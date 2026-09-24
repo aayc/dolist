@@ -13,7 +13,8 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "bench": "vitest bench --run --reporter=default --reporter=json --outputFile.json=bench-results.json"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

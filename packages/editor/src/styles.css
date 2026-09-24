@@ -1,4 +1,365 @@
-/* Editor styles. Colors come from the app's theme CSS variables (see apps/web theme). */
+/*
+ * @ddl/editor component styles. Import once from the app: `import "@ddl/editor/styles.css"`.
+ * Uses only the app's theme variables (--ddl-*); CodeMirror base-theme overrides live in theme.ts.
+ * Selectors that touch `.cm-line` start with `.cm-ddl-editor` to outrank CodeMirror's base theme.
+ */
+
 .cm-editor {
   height: 100%;
+}
+
+/* Headings (live preview line classes) */
+.cm-ddl-editor .cm-line.cm-ddl-heading {
+  line-height: 1.3;
+  padding-top: 0.35em;
+  padding-bottom: 0.1em;
+}
+.cm-ddl-editor .cm-line.cm-ddl-h1 {
+  font-size: 1.75em;
+}
+.cm-ddl-editor .cm-line.cm-ddl-h2 {
+  font-size: 1.5em;
+}
+.cm-ddl-editor .cm-line.cm-ddl-h3 {
+  font-size: 1.3em;
+}
+.cm-ddl-editor .cm-line.cm-ddl-h4 {
+  font-size: 1.15em;
+}
+.cm-ddl-editor .cm-line.cm-ddl-h5 {
+  font-size: 1.05em;
+}
+.cm-ddl-editor .cm-line.cm-ddl-h6 {
+  font-size: 1em;
+  color: var(--ddl-text-muted);
+}
+
+/* Blockquotes */
+.cm-ddl-editor .cm-line.cm-ddl-quote {
+  border-left: 2px solid var(--ddl-border);
+  padding-left: 14px;
+  color: var(--ddl-text-muted);
+}
+
+/* Fenced code blocks: fences stay visible but faint */
+.cm-ddl-editor .cm-line.cm-ddl-codeblock {
+  background-color: var(--ddl-bg-secondary);
+  font-family: var(--ddl-font-mono);
+  font-size: 0.9em;
+  padding-left: 14px;
+  padding-right: 14px;
+}
+.cm-ddl-editor .cm-line.cm-ddl-codeblock-begin {
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+}
+.cm-ddl-editor .cm-line.cm-ddl-codeblock-end {
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+.cm-ddl-fence,
+.cm-ddl-fence * {
+  color: var(--ddl-text-faint);
+}
+
+/* Inline code */
+.cm-ddl-inline-code {
+  font-family: var(--ddl-font-mono);
+  background-color: var(--ddl-bg-secondary);
+  border-radius: 4px;
+  padding: 0.1em 0.25em;
+}
+
+/* YAML frontmatter */
+.cm-ddl-editor .cm-line.cm-ddl-frontmatter {
+  font-family: var(--ddl-font-mono);
+  font-size: 0.85em;
+  color: var(--ddl-text-muted);
+}
+.cm-ddl-editor .cm-line.cm-ddl-frontmatter * {
+  color: inherit;
+  font-weight: inherit;
+}
+
+/* Links rendered by the live preview (plain click follows them) */
+.cm-ddl-link,
+.cm-ddl-wikilink {
+  color: var(--ddl-accent);
+  cursor: pointer;
+}
+.cm-ddl-link {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--ddl-accent) 45%, transparent);
+  text-underline-offset: 0.15em;
+}
+.cm-ddl-wikilink:hover,
+.cm-ddl-link:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--ddl-accent);
+}
+
+/* Horizontal rule */
+.cm-ddl-hr {
+  display: inline-block;
+  width: 100%;
+  vertical-align: middle;
+  border-top: 1px solid var(--ddl-border);
+}
+
+/* Bullets */
+.cm-ddl-bullet {
+  display: inline-block;
+  width: 0.6em;
+  text-align: center;
+  color: var(--ddl-text-muted);
+}
+.cm-ddl-bullet::after {
+  content: "";
+  display: inline-block;
+  width: 0.36em;
+  height: 0.36em;
+  border-radius: 50%;
+  background-color: currentColor;
+  vertical-align: 0.2em;
+}
+
+/* Task checkboxes */
+.cm-ddl-checkbox {
+  display: inline-grid;
+  place-content: center;
+  box-sizing: border-box;
+  width: 1.05em;
+  height: 1.05em;
+  margin: 0 0.15em 0 0;
+  /* An inline grid's baseline comes from its pseudo-element; center on the x-height instead. */
+  vertical-align: middle;
+  border: 1.5px solid var(--ddl-text-faint);
+  border-radius: 0.25em;
+  background-color: transparent;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease;
+}
+.cm-ddl-checkbox::before {
+  content: "";
+  width: 0.6em;
+  height: 0.6em;
+  transform: scale(0);
+  background-color: var(--ddl-bg);
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+.cm-ddl-checkbox:hover:not(.cm-ddl-checkbox-readonly) {
+  border-color: var(--ddl-accent);
+}
+.cm-ddl-checkbox[aria-checked="true"] {
+  background-color: var(--ddl-accent);
+  border-color: var(--ddl-accent);
+}
+.cm-ddl-checkbox[aria-checked="true"]::before {
+  transform: scale(1);
+}
+/* [/] in progress, [-] cancelled, [>] deferred */
+.cm-ddl-checkbox[aria-checked="mixed"],
+.cm-ddl-checkbox[data-task="-"],
+.cm-ddl-checkbox[data-task=">"] {
+  background-color: transparent;
+}
+.cm-ddl-checkbox[aria-checked="mixed"] {
+  border-color: var(--ddl-accent);
+}
+.cm-ddl-checkbox[aria-checked="mixed"]::before,
+.cm-ddl-checkbox[data-task="-"]::before,
+.cm-ddl-checkbox[data-task=">"]::before {
+  transform: scale(1);
+  height: 0.14em;
+  clip-path: none;
+  border-radius: 1px;
+}
+.cm-ddl-checkbox[aria-checked="mixed"]::before {
+  background-color: var(--ddl-accent);
+}
+.cm-ddl-checkbox[data-task="-"] {
+  border-color: var(--ddl-text-faint);
+}
+.cm-ddl-checkbox[data-task="-"]::before {
+  background-color: var(--ddl-text-faint);
+}
+.cm-ddl-checkbox[data-task=">"] {
+  border-color: var(--ddl-info);
+}
+.cm-ddl-checkbox[data-task=">"]::before {
+  background-color: var(--ddl-info);
+}
+.cm-ddl-checkbox-readonly {
+  cursor: default;
+}
+
+/* Completed / cancelled tasks */
+.cm-ddl-editor .cm-line.cm-ddl-task-done {
+  color: var(--ddl-text-muted);
+}
+.cm-ddl-editor .cm-line.cm-ddl-task-cancelled {
+  color: var(--ddl-text-faint);
+}
+.cm-ddl-task-done-text,
+.cm-ddl-task-cancelled-text {
+  text-decoration: line-through;
+  text-decoration-color: var(--ddl-text-faint);
+}
+
+/* Agent annotations: faint status-colored marker left of the line */
+.cm-ddl-editor .cm-line.cm-ddl-annotated {
+  position: relative;
+}
+.cm-ddl-editor .cm-line.cm-ddl-annotated::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 0.3em;
+  bottom: 0.3em;
+  width: 2px;
+  border-radius: 2px;
+  background-color: currentColor;
+  color: var(--ddl-text-faint);
+  opacity: 0.6;
+  pointer-events: none;
+}
+.cm-ddl-editor .cm-line.cm-ddl-annotated-triaging::before {
+  color: var(--ddl-info);
+}
+.cm-ddl-editor .cm-line.cm-ddl-annotated-working::before {
+  color: var(--ddl-accent);
+}
+.cm-ddl-editor .cm-line.cm-ddl-annotated-waiting_approval::before,
+.cm-ddl-editor .cm-line.cm-ddl-annotated-waiting_user::before {
+  color: var(--ddl-warning);
+}
+.cm-ddl-editor .cm-line.cm-ddl-annotated-done::before {
+  color: var(--ddl-success);
+}
+.cm-ddl-editor .cm-line.cm-ddl-annotated-failed::before {
+  color: var(--ddl-danger);
+}
+
+/* Agent badges */
+.cm-ddl-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  box-sizing: border-box;
+  max-width: 20em;
+  height: 1.6em;
+  margin-left: 0.6em;
+  padding: 0 0.6em;
+  vertical-align: 0.08em;
+  border: 1px solid var(--ddl-border);
+  border-radius: 999px;
+  background-color: var(--ddl-bg-secondary);
+  color: var(--ddl-text-muted);
+  font-family: var(--ddl-font-ui);
+  font-size: 0.72em;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+.cm-ddl-badge:hover {
+  background-color: var(--ddl-bg-hover);
+  color: var(--ddl-text);
+}
+.cm-ddl-badge:focus-visible {
+  outline: 2px solid var(--ddl-accent);
+  outline-offset: 1px;
+}
+.cm-ddl-badge-icon {
+  flex: none;
+  font-size: 1.05em;
+  line-height: 1;
+}
+.cm-ddl-badge-icon:empty {
+  width: 0.6em;
+  height: 0.6em;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+.cm-ddl-badge-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cm-ddl-badge-unread {
+  flex: none;
+  min-width: 1.5em;
+  padding: 0 0.4em;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background-color: var(--ddl-accent);
+  color: var(--ddl-bg);
+  font-size: 0.85em;
+  font-weight: 600;
+  line-height: 1.5em;
+  text-align: center;
+}
+.cm-ddl-badge-unread[hidden] {
+  display: none;
+}
+.cm-ddl-badge-triaging .cm-ddl-badge-icon {
+  color: var(--ddl-info);
+  animation: cm-ddl-pulse 1.4s ease-in-out infinite;
+}
+.cm-ddl-badge-queued .cm-ddl-badge-icon {
+  color: var(--ddl-text-faint);
+}
+.cm-ddl-badge-working .cm-ddl-badge-icon {
+  color: var(--ddl-accent);
+  animation: cm-ddl-pulse 1.4s ease-in-out infinite;
+}
+.cm-ddl-badge-waiting_approval,
+.cm-ddl-badge-waiting_user {
+  border-color: color-mix(in srgb, var(--ddl-warning) 45%, transparent);
+  color: var(--ddl-text);
+}
+.cm-ddl-badge-waiting_approval .cm-ddl-badge-icon,
+.cm-ddl-badge-waiting_user .cm-ddl-badge-icon {
+  color: var(--ddl-warning);
+}
+.cm-ddl-badge-done .cm-ddl-badge-icon {
+  color: var(--ddl-success);
+}
+.cm-ddl-badge-failed {
+  border-color: color-mix(in srgb, var(--ddl-danger) 45%, transparent);
+}
+.cm-ddl-badge-failed .cm-ddl-badge-icon {
+  color: var(--ddl-danger);
+}
+.cm-ddl-badge-cancelled .cm-ddl-badge-icon {
+  color: var(--ddl-text-faint);
+}
+
+@keyframes cm-ddl-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cm-ddl-badge .cm-ddl-badge-icon {
+    animation: none;
+  }
+  .cm-ddl-checkbox,
+  .cm-ddl-badge {
+    transition: none;
+  }
 }

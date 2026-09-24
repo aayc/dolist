@@ -33,7 +33,13 @@ export interface EditorCallbacks {
   /** Every document change. Keep it cheap; the host debounces persistence. */
   onDocChange?(doc: string, meta: { userEvent: boolean }): void;
   onAnnotationClick?(annotation: LineAnnotation): void;
-  onWikiLinkClick?(target: string, options: { newPane: boolean }): void;
+  /**
+   * `target` is the note part of the link (no `#subpath`, no alias), e.g. `Daily/2026-06-19` for
+   * `[[Daily/2026-06-19#Tasks|today]]`; `subpath` is `Tasks` (`^block` for block refs). Relative
+   * markdown links (`[x](Note.md)`) arrive here too.
+   */
+  onWikiLinkClick?(target: string, options: { newPane: boolean; subpath?: string }): void;
+  /** Only http(s), mailto and tel URLs are ever passed (`www.` gets `https://`). */
   onExternalLinkClick?(url: string): void;
   /** Cursor moved to a different line (throttle before sending presence). */
   onCursorLine?(line: number): void;

@@ -1,70 +1,132 @@
 /**
- * Baseline implementation (plain CodeMirror markdown). Live preview, annotations, vim, etc. are
- * layered in as extensions; the public contract lives in ./types.ts.
+ * `createMarkdownEditor`: the host-facing wrapper around one EditorView. The public contract lives
+ * in ./types.ts; everything here is glue between that contract and the extensions.
  */
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { Compartment, EditorState, type Extension } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
+import { EditorState, Transaction } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
+import { setAnnotationsEffect } from "./annotations/field";
 import {
-  type CreateEditorOptions,
-  DEFAULT_EDITOR_CONFIG,
-  type EditorConfig,
-  type LineAnnotation,
-  type MarkdownEditor,
-} from "./types";
+  callbacksEffect,
+  configEffects,
+  hasEditorCompartments,
+  resolveConfig,
+  vimEffect,
+} from "./config";
+import { minimalChange, normalizeLineEndings } from "./diff";
+import { editorExtensions } from "./extensions";
+import { cursorLine } from "./listeners";
+import type { CreateEditorOptions, EditorConfig, MarkdownEditor } from "./types";
+import { isVimLoaded, onVimLoaded } from "./vim";
 
 export function createMarkdownEditor(
   parent: HTMLElement,
   options: CreateEditorOptions,
 ): MarkdownEditor {
-  let config: EditorConfig = { ...DEFAULT_EDITOR_CONFIG, ...options.config };
+  let config: EditorConfig = resolveConfig(options.config);
   const callbacks = options.callbacks ?? {};
-  const configCompartment = new Compartment();
 
-  const configExtensions = (c: EditorConfig): Extension => [
-    EditorState.readOnly.of(c.readOnly),
-    EditorView.contentAttributes.of({ spellcheck: String(c.spellcheck) }),
-  ];
+  const createState = (doc: string): EditorState =>
+    EditorState.create({
+      doc: normalizeLineEndings(doc),
+      extensions: editorExtensions(config, callbacks),
+    });
 
-  const extensions = (): Extension => [
-    history(),
-    keymap.of([...defaultKeymap, ...historyKeymap]),
-    markdown({ base: markdownLanguage }),
-    EditorView.lineWrapping,
-    configCompartment.of(configExtensions(config)),
-    EditorView.updateListener.of((update) => {
-      if (update.docChanged) {
-        const userEvent = update.transactions.some(
-          (tr) => tr.isUserEvent("input") || tr.isUserEvent("delete"),
-        );
-        callbacks.onDocChange?.(update.state.doc.toString(), { userEvent });
-      }
-    }),
-  ];
-
-  const createState = (doc: string) => EditorState.create({ doc, extensions: extensions() });
   const view = new EditorView({ state: createState(options.doc), parent });
+  let destroyed = false;
+  let stopWaitingForVim: (() => void) | null = null;
+
+  const ensureVim = (): void => {
+    if (!config.vimMode || isVimLoaded() || stopWaitingForVim) return;
+    stopWaitingForVim = onVimLoaded(() => {
+      stopWaitingForVim = null;
+      if (!destroyed && config.vimMode) view.dispatch({ effects: vimEffect(config) });
+    });
+  };
+  ensureVim();
+
+  const swapState = (state: EditorState, reapply: boolean): void => {
+    const previousLine = cursorLine(view.state);
+    view.setState(state);
+    if (reapply) {
+      view.dispatch({
+        effects: [
+          ...configEffects(null, config),
+          callbacksEffect(callbacks),
+          setAnnotationsEffect.of([]),
+        ],
+      });
+    }
+    const line = cursorLine(view.state);
+    if (line !== previousLine) callbacks.onCursorLine?.(line);
+  };
 
   return {
     view,
+
     getDocument: () => view.state.doc.toString(),
-    setDocument(doc) {
-      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: doc } });
+
+    setDocument(doc, { resetHistory = false } = {}) {
+      const next = normalizeLineEndings(doc);
+      if (resetHistory) {
+        swapState(createState(next), false);
+        return;
+      }
+      const change = minimalChange(view.state.doc.toString(), next);
+      if (!change) return;
+      // External edits are not undoable; local history is mapped through them instead.
+      view.dispatch({
+        changes: change,
+        annotations: [Transaction.addToHistory.of(false), Transaction.remote.of(true)],
+      });
     },
+
     createState,
+
     getState: () => view.state,
-    setState: (state) => view.setState(state),
-    setAnnotations(_annotations: readonly LineAnnotation[]) {},
+
+    setState(state) {
+      // A state from elsewhere (no editor compartments) keeps its document and selection only.
+      if (!hasEditorCompartments(state)) {
+        const adopted = EditorState.create({
+          doc: state.doc,
+          selection: state.selection,
+          extensions: editorExtensions(config, callbacks),
+        });
+        swapState(adopted, false);
+        return;
+      }
+      swapState(state, true);
+    },
+
+    setAnnotations(annotations) {
+      view.dispatch({ effects: setAnnotationsEffect.of(annotations) });
+    },
+
     configure(partial) {
-      config = { ...config, ...partial };
-      view.dispatch({ effects: configCompartment.reconfigure(configExtensions(config)) });
+      const next = resolveConfig(partial, config);
+      const effects = configEffects(config, next);
+      config = next;
+      if (effects.length > 0) view.dispatch({ effects });
+      ensureVim();
     },
+
     focus: () => view.focus(),
+
     scrollToLine(line) {
-      const pos = view.state.doc.line(Math.min(line + 1, view.state.doc.lines)).from;
-      view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+      if (!Number.isFinite(line)) return;
+      const { doc } = view.state;
+      const n = Math.min(Math.max(Math.floor(line), 0), doc.lines - 1);
+      const pos = doc.line(n + 1).from;
+      view.dispatch({
+        selection: { anchor: pos },
+        effects: EditorView.scrollIntoView(pos, { y: "center" }),
+      });
     },
-    destroy: () => view.destroy(),
+
+    destroy: () => {
+      destroyed = true;
+      stopWaitingForVim?.();
+      view.destroy();
+    },
   };
 }

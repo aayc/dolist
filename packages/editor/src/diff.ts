@@ -1,0 +1,70 @@
+export interface TextChange {
+  from: number;
+  to: number;
+  insert: string;
+}
+
+const NEWLINE = 10;
+
+function isHighSurrogate(code: number): boolean {
+  return code >= 0xd800 && code <= 0xdbff;
+}
+
+function isLowSurrogate(code: number): boolean {
+  return code >= 0xdc00 && code <= 0xdfff;
+}
+
+/**
+ * Slides the segment `[from, from + length)` of `text` left to the nearest line start, if the
+ * text allows it (each step needs the char before the segment to equal its last char).
+ */
+function slideToLineStart(text: string, from: number, length: number): number {
+  let pos = from;
+  while (pos > 0 && text.charCodeAt(pos - 1) !== NEWLINE) {
+    if (text.charCodeAt(pos - 1) !== text.charCodeAt(pos - 1 + length)) return from;
+    pos--;
+  }
+  return pos;
+}
+
+/**
+ * The single replacement turning `current` into `next`: common prefix/suffix trimmed, never splitting
+ * a surrogate pair. Whole-line insertions/deletions are aligned to line starts, so text inserted
+ * above a line maps positions on that line (cursor, badges) down instead of leaving them behind.
+ */
+export function minimalChange(current: string, next: string): TextChange | null {
+  if (current === next) return null;
+  const max = Math.min(current.length, next.length);
+  let start = 0;
+  while (start < max && current.charCodeAt(start) === next.charCodeAt(start)) start++;
+  let end = 0;
+  while (
+    end < max - start &&
+    current.charCodeAt(current.length - 1 - end) === next.charCodeAt(next.length - 1 - end)
+  ) {
+    end++;
+  }
+  if (start > 0 && isHighSurrogate(current.charCodeAt(start - 1))) start--;
+  if (end > 0 && isLowSurrogate(current.charCodeAt(current.length - end))) end--;
+
+  let from = start;
+  let to = current.length - end;
+  let insertTo = next.length - end;
+  if (from === to && next.slice(from, insertTo).includes("\n")) {
+    const shift = from - slideToLineStart(next, from, insertTo - from);
+    from -= shift;
+    to -= shift;
+    insertTo -= shift;
+  } else if (from === insertTo && current.slice(from, to).includes("\n")) {
+    const shift = from - slideToLineStart(current, from, to - from);
+    from -= shift;
+    to -= shift;
+    insertTo -= shift;
+  }
+  return { from, to, insert: next.slice(from, insertTo) };
+}
+
+/** CodeMirror stores `\n`-separated lines; normalize before comparing with its content. */
+export function normalizeLineEndings(text: string): string {
+  return text.includes("\r") ? text.replace(/\r\n?/g, "\n") : text;
+}
