@@ -104,14 +104,20 @@ const op: fc.Arbitrary<Op> = fc.oneof(
 );
 
 /**
- * Positions where inserting a line break would split a task line between its start (where the
- * badge is anchored) and its token: `(line.from, token start]`. Moved to the line start instead.
+ * Positions where inserting a line break could split a task between its start (where the badge is
+ * anchored) and its token, which by design leaves the badge with the start. A task starts after
+ * the previous task's token when lines were joined, so anywhere in `(previous token end, next
+ * token start]` is unsafe; the break moves to the previous token's end (or the line start).
  */
 function safeBreakPos(state: EditorState, pos: number): number {
   const line = state.doc.lineAt(pos);
-  const tokenAt = line.text.indexOf("§");
-  if (tokenAt < 0 || pos <= line.from || pos > line.from + tokenAt) return pos;
-  return line.from;
+  let segmentStart = line.from;
+  for (const match of line.text.matchAll(/§\d\d§/g)) {
+    const start = line.from + match.index;
+    if (pos <= start) return pos <= segmentStart ? pos : segmentStart;
+    segmentStart = start + match[0].length;
+  }
+  return pos;
 }
 
 function edit(state: EditorState, spec: TransactionSpec): EditorState {

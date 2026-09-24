@@ -7,6 +7,7 @@
  * a single change removes its line's entire content (line deleted, `dd`, cut, select-all-and-type).
  */
 
+import { invertedEffects } from "@codemirror/commands";
 import {
   type ChangeSet,
   type EditorState,
@@ -14,6 +15,7 @@ import {
   StateEffect,
   StateField,
   type Text,
+  type Transaction,
 } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView } from "@codemirror/view";
 import type { TaskAgentStatus } from "@ddl/core";
@@ -40,6 +42,57 @@ export const HIDDEN_BADGE_STATUSES: ReadonlySet<TaskAgentStatus> = new Set(["idl
 
 /** Replaces the whole annotation set. Lines are 0-based and refer to the state it is applied to. */
 export const setAnnotationsEffect = StateEffect.define<readonly LineAnnotation[]>();
+
+interface SavedAnchor {
+  readonly id: string;
+  readonly anchor: number;
+}
+
+/**
+ * Applied by undo: puts back badges whose anchor the undone change collapsed into a deletion.
+ * Mapping alone can't: undo re-inserts the text at the collapsed anchor and forward association
+ * would push the badge past its own restored task.
+ */
+const restoreAnchorsEffect = StateEffect.define<readonly SavedAnchor[]>({
+  map: (saved, mapping) =>
+    saved.map(({ id, anchor }) => ({ id, anchor: mapping.mapPos(anchor, 1) })),
+});
+
+/** For the history: the anchors this change deletes text around, to restore on undo. */
+function collapsedAnchors(tr: Transaction, field: StateField<AnnotationState>) {
+  if (!tr.docChanged) return [];
+  const entries = tr.startState.field(field, false)?.entries;
+  if (!entries?.length) return [];
+  const saved: SavedAnchor[] = [];
+  tr.changes.iterChangedRanges((fromA, toA) => {
+    if (toA === fromA) return;
+    for (const entry of entries) {
+      if (entry.anchor >= fromA && entry.anchor <= toA) {
+        saved.push({ id: entry.annotation.id, anchor: entry.anchor });
+      }
+    }
+  });
+  return saved.length > 0 ? [restoreAnchorsEffect.of(saved)] : [];
+}
+
+/** Badges that still exist move back; dropped ones stay dropped. */
+function restoreAnchors(
+  value: AnnotationState,
+  saved: readonly SavedAnchor[],
+  doc: Text,
+): AnnotationState {
+  const anchors = new Map(saved.map(({ id, anchor }) => [id, anchor]));
+  let moved = false;
+  const entries = value.entries.map((entry) => {
+    const anchor = anchors.get(entry.annotation.id);
+    if (anchor === undefined || anchor === entry.anchor || anchor > doc.length) return entry;
+    moved = true;
+    return { ...entry, anchor };
+  });
+  if (!moved) return value;
+  entries.sort((a, b) => a.anchor - b.anchor);
+  return { entries, decorations: buildDecorations(entries, doc) };
+}
 
 const lineDecorationCache = new Map<TaskAgentStatus, Decoration>();
 
@@ -111,11 +164,13 @@ function insertedLines(changes: ChangeSet, newDoc: Text): Map<string, number[]> 
   return lines;
 }
 
+/** `keep`: badges an undo is about to restore, kept even when their line looks removed. */
 function mapAnnotations(
   value: AnnotationState,
   changes: ChangeSet,
   oldDoc: Text,
   newDoc: Text,
+  keep?: ReadonlySet<string>,
 ): AnnotationState {
   /** `[fromA, toA, toB]` of every change that deletes text. */
   const deletions: Array<[number, number, number]> = [];
@@ -123,17 +178,30 @@ function mapAnnotations(
     if (toA > fromA) deletions.push([fromA, toA, toB]);
   });
   let reinserted: Map<string, number[]> | null = null;
+  /** New start of each re-inserted line, by its old start (every badge on it moves along). */
+  const movedLines = new Map<number, number | undefined>();
   let reordered = false;
   const entries: AnchoredAnnotation[] = [];
   for (const entry of value.entries) {
     let replacedAt: number | undefined;
     if (deletions.length > 0) {
       const line = oldDoc.lineAt(entry.anchor);
-      if (deletions.some(([from, to]) => from <= line.from && to >= line.to)) {
-        // The whole line was removed: keep the badge only if the same change inserted that exact
-        // line again (line moves, undoing them, external reorders).
+      // The task's text runs from the anchor (the line start, or where the task landed when its
+      // line was joined onto the previous one) to the end of the line.
+      if (deletions.some(([from, to]) => from <= entry.anchor && to >= line.to)) {
+        // The task's text was removed: keep the badge only if the same change inserted it again
+        // (line moves, undoing them, external reorders), as its whole line or as a line of its own.
         reinserted ??= insertedLines(changes, newDoc);
-        const at = reinserted.get(line.text)?.shift();
+        if (!movedLines.has(line.from))
+          movedLines.set(line.from, reinserted.get(line.text)?.shift());
+        const lineAt = movedLines.get(line.from);
+        const offset = entry.anchor - line.from;
+        let at = lineAt === undefined ? undefined : lineAt + offset;
+        if (at === undefined && offset > 0) {
+          at = reinserted.get(oldDoc.sliceString(entry.anchor, line.to))?.shift();
+        }
+        if (at === undefined && keep?.has(entry.annotation.id))
+          at = changes.mapPos(entry.anchor, 1);
         if (at === undefined) continue;
         entries.push({ ...entry, anchor: at });
         reordered = true;
@@ -156,15 +224,25 @@ export const annotationField = StateField.define<AnnotationState>({
   update(value, tr) {
     let next = value;
     if (tr.docChanged && next.entries.length > 0) {
-      next = mapAnnotations(next, tr.changes, tr.startState.doc, tr.state.doc);
+      const restoring = tr.effects.flatMap((e) =>
+        e.is(restoreAnchorsEffect) ? e.value.map((saved) => saved.id) : [],
+      );
+      const keep = restoring.length > 0 ? new Set(restoring) : undefined;
+      next = mapAnnotations(next, tr.changes, tr.startState.doc, tr.state.doc, keep);
     }
     for (const effect of tr.effects) {
-      if (effect.is(setAnnotationsEffect))
+      if (effect.is(setAnnotationsEffect)) {
         next = placeAnnotations(effect.value, tr.state.doc, next);
+      } else if (effect.is(restoreAnchorsEffect) && next.entries.length > 0) {
+        next = restoreAnchors(next, effect.value, tr.state.doc);
+      }
     }
     return next;
   },
-  provide: (field) => EditorView.decorations.from(field, (value) => value.decorations),
+  provide: (field) => [
+    EditorView.decorations.from(field, (value) => value.decorations),
+    invertedEffects.of((tr) => collapsedAnchors(tr, field)),
+  ],
 });
 
 /** Current annotations with their lines mapped through every edit since they were set. */

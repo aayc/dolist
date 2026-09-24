@@ -169,6 +169,34 @@ describe("annotations", () => {
     expect(up && lines(up)).toEqual({ a: 2, b: 1 });
   });
 
+  it("puts a badge back on its task when undo restores text deleted around it", () => {
+    // Join the task onto the next line, then delete the task's text up to what was joined.
+    let state = withAnnotations(DOC, [annotation("a", 1)]);
+    const task = state.doc.line(2);
+    state = edit(state, { changes: { from: task.to, to: task.to + 1 }, userEvent: "delete" });
+    state = edit(state, { changes: { from: task.from - 1, to: task.to }, userEvent: "delete" });
+    expect(state.doc.toString()).not.toContain("book flights");
+
+    const undone = run(state, undo);
+    expect(undone?.doc.toString()).toBe(DOC);
+    expect(undone && lines(undone)).toEqual({ a: 1 });
+  });
+
+  it("keeps the badge of a moved line that was edited, when undo moves it back", () => {
+    let state = withAnnotations(DOC, [annotation("a", 1), annotation("b", 2)]);
+    state = run(edit(state, { selection: { anchor: DOC.indexOf("email") } }), moveLineUp) ?? state;
+    const moved = state.doc.line(3);
+    state = edit(state, {
+      changes: { from: moved.from + 1, insert: "x" },
+      userEvent: "input.type",
+    });
+    expect(lines(state)).toEqual({ a: 2, b: 1 });
+
+    let undone: EditorState | null = state;
+    while (undone && undone.doc.toString() !== DOC) undone = run(undone, undo);
+    expect(undone && lines(undone)).toEqual({ a: 1, b: 2 });
+  });
+
   it("moves with the task text when a replacement at the line start inserts a line break", () => {
     // Select the start of the line (here the bullet) and paste text ending in a line break.
     let state = withAnnotations(DOC, [annotation("a", 1)]);
