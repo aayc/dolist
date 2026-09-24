@@ -15,6 +15,18 @@ export interface TaskEvent {
   at: number;
 }
 
+/**
+ * A settled change to the rest of a note (headings, paragraphs, plain bullets): the user's lines
+ * that are new or edited since the last such event. The agent's own lines never count.
+ */
+export interface NoteEvent {
+  notePath: string;
+  date: string | null;
+  /** 0-based lines, in note order. */
+  lines: Array<{ line: number; text: string }>;
+  at: number;
+}
+
 /** What the orchestrator asks a subagent to do. */
 export interface SubagentSpec {
   taskId: string;

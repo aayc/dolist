@@ -14,6 +14,9 @@ export const TOOL = {
   messageSubagent: "message_subagent",
   cancelSubagent: "cancel_subagent",
   listTasks: "list_tasks",
+  anchorLine: "anchor_line",
+  // Orchestrator and subagents: the agent's own text in the user's notes
+  editNote: "edit_note",
   // Subagent ↔ thread
   postUpdate: "post_update",
   createArtifact: "create_artifact",
@@ -199,6 +202,57 @@ export interface ListTasksInput {
   /** Defaults to today's daily note. */
   notePath?: string;
 }
+export interface AnchorLineInput {
+  /** Defaults to today's daily note. */
+  notePath?: string;
+  /** 1-based, as numbered in the digest's note view. */
+  line: number;
+  /** The line's current text, to confirm it is the one meant. */
+  text: string;
+}
+
+// ── Editing notes (orchestrator and subagents) ──────────────────────────────
+
+export const NOTE_EDIT_OPS = [
+  "add_under",
+  "insert_after",
+  "append",
+  "replace",
+  "delete",
+  "set_checkbox",
+] as const;
+export type NoteEditOp = (typeof NOTE_EDIT_OPS)[number];
+
+/**
+ * One change to a note. New and replacement lines are written as the agent's (they get an agent
+ * marker); `replace`, `delete` and `set_checkbox` change an existing line, which counts as the
+ * agent's own only with `mine: true` (checked against the note when the edit runs).
+ */
+export interface NoteEdit {
+  op: NoteEditOp;
+  /** `add_under`, `set_checkbox`: the task or anchor id. */
+  taskId?: string;
+  /** `insert_after`, `replace`, `delete`: 1-based line (0 = top of the note for `insert_after`). */
+  line?: number;
+  /** `insert_after`, `replace`, `delete`: the line's current text. */
+  expect?: string;
+  /** `add_under`, `insert_after`, `append`: the new lines. */
+  lines?: string[];
+  /** `replace`: the new text of the line (its indentation is kept). */
+  text?: string;
+  /** `set_checkbox`. */
+  checked?: boolean;
+  /** `replace`, `delete`, `set_checkbox`: the line is one the agent wrote. */
+  mine?: boolean;
+}
+export interface EditNoteInput {
+  /** Defaults to the note of `taskId` (a subagent's own task), else today's daily note. */
+  notePath?: string;
+  /** The task or anchor this edit belongs to: its thread signs the new lines. */
+  taskId?: string;
+  edits: NoteEdit[];
+}
+
 export interface MockIrreversibleActionInput {
   action: string;
   details: string;

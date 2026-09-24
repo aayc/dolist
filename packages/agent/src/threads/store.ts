@@ -11,6 +11,7 @@ import {
 } from "@ddl/contract";
 import {
   type ArtifactMeta,
+  type CitedSource,
   createId,
   type Logger,
   type SurfaceKind,
@@ -33,6 +34,7 @@ export const BINARY_ARTIFACT_SUFFIX = PERSISTED_BINARY_ARTIFACT_SUFFIX;
 
 const LOAD_CONCURRENCY = 16;
 const WRITE_RETRY_MS = 5_000;
+const MAX_THREAD_SOURCES = 50;
 
 export interface ThreadStoreOptions {
   storage: StorageProvider;
@@ -209,6 +211,23 @@ class SidecarThreadStore implements ThreadStore {
     const thread = this.threads.get(threadId);
     if (!thread || thread.surfaces.includes(surface)) return;
     thread.surfaces.push(surface);
+    this.changed(thread, true);
+  }
+
+  addSources(threadId: string, sources: readonly CitedSource[]): void {
+    const thread = this.threads.get(threadId);
+    if (!thread || sources.length === 0) return;
+    const byUrl = new Map((thread.sources ?? []).map((source) => [source.url, source]));
+    let changed = false;
+    for (const source of sources) {
+      const known = byUrl.get(source.url);
+      if (known && known.title === source.title && known.snippet === source.snippet) continue;
+      byUrl.delete(source.url);
+      byUrl.set(source.url, { ...known, ...source });
+      changed = true;
+    }
+    if (!changed) return;
+    thread.sources = [...byUrl.values()].slice(-MAX_THREAD_SOURCES);
     this.changed(thread, true);
   }
 

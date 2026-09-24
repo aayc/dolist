@@ -8,7 +8,10 @@ import {
   isBlankTaskText,
   isClosedStatus,
   type Logger,
+  parseAgentLine,
+  parseDailyNotePath,
   silentLogger,
+  stripAgentMarker,
   type TaskAgentStatus,
   type ToolSpec,
   today,
@@ -28,19 +31,22 @@ import {
   buildOrchestratorSystemPrompt,
   type DigestCapabilities,
   type DigestChange,
+  type DigestLine,
   type DigestNote,
   formatOrchestratorDigest,
   type OrchestratorDigest,
 } from "../prompts/orchestrator";
 import { formatTaskUpdate } from "../prompts/subagent";
 import type { GateContext } from "../safety/types";
+import type { AnchorLineInput } from "../tools/contracts";
 import { ToolInputError } from "../tools/input";
+import { findQuotedLine } from "../tools/notes";
 import { createOrchestratorTools, type OrchestratorToolHost } from "../tools/orchestrator";
 import type { TaskRecords } from "./records";
 import { badgeFrom, type SubagentManager, type SubagentReport } from "./subagents";
 import type { TaskBoard } from "./task-board";
 import type { TaskLookup } from "./task-watcher";
-import type { SubagentSpec, TaskEvent } from "./types";
+import type { NoteEvent, SubagentSpec, TaskEvent } from "./types";
 
 export const ORCHESTRATOR_SESSION_PREFIX = "orchestrator:";
 
@@ -83,13 +89,23 @@ type QueueItem =
       dueAt: number;
     }
   | { kind: "reply"; taskId: string | null; threadId: string; text: string; dueAt: number }
-  | { kind: "report"; report: SubagentReport; dueAt: number };
+  | { kind: "report"; report: SubagentReport; dueAt: number }
+  | {
+      kind: "note";
+      notePath: string;
+      date: string | null;
+      /** 0-based. */
+      lines: Array<{ line: number; text: string }>;
+      dueAt: number;
+    };
 
 interface Turn {
   items: QueueItem[];
   /** Tasks whose status a tool set during this turn. */
   touched: Set<string>;
   commented: Set<string>;
+  /** Anchors `anchor_line` created during this turn. */
+  anchored: Set<string>;
   error?: string;
   startedAt: number;
   firstToolAt?: number;
@@ -219,6 +235,31 @@ export class Orchestrator {
         return;
       }
     }
+  }
+
+  /** The user wrote or edited lines that aren't tasks (they may be addressed to the agent). */
+  handleNoteEvent(event: NoteEvent): void {
+    if (this.stopped || event.lines.length === 0) return;
+    const key = `note:${event.notePath}`;
+    const existing = this.queue.get(key);
+    const lines = new Map<string, { line: number; text: string }>();
+    if (existing?.kind === "note") for (const line of existing.lines) lines.set(line.text, line);
+    for (const line of event.lines) lines.set(line.text, line);
+    this.queue.set(key, {
+      kind: "note",
+      notePath: event.notePath,
+      date: event.date,
+      lines: [...lines.values()].sort((a, b) => a.line - b.line),
+      dueAt: existing?.dueAt ?? this.now() + this.batchWindowMs,
+    });
+    this.scheduleDrain();
+  }
+
+  /** The line an anchor was attached to is gone: like deleting a task, its work stops. */
+  anchorRemoved(anchorId: string): void {
+    if (this.stopped) return;
+    this.dropQueued(anchorId);
+    this.background(this.stopWork(anchorId, "The line was deleted from the note.", true));
   }
 
   /** A user reply in a thread whose task has no subagent in this process. */
@@ -388,6 +429,7 @@ export class Orchestrator {
       items,
       touched: new Set(),
       commented: new Set(),
+      anchored: new Set(),
       startedAt: this.now(),
     };
     this.turn = turn;
@@ -428,8 +470,14 @@ export class Orchestrator {
 
   /** Tasks the model left untouched: answered → done, errors → failed, otherwise ignored. */
   private resolveTurn(turn: Turn): void {
+    // An anchor the model attached but never used would leave an empty badge on the line.
+    for (const anchorId of turn.anchored) {
+      if (!turn.touched.has(anchorId) && !turn.commented.has(anchorId)) {
+        this.options.records.remove(anchorId);
+      }
+    }
     for (const item of turn.items) {
-      const taskId = item.kind === "report" ? null : item.taskId;
+      const taskId = item.kind === "task" || item.kind === "reply" ? item.taskId : null;
       if (!taskId) continue;
       const previous = this.previousStatus.get(taskId);
       this.previousStatus.delete(taskId);
@@ -513,17 +561,28 @@ export class Orchestrator {
     const { lookup, records, subagents } = this.options;
     const now = this.now();
     const notes = new Map<string, DigestNote>();
+    const noteFor = (notePath: string, date: string | null): DigestNote => {
+      let note = notes.get(notePath);
+      if (!note) {
+        note = { notePath, date, changed: [], others: [] };
+        notes.set(notePath, note);
+      }
+      return note;
+    };
     const changed = new Set<string>();
     for (const item of items) {
+      if (item.kind === "note") {
+        noteFor(item.notePath, item.date).changedLines = item.lines.map((line) => ({
+          n: line.line + 1,
+          text: line.text,
+        }));
+        continue;
+      }
       if (item.kind !== "task") continue;
       const found = lookup.findTask(item.taskId);
       const task = found?.task ?? item.event.task;
       const notePath = found?.notePath ?? item.event.notePath;
-      let note = notes.get(notePath);
-      if (!note) {
-        note = { notePath, date: found?.date ?? item.event.date, changed: [], others: [] };
-        notes.set(notePath, note);
-      }
+      const note = noteFor(notePath, found?.date ?? item.event.date);
       const record = records.get(item.taskId);
       const parent = task.parentId
         ? lookup.getTasks(notePath).find((t) => t.id === task.parentId)
@@ -540,7 +599,19 @@ export class Orchestrator {
       });
       changed.add(item.taskId);
     }
+    // A reply or a report brings its task's note into view, so the orchestrator can write there.
+    for (const item of items) {
+      const taskId =
+        item.kind === "reply" ? item.taskId : item.kind === "report" ? item.report.taskId : null;
+      if (!taskId) continue;
+      const found = lookup.findTask(taskId);
+      const record = records.get(taskId);
+      const notePath = found?.notePath ?? record?.notePath;
+      if (notePath) noteFor(notePath, found?.date ?? record?.date ?? null);
+    }
     for (const note of notes.values()) {
+      const view = this.noteView(note.notePath);
+      if (view) note.view = view;
       const tasks = lookup.getTasks(note.notePath);
       // Items arrive in settle order, which timer jitter can shuffle; the model works through the
       // digest in order, so it lists a note's tasks the way the note does.
@@ -667,7 +738,68 @@ export class Orchestrator {
         return "Subagent cancelled.";
       },
       listTasks: async ({ notePath }) => this.describeTasks(notePath ?? this.todayPath()),
+      anchorLine: async (input) => this.anchorLine(input),
     };
+  }
+
+  /** The whole note, numbered, with what the agent knows about each line. */
+  private noteView(notePath: string): DigestLine[] | undefined {
+    const { lookup, records } = this.options;
+    const content = lookup.getContent(notePath);
+    if (content === null) return undefined;
+    const tasks = new Map(lookup.getTasks(notePath).map((task) => [task.line, task]));
+    const anchors = new Map(records.anchors(notePath).map((record) => [record.line, record]));
+    return content.split("\n").map((raw, index): DigestLine => {
+      const line = raw.replace(/\r$/, "");
+      const agent = parseAgentLine(line);
+      const task = tasks.get(index);
+      const anchor = task ? undefined : anchors.get(index);
+      const record = task ? records.get(task.id) : anchor;
+      return {
+        n: index + 1,
+        text: agent?.text ?? line,
+        ...(task ? { taskId: task.id } : {}),
+        ...(anchor ? { anchorId: anchor.taskId } : {}),
+        ...(agent ? { agent: true } : {}),
+        ...(record ? { agentStatus: record.status } : {}),
+        ...(record?.summary ? { agentSummary: record.summary } : {}),
+      };
+    });
+  }
+
+  /** `anchor_line`: a record for a non-task line, so it gets a thread and a badge. */
+  private anchorLine(input: AnchorLineInput): string {
+    const { lookup, records } = this.options;
+    const notePath = input.notePath ?? this.todayPath();
+    const content = lookup.getContent(notePath);
+    if (content === null) {
+      throw new ToolInputError(
+        `${notePath} isn't a daily note I watch; only lines of watched notes can have threads.`,
+      );
+    }
+    const lines = content.split("\n").map((line) => line.replace(/\r$/, ""));
+    const index = findQuotedLine(lines, input.line - 1, input.text);
+    if (index === null) {
+      throw new ToolInputError(
+        `Line ${input.line} of ${notePath} doesn't read ${quote(input.text, 120)}. Use the numbers of the note view in the latest digest.`,
+      );
+    }
+    const task = lookup.getTasks(notePath).find((t) => t.line === index);
+    if (task) return `Line ${index + 1} is a task: use its id ${task.id}.`;
+    const text = stripAgentMarker(lines[index]!).trim();
+    const existing = records.anchors(notePath).find((record) => record.line === index);
+    if (existing) return `Line ${index + 1} already has a thread: use ${existing.taskId}.`;
+    const date = parseDailyNotePath(notePath, this.options.getSettings().dailyNotes);
+    const record = records.ensure({
+      taskId: createId("anc", 10),
+      notePath,
+      date: date ? toISODate(date) : null,
+      text,
+      line: index,
+      anchor: "line",
+    });
+    this.turn?.anchored.add(record.taskId);
+    return `Attached ${record.taskId} to line ${index + 1}. Use it as the taskId.`;
   }
 
   private describeTasks(notePath: string): string {

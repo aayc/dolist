@@ -25,6 +25,18 @@ export interface ParsedOtherTask {
   agentSummary?: string;
 }
 
+/** A line of the note view: `12| text  ⟪tsk_ab · working — "Badge" · yours⟫`. */
+export interface ParsedViewLine {
+  n: number;
+  text: string;
+  /** Task or anchor id. */
+  id?: string;
+  agentStatus?: string;
+  agentSummary?: string;
+  /** The agent wrote it. */
+  agent?: boolean;
+}
+
 export interface ParsedNote {
   notePath: string;
   /** "today", "tomorrow", "in 3 days", "2 days ago"… */
@@ -33,6 +45,9 @@ export interface ParsedNote {
   others: ParsedOtherTask[];
   /** Other tasks elided from the digest ("… N more"). */
   moreOthers: number;
+  /** The user's changed non-task lines (1-based `n`). */
+  changedLines: Array<{ n: number; text: string }>;
+  view: ParsedViewLine[];
 }
 
 export interface ParsedReply {
@@ -115,7 +130,7 @@ export function parseDigest(text: string): ParsedDigest {
 
   let section: Section = null;
   let note: ParsedNote | null = null;
-  let noteBlock: "changed" | "others" | null = null;
+  let noteBlock: "changed" | "lines" | "others" | "view" | null = null;
   let lastChanged: ParsedChangedTask | null = null;
 
   for (const line of lines.slice(1)) {
@@ -142,6 +157,27 @@ export function parseDigest(text: string): ParsedDigest {
       if (line === "Other tasks on this note:") {
         noteBlock = "others";
         lastChanged = null;
+        continue;
+      }
+      if (line.startsWith("Changed lines (")) {
+        noteBlock = "lines";
+        lastChanged = null;
+        continue;
+      }
+      if (line.startsWith("Note (the whole file")) {
+        noteBlock = "view";
+        lastChanged = null;
+        continue;
+      }
+      if (noteBlock === "lines") {
+        const head = /^- \[line\] (\d+): /.exec(line);
+        const text = head ? readJsonString(line, head[0].length) : null;
+        if (head && text) note.changedLines.push({ n: Number(head[1]), text: text.value });
+        continue;
+      }
+      if (noteBlock === "view") {
+        const viewLine = parseViewLine(line);
+        if (viewLine) note.view.push(viewLine);
         continue;
       }
       if (line.startsWith("    - ") && lastChanged) {
@@ -203,7 +239,40 @@ function parseNoteHeading(heading: string): ParsedNote {
     changed: [],
     others: [],
     moreOthers: 0,
+    changedLines: [],
+    view: [],
   };
+}
+
+function parseViewLine(line: string): ParsedViewLine | null {
+  const head = /^\s*(\d+)\| ?/.exec(line);
+  if (!head) return null;
+  const rest = line.slice(head[0].length);
+  const note = /^(.*?) {2}⟪([^⟫]*)⟫$/.exec(rest);
+  const out: ParsedViewLine = { n: Number(head[1]), text: note ? note[1]! : rest };
+  if (!note) return out;
+  // `id · status — "summary" · yours`, each part optional; the summary is JSON and may contain " · ".
+  let tail = note[2]!;
+  const id = /^((?:tsk|anc)_\S+?)(?: · |$)/.exec(tail);
+  if (id) {
+    out.id = id[1]!;
+    tail = tail.slice(id[0].length);
+  }
+  const status = /^([a-z_]+)(?= — "| · |$)/.exec(tail);
+  if (status && status[1] !== "yours") {
+    out.agentStatus = status[1]!;
+    tail = tail.slice(status[0].length);
+    if (tail.startsWith(" — ")) {
+      const summary = readJsonString(tail, 3);
+      if (summary) {
+        out.agentSummary = summary.value;
+        tail = tail.slice(summary.end);
+      }
+    }
+    if (tail.startsWith(" · ")) tail = tail.slice(3);
+  }
+  if (tail === "yours") out.agent = true;
+  return out;
 }
 
 function parseChangedLine(line: string): ParsedChangedTask | null {

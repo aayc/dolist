@@ -10,6 +10,7 @@ import { ACTION_CATEGORIES } from "./policy";
 import { searchQueryHits, sensitiveValueHits, sqlHits, writtenContentHits } from "./rules/content";
 import { fileReadAnalysis, fileWriteAnalysis, NOTES_READ } from "./rules/files";
 import { mcpAnalysis } from "./rules/mcp";
+import { noteEditHits } from "./rules/notes";
 import { readPathHits, writePathHits } from "./rules/path-rules";
 import { analysisHits, commandHits, SHELL_BENIGN } from "./rules/shell";
 import { quote, type RuleHit, runRules, type ShellEnv } from "./rules/types";
@@ -179,6 +180,10 @@ export function analyzeAction(ctx: ActionContext): ActionAnalysis {
       result.hits = r.benign ? [...r.hits, r.benign] : r.hits;
       break;
     }
+    case "note_edit":
+      result.hits = noteEditHits(facts.input);
+      fastPath = result.hits.every((hit) => hit.rule.decision === "allow");
+      break;
     case "mcp":
       result = connectorAnalysis(facts);
       fastPath ||= result.hits.some(

@@ -33,6 +33,7 @@ describe("pi-http: the real harness against the fake OpenRouter", () => {
       "web_search",
       "web_fetch",
       "create_artifact",
+      "edit_note",
       "finish_task",
     ]);
 

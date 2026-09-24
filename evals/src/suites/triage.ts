@@ -230,6 +230,10 @@ function recordingHost(calls: RecordedCall[]): OrchestratorToolHost {
       record(TOOL.listTasks, input);
       return FILLER_TASKS.map((t) => `- ${t.taskId}: "${t.text}"`).join("\n");
     },
+    anchorLine: async (input) => {
+      record(TOOL.anchorLine, input);
+      return "Attached anc_eval to the line. Use it as the taskId.";
+    },
   };
 }
 

@@ -142,6 +142,7 @@ export class TaskRecords {
     date: string | null;
     text: string;
     line: number;
+    anchor?: "line";
   }): TaskAgentRecord {
     const existing = this.records.get(input.taskId);
     if (existing) return { ...existing };
@@ -155,6 +156,7 @@ export class TaskRecords {
       threadId: null,
       updatedAt: this.now(),
       unread: 0,
+      ...(input.anchor ? { anchor: input.anchor } : {}),
     };
     this.records.set(record.taskId, record);
     this.changed(record, true);
@@ -231,6 +233,42 @@ export class TaskRecords {
     this.scheduleSave();
     this.dirtyNotes.add(notePath);
     this.scheduleNoteEvents();
+  }
+
+  /** Records of the note's non-task lines (threads the orchestrator anchored to a line). */
+  anchors(notePath: string): TaskAgentRecord[] {
+    return this.list(notePath).filter((record) => record.anchor === "line");
+  }
+
+  /**
+   * Moves the note's line anchors to where the latest parse found them (`resolveLineAnchors`) and
+   * returns the ids of those no longer in the note.
+   */
+  syncAnchors(
+    notePath: string,
+    positions: ReadonlyMap<string, { line: number; text: string }>,
+  ): string[] {
+    const missing: string[] = [];
+    let changed = false;
+    for (const record of this.records.values()) {
+      if (record.notePath !== notePath || record.anchor !== "line") continue;
+      const at = positions.get(record.taskId);
+      if (!at) {
+        missing.push(record.taskId);
+        continue;
+      }
+      if (record.line === at.line && record.text === at.text) continue;
+      record.line = at.line;
+      record.text = at.text;
+      changed = true;
+    }
+    if (changed) {
+      this.dirty = true;
+      this.scheduleSave();
+      this.dirtyNotes.add(notePath);
+      this.scheduleNoteEvents();
+    }
+    return missing;
   }
 
   remove(taskId: string): void {

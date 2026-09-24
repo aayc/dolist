@@ -108,6 +108,11 @@ command, MCP server/tool words, every string in the input). Then per family:
   elsewhere they need approval (stricter for the app's own config/approval state, startup files,
   credentials and system paths). Written content is scanned so a dangerous script cannot be staged
   in the workspace and run later.
+- **Note edits** (`rules/notes.ts`, the `edit_note` tool): the agent's own text goes into the
+  user's note directly — new lines, and lines it wrote before (marked `%%agent:<thread>%%`).
+  Changing or deleting the user's lines or checking their boxes needs approval; writing the app's
+  hidden state is a hard deny. An edit claims a line as the agent's with `mine: true`, and the tool
+  refuses the edit when the line isn't marked as the agent's, so the claim can't skip approval.
 - **MCP connectors** (`rules/mcp.ts`): tool-name verbs map to categories (`send`/`reply` →
   communication, `create_event` → booking, `pay`/`charge` → payment, `delete` → destructive, …;
   `create_draft` is allowed, `get/list/search` are reads); after a conjunction a new verb starts
@@ -116,12 +121,13 @@ command, MCP server/tool words, every string in the input). Then per family:
 
 ## Rules
 
-Stable ids, grouped by decision (generated from `SAFETY_RULES`; 132 rules).
+Stable ids, grouped by decision (generated from `SAFETY_RULES`; 137 rules).
 
 | Rule id | Category | Decision | Risk | Matches |
 | --- | --- | --- | --- | --- |
 | `browser.dangerous-scheme` | system | deny | critical | Opens a script, local-file or browser-internal address |
 | `network.app-self-access` | system | deny | critical | Operates the Daily Do List app itself (an agent could approve its own actions) |
+| `notes.edit.hidden-path` | system | deny | critical | Writes to the app's hidden state instead of a note |
 | `secrets.app-config-write` | system | deny | critical | Changes the app's own keys, connector config or approval state (an agent could grant itself permissions) |
 | `secrets.credential-store` | credentials | deny | critical | Reads a password store, keychain, browser credential database or the app's API keys |
 | `secrets.embedded-access` | credentials | deny | critical | Reads private keys, keychains or credential stores from code or typed text |
@@ -179,6 +185,9 @@ Stable ids, grouped by decision (generated from `SAFETY_RULES`; 132 rules).
 | `destructive.unsafe-variable-path` | destructive | require_approval | critical | Deletes a path built from a variable that could expand to your home or root folder |
 | `file_write.note-edit` | file_write | require_approval | medium | Edits a note or vault file outside the task workspace |
 | `file_write.outside-workspace` | file_write | require_approval | medium | Writes files outside the task workspace |
+| `notes.edit.delete-user-text` | destructive | require_approval | medium | Deletes text you wrote from a note |
+| `notes.edit.unreadable` | file_write | require_approval | medium | A note edit the rules can't read |
+| `notes.edit.user-text` | file_write | require_approval | medium | Changes text you wrote in a note |
 | `file_write.symlink-outside` | file_write | require_approval | medium | Creates a link that points outside the task workspace |
 | `forms.action-link` | form_submission | require_approval | medium | Opens a link that confirms, approves or answers something |
 | `forms.enter-key` | form_submission | require_approval | medium | Presses Enter while working on a task that commits something (purchase, booking, message…) |
@@ -245,6 +254,7 @@ Stable ids, grouped by decision (generated from `SAFETY_RULES`; 132 rules).
 | `files.read` | read | allow | low | Reads or searches files |
 | `mcp.draft` | file_write | allow | low | Connector tool that only saves a draft |
 | `mcp.read-action` | read | allow | low | Connector tool that only reads (get, list, search, …) |
+| `notes.edit.own` | file_write | allow | low | Adds its own text to a note, or changes lines it wrote |
 | `notes.read` | read | allow | low | Reads or searches your notes |
 | `shell.compute` | compute | allow | low | Runs computations (calculators, text processing, inline code without side effects) |
 | `shell.read-only` | read | allow | low | Runs read-only shell commands (listing, reading, searching, git status, HTTP GET) |

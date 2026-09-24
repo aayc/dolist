@@ -226,6 +226,10 @@ function describeFromFacts(f: ActionFacts): string {
         return `Write file ${path ?? "(no path)"}${content ? ` (${sizeOf(content)})` : ""}`;
       return `Edit file ${path ?? "(no path)"}`;
     }
+    case "note_edit": {
+      const edits = Array.isArray(input.edits) ? input.edits.length : 0;
+      return `Edit note ${str(input.notePath) ?? "(the task's note)"}: ${edits} change${edits === 1 ? "" : "s"}`;
+    }
     case "browser":
     case "computer":
       return describeUi(f) ?? humanize(f.operation);

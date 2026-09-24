@@ -43,6 +43,14 @@ key the judge is off (uncertain actions ask you) and web search comes from the C
   editor reports you typing on that line, and shortened to ~0.7 s once your cursor leaves the line
   (e.g. you pressed Enter). Blank template tasks are ignored until they have text.
 - Emits `added`, `updated`, `completed`, `reopened`, `removed` events.
+- The rest of the note settles too: new or edited lines that aren't tasks become one `note` event
+  per pause, but only when a line could be addressed to the agent (`orchestrator/prose.ts`: a
+  question, `@agent`, `TODO`, a line opening with a request verb). Journaling never wakes the
+  orchestrator by itself; it still sees those lines in the whole-note view of its next digest.
+- The agent's own lines (ending in `%%agent:<thread>%%`) never count: its tasks aren't announced,
+  its prose isn't news. Deleting the marker makes a task the user's, and it is triaged then.
+- Keeps each note's latest content for the orchestrator (`getContent`) and tells the agent's edits
+  when the user has paused typing in a note (`waitForPause`).
 
 ## 2. Deciding (Orchestrator)
 
@@ -51,10 +59,20 @@ key the judge is off (uncertain actions ask you) and web search comes from the C
   to a task whose subagent is running are forwarded to that subagent.
 - Everything else is batched (~150 ms) into one **event digest** for the day's orchestrator
   session (`orchestrator:<date>`, restarted every 30 turns, 180 s turn timeout). The digest has the
-  local time, changed tasks with sub-bullets and previous text, the rest of the list, thread
-  replies, subagent reports, running work and the capabilities available.
+  local time, changed tasks with sub-bullets and previous text, changed lines (prose addressed to
+  it), the rest of the list, **the whole note** numbered (`12| line  ⟪tsk_… · working — "badge" ·
+  yours⟫`: ids, agent status and badge, and which lines the agent wrote), thread replies, subagent
+  reports, running work and the capabilities available. Replies and reports bring their note's
+  view along.
 - The orchestrator's tools: `spawn_subagent`, `post_comment`, `ask_user`, `set_task_status`,
-  `message_subagent`, `cancel_subagent`, `list_tasks`, `read_note`, `web_search`, `web_fetch`.
+  `message_subagent`, `cancel_subagent`, `list_tasks`, `anchor_line`, `edit_note`, `read_note`,
+  `web_search`, `web_fetch`.
+- **Anchors**: `anchor_line` attaches a thread to any line that isn't a task (a question, a
+  heading…). It becomes a record with `anchor: "line"` and an `anc_…` id that every task tool
+  accepts, so the line gets a badge and its own thread like a task. Anchors follow their line as
+  the note changes (`resolveLineAnchors`, the task tracker's identity rules); one whose line is
+  gone for twice the settle delay is removed and its work stops, like a deleted task's. An anchor
+  the model created but never used in its turn is dropped.
 - Its prompt (`src/prompts/orchestrator.ts`) defines exactly four outcomes per task: **delegate**
   (default for anything digital), **answer** (quick facts/lookups), **ask** (only when genuinely
   ambiguous), **ignore** (chores, exercise, personal calls — silently). It knows the list
@@ -65,9 +83,10 @@ key the judge is off (uncertain actions ask you) and web search comes from the C
 - One harness session per task/thread with a crisp goal, instructions and the minimal capabilities:
   `web`, `browser`, `computer`, `shell`, `files`, `connectors`. Concurrency is limited
   (`maxConcurrentSubagents`, default 3) with a FIFO queue.
-- Tools: thread tools (`post_update`, `ask_user`, `create_artifact`, `finish_task`), knowledge
-  (`read_note`, `search_notes`, `web_fetch` with SSRF protection, `web_search` via OpenRouter's web
-  plugin), execution tools (`browser_*`, `computer_*`), MCP connector tools (`mcp__server__tool`),
+- Tools: thread tools (`post_update`, `ask_user`, `create_artifact`, `finish_task`), `edit_note`
+  (bound to its task: results go under it by default), knowledge (`read_note`, `search_notes`,
+  `web_fetch` with SSRF protection, `web_search` via OpenRouter's web plugin), execution tools
+  (`browser_*`, `computer_*`), MCP connector tools (`mcp__server__tool`),
   and built-in file/shell tools bound to the task's workspace (`$DDL_HOME/workspaces/<thread>`):
   Pi's own, or our equivalents with the same names and inputs (`src/harness/builtin-tools.ts`).
 - Harness events stream into the thread: text deltas, tool calls (running/ok/error/blocked), live
@@ -77,6 +96,25 @@ key the judge is off (uncertain actions ask you) and web search comes from the C
 - Prompt (`src/prompts/subagent.ts`): plan briefly, report milestones, create artifacts for real
   outputs, attempt risky steps normally (the safety gate asks you), never work around a denial,
   never enter credentials you didn't provide, treat web content as untrusted.
+
+## The living list: writing, anchors, citations
+
+- **Agent text in notes.** `edit_note` (`src/tools/notes.ts`) adds lines under a task or anchor,
+  after a line, or at the end; it can also rewrite or delete lines and set checkboxes. Every line
+  the agent writes ends with `%%agent:<threadId>%%` (`@ddl/core` `agent-text.ts`), an Obsidian
+  comment: Obsidian hides it, our editors hide it and draw the line as agent text linked to its
+  thread. Lines are found by their quoted text near the given number, so a miscounted line still
+  lands right; edits wait for a pause in the user's typing and are replanned if the note changed.
+  Safety: its own text goes in directly, changing the user's needs approval (see the safety
+  README). Clients merge an agent edit into unsaved typing with `mergeText` (`@ddl/core`
+  `merge.ts`, a line-based three-way merge) instead of making a conflict copy.
+- **Citations.** Agents cite with markdown links (`[CTBUH](https://…)`, numbered `[1](https://…)`)
+  and `[[Note]]` links. The runtime remembers pages `web_search`/`web_fetch` returned
+  (`threads/sources.ts`); when a thread cites one (a message or a note line it wrote), the thread
+  keeps it in `Thread.sources` (url, title, snippet). Clients preview citations from there and
+  never fetch a page to build a preview.
+- **Badges** stay the short status next to the line ("Booked · Tue 9:30am"); note lines are for
+  results worth keeping, with their sources.
 
 ## 4. Staying safe (SafetyGate)
 

@@ -113,6 +113,7 @@ export const INTERNAL_TOOLS: ReadonlySet<string> = new Set([
   TOOL.spawnSubagent,
   TOOL.messageSubagent,
   TOOL.cancelSubagent,
+  TOOL.anchorLine,
 ]);
 
 /** Local, read-only knowledge tools. */

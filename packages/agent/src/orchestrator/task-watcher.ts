@@ -9,8 +9,10 @@ import {
   type AppSettings,
   Emitter,
   hashString,
+  isAgentLine,
   isBlankTaskText,
   isClosedStatus,
+  isTaskLine,
   isWithinWindow,
   type LocalDate,
   type Logger,
@@ -27,7 +29,8 @@ import {
   type Unsubscribe,
 } from "@ddl/core";
 import type { StorageEvent, StorageProvider } from "@ddl/storage";
-import type { TaskEvent } from "./types";
+import { mayBeRequest } from "./prose";
+import type { NoteEvent, TaskEvent } from "./types";
 
 export const TASK_STATE_DIR = PERSISTED_PATHS.taskState;
 
@@ -55,6 +58,8 @@ export interface TaskWatcherOptions {
 export type TaskWatcherEvents = {
   /** A settled change to one task. */
   task: TaskEvent;
+  /** A settled change to the note's other lines (see `NoteEvent`). */
+  note: NoteEvent;
   /** Every re-parse of a watched note (unsettled): keeps lines/text of records current. */
   tasks: { notePath: string; date: string | null; tasks: readonly TrackedTask[] };
 };
@@ -65,6 +70,37 @@ export interface TaskLookup {
     taskId: string,
   ): { task: TrackedTask; notePath: string; date: string | null } | undefined;
   getTasks(notePath: string): readonly TrackedTask[];
+  /** The note's content as of the last parse (null when not watched or deleted). */
+  getContent(notePath: string): string | null;
+}
+
+/** The user's non-task lines (no blank, task or agent-written lines), trimmed, in note order. */
+function userProse(content: string): Array<{ line: number; text: string }> {
+  const out: Array<{ line: number; text: string }> = [];
+  const lines = content.split("\n");
+  for (let line = 0; line < lines.length; line++) {
+    const raw = lines[line]!.replace(/\r$/, "");
+    const text = raw.trim();
+    if (text === "" || isTaskLine(raw) || isAgentLine(raw)) continue;
+    out.push({ line, text });
+  }
+  return out;
+}
+
+/** Lines of `next` whose text isn't in `previous` (as many times), i.e. new or edited lines. */
+function newProse(
+  next: ReadonlyArray<{ line: number; text: string }>,
+  previous: readonly string[],
+): Array<{ line: number; text: string }> {
+  const left = new Map<string, number>();
+  for (const text of previous) left.set(text, (left.get(text) ?? 0) + 1);
+  const out: Array<{ line: number; text: string }> = [];
+  for (const entry of next) {
+    const count = left.get(entry.text) ?? 0;
+    if (count > 0) left.set(entry.text, count - 1);
+    else out.push(entry);
+  }
+  return out;
 }
 
 interface SettledSnapshot {
@@ -88,6 +124,17 @@ interface NoteState {
   processing: Promise<void> | null;
   rerun: "event" | "scan" | null;
   saveTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The note as of the last read (null once deleted). */
+  content: string | null;
+  prose: ProseState;
+}
+
+/** Settling of the note's non-task lines, which the orchestrator sees as `note` events. */
+interface ProseState {
+  /** The user's non-task lines as of the last settle; null until the note was first read. */
+  settled: string[] | null;
+  lastChangeAt: number;
+  timer: ReturnType<typeof setTimeout> | undefined;
 }
 
 interface PendingSettle {
@@ -173,6 +220,7 @@ export class TaskWatcher implements TaskLookup {
       if (pending.timer) clearTimeout(pending.timer);
     }
     this.pending.clear();
+    for (const state of this.notes.values()) this.cancelProse(state);
     await this.scanning?.catch(() => {});
     await Promise.all([...this.notes.values()].map((state) => state.processing));
     await this.flush();
@@ -218,10 +266,39 @@ export class TaskWatcher implements TaskLookup {
     for (const pending of this.pending.values()) {
       if (pending.notePath === path) this.schedule(pending);
     }
+    const state = this.notes.get(path);
+    if (state?.prose.timer) this.scheduleProse(state);
   }
 
   getTasks(notePath: string): readonly TrackedTask[] {
     return this.notes.get(notePath)?.tasks ?? [];
+  }
+
+  getContent(notePath: string): string | null {
+    return this.notes.get(notePath)?.content ?? null;
+  }
+
+  /**
+   * Resolves once the editor hasn't reported typing in the note for the activity window (or after
+   * `maxWaitMs`), so the agent's own edits land between keystrokes rather than under them.
+   */
+  async waitForPause(notePath: string, maxWaitMs = 8_000): Promise<void> {
+    let path: string;
+    try {
+      path = normalizePath(notePath);
+    } catch {
+      return;
+    }
+    const deadline = this.now() + maxWaitMs;
+    for (;;) {
+      const activity = this.activity.get(path);
+      const quietFor = activity ? this.now() - activity.at : Number.POSITIVE_INFINITY;
+      const left = deadline - this.now();
+      if (quietFor >= this.activityWindowMs || left <= 0) return;
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.max(10, Math.min(this.activityWindowMs - quietFor, left))),
+      );
+    }
   }
 
   findTask(
@@ -304,6 +381,8 @@ export class TaskWatcher implements TaskLookup {
       if (pending.timer) clearTimeout(pending.timer);
       this.pending.delete(taskId);
     }
+    const state = this.notes.get(notePath);
+    if (state) this.cancelProse(state);
   }
 
   private enqueue(notePath: string, cause: "event" | "scan"): Promise<void> {
@@ -336,19 +415,87 @@ export class TaskWatcher implements TaskLookup {
     if (!this.running) return;
     const at = this.now();
     if (!file) {
+      state.content = null;
+      this.cancelProse(state);
+      state.prose.settled = null;
       if (state.tasks.length > 0) this.applyParse(state, [], null, at, cause === "scan");
       return;
     }
+    // Like tasks: a note that appears while we watch is new writing; one a scan finds already existed.
+    const created = state.content === null && cause === "event";
+    state.content = file.content;
     if (file.version !== state.contentVersion) {
       const parsed = parseTasks(file.content);
       if (!state.tracked) {
         this.firstSight(state, parsed, file.version, at, cause);
+        this.trackProse(state, at, created);
         return;
       }
       // Changes found by a scan were made while we weren't watching: nobody is mid-typing them.
       this.applyParse(state, parsed, file.version, at, cause === "scan");
     }
+    this.trackProse(state, at, created);
     if (cause === "scan") this.reconcileUnsettled(state);
+  }
+
+  // ── Prose (the note's non-task lines) ─────────────────────────────────────
+
+  /**
+   * New or edited user lines settle like tasks do, as one `note` event per pause. Lines that only
+   * disappeared keep their place in the snapshot until the next settle, so cutting and pasting a
+   * line isn't news. The first read of a note found by a scan only takes the snapshot; a note
+   * `created` while we watch starts from nothing.
+   */
+  private trackProse(state: NoteState, at: number, created: boolean): void {
+    const prose = userProse(state.content ?? "");
+    if (state.prose.settled === null) {
+      if (!created) {
+        state.prose.settled = prose.map((entry) => entry.text);
+        return;
+      }
+      state.prose.settled = [];
+    }
+    if (!newProse(prose, state.prose.settled).some((entry) => mayBeRequest(entry.text))) return;
+    state.prose.lastChangeAt = at;
+    this.scheduleProse(state);
+  }
+
+  private scheduleProse(state: NoteState): void {
+    if (state.prose.timer) clearTimeout(state.prose.timer);
+    const delay = Math.max(0, this.proseDueAt(state) - this.now());
+    state.prose.timer = setTimeout(() => this.settleProse(state.notePath), delay);
+  }
+
+  /** Settle delay after the last change, later while the user is still typing in the note. */
+  private proseDueAt(state: NoteState): number {
+    let due = state.prose.lastChangeAt + this.settings.agent.settleMs;
+    const activity = this.activity.get(state.notePath);
+    if (activity && this.now() - activity.at <= this.activityWindowMs) {
+      due = Math.max(due, activity.at + this.activityWindowMs);
+    }
+    return due;
+  }
+
+  private settleProse(notePath: string): void {
+    const state = this.notes.get(notePath);
+    if (!state || !this.running) return;
+    state.prose.timer = undefined;
+    if (this.proseDueAt(state) > this.now()) {
+      this.scheduleProse(state);
+      return;
+    }
+    const prose = userProse(state.content ?? "");
+    const lines = newProse(prose, state.prose.settled ?? []).filter((entry) =>
+      mayBeRequest(entry.text),
+    );
+    state.prose.settled = prose.map((entry) => entry.text);
+    if (lines.length === 0) return;
+    this.emitter.emit("note", { notePath, date: state.date, lines, at: this.now() });
+  }
+
+  private cancelProse(state: NoteState): void {
+    if (state.prose.timer) clearTimeout(state.prose.timer);
+    state.prose.timer = undefined;
   }
 
   /**
@@ -369,13 +516,13 @@ export class TaskWatcher implements TaskLookup {
     state.tracked = true;
     const act = cause === "scan" ? this.settings.agent.actOnExistingTasks : true;
     for (const task of tasks) {
-      const actionable = !isBlankTaskText(task.text) && !isClosedStatus(task.status);
+      const actionable = !isBlankTaskText(task.text) && !isClosedStatus(task.status) && !task.agent;
       if (act && actionable) {
         this.markPending(state, task.id, at, cause === "scan");
       } else {
         state.settled.set(task.id, {
           task: cloneTask(task),
-          announced: !isBlankTaskText(task.text),
+          announced: !isBlankTaskText(task.text) && !task.agent,
         });
       }
     }
@@ -391,6 +538,7 @@ export class TaskWatcher implements TaskLookup {
     immediate: boolean,
   ): void {
     const ghostIds = new Set(state.ghosts.map((g) => g.id));
+    const wasAgents = new Set(state.tasks.filter((t) => t.agent).map((t) => t.id));
     const { tasks, diff } = trackTasks(
       [...state.tasks, ...state.ghosts],
       parsed,
@@ -406,8 +554,11 @@ export class TaskWatcher implements TaskLookup {
     for (const { task } of diff.updated) touched.add(task.id);
     for (const { task } of diff.statusChanged) touched.add(task.id);
     for (const task of diff.removed) if (!ghostIds.has(task.id)) touched.add(task.id);
-    // A revived ghost settles against its snapshot like any other change.
-    for (const task of tasks) if (ghostIds.has(task.id)) touched.add(task.id);
+    // A revived ghost settles against its snapshot like any other change; so does an agent task
+    // whose marker the user deleted (it's theirs now).
+    for (const task of tasks) {
+      if (ghostIds.has(task.id) || (wasAgents.has(task.id) && !task.agent)) touched.add(task.id);
+    }
     for (const taskId of touched) this.markPending(state, taskId, at, immediate);
 
     this.emitter.emit("tasks", { notePath: state.notePath, date: state.date, tasks: state.tasks });
@@ -487,7 +638,9 @@ export class TaskWatcher implements TaskLookup {
     if (current) {
       state.settled.set(taskId, {
         task: cloneTask(current),
-        announced: (snapshot?.announced ?? false) || !isBlankTaskText(current.text),
+        // The agent's own tasks aren't requests: they're announced once the user removes the marker.
+        announced:
+          (snapshot?.announced ?? false) || (!isBlankTaskText(current.text) && !current.agent),
       });
     } else {
       state.settled.delete(taskId);
@@ -510,6 +663,7 @@ export class TaskWatcher implements TaskLookup {
       return { ...base, kind: "removed", task: ghost ?? snapshot.task, previous: snapshot.task };
     }
     if (isBlankTaskText(current.text)) return null;
+    if (current.agent && !snapshot?.announced) return null;
     if (!snapshot?.announced) {
       return isClosedStatus(current.status) ? null : { ...base, kind: "added", task: current };
     }
@@ -588,6 +742,8 @@ export class TaskWatcher implements TaskLookup {
         processing: null,
         rerun: null,
         saveTimer: undefined,
+        content: null,
+        prose: { settled: null, lastChangeAt: 0, timer: undefined },
       };
       this.notes.set(notePath, state);
     }
@@ -633,7 +789,7 @@ export class TaskWatcher implements TaskLookup {
     state.settled = new Map(
       tasks.map((task) => [
         task.id,
-        { task: cloneTask(task), announced: !isBlankTaskText(task.text) },
+        { task: cloneTask(task), announced: !isBlankTaskText(task.text) && !task.agent },
       ]),
     );
     state.tracked = true;
@@ -697,7 +853,7 @@ function isOnTask(line: number, task: TrackedTask): boolean {
 }
 
 function differs(snapshot: SettledSnapshot, task: TrackedTask): boolean {
-  if (!snapshot.announced) return !isBlankTaskText(task.text);
+  if (!snapshot.announced) return !isBlankTaskText(task.text) && !task.agent;
   const previous = snapshot.task;
   return (
     previous.text !== task.text ||

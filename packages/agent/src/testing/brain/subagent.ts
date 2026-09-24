@@ -253,7 +253,40 @@ function nextStep(plan: Plan): Step {
       }
     }
   }
+
+  // 7. The outcome goes into the note under the task — only for work that actually succeeded.
+  const succeeded =
+    plan.errors.length === 0 &&
+    !deniedBefore(plan) &&
+    (verb ? plan.risky?.outcome?.status === "ok" : plan.researchOk);
+  if (succeeded && tools.has("edit_note")) {
+    const edit = replay.take("edit_note");
+    if (!edit || (edit.status === "invalid" && edit.attempts < 2)) {
+      return {
+        call: {
+          name: "edit_note",
+          arguments: { edits: [{ op: "add_under", lines: [outcomeLine(plan, verb)] }] },
+        },
+      };
+    }
+  }
   return { finish: true };
+}
+
+/** The line the fake leaves under its task: what happened and, for research, its best source. */
+function outcomeLine(plan: Plan, verb: string | null | undefined): string {
+  if (verb) return `${PAST_TENSE[verb] ?? "Done"} (mock) — details in the thread`;
+  const url = plan.urls[0];
+  if (!url) return "Summary ready (mock) — details in the thread";
+  return `Summary ready (mock) — best source: [${hostOf(url)}](${url})`;
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
 }
 
 function researchStep(plan: Plan): Step {

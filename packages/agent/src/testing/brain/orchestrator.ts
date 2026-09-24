@@ -10,6 +10,7 @@ import {
   isDigest,
   type ParsedChangedTask,
   type ParsedDigest,
+  type ParsedNote,
   type ParsedReply,
   parseDigest,
 } from "./digest";
@@ -45,10 +46,14 @@ interface Work {
   previousText?: string;
   reply?: string;
   ack: string;
+  /** A non-task line the orchestrator anchored: answers also go into the note under it. */
+  anchored?: boolean;
 }
 
 const MAX_GOAL = 500;
 const MAX_COMMENT_TASK = 120;
+/** A line that isn't a task is only work when it's addressed to the agent. */
+const ADDRESSED = /\?\s*$|^@?agent\b[:,]?\s/i;
 
 export function orchestratorTurn(
   request: BrainRequest,
@@ -74,7 +79,53 @@ export function orchestratorTurn(
   for (const reply of ctx.digest.replies) {
     if (reply.taskId && !changedIds.has(reply.taskId)) calls.push(...planReply(reply, ctx));
   }
+  for (const note of ctx.digest.notes) {
+    for (const line of note.changedLines) calls.push(...planLine(note, line, ctx));
+  }
   return calls.length > 0 ? { toolCalls: calls } : {};
+}
+
+/** A changed line addressed to the agent: anchor a thread to it, then triage it like a task. */
+function planLine(
+  note: ParsedNote,
+  line: { n: number; text: string },
+  ctx: Context,
+): TurnToolCall[] {
+  const text = line.text.trim();
+  if (!ADDRESSED.test(text) || !ctx.tools.has("anchor_line")) return [];
+  const request = text.replace(/^@?agent\b[:,]?\s*/i, "");
+  const decision = triage({
+    text: request,
+    notes: [],
+    ...(ctx.digest.today ? { today: ctx.digest.today } : {}),
+  });
+  if (decision.kind === "ignore") return [];
+  const anchor = ctx.calls.find(
+    (call) => call.name === "anchor_line" && argString(call, "text") === line.text,
+  );
+  if (!anchor) {
+    return [
+      {
+        name: "anchor_line",
+        arguments: { notePath: note.notePath, line: line.n, text: line.text },
+      },
+    ];
+  }
+  const id =
+    anchor.status === "ok" ? /\b((?:anc|tsk)_[\w-]+)/.exec(anchor.result ?? "")?.[1] : null;
+  if (!id) return [];
+  const work: Work = {
+    taskId: id,
+    text: request,
+    notes: [],
+    ack: pick(
+      [`On it — ${lowerFirst(excerpt(request, 100))}`, `Looking into it: ${excerpt(request, 100)}`],
+      ctx.options.seed,
+      request,
+    ),
+    anchored: true,
+  };
+  return planOutcome(work, decision, ctx);
 }
 
 function callsFor(taskId: string, ctx: Context): CallRecord[] {
@@ -204,17 +255,34 @@ function planAnswer(
     }
     if (search?.status === "ok" && search.result) {
       const url = firstUrl(search.result);
-      text = `${firstLine(search.result).replace(/^\d+\.\s*/, "")}${url && !firstLine(search.result).includes(url) ? ` — ${url}` : ""}`;
+      const first = firstLine(search.result).replace(/^\d+\.\s*/, "");
+      const link = url ? `[${hostOf(url)}](${url})` : "";
+      text = !url ? first : first.includes(url) ? first.replace(url, link) : `${first} (${link})`;
       summary = "Answered";
     } else {
       text = "I couldn't look this up right now; the official source is the safest bet.";
       summary = "Couldn't look up";
     }
   }
-  return [
+  const calls: TurnToolCall[] = [
     { name: "post_comment", arguments: { taskId, text, summary } },
     { name: "set_task_status", arguments: { taskId, status: "done", summary } },
   ];
+  if (work.anchored && ctx.tools.has("edit_note")) {
+    calls.push({
+      name: "edit_note",
+      arguments: { taskId, edits: [{ op: "add_under", taskId, lines: [text] }] },
+    });
+  }
+  return calls;
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
 }
 
 function planDelegate(work: Work, wanted: readonly Capability[], ctx: Context): TurnToolCall[] {

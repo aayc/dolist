@@ -1,6 +1,7 @@
 import { type ToolSpec, textResult, truncate } from "@ddl/core";
 import type { Capability } from "../execution/types";
 import {
+  type AnchorLineInput,
   type CancelSubagentInput,
   type ListTasksInput,
   type MessageSubagentInput,
@@ -18,6 +19,7 @@ import {
   requireEnum,
   requireEnumArray,
   requireString,
+  ToolInputError,
 } from "./input";
 
 export const CAPABILITIES: readonly Capability[] = [
@@ -49,6 +51,7 @@ export interface OrchestratorToolHost {
   messageSubagent(input: MessageSubagentInput): Promise<string>;
   cancelSubagent(input: CancelSubagentInput): Promise<string>;
   listTasks(input: ListTasksInput): Promise<string>;
+  anchorLine(input: AnchorLineInput): Promise<string>;
 }
 
 const TASK_ID = {
@@ -280,7 +283,60 @@ export function createOrchestratorTools(host: OrchestratorToolHost): ToolSpec[] 
       }),
   };
 
-  return [spawn, postComment, askUser, setStatus, messageSubagent, cancelSubagent, listTasks];
+  const anchorLine: ToolSpec = {
+    name: TOOL.anchorLine,
+    label: "Attach a thread to a line",
+    description:
+      "Attach a thread to a line of the note that isn't a task (a question, a request, a heading) so the user gets a badge there. Returns an id that works as taskId with post_comment, set_task_status, ask_user, spawn_subagent and edit_note.",
+    parameters: {
+      type: "object",
+      properties: {
+        notePath: {
+          type: "string",
+          description: "Vault path of the note; defaults to today's daily note.",
+        },
+        line: {
+          type: "integer",
+          minimum: 1,
+          description: "1-based line number from the note view.",
+        },
+        text: { type: "string", description: "The line's current text, as shown." },
+      },
+      required: ["line", "text"],
+      additionalProperties: false,
+    },
+    safety: {
+      ...INTERNAL,
+      describe: (input) => `Attach a thread to ${truncate(String(field(input, "text")), 120)}`,
+    },
+    execute: (input) =>
+      guarded(async () => {
+        const args = asInput(input);
+        const line = args.line;
+        if (typeof line !== "number" || !Number.isInteger(line) || line < 1) {
+          throw new ToolInputError('"line" must be the 1-based line number from the note view.');
+        }
+        const notePath = optionalString(args, "notePath", { maxLength: 500 });
+        return textResult(
+          await host.anchorLine({
+            ...(notePath ? { notePath } : {}),
+            line,
+            text: requireString(args, "text", { maxLength: 2_000 }),
+          }),
+        );
+      }),
+  };
+
+  return [
+    spawn,
+    postComment,
+    askUser,
+    setStatus,
+    messageSubagent,
+    cancelSubagent,
+    listTasks,
+    anchorLine,
+  ];
 }
 
 function field(input: unknown, key: string): unknown {

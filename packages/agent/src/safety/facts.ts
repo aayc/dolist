@@ -19,6 +19,7 @@ export type ToolFamily =
   | "shell"
   | "file_read"
   | "file_write"
+  | "note_edit"
   | "mcp"
   | "custom";
 
@@ -104,6 +105,7 @@ function familyOf(toolName: string, isMcp: boolean): ToolFamily {
   if (isMcp) return "mcp";
   if (INTERNAL_TOOLS.has(toolName)) return "internal";
   if (KNOWLEDGE_TOOLS.has(toolName)) return "knowledge";
+  if (toolName === TOOL.editNote) return "note_edit";
   if (toolName === TOOL.webSearch) return "web_search";
   if (toolName === TOOL.webFetch) return "web_fetch";
   if (toolName === TOOL.bash) return "shell";

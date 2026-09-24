@@ -190,6 +190,7 @@ describe("retries and recovery", () => {
     expect(t.toolCalls(task).map((m) => `${m.toolName}:${m.status}`)).toEqual([
       "web_search:ok",
       "web_fetch:error",
+      "edit_note:ok",
     ]);
     expect(t.web.fetched).toEqual([failing]);
     expectAllGated(t);

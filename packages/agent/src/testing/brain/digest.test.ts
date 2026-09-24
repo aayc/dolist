@@ -55,9 +55,41 @@ const status = fc.constantFrom(
 );
 const checkbox = fc.constantFrom("open", "done", "cancelled", "in_progress", "deferred");
 
+const viewLines = fc
+  .array(
+    fc.record({
+      text: fc.oneof(
+        text,
+        fc.constant(""),
+        text.map((t) => `  - ${t}`),
+      ),
+      id: fc.option(fc.oneof(taskId, fc.stringMatching(/^anc_[a-z0-9]{6,10}$/)), {
+        nil: undefined,
+      }),
+      agent: fc.boolean(),
+      agentStatus: fc.option(status, { nil: undefined }),
+      agentSummary: fc.option(text, { nil: undefined }),
+    }),
+    { maxLength: 8 },
+  )
+  .map((lines) =>
+    lines.map((line, i) => ({
+      n: i + 1,
+      text: line.text,
+      ...(line.id?.startsWith("anc_") ? { anchorId: line.id } : line.id ? { taskId: line.id } : {}),
+      ...(line.agent ? { agent: true } : {}),
+      ...(line.agentStatus ? { agentStatus: line.agentStatus } : {}),
+      ...(line.agentStatus && line.agentSummary ? { agentSummary: line.agentSummary } : {}),
+    })),
+  );
+
 const note: fc.Arbitrary<DigestNote> = fc.record({
   notePath: fc.constantFrom("Daily/2026-09-23.md", "Daily/2026-09-24.md", "Daily/2026-09-20.md"),
   date: fc.constantFrom("2026-09-23", "2026-09-24", "2026-09-20", null),
+  changedLines: fc.array(fc.record({ n: fc.integer({ min: 1, max: 500 }), text }), {
+    maxLength: 3,
+  }),
+  view: viewLines,
   changed: fc.array(
     fc.record(
       {
@@ -162,6 +194,19 @@ describe("parseDigest ⇄ formatOrchestratorDigest", () => {
           o.agentStatus,
           o.agentSummary,
         ]),
+      );
+      expect(out.changedLines).toEqual(inputNote.changedLines ?? []);
+      const view = [...(inputNote.view ?? [])];
+      while (view.length > 0 && view.at(-1)!.text.trim() === "") view.pop();
+      expect(out.view).toEqual(
+        view.map((line) => ({
+          n: line.n,
+          text: line.text,
+          ...(line.taskId || line.anchorId ? { id: line.taskId ?? line.anchorId } : {}),
+          ...(line.agentStatus ? { agentStatus: line.agentStatus } : {}),
+          ...(line.agentSummary ? { agentSummary: line.agentSummary } : {}),
+          ...(line.agent ? { agent: true } : {}),
+        })),
       );
     });
     expect(parsed.replies).toEqual(

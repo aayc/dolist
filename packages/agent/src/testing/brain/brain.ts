@@ -88,6 +88,8 @@ const SANDBOX_TOOLS: ReadonlySet<string> = new Set([
   "message_subagent",
   "cancel_subagent",
   "list_tasks",
+  "anchor_line",
+  "edit_note",
 ]);
 const SANDBOX_CAPABILITIES: readonly Capability[] = ["web", "files"];
 

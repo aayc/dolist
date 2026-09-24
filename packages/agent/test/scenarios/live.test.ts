@@ -20,8 +20,18 @@ describe("live mode (in-process)", () => {
       "web_search",
       "web_fetch",
       "create_artifact",
+      "edit_note",
       "finish_task",
     ]);
+    // The outcome is in the note as the agent's line, and the page it cites is a thread source.
+    const thread = t.thread(task);
+    const note = (await t.storage.read(t.notePath()))!.content;
+    expect(note).toContain(
+      `  - Summary ready (mock) — best source: [example.com](https://www.example.com/guides/compare-flights-to-denver-for-thanksgiving) %%agent:${thread.id}%%`,
+    );
+    expect(t.thread(task).sources?.map((s) => s.url)).toContain(
+      "https://www.example.com/guides/compare-flights-to-denver-for-thanksgiving",
+    );
     const search = t.toolCalls(task).find((m) => m.toolName === "web_search");
     expect(search).toMatchObject({ status: "ok", label: "Search the web" });
     expect(search?.resultPreview).toContain(

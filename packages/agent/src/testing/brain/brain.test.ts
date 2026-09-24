@@ -42,6 +42,7 @@ beforeAll(async () => {
       messageSubagent: unused,
       cancelSubagent: unused,
       listTasks: unused,
+      anchorLine: unused,
     }),
     ...createFakeWebTools(),
   ]);

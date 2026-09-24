@@ -137,8 +137,11 @@ and package READMEs (`packages/storage`, `packages/connectors`, `packages/editor
    reject unexpected `Host`/`Origin` headers. Never add an unauthenticated endpoint that reads the
    vault or triggers agent work. The same holds for every other listener (the Cursor harness's MCP
    bridge: loopback, per-session random path and token, no `Origin`).
-7. **Agents don't silently edit the user's notes.** Agents write to the sidecar (threads,
-   artifacts). Changing note content is a `file_write` on the vault and goes through approval.
+7. **Agents never silently change the user's words.** An agent writes in a note only through
+ `edit_note`: every line it writes ends with an agent marker (`%%agent:<thread>%%`) so it is
+ visibly the agent's, its own lines go in directly, and changing or deleting the user's lines (or
+ checking their boxes) goes through approval. Everything else agents make lives in the sidecar
+ (threads, artifacts). Clients merge agent edits into unsaved typing (`mergeText`).
 8. **Keystroke path stays O(line).** No network, no full-document parse, no React re-render per
    keystroke. Persistence is debounced; anchors are mapped through CodeMirror transactions.
 9. **Time is local.** Daily notes use the user's local calendar date (`@ddl/core` dates), never UTC.

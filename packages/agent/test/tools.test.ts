@@ -33,6 +33,7 @@ function recordingHost(): OrchestratorToolHost & { calls: Array<[string, unknown
     messageSubagent: record("message"),
     cancelSubagent: record("cancel"),
     listTasks: record("list"),
+    anchorLine: record("anchor"),
   };
 }
 
@@ -48,6 +49,7 @@ describe("orchestrator tools", () => {
       TOOL.messageSubagent,
       TOOL.cancelSubagent,
       TOOL.listTasks,
+      TOOL.anchorLine,
     ]);
     const ok = await run(tool(tools, TOOL.spawnSubagent), {
       taskId: "tsk_1",
@@ -76,6 +78,10 @@ describe("orchestrator tools", () => {
     expect((await run(tool(tools, TOOL.postComment), "nope")).isError).toBe(true);
     expect(toolResultText(await run(tool(tools, TOOL.listTasks), undefined))).toBe("list ok");
     expect(host.calls.map(([name]) => name)).toEqual(["spawn", "list"]);
+    expect((await run(tool(tools, TOOL.anchorLine), { line: 0, text: "x" })).isError).toBe(true);
+    const anchored = await run(tool(tools, TOOL.anchorLine), { line: 4, text: " Question? " });
+    expect(toolResultText(anchored)).toBe("anchor ok");
+    expect(host.calls.at(-1)).toEqual(["anchor", { line: 4, text: "Question?" }]);
   });
 
   it("turns host ToolInputErrors into error results and declares internal-only safety", async () => {

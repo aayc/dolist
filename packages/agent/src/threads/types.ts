@@ -6,6 +6,7 @@
 import type {
   ArtifactKind,
   ArtifactMeta,
+  CitedSource,
   SurfaceKind,
   TaskAgentStatus,
   Thread,
@@ -42,6 +43,8 @@ export interface ThreadStore {
   setStatus(threadId: string, status: TaskAgentStatus): void;
   setTitle(threadId: string, title: string): void;
   addSurface(threadId: string, surface: SurfaceKind): void;
+  /** Remembers web pages the thread cites (deduplicated by URL, newest kept, capped). */
+  addSources(threadId: string, sources: readonly CitedSource[]): void;
   addArtifact(threadId: string, artifact: NewArtifact): Promise<ArtifactMeta>;
   readArtifact(
     threadId: string,

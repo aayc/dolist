@@ -8,14 +8,17 @@ import {
   type ArtifactMeta,
   agentModel,
   createId,
+  dailyNotePath,
   Emitter,
   type Logger,
+  resolveLineAnchors,
   type SurfaceKind,
   silentLogger,
   type TaskAgentRecord,
   type Thread,
   type ThreadSummary,
   type ToolSpec,
+  today,
   truncate,
   type Unsubscribe,
 } from "@ddl/core";
@@ -47,11 +50,13 @@ import type {
   SafetyGate,
   SafetyGateOptions,
 } from "./safety/types";
+import { SourceCatalog } from "./threads/sources";
 import { createThreadStore } from "./threads/store";
 import type { ThreadStore } from "./threads/types";
 import { TOOL } from "./tools/contracts";
 import { createKnowledgeTools } from "./tools/knowledge";
 import { categoryForVerb, createMockIrreversibleActionTool, riskyVerb } from "./tools/mock";
+import { createNoteEditTool, type NoteEditHost } from "./tools/notes";
 
 /** Seams for tests and embedders; production callers pass nothing. */
 export interface AgentRuntimeOverrides {
@@ -139,6 +144,11 @@ class Runtime implements AgentRuntime {
   private readonly subagents: SubagentManager;
   private readonly orchestrator: Orchestrator;
   private readonly knowledgeTools: ToolSpec[];
+  /** `edit_note`, shared by the orchestrator and every subagent. */
+  private readonly noteEditTool: ToolSpec;
+  private readonly sourceCatalog = new SourceCatalog();
+  /** Anchors whose line is gone, removed unless it comes back (an edit in progress) in time. */
+  private readonly missingAnchors = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly surfaceSubscribers = new Map<string, number>();
   private readonly approvalMessages = new Set<string>();
   private readonly disposers: Unsubscribe[] = [];
@@ -203,6 +213,23 @@ class Runtime implements AgentRuntime {
       logger: this.logger,
     });
     this.knowledgeTools = createKnowledgeTools({ storage });
+    const noteEditHost: NoteEditHost = {
+      storage,
+      locate: (taskId) => {
+        const found = this.watcher.findTask(taskId);
+        if (found)
+          return { notePath: found.notePath, line: found.task.line, text: found.task.text };
+        const record = this.records.get(taskId);
+        return record ? { notePath: record.notePath, line: record.line, text: record.text } : null;
+      },
+      threadFor: (taskId) => (taskId ? this.board.ensureThread(taskId).id : null),
+      defaultNotePath: () => dailyNotePath(today(new Date(this.now())), this.settings.dailyNotes),
+      waitForPause: (notePath) => this.watcher.waitForPause(notePath),
+      onEdited: ({ threadId, lines }) => {
+        if (threadId) this.attachSources(threadId, lines.join("\n"));
+      },
+    };
+    this.noteEditTool = createNoteEditTool(noteEditHost);
     const executionTools = overrides.createExecutionTools ?? createExecutionTools;
     this.subagents = new SubagentManager({
       harness: () => this.harness,
@@ -214,6 +241,7 @@ class Runtime implements AgentRuntime {
       execution: options.execution,
       executionTools,
       ...(options.connectors ? { connectors: options.connectors } : {}),
+      taskTools: (taskId) => [createNoteEditTool(noteEditHost, { ownTask: taskId })],
       knowledgeTools: () => this.knowledgeTools,
       webTools: () => this.webTools,
       ...(this.mode === "mock" ||
@@ -242,6 +270,7 @@ class Runtime implements AgentRuntime {
       beforeToolCall: this.beforeToolCall,
       tools: () => [
         ...this.knowledgeTools.filter((tool) => tool.name === TOOL.readNote),
+        this.noteEditTool,
         ...this.webTools,
       ],
       capabilities: () => this.capabilities(),
@@ -295,6 +324,8 @@ class Runtime implements AgentRuntime {
   async stop(): Promise<void> {
     if (this.stopped) return;
     this.stopped = true;
+    for (const timer of this.missingAnchors.values()) clearTimeout(timer);
+    this.missingAnchors.clear();
     await this.watcher.stop().catch((error: unknown) => this.logError("watcher.stop", error));
     await this.orchestrator
       .stop()
@@ -632,7 +663,7 @@ class Runtime implements AgentRuntime {
       this.webTools = factory({
         ...(llm ? { llm } : {}),
         logger: this.logger.child({ component: "web" }),
-      });
+      }).map((tool) => this.sourceCatalog.observe(tool));
     } catch (error) {
       this.logger.warn("Web tools unavailable", { error: errorText(error) });
     }
@@ -657,6 +688,10 @@ class Runtime implements AgentRuntime {
               threadId: event.threadId,
               message: event.message,
             });
+            const { message } = event;
+            if (message.kind === "text" && message.role === "agent" && !message.streaming) {
+              this.attachSources(event.threadId, message.text);
+            }
           } else {
             this.emitter.emit("thread.delta", {
               threadId: event.threadId,
@@ -680,8 +715,15 @@ class Runtime implements AgentRuntime {
         safe((event) => this.orchestrator.handleTaskEvent(event)),
       ),
       this.watcher.on(
+        "note",
+        safe((event) => this.orchestrator.handleNoteEvent(event)),
+      ),
+      this.watcher.on(
         "tasks",
-        safe(({ notePath, tasks }) => this.records.syncTasks(notePath, tasks)),
+        safe(({ notePath, tasks }) => {
+          this.records.syncTasks(notePath, tasks);
+          this.syncAnchors(notePath);
+        }),
       ),
     );
     if (this.options.connectors) {
@@ -834,6 +876,41 @@ class Runtime implements AgentRuntime {
       text,
       createdAt: this.now(),
     });
+  }
+
+  /** Remembers, on the thread, the known web pages that `text` (its message or note line) cites. */
+  private attachSources(threadId: string, text: string): void {
+    const cited = this.sourceCatalog.citedIn(text);
+    if (cited.length > 0) this.threads.addSources(threadId, cited);
+  }
+
+  /**
+   * Keeps line anchors on their line as the note changes. An anchor whose line vanished gets the
+   * settle delay (twice) to come back, as a cut and paste or a rewrite would; then it's removed and
+   * its work stops, like a deleted task's.
+   */
+  private syncAnchors(notePath: string): void {
+    const anchors = this.records.anchors(notePath);
+    if (anchors.length === 0) return;
+    const content = this.watcher.getContent(notePath);
+    if (content === null) return;
+    const positions = resolveLineAnchors(
+      content,
+      anchors.map((record) => ({ anchorId: record.taskId, text: record.text, line: record.line })),
+    );
+    for (const anchorId of positions.keys()) {
+      clearTimeout(this.missingAnchors.get(anchorId));
+      this.missingAnchors.delete(anchorId);
+    }
+    for (const anchorId of this.records.syncAnchors(notePath, positions)) {
+      if (this.missingAnchors.has(anchorId)) continue;
+      const timer = setTimeout(() => {
+        this.missingAnchors.delete(anchorId);
+        this.safely(() => this.orchestrator.anchorRemoved(anchorId), undefined);
+      }, this.settings.agent.settleMs * 2);
+      timer.unref?.();
+      this.missingAnchors.set(anchorId, timer);
+    }
   }
 
   private queueStatus(): void {

@@ -2,9 +2,9 @@
 
 **A local-first, Obsidian-style markdown notes app whose daily note is a to-do list that an AI
 actually does.** You write tasks the way you always have; an always-on orchestrator agent watches
-the list, dispatches subagents to research, browse, draft and act, and reports back as comments on
-each task. Anything risky — spending money, booking, sending messages, deleting data — waits for
-your approval.
+the whole note, dispatches subagents to research, browse, draft and act, and reports back as
+comments and as its own (clearly marked) lines in your note. Anything risky — spending money,
+booking, sending messages, deleting data, changing your words — waits for your approval.
 
 It's a *do* list, not a *to-do* list: the point is that things get done.
 
@@ -26,12 +26,19 @@ It's a *do* list, not a *to-do* list: the point is that things get done.
   faithful Swift port of it in the Mac app, both checked against 11,000+ recorded behaviors:
   motions, operators, text objects, visual block, registers, macros, marks, `:s`/`:g`/`:sort`,
   plus `:w`/`:q`/`:e <note>`, tab switching, system clipboard registers and a vimrc setting.
-- **An agent that is always watching.** New or edited tasks in today's note are triaged within a
-  couple of seconds of you finishing typing. The orchestrator answers quick questions itself,
-  ignores chores it can't help with, and spawns subagents for real work.
-- **Comments and threads on every task.** A status badge sits at the end of each task line; click
-  it for the full thread: streamed agent messages, tool activity, artifacts (drafts, comparisons,
-  research summaries), a live browser view and a computer-use view. Reply to steer the agent.
+- **An agent that is always watching — the whole note.** New or edited tasks in today's note are
+  triaged within a couple of seconds of you finishing typing, and a question or request written as
+  plain text ("What's the tallest building in NYC?") gets the same treatment. The orchestrator
+  sees the entire note, answers quick questions itself, ignores chores it can't help with, and
+  spawns subagents for real work.
+- **A list that's alive.** The agent writes back into your note — the booking confirmation under
+  the task, the answer under your question, follow-ups as new tasks — shown in its own color so
+  you always know which words are yours. It never changes your own lines without asking.
+- **Comments, threads and citations.** A status badge sits at the end of the line the agent chose
+  (a task, or any line it attached a thread to); click it for the full thread: streamed agent
+  messages, tool activity, artifacts (drafts, comparisons, research summaries), a live browser view
+  and a computer-use view. Sources are clickable citations with hover previews. Reply to steer
+  the agent.
 - **A separate safety evaluator.** Every tool call from every agent passes a policy → rules → LLM
   judge pipeline before it runs. Payments, bookings, outgoing messages, account changes,
   destructive commands and desktop control require your explicit approval; catastrophic actions are

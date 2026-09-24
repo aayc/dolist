@@ -2,7 +2,7 @@ import type { AppSettings, DeepPartial } from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TaskWatcher } from "../src/orchestrator/task-watcher";
-import type { TaskEvent } from "../src/orchestrator/types";
+import type { NoteEvent, TaskEvent } from "../src/orchestrator/types";
 import { testSettings } from "./helpers/fakes";
 
 const TODAY = "Daily/2026-09-23.md";
@@ -248,5 +248,82 @@ describe("TaskWatcher startup", () => {
     await watcher.start();
     await vi.advanceTimersByTimeAsync(0);
     expect(kinds(events)).toEqual(["added:Draft the newsletter"]);
+  });
+});
+
+describe("TaskWatcher: the rest of the note", () => {
+  function withNotes(options: Parameters<typeof setup>[0] = {}) {
+    const context = setup(options);
+    const notes: NoteEvent[] = [];
+    context.watcher.on("note", (event) => notes.push(event));
+    return { ...context, notes };
+  }
+
+  it("settles a question written as prose into one `note` event, once the user pauses", async () => {
+    const { storage, watcher, notes } = withNotes();
+    await watcher.start();
+    await storage.write(TODAY, "# Thursday\nSlept badly.");
+    await vi.advanceTimersByTimeAsync(SETTLE * 2);
+    expect(notes).toEqual([]);
+    await storage.write(TODAY, "# Thursday\nSlept badly.\nWhat's the capital of Aus");
+    watcher.noteEditorActivity(TODAY, 2);
+    await storage.write(TODAY, "# Thursday\nSlept badly.\nWhat's the capital of Australia?");
+    await vi.advanceTimersByTimeAsync(SETTLE - 1);
+    expect(notes).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(notes.map((n) => n.lines)).toEqual([
+      [{ line: 2, text: "What's the capital of Australia?" }],
+    ]);
+    expect(watcher.getContent(TODAY)).toContain("What's the capital of Australia?");
+  });
+
+  it("stays quiet for journaling, the agent's own lines, and a cut-and-paste", async () => {
+    const { storage, watcher, notes } = withNotes();
+    await watcher.start();
+    // A note created while watching is new writing: its question is news once.
+    await storage.write(TODAY, "Find a plumber for Saturday?");
+    await vi.advanceTimersByTimeAsync(SETTLE);
+    expect(notes.map((n) => n.lines.map((l) => l.text))).toEqual([
+      ["Find a plumber for Saturday?"],
+    ]);
+    notes.length = 0;
+    await storage.write(TODAY, "Find a plumber for Saturday?\nLunch with Sam was great.");
+    await storage.write(
+      TODAY,
+      "Find a plumber for Saturday?\nLunch with Sam was great.\nWhat time is it in Tokyo? %%agent:thr_1%%",
+    );
+    await vi.advanceTimersByTimeAsync(SETTLE * 2);
+    await storage.write(TODAY, "Lunch with Sam was great.");
+    await storage.write(TODAY, "Lunch with Sam was great.\nFind a plumber for Saturday?");
+    await vi.advanceTimersByTimeAsync(SETTLE * 2);
+    expect(notes).toEqual([]);
+  });
+
+  it("never announces the agent's own tasks, until the user deletes the marker", async () => {
+    const { storage, watcher, events } = setup();
+    await watcher.start();
+    await storage.write(TODAY, "- [ ] Call the restaurant to confirm %%agent:thr_1%%");
+    await vi.advanceTimersByTimeAsync(SETTLE * 2);
+    expect(events).toEqual([]);
+    await storage.write(TODAY, "- [ ] Call the restaurant to confirm");
+    await vi.advanceTimersByTimeAsync(SETTLE);
+    expect(kinds(events)).toEqual(["added:Call the restaurant to confirm"]);
+  });
+
+  it("lets the agent's edits wait for a pause in the user's typing", async () => {
+    const { watcher } = setup();
+    await watcher.start();
+    let paused = false;
+    watcher.noteEditorActivity(TODAY, 0);
+    void watcher.waitForPause(TODAY).then(() => {
+      paused = true;
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+    watcher.noteEditorActivity(TODAY, 1);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(paused).toBe(false);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(paused).toBe(true);
+    await expect(watcher.waitForPause("Daily/2026-09-24.md")).resolves.toBeUndefined();
   });
 });

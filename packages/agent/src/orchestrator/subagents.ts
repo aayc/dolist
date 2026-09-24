@@ -88,6 +88,8 @@ export interface SubagentManagerOptions {
   knowledgeTools: () => ToolSpec[];
   /** web_fetch / web_search (granted with the `web` capability). */
   webTools: () => ToolSpec[];
+  /** Tools bound to the subagent's own task (`edit_note` writes under it by default). */
+  taskTools?: (taskId: string) => ToolSpec[];
   /** Additional tools per subagent (mock mode). */
   extraTools?: (spec: SubagentSpec, task: TaskRef) => ToolSpec[];
   getSettings: () => AppSettings;
@@ -604,6 +606,7 @@ export class SubagentManager {
     const capabilities = run.spec.capabilities;
     const tools: ToolSpec[] = [
       ...createThreadTools(this.threadHost(run)),
+      ...(this.options.taskTools?.(run.taskId) ?? []),
       ...this.options.knowledgeTools(),
     ];
     if (capabilities.includes("web")) tools.push(...this.options.webTools());
