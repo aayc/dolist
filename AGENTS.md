@@ -49,8 +49,9 @@ packages/
   core/           Pure, isomorphic domain logic + wire protocol types (no dependencies!)
   storage/        StorageProvider interface; local-fs, memory, s3 (stub); SyncEngine; search
   editor/         CodeMirror 6 markdown editor: live preview, tasks, vim, agent badges
-  agent/          Agent runtime: watcher, orchestrator, subagents, harness (Pi), safety, approvals,
-                  execution providers (local/cloud), threads/artifacts, tools, LLM client
+  agent/          Agent runtime: watcher, orchestrator, subagents, harnesses (Pi │ Cursor CLI),
+                  safety, approvals, execution providers (local/cloud), threads/artifacts, tools,
+                  LLM client
   connectors/     MCP client: mcpServers config → ToolSpecs (stdio / streamable HTTP / SSE)
 evals/            Agent evals (safety verdicts, triage, latency); mock mode runs in CI
 scripts/          Repo tooling (secret scan, bench/bundle budgets, git hooks)
@@ -75,6 +76,7 @@ docs/             Architecture, agent system, performance, security model, cross
 | Build / bundle budget | `pnpm build && pnpm size:check` |
 | Build / run production | `pnpm build && pnpm start` → http://127.0.0.1:7331 |
 | Smoke-test the real model | `pnpm --filter @ddl/agent exec tsx scripts/smoke-pi.ts` (also `smoke-llm.ts`) |
+| Smoke-test the Cursor CLI harness | `pnpm --filter @ddl/agent exec tsx scripts/smoke-cursor.ts [--model=…]` (your CLI login, a little usage) |
 
 Scope commands to the package you are working in while iterating. Before you finish, run
 `pnpm check`; for UI or agent changes also run the relevant parts of what CI runs:
@@ -92,6 +94,7 @@ Scope commands to the package you are working in while iterating. Before you fin
                                      Orchestrator (control plane + orchestrator agent session)
                                         ▼ spawn_subagent
                                      SubagentManager (one harness session per task/thread)
+                                        │ harness: Pi (in process) │ Cursor CLI (ACP; our tools over a local MCP bridge)
                                         │ tools: thread / web / notes / browser / computer / bash / MCP
                                         ▼ every tool call
                                      SafetyGate → SafetyEvaluator (policy → rules → LLM judge)
@@ -112,12 +115,17 @@ and package READMEs (`packages/storage`, `packages/connectors`, `packages/editor
 ## Invariants (do not break these)
 
 1. **Safety gate is mandatory.** Every tool — built-in, harness built-in (bash/read/write/edit),
-   execution, connector (MCP) — executes only after `beforeToolCall` (the SafetyGate) allows it.
+   execution, connector (MCP), and whatever a harness's CLI runs itself after asking (the Cursor
+   CLI's web search/fetch) — executes only after `beforeToolCall` (the SafetyGate) allows it.
    Never add a code path that executes a tool without it. New tools must declare honest
    `ToolSafetyHints`; hints may only make things *more* restricted.
-2. **Harness isolation.** Only `packages/agent/src/harness/` may import `@earendil-works/pi-*`.
-   Everything else uses the `Harness`/`HarnessSession` interfaces and `ToolSpec` from `@ddl/core`.
-   To customize Pi beyond its extension API, prefer `pnpm patch` over forking.
+2. **Harness isolation.** Only `packages/agent/src/harness/` may import `@earendil-works/pi-*` or
+   know about the Cursor CLI (its ACP protocol, config files, tool kinds): Pi lives in
+   `harness/pi/`, the Cursor CLI in `harness/cursor/`, and `harness/registry.ts` picks one from
+   `settings.agent.harness`. Everything else uses the `Harness`/`HarnessSession` interfaces and
+   `ToolSpec` from `@ddl/core`. To customize Pi beyond its extension API, prefer `pnpm patch` over
+   forking. The Cursor harness never lets the CLI run its own tools: they are denied by config,
+   its permission requests go through the gate, and a monitor stops sessions that break that.
 3. **Provider registries.** Backend selection happens only in registries
    (`createStorageProvider`, `createExecutionProvider`, `createSyncTarget`, …). No
    `if (kind === "s3")` in callers.
@@ -127,7 +135,8 @@ and package READMEs (`packages/storage`, `packages/connectors`, `packages/editor
    types. Changing a shape = update both sides in the same change.
 6. **The daemon is local-only and authenticated.** Bind `127.0.0.1`, require the bearer token,
    reject unexpected `Host`/`Origin` headers. Never add an unauthenticated endpoint that reads the
-   vault or triggers agent work.
+   vault or triggers agent work. The same holds for every other listener (the Cursor harness's MCP
+   bridge: loopback, per-session random path and token, no `Origin`).
 7. **Agents don't silently edit the user's notes.** Agents write to the sidecar (threads,
    artifacts). Changing note content is a `file_write` on the vault and goes through approval.
 8. **Keystroke path stays O(line).** No network, no full-document parse, no React re-render per
@@ -170,11 +179,19 @@ and package READMEs (`packages/storage`, `packages/connectors`, `packages/editor
 - **Turbo:** `typecheck`/`test` depend on a `transit` task so a change in `@ddl/core` invalidates
   every dependent's cache. Env vars reach tasks only via `passThroughEnv`/`globalEnv`.
 - **Daemon startup:** the daemon bundle is code-split; heavy optional dependencies load on first
- use (the Pi harness from `@ddl/agent/pi`, Playwright via `import()` where Chrome launches).
- Don't re-export them from a package index or import them statically elsewhere:
- `apps/daemon/build.mjs` fails the build if they would load before the daemon answers.
+ use (the Pi harness from `@ddl/agent/pi`, the Cursor harness from `@ddl/agent/cursor`, Playwright
+ via `import()` where Chrome launches). Don't re-export them from a package index or import them
+ statically elsewhere: `apps/daemon/build.mjs` fails the build if they would load before the
+ daemon answers.
 - **Pi harness:** sessions are hermetic (isolated `agentDir` under `$DDL_HOME/pi`, no discovered
   extensions/skills/context files) and refuse to start if the safety-gate extension didn't load.
+- **Cursor harness:** set `agent.harness` to `cursor` in Settings (the other settings keep working;
+  `agent.cursorModel` picks the model). It needs the Cursor CLI installed (`curl
+  https://cursor.com/install -fsS | bash`, found as `agent`/`cursor-agent` on PATH or in
+  `~/.local/bin`, or `DDL_CURSOR_CLI=/path/to/agent`) and signed in (`agent login`); no
+  `OPENROUTER_API_KEY` needed, though the safety judge and our `web_search` still use one when set.
+  It keeps a private CLI config under `$DDL_HOME/cursor/` and never uses yours. Tests must not
+  spawn the real CLI: use `src/harness/cursor/testing/fake-cursor-cli.ts` (see `cursor.test.ts`).
 - **E2E typing:** use Playwright's real keyboard (`page.keyboard.type`). Automation "fill"-style
   typing into CodeMirror rebuilds text from the DOM (including badge widgets) and corrupts notes.
 

@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ExecutionError } from "../errors";
 import { HeadTailBuffer, utf8Head, utf8Tail } from "./output-buffer";
 import { LocalShellExecutor, resolveShell } from "./shell";
@@ -81,12 +81,14 @@ describe("LocalShellExecutor", () => {
   it("kills the whole process group on timeout", async () => {
     const pidFile = join(dir, "bg.pid");
     const started = Date.now();
+    // Long enough for the shell to start the background job even on a busy machine.
     const result = await shell.exec(`sleep 30 & echo $! > ${pidFile}; sleep 30`, {
       cwd: dir,
-      timeoutMs: 300,
+      timeoutMs: 1500,
     });
     expect(result.timedOut).toBe(true);
-    expect(result.exitCode).toBeNull();
+    // A shell waiting on a foreground job may report the SIGTERM as its exit status (128 + 15).
+    expect([null, 143]).toContain(result.exitCode);
     expect(Date.now() - started).toBeLessThan(5000);
     const backgroundPid = Number((await readFile(pidFile, "utf8")).trim());
     expect(backgroundPid).toBeGreaterThan(0);
@@ -100,7 +102,10 @@ describe("LocalShellExecutor", () => {
       cwd: dir,
       signal: controller.signal,
     });
-    await new Promise((r) => setTimeout(r, 300));
+    await vi.waitFor(
+      async () => expect((await readFile(pidFile, "utf8").catch(() => "")).trim()).not.toBe(""),
+      { timeout: 5000, interval: 20 },
+    );
     controller.abort();
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
     const backgroundPid = Number((await readFile(pidFile, "utf8")).trim());

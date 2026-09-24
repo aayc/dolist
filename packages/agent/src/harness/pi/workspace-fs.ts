@@ -4,17 +4,7 @@
  * the symlink-resolved target against the workspace root.
  */
 import { constants } from "node:fs";
-import {
-  access,
-  glob,
-  mkdir,
-  readdir,
-  readFile,
-  realpath,
-  stat,
-  writeFile,
-} from "node:fs/promises";
-import path from "node:path";
+import { access, glob, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import {
   detectSupportedImageMimeTypeFromFile,
   type EditOperations,
@@ -24,13 +14,7 @@ import {
   type ReadOperations,
   type WriteOperations,
 } from "@earendil-works/pi-coding-agent";
-
-export class WorkspaceAccessError extends Error {
-  constructor(target: string) {
-    super(`Access denied: ${target} is outside the task workspace`);
-    this.name = "WorkspaceAccessError";
-  }
-}
+import { WorkspaceGuard } from "../workspace-guard";
 
 export interface WorkspaceFs {
   read: ReadOperations;
@@ -99,46 +83,4 @@ export function createWorkspaceFs(root: string): WorkspaceFs {
 /** Pi's find tool (fd) matches bare patterns such as `*.ts` at any depth. */
 function toRecursivePattern(pattern: string): string {
   return pattern.includes("/") ? pattern : `**/${pattern}`;
-}
-
-class WorkspaceGuard {
-  private readonly root: string;
-  private realRoot: string | undefined;
-
-  constructor(root: string) {
-    this.root = path.resolve(root);
-  }
-
-  async resolve(target: string): Promise<string> {
-    this.realRoot ??= await realpath(this.root);
-    const resolved = await realpathAllowingMissing(path.resolve(this.root, target));
-    if (!isInside(this.realRoot, resolved)) throw new WorkspaceAccessError(target);
-    return resolved;
-  }
-}
-
-/** Real path of `target`, resolving the deepest existing ancestor when the target is new. */
-async function realpathAllowingMissing(target: string): Promise<string> {
-  const missing: string[] = [];
-  let current = target;
-  for (;;) {
-    try {
-      return path.join(await realpath(current), ...missing.reverse());
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
-      const parent = path.dirname(current);
-      if (parent === current) return target;
-      missing.push(path.basename(current));
-      current = parent;
-    }
-  }
-}
-
-function isInside(root: string, target: string): boolean {
-  const relative = path.relative(root, target);
-  return (
-    relative === "" ||
-    (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))
-  );
 }

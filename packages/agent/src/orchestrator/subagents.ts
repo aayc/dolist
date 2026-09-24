@@ -1,6 +1,7 @@
 import type { ConnectorToolSource } from "@ddl/connectors";
 import {
   type AppSettings,
+  agentModel,
   createId,
   isActiveTaskStatus,
   type Logger,
@@ -132,6 +133,8 @@ interface Run {
   closed: boolean;
   controller: AbortController;
   session?: HarnessSession;
+  /** The harness that created `session`; a new harness gets a new session. */
+  sessionHarness?: Harness;
   sessionId?: string;
   workspace?: Workspace;
   pending?: PendingPrompt;
@@ -398,6 +401,10 @@ export class SubagentManager {
   private async execute(run: Run): Promise<void> {
     run.turn = freshTurn();
     try {
+      if (run.session && run.sessionHarness !== this.options.harness()) {
+        await this.disposeSession(run);
+        run.needsHistory = true;
+      }
       let history: string | undefined;
       const fresh = !run.session;
       if (fresh) {
@@ -495,7 +502,7 @@ export class SubagentManager {
         role: "subagent",
         systemPrompt: buildSubagentSystemPrompt({ now: this.now(), capabilities }),
         tools,
-        model: this.options.getSettings().agent.model,
+        model: agentModel(this.options.getSettings().agent),
         thinking: "medium",
         cwd: run.workspace.dir,
         builtinTools: {
@@ -516,6 +523,7 @@ export class SubagentManager {
       return;
     }
     run.session = session;
+    run.sessionHarness = harness;
     run.sessionId = sessionId;
   }
 
@@ -523,6 +531,7 @@ export class SubagentManager {
   private async disposeSession(run: Run): Promise<void> {
     const session = run.session;
     run.session = undefined;
+    run.sessionHarness = undefined;
     if (run.sessionId) this.bySession.delete(run.sessionId);
     run.sessionId = undefined;
     try {

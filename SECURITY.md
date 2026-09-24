@@ -40,9 +40,17 @@ Requests with unexpected `Host` or `Origin` headers are rejected, which blocks D
 cross-site requests from web pages. No unauthenticated endpoint reads the vault or triggers agent
 work.
 
+**Cursor harness MCP bridge.** With the Cursor CLI harness, the daemon also listens on an ephemeral
+`127.0.0.1` port: the MCP endpoint through which the CLI calls this app's tools. Each agent session
+gets its own random path and a random 32-byte bearer token (compared in constant time), handed only
+to that session's CLI process. Requests with any `Origin` header or a `Host` other than
+`127.0.0.1:<port>`/`localhost:<port>`, and oversized bodies, are refused before parsing. Every call
+still goes through the safety gate. The CLI runs with a private config that denies its own file,
+shell and fetch tools, and a minimal environment without API keys.
+
 **Agent safety gate.** Every tool call from every agent passes the safety gate before it executes.
-That includes built-in tools, the harness's shell and file tools, browser and computer control, and
-MCP connector tools. The gate evaluates each call with policy, then rules, then an independent LLM
+That includes built-in tools, the harness's shell and file tools, browser and computer control,
+MCP connector tools, and the Cursor CLI's web search and fetch. The gate evaluates each call with policy, then rules, then an independent LLM
 judge. Risky actions pause until you explicitly approve them in the UI: spending money, booking,
 sending messages, deleting data, or changing your notes. The gate fails closed, so evaluator errors
 or timeouts block the action.
@@ -67,8 +75,9 @@ Examples:
 
 - bypassing the safety gate or approvals, or any tool that executes without the gate;
 - prompt injection that leads to a risky action without approval;
-- getting past the daemon's token, `Host` or `Origin` checks, or reading the vault or agent state
-  from a web page;
+- getting past the daemon's (or the Cursor harness MCP bridge's) token, `Host` or `Origin` checks,
+  or reading the vault or agent state from a web page;
+- getting the Cursor CLI to run one of its own tools (files, shell, fetch) under the Cursor harness;
 - secrets leaking into logs, threads, artifacts or the repository;
 - path traversal outside the vault or agent workspaces;
 - script injection through rendered notes, agent threads or artifacts.

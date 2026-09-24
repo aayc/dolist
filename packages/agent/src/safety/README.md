@@ -22,7 +22,7 @@ ToolCallRequest ─▶ SafetyGate ─▶ SafetyEvaluator ─▶ verdict
 | `createApprovalBroker({ storage?, defaultTimeoutMs?, now?, logger? })` | Pending approvals, decisions, standing grants, persistence. Returns a `PersistentApprovalBroker` (adds `ready`, `flush()`, `dispose()`). |
 | `createSafetyGate(options)` | `beforeToolCall` for `HarnessSessionOptions`. Never throws. |
 | `DEFAULT_SAFETY_POLICY`, `resolvePolicy(partial)` | Default policy and safe merging of overrides (malformed values are ignored). |
-| `builtinToolHints(name)` | Hints for harness built-ins without a `ToolSpec`: `read/grep/find/ls` → read-only, `write/edit` → `file_write`, `bash` → `system` (its commands are analyzed by the shell rules). |
+| `builtinToolHints(name)` | Hints for harness built-ins without a `ToolSpec`: `read/grep/find/ls` → read-only, `write/edit` → `file_write`, `bash` → `system` (its commands are analyzed by the shell rules). The Cursor harness sends its own versions of these, and the Cursor CLI's web search/fetch as `web_search {query}` / `web_fetch {url}`, all without a spec; they get the same verdicts (`harness-requests.test.ts`). |
 | `SAFETY_RULES` | Metadata of every rule (id, category, decision, risk, description), sorted by id. |
 | `describeAction(ctx)`, `redactActionInput(ctx)` | Approval-card summary and the input with secrets hidden. |
 | `maskSensitiveText`, `redactSensitiveInput`, `luhnValid` | Masking helpers (cards keep their last 4 digits; secrets and SSNs are hidden). |

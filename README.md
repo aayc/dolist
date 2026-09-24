@@ -41,8 +41,9 @@ It's a *do* list, not a *to-do* list: the point is that things get done.
 - **Connectors via MCP.** Add any MCP server (Google Workspace, Playwright, GitHub, Notion, …) with
   the same `mcpServers` JSON you'd use in Claude Desktop or Cursor.
 - **Providers everywhere.** Storage (local folder today, S3 next), sync targets, execution (local
-  today, cloud next), agent harness ([Pi](https://github.com/badlogic/pi-mono) today) and connectors
-  sit behind interfaces with a registry.
+  today, cloud next), agent harness ([Pi](https://github.com/badlogic/pi-mono) on OpenRouter, or the
+  [Cursor CLI](https://cursor.com/cli) with your Cursor account) and connectors sit behind
+  interfaces with a registry.
 
 ## Quick start
 
@@ -74,6 +75,21 @@ Other ways to run it:
 
 The model defaults to **DeepSeek V4.1 Flash** via OpenRouter (`deepseek/deepseek-v4.1-flash`);
 change it with `DDL_MODEL` or in Settings → Agent.
+
+**Run the agent on the Cursor CLI instead.** Install the CLI and sign in with your Cursor account,
+then pick the Cursor harness in Settings → Agent (its model defaults to `composer-2.5`; any model
+`agent models` lists works). No OpenRouter key is needed; with one, it still powers the safety
+judge and web search.
+
+```bash
+curl https://cursor.com/install -fsS | bash
+agent login
+```
+
+The Cursor CLI's own tools (files, terminal, edits, web fetch) are switched off: agents use this
+app's tools, served to the CLI over a local MCP endpoint and checked by the same safety gate.
+Browser and computer use therefore work the same with both harnesses — they're this app's local
+Chrome and (on macOS) desktop control, not Cursor's. Details: [Agent system](docs/AGENT_SYSTEM.md#5-the-cursor-cli-harness).
 
 ## macOS app
 
@@ -147,7 +163,7 @@ Deep dives: [Architecture](docs/ARCHITECTURE.md) · [Agent system](docs/AGENT_SY
 | `~/.daily-do-list/config.json` | Daemon config: vault path, port, agent mode, sync target, execution provider |
 | `~/.daily-do-list/mcp.json` | MCP connectors (`{ "mcpServers": { … } }`) |
 | `<vault>/.daily-do-list/settings.json` | App settings (theme, editor, daily notes, agent), editable in the UI |
-| Env vars | `DDL_HOME`, `DDL_VAULT`, `DDL_PORT`, `DDL_AGENT_MODE` (`live`/`mock`/`off`), `DDL_MODEL` |
+| Env vars | `DDL_HOME`, `DDL_VAULT`, `DDL_PORT`, `DDL_AGENT_MODE` (`live`/`mock`/`off`), `DDL_MODEL`, `DDL_CURSOR_CLI` (path to the Cursor CLI, if not on PATH or in `~/.local/bin`) |
 
 Agent threads, artifacts and state live in the vault's hidden `.daily-do-list/` folder, so they
 travel with your notes. Deleted notes go to the vault's `.trash/` folder.
@@ -191,7 +207,7 @@ CI details: [docs/CI.md](docs/CI.md).
 - Agents can act on your machine; the safety gate is mandatory for every tool call and fails
   closed. Review approval cards before approving.
 - When the agent is on, the text of your daily notes (and anything agents read) is sent to the
-  configured model provider (OpenRouter by default).
+  configured model provider (OpenRouter by default, Cursor with the Cursor CLI harness).
 - Report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
 
 ## Roadmap

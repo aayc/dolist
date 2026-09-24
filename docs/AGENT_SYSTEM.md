@@ -20,11 +20,16 @@ storage.watch ─▶ TaskWatcher ─▶ Orchestrator ──spawn_subagent──�
 
 | Mode | Harness | Safety | Network |
 | --- | --- | --- | --- |
-| `live` | Pi coding-agent SDK on OpenRouter (`deepseek/deepseek-v4.1-flash` by default) | rules + LLM judge | yes |
+| `live` | `settings.agent.harness`: `pi` — the Pi coding-agent SDK on OpenRouter (`deepseek/deepseek-v4.1-flash` by default) — or `cursor` — the Cursor CLI's agent (`composer-2.5` by default, see below) | rules + LLM judge | yes |
 | `mock` | `ScriptedHarness` with a deterministic script | rules only | no |
 | `off` | — (no watcher) | — | no |
 
-Without an API key, `live` starts degraded and `status().problem` explains how to fix it.
+`src/harness/registry.ts` picks the harness and checks what it needs: Pi an OpenRouter key that
+OpenRouter accepts, Cursor the CLI installed and signed in. When that's missing, `live` starts
+degraded and `status().problem` explains how to fix it. Changing `agent.harness` in Settings
+switches harnesses at runtime: running work finishes on the old one, new and idle sessions move to
+the new one. The safety judge and our `web_search` use OpenRouter with either harness; without a
+key the judge is off (uncertain actions ask you) and web search comes from the Cursor CLI.
 
 ## 1. Watching the list (TaskWatcher)
 
@@ -63,7 +68,8 @@ Without an API key, `live` starts degraded and `status().problem` explains how t
 - Tools: thread tools (`post_update`, `ask_user`, `create_artifact`, `finish_task`), knowledge
   (`read_note`, `search_notes`, `web_fetch` with SSRF protection, `web_search` via OpenRouter's web
   plugin), execution tools (`browser_*`, `computer_*`), MCP connector tools (`mcp__server__tool`),
-  and Pi's built-in file/shell tools bound to the task's workspace (`$DDL_HOME/workspaces/<thread>`).
+  and built-in file/shell tools bound to the task's workspace (`$DDL_HOME/workspaces/<thread>`):
+  Pi's own, or our equivalents with the same names and inputs (`src/harness/builtin-tools.ts`).
 - Harness events stream into the thread: text deltas, tool calls (running/ok/error/blocked), live
   browser/computer frames (only while someone is watching), artifacts.
 - Finished sessions stay warm so your reply resumes them with full context; *Retry* starts fresh
@@ -76,7 +82,8 @@ Without an API key, `live` starts degraded and `status().problem` explains how t
 
 Every tool call — orchestrator or subagent, built-in, execution, or MCP — goes through
 `beforeToolCall` before it executes. The Pi adapter refuses to start a session if the gate is not
-installed, and only executes a tool call the gate approved (by call id, once).
+installed, and only executes a tool call the gate approved (by call id, once). The Cursor adapter
+serves every tool itself and gates each call before running it; see below for the CLI's own tools.
 
 Pipeline (details and the full rule table in `packages/agent/src/safety/README.md`):
 
@@ -95,6 +102,64 @@ Pipeline (details and the full rule table in `packages/agent/src/safety/README.m
 `require_approval` pauses the agent and shows an approval card (Approve once / Approve for this
 task / Deny with a note). Pending approvals time out (default 12 h → denied) and are cancelled when
 the task is removed or completed.
+
+## 5. The Cursor CLI harness
+
+`@ddl/agent/cursor` (`src/harness/cursor/`) runs conversations on the Cursor CLI's agent
+(`agent acp`, the Agent Client Protocol: JSON-RPC over stdio), signed in with your own Cursor
+account — no API key. One CLI process per session; the model is `agent.cursorModel`, matched
+against the CLI's model list by id, base id (`gpt-5.5` for `gpt-5.5[…]`) or display name.
+
+**Tools.** The CLI runs its own tools (read, grep/glob, shell, edit, delete, web fetch, subagents)
+without asking the client, so none of them is used. Every tool the agent has is ours, served over
+a local MCP endpoint (the "bridge", one per harness on 127.0.0.1 with a per-session path and bearer
+token): the ToolSpecs of the session plus, when `builtinTools` asks for them, `read`/`write`/`edit`
+(or `read`/`grep`/`find`/`ls`) confined to the task workspace and `bash` through the
+ShellExecutor — the names and inputs Pi uses, gated without a spec so the built-in safety rules
+apply. Each MCP call is validated against the tool's schema, then gated, then executed, with the
+same events as Pi; side-effecting calls run one at a time.
+
+**Keeping the CLI's tools off.** Layered, each layer enough on its own for what it covers:
+
+1. A private CLI config (`CURSOR_CONFIG_DIR=$DDL_HOME/cursor/config`): allowlist approvals with an
+   empty allowlist except our MCP server, web search always asks, sandboxed shell, and a deny
+   list — `Read(**)`, `Write(**)` (and `/**`), `Shell(*)`, `WebFetch(*)` and `Mcp(<name>:*)` for
+   each server in your `~/.cursor/mcp.json`. Your own CLI config (allowlists, approval mode) never
+   applies. The same deny list is the session workspace's `.cursor/cli.json`.
+2. Permission requests the CLI still sends go through the gate: its web search and fetch as
+   `web_search {query}` / `web_fetch {url}` (only for agents with web access), answered
+   allow-once / reject-once, never "always"; calls to our own server are allowed (the bridge gates
+   them); everything else, including the CLI's question prompts, is rejected.
+3. A policy monitor watches every tool call the CLI reports. Blocked calls are reported as
+   completed too, but without a result; a disabled tool that produced one (file content, command
+   output, a diff, results of an unapproved web request, output of another MCP server) stops the
+   session with an error. grep/glob are tolerated: the CLI confines them to the session workspace,
+   which holds only our `AGENTS.md` and `.cursor/cli.json`.
+
+**Sessions.** The CLI's cwd is `$DDL_HOME/cursor/sessions/<id>/workspace` (0700) with `AGENTS.md` —
+the system prompt, tool guidance and the tools' prompt guidelines — not the task workspace. Its
+data dir sits next to it; both, and the CLI's transcript store, are deleted with the session, and
+stale ones when the harness starts. The CLI gets a minimal environment (paths, locale, proxies,
+CA bundles; never API keys) and runs in its own process group, so disposing ends it and its helper
+processes. `prompt` queues follow-ups; `steer` is delivered at the next turn boundary as a
+follow-up within the same run (ACP can't inject into a running turn); `abort` sends
+`session/cancel` and stops the CLI if the turn doesn't end within 10 s. Idle sessions end their
+process after 5 minutes (each is ~500 MB) and resume with `session/load` on the next prompt, as
+does a session whose CLI crashed.
+
+**Long calls.** The CLI's MCP client gives up on a request after 60 s. A call still running after
+45 s — typically waiting for your approval — is answered "still running, end your turn" and
+finishes in the background; its outcome is sent to the model as a follow-up in the same run.
+
+**Limits.** Browser and computer use come from our execution tools over MCP (the CLI has no
+browser tool, and Cursor's computer use is cloud-only). `thinking` is ignored: reasoning effort is
+part of the Cursor model id. No token usage events. The CLI may add your account's user and team
+rules to the prompt. Session creation takes ~4–8 s and each turn a few seconds more than Pi
+because of process start and the CLI's own tool loop.
+
+Try it: `pnpm --filter @ddl/agent exec tsx scripts/smoke-cursor.ts` (real CLI, a little usage).
+Tests use a fake CLI (`src/harness/cursor/testing/fake-cursor-cli.ts`) that speaks the same ACP
+and calls the bridge like the real one.
 
 ## Evals
 
@@ -116,7 +181,9 @@ pnpm eval -- --suite triage            # real model (needs OPENROUTER_API_KEY)
 - New tool: name it in `src/tools/contracts.ts`, implement a `ToolSpec` with honest safety hints
   and a `describe()`, add safety eval cases.
 - New execution backend: implement `ExecutionProvider` and register it in `createExecutionProvider`.
-- New harness: implement `Harness` in `src/harness/` (only that directory may import Pi).
+- New harness: implement `Harness` in `src/harness/<name>/` (only that directory may import its
+  SDK or know its CLI), add an entry to `src/harness/registry.ts` that checks its requirements and
+  loads it with `import()`, and a value to `AgentHarnessKind` in `@ddl/core` settings.
 
 ## Testing with the fake agent
 

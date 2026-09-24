@@ -102,6 +102,61 @@ describe("AgentRuntime status", () => {
     await t.waitForStatus("Water the plants", "ignored");
   });
 
+  it("live mode with the Cursor harness explains a missing or signed-out CLI", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    const missing = await runtime({
+      mode: "live",
+      settings: { agent: { harness: "cursor" } },
+      overrides: { checkCursorCli: async () => ({ state: "missing" }) },
+    });
+    expect(missing.runtime.status().problem).toContain(
+      "Install it with `curl https://cursor.com/install -fsS | bash`",
+    );
+    const signedOut = await runtime({
+      mode: "live",
+      settings: { agent: { harness: "cursor" } },
+      overrides: { checkCursorCli: async () => ({ state: "signed_out", binary: "/bin/agent" }) },
+    });
+    expect(signedOut.runtime.status().problem).toMatch(/not signed in\. Run `agent login`/);
+    await signedOut.storage.write(TODAY, "- [ ] Research standing desks\n");
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    expect(signedOut.runtime.getTaskRecords(TODAY)).toEqual([]);
+  });
+
+  it("the Cursor harness needs no OpenRouter key and reports the Cursor model", async () => {
+    delete process.env.OPENROUTER_API_KEY;
+    const checkApiKey = vi.fn();
+    const t = await runtime({
+      mode: "live",
+      settings: { agent: { harness: "cursor", cursorModel: "gpt-5.5" } },
+      overrides: {
+        checkApiKey,
+        checkCursorCli: async () => ({ state: "ready", binary: "/bin/agent" }),
+      },
+    });
+    expect(t.runtime.status().problem).toBeUndefined();
+    expect(t.runtime.status().model).toBe("gpt-5.5");
+    expect(checkApiKey).not.toHaveBeenCalled();
+  });
+
+  it("re-creates the harness when the harness setting changes", async () => {
+    delete process.env.OPENROUTER_API_KEY;
+    const checkCursorCli = vi.fn(async () => ({ state: "ready" as const, binary: "/bin/agent" }));
+    const t = await runtime({ mode: "live", overrides: { checkCursorCli } });
+    expect(t.runtime.status().problem).toContain("OPENROUTER_API_KEY");
+    const settings = testSettings();
+    t.runtime.updateSettings({ ...settings, agent: { ...settings.agent, harness: "cursor" } });
+    await vi.waitFor(() => expect(t.runtime.status().problem).toBeUndefined(), WAIT);
+    expect(checkCursorCli).toHaveBeenCalledTimes(1);
+    expect(t.runtime.status().model).toBe(settings.agent.cursorModel);
+    t.runtime.updateSettings(settings);
+    await vi.waitFor(
+      () => expect(t.runtime.status().problem).toContain("OPENROUTER_API_KEY"),
+      WAIT,
+    );
+    expect(t.runtime.status().model).toBe(settings.agent.model);
+  });
+
   it("starts degraded (fail closed) when the safety system cannot start", async () => {
     const safety = fakeSafety({
       createSafetyEvaluator: () => {

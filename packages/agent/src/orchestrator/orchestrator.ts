@@ -1,5 +1,6 @@
 import {
   type AppSettings,
+  agentModel,
   charFromStatus,
   createId,
   dailyNotePath,
@@ -98,6 +99,8 @@ interface OrchestratorSession {
   id: string;
   date: string;
   session: HarnessSession;
+  /** The harness that created the session; a new harness gets a new session. */
+  harness: Harness;
   turns: number;
 }
 
@@ -449,13 +452,20 @@ export class Orchestrator {
 
   private async ensureSession(): Promise<OrchestratorSession> {
     const date = toISODate(today(new Date(this.now())));
+    const harness = this.options.harness();
     const current = this.session;
-    if (current && current.date === date && current.turns < this.maxTurnsPerSession) return current;
+    if (
+      current &&
+      current.harness === harness &&
+      current.date === date &&
+      current.turns < this.maxTurnsPerSession
+    ) {
+      return current;
+    }
     if (current) {
       this.session = null;
       this.background(current.session.dispose());
     }
-    const harness = this.options.harness();
     if (!harness) throw new Error("The agent harness is unavailable.");
     const sequence = this.lastSequence.date === date ? this.lastSequence.value + 1 : 1;
     this.lastSequence = { date, value: sequence };
@@ -465,13 +475,13 @@ export class Orchestrator {
       role: "orchestrator",
       systemPrompt: buildOrchestratorSystemPrompt(),
       tools: [...createOrchestratorTools(this.host), ...this.options.tools()],
-      model: this.options.getSettings().agent.model,
+      model: agentModel(this.options.getSettings().agent),
       thinking: "low",
       cwd: this.options.cwd,
       beforeToolCall: this.options.beforeToolCall,
       onEvent: (event) => this.onEvent(event),
     });
-    this.session = { id, date, session, turns: 0 };
+    this.session = { id, date, session, harness, turns: 0 };
     return this.session;
   }
 

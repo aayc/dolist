@@ -1,7 +1,8 @@
 /**
  * Harness abstraction. The harness runs one agent conversation (system prompt + tools + model loop).
- * `PiHarness` embeds the Pi coding-agent SDK; `ScriptedHarness` is a deterministic fake used for
- * tests, e2e and `DDL_AGENT_MODE=mock`. Nothing outside `src/harness/` may import Pi directly.
+ * `PiHarness` embeds the Pi coding-agent SDK; `CursorHarness` drives the Cursor CLI over ACP;
+ * `ScriptedHarness` is a deterministic fake used for tests, e2e and `DDL_AGENT_MODE=mock`. Nothing
+ * outside `src/harness/` may import Pi or know which harness is in use; `registry.ts` picks one.
  */
 import type { ToolResult, ToolSpec } from "@ddl/core";
 import type { ShellExecutor } from "../execution/types";
@@ -16,7 +17,10 @@ export interface ToolCallRequest {
   toolCallId: string;
   toolName: string;
   input: unknown;
-  /** Our spec for custom tools; undefined for harness built-ins (bash/read/write/edit). */
+  /**
+   * Our spec for custom tools; undefined for harness built-ins (bash/read/write/edit/grep/find/ls)
+   * and for tools the Cursor CLI runs itself after asking (web_search/web_fetch).
+   */
   spec?: ToolSpec;
 }
 
@@ -59,8 +63,9 @@ export interface HarnessSessionOptions {
   role: AgentRole;
   systemPrompt: string;
   tools: ToolSpec[];
-  /** OpenRouter model id. */
+  /** The harness's model id: an OpenRouter id (Pi) or a Cursor CLI model id (Cursor). */
   model: string;
+  /** Reasoning effort (Pi). Cursor models carry it in their id's parameters instead. */
   thinking?: ThinkingLevel;
   /** Working directory for file/shell tools (the task workspace). */
   cwd: string;
@@ -91,4 +96,9 @@ export interface HarnessSession {
 export interface Harness {
   readonly name: string;
   createSession(options: HarnessSessionOptions): Promise<HarnessSession>;
+  /**
+   * Releases shared resources (processes, listeners). Sessions still open keep working; the
+   * resources close once they have been disposed. No new sessions afterwards.
+   */
+  dispose?(): Promise<void>;
 }

@@ -9,6 +9,7 @@ import type {
   ToolCallEvent,
   ToolCallEventResult,
 } from "@earendil-works/pi-coding-agent";
+import { decideGate } from "../gate-decision";
 import type { AgentRole, ToolCallDecision, ToolCallRequest } from "../types";
 import type { ToolCallLedger } from "./ledger";
 
@@ -57,12 +58,11 @@ export async function decideToolCall(
   return { block: true, reason: `Blocked by safety policy: ${decision.reason}` };
 }
 
-/** Fails closed: a throwing, malformed or aborted gate decision blocks the call. */
-async function askGate(
+function askGate(
   event: Pick<ToolCallEvent, "toolCallId" | "toolName" | "input">,
   signal: AbortSignal | undefined,
   options: GateOptions,
-): Promise<{ allow: true } | { allow: false; reason: string }> {
+): Promise<ToolCallDecision> {
   const spec = options.specs.get(event.toolName);
   const request: ToolCallRequest = {
     sessionId: options.sessionId,
@@ -72,43 +72,5 @@ async function askGate(
     input: event.input,
     ...(spec ? { spec } : {}),
   };
-  try {
-    const decision: unknown = await raceAbort(
-      Promise.resolve().then(() => options.beforeToolCall(request)),
-      signal,
-    );
-    if (isRecord(decision) && decision.allow === true) return { allow: true };
-    const reason = isRecord(decision) && typeof decision.reason === "string" ? decision.reason : "";
-    return { allow: false, reason: reason || "denied" };
-  } catch (error) {
-    if (signal?.aborted) return { allow: false, reason: "the run was aborted" };
-    options.logger?.warn("safety gate threw; blocking tool call", {
-      tool: event.toolName,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return { allow: false, reason: "the safety check failed" };
-  }
-}
-
-function raceAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
-  if (!signal) return promise;
-  if (signal.aborted) return Promise.reject(signal.reason);
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = () => reject(signal.reason);
-    signal.addEventListener("abort", onAbort, { once: true });
-    promise.then(
-      (value) => {
-        signal.removeEventListener("abort", onAbort);
-        resolve(value);
-      },
-      (error: unknown) => {
-        signal.removeEventListener("abort", onAbort);
-        reject(error);
-      },
-    );
-  });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return decideGate(options.beforeToolCall, request, signal, options.logger);
 }

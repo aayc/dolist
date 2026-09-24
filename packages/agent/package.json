@@ -2,12 +2,13 @@
   "name": "@ddl/agent",
   "version": "0.1.0",
   "private": true,
-  "description": "The always-on agent system: note watcher, orchestrator, subagents (Pi harness), safety evaluator + approvals, execution providers (local/cloud), threads and artifacts.",
+  "description": "The always-on agent system: note watcher, orchestrator, subagents (Pi or Cursor CLI harness), safety evaluator + approvals, execution providers (local/cloud), threads and artifacts.",
   "type": "module",
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
     "./pi": "./src/harness/pi.ts",
+    "./cursor": "./src/harness/cursor.ts",
     "./testing": "./src/testing/index.ts"
   },
   "scripts": {

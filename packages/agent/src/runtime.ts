@@ -6,6 +6,7 @@ import {
   type ApprovalStatus,
   type AppSettings,
   type ArtifactMeta,
+  agentModel,
   createId,
   Emitter,
   type Logger,
@@ -20,9 +21,11 @@ import {
 } from "@ddl/core";
 import { createExecutionTools } from "./execution";
 import type { Capability, ExecutionToolFactory, FrameListener } from "./execution/types";
+import type { CursorCliStatus } from "./harness/cursor/cli";
+import { type HarnessSetupContext, setupHarness } from "./harness/registry";
 import { ScriptedHarness } from "./harness/scripted";
 import type { Harness, ToolCallDecision, ToolCallRequest } from "./harness/types";
-import { checkOpenRouterKey, type OpenRouterKeyCheck } from "./llm/openrouter";
+import type { OpenRouterKeyCheck } from "./llm/openrouter";
 import type { LlmClient } from "./llm/types";
 import { createMockScript } from "./orchestrator/mock-script";
 import { Orchestrator } from "./orchestrator/orchestrator";
@@ -70,6 +73,8 @@ export interface AgentRuntimeOverrides {
   quickSettleMs?: number;
   /** Live-mode API key verification (default: `checkOpenRouterKey`). */
   checkApiKey?: (apiKey: string) => Promise<OpenRouterKeyCheck>;
+  /** Live-mode Cursor CLI check for the Cursor harness (default: `agent status`). */
+  checkCursorCli?: () => Promise<CursorCliStatus>;
   /**
    * Live-mode OpenRouter key and endpoint for the harness and the key check. Defaults:
    * `OPENROUTER_API_KEY` and `DDL_OPENROUTER_BASE_URL` (unset: OpenRouter itself).
@@ -141,11 +146,16 @@ class Runtime implements AgentRuntime {
   private evaluator: SafetyEvaluator | null = null;
   private gate: SafetyGate | null = null;
   private harness: Harness | null = null;
+  /** Replaced harnesses whose sessions may still be running; disposed on stop. */
+  private readonly retiredHarnesses = new Set<Harness>();
+  private harnessSetups = 0;
   private webTools: ToolSpec[] = [];
   private settings: AppSettings;
   private enabled: boolean;
   /** Why the agent cannot run at all (configuration). */
   private problem: string | undefined;
+  /** Why the configured harness cannot run (e.g. no API key, Cursor CLI not signed in). */
+  private harnessProblem: string | undefined;
   /** The last orchestrator turn failed (cleared by the next successful turn). */
   private turnProblem: string | undefined;
   private started = false;
@@ -269,7 +279,8 @@ class Runtime implements AgentRuntime {
     this.setupSafety();
     await this.setupHarness();
     if (this.mode === "live") await this.setupWebTools();
-    if (this.problem) this.logger.warn("Agent runtime degraded", { problem: this.problem });
+    const problem = this.problem ?? this.harnessProblem;
+    if (problem) this.logger.warn("Agent runtime degraded", { problem });
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -289,6 +300,14 @@ class Runtime implements AgentRuntime {
       .stop()
       .catch((error: unknown) => this.logError("orchestrator.stop", error));
     await this.subagents.stop().catch((error: unknown) => this.logError("subagents.stop", error));
+    this.harnessSetups++;
+    const harnesses = [...this.retiredHarnesses, ...(this.harness ? [this.harness] : [])];
+    this.retiredHarnesses.clear();
+    await Promise.all(
+      harnesses.map((harness) =>
+        harness.dispose?.().catch((error: unknown) => this.logError("harness.dispose", error)),
+      ),
+    );
     // The broker persists with a debounce; unflushed approvals would vanish on restart while
     // their thread messages still point at them.
     const broker = this.broker as ApprovalBroker & { flush?: () => Promise<void> };
@@ -300,12 +319,12 @@ class Runtime implements AgentRuntime {
   }
 
   status(): AgentStatusResponse {
-    const problem = this.problem ?? this.turnProblem;
+    const problem = this.problem ?? this.harnessProblem ?? this.turnProblem;
     const { execution, connectors } = this.options;
     return {
       mode: this.mode,
       enabled: this.mode !== "off" && this.enabled,
-      model: this.mode === "mock" ? "mock" : this.settings.agent.model,
+      model: this.mode === "mock" ? "mock" : agentModel(this.settings.agent),
       running: this.subagents.runningCount(),
       queued: this.subagents.queuedCount(),
       pendingApprovals: this.safely(() => this.broker.list({ status: "pending" }).length, 0),
@@ -340,6 +359,9 @@ class Runtime implements AgentRuntime {
       this.gate
     ) {
       this.setupSafety();
+    }
+    if (previous.agent.harness !== agent.harness && this.switchesHarness()) {
+      this.background(this.switchHarness());
     }
     this.queueStatus();
   }
@@ -392,9 +414,10 @@ class Runtime implements AgentRuntime {
     });
     if (thread.taskId) this.records.markRead(thread.taskId);
     if (!this.canRun() || this.stopped) {
+      const problem = this.problem ?? this.harnessProblem;
       this.postSystemNote(
         threadId,
-        `The agent isn't running${this.problem ? ` (${this.problem})` : ""}. Your message is saved.`,
+        `The agent isn't running${problem ? ` (${problem})` : ""}. Your message is saved.`,
       );
       return;
     }
@@ -429,7 +452,9 @@ class Runtime implements AgentRuntime {
     if (!thread) throw new UnknownThreadError(threadId);
     if (!thread.taskId) throw new AgentUnavailableError("This thread isn't attached to a task.");
     if (!this.canRun() || this.stopped) {
-      throw new AgentUnavailableError(this.problem ?? "The agent is not running.");
+      throw new AgentUnavailableError(
+        this.problem ?? this.harnessProblem ?? "The agent is not running.",
+      );
     }
     const taskId = thread.taskId;
     if (this.records.getSpec(taskId) || this.subagents.hasSubagent(taskId)) {
@@ -543,40 +568,61 @@ class Runtime implements AgentRuntime {
       });
       return;
     }
-    const apiKey = this.overrides.openRouter?.apiKey ?? process.env.OPENROUTER_API_KEY;
-    if (!apiKey) {
-      this.problem ??=
-        "OPENROUTER_API_KEY is not set. Add it to ~/.daily-do-list/.env (or the daemon's environment) and restart, or run with DDL_AGENT_MODE=mock.";
+    const result = await setupHarness(this.settings.agent.harness, this.harnessContext());
+    if ("problem" in result) this.harnessProblem = result.problem;
+    else this.harness = result.harness;
+  }
+
+  /** Live mode picks the harness from settings; mock mode and injected harnesses never change. */
+  private switchesHarness(): boolean {
+    return this.mode === "live" && !this.options.harness && !this.stopped;
+  }
+
+  /**
+   * Replaces the harness after `agent.harness` changed. Sessions of the old harness keep running
+   * until their work ends (it is disposed once they are); new sessions use the new harness, and
+   * idle ones are re-created with it when next used.
+   */
+  private async switchHarness(): Promise<void> {
+    const setup = ++this.harnessSetups;
+    const kind = this.settings.agent.harness;
+    const result = await setupHarness(kind, this.harnessContext());
+    if (setup !== this.harnessSetups || this.stopped) {
+      if ("harness" in result) await result.harness.dispose?.();
       return;
     }
-    const baseUrl =
-      this.overrides.openRouter?.baseUrl ??
-      (process.env.DDL_OPENROUTER_BASE_URL?.trim() || undefined);
-    if (baseUrl) this.logger.info("Using a custom OpenRouter endpoint", { baseUrl });
-    const checkKey =
-      this.overrides.checkApiKey ??
-      ((key: string) => checkOpenRouterKey(key, baseUrl ? { baseUrl } : {}));
-    const check = await checkKey(apiKey);
-    if (check.status === "invalid") {
-      this.problem ??= `OpenRouter rejected OPENROUTER_API_KEY (${check.httpStatus}: ${check.message}). Put a valid key in ~/.daily-do-list/.env and restart.`;
+    const previous = this.harness;
+    if ("harness" in result) {
+      this.harness = result.harness;
+      this.harnessProblem = undefined;
+    } else {
+      this.harness = null;
+      this.harnessProblem = result.problem;
+    }
+    if (previous && previous !== this.harness) {
+      this.retiredHarnesses.add(previous);
+      this.background(previous.dispose?.() ?? Promise.resolve());
+    }
+    this.logger.info("Agent harness changed", { harness: kind, ready: this.harness !== null });
+    if (!this.started || this.stopped) {
+      this.queueStatus();
       return;
     }
-    if (check.status === "unknown") {
-      this.logger.warn("Could not verify the OpenRouter key; continuing", {
-        reason: check.message,
-      });
-    }
-    try {
-      const { createPiHarness } = await import("./harness/pi");
-      this.harness = createPiHarness({
-        apiKey,
-        home: this.options.home,
-        logger: this.logger.child({ component: "harness" }),
-        ...(baseUrl ? { baseUrl } : {}),
-      });
-    } catch (error) {
-      this.problem ??= `The agent harness failed to start: ${errorText(error)}`;
-    }
+    if (this.canRun() && this.enabled) await this.startWatching();
+    else if (!this.canRun()) await this.watcher.stop();
+    this.queueStatus();
+  }
+
+  private harnessContext(): HarnessSetupContext {
+    const { openRouter, checkApiKey, checkCursorCli } = this.overrides;
+    return {
+      home: this.options.home,
+      logger: this.logger,
+      env: process.env,
+      ...(openRouter ? { openRouter } : {}),
+      ...(checkApiKey ? { checkOpenRouterKey: checkApiKey } : {}),
+      ...(checkCursorCli ? { checkCursorCli } : {}),
+    };
   }
 
   private async setupWebTools(): Promise<void> {
@@ -646,7 +692,13 @@ class Runtime implements AgentRuntime {
   // ── Internals ─────────────────────────────────────────────────────────────
 
   private canRun(): boolean {
-    return this.mode !== "off" && !this.problem && this.harness !== null && this.gate !== null;
+    return (
+      this.mode !== "off" &&
+      !this.problem &&
+      !this.harnessProblem &&
+      this.harness !== null &&
+      this.gate !== null
+    );
   }
 
   private async startWatching(): Promise<void> {

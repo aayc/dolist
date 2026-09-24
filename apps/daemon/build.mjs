@@ -3,8 +3,8 @@
 // pnpm catalog), so bare imports resolve from apps/daemon/node_modules at runtime.
 //
 // Code splitting keeps startup fast: modules reached only through `import()` (the agent runtime,
-// the Pi harness) land in dist/chunks/ and load on first use, so their external dependencies
-// aren't hoisted into main.js and loaded before the daemon can answer.
+// the Pi and Cursor harnesses) land in dist/chunks/ and load on first use, so their external
+// dependencies aren't hoisted into main.js and loaded before the daemon can answer.
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
