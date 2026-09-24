@@ -1,4 +1,4 @@
-import { existsSync, statSync, symlinkSync } from "node:fs";
+import { existsSync, lstatSync, rmSync, statSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { API_ROUTES, type ArtifactMeta, isHiddenPath } from "@ddl/core";
 import { LocalFsStorageProvider } from "@ddl/storage";
@@ -288,6 +288,23 @@ const encodedPath = fc
 
 const DELETE_TARGETS = ["x.md", "Notes/x.md", "a b/x.md", "CON/x.md", "e\u0301/x.md"];
 
+/**
+ * The fuzzed PUTs above can leave a folder where a delete target goes (`PUT x.md/x.md`), or a file
+ * where its folder goes: remove it so the target can be recreated.
+ */
+function clearTheWay(path: string): void {
+  const segments = path.split("/");
+  for (let i = 1; i <= segments.length; i++) {
+    const abs = join(canary.vault, ...segments.slice(0, i));
+    const stats = lstatSync(abs, { throwIfNoEntry: false });
+    if (!stats) return;
+    if (i < segments.length ? !stats.isDirectory() : !stats.isFile()) {
+      rmSync(abs, { recursive: true, force: true });
+      return;
+    }
+  }
+}
+
 describe("fuzzed note paths", () => {
   test.prop([encodedPath, fc.constantFrom("GET", "PUT")], { numRuns: ioRuns(0.6) })(
     "never escape the vault, never touch hidden files, and never fail with 5xx",
@@ -312,7 +329,9 @@ describe("fuzzed note paths", () => {
     "DELETE only ever moves one visible note into vault/.trash",
     async (encoded) => {
       for (const path of DELETE_TARGETS) {
-        if (!(await app.storage.stat(path))) await app.storage.write(path, "target");
+        if (await app.storage.stat(path)) continue;
+        clearTheWay(path);
+        await app.storage.write(path, "target");
       }
       let res: Response | undefined;
       const changes = await diskChanges(async () => {

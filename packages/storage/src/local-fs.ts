@@ -576,6 +576,7 @@ export class LocalFsStorageProvider implements StorageProvider {
           if (!this.rules.isIgnored(path)) tracker.notify(path);
         },
         onRescan: () => tracker.requestRescan(),
+        skipDirectory: (path) => this.rules.isIgnored(path),
       });
       tracking.watcher = watcher;
       // Watch before the baseline scan so nothing slips in between.

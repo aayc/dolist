@@ -1,14 +1,31 @@
-import { type FSWatcher, watch } from "node:fs";
+import { watch } from "node:fs";
 import { type Logger, normalizePath } from "@ddl/core";
+import { watchDirectoryTree } from "./directory-tree-watcher";
 import { errorMessage } from "./fs-errors";
+
+/** What the watcher needs from an open watch (an `FSWatcher` or a `DirectoryTreeWatcher`). */
+export interface WatchHandle {
+  on(event: "error", listener: (error: unknown) => void): unknown;
+  close(): void;
+}
 
 export type WatchFactory = (
   root: string,
   listener: (eventType: string, filename: string | null) => void,
-) => FSWatcher;
+) => WatchHandle;
 
-const defaultWatchFactory: WatchFactory = (root, listener) =>
-  watch(root, { recursive: true, persistent: false, encoding: "utf8" }, listener);
+/**
+ * Node's recursive mode is native on macOS (FSEvents) and Windows. On Linux it watches each file's
+ * inode and misses in-place edits after an atomic replace, so a tree of directory watches is used.
+ */
+function defaultWatchFactory(skipDirectory?: (path: string) => boolean): WatchFactory {
+  if (process.platform === "linux") {
+    return (root, listener) =>
+      watchDirectoryTree(root, listener, skipDirectory ? { skip: skipDirectory } : {});
+  }
+  return (root, listener) =>
+    watch(root, { recursive: true, persistent: false, encoding: "utf8" }, listener);
+}
 
 export interface RecursiveWatcherOptions {
   /** Absolute, real path of the folder to watch. */
@@ -18,6 +35,8 @@ export interface RecursiveWatcherOptions {
   onChange(path: string): void;
   /** Events may have been lost (no file name, or the watcher restarted): reconcile everything. */
   onRescan(): void;
+  /** Directories not worth watching (ignored by the provider); honored where supported. */
+  skipDirectory?(path: string): boolean;
   /** Injection point for tests. */
   watchFactory?: WatchFactory;
   minRestartDelayMs?: number;
@@ -34,7 +53,7 @@ export class RecursiveWatcher {
   private readonly factory: WatchFactory;
   private readonly minDelay: number;
   private readonly maxDelay: number;
-  private watcher: FSWatcher | undefined;
+  private watcher: WatchHandle | undefined;
   private openedAt = 0;
   private restartDelay: number;
   private restartTimer: ReturnType<typeof setTimeout> | undefined;
@@ -42,7 +61,7 @@ export class RecursiveWatcher {
 
   constructor(options: RecursiveWatcherOptions) {
     this.options = options;
-    this.factory = options.watchFactory ?? defaultWatchFactory;
+    this.factory = options.watchFactory ?? defaultWatchFactory(options.skipDirectory);
     this.minDelay = options.minRestartDelayMs ?? 100;
     this.maxDelay = options.maxRestartDelayMs ?? 30_000;
     this.restartDelay = this.minDelay;
@@ -67,7 +86,7 @@ export class RecursiveWatcher {
 
   private open(isRestart: boolean): void {
     if (this.closed) return;
-    let watcher: FSWatcher;
+    let watcher: WatchHandle;
     try {
       watcher = this.factory(this.options.root, (eventType, filename) =>
         this.handle(eventType, filename),
@@ -102,7 +121,7 @@ export class RecursiveWatcher {
     else this.options.onChange(path);
   }
 
-  private fail(watcher: FSWatcher, error: unknown): void {
+  private fail(watcher: WatchHandle, error: unknown): void {
     if (watcher !== this.watcher) return;
     this.options.logger.warn("file watcher failed; restarting", { error: errorMessage(error) });
     this.watcher = undefined;
