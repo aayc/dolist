@@ -621,15 +621,33 @@ export class TaskWatcher implements TaskLookup {
     const pending = this.pending.get(taskId);
     if (!pending || !this.running) return;
     pending.timer = undefined;
-    const due = this.dueAt(pending);
-    if (due > this.now()) {
+    if (this.dueAt(pending) > this.now()) {
       this.schedule(pending);
       return;
     }
-    this.pending.delete(taskId);
     const state = this.notes.get(pending.notePath);
-    if (!state) return;
+    if (!state) {
+      this.pending.delete(taskId);
+      return;
+    }
+    // Tasks written together are due together, but each timer waits `due - now()`, so they can
+    // fire in any order and turns apart. Settling every due task of the note in one pass, top to
+    // bottom, hands them to the orchestrator as one batch in note order.
+    const order = new Map(state.tasks.map((task, index) => [task.id, index]));
+    const position = (id: string) => order.get(id) ?? Number.POSITIVE_INFINITY;
+    const due = [...this.pending.values()]
+      .filter(
+        (p) => p.notePath === pending.notePath && (p === pending || this.dueAt(p) <= this.now()),
+      )
+      .sort((a, b) => position(a.taskId) - position(b.taskId));
+    for (const next of due) {
+      if (next.timer) clearTimeout(next.timer);
+      this.pending.delete(next.taskId);
+      this.settleTask(state, next.taskId);
+    }
+  }
 
+  private settleTask(state: NoteState, taskId: string): void {
     const current = state.tasks.find((t) => t.id === taskId);
     const ghost = current ? undefined : state.ghosts.find((g) => g.id === taskId);
     const snapshot = state.settled.get(taskId);

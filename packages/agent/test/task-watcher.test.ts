@@ -11,11 +11,19 @@ const SETTLE = 1_000;
 let watchers: TaskWatcher[] = [];
 
 function setup(
-  options: { storage?: MemoryStorageProvider; settings?: DeepPartial<AppSettings> } = {},
+  options: {
+    storage?: MemoryStorageProvider;
+    settings?: DeepPartial<AppSettings>;
+    now?: () => number;
+  } = {},
 ) {
   const storage = options.storage ?? new MemoryStorageProvider();
   const settings = testSettings({ agent: { settleMs: SETTLE }, ...options.settings });
-  const watcher = new TaskWatcher({ storage, settings });
+  const watcher = new TaskWatcher({
+    storage,
+    settings,
+    ...(options.now ? { now: options.now } : {}),
+  });
   watchers.push(watcher);
   const events: TaskEvent[] = [];
   watcher.on("task", (event) => events.push(event));
@@ -46,6 +54,22 @@ describe("TaskWatcher settling", () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(kinds(events)).toEqual(["added:Book dentist appointment"]);
     expect(events[0]).toMatchObject({ notePath: TODAY, date: "2026-09-23" });
+  });
+
+  it("settles tasks written together at once, in note order, whatever order their timers fire in", async () => {
+    // A clock that ticks on every read gives each later task a shorter delay, so the timers fire
+    // bottom to top; handed over one by one, a slow machine split them across orchestrator turns.
+    let reads = 0;
+    const { storage, watcher, events } = setup({ now: () => Date.now() + reads++ });
+    await watcher.start();
+    await storage.write(TODAY, "- [ ] Option A\n- [ ] Option B\n- [ ] Option C\n- [ ] Option D");
+    await vi.advanceTimersByTimeAsync(SETTLE);
+    expect(kinds(events)).toEqual([
+      "added:Option A",
+      "added:Option B",
+      "added:Option C",
+      "added:Option D",
+    ]);
   });
 
   it("waits while the editor reports typing on the task's line", async () => {
