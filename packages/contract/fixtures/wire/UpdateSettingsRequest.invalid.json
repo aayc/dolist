@@ -58,5 +58,11 @@
     "value": { "editor": null },
     "path": ["editor"],
     "code": "invalid_type"
+  },
+  {
+    "name": "vimrc of the wrong type",
+    "value": { "editor": { "vimrc": 3 } },
+    "path": ["editor", "vimrc"],
+    "code": "invalid_type"
   }
 ]

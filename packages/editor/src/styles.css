@@ -381,3 +381,35 @@
     transition: none;
   }
 }
+
+/*
+ * Vim. The adapter's own theme is injected at runtime with the same specificity, so these rules
+ * add a class to win. The block cursor draws its character in the text's color (an inline style).
+ */
+.cm-ddl-editor .cm-vimCursorLayer .cm-fat-cursor {
+  background: color-mix(in srgb, var(--ddl-accent) 75%, transparent);
+  border-radius: 1px;
+}
+
+.cm-ddl-editor:not(.cm-focused) .cm-vimCursorLayer .cm-fat-cursor {
+  background: none;
+  outline: 1px solid color-mix(in srgb, var(--ddl-accent) 70%, transparent);
+}
+
+.cm-ddl-editor .cm-vim-panel {
+  padding: 4px 12px;
+  font-family: var(--ddl-font-mono);
+  font-size: 13px;
+  color: var(--ddl-text);
+}
+
+.cm-ddl-editor .cm-vim-panel input {
+  color: var(--ddl-text);
+  font: inherit;
+}
+
+/* Errors (a `div`; "recording @q" is a `span`), which vim.js colors red with an inline style. */
+.cm-ddl-editor div.cm-vim-message {
+  /* biome-ignore lint/complexity/noImportantStyles: only !important beats an inline style */
+  color: var(--ddl-danger) !important;
+}

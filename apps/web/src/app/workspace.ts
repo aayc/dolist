@@ -40,6 +40,7 @@ import { placeInTabs, removeFromTabs, renameInTabs, useTabsStore } from "../stat
 import { toast } from "../state/toast-store";
 import { ui } from "../state/ui-store";
 import { vaultActions } from "../state/vault-store";
+import { setVimrcProblems, setVimStatus } from "../state/vim-store";
 import type { AgentActions } from "./agent-actions";
 
 export interface OpenOptions {
@@ -84,6 +85,8 @@ export class Workspace {
   private navTarget: string | null = null;
   private treeRefresh: ReturnType<typeof setTimeout> | undefined;
   private mountWaiters: Array<() => void> = [];
+  /** Runs an app command by id (vim `:obcommand`); set once the command registry exists. */
+  commandRunner: ((id: string) => boolean) | null = null;
 
   constructor(client: DaemonClient, agent: AgentActions) {
     this.client = client;
@@ -124,6 +127,16 @@ export class Workspace {
         onWikiLinkClick: (target, newPane) => void this.openWikiLink(target, newPane),
         onExternalLinkClick: openExternal,
         onSaveRequested: (path) => void this.notes.flush(path),
+        onSaveAllRequested: () => void this.notes.flushAll(),
+        onCloseRequested: (path, all) => (all ? this.closeAllTabs() : this.closeTab(path)),
+        onOpenRequested: (target, newTab) => {
+          if (target === null) ui.openOverlay({ kind: "switcher" });
+          else void this.openWikiLink(target, newTab);
+        },
+        onSwitchTabRequested: (to) => this.switchTab(to),
+        runCommand: (id) => this.commandRunner?.(id) ?? false,
+        onVimStatus: setVimStatus,
+        onVimrcApplied: setVimrcProblems,
         beforeDeactivate: (path) => void this.notes.flush(path),
         canEvict: (path) =>
           !useTabsStore.getState().tabs.includes(path) && !this.notes.isBusy(path),
@@ -229,6 +242,21 @@ export class Workspace {
   closeActiveTab(): void {
     const active = this.activePath;
     if (active) this.closeTab(active);
+  }
+
+  closeAllTabs(): void {
+    for (const path of [...useTabsStore.getState().tabs].reverse()) this.closeTab(path);
+  }
+
+  /** Activates the tab `delta` tabs away (wrapping around), or the tab at `index` if there is one. */
+  switchTab(to: { delta: number } | { index: number }): void {
+    const { tabs, active } = useTabsStore.getState();
+    if (tabs.length === 0) return;
+    const current = active === null ? 0 : Math.max(0, tabs.indexOf(active));
+    const index =
+      "delta" in to ? (((current + to.delta) % tabs.length) + tabs.length) % tabs.length : to.index;
+    const path = tabs[index];
+    if (path !== undefined) this.activateTab(path);
   }
 
   private afterActivate(path: string, options: OpenOptions): void {

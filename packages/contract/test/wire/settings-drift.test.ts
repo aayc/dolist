@@ -71,6 +71,7 @@ describe("wire ⇄ persisted settings ranges", () => {
       SETTINGS_RANGES.templateLength,
       (v: string) => ({ weeklyNotes: { template: v } }),
     ],
+    ["editor.vimrc", SETTINGS_RANGES.vimrcLength, (v: string) => ({ editor: { vimrc: v } })],
   ] as const)("%s has the same length limit in both", (_name, max, patch) => {
     for (const [value, ok] of [
       ["x".repeat(max), true],

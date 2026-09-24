@@ -40,6 +40,9 @@ public enum ThemePreference: String, Codable, Hashable, Sendable, CaseIterable {
 
 public struct EditorSettings: Codable, Hashable, Sendable {
   public var vimMode: Bool
+  /// Vim startup commands, one ex command per line (`imap jj <Esc>`, `set clipboard=unnamed`);
+  /// lines starting with `"` are comments. Applied when vim starts and whenever this changes.
+  public var vimrc: String
   /// Obsidian-style live preview (hide markdown syntax away from the cursor).
   public var livePreview: Bool
   public var readableLineLength: Bool
@@ -48,10 +51,11 @@ public struct EditorSettings: Codable, Hashable, Sendable {
   public var showLineNumbers: Bool
 
   public init(
-    vimMode: Bool, livePreview: Bool, readableLineLength: Bool, fontSize: Double,
+    vimMode: Bool, vimrc: String = "", livePreview: Bool, readableLineLength: Bool, fontSize: Double,
     spellcheck: Bool, showLineNumbers: Bool
   ) {
     self.vimMode = vimMode
+    self.vimrc = vimrc
     self.livePreview = livePreview
     self.readableLineLength = readableLineLength
     self.fontSize = fontSize
@@ -59,9 +63,21 @@ public struct EditorSettings: Codable, Hashable, Sendable {
     self.showLineNumbers = showLineNumbers
   }
 
+  /// Daemons older than the vimrc setting don't send it.
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    vimMode = try container.decode(Bool.self, forKey: .vimMode)
+    vimrc = try container.decodeIfPresent(String.self, forKey: .vimrc) ?? ""
+    livePreview = try container.decode(Bool.self, forKey: .livePreview)
+    readableLineLength = try container.decode(Bool.self, forKey: .readableLineLength)
+    fontSize = try container.decode(Double.self, forKey: .fontSize)
+    spellcheck = try container.decode(Bool.self, forKey: .spellcheck)
+    showLineNumbers = try container.decode(Bool.self, forKey: .showLineNumbers)
+  }
+
   public static let defaults = EditorSettings(
-    vimMode: false, livePreview: true, readableLineLength: true, fontSize: 16, spellcheck: false,
-    showLineNumbers: false)
+    vimMode: false, vimrc: "", livePreview: true, readableLineLength: true, fontSize: 16,
+    spellcheck: false, showLineNumbers: false)
 }
 
 /// Days around today whose daily notes the orchestrator watches.
@@ -146,6 +162,7 @@ public enum SettingsRanges {
   public static let folderLength = 512
   public static let formatLength = 128
   public static let templateLength = 512
+  public static let vimrcLength = 16_384
 }
 
 // MARK: - Settings patch (UpdateSettingsRequest = DeepPartial<AppSettings>)
@@ -176,6 +193,7 @@ public struct SettingsPatch: Codable, Hashable, Sendable {
 
   public struct EditorPatch: Codable, Hashable, Sendable {
     public var vimMode: Bool?
+    public var vimrc: String?
     public var livePreview: Bool?
     public var readableLineLength: Bool?
     public var fontSize: Double?
@@ -183,10 +201,12 @@ public struct SettingsPatch: Codable, Hashable, Sendable {
     public var showLineNumbers: Bool?
 
     public init(
-      vimMode: Bool? = nil, livePreview: Bool? = nil, readableLineLength: Bool? = nil,
-      fontSize: Double? = nil, spellcheck: Bool? = nil, showLineNumbers: Bool? = nil
+      vimMode: Bool? = nil, vimrc: String? = nil, livePreview: Bool? = nil,
+      readableLineLength: Bool? = nil, fontSize: Double? = nil, spellcheck: Bool? = nil,
+      showLineNumbers: Bool? = nil
     ) {
       self.vimMode = vimMode
+      self.vimrc = vimrc
       self.livePreview = livePreview
       self.readableLineLength = readableLineLength
       self.fontSize = fontSize
@@ -263,6 +283,7 @@ extension AppSettings {
     if let theme = patch.theme { next.theme = theme }
     if let p = patch.editor {
       if let v = p.vimMode { next.editor.vimMode = v }
+      if let v = p.vimrc { next.editor.vimrc = v }
       if let v = p.livePreview { next.editor.livePreview = v }
       if let v = p.readableLineLength { next.editor.readableLineLength = v }
       if let v = p.fontSize { next.editor.fontSize = v }

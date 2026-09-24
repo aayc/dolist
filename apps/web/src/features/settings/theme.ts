@@ -39,6 +39,7 @@ export function editorConfigFrom(settings: AppSettings): Partial<EditorConfig> {
   const { editor } = settings;
   return {
     vimMode: editor.vimMode,
+    vimrc: editor.vimrc,
     livePreview: editor.livePreview,
     readableLineLength: editor.readableLineLength,
     spellcheck: editor.spellcheck,

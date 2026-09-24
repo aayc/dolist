@@ -30,6 +30,7 @@ struct InvalidFixtureTests {
       "missing agent section": .rejected,
       "model with surrounding whitespace": .tolerated(constraint),
       "watch window over a year": .tolerated(constraint),
+      "vimrc that is not a string": .rejected,
     ],
     "ApprovalDecisionRequest": [
       "unknown decision": .rejected,
@@ -144,6 +145,7 @@ struct InvalidFixtureTests {
       "blank model": .tolerated(constraint),
       "unknown watch key": .tolerated(unknownKey),
       "section replaced by null": .tolerated("a null section decodes as nil (not patched)"),
+      "vimrc of the wrong type": .rejected,
     ],
     "WriteNoteRequest": [
       "missing content": .rejected,

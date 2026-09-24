@@ -32,12 +32,14 @@ export function getSettings(): AppSettings {
   return useSettingsStore.getState().settings;
 }
 
+/** The daemon's settings; fields an older daemon doesn't send keep their defaults. */
 export function applySettings(settings: AppSettings, loaded = true): void {
+  const next = mergeSettings(DEFAULT_SETTINGS, settings);
   useSettingsStore.setState({
-    settings: warmUp(settings),
+    settings: warmUp(next),
     loaded: loaded || useSettingsStore.getState().loaded,
   });
-  writeJson(STORAGE_KEYS.settingsCache, settings);
+  writeJson(STORAGE_KEYS.settingsCache, next);
 }
 
 export function patchSettingsLocally(patch: DeepPartial<AppSettings>): AppSettings {

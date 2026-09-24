@@ -326,6 +326,7 @@ export const settingsOverridesArb: fc.Arbitrary<PersistedSettingsOverrides> = fc
     editor: fc.record(
       {
         vimMode: fc.boolean(),
+        vimrc: fc.string({ maxLength: 200 }),
         livePreview: fc.boolean(),
         readableLineLength: fc.boolean(),
         fontSize: fc.integer({ min: 8, max: 48 }),

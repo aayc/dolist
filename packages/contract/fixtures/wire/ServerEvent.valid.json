@@ -171,6 +171,7 @@
         "theme": "system",
         "editor": {
           "vimMode": false,
+          "vimrc": "",
           "livePreview": true,
           "readableLineLength": true,
           "fontSize": 16,

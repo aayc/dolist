@@ -5,7 +5,7 @@ import { isVimLoaded, preloadVim } from "./vim";
 
 const chunk = vi.hoisted(() => ({ failures: 1 }));
 
-vi.mock("@replit/codemirror-vim", async (importOriginal) => {
+vi.mock("./vim-integration", async (importOriginal) => {
   if (chunk.failures > 0) {
     chunk.failures--;
     throw new Error("Failed to fetch dynamically imported module");

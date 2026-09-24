@@ -15,6 +15,7 @@ export const SETTINGS_RANGES = {
   folderLength: 512,
   formatLength: 128,
   templateLength: 512,
+  vimrcLength: 16_384,
 } as const;
 
 const range = (r: { min: number; max: number }) => z.int().min(r.min).max(r.max);
@@ -27,6 +28,10 @@ export const ThemePreferenceSchema = named(
 
 const editorFields = {
   vimMode: z.boolean(),
+  vimrc: z
+    .string()
+    .max(SETTINGS_RANGES.vimrcLength)
+    .describe('Vim startup ex commands, one per line; lines starting with `"` are comments.'),
   livePreview: z.boolean().describe("Obsidian-style live preview."),
   readableLineLength: z.boolean(),
   fontSize: z.number().min(SETTINGS_RANGES.fontSize.min).max(SETTINGS_RANGES.fontSize.max),

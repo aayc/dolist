@@ -31,6 +31,7 @@ export function createServices(client: DaemonClient): Services {
     updateSettings: (patch) => updateSettings(client, patch),
   };
   services.commands.registerAll(createDefaultCommands(services));
+  workspace.commandRunner = (id) => services.commands.run(id);
   return services;
 }
 

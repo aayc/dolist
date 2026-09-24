@@ -17,6 +17,7 @@ enum FakeSettings {
       if let value, value.utf16.count > max { problems.append("\(path) is longer than \(max) characters") }
     }
     check(patch.editor?.fontSize, SettingsRanges.fontSize, "editor.fontSize")
+    checkLength(patch.editor?.vimrc, SettingsRanges.vimrcLength, "editor.vimrc")
     for (name, section) in [("dailyNotes", patch.dailyNotes), ("weeklyNotes", patch.weeklyNotes.map {
       SettingsPatch.DailyNotesPatch(folder: $0.folder, format: $0.format, template: $0.template)
     })] {

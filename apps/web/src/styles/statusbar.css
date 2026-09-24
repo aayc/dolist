@@ -83,6 +83,27 @@ button.status-item:hover {
   letter-spacing: 0.04em;
 }
 
+.status-vim.is-insert,
+.status-vim.is-replace {
+  color: var(--ddl-success);
+}
+
+.status-vim.is-visual,
+.status-vim.is-visual-line,
+.status-vim.is-visual-block {
+  color: var(--ddl-warning);
+}
+
+.status-vim-pending {
+  color: var(--ddl-text-muted);
+  font-weight: 400;
+}
+
+.status-vim-recording {
+  color: var(--ddl-danger);
+  font-weight: 400;
+}
+
 .connection-dot {
   width: 7px;
   height: 7px;

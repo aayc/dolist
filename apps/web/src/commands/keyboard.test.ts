@@ -4,6 +4,9 @@ import { parseHotkey } from "./hotkeys";
 import { installGlobalHotkeys } from "./keyboard";
 import { CommandRegistry } from "./registry";
 
+const vim = vi.hoisted(() => ({ claims: false }));
+vi.mock("@ddl/editor", () => ({ vimClaimsKey: () => vim.claims }));
+
 let registry: CommandRegistry;
 let dispose: () => void;
 const today = vi.fn();
@@ -88,6 +91,40 @@ describe("global hotkeys", () => {
     overlayOpen = true;
     expect(press({ key: "Escape" }).defaultPrevented).toBe(true);
     expect(closeOverlay).toHaveBeenCalledOnce();
+  });
+
+  it("leaves the Ctrl keys vim binds to vim where Mod is Ctrl, and only there", () => {
+    dispose();
+    const switcher = vi.fn();
+    const save = vi.fn();
+    registry.register({
+      id: "switcher",
+      name: "Switcher",
+      hotkeys: [parseHotkey("Mod+O")],
+      run: switcher,
+    });
+    registry.register({ id: "save", name: "Save", hotkeys: [parseHotkey("Mod+S")], run: save });
+    vim.claims = true;
+    try {
+      dispose = installGlobalHotkeys(registry, false);
+      // Vim (normal mode) claims Ctrl-O: the event reaches the editor untouched.
+      expect(press({ key: "o", ctrlKey: true }).defaultPrevented).toBe(false);
+      expect(switcher).not.toHaveBeenCalled();
+      vim.claims = false;
+      // Keys vim doesn't bind (or insert mode) keep their app shortcut.
+      expect(press({ key: "s", ctrlKey: true }).defaultPrevented).toBe(true);
+      expect(press({ key: "o", ctrlKey: true }).defaultPrevented).toBe(true);
+      expect(save).toHaveBeenCalledOnce();
+      expect(switcher).toHaveBeenCalledOnce();
+      dispose();
+      // On macOS "Mod" is ⌘, which vim never binds.
+      vim.claims = true;
+      dispose = installGlobalHotkeys(registry, true);
+      expect(press({ key: "o", metaKey: true }).defaultPrevented).toBe(true);
+      expect(switcher).toHaveBeenCalledTimes(2);
+    } finally {
+      vim.claims = false;
+    }
   });
 
   it("keeps working after a command throws, and stops listening once disposed", async () => {

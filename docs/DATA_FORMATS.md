@@ -256,8 +256,8 @@ The user's explicit `AppSettings` overrides (a deep partial), merged over the de
 include `DDL_MODEL` from the daemon config).
 
 ```text
-{ version: 1, theme?, editor?: { vimMode?, livePreview?, readableLineLength?, fontSize? (8–48),
-  spellcheck?, showLineNumbers? }, dailyNotes?/weeklyNotes?: { folder? (≤512), format? (≤128),
+{ version: 1, theme?, editor?: { vimMode?, vimrc? (≤16384), livePreview?, readableLineLength?,
+  fontSize? (8–48), spellcheck?, showLineNumbers? }, dailyNotes?/weeklyNotes?: { folder? (≤512), format? (≤128),
   template? (≤512) }, agent?: { enabled?, settleMs? (0–120000), maxConcurrentSubagents? (1–32),
   model?, judgeModel? (1–200 chars, trimmed), watch?: { pastDays?, futureDays? (0–366) },
   actOnExistingTasks?, approvalTimeoutMs? (1 min–30 days) } }

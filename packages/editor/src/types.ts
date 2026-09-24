@@ -21,6 +21,8 @@ export interface LineAnnotation {
 
 export interface EditorConfig {
   vimMode: boolean;
+  /** Vim startup commands (see `AppSettings.editor.vimrc`); global to every vim editor. */
+  vimrc: string;
   livePreview: boolean;
   readableLineLength: boolean;
   spellcheck: boolean;
@@ -43,8 +45,44 @@ export interface EditorCallbacks {
   onExternalLinkClick?(url: string): void;
   /** Cursor moved to a different line (throttle before sending presence). */
   onCursorLine?(line: number): void;
-  /** Mod-s */
+  /** Mod-s, vim `:w` (and `:wq`/`:x` before `onClose`). */
   onSave?(): void;
+  /** vim `:wa`: save every open note. */
+  onSaveAll?(): void;
+  /** vim `:q`/`:q!`/`:wq`/`:x`: close this note's tab; `all` for `:qa`/`:wqa`. */
+  onClose?(options: { all: boolean }): void;
+  /** vim `:e <note>`/`:tabedit <note>`: open a note by name or path; `null` = let the user pick. */
+  onOpenNote?(target: string | null, options: { newTab: boolean }): void;
+  /** vim `gt`/`gT`, `:tabnext`/`:bnext`…: switch `delta` tabs, or to the 0-based tab `index`. */
+  onSwitchTab?(to: { delta: number } | { index: number }): void;
+  /** vim `:obcommand <id>`: run an app command; false when there is no such command. */
+  onRunCommand?(id: string): boolean;
+  /** Vim mode or pending keys changed (`null`: vim is off). Called only on changes. */
+  onVimStatus?(status: VimStatus | null): void;
+  /** The vimrc was (re)applied; lines vim rejected, with its message. */
+  onVimrcApplied?(problems: readonly VimrcProblem[]): void;
+}
+
+export type VimModeName =
+  | "normal"
+  | "insert"
+  | "replace"
+  | "visual"
+  | "visual-line"
+  | "visual-block";
+
+export interface VimStatus {
+  mode: VimModeName;
+  /** Keys of a command still being typed (Vim's "showcmd"), e.g. `2d` or `"a`. */
+  pending: string;
+  /** Recording a macro into this register. */
+  recording: string | null;
+}
+
+export interface VimrcProblem {
+  /** 0-based line in the vimrc. */
+  line: number;
+  message: string;
 }
 
 export interface MarkdownEditor {
@@ -72,6 +110,7 @@ export interface CreateEditorOptions {
 
 export const DEFAULT_EDITOR_CONFIG: EditorConfig = {
   vimMode: false,
+  vimrc: "",
   livePreview: true,
   readableLineLength: true,
   spellcheck: false,

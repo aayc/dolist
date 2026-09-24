@@ -88,6 +88,29 @@
   min-width: 0;
 }
 
+.setting-stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.vimrc-input {
+  display: block;
+  width: 100%;
+  min-height: 140px;
+  resize: vertical;
+  font-family: var(--ddl-font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.vimrc-problems {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--ddl-danger);
+  font-size: 12px;
+}
+
 .setting-name {
   font-weight: 500;
 }

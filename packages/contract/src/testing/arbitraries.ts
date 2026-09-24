@@ -355,9 +355,16 @@ const fontSize = () =>
     }),
   );
 
+const vimrc = () =>
+  fc.oneof(
+    fc.constantFrom("", 'imap jj <Esc>\n" comment\nset clipboard=unnamed', "nmap j gj\nnmap k gk"),
+    p.text(SETTINGS_RANGES.vimrcLength),
+  );
+
 const editorSettings = (): Arb<core.EditorSettings> =>
   fc.record({
     vimMode: fc.boolean(),
+    vimrc: vimrc(),
     livePreview: fc.boolean(),
     readableLineLength: fc.boolean(),
     fontSize: fontSize(),
@@ -437,6 +444,7 @@ const updateSettingsRequest = (): Arb<core.UpdateSettingsRequest> =>
       theme: themePreference(),
       editor: partialOf<core.EditorSettings>({
         vimMode: fc.boolean(),
+        vimrc: vimrc(),
         livePreview: fc.boolean(),
         readableLineLength: fc.boolean(),
         fontSize: fontSize(),

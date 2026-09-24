@@ -1,6 +1,7 @@
 [
   { "name": "empty patch", "value": {} },
   { "name": "one editor flag", "value": { "editor": { "vimMode": true } } },
+  { "name": "vimrc", "value": { "editor": { "vimrc": "\" leave insert mode\nimap jj <Esc>\n" } } },
   {
     "name": "several sections",
     "value": {

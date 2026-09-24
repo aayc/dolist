@@ -36,4 +36,5 @@ export { markdownSupport } from "./syntax/language";
 export { ddlTags, splitWikiLink, type WikiLinkParts } from "./syntax/markdown-extensions";
 export { editorTheme, markdownHighlightStyle } from "./theme";
 export * from "./types";
-export { isVimLoaded, preloadVim } from "./vim";
+export { isVimLoaded, preloadVim, vimClaimsKey } from "./vim";
+export { parseVimrc, type VimrcCommand } from "./vimrc";

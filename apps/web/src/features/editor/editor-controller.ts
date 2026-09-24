@@ -4,6 +4,8 @@ import {
   type EditorConfig,
   type LineAnnotation,
   type MarkdownEditor,
+  type VimrcProblem,
+  type VimStatus,
 } from "@ddl/editor";
 import { LruMap } from "../../lib/lru";
 
@@ -29,6 +31,18 @@ export interface EditorControllerDeps {
   onWikiLinkClick(target: string, newPane: boolean): void;
   onExternalLinkClick(url: string): void;
   onSaveRequested(path: string): void;
+  /** vim `:wa` */
+  onSaveAllRequested(): void;
+  /** vim `:q` and friends: close the active note's tab (or every tab). */
+  onCloseRequested(path: string, all: boolean): void;
+  /** vim `:e`: open a note by name or path, or let the user pick one (`null`). */
+  onOpenRequested(target: string | null, newTab: boolean): void;
+  /** vim `gt`/`gT`, `:tabnext`… */
+  onSwitchTabRequested(to: { delta: number } | { index: number }): void;
+  /** vim `:obcommand <id>`: false when there is no such command. */
+  runCommand(id: string): boolean;
+  onVimStatus(status: VimStatus | null): void;
+  onVimrcApplied(problems: readonly VimrcProblem[]): void;
   /** Called synchronously before the active note is swapped out (flush unsaved edits). */
   beforeDeactivate(path: string): void;
   canEvict(path: string): boolean;
@@ -83,6 +97,15 @@ export class EditorController {
         onSave: () => {
           if (this.activePath !== null) this.deps.onSaveRequested(this.activePath);
         },
+        onSaveAll: () => this.deps.onSaveAllRequested(),
+        onClose: ({ all }) => {
+          if (this.activePath !== null) this.deps.onCloseRequested(this.activePath, all);
+        },
+        onOpenNote: (target, { newTab }) => this.deps.onOpenRequested(target, newTab),
+        onSwitchTab: (to) => this.deps.onSwitchTabRequested(to),
+        onRunCommand: (id) => this.deps.runCommand(id),
+        onVimStatus: (status) => this.deps.onVimStatus(status),
+        onVimrcApplied: (problems) => this.deps.onVimrcApplied(problems),
       },
     });
     this.activePath = null;

@@ -9,6 +9,11 @@ export type ThemePreference = "system" | "light" | "dark";
 
 export interface EditorSettings {
   vimMode: boolean;
+  /**
+   * Vim startup commands, one ex command per line (`imap jj <Esc>`, `set clipboard=unnamed`);
+   * lines starting with `"` are comments. Applied when vim loads and whenever this changes.
+   */
+  vimrc: string;
   /** Obsidian-style live preview (hide markdown syntax away from the cursor). */
   livePreview: boolean;
   readableLineLength: boolean;
@@ -56,6 +61,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: "system",
   editor: {
     vimMode: false,
+    vimrc: "",
     livePreview: true,
     readableLineLength: true,
     fontSize: 16,

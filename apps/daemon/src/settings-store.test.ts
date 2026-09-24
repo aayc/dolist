@@ -319,6 +319,10 @@ describe("persisted settings validation matches PUT /api/settings", () => {
   const cases: Array<[string, unknown[]]> = [
     ["theme", ["system", "light", "dark", "neon", 1, null]],
     ["editor.vimMode", [true, false, "yes", 1]],
+    [
+      "editor.vimrc",
+      ["", 'imap jj <Esc>\n" note', "x".repeat(16_384), "x".repeat(16_385), 1, null],
+    ],
     ["editor.fontSize", [8, 16.5, 48, 7, 49, "16"]],
     ["editor.showLineNumbers", [true, 0]],
     ["dailyNotes.folder", ["", "Journal", "x".repeat(512), "x".repeat(513), 1]],
@@ -389,6 +393,7 @@ describe("Obsidian import on first run", () => {
       }),
       ".obsidian/app.json": JSON.stringify({ vimMode: true, showLineNumber: true, legacy: 1 }),
       ".obsidian/appearance.json": JSON.stringify({ theme: "moonstone" }),
+      ".obsidian.vimrc": '" jj leaves insert mode\r\nimap jj <Esc>\r\n',
     });
     const store = await open(storage);
     expect(store.get().dailyNotes).toEqual({
@@ -396,7 +401,11 @@ describe("Obsidian import on first run", () => {
       format: "YYYY/MM/YYYY-MM-DD",
       template: "Templates/Daily Template",
     });
-    expect(store.get().editor).toMatchObject({ vimMode: true, showLineNumbers: true });
+    expect(store.get().editor).toMatchObject({
+      vimMode: true,
+      showLineNumbers: true,
+      vimrc: '" jj leaves insert mode\nimap jj <Esc>\n',
+    });
     expect(store.get().theme).toBe("light");
     expect(await storedOverrides(storage)).toMatchObject({
       dailyNotes: { folder: "Journal/Daily" },

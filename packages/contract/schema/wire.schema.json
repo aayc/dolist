@@ -832,6 +832,11 @@
         "vimMode": {
           "type": "boolean"
         },
+        "vimrc": {
+          "type": "string",
+          "maxLength": 16384,
+          "description": "Vim startup ex commands, one per line; lines starting with `\"` are comments."
+        },
         "livePreview": {
           "type": "boolean",
           "description": "Obsidian-style live preview."
@@ -853,6 +858,7 @@
       },
       "required": [
         "vimMode",
+        "vimrc",
         "livePreview",
         "readableLineLength",
         "fontSize",
@@ -1018,6 +1024,11 @@
           "properties": {
             "vimMode": {
               "type": "boolean"
+            },
+            "vimrc": {
+              "type": "string",
+              "maxLength": 16384,
+              "description": "Vim startup ex commands, one per line; lines starting with `\"` are comments."
             },
             "livePreview": {
               "type": "boolean",

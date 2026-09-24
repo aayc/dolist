@@ -8,12 +8,13 @@ import { EditorView, highlightActiveLineGutter, lineNumbers } from "@codemirror/
 import { editorCallbacks } from "./callbacks";
 import { livePreview } from "./live-preview/plugin";
 import { DEFAULT_EDITOR_CONFIG, type EditorCallbacks, type EditorConfig } from "./types";
-import { vimMode } from "./vim";
+import { vimMode, vimrcFacet } from "./vim";
 
 type ConfigKey = keyof EditorConfig;
 
 const compartments: Record<ConfigKey, Compartment> = {
   vimMode: new Compartment(),
+  vimrc: new Compartment(),
   livePreview: new Compartment(),
   readableLineLength: new Compartment(),
   spellcheck: new Compartment(),
@@ -29,6 +30,7 @@ const gutters: Extension = [lineNumbers(), highlightActiveLineGutter(), foldGutt
 
 const builders: { [K in ConfigKey]: (config: EditorConfig) => Extension } = {
   vimMode: (c) => vimMode(c.vimMode),
+  vimrc: (c) => vimrcFacet.of(c.vimrc),
   livePreview: (c) => (c.livePreview ? livePreview : []),
   readableLineLength: (c) => (c.readableLineLength ? readableLineLength : []),
   spellcheck: (c) =>
@@ -54,6 +56,7 @@ export function resolveConfig(
     : base.fontSize;
   return {
     vimMode: Boolean(merged.vimMode),
+    vimrc: typeof merged.vimrc === "string" ? merged.vimrc : base.vimrc,
     livePreview: Boolean(merged.livePreview),
     readableLineLength: Boolean(merged.readableLineLength),
     spellcheck: Boolean(merged.spellcheck),

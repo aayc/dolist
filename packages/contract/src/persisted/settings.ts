@@ -38,6 +38,7 @@ export const PersistedSettingsOverridesSchema = z
     editor: z
       .object({
         vimMode: Bool,
+        vimrc: z.string().max(16_384),
         livePreview: Bool,
         readableLineLength: Bool,
         fontSize: z.number().min(8).max(48),

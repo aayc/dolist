@@ -1,3 +1,4 @@
+import type { VimModeName } from "@ddl/editor";
 import { Bot, CircleAlert, LoaderCircle, ShieldAlert, TriangleAlert } from "lucide-react";
 import { useServices } from "../../app/services";
 import { cx } from "../../lib/cx";
@@ -8,6 +9,7 @@ import { useNotesStore } from "../../state/notes-store";
 import { useSettingsStore } from "../../state/settings-store";
 import { useTabsStore } from "../../state/tabs-store";
 import { ui } from "../../state/ui-store";
+import { useVimStore } from "../../state/vim-store";
 import { agentModeLabel, connectionItem, type SaveProblem, visibleSaveState } from "./status-items";
 
 export function StatusBar() {
@@ -109,12 +111,38 @@ function SaveIndicator({ state }: { state: SaveProblem }) {
   );
 }
 
+const VIM_MODES: Record<VimModeName, string> = {
+  normal: "NORMAL",
+  insert: "INSERT",
+  replace: "REPLACE",
+  visual: "VISUAL",
+  "visual-line": "V-LINE",
+  "visual-block": "V-BLOCK",
+};
+
+/** Vim's mode line: pending keys ("showcmd"), macro recording, and the mode. */
 function VimIndicator() {
-  const vim = useSettingsStore((s) => s.settings.editor.vimMode);
-  if (!vim) return null;
+  const enabled = useSettingsStore((s) => s.settings.editor.vimMode);
+  const status = useVimStore((s) => s.status);
+  if (!enabled) return null;
   return (
-    <span className="status-item status-vim" data-testid="status-vim" title="Vim mode">
-      VIM
+    <span
+      className={cx("status-item status-vim", status && `is-${status.mode}`)}
+      data-testid="status-vim"
+      data-mode={status?.mode ?? ""}
+      title="Vim mode"
+    >
+      {status?.recording ? (
+        <span className="status-vim-recording" data-testid="status-vim-recording">
+          recording @{status.recording}
+        </span>
+      ) : null}
+      {status?.pending ? (
+        <span className="status-vim-pending" data-testid="status-vim-pending">
+          {status.pending}
+        </span>
+      ) : null}
+      <span className="status-vim-mode">{status ? VIM_MODES[status.mode] : "VIM"}</span>
     </span>
   );
 }

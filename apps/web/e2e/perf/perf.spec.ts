@@ -224,6 +224,47 @@ test("thread:open (badge click → thread rendered)", async ({ page }) => {
   expect(record("thread:open", samples, BUDGET_MS.threadOpen, "p95").passed).toBe(true);
 });
 
+test("vim mode: keystroke latency and long tasks in a 2000-line note", async ({ page }) => {
+  await boot(page);
+  await waitForPrefetch(page);
+  await page.evaluate(
+    ([path, content]) => window.__ddlMock!.createNote(path!, content!),
+    [BIG_NOTE, bigNote(2000)],
+  );
+  await page.evaluate((path) => window.__ddlDebug!.openNote(path), BIG_NOTE);
+  await expect(noteTitle(page)).toHaveValue("Big note");
+  await page.evaluate(() => window.__ddlDebug!.runCommand("editor:vim"));
+  await expect(page.getByTestId("status-vim")).toHaveAttribute("data-mode", "normal");
+  await page.locator(".cm-content").click();
+  await page.keyboard.type("Go", { delay: 25 });
+  await page.waitForTimeout(500);
+  await page.evaluate(() => window.__ddlPerf!.clear());
+
+  // Insert mode: every key goes through vim's handler before CodeMirror inserts it.
+  const text = "Ask the landlord whether the parking spot comes with the renewed lease ";
+  for (let round = 0; round < 2; round++) {
+    await page.keyboard.type(text, { delay: 25 });
+    await page.keyboard.press("Enter");
+  }
+  // Normal mode: motions, edits and undo in the long note.
+  await page.keyboard.press("Escape");
+  for (let round = 0; round < 12; round++) await page.keyboard.type("kkwwbjjxu", { delay: 25 });
+  await page.waitForTimeout(800);
+
+  const { keystrokes, longTasks } = await page.evaluate(() => ({
+    keystrokes: window
+      .__ddlPerf!.measures.filter((m) => m.name === "keystroke")
+      .map((m) => m.duration),
+    longTasks: window.__ddlPerf!.longTasks.map((t) => t.duration),
+  }));
+  expect(keystrokes.length).toBeGreaterThan(250);
+  const latency = record("keystroke (vim)", keystrokes, BUDGET_MS.keystrokeP95, "p95");
+  const over = longTasks.filter((d) => d > BUDGET_MS.longTaskMs);
+  const tasks = record("long tasks > 50ms while typing (vim)", over, 0, "count");
+  expect(latency.passed).toBe(true);
+  expect(tasks.passed, `long tasks: ${JSON.stringify(longTasks)}`).toBe(true);
+});
+
 test("keystroke latency and long tasks while typing in a 2000-line note", async ({ page }) => {
   await boot(page);
   await waitForPrefetch(page);

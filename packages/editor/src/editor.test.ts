@@ -347,4 +347,22 @@ describe("keyboard and vim", () => {
     expect(getAnnotations(editor.view.state).map((a) => a.line)).toEqual([1]);
     expect(editor.view.dom.querySelectorAll(".cm-ddl-badge")).toHaveLength(1);
   });
+
+  it("treats vim dd and u like any line deletion and undo", () => {
+    const editor = mount({ doc: DOC, config: { vimMode: true } });
+    editor.setAnnotations([annotation("a", 1), annotation("b", 2)]);
+    const cm = vimAdapter(editor);
+    const shown = () => getAnnotations(editor.view.state).map((a) => [a.id, a.line]);
+    Vim.handleEx(cm, "2");
+    for (const key of ["d", "d"]) Vim.handleKey(cm, key, "user");
+    expect(editor.getDocument()).toBe("# Today\n- [ ] email Sam");
+    expect(shown()).toEqual([["b", 1]]);
+
+    // A dropped badge never comes back by itself; the host re-sends it for the restored task.
+    Vim.handleKey(cm, "u", "user");
+    expect(editor.getDocument()).toBe(DOC);
+    expect(shown()).toEqual([["b", 2]]);
+    editor.setAnnotations([annotation("a", 1), annotation("b", 2)]);
+    expect(editor.view.dom.querySelectorAll(".cm-ddl-badge")).toHaveLength(2);
+  });
 });

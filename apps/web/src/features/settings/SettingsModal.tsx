@@ -10,6 +10,7 @@ import { useConnectionStore } from "../../state/connection-store";
 import { useSettingsStore } from "../../state/settings-store";
 import { type SettingsSection, ui } from "../../state/ui-store";
 import { useVaultStore } from "../../state/vault-store";
+import { useVimStore } from "../../state/vim-store";
 import { Modal } from "../overlays/Modal";
 import { dailyPreview } from "./daily-preview";
 import "../../styles/settings.css";
@@ -142,6 +143,51 @@ function DraftInput({
   );
 }
 
+const VIMRC_PLACEHOLDER = [
+  '" One ex command per line, for example:',
+  "imap jj <Esc>",
+  "nmap j gj",
+  "set clipboard=unnamed",
+].join("\n");
+
+/** The vimrc: committed after typing pauses (and on blur); lines vim rejected are listed below. */
+function VimrcEditor({ value, onCommit }: { value: string; onCommit(value: string): void }) {
+  const [draft, setDraft] = useState(value);
+  const problems = useVimStore((s) => s.vimrcProblems);
+  useEffect(() => setDraft(value), [value]);
+  useEffect(() => {
+    if (draft === value) return;
+    const timer = setTimeout(() => onCommit(draft), 800);
+    return () => clearTimeout(timer);
+  }, [draft, value, onCommit]);
+  return (
+    <div className="vimrc">
+      <textarea
+        className="input vimrc-input"
+        value={draft}
+        rows={8}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        placeholder={VIMRC_PLACEHOLDER}
+        aria-label="vimrc"
+        data-testid="setting-vimrc"
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => draft !== value && onCommit(draft)}
+      />
+      {problems.length > 0 ? (
+        <ul className="vimrc-problems" data-testid="vimrc-problems">
+          {problems.map((problem) => (
+            <li key={`${problem.line}:${problem.message}`}>
+              Line {problem.line + 1}: {problem.message}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 function NumberInput({
   value,
   min,
@@ -229,6 +275,20 @@ function EditorSection() {
           testId="setting-vim"
         />
       </Setting>
+      {editor.vimMode ? (
+        <div className="setting setting-stacked">
+          <div className="setting-info">
+            <div className="setting-name">vimrc</div>
+            <div className="setting-description">
+              Ex commands to run when vim starts, one per line; lines starting with <code>"</code>{" "}
+              are comments. Supports <code>map</code>/<code>noremap</code> and friends,{" "}
+              <code>set</code>, <code>let mapleader</code> and <code>exmap</code> with{" "}
+              <code>obcommand</code>.
+            </div>
+          </div>
+          <VimrcEditor value={editor.vimrc} onCommit={(vimrc) => set({ vimrc })} />
+        </div>
+      ) : null}
       <Setting name="Live preview" description="Hide markdown syntax away from the cursor.">
         <Toggle
           checked={editor.livePreview}

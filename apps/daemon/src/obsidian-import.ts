@@ -14,6 +14,9 @@ import { z } from "zod";
 const DAILY_NOTES_FILE = ".obsidian/daily-notes.json";
 const APP_FILE = ".obsidian/app.json";
 const APPEARANCE_FILE = ".obsidian/appearance.json";
+/** Where the Obsidian "Vimrc Support" plugin reads its vimrc from by default. */
+const VIMRC_FILE = ".obsidian.vimrc";
+const MAX_VIMRC_LENGTH = 16_384;
 
 /** Obsidian's daily-notes defaults, used for keys missing from its config file. */
 const OBSIDIAN_DAILY_FORMAT = "YYYY-MM-DD";
@@ -70,6 +73,9 @@ export async function readObsidianSettings(
     if (Object.keys(editor).length > 0) patch.editor = editor;
   }
 
+  const vimrc = await readVimrc(storage, logger);
+  if (vimrc !== null) patch.editor = { ...patch.editor, vimrc };
+
   const appearance = await readConfig(storage, APPEARANCE_FILE, AppearanceFileSchema, logger);
   const theme = appearance?.theme ? OBSIDIAN_THEMES[appearance.theme] : undefined;
   if (theme) patch.theme = theme;
@@ -106,6 +112,24 @@ async function readConfig<S extends z.ZodType>(
     });
   }
   return null;
+}
+
+async function readVimrc(storage: StorageProvider, logger: Logger): Promise<string | null> {
+  try {
+    const file = await storage.read(VIMRC_FILE);
+    if (!file || file.content.trim() === "") return null;
+    if (file.content.length > MAX_VIMRC_LENGTH) {
+      logger.warn("Ignoring an Obsidian vimrc over the size limit", { path: VIMRC_FILE });
+      return null;
+    }
+    return file.content.replace(/\r\n?/g, "\n");
+  } catch (error) {
+    logger.warn("Could not read the Obsidian vimrc", {
+      path: VIMRC_FILE,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
 }
 
 /** Vault-relative, trailing-slash-free path; invalid or hidden values fall back to the vault root. */

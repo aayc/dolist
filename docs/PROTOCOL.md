@@ -739,6 +739,7 @@ Editor preferences.
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `vimMode` | boolean | yes |  |
+| `vimrc` | string (≤ 16384 chars) | yes | Vim startup ex commands, one per line; lines starting with `"` are comments. |
 | `livePreview` | boolean | yes | Obsidian-style live preview. |
 | `readableLineLength` | boolean | yes |  |
 | `fontSize` | number (8–48) | yes |  |

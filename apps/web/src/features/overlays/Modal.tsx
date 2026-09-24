@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { cx } from "../../lib/cx";
 import { ui } from "../../state/ui-store";
 
@@ -22,9 +22,10 @@ export function Modal({
 }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null);
   const close = onClose ?? ui.closeOverlay;
+  // Read while rendering: an autoFocus child has already taken focus by the time effects run.
+  const [previouslyFocused] = useState(() => document.activeElement as HTMLElement | null);
 
   useEffect(() => {
-    const previouslyFocused = document.activeElement as HTMLElement | null;
     const el = ref.current;
     if (el && !el.contains(document.activeElement)) {
       el.querySelector<HTMLElement>("[autofocus], input, textarea, button, [tabindex]")?.focus();
@@ -32,7 +33,7 @@ export function Modal({
     return () => {
       if (previouslyFocused?.isConnected) previouslyFocused.focus({ preventScroll: true });
     };
-  }, []);
+  }, [previouslyFocused]);
 
   return (
     <div

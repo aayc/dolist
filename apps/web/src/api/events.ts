@@ -139,6 +139,7 @@ const settings = shape({
   theme: str,
   editor: shape({
     vimMode: bool,
+    vimrc: optional(str),
     livePreview: bool,
     readableLineLength: bool,
     fontSize: num,

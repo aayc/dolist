@@ -16,13 +16,18 @@ spec writes `apps/web/perf-results.json`.
 | `tab:switch` | switching between a 2 000-line note and today's note | 30 ms |
 | `thread:open` | badge click → thread rendered | 100 ms |
 | `keystroke` (p95) | keydown → next frame after the DOM update, 2 000-line note | 16 ms |
-| long tasks | tasks > 50 ms while typing | 0 |
+| `keystroke (vim)` (p95) | the same with vim mode on: insert-mode typing, then normal-mode motions, `x` and `u` | 16 ms |
+| long tasks | tasks > 50 ms while typing (both modes) | 0 |
 
 CI multiplies budgets by `PERF_BUDGET_MULTIPLIER=2` (slower shared runners). The perf run disables
 Chrome's frame-rate limiter so "→ next frame" measures work, not vsync alignment.
 
-Latest local run (Apple Silicon): keystroke p95 1.7 ms, daily open ~4–5 ms, tab switch 8 ms,
-thread open 15 ms, first load 105 ms, zero long tasks.
+Latest local run (Apple Silicon): keystroke p95 1.6 ms (vim mode 1.8 ms), daily open ~4–5 ms, tab
+switch 14 ms, thread open 9 ms, first load 106 ms, zero long tasks.
+
+Vim mode adds one handler to the keystroke path. The mode indicator and pending-keys display in the
+status bar update from one coalesced callback per keystroke, and only when the value changes, so
+typing in insert mode renders no React.
 
 ## Launch: daemon and macOS app
 
@@ -74,14 +79,17 @@ budgets.
 
 | Bundle | Budget (gzip) | Current |
 | --- | --- | --- |
-| Initial JS (entry + static imports) | 320 kB | ~311 kB |
+| Initial JS (entry + static imports) | 320 kB | ~312 kB |
 | Initial CSS | 40 kB | ~5 kB |
-| Total JS | 1 200 kB | ~790 kB |
+| Total JS | 1 200 kB | ~802 kB |
 
 The initial JS is dominated by CodeMirror core and `@codemirror/lang-markdown`, which statically
-embeds `@codemirror/lang-html` (and with it the JS/CSS parsers, ~60 kB gz). Vim (~300 kB of
-source) is loaded on demand — in parallel with startup when vim mode is on. A future win: patch
-`lang-markdown` (via `pnpm patch`) to drop the HTML embedding.
+embeds `@codemirror/lang-html` (and with it the JS/CSS parsers, ~60 kB gz). Vim is loaded on
+demand — in parallel with startup when vim mode is on: `@ddl/editor`'s `vim.ts` is a tiny loader
+in the main bundle, and `vim-integration.ts` (the engine plus ex commands, clipboard registers,
+vimrc and the status plugin) is one lazy chunk of ~42 kB gz. Don't import `vim-integration` or
+`@replit/codemirror-vim` statically. A future win: patch `lang-markdown` (via `pnpm patch`) to drop
+the HTML embedding.
 
 ## Design rules that keep it fast
 
