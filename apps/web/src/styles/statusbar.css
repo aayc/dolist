@@ -47,9 +47,14 @@ button.status-item:hover {
   color: var(--ddl-success);
 }
 
-.status-agent.is-off svg,
-.status-agent.has-problem svg {
+.status-agent.is-paused svg,
+.status-agent.is-off svg {
   color: var(--ddl-warning);
+}
+
+.status-agent.is-unavailable,
+.status-agent.is-unavailable svg {
+  color: var(--ddl-danger);
 }
 
 .status-approvals {

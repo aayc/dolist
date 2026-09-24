@@ -35,35 +35,34 @@ export function StatusBar() {
 function AgentItems() {
   const { agent } = useServices();
   const enabled = useAgentStore((s) => s.status?.enabled ?? null);
-  const mode = useAgentStore((s) => agentModeLabel(s.status?.mode ?? null));
+  const rawMode = useAgentStore((s) => s.status?.mode ?? null);
+  const mode = agentModeLabel(rawMode);
   const running = useAgentStore((s) => s.status?.running ?? 0);
   const queued = useAgentStore((s) => s.status?.queued ?? 0);
-  const problem = useAgentStore((s) => s.status?.problem ?? null);
+  const problem = useAgentStore((s) => s.status?.problem?.trim() || null);
   const pending = usePendingApprovalCount();
-  const title =
-    problem ??
-    (enabled === null
-      ? "Agent status unknown"
-      : enabled
-        ? "The agent is watching your daily notes — click to pause"
-        : "The agent is paused — click to resume");
+  const item = agentItem(enabled, rawMode === "off", problem);
   return (
     <>
       <button
         type="button"
-        className={cx(
-          "status-item status-agent",
-          enabled ? "is-on" : "is-off",
-          problem && "has-problem",
-        )}
-        onClick={() => enabled !== null && void agent.setEnabled(!enabled)}
+        className={cx("status-item status-agent", `is-${item.state}`)}
+        onClick={() => {
+          if (item.state === "on" || item.state === "paused") void agent.setEnabled(!enabled);
+          else ui.openOverlay({ kind: "settings", section: "agent" });
+        }}
         aria-pressed={enabled ?? false}
-        title={title}
+        title={item.title}
         data-testid="status-agent"
+        data-state={item.state}
       >
-        <Bot size={13} aria-hidden="true" />
-        <span>{enabled === null ? "Agent" : enabled ? "Agent on" : "Agent off"}</span>
-        {mode ? <span className="status-muted">{mode}</span> : null}
+        {item.state === "unavailable" ? (
+          <TriangleAlert size={13} aria-hidden="true" />
+        ) : (
+          <Bot size={13} aria-hidden="true" />
+        )}
+        <span>{item.label}</span>
+        {mode && rawMode !== "off" ? <span className="status-muted">{mode}</span> : null}
       </button>
       {running + queued > 0 ? (
         <span className="status-item" data-testid="status-running" title={`${queued} queued`}>
@@ -84,6 +83,27 @@ function AgentItems() {
       ) : null}
     </>
   );
+}
+
+type AgentItemState = "unknown" | "on" | "paused" | "off" | "unavailable";
+
+/** One agent item that never says "on" while the agent can't act (same wording as the Mac app). */
+function agentItem(
+  enabled: boolean | null,
+  off: boolean,
+  problem: string | null,
+): { state: AgentItemState; label: string; title: string } {
+  if (enabled === null) return { state: "unknown", label: "Agent", title: "Agent status unknown" };
+  if (off)
+    return { state: "off", label: "Agent off", title: problem ?? "The agent is turned off." };
+  if (problem) return { state: "unavailable", label: "Agent unavailable", title: problem };
+  return enabled
+    ? {
+        state: "on",
+        label: "Agent on",
+        title: "The agent is watching your daily notes. Click to pause.",
+      }
+    : { state: "paused", label: "Agent paused", title: "The agent is paused. Click to resume." };
 }
 
 const SAVE_LABELS: Record<SaveProblem, string> = {
