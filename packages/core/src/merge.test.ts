@@ -67,6 +67,11 @@ describe("mergeText", () => {
   it("takes identical changes once", () => {
     const both = note("# Thursday", "- [x] Book a table", "- [ ] Renew passport", "Notes");
     expect(mergeText(base, both, both)).toEqual({ text: both, conflict: false });
+    // Deleting the first or the last of three identical lines gives the same text, so which copy
+    // each side removed can't be told apart: like git, that's one change, not two.
+    const copies = note("- [ ] a", "  - note", "  - note", "  - note", "- [ ] a");
+    const oneLess = note("- [ ] a", "  - note", "  - note", "- [ ] a");
+    expect(mergeText(copies, oneLess, oneLess)).toEqual({ text: oneLess, conflict: false });
   });
 
   it("reports a conflict when both sides rewrite the same line, keeping the user's", () => {
@@ -101,7 +106,9 @@ describe("mergeText", () => {
     fc.array(lineArb, { maxLength: 3 }),
   ])(
     "edits to separate halves of a note merge into both edits",
-    (lines, a, b, localNew, remoteNew) => {
+    (raw, a, b, localNew, remoteNew) => {
+      // Numbered, so each side's edit is identifiable: among identical lines it isn't (see above).
+      const lines = raw.map((line, k) => `${line} ${k}`);
       // The local side rewrites one line in the first half, the remote side one in the second.
       const half = Math.floor(lines.length / 2);
       const i = a % half;
