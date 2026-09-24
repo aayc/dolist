@@ -21,7 +21,11 @@ It's a *do* list, not a *to-do* list: the point is that things get done.
 - **Daily notes, built in.** `⌘⇧D` opens today's note (created from your template), `⌘⇧P` jumps to
   the previous existing daily note, `⌘⇧N` to the next.
 - **Fast, minimal editor.** CodeMirror 6 with Obsidian-style live preview, clickable checkboxes,
-  wikilinks, vim mode, dark and light themes. Performance budgets are enforced in CI.
+  wikilinks, dark and light themes. Performance budgets are enforced in CI.
+- **Vim mode, like Obsidian's.** The same engine (`@replit/codemirror-vim`) on the web and a
+  faithful Swift port of it in the Mac app, both checked against 11,000+ recorded behaviors:
+  motions, operators, text objects, visual block, registers, macros, marks, `:s`/`:g`/`:sort`,
+  plus `:w`/`:q`/`:e <note>`, tab switching, system clipboard registers and a vimrc setting.
 - **An agent that is always watching.** New or edited tasks in today's note are triaged within a
   couple of seconds of you finishing typing. The orchestrator answers quick questions itself,
   ignores chores it can't help with, and spawns subagents for real work.

@@ -9,7 +9,7 @@ app's platform-neutral Swift packages.
 | --- | --- | --- | --- |
 | Web | Browser → daemon on `127.0.0.1` | Local daemon | ✅ working |
 | macOS | Native SwiftUI/AppKit app that supervises its own daemon (or attaches to a running one) | Local daemon (full capabilities: shell, browser, desktop) | in progress — `apps/macos` |
-| iPhone | Native SwiftUI app reusing `DailyDoListModels`, `DailyDoListClient` and `DailyDoListDomain` | Your Mac's daemon over an authenticated tunnel, or a cloud daemon (`cloud` execution provider) | planned — `apps/mobile` |
+| iPhone | Native SwiftUI app reusing `DailyDoListModels`, `DailyDoListClient`, `DailyDoListDomain` and `DailyDoListVim` | Your Mac's daemon over an authenticated tunnel, or a cloud daemon (`cloud` execution provider) | planned — `apps/mobile` |
 
 ## Why every client can share one backend
 
@@ -24,6 +24,9 @@ app's platform-neutral Swift packages.
   build for iOS.
 - **Domain logic is pure.** `@ddl/core` has no dependencies and no Node/DOM APIs, so daily-note
   math, task parsing and identity tracking behave identically everywhere.
+- **Editor behavior is pinned by vectors.** Vim mode runs `@replit/codemirror-vim` on the web and
+  `DailyDoListVim` (a Foundation-only Swift port) natively; both replay the same recorded behavior
+  vectors (`packages/editor/test/vim`), so a key sequence does the same thing on every surface.
 - **Hands are a provider.** The agent loop only needs an `ExecutionProvider`. On macOS it's the
   local one; for iPhone-only use, a `cloud` provider (remote sandbox with browser/desktop) plugs in
   without touching the orchestrator.
@@ -52,9 +55,9 @@ A native SwiftUI/AppKit app built from independent Swift packages (see
 
 ## iPhone app (apps/mobile)
 
-1. A native SwiftUI app reusing `DailyDoListModels`, `DailyDoListClient` and `DailyDoListDomain`
-   (Foundation-only, already built for iOS 17), with a compact UI: single pane, thread as a sheet,
-   approvals as native notifications with Approve/Deny actions.
+1. A native SwiftUI app reusing `DailyDoListModels`, `DailyDoListClient`, `DailyDoListDomain` and
+   `DailyDoListVim` (Foundation-only, declared for iOS 17), with a compact UI: single pane, thread
+   as a sheet, approvals as native notifications with Approve/Deny actions.
 2. Connects to a daemon it does not host: the user's Mac (paired with a QR code carrying the URL
    and a device-scoped token; reachable over Tailscale or a relay) or a cloud daemon.
 3. Offline: a local cache of the vault with the same `SyncEngine` semantics, so editing works on

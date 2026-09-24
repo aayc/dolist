@@ -68,6 +68,7 @@ docs/             Architecture, agent system, performance, security model, cross
 | Unit tests | `pnpm test` (or `pnpm --filter @ddl/<pkg> test`) |
 | Benchmarks (with budgets) | `pnpm bench` then `pnpm bench:check` |
 | E2E / perf e2e | `pnpm e2e` / `pnpm e2e:perf` |
+| Vim: regenerate vectors / CI gate | `pnpm vim:vectors` / `pnpm vim:check` (Chromium; see "Vim mode" below) |
 | Evals | `pnpm eval:mock` (CI) / `pnpm eval` (real model, needs `OPENROUTER_API_KEY`) |
 | Pre-commit essentials | `pnpm check` (lint + typecheck + unit tests + secret scan) |
 | Build / bundle budget | `pnpm build && pnpm size:check` |
@@ -77,7 +78,7 @@ docs/             Architecture, agent system, performance, security model, cross
 Scope commands to the package you are working in while iterating. Before you finish, run
 `pnpm check`; for UI or agent changes also run the relevant parts of what CI runs:
 `pnpm build && pnpm size:check`, `pnpm bench && pnpm bench:check`, `pnpm e2e`, `pnpm e2e:perf`,
-`pnpm eval:mock` (see `docs/CI.md`).
+`pnpm eval:mock`, and `pnpm vim:check` for editor, keyboard or vim changes (see `docs/CI.md`).
 
 ## Architecture in one screen
 
@@ -187,6 +188,28 @@ and package READMEs (`packages/storage`, `packages/connectors`, `packages/editor
 - Tests never hit the network or the real model (use `MockLlmClient` / `ScriptedHarness`), never
   touch the user's real vault, and clean up temp dirs.
 
+### Vim mode
+
+vim.js (`@replit/codemirror-vim`) is the reference implementation of vim behavior. Our job is to
+integrate it faithfully, and three checks in `packages/editor/test/vim` pin it (details in its
+`README.md`):
+
+- **Vectors are a contract.** `packages/editor/test/vim/vectors.jsonl` is generated, never edited
+  by hand. It holds vim behavior as data (document + selection + keys → document, selections,
+  mode, registers), and the Swift port (`apps/macos`) replays the same file. `pnpm vim:vectors`
+  regenerates it after a vim.js upgrade or a catalog change; review the diff and commit it with
+  the change. The format and replay rules in that README are shared with Swift: change them only
+  additively and log the change in the README's "Changes" section.
+- **Coverage is enforced.** Every `defaultKeymap` entry and ex command of vim.js needs a catalog
+  case (`test/vim/catalog`), or an exclusion with a reason.
+- **Our editor must match the oracle.** vim.js's own test suite and every vector also run
+  against `createMarkdownEditor`. A new difference is a bug to fix. If it's deliberate (a markdown
+  behavior wins), add it to `test/vim/upstream/expected-failures.ts` with the reason.
+
+`pnpm vim:check` (CI, e2e job) runs all three in Chromium in about 25 s. App-level vim behavior
+(ex commands, status, clipboard, vimrc, key policy) has unit tests in `packages/editor/src/vim*`
+and real-keyboard e2e tests in `apps/web/e2e/vim.spec.ts`.
+
 ## How to…
 
 - **Add a storage backend:** implement `StorageProvider` (`packages/storage/src/types.ts`), add it to
@@ -210,9 +233,9 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
 - **Layout:** `Package.swift` is the app shell (`Sources/DailyDoListApp`, OS integration in
   `System/`). Independent local packages live in `Packages/`: `DailyDoListModels` (wire models),
   `DailyDoListClient` (`HTTPDaemonClient` + `InMemoryDaemonClient`), `DailyDoListDomain` (ported
-  `@ddl/core` logic), `DailyDoListEditor`, `DailyDoListAgent`, and `DailyDoListDaemon`
-  (`DaemonSupervisor`). `IntegrationTests/` is a separate package that runs against the real
-  daemon.
+  `@ddl/core` logic), `DailyDoListEditor`, `DailyDoListAgent`, `DailyDoListVim` (the port of the
+  web editor's vim mode), and `DailyDoListDaemon` (`DaemonSupervisor`). `IntegrationTests/` is a
+  separate package that runs against the real daemon.
 - **Commands:** `apps/macos/scripts/test.sh [Package|app|integration] [-- swift test args]`,
   `apps/macos/scripts/run-app.sh [--demo]`, and
   `apps/macos/scripts/build-app.sh [--release] [--with-daemon] [--zip]` (writes to
@@ -221,10 +244,23 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
   Command Line Tools: there's no XCTest, so tests use Swift Testing, and plain `swift test` can't
   find `Testing.framework`. Always go through `scripts/test.sh`, which adds the flags only when
   `xcode-select` points at the CLT.
-- **Conventions:** every package builds and tests on its own. Models, Client and Domain stay
+- **Conventions:** every package builds and tests on its own. Models, Client, Domain and Vim stay
   Foundation-only (they also build for iOS). Use small files with doc comments. Anything touching
   processes, the network, files or time goes behind a protocol so tests use fakes (see
   `DaemonSupervisorDependencies`). No third-party Swift dependencies so far.
+- **Vim:** `DailyDoListVim` ports vim.js and its CodeMirror 6 adapter file by file, keeping their
+  structure and names; the web engine (not the vim editor) decides what is correct. Its
+  `VectorReplayTests` replay `packages/editor/test/vim/vectors.jsonl` and must stay at 100% (an
+  exclusion needs a reason in the test file); `Tests/.../Upstream` holds vim.js's own tests. Hosts
+  implement `VimEditor`; see `apps/macos/Packages/DailyDoListVim/README.md`.
+- **Vim in the editor:** `DailyDoListEditor` hosts the engine (`Vim/TextViewVimHost*.swift`), and
+  `EditorVimIntegration` ports `vim-integration.ts` (the app's ex commands, `gt`, the clipboard
+  registers, the vimrc). The app owns one `Vim` and one integration for every editor. Its
+  `VimVectorReplayTests` replay every vector through the real editor (via the
+  `DailyDoListVimTestSupport` library), with live preview off and on, and must stay at 100% too.
+  Vim-mode tests send real `NSEvent`s through `VimEditorHarness`. After a vim change, run
+  `test.sh DailyDoListVim`, `test.sh DailyDoListEditor` and `test.sh app`. The design (key
+  routing, undo grouping, switching notes) is in the editor's README.
 - **Protocol changes:** a wire change in `packages/core/src/protocol.ts` also updates
   `DailyDoListModels` in the same change. Its tests decode the `@ddl/contract` fixtures.
 - **Daemon supervision:** the app attaches to a running daemon and never stops one it didn't
@@ -234,8 +270,8 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
   `Resources/Info.plist.template` and signs ad hoc. `--with-daemon` bundles
   `pnpm deploy --prod --legacy` output into `Contents/Resources/daemon`. Don't rely on SwiftPM's
   `Bundle.module` in app code: it looks next to the `.app`.
-- **CI:** `.github/workflows/macos.yml` (package tests, integration tests, release build, zipped
-  app artifact).
+- **CI:** `.github/workflows/macos.yml` (package tests, an iOS build of the Foundation-only
+  packages, integration tests, release build, zipped app artifact).
 
 ## Commits & PRs
 

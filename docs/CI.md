@@ -9,7 +9,7 @@ cache, then `pnpm install --frozen-lockfile`.
 | --- | --- | --- |
 | CI (`ci.yml`) | push to `main`, pull requests, merge queue | `check`, `test-macos`, `bench`, `e2e`, `evals-mock` |
 | Security (`security.yml`) | push to `main`, pull requests, merge queue, weekly (Mon 05:27 UTC), manual | `gitleaks`, `codeql` (JS/TS + Actions), `dependency-review` (PRs) |
-| macOS app (`macos.yml`) | push to `main` and pull requests touching the app, the daemon or what it bundles; manual | `app` |
+| macOS app (`macos.yml`) | push to `main` and pull requests touching the app, the daemon, what it bundles or the vim vectors; manual | `app` |
 | Evals (live) (`evals.yml`) | weekly (Mon 06:43 UTC), manual | `gate`, `live` |
 | Dependabot (`dependabot.yml`) | weekly (Monday) | npm and GitHub Actions update PRs |
 
@@ -77,9 +77,19 @@ pnpm bench:check                      # or: node scripts/bench-check.mjs package
 1. Restores `~/.cache/ms-playwright`, keyed by the `@playwright/test` version in `pnpm-lock.yaml`.
 2. `pnpm --filter @ddl/web exec playwright install --with-deps chromium`. System packages aren't
    cached, so this always runs; the browser download is skipped on a cache hit.
-3. `pnpm e2e` (project `functional`). The report and traces are uploaded as
+3. `pnpm vim:check` (~25 s), the vim-mode gate, in one Chromium session (see
+   `packages/editor/test/vim/README.md`):
+   - regenerates `packages/editor/test/vim/vectors.jsonl` (the vim behavior contract the Swift port
+     replays too) and fails with a per-case diff if the committed file differs, if a catalog case
+     throws, or if a `defaultKeymap` entry or ex command lost its catalog coverage;
+   - runs vim.js's own test suite against plain CodeMirror 6 (upstream's setup; all must pass) and
+     against the Daily Do List editor (only the listed, deliberate differences may fail);
+   - replays every vector against the Daily Do List editor (only listed skips may differ).
+   After an intended change (a dependency upgrade, a new catalog case) run `pnpm vim:vectors` and
+   commit the regenerated file after reviewing its diff.
+4. `pnpm e2e` (project `functional`). The report and traces are uploaded as
    `playwright-report-functional`.
-4. `pnpm e2e:perf` (project `perf`) with `PERF_BUDGET_MULTIPLIER=2`. The perf specs write
+5. `pnpm e2e:perf` (project `perf`) with `PERF_BUDGET_MULTIPLIER=2`. The perf specs write
    `apps/web/perf-results.json` and fail when a metric exceeds budget × multiplier.
    `.github/scripts/perf-summary.mjs` renders the numbers into the job summary. The report and
    `perf-results.json` are uploaded as `playwright-report-perf`.
@@ -91,9 +101,13 @@ summary understands `{ "multiplier": 2, "results": [{ "name": "tab:switch", "val
 
 ```sh
 pnpm --filter @ddl/web exec playwright install chromium   # once
+pnpm vim:check
 pnpm e2e
 PERF_BUDGET_MULTIPLIER=2 pnpm e2e:perf && node .github/scripts/perf-summary.mjs
 ```
+
+The vim scripts prefer Playwright's bundled Chromium (what CI uses) and fall back to the installed
+Google Chrome; `VIM_CHROMIUM_CHANNEL=chrome` forces Chrome.
 
 ### `evals-mock`: deterministic agent evals
 
@@ -109,9 +123,12 @@ pnpm eval:mock && node .github/scripts/eval-summary.mjs
 
 ## macOS app (`macos.yml`)
 
-One job, `app`, on `macos-latest`, only when `apps/macos`, the daemon or a package the daemon
-bundles changes (the two path lists in the workflow must stay in sync). It selects the newest
-non-beta Xcode, builds the daemon, runs every Swift package's tests, runs the integration tests
+One job, `app`, on `macos-latest`, only when `apps/macos`, the daemon, a package the daemon
+bundles or the vim behavior vectors (`packages/editor/test/vim`, replayed by `DailyDoListVim`)
+change (the two path lists in the workflow must stay in sync). It selects the newest non-beta
+Xcode, builds the daemon, runs every Swift package's tests (including the vim vector replay),
+compiles the Foundation-only packages the iPhone app will reuse (`DailyDoListModels`,
+`DailyDoListClient`, `DailyDoListDomain`, `DailyDoListVim`) for iOS, runs the integration tests
 against the real daemon with the mock agent, builds a release "Daily Do List.app" with the bundled
 daemon, and uploads the zipped app as the `daily-do-list-macos` artifact (kept 14 days; ad hoc
 signed, not notarized).
