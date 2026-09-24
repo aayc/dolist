@@ -62,6 +62,7 @@ future iPhone app too.
 | Test one package | `apps/macos/scripts/test.sh DailyDoListDaemon` (or `app`) |
 | Filter tests | `apps/macos/scripts/test.sh DailyDoListModels -- --filter ContractFixture` |
 | Integration tests | `pnpm --filter @ddl/daemon build && apps/macos/scripts/test.sh integration` |
+| Format / lint Swift (swift-format, `.swift-format`) | `pnpm lint:fix` / `node scripts/lint.mjs --all --only swift` |
 | Package the app | `apps/macos/scripts/build-app.sh [--release] [--with-daemon] [--zip] [--output DIR] [--open]` |
 | Re-render the icon source | `swift apps/macos/scripts/make-icon.swift --png apps/macos/Resources/AppIcon-1024.png` |
 

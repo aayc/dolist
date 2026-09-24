@@ -1,0 +1,6 @@
+# Mechanical commits that `git blame` skips (scripts/install-git-hooks.mjs sets
+# blame.ignoreRevsFile; GitHub reads this file too). Add a commit here only if it changes
+# formatting and nothing else.
+
+# style(macos): format every Swift file with swift-format
+8e28a2e1ff5f9fe94e9fff380bae6298abba0e3c

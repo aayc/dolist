@@ -9,12 +9,13 @@
  *   hygiene     conflict markers, line endings, whitespace, big files, case-colliding paths,
  *               executable bits, relative Markdown links (scripts/check-hygiene.mjs)
  *   biome       TypeScript, JavaScript, JSON, CSS: lint + format (biome.json)
+ *   swift       Swift: swift-format's formatting and lint rules (.swift-format)
  *   shellcheck  shell scripts and git hooks
  *   actionlint  GitHub workflows, including the shell in their `run:` steps
  *   vectors     the Swift test vectors still match the TypeScript core (when their inputs change)
  *
- * `--fix` applies Biome's fixes and regenerates the vectors. A missing external tool is skipped
- * with a warning locally (`brew install shellcheck actionlint`) and fails the run in CI.
+ * `--fix` applies Biome's fixes, formats Swift and regenerates the vectors. A missing external
+ * tool is skipped with a warning locally and fails the run in CI.
  */
 import { execFileSync, spawnSync } from "node:child_process";
 
@@ -59,14 +60,23 @@ const CHECKS = [
           ],
   },
   {
+    name: "swift",
+    tool: { probe: ["swift", "format", "--version"], install: "xcode-select --install" },
+    matches: (f) => f.endsWith(".swift"),
+    command: (matched) =>
+      fix
+        ? ["swift", "format", "format", "--in-place", "--parallel", ...matched]
+        : ["swift", "format", "lint", "--strict", "--parallel", ...matched],
+  },
+  {
     name: "shellcheck",
-    tool: "shellcheck",
+    tool: { probe: ["shellcheck", "--version"], install: "brew install shellcheck" },
     matches: (f) => /(\.sh$|^\.githooks\/[^/]+$)/.test(f),
     command: (matched) => ["shellcheck", ...matched],
   },
   {
     name: "actionlint",
-    tool: "actionlint",
+    tool: { probe: ["actionlint", "--version"], install: "brew install actionlint" },
     // A changed local action can break the workflows that use it, so lint them all.
     matches: (f) => /^\.github\/(workflows|actions)\/.+\.ya?ml$/.test(f),
     command: () => ["actionlint"],
@@ -81,8 +91,9 @@ const CHECKS = [
   },
 ];
 
-function installed(tool) {
-  return !spawnSync(tool, ["--version"], { stdio: "ignore" }).error;
+function installed({ probe: [command, ...rest] }) {
+  const result = spawnSync(command, rest, { stdio: "ignore" });
+  return !result.error && result.status === 0;
 }
 
 const ran = [];
@@ -93,8 +104,8 @@ for (const check of CHECKS) {
   const matched = check.matches ? files.filter(check.matches) : files;
   if (check.matches && matched.length === 0) continue;
   if (check.tool && !installed(check.tool)) {
-    if (process.env.CI) failed.push(`${check.name} (${check.tool} is not installed)`);
-    else skipped.push(check.tool);
+    if (process.env.CI) failed.push(`${check.name} (${check.tool.probe[0]} is not installed)`);
+    else skipped.push(`${check.name} (${check.tool.install})`);
     continue;
   }
   const [command, ...rest] = check.command(matched);
@@ -103,11 +114,7 @@ for (const check of CHECKS) {
   if (result.status !== 0) failed.push(check.name);
 }
 
-if (skipped.length > 0) {
-  console.warn(
-    `⚠ lint: skipped ${skipped.join(", ")}: not installed (brew install ${skipped.join(" ")})`,
-  );
-}
+if (skipped.length > 0) console.warn(`⚠ lint: not installed, skipped: ${skipped.join(", ")}`);
 if (failed.length > 0) {
   console.error(`✖ lint: ${failed.join(", ")} failed`);
   process.exit(1);

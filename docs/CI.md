@@ -27,8 +27,10 @@ Runs `pnpm lint`, `pnpm typecheck`, `pnpm test`, `node scripts/check-secrets.mjs
 `pnpm lint` is `scripts/lint.mjs --all`, the same checks the pre-commit hook runs on staged files:
 file hygiene (`scripts/check-hygiene.mjs`: conflict markers, LF endings, final newlines, trailing
 whitespace, files over 1 MiB, paths that differ only in case, executable bits, relative Markdown
-links), Biome, shellcheck on shell scripts and git hooks, actionlint on the workflows, and
-`pnpm vectors:check`. In CI a missing tool fails the step; locally it's skipped with a warning. The
+links), Biome, swift-format on the Swift sources (`.swift-format`), shellcheck on shell scripts and
+git hooks, actionlint on the workflows, and `pnpm vectors:check`. This job runs it with
+`--skip swift`; the macOS workflow lints Swift with Xcode's swift-format, the version local
+toolchains ship. In CI a missing tool fails the step; locally it's skipped with a warning. The
 job installs actionlint and shellcheck from their releases, pinned by version and SHA-256 like
 gitleaks, because versions disagree on rules (the runner image's shellcheck 0.9 rejects `test -nt`,
 which 0.11 accepts as POSIX). Keep the pins at the versions Homebrew installs.
@@ -144,7 +146,8 @@ pnpm eval:mock && node .github/scripts/eval-summary.mjs
 One job, `app`, on `macos-latest`, only when `apps/macos`, the daemon, a package the daemon
 bundles or the vim behavior vectors (`packages/editor/test/vim`, replayed by `DailyDoListVim`)
 change (the two path lists in the workflow must stay in sync). It selects the newest non-beta
-Xcode, builds the daemon, runs every Swift package's tests (including the vim vector replay),
+Xcode, lints the Swift formatting (`node scripts/lint.mjs --all --only swift`, strict
+swift-format), builds the daemon, runs every Swift package's tests (including the vim vector replay),
 compiles the Foundation-only packages the iPhone app will reuse (`DailyDoListModels`,
 `DailyDoListClient`, `DailyDoListDomain`, `DailyDoListVim`) for iOS, runs the integration tests
 against the real daemon with the mock agent, builds a release "Daily Do List.app" with the bundled
@@ -152,6 +155,7 @@ daemon, and uploads the zipped app as the `daily-do-list-macos` artifact (kept 1
 signed, not notarized).
 
 ```sh
+node scripts/lint.mjs --all --only swift   # or pnpm lint:fix to format
 pnpm --filter @ddl/daemon build
 apps/macos/scripts/test.sh                 # every package, then the app shell
 apps/macos/scripts/test.sh integration     # real daemon, mock agent

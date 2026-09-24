@@ -42,7 +42,9 @@ brew install gitleaks shellcheck actionlint   # the hooks' scanners and linters
 
 The pre-commit hook also lints what you stage with `scripts/lint.mjs`, the same checks as
 `pnpm lint` and CI: file hygiene (conflict markers, line endings, whitespace, big files, broken
-relative links), Biome, shellcheck, actionlint, and the Swift test vectors when their inputs change.
+relative links), Biome, swift-format (it comes with Xcode and the Command Line Tools), shellcheck,
+actionlint, and the Swift test vectors when their inputs change. `pnpm lint:fix` applies the
+formatters.
 
 Live agent runs need an OpenRouter key. Put `OPENROUTER_API_KEY=...` in `~/.daily-do-list/.env`.
 

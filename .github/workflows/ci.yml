@@ -55,7 +55,8 @@ jobs:
             "shellcheck-v${SHELLCHECK_VERSION}/shellcheck"
           echo "$bin_dir" >> "$GITHUB_PATH"
       - name: Lint (hygiene, Biome, shellcheck, actionlint, Swift vectors)
-        run: pnpm lint
+        # Swift formatting is linted by the macOS workflow, with Xcode's swift-format.
+        run: pnpm lint --skip swift
       - name: Typecheck
         run: pnpm typecheck
       - name: Unit tests

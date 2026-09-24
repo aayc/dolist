@@ -196,7 +196,7 @@ and a bundle-size budget. See [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 ## Development
 
 ```bash
-pnpm lint        # Biome, shellcheck, actionlint, file hygiene (also the pre-commit hook)
+pnpm lint        # Biome, swift-format, shellcheck, actionlint, file hygiene (also pre-commit)
 pnpm typecheck   # TypeScript 7 across all packages
 pnpm test        # Vitest (≈1 500 tests)
 pnpm bench && pnpm bench:check

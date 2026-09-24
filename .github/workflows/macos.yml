@@ -72,6 +72,9 @@ jobs:
           swift --version
           node --version
 
+      - name: Swift format (swift-format lint, strict)
+        run: node scripts/lint.mjs --all --only swift
+
       - name: Build the daemon
         run: pnpm --filter @ddl/daemon build
 

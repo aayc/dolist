@@ -162,7 +162,7 @@ and package READMEs (`packages/storage`, `packages/connectors`, `packages/editor
   (default exports only where a tool requires them, e.g. eval suites, config files).
 - Formatting and linting: Biome (`pnpm lint:fix`). 2 spaces, double quotes, semicolons, width 100.
   `pnpm lint` (`scripts/lint.mjs`, also the pre-commit hook on staged files) adds file hygiene,
-  shellcheck, actionlint and the Swift vectors check.
+  swift-format, shellcheck, actionlint and the Swift vectors check.
 - Avoid `any`; use `unknown` + narrowing. Validate all external input (HTTP bodies with zod in the
   daemon, LLM JSON output against schemas, MCP payloads).
 - Errors: throw typed errors (`ConflictError`, `LlmError`, …). Libraries never `console.log`; take a
@@ -272,7 +272,8 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
 - **Conventions:** every package builds and tests on its own. Models, Client, Domain and Vim stay
   Foundation-only (they also build for iOS). Use small files with doc comments. Anything touching
   processes, the network, files or time goes behind a protocol so tests use fakes (see
-  `DaemonSupervisorDependencies`). No third-party Swift dependencies so far.
+  `DaemonSupervisorDependencies`). No third-party Swift dependencies so far. swift-format
+  (`.swift-format`: 2 spaces, width 100) formats and lints every Swift file: `pnpm lint:fix`.
 - **Vim:** `DailyDoListVim` ports vim.js and its CodeMirror 6 adapter file by file, keeping their
   structure and names; the web engine (not the vim editor) decides what is correct. Its
   `VectorReplayTests` replay `packages/editor/test/vim/vectors.jsonl` and must stay at 100% (an
