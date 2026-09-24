@@ -41,7 +41,9 @@ key the judge is off (uncertain actions ask you) and web search comes from the C
   Dice similarity for edits, positional fallback). Tracker state persists in the sidecar.
 - Each changed task gets its own **settle timer** (`settleMs`, default 2.5 s), extended while the
   editor reports you typing on that line, and shortened to ~0.7 s once your cursor leaves the line
-  (e.g. you pressed Enter). Blank template tasks are ignored until they have text.
+  (e.g. you pressed Enter). When one settles, every other task of the note that's due settles with
+  it, top to bottom, so tasks written together reach the orchestrator as one batch in note order.
+  Blank template tasks are ignored until they have text.
 - Emits `added`, `updated`, `completed`, `reopened`, `removed` events.
 - The rest of the note settles too: new or edited lines that aren't tasks become one `note` event
   per pause, but only when a line could be addressed to the agent (`orchestrator/prose.ts`: a
