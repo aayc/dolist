@@ -56,6 +56,10 @@ final class Workspace {
   @ObservationIgnored var errorToasted: Set<String> = []
   @ObservationIgnored var treeRefresh: IdleTimer!
   @ObservationIgnored var presence: PresenceReporter!
+  /// Hover previews of `[[wikilinks]]` (editor tooltips, thread cards).
+  @ObservationIgnored var notePreviews: NotePreviewCache!
+  /// Threads loaded for the sources of a link preview (each at most once).
+  @ObservationIgnored var previewThreadLoads: Set<String> = []
 
   init(
     client: DaemonClient, settings: SettingsStore, ui: UIState, toasts: ToastStore,
@@ -80,6 +84,13 @@ final class Workspace {
     presence = PresenceReporter(scheduler: scheduler) { [client] path, line in
       Task { await client.send(.editorActivity(notePath: path, line: line)) }
     }
+    notePreviews = NotePreviewCache(
+      resolve: { [weak self] target in self?.resolveWikiLink(target) },
+      loadedContent: { [weak self] path in
+        guard let self, self.notes.has(path) else { return nil }
+        return self.editor.liveText(for: path) ?? self.content(of: path)
+      },
+      read: { [client] path in try await client.readNote(path).content })
     notes.delegate = self
     notes.onStateChange = { [weak self] path, state in
       if state == .saved { self?.errorToasted.remove(path) }

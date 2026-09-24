@@ -112,6 +112,16 @@ extension FakeDaemon {
   ]
 
   private static let demoToday = ["- [x] Compare standing desks under $400", "- [ ] Reserve a table for Friday dinner"]
+  /// Written as prose; the orchestrator answered it in a thread anchored to the line.
+  private static let demoQuestion = "How tall is Ridge Tower downtown?"
+
+  /// Pages the agent's lines in today's note cite (added to their threads' sources).
+  private static let deskSource = CitedSource(
+    url: "https://desks.example/rise-pro", title: "Example Rise Pro standing desk — Desks Example",
+    snippet: "Dual motor, 25–50 in height range, 7-year warranty. $379 this week.")
+  private static let tableSource = CitedSource(
+    url: "https://booking.example/trattoria-sole", title: "Trattoria Sole — Booking Example",
+    snippet: "Tables for 2 on Friday at 7:00 PM and 8:30 PM. Free cancellation until noon.")
 
   private func seedDemo() {
     let start = nowMillis
@@ -131,13 +141,74 @@ extension FakeDaemon {
     let content = (Self.demoToday + [FakeCalendar.defaultDailyNoteContent]).joined(separator: "\n")
     vault.store(todayPath, content, mtime: start - 60_000)
     observeNote(todayPath, content: content, initial: true)
-    seedCompletedTask(todayPath, date: today, text: Self.demoToday[0].dropTaskPrefix, completedAt: start - 7_200_000)
-    seedCompletedTask(todayPath, date: today, text: Self.demoToday[1].dropTaskPrefix, completedAt: start - 3_600_000)
+    let desks = seedCompletedTask(
+      todayPath, date: today, text: Self.demoToday[0].dropTaskPrefix, completedAt: start - 7_200_000,
+      source: Self.deskSource)
+    let table = seedCompletedTask(
+      todayPath, date: today, text: Self.demoToday[1].dropTaskPrefix, completedAt: start - 3_600_000,
+      source: Self.tableSource)
+    guard let desks, let table else { return }
+    // What the agent wrote into the note: findings under each task and a follow-up task.
+    let lines = [
+      Self.demoToday[0],
+      FakeAgentText.mark("  - Example Rise Pro is the pick at $379, dual motor ([Desks Example](\(Self.deskSource.url)))", threadId: desks),
+      Self.demoToday[1],
+      FakeAgentText.mark("  - Trattoria Sole has a table for 2 at 7:00 PM ([Booking Example](\(Self.tableSource.url)))", threadId: table),
+      FakeAgentText.mark("- [ ] Call Trattoria Sole to confirm the table", threadId: table),
+      Self.demoQuestion,
+      FakeCalendar.defaultDailyNoteContent,
+    ]
+    let final = lines.joined(separator: "\n")
+    vault.store(todayPath, final, mtime: start - 60_000)
+    observeNote(todayPath, content: final, initial: true)
+    seedAnsweredQuestion(todayPath, date: today, line: lines.firstIndex(of: Self.demoQuestion) ?? 0, answeredAt: start - 1_800_000)
   }
 
-  /// A finished thread and a `done` record for an existing task (the agent's earlier work).
-  private func seedCompletedTask(_ path: String, date: LocalDate, text: String, completedAt: EpochMillis) {
-    guard let task = tracked[path]?.first(where: { $0.text == text }) else { return }
+  /// A question written as prose, answered by the orchestrator in a thread anchored to its line:
+  /// a `done` record with `anchor: line` (id `anc_…`) and a thread citing its sources.
+  private func seedAnsweredQuestion(_ path: String, date: LocalDate, line: Int, answeredAt: EpochMillis) {
+    let threadId = nextID("thr")
+    let anchorId = nextID("anc")
+    let tower = "https://city.example/landmarks/ridge-tower"
+    let skyline = "https://skyline.example/towers"
+    let messages: [ThreadMessage] = [
+      Self.statusMessage(.working, "Looking it up", at: answeredAt - 20_000, id: nextID("msg")),
+      .toolCall(
+        ToolCallMessage(
+          id: nextID("msg"), author: "orchestrator", createdAt: answeredAt - 16_000, toolCallId: nextID("call"),
+          toolName: "web_search", label: "Web search", input: ["query": "Ridge Tower height"], status: .ok,
+          resultPreview: "5 results", endedAt: answeredAt - 14_500)),
+      Self.agentText(
+        "orchestrator",
+        """
+        **About 1,250 ft (381 m)** to the roof, 1,380 ft with its spire [1](\(tower)). It has been the tallest \
+        building downtown since it opened [2](\(skyline)#ridge).
+
+        I added it to [[Ideas]] under places to visit.
+        """, at: answeredAt - 4_000, id: nextID("msg")),
+      Self.statusMessage(.done, "Answered", at: answeredAt, id: nextID("msg")),
+    ]
+    threads[threadId] = AgentThread(
+      id: threadId, taskId: anchorId, notePath: path, title: Self.demoQuestion, status: .done, createdAt: answeredAt - 20_000,
+      updatedAt: answeredAt, messages: messages,
+      sources: [
+        CitedSource(
+          url: tower, title: "Ridge Tower — City Landmarks",
+          snippet: "Ridge Tower rises 1,250 ft (381 m) to its roof; the spire brings it to 1,380 ft."),
+        CitedSource(url: skyline, title: "Downtown skyline: every tower ranked"),
+      ])
+    records[anchorId] = TaskAgentRecord(
+      taskId: anchorId, notePath: path, date: date.iso, text: Self.demoQuestion, line: line, status: .done,
+      summary: "About 1,250 ft", threadId: threadId, updatedAt: answeredAt, unread: 0, anchor: .line)
+  }
+
+  /// A finished thread and a `done` record for an existing task (the agent's earlier work); `source`
+  /// joins the thread's sources. Returns the thread's id.
+  @discardableResult
+  private func seedCompletedTask(
+    _ path: String, date: LocalDate, text: String, completedAt: EpochMillis, source: CitedSource? = nil
+  ) -> String? {
+    guard let task = tracked[path]?.first(where: { $0.text == text }) else { return nil }
     let script = AgentScript.forTask(text)
     var clock = completedAt - 90_000
     func next() -> EpochMillis {
@@ -182,12 +253,14 @@ extension FakeDaemon {
       messages.append(Self.agentText(script.author, script.finalText, at: next(), id: nextID("msg")))
     }
     messages.append(Self.statusMessage(.done, "Task complete", at: completedAt, id: nextID("msg")))
+    let sources = script.sources + (source.map { [$0] } ?? [])
     threads[threadId] = AgentThread(
       id: threadId, taskId: task.id, notePath: path, title: text, status: .done, createdAt: completedAt - 90_000,
-      updatedAt: completedAt, messages: messages, artifacts: [meta])
+      updatedAt: completedAt, messages: messages, artifacts: [meta], sources: sources.isEmpty ? nil : sources)
     records[task.id] = TaskAgentRecord(
       taskId: task.id, notePath: path, date: date.iso, text: text, line: task.line, status: .done, summary: summary,
       threadId: threadId, updatedAt: completedAt, unread: 0)
+    return threadId
   }
 }
 

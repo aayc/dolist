@@ -54,13 +54,13 @@ public struct ApprovalCard: View {
       if !approval.reason.isEmpty {
         Text(verbatim: approval.reason)
           .font(.callout)
-          .foregroundStyle(.secondary)
+          .foregroundStyle(AgentTheme.mutedText)
           .fixedSize(horizontal: false, vertical: true)
       }
       DisclosureGroup(isExpanded: $showsDetails) {
         JSONBlock(text: approval.input.prettyJSONString).padding(.top, 4)
       } label: {
-        Text("Details").font(.caption).foregroundStyle(.secondary)
+        Text("Details").font(.caption).foregroundStyle(AgentTheme.mutedText)
       }
       if approval.isPending {
         pendingActions(now: now)
@@ -82,7 +82,7 @@ public struct ApprovalCard: View {
       Image(systemName: approval.status.systemImage).foregroundStyle(tint)
       Text(approval.isPending ? "Approval needed" : "Approval")
         .font(.headline)
-        .foregroundStyle(approval.isPending ? AgentTheme.warning : Color.primary)
+        .foregroundStyle(approval.isPending ? AgentTheme.warning : AgentTheme.text)
       Spacer(minLength: 8)
       Label {
         Text(verbatim: approval.toolLabel ?? approval.toolName).lineLimit(1)
@@ -90,7 +90,7 @@ public struct ApprovalCard: View {
         Image(systemName: ToolIcon.systemName(for: approval.toolName))
       }
       .font(.caption)
-      .foregroundStyle(.secondary)
+      .foregroundStyle(AgentTheme.mutedText)
     }
   }
 
@@ -126,11 +126,11 @@ public struct ApprovalCard: View {
           Text("Sending your decision…")
         }
         .font(.caption)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(AgentTheme.mutedText)
       } else if let expiresAt = approval.expiresAt {
         Label(AgentFormat.expiry(expiresAt, now: now), systemImage: "clock")
           .font(.caption)
-          .foregroundStyle(.secondary)
+          .foregroundStyle(AgentTheme.mutedText)
       }
     }
   }
@@ -165,7 +165,7 @@ public struct ApprovalCard: View {
           Text(verbatim: "“\(note)”")
             .font(.callout)
             .italic()
-            .foregroundStyle(.secondary)
+            .foregroundStyle(AgentTheme.mutedText)
             .fixedSize(horizontal: false, vertical: true)
         }
       }
@@ -206,7 +206,7 @@ struct ApprovalPlaceholder: View {
   var body: some View {
     HStack(spacing: 8) {
       ProgressView().controlSize(.small)
-      Text("Loading approval…").font(.callout).foregroundStyle(.secondary)
+      Text("Loading approval…").font(.callout).foregroundStyle(AgentTheme.mutedText)
     }
     .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
     .padding(.horizontal, 12)

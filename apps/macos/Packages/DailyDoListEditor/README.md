@@ -2,9 +2,10 @@
 
 Native markdown editor for the Daily Do List macOS app: an `NSTextView` on an explicit TextKit 1
 stack (`NSTextStorage` → `NSLayoutManager` → `NSTextContainer`) that edits plain markdown with
-Obsidian-style live preview, clickable task checkboxes, agent status badges and Obsidian's list and
-formatting commands, and vim mode. Its only dependency is `DailyDoListVim` (the vim engine);
-`packages/editor` (the web CodeMirror editor) is its behavioral reference.
+Obsidian-style live preview, clickable task checkboxes, agent status badges, lines the agent
+wrote (a sparkle opens their thread), lines a thread is anchored to, link previews, Obsidian's
+list and formatting commands, and vim mode. Its only dependency is `DailyDoListVim` (the vim
+engine); `packages/editor` (the web CodeMirror editor) is its behavioral reference.
 
 ```swift
 let editor = MarkdownEditorController(configuration: EditorConfiguration(fontSize: 16))
@@ -30,13 +31,14 @@ editor.configure(EditorConfiguration(fontSize: 16, vimMode: true))
 | --- | --- |
 | `MarkdownEditorController(configuration:)` | One editor. `view` is the view to embed: `scrollView` (with the `NSTextView`, `textView`, inside it) and vim's command line under it. |
 | `text`, `setText(_:resetUndo:)` | `setText` never notifies the delegate. Without `resetUndo` it applies one minimal replacement (common prefix/suffix, whole lines aligned), so selection, scroll and badge anchors survive; the change is undoable (read-only editors clear undo instead). With `resetUndo` it replaces the document, clears undo and badges, and puts the caret at the start. `\r\n`/`\r` become `\n`. |
-| `setBadges(_:)`, `badges` | Badges are anchored to their line and remapped through edits; `badges` returns them with current lines. `idle`/`ignored` are kept but not drawn. |
+| `setBadges(_:)`, `badges` | Badges are anchored to their line and remapped through edits; `badges` returns them with current lines. `idle`/`ignored` are kept but not drawn. A badge with `highlightsLine` (a thread anchored to a line that isn't a task) also draws the line's band. |
+| `applyRemoteChanges(_:)` | Someone else's changes (`EditorTextChange`s: non-overlapping UTF-16 ranges of the current text, applied in order at the same place), e.g. the remote side of a merge. Each is its own storage edit, so the caret, selection, badges and the user's undo history stay; together they're one undoable step. The delegate isn't notified. |
 | `configure(_:)`, `configuration` | Font size (restyles), live preview, readable line length, spellcheck, line numbers, editable, vim mode. |
 | `vim`, `vimSession`, `vimStatus` | The app's shared `Vim` (vim mode needs it and `configuration.vimMode`), the session attached to this editor, and its mode line. In a read-only editor vim moves, yanks and searches but doesn't edit. |
 | `EditorVimIntegration(vim:pasteboard:)`, `applyVimrc(_:)`, `vimrcProblems` | Install once per app on the shared `Vim`: the app's ex commands, `gt`/`gT`, the clipboard registers and the vimrc (see [Vim mode](#vim-mode)). `VimPasteboard` puts the pasteboard behind a protocol for tests. |
 | `focus()`, `moveCaretToEnd()`, `scrollToLine(_:)` | `focus()` before the editor is in a window applies once it is (the first note at launch). `moveCaretToEnd` puts the caret after the last line and scrolls to it. `scrollToLine` puts the caret at the line start and centers it (0-based, clamped). |
 | `snapshot()`, `restore(_:)` | Text, selection, scroll offset and the note's own `UndoManager` for instant tab switches. `restore` and `setText(_:resetUndo: true)` start a new document: badges are cleared and the caret line is always reported. |
-| `delegate` | `editorTextDidChange` (user edits only, including undo), `didClickBadge` (with its current line), `didClickWikiLink(target:newWindow:)`, `didClickLink(url:)`, `cursorDidMoveToLine` (only when the line changes), `editorDidRequestSave` (also `:w`), `vimStatusDidChange` (only when it changes; nil when vim mode ends), `perform(_: EditorVimRequest)` (vim's app commands; the default answers `.unavailable`). |
+| `delegate` | `editorTextDidChange` (user edits only, including undo), `didClickBadge` (with its current line), `didClickAgentThread` (a sparkle), `didClickWikiLink(target:newWindow:)`, `didClickLink(url:)`, `previewFor(_: EditorLinkPreview)` (a link's tooltip: asked when hovering starts and when the tooltip shows; nil = `fallbackText`), `cursorDidMoveToLine` (only when the line changes), `editorDidRequestSave` (also `:w`), `vimStatusDidChange` (only when it changes; nil when vim mode ends), `perform(_: EditorVimRequest)` (vim's app commands; the default answers `.unavailable`). |
 
 Additions to the original contract (all source-compatible):
 
@@ -52,10 +54,32 @@ Additions to the original contract (all source-compatible):
 headings 1.6 / 1.4 / 1.25 / 1.1 / 1 / 1 em semibold with a little space above, bold, italic, bold
 italic, strikethrough, `==highlight==` and `#tags` on rounded backgrounds, monospaced inline code
 on a rounded background, fenced code blocks on a full-width rounded background (fences faint),
-YAML frontmatter as small monospaced metadata, links and wikilinks in the accent color (`#7F6DF2`,
-lighter in dark mode; markdown links and URLs underlined), blockquotes with accent bars and muted
+YAML frontmatter as small monospaced metadata, links and wikilinks in the accent color (`#1D6FE8`,
+`#3B8BFF` in dark mode; markdown links and URLs underlined), blockquotes with accent bars and muted
 text, completed tasks struck through and muted (cancelled ones fainter), horizontal rules as a thin
-line. Wrapped list items align with their text. Colors are dynamic (light/dark).
+line. Wrapped list items align with their text. Colors are the app's palette (`EditorColors`:
+background, text, muted and faint text, accent, agent text, anchor band, status tones), dynamic
+light/dark; the caret is the accent and selections an accent tint.
+
+**Agent lines.** A line ending with `%%agent:<threadId>%%` (or `%%agent%%`; the grammar of
+`@ddl/core`'s `AGENT_MARKER_RE`, outside code and frontmatter) was written by the agent: its text is
+drawn in the agent color (checkboxes, bullets, links, tags and completed tasks keep theirs). With
+live preview the marker (and the blanks before it) is hidden like other syntax and a sparkle is
+drawn in its slot in the accent color; clicking it calls `didClickAgentThread` (without a thread
+the sparkle is only a mark), and its tooltip says "Written by the agent — open thread". The line
+the selection touches shows the marker as faint text; so does source mode. A caret landing after a
+hidden marker (a click past the end of the line) goes before it, and Enter between the text and the
+marker's end starts the next line after the marker, so typing keeps the line the agent's; deleting
+the marker makes it the user's.
+
+**Anchored lines.** A drawn badge with `highlightsLine` gives its line a soft accent band
+(`anchorBackground`) across the text column, a little wider, with a 2 pt accent bar at its left
+edge, drawn behind the text and the selection. It follows the line through edits like the badge.
+
+**Link previews.** Every visible link has a tooltip: `previewFor` gets an `EditorLinkPreview` (an
+external URL or a note target, the link's visible text, and the thread named by the agent marker
+of the link's line); without an answer the tooltip is the link text, hostname and URL, or the
+note's name.
 
 **Tokenizer** (pure, AppKit-free, UTF-16 offsets): ATX headings 1–6, fenced code (```` ``` ````
 / `~~~`, info string, unterminated fences run to the end), frontmatter (`---` on line 0, closed by
@@ -74,8 +98,8 @@ touch; the lines it touches show raw syntax. Hidden: heading `#`s and their spac
 `<>`, escapes, wikilink brackets (and the target when there is an alias), blockquote `>`s (bars
 drawn instead), rules (a line drawn instead). `- [ ]` becomes a checkbox and `-`/`*`/`+` a dot,
 revealed only while the selection touches the marker, so the checkbox stays while you type the
-task. Nothing is revealed while the editor isn't first responder. With live preview off, all syntax
-shows dimmed. A caret landing inside hidden syntax (vertical moves, clicks) snaps to its edge;
+task. An agent marker becomes a sparkle and is revealed with its line. Nothing is revealed while
+the editor isn't first responder. With live preview off, all syntax shows dimmed. A caret landing inside hidden syntax (vertical moves, clicks) snaps to its edge;
 clicks land next to the visible character clicked.
 
 **Checkboxes.** SF Symbols in the accent color: `square` (open), `checkmark.square.fill` (done),
@@ -84,7 +108,7 @@ plus `arrow.left.square`, `questionmark.square`, `exclamationmark.square`. Click
 `[ ]` ↔ `[x]` (other statuses → `[x]`) as an undoable edit, never in a read-only editor.
 
 **Badges.** Drawn after the text on the last line fragment of their line: a status dot (triaging
-accent, queued gray, working blue, needs-you amber, done green, failed red, cancelled gray), the
+accent, queued faint, working info (cyan), needs-you amber, done green, failed red, cancelled faint), the
 label shortened to ~28 characters and, with unread messages, a 6 pt accent dot (the tooltip says
 "N unread", `99+` max). Only badges that need the user are loud (`BadgeStyle`):
 `waiting_approval`/`waiting_user` are warning-tinted pills (14 % fill, warning border, primary
@@ -221,7 +245,8 @@ matches in the visible lines with temporary attributes.
 | `Styling/MarkdownHighlighter` | Incremental highlighter: owns the line index and each line's entry state (inside a fence or not). An edit re-tokenizes the edited lines, then continues forward only while the state entering the next line changed (toggling a fence restyles until the states re-synchronize); frontmatter is re-evaluated only for edits in its first 200 lines. |
 | `Styling/EditorTheme`, `EditorColors`, `StyleSegments`, `BadgeStyle` | Fonts, metrics, cached attribute dictionaries per style; flattening of nested spans; how loud each badge status is. |
 | `Layout/GlyphLayoutDelegate` | Live preview and line metrics (below). |
-| `Layout/MarkdownLayoutManager`, `DecorationRenderer`, `LivePreviewState` | Backgrounds, bars, rules, checkboxes, bullets; what is revealed. |
+| `Layout/MarkdownLayoutManager`, `DecorationRenderer`, `LivePreviewState` | Backgrounds, bars, rules, checkboxes, bullets, sparkles; what is revealed. |
+| `Tokenizer/AgentMarker`, `Controller/MarkdownEditorController+Agent` | The agent marker grammar; sparkles (hit testing, tooltips), anchored-line bands (drawn from `MarkdownTextView.drawBackground(in:)`), link previews, and keeping markers on their line while editing. |
 | `View/MarkdownTextView`, `BadgeRenderer`, `LineNumberRulerView` | Thin `NSTextView` subclass forwarding keys/mouse/drawing to the controller; badge layout/drawing/hit-testing; line numbers. |
 | `Commands/` | Pure commands returning `TextEdit`s (list editing, tasks, formatting). |
 | `Model/` | `LineIndex`, `BadgeStore` (anchors), `TextDiff` (minimal change). |
@@ -265,6 +290,7 @@ TextKit 1 techniques worth knowing before changing things (each verified experim
 | Selection change with live preview (reveal state + glyph invalidation) | < 2 ms | 0.024 ms avg | 0.038 ms avg |
 | … plus relayout of the revealed lines, p95 | | 0.13 ms | 0.17 ms |
 | Pure tokenizer, whole note | | 2.4 ms | 15 ms |
+| Before each draw: badge layouts, sparkles, link tooltip areas (every tenth line the agent's) | | | 0.05 ms avg |
 
 Motion adds nothing to these paths: typing and selection changes only check that nothing moves.
 Assertions use generous debug budgets scaled by `EDITOR_PERF_BUDGET_MULTIPLIER`. Release numbers:
@@ -292,7 +318,7 @@ apps/macos/scripts/test.sh DailyDoListEditor -- --filter Vim         # vim mode,
 VIM_VECTORS_FILTER=viewport/ VIM_VECTORS_VERBOSE=1 apps/macos/scripts/test.sh DailyDoListEditor -- --filter VimVectorReplayTests
 ```
 
-Swift Testing, 222 tests (210 parameterized cases): tokenizer tables (unicode offsets, nesting,
+Swift Testing, 239 tests (plus parameterized cases): tokenizer tables (unicode offsets, nesting,
 unterminated constructs, code spans, URLs with underscores, tags vs headings vs URLs), an
 incremental-vs-full equivalence property test (3 seeds × 500 random edits including fence and
 frontmatter toggles, comparing line states and every attribute run), command tables ported from
@@ -301,10 +327,13 @@ checked on rendered pixels), live preview glyph properties, minimal-diff `setTex
 separate undo histories, checkbox/badge/link hit testing, motion (curves against brute force, the
 timeline, and motion driven through the controller with a manual clock and ticker: what starts
 it, what each frame redraws, that frames stop, Reduce Motion, hidden windows), fuzzing (random and
-pathological lines, random edits with drawing), performance, and offscreen PNG renders written to
+pathological lines, random edits with drawing), agent lines (marker grammar, colors, hidden
+markers and sparkle slots, sparkle clicks and tooltips, the caret and Enter around markers),
+anchored-line bands (also checked on pixels), link previews and tooltip areas, remote changes
+(caret, badges and undo), performance, and offscreen PNG renders written to
 `.build/editor-snapshots/` for manual review (ignored by git): the sample note (light, dark, source
-mode with line numbers), badges in every status (light, dark), narrow-window badges, and a frame
-in the middle of every kind of motion.
+mode with line numbers), badges in every status (light, dark), narrow-window badges, agent lines
+with an anchored line (light, dark, source mode), and a frame in the middle of every kind of motion.
 
 Vim mode has 65 of these tests (`Tests/DailyDoListEditorTests/Vim/`), all driving the editor with
 real `NSEvent`s through `keyDown`:

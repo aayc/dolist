@@ -195,7 +195,7 @@ struct BadgeTests {
       #expect(quiet.text == EditorColors.tertiaryText)
     }
     #expect(BadgeStyle(status: "done", isHovered: false).dot == EditorColors.success)
-    #expect(BadgeStyle(status: "cancelled", isHovered: false).dot == NSColor.systemGray)
+    #expect(BadgeStyle(status: "cancelled", isHovered: false).dot == EditorColors.tertiaryText)
   }
 
   @Test(arguments: ["waiting_user", "failed", "queued", "done", "cancelled"])

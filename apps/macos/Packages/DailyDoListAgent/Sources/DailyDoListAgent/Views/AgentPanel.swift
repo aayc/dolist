@@ -10,6 +10,7 @@ public struct AgentPanel: View {
   let onClose: (() -> Void)?
   let headerHeight: CGFloat
   let onHide: (() -> Void)?
+  let noteLinks: AgentNoteLinks
 
   /// - Parameters:
   ///   - onShowInNote: opens the task's note at its line (the button is hidden when nil).
@@ -17,10 +18,11 @@ public struct AgentPanel: View {
   ///   - headerHeight: height of the header row, to line up with the host's other pane headers.
   ///   - onHide: adds a "hide panel" button to the header. A thread then has no Close button of
   ///     its own: the header already goes back to the inbox and hides the panel.
+  ///   - noteLinks: how `[[wikilinks]]` in agent text open and preview notes.
   public init(
     store: AgentStore, selectedThreadId: Binding<String?>,
     onShowInNote: ((TaskLocation) -> Void)? = nil, onClose: (() -> Void)? = nil,
-    headerHeight: CGFloat = 40, onHide: (() -> Void)? = nil
+    headerHeight: CGFloat = 40, onHide: (() -> Void)? = nil, noteLinks: AgentNoteLinks = .none
   ) {
     self.store = store
     self._selectedThreadId = selectedThreadId
@@ -28,6 +30,7 @@ public struct AgentPanel: View {
     self.onClose = onClose
     self.headerHeight = headerHeight
     self.onHide = onHide
+    self.noteLinks = noteLinks
   }
 
   public var body: some View {
@@ -59,8 +62,10 @@ public struct AgentPanel: View {
     }
     .animation(.snappy(duration: 0.2), value: store.lastError?.id)
     .frame(minWidth: 300)
+    .foregroundStyle(AgentTheme.text)
     .tint(AgentTheme.accent)
-    .environment(\.openURL, LinkPolicy.openURLAction)
+    .environment(\.agentNoteLinks, noteLinks)
+    .environment(\.openURL, LinkPolicy.openURLAction(noteLinks: noteLinks))
   }
 
   private var header: some View {

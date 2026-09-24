@@ -18,7 +18,7 @@ struct Composer: View {
         ZStack(alignment: .topLeading) {
           if text.isEmpty {
             Text(unavailable == nil ? "Reply to the agent…" : "Replies are off while the agent can't act")
-              .foregroundStyle(.tertiary)
+              .foregroundStyle(AgentTheme.faint)
               .padding(.leading, 7)
               .padding(.top, 3)
               .allowsHitTesting(false)
@@ -45,7 +45,7 @@ struct Composer: View {
       if let unavailable {
         Label(unavailable, systemImage: "pause.circle")
           .font(.caption)
-          .foregroundStyle(.secondary)
+          .foregroundStyle(AgentTheme.mutedText)
           .lineLimit(2)
       }
     }

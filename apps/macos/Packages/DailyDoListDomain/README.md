@@ -20,7 +20,10 @@ corpus (about 20,000 cases) and the Swift tests assert identical results.
 | `TextTools` (`normalize`, `diceSimilarity`, `isPrefixExtension`, `truncate`, `hash`, `splitLines`) | `text.ts` |
 | `TaskParser`, `ParsedTask`, `TaskStatus` | `markdown/tasks.ts` |
 | `TaskTracker`, `TrackedTask`, `TaskDiff` | `markdown/task-tracker.ts` |
-| `TaskAnchors`, `TaskAnchor` | `markdown/anchors.ts` |
+| `TaskAnchors`, `TaskAnchor` | `markdown/anchors.ts` (tasks) |
+| `LineAnchors` (`anchorableLines`, `resolve`), `LineAnchor`, `AnchoredLine` | `markdown/anchors.ts` (`anchorableLines`, `resolveLineAnchors`) |
+| `AgentText` (`parse`, `isAgentLine`, `stripMarker`, `marker`, `markLine`), `AgentLine` | `markdown/agent-text.ts` |
+| `TextMerge` (`diffLines`, `merge`, `lines`), `LineHunk`, `MergeResult` | `merge.ts` (`diffLines`, `mergeText`) |
 | `WikiLinks` (`parse`, `resolve`) | `markdown/wikilinks.ts` |
 | `VaultTree` | `apps/web/src/features/explorer/tree.ts` |
 | `Fuzzy` | Swift-native, modeled on `apps/web/src/lib/fuzzy.ts` |
@@ -59,7 +62,15 @@ What "exactly" takes, beyond the algorithms:
   `referenceYear` (default: the current year, like the core's `new Date().getFullYear()`).
 - `TaskTracker.track(previous:parsed:now:similarityThreshold:idFactory:)` takes a non-escaping
   `idFactory`, so tests can count ids (`t1`, `t2`, …); the default makes `tsk_` + 10 base-36
-  characters like the core. `TaskAnchor(record:)` builds an anchor from a `TaskAgentRecord`.
+  characters like the core. `TaskAnchor(record:)` and `LineAnchor(record:)` build anchors from a
+  `TaskAgentRecord` (a task's, or one with `anchor == .line`).
+- Agent markers (`%%agent:<threadId>%%` ending a line) are matched by scanning back from the end
+  of the line, which finds the same match as the core's end-anchored regex. `TaskParser` leaves
+  them out of task texts and notes and sets `ParsedTask.agent` (and `TrackedTask.agent`), like
+  `parseTasks`. `AgentLine.markerFrom` is a UTF-16 offset.
+- `TextMerge` compares lines by UTF-16 code units (NFC and NFD spellings differ, as in
+  JavaScript) and keeps a `\r` with its line. Like the core, a deletion among identical lines can
+  align with the other side's edit of another copy and report a conflict.
 - `VaultTree`: nodes with stable ids (their paths), `outlineChildren` for `OutlineGroup`,
   `node(at:)`, `ancestors(of:)` / `revealing(_:in:)` to expand to a file, `visibleRows` for a flat
   outline list. Folders implied by file paths are created; distinct Unicode spellings of a folder
@@ -88,6 +99,8 @@ What "exactly" takes, beyond the algorithms:
 | `tasks.json` | 448 | 69 curated documents (fences, frontmatter limits, BOM, CRLF, nesting, notes, emoji/CJK/combining marks) + 220 seeded random documents (1,267 tasks), line edits, blank texts, statuses |
 | `tracker.json` | 319 steps | 85 edit sequences: typing char by char, prefix extensions, typo fixes, reorders, duplicates, deletions, rewrites, thresholds, nesting, notes, Unicode, 45 seeded random edit sequences, and targeted cases that pin each matcher constant (distance weight and cap, prefix score, fuzzy budget and minimum window, duplicate alignment budget and ties, anchor lookup, score ties) |
 | `anchors.json` | 89 | curated cases (deleted tasks, empty and duplicate ids, shared lines) and seeded random edits |
+| `agent-text.json` | 592 | agent markers on 230 lines (ids of every length and alphabet, markers mid-line, blanks and tabs, emoji offsets) with `parseAgentLine`, `stripAgentMarker`, `markAgentLine` × 5 ids; `parseTasks` and `anchorableLines` on 86 documents with agent lines; `resolveLineAnchors` on 276 edited documents |
+| `merge.json` | 607 | `diffLines` on 200 random line lists; `mergeText` on curated merges and 400 random edit pairs (insertions at the same place, adjacent hunks, deletions, conflicts, NFC/NFD, `\r`) |
 
 Output is deterministic: times are formatted in `America/Los_Angeles` (the Swift tests use the
 same `TimeZone`), `new Date()` / `Date.now()` are pinned to 2026-09-23 09:30 there, and every

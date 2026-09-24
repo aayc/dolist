@@ -27,11 +27,14 @@ public struct ParsedTask: Hashable, Sendable, Codable {
   public var notes: [String]
   /// Wikilink targets mentioned in the task text (e.g. forwarded-to daily notes).
   public var links: [String]
+  /// The agent wrote this task: its line ends with an agent marker, which `text` and `notes`
+  /// leave out (`raw` keeps it).
+  public var agent: Bool
 
   public init(
     line: Int, indent: Int, depth: Int, marker: String, statusChar: String, status: TaskStatus,
     text: String, raw: String, from: Int, to: Int, textFrom: Int, parentLine: Int?,
-    notes: [String], links: [String]
+    notes: [String], links: [String], agent: Bool = false
   ) {
     self.line = line
     self.indent = indent
@@ -47,5 +50,6 @@ public struct ParsedTask: Hashable, Sendable, Codable {
     self.parentLine = parentLine
     self.notes = notes
     self.links = links
+    self.agent = agent
   }
 }

@@ -8,7 +8,9 @@
 /// - lines split on `\n` (one trailing `\r` is dropped; a lone `\r` is not a break); a leading
 ///   byte order mark belongs to no line but offsets still count it;
 /// - any line closes the list items at its indent or deeper (tab = 4 columns); non-task lines
-///   under a task become its notes.
+///   under a task become its notes;
+/// - an agent marker (`AgentText`) ending a line is left out of task texts and notes, and flags
+///   the task as the agent's.
 public enum TaskParser {
   /// `parseTasks`: every checkbox task in the document, in one linear pass.
   public static func parse(_ markdown: String) -> [ParsedTask] {
@@ -99,8 +101,9 @@ public enum TaskParser {
         }
         let owner = stackOwner.last ?? -1
 
+        let agentMarker = AgentText.findMarker(p, lineStart, rawEnd)
         if let match = matchTaskLine(p, wsEnd, rawEnd, checkNewlines: false) {
-          let textRange = jsTrim(p, match.bodyStart..<rawEnd)
+          let textRange = jsTrim(p, match.bodyStart..<max(match.bodyStart, agentMarker?.from ?? rawEnd))
           var links: [String] = []
           if mayContainLink(p, textRange) {
             WikiLinks.scan(p, textRange) { links.append(String(utf16: p, $0.target)) }
@@ -113,13 +116,13 @@ public enum TaskParser {
               status: TaskStatus(unit: p[match.statusIndex]), text: String(utf16: p, textRange),
               raw: String(utf16: p, lineStart..<rawEnd), from: lineStart, to: rawEnd,
               textFrom: match.bodyStart, parentLine: owner >= 0 ? tasks[owner].line : nil, notes: [],
-              links: links))
+              links: links, agent: agentMarker != nil))
           stackIndent.append(indent)
           stackOwner.append(tasks.count - 1)
         } else {
           // A non-task line nested under a task (sub-bullet or continuation) is agent context.
           if owner >= 0 {
-            tasks[owner].notes.append(noteText(p, jsTrim(p, lineStart..<rawEnd)))
+            tasks[owner].notes.append(noteText(p, jsTrim(p, lineStart..<(agentMarker?.from ?? rawEnd))))
           }
           if let markerEnd = matchMarker(p, wsEnd, rawEnd), markerEnd < rawEnd, isBlank(p[markerEnd]) {
             stackIndent.append(indent)

@@ -45,7 +45,7 @@ final class LineNumberRulerView: NSRulerView {
     guard let textView, let layoutManager = textView.layoutManager, let container = textView.textContainer,
       let storage = textView.textStorage
     else { return }
-    NSColor.textBackgroundColor.setFill()
+    EditorColors.background.setFill()
     rect.fill()
     let index = lineIndex()
     let origin = textView.textContainerOrigin
@@ -69,7 +69,7 @@ final class LineNumberRulerView: NSRulerView {
         baseline = fragment.minY + layoutManager.location(forGlyphAt: glyph).y
       }
       let y = convert(NSPoint(x: 0, y: baseline + origin.y), from: textView).y
-      let color = line == current ? NSColor.secondaryLabelColor : NSColor.tertiaryLabelColor
+      let color = line == current ? EditorColors.currentLineNumber : EditorColors.lineNumber
       let label = String(line + 1) as NSString
       let attributes: [NSAttributedString.Key: Any] = [.font: numberFont, .foregroundColor: color]
       let size = label.size(withAttributes: attributes)

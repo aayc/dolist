@@ -47,6 +47,10 @@ struct AgentScript: Sendable {
   var risky: RiskyAction?
   var finalText: String
   var doneSummary: String
+  /// The pages the thread cites (`AgentThread.sources`).
+  var sources: [CitedSource] = []
+  /// Written under the task (as an agent line) when the work is done.
+  var noteLine: String?
 
   var author: MessageAuthor { "subagent:\(subagent)" }
 
@@ -87,6 +91,8 @@ struct AgentScript: Sendable {
 
   private static func research(_ topic: String, browse: Bool) -> AgentScript {
     let url = "https://guide.example/search?q=\(slug(topic))"
+    let guide = "https://guide.example/best/\(slug(topic))"
+    let reviews = "https://reviews.example/\(slug(topic))"
     var steps = [
       ToolStep(
         toolName: "web_search", label: "Web search", input: ["query": .string(topic), "maxResults": 8],
@@ -133,13 +139,20 @@ struct AgentScript: Sendable {
       finalText: """
         Done! I compared three options for **\(topic)**:
 
-        - **Option A** ($129) — best overall value
-        - **Option B** ($189) — premium build
-        - **Option C** ($79) — budget pick
+        - **Option A** ($129) — best overall value [1](\(guide))
+        - **Option B** ($189) — premium build [2](\(reviews))
+        - **Option C** ($79) — budget pick [1](\(guide))
 
         The full comparison is in the artifact.
         """,
-      doneSummary: "3 options")
+      doneSummary: "3 options",
+      sources: [
+        CitedSource(
+          url: guide, title: "The best \(topic) — Guide Example",
+          snippet: "Option A ($129) balances price and quality; Option C ($79) is the budget pick."),
+        CitedSource(url: reviews, title: "\(topic): long-term reviews", snippet: "Option B ($189) has the sturdiest build."),
+      ],
+      noteLine: "Option A ($129) is the best value ([Guide Example](\(guide)))")
   }
 
   private static func purchase(_ topic: String, browse: Bool) -> AgentScript {
@@ -207,11 +220,15 @@ struct AgentScript: Sendable {
         toolName: "browser_click", toolLabel: "Click in browser", input: ["element": "Confirm booking button", "ref": "e12"],
         summary: "Book “\(topic)” for Tue 9:30 AM", risk: .medium, categories: [.booking, .formSubmission],
         reason: "This makes a reservation in your name.",
-        approvedText: "Booked for **Tue 9:30 AM** ✅ A confirmation was sent to your inbox.",
+        approvedText: "Booked for **Tue 9:30 AM** [1](\(url)) ✅ A confirmation was sent to your inbox.",
         approvedSummary: "Booked · Tue 9:30 AM",
-        deniedText: "No problem — nothing was booked. Tue 9:30 AM was the earliest open slot.",
+        deniedText: "No problem — nothing was booked. Tue 9:30 AM was the earliest open slot [1](\(url)).",
         deniedSummary: "Not booked"),
-      finalText: "", doneSummary: "")
+      finalText: "", doneSummary: "",
+      sources: [
+        CitedSource(
+          url: url, title: "Availability — booking.example", snippet: "3 open slots this week; Tue 9:30 AM is the earliest.")
+      ])
   }
 
   private static func message(_ topic: String) -> AgentScript {

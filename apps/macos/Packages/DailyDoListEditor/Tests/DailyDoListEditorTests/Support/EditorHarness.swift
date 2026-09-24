@@ -40,7 +40,18 @@ final class RecordingDelegate: MarkdownEditorDelegate {
   var wikiLinks: [(target: String, newWindow: Bool)] = []
   var links: [URL] = []
   var saves = 0
+  var agentThreadClicks: [String] = []
+  var previewRequests: [EditorLinkPreview] = []
+  /// What `previewFor` answers (nil: the editor's fallback).
+  var previewAnswer: String?
 
+  func editor(_ editor: MarkdownEditorController, didClickAgentThread threadId: String) {
+    agentThreadClicks.append(threadId)
+  }
+  func editor(_ editor: MarkdownEditorController, previewFor link: EditorLinkPreview) -> String? {
+    previewRequests.append(link)
+    return previewAnswer
+  }
   func editorTextDidChange(_ editor: MarkdownEditorController, text: String) { textChanges.append(text) }
   func editor(_ editor: MarkdownEditorController, didClickBadge badge: EditorBadge) { badgeClicks.append(badge) }
   func editor(_ editor: MarkdownEditorController, didClickWikiLink target: String, newWindow: Bool) {

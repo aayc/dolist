@@ -6,8 +6,9 @@ import AppKit
 ///   the very start of a line is instead a zero-advance control glyph: TextKit attaches leading
 ///   null glyphs to the *previous* line fragment, which would drop the paragraph's first-line indent
 ///   and spacing (verified experimentally).
-/// - A replaced marker (`- [ ]`, `-`) keeps its first character as a whitespace control glyph with a
-///   fixed width (the checkbox or bullet slot, drawn by `DecorationRenderer`); the rest is null.
+/// - A replaced marker (`- [ ]`, `-`, an agent marker) keeps its first character as a whitespace
+///   control glyph with a fixed width (the checkbox, bullet or sparkle slot, drawn by
+///   `DecorationRenderer`); the rest is null.
 /// - Fixed line heights come from the paragraph styles; this delegate moves the baseline so the text
 ///   is vertically centered in the line box instead of sitting at its bottom.
 @MainActor
@@ -33,8 +34,9 @@ final class GlyphLayoutDelegate: NSObject {
   }
 
   private func slotWidth(forReplacementAt index: Int, kind: MarkerKind) -> CGFloat {
-    guard kind == .bullet, let storage else { return theme.checkboxSlotWidth }
+    guard kind != .task, let storage else { return theme.checkboxSlotWidth }
     let font = storage.attribute(.font, at: index, effectiveRange: nil) as? NSFont ?? theme.bodyFont
+    if kind == .agent { return theme.agentSlotWidth(font: font) }
     return theme.bulletSlotWidth(storage.mutableString.character(at: index), font: font)
   }
 }

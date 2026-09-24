@@ -20,9 +20,12 @@ struct SnapshotTests {
     "Daily/2026-09-23.md": """
       # Wednesday
       - [x] Compare standing desks under $400
+        - Example Rise Pro is the pick at $449, dual motor ([Desks Example](https://desks.example/rise-pro)) %%agent:thr_sample_desks%%
       - [ ] Reserve a table for Friday dinner
+      - [ ] Call Trattoria Sole to confirm the table %%agent:thr_sample_booking%%
       - [ ] Draft the offsite agenda
         - 3 sessions, 1 walk
+      How tall is Ridge Tower downtown?
       - [ ] Renew passport
 
       Notes from standup: ship the [[Launch Plan]] review by Friday.
@@ -63,11 +66,16 @@ struct SnapshotTests {
   private func bootedModel() async throws -> (AppModel, Workspace) {
     let client = FakeDaemonClient(notes: Self.sampleNotes)
     let daily = "Daily/2026-09-23.md"
+    var question = TaskAgentRecord.sample(
+      SampleData.questionAnchorId, note: daily, text: "How tall is Ridge Tower downtown?", line: 7, status: .done,
+      summary: "About 1,250 ft", threadId: SampleData.questionThreadId)
+    question.anchor = .line
     client.withState {
       $0.records[daily] = [
         .sample("t1", note: daily, text: "Compare standing desks under $400", line: 1, status: .done, summary: "3 options", threadId: SampleData.desksThreadId),
-        .sample("t2", note: daily, text: "Reserve a table for Friday dinner", line: 2, status: .waitingApproval, threadId: SampleData.bookingThreadId),
-        .sample("t3", note: daily, text: "Draft the offsite agenda", line: 3, status: .working, summary: "Outlining sessions", threadId: SampleData.emailThreadId),
+        .sample("t2", note: daily, text: "Reserve a table for Friday dinner", line: 3, status: .waitingApproval, threadId: SampleData.bookingThreadId),
+        .sample("t3", note: daily, text: "Draft the offsite agenda", line: 5, status: .working, summary: "Outlining sessions", threadId: SampleData.emailThreadId),
+        question,
       ]
       $0.agentStatus.running = 1
     }
@@ -84,7 +92,9 @@ struct SnapshotTests {
     await settle()
     agent.apply(.taskRecords(TaskRecordsEvent(notePath: daily, records: client.withState { $0.records[daily] ?? [] })))
     workspace.editor.recomputeBadges()
-    #expect(workspace.editor.controller.badges.map(\.label) == ["Done · 3 options", "Needs approval", "Outlining sessions"])
+    #expect(
+      workspace.editor.controller.badges.map(\.label) == ["Done · 3 options", "Needs approval", "Outlining sessions", "Done · About 1,250 ft"])
+    #expect(workspace.editor.controller.badges.map(\.highlightsLine) == [false, false, false, true])
     return (model, workspace)
   }
 
@@ -101,6 +111,35 @@ struct SnapshotTests {
       try await render(MainWindowView(model: model), size: CGSize(width: 1440, height: 800), dark: dark, name: "main-window-agent-panel", afterDisplay: repaintBadges)
       model.ui.selectedThreadId = SampleData.bookingThreadId
       try await render(MainWindowView(model: model), size: CGSize(width: 1440, height: 800), dark: dark, name: "main-window-thread", afterDisplay: repaintBadges)
+      // The anchored question's thread: an answer citing its sources and a note.
+      model.ui.selectedThreadId = SampleData.questionThreadId
+      try await render(MainWindowView(model: model), size: CGSize(width: 1440, height: 800), dark: dark, name: "main-window-citations", afterDisplay: repaintBadges)
+    }
+    await model.teardown()
+  }
+
+  /// Demo mode as launched with `--demo`: the in-memory daemon's seed, with the agent's lines,
+  /// its task, the anchored question and a thread citing its sources.
+  @Test func demoWindow() async throws {
+    let environment = makeEnvironment(
+      client: FakeDaemonClient(), demo: true,
+      demoClient: { InMemoryDaemonClient(seed: .demo, clock: .immediate(), agent: .enabled) })
+    let model = AppModel(environment: environment)
+    await model.boot()
+    let workspace = try #require(model.workspace)
+    await workspace.openToday()
+    let controller = workspace.editor.controller
+    try await eventually("demo badges", timeout: 5) {
+      workspace.editor.recomputeBadges()
+      return controller.badges.contains { $0.highlightsLine }
+    }
+    #expect(controller.text.contains("%%agent:thr_"))
+    let question = try #require(controller.badges.first { $0.highlightsLine })
+    let repaint = { controller.setBadges(controller.badges) }
+    for dark in [false, true] {
+      model.ui.inspectorPresented = true
+      model.ui.selectedThreadId = question.threadId
+      try await render(MainWindowView(model: model), size: CGSize(width: 1440, height: 800), dark: dark, name: "main-window-demo", afterDisplay: repaint)
     }
     await model.teardown()
   }

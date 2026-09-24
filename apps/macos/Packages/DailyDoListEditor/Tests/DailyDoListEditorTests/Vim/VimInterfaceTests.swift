@@ -178,7 +178,7 @@ struct VimInterfaceTests {
     let pixel = try #require(focused.color(at: inside, in: editor.textView))
     let background = try #require(focused.color(at: NSPoint(x: block.rect.maxX + 30, y: inside.y), in: editor.textView))
     #expect(distance(pixel, background) > 0.3, "the block is filled on \(name)")
-    #expect(pixel.blueComponent > pixel.greenComponent, "the block has the accent's purple on \(name)")
+    #expect(pixel.blueComponent > pixel.greenComponent, "the block has the accent's blue on \(name)")
     try FileManager.default.createDirectory(at: RenderSnapshotTests.outputDirectory, withIntermediateDirectories: true)
     if let png = focused.representation(using: .png, properties: [:]) {
       try png.write(to: RenderSnapshotTests.outputDirectory.appendingPathComponent("vim-block-cursor-\(name).png"))

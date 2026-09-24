@@ -7,9 +7,11 @@ import Foundation
 /// Block rules: ATX headings 1–6 (up to three leading spaces), fenced code (```` ``` ```` / `~~~`,
 /// info string, an unterminated fence runs to the end), YAML frontmatter (`---` on the first line,
 /// closed by `---`/`...` within 200 lines, like `@ddl/core`), nested blockquotes, lists (`-`, `*`,
-/// `+`, `1.`, `1)`), task items with any status character, horizontal rules and blank lines.
-/// Indented code blocks and setext headings are deliberately not supported: an indented task must
-/// stay a task, and a line's style must not depend on the next line.
+/// `+`, `1.`, `1)`), task items with any status character, horizontal rules and blank lines. A
+/// line ending with an agent marker (`AgentMarker`, outside code and frontmatter) is tokenized
+/// without it and styled as the agent's text. Indented code blocks and setext headings are
+/// deliberately not supported: an indented task must stay a task, and a line's style must not
+/// depend on the next line.
 enum MarkdownTokenizer {
   /// Frontmatter must close within this many lines (same limit as `@ddl/core`).
   static let frontmatterMaxLines = 200
@@ -32,7 +34,18 @@ enum MarkdownTokenizer {
       return (LineTokens(kind: .codeFenceOpen), .fence(marker: fence.marker, length: fence.length))
     }
     if MarkdownBlockRules.isBlank(s) { return (LineTokens(kind: .blank), .normal) }
+    guard let agent = AgentMarker.scan(s) else { return (tokenizeContent(s), .normal) }
+    // The text before the marker is styled like any line; the whole text is the agent's.
+    let body = agent.range.location
+    var tokens = tokenizeContent(Array(s[..<body]))
+    tokens.agent = agent
+    tokens.markers.append(SyntaxMarker(range: agent.range, kind: .agent))
+    if body > 0 { tokens.spans.append(StyledSpan(range: NSRange(0, body), style: .agent)) }
+    return (tokens, .normal)
+  }
 
+  /// Tokens of a line that isn't code, frontmatter or blank.
+  private static func tokenizeContent(_ s: [UInt16]) -> LineTokens {
     let prefix = LinePrefix.parse(s)
     var tokens = LineTokens(kind: .paragraph)
     tokens.quoteDepth = prefix.quoteDepth
@@ -44,7 +57,7 @@ enum MarkdownTokenizer {
     if MarkdownBlockRules.isHorizontalRule(s, from: bodyStart) {
       tokens.kind = .horizontalRule
       tokens.markers.append(SyntaxMarker(range: NSRange(bodyStart, s.count), kind: .horizontalRule))
-      return (tokens, .normal)
+      return tokens
     }
     if let heading = headingBounds(s, from: bodyStart) {
       tokens.kind = .heading(level: heading.level)
@@ -53,7 +66,7 @@ enum MarkdownTokenizer {
         tokens.markers.append(SyntaxMarker(range: NSRange(heading.contentEnd, s.count), kind: .heading))
       }
       appendInline(s, heading.contentStart, heading.contentEnd, to: &tokens)
-      return (tokens, .normal)
+      return tokens
     }
     if let marker = prefix.marker {
       tokens.kind = .listItem
@@ -82,10 +95,10 @@ enum MarkdownTokenizer {
         tokens.markers.append(SyntaxMarker(range: marker, kind: .bullet))
       }
       appendInline(s, prefix.contentStart, s.count, to: &tokens)
-      return (tokens, .normal)
+      return tokens
     }
     appendInline(s, bodyStart, s.count, to: &tokens)
-    return (tokens, .normal)
+    return tokens
   }
 
   /// ATX heading at `from`: up to three spaces, 1–6 `#`, then whitespace or the end of the line;

@@ -9,6 +9,12 @@ import Observation
 /// conflict resolution and external-change handling — the same algorithm as the web app's
 /// `NotesController`. The editor stays the source of truth for live text: content is only read (via
 /// the delegate) when a save actually happens, so a keystroke costs O(1) here.
+///
+/// When someone else (e.g. the agent) changes a note that has unsaved local edits — announced by
+/// `vault.changed`, or found by a save's 409 — the two are merged line by line (`TextMerge`, base =
+/// the last server version we know). Without a conflict the editor gets only the other side's
+/// changes and the merged text is saved on top of their version; a conflict keeps ours and saves
+/// theirs as a conflict copy.
 @MainActor
 @Observable
 final class NotesStore {
@@ -152,10 +158,43 @@ final class NotesStore {
       delegate?.notesStore(self, applyRemote: fresh.content, to: path)
       return
     }
-    // Local edits pending: the next save gets a 409 and resolves the conflict.
+    // Local edits pending: merge them with the new version and save the result on top of it.
+    if let merged = merge(doc, with: fresh) {
+      if Self.same(merged, fresh.content) {
+        doc.savedRev = doc.localRev
+        doc.pendingContent = nil
+        updateStatus(doc)
+      } else {
+        save(doc)
+      }
+      return
+    }
+    // A conflict: the next save gets a 409 and keeps a conflict copy of theirs.
     doc.conflict = true
     updateStatus(doc)
     arm(doc, delay: saveDelay)
+  }
+
+  /// Merges the note's live text with `current` (a newer server version) over the last version we
+  /// know. Without a conflict `current` becomes the base, the editor gets the merged text (the
+  /// delegate applies only the other side's changes) and the merged text is returned; nil on a
+  /// conflict, leaving everything as it was.
+  private func merge(_ doc: NoteDoc, with current: NoteResponse) -> String? {
+    let local = delegate?.notesStore(self, liveContentOf: doc.path) ?? doc.pendingContent ?? doc.serverContent
+    let merged = TextMerge.merge(base: doc.serverContent, local: local, remote: current.content)
+    guard !merged.conflict else { return nil }
+    doc.serverContent = current.content
+    doc.version = current.version
+    doc.mtime = current.mtime
+    doc.conflict = false
+    doc.pendingContent = merged.text
+    if !Self.same(merged.text, local) { delegate?.notesStore(self, applyMerged: merged.text, to: doc.path) }
+    return merged.text
+  }
+
+  /// Same text, code unit for code unit (`==` also equates NFC and NFD spellings).
+  private static func same(_ a: String, _ b: String) -> Bool {
+    a.utf8.elementsEqual(b.utf8)
   }
 
   func handleRemoteDelete(_ path: String) {
@@ -302,7 +341,18 @@ final class NotesStore {
       delegate?.notesStore(self, applyRemote: current.content, to: doc.path)
       return
     }
-    // Keep ours; preserve theirs next to it.
+    // Both changed: merge, and save the merged text on top of theirs (it carries every edit known
+    // now).
+    if let merged = merge(doc, with: current) {
+      let mergedRev = doc.localRev
+      if Self.same(merged, current.content) {
+        acknowledge(doc, content: merged, rev: mergedRev, version: current.version, mtime: current.mtime)
+      } else {
+        await write(doc, content: merged, rev: mergedRev, depth: depth + 1)
+      }
+      return
+    }
+    // A conflict: keep ours; preserve theirs next to it.
     let copyPath = try await writeConflictCopy(of: doc.path, content: current.content)
     delegate?.notesStore(self, didSaveConflictCopy: copyPath, of: doc.path)
     guard tracks(doc) else { return }

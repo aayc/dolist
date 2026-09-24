@@ -18,7 +18,7 @@ struct ToolCallRow: View {
       } label: {
         HStack(spacing: 7) {
           Image(systemName: ToolIcon.systemName(for: call.toolName))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(AgentTheme.mutedText)
             .frame(width: 16)
           Text(verbatim: call.label ?? call.toolName)
             .lineLimit(1)
@@ -26,7 +26,7 @@ struct ToolCallRow: View {
           if call.label != nil {
             Text(verbatim: call.toolName)
               .font(.system(size: 11, design: .monospaced))
-              .foregroundStyle(.tertiary)
+              .foregroundStyle(AgentTheme.faint)
               .lineLimit(1)
               .layoutPriority(-1)
           }
@@ -35,12 +35,12 @@ struct ToolCallRow: View {
             Text(verbatim: duration)
               .font(.caption)
               .monospacedDigit()
-              .foregroundStyle(.secondary)
+              .foregroundStyle(AgentTheme.mutedText)
           }
           ToolStatusIcon(status: call.status)
           Image(systemName: "chevron.right")
             .font(.caption2.weight(.semibold))
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(AgentTheme.faint)
             .rotationEffect(.degrees(expanded ? 90 : 0))
         }
         .contentShape(Rectangle())
@@ -52,7 +52,7 @@ struct ToolCallRow: View {
       if let preview = call.resultPreview, !preview.isEmpty {
         Text(verbatim: preview)
           .font(.caption)
-          .foregroundStyle(call.status == .error ? AgentTheme.danger : Color.secondary)
+          .foregroundStyle(call.status == .error ? AgentTheme.danger : AgentTheme.mutedText)
           .lineLimit(expanded ? nil : 2)
           .textSelection(.enabled)
           .padding(.leading, 23)

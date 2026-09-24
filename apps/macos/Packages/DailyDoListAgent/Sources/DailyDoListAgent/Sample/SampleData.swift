@@ -17,11 +17,50 @@ public enum SampleData {
   public static let cleanupThreadId = "thr_sample_cleanup"
   public static let subscriptionThreadId = "thr_sample_subscription"
   public static let libraryThreadId = "thr_sample_library"
+  /// A question written as prose; its thread is anchored to that line.
+  public static let questionThreadId = "thr_sample_question"
+  public static let questionAnchorId = "anc_sample_question"
 
   public static let reserveApprovalId = "apr_sample_reserve"
   public static let depositApprovalId = "apr_sample_deposit"
   public static let emailApprovalId = "apr_sample_email"
   public static let retailersApprovalId = "apr_sample_retailers"
+
+  /// The desks thread's answer: numbered citations of its sources and a note it links.
+  public static let desksAnswer = """
+    **Pick: Example Rise Pro ($449)** — dual motor, 25–50 in, 7-year warranty [1](https://desks.example/rise-pro). \
+    Sample Lift 2 is often on sale for $349 [2](https://office-shop.example/lift-2#deals), and reviewers call the \
+    Demo Desk Mini wobbly above 40 in [3](https://reviews.example/standing-desks).
+
+    It fits the desk space noted in [[Projects/Home Office|your home office note]]. The full comparison is attached.
+    """
+
+  public static let questionAnswer = """
+    **About 1,250 ft (381 m)** to the roof, 1,380 ft with its spire [1](https://city.example/landmarks/ridge-tower). \
+    It has been the tallest building downtown since it opened [2](https://skyline.example/towers#ridge).
+
+    Saved to [[Ideas]] under places to visit.
+    """
+
+  public static let questionSources = [
+    CitedSource(
+      url: "https://city.example/landmarks/ridge-tower", title: "Ridge Tower — City Landmarks",
+      snippet: "Ridge Tower rises 1,250 ft (381 m) to its roof; the spire brings it to 1,380 ft."),
+    CitedSource(
+      url: "https://skyline.example/towers", title: "Downtown skyline: every tower ranked",
+      snippet: "Ridge Tower has topped the downtown skyline since its completion."),
+  ]
+
+  /// The pages the desks thread cites, as the agent saw them.
+  public static let desksSources = [
+    CitedSource(
+      url: "https://desks.example/rise-pro", title: "Example Rise Pro — Desks Example",
+      snippet: "Dual-motor standing desk, 25–50 in height range, 7-year warranty. Free shipping."),
+    CitedSource(
+      url: "https://office-shop.example/lift-2", title: "Sample Lift 2 standing desk",
+      snippet: "Single motor, 27–47 in. Regularly discounted to $349."),
+    CitedSource(url: "https://reviews.example/standing-desks", title: "The best standing desks of the year"),
+  ]
 
   /// Everything a store needs, as the daemon would serve it.
   public struct Snapshot: Sendable {
@@ -107,7 +146,7 @@ private struct Builder {
   func ago(_ minutes: Double) -> EpochMillis { now.addingTimeInterval(-minutes * 60).epochMillis }
 
   func build() -> SampleData.Snapshot {
-    let threads = [booking(), email(), desks(), coffee()]
+    let threads = [booking(), email(), desks(), coffee(), question()]
     let approvals = self.approvals()
     var summaries = threads.map { thread in
       AgentState.summarize(
@@ -142,13 +181,15 @@ private struct Builder {
       SampleData.lunchThreadId: (9, nil, 0),
       SampleData.cleanupThreadId: (10, "Blocked: deleting files needs a narrower plan", 0),
       SampleData.subscriptionThreadId: (11, "Stopped", 0),
+      SampleData.questionThreadId: (13, "About 1,250 ft", 1),
     ]
     return summaries.compactMap { summary in
       guard let badge = badges[summary.id], let taskId = summary.taskId else { return nil }
       return TaskAgentRecord(
         taskId: taskId, notePath: notePath, date: String(notePath.dropFirst(6).prefix(10)),
         text: summary.title, line: badge.line, status: summary.status, summary: badge.summary,
-        threadId: summary.id, updatedAt: summary.updatedAt, unread: badge.unread)
+        threadId: summary.id, updatedAt: summary.updatedAt, unread: badge.unread,
+        anchor: taskId.hasPrefix("anc_") ? .line : nil)
     }
   }
 
@@ -231,13 +272,14 @@ private struct Builder {
         .approval(ApprovalMessage(id: "msg_d03", author: agent, createdAt: ago(92), approvalId: SampleData.retailersApprovalId)),
         .toolCall(ToolCallMessage(id: "msg_d04", author: agent, createdAt: ago(55), toolCallId: "call_d04", toolName: "browser_extract_text", label: "Read 3 product pages", input: ["maxChars": 20000], status: .ok, resultPreview: "Prices, height ranges and warranties for 3 desks", endedAt: ago(55) + 48_000)),
         .artifact(ArtifactMessage(id: "msg_d05", author: agent, createdAt: ago(32), artifactId: "art_sample_desks")),
-        .text(TextMessage(id: "msg_d06", author: agent, createdAt: ago(31), role: .agent, text: "**Pick: Example Rise Pro ($449)** — dual motor, 25–50 in, 7-year warranty. The full comparison is attached.")),
+        .text(TextMessage(id: "msg_d06", author: agent, createdAt: ago(31), role: .agent, text: SampleData.desksAnswer)),
         .status(StatusMessage(id: "msg_d07", author: "system", createdAt: ago(31), status: .done, text: "Done · 3 desks compared")),
       ],
       artifacts: [
         ArtifactMeta(id: "art_sample_desks", threadId: id, title: "Standing desks under $500", kind: .markdown, mimeType: "text/markdown", path: ".daily-do-list/artifacts/\(id)/art_sample_desks.md", size: 1_046, createdAt: ago(32)),
         ArtifactMeta(id: "art_sample_script", threadId: id, title: "price_watch.py", kind: .code, mimeType: "text/x-python", language: "python", path: ".daily-do-list/artifacts/\(id)/art_sample_script.py", size: 702, createdAt: ago(31)),
-      ])
+      ],
+      sources: SampleData.desksSources)
   }
 
   func coffee() -> AgentThread {
@@ -254,6 +296,22 @@ private struct Builder {
         .toolCall(ToolCallMessage(id: "msg_c04", author: agent, createdAt: ago(0.2), toolCallId: "call_c04", toolName: "computer_screenshot", label: "Check the cart", input: [:], status: .running)),
       ],
       surfaces: [.computer])
+  }
+
+  /// Anchored to the prose line "How tall is Ridge Tower downtown?": the answer cites its sources
+  /// and a note.
+  func question() -> AgentThread {
+    let id = SampleData.questionThreadId
+    return AgentThread(
+      id: id, taskId: SampleData.questionAnchorId, notePath: notePath, title: "How tall is Ridge Tower downtown?",
+      status: .done, createdAt: ago(18), updatedAt: ago(16),
+      messages: [
+        .status(StatusMessage(id: "msg_q01", author: "system", createdAt: ago(18), status: .working, text: "Looking it up")),
+        .toolCall(ToolCallMessage(id: "msg_q02", author: "orchestrator", createdAt: ago(17.8), toolCallId: "call_q02", toolName: "web_search", label: "Search the web", input: ["query": "Ridge Tower height"], status: .ok, resultPreview: "5 results", endedAt: ago(17.8) + 1_400)),
+        .text(TextMessage(id: "msg_q03", author: "orchestrator", createdAt: ago(16), role: .agent, text: SampleData.questionAnswer)),
+        .status(StatusMessage(id: "msg_q04", author: "system", createdAt: ago(16), status: .done, text: "Answered")),
+      ],
+      sources: SampleData.questionSources)
   }
 
   func passport() -> ThreadSummary {

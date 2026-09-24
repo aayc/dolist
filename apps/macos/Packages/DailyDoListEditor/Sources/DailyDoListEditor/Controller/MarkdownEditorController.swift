@@ -58,6 +58,10 @@ public final class MarkdownEditorController {
   var lastReportedLine = 0
   var hoveredBadgeID: String?
   var drawnBadgeRects: [NSRect] = []
+  var drawnSparkleRects: [NSRect] = []
+  /// Tooltip areas registered with the text view: badges, sparkles and links.
+  var registeredToolTipRects: [NSRect] = []
+  var hoveredLinkRange: NSRange?
   private var badgeReserve: CGFloat = 0
 
   public convenience init(configuration: EditorConfiguration = EditorConfiguration()) {
@@ -127,7 +131,9 @@ public final class MarkdownEditorController {
     view.inlinePredictionType = .no
     if #available(macOS 15.0, *) { view.mathExpressionCompletionType = .no }
     view.drawsBackground = true
-    view.backgroundColor = .textBackgroundColor
+    view.backgroundColor = EditorColors.background
+    view.insertionPointColor = EditorColors.accent
+    view.selectedTextAttributes = [.backgroundColor: EditorColors.selection]
     view.isVerticallyResizable = true
     view.isHorizontallyResizable = false
     view.autoresizingMask = [.width]
@@ -142,7 +148,7 @@ public final class MarkdownEditorController {
     scrollView.autohidesScrollers = true
     scrollView.borderType = .noBorder
     scrollView.drawsBackground = true
-    scrollView.backgroundColor = .textBackgroundColor
+    scrollView.backgroundColor = EditorColors.background
     scrollView.autoresizingMask = [.width, .height]
     bridge.observe(clipView: scrollView.contentView)
   }
@@ -168,6 +174,50 @@ public final class MarkdownEditorController {
     applyExternalChange(change)
     replacingText = false
     setSelection(selection.map { Self.map($0, through: change, in: storage.mutableString) }, adjust: false)
+  }
+
+  /// Applies changes someone else made (e.g. the remote side of a merge) without notifying the
+  /// delegate. Ranges are non-overlapping, in the current text; changes at the same place apply in
+  /// the order given. Each change is its own storage edit, so the selection, badge anchors and the
+  /// user's undo history move with the text around it; together they are one undoable step
+  /// (read-only editors clear undo instead).
+  public func applyRemoteChanges(_ changes: [EditorTextChange]) {
+    let length = storage.length
+    let ordered = changes.enumerated()
+      .filter { $0.element.range.location >= 0 && $0.element.range.end <= length }
+      .sorted { ($0.element.range.location, $0.offset) < ($1.element.range.location, $1.offset) }
+      .map(\.element)
+    let sorted = Array(ordered.reversed())
+    guard !sorted.isEmpty else { return }
+    var selection = textView.selectedRanges.map(\.rangeValue)
+    applyingProgrammaticChange = true
+    defer { applyingProgrammaticChange = false }
+    replacingText = true
+    beginEditorOperation(userEvent: "input.remote")
+    var applied = false
+    if textView.isEditable, textView.allowsUndo {
+      markdownTextView.breakUndoCoalescing()
+      withUndoGroup {
+        guard textView.shouldChangeText(
+          inRanges: ordered.map { NSValue(range: $0.range) }, replacementStrings: ordered.map(\.text))
+        else { return }
+        for change in sorted { storage.replaceCharacters(in: change.range, with: change.text) }
+        textView.didChangeText()
+        applied = true
+      }
+      markdownTextView.breakUndoCoalescing()
+    }
+    if !applied {
+      for change in sorted { storage.replaceCharacters(in: change.range, with: change.text) }
+      noteUndoManager.removeAllActions()
+    }
+    endEditorOperation()
+    replacingText = false
+    for change in sorted {
+      let diff = TextDiff.Change(range: change.range, replacement: change.text)
+      selection = selection.map { Self.map($0, through: diff) }
+    }
+    setSelection(selection.map { $0.clamped(to: storage.length) }, adjust: false)
   }
 
   /// Replaces the document like a note switch, with `text` exactly as given (tests: the vim vectors
@@ -218,6 +268,11 @@ public final class MarkdownEditorController {
   /// Maps a selection range through an external change. Whole lines inserted at a line start
   /// belong above it, so a caret at that line start stays on its line.
   static func map(_ range: NSRange, through change: TextDiff.Change, in text: NSString) -> NSRange {
+    map(range, through: change).clamped(to: text.length)
+  }
+
+  /// `map(_:through:in:)` without clamping (the positions of a text other changes still edit).
+  static func map(_ range: NSRange, through change: TextDiff.Change) -> NSRange {
     let from = change.range.location
     let to = change.range.end
     let inserted = (change.replacement as NSString).length
@@ -230,7 +285,7 @@ public final class MarkdownEditorController {
     }
     let start = map(range.location)
     let end = range.length == 0 ? start : max(start, map(range.end))
-    return NSRange(start, end).clamped(to: text.length)
+    return NSRange(start, end)
   }
 
   // MARK: Badges

@@ -52,8 +52,8 @@ struct BadgeStyle {
     }
   }
 
-  /// Status dot: triaging accent, working blue, needs you warning, done green, failed red, queued,
-  /// cancelled and unknown statuses gray.
+  /// Status dot: triaging accent, working info, needs you warning, done success, failed danger;
+  /// queued, cancelled and unknown statuses faint.
   static func dotColor(_ status: String) -> NSColor {
     switch status {
     case "triaging": EditorColors.accent
@@ -61,7 +61,7 @@ struct BadgeStyle {
     case "waiting_approval", "waiting_user": EditorColors.warning
     case "done": EditorColors.success
     case "failed": EditorColors.danger
-    default: .systemGray
+    default: EditorColors.tertiaryText
     }
   }
 }

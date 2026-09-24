@@ -1,5 +1,5 @@
-// Renders the Daily Do List app icon: a macOS-style squircle with a deep purple gradient and a
-// white rounded checkbox with a checkmark. Pure CoreGraphics, so it runs with the Command Line
+// Renders the Daily Do List app icon: a macOS-style squircle with the palette's blue gradient and
+// a white rounded checkbox with a checkmark. Pure CoreGraphics, so it runs with the Command Line
 // Tools alone:
 //
 //   swift apps/macos/scripts/make-icon.swift --iconset build/AppIcon.iconset   # all sizes
@@ -12,9 +12,9 @@ import CoreGraphics
 import Foundation
 import ImageIO
 
-let purpleTop = CGColor(srgbRed: 0x7F / 255, green: 0x6D / 255, blue: 0xF2 / 255, alpha: 1)
-let purpleBottom = CGColor(srgbRed: 0x4B / 255, green: 0x3B / 255, blue: 0xB5 / 255, alpha: 1)
-let checkPurple = CGColor(srgbRed: 0x55 / 255, green: 0x44 / 255, blue: 0xC4 / 255, alpha: 1)
+let blueTop = CGColor(srgbRed: 0x5C / 255, green: 0xA0 / 255, blue: 0xFF / 255, alpha: 1)
+let blueBottom = CGColor(srgbRed: 0x15 / 255, green: 0x57 / 255, blue: 0xC0 / 255, alpha: 1)
+let checkBlue = CGColor(srgbRed: 0x1D / 255, green: 0x6F / 255, blue: 0xE8 / 255, alpha: 1)
 let white = CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)
 
 /// A superellipse ("squircle") inscribed in `rect`: continuous curvature like macOS icons.
@@ -49,19 +49,19 @@ func drawIcon(in context: CGContext, size: CGFloat) {
   context.saveGState()
   context.setShadow(
     offset: CGSize(width: 0, height: -12 * unit), blur: 28 * unit,
-    color: CGColor(srgbRed: 0.1, green: 0.05, blue: 0.3, alpha: 0.35))
+    color: CGColor(srgbRed: 0.03, green: 0.08, blue: 0.25, alpha: 0.35))
   context.addPath(bodyPath)
-  context.setFillColor(purpleBottom)
+  context.setFillColor(blueBottom)
   context.fillPath()
   context.restoreGState()
 
-  // Gradient fill, top (#7F6DF2) to bottom (#4B3BB5).
+  // Gradient fill, top (#5CA0FF) to bottom (#1557C0).
   let space = CGColorSpace(name: CGColorSpace.sRGB)!
   context.saveGState()
   context.addPath(bodyPath)
   context.clip()
   let gradient = CGGradient(
-    colorsSpace: space, colors: [purpleTop, purpleBottom] as CFArray, locations: [0, 1])!
+    colorsSpace: space, colors: [blueTop, blueBottom] as CFArray, locations: [0, 1])!
   context.drawLinearGradient(
     gradient, start: CGPoint(x: body.midX, y: body.maxY), end: CGPoint(x: body.midX, y: body.minY),
     options: [])
@@ -86,21 +86,21 @@ func drawIcon(in context: CGContext, size: CGFloat) {
   if !small {
     context.setShadow(
       offset: CGSize(width: 0, height: -10 * unit), blur: 24 * unit,
-      color: CGColor(srgbRed: 0.08, green: 0.03, blue: 0.25, alpha: 0.35))
+      color: CGColor(srgbRed: 0.02, green: 0.07, blue: 0.22, alpha: 0.35))
   }
   context.addPath(boxPath)
   context.setFillColor(white)
   context.fillPath()
   context.restoreGState()
 
-  // The checkmark, in the icon's purple.
+  // The checkmark, in the palette's accent.
   let check = CGMutablePath()
   check.move(to: CGPoint(x: box.minX + boxSize * 0.24, y: box.minY + boxSize * 0.52))
   check.addLine(to: CGPoint(x: box.minX + boxSize * 0.43, y: box.minY + boxSize * 0.32))
   check.addLine(to: CGPoint(x: box.minX + boxSize * 0.77, y: box.minY + boxSize * 0.71))
   context.saveGState()
   context.addPath(check)
-  context.setStrokeColor(checkPurple)
+  context.setStrokeColor(checkBlue)
   context.setLineWidth(boxSize * (small ? 0.17 : 0.13))
   context.setLineCap(.round)
   context.setLineJoin(.round)

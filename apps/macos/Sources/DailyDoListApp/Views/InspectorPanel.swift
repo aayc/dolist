@@ -16,7 +16,8 @@ struct InspectorPanel: View {
             Task { await workspace.revealTask(notePath: location.notePath, record: location.record) }
           },
           headerHeight: Theme.headerHeight,
-          onHide: { ui.inspectorPresented = false })
+          onHide: { ui.inspectorPresented = false },
+          noteLinks: workspace.agentNoteLinks)
       } else {
         ContentUnavailableView("Agent unavailable", systemImage: "sparkles", description: Text("Not connected to the daemon."))
       }

@@ -14,6 +14,7 @@ extension Workspace {
   func handleVaultChanged(_ event: VaultChangedEvent) {
     if let origin = event.clientId, origin == client.clientId { return }
     for change in event.changes where !VaultPath.isHidden(change.path) {
+      notePreviews.invalidate(change.path)
       switch change.kind {
       case .deleted:
         let nested = notes.paths.filter { $0.hasPrefix("\(change.path)/") }
@@ -68,15 +69,18 @@ extension Workspace {
     agent?.forgetRecords(for: notePath)
   }
 
-  /// "Show in Note" from a thread: opens the note and scrolls to the task's current line (re-resolved
-  /// against local edits).
+  /// "Show in Note" from a thread: opens the note and scrolls to the task's (or anchored line's)
+  /// current line, re-resolved against local edits.
   func revealTask(notePath: String, record: TaskAgentRecord?) async {
     guard await openNote(notePath) else { return }
     guard let record else { return }
-    let anchor = TaskAnchor(taskId: record.taskId, text: record.text, line: record.line)
-    let line = TaskAnchors.resolve(editor.controller.text, anchors: [anchor])[record.taskId] ?? record.line
-    editor.scrollToLine(line)
+    editor.scrollToLine(BadgeBuilder.line(of: record, in: editor.controller.text) ?? record.line)
     editor.focus()
+  }
+
+  /// Sparkle click on a line the agent wrote: open the thread its marker names.
+  func openAgentThread(_ threadId: String) {
+    ui.showThread(threadId)
   }
 
   /// Badge click: open the task's thread (or the inbox until the orchestrator creates one).
@@ -100,6 +104,10 @@ extension Workspace: NotesStoreDelegate {
 
   func notesStore(_ store: NotesStore, applyRemote content: String, to path: String) {
     editor.applyRemote(content, to: path)
+  }
+
+  func notesStore(_ store: NotesStore, applyMerged content: String, to path: String) {
+    editor.applyMerged(content, to: path)
   }
 
   func notesStore(_ store: NotesStore, didSaveConflictCopy copyPath: String, of path: String) {
@@ -152,6 +160,14 @@ extension Workspace: EditorCoordinatorHost {
 
   func editorDidClickBadge(_ badge: EditorBadge) {
     openTaskThread(badge)
+  }
+
+  func editorDidClickAgentThread(_ threadId: String) {
+    openAgentThread(threadId)
+  }
+
+  func editorPreview(for link: EditorLinkPreview) -> String? {
+    linkPreviewText(for: link)
   }
 
   func editorDidClickWikiLink(_ target: String, newTab: Bool) {

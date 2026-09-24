@@ -1,28 +1,36 @@
 import AppKit
 import SwiftUI
 
-/// Colors and metrics of the shell (Obsidian-like; same tokens as the web app's theme.css).
+/// Colors and metrics of the shell: the app's palette (the web app's `--ddl-*` tokens in
+/// theme.css), dark and light.
 enum Theme {
-  static let accent = Color(lightHex: 0x705DCF, darkHex: 0x7F6DF2)
-  static let accentSoft = Color(lightHex: 0x705DCF, darkHex: 0x7F6DF2, opacity: 0.14)
-  static let success = Color(lightHex: 0x2F9E5A, darkHex: 0x4FB477)
-  static let warning = Color(lightHex: 0xB7791F, darkHex: 0xE0A526)
-  static let danger = Color(lightHex: 0xD1383D, darkHex: 0xE5534B)
-  static let info = Color(lightHex: 0x1F6FEB, darkHex: 0x4EA1FF)
+  static let accent = Color(lightHex: 0x1D6FE8, darkHex: 0x3B8BFF)
+  /// Hovered and pressed accent.
+  static let accentStrong = Color(lightHex: 0x1557C0, darkHex: 0x5CA0FF)
+  /// Tinted backgrounds.
+  static let accentSoft = Color(lightHex: 0x1D6FE8, darkHex: 0x3B8BFF, lightOpacity: 0.12, darkOpacity: 0.16)
+  static let success = Color(lightHex: 0x0F9D58, darkHex: 0x34D399)
+  static let warning = Color(lightHex: 0xB7791F, darkHex: 0xFBBF24)
+  static let danger = Color(lightHex: 0xD92D20, darkHex: 0xF87171)
+  static let info = Color(lightHex: 0x0891B2, darkHex: 0x22D3EE)
 
-  static let background = Color(lightHex: 0xFFFFFF, darkHex: 0x1E1E1E)
-  static let secondaryBackground = Color(lightHex: 0xF6F6F6, darkHex: 0x262626)
-  static let hover = Color(lightHex: 0xECECEC, darkHex: 0x2E2E2E)
-  static let activeBackground = Color(lightHex: 0xE2E2E2, darkHex: 0x363636)
-  static let border = Color(lightHex: 0xE3E3E3, darkHex: 0x333333)
+  /// The editor, the note and the agent panel.
+  static let background = Color(lightHex: 0xFFFFFF, darkHex: 0x0E1116)
+  /// The sidebar.
+  static let secondaryBackground = Color(lightHex: 0xF3F5F8, darkHex: 0x151A21)
+  static let hover = Color(lightHex: 0xE9EDF2, darkHex: 0x1E2530)
+  /// Selected rows, the active tab.
+  static let activeBackground = Color(lightHex: 0xDDE4EE, darkHex: 0x242D3A)
+  static let border = Color(lightHex: 0xD5DCE5, darkHex: 0x283140)
   /// Every line between and inside the panes, opaque so it reads the same on any background.
-  static let separator = Color(lightHex: 0xDEDEDE, darkHex: 0x363636)
-  static let text = Color(lightHex: 0x222222, darkHex: 0xDCDDDE)
-  static let mutedText = Color(lightHex: 0x5C5C5C, darkHex: 0xA3A3A3)
-  static let faintText = Color(lightHex: 0x9A9A9A, darkHex: 0x666666)
-  static let elevated = Color(lightHex: 0xFFFFFF, darkHex: 0x2A2A2A)
+  static let separator = Color(lightHex: 0xD5DCE5, darkHex: 0x283140)
+  static let text = Color(lightHex: 0x0B1220, darkHex: 0xF2F5F9)
+  static let mutedText = Color(lightHex: 0x475467, darkHex: 0xB4BDC9)
+  static let faintText = Color(lightHex: 0x8492A6, darkHex: 0x7A8594)
+  /// Cards, popovers, toasts, code.
+  static let elevated = Color(lightHex: 0xFFFFFF, darkHex: 0x1A2029)
   /// The open tab, on the header's background.
-  static let selectedTab = Color(lightHex: 0xEDEDED, darkHex: 0x2C2C2C)
+  static let selectedTab = Color(lightHex: 0xDDE4EE, darkHex: 0x242D3A)
 
   /// Every pane's top row (sidebar, tabs, agent panel), so their bottom lines meet.
   static let headerHeight: CGFloat = 40
@@ -35,10 +43,15 @@ enum Theme {
 extension Color {
   /// A color that follows the effective appearance (light/dark).
   init(lightHex light: UInt32, darkHex dark: UInt32, opacity: Double = 1) {
+    self.init(lightHex: light, darkHex: dark, lightOpacity: opacity, darkOpacity: opacity)
+  }
+
+  /// A color that follows the effective appearance, with an opacity per appearance.
+  init(lightHex light: UInt32, darkHex dark: UInt32, lightOpacity: Double, darkOpacity: Double) {
     self.init(
       nsColor: NSColor(name: nil) { appearance in
         let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        return NSColor(rgbHex: isDark ? dark : light, alpha: opacity)
+        return isDark ? NSColor(rgbHex: dark, alpha: darkOpacity) : NSColor(rgbHex: light, alpha: lightOpacity)
       })
   }
 }

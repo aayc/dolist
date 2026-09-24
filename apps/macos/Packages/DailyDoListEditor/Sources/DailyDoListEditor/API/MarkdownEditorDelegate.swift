@@ -17,6 +17,12 @@ public protocol MarkdownEditorDelegate: AnyObject {
   func editor(_ editor: MarkdownEditorController, vimStatusDidChange status: EditorVimStatus?)
   /// An app command from vim (`:q`, `:e note`, `gt`, `:obcommand id`…).
   func editor(_ editor: MarkdownEditorController, perform request: EditorVimRequest) -> EditorVimRequestResult
+  /// The sparkle ending a line the agent wrote was clicked: open the thread its marker names.
+  func editor(_ editor: MarkdownEditorController, didClickAgentThread threadId: String)
+  /// The hover preview of a link: asked when the pointer starts hovering the link (a chance to
+  /// start loading what it needs) and again when its tooltip shows. Return what's known now; nil
+  /// shows `link.fallbackText`.
+  func editor(_ editor: MarkdownEditorController, previewFor link: EditorLinkPreview) -> String?
 }
 
 extension MarkdownEditorDelegate {
@@ -30,4 +36,6 @@ extension MarkdownEditorDelegate {
   public func editor(_ editor: MarkdownEditorController, perform request: EditorVimRequest) -> EditorVimRequestResult {
     .unavailable
   }
+  public func editor(_ editor: MarkdownEditorController, didClickAgentThread threadId: String) {}
+  public func editor(_ editor: MarkdownEditorController, previewFor link: EditorLinkPreview) -> String? { nil }
 }

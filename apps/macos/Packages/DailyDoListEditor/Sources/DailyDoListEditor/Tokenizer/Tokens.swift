@@ -2,7 +2,8 @@ import Foundation
 
 /// Kinds of syntax markers. Live preview hides markers of every kind on lines away from the
 /// selection; `task` and `bullet` markers are instead *replaced* (by a checkbox or a dot) and are
-/// revealed only while the selection touches the marker itself.
+/// revealed only while the selection touches the marker itself. An `agent` marker is replaced by a
+/// sparkle and revealed with its line.
 enum MarkerKind: Int, Sendable, CaseIterable {
   case heading = 1
   case quote
@@ -17,9 +18,15 @@ enum MarkerKind: Int, Sendable, CaseIterable {
   case horizontalRule
   case task
   case bullet
+  case agent
 
-  /// Drawn as something else (checkbox, dot) in a fixed-width slot instead of just disappearing.
-  var isReplacement: Bool { self == .task || self == .bullet }
+  /// Drawn as something else (checkbox, dot, sparkle) in a fixed-width slot instead of just
+  /// disappearing.
+  var isReplacement: Bool { self == .task || self == .bullet || self == .agent }
+
+  /// Revealed only while the selection touches the marker itself (the checkbox stays while you
+  /// type the task); every other kind is revealed with its line.
+  var revealsOnTouch: Bool { self == .task || self == .bullet }
 }
 
 /// Inline (and line-level) styles a tokenizer span can carry. Spans may nest; the highlighter
@@ -42,6 +49,8 @@ struct InlineStyle: OptionSet, Hashable, Sendable {
   static let taskCancelled = InlineStyle(rawValue: 1 << 9)
   /// The number of an ordered list item (`1.`), which stays visible.
   static let listNumber = InlineStyle(rawValue: 1 << 10)
+  /// A line the agent wrote (before its marker).
+  static let agent = InlineStyle(rawValue: 1 << 11)
 }
 
 struct StyledSpan: Equatable, Sendable {
@@ -151,6 +160,8 @@ struct LineTokens: Equatable, Sendable {
   /// The list marker (`-`, `*`, `+`, `1.`, `1)`) of a list item.
   var listMarker: NSRange?
   var listPrefix: ListPrefixLayout?
+  /// The agent marker ending the line, when the agent wrote it.
+  var agent: AgentMarkerToken?
 
   init(kind: LineKind) {
     self.kind = kind
@@ -171,6 +182,7 @@ struct LineTokens: Equatable, Sendable {
     }
     copy.listMarker = listMarker?.shifted(by: delta)
     copy.listPrefix = listPrefix?.offset(by: delta)
+    copy.agent = agent?.offset(by: delta)
     return copy
   }
 }

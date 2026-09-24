@@ -139,6 +139,34 @@ struct SnapshotTests {
     #expect(greenIconPixels(try render()) > 20, "the row still shows the thread's old status")
   }
 
+  /// Threads citing their sources: numbered chips, links, and a `[[wikilink]]`.
+  @Test(arguments: [false, true])
+  func threadsWithCitations(dark: Bool) throws {
+    let view = HStack(alignment: .top, spacing: 0) {
+      AgentPanel(store: store, selectedThreadId: .constant(SampleData.questionThreadId)).frame(width: 440)
+      Divider()
+      AgentPanel(store: store, selectedThreadId: .constant(SampleData.desksThreadId)).frame(width: 440)
+    }
+    .agentReferenceDate(Self.now)
+    check(try SnapshotRenderer.render(view, name: "thread-citations", size: CGSize(width: 881, height: 700), dark: dark))
+  }
+
+  /// The hover cards of a cited page, a plain link and a note (popovers can't be captured, so the
+  /// cards render on their own).
+  @Test(arguments: [false, true])
+  func linkPreviewCards(dark: Bool) throws {
+    let cited = LinkPreview.make(url: "https://city.example/landmarks/ridge-tower", label: "1", sources: SampleData.questionSources)
+    let plain = LinkPreview.make(url: "https://www.news.example/story?id=4", label: "The story", sources: [])
+    let note = NotePreview(title: "Ideas", lines: ["# Ideas", "- A weekly review template", "- Batch errands by neighborhood", "> Small steps every day."])
+    let view = VStack(alignment: .leading, spacing: 16) {
+      LinkPreviewCard(content: .page(cited), noteLinks: .none).background(AgentTheme.cardBackground)
+      LinkPreviewCard(content: .page(plain), noteLinks: .none).background(AgentTheme.cardBackground)
+      NotePreviewView(target: "Ideas", noteLinks: .none, preview: note).padding(12).frame(width: 300).background(AgentTheme.cardBackground)
+    }
+    .padding(16)
+    check(try SnapshotRenderer.render(view, name: "link-preview-cards", size: CGSize(width: 340, height: 460), dark: dark), minimumColors: 8)
+  }
+
   @Test(arguments: [false, true])
   func approvalCardStates(dark: Bool) throws {
     let base = try #require(store.approvals[SampleData.reserveApprovalId])

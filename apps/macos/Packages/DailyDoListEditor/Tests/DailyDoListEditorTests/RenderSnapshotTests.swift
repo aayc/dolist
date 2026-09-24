@@ -105,7 +105,8 @@ struct RenderSnapshotTests {
         #expect(saturation(inside) > 0.04, "\(status) is tinted")
       case .working:
         #expect(distance(inside, background) > 0.03, "\(status) is a pill")
-        #expect(saturation(inside) < 0.02, "\(status) is neutral")
+        // Neutral: no more tinted than the palette's (slightly blue) surfaces.
+        #expect(abs(saturation(inside) - saturation(background)) < 0.04, "\(status) is neutral")
       case .quiet:
         #expect(distance(inside, background) < 0.01, "\(status) has no fill")
       }
@@ -138,6 +139,63 @@ struct RenderSnapshotTests {
     let png = try render(editor)
     try FileManager.default.createDirectory(at: Self.outputDirectory, withIntermediateDirectories: true)
     try png.write(to: Self.outputDirectory.appendingPathComponent("motion-frame.png"))
+  }
+
+  static let agentNote = [
+    "# Thursday",
+    "- [ ] Book a table for Friday dinner",
+    "  - Trattoria Sole has a table for 2 at 7:00 PM ([Sole bookings](https://sole.example/book)) %%agent:thr_ab12%%",
+    "- [ ] Call the restaurant to confirm %%agent:thr_ab12%%",
+    "What's the tallest building downtown?",
+    "- [x] Renew the library books",
+    "## Trip ideas %%agent:thr_2%%",
+    "Notes from the [[Launch Plan]] review.",
+  ].joined(separator: "\n")
+
+  static func agentBadges(_ text: String) -> [EditorBadge] {
+    [
+      EditorBadge(id: "t1", line: 1, status: "done", label: "Done · Table held", unread: 1, threadId: "thr_ab12"),
+      EditorBadge(id: "anc_q", line: 4, status: "done", label: "Done · Ridge Tower, 1,250 ft", threadId: "thr_q", highlightsLine: true),
+    ]
+  }
+
+  /// Agent lines (sparkles, agent text color) and a line a thread is anchored to (band, bar,
+  /// badge), light and dark; the caret sits on the last line.
+  @Test(arguments: [("light", NSAppearance.Name.aqua), ("dark", NSAppearance.Name.darkAqua)])
+  func rendersAgentLinesAndAnAnchoredLine(name: String, appearance: NSAppearance.Name) throws {
+    let text = Self.agentNote
+    let editor = EditorHarness(text: text, selection: NSRange(location: (text as NSString).length, length: 0), size: NSSize(width: 900, height: 360))
+    editor.controller.scrollView.appearance = NSAppearance(named: appearance)
+    editor.controller.setBadges(Self.agentBadges(text))
+    let png = try render(editor)
+    try FileManager.default.createDirectory(at: Self.outputDirectory, withIntermediateDirectories: true)
+    try png.write(to: Self.outputDirectory.appendingPathComponent("agent-lines-\(name).png"))
+
+    // The band is drawn: accent-tinted pixels left of the question's text, over the background.
+    let rep = try snapshot(editor.textView)
+    let scale = CGFloat(rep.pixelsWide) / editor.textView.bounds.width
+    let band = try #require(editor.controller.anchoredLineBands(in: editor.textView.visibleRect).first)
+    func color(_ point: NSPoint) throws -> NSColor {
+      try #require(rep.colorAt(x: Int(point.x * scale), y: Int(point.y * scale))?.usingColorSpace(.sRGB))
+    }
+    let bar = try color(NSPoint(x: band.minX + 1, y: band.midY))
+    let fill = try color(NSPoint(x: band.minX + 5, y: band.midY))
+    let outside = try color(NSPoint(x: band.minX + 5, y: band.maxY + 6))
+    #expect(bar.blueComponent - bar.redComponent > 0.3, "the bar is accent blue")
+    #expect(fill.blueComponent - fill.redComponent > outside.blueComponent - outside.redComponent + 0.02, "the band is tinted")
+    // A sparkle is drawn in each hidden marker's slot.
+    #expect(editor.controller.agentSparkles().count == 3)
+  }
+
+  @Test func rendersAgentLinesInSourceMode() throws {
+    let text = Self.agentNote
+    let configuration = EditorConfiguration(livePreview: false, readableLineLength: false)
+    let editor = EditorHarness(text: text, configuration: configuration, size: NSSize(width: 1000, height: 320))
+    editor.controller.scrollView.appearance = NSAppearance(named: .darkAqua)
+    editor.controller.setBadges(Self.agentBadges(text))
+    let png = try render(editor)
+    try FileManager.default.createDirectory(at: Self.outputDirectory, withIntermediateDirectories: true)
+    try png.write(to: Self.outputDirectory.appendingPathComponent("agent-lines-source-mode.png"))
   }
 
   @Test func rendersSourceModeWithLineNumbers() throws {

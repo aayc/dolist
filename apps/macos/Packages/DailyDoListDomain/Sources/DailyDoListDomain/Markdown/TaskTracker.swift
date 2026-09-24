@@ -15,10 +15,12 @@ public struct TrackedTask: Hashable, Sendable, Codable, Identifiable {
   public var firstSeenAt: EpochMillis
   /// Epoch ms of the last text/notes/status change.
   public var updatedAt: EpochMillis
+  /// The agent wrote this task (see `ParsedTask.agent`).
+  public var agent: Bool
 
   public init(
     id: String, text: String, status: TaskStatus, line: Int, depth: Int, parentId: String?,
-    notes: [String], firstSeenAt: EpochMillis, updatedAt: EpochMillis
+    notes: [String], firstSeenAt: EpochMillis, updatedAt: EpochMillis, agent: Bool = false
   ) {
     self.id = id
     self.text = text
@@ -29,6 +31,7 @@ public struct TrackedTask: Hashable, Sendable, Codable, Identifiable {
     self.notes = notes
     self.firstSeenAt = firstSeenAt
     self.updatedAt = updatedAt
+    self.agent = agent
   }
 }
 
@@ -108,7 +111,7 @@ public enum TaskTracker {
         tasks.append(
           TrackedTask(
             id: idFactory(), text: p.text, status: p.status, line: p.line, depth: p.depth, parentId: nil,
-            notes: p.notes, firstSeenAt: now, updatedAt: now))
+            notes: p.notes, firstSeenAt: now, updatedAt: now, agent: p.agent))
         changes.append(nil)
         continue
       }
@@ -119,7 +122,7 @@ public enum TaskTracker {
         TrackedTask(
           id: prev.id, text: p.text, status: p.status, line: p.line, depth: p.depth, parentId: nil,
           notes: p.notes, firstSeenAt: prev.firstSeenAt,
-          updatedAt: change.text || change.notes || change.status ? now : prev.updatedAt))
+          updatedAt: change.text || change.notes || change.status ? now : prev.updatedAt, agent: p.agent))
       changes.append(change)
     }
     let taskAtLine = lineLookup(parsed)

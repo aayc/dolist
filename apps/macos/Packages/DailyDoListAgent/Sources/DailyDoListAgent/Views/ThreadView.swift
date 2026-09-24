@@ -185,7 +185,7 @@ struct ThreadHeader: View {
           if let notePath {
             Label(AgentFormat.noteName(notePath), systemImage: "doc.text")
               .font(.caption)
-              .foregroundStyle(.secondary)
+              .foregroundStyle(AgentTheme.mutedText)
               .lineLimit(1)
           }
         }
@@ -199,7 +199,7 @@ struct ThreadHeader: View {
         }
         if let onClose { IconButton(systemImage: "xmark", help: "Close", action: onClose) }
       }
-      .foregroundStyle(.secondary)
+      .foregroundStyle(AgentTheme.mutedText)
     }
     .padding(.horizontal, 12)
     .padding(.top, 10)
@@ -235,7 +235,7 @@ private struct ThreadTabChip: View {
     Button(action: action) {
       Text(verbatim: title)
         .font(.system(size: 12, weight: isSelected ? .medium : .regular))
-        .foregroundStyle(isSelected ? Color.primary : AgentTheme.mutedText)
+        .foregroundStyle(isSelected ? AgentTheme.text : AgentTheme.mutedText)
         .padding(.horizontal, 10)
         .frame(height: 26)
         .background(

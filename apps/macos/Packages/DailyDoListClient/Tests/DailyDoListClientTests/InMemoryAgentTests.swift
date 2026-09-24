@@ -75,6 +75,18 @@ struct InMemoryAgentTests {
       }
       #expect(deltas.joined() == message.text && message.streaming == false)
     }
+    // The answer cites its sources, and the agent writes what it found under the task.
+    let sources = try #require(response.thread.sources)
+    #expect(sources.count == 2)
+    for case .text(let message) in response.thread.messages where message.text.contains("[1](") {
+      #expect(sources.contains { message.text.contains("[1](\($0.url))") })
+    }
+    let note = try await client.readNote(Self.today).content
+    #expect(note.hasPrefix("- [ ] Research the best indoor herb garden kits\n  - Option A ($129) is the best value ([Guide Example]("))
+    #expect(note.hasSuffix(" %%agent:\(threadId)%%\n"))
+    #expect(sources.contains { note.contains($0.url) })
+    #expect(events.contains { if case .vaultChanged(let e) = $0 { e.origin == .agent } else { false } })
+
     let artifactMeta = try #require(response.thread.artifacts.first)
     #expect(artifactMeta.kind == .markdown && artifactMeta.mimeType == "text/markdown")
     let artifact = try await client.artifact(threadId: threadId, artifactId: artifactMeta.id)

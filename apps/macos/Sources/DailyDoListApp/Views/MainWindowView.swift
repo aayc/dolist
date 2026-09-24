@@ -72,6 +72,7 @@ struct WorkspaceView: View {
         }
       }
     }
+    .foregroundStyle(Theme.text)
     .animation(.snappy(duration: 0.2), value: ui.sidebarVisible)
     .animation(.snappy(duration: 0.2), value: ui.inspectorPresented)
     .ignoresSafeArea(.container, edges: .top)

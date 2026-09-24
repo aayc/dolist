@@ -128,6 +128,29 @@ struct PerformanceTests {
     #expect(total.p95 < 20 * Self.multiplier)
   }
 
+  /// Before each draw: badge layouts, sparkles and link tooltip areas of the visible lines (every
+  /// tenth line is the agent's).
+  @Test func preDrawBookkeeping() {
+    let editor = makeEditor()
+    let note = Self.note.components(separatedBy: "\n").enumerated().map { index, line in
+      index % 10 == 3 && !line.isEmpty ? "\(line) %%agent:thr_\(index)%%" : line
+    }.joined(separator: "\n")
+    editor.controller.setText(note, resetUndo: true)
+    editor.controller.setBadges(badges(for: editor))
+    editor.controller.scrollToLine(1000)
+    editor.layout()
+    let clock = ContinuousClock()
+    var samples: [Double] = []
+    for _ in 0..<100 {
+      let elapsed = clock.measure { editor.controller.textViewWillDraw(editor.textView) }
+      samples.append(Self.milliseconds(elapsed))
+    }
+    let stats = Stats(samples: Array(samples.dropFirst(2)))
+    print("PERF pre-draw (badge layouts, sparkles, link tooltip areas): \(stats)")
+    #expect(!editor.controller.agentSparkles().isEmpty)
+    #expect(stats.average < 4 * Self.multiplier)
+  }
+
   @Test func tokenizerThroughput() {
     let clock = ContinuousClock()
     var lines = 0

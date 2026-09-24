@@ -89,6 +89,8 @@ public final class AppModel {
   public func start() {
     guard !hasStarted else { return }
     hasStarted = true
+    // The default theme (dark) until the daemon's settings arrive; only changes apply after that.
+    applyTheme(settings.settings.theme)
     if environment.enablesSystemServices { installSystemServices() }
     bootTask = Task { await boot() }
   }
@@ -112,12 +114,16 @@ public final class AppModel {
 
   func applyTheme(_ theme: ThemePreference) {
     guard environment.enablesSystemServices else { return }
-    NSApplication.shared.appearance =
-      switch theme {
-      case .system: nil
-      case .light: NSAppearance(named: .aqua)
-      case .dark: NSAppearance(named: .darkAqua)
-      }
+    NSApplication.shared.appearance = Self.appearance(for: theme)
+  }
+
+  /// The app's appearance for a theme setting (nil: follow the system).
+  static func appearance(for theme: ThemePreference) -> NSAppearance? {
+    switch theme {
+    case .system: nil
+    case .light: NSAppearance(named: .aqua)
+    case .dark: NSAppearance(named: .darkAqua)
+    }
   }
 
   // MARK: - Tabs persistence

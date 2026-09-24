@@ -56,8 +56,8 @@ private struct InboxSectionHeader: View {
     HStack(spacing: 6) {
       Text(group.title.uppercased())
         .font(.caption.weight(.semibold))
-        .foregroundStyle(group == .needsYou ? AgentTheme.warning : Color.secondary)
-      Text(verbatim: "\(count)").font(.caption).foregroundStyle(.tertiary)
+        .foregroundStyle(group == .needsYou ? AgentTheme.warning : AgentTheme.mutedText)
+      Text(verbatim: "\(count)").font(.caption).foregroundStyle(AgentTheme.faint)
       Spacer()
     }
     .padding(.horizontal, 10)
@@ -93,12 +93,12 @@ struct InboxRow: View {
             Text(verbatim: AgentFormat.relativeTime(Date(epochMillis: thread.updatedAt), now: now))
               .font(.caption)
               .monospacedDigit()
-              .foregroundStyle(.secondary)
+              .foregroundStyle(AgentTheme.mutedText)
           }
           if let preview = thread.lastMessagePreview.map(AgentFormat.plainPreview), !preview.isEmpty {
             Text(verbatim: preview)
               .font(.callout)
-              .foregroundStyle(.secondary)
+              .foregroundStyle(AgentTheme.mutedText)
               .lineLimit(2)
           }
           HStack(spacing: 6) {
@@ -106,7 +106,7 @@ struct InboxRow: View {
             if let notePath = thread.notePath {
               Text(verbatim: AgentFormat.noteName(notePath))
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(AgentTheme.faint)
                 .lineLimit(1)
             }
             Spacer(minLength: 0)

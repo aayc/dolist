@@ -29,6 +29,30 @@ struct SampleDataTests {
     #expect(Set(snapshot.threads.map(\.id)).count == snapshot.threads.count)
   }
 
+  /// Threads that cite pages carry them in `sources`; every numbered citation is one of them.
+  @Test func citationsHaveTheirSources() throws {
+    for id in [SampleData.desksThreadId, SampleData.questionThreadId] {
+      let thread = try #require(snapshot.loadedThreads.first { $0.id == id })
+      let sources = try #require(thread.sources)
+      let text = thread.messages.compactMap { message -> String? in
+        if case .text(let text) = message { return text.text }
+        return nil
+      }.joined(separator: "\n")
+      let rendered = MarkdownRenderer.blocks(from: text)
+      var citations = 0
+      for block in rendered {
+        guard case .paragraph(_, let paragraph) = block else { continue }
+        for run in paragraph.runs {
+          guard let url = run.link, LinkPreview.isCitationLabel(String(paragraph[run.range].characters)) else { continue }
+          citations += 1
+          #expect(CitedSourceMatch.source(for: url.absoluteString, in: sources) != nil, "\(url) is a source of \(id)")
+        }
+      }
+      #expect(citations >= 2)
+      #expect(text.contains("[["), "\(id) links a note")
+    }
+  }
+
   @Test func theBookingThreadHasEveryMessageKind() throws {
     let booking = try #require(snapshot.loadedThreads.first { $0.id == SampleData.bookingThreadId })
     #expect(Set(booking.messages.map(\.kind)) == ["text", "tool_call", "approval", "artifact", "status"])
@@ -59,7 +83,10 @@ struct SampleDataTests {
     let store = SampleData.makeStore(now: FormattingTests.now)
     #expect(store.pendingApprovalCount == 2)
     #expect(store.todayNotePath == snapshot.dailyNotePath)
-    #expect(store.records(for: snapshot.dailyNotePath).count == 9)
+    #expect(store.records(for: snapshot.dailyNotePath).count == 10)
+    let anchored = try #require(store.record(forThread: SampleData.questionThreadId))
+    #expect(anchored.anchor == .line)
+    #expect(anchored.taskId == SampleData.questionAnchorId)
     let sections = store.inboxSections(now: FormattingTests.now)
     #expect(sections.map(\.group) == [.needsYou, .working, .done, .other])
     #expect(sections.first?.threads.map(\.id).contains(SampleData.bookingThreadId) == true)

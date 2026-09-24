@@ -39,10 +39,10 @@ struct Chip: View {
       Text(text)
     }
     .font(.caption.weight(.medium))
-    .foregroundStyle(tone?.color ?? Color.secondary)
+    .foregroundStyle(tone?.color ?? AgentTheme.mutedText)
     .padding(.horizontal, 7)
     .padding(.vertical, 2)
-    .background(Capsule().fill((tone?.color ?? Color.primary).opacity(tone == nil ? 0.07 : 0.14)))
+    .background(Capsule().fill((tone?.color ?? AgentTheme.text).opacity(tone == nil ? 0.07 : 0.14)))
   }
 }
 
@@ -178,7 +178,7 @@ struct AgentErrorBanner: View {
       Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(AgentTheme.danger)
       VStack(alignment: .leading, spacing: 2) {
         Text(alert.title).font(.callout.weight(.semibold))
-        Text(alert.message).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+        Text(alert.message).font(.caption).foregroundStyle(AgentTheme.mutedText).lineLimit(3)
       }
       Spacer(minLength: 4)
       IconButton(systemImage: "xmark", help: "Dismiss", action: onDismiss)
@@ -199,7 +199,7 @@ struct AgentStatusIndicator: View {
     let (text, tone) = summary
     HStack(spacing: 5) {
       Circle().fill(tone.color).frame(width: 7, height: 7)
-      Text(text).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+      Text(text).font(.caption).foregroundStyle(AgentTheme.mutedText).lineLimit(1)
     }
     .help(store.unavailableReason ?? text)
     .accessibilityElement(children: .combine)

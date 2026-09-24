@@ -74,7 +74,7 @@ struct ArtifactViewerContent: View {
       Image(systemName: kind.systemImage).foregroundStyle(AgentTheme.accent)
       Text(verbatim: meta?.title ?? "Artifact").font(.headline).lineLimit(1)
       Chip(text: meta?.kindLabel ?? kind.displayLabel)
-      if let meta { Text(verbatim: AgentFormat.bytes(meta.size)).font(.caption).foregroundStyle(.secondary) }
+      if let meta { Text(verbatim: AgentFormat.bytes(meta.size)).font(.caption).foregroundStyle(AgentTheme.mutedText) }
       Spacer(minLength: 8)
       Button {
         if let payload { ArtifactFiles.copy(payload, kind: kind) }
@@ -188,7 +188,7 @@ struct CodeArtifactView: View {
     TopLeadingScrollView {
       HStack(alignment: .top, spacing: 14) {
         Text(verbatim: numbers)
-          .foregroundStyle(.tertiary)
+          .foregroundStyle(AgentTheme.faint)
           .multilineTextAlignment(.trailing)
           .accessibilityHidden(true)
         Text(verbatim: code).textSelection(.enabled)

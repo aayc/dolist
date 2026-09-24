@@ -14,6 +14,8 @@ protocol MarkdownTextViewHooks: AnyObject {
   func textView(_ textView: MarkdownTextView, mouseMovedTo point: NSPoint?, modifiers: NSEvent.ModifierFlags)
   func textView(_ textView: MarkdownTextView, toolTipAt point: NSPoint) -> String?
   func textViewWillDraw(_ textView: MarkdownTextView)
+  /// After the background, before the text and the selection.
+  func textView(_ textView: MarkdownTextView, drawBackgroundIn rect: NSRect)
   func textView(_ textView: MarkdownTextView, drawOverlaysIn dirtyRect: NSRect)
   func textViewDidChangeWidth(_ textView: MarkdownTextView)
   func textViewDidChangeFocus(_ textView: MarkdownTextView)
@@ -254,6 +256,11 @@ final class MarkdownTextView: NSTextView, NSViewToolTipOwner {
   override func viewWillDraw() {
     super.viewWillDraw()
     hooks?.textViewWillDraw(self)
+  }
+
+  override func drawBackground(in rect: NSRect) {
+    super.drawBackground(in: rect)
+    hooks?.textView(self, drawBackgroundIn: rect)
   }
 
   override func draw(_ dirtyRect: NSRect) {

@@ -26,7 +26,8 @@ public enum MarkdownBlock: Hashable, Sendable, Identifiable {
 ///
 /// Agent text is untrusted: links other than http(s)/mailto are stripped (they render as plain
 /// text), raw HTML tags are dropped, and images show their alt text. Single newlines are kept as
-/// line breaks (like the web app's `breaks: true`).
+/// line breaks (like the web app's `breaks: true`). `[[Note]]` and `[[Note#Heading|label]]`
+/// outside code become links to the note (`WikiLinkURL`), shown as their label or name.
 public enum MarkdownRenderer {
   public static func blocks(from source: String) -> [MarkdownBlock] {
     let options = AttributedString.MarkdownParsingOptions(
@@ -51,7 +52,64 @@ public enum MarkdownRenderer {
       return AttributedString(source)
     }
     sanitize(&text)
+    linkWikiLinks(&text)
     return text
+  }
+
+  /// Turns `[[target#subpath|alias]]` outside code spans and links into a link to the note, shown
+  /// as the alias, else the note's name (`Note › Heading` with a subpath).
+  static func linkWikiLinks(_ text: inout AttributedString) {
+    let characters = Array(text.characters)
+    var matches: [(range: Range<Int>, display: String, url: URL)] = []
+    var index = 0
+    while index + 1 < characters.count {
+      guard characters[index] == "[", characters[index + 1] == "[" else {
+        index += 1
+        continue
+      }
+      var close = index + 2
+      while close + 1 < characters.count, !(characters[close] == "]" && characters[close + 1] == "]"),
+        characters[close] != "[", !characters[close].isNewline
+      {
+        close += 1
+      }
+      guard close + 1 < characters.count, characters[close] == "]", characters[close + 1] == "]" else {
+        index += 1
+        continue
+      }
+      let inner = String(characters[(index + 2)..<close])
+      let alias = inner.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false).dropFirst().first
+        .map { $0.trimmingCharacters(in: .whitespaces) }
+      let target = (inner.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? "")
+        .trimmingCharacters(in: .whitespaces)
+      let parts = target.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
+      let note = parts.first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+      if !note.isEmpty, let url = WikiLinkURL.url(for: target) {
+        let heading = parts.count > 1 ? parts[1].trimmingCharacters(in: .whitespaces) : ""
+        let name = heading.isEmpty ? WikiLinkURL.noteName(note) : "\(WikiLinkURL.noteName(note)) › \(heading)"
+        matches.append((index..<(close + 2), alias.flatMap { $0.isEmpty ? nil : $0 } ?? name, url))
+      }
+      index = close + 2
+    }
+    guard !matches.isEmpty else { return }
+    var result = AttributedString()
+    var cursor = text.startIndex
+    for match in matches {
+      let lower = text.characters.index(text.startIndex, offsetBy: match.range.lowerBound)
+      let upper = text.characters.index(text.startIndex, offsetBy: match.range.upperBound)
+      let original = text[lower..<upper]
+      let isLiteral = original.runs.contains { run in
+        run.link != nil || run.inlinePresentationIntent?.contains(.code) == true
+      }
+      guard !isLiteral, lower >= cursor else { continue }
+      result.append(text[cursor..<lower])
+      var link = AttributedString(match.display, attributes: original.runs.first?.attributes ?? AttributeContainer())
+      link.link = match.url
+      result.append(link)
+      cursor = upper
+    }
+    result.append(text[cursor...])
+    text = result
   }
 
   /// Removes unsafe links and raw HTML, turns soft breaks into newlines.
@@ -95,6 +153,7 @@ private struct BlockBuilder {
     flushTable()
     var text = content
     MarkdownRenderer.sanitize(&text)
+    MarkdownRenderer.linkWikiLinks(&text)
     guard let innermost = components.first else {
       if !text.characters.isEmpty { blocks.append(.paragraph(id: nextAnonymousId, text: text)) }
       return
@@ -135,6 +194,7 @@ private struct BlockBuilder {
     }
     var text = content
     MarkdownRenderer.sanitize(&text)
+    MarkdownRenderer.linkWikiLinks(&text)
     let isHeader = components.contains { if case .tableHeaderRow = $0.kind { true } else { false } }
     if isHeader {
       table?.header.append(text)

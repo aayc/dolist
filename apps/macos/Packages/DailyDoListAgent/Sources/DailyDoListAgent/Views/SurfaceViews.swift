@@ -76,16 +76,16 @@ public struct ComputerSurfaceView: View {
   private func actionLog(_ actions: [SurfaceAction]) -> some View {
     let now = referenceDate ?? Date()
     return VStack(alignment: .leading, spacing: 4) {
-      Text("Actions").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+      Text("Actions").font(.caption.weight(.semibold)).foregroundStyle(AgentTheme.mutedText)
       if actions.isEmpty {
-        Text("Nothing yet.").font(.caption).foregroundStyle(.tertiary)
+        Text("Nothing yet.").font(.caption).foregroundStyle(AgentTheme.faint)
       } else {
         ScrollView {
           VStack(alignment: .leading, spacing: 3) {
             ForEach(actions.reversed()) { action in
               HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(verbatim: AgentFormat.timestamp(action.ts, now: now))
-                  .foregroundStyle(.tertiary)
+                  .foregroundStyle(AgentTheme.faint)
                   .monospacedDigit()
                 Text(verbatim: action.summary).lineLimit(1).truncationMode(.middle)
               }
@@ -136,7 +136,7 @@ private struct SurfaceBar: View {
       let live = SurfaceFeed.isLive(lastFrameAt: lastFrameAt, now: referenceDate ?? context.date)
       HStack(spacing: 8) {
         LiveBadge(isLive: live)
-        Image(systemName: systemImage).foregroundStyle(.secondary)
+        Image(systemName: systemImage).foregroundStyle(AgentTheme.mutedText)
         VStack(alignment: .leading, spacing: 1) {
           Text(verbatim: title)
             .font(monospacedTitle ? .system(size: 11.5, design: .monospaced) : .callout)
@@ -144,7 +144,7 @@ private struct SurfaceBar: View {
             .truncationMode(.middle)
             .textSelection(.enabled)
           if let subtitle, !subtitle.isEmpty {
-            Text(verbatim: subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            Text(verbatim: subtitle).font(.caption).foregroundStyle(AgentTheme.mutedText).lineLimit(1)
           }
         }
         Spacer(minLength: 0)
@@ -166,7 +166,7 @@ private struct LiveBadge: View {
       Circle().fill(isLive ? AgentTheme.danger : AgentTheme.faint).frame(width: 7, height: 7)
       Text(isLive ? "Live" : "Idle")
         .font(.caption2.weight(.semibold))
-        .foregroundStyle(isLive ? AgentTheme.danger : Color.secondary)
+        .foregroundStyle(isLive ? AgentTheme.danger : AgentTheme.mutedText)
     }
     .accessibilityElement(children: .combine)
   }

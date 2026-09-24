@@ -53,7 +53,7 @@ public struct AgentMenuBarContent: View {
         Text("Daily Do List").font(.headline)
         Text(verbatim: statusLine)
           .font(.caption)
-          .foregroundStyle(store.status?.problem == nil ? Color.secondary : AgentTheme.danger)
+          .foregroundStyle(store.status?.problem == nil ? AgentTheme.mutedText : AgentTheme.danger)
           .lineLimit(2)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -78,7 +78,7 @@ public struct AgentMenuBarContent: View {
     if pending.isEmpty {
       Label("No approvals waiting", systemImage: "checkmark.shield")
         .font(.callout)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(AgentTheme.mutedText)
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
     } else {
@@ -100,7 +100,7 @@ public struct AgentMenuBarContent: View {
         if pending.count > Self.maxApprovals {
           Text("+\(pending.count - Self.maxApprovals) more in the app")
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(AgentTheme.mutedText)
             .padding(.horizontal, 12)
             .padding(.top, 2)
         }
@@ -152,7 +152,7 @@ private struct MenuApprovalRow: View {
               .fixedSize(horizontal: false, vertical: true)
             Text(verbatim: [threadTitle, approval.risk.displayLabel].compactMap { $0 }.joined(separator: " · "))
               .font(.caption)
-              .foregroundStyle(.secondary)
+              .foregroundStyle(AgentTheme.mutedText)
               .lineLimit(1)
           }
           Spacer(minLength: 0)
@@ -186,10 +186,10 @@ private struct MenuRowButton: View {
   var body: some View {
     Button(action: action) {
       HStack(spacing: 8) {
-        Image(systemName: systemImage).frame(width: 18).foregroundStyle(.secondary)
+        Image(systemName: systemImage).frame(width: 18).foregroundStyle(AgentTheme.mutedText)
         Text(title)
         Spacer()
-        if let shortcut { Text(verbatim: shortcut).foregroundStyle(.tertiary) }
+        if let shortcut { Text(verbatim: shortcut).foregroundStyle(AgentTheme.faint) }
       }
       .padding(.horizontal, 8)
       .padding(.vertical, 5)

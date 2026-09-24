@@ -43,7 +43,7 @@ future iPhone app too.
 | `Sources/DailyDoListApp/System` | OS integration: launch at login (`SMAppService`), the global hotkey (Carbon), shortcut parsing, conflicts with macOS shortcuts. |
 | `Packages/DailyDoListModels` (iOS) | Swift mirror of the wire protocol (`packages/core/src/protocol.ts`), checked against the `@ddl/contract` fixtures. |
 | `Packages/DailyDoListClient` (iOS) | `DaemonClient`: `HTTPDaemonClient` (REST + WebSocket, reconnects and resyncs) and `InMemoryDaemonClient` (the demo and test fake). |
-| `Packages/DailyDoListDomain` (iOS) | Pure domain logic ported from `@ddl/core`: dates and daily notes, task parsing and tracking, wikilinks, paths, fuzzy matching. |
+| `Packages/DailyDoListDomain` (iOS) | Pure domain logic ported from `@ddl/core`: dates and daily notes, task parsing and tracking, line anchors, agent-line markers, three-way merges, wikilinks, paths, fuzzy matching. |
 | `Packages/DailyDoListEditor` | The TextKit markdown editor: live preview, clickable checkboxes, agent badges, and vim mode (it hosts `DailyDoListVim`). |
 | `Packages/DailyDoListVim` (iOS) | Vim mode: a port of the web editor's vim.js and its CodeMirror 6 adapter, checked against the web app's vim vectors; hosts implement `VimEditor` ([README](Packages/DailyDoListVim/README.md)). |
 | `Packages/DailyDoListAgent` | Agent state and UI: inbox, threads, approval cards, artifacts, notifications, menu bar, Dock badge. |
@@ -85,6 +85,23 @@ future iPhone app too.
 - **Agent badges** are loud only when they need you, and move gently (fade-ins, crossfades, the
   triaging pulse, checkmarks popping in) unless Reduce Motion is on. See the
   [editor README](Packages/DailyDoListEditor/README.md#behavior).
+- **Dark by default**, in the app's blue palette (the web app's `--ddl-*` tokens: `Theme`,
+  `AgentTheme`, `EditorColors`). Settings → Appearance switches to light or the system's.
+
+## The agent in your notes
+
+- **Lines the agent wrote** end with `%%agent:<thread>%%` (an Obsidian comment). The editor hides
+  the marker, draws the line in the agent color and ends it with a sparkle that opens the thread
+  (the marker shows faintly on the line you're editing and in source mode).
+- **Threads anchored to a line** that isn't a task (a question written as prose) put their badge on
+  that line and give it a soft accent band with a bar at its left edge.
+- **Citations**: in a thread, `[1](url)` links are small chips, and hovering a link shows a card
+  (the page's title, hostname and snippet from the thread's `sources`, never fetched) or, for a
+  `[[wikilink]]`, the note's first lines. In the editor, links show the same preview as a tooltip.
+- **Merging**: when the agent (or anyone) changes a note you have unsaved edits in, the two are
+  merged line by line (`TextMerge`); the editor only receives their lines, your caret and undo
+  stay, and the result is saved on top of their version. Changes to the same lines keep yours and
+  save theirs as a conflict copy, as before.
 
 ## Vim mode
 
@@ -172,7 +189,7 @@ restarts a managed daemon in place, and connected clients reconnect and resync.
   version from `apps/macos/VERSION` if present, else the root `package.json`, and build number from
   the git commit count (else a timestamp). It also sets macOS 14 minimum, local-networking ATS, and
   no sudden termination.
-- `Contents/Resources/AppIcon.icns`: `make-icon.swift` renders the icon (a purple squircle with a
+- `Contents/Resources/AppIcon.icns`: `make-icon.swift` renders the icon (a blue squircle with a
   white checkbox) at every size with CoreGraphics, then `iconutil` packs it. The result is cached
   in `build/.work` until the script changes.
 - `--with-daemon`: `pnpm --filter @ddl/daemon build`, then

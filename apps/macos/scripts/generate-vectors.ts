@@ -15,6 +15,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as core from "../../../packages/core/src/index.ts";
+import { buildAgentTextVectors, buildMergeVectors } from "./vectors/agent-text";
 import { PINNED_NOW_MS, pinClock, VECTOR_TIME_ZONE } from "./vectors/common";
 import { buildDailyNoteVectors, buildTemplateVectors } from "./vectors/daily-notes";
 import { buildDateFormatVectors, buildDateParseVectors } from "./vectors/dates";
@@ -43,6 +44,8 @@ const builders: Array<[string, () => unknown]> = [
   ["tasks.json", () => buildTaskVectors(core)],
   ["tracker.json", () => buildTrackerVectors(core)],
   ["anchors.json", () => buildAnchorVectors(core)],
+  ["agent-text.json", () => buildAgentTextVectors(core)],
+  ["merge.json", () => buildMergeVectors(core)],
 ];
 
 /** Collects up to `limit` JSON paths where `a` and `b` differ. */

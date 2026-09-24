@@ -1,8 +1,11 @@
 import SwiftUI
 
-/// Renders agent markdown natively (see `MarkdownRenderer`); links go through `LinkPolicy`.
+/// Renders agent markdown natively (see `MarkdownRenderer`). Text blocks are `RichTextBlock`s:
+/// links preview on hover (pages from the thread's sources, notes through the host) and go
+/// through `LinkPolicy`; numbered citations are chips.
 struct MarkdownView: View {
   let source: String
+  @Environment(\.agentNoteLinks) private var noteLinks
 
   var body: some View {
     let blocks = MarkdownCache.shared.blocks(for: source)
@@ -12,7 +15,7 @@ struct MarkdownView: View {
       }
     }
     .textSelection(.enabled)
-    .environment(\.openURL, LinkPolicy.openURLAction)
+    .environment(\.openURL, LinkPolicy.openURLAction(noteLinks: noteLinks))
   }
 }
 
@@ -22,25 +25,24 @@ private struct MarkdownBlockView: View {
   var body: some View {
     switch block {
     case .paragraph(_, let text):
-      Text(text).fixedSize(horizontal: false, vertical: true)
+      RichTextBlock(text: text)
     case .heading(_, let level, let text):
-      Text(text)
-        .font(level == 1 ? .title2.weight(.bold) : level == 2 ? .title3.weight(.semibold) : .headline)
+      RichTextBlock(text: text, style: .heading(level: level))
         .padding(.top, level <= 2 ? 4 : 2)
-        .fixedSize(horizontal: false, vertical: true)
     case .listItem(_, let marker, let depth, let text):
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         Text(verbatim: marker ?? "")
-          .foregroundStyle(.secondary)
+          .foregroundStyle(AgentTheme.mutedText)
           .monospacedDigit()
           .frame(minWidth: 14, alignment: .trailing)
-        Text(text).fixedSize(horizontal: false, vertical: true)
+        RichTextBlock(text: text)
+          .alignmentGuide(.firstTextBaseline) { _ in RichTextStyle.body.baseFont.ascender + 1 }
       }
       .padding(.leading, CGFloat(depth - 1) * 16)
     case .quote(_, let text):
       HStack(spacing: 8) {
         RoundedRectangle(cornerRadius: 1.5).fill(AgentTheme.accent.opacity(0.55)).frame(width: 3)
-        Text(text).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        RichTextBlock(text: text, style: .quote)
       }
       .fixedSize(horizontal: false, vertical: true)
     case .code(_, let language, let code):
@@ -63,7 +65,7 @@ struct CodeBlockView: View {
       if let language {
         Text(verbatim: language)
           .font(.caption2.weight(.medium))
-          .foregroundStyle(.secondary)
+          .foregroundStyle(AgentTheme.mutedText)
           .padding(.horizontal, 10)
           .padding(.top, 6)
       }
@@ -92,7 +94,7 @@ private struct MarkdownTableView: View {
         if !header.isEmpty {
           GridRow {
             ForEach(header.indices, id: \.self) { column in
-              Text(header[column]).font(.callout.weight(.semibold))
+              Text(Self.superscriptingCitations(header[column])).font(.callout.weight(.semibold))
             }
           }
           Divider()
@@ -100,7 +102,7 @@ private struct MarkdownTableView: View {
         ForEach(rows.indices, id: \.self) { row in
           GridRow {
             ForEach(rows[row].indices, id: \.self) { column in
-              Text(rows[row][column]).font(.callout)
+              Text(Self.superscriptingCitations(rows[row][column])).font(.callout)
             }
           }
         }
@@ -108,6 +110,17 @@ private struct MarkdownTableView: View {
       .padding(8)
     }
     .background(RoundedRectangle(cornerRadius: 6).strokeBorder(AgentTheme.border))
+  }
+
+  /// Table cells are SwiftUI `Text`: numbered citations become small raised numbers.
+  static func superscriptingCitations(_ text: AttributedString) -> AttributedString {
+    var styled = text
+    for run in text.runs where run.link != nil {
+      guard LinkPreview.isCitationLabel(String(text[run.range].characters)) else { continue }
+      styled[run.range].swiftUI.font = .system(size: 9.5, weight: .semibold)
+      styled[run.range].swiftUI.baselineOffset = AgentRichText.citationBaselineOffset
+    }
+    return styled
   }
 }
 

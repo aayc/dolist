@@ -147,6 +147,12 @@ final class EditorTheme {
     bulletDiameter = max(3, (size * 0.3).rounded())
   }
 
+  /// Width reserved for the sparkle that replaces an agent marker (and the blanks before it) in a
+  /// line set in `font`.
+  func agentSlotWidth(font: NSFont) -> CGFloat {
+    (font.pointSize * 1.25).rounded()
+  }
+
   /// Attributes for text typed where no styling applies yet (and the empty last line).
   var baseAttributes: [NSAttributedString.Key: Any] {
     attributes(for: StyleKey(block: .body, quoteDepth: 0))
@@ -322,6 +328,7 @@ final class EditorTheme {
     if key.inline.contains(.taskCancelled) { return EditorColors.tertiaryText }
     if !key.inline.isDisjoint(with: [.link, .wikilink, .tag]) { return EditorColors.accent }
     if key.inline.contains(.taskDone) || key.inline.contains(.listNumber) { return EditorColors.secondaryText }
+    if key.inline.contains(.agent) { return EditorColors.agentText }
     switch key.block {
     case .frontmatter: return EditorColors.secondaryText
     case .frontmatterDelimiter, .codeFence, .horizontalRule: return EditorColors.tertiaryText

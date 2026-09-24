@@ -1,8 +1,8 @@
 import AppKit
 
-/// What live preview reveals right now. Syntax markers are hidden except on the lines the selection
-/// touches ("revealed lines"); checkbox and bullet markers are replaced except while the selection
-/// touches the marker itself. Without focus nothing is revealed.
+/// What live preview reveals right now. Syntax markers (agent markers included) are hidden except
+/// on the lines the selection touches ("revealed lines"); checkbox and bullet markers are replaced
+/// except while the selection touches the marker itself. Without focus nothing is revealed.
 ///
 /// Glyph generation reads this state, so every change must invalidate the glyphs of the lines whose
 /// visibility changed; `update(selection:focused:…)` returns exactly those ranges.
@@ -21,7 +21,7 @@ final class LivePreviewState {
   /// Whether a marker of `kind` spanning `range` is currently hidden (or replaced).
   func isHidden(_ kind: MarkerKind, range: NSRange) -> Bool {
     guard isEnabled else { return false }
-    if kind.isReplacement {
+    if kind.revealsOnTouch {
       return !selection.contains { $0.touches(range) }
     }
     guard let revealed = revealedLines else { return true }
@@ -86,7 +86,7 @@ final class LivePreviewState {
   ) -> Bool {
     var changed = false
     storage.enumerateAttribute(.ddlMarker, in: range.clamped(to: storage.length)) { value, run, stop in
-      guard let raw = value as? Int, MarkerKind(rawValue: raw)?.isReplacement == true else { return }
+      guard let raw = value as? Int, MarkerKind(rawValue: raw)?.revealsOnTouch == true else { return }
       let touchedBefore = old.contains { $0.touches(run) }
       let touchedNow = new.contains { $0.touches(run) }
       if touchedBefore != touchedNow {

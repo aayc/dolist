@@ -52,10 +52,11 @@ struct ChatView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
+            .environment(\.citationSources, thread.sources ?? [])
             if thread.messages.isEmpty {
               Text("No messages yet. The agent posts updates here as it works.")
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AgentTheme.mutedText)
                 .padding(24)
             }
             Color.clear

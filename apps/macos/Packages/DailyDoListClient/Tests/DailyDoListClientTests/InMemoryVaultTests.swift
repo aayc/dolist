@@ -286,9 +286,29 @@ struct InMemoryVaultTests {
     #expect(!today.created && today.content.hasSuffix("\n- [ ] "))
     #expect(try await client.readNote("Templates/Daily.md").content == "- [ ] ")
     let records = try await client.taskRecords(notePath: today.path)
-    #expect(records.count == 2 && records.allSatisfy { $0.status == .done && $0.threadId != nil && $0.date == "2026-09-23" })
+    #expect(records.count == 3 && records.allSatisfy { $0.status == .done && $0.threadId != nil && $0.date == "2026-09-23" })
     let threads = try await client.threads(notePath: nil, taskId: nil)
-    #expect(threads.count == 5 && threads.allSatisfy { $0.status == .done })
+    #expect(threads.count == 6 && threads.allSatisfy { $0.status == .done })
+
+    // Today's note shows the agent at work: its lines under the tasks (citing pages its threads
+    // know), a task it wrote, and a prose question answered in a thread anchored to that line.
+    let lines = today.content.components(separatedBy: "\n")
+    let agentLines = lines.filter { $0.hasSuffix("%%") && $0.contains(" %%agent:thr_") }
+    #expect(agentLines.count == 3)
+    #expect(agentLines.contains { $0.hasPrefix("- [ ] Call Trattoria Sole to confirm the table %%agent:thr_") })
+    #expect(records.contains { $0.text == "Call Trattoria Sole to confirm the table" } == false, "the agent's task has no record yet")
+    let anchored = try #require(records.first { $0.anchor == .line })
+    #expect(anchored.taskId.hasPrefix("anc_") && anchored.text == "How tall is Ridge Tower downtown?")
+    #expect(lines[anchored.line] == anchored.text)
+    let question = try await client.thread(try #require(anchored.threadId)).thread
+    #expect(question.sources?.count == 2)
+    let answer = question.messages.compactMap { if case .text(let text) = $0 { text.text } else { nil } }.joined()
+    #expect(answer.contains("[1](https://city.example/landmarks/ridge-tower)") && answer.contains("[[Ideas]]"))
+    for record in records where record.anchor == nil {
+      let thread = try await client.thread(try #require(record.threadId)).thread
+      let cited = try #require(agentLines.first { $0.hasSuffix("%%agent:\(thread.id)%%") && $0.hasPrefix("  - ") })
+      #expect(thread.sources?.contains { cited.contains($0.url) } == true, "\(cited) cites a source of \(thread.id)")
+    }
     let decided = try await client.approvals(status: .approved)
     #expect(decided.count == 2)
     #expect(try await client.approvals(status: .pending).isEmpty)

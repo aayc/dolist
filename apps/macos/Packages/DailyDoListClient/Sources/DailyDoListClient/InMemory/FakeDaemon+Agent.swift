@@ -89,7 +89,8 @@ enum FakeTaskParser {
     guard afterStatus.first == "]" else { return nil }
     let tail = afterStatus.dropFirst()
     if let first = tail.first, first != " " && first != "\t" { return nil }
-    return ParsedTask(line: index, text: tail.trimmingCharacters(in: .whitespaces), isOpen: status == " ")
+    let text = FakeAgentText.strip(String(tail)).trimmingCharacters(in: .whitespaces)
+    return ParsedTask(line: index, text: text, isOpen: status == " ")
   }
 
   /// `isBlankTaskText`: fewer than two characters besides whitespace, `.`, `…` and `-`.
@@ -377,6 +378,7 @@ extension FakeDaemon {
         changed = true
       }
     }
+    if followAnchors(path, content: content) { changed = true }
     if changed { emitRecords(path) }
 
     guard !initial, settings.agent.enabled, watchedDate(of: path) != nil else { return }
@@ -570,6 +572,7 @@ extension FakeDaemon {
         ?? createThread(taskId: taskId, notePath: record.notePath, title: record.text)
       job.threadId = threadId
       jobs[jobId] = job
+      if !script.sources.isEmpty { threads[threadId]?.sources = script.sources }
       patchRecord(taskId) {
         $0.status = .working
         $0.summary = script.workingSummary
@@ -659,6 +662,9 @@ extension FakeDaemon {
         }
       }
       if let threadId = job.threadId { setThreadStatus(threadId, status, status == .done ? "Task complete" : nil) }
+      if status == .done, let taskId = job.taskId, let threadId = job.threadId, let line = job.script?.noteLine {
+        writeAgentLine(line, underTask: taskId, threadId: threadId)
+      }
       emitStatus()
       drainQueue()
       return false

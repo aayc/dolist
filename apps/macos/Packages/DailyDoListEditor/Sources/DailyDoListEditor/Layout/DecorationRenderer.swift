@@ -1,13 +1,16 @@
 import AppKit
 
-/// Draws what isn't glyphs: backgrounds, bars and rules (behind the text) and checkboxes and
-/// bullets (in the slots reserved by `GlyphLayoutDelegate`). Everything is derived from the text
-/// storage attributes and the current layout, so drawing only ever touches the visible glyphs.
+/// Draws what isn't glyphs: backgrounds, bars and rules (behind the text) and checkboxes, bullets
+/// and agent sparkles (in the slots reserved by `GlyphLayoutDelegate`). Everything is derived from
+/// the text storage attributes and the current layout, so drawing only ever touches the visible
+/// glyphs.
 @MainActor
 final class DecorationRenderer {
   var theme: EditorTheme
   /// Checkmarks popping in.
   weak var motion: EditorMotion?
+  /// Start of the agent marker whose sparkle is under the pointer (drawn stronger).
+  var hoveredSparkle: Int?
   private let livePreview: LivePreviewState
   private var symbolCache: [SymbolKey: NSImage] = [:]
 
@@ -116,7 +119,7 @@ final class DecorationRenderer {
     }
   }
 
-  // MARK: Checkboxes and bullets
+  // MARK: Checkboxes, bullets and sparkles
 
   func drawReplacements(in layoutManager: MarkdownLayoutManager, glyphRange: NSRange, origin: NSPoint) {
     guard livePreview.isEnabled, glyphRange.length > 0, let storage = layoutManager.textStorage else { return }
@@ -138,8 +141,18 @@ final class DecorationRenderer {
           check: self.motion?.checkPaint(statusOffset: statusOffset))
       } else if kind == .bullet {
         self.drawBullet(inSlot: rect, baseline: baseline, font: slot.font)
+      } else if kind == .agent {
+        let color = self.hoveredSparkle == full.location ? EditorColors.accentStrong : EditorColors.accent
+        self.drawSymbol("sparkle", color: color, in: self.sparkleRect(inSlot: rect, baseline: baseline, font: slot.font))
       }
     }
+  }
+
+  /// The sparkle inside an agent marker's slot: centered, on the middle of the x-height.
+  func sparkleRect(inSlot slot: NSRect, baseline: CGFloat, font: NSFont) -> NSRect {
+    let size = (font.pointSize * 0.8).rounded()
+    let centerY = baseline - font.xHeight / 2
+    return NSRect(x: (slot.midX - size / 2).rounded(), y: (centerY - size / 2).rounded(), width: size, height: size)
   }
 
   /// The reserved slot of a replaced marker, or nil while the marker shows as text.
@@ -182,7 +195,7 @@ final class DecorationRenderer {
     case UTF16Unit.greaterThan: ("arrow.right.square", EditorColors.accent)
     case UTF16Unit.lessThan: ("arrow.left.square", EditorColors.accent)
     case UTF16Unit.question: ("questionmark.square", EditorColors.accent)
-    case UTF16Unit.bang: ("exclamationmark.square", NSColor.systemOrange)
+    case UTF16Unit.bang: ("exclamationmark.square", EditorColors.warning)
     default: ("square.dashed", EditorColors.accent)
     }
   }
@@ -206,12 +219,20 @@ final class DecorationRenderer {
 
   private func drawCheckbox(status: UInt16, in rect: NSRect) {
     let (name, color) = Self.checkboxSymbol(for: status)
-    guard let image = symbol(name, pointSize: rect.height), let context = NSGraphicsContext.current?.cgContext else {
+    guard drawSymbol(name, color: color, in: rect) else {
       color.setStroke()
       let path = NSBezierPath(roundedRect: rect.insetBy(dx: 1.5, dy: 1.5), xRadius: 3, yRadius: 3)
       path.lineWidth = 1.5
       path.stroke()
       return
+    }
+  }
+
+  /// An SF Symbol fitted in `rect` and tinted with `color`; false when the symbol is unavailable.
+  @discardableResult
+  private func drawSymbol(_ name: String, color: NSColor, in rect: NSRect) -> Bool {
+    guard let image = symbol(name, pointSize: rect.height), let context = NSGraphicsContext.current?.cgContext else {
+      return false
     }
     let scale = min(rect.width / max(image.size.width, 1), rect.height / max(image.size.height, 1))
     let size = NSSize(width: image.size.width * scale, height: image.size.height * scale)
@@ -223,6 +244,7 @@ final class DecorationRenderer {
     fitted.insetBy(dx: -1, dy: -1).fill(using: .sourceAtop)
     context.endTransparencyLayer()
     context.restoreGState()
+    return true
   }
 
   private func symbol(_ name: String, pointSize: CGFloat) -> NSImage? {

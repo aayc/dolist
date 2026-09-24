@@ -42,7 +42,7 @@ struct MessageRow: View, Equatable {
     case .unknown(let kind, _, _):
       Label("Unsupported message (\(kind))", systemImage: "questionmark.square.dashed")
         .font(.caption)
-        .foregroundStyle(.tertiary)
+        .foregroundStyle(AgentTheme.faint)
     }
   }
 }
@@ -68,8 +68,8 @@ struct TextMessageView: View {
       HStack(spacing: 6) {
         Text(verbatim: AgentFormat.authorLabel(message.author))
           .font(.caption.weight(.semibold))
-          .foregroundStyle(.secondary)
-        Text(verbatim: time).font(.caption).foregroundStyle(.tertiary)
+          .foregroundStyle(AgentTheme.mutedText)
+        Text(verbatim: time).font(.caption).foregroundStyle(AgentTheme.faint)
       }
       if message.streaming == true {
         StreamingText(text: message.text)
@@ -88,12 +88,12 @@ struct TextMessageView: View {
           ProgressView().controlSize(.mini)
           Text("Sending…")
         } else {
-          Text(verbatim: time).foregroundStyle(.tertiary)
+          Text(verbatim: time).foregroundStyle(AgentTheme.faint)
         }
         Text("You").fontWeight(.semibold)
       }
       .font(.caption)
-      .foregroundStyle(.secondary)
+      .foregroundStyle(AgentTheme.mutedText)
       Text(verbatim: message.text)
         .textSelection(.enabled)
         .fixedSize(horizontal: false, vertical: true)
@@ -113,7 +113,7 @@ struct TextMessageView: View {
       Text(MarkdownRenderer.inline(message.text)).fixedSize(horizontal: false, vertical: true)
     }
     .font(.callout)
-    .foregroundStyle(.secondary)
+    .foregroundStyle(AgentTheme.mutedText)
     .frame(maxWidth: .infinity, alignment: .leading)
     .environment(\.openURL, LinkPolicy.openURLAction)
   }
@@ -149,7 +149,7 @@ struct StatusDivider: View {
         Image(systemName: message.status.systemImage).imageScale(.small)
         Text(verbatim: message.text ?? message.status.displayLabel).lineLimit(2)
         Text(verbatim: "· \(AgentFormat.timestamp(message.createdAt, now: now))")
-          .foregroundStyle(.tertiary)
+          .foregroundStyle(AgentTheme.faint)
       }
       .font(.caption)
       .foregroundStyle(message.status.tone.color)
@@ -184,12 +184,12 @@ struct ArtifactRow: View {
             .lineLimit(1)
           Text(verbatim: meta.map { "\($0.kindLabel) · \(AgentFormat.bytes($0.size))" } ?? "Loading…")
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(AgentTheme.mutedText)
         }
         Spacer(minLength: 4)
         Image(systemName: "chevron.right")
           .font(.caption.weight(.semibold))
-          .foregroundStyle(.tertiary)
+          .foregroundStyle(AgentTheme.faint)
       }
       .padding(8)
       .contentShape(Rectangle())

@@ -10,6 +10,10 @@ protocol EditorCoordinatorHost: AnyObject {
   func editorDidEdit(_ path: String)
   func editorRecords(for path: String) -> [TaskAgentRecord]
   func editorDidClickBadge(_ badge: EditorBadge)
+  /// The sparkle of a line the agent wrote was clicked.
+  func editorDidClickAgentThread(_ threadId: String)
+  /// The hover preview (tooltip text) of a link; nil for the editor's fallback.
+  func editorPreview(for link: EditorLinkPreview) -> String?
   func editorDidClickWikiLink(_ target: String, newTab: Bool)
   func editorDidMoveCursor(_ path: String, line: Int)
   func editorDidRequestSave(_ path: String)
@@ -89,6 +93,21 @@ final class EditorCoordinator {
     }
   }
 
+  /// Local edits merged with a newer server version: the active note gets only the lines that
+  /// differ (each block of changed lines is its own edit, so the caret, selection, badges and the
+  /// user's undo history stay); an inactive note drops its snapshot and reloads when shown.
+  func applyMerged(_ content: String, to path: String) {
+    guard path == activePath else {
+      snapshots[path] = nil
+      return
+    }
+    let changes = MergeEdits.changes(from: controller.text, to: content)
+    guard !changes.isEmpty else { return }
+    controller.applyRemoteChanges(changes)
+    recomputeBadges()
+    wordTimer.poke()
+  }
+
   func forget(_ path: String) {
     snapshots[path] = nil
   }
@@ -163,6 +182,14 @@ extension EditorCoordinator: MarkdownEditorDelegate {
 
   func editor(_ editor: MarkdownEditorController, didClickBadge badge: EditorBadge) {
     host?.editorDidClickBadge(badge)
+  }
+
+  func editor(_ editor: MarkdownEditorController, didClickAgentThread threadId: String) {
+    host?.editorDidClickAgentThread(threadId)
+  }
+
+  func editor(_ editor: MarkdownEditorController, previewFor link: EditorLinkPreview) -> String? {
+    host?.editorPreview(for: link)
   }
 
   func editor(_ editor: MarkdownEditorController, didClickWikiLink target: String, newWindow: Bool) {

@@ -42,6 +42,9 @@ protocol NotesStoreDelegate: AnyObject {
   func notesStore(_ store: NotesStore, liveContentOf path: String) -> String?
   /// A newer server version arrived and there were no local edits: show it.
   func notesStore(_ store: NotesStore, applyRemote content: String, to path: String)
+  /// Local edits and a newer server version merged cleanly into `content`: show it, moving only
+  /// the other side's changes into the editor (the caret, selection and undo history stay).
+  func notesStore(_ store: NotesStore, applyMerged content: String, to path: String)
   /// Local edits won a 409; the other version was saved as `copyPath`.
   func notesStore(_ store: NotesStore, didSaveConflictCopy copyPath: String, of path: String)
   /// The note was deleted elsewhere. `restored`: local edits were written back (note recreated).

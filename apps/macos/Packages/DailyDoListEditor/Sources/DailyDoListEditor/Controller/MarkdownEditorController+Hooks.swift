@@ -4,17 +4,21 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
   // MARK: Selection
 
   /// A caret landing strictly inside hidden syntax (vertical moves, clicks next to a checkbox) is
-  /// moved to the edge of the hidden run in the direction of travel.
+  /// moved to the edge of the hidden run in the direction of travel; one landing after a hidden
+  /// agent marker goes before it.
   func textView(_ textView: MarkdownTextView, adjust proposed: [NSRange], previous: [NSRange]) -> [NSRange] {
     guard !suppressSelectionAdjustment, livePreview.isEnabled, proposed.count == 1, let range = proposed.first,
       range.length == 0
     else { return proposed }
-    let caret = range.location
-    guard caret > 0, caret < storage.length, let marker = glyphDelegate.hiddenMarker(at: caret),
+    var caret = range.location
+    if caret > 0, caret < storage.length, let marker = glyphDelegate.hiddenMarker(at: caret),
       marker.range.location < caret
-    else { return proposed }
-    let forward = (previous.first?.location ?? 0) <= caret
-    return [NSRange(location: forward ? marker.range.end : marker.range.location, length: 0)]
+    {
+      let forward = (previous.first?.location ?? 0) <= caret
+      caret = forward ? marker.range.end : marker.range.location
+    }
+    caret = caretBeforeHiddenAgentMarker(caret)
+    return caret == range.location ? proposed : [NSRange(location: caret, length: 0)]
   }
 
   func textViewDidChangeSelection(_ textView: MarkdownTextView, stillSelecting: Bool) {
@@ -54,8 +58,13 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
   // MARK: Keys
 
   func textViewHandleNewline(_ textView: MarkdownTextView) -> Bool {
-    guard configuration.isEditable,
-      let edit = ListCommands.newline(in: storage.mutableString, selection: currentSelection, isLiteralLine: isLiteral)
+    guard configuration.isEditable else { return false }
+    if let caret = currentSelection.first, currentSelection.count == 1, caret.length == 0,
+      let end = newlinePosition(forCaret: caret.location)
+    {
+      setSelection([NSRange(location: end, length: 0)], adjust: false)
+    }
+    guard let edit = ListCommands.newline(in: storage.mutableString, selection: currentSelection, isLiteralLine: isLiteral)
     else { return false }
     return perform(edit, actionName: "Typing")
   }
@@ -96,8 +105,9 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
     return handleClick(at: point, modifiers: modifiers)
   }
 
-  /// Badge → `didClickBadge`; checkbox → toggle; link → follow (⌘-click always, plain click when its
-  /// syntax is hidden). Returns false to let the text view handle the click.
+  /// Badge → `didClickBadge`; checkbox → toggle; sparkle → `didClickAgentThread`; link → follow
+  /// (⌘-click always, plain click when its syntax is hidden). Returns false to let the text view
+  /// handle the click.
   @discardableResult
   func handleClick(at point: NSPoint, modifiers: NSEvent.ModifierFlags) -> Bool {
     if let layout = badgeLayout(at: point) {
@@ -108,6 +118,10 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
     }
     if let line = checkboxLine(at: point) {
       if configuration.isEditable { toggleTask(atLine: line) }
+      return true
+    }
+    if let threadId = agentSparkle(at: point)?.threadId {
+      delegate?.editor(self, didClickAgentThread: threadId)
       return true
     }
     let command = modifiers.contains(.command)
@@ -124,30 +138,51 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
       for rect in drawnBadgeRects { textView.setNeedsDisplay(rect.insetBy(dx: -2, dy: -2)) }
       hoveredBadgeID = layout?.badge.id
     }
-    guard let point else { return }
-    let clickable =
-      layout != nil || (configuration.isEditable && checkboxLine(at: point) != nil)
-      || (link(at: point).map { modifiers.contains(.command) || isRendered($0.range) } ?? false)
+    let sparkle = point.flatMap { agentSparkle(at: $0) }.flatMap { $0.threadId == nil ? nil : $0 }
+    if sparkle?.marker.location != decorations.hoveredSparkle {
+      for rect in drawnSparkleRects { textView.setNeedsDisplay(rect.insetBy(dx: -2, dy: -2)) }
+      decorations.hoveredSparkle = sparkle?.marker.location
+    }
+    guard let point else {
+      hoverLinkDidChange(nil)
+      return
+    }
+    let hoveredLink = link(at: point)
+    hoverLinkDidChange(hoveredLink)
+    var clickable = layout != nil || sparkle != nil
+    if !clickable, configuration.isEditable { clickable = checkboxLine(at: point) != nil }
+    if !clickable, let hoveredLink { clickable = modifiers.contains(.command) || isRendered(hoveredLink.range) }
     (clickable ? NSCursor.pointingHand : NSCursor.iBeam).set()
   }
 
   func textView(_ textView: MarkdownTextView, toolTipAt point: NSPoint) -> String? {
-    badgeLayout(at: point).map { BadgeRenderer.toolTip(for: $0.badge) }
+    if let layout = badgeLayout(at: point) { return BadgeRenderer.toolTip(for: layout.badge) }
+    if let sparkle = agentSparkle(at: point) { return sparkle.toolTip }
+    return linkToolTip(at: point)
   }
 
   // MARK: Drawing and geometry
 
-  /// Before each draw: redraw badges that moved, refresh their tooltip rects, and keep the pulse
-  /// of a triaging badge in view going.
+  /// Before each draw: redraw badges that moved, refresh the tooltip rects (badges, sparkles,
+  /// links), and keep the pulse of a triaging badge in view going.
   func textViewWillDraw(_ textView: MarkdownTextView) {
     let layouts = currentBadgeLayouts()
     motion.willDraw(pulseVisible: layouts.contains { self.motion.state.isPulsing($0.badge.id) })
     let rects = layouts.map(\.rect)
-    guard rects != drawnBadgeRects else { return }
-    for rect in drawnBadgeRects + rects { textView.setNeedsDisplay(rect.insetBy(dx: -2, dy: -2)) }
+    if rects != drawnBadgeRects {
+      for rect in drawnBadgeRects + rects { textView.setNeedsDisplay(rect.insetBy(dx: -2, dy: -2)) }
+      drawnBadgeRects = rects
+    }
+    drawnSparkleRects = agentSparkles().map(\.rect)
+    let toolTipRects = rects + drawnSparkleRects + visibleLinkRects()
+    guard toolTipRects != registeredToolTipRects else { return }
     textView.removeAllToolTips()
-    for rect in rects { textView.addToolTip(rect, owner: textView, userData: nil) }
-    drawnBadgeRects = rects
+    for rect in toolTipRects { textView.addToolTip(rect, owner: textView, userData: nil) }
+    registeredToolTipRects = toolTipRects
+  }
+
+  func textView(_ textView: MarkdownTextView, drawBackgroundIn rect: NSRect) {
+    drawAnchoredLines(in: rect)
   }
 
   func textView(_ textView: MarkdownTextView, drawOverlaysIn dirtyRect: NSRect) {

@@ -116,8 +116,11 @@ _ = try await client.decideApproval(approval.id, .init(decision: .deny, note: "N
 `init(seed:clock:agent:clientId:)`:
 
 - **`Seed`** — `.demo`: today's daily note from the `- [ ] ` template with two tasks the agent already
-  finished, previous days with a gap and done tasks (with finished threads and approvals),
-  `Templates/Daily.md`, `Projects/…`, `Ideas.md`, `Welcome.md` (synthetic content only). `.empty`, or
+  finished, the lines it wrote under them (each citing a page its thread lists in `sources`), a
+  task it wrote, and a question written as prose that it answered in a thread anchored to that line
+  (a record with `anchor: line`; the answer cites its sources and links `[[Ideas]]`); previous days
+  with a gap and done tasks (with finished threads and approvals), `Templates/Daily.md`,
+  `Projects/…`, `Ideas.md`, `Welcome.md` (synthetic content only). `.empty`, or
   `.files([path: content])`. Tasks already in a seed are never acted on.
 - **`SimulationClock`** — `.realTime(speed:)` (default; wall-clock pacing), `.immediate()` (scheduled
   work runs to completion before each call returns), `.manual()` (nothing runs until
@@ -141,7 +144,10 @@ new open, non-blank task (`- [ ] text`, identity kept across edits like the real
 for `agent.settleMs` (1.2 s; longer while `editor.activity` points at its line), then: record `idle` →
 `triaging` → `working`, a thread (`thread.upsert`), streamed text (`thread.message` streaming,
 `thread.delta` per word, final `thread.message`), tool calls `running` → `ok`, a markdown artifact,
-and `done` with a summary. Whole-word `buy|order|book|reserve|email|send|pay` tasks request an
+and `done` with a summary. Research answers cite the thread's `sources` (`[1](url)`), and a finished
+research task gets an agent line under it (`  - … %%agent:<thread>%%`, a `vault.changed` with origin
+`agent`), so clients merge it with unsaved edits. Task texts leave agent markers out, and line
+anchors follow their text. Whole-word `buy|order|book|reserve|email|send|pay` tasks request an
 approval (`approval.upsert`) and wait: approve → tool `ok` → `done`; deny → tool `blocked` → `done`
 with the note quoted. Tasks mentioning "browse" show a browser surface and send `surface.frame`s (a
 16×10 PNG) to subscribers. `maxConcurrentSubagents` queues extra tasks; `cancelThread`,

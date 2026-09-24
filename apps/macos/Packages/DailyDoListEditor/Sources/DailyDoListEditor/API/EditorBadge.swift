@@ -1,6 +1,6 @@
 import Foundation
 
-/// An agent badge drawn at the end of a task line.
+/// An agent badge drawn at the end of a task line (or of a line a thread is anchored to).
 ///
 /// Badges aren't part of the text: the editor anchors each one to the start of its line and keeps
 /// it there through subsequent edits (lines inserted or deleted above move it; deleting its line
@@ -16,13 +16,20 @@ public struct EditorBadge: Hashable, Sendable, Identifiable {
   public var label: String
   public var unread: Int
   public var threadId: String?
+  /// The thread is attached to this line rather than to a task on it: the line gets a soft accent
+  /// band with a bar at its left edge while the badge is drawn.
+  public var highlightsLine: Bool
 
-  public init(id: String, line: Int, status: String, label: String, unread: Int = 0, threadId: String? = nil) {
+  public init(
+    id: String, line: Int, status: String, label: String, unread: Int = 0, threadId: String? = nil,
+    highlightsLine: Bool = false
+  ) {
     self.id = id
     self.line = line
     self.status = status
     self.label = label
     self.unread = unread
     self.threadId = threadId
+    self.highlightsLine = highlightsLine
   }
 }

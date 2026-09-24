@@ -10,6 +10,7 @@ import Testing
 final class RecordingNotesDelegate: NotesStoreDelegate {
   var live: [String: String] = [:]
   var applied: [(path: String, content: String)] = []
+  var merged: [(path: String, content: String)] = []
   var conflictCopies: [(copy: String, original: String)] = []
   var deletions: [(path: String, restored: Bool)] = []
   var failures: [String] = []
@@ -18,6 +19,10 @@ final class RecordingNotesDelegate: NotesStoreDelegate {
   func notesStore(_ store: NotesStore, liveContentOf path: String) -> String? { live[path] }
   func notesStore(_ store: NotesStore, applyRemote content: String, to path: String) {
     applied.append((path, content))
+    live[path] = content
+  }
+  func notesStore(_ store: NotesStore, applyMerged content: String, to path: String) {
+    merged.append((path, content))
     live[path] = content
   }
   func notesStore(_ store: NotesStore, didSaveConflictCopy copyPath: String, of path: String) {
@@ -169,6 +174,70 @@ struct NotesStoreTests {
     try await eventually("resolved") { store.saveStates[path] == .saved }
     #expect(client.note(path)?.content == "mine")
     #expect(client.note("Notes/Plan (conflict).md")?.content == "theirs")
+  }
+
+  // MARK: Merging someone else's changes
+
+  private static let day = "# Thursday\n- [ ] Book a table\n- [ ] Renew passport\nNotes"
+  private static let agentLine = "  - Trattoria Sole has a table at 7 PM %%agent:thr_1%%"
+
+  private func loadDay() async throws -> String {
+    let day = "Daily/2026-09-24.md"
+    client.setNote(day, Self.day)
+    try await store.load(day)
+    delegate.live[day] = Self.day
+    return day
+  }
+
+  @Test func anAgentEditToOtherLinesMergesWithTheUsersTyping() async throws {
+    let day = try await loadDay()
+    delegate.live[day] = Self.day.replacingOccurrences(of: "Book a table", with: "Book a table for two")
+    store.markDirty(day)
+    let remote = Self.day.replacingOccurrences(of: "- [ ] Book a table\n", with: "- [ ] Book a table\n\(Self.agentLine)\n")
+    let version = client.setNote(day, remote)
+    client.resetLog()
+    await store.handleRemoteChange(day, version: version)
+
+    let merged = "# Thursday\n- [ ] Book a table for two\n\(Self.agentLine)\n- [ ] Renew passport\nNotes"
+    #expect(delegate.merged.map(\.content) == [merged])
+    #expect(store.serverContent(day) == remote)
+    try await eventually("saved") { store.saveStates[day] == .saved }
+    #expect(client.writes.map(\.content) == [merged])
+    #expect(client.writes.first?.base == .match(version), "saved on top of the agent's version")
+    #expect(client.note(day)?.content == merged)
+    #expect(delegate.conflictCopies.isEmpty)
+    #expect(delegate.applied.isEmpty)
+  }
+
+  @Test func aSaveThatMeetsAnAgentEditMergesInsteadOfCopying() async throws {
+    let day = try await loadDay()
+    let remote = Self.day.replacingOccurrences(of: "Notes", with: "Notes\n- [ ] Call to confirm %%agent:thr_1%%")
+    client.setNote(day, remote)
+    delegate.live[day] = Self.day.replacingOccurrences(of: "Renew passport", with: "Renew passport by June")
+    store.markDirty(day)
+    scheduler.advance(by: 0.3)
+    try await eventually("saved") { store.saveStates[day] == .saved }
+
+    let merged = "# Thursday\n- [ ] Book a table\n- [ ] Renew passport by June\nNotes\n- [ ] Call to confirm %%agent:thr_1%%"
+    #expect(client.note(day)?.content == merged)
+    #expect(delegate.merged.last?.content == merged)
+    #expect(delegate.conflictCopies.isEmpty)
+    #expect(store.isDirty(day) == false)
+  }
+
+  @Test func theSameChangeOnBothSidesNeedsNoSave() async throws {
+    let day = try await loadDay()
+    let both = Self.day.replacingOccurrences(of: "- [ ] Book", with: "- [x] Book")
+    delegate.live[day] = both
+    store.markDirty(day)
+    let version = client.setNote(day, both)
+    client.resetLog()
+    await store.handleRemoteChange(day, version: version)
+    #expect(store.saveStates[day] == .saved)
+    #expect(store.isDirty(day) == false)
+    #expect(delegate.merged.isEmpty, "the editor already shows it")
+    await settle()
+    #expect(client.writes.isEmpty)
   }
 
   @Test func remoteDeleteOfACleanNoteForgetsIt() {
