@@ -1,0 +1,39 @@
+{
+  "name": "daily-do-list",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Daily Do List — a local-first markdown notes app where an always-on AI orchestrator watches your daily to-do list and actually does the tasks.",
+  "type": "module",
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=24.4.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev --filter=@ddl/daemon --filter=@ddl/web",
+    "dev:mock": "DDL_AGENT_MODE=mock turbo run dev --filter=@ddl/daemon --filter=@ddl/web",
+    "build": "turbo run build",
+    "start": "pnpm --filter @ddl/daemon start",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "bench": "turbo run bench",
+    "bench:check": "node scripts/bench-check.mjs",
+    "size:check": "node scripts/bundle-size-check.mjs",
+    "e2e": "pnpm --filter @ddl/web e2e",
+    "e2e:perf": "pnpm --filter @ddl/web e2e:perf",
+    "eval": "pnpm --filter @ddl/evals eval",
+    "eval:mock": "pnpm --filter @ddl/evals eval:mock",
+    "check:secrets": "node scripts/check-secrets.mjs --all",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:secrets",
+    "prepare": "node scripts/install-git-hooks.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@types/node": "^24.0.0",
+    "turbo": "^2.11.3",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
+  }
+}

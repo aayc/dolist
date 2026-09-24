@@ -1,0 +1,6 @@
+#!/bin/sh
+# Versioned pre-commit hook (installed via `pnpm install` → scripts/install-git-hooks.mjs).
+# This repository is PUBLIC: never bypass with --no-verify for anything touching config or secrets.
+set -e
+node scripts/check-secrets.mjs --staged
+pnpm exec biome check --staged --no-errors-on-unmatched --files-ignore-unknown=true

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "stream",
+  "globalEnv": ["NODE_ENV", "CI"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "typecheck": {
+      "outputs": []
+    },
+    "test": {
+      "outputs": []
+    },
+    "bench": {
+      "cache": false,
+      "outputs": ["bench-results.json"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "passThroughEnv": ["DDL_*", "OPENROUTER_API_KEY"]
+    },
+    "e2e": {
+      "cache": false,
+      "dependsOn": ["^build"]
+    }
+  }
+}

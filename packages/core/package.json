@@ -1,0 +1,16 @@
+{
+  "name": "@ddl/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pure, dependency-free domain logic shared by every Daily Do List surface: vault paths, daily notes, markdown task parsing and identity tracking, agent/thread types, and the daemon wire protocol.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "bench": "vitest bench --run --reporter=default --reporter=json --outputFile.json=bench-results.json"
+  }
+}

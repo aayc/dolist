@@ -1,0 +1,20 @@
+{
+  "name": "@ddl/evals",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent evals: safety-evaluator verdicts, orchestrator triage decisions and latency. Mock mode runs deterministically in CI; live mode hits the real model.",
+  "type": "module",
+  "scripts": {
+    "eval": "tsx src/run.ts",
+    "eval:mock": "tsx src/run.ts --mock",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@ddl/agent": "workspace:*",
+    "@ddl/core": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15"
+  }
+}

@@ -1,0 +1,12 @@
+packages:
+  - apps/web
+  - apps/daemon
+  - packages/*
+  - evals
+
+autoInstallPeers: true
+strictPeerDependencies: false
+
+# Native/postinstall scripts we explicitly trust. Everything else is blocked by pnpm 10's default.
+onlyBuiltDependencies:
+  - esbuild

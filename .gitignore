@@ -1,0 +1,67 @@
+# ── Dependencies & build output ──────────────────────────────
+node_modules/
+dist/
+build/
+out/
+.turbo/
+*.tsbuildinfo
+coverage/
+
+# ── Test & benchmark artifacts ───────────────────────────────
+playwright-report/
+test-results/
+blob-report/
+bench-results.json
+perf-results.json
+eval-results/
+*.cpuprofile
+*.heapsnapshot
+
+# ── Secrets: never commit these (this is a PUBLIC repo) ──────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+credentials*.json
+service-account*.json
+secrets/
+.npmrc.local
+.netrc
+*.token
+
+# ── Local app data (vaults, agent state, browser profiles) ──
+.daily-do-list/
+vault/
+vaults/
+.vault/
+browser-profile/
+workspaces/
+*.sqlite
+*.sqlite-journal
+*.db
+
+# ── Shell / editor / OS noise ───────────────────────────────
+.bash_history
+.zsh_history
+*_history
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# ── Native app build output (future desktop/mobile shells) ──
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+apps/mobile/ios/build/

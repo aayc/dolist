@@ -1,0 +1,32 @@
+{
+  "name": "@ddl/daemon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local daemon: serves the UI, owns the vault (StorageProvider), and runs the always-on agent runtime. Binds to 127.0.0.1 only.",
+  "type": "module",
+  "bin": {
+    "daily-do-list": "./dist/main.js"
+  },
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/main.ts",
+    "build": "node build.mjs",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@ddl/agent": "workspace:*",
+    "@ddl/connectors": "workspace:*",
+    "@ddl/core": "workspace:*",
+    "@ddl/storage": "workspace:*",
+    "@hono/node-server": "^2.1.1",
+    "hono": "^4.13.8",
+    "ws": "^8.21.3",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15"
+  }
+}

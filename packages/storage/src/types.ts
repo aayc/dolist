@@ -1,0 +1,188 @@
+/**
+ * Storage Provider contract. A provider stores a flat namespace of vault-relative POSIX paths
+ * (see `@ddl/core` paths) mapped to UTF-8 text files. Folders are implicit (derived from paths),
+ * except that providers may report empty folders via `listFolders`.
+ *
+ * Every write returns an opaque `version` (content hash for local-fs, ETag for S3). Passing
+ * `ifMatch` makes the write conditional (optimistic concurrency); `ifMatch: null` means
+ * "create only if absent". Violations throw `ConflictError`.
+ */
+import type { Unsubscribe } from "@ddl/core";
+
+export type StorageProviderKind = "local" | "memory" | "s3";
+
+export interface FileEntry {
+  path: string;
+  size: number;
+  /** Epoch ms. */
+  mtime: number;
+  version: string;
+}
+
+export interface FileContent extends FileEntry {
+  content: string;
+}
+
+export interface WriteOptions {
+  /**
+   * Conditional write. A string requires the current version to equal it; `null` requires the file
+   * to not exist. Omit for an unconditional write.
+   */
+  ifMatch?: string | null;
+}
+
+export interface WriteResult {
+  path: string;
+  version: string;
+  mtime: number;
+  size: number;
+  /** True when the file did not exist before this write. */
+  created: boolean;
+}
+
+export type StorageEventKind = "created" | "modified" | "deleted";
+
+export interface StorageEvent {
+  kind: StorageEventKind;
+  path: string;
+  /** New version for created/modified. */
+  version?: string;
+  /**
+   * True when the change came from this provider instance's own write/delete/rename (so callers can
+   * tell user/agent writes made through the app apart from external edits, e.g. in Obsidian).
+   */
+  self: boolean;
+}
+
+export interface ListOptions {
+  /** Only paths under this folder (vault-relative, no trailing slash). */
+  prefix?: string;
+  /** Include hidden paths (dot-segments such as `.daily-do-list/`). Default false. */
+  includeHidden?: boolean;
+}
+
+export interface StorageCapabilities {
+  /** Emits change events for external modifications. */
+  watch: boolean;
+  /** Writes are atomic (readers never observe partial content). */
+  atomicWrites: boolean;
+  /** Supports empty folders. */
+  folders: boolean;
+}
+
+export interface StorageProvider {
+  readonly kind: StorageProviderKind;
+  /** Stable identifier for this provider instance (used e.g. to key sync state). */
+  readonly id: string;
+  /** Human-readable name (vault folder name, bucket/prefix, …). */
+  readonly displayName: string;
+  readonly capabilities: StorageCapabilities;
+
+  list(options?: ListOptions): Promise<FileEntry[]>;
+  listFolders(options?: ListOptions): Promise<string[]>;
+  stat(path: string): Promise<FileEntry | null>;
+  read(path: string): Promise<FileContent | null>;
+  write(path: string, content: string, options?: WriteOptions): Promise<WriteResult>;
+  delete(path: string, options?: WriteOptions): Promise<void>;
+  /** Renames a file. Fails with `ConflictError` if `to` exists. */
+  rename(from: string, to: string): Promise<WriteResult>;
+  createFolder(path: string): Promise<void>;
+  /** Subscribe to changes. Providers without `capabilities.watch` only emit `self` events. */
+  watch(listener: (event: StorageEvent) => void): Unsubscribe;
+  dispose(): Promise<void>;
+}
+
+export class StorageError extends Error {
+  readonly path: string | undefined;
+
+  constructor(message: string, path?: string) {
+    super(message);
+    this.name = "StorageError";
+    this.path = path;
+  }
+}
+
+export class ConflictError extends StorageError {
+  readonly currentVersion: string | null;
+
+  constructor(path: string, currentVersion: string | null) {
+    super(`Version conflict for "${path}"`, path);
+    this.name = "ConflictError";
+    this.currentVersion = currentVersion;
+  }
+}
+
+export class NotFoundError extends StorageError {
+  constructor(path: string) {
+    super(`Not found: "${path}"`, path);
+    this.name = "NotFoundError";
+  }
+}
+
+export class NotImplementedError extends StorageError {
+  constructor(feature: string) {
+    super(`Not implemented yet: ${feature}`);
+    this.name = "NotImplementedError";
+  }
+}
+
+// ── Provider configuration (discriminated by `kind`) ───────────────────────
+
+export interface LocalStorageConfig {
+  kind: "local";
+  /** Absolute path to the vault root folder. */
+  root: string;
+  /** Extra glob-free path prefixes to ignore when watching/listing (e.g. `.trash`). */
+  ignore?: string[];
+}
+
+export interface MemoryStorageConfig {
+  kind: "memory";
+  id?: string;
+  initialFiles?: Record<string, string>;
+}
+
+export interface S3StorageConfig {
+  kind: "s3";
+  bucket: string;
+  /** Key prefix acting as the vault root, e.g. `vaults/personal/`. */
+  prefix?: string;
+  region?: string;
+  /** Custom endpoint for S3-compatible stores (R2, MinIO, …). */
+  endpoint?: string;
+  /** Credentials come from the standard AWS provider chain unless a profile is given. */
+  profile?: string;
+  forcePathStyle?: boolean;
+}
+
+export type StorageConfig = LocalStorageConfig | MemoryStorageConfig | S3StorageConfig;
+
+// ── Sync ───────────────────────────────────────────────────────────────────
+
+export type SyncTargetConfig =
+  | { kind: "none" }
+  /** Mirror to another local folder (e.g. an iCloud Drive/Dropbox folder for cross-device sync). */
+  | { kind: "local"; root: string }
+  | ({ kind: "s3" } & Omit<S3StorageConfig, "kind">);
+
+export type SyncState = "idle" | "syncing" | "error" | "disabled";
+
+export interface SyncStatus {
+  state: SyncState;
+  target: SyncTargetConfig["kind"];
+  lastSyncedAt: number | null;
+  lastError?: string;
+  pendingChanges: number;
+  conflicts: string[];
+}
+
+export interface SyncReport {
+  pushed: string[];
+  pulled: string[];
+  deletedLocal: string[];
+  deletedRemote: string[];
+  merged: string[];
+  /** Conflict copies created, as `{ path, conflictPath }`. */
+  conflicts: Array<{ path: string; conflictPath: string }>;
+  durationMs: number;
+}

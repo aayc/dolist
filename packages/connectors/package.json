@@ -1,0 +1,19 @@
+{
+  "name": "@ddl/connectors",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCP connectors: connects to configured MCP servers (stdio / streamable HTTP / SSE) and exposes their tools as harness-agnostic ToolSpecs.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@ddl/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.30.1"
+  }
+}

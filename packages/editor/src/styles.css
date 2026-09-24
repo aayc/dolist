@@ -1,0 +1,4 @@
+/* Editor styles. Colors come from the app's theme CSS variables (see apps/web theme). */
+.cm-editor {
+  height: 100%;
+}
