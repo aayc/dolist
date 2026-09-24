@@ -23,6 +23,7 @@
     "typebox": "catalog:"
   },
   "devDependencies": {
+    "@ddl/contract": "workspace:*",
     "tsx": "^4.23.15"
   }
 }

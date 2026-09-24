@@ -1,0 +1,19 @@
+{
+  "name": "@ddl/contract",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Runtime schemas (zod) for every data contract: the daemon wire protocol (REST + WebSocket) and the persisted sidecar formats. Kept in lockstep with the TypeScript types in @ddl/core by type-level tests.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@ddl/core": "workspace:*",
+    "zod": "catalog:"
+  }
+}

@@ -15,6 +15,7 @@ const BUNDLED_PACKAGES = [
   "packages/agent",
   "packages/storage",
   "packages/connectors",
+  "packages/contract",
   "packages/core",
 ];
 

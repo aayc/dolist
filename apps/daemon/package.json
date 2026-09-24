@@ -17,6 +17,7 @@
   "dependencies": {
     "@ddl/agent": "workspace:*",
     "@ddl/connectors": "workspace:*",
+    "@ddl/contract": "workspace:*",
     "@ddl/core": "workspace:*",
     "@ddl/storage": "workspace:*",
     "@earendil-works/pi-agent-core": "catalog:",
@@ -28,7 +29,7 @@
     "playwright-core": "catalog:",
     "typebox": "catalog:",
     "ws": "^8.21.3",
-    "zod": "^4.6.5"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/ws": "^8.18.1",

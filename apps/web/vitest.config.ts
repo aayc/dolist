@@ -15,5 +15,6 @@ export default defineConfig({
     include: ["src/**/*.test.{ts,tsx}"],
     environment: "node",
     restoreMocks: true,
+    setupFiles: ["../../scripts/vitest/setup-fast-check.ts"],
   },
 });
