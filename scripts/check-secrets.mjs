@@ -28,6 +28,7 @@ const FORBIDDEN_FILES = [
   },
   { re: /(^|\/)(credentials|service-account)[^/]*\.json$/i, why: "cloud credentials" },
   { re: /(^|\/)\.daily-do-list\//, why: "local agent state (threads, approvals, workspaces)" },
+  { re: /(^|\/)daemon-token$/, why: "local daemon bearer token" },
   { re: /(^|\/)(auth|secrets?)\.json$/i, why: "auth/secrets file" },
 ];
 
@@ -43,6 +44,7 @@ const PATTERNS = [
   { id: "aws-access-key-id", re: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/ },
   { id: "aws-secret-key", re: /aws_secret_access_key\s*[:=]\s*["']?[A-Za-z0-9/+=]{40}/i },
   { id: "github-token", re: /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{60,})\b/ },
+  { id: "npm-token", re: /\bnpm_[A-Za-z0-9]{36}\b/ },
   { id: "slack-token", re: /\bxox[abposr]-[A-Za-z0-9-]{10,}/ },
   { id: "google-api-key", re: /\bAIza[0-9A-Za-z_-]{35}\b/ },
   { id: "stripe-key", re: /\b(?:sk|rk)_live_[A-Za-z0-9]{20,}\b/ },

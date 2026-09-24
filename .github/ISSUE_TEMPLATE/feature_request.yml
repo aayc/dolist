@@ -1,0 +1,56 @@
+name: Feature request
+description: Suggest an idea or improvement.
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! Please search existing issues first. This repository is public, so keep examples synthetic.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should happen? Include example daily-note tasks if the agent is involved.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Editor
+        - Daily notes
+        - Agent / orchestrator / subagents
+        - Safety evaluator / approvals
+        - Storage / sync
+        - Connectors (MCP)
+        - Daemon / API
+        - Performance
+        - Desktop / mobile apps
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety considerations
+      description: >-
+        Would agents gain a new capability (spend money, send messages, delete data, edit notes, access
+        new services)? Which actions should require approval?
+  - type: textarea
+    id: performance
+    attributes:
+      label: Performance considerations
+      description: Could this touch the keystroke path, startup or bundle size?

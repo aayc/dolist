@@ -1,0 +1,76 @@
+name: Evals (live)
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Run only this suite (e.g. safety, triage). Empty runs every suite.
+        type: string
+        required: false
+      filter:
+        description: Only run cases whose id contains this text.
+        type: string
+        required: false
+  schedule:
+    - cron: "43 6 * * 1" # Mondays 06:43 UTC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  TURBO_TELEMETRY_DISABLED: "1"
+
+jobs:
+  gate:
+    name: Check for OPENROUTER_API_KEY
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        env:
+          HAS_KEY: ${{ secrets.OPENROUTER_API_KEY != '' }}
+        run: |
+          if [ "$HAS_KEY" = "true" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Live evals skipped::The OPENROUTER_API_KEY repository secret is not set."
+            echo "Live evals skipped: the \`OPENROUTER_API_KEY\` repository secret is not set." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  live:
+    name: Live evals
+    needs: gate
+    if: needs.gate.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+
+      - name: Run live evals
+        # The key is scoped to this step only, so dependency install scripts never see it.
+        run: pnpm eval ${SUITE:+--suite "$SUITE"} ${FILTER:+--filter "$FILTER"}
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          SUITE: ${{ inputs.suite }}
+          FILTER: ${{ inputs.filter }}
+      - name: Summary
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/eval-summary.mjs
+      - name: Upload results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: eval-results-live
+          path: evals/eval-results/
+          if-no-files-found: warn
+          retention-days: 90

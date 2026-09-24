@@ -1,0 +1,176 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # Superseded PR runs are cancelled; every commit on main keeps its own run.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  TURBO_TELEMETRY_DISABLED: "1"
+
+jobs:
+  check:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+
+      - name: Lint (Biome)
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Unit tests
+        run: pnpm test
+      - name: Secret scan
+        run: node scripts/check-secrets.mjs --all
+      - name: Build
+        run: pnpm build
+      - name: Bundle size budget
+        run: node scripts/bundle-size-check.mjs
+
+  test-macos:
+    # The local filesystem watcher, macOS computer-use helpers and Chrome-based browser tests.
+    name: Unit tests (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+
+      - name: Unit tests
+        run: pnpm test
+
+  bench:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BENCH_BUDGET_MULTIPLIER: "2"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+
+      - name: Run benchmarks
+        # One package at a time so suites don't compete for the runner's CPUs. Loose env mode lets
+        # BENCH_BUDGET_MULTIPLIER through Turbo's strict env filtering, which drops variables that
+        # turbo.json doesn't declare for the task.
+        run: pnpm bench --concurrency=1 --env-mode=loose
+      - name: Check results
+        if: ${{ !cancelled() }}
+        run: node scripts/bench-check.mjs
+      - name: Upload results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bench-results
+          path: |
+            packages/*/bench-results.json
+            apps/*/bench-results.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  e2e:
+    name: E2E and perf (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+
+      - name: Resolve Playwright version
+        id: playwright
+        run: |
+          version="$(grep -m1 -E "^  '?@playwright/test@[0-9]" pnpm-lock.yaml | cut -d@ -f3 | tr -d "':")"
+          if [ -z "$version" ]; then
+            echo "::error::@playwright/test not found in pnpm-lock.yaml"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - name: Install Playwright browsers
+        id: browsers
+        # System dependencies aren't cached, so this also runs on a cache hit (downloads are skipped).
+        run: pnpm --filter @ddl/web exec playwright install --with-deps chromium
+
+      - name: Functional tests
+        run: pnpm e2e
+      # Each Playwright run replaces playwright-report/ and test-results/, so upload in between.
+      - name: Upload functional report
+        if: ${{ !cancelled() && steps.browsers.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-functional
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Perf tests
+        if: ${{ !cancelled() && steps.browsers.outcome == 'success' }}
+        run: pnpm e2e:perf
+        env:
+          PERF_BUDGET_MULTIPLIER: "2"
+      - name: Perf summary
+        if: ${{ !cancelled() && steps.browsers.outcome == 'success' }}
+        run: node .github/scripts/perf-summary.mjs
+        env:
+          PERF_BUDGET_MULTIPLIER: "2"
+      - name: Upload perf report
+        if: ${{ !cancelled() && steps.browsers.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-perf
+          path: |
+            apps/web/perf-results.json
+            apps/web/playwright-report/
+            apps/web/test-results/
+          if-no-files-found: warn
+          retention-days: 14
+
+  evals-mock:
+    name: Evals (mock)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+
+      - name: Run mock evals
+        run: pnpm eval:mock
+      - name: Summary
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/eval-summary.mjs
+      - name: Upload results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: eval-results-mock
+          path: evals/eval-results/
+          if-no-files-found: warn
+          retention-days: 30

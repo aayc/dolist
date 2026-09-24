@@ -1,0 +1,6 @@
+blank_issues_enabled: false
+contact_links:
+  # Replace OWNER/REPO with the repository's path once it is created on GitHub.
+  - name: Report a security vulnerability
+    url: https://github.com/OWNER/REPO/security/advisories/new
+    about: Report vulnerabilities privately through a GitHub security advisory, never in a public issue.

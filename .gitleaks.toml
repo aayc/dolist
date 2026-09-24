@@ -1,0 +1,15 @@
+# gitleaks configuration, used by .github/workflows/security.yml (full git history on every push,
+# pull request and weekly). Extends the upstream default ruleset.
+#
+# This repository is public: fix a finding by removing and rotating the secret, not by allowlisting
+# it. Verified false positives (e.g. a synthetic token in a test fixture) are handled per line:
+# append a `gitleaks:allow` comment (plus `secret-scan:ignore` for scripts/check-secrets.mjs), or
+# add the finding's fingerprint to `.gitleaksignore` for content that can't carry a comment.
+#
+# Avoid path allowlists here: gitleaks skips a file entirely when a global allowlist path matches
+# (even with `condition = "AND"`), so a "test files" path would stop scanning all tests.
+
+title = "Daily Do List"
+
+[extend]
+useDefault = true
