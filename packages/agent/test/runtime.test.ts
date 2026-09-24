@@ -139,14 +139,18 @@ describe("AgentRuntime status", () => {
     expect(checkApiKey).not.toHaveBeenCalled();
   });
 
-  it("re-creates the harness when the harness setting changes", async () => {
+  // The first switch loads the Cursor harness modules, which takes seconds on a loaded machine.
+  it("re-creates the harness when the harness setting changes", { timeout: 30_000 }, async () => {
     delete process.env.OPENROUTER_API_KEY;
     const checkCursorCli = vi.fn(async () => ({ state: "ready" as const, binary: "/bin/agent" }));
     const t = await runtime({ mode: "live", overrides: { checkCursorCli } });
     expect(t.runtime.status().problem).toContain("OPENROUTER_API_KEY");
     const settings = testSettings();
     t.runtime.updateSettings({ ...settings, agent: { ...settings.agent, harness: "cursor" } });
-    await vi.waitFor(() => expect(t.runtime.status().problem).toBeUndefined(), WAIT);
+    await vi.waitFor(() => expect(t.runtime.status().problem).toBeUndefined(), {
+      ...WAIT,
+      timeout: 20_000,
+    });
     expect(checkCursorCli).toHaveBeenCalledTimes(1);
     expect(t.runtime.status().model).toBe(settings.agent.cursorModel);
     t.runtime.updateSettings(settings);

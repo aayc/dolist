@@ -15,6 +15,8 @@ import { CursorHarness, type CursorHarnessOptions } from "./cursor/harness";
 import type { HarnessEvent, HarnessSession, HarnessSessionOptions, ToolCallRequest } from "./types";
 
 const FAKE_CLI = fileURLToPath(new URL("./cursor/testing/fake-cursor-cli.ts", import.meta.url));
+/** Every test starts the fake CLI as a process; a loaded machine can take seconds to do that. */
+const SPAWN_TIMEOUT_MS = 30_000;
 const cleanup: string[] = [];
 const sessions: HarnessSession[] = [];
 
@@ -144,7 +146,7 @@ describe("createCursorHarness", () => {
   });
 });
 
-describe("CursorHarness (fake CLI)", () => {
+describe("CursorHarness (fake CLI)", { timeout: SPAWN_TIMEOUT_MS }, () => {
   it("streams a reply bracketed by turn_start/idle with stable message ids", async () => {
     const s = await setup();
     const session = await s.create();

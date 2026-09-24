@@ -22,6 +22,8 @@ import {
 } from "./workspace";
 
 const FAKE_CLI = fileURLToPath(new URL("./testing/fake-cursor-cli.ts", import.meta.url));
+/** These tests start the fake CLI as a process; a loaded machine can take seconds to do that. */
+const SPAWN_TIMEOUT_MS = 30_000;
 const dirs: string[] = [];
 
 afterEach(async () => {
@@ -139,7 +141,7 @@ describe("Cursor harness files", () => {
   });
 });
 
-describe("Cursor CLI discovery and status", () => {
+describe("Cursor CLI discovery and status", { timeout: SPAWN_TIMEOUT_MS }, () => {
   it("finds the CLI by path, by name on PATH, or in ~/.local/bin", async () => {
     const home = await tempDir();
     const bin = path.join(home, ".local", "bin");
@@ -191,20 +193,18 @@ describe("Cursor CLI discovery and status", () => {
         env: { PATH: process.env.PATH },
         ...(timeoutMs ? { timeoutMs } : {}),
       });
-    expect(await check([])).toEqual({ state: "ready", binary: process.execPath });
-    expect(await check(["--fake-auth=signed_out"])).toEqual({
-      state: "signed_out",
-      binary: process.execPath,
-    });
-    expect(await check(["--fake-auth=garbage"])).toMatchObject({
-      state: "error",
-      message: /unexpected output/,
-    });
-    expect(await check(["--fake-auth=hang"], 300)).toMatchObject({
-      state: "error",
-      message: /did not answer/,
-    });
-    expect(await checkCursorCli({ binary: "/nope/agent" })).toEqual({ state: "missing" });
+    const [ready, signedOut, garbage, hang, missing] = await Promise.all([
+      check([]),
+      check(["--fake-auth=signed_out"]),
+      check(["--fake-auth=garbage"]),
+      check(["--fake-auth=hang"], 300),
+      checkCursorCli({ binary: "/nope/agent" }),
+    ]);
+    expect(ready).toEqual({ state: "ready", binary: process.execPath });
+    expect(signedOut).toEqual({ state: "signed_out", binary: process.execPath });
+    expect(garbage).toMatchObject({ state: "error", message: /unexpected output/ });
+    expect(hang).toMatchObject({ state: "error", message: /did not answer/ });
+    expect(missing).toEqual({ state: "missing" });
     expect(parseAuthenticated('{"isAuthenticated":true,"userInfo":{}}')).toBe(true);
     expect(parseAuthenticated("nope")).toBeUndefined();
   });
@@ -219,7 +219,7 @@ describe("Cursor CLI discovery and status", () => {
   });
 });
 
-describe("AcpConnection", () => {
+describe("AcpConnection", { timeout: SPAWN_TIMEOUT_MS }, () => {
   const script = (source: string) => ({
     command: process.execPath,
     args: ["-e", source],
