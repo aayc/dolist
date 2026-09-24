@@ -109,6 +109,7 @@ Scope commands to the package you are working in while iterating. Before you fin
 Key flows are documented in `docs/ARCHITECTURE.md` and `docs/AGENT_SYSTEM.md`.
 
 Docs index: `README.md` (product + quick start), `docs/ARCHITECTURE.md`, `docs/AGENT_SYSTEM.md`,
+`docs/USER_JOURNEYS.md` (the living-list journeys and their tests),
 `docs/PERFORMANCE.md`, `docs/CROSS_PLATFORM.md`, `docs/CI.md`, `SECURITY.md`, `CONTRIBUTING.md`,
 and package READMEs (`packages/storage`, `packages/connectors`, `packages/editor`,
 `packages/agent/src/safety`, `packages/agent/src/execution`, `apps/daemon`, `apps/macos`).
