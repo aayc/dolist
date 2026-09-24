@@ -34,7 +34,9 @@ struct EmptyNoteView: View {
     .background(Theme.background)
   }
 
-  private func action(_ title: String, shortcut: String, _ run: @escaping @MainActor () async -> Void) -> some View {
+  private func action(
+    _ title: String, shortcut: String, _ run: @escaping @MainActor () async -> Void
+  ) -> some View {
     Button {
       Task { await run() }
     } label: {

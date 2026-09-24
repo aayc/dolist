@@ -29,7 +29,9 @@ public struct BrowserSurfaceView: View {
 
   static func markers(for frame: SurfaceFrame) -> [SurfaceMarker] {
     guard let action = frame.action, let x = action.x, let y = action.y else { return [] }
-    return [SurfaceMarker(id: "\(frame.ts)", x: x, y: y, label: action.text ?? action.kind, opacity: 1)]
+    return [
+      SurfaceMarker(id: "\(frame.ts)", x: x, y: y, label: action.text ?? action.kind, opacity: 1)
+    ]
   }
 }
 
@@ -51,7 +53,9 @@ public struct ComputerSurfaceView: View {
     let frame = store.latestFrame(threadId: threadId, surface: .computer)
     let actions = store.recentActions(threadId: threadId, surface: .computer)
     VStack(spacing: 0) {
-      SurfaceBar(systemImage: "desktopcomputer", title: "Computer use", subtitle: nil, lastFrameAt: frame?.ts)
+      SurfaceBar(
+        systemImage: "desktopcomputer", title: "Computer use", subtitle: nil, lastFrameAt: frame?.ts
+      )
       SurfaceStage(
         image: frame.flatMap { store.image(for: $0) }, frame: frame,
         markers: Self.markers(for: actions),
@@ -113,13 +117,16 @@ struct SurfaceMarker: Identifiable, Hashable {
 
 enum SurfaceGeometry {
   /// Maps a point in frame pixels into a view showing the whole frame at `viewSize`.
-  static func point(x: Double, y: Double, frameWidth: Int, frameHeight: Int, viewSize: CGSize) -> CGPoint {
+  static func point(x: Double, y: Double, frameWidth: Int, frameHeight: Int, viewSize: CGSize)
+    -> CGPoint
+  {
     func fraction(_ value: Double, of size: Int) -> Double {
       let ratio = value / Double(max(size, 1))
       return ratio.isFinite ? min(max(ratio, 0), 1) : 0
     }
     return CGPoint(
-      x: fraction(x, of: frameWidth) * viewSize.width, y: fraction(y, of: frameHeight) * viewSize.height)
+      x: fraction(x, of: frameWidth) * viewSize.width,
+      y: fraction(y, of: frameHeight) * viewSize.height)
   }
 }
 
@@ -144,7 +151,8 @@ private struct SurfaceBar: View {
             .truncationMode(.middle)
             .textSelection(.enabled)
           if let subtitle, !subtitle.isEmpty {
-            Text(verbatim: subtitle).font(.caption).foregroundStyle(AgentTheme.mutedText).lineLimit(1)
+            Text(verbatim: subtitle).font(.caption).foregroundStyle(AgentTheme.mutedText).lineLimit(
+              1)
           }
         }
         Spacer(minLength: 0)
@@ -184,7 +192,9 @@ private struct SurfaceStage: View {
         Image(nsImage: image)
           .resizable()
           .interpolation(.high)
-          .aspectRatio(CGSize(width: max(frame.width, 1), height: max(frame.height, 1)), contentMode: .fit)
+          .aspectRatio(
+            CGSize(width: max(frame.width, 1), height: max(frame.height, 1)), contentMode: .fit
+          )
           .overlay {
             GeometryReader { geometry in
               ForEach(markers) { marker in

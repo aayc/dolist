@@ -8,7 +8,8 @@ import Testing
 struct ControllerTests {
   @Test func setTextAppliesAMinimalDiffKeepingSelectionAndBadges() {
     let editor = EditorHarness("- [ ] A\n- [ ] B|\n- [ ] C")
-    editor.controller.setBadges([EditorBadge(id: "b", line: 1, status: "working", label: "Working")])
+    editor.controller.setBadges([EditorBadge(id: "b", line: 1, status: "working", label: "Working")]
+    )
     editor.controller.setText("- [ ] New\n- [ ] A\n- [ ] B\n- [ ] C")
     #expect(editor.marked == "- [ ] New\n- [ ] A\n- [ ] B|\n- [ ] C")
     #expect(editor.controller.badges.first?.line == 2)
@@ -23,7 +24,8 @@ struct ControllerTests {
     controller.moveCaretToEnd()
     controller.focus()
     let window = NSWindow(
-      contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+      contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled],
+      backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     defer { window.close() }
     window.contentView = controller.scrollView
@@ -81,9 +83,11 @@ struct ControllerTests {
     let editor = EditorHarness("a|\nb")
     editor.controller.setText("other", resetUndo: true)
     #expect(editor.delegate.cursorLines == [0])
-    editor.controller.restore(EditorSnapshot(text: "x\ny\nz", selectedRange: NSRange(location: 4, length: 0)))
+    editor.controller.restore(
+      EditorSnapshot(text: "x\ny\nz", selectedRange: NSRange(location: 4, length: 0)))
     #expect(editor.delegate.cursorLines == [0, 2])
-    editor.controller.restore(EditorSnapshot(text: "p\nq\nr", selectedRange: NSRange(location: 4, length: 0)))
+    editor.controller.restore(
+      EditorSnapshot(text: "p\nq\nr", selectedRange: NSRange(location: 4, length: 0)))
     #expect(editor.delegate.cursorLines == [0, 2, 2])
     editor.controller.setText("p\nq\nr!")
     #expect(editor.delegate.cursorLines == [0, 2, 2])
@@ -123,7 +127,8 @@ struct ControllerTests {
     editor.controller.restore(EditorSnapshot(text: "short"))
     #expect(editor.controller.scrollView.contentView.bounds.origin.y == 0)
     editor.controller.restore(snapshot)
-    #expect(abs(editor.controller.scrollView.contentView.bounds.origin.y - snapshot.scrollOffset.y) < 1)
+    #expect(
+      abs(editor.controller.scrollView.contentView.bounds.origin.y - snapshot.scrollOffset.y) < 1)
     #expect(editor.controller.caretLine == 200)
   }
 
@@ -145,7 +150,8 @@ struct ControllerTests {
     let editor = EditorHarness(text: "text", size: NSSize(width: 1400, height: 500))
     let container = editor.controller.textContainer
     #expect(container.size.width == TextGeometry.maxReadableWidth)
-    #expect(abs(editor.textView.textContainerInset.width - (editor.textView.bounds.width - 700) / 2) <= 1)
+    #expect(
+      abs(editor.textView.textContainerInset.width - (editor.textView.bounds.width - 700) / 2) <= 1)
     var configuration = editor.controller.configuration
     configuration.readableLineLength = false
     configuration.spellcheck = true
@@ -160,14 +166,18 @@ struct ControllerTests {
   }
 
   @Test func geometryCentersAReadableColumnAndReservesBadgeRoom() {
-    let wide = TextGeometry.compute(viewWidth: 1200, readable: true, horizontalPadding: 28, topPadding: 20, badgeReserve: 0)
+    let wide = TextGeometry.compute(
+      viewWidth: 1200, readable: true, horizontalPadding: 28, topPadding: 20, badgeReserve: 0)
     #expect(wide.columnWidth == 700)
     #expect(wide.inset.width == 250)
-    let narrow = TextGeometry.compute(viewWidth: 600, readable: true, horizontalPadding: 28, topPadding: 20, badgeReserve: 0)
+    let narrow = TextGeometry.compute(
+      viewWidth: 600, readable: true, horizontalPadding: 28, topPadding: 20, badgeReserve: 0)
     #expect(narrow.columnWidth == 544)
-    let reserved = TextGeometry.compute(viewWidth: 600, readable: true, horizontalPadding: 28, topPadding: 20, badgeReserve: 160)
+    let reserved = TextGeometry.compute(
+      viewWidth: 600, readable: true, horizontalPadding: 28, topPadding: 20, badgeReserve: 160)
     #expect(reserved.columnWidth == CGFloat(412))
-    let full = TextGeometry.compute(viewWidth: 1200, readable: false, horizontalPadding: 28, topPadding: 20, badgeReserve: 160)
+    let full = TextGeometry.compute(
+      viewWidth: 1200, readable: false, horizontalPadding: 28, topPadding: 20, badgeReserve: 160)
     #expect(full.columnWidth == CGFloat(1012))
   }
 }

@@ -21,11 +21,16 @@ public struct VimVectorReport: Sendable {
   public func summary(title: String) -> String {
     var lines = [title]
     for category in total.keys.sorted() {
-      let pass = passed[category] ?? 0, count = total[category] ?? 0
+      let pass = passed[category] ?? 0
+      let count = total[category] ?? 0
       let skipped = excluded[category].map { ", \($0) excluded" } ?? ""
-      lines.append("  \(category.padding(toLength: 12, withPad: " ", startingAt: 0)) \(pass)/\(count)\(skipped)")
+      lines.append(
+        "  \(category.padding(toLength: 12, withPad: " ", startingAt: 0)) \(pass)/\(count)\(skipped)"
+      )
     }
-    lines.append("  total        \(passedCount)/\(totalCount)" + (excludedCount == 0 ? "" : ", \(excludedCount) excluded"))
+    lines.append(
+      "  total        \(passedCount)/\(totalCount)"
+        + (excludedCount == 0 ? "" : ", \(excludedCount) excluded"))
     return lines.joined(separator: "\n")
   }
 
@@ -41,7 +46,8 @@ public struct VimVectorReport: Sendable {
       if !verbose && list.count > detailsPerCategory {
         let rest = list.dropFirst(detailsPerCategory)
         messages.append(
-          "\(category): \(rest.count) more failing cases: \(rest.prefix(40).map(\.vector.name).joined(separator: ", "))")
+          "\(category): \(rest.count) more failing cases: \(rest.prefix(40).map(\.vector.name).joined(separator: ", "))"
+        )
       }
     }
     return messages
@@ -49,7 +55,8 @@ public struct VimVectorReport: Sendable {
 
   /// A failure in the form tests print it: the case, its steps and the differences.
   public static func describe(_ failure: Failure) -> String {
-    let steps = failure.mismatch.history.enumerated().map { "    \($0.offset): \($0.element)" }.joined(separator: "\n")
+    let steps = failure.mismatch.history.enumerated().map { "    \($0.offset): \($0.element)" }
+      .joined(separator: "\n")
     return """
       \(failure.vector.name) (step \(failure.mismatch.step))
       \(steps)

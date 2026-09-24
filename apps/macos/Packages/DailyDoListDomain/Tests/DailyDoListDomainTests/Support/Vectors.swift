@@ -79,11 +79,13 @@ struct VectorCheck {
   }
 
   func verify(atLeast minimum: Int = 1, sourceLocation: SourceLocation = #_sourceLocation) {
-    #expect(total >= minimum, "\(name): only \(total) cases checked", sourceLocation: sourceLocation)
+    #expect(
+      total >= minimum, "\(name): only \(total) cases checked", sourceLocation: sourceLocation)
     if failures > 0 {
       Issue.record(
-        Comment(rawValue: "\(name): \(failures) of \(total) cases differ from the TypeScript core:\n"
-          + samples.joined(separator: "\n")),
+        Comment(
+          rawValue: "\(name): \(failures) of \(total) cases differ from the TypeScript core:\n"
+            + samples.joined(separator: "\n")),
         sourceLocation: sourceLocation)
     }
   }

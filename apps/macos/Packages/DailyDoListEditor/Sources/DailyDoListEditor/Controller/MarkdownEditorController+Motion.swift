@@ -12,14 +12,17 @@ extension MarkdownEditorController {
     for layout in currentBadgeLayouts() {
       let id = layout.badge.id
       if state.isTransitioning(id) {
-        rects.append(badgeRenderer.motionRect(of: layout, previous: state.crossfading[id]?.previous))
+        rects.append(
+          badgeRenderer.motionRect(of: layout, previous: state.crossfading[id]?.previous))
       } else if state.isPulsing(id) {
         rects.append(badgeRenderer.dotRect(in: layout.rect).insetBy(dx: -1, dy: -1))
       }
       if state.isPulsing(id) { pulseVisible = true }
     }
     for offset in state.checkOffsets {
-      if let rect = checkboxRect(statusOffset: offset) { rects.append(rect.insetBy(dx: -1, dy: -1)) }
+      if let rect = checkboxRect(statusOffset: offset) {
+        rects.append(rect.insetBy(dx: -1, dy: -1))
+      }
     }
     motion.invalidate(rects)
     guard motion.canAnimate else {
@@ -33,11 +36,16 @@ extension MarkdownEditorController {
   /// The drawn checkbox of the task whose status character is at `statusOffset` (text-view
   /// coordinates), or nil while it isn't drawn (live preview off, syntax revealed).
   func checkboxRect(statusOffset: Int) -> NSRect? {
-    guard livePreview.isEnabled, statusOffset >= 0, statusOffset < storage.length else { return nil }
+    guard livePreview.isEnabled, statusOffset >= 0, statusOffset < storage.length else {
+      return nil
+    }
     let index = highlighter.lineIndex
-    let line = index.contentRange(ofLine: index.line(containing: statusOffset), textLength: storage.length)
+    let line = index.contentRange(
+      ofLine: index.line(containing: statusOffset), textLength: storage.length)
     var marker = NSRange()
-    guard let raw = storage.attribute(.ddlMarker, at: statusOffset, longestEffectiveRange: &marker, in: line) as? Int,
+    guard
+      let raw = storage.attribute(
+        .ddlMarker, at: statusOffset, longestEffectiveRange: &marker, in: line) as? Int,
       MarkerKind(rawValue: raw) == .task, marker.end == statusOffset + 2,
       let slot = decorations.slot(forMarker: marker, kind: .task, in: layoutManager)
     else { return nil }

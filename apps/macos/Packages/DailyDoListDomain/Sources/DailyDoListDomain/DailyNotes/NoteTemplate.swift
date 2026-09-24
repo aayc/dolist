@@ -15,7 +15,8 @@ public enum NoteTemplate {
     public var timeFormat: String?
 
     public init(
-      title: String, date: LocalDate, now: Date? = nil, dateFormat: String? = nil, timeFormat: String? = nil
+      title: String, date: LocalDate, now: Date? = nil, dateFormat: String? = nil,
+      timeFormat: String? = nil
     ) {
       self.title = title
       self.date = date
@@ -28,7 +29,9 @@ public enum NoteTemplate {
   /// `renderTemplate`: replaces `{{title}}`, `{{date}}`, `{{time}}`, `{{date:FORMAT}}` and
   /// `{{time:FORMAT}}` (names in any case, blanks allowed inside the braces); anything else is left
   /// untouched and substituted text is never expanded again. Times are read in `timeZone`.
-  public static func render(_ template: String, context: Context, timeZone: TimeZone = .current) -> String {
+  public static func render(_ template: String, context: Context, timeZone: TimeZone = .current)
+    -> String
+  {
     let now = context.now ?? Date()
     let source = UTF16Buffer(template)
     return source.withPointer { p, n in
@@ -47,10 +50,12 @@ public enum NoteTemplate {
           out.append(context.title)
         case .date:
           out.append(
-            MomentFormat.format(context.date, format ?? context.dateFormat ?? "YYYY-MM-DD", timeZone: timeZone))
+            MomentFormat.format(
+              context.date, format ?? context.dateFormat ?? "YYYY-MM-DD", timeZone: timeZone))
         case .time:
           out.append(
-            MomentFormat.format(instant: now, format ?? context.timeFormat ?? "HH:mm", timeZone: timeZone))
+            MomentFormat.format(
+              instant: now, format ?? context.timeFormat ?? "HH:mm", timeZone: timeZone))
         }
         i = match.end
         copied = i

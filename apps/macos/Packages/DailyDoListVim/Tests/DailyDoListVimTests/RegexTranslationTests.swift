@@ -6,7 +6,9 @@ import Testing
 /// The JavaScript regex layer on top of ICU: syntax, matching semantics that differ between the
 /// engines, `source` escaping and V8's error messages.
 @Suite struct RegexTranslationTests {
-  private func matches(_ pattern: String, _ flags: String = "", _ subject: String, from: Int = 0) throws -> [String?]? {
+  private func matches(_ pattern: String, _ flags: String = "", _ subject: String, from: Int = 0)
+    throws -> [String?]?
+  {
     let regex = try JSRegExp(VimText(pattern), flags: flags)
     guard let m = regex.firstMatch(in: VimText(subject), from: from) else { return nil }
     return (0..<m.count).map { m[$0]?.string }
@@ -109,22 +111,34 @@ import Testing
     }
     #expect(message("(") == "SyntaxError: Invalid regular expression: /(/: Unterminated group")
     #expect(message("a**") == "SyntaxError: Invalid regular expression: /a**/: Nothing to repeat")
-    #expect(message("[b-a]") == "SyntaxError: Invalid regular expression: /[b-a]/: Range out of order in character class")
-    #expect(message("\\u{1", "u") == "SyntaxError: Invalid regular expression: /\\u{1/u: Invalid Unicode escape")
-    #expect(message("a{", "u") == "SyntaxError: Invalid regular expression: /a{/u: Incomplete quantifier")
+    #expect(
+      message("[b-a]")
+        == "SyntaxError: Invalid regular expression: /[b-a]/: Range out of order in character class"
+    )
+    #expect(
+      message("\\u{1", "u")
+        == "SyntaxError: Invalid regular expression: /\\u{1/u: Invalid Unicode escape")
+    #expect(
+      message("a{", "u") == "SyntaxError: Invalid regular expression: /a{/u: Incomplete quantifier")
     #expect(message("a{") == nil)
     #expect(message("x", "gg") == "SyntaxError: Invalid flags supplied to RegExp constructor 'gg'")
   }
 
   @Test func replaceFollowsGetSubstitution() throws {
-    func replace(_ subject: String, _ pattern: String, _ flags: String, _ replacement: String) throws -> String {
-      JSReplace.replace(VimText(subject), try JSRegExp(VimText(pattern), flags: flags), with: VimText(replacement)).string
+    func replace(_ subject: String, _ pattern: String, _ flags: String, _ replacement: String)
+      throws -> String
+    {
+      JSReplace.replace(
+        VimText(subject), try JSRegExp(VimText(pattern), flags: flags), with: VimText(replacement)
+      ).string
     }
     #expect(try replace("a1b2", "(\\d)", "g", "<$1>") == "a<1>b<2>")
     #expect(try replace("abc", "b", "", "[$&|$`|$']") == "a[b|a|c]c")
     #expect(try replace("abc", "b", "", "$$") == "a$c")
     #expect(try replace("abc", "(b)", "", "$2$0") == "a$2$0c")
-    #expect(try replace("abc", "(?<x>b)", "", "$<x>$<y>") == "abc".replacingOccurrences(of: "b", with: "b"))
+    #expect(
+      try replace("abc", "(?<x>b)", "", "$<x>$<y>")
+        == "abc".replacingOccurrences(of: "b", with: "b"))
     #expect(try replace("aaa", "a*?", "g", "-") == "-a-a-a-")
     #expect(try replace("😀", "", "gu", "-") == "-😀-")
     #expect(try replace("😀", "", "g", "-").utf16.count == 5)

@@ -20,10 +20,16 @@ final class TestWebSocketServer: @unchecked Sendable {
     let id: Int
     fileprivate let server: TestWebSocketServer
 
-    func send(_ text: String) { server.withConnection(id) { $0.sendFrame(opcode: 0x1, payload: Data(text.utf8)) } }
-    func sendBinary(_ data: Data) { server.withConnection(id) { $0.sendFrame(opcode: 0x2, payload: data) } }
+    func send(_ text: String) {
+      server.withConnection(id) { $0.sendFrame(opcode: 0x1, payload: Data(text.utf8)) }
+    }
+    func sendBinary(_ data: Data) {
+      server.withConnection(id) { $0.sendFrame(opcode: 0x2, payload: data) }
+    }
     /// Close handshake with `code`, then TCP close.
-    func close(code: UInt16, reason: String = "") { server.withConnection(id) { $0.close(code: code, reason: reason) } }
+    func close(code: UInt16, reason: String = "") {
+      server.withConnection(id) { $0.close(code: code, reason: reason) }
+    }
     /// Abrupt TCP close without a close frame.
     func drop() { server.withConnection(id) { $0.drop() } }
     var messages: [String] { server.state.withLock { $0.messages[id] ?? [] } }
@@ -91,7 +97,9 @@ final class TestWebSocketServer: @unchecked Sendable {
 
   /// Waits for the `n`-th (1-based) upgraded connection.
   func peer(_ n: Int, timeout: Duration = .seconds(5)) async throws -> Peer {
-    try await waitFor("connection #\(n)", timeout: timeout) { peers.count >= n ? peers[n - 1] : nil }
+    try await waitFor("connection #\(n)", timeout: timeout) {
+      peers.count >= n ? peers[n - 1] : nil
+    }
   }
 
   func stop() {
@@ -170,7 +178,8 @@ private final class Connection: @unchecked Sendable {
   }
 
   private func receive() {
-    nw.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { [weak self] data, _, isComplete, error in
+    nw.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) {
+      [weak self] data, _, isComplete, error in
       guard let self else { return }
       if let data, !data.isEmpty {
         buffer.append(data)
@@ -196,24 +205,33 @@ private final class Connection: @unchecked Sendable {
 
   private func handshake(_ head: String) {
     var lines = head.components(separatedBy: "\r\n")
-    let requestLine = lines.isEmpty ? [] : lines.removeFirst().split(separator: " ").map(String.init)
+    let requestLine =
+      lines.isEmpty ? [] : lines.removeFirst().split(separator: " ").map(String.init)
     var headers: [String: String] = [:]
     for line in lines {
       guard let colon = line.firstIndex(of: ":") else { continue }
-      headers[line[..<colon].lowercased()] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+      headers[line[..<colon].lowercased()] = line[line.index(after: colon)...].trimmingCharacters(
+        in: .whitespaces)
     }
     let upgrade = TestWebSocketServer.Upgrade(
-      method: requestLine.first ?? "", target: requestLine.count > 1 ? requestLine[1] : "", headers: headers)
+      method: requestLine.first ?? "", target: requestLine.count > 1 ? requestLine[1] : "",
+      headers: headers)
     guard let server else { return }
     let (rejectStatus, onUpgrade) = server.upgraded(id, upgrade)
     if let status = rejectStatus {
-      write("HTTP/1.1 \(status) Refused\r\nConnection: close\r\nContent-Length: 0\r\n\r\n") { [weak self] in self?.drop() }
+      write("HTTP/1.1 \(status) Refused\r\nConnection: close\r\nContent-Length: 0\r\n\r\n") {
+        [weak self] in self?.drop()
+      }
       return
     }
     let key = headers["sec-websocket-key"] ?? ""
-    let accept = Data(Insecure.SHA1.hash(data: Data((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").utf8)))
-      .base64EncodedString()
-    write("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: \(accept)\r\n\r\n")
+    let accept = Data(
+      Insecure.SHA1.hash(data: Data((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").utf8))
+    )
+    .base64EncodedString()
+    write(
+      "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: \(accept)\r\n\r\n"
+    )
     upgraded = true
     onUpgrade(TestWebSocketServer.Peer(id: id, server: server))
   }
@@ -261,7 +279,8 @@ private final class Connection: @unchecked Sendable {
         fragments.removeAll()
       }
     case 0x8:
-      let code = frame.payload.count >= 2 ? UInt16(frame.payload[0]) << 8 | UInt16(frame.payload[1]) : nil
+      let code =
+        frame.payload.count >= 2 ? UInt16(frame.payload[0]) << 8 | UInt16(frame.payload[1]) : nil
       server?.receivedClose(id, code: code)
       if closing {
         drop()
@@ -281,7 +300,8 @@ private final class Connection: @unchecked Sendable {
     var frame = Data([0x80 | opcode])
     switch payload.count {
     case ..<126: frame.append(UInt8(payload.count))
-    case ..<65_536: frame.append(contentsOf: [126, UInt8(payload.count >> 8), UInt8(payload.count & 0xFF)])
+    case ..<65_536:
+      frame.append(contentsOf: [126, UInt8(payload.count >> 8), UInt8(payload.count & 0xFF)])
     default:
       frame.append(127)
       frame.append(contentsOf: (0..<8).reversed().map { UInt8((payload.count >> ($0 * 8)) & 0xFF) })

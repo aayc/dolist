@@ -22,7 +22,9 @@ extension RealDaemonTests {
       let note = try await client.dailyNote("today", create: true)
       for _ in 0..<5 {
         let current = try await client.readNote(note.path)
-        let body = current.content.isEmpty || current.content.hasSuffix("\n") ? current.content : current.content + "\n"
+        let body =
+          current.content.isEmpty || current.content.hasSuffix("\n")
+          ? current.content : current.content + "\n"
         do {
           _ = try await client.writeNote(
             note.path, content: body + "- [ ] \(task)\n", baseVersion: .match(current.version))
@@ -35,8 +37,11 @@ extension RealDaemonTests {
     }
 
     /// Waits for the task's pending approval.
-    func pendingApproval(for record: TaskAgentRecord, in log: EventLog, from: Int) async throws -> ApprovalRequest {
-      try await log.event(from: from, "a pending approval for “\(record.text)”") { event -> ApprovalRequest? in
+    func pendingApproval(for record: TaskAgentRecord, in log: EventLog, from: Int) async throws
+      -> ApprovalRequest
+    {
+      try await log.event(from: from, "a pending approval for “\(record.text)”") {
+        event -> ApprovalRequest? in
         guard case .approvalUpsert(let approval) = event, approval.taskId == record.taskId,
           approval.status == .pending
         else { return nil }
@@ -64,27 +69,36 @@ extension RealDaemonTests {
 
       let record = try await log.record(from: mark, text: task)
       #expect(record.notePath == notePath)
-      let thread = try await log.event(from: mark, "thread.upsert for the task") { event -> ThreadSummary? in
+      let thread = try await log.event(from: mark, "thread.upsert for the task") {
+        event -> ThreadSummary? in
         if case .threadUpsert(let thread) = event, thread.taskId == record.taskId { return thread }
         return nil
       }
       #expect(thread.title == task)
       _ = try await log.event(from: mark, "thread.message") { event -> ThreadMessageEvent? in
-        if case .threadMessage(let message) = event, message.threadId == thread.id { return message }
+        if case .threadMessage(let message) = event, message.threadId == thread.id {
+          return message
+        }
         return nil
       }
-      _ = try await log.event(from: mark, "thread.delta (streamed text)") { event -> ThreadDeltaEvent? in
+      _ = try await log.event(from: mark, "thread.delta (streamed text)") {
+        event -> ThreadDeltaEvent? in
         if case .threadDelta(let delta) = event, delta.threadId == thread.id { return delta }
         return nil
       }
       let done = try await log.record(from: mark, text: task, status: .done)
       #expect(done.threadId == thread.id)
 
-      #expect(try await client.taskRecords(notePath: notePath).contains { $0.taskId == done.taskId && $0.status == .done })
-      #expect(try await client.threads(notePath: notePath, taskId: nil).contains { $0.id == thread.id })
+      #expect(
+        try await client.taskRecords(notePath: notePath).contains {
+          $0.taskId == done.taskId && $0.status == .done
+        })
+      #expect(
+        try await client.threads(notePath: notePath, taskId: nil).contains { $0.id == thread.id })
       let full = try await client.thread(thread.id)
       #expect(full.thread.status == .done)
-      let artifact = try #require(full.thread.artifacts.first, "the subagent hands back an artifact")
+      let artifact = try #require(
+        full.thread.artifacts.first, "the subagent hands back an artifact")
       let payload = try await client.artifact(threadId: thread.id, artifactId: artifact.id)
       #expect(payload.mimeType == "text/markdown")
       #expect(String(decoding: payload.data, as: UTF8.self).contains("# \(task)"))
@@ -106,7 +120,8 @@ extension RealDaemonTests {
       #expect(approval.summary.contains("Mock order"))
       #expect(try await client.approvals(status: .pending).contains { $0.id == approval.id })
 
-      let decided = try await client.decideApproval(approval.id, ApprovalDecisionRequest(decision: .approve, scope: .once))
+      let decided = try await client.decideApproval(
+        approval.id, ApprovalDecisionRequest(decision: .approve, scope: .once))
       #expect(decided.status == .approved)
       #expect(decided.scope == .once)
       let twice = await captureError {
@@ -132,17 +147,19 @@ extension RealDaemonTests {
       let record = try await log.record(from: mark, text: task)
       let approval = try await pendingApproval(for: record, in: log, from: mark)
       let denied = try await client.decideApproval(
-        approval.id, ApprovalDecisionRequest(decision: .deny, note: "Friday is fully booked for me"))
+        approval.id, ApprovalDecisionRequest(decision: .deny, note: "Friday is fully booked for me")
+      )
 
       #expect(denied.status == .denied)
       #expect(denied.decisionNote == "Friday is fully booked for me")
       let waiting = try await log.record(from: mark, text: task, status: .waitingUser)
       let threadId = try #require(waiting.threadId)
       let thread = try await client.thread(threadId)
-      #expect(thread.thread.messages.contains { message in
-        if case .toolCall(let call) = message { return call.status == .blocked }
-        return false
-      }, "the gate blocked the booking")
+      #expect(
+        thread.thread.messages.contains { message in
+          if case .toolCall(let call) = message { return call.status == .blocked }
+          return false
+        }, "the gate blocked the booking")
       #expect(thread.texts.contains { $0.contains("Friday is fully booked for me") })
 
       let retryMark = log.mark
@@ -151,7 +168,9 @@ extension RealDaemonTests {
       _ = try await log.record(from: retryMark, text: task, status: .working)
       _ = try await log.record(from: retryMark, text: task, status: .waitingUser)
       let after = try await client.thread(threadId)
-      #expect(after.texts.contains { $0.contains("denied it earlier") }, "the retry doesn't book behind the user's back")
+      #expect(
+        after.texts.contains { $0.contains("denied it earlier") },
+        "the retry doesn't book behind the user's back")
       await client.disconnect()
     }
 
@@ -171,8 +190,10 @@ extension RealDaemonTests {
 
       #expect(cancelled.ok)
       _ = try await log.record(from: cancelMark, text: task, status: .cancelled)
-      _ = try await log.event(from: cancelMark, "the approval is cancelled") { event -> ApprovalRequest? in
-        guard case .approvalUpsert(let update) = event, update.id == approval.id, update.status == .cancelled
+      _ = try await log.event(from: cancelMark, "the approval is cancelled") {
+        event -> ApprovalRequest? in
+        guard case .approvalUpsert(let update) = event, update.id == approval.id,
+          update.status == .cancelled
         else { return nil }
         return update
       }

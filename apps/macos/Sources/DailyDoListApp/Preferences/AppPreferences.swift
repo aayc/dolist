@@ -35,11 +35,17 @@ final class AppPreferences {
   @ObservationIgnored private let defaults: UserDefaults
   @ObservationIgnored private let environment: [String: String]
 
-  var daemonMode: DaemonMode { didSet { defaults.set(daemonMode.rawValue, forKey: Key.daemonMode) } }
+  var daemonMode: DaemonMode {
+    didSet { defaults.set(daemonMode.rawValue, forKey: Key.daemonMode) }
+  }
   /// Base URL of an external daemon.
-  var externalBaseURL: String { didSet { defaults.set(externalBaseURL, forKey: Key.externalBaseURL) } }
+  var externalBaseURL: String {
+    didSet { defaults.set(externalBaseURL, forKey: Key.externalBaseURL) }
+  }
   /// Port of the managed daemon; nil = `$DDL_PORT` / config.json / 7331.
-  var managedPortOverride: Int? { didSet { defaults.set(managedPortOverride, forKey: Key.managedPort) } }
+  var managedPortOverride: Int? {
+    didSet { defaults.set(managedPortOverride, forKey: Key.managedPort) }
+  }
   /// DDL_HOME override; nil = `$DDL_HOME` or `~/.daily-do-list`.
   var homeOverride: String? { didSet { defaults.set(homeOverride, forKey: Key.home) } }
   /// Vault folder override for the managed daemon; nil = `$DDL_VAULT` or the daemon's default.
@@ -47,27 +53,42 @@ final class AppPreferences {
   /// DDL_AGENT_MODE for the managed daemon; nil = `$DDL_AGENT_MODE` or the daemon default.
   var agentMode: AgentMode? { didSet { defaults.set(agentMode?.rawValue, forKey: Key.agentMode) } }
   var launchAtLogin: Bool { didSet { defaults.set(launchAtLogin, forKey: Key.launchAtLogin) } }
-  var globalHotkeyEnabled: Bool { didSet { defaults.set(globalHotkeyEnabled, forKey: Key.globalHotkeyEnabled) } }
+  var globalHotkeyEnabled: Bool {
+    didSet { defaults.set(globalHotkeyEnabled, forKey: Key.globalHotkeyEnabled) }
+  }
   /// Display form, e.g. `⌃⌥⌘D`; nil = the system integration's default.
   var globalHotkey: String? { didSet { defaults.set(globalHotkey, forKey: Key.globalHotkey) } }
 
   var lastOpenTabs: [String] { didSet { defaults.set(lastOpenTabs, forKey: Key.lastOpenTabs) } }
   var lastActiveTab: String? { didSet { defaults.set(lastActiveTab, forKey: Key.lastActiveTab) } }
   var sidebarVisible: Bool { didSet { defaults.set(sidebarVisible, forKey: Key.sidebarVisible) } }
-  var inspectorVisible: Bool { didSet { defaults.set(inspectorVisible, forKey: Key.inspectorVisible) } }
-  var sidebarWidth: CGFloat { didSet { defaults.set(Double(sidebarWidth), forKey: Key.sidebarWidth) } }
-  var inspectorWidth: CGFloat { didSet { defaults.set(Double(inspectorWidth), forKey: Key.inspectorWidth) } }
-  var sidebarMode: SidebarMode { didSet { defaults.set(sidebarMode.rawValue, forKey: Key.sidebarMode) } }
+  var inspectorVisible: Bool {
+    didSet { defaults.set(inspectorVisible, forKey: Key.inspectorVisible) }
+  }
+  var sidebarWidth: CGFloat {
+    didSet { defaults.set(Double(sidebarWidth), forKey: Key.sidebarWidth) }
+  }
+  var inspectorWidth: CGFloat {
+    didSet { defaults.set(Double(inspectorWidth), forKey: Key.inspectorWidth) }
+  }
+  var sidebarMode: SidebarMode {
+    didSet { defaults.set(sidebarMode.rawValue, forKey: Key.sidebarMode) }
+  }
   var expandedFolders: Set<String> {
     didSet { defaults.set(expandedFolders.sorted(), forKey: Key.expandedFolders) }
   }
 
-  init(defaults: UserDefaults = .standard, environment: [String: String] = ProcessInfo.processInfo.environment) {
+  init(
+    defaults: UserDefaults = .standard,
+    environment: [String: String] = ProcessInfo.processInfo.environment
+  ) {
     self.defaults = defaults
     self.environment = environment
-    daemonMode = defaults.string(forKey: Key.daemonMode).flatMap(DaemonMode.init(rawValue:)) ?? .managed
+    daemonMode =
+      defaults.string(forKey: Key.daemonMode).flatMap(DaemonMode.init(rawValue:)) ?? .managed
     externalBaseURL =
-      defaults.string(forKey: Key.externalBaseURL) ?? "http://127.0.0.1:\(DaemonLaunchConfiguration.defaultPort)"
+      defaults.string(forKey: Key.externalBaseURL)
+      ?? "http://127.0.0.1:\(DaemonLaunchConfiguration.defaultPort)"
     let port = defaults.integer(forKey: Key.managedPort)
     managedPortOverride = (1...65_535).contains(port) ? port : nil
     homeOverride = defaults.string(forKey: Key.home)
@@ -80,17 +101,22 @@ final class AppPreferences {
     lastActiveTab = defaults.string(forKey: Key.lastActiveTab)
     sidebarVisible = defaults.object(forKey: Key.sidebarVisible) as? Bool ?? true
     inspectorVisible = defaults.bool(forKey: Key.inspectorVisible)
-    sidebarWidth = (defaults.object(forKey: Key.sidebarWidth) as? Double).map { CGFloat($0) } ?? PaneLayout.sidebarDefault
+    sidebarWidth =
+      (defaults.object(forKey: Key.sidebarWidth) as? Double).map { CGFloat($0) }
+      ?? PaneLayout.sidebarDefault
     inspectorWidth =
-      (defaults.object(forKey: Key.inspectorWidth) as? Double).map { CGFloat($0) } ?? PaneLayout.inspectorDefault
-    sidebarMode = defaults.string(forKey: Key.sidebarMode).flatMap(SidebarMode.init(rawValue:)) ?? .files
+      (defaults.object(forKey: Key.inspectorWidth) as? Double).map { CGFloat($0) }
+      ?? PaneLayout.inspectorDefault
+    sidebarMode =
+      defaults.string(forKey: Key.sidebarMode).flatMap(SidebarMode.init(rawValue:)) ?? .files
     expandedFolders = Set(defaults.stringArray(forKey: Key.expandedFolders) ?? ["Daily"])
   }
 
   /// The supervisor configuration: the standard (terminal-equivalent) one plus overrides.
   var launchConfiguration: DaemonLaunchConfiguration {
     var configuration = DaemonLaunchConfiguration.standard(environment: environment)
-    if let homeOverride = homeOverride?.trimmingCharacters(in: .whitespaces), !homeOverride.isEmpty {
+    if let homeOverride = homeOverride?.trimmingCharacters(in: .whitespaces), !homeOverride.isEmpty
+    {
       configuration.home = URL(fileURLWithPath: expandTilde(homeOverride), isDirectory: true)
     }
     if let vaultPath = vaultPath?.trimmingCharacters(in: .whitespaces), !vaultPath.isEmpty {

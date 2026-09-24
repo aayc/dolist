@@ -5,7 +5,6 @@ import Testing
 
 @testable import DailyDoListVim
 
-
 /// A `testMotion` / `testJumplist` case: keys from `start`, then the cursor must be at `end`.
 struct UpstreamMotionCase: Sendable, CustomTestStringConvertible {
   let name: String
@@ -50,10 +49,13 @@ struct UpstreamMotionCase: Sendable, CustomTestStringConvertible {
     UpstreamMotionCase(name: "k_repeat", keys: ["2", "k"], end: [0, 4], start: [2, 4]),
     UpstreamMotionCase(name: "k_repeat_clip", keys: ["1000", "k"], end: [0, 4], start: [2, 4]),
     UpstreamMotionCase(name: "w", keys: ["w"], end: [0, 1], start: [0, 0]),
-    UpstreamMotionCase(name: "keepHPos", keys: ["5", "j", "j", "7", "k"], end: [8, 12], start: [12, 12]),
+    UpstreamMotionCase(
+      name: "keepHPos", keys: ["5", "j", "j", "7", "k"], end: [8, 12], start: [12, 12]),
     UpstreamMotionCase(name: "keepHPosEol", keys: ["$", "2", "j"], end: [2, 18], start: [0, 0]),
-    UpstreamMotionCase(name: "w_multiple_newlines_no_space", keys: ["w"], end: [12, 2], start: [11, 2]),
-    UpstreamMotionCase(name: "w_multiple_newlines_with_space", keys: ["w"], end: [14, 0], start: [12, 51]),
+    UpstreamMotionCase(
+      name: "w_multiple_newlines_no_space", keys: ["w"], end: [12, 2], start: [11, 2]),
+    UpstreamMotionCase(
+      name: "w_multiple_newlines_with_space", keys: ["w"], end: [14, 0], start: [12, 51]),
     UpstreamMotionCase(name: "w_repeat", keys: ["2", "w"], end: [0, 7], start: [0, 0]),
     UpstreamMotionCase(name: "w_wrap", keys: ["w"], end: [1, 1], start: [0, 7]),
     UpstreamMotionCase(name: "w_endOfDocument", keys: ["w"], end: [15, 0], start: [15, 0]),
@@ -74,7 +76,8 @@ struct UpstreamMotionCase: Sendable, CustomTestStringConvertible {
     UpstreamMotionCase(name: "ge_repeat", keys: ["2", "g", "e"], end: [0, 5], start: [1, 1]),
     UpstreamMotionCase(name: "ge_wrap", keys: ["g", "e"], end: [0, 9], start: [1, 1]),
     UpstreamMotionCase(name: "ge_startOfDocument", keys: ["g", "e"], end: [0, 0], start: [0, 0]),
-    UpstreamMotionCase(name: "ge_end_to_start", keys: ["1000", "g", "e"], end: [0, 0], start: [15, 0]),
+    UpstreamMotionCase(
+      name: "ge_end_to_start", keys: ["1000", "g", "e"], end: [0, 0], start: [15, 0]),
     UpstreamMotionCase(name: "gg", keys: ["g", "g"], end: [0, 1], start: [3, 1]),
     UpstreamMotionCase(name: "gg_repeat", keys: ["3", "g", "g"], end: [2, 0], start: [0, 0]),
     UpstreamMotionCase(name: "G", keys: ["G"], end: [15, 0], start: [3, 1]),
@@ -102,32 +105,53 @@ struct UpstreamMotionCase: Sendable, CustomTestStringConvertible {
     UpstreamMotionCase(name: "%_braces", keys: ["%"], end: [3, 11], start: [3, 9]),
     UpstreamMotionCase(name: "%_seek_outside", keys: ["%"], end: [4, 16], start: [4, 1]),
     UpstreamMotionCase(name: "%_seek_inside", keys: ["%"], end: [4, 11], start: [4, 14]),
-    UpstreamMotionCase(name: "di(_outside_should_stay", keys: ["d", "i", "("], end: [0, 0], start: [0, 0]),
+    UpstreamMotionCase(
+      name: "di(_outside_should_stay", keys: ["d", "i", "("], end: [0, 0], start: [0, 0]),
   ]
 
   nonisolated static let jumplist: [UpstreamMotionCase] = [
     UpstreamMotionCase(name: "jumplist_H", keys: ["H", "<C-o>"], end: [5, 2], start: [5, 2]),
     UpstreamMotionCase(name: "jumplist_M", keys: ["M", "<C-o>"], end: [2, 2], start: [2, 2]),
     UpstreamMotionCase(name: "jumplist_L", keys: ["L", "<C-o>"], end: [2, 2], start: [2, 2]),
-    UpstreamMotionCase(name: "jumplist_[[", keys: ["[", "[", "<C-o>"], end: [5, 2], start: [5, 2]),
-    UpstreamMotionCase(name: "jumplist_]]", keys: ["]", "]", "<C-o>"], end: [2, 2], start: [2, 2]),
+    UpstreamMotionCase(
+      name: "jumplist_[[", keys: ["[", "[", "<C-o>"], end: [5, 2], start: [5, 2]),
+    UpstreamMotionCase(
+      name: "jumplist_]]", keys: ["]", "]", "<C-o>"], end: [2, 2], start: [2, 2]),
     UpstreamMotionCase(name: "jumplist_G", keys: ["G", "<C-o>"], end: [5, 2], start: [5, 2]),
-    UpstreamMotionCase(name: "jumplist_gg", keys: ["g", "g", "<C-o>"], end: [5, 2], start: [5, 2]),
+    UpstreamMotionCase(
+      name: "jumplist_gg", keys: ["g", "g", "<C-o>"], end: [5, 2], start: [5, 2]),
     UpstreamMotionCase(name: "jumplist_%", keys: ["%", "<C-o>"], end: [1, 5], start: [1, 5]),
     UpstreamMotionCase(name: "jumplist_{", keys: ["{", "<C-o>"], end: [1, 5], start: [1, 5]),
     UpstreamMotionCase(name: "jumplist_}", keys: ["}", "<C-o>"], end: [1, 5], start: [1, 5]),
-    UpstreamMotionCase(name: "jumplist_'", keys: ["m", "a", "h", "'", "a", "h", "<C-i>"], end: [1, 0], start: [1, 5]),
-    UpstreamMotionCase(name: "jumplist_`", keys: ["m", "a", "h", "`", "a", "h", "<C-i>"], end: [1, 5], start: [1, 5]),
-    UpstreamMotionCase(name: "jumplist_*_cachedCursor", keys: ["*", "<C-o>"], end: [1, 3], start: [1, 3]),
-    UpstreamMotionCase(name: "jumplist_#_cachedCursor", keys: ["#", "<C-o>"], end: [1, 3], start: [1, 3]),
-    UpstreamMotionCase(name: "jumplist_n", keys: ["#", "n", "<C-o>"], end: [1, 1], start: [2, 3]),
-    UpstreamMotionCase(name: "jumplist_N", keys: ["#", "N", "<C-o>"], end: [1, 1], start: [2, 3]),
-    UpstreamMotionCase(name: "jumplist_repeat_<c-o>", keys: ["*", "*", "*", "3", "<C-o>"], end: [2, 3], start: [2, 3]),
-    UpstreamMotionCase(name: "jumplist_repeat_<c-i>", keys: ["*", "*", "*", "3", "<C-o>", "2", "<C-i>"], end: [5, 0], start: [2, 3]),
-    UpstreamMotionCase(name: "jumplist_repeated_motion", keys: ["3", "*", "<C-o>"], end: [2, 3], start: [2, 3]),
-    UpstreamMotionCase(name: "jumplist_/", keys: ["/", "dialog\n", "<C-o>"], end: [2, 3], start: [2, 3]),
-    UpstreamMotionCase(name: "jumplist_?", keys: ["?", "dialog\n", "<C-o>"], end: [2, 3], start: [2, 3]),
-    UpstreamMotionCase(name: "jumplist_skip_deleted_mark<c-o>", keys: ["*", "n", "n", "k", "d", "k", "<C-o>", "<C-o>", "<C-o>"], end: [0, 2], start: [0, 2]),
-    UpstreamMotionCase(name: "jumplist_skip_deleted_mark<c-i>", keys: ["*", "n", "n", "k", "d", "k", "<C-o>", "<C-i>", "<C-i>"], end: [1, 0], start: [0, 2]),
+    UpstreamMotionCase(
+      name: "jumplist_'", keys: ["m", "a", "h", "'", "a", "h", "<C-i>"], end: [1, 0], start: [1, 5]),
+    UpstreamMotionCase(
+      name: "jumplist_`", keys: ["m", "a", "h", "`", "a", "h", "<C-i>"], end: [1, 5], start: [1, 5]),
+    UpstreamMotionCase(
+      name: "jumplist_*_cachedCursor", keys: ["*", "<C-o>"], end: [1, 3], start: [1, 3]),
+    UpstreamMotionCase(
+      name: "jumplist_#_cachedCursor", keys: ["#", "<C-o>"], end: [1, 3], start: [1, 3]),
+    UpstreamMotionCase(
+      name: "jumplist_n", keys: ["#", "n", "<C-o>"], end: [1, 1], start: [2, 3]),
+    UpstreamMotionCase(
+      name: "jumplist_N", keys: ["#", "N", "<C-o>"], end: [1, 1], start: [2, 3]),
+    UpstreamMotionCase(
+      name: "jumplist_repeat_<c-o>", keys: ["*", "*", "*", "3", "<C-o>"], end: [2, 3],
+      start: [2, 3]),
+    UpstreamMotionCase(
+      name: "jumplist_repeat_<c-i>", keys: ["*", "*", "*", "3", "<C-o>", "2", "<C-i>"],
+      end: [5, 0], start: [2, 3]),
+    UpstreamMotionCase(
+      name: "jumplist_repeated_motion", keys: ["3", "*", "<C-o>"], end: [2, 3], start: [2, 3]),
+    UpstreamMotionCase(
+      name: "jumplist_/", keys: ["/", "dialog\n", "<C-o>"], end: [2, 3], start: [2, 3]),
+    UpstreamMotionCase(
+      name: "jumplist_?", keys: ["?", "dialog\n", "<C-o>"], end: [2, 3], start: [2, 3]),
+    UpstreamMotionCase(
+      name: "jumplist_skip_deleted_mark<c-o>",
+      keys: ["*", "n", "n", "k", "d", "k", "<C-o>", "<C-o>", "<C-o>"], end: [0, 2], start: [0, 2]),
+    UpstreamMotionCase(
+      name: "jumplist_skip_deleted_mark<c-i>",
+      keys: ["*", "n", "n", "k", "d", "k", "<C-o>", "<C-i>", "<C-i>"], end: [1, 0], start: [0, 2]),
   ]
 }

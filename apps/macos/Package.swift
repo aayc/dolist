@@ -7,7 +7,7 @@ let package = Package(
   name: "DailyDoListMac",
   platforms: [.macOS(.v14)],
   products: [
-    .executable(name: "DailyDoList", targets: ["DailyDoList"]),
+    .executable(name: "DailyDoList", targets: ["DailyDoList"])
   ],
   dependencies: [
     .package(path: "Packages/DailyDoListModels"),

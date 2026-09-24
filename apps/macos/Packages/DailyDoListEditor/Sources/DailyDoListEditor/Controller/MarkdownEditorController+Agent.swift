@@ -12,7 +12,9 @@ extension MarkdownEditorController {
     /// The sparkle's slot, in text-view coordinates.
     var rect: NSRect
 
-    var toolTip: String { threadId == nil ? "Written by the agent" : "Written by the agent — open thread" }
+    var toolTip: String {
+      threadId == nil ? "Written by the agent" : "Written by the agent — open thread"
+    }
   }
 
   // MARK: Agent lines
@@ -20,10 +22,12 @@ extension MarkdownEditorController {
   /// The agent marker ending the line that holds `offset`, when the agent wrote that line.
   func agentMarker(onLineContaining offset: Int) -> NSRange? {
     let index = highlighter.lineIndex
-    let content = index.contentRange(ofLine: index.line(containing: offset), textLength: storage.length)
+    let content = index.contentRange(
+      ofLine: index.line(containing: offset), textLength: storage.length)
     guard content.length > 0 else { return nil }
     var range = NSRange()
-    guard let raw = storage.attribute(.ddlMarker, at: content.end - 1, effectiveRange: &range) as? Int,
+    guard
+      let raw = storage.attribute(.ddlMarker, at: content.end - 1, effectiveRange: &range) as? Int,
       MarkerKind(rawValue: raw) == .agent
     else { return nil }
     return range
@@ -46,18 +50,22 @@ extension MarkdownEditorController {
       guard let raw = value as? Int, MarkerKind(rawValue: raw) == .agent else { return }
       var full = run
       _ = storage.attribute(.ddlMarker, at: run.location, effectiveRange: &full)
-      guard full.location == run.location, let slot = decorations.slot(forMarker: full, kind: .agent, in: layoutManager)
+      guard full.location == run.location,
+        let slot = decorations.slot(forMarker: full, kind: .agent, in: layoutManager)
       else { return }
       result.append(
         AgentSparkle(
-          marker: full, threadId: agentThreadId(ofMarker: full), rect: slot.rect.offsetBy(dx: origin.x, dy: origin.y)))
+          marker: full, threadId: agentThreadId(ofMarker: full),
+          rect: slot.rect.offsetBy(dx: origin.x, dy: origin.y)))
     }
     return result
   }
 
   /// The sparkle under `point`.
   func agentSparkle(at point: NSPoint) -> AgentSparkle? {
-    let strip = NSRect(x: markdownTextView.textContainerOrigin.x, y: point.y - 1, width: textContainer.size.width + 40, height: 2)
+    let strip = NSRect(
+      x: markdownTextView.textContainerOrigin.x, y: point.y - 1,
+      width: textContainer.size.width + 40, height: 2)
     return agentSparkles(in: strip).first { $0.rect.insetBy(dx: -2, dy: -2).contains(point) }
   }
 
@@ -74,7 +82,9 @@ extension MarkdownEditorController {
   /// A caret between an agent line's text and the end of its marker, where Enter must start the
   /// next line after the marker (the marker stays on the agent's line): the line end.
   func newlinePosition(forCaret caret: Int) -> Int? {
-    guard let marker = agentMarker(onLineContaining: caret), caret >= marker.location, caret < marker.end else {
+    guard let marker = agentMarker(onLineContaining: caret), caret >= marker.location,
+      caret < marker.end
+    else {
       return nil
     }
     return marker.end
@@ -90,15 +100,20 @@ extension MarkdownEditorController {
     let origin = markdownTextView.textContainerOrigin
     let visible = rect.offsetBy(dx: -origin.x, dy: -origin.y)
     let chars = layoutManager.characterRange(
-      forGlyphRange: layoutManager.glyphRange(forBoundingRect: visible, in: textContainer), actualGlyphRange: nil)
+      forGlyphRange: layoutManager.glyphRange(forBoundingRect: visible, in: textContainer),
+      actualGlyphRange: nil)
     let pad = (theme.fontSize * 0.5).rounded()
     var bands: [NSRect] = []
-    for item in items where item.lineEnd >= chars.location && item.anchor <= chars.end && item.anchor < storage.length {
-      let content = NSRange(item.anchor, max(item.anchor + 1, item.lineEnd)).clamped(to: storage.length)
+    for item in items
+    where item.lineEnd >= chars.location && item.anchor <= chars.end && item.anchor < storage.length
+    {
+      let content = NSRange(item.anchor, max(item.anchor + 1, item.lineEnd)).clamped(
+        to: storage.length)
       let glyphs = layoutManager.glyphRange(forCharacterRange: content, actualCharacterRange: nil)
       var band = NSRect.null
       layoutManager.enumerateLineFragments(forGlyphRange: glyphs) { fragment, used, _, _, _ in
-        band = band.union(NSRect(x: fragment.minX, y: used.minY, width: fragment.width, height: used.height))
+        band = band.union(
+          NSRect(x: fragment.minX, y: used.minY, width: fragment.width, height: used.height))
       }
       guard !band.isNull else { continue }
       bands.append(
@@ -111,7 +126,8 @@ extension MarkdownEditorController {
   /// Draws the anchored-line bands behind the text: a soft accent fill with a 2 pt accent bar at
   /// the left edge.
   func drawAnchoredLines(in dirtyRect: NSRect) {
-    for band in anchoredLineBands(in: markdownTextView.visibleRect) where band.intersects(dirtyRect) {
+    for band in anchoredLineBands(in: markdownTextView.visibleRect) where band.intersects(dirtyRect)
+    {
       NSGraphicsContext.saveGraphicsState()
       let shape = NSBezierPath(roundedRect: band, xRadius: 4, yRadius: 4)
       shape.addClip()
@@ -133,8 +149,10 @@ extension MarkdownEditorController {
       case .external(let url): .external(url)
       case .note(let note, let subpath): .note(target: note, subpath: subpath)
       }
-    let threadId = agentMarker(onLineContaining: link.range.location).flatMap(agentThreadId(ofMarker:))
-    return EditorLinkPreview(target: target, label: visibleText(of: link.range), agentThreadId: threadId)
+    let threadId = agentMarker(onLineContaining: link.range.location).flatMap(
+      agentThreadId(ofMarker:))
+    return EditorLinkPreview(
+      target: target, label: visibleText(of: link.range), agentThreadId: threadId)
   }
 
   /// The text of `range` without its markdown syntax (what live preview shows).
@@ -157,7 +175,9 @@ extension MarkdownEditorController {
   func hoverLinkDidChange(_ link: (target: LinkTarget, range: NSRange)?) {
     guard link?.range != hoveredLinkRange else { return }
     hoveredLinkRange = link?.range
-    if let link, let preview = linkPreview(for: link) { _ = delegate?.editor(self, previewFor: preview) }
+    if let link, let preview = linkPreview(for: link) {
+      _ = delegate?.editor(self, previewFor: preview)
+    }
   }
 
   /// The visible pieces of every link in the visible rect (text-view coordinates), for tooltips.
@@ -166,13 +186,15 @@ extension MarkdownEditorController {
     let origin = markdownTextView.textContainerOrigin
     let visible = markdownTextView.visibleRect.offsetBy(dx: -origin.x, dy: -origin.y)
     let chars = layoutManager.characterRange(
-      forGlyphRange: layoutManager.glyphRange(forBoundingRect: visible, in: textContainer), actualGlyphRange: nil)
+      forGlyphRange: layoutManager.glyphRange(forBoundingRect: visible, in: textContainer),
+      actualGlyphRange: nil)
     var rects: [NSRect] = []
     storage.enumerateAttribute(.ddlLink, in: chars.clamped(to: storage.length)) { value, run, _ in
       guard value != nil else { return }
       let glyphs = layoutManager.glyphRange(forCharacterRange: run, actualCharacterRange: nil)
       layoutManager.enumerateEnclosingRects(
-        forGlyphRange: glyphs, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0), in: textContainer
+        forGlyphRange: glyphs, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0),
+        in: textContainer
       ) { rect, _ in
         if rect.width > 0.5 { rects.append(rect.offsetBy(dx: origin.x, dy: origin.y)) }
       }

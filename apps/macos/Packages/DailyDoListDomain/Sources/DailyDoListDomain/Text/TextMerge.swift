@@ -38,22 +38,31 @@ public enum TextMerge {
   public static func diffLines(_ a: [String], _ b: [String]) -> [LineHunk] {
     var table = LineTable()
     let ids = (table.intern(a), table.intern(b))
-    return diff(ids.0, ids.1).map { LineHunk(start: $0.start, end: $0.end, lines: Array(b[$0.lines])) }
+    return diff(ids.0, ids.1).map {
+      LineHunk(start: $0.start, end: $0.end, lines: Array(b[$0.lines]))
+    }
   }
 
   /// `mergeText`.
   public static func merge(base: String, local: String, remote: String) -> MergeResult {
-    if local.jsEquals(remote) || remote.jsEquals(base) { return MergeResult(text: local, conflict: false) }
+    if local.jsEquals(remote) || remote.jsEquals(base) {
+      return MergeResult(text: local, conflict: false)
+    }
     if local.jsEquals(base) { return MergeResult(text: remote, conflict: false) }
     var table = LineTable()
     let baseLines = table.intern(lines(base))
     let localLines = table.intern(lines(local))
     let remoteLines = table.intern(lines(remote))
     // JavaScript's sort is stable: at equal bounds local hunks (listed first) come first.
-    let sides = (diff(baseLines, localLines).map { Side(hunk: $0, lines: localLines, isLocal: true) }
+    let sides =
+      (diff(baseLines, localLines).map { Side(hunk: $0, lines: localLines, isLocal: true) }
       + diff(baseLines, remoteLines).map { Side(hunk: $0, lines: remoteLines, isLocal: false) })
       .enumerated()
-      .sorted { ($0.element.hunk.start, $0.element.hunk.end, $0.offset) < ($1.element.hunk.start, $1.element.hunk.end, $1.offset) }
+      .sorted {
+        ($0.element.hunk.start, $0.element.hunk.end, $0.offset) < (
+          $1.element.hunk.start, $1.element.hunk.end, $1.offset
+        )
+      }
       .map(\.element)
 
     var out: [Int] = []
@@ -96,7 +105,8 @@ public enum TextMerge {
       position = end
     }
     out += slice(baseLines, position, baseLines.count)
-    return MergeResult(text: out.map { table.strings[$0] }.joined(separator: "\n"), conflict: conflict)
+    return MergeResult(
+      text: out.map { table.strings[$0] }.joined(separator: "\n"), conflict: conflict)
   }
 
   /// `text.split("\n")`: every line, empty ones included (a `\r` stays part of its line).
@@ -173,7 +183,9 @@ public enum TextMerge {
     var prefix = 0
     while prefix < a.count && prefix < b.count && a[prefix] == b[prefix] { prefix += 1 }
     var suffix = 0
-    while suffix < a.count - prefix && suffix < b.count - prefix && a[a.count - 1 - suffix] == b[b.count - 1 - suffix] {
+    while suffix < a.count - prefix && suffix < b.count - prefix
+      && a[a.count - 1 - suffix] == b[b.count - 1 - suffix]
+    {
       suffix += 1
     }
     let midA = Array(a[prefix..<(a.count - suffix)])
@@ -187,7 +199,8 @@ public enum TextMerge {
     var j = 0
     for (pi, pj) in pairs + [(midA.count, midB.count)] {
       if i < pi || j < pj {
-        hunks.append(IDHunk(start: prefix + i, end: prefix + pi, lines: (prefix + j)..<(prefix + pj)))
+        hunks.append(
+          IDHunk(start: prefix + i, end: prefix + pi, lines: (prefix + j)..<(prefix + pj)))
       }
       i = pi + 1
       j = pj + 1

@@ -5,7 +5,9 @@ import Testing
 
 private func zone(_ id: String) -> TimeZone { TimeZone(identifier: id)! }
 private func instant(_ iso: String) -> Date { ISO8601DateFormatter().date(from: iso)! }
-private func d(_ y: Int, _ m: Int, _ day: Int) -> LocalDate { LocalDate(year: y, month: m, day: day) }
+private func d(_ y: Int, _ m: Int, _ day: Int) -> LocalDate {
+  LocalDate(year: y, month: m, day: day)
+}
 
 extension DomainTests {
   /// Clock changes, skipped days and southern-hemisphere zones: calendar dates never drift.
@@ -13,15 +15,23 @@ extension DomainTests {
     @Test func losAngelesSpringForward() {
       let la = zone("America/Los_Angeles")
       // 2026-03-08 02:00 PST → 03:00 PDT.
-      #expect(MomentFormat.format(instant: instant("2026-03-08T09:59:59Z"), "YYYY-MM-DD HH:mm:ss", timeZone: la) == "2026-03-08 01:59:59")
-      #expect(MomentFormat.format(instant: instant("2026-03-08T10:00:00Z"), "YYYY-MM-DD HH:mm:ss", timeZone: la) == "2026-03-08 03:00:00")
+      #expect(
+        MomentFormat.format(
+          instant: instant("2026-03-08T09:59:59Z"), "YYYY-MM-DD HH:mm:ss", timeZone: la)
+          == "2026-03-08 01:59:59")
+      #expect(
+        MomentFormat.format(
+          instant: instant("2026-03-08T10:00:00Z"), "YYYY-MM-DD HH:mm:ss", timeZone: la)
+          == "2026-03-08 03:00:00")
       #expect(d(2026, 3, 8).startOfDay(in: la) == instant("2026-03-08T08:00:00Z"))
       #expect(d(2026, 3, 9).startOfDay(in: la) == instant("2026-03-09T07:00:00Z"))
       // Noon is always a safe instant for the day.
       var calendar = Calendar(identifier: .gregorian)
       calendar.timeZone = la
       #expect(d(2026, 3, 8).date(calendar: calendar) == instant("2026-03-08T19:00:00Z"))
-      #expect(LocalDate(date: d(2026, 3, 8).date(calendar: calendar), calendar: calendar) == d(2026, 3, 8))
+      #expect(
+        LocalDate(date: d(2026, 3, 8).date(calendar: calendar), calendar: calendar) == d(2026, 3, 8)
+      )
     }
 
     @Test func losAngelesFallBack() {
@@ -40,25 +50,44 @@ extension DomainTests {
     @Test func berlin() {
       let berlin = zone("Europe/Berlin")
       // 2026-03-29 02:00 CET → 03:00 CEST; 2026-10-25 03:00 CEST → 02:00 CET.
-      #expect(MomentFormat.format(instant: instant("2026-03-29T00:59:59Z"), "HH:mm", timeZone: berlin) == "01:59")
-      #expect(MomentFormat.format(instant: instant("2026-03-29T01:00:00Z"), "HH:mm", timeZone: berlin) == "03:00")
-      #expect(MomentFormat.format(instant: instant("2026-10-25T00:30:00Z"), "HH:mm", timeZone: berlin) == "02:30")
-      #expect(MomentFormat.format(instant: instant("2026-10-25T01:30:00Z"), "HH:mm", timeZone: berlin) == "02:30")
+      #expect(
+        MomentFormat.format(instant: instant("2026-03-29T00:59:59Z"), "HH:mm", timeZone: berlin)
+          == "01:59")
+      #expect(
+        MomentFormat.format(instant: instant("2026-03-29T01:00:00Z"), "HH:mm", timeZone: berlin)
+          == "03:00")
+      #expect(
+        MomentFormat.format(instant: instant("2026-10-25T00:30:00Z"), "HH:mm", timeZone: berlin)
+          == "02:30")
+      #expect(
+        MomentFormat.format(instant: instant("2026-10-25T01:30:00Z"), "HH:mm", timeZone: berlin)
+          == "02:30")
       #expect(d(2026, 3, 29).startOfDay(in: berlin) == instant("2026-03-28T23:00:00Z"))
       #expect(d(2026, 3, 30).startOfDay(in: berlin) == instant("2026-03-29T22:00:00Z"))
-      #expect(LocalDate.today(now: instant("2026-10-25T22:59:59Z"), timeZone: berlin) == d(2026, 10, 25))
-      #expect(LocalDate.today(now: instant("2026-10-25T23:00:00Z"), timeZone: berlin) == d(2026, 10, 26))
+      #expect(
+        LocalDate.today(now: instant("2026-10-25T22:59:59Z"), timeZone: berlin) == d(2026, 10, 25))
+      #expect(
+        LocalDate.today(now: instant("2026-10-25T23:00:00Z"), timeZone: berlin) == d(2026, 10, 26))
     }
 
     @Test func southernHemisphere() {
       let sydney = zone("Australia/Sydney")
       // DST starts 2026-10-04 02:00 AEST → 03:00 AEDT and ends 2026-04-05 03:00 → 02:00.
-      #expect(MomentFormat.format(instant: instant("2026-10-03T15:59:59Z"), "YYYY-MM-DD HH:mm", timeZone: sydney) == "2026-10-04 01:59")
-      #expect(MomentFormat.format(instant: instant("2026-10-03T16:00:00Z"), "YYYY-MM-DD HH:mm", timeZone: sydney) == "2026-10-04 03:00")
-      #expect(d(2026, 1, 15).startOfDay(in: sydney) == instant("2026-01-14T13:00:00Z"))  // summer: +11
-      #expect(d(2026, 7, 15).startOfDay(in: sydney) == instant("2026-07-14T14:00:00Z"))  // winter: +10
-      #expect(LocalDate.today(now: instant("2026-12-31T12:59:59Z"), timeZone: sydney) == d(2026, 12, 31))
-      #expect(LocalDate.today(now: instant("2026-12-31T13:00:00Z"), timeZone: sydney) == d(2027, 1, 1))
+      #expect(
+        MomentFormat.format(
+          instant: instant("2026-10-03T15:59:59Z"), "YYYY-MM-DD HH:mm", timeZone: sydney)
+          == "2026-10-04 01:59")
+      #expect(
+        MomentFormat.format(
+          instant: instant("2026-10-03T16:00:00Z"), "YYYY-MM-DD HH:mm", timeZone: sydney)
+          == "2026-10-04 03:00")
+      // Sydney is UTC+11 in (southern) summer and UTC+10 in winter.
+      #expect(d(2026, 1, 15).startOfDay(in: sydney) == instant("2026-01-14T13:00:00Z"))
+      #expect(d(2026, 7, 15).startOfDay(in: sydney) == instant("2026-07-14T14:00:00Z"))
+      #expect(
+        LocalDate.today(now: instant("2026-12-31T12:59:59Z"), timeZone: sydney) == d(2026, 12, 31))
+      #expect(
+        LocalDate.today(now: instant("2026-12-31T13:00:00Z"), timeZone: sydney) == d(2027, 1, 1))
     }
 
     @Test func skippedMidnightAndSkippedDay() {
@@ -70,13 +99,18 @@ extension DomainTests {
       #expect(LocalDate(date: start, timeZone: santiago) == d(2023, 9, 3))
       // Samoa skipped 2011-12-30 entirely; its "midnight" is the next day's.
       let apia = zone("Pacific/Apia")
-      #expect(LocalDate(date: d(2011, 12, 30).startOfDay(in: apia), timeZone: apia) == d(2011, 12, 31))
+      #expect(
+        LocalDate(date: d(2011, 12, 30).startOfDay(in: apia), timeZone: apia) == d(2011, 12, 31))
       // Calendar arithmetic ignores all of that.
       #expect(d(2011, 12, 29).adding(days: 1) == d(2011, 12, 30))
-      #expect(d(2023, 9, 2).adding(days: 1, calendar: Calendar(identifier: .gregorian)) == d(2023, 9, 3))
+      #expect(
+        d(2023, 9, 2).adding(days: 1, calendar: Calendar(identifier: .gregorian)) == d(2023, 9, 3))
     }
 
-    @Test(arguments: ["America/Los_Angeles", "Europe/Berlin", "Australia/Lord_Howe", "America/Santiago", "Pacific/Chatham"])
+    @Test(arguments: [
+      "America/Los_Angeles", "Europe/Berlin", "Australia/Lord_Howe", "America/Santiago",
+      "Pacific/Chatham",
+    ])
     func dailyNotePathsDoNotDependOnTheClock(zoneID: String) {
       let tz = zone(zoneID)
       let settings = DailyNoteSettings(folder: "Daily", format: "YYYY-MM-DD dddd", template: "")
@@ -145,7 +179,9 @@ extension DomainTests {
       #expect(MomentFormat.format(d(50, 1, 1), "YYYY") == "0050")
       #expect(MomentFormat.format(d(-1, 1, 1), "YYYY") == "00-1")  // JavaScript's padStart
       #expect(MomentFormat.format(d(2026, 2, 30), "YYYY") == MomentFormat.invalidDate)
-      #expect(MomentFormat.format(instant: Date(timeIntervalSince1970: .nan), "YYYY") == MomentFormat.invalidDate)
+      #expect(
+        MomentFormat.format(instant: Date(timeIntervalSince1970: .nan), "YYYY")
+          == MomentFormat.invalidDate)
     }
 
     @Test func strictParsing() {
@@ -189,10 +225,13 @@ extension DomainTests {
       #expect(DailyNotes.friendlyTitle(d(2026, 9, 24), today: today) == "Thursday, September 24")
       #expect(DailyNotes.friendlyTitle(d(2026, 1, 1), today: today) == "Thursday, January 1")
       #expect(DailyNotes.friendlyTitle(d(2026, 12, 31), today: today) == "Thursday, December 31")
-      #expect(DailyNotes.friendlyTitle(d(2025, 12, 29), today: today) == "Monday, December 29, 2025")
+      #expect(
+        DailyNotes.friendlyTitle(d(2025, 12, 29), today: today) == "Monday, December 29, 2025")
       #expect(DailyNotes.friendlyTitle(d(2027, 1, 4), today: today) == "Monday, January 4, 2027")
       // Only the year matters, not how far away the date is.
-      #expect(DailyNotes.friendlyTitle(d(2025, 12, 31), today: d(2026, 1, 1)) == "Wednesday, December 31, 2025")
+      #expect(
+        DailyNotes.friendlyTitle(d(2025, 12, 31), today: d(2026, 1, 1))
+          == "Wednesday, December 31, 2025")
     }
   }
 }

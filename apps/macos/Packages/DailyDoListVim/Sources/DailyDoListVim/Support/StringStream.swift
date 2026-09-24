@@ -64,7 +64,9 @@ struct StringStream {
 
   /// `match(string, consume, caseInsensitive)`.
   @discardableResult
-  mutating func match(_ pattern: String, consume: Bool = true, caseInsensitive: Bool = false) -> Bool {
+  mutating func match(_ pattern: String, consume: Bool = true, caseInsensitive: Bool = false)
+    -> Bool
+  {
     let p = VimText(pattern)
     var sub = string.substr(pos, p.length)
     var target = p

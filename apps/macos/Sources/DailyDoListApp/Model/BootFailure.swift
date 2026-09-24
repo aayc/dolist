@@ -63,15 +63,22 @@ enum BootFailure: Error, Equatable, Sendable {
   init(_ error: Error) {
     switch error as? DaemonClientError {
     case .unreachable(let reason):
-      self = .daemonNotRunning(detail: "Nothing answered (\(reason)). Start the daemon with `pnpm dev`, or let the app manage it.")
+      self = .daemonNotRunning(
+        detail:
+          "Nothing answered (\(reason)). Start the daemon with `pnpm dev`, or let the app manage it."
+      )
     case .unauthorized:
-      self = .unauthorized(detail: "The token in the daemon-token file doesn't match the running daemon. It was probably started with a different DDL_HOME; restart it or fix DDL_HOME in Settings.")
+      self = .unauthorized(
+        detail:
+          "The token in the daemon-token file doesn't match the running daemon. It was probably started with a different DDL_HOME; restart it or fix DDL_HOME in Settings."
+      )
     case .incompatibleApiVersion(let server):
       self = .incompatibleApiVersion(server: server)
     case .some(let clientError):
       self = .other(detail: clientError.errorDescription ?? "\(clientError)")
     case nil:
-      self = .other(detail: (error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
+      self = .other(
+        detail: (error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
     }
   }
 

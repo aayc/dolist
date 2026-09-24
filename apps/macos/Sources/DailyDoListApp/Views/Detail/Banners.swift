@@ -69,7 +69,8 @@ private struct ToastView: View {
       Button {
         toasts.dismiss(toast.id)
       } label: {
-        Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.faintText)
+        Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(
+          Theme.faintText)
       }
       .buttonStyle(.plain)
       .help("Dismiss")

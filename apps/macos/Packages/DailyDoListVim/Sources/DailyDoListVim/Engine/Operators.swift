@@ -16,7 +16,9 @@ extension Vim {
     }
     operators["indentAuto"] = { [unowned self] cm, _, ranges, _, _ throws in
       cm.execCommand("indentAuto")
-      return Pos(ranges[0].anchor.line, self.findFirstNonWhiteSpaceCharacter(cm.getLine(ranges[0].anchor.line)))
+      return Pos(
+        ranges[0].anchor.line,
+        self.findFirstNonWhiteSpaceCharacter(cm.getLine(ranges[0].anchor.line)))
     }
     operators["hardWrap"] = { cm, args, ranges, oldAnchor, _ throws in
       let from = ranges[0].anchor.line
@@ -53,22 +55,28 @@ extension Vim {
     operators["yank"] = { [unowned self] cm, args, ranges, oldAnchor, _ throws in
       let vim = cm.vim!
       let text = cm.getSelection()
-      let endPos = vim.visualMode ? cursorMin(vim.sel.anchor, vim.sel.head, ranges[0].head, ranges[0].anchor) : oldAnchor
-      self.globalState.registerController.pushText(args.registerName, "yank", text, linewise: args.linewise, blockwise: vim.visualBlock)
+      let endPos =
+        vim.visualMode
+        ? cursorMin(vim.sel.anchor, vim.sel.head, ranges[0].head, ranges[0].anchor) : oldAnchor
+      self.globalState.registerController.pushText(
+        args.registerName, "yank", text, linewise: args.linewise, blockwise: vim.visualBlock)
       let lineCount = abs(cm.getCursor(.end).line - cm.getCursor(.start).line)
       self.showConfirm(
-        cm, String(lineCount == 0 ? 1 : lineCount) + " lines yanked" + (args.registerName.flatMap { $0.isEmpty ? nil : " into \"" + $0 } ?? ""),
+        cm,
+        String(lineCount == 0 ? 1 : lineCount) + " lines yanked"
+          + (args.registerName.flatMap { $0.isEmpty ? nil : " into \"" + $0 } ?? ""),
         long: false, duration: 1.5)
       return endPos
     }
     operators["rot13"] = { [unowned self] cm, args, ranges, oldAnchor, newHead throws in
       let selections = cm.getSelections()
       let swapped = selections.map { selection in
-        VimText(units: selection.units.map { code in
-          if code >= 65 && code <= 90 { return 65 + ((code - 65 + 13) % 26) }
-          if code >= 97 && code <= 122 { return 97 + ((code - 97 + 13) % 26) }
-          return code
-        })
+        VimText(
+          units: selection.units.map { code in
+            if code >= 65 && code <= 90 { return 65 + ((code - 65 + 13) % 26) }
+            if code >= 97 && code <= 122 { return 97 + ((code - 97 + 13) % 26) }
+            return code
+          })
       }
       cm.replaceSelections(swapped)
       return self.caseOperatorResult(cm, args, ranges, oldAnchor, newHead)
@@ -76,10 +84,15 @@ extension Vim {
   }
 
   /// Where `changeCase` and `rot13` leave the cursor.
-  private func caseOperatorResult(_ cm: EditorAdapter, _ args: OperatorArgs, _ ranges: [VimRange], _ oldAnchor: Pos, _ newHead: Pos?) -> Pos? {
+  private func caseOperatorResult(
+    _ cm: EditorAdapter, _ args: OperatorArgs, _ ranges: [VimRange], _ oldAnchor: Pos,
+    _ newHead: Pos?
+  ) -> Pos? {
     if args.shouldMoveCursor {
       return newHead
-    } else if !(cm.vim?.visualMode ?? false) && args.linewise && ranges[0].anchor.line + 1 == ranges[0].head.line {
+    } else if !(cm.vim?.visualMode ?? false) && args.linewise
+      && ranges[0].anchor.line + 1 == ranges[0].head.line
+    {
       return Pos(oldAnchor.line, findFirstNonWhiteSpaceCharacter(cm.getLine(oldAnchor.line)))
     } else if args.linewise {
       return oldAnchor
@@ -124,21 +137,26 @@ extension Vim {
       cm.replaceSelections(Array(repeating: VimText(), count: ranges.count))
       finalHead = cursorMin(ranges[0].head, ranges[0].anchor)
     }
-    globalState.registerController.pushText(args.registerName, "change", text, linewise: args.linewise, blockwise: ranges.count > 1)
+    globalState.registerController.pushText(
+      args.registerName, "change", text, linewise: args.linewise, blockwise: ranges.count > 1)
     let actionArgs = ActionArgs()
     actionArgs.head = finalHead
     try actEnterInsertMode(cm, actionArgs, vim)
   }
 
   /// `operators.delete`.
-  private func opDelete(_ cm: EditorAdapter, _ args: OperatorArgs, _ ranges: [VimRange]) throws -> Pos? {
+  private func opDelete(_ cm: EditorAdapter, _ args: OperatorArgs, _ ranges: [VimRange]) throws
+    -> Pos?
+  {
     let vim = cm.vim!
     var finalHead: Pos
     let text: VimText
     if !vim.visualBlock {
       var anchor = ranges[0].anchor
       let head = ranges[0].head
-      if args.linewise && head.line != cm.firstLine() && anchor.line == cm.lastLine() && anchor.line == head.line - 1 {
+      if args.linewise && head.line != cm.firstLine() && anchor.line == cm.lastLine()
+        && anchor.line == head.line - 1
+      {
         // Special case for dd on last line (and first line).
         if anchor.line == cm.firstLine() {
           anchor.ch = 0
@@ -157,12 +175,15 @@ extension Vim {
       cm.replaceSelections(Array(repeating: VimText(), count: ranges.count))
       finalHead = cursorMin(ranges[0].head, ranges[0].anchor)
     }
-    globalState.registerController.pushText(args.registerName, "delete", text, linewise: args.linewise, blockwise: vim.visualBlock)
+    globalState.registerController.pushText(
+      args.registerName, "delete", text, linewise: args.linewise, blockwise: vim.visualBlock)
     return clipCursorToContent(cm, finalHead)
   }
 
   /// `operators.indent`.
-  private func opIndent(_ cm: EditorAdapter, _ args: OperatorArgs, _ ranges: [VimRange]) throws -> Pos? {
+  private func opIndent(_ cm: EditorAdapter, _ args: OperatorArgs, _ ranges: [VimRange]) throws
+    -> Pos?
+  {
     let vim = cm.vim!
     // In visual mode, n> shifts the selection right n times, instead of shifting n lines right
     // once.
@@ -201,6 +222,7 @@ extension Vim {
     for _ in 0..<count {
       if args.indentRight { cm.indentMore() } else { cm.indentLess() }
     }
-    return Pos(ranges[0].anchor.line, findFirstNonWhiteSpaceCharacter(cm.getLine(ranges[0].anchor.line)))
+    return Pos(
+      ranges[0].anchor.line, findFirstNonWhiteSpaceCharacter(cm.getLine(ranges[0].anchor.line)))
   }
 }

@@ -7,7 +7,8 @@ enum JSReplace {
   }
 
   /// `subject.replace(regexp, fn)`.
-  static func replace(_ subject: VimText, _ regex: JSRegExp, _ fn: (JSMatch) -> VimText) -> VimText {
+  static func replace(_ subject: VimText, _ regex: JSRegExp, _ fn: (JSMatch) -> VimText) -> VimText
+  {
     let prepared = JSSubject(subject)
     var out: [UInt16] = []
     var last = 0
@@ -25,7 +26,9 @@ enum JSReplace {
 
   /// AdvanceStringIndex: one code unit, or a whole surrogate pair with the `u` flag.
   static func advance(_ text: VimText, _ index: Int, _ unicode: Bool) -> Int {
-    if unicode, index + 1 < text.length, isHighSurrogate(text[index]), isLowSurrogate(text[index + 1]) {
+    if unicode, index + 1 < text.length, isHighSurrogate(text[index]),
+      isLowSurrogate(text[index + 1])
+    {
       return index + 2
     }
     return index + 1

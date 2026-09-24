@@ -40,7 +40,9 @@ struct GlobalShortcutTests {
   @Test func globalShortcutsNeedARealModifier() throws {
     #expect(try #require(GlobalShortcut(parsing: "⌥⌘D")).isValidGlobalShortcut)
     #expect(try #require(GlobalShortcut(parsing: "⌃D")).isValidGlobalShortcut)
-    #expect(try #require(GlobalShortcut(parsing: "F5")).isValidGlobalShortcut, "function keys may stand alone")
+    #expect(
+      try #require(GlobalShortcut(parsing: "F5")).isValidGlobalShortcut,
+      "function keys may stand alone")
     #expect(try !#require(GlobalShortcut(parsing: "D")).isValidGlobalShortcut)
     #expect(try !#require(GlobalShortcut(parsing: "⇧D")).isValidGlobalShortcut)
   }
@@ -63,7 +65,9 @@ struct GlobalShortcutTests {
   @Test func codableAsItsDisplayString() throws {
     let data = try JSONEncoder().encode([GlobalShortcut.openTodaysNote])
     #expect(String(decoding: data, as: UTF8.self) == #"["⌃⌥⌘D"]"#)
-    #expect(try JSONDecoder().decode([GlobalShortcut].self, from: Data(#"["ctrl+opt+n"]"#.utf8)).first?.displayString == "⌃⌥N")
+    #expect(
+      try JSONDecoder().decode([GlobalShortcut].self, from: Data(#"["ctrl+opt+n"]"#.utf8)).first?
+        .displayString == "⌃⌥N")
     #expect(throws: DecodingError.self) {
       try JSONDecoder().decode([GlobalShortcut].self, from: Data(#"["nope"]"#.utf8))
     }
@@ -93,17 +97,24 @@ struct SystemShortcutConflictTests {
     ]
     let optionCommandD = try #require(GlobalShortcut(parsing: "⌥⌘D"))
     #expect(SystemShortcutConflicts.conflict(for: optionCommandD, symbolicHotKeys: remapped) == nil)
-    #expect(SystemShortcutConflicts.conflict(for: .openTodaysNote, symbolicHotKeys: remapped)?.id == "52")
+    #expect(
+      SystemShortcutConflicts.conflict(for: .openTodaysNote, symbolicHotKeys: remapped)?.id == "52")
   }
 
   @Test func otherShortcutsAreFree() throws {
-    #expect(SystemShortcutConflicts.conflict(for: try #require(GlobalShortcut(parsing: "⌃⌥⌘T")), symbolicHotKeys: [:]) == nil)
-    #expect(SystemShortcutConflicts.conflict(for: try #require(GlobalShortcut(parsing: "⌘Space")), symbolicHotKeys: [:])?.id == "64")
+    #expect(
+      SystemShortcutConflicts.conflict(
+        for: try #require(GlobalShortcut(parsing: "⌃⌥⌘T")), symbolicHotKeys: [:]) == nil)
+    #expect(
+      SystemShortcutConflicts.conflict(
+        for: try #require(GlobalShortcut(parsing: "⌘Space")), symbolicHotKeys: [:])?.id == "64")
   }
 
   @Test func eventFlagsMapToModifiers() {
     #expect(SystemShortcutConflicts.modifiers(fromEventFlags: 0x180000) == [.option, .command])
-    #expect(SystemShortcutConflicts.modifiers(fromEventFlags: 0x840000) == [.control], "the arrow-key flag is ignored")
+    #expect(
+      SystemShortcutConflicts.modifiers(fromEventFlags: 0x840000) == [.control],
+      "the arrow-key flag is ignored")
   }
 }
 
@@ -111,10 +122,21 @@ struct SystemShortcutConflictTests {
 @Suite("System integration")
 struct SystemIntegrationTests {
   @Test func launchAtLoginExplainsWhyItIsUnavailable() {
-    #expect(LaunchAtLoginService.unavailableReason(isAppBundle: false, bundleIdentifier: nil, isSigned: false)?.contains("build-app.sh") == true)
-    #expect(LaunchAtLoginService.unavailableReason(isAppBundle: true, bundleIdentifier: nil, isSigned: true)?.contains("CFBundleIdentifier") == true)
-    #expect(LaunchAtLoginService.unavailableReason(isAppBundle: true, bundleIdentifier: "app.dailydolist.mac", isSigned: false)?.contains("code-signed") == true)
-    #expect(LaunchAtLoginService.unavailableReason(isAppBundle: true, bundleIdentifier: "app.dailydolist.mac", isSigned: true) == nil)
+    #expect(
+      LaunchAtLoginService.unavailableReason(
+        isAppBundle: false, bundleIdentifier: nil, isSigned: false)?.contains("build-app.sh")
+        == true)
+    #expect(
+      LaunchAtLoginService.unavailableReason(
+        isAppBundle: true, bundleIdentifier: nil, isSigned: true)?.contains("CFBundleIdentifier")
+        == true)
+    #expect(
+      LaunchAtLoginService.unavailableReason(
+        isAppBundle: true, bundleIdentifier: "app.dailydolist.mac", isSigned: false)?.contains(
+          "code-signed") == true)
+    #expect(
+      LaunchAtLoginService.unavailableReason(
+        isAppBundle: true, bundleIdentifier: "app.dailydolist.mac", isSigned: true) == nil)
   }
 
   @Test func outsideAnAppBundleLaunchAtLoginIsUnavailable() {
@@ -133,7 +155,8 @@ struct SystemIntegrationTests {
   }
 
   @Test func bridgeRejectsBadShortcutsBeforeRegistering() {
-    let bridge: any SystemIntegrationBridge = SystemIntegration(bundle: .main, symbolicHotKeys: { [:] })
+    let bridge: any SystemIntegrationBridge = SystemIntegration(
+      bundle: .main, symbolicHotKeys: { [:] })
     #expect(throws: GlobalShortcutError.unrecognized("nonsense")) {
       try bridge.setGlobalHotkey("nonsense") {}
     }

@@ -111,7 +111,9 @@ extension FakeDaemon {
     ),
   ]
 
-  private static let demoToday = ["- [x] Compare standing desks under $400", "- [ ] Reserve a table for Friday dinner"]
+  private static let demoToday = [
+    "- [x] Compare standing desks under $400", "- [ ] Reserve a table for Friday dinner",
+  ]
   /// Written as prose; the orchestrator answered it in a thread anchored to the line.
   private static let demoQuestion = "How tall is Ridge Tower downtown?"
 
@@ -125,8 +127,12 @@ extension FakeDaemon {
 
   private func seedDemo() {
     let start = nowMillis
-    vault.store("Templates/Daily.md", FakeCalendar.defaultDailyNoteContent, mtime: start - 30 * Self.dayMillis)
-    for (path, content) in Self.demoNotes { vault.store(path, content, mtime: start - 7 * Self.dayMillis) }
+    vault.store(
+      "Templates/Daily.md", FakeCalendar.defaultDailyNoteContent, mtime: start - 30 * Self.dayMillis
+    )
+    for (path, content) in Self.demoNotes {
+      vault.store(path, content, mtime: start - 7 * Self.dayMillis)
+    }
     let today = today
     for day in Self.demoHistory {
       let date = today.adding(days: day.offset)
@@ -135,25 +141,33 @@ extension FakeDaemon {
       let content = day.lines.joined(separator: "\n")
       vault.store(path, content, mtime: mtime)
       observeNote(path, content: content, initial: true)
-      for text in day.completed { seedCompletedTask(path, date: date, text: text, completedAt: mtime - 3_600_000) }
+      for text in day.completed {
+        seedCompletedTask(path, date: date, text: text, completedAt: mtime - 3_600_000)
+      }
     }
     guard let todayPath = try? calendar.dailyNotePath(today, settings.dailyNotes) else { return }
     let content = (Self.demoToday + [FakeCalendar.defaultDailyNoteContent]).joined(separator: "\n")
     vault.store(todayPath, content, mtime: start - 60_000)
     observeNote(todayPath, content: content, initial: true)
     let desks = seedCompletedTask(
-      todayPath, date: today, text: Self.demoToday[0].dropTaskPrefix, completedAt: start - 7_200_000,
+      todayPath, date: today, text: Self.demoToday[0].dropTaskPrefix,
+      completedAt: start - 7_200_000,
       source: Self.deskSource)
     let table = seedCompletedTask(
-      todayPath, date: today, text: Self.demoToday[1].dropTaskPrefix, completedAt: start - 3_600_000,
+      todayPath, date: today, text: Self.demoToday[1].dropTaskPrefix,
+      completedAt: start - 3_600_000,
       source: Self.tableSource)
     guard let desks, let table else { return }
     // What the agent wrote into the note: findings under each task and a follow-up task.
     let lines = [
       Self.demoToday[0],
-      FakeAgentText.mark("  - Example Rise Pro is the pick at $379, dual motor ([Desks Example](\(Self.deskSource.url)))", threadId: desks),
+      FakeAgentText.mark(
+        "  - Example Rise Pro is the pick at $379, dual motor ([Desks Example](\(Self.deskSource.url)))",
+        threadId: desks),
       Self.demoToday[1],
-      FakeAgentText.mark("  - Trattoria Sole has a table for 2 at 7:00 PM ([Booking Example](\(Self.tableSource.url)))", threadId: table),
+      FakeAgentText.mark(
+        "  - Trattoria Sole has a table for 2 at 7:00 PM ([Booking Example](\(Self.tableSource.url)))",
+        threadId: table),
       FakeAgentText.mark("- [ ] Call Trattoria Sole to confirm the table", threadId: table),
       Self.demoQuestion,
       FakeCalendar.defaultDailyNoteContent,
@@ -161,12 +175,16 @@ extension FakeDaemon {
     let final = lines.joined(separator: "\n")
     vault.store(todayPath, final, mtime: start - 60_000)
     observeNote(todayPath, content: final, initial: true)
-    seedAnsweredQuestion(todayPath, date: today, line: lines.firstIndex(of: Self.demoQuestion) ?? 0, answeredAt: start - 1_800_000)
+    seedAnsweredQuestion(
+      todayPath, date: today, line: lines.firstIndex(of: Self.demoQuestion) ?? 0,
+      answeredAt: start - 1_800_000)
   }
 
   /// A question written as prose, answered by the orchestrator in a thread anchored to its line:
   /// a `done` record with `anchor: line` (id `anc_…`) and a thread citing its sources.
-  private func seedAnsweredQuestion(_ path: String, date: LocalDate, line: Int, answeredAt: EpochMillis) {
+  private func seedAnsweredQuestion(
+    _ path: String, date: LocalDate, line: Int, answeredAt: EpochMillis
+  ) {
     let threadId = nextID("thr")
     let anchorId = nextID("anc")
     let tower = "https://city.example/landmarks/ridge-tower"
@@ -175,8 +193,10 @@ extension FakeDaemon {
       Self.statusMessage(.working, "Looking it up", at: answeredAt - 20_000, id: nextID("msg")),
       .toolCall(
         ToolCallMessage(
-          id: nextID("msg"), author: "orchestrator", createdAt: answeredAt - 16_000, toolCallId: nextID("call"),
-          toolName: "web_search", label: "Web search", input: ["query": "Ridge Tower height"], status: .ok,
+          id: nextID("msg"), author: "orchestrator", createdAt: answeredAt - 16_000,
+          toolCallId: nextID("call"),
+          toolName: "web_search", label: "Web search", input: ["query": "Ridge Tower height"],
+          status: .ok,
           resultPreview: "5 results", endedAt: answeredAt - 14_500)),
       Self.agentText(
         "orchestrator",
@@ -189,24 +209,29 @@ extension FakeDaemon {
       Self.statusMessage(.done, "Answered", at: answeredAt, id: nextID("msg")),
     ]
     threads[threadId] = AgentThread(
-      id: threadId, taskId: anchorId, notePath: path, title: Self.demoQuestion, status: .done, createdAt: answeredAt - 20_000,
+      id: threadId, taskId: anchorId, notePath: path, title: Self.demoQuestion, status: .done,
+      createdAt: answeredAt - 20_000,
       updatedAt: answeredAt, messages: messages,
       sources: [
         CitedSource(
           url: tower, title: "Ridge Tower — City Landmarks",
-          snippet: "Ridge Tower rises 1,250 ft (381 m) to its roof; the spire brings it to 1,380 ft."),
+          snippet:
+            "Ridge Tower rises 1,250 ft (381 m) to its roof; the spire brings it to 1,380 ft."),
         CitedSource(url: skyline, title: "Downtown skyline: every tower ranked"),
       ])
     records[anchorId] = TaskAgentRecord(
-      taskId: anchorId, notePath: path, date: date.iso, text: Self.demoQuestion, line: line, status: .done,
-      summary: "About 1,250 ft", threadId: threadId, updatedAt: answeredAt, unread: 0, anchor: .line)
+      taskId: anchorId, notePath: path, date: date.iso, text: Self.demoQuestion, line: line,
+      status: .done,
+      summary: "About 1,250 ft", threadId: threadId, updatedAt: answeredAt, unread: 0, anchor: .line
+    )
   }
 
   /// A finished thread and a `done` record for an existing task (the agent's earlier work); `source`
   /// joins the thread's sources. Returns the thread's id.
   @discardableResult
   private func seedCompletedTask(
-    _ path: String, date: LocalDate, text: String, completedAt: EpochMillis, source: CitedSource? = nil
+    _ path: String, date: LocalDate, text: String, completedAt: EpochMillis,
+    source: CitedSource? = nil
   ) -> String? {
     guard let task = tracked[path]?.first(where: { $0.text == text }) else { return nil }
     let script = AgentScript.forTask(text)
@@ -217,9 +242,11 @@ extension FakeDaemon {
     }
     let threadId = nextID("thr")
     var messages: [ThreadMessage] = [
-      Self.statusMessage(.working, "Started a \(script.subagent) subagent", at: next(), id: nextID("msg")),
+      Self.statusMessage(
+        .working, "Started a \(script.subagent) subagent", at: next(), id: nextID("msg")),
       Self.agentText(
-        "orchestrator", "Picked this up — handing it to a **\(script.subagent)** subagent.", at: next(), id: nextID("msg")),
+        "orchestrator", "Picked this up — handing it to a **\(script.subagent)** subagent.",
+        at: next(), id: nextID("msg")),
       Self.agentText(script.author, script.intro, at: next(), id: nextID("msg")),
     ]
     for step in script.steps {
@@ -227,38 +254,55 @@ extension FakeDaemon {
       messages.append(
         .toolCall(
           ToolCallMessage(
-            id: nextID("msg"), author: script.author, createdAt: at, toolCallId: nextID("call"), toolName: step.toolName,
-            label: step.label, input: step.input, status: .ok, resultPreview: step.resultPreview, endedAt: at + step.durationMs)))
+            id: nextID("msg"), author: script.author, createdAt: at, toolCallId: nextID("call"),
+            toolName: step.toolName,
+            label: step.label, input: step.input, status: .ok, resultPreview: step.resultPreview,
+            endedAt: at + step.durationMs)))
     }
     let artifactId = nextID("art")
     let data = Data(script.artifact.content.utf8)
     let meta = ArtifactMeta(
-      id: artifactId, threadId: threadId, title: script.artifact.title, kind: .markdown, mimeType: "text/markdown",
-      path: "\(FakeVaultPaths.sidecar)/artifacts/\(threadId)/\(artifactId).md", size: data.count, createdAt: next())
+      id: artifactId, threadId: threadId, title: script.artifact.title, kind: .markdown,
+      mimeType: "text/markdown",
+      path: "\(FakeVaultPaths.sidecar)/artifacts/\(threadId)/\(artifactId).md", size: data.count,
+      createdAt: next())
     artifacts[artifactId] = StoredArtifact(meta: meta, data: data)
     messages.append(
-      .artifact(ArtifactMessage(id: nextID("msg"), author: script.author, createdAt: meta.createdAt, artifactId: artifactId)))
+      .artifact(
+        ArtifactMessage(
+          id: nextID("msg"), author: script.author, createdAt: meta.createdAt,
+          artifactId: artifactId)))
     var summary = script.doneSummary
     if let risky = script.risky {
       let at = next()
       let approval = ApprovalRequest(
-        id: nextID("apr"), threadId: threadId, taskId: task.id, toolName: risky.toolName, toolLabel: risky.toolLabel,
-        input: risky.input, summary: risky.summary, risk: risky.risk, categories: risky.categories, reason: risky.reason,
+        id: nextID("apr"), threadId: threadId, taskId: task.id, toolName: risky.toolName,
+        toolLabel: risky.toolLabel,
+        input: risky.input, summary: risky.summary, risk: risky.risk, categories: risky.categories,
+        reason: risky.reason,
         status: .approved, scope: .once, createdAt: at, decidedAt: at + 30_000)
       approvals[approval.id] = approval
-      messages.append(.approval(ApprovalMessage(id: nextID("msg"), author: "system", createdAt: at, approvalId: approval.id)))
-      messages.append(Self.agentText(script.author, risky.approvedText, at: next(), id: nextID("msg")))
+      messages.append(
+        .approval(
+          ApprovalMessage(
+            id: nextID("msg"), author: "system", createdAt: at, approvalId: approval.id)))
+      messages.append(
+        Self.agentText(script.author, risky.approvedText, at: next(), id: nextID("msg")))
       summary = risky.approvedSummary
     } else {
-      messages.append(Self.agentText(script.author, script.finalText, at: next(), id: nextID("msg")))
+      messages.append(
+        Self.agentText(script.author, script.finalText, at: next(), id: nextID("msg")))
     }
     messages.append(Self.statusMessage(.done, "Task complete", at: completedAt, id: nextID("msg")))
     let sources = script.sources + (source.map { [$0] } ?? [])
     threads[threadId] = AgentThread(
-      id: threadId, taskId: task.id, notePath: path, title: text, status: .done, createdAt: completedAt - 90_000,
-      updatedAt: completedAt, messages: messages, artifacts: [meta], sources: sources.isEmpty ? nil : sources)
+      id: threadId, taskId: task.id, notePath: path, title: text, status: .done,
+      createdAt: completedAt - 90_000,
+      updatedAt: completedAt, messages: messages, artifacts: [meta],
+      sources: sources.isEmpty ? nil : sources)
     records[task.id] = TaskAgentRecord(
-      taskId: task.id, notePath: path, date: date.iso, text: text, line: task.line, status: .done, summary: summary,
+      taskId: task.id, notePath: path, date: date.iso, text: text, line: task.line, status: .done,
+      summary: summary,
       threadId: threadId, updatedAt: completedAt, unread: 0)
     return threadId
   }

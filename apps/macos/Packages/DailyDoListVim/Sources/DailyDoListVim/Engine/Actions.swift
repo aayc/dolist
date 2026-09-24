@@ -44,7 +44,8 @@ extension Vim {
     }
     define("enterMacroRecordMode") { [unowned self] cm, args, _ throws in
       let registerName = args.selectedCharacter?.string
-      if self.globalState.registerController.isValidRegister(registerName), let name = registerName {
+      if self.globalState.registerController.isValidRegister(registerName), let name = registerName
+      {
         self.enterMacroRecordMode(cm, name)
       }
     }
@@ -59,14 +60,19 @@ extension Vim {
         cm.signal(.vimModeChange, .modeChange(mode: "insert", subMode: nil))
       }
     }
-    define("enterInsertMode") { [unowned self] cm, args, vim throws in try self.actEnterInsertMode(cm, args, vim) }
-    define("toggleVisualMode") { [unowned self] cm, args, vim throws in try self.actToggleVisualMode(cm, args, vim) }
+    define("enterInsertMode") { [unowned self] cm, args, vim throws in
+      try self.actEnterInsertMode(cm, args, vim)
+    }
+    define("toggleVisualMode") { [unowned self] cm, args, vim throws in
+      try self.actToggleVisualMode(cm, args, vim)
+    }
     define("reselectLastSelection") { [unowned self] cm, _, vim throws in
       let lastSelection = vim.lastSelection
       if vim.visualMode { try self.updateLastSelection(cm, vim) }
       guard let lastSelection else { return }
       // If the marks have been destroyed due to edits, do nothing.
-      guard let anchor = lastSelection.anchorMark.find(), let head = lastSelection.headMark.find() else { return }
+      guard let anchor = lastSelection.anchorMark.find(), let head = lastSelection.headMark.find()
+      else { return }
       vim.sel = VimRange(anchor: anchor, head: head)
       vim.visualMode = true
       vim.visualLine = lastSelection.visualLine
@@ -74,9 +80,15 @@ extension Vim {
       self.updateCmSelection(cm)
       self.updateMark(cm, vim, "<", cursorMin(anchor, head))
       self.updateMark(cm, vim, ">", cursorMax(anchor, head))
-      cm.signal(.vimModeChange, .modeChange(mode: "visual", subMode: vim.visualLine ? "linewise" : vim.visualBlock ? "blockwise" : ""))
+      cm.signal(
+        .vimModeChange,
+        .modeChange(
+          mode: "visual", subMode: vim.visualLine ? "linewise" : vim.visualBlock ? "blockwise" : "")
+      )
     }
-    define("joinLines") { [unowned self] cm, args, vim throws in try self.actJoinLines(cm, args, vim) }
+    define("joinLines") { [unowned self] cm, args, vim throws in
+      try self.actJoinLines(cm, args, vim)
+    }
     define("newLineAndEnterInsertMode") { [unowned self] cm, args, vim throws in
       vim.insertMode = true
       var insertAt = cm.getCursor()
@@ -143,10 +155,14 @@ extension Vim {
       }
     }
     define("setMark") { [unowned self] cm, args, vim throws in
-      if let markName = args.selectedCharacter, !markName.isEmpty { self.updateMark(cm, vim, markName.string, cm.getCursor()) }
+      if let markName = args.selectedCharacter, !markName.isEmpty {
+        self.updateMark(cm, vim, markName.string, cm.getCursor())
+      }
     }
     define("replace") { [unowned self] cm, args, vim throws in try self.actReplace(cm, args, vim) }
-    define("incrementNumberToken") { [unowned self] cm, args, _ throws in try self.actIncrementNumberToken(cm, args) }
+    define("incrementNumberToken") { [unowned self] cm, args, _ throws in
+      try self.actIncrementNumberToken(cm, args)
+    }
     define("repeatLastEdit") { [unowned self] cm, args, vim throws in
       guard let lastEditInputState = vim.lastEditInputState else { return }
       var count = args.repeat
@@ -187,7 +203,8 @@ extension Vim {
     } else {
       let newBottom = newPos + cm.getScrollInfo().clientHeight
       if newBottom < cursorCoords.bottom {
-        let line = (Double(cursor.line) - (cursorCoords.bottom - newBottom) / lineHeight).rounded(.down)
+        let line = (Double(cursor.line) - (cursorCoords.bottom - newBottom) / lineHeight).rounded(
+          .down)
         let moved = Pos(Int(line), cursor.ch)
         cm.setCursor(moved)
         cursorCoords = cm.charCoords(moved)
@@ -229,7 +246,8 @@ extension Vim {
     case "endOfSelectedArea":
       if !vim.visualMode { return }
       if !vim.visualBlock {
-        head = sel.head.line >= sel.anchor.line ? sel.head.offsetting(0, 1) : Pos(sel.anchor.line, 0)
+        head =
+          sel.head.line >= sel.anchor.line ? sel.head.offsetting(0, 1) : Pos(sel.anchor.line, 0)
       } else {
         head = Pos(min(sel.head.line, sel.anchor.line), chAdd(max(sel.head.ch, sel.anchor.ch), 1))
         height = abs(sel.head.line - sel.anchor.line) + 1
@@ -258,14 +276,17 @@ extension Vim {
       }
       vim.insertEnd?.clear()
       vim.insertEnd = cm.setBookmark(head, insertLeft: true)
-      cm.onInputFieldKeydown(onKeyEventTargetKeyDownToken) { [unowned self] event in self.onKeyEventTargetKeyDown(event) }
+      cm.onInputFieldKeydown(onKeyEventTargetKeyDownToken) { [unowned self] event in
+        self.onKeyEventTargetKeyDown(event)
+      }
     }
     if vim.visualMode { try exitVisualMode(cm) }
     selectForInsert(cm, head, height)
   }
 
   /// `actions.toggleVisualMode`: `v`, `V`, `<C-v>`.
-  private func actToggleVisualMode(_ cm: EditorAdapter, _ args: ActionArgs, _ vim: VimState) throws {
+  private func actToggleVisualMode(_ cm: EditorAdapter, _ args: ActionArgs, _ vim: VimState) throws
+  {
     let count = args.repeat
     let anchor = cm.getCursor()
     let linewise = args.linewise ?? false
@@ -277,7 +298,11 @@ extension Vim {
       let head = clipCursorToContent(cm, Pos(anchor.line, anchor.ch + count - 1))
       let newPosition = updateSelectionForSurrogateCharacters(cm, anchor, head)
       vim.sel = VimRange(anchor: newPosition.start, head: newPosition.end)
-      cm.signal(.vimModeChange, .modeChange(mode: "visual", subMode: vim.visualLine ? "linewise" : vim.visualBlock ? "blockwise" : ""))
+      cm.signal(
+        .vimModeChange,
+        .modeChange(
+          mode: "visual", subMode: vim.visualLine ? "linewise" : vim.visualBlock ? "blockwise" : "")
+      )
       updateCmSelection(cm)
       updateMark(cm, vim, "<", cursorMin(anchor, head))
       updateMark(cm, vim, ">", cursorMax(anchor, head))
@@ -285,7 +310,11 @@ extension Vim {
       // Toggling between modes
       vim.visualLine = linewise
       vim.visualBlock = args.blockwise
-      cm.signal(.vimModeChange, .modeChange(mode: "visual", subMode: vim.visualLine ? "linewise" : vim.visualBlock ? "blockwise" : ""))
+      cm.signal(
+        .vimModeChange,
+        .modeChange(
+          mode: "visual", subMode: vim.visualLine ? "linewise" : vim.visualBlock ? "blockwise" : "")
+      )
       updateCmSelection(cm)
     } else {
       try exitVisualMode(cm)
@@ -294,7 +323,8 @@ extension Vim {
 
   /// `actions.joinLines`: `J`, `gJ`.
   private func actJoinLines(_ cm: EditorAdapter, _ args: ActionArgs, _ vim: VimState) throws {
-    var curStart: Pos, curEnd: Pos
+    var curStart: Pos
+    var curEnd: Pos
     if vim.visualMode {
       curStart = cm.getCursor(.anchor)
       curEnd = cm.getCursor(.head)
@@ -330,7 +360,10 @@ extension Vim {
   }
 
   /// `actions.continuePaste`.
-  func continuePaste(_ cm: EditorAdapter, _ args: ActionArgs, _ vim: VimState, _ textIn: VimText, _ register: VimRegister) throws {
+  func continuePaste(
+    _ cm: EditorAdapter, _ args: ActionArgs, _ vim: VimState, _ textIn: VimText,
+    _ register: VimRegister
+  ) throws {
     var cur = cm.getCursor()
     var text = textIn
     if text.isEmpty { return }
@@ -371,7 +404,8 @@ extension Vim {
       cur.ch = min(lineLength(cm, cur.line), cur.ch)
     } else if linewise {
       if vim.visualMode {
-        text = vim.visualLine ? text.slice(0, -1) : VimText("\n") + text.slice(0, text.length - 1) + "\n"
+        text =
+          vim.visualLine ? text.slice(0, -1) : VimText("\n") + text.slice(0, text.length - 1) + "\n"
       } else if args.after {
         // Move the newline at the end to the start instead, and paste just before the newline
         // character of the line we are on right now.
@@ -452,7 +486,9 @@ extension Vim {
 
   /// `text.replace(/^\s*/gm, fn)`: every (possibly empty) run of whitespace at a line start; a
   /// run can span line breaks, swallowing blank lines.
-  private func replaceLeadingWhitespaceOfLines(_ text: VimText, _ fn: (VimText) -> VimText) -> VimText {
+  private func replaceLeadingWhitespaceOfLines(_ text: VimText, _ fn: (VimText) -> VimText)
+    -> VimText
+  {
     let u = text.units
     var out: [UInt16] = []
     var last = 0
@@ -531,13 +567,16 @@ extension Vim {
         }
       }
       let tabsReplaced = pairsReplaced.flatMap { $0 == 0x09 ? spaces.units : [$0] }
-      let replaced = VimText(units: tabsReplaced.flatMap { $0 == 0x0A ? [0x0A] : replaceWith.units })
+      let replaced = VimText(
+        units: tabsReplaced.flatMap { $0 == 0x0A ? [0x0A] : replaceWith.units })
       cm.replaceSelections(replaced.split(unit: 0x0A))
     } else {
       try cm.replaceRange(replaceCharacters(cm.getRange(curStart, curEnd)), curStart, curEnd)
     }
     if vim.visualMode {
-      curStart = cursorIsBefore(selections[0].anchor, selections[0].head) ? selections[0].anchor : selections[0].head
+      curStart =
+        cursorIsBefore(selections[0].anchor, selections[0].head)
+        ? selections[0].anchor : selections[0].head
       cm.setCursor(curStart)
       try exitVisualMode(cm, moveHead: false)
     } else {
@@ -550,7 +589,8 @@ extension Vim {
     let cur = cm.getCursor()
     let lineStr = cm.getLine(cur.line)
     var found: NumberToken?
-    var start = 0, end = 0
+    var start = 0
+    var end = 0
     var searchFrom = 0
     while let token = nextNumberToken(lineStr, from: searchFrom) {
       found = token
@@ -572,7 +612,8 @@ extension Vim {
     case "0x": radix = 16
     default: radix = 10
     }
-    let number = JSNumber.parseInt(match.sign + digits, radix: radix) + increment * Double(args.repeat)
+    let number =
+      JSNumber.parseInt(match.sign + digits, radix: radix) + increment * Double(args.repeat)
     var numberStr = JSNumber.toString(number, radix: radix)
     var zeroPadding = VimText()
     if !baseStr.isEmpty {
@@ -600,7 +641,9 @@ extension Vim {
   /// The next match of `/(-?)(?:(0x)([\da-f]+)|(0b|0|)(\d+))/gi` at or after `from`.
   private func nextNumberToken(_ s: VimText, from: Int) -> NumberToken? {
     let u = s.units
-    func isHex(_ c: UInt16) -> Bool { isASCIIDigit(c) || (c >= 0x61 && c <= 0x66) || (c >= 0x41 && c <= 0x46) }
+    func isHex(_ c: UInt16) -> Bool {
+      isASCIIDigit(c) || (c >= 0x61 && c <= 0x66) || (c >= 0x41 && c <= 0x46)
+    }
     func digitRun(_ i: Int, _ test: (UInt16) -> Bool) -> Int {
       var j = i
       while j < u.count && test(u[j]) { j += 1 }
@@ -612,19 +655,25 @@ extension Vim {
       if q + 1 < u.count, u[q] == 0x30, u[q + 1] == 0x78 || u[q + 1] == 0x58 {
         let end = digitRun(q + 2, isHex)
         if end > q + 2 {
-          return NumberToken(index: p, length: end - p, sign: signed ? "-" : "", base: VimText(u[q..<(q + 2)]), digits: VimText(u[(q + 2)..<end]))
+          return NumberToken(
+            index: p, length: end - p, sign: signed ? "-" : "", base: VimText(u[q..<(q + 2)]),
+            digits: VimText(u[(q + 2)..<end]))
         }
       }
       // (0b|0|)(\d+)
       for prefix in [2, 1, 0] {
         if prefix == 2 {
-          guard q + 1 < u.count, u[q] == 0x30, u[q + 1] == 0x62 || u[q + 1] == 0x42 else { continue }
+          guard q + 1 < u.count, u[q] == 0x30, u[q + 1] == 0x62 || u[q + 1] == 0x42 else {
+            continue
+          }
         } else if prefix == 1 {
           guard q < u.count, u[q] == 0x30 else { continue }
         }
         let end = digitRun(q + prefix, isASCIIDigit)
         if end > q + prefix {
-          return NumberToken(index: p, length: end - p, sign: signed ? "-" : "", base: VimText(u[q..<(q + prefix)]), digits: VimText(u[(q + prefix)..<end]))
+          return NumberToken(
+            index: p, length: end - p, sign: signed ? "-" : "", base: VimText(u[q..<(q + prefix)]),
+            digits: VimText(u[(q + prefix)..<end]))
         }
       }
       return nil

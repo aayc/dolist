@@ -8,10 +8,10 @@ let package = Package(
   name: "DailyDoListEditor",
   platforms: [.macOS(.v14)],
   products: [
-    .library(name: "DailyDoListEditor", targets: ["DailyDoListEditor"]),
+    .library(name: "DailyDoListEditor", targets: ["DailyDoListEditor"])
   ],
   dependencies: [
-    .package(path: "../DailyDoListVim"),
+    .package(path: "../DailyDoListVim")
   ],
   targets: [
     .target(

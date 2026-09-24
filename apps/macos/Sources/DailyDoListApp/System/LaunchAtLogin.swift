@@ -40,7 +40,9 @@ struct LaunchAtLoginService {
       isSigned: Self.isCodeSigned())
   }
 
-  static func unavailableReason(isAppBundle: Bool, bundleIdentifier: String?, isSigned: Bool) -> String? {
+  static func unavailableReason(isAppBundle: Bool, bundleIdentifier: String?, isSigned: Bool)
+    -> String?
+  {
     if !isAppBundle {
       return """
         Launch at login needs the packaged app. Build it with apps/macos/scripts/build-app.sh \
@@ -67,7 +69,8 @@ struct LaunchAtLoginService {
     case .notRegistered: return .disabled
     case .notFound:
       return .unavailable(
-        "macOS can't register this copy of the app as a login item. Move it to /Applications and relaunch it.")
+        "macOS can't register this copy of the app as a login item. Move it to /Applications and relaunch it."
+      )
     @unknown default: return .disabled
     }
   }

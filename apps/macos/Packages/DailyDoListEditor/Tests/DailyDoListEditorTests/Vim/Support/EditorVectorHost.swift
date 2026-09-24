@@ -13,10 +13,12 @@ final class EditorVectorHosts {
 
   init(header: VimVectorHeader, livePreview: Bool = false) {
     controller = MarkdownEditorController(
-      configuration: EditorConfiguration(fontSize: 16, livePreview: livePreview, readableLineLength: false, vimMode: true),
+      configuration: EditorConfiguration(
+        fontSize: 16, livePreview: livePreview, readableLineLength: false, vimMode: true),
       uniformMetrics: .init(lineHeight: CGFloat(header.lineHeight), tabSize: header.tabSize))
     controller.containerView.showsPanel = false
-    controller.view.frame = NSRect(x: 0, y: 0, width: 900, height: CGFloat(header.rows) * CGFloat(header.lineHeight))
+    controller.view.frame = NSRect(
+      x: 0, y: 0, width: 900, height: CGFloat(header.rows) * CGFloat(header.lineHeight))
     controller.view.layoutSubtreeIfNeeded()
     controller.scrollView.hasVerticalScroller = false
     controller.markdownTextView.frame.size.width = controller.scrollView.contentSize.width
@@ -25,7 +27,8 @@ final class EditorVectorHosts {
   /// The editor reset for `spec` (vim is attached by the replay).
   func host(for spec: VimVectorEditorSpec) -> any VimVectorHost {
     controller.vim = nil
-    controller.setUniformMetrics(.init(lineHeight: CGFloat(spec.header.lineHeight), tabSize: spec.tabSize))
+    controller.setUniformMetrics(
+      .init(lineHeight: CGFloat(spec.header.lineHeight), tabSize: spec.tabSize))
     controller.replaceDocument(withExactly: spec.doc.nsString)
     controller.noteUndoManager.groupsByEvent = false
     let host = controller.vimHost
@@ -46,7 +49,9 @@ extension TextViewVimHost: VimVectorHost {
   /// The oracle's native edit, applied through the editor's pipeline as the editor's own edit
   /// (reported to vim with the selection afterwards, even when nothing changed).
   public func replayNativeEdit(_ token: String, in session: VimSession) -> Bool {
-    guard !vimIsReadOnly, let edit = VimVectorReplayer.nativeEdit(for: token, in: session) else { return false }
+    guard !vimIsReadOnly, let edit = VimVectorReplayer.nativeEdit(for: token, in: session) else {
+      return false
+    }
     if edit.changes.isEmpty {
       setSelection(edit.selection)
       pendingScroll = selection.main

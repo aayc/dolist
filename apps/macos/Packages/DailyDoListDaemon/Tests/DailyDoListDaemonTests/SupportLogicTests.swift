@@ -11,11 +11,16 @@ struct DaemonProcessEnvironmentTests {
 
   @Test func setsDaemonVariablesOverTheInheritedOnes() {
     let configuration = DaemonLaunchConfiguration(
-      home: URL(fileURLWithPath: "/Users/me/.ddl"), vaultPath: URL(fileURLWithPath: "/Users/me/Vault"),
-      port: 7999, agentMode: "off", extraEnvironment: ["DDL_PORT": "7999", "EXTRA": "1", "PATH": "/only"])
-    let base = ["HOME": "/Users/me", "DDL_HOME": "/elsewhere", "DDL_PORT": "1234", "PATH": "/usr/bin:/bin"]
+      home: URL(fileURLWithPath: "/Users/me/.ddl"),
+      vaultPath: URL(fileURLWithPath: "/Users/me/Vault"),
+      port: 7999, agentMode: "off",
+      extraEnvironment: ["DDL_PORT": "7999", "EXTRA": "1", "PATH": "/only"])
+    let base = [
+      "HOME": "/Users/me", "DDL_HOME": "/elsewhere", "DDL_PORT": "1234", "PATH": "/usr/bin:/bin",
+    ]
 
-    let variables = DaemonProcessEnvironment.variables(base: base, configuration: configuration, node: node)
+    let variables = DaemonProcessEnvironment.variables(
+      base: base, configuration: configuration, node: node)
 
     #expect(variables["HOME"] == "/Users/me")
     #expect(variables["DDL_HOME"] == "/Users/me/.ddl")
@@ -30,7 +35,8 @@ struct DaemonProcessEnvironmentTests {
     let configuration = DaemonLaunchConfiguration(home: URL(fileURLWithPath: "/h"), port: 7331)
     let base = ["DDL_VAULT": "/Users/me/FromShell", "PATH": "/usr/bin"]
 
-    let variables = DaemonProcessEnvironment.variables(base: base, configuration: configuration, node: node)
+    let variables = DaemonProcessEnvironment.variables(
+      base: base, configuration: configuration, node: node)
 
     #expect(variables["DDL_VAULT"] == "/Users/me/FromShell")
     #expect(variables["DDL_AGENT_MODE"] == nil)
@@ -53,8 +59,12 @@ struct DaemonProcessEnvironmentTests {
     #expect(
       DaemonProcessEnvironment.arguments(entry: entry, stopsWhenAppExits: true)
         == ["--import", DaemonProcessEnvironment.watchdogPreload, "/app/daemon/dist/main.js"])
-    #expect(DaemonProcessEnvironment.arguments(entry: entry, stopsWhenAppExits: false) == ["/app/daemon/dist/main.js"])
-    #expect(!DaemonProcessEnvironment.watchdogPreload.contains(" "), "one argv word, no quoting needed")
+    #expect(
+      DaemonProcessEnvironment.arguments(entry: entry, stopsWhenAppExits: false) == [
+        "/app/daemon/dist/main.js"
+      ])
+    #expect(
+      !DaemonProcessEnvironment.watchdogPreload.contains(" "), "one argv word, no quoting needed")
   }
 }
 
@@ -62,14 +72,19 @@ struct DaemonProcessEnvironmentTests {
 struct DaemonRestartPolicyTests {
   @Test func backoffDoublesUpToTheCap() {
     let policy = DaemonRestartPolicy()
-    #expect((1...8).map(policy.delay(forAttempt:)) == [1, 2, 4, 8, 16, 30, 30, 30].map { .seconds($0) })
+    #expect(
+      (1...8).map(policy.delay(forAttempt:)) == [1, 2, 4, 8, 16, 30, 30, 30].map { .seconds($0) })
     #expect(policy.delay(forAttempt: 0) == .seconds(1))
     #expect(policy.delay(forAttempt: 1_000) == .seconds(30))
   }
 
   @Test func customPolicy() {
-    let policy = DaemonRestartPolicy(initialDelay: .milliseconds(250), maxDelay: .seconds(1), maxFailures: 0)
-    #expect((1...4).map(policy.delay(forAttempt:)) == [.milliseconds(250), .milliseconds(500), .seconds(1), .seconds(1)])
+    let policy = DaemonRestartPolicy(
+      initialDelay: .milliseconds(250), maxDelay: .seconds(1), maxFailures: 0)
+    #expect(
+      (1...4).map(policy.delay(forAttempt:)) == [
+        .milliseconds(250), .milliseconds(500), .seconds(1), .seconds(1),
+      ])
     #expect(policy.maxFailures == 1)
   }
 
@@ -115,7 +130,8 @@ struct LineSplitterTests {
 
   @Test func runawayLinesAreEmittedInPieces() {
     var splitter = LineSplitter()
-    let lines = splitter.append(Data(String(repeating: "y", count: LineSplitter.maxLineLength * 4 + 1).utf8))
+    let lines = splitter.append(
+      Data(String(repeating: "y", count: LineSplitter.maxLineLength * 4 + 1).utf8))
     #expect(lines.count == 1)
     #expect(splitter.flush() == [])
   }
@@ -137,23 +153,37 @@ struct HealthClassificationTests {
   @Test func daemonHealthIsHealthy() {
     let result = URLSessionHealthChecker.classify(
       status: 200,
-      body: body(#"{"ok":true,"version":"0.1.0","apiVersion":1,"vaultName":"Notes","agentMode":"mock"}"#),
+      body: body(
+        #"{"ok":true,"version":"0.1.0","apiVersion":1,"vaultName":"Notes","agentMode":"mock"}"#),
       server: nil)
-    #expect(result == .healthy(DaemonHealth(version: "0.1.0", apiVersion: 1, vaultName: "Notes", agentMode: "mock")))
+    #expect(
+      result
+        == .healthy(
+          DaemonHealth(version: "0.1.0", apiVersion: 1, vaultName: "Notes", agentMode: "mock")))
   }
 
   @Test func daemonUnauthorizedIsRecognized() {
     let result = URLSessionHealthChecker.classify(
-      status: 401, body: body(#"{"error":"unauthorized","message":"Missing or invalid bearer token"}"#),
+      status: 401,
+      body: body(#"{"error":"unauthorized","message":"Missing or invalid bearer token"}"#),
       server: nil)
     #expect(result == .unauthorized)
   }
 
   @Test func anythingElseIsForeign() {
-    #expect(URLSessionHealthChecker.classify(status: 404, body: body("<h1>nope</h1>"), server: "nginx") == .foreign("HTTP 404, Server: nginx"))
-    #expect(URLSessionHealthChecker.classify(status: 200, body: body("hello"), server: nil) == .foreign("HTTP 200 without a health response"))
-    #expect(URLSessionHealthChecker.classify(status: 401, body: body("{}"), server: nil) == .foreign("HTTP 401"))
-    #expect(URLSessionHealthChecker.classify(status: 200, body: body(#"{"ok":false,"version":"1","apiVersion":1}"#), server: nil) == .foreign("HTTP 200 without a health response"))
+    #expect(
+      URLSessionHealthChecker.classify(status: 404, body: body("<h1>nope</h1>"), server: "nginx")
+        == .foreign("HTTP 404, Server: nginx"))
+    #expect(
+      URLSessionHealthChecker.classify(status: 200, body: body("hello"), server: nil)
+        == .foreign("HTTP 200 without a health response"))
+    #expect(
+      URLSessionHealthChecker.classify(status: 401, body: body("{}"), server: nil)
+        == .foreign("HTTP 401"))
+    #expect(
+      URLSessionHealthChecker.classify(
+        status: 200, body: body(#"{"ok":false,"version":"1","apiVersion":1}"#), server: nil)
+        == .foreign("HTTP 200 without a health response"))
   }
 }
 
@@ -175,7 +205,10 @@ struct DaemonLaunchConfigurationTests {
 
   @Test func environmentOverrides() {
     let configuration = DaemonLaunchConfiguration.standard(
-      environment: ["DDL_HOME": "~/.ddl-dev", "DDL_VAULT": "~/Vault", "DDL_PORT": "7400", "DDL_AGENT_MODE": "MOCK"],
+      environment: [
+        "DDL_HOME": "~/.ddl-dev", "DDL_VAULT": "~/Vault", "DDL_PORT": "7400",
+        "DDL_AGENT_MODE": "MOCK",
+      ],
       homeDirectory: home)
     #expect(configuration.home.path == "/Users/me/.ddl-dev")
     #expect(configuration.vaultPath?.path == "/Users/me/Vault")
@@ -184,12 +217,15 @@ struct DaemonLaunchConfigurationTests {
   }
 
   @Test func portFromTheDaemonConfigFile() throws {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ddl-config-\(UUID().uuidString)")
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "ddl-config-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
-    try Data(#"{"port": 7612, "agentMode": "off"}"#.utf8).write(to: directory.appendingPathComponent("config.json"))
+    try Data(#"{"port": 7612, "agentMode": "off"}"#.utf8).write(
+      to: directory.appendingPathComponent("config.json"))
 
-    let fromFile = DaemonLaunchConfiguration.standard(environment: ["DDL_HOME": directory.path], homeDirectory: home)
+    let fromFile = DaemonLaunchConfiguration.standard(
+      environment: ["DDL_HOME": directory.path], homeDirectory: home)
     let fromEnvironment = DaemonLaunchConfiguration.standard(
       environment: ["DDL_HOME": directory.path, "DDL_PORT": "7613"], homeDirectory: home)
 
@@ -197,11 +233,16 @@ struct DaemonLaunchConfigurationTests {
     #expect(fromEnvironment.port == 7613, "env beats config.json, like the daemon")
 
     try Data(#"{"port": 0}"#.utf8).write(to: directory.appendingPathComponent("config.json"))
-    #expect(DaemonLaunchConfiguration.standard(environment: ["DDL_HOME": directory.path], homeDirectory: home).port == 7331)
+    #expect(
+      DaemonLaunchConfiguration.standard(
+        environment: ["DDL_HOME": directory.path], homeDirectory: home
+      ).port == 7331)
   }
 
   @Test func errorMessagesAbbreviateTheHomeFolder() {
-    #expect(displayPath("/Users/me/.daily-do-list/daemon-token", homeDirectory: "/Users/me") == "~/.daily-do-list/daemon-token")
+    #expect(
+      displayPath("/Users/me/.daily-do-list/daemon-token", homeDirectory: "/Users/me")
+        == "~/.daily-do-list/daemon-token")
     #expect(displayPath("/Users/me", homeDirectory: "/Users/me") == "~")
     #expect(displayPath("/Users/me2", homeDirectory: "/Users/me") == "/Users/me2")
     #expect(displayPath("/Users/you/x", homeDirectory: "/Users/me") == "/Users/you/x")

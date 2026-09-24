@@ -95,7 +95,8 @@ struct InboxRow: View {
               .monospacedDigit()
               .foregroundStyle(AgentTheme.mutedText)
           }
-          if let preview = thread.lastMessagePreview.map(AgentFormat.plainPreview), !preview.isEmpty {
+          if let preview = thread.lastMessagePreview.map(AgentFormat.plainPreview), !preview.isEmpty
+          {
             Text(verbatim: preview)
               .font(.callout)
               .foregroundStyle(AgentTheme.mutedText)
@@ -111,8 +112,10 @@ struct InboxRow: View {
             }
             Spacer(minLength: 0)
             if pendingApprovals > 0 {
-              CountBadge(count: pendingApprovals, tone: .warning, systemImage: "exclamationmark.shield.fill")
-                .help("\(pendingApprovals) waiting for your approval")
+              CountBadge(
+                count: pendingApprovals, tone: .warning, systemImage: "exclamationmark.shield.fill"
+              )
+              .help("\(pendingApprovals) waiting for your approval")
             }
             if unread > 0 {
               CountBadge(count: unread, tone: .accent).help("\(unread) unread")

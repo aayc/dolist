@@ -18,7 +18,9 @@ func waitUntil(
   let clock = ContinuousClock()
   let deadline = clock.now.advanced(by: timeout)
   while !condition() {
-    guard clock.now < deadline else { throw TimeoutError(description: "timed out waiting for \(what())") }
+    guard clock.now < deadline else {
+      throw TimeoutError(description: "timed out waiting for \(what())")
+    }
     try await Task.sleep(for: .milliseconds(5))
   }
 }
@@ -61,7 +63,8 @@ final class StreamRecorder: Sendable {
   private let task: Task<Void, Never>
 
   init(_ stream: AsyncStream<DaemonStreamItem>) {
-    let storage = OSAllocatedUnfairLock<(items: [DaemonStreamItem], finished: Bool)>(initialState: ([], false))
+    let storage = OSAllocatedUnfairLock<(items: [DaemonStreamItem], finished: Bool)>(
+      initialState: ([], false))
     self.storage = storage
     task = Task {
       for await item in stream { storage.withLock { $0.items.append(item) } }
@@ -79,7 +82,9 @@ final class StreamRecorder: Sendable {
   }
   var resyncCount: Int { items.filter { $0 == .resync }.count }
 
-  func waitFor(_ what: String = "item", timeout: Duration = .seconds(5), _ match: (DaemonStreamItem) -> Bool) async throws {
+  func waitFor(
+    _ what: String = "item", timeout: Duration = .seconds(5), _ match: (DaemonStreamItem) -> Bool
+  ) async throws {
     try await waitUntil(what, timeout: timeout) { items.contains(where: match) }
   }
 

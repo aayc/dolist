@@ -50,15 +50,19 @@ struct ChangeSet {
 
   /// Calls `f(fromA, toA, fromB, toB, text)` for every changed range.
   func iterChanges(individual: Bool = false, _ f: (Int, Int, Int, Int, VimText) -> Void) {
-    var posA = 0, posB = 0, i = 0
+    var posA = 0
+    var posB = 0
+    var i = 0
     while i < sections.count {
-      var len = sections[i], ins = sections[i + 1]
+      var len = sections[i]
+      var ins = sections[i + 1]
       i += 2
       if ins < 0 {
         posA += len
         posB += len
       } else {
-        var endA = posA, endB = posB
+        var endA = posA
+        var endB = posB
         var text = VimText()
         while true {
           endA += len
@@ -82,9 +86,12 @@ struct ChangeSet {
   }
 
   func iterGaps(_ f: (Int, Int, Int) -> Void) {
-    var posA = 0, posB = 0, i = 0
+    var posA = 0
+    var posB = 0
+    var i = 0
     while i < sections.count {
-      let len = sections[i], ins = sections[i + 1]
+      let len = sections[i]
+      let ins = sections[i + 1]
       i += 2
       if ins < 0 {
         f(posA, posB, len)
@@ -105,7 +112,8 @@ struct ChangeSet {
     var result: [Int] = []
     var i = 0
     while i < sections.count {
-      let len = sections[i], ins = sections[i + 1]
+      let len = sections[i]
+      let ins = sections[i + 1]
       if ins < 0 { result += [len, ins] } else { result += [ins, len] }
       i += 2
     }
@@ -119,7 +127,8 @@ struct ChangeSet {
     var pos = 0
     var i = 0
     while i < result.count {
-      let len = result[i], ins = result[i + 1]
+      let len = result[i]
+      let ins = result[i + 1]
       if ins >= 0 {
         result[i] = ins
         result[i + 1] = len
@@ -153,9 +162,12 @@ struct ChangeSet {
 
   /// `mapPos(pos, assoc, mode)`; nil when `mode` tracks a deletion.
   func mapPos(_ pos: Int, assoc: Int = -1, mode: MapMode = .simple) -> Int? {
-    var posA = 0, posB = 0, i = 0
+    var posA = 0
+    var posB = 0
+    var i = 0
     while i < sections.count {
-      let len = sections[i], ins = sections[i + 1]
+      let len = sections[i]
+      let ins = sections[i + 1]
       i += 2
       let endA = posA + len
       if ins < 0 {
@@ -163,7 +175,8 @@ struct ChangeSet {
         posB += len
       } else {
         if mode != .simple && endA >= pos
-          && ((mode == .trackDel && posA < pos && endA > pos) || (mode == .trackBefore && posA < pos)
+          && ((mode == .trackDel && posA < pos && endA > pos)
+            || (mode == .trackBefore && posA < pos)
             || (mode == .trackAfter && endA > pos))
         {
           return nil
@@ -183,9 +196,11 @@ struct ChangeSet {
 
   /// `touchesRange(from, to)`: false, true, or "cover" (`.cover`).
   func touchesRange(_ from: Int, _ to: Int) -> Bool {
-    var pos = 0, i = 0
+    var pos = 0
+    var i = 0
     while i < sections.count && pos <= to {
-      let len = sections[i], ins = sections[i + 1]
+      let len = sections[i]
+      let ins = sections[i + 1]
       i += 2
       let end = pos + len
       if ins >= 0 && pos <= to && end >= from { return true }
@@ -210,7 +225,9 @@ struct ChangeSet {
   /// `ChangeSet.of(specs, length)`: specs are in start-document offsets, in any order. Inserted
   /// text has its line breaks normalized ("\r\n" and "\r" become "\n", like CodeMirror's
   /// `DefaultSplit`).
-  static func of(_ specs: [Spec], length: Int, normalizingLineBreaks: Bool = true) throws -> ChangeSet {
+  static func of(_ specs: [Spec], length: Int, normalizingLineBreaks: Bool = true) throws
+    -> ChangeSet
+  {
     var sections: [Int] = []
     var inserted: [VimText] = []
     var pos = 0
@@ -226,7 +243,8 @@ struct ChangeSet {
     }
     for spec in specs {
       guard spec.from <= spec.to && spec.from >= 0 && spec.to <= length else {
-        throw JSException.rangeError("Invalid change range \(spec.from) to \(spec.to) (in doc of length \(length))")
+        throw JSException.rangeError(
+          "Invalid change range \(spec.from) to \(spec.to) (in doc of length \(length))")
       }
       let text = normalizingLineBreaks ? normalizeLineBreaks(spec.insert) : spec.insert
       if spec.from == spec.to && text.isEmpty { continue }
@@ -350,7 +368,8 @@ private struct SectionIter {
 private func mapSet(_ setA: ChangeSet, _ setB: ChangeSet, before: Bool, mkSet: Bool) -> ChangeSet {
   var sections: [Int] = []
   var insert: [VimText] = []
-  var a = SectionIter(setA), b = SectionIter(setB)
+  var a = SectionIter(setA)
+  var b = SectionIter(setB)
   var inserted = -1
   while true {
     if (a.done && b.len != 0) || (b.done && a.len != 0) {
@@ -360,7 +379,10 @@ private func mapSet(_ setA: ChangeSet, _ setB: ChangeSet, before: Bool, mkSet: B
       addSection(&sections, len, -1)
       a.forward(len)
       b.forward(len)
-    } else if b.ins >= 0 && (a.ins < 0 || inserted == a.i || (a.off == 0 && (b.len < a.len || (b.len == a.len && !before)))) {
+    } else if b.ins >= 0
+      && (a.ins < 0 || inserted == a.i
+        || (a.off == 0 && (b.len < a.len || (b.len == a.len && !before))))
+    {
       var len = b.len
       addSection(&sections, b.ins, -1)
       while len > 0 {
@@ -405,7 +427,8 @@ private func mapSet(_ setA: ChangeSet, _ setB: ChangeSet, before: Bool, mkSet: B
 private func composeSets(_ setA: ChangeSet, _ setB: ChangeSet, mkSet: Bool) -> ChangeSet {
   var sections: [Int] = []
   var insert: [VimText] = []
-  var a = SectionIter(setA), b = SectionIter(setB)
+  var a = SectionIter(setA)
+  var b = SectionIter(setB)
   var open = false
   while true {
     if a.done && b.done {

@@ -48,7 +48,8 @@ struct LinePrefix: Equatable, Sendable {
 
     let markerStart = pos
     var markerEnd = pos
-    if pos < n, s[pos] == UTF16Unit.dash || s[pos] == UTF16Unit.asterisk || s[pos] == UTF16Unit.plus {
+    if pos < n, s[pos] == UTF16Unit.dash || s[pos] == UTF16Unit.asterisk || s[pos] == UTF16Unit.plus
+    {
       markerEnd = pos + 1
       prefix.bullet = s[pos]
     } else {

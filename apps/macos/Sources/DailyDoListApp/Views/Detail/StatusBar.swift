@@ -15,7 +15,8 @@ struct StatusBar: View {
   var body: some View {
     let visibility = StatusBarVisibility(
       saveState: workspace.tabs.active.flatMap { workspace.notes.saveStates[$0] },
-      connection: model.connection.state, isDemo: model.connection.isDemo, agentMode: model.agent?.status?.mode)
+      connection: model.connection.state, isDemo: model.connection.isDemo,
+      agentMode: model.agent?.status?.mode)
     HStack(spacing: 14) {
       if let agent = model.agent {
         AgentStatusItems(model: model, agent: agent, mode: visibility.agentMode)
@@ -195,7 +196,8 @@ struct SaveIndicator: View {
       case .saved: EmptyView()
       case .saving: ProgressView().controlSize(.mini)
       case .dirty: Circle().fill(Theme.mutedText).frame(width: 6, height: 6)
-      case .conflict: Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
+      case .conflict:
+        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
       case .error: Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.danger)
       }
       Text(state.label)

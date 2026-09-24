@@ -30,7 +30,9 @@ extension Vim {
 
   /// `findWord(cm, cur, forward, bigWord, emptyLineIsWord)`: the next word from `cur` (the rest of
   /// the current word when in the middle of one).
-  func findWord(_ cm: EditorAdapter, _ cur: Pos, _ forward: Bool, _ bigWord: Bool, _ emptyLineIsWord: Bool) -> FoundWord? {
+  func findWord(
+    _ cm: EditorAdapter, _ cur: Pos, _ forward: Bool, _ bigWord: Bool, _ emptyLineIsWord: Bool
+  ) -> FoundWord? {
     var lineNum = cur.line
     var pos = cur.ch
     var line = cm.getLine(lineNum)
@@ -45,7 +47,8 @@ extension Vim {
     while true {
       if emptyLineIsWord && line.isEmpty { return FoundWord(from: 0, to: 0, line: lineNum) }
       let stop = dir > 0 ? line.length : -1
-      var wordStart = stop, wordEnd = stop
+      var wordStart = stop
+      var wordEnd = stop
       // `pos != stop`, guarded against starting past the end of the line.
       while dir > 0 ? pos < stop : pos > stop {
         var foundWord = false
@@ -62,7 +65,8 @@ extension Vim {
               i += 1
               continue
             } else {
-              return FoundWord(from: min(wordStart, wordEnd + 1), to: max(wordStart, wordEnd), line: lineNum)
+              return FoundWord(
+                from: min(wordStart, wordEnd + 1), to: max(wordStart, wordEnd), line: lineNum)
             }
           }
           i += 1
@@ -78,7 +82,10 @@ extension Vim {
   }
 
   /// `moveToWord(cm, cur, repeat, forward, wordEnd, bigWord)`: `w`, `e`, `b`, `ge` and friends.
-  func moveToWord(_ cm: EditorAdapter, _ start: Pos, _ repeatIn: Int, _ forward: Bool, _ wordEnd: Bool, _ bigWord: Bool) -> Pos? {
+  func moveToWord(
+    _ cm: EditorAdapter, _ start: Pos, _ repeatIn: Int, _ forward: Bool, _ wordEnd: Bool,
+    _ bigWord: Bool
+  ) -> Pos? {
     let curStart = start
     var cur = start
     var words: [FoundWord] = []
@@ -89,7 +96,10 @@ extension Vim {
     for _ in 0..<max(0, count) {
       guard let word = findWord(cm, cur, forward, bigWord, emptyLineIsWord) else {
         let eodCh = lineLength(cm, cm.lastLine())
-        words.append(forward ? FoundWord(from: eodCh, to: eodCh, line: cm.lastLine()) : FoundWord(from: 0, to: 0, line: 0))
+        words.append(
+          forward
+            ? FoundWord(from: eodCh, to: eodCh, line: cm.lastLine())
+            : FoundWord(from: 0, to: 0, line: 0))
         break
       }
       words.append(word)
@@ -129,7 +139,9 @@ extension Vim {
 
   /// `expandWordUnderCursor(cm, options, cursor)`: the word at (or after) the cursor, for `*`, `#`,
   /// `iw`, `aw`, `iW`, `aW`.
-  func expandWordUnderCursor(_ cm: EditorAdapter, _ options: WordOptions, _ cursor: Pos? = nil) -> (start: Pos, end: Pos)? {
+  func expandWordUnderCursor(_ cm: EditorAdapter, _ options: WordOptions, _ cursor: Pos? = nil) -> (
+    start: Pos, end: Pos
+  )? {
     let cur = cursor ?? getHead(cm)
     let line = cm.getLine(cur.line)
     var endLine = line
@@ -158,7 +170,8 @@ extension Vim {
         if !test(charAt(line, idx)) { test = isPunctuationTest }
       }
     }
-    var end = idx, start = idx
+    var end = idx
+    var start = idx
     while test(charAt(line, start)) && start >= 0 { start -= 1 }
     start += 1
     if let next = wordOnNextLine {

@@ -25,7 +25,10 @@ extension RealDaemonTests {
         return nil
       }
       #expect(states.first == .idle, "a stream starts with the current state")
-      #expect(states.dropFirst().prefix(2) == [.connecting, .connected(serverVersion: hello.serverVersion)])
+      #expect(
+        states.dropFirst().prefix(2) == [
+          .connecting, .connected(serverVersion: hello.serverVersion),
+        ])
       #expect(!log.items.contains(.resync), "a first connection needs no resync")
       await client.disconnect()
     }

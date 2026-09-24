@@ -22,9 +22,11 @@ enum MarkdownTokenizer {
     _ s: [UInt16], state: BlockState, frontmatter: FrontmatterRole? = nil
   ) -> (tokens: LineTokens, next: BlockState) {
     if let frontmatter {
-      return (LineTokens(kind: frontmatter == .delimiter ? .frontmatterDelimiter : .frontmatter), .normal)
+      return (
+        LineTokens(kind: frontmatter == .delimiter ? .frontmatterDelimiter : .frontmatter), .normal
+      )
     }
-    if case let .fence(marker, length) = state {
+    if case .fence(let marker, let length) = state {
       if MarkdownBlockRules.isClosingFence(s, marker: marker, length: length) {
         return (LineTokens(kind: .codeFenceClose), .normal)
       }
@@ -61,9 +63,11 @@ enum MarkdownTokenizer {
     }
     if let heading = headingBounds(s, from: bodyStart) {
       tokens.kind = .heading(level: heading.level)
-      tokens.markers.append(SyntaxMarker(range: NSRange(bodyStart, heading.contentStart), kind: .heading))
+      tokens.markers.append(
+        SyntaxMarker(range: NSRange(bodyStart, heading.contentStart), kind: .heading))
       if heading.contentEnd < s.count {
-        tokens.markers.append(SyntaxMarker(range: NSRange(heading.contentEnd, s.count), kind: .heading))
+        tokens.markers.append(
+          SyntaxMarker(range: NSRange(heading.contentEnd, s.count), kind: .heading))
       }
       appendInline(s, heading.contentStart, heading.contentEnd, to: &tokens)
       return tokens
@@ -72,12 +76,14 @@ enum MarkdownTokenizer {
       tokens.kind = .listItem
       tokens.listMarker = marker
       tokens.listPrefix = ListPrefixLayout(
-        indentStart: prefix.quoteEnd, markerStart: marker.location, markerEnd: marker.end, box: prefix.box,
+        indentStart: prefix.quoteEnd, markerStart: marker.location, markerEnd: marker.end,
+        box: prefix.box,
         textStart: prefix.contentStart)
       if let box = prefix.box, let status = prefix.status {
         let replaced = prefix.ordered == nil ? NSRange(marker.location, box.end) : box
         let text = NSRange(prefix.contentStart, s.count)
-        tokens.task = TaskToken(markerRange: replaced, boxRange: box, status: status, textRange: text)
+        tokens.task = TaskToken(
+          markerRange: replaced, boxRange: box, status: status, textRange: text)
         tokens.markers.append(SyntaxMarker(range: replaced, kind: .task))
         if prefix.ordered != nil {
           tokens.spans.append(StyledSpan(range: marker, style: .listNumber))
@@ -103,7 +109,9 @@ enum MarkdownTokenizer {
 
   /// ATX heading at `from`: up to three spaces, 1–6 `#`, then whitespace or the end of the line;
   /// an optional closing `#` sequence (preceded by whitespace) is syntax too.
-  static func headingBounds(_ s: [UInt16], from: Int) -> (level: Int, contentStart: Int, contentEnd: Int)? {
+  static func headingBounds(_ s: [UInt16], from: Int) -> (
+    level: Int, contentStart: Int, contentEnd: Int
+  )? {
     let n = s.count
     var p = from
     var spaces = 0
@@ -131,7 +139,9 @@ enum MarkdownTokenizer {
     return (level, contentStart, max(contentStart, contentEnd))
   }
 
-  private static func appendInline(_ s: [UInt16], _ from: Int, _ to: Int, to tokens: inout LineTokens) {
+  private static func appendInline(
+    _ s: [UInt16], _ from: Int, _ to: Int, to tokens: inout LineTokens
+  ) {
     guard to > from else { return }
     var inline = InlineTokenizer(s, from: from, to: to)
     inline.run()
@@ -144,7 +154,8 @@ enum MarkdownTokenizer {
   /// Index of the line closing a frontmatter block that opens on line 0, or nil.
   static func frontmatterEnd(lineCount: Int, line: (Int) -> [UInt16]) -> Int? {
     guard lineCount >= 2, MarkdownBlockRules.isFrontmatterOpen(line(0)) else { return nil }
-    for index in 1..<min(lineCount, frontmatterMaxLines) where MarkdownBlockRules.isFrontmatterClose(line(index)) {
+    for index in 1..<min(lineCount, frontmatterMaxLines)
+    where MarkdownBlockRules.isFrontmatterClose(line(index)) {
       return index
     }
     return nil
@@ -169,14 +180,18 @@ enum MarkdownTokenizer {
       let end = index + 1 < starts.count ? starts[index + 1] - 1 : units.count
       return NSRange(start, end)
     }
-    let lineUnits: (Int) -> [UInt16] = { Array(units[lineRanges[$0].location..<lineRanges[$0].end]) }
+    let lineUnits: (Int) -> [UInt16] = {
+      Array(units[lineRanges[$0].location..<lineRanges[$0].end])
+    }
     let frontmatterEnd = frontmatterEnd(lineCount: lineRanges.count, line: lineUnits)
     var state = BlockState.normal
     var lines: [Line] = []
     lines.reserveCapacity(lineRanges.count)
     for (index, range) in lineRanges.enumerated() {
       let role: FrontmatterRole? =
-        frontmatterEnd.map { index == 0 || index == $0 ? .delimiter : (index < $0 ? .content : nil) } ?? nil
+        frontmatterEnd.map {
+          index == 0 || index == $0 ? .delimiter : (index < $0 ? .content : nil)
+        } ?? nil
       let (tokens, next) = tokenizeLine(lineUnits(index), state: state, frontmatter: role)
       lines.append(Line(range: range, state: state, tokens: tokens.offset(by: range.location)))
       state = next

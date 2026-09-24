@@ -12,7 +12,9 @@ enum IntegrationEnvironment {
     }
     var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
     while directory.path != "/" {
-      if FileManager.default.fileExists(atPath: directory.appendingPathComponent("apps/daemon/package.json").path) {
+      if FileManager.default.fileExists(
+        atPath: directory.appendingPathComponent("apps/daemon/package.json").path)
+      {
         return directory
       }
       directory.deleteLastPathComponent()
@@ -123,7 +125,9 @@ enum Fixtures {
   @TaskLocal static var daemon: DaemonFixture?
 
   static func current() throws -> DaemonFixture {
-    guard let daemon else { throw FixtureError("no daemon: add the .realDaemon trait to the suite") }
+    guard let daemon else {
+      throw FixtureError("no daemon: add the .realDaemon trait to the suite")
+    }
     return daemon
   }
 }

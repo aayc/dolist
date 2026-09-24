@@ -6,14 +6,18 @@
 enum DefaultKeymap {
   // MARK: Builders
 
-  private static func keyToKey(_ keys: String, _ toKeys: String, _ context: KeyContext? = nil) -> VimCommand {
+  private static func keyToKey(_ keys: String, _ toKeys: String, _ context: KeyContext? = nil)
+    -> VimCommand
+  {
     let c = VimCommand(keys: VimText(keys), type: .keyToKey)
     c.toKeys = VimText(toKeys)
     c.context = context
     return c
   }
 
-  private static func motion(_ keys: String, _ name: String, _ args: MotionArgs? = nil, _ context: KeyContext? = nil) -> VimCommand {
+  private static func motion(
+    _ keys: String, _ name: String, _ args: MotionArgs? = nil, _ context: KeyContext? = nil
+  ) -> VimCommand {
     let c = VimCommand(keys: VimText(keys), type: .motion)
     c.motion = name
     c.motionArgs = args
@@ -22,7 +26,8 @@ enum DefaultKeymap {
   }
 
   private static func op(
-    _ keys: String, _ name: String, _ args: OperatorArgs? = nil, _ context: KeyContext? = nil, isEdit: Bool = false,
+    _ keys: String, _ name: String, _ args: OperatorArgs? = nil, _ context: KeyContext? = nil,
+    isEdit: Bool = false,
     exitVisualBlock: Bool = false
   ) -> VimCommand {
     let c = VimCommand(keys: VimText(keys), type: .operator)
@@ -35,7 +40,8 @@ enum DefaultKeymap {
   }
 
   private static func opMotion(
-    _ keys: String, _ op: String, _ motion: String, _ motionArgs: MotionArgs? = nil, operatorArgs: OperatorArgs? = nil,
+    _ keys: String, _ op: String, _ motion: String, _ motionArgs: MotionArgs? = nil,
+    operatorArgs: OperatorArgs? = nil,
     operatorMotionArgs: OperatorMotionArgs? = nil, _ context: KeyContext? = nil
   ) -> VimCommand {
     let c = VimCommand(keys: VimText(keys), type: .operatorMotion)
@@ -49,7 +55,8 @@ enum DefaultKeymap {
   }
 
   private static func action(
-    _ keys: String, _ name: String, _ args: ActionArgs? = nil, _ context: KeyContext? = nil, isEdit: Bool = false,
+    _ keys: String, _ name: String, _ args: ActionArgs? = nil, _ context: KeyContext? = nil,
+    isEdit: Bool = false,
     interlaceInsertRepeat: Bool = false, motion: String? = nil
   ) -> VimCommand {
     let c = VimCommand(keys: VimText(keys), type: .action)
@@ -118,11 +125,15 @@ enum DefaultKeymap {
       motion("w", "moveByWords", MotionArgs(forward: true, wordEnd: false)),
       motion("W", "moveByWords", MotionArgs(forward: true, wordEnd: false, bigWord: true)),
       motion("e", "moveByWords", MotionArgs(forward: true, wordEnd: true, inclusive: true)),
-      motion("E", "moveByWords", MotionArgs(forward: true, wordEnd: true, bigWord: true, inclusive: true)),
+      motion(
+        "E", "moveByWords", MotionArgs(forward: true, wordEnd: true, bigWord: true, inclusive: true)
+      ),
       motion("b", "moveByWords", MotionArgs(forward: false, wordEnd: false)),
       motion("B", "moveByWords", MotionArgs(forward: false, wordEnd: false, bigWord: true)),
       motion("ge", "moveByWords", MotionArgs(forward: false, wordEnd: true, inclusive: true)),
-      motion("gE", "moveByWords", MotionArgs(forward: false, wordEnd: true, bigWord: true, inclusive: true)),
+      motion(
+        "gE", "moveByWords",
+        MotionArgs(forward: false, wordEnd: true, bigWord: true, inclusive: true)),
       motion("{", "moveByParagraph", MotionArgs(forward: false, toJumplist: true)),
       motion("}", "moveByParagraph", MotionArgs(forward: true, toJumplist: true)),
       motion("(", "moveBySentence", MotionArgs(forward: false)),
@@ -131,8 +142,12 @@ enum DefaultKeymap {
       motion("<C-b>", "moveByPage", MotionArgs(forward: false)),
       motion("<C-d>", "moveByScroll", MotionArgs(forward: true, explicitRepeat: true)),
       motion("<C-u>", "moveByScroll", MotionArgs(forward: false, explicitRepeat: true)),
-      motion("gg", "moveToLineOrEdgeOfDocument", MotionArgs(forward: false, linewise: true, toJumplist: true, explicitRepeat: true)),
-      motion("G", "moveToLineOrEdgeOfDocument", MotionArgs(forward: true, linewise: true, toJumplist: true, explicitRepeat: true)),
+      motion(
+        "gg", "moveToLineOrEdgeOfDocument",
+        MotionArgs(forward: false, linewise: true, toJumplist: true, explicitRepeat: true)),
+      motion(
+        "G", "moveToLineOrEdgeOfDocument",
+        MotionArgs(forward: true, linewise: true, toJumplist: true, explicitRepeat: true)),
       motion("g$", "moveToEndOfDisplayLine"),
       motion("g^", "moveToStartOfDisplayLine"),
       motion("g0", "moveToStartOfDisplayLine"),
@@ -157,7 +172,8 @@ enum DefaultKeymap {
       motion("['", "jumpToMark", MotionArgs(forward: false, linewise: true)),
       // the next two aren't motions but must come before more general motion declarations
       action("]p", "paste", ActionArgs(after: true, isEdit: true, matchIndent: true), isEdit: true),
-      action("[p", "paste", ActionArgs(after: false, isEdit: true, matchIndent: true), isEdit: true),
+      action(
+        "[p", "paste", ActionArgs(after: false, isEdit: true, matchIndent: true), isEdit: true),
       motion("]<character>", "moveToSymbol", MotionArgs(forward: true, toJumplist: true)),
       motion("[<character>", "moveToSymbol", MotionArgs(forward: false, toJumplist: true)),
       motion("|", "moveToColumn"),
@@ -182,18 +198,25 @@ enum DefaultKeymap {
       op("gw", "hardWrap", OperatorArgs(keepCursor: true)),
       op("g?", "rot13"),
       // Operator-Motion dual commands
-      opMotion("x", "delete", "moveByCharacters", MotionArgs(forward: true), operatorMotionArgs: OperatorMotionArgs(visualLine: false)),
-      opMotion("X", "delete", "moveByCharacters", MotionArgs(forward: false), operatorMotionArgs: OperatorMotionArgs(visualLine: true)),
+      opMotion(
+        "x", "delete", "moveByCharacters", MotionArgs(forward: true),
+        operatorMotionArgs: OperatorMotionArgs(visualLine: false)),
+      opMotion(
+        "X", "delete", "moveByCharacters", MotionArgs(forward: false),
+        operatorMotionArgs: OperatorMotionArgs(visualLine: true)),
       opMotion("D", "delete", "moveToEol", MotionArgs(inclusive: true), .normal),
       op("D", "delete", OperatorArgs(linewise: true), .visual),
       opMotion("Y", "yank", "expandToLine", MotionArgs(linewise: true), .normal),
       op("Y", "yank", OperatorArgs(linewise: true), .visual),
       opMotion("C", "change", "moveToEol", MotionArgs(inclusive: true), .normal),
       op("C", "change", OperatorArgs(linewise: true), .visual),
-      opMotion("~", "changeCase", "moveByCharacters", MotionArgs(forward: true), operatorArgs: OperatorArgs(shouldMoveCursor: true), .normal),
+      opMotion(
+        "~", "changeCase", "moveByCharacters", MotionArgs(forward: true),
+        operatorArgs: OperatorArgs(shouldMoveCursor: true), .normal),
       op("~", "changeCase", nil, .visual),
       opMotion("<C-u>", "delete", "moveToStartOfLine", nil, .insert),
-      opMotion("<C-w>", "delete", "moveByWords", MotionArgs(forward: false, wordEnd: false), .insert),
+      opMotion(
+        "<C-w>", "delete", "moveByWords", MotionArgs(forward: false, wordEnd: false), .insert),
       // ignore C-w in normal mode
       {
         let c = VimCommand(keys: "<C-w>", type: .idle)
@@ -207,14 +230,20 @@ enum DefaultKeymap {
       action("<C-y>", "scroll", ActionArgs(forward: false, linewise: true)),
       action("a", "enterInsertMode", ActionArgs(insertAt: "charAfter"), .normal, isEdit: true),
       action("A", "enterInsertMode", ActionArgs(insertAt: "eol"), .normal, isEdit: true),
-      action("A", "enterInsertMode", ActionArgs(insertAt: "endOfSelectedArea"), .visual, isEdit: true),
+      action(
+        "A", "enterInsertMode", ActionArgs(insertAt: "endOfSelectedArea"), .visual, isEdit: true),
       action("i", "enterInsertMode", ActionArgs(insertAt: "inplace"), .normal, isEdit: true),
       action("gi", "enterInsertMode", ActionArgs(insertAt: "lastEdit"), .normal, isEdit: true),
       action("I", "enterInsertMode", ActionArgs(insertAt: "firstNonBlank"), .normal, isEdit: true),
       action("gI", "enterInsertMode", ActionArgs(insertAt: "bol"), .normal, isEdit: true),
-      action("I", "enterInsertMode", ActionArgs(insertAt: "startOfSelectedArea"), .visual, isEdit: true),
-      action("o", "newLineAndEnterInsertMode", ActionArgs(after: true), .normal, isEdit: true, interlaceInsertRepeat: true),
-      action("O", "newLineAndEnterInsertMode", ActionArgs(after: false), .normal, isEdit: true, interlaceInsertRepeat: true),
+      action(
+        "I", "enterInsertMode", ActionArgs(insertAt: "startOfSelectedArea"), .visual, isEdit: true),
+      action(
+        "o", "newLineAndEnterInsertMode", ActionArgs(after: true), .normal, isEdit: true,
+        interlaceInsertRepeat: true),
+      action(
+        "O", "newLineAndEnterInsertMode", ActionArgs(after: false), .normal, isEdit: true,
+        interlaceInsertRepeat: true),
       action("v", "toggleVisualMode"),
       action("V", "toggleVisualMode", ActionArgs(linewise: true)),
       action("<C-v>", "toggleVisualMode", ActionArgs(blockwise: true)),
@@ -229,7 +258,8 @@ enum DefaultKeymap {
       action("q<register>", "enterMacroRecordMode"),
       // Handle Replace-mode as a special case of insert mode.
       action("R", "enterInsertMode", ActionArgs(replace: true), .normal, isEdit: true),
-      op("R", "change", OperatorArgs(linewise: true, fullLine: true), .visual, exitVisualBlock: true),
+      op(
+        "R", "change", OperatorArgs(linewise: true, fullLine: true), .visual, exitVisualBlock: true),
       action("u", "undo", nil, .normal),
       op("u", "changeCase", OperatorArgs(toLower: true), .visual, isEdit: true),
       op("U", "changeCase", OperatorArgs(toLower: false), .visual, isEdit: true),
@@ -239,14 +269,23 @@ enum DefaultKeymap {
       action("<C-r><register>", "insertRegister", nil, .insert, isEdit: true),
       action("<C-o>", "oneNormalCommand", nil, .insert),
       action("zz", "scrollToCursor", ActionArgs(position: "center")),
-      action("z.", "scrollToCursor", ActionArgs(position: "center"), motion: "moveToFirstNonWhiteSpaceCharacter"),
+      action(
+        "z.", "scrollToCursor", ActionArgs(position: "center"),
+        motion: "moveToFirstNonWhiteSpaceCharacter"),
       action("zt", "scrollToCursor", ActionArgs(position: "top")),
-      action("z<CR>", "scrollToCursor", ActionArgs(position: "top"), motion: "moveToFirstNonWhiteSpaceCharacter"),
+      action(
+        "z<CR>", "scrollToCursor", ActionArgs(position: "top"),
+        motion: "moveToFirstNonWhiteSpaceCharacter"),
       action("zb", "scrollToCursor", ActionArgs(position: "bottom")),
-      action("z-", "scrollToCursor", ActionArgs(position: "bottom"), motion: "moveToFirstNonWhiteSpaceCharacter"),
+      action(
+        "z-", "scrollToCursor", ActionArgs(position: "bottom"),
+        motion: "moveToFirstNonWhiteSpaceCharacter"),
       action(".", "repeatLastEdit"),
-      action("<C-a>", "incrementNumberToken", ActionArgs(increase: true, backtrack: false), isEdit: true),
-      action("<C-x>", "incrementNumberToken", ActionArgs(increase: false, backtrack: false), isEdit: true),
+      action(
+        "<C-a>", "incrementNumberToken", ActionArgs(increase: true, backtrack: false), isEdit: true),
+      action(
+        "<C-x>", "incrementNumberToken", ActionArgs(increase: false, backtrack: false), isEdit: true
+      ),
       action("<C-t>", "indent", ActionArgs(indentRight: true), .insert),
       action("<C-d>", "indent", ActionArgs(indentRight: false), .insert),
       // Text object motions
@@ -255,8 +294,14 @@ enum DefaultKeymap {
       // Search
       search("/", SearchArgs(forward: true, querySrc: "prompt", toJumplist: true)),
       search("?", SearchArgs(forward: false, querySrc: "prompt", toJumplist: true)),
-      search("*", SearchArgs(forward: true, querySrc: "wordUnderCursor", toJumplist: true, wholeWordOnly: true)),
-      search("#", SearchArgs(forward: false, querySrc: "wordUnderCursor", toJumplist: true, wholeWordOnly: true)),
+      search(
+        "*",
+        SearchArgs(
+          forward: true, querySrc: "wordUnderCursor", toJumplist: true, wholeWordOnly: true)),
+      search(
+        "#",
+        SearchArgs(
+          forward: false, querySrc: "wordUnderCursor", toJumplist: true, wholeWordOnly: true)),
       search("g*", SearchArgs(forward: true, querySrc: "wordUnderCursor", toJumplist: true)),
       search("g#", SearchArgs(forward: false, querySrc: "wordUnderCursor", toJumplist: true)),
     ]
@@ -266,43 +311,44 @@ enum DefaultKeymap {
   }
 
   /// `defaultExCommandMap`: name, short name, flags.
-  static let exCommands: [(name: String, shortName: String?, possiblyAsync: Bool, excludeFromCommandHistory: Bool)] = [
-    ("colorscheme", "colo", false, false),
-    ("map", nil, false, false),
-    ("imap", "im", false, false),
-    ("nmap", "nm", false, false),
-    ("vmap", "vm", false, false),
-    ("omap", "om", false, false),
-    ("noremap", "no", false, false),
-    ("nnoremap", "nn", false, false),
-    ("vnoremap", "vn", false, false),
-    ("inoremap", "ino", false, false),
-    ("onoremap", "ono", false, false),
-    ("unmap", nil, false, false),
-    ("mapclear", "mapc", false, false),
-    ("nmapclear", "nmapc", false, false),
-    ("vmapclear", "vmapc", false, false),
-    ("imapclear", "imapc", false, false),
-    ("omapclear", "omapc", false, false),
-    ("write", "w", false, false),
-    ("undo", "u", false, false),
-    ("redo", "red", false, false),
-    ("set", "se", false, false),
-    ("setlocal", "setl", false, false),
-    ("setglobal", "setg", false, false),
-    ("sort", "sor", false, false),
-    ("substitute", "s", true, false),
-    ("startinsert", "start", false, false),
-    ("nohlsearch", "noh", false, false),
-    ("yank", "y", false, false),
-    ("put", "pu", false, false),
-    ("delmarks", "delm", false, false),
-    ("marks", nil, false, true),
-    ("registers", "reg", false, true),
-    ("vglobal", "v", false, false),
-    ("delete", "d", false, false),
-    ("join", "j", false, false),
-    ("normal", "norm", false, false),
-    ("global", "g", false, false),
-  ]
+  static let exCommands:
+    [(name: String, shortName: String?, possiblyAsync: Bool, excludeFromCommandHistory: Bool)] = [
+      ("colorscheme", "colo", false, false),
+      ("map", nil, false, false),
+      ("imap", "im", false, false),
+      ("nmap", "nm", false, false),
+      ("vmap", "vm", false, false),
+      ("omap", "om", false, false),
+      ("noremap", "no", false, false),
+      ("nnoremap", "nn", false, false),
+      ("vnoremap", "vn", false, false),
+      ("inoremap", "ino", false, false),
+      ("onoremap", "ono", false, false),
+      ("unmap", nil, false, false),
+      ("mapclear", "mapc", false, false),
+      ("nmapclear", "nmapc", false, false),
+      ("vmapclear", "vmapc", false, false),
+      ("imapclear", "imapc", false, false),
+      ("omapclear", "omapc", false, false),
+      ("write", "w", false, false),
+      ("undo", "u", false, false),
+      ("redo", "red", false, false),
+      ("set", "se", false, false),
+      ("setlocal", "setl", false, false),
+      ("setglobal", "setg", false, false),
+      ("sort", "sor", false, false),
+      ("substitute", "s", true, false),
+      ("startinsert", "start", false, false),
+      ("nohlsearch", "noh", false, false),
+      ("yank", "y", false, false),
+      ("put", "pu", false, false),
+      ("delmarks", "delm", false, false),
+      ("marks", nil, false, true),
+      ("registers", "reg", false, true),
+      ("vglobal", "v", false, false),
+      ("delete", "d", false, false),
+      ("join", "j", false, false),
+      ("normal", "norm", false, false),
+      ("global", "g", false, false),
+    ]
 }

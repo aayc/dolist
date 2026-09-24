@@ -90,7 +90,8 @@ final class EventLog: @unchecked Sendable {
       switch event {
       case .taskRecord(let record): "task.record \(record.status.rawValue) \(record.text)"
       case .threadUpsert(let thread): "thread.upsert \(thread.status.rawValue) \(thread.title)"
-      case .approvalUpsert(let approval): "approval.upsert \(approval.status.rawValue) \(approval.summary)"
+      case .approvalUpsert(let approval):
+        "approval.upsert \(approval.status.rawValue) \(approval.summary)"
       default: event.type
       }
     }

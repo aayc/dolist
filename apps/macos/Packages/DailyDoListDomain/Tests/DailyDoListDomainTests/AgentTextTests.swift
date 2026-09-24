@@ -14,7 +14,8 @@ extension DomainTests {
     }
 
     @Test func replacesAnExistingMarkerAndNeverMarksABlankLine() {
-      #expect(AgentText.markLine("- x %%agent:thr_old%%", threadId: "thr_new") == "- x %%agent:thr_new%%")
+      #expect(
+        AgentText.markLine("- x %%agent:thr_old%%", threadId: "thr_new") == "- x %%agent:thr_new%%")
       #expect(AgentText.markLine("   ", threadId: "thr_1") == "")
       #expect(AgentText.markLine("- y", threadId: "not a valid id!") == "- y %%agent%%")
       // Only blanks go before the marker; other whitespace keeps the line unmarked when it's all
@@ -25,7 +26,8 @@ extension DomainTests {
 
     @Test func parsesTheTextTheThreadAndWhereTheMarkerStarts() {
       #expect(
-        AgentText.parse("- Booked %%agent:thr_1%%") == AgentLine(text: "- Booked", threadId: "thr_1", markerFrom: 8))
+        AgentText.parse("- Booked %%agent:thr_1%%")
+          == AgentLine(text: "- Booked", threadId: "thr_1", markerFrom: 8))
       #expect(AgentText.parse("- mine") == nil)
       #expect(AgentText.parse("%%agent%% in the middle is not a marker") == nil)
       #expect(AgentText.isAgentLine("- ok %%agent%%  "))
@@ -46,7 +48,9 @@ extension DomainTests {
       #expect(AgentText.parse("- a %%agent:%%") == nil)
       #expect(AgentText.parse("- a %%agent:thr.1%%") == nil)
       #expect(AgentText.parse("- a %%agent:agent%%")?.threadId == "agent")
-      #expect(AgentText.parse("- a %%agent:%%agent%%") == AgentLine(text: "- a %%agent:", threadId: nil, markerFrom: 12))
+      #expect(
+        AgentText.parse("- a %%agent:%%agent%%")
+          == AgentLine(text: "- a %%agent:", threadId: nil, markerFrom: 12))
       #expect(AgentText.parse("- a %%Agent%%") == nil)
       #expect(AgentText.parse("- a %%agent%% %%") == nil)
       #expect(AgentText.marker(threadId: nil) == "%%agent%%")
@@ -68,7 +72,8 @@ extension DomainTests {
     }
 
     @Test func agentMarkersInTaskTextsAndLinks() {
-      let tasks = TaskParser.parse("- [ ] %%agent:thr_1%%\n- [x] Read [[Note]] %%agent%%\n- [ ] a%%agent%%")
+      let tasks = TaskParser.parse(
+        "- [ ] %%agent:thr_1%%\n- [x] Read [[Note]] %%agent%%\n- [ ] a%%agent%%")
       #expect(tasks.map(\.text) == ["", "Read [[Note]]", "a"])
       #expect(tasks.map(\.agent) == [true, true, true])
       #expect(tasks[1].links == ["Note"])
@@ -97,7 +102,9 @@ extension DomainTests {
     }
 
     @Test func followsALineAsTheUserEditsAroundAndInsideIt() {
-      let anchors = [LineAnchor(anchorId: "anc_q", text: "What's the tallest building in NYC?", line: 2)]
+      let anchors = [
+        LineAnchor(anchorId: "anc_q", text: "What's the tallest building in NYC?", line: 2)
+      ]
       let moved = "- [ ] New task\n\(doc)"
       #expect(
         LineAnchors.resolve(moved, anchors: anchors)["anc_q"]
@@ -109,14 +116,21 @@ extension DomainTests {
     }
 
     @Test func crlfEmptyIdsAndRecords() {
-      #expect(LineAnchors.anchorableLines("a\r\n\r\n  b  \r\n- [ ] t\r\n") == [
-        AnchoredLine(line: 0, text: "a"), AnchoredLine(line: 2, text: "b"),
-      ])
+      #expect(
+        LineAnchors.anchorableLines("a\r\n\r\n  b  \r\n- [ ] t\r\n") == [
+          AnchoredLine(line: 0, text: "a"), AnchoredLine(line: 2, text: "b"),
+        ])
       #expect(LineAnchors.anchorableLines("").isEmpty)
-      let anchors = [LineAnchor(anchorId: "", text: "a", line: 0), LineAnchor(anchorId: "anc_b", text: "b", line: 1)]
-      #expect(LineAnchors.resolve("a\nb", anchors: anchors) == ["anc_b": AnchoredLine(line: 1, text: "b")])
+      let anchors = [
+        LineAnchor(anchorId: "", text: "a", line: 0),
+        LineAnchor(anchorId: "anc_b", text: "b", line: 1),
+      ]
+      #expect(
+        LineAnchors.resolve("a\nb", anchors: anchors) == ["anc_b": AnchoredLine(line: 1, text: "b")]
+      )
       let record = TaskAgentRecord(
-        taskId: "anc_1", notePath: "n.md", date: nil, text: "Why?", line: 3, status: .done, threadId: "thr_1",
+        taskId: "anc_1", notePath: "n.md", date: nil, text: "Why?", line: 3, status: .done,
+        threadId: "thr_1",
         updatedAt: 0, unread: 0, anchor: .line)
       #expect(LineAnchor(record: record) == LineAnchor(anchorId: "anc_1", text: "Why?", line: 3))
     }

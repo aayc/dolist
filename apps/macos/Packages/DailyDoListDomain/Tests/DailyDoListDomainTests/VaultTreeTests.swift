@@ -27,7 +27,9 @@ extension DomainTests {
     }
 
     @Test func impliedFoldersAndEmptyFolders() {
-      let tree = VaultTree.build([file("a/b/c/d/e/f/g/h/i/j/k.md"), folder("empty"), folder("empty/nested-empty")], locale: en)
+      let tree = VaultTree.build(
+        [file("a/b/c/d/e/f/g/h/i/j/k.md"), folder("empty"), folder("empty/nested-empty")],
+        locale: en)
       #expect(tree.map(\.path) == ["a", "empty"])
       #expect(VaultTree.node(at: "a/b/c/d/e/f/g/h/i/j/k.md", in: tree)?.name == "k")
       #expect(VaultTree.node(at: "empty/nested-empty", in: tree)?.children == [])
@@ -37,7 +39,8 @@ extension DomainTests {
     @Test func orderDoesNotDependOnTheInput() {
       let entries = [
         file("note.md"), file("Note.md"), file("résumé.md"), file("resume.md"), file("Straße 2.md"),
-        file("Strasse 10.md"), file("x/Day 10.md"), file("x/Day 2.md"), folder("x/sub"), file("10.md"),
+        file("Strasse 10.md"), file("x/Day 10.md"), file("x/Day 2.md"), folder("x/sub"),
+        file("10.md"),
         file("9.md"), file("日本.md"), file("😀.md"),
       ]
       let expected = shape(VaultTree.build(entries, locale: en))
@@ -47,7 +50,9 @@ extension DomainTests {
       }
       // Names equal to the collator fall back to code units, so the order is total.
       #expect(expected.prefix(2) == ["x|folder", "x/sub|folder"])
-      #expect(expected.contains("Note.md|file") && expected.firstIndex(of: "Note.md|file")! < expected.firstIndex(of: "note.md|file")!)
+      #expect(
+        expected.contains("Note.md|file")
+          && expected.firstIndex(of: "Note.md|file")! < expected.firstIndex(of: "note.md|file")!)
     }
 
     @Test func distinctUnicodeSpellingsStayDistinct() {

@@ -8,10 +8,14 @@ import Testing
 @Suite("Editor commands")
 @MainActor
 struct EditorCommandTests {
-  private func keyEvent(_ characters: String, keyCode: UInt16 = 0, modifiers: NSEvent.ModifierFlags = .command) -> NSEvent {
+  private func keyEvent(
+    _ characters: String, keyCode: UInt16 = 0, modifiers: NSEvent.ModifierFlags = .command
+  ) -> NSEvent {
     NSEvent.keyEvent(
-      with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 0, windowNumber: 0, context: nil,
-      characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode)!
+      with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 0, windowNumber: 0,
+      context: nil,
+      characters: characters, charactersIgnoringModifiers: characters, isARepeat: false,
+      keyCode: keyCode)!
   }
 
   @Test func typingATaskFromScratchProducesExactlyThat() {

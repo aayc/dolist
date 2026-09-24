@@ -28,7 +28,8 @@ public struct LinkPreview: Hashable, Sendable {
     let source = CitedSourceMatch.source(for: url, in: sources)
     let text = label?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     let meaningfulLabel = text.isEmpty || isCitationLabel(text) || text == url ? nil : text
-    let title = source?.title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
+    let title =
+      source?.title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
       ?? meaningfulLabel ?? (host.isEmpty ? url : host)
     let snippet = source?.snippet?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
     return LinkPreview(title: title, host: host, snippet: snippet, url: url)
@@ -74,7 +75,8 @@ enum CitedSourceMatch {
 
   /// `host/path?query`, lowercased host without `www.`, no trailing slash, no fragment.
   static func key(_ url: String) -> String? {
-    guard var components = URLComponents(string: url), let host = components.host?.lowercased() else { return nil }
+    guard var components = URLComponents(string: url), let host = components.host?.lowercased()
+    else { return nil }
     components.fragment = nil
     var path = components.percentEncodedPath
     while path.hasSuffix("/") { path.removeLast() }

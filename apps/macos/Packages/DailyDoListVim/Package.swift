@@ -16,6 +16,7 @@ let package = Package(
   targets: [
     .target(name: "DailyDoListVim"),
     .target(name: "DailyDoListVimTestSupport", dependencies: ["DailyDoListVim"]),
-    .testTarget(name: "DailyDoListVimTests", dependencies: ["DailyDoListVim", "DailyDoListVimTestSupport"]),
+    .testTarget(
+      name: "DailyDoListVimTests", dependencies: ["DailyDoListVim", "DailyDoListVimTestSupport"]),
   ]
 )

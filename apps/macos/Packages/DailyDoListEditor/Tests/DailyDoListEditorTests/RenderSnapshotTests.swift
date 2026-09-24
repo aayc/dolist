@@ -25,7 +25,8 @@ struct RenderSnapshotTests {
     editor.select(NSRange(location: editor.offset(of: "Plan for today") + 5, length: 0))
     let png = try render(editor)
     #expect(png.count > 10_000)
-    try FileManager.default.createDirectory(at: Self.outputDirectory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(
+      at: Self.outputDirectory, withIntermediateDirectories: true)
     try png.write(to: Self.outputDirectory.appendingPathComponent("sample-\(name).png"))
   }
 
@@ -43,22 +44,29 @@ struct RenderSnapshotTests {
       EditorBadge(id: "c", line: 2, status: "done", label: "Done · About 250 g", unread: 1),
     ])
     let png = try render(editor)
-    try FileManager.default.createDirectory(at: Self.outputDirectory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(
+      at: Self.outputDirectory, withIntermediateDirectories: true)
     try png.write(to: Self.outputDirectory.appendingPathComponent("badges-narrow.png"))
 
     // A pill that starts inside the text column and ends in the margin is drawn in full.
     let column = editor.textView.textContainerOrigin.x + editor.controller.textContainer.size.width
     let layouts = editor.controller.currentBadgeLayouts()
-    let crossing = try #require(layouts.first { $0.rect.minX < column && $0.rect.maxX > column + 24 })
+    let crossing = try #require(
+      layouts.first { $0.rect.minX < column && $0.rect.maxX > column + 24 })
     let rep = try snapshot(editor.textView)
     let scale = CGFloat(rep.pixelsWide) / editor.textView.bounds.width
     var colors = Set<UInt32>()
     for x in stride(from: column + 4, to: crossing.rect.maxX - 2, by: 1) {
-      guard let color = rep.colorAt(x: Int(x * scale), y: Int(crossing.rect.midY * scale))?.usingColorSpace(.sRGB)
+      guard
+        let color = rep.colorAt(x: Int(x * scale), y: Int(crossing.rect.midY * scale))?
+          .usingColorSpace(.sRGB)
       else { continue }
-      colors.insert(UInt32(color.redComponent * 255) << 16 | UInt32(color.greenComponent * 255) << 8 | UInt32(color.blueComponent * 255))
+      colors.insert(
+        UInt32(color.redComponent * 255) << 16 | UInt32(color.greenComponent * 255) << 8
+          | UInt32(color.blueComponent * 255))
     }
-    #expect(colors.count > 2, "the part of badge \(crossing.badge.id) right of the text column is blank")
+    #expect(
+      colors.count > 2, "the part of badge \(crossing.badge.id) right of the text column is blank")
   }
 
   /// Every drawn status, light and dark: only "needs you" and "failed" are tinted, working badges
@@ -66,8 +74,10 @@ struct RenderSnapshotTests {
   @Test(arguments: [("light", NSAppearance.Name.aqua), ("dark", NSAppearance.Name.darkAqua)])
   func rendersBadgesInEveryStatus(name: String, appearance: NSAppearance.Name) throws {
     let statuses: [(status: String, label: String, unread: Int)] = [
-      ("waiting_approval", "Needs approval", 0), ("waiting_user", "Needs your input", 1), ("failed", "Failed · Site down", 0),
-      ("triaging", "Triaging…", 0), ("queued", "Queued", 0), ("working", "Comparing fares", 2), ("done", "Done · 3 options", 0),
+      ("waiting_approval", "Needs approval", 0), ("waiting_user", "Needs your input", 1),
+      ("failed", "Failed · Site down", 0),
+      ("triaging", "Triaging…", 0), ("queued", "Queued", 0), ("working", "Comparing fares", 2),
+      ("done", "Done · 3 options", 0),
       ("done", "Done · Summary ready", 3), ("cancelled", "Stopped", 0),
     ]
     let text = statuses.map { "- [ ] Task \($0.status)" }.joined(separator: "\n")
@@ -75,23 +85,29 @@ struct RenderSnapshotTests {
     editor.controller.scrollView.appearance = NSAppearance(named: appearance)
     editor.controller.setBadges(
       statuses.enumerated().map { index, item in
-        EditorBadge(id: "b\(index)", line: index + 1, status: item.status, label: item.label, unread: item.unread)
+        EditorBadge(
+          id: "b\(index)", line: index + 1, status: item.status, label: item.label,
+          unread: item.unread)
       })
     let png = try render(editor)
-    try FileManager.default.createDirectory(at: Self.outputDirectory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(
+      at: Self.outputDirectory, withIntermediateDirectories: true)
     try png.write(to: Self.outputDirectory.appendingPathComponent("badges-\(name).png"))
 
     let rep = try snapshot(editor.textView)
     let scale = CGFloat(rep.pixelsWide) / editor.textView.bounds.width
     func color(_ point: NSPoint) throws -> NSColor {
-      try #require(rep.colorAt(x: Int(point.x * scale), y: Int(point.y * scale))?.usingColorSpace(.sRGB))
+      try #require(
+        rep.colorAt(x: Int(point.x * scale), y: Int(point.y * scale))?.usingColorSpace(.sRGB))
     }
     func distance(_ a: NSColor, _ b: NSColor) -> CGFloat {
-      abs(a.redComponent - b.redComponent) + abs(a.greenComponent - b.greenComponent) + abs(a.blueComponent - b.blueComponent)
+      abs(a.redComponent - b.redComponent) + abs(a.greenComponent - b.greenComponent)
+        + abs(a.blueComponent - b.blueComponent)
     }
     /// How far from gray a color is.
     func saturation(_ c: NSColor) -> CGFloat {
-      max(c.redComponent, c.greenComponent, c.blueComponent) - min(c.redComponent, c.greenComponent, c.blueComponent)
+      max(c.redComponent, c.greenComponent, c.blueComponent)
+        - min(c.redComponent, c.greenComponent, c.blueComponent)
     }
     let layouts = editor.controller.currentBadgeLayouts()
     #expect(layouts.count == statuses.count)
@@ -117,7 +133,9 @@ struct RenderSnapshotTests {
   /// crossfading from working to done, a triaging dot at its faintest, a checkmark popping in.
   @Test func rendersAFrameOfMotion() throws {
     let text = "- [ ] Appearing\n- [ ] Crossfading\n- [ ] Triaging\n- [ ] Checked\nEnd"
-    let editor = EditorHarness(text: text, selection: NSRange(location: (text as NSString).length, length: 0), size: NSSize(width: 640, height: 220))
+    let editor = EditorHarness(
+      text: text, selection: NSRange(location: (text as NSString).length, length: 0),
+      size: NSSize(width: 640, height: 220))
     editor.controller.scrollView.appearance = NSAppearance(named: .aqua)
     let motion = ManualMotion(editor)
     editor.controller.setBadges([
@@ -133,11 +151,14 @@ struct RenderSnapshotTests {
       EditorBadge(id: "c", line: 2, status: "triaging", label: "Triaging…"),
     ])
     let checkbox = try #require(editor.controller.checkboxRects().first { $0.line == 3 })
-    #expect(editor.controller.handleClick(at: NSPoint(x: checkbox.rect.midX, y: checkbox.rect.midY), modifiers: []))
+    #expect(
+      editor.controller.handleClick(
+        at: NSPoint(x: checkbox.rect.midX, y: checkbox.rect.midY), modifiers: []))
     motion.frame(after: 0.07)
     #expect(motion.isTicking)
     let png = try render(editor)
-    try FileManager.default.createDirectory(at: Self.outputDirectory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(
+      at: Self.outputDirectory, withIntermediateDirectories: true)
     try png.write(to: Self.outputDirectory.appendingPathComponent("motion-frame.png"))
   }
 
@@ -154,8 +175,12 @@ struct RenderSnapshotTests {
 
   static func agentBadges(_ text: String) -> [EditorBadge] {
     [
-      EditorBadge(id: "t1", line: 1, status: "done", label: "Done · Table held", unread: 1, threadId: "thr_ab12"),
-      EditorBadge(id: "anc_q", line: 4, status: "done", label: "Done · Ridge Tower, 1,250 ft", threadId: "thr_q", highlightsLine: true),
+      EditorBadge(
+        id: "t1", line: 1, status: "done", label: "Done · Table held", unread: 1,
+        threadId: "thr_ab12"),
+      EditorBadge(
+        id: "anc_q", line: 4, status: "done", label: "Done · Ridge Tower, 1,250 ft",
+        threadId: "thr_q", highlightsLine: true),
     ]
   }
 
@@ -164,25 +189,32 @@ struct RenderSnapshotTests {
   @Test(arguments: [("light", NSAppearance.Name.aqua), ("dark", NSAppearance.Name.darkAqua)])
   func rendersAgentLinesAndAnAnchoredLine(name: String, appearance: NSAppearance.Name) throws {
     let text = Self.agentNote
-    let editor = EditorHarness(text: text, selection: NSRange(location: (text as NSString).length, length: 0), size: NSSize(width: 900, height: 360))
+    let editor = EditorHarness(
+      text: text, selection: NSRange(location: (text as NSString).length, length: 0),
+      size: NSSize(width: 900, height: 360))
     editor.controller.scrollView.appearance = NSAppearance(named: appearance)
     editor.controller.setBadges(Self.agentBadges(text))
     let png = try render(editor)
-    try FileManager.default.createDirectory(at: Self.outputDirectory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(
+      at: Self.outputDirectory, withIntermediateDirectories: true)
     try png.write(to: Self.outputDirectory.appendingPathComponent("agent-lines-\(name).png"))
 
     // The band is drawn: accent-tinted pixels left of the question's text, over the background.
     let rep = try snapshot(editor.textView)
     let scale = CGFloat(rep.pixelsWide) / editor.textView.bounds.width
-    let band = try #require(editor.controller.anchoredLineBands(in: editor.textView.visibleRect).first)
+    let band = try #require(
+      editor.controller.anchoredLineBands(in: editor.textView.visibleRect).first)
     func color(_ point: NSPoint) throws -> NSColor {
-      try #require(rep.colorAt(x: Int(point.x * scale), y: Int(point.y * scale))?.usingColorSpace(.sRGB))
+      try #require(
+        rep.colorAt(x: Int(point.x * scale), y: Int(point.y * scale))?.usingColorSpace(.sRGB))
     }
     let bar = try color(NSPoint(x: band.minX + 1, y: band.midY))
     let fill = try color(NSPoint(x: band.minX + 5, y: band.midY))
     let outside = try color(NSPoint(x: band.minX + 5, y: band.maxY + 6))
     #expect(bar.blueComponent - bar.redComponent > 0.3, "the bar is accent blue")
-    #expect(fill.blueComponent - fill.redComponent > outside.blueComponent - outside.redComponent + 0.02, "the band is tinted")
+    #expect(
+      fill.blueComponent - fill.redComponent > outside.blueComponent - outside.redComponent + 0.02,
+      "the band is tinted")
     // A sparkle is drawn in each hidden marker's slot.
     #expect(editor.controller.agentSparkles().count == 3)
   }
@@ -190,21 +222,26 @@ struct RenderSnapshotTests {
   @Test func rendersAgentLinesInSourceMode() throws {
     let text = Self.agentNote
     let configuration = EditorConfiguration(livePreview: false, readableLineLength: false)
-    let editor = EditorHarness(text: text, configuration: configuration, size: NSSize(width: 1000, height: 320))
+    let editor = EditorHarness(
+      text: text, configuration: configuration, size: NSSize(width: 1000, height: 320))
     editor.controller.scrollView.appearance = NSAppearance(named: .darkAqua)
     editor.controller.setBadges(Self.agentBadges(text))
     let png = try render(editor)
-    try FileManager.default.createDirectory(at: Self.outputDirectory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(
+      at: Self.outputDirectory, withIntermediateDirectories: true)
     try png.write(to: Self.outputDirectory.appendingPathComponent("agent-lines-source-mode.png"))
   }
 
   @Test func rendersSourceModeWithLineNumbers() throws {
-    let configuration = EditorConfiguration(livePreview: false, readableLineLength: false, showLineNumbers: true)
-    let editor = EditorHarness(text: SampleNote.text, configuration: configuration, size: NSSize(width: 900, height: 1200))
+    let configuration = EditorConfiguration(
+      livePreview: false, readableLineLength: false, showLineNumbers: true)
+    let editor = EditorHarness(
+      text: SampleNote.text, configuration: configuration, size: NSSize(width: 900, height: 1200))
     editor.controller.scrollView.appearance = NSAppearance(named: .aqua)
     let png = try render(editor, includeRuler: true)
     #expect(png.count > 10_000)
-    try FileManager.default.createDirectory(at: Self.outputDirectory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(
+      at: Self.outputDirectory, withIntermediateDirectories: true)
     try png.write(to: Self.outputDirectory.appendingPathComponent("sample-source-mode.png"))
   }
 
@@ -224,14 +261,21 @@ struct RenderSnapshotTests {
     let gutter = try snapshot(ruler)
     let composite = try #require(
       NSBitmapImageRep(
-        bitmapDataPlanes: nil, pixelsWide: gutter.pixelsWide + text.pixelsWide, pixelsHigh: text.pixelsHigh,
-        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+        bitmapDataPlanes: nil, pixelsWide: gutter.pixelsWide + text.pixelsWide,
+        pixelsHigh: text.pixelsHigh,
+        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+        colorSpaceName: .deviceRGB,
         bytesPerRow: 0, bitsPerPixel: 0))
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: composite)
     let height = CGFloat(text.pixelsHigh)
-    gutter.draw(in: NSRect(x: 0, y: height - CGFloat(gutter.pixelsHigh), width: CGFloat(gutter.pixelsWide), height: CGFloat(gutter.pixelsHigh)))
-    text.draw(in: NSRect(x: CGFloat(gutter.pixelsWide), y: 0, width: CGFloat(text.pixelsWide), height: height))
+    gutter.draw(
+      in: NSRect(
+        x: 0, y: height - CGFloat(gutter.pixelsHigh), width: CGFloat(gutter.pixelsWide),
+        height: CGFloat(gutter.pixelsHigh)))
+    text.draw(
+      in: NSRect(
+        x: CGFloat(gutter.pixelsWide), y: 0, width: CGFloat(text.pixelsWide), height: height))
     NSGraphicsContext.restoreGraphicsState()
     return try #require(composite.representation(using: .png, properties: [:]))
   }
@@ -250,7 +294,8 @@ struct RenderSnapshotTests {
     for y in stride(from: 0, to: rep.pixelsHigh, by: stepY) {
       for x in stride(from: 0, to: rep.pixelsWide, by: stepX) {
         guard let color = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
-        let r = UInt32(color.redComponent * 255), g = UInt32(color.greenComponent * 255)
+        let r = UInt32(color.redComponent * 255)
+        let g = UInt32(color.greenComponent * 255)
         let b = UInt32(color.blueComponent * 255)
         colors.insert(r << 16 | g << 8 | b)
       }

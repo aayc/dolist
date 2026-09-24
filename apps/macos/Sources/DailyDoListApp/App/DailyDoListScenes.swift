@@ -45,7 +45,8 @@ struct MenuBarLabel: View {
       Label("\(pending)", systemImage: "checkmark.square.badge.exclamationmark")
         .labelStyle(.titleAndIcon)
     } else {
-      Image(systemName: model.agent?.status?.enabled == false ? "square.dashed" : "checkmark.square")
+      Image(
+        systemName: model.agent?.status?.enabled == false ? "square.dashed" : "checkmark.square")
     }
   }
 }

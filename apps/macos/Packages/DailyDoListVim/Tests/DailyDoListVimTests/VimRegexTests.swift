@@ -8,7 +8,9 @@ import Testing
 @Suite struct VimRegexTests {
   let vim = Vim(scheduler: ManualVimScheduler(), isMac: false)
 
-  private func translate(_ pattern: String) -> String { vim.translateRegex(VimText(pattern)).string }
+  private func translate(_ pattern: String) -> String {
+    vim.translateRegex(VimText(pattern)).string
+  }
 
   @Test func magicMode() {
     #expect(translate("\\(a\\|b\\)") == "(a|b)")

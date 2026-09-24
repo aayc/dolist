@@ -38,7 +38,9 @@ final class VaultStore {
   // MARK: - Local mutations
 
   /// Replaces the tree with a snapshot, keeping `known` files that the snapshot may predate.
-  func setTree(_ response: VaultTreeResponse, keeping known: [(path: String, version: String?)] = []) {
+  func setTree(
+    _ response: VaultTreeResponse, keeping known: [(path: String, version: String?)] = []
+  ) {
     var next: [String: VaultEntry] = [:]
     for entry in response.entries where !entry.path.isEmpty && !VaultPath.isHidden(entry.path) {
       next[entry.path] = entry
@@ -89,7 +91,9 @@ final class VaultStore {
     for entry in moving { next[entry.path] = nil }
     for entry in moving {
       guard let target = NotePaths.renamed(entry.path, from: from, to: to) else { continue }
-      next[target] = VaultEntry(path: target, kind: entry.kind, size: entry.size, mtime: entry.mtime, version: entry.version)
+      next[target] = VaultEntry(
+        path: target, kind: entry.kind, size: entry.size, mtime: entry.mtime, version: entry.version
+      )
     }
     Self.addAncestors(of: to, to: &next)
     commit(next)
@@ -145,7 +149,8 @@ final class VaultStore {
       // Undo exactly what the move added (the target and folders it implied), then restore.
       let implied = Set(VaultPath.ancestorFolders(to))
       var next = entries
-      for key in next.keys where before[key] == nil && (NotePaths.isSameOrInside(key, to) || implied.contains(key)) {
+      for key in next.keys
+      where before[key] == nil && (NotePaths.isSameOrInside(key, to) || implied.contains(key)) {
         next[key] = nil
       }
       for entry in snapshot { next[entry.path] = entry }

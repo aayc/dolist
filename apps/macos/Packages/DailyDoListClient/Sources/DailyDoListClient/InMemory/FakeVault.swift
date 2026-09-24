@@ -31,21 +31,30 @@ struct FakeVault: Sendable {
 
   /// Visible folders, then visible files, each in code-point order (like the tree route).
   func entries() -> [VaultEntry] {
-    let visibleFolders = folders.filter { !FakeVaultPaths.isHidden($0) }.sorted(by: Self.codePointOrder)
-    let visibleFiles = files.keys.filter { !FakeVaultPaths.isHidden($0) }.sorted(by: Self.codePointOrder)
+    let visibleFolders = folders.filter { !FakeVaultPaths.isHidden($0) }.sorted(
+      by: Self.codePointOrder)
+    let visibleFiles = files.keys.filter { !FakeVaultPaths.isHidden($0) }.sorted(
+      by: Self.codePointOrder)
     return visibleFolders.map { VaultEntry(path: $0, kind: .folder) }
       + visibleFiles.compactMap { path in
-        files[path].map { VaultEntry(path: path, kind: .file, size: $0.size, mtime: $0.mtime, version: $0.version) }
+        files[path].map {
+          VaultEntry(path: path, kind: .file, size: $0.size, mtime: $0.mtime, version: $0.version)
+        }
       }
   }
 
   var searchableNotes: [FakeVaultSearch.Note] {
-    files.map { FakeVaultSearch.Note(path: $0.key, content: $0.value.content, mtime: $0.value.mtime, size: $0.value.size) }
+    files.map {
+      FakeVaultSearch.Note(
+        path: $0.key, content: $0.value.content, mtime: $0.value.mtime, size: $0.value.size)
+    }
   }
 
   /// Writes without preconditions (seeding and external edits).
   @discardableResult
-  mutating func store(_ path: String, _ content: String, mtime: EpochMillis) -> (file: File, created: Bool) {
+  mutating func store(_ path: String, _ content: String, mtime: EpochMillis) -> (
+    file: File, created: Bool
+  ) {
     let file = File(content: content, version: ContentHash.version(of: content), mtime: mtime)
     let created = files[path] == nil
     files[path] = file
@@ -118,7 +127,8 @@ struct FakeVault: Sendable {
 
   /// The `attempt`-th `.trash/` candidate for `path`: the same relative path, then with a
   /// ` (YYYY-MM-DD HHmmss)` suffix, then with the suffix and a counter.
-  static func trashCandidate(_ path: String, isFolder: Bool, stamp: String, attempt: Int) -> String {
+  static func trashCandidate(_ path: String, isFolder: Bool, stamp: String, attempt: Int) -> String
+  {
     let target = FakeVaultPaths.trash + "/" + path
     guard attempt > 0 else { return target }
     let suffix = attempt == 1 ? " (\(stamp))" : " (\(stamp) \(attempt))"
@@ -126,7 +136,8 @@ struct FakeVault: Sendable {
     let slash = target.lastIndex(of: "/").map { target.index(after: $0) } ?? target.startIndex
     let name = String(target[slash...].dropLast(ext.count))
     let budget = 255 - suffix.utf8.count - ext.utf8.count
-    return String(target[..<slash]) + FakeVaultPaths.truncateUTF8(name, maxBytes: budget) + suffix + ext
+    return String(target[..<slash]) + FakeVaultPaths.truncateUTF8(name, maxBytes: budget) + suffix
+      + ext
   }
 
   /// `moveNoteToTrash`: the first free candidate.
@@ -148,7 +159,9 @@ struct FakeVault: Sendable {
 
   /// `moveFolderToTrash`: the first candidate none of whose destination files exists (an existing
   /// trash folder is merged into, like the daemon does). Returns the moves and the trash folder.
-  mutating func trashFolder(_ folder: String, stamp: String) throws(StorageFailure) -> (moves: [Move], trashedTo: String) {
+  mutating func trashFolder(_ folder: String, stamp: String) throws(StorageFailure) -> (
+    moves: [Move], trashedTo: String
+  ) {
     for attempt in 0..<100 {
       let to = Self.trashCandidate(folder, isFolder: true, stamp: stamp, attempt: attempt)
       guard let plan = planFolderMove(folder, to: to) else { continue }
@@ -181,7 +194,9 @@ struct FakeVault: Sendable {
     return plan
   }
 
-  private mutating func executeFolderMove(_ from: String, to: String, plan: [(from: String, to: String)]) -> [Move] {
+  private mutating func executeFolderMove(
+    _ from: String, to: String, plan: [(from: String, to: String)]
+  ) -> [Move] {
     var moves: [Move] = []
     for step in plan {
       if let file = try? rename(step.from, to: step.to) {

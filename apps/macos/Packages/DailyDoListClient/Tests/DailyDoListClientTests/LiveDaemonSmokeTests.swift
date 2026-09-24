@@ -27,7 +27,8 @@ struct LiveDaemonSmokeTests {
     await client.disconnect()
     try await recorder.waitForFinish()
 
-    let wrongToken = HTTPDaemonClient(endpoint: DaemonEndpoint(baseURL: client.endpoint.baseURL, token: "not-the-token"))
+    let wrongToken = HTTPDaemonClient(
+      endpoint: DaemonEndpoint(baseURL: client.endpoint.baseURL, token: "not-the-token"))
     await #expect(throws: DaemonClientError.unauthorized) { try await wrongToken.tree() }
   }
 }

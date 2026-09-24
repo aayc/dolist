@@ -28,7 +28,9 @@ struct ComposerTests {
     var submitted = 0
     let coordinator = coordinator { submitted += 1 }
     let textView = NSTextView()
-    textView.setMarkedText("にほ", selectedRange: NSRange(location: 2, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+    textView.setMarkedText(
+      "にほ", selectedRange: NSRange(location: 2, length: 0),
+      replacementRange: NSRange(location: NSNotFound, length: 0))
     #expect(textView.hasMarkedText())
     #expect(!coordinator.textView(textView, doCommandBy: #selector(NSResponder.insertNewline(_:))))
     #expect(submitted == 0)

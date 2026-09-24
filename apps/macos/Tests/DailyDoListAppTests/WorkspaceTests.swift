@@ -38,10 +38,14 @@ struct WorkspaceNavigationTests {
   @Test func dailyNotesOpenWithTheCaretAtTheEndSoTypingAddsToTheList() async throws {
     await workspace.openToday()
     let editor = workspace.editor.controller
-    #expect(editor.snapshot().selectedRange == NSRange(location: ("- [ ] today" as NSString).length, length: 0))
+    #expect(
+      editor.snapshot().selectedRange
+        == NSRange(location: ("- [ ] today" as NSString).length, length: 0))
 
     await workspace.openNote("Ideas.md", OpenOptions(newTab: true))
-    #expect(editor.snapshot().selectedRange == NSRange(location: 0, length: 0), "other notes open at the top")
+    #expect(
+      editor.snapshot().selectedRange == NSRange(location: 0, length: 0),
+      "other notes open at the top")
 
     // Back on the daily note, its own caret comes back (not forced to the end again).
     workspace.activateTab("Daily/2026-09-23.md")
@@ -71,7 +75,8 @@ struct WorkspaceNavigationTests {
 
   @Test func weeklyNoteIsCreatedFromTheTemplateWithCreateOnly() async throws {
     await workspace.openWeekly()
-    let expected = DailyNotes.weeklyPath(for: LocalDate(year: 2026, month: 9, day: 23), settings: .defaults)
+    let expected = DailyNotes.weeklyPath(
+      for: LocalDate(year: 2026, month: 9, day: 23), settings: .defaults)
     #expect(workspace.activePath == expected)
     let write = try #require(client.writes.last)
     #expect(write.path == expected)
@@ -127,7 +132,9 @@ struct WorkspaceNavigationTests {
     #expect(workspace.editor.controller.text == "plan")
     workspace.activateTab("Ideas.md")
     #expect(workspace.editor.controller.text == "ideas, edited")
-    try await eventually("switch flushed the edit") { client.note("Ideas.md")?.content == "ideas, edited" }
+    try await eventually("switch flushed the edit") {
+      client.note("Ideas.md")?.content == "ideas, edited"
+    }
   }
 
   @Test func wikiLinksResolveLikeObsidianOrCreateTheNote() async throws {
@@ -176,7 +183,8 @@ struct WorkspaceNavigationTests {
 
     workspace.ui.renamingPath = nil
     workspace.beginRename("Projects/Launch/Plan.md")
-    #expect(workspace.ui.titleFocusPath == "Projects/Launch/Plan.md", "other notes rename in their title")
+    #expect(
+      workspace.ui.titleFocusPath == "Projects/Launch/Plan.md", "other notes rename in their title")
     #expect(workspace.ui.renamingPath == nil)
   }
 
@@ -204,7 +212,8 @@ struct WorkspaceNavigationTests {
   }
 
   @Test func restoredTabsOpenExistingNotesOnly() async {
-    await workspace.restoreTabs(["Ideas.md", "Gone.md", "Projects/Launch/Plan.md"], active: "Projects/Launch/Plan.md")
+    await workspace.restoreTabs(
+      ["Ideas.md", "Gone.md", "Projects/Launch/Plan.md"], active: "Projects/Launch/Plan.md")
     #expect(workspace.tabs.tabs == ["Ideas.md", "Projects/Launch/Plan.md"])
     #expect(workspace.activePath == "Projects/Launch/Plan.md")
   }
@@ -213,7 +222,9 @@ struct WorkspaceNavigationTests {
 @MainActor
 @Suite("Editor integration")
 struct EditorIntegrationTests {
-  let client = FakeDaemonClient(notes: ["Daily/2026-09-23.md": "Intro\n- [ ] Book flights to Lisbon\n- [ ] Buy milk"])
+  let client = FakeDaemonClient(notes: [
+    "Daily/2026-09-23.md": "Intro\n- [ ] Book flights to Lisbon\n- [ ] Buy milk"
+  ])
   let scheduler = ManualScheduler()
 
   @Test func badgesFollowRecordsAndEditsDebounced() async throws {
@@ -222,10 +233,16 @@ struct EditorIntegrationTests {
     workspace.applyTree(try await client.tree())
     await workspace.openToday()
     let path = "Daily/2026-09-23.md"
-    agent.apply(.taskRecords(TaskRecordsEvent(notePath: path, records: [
-      .sample("t1", note: path, text: "Book flights to Lisbon", line: 1, status: .working, summary: "Comparing fares", threadId: "th1"),
-      .sample("t2", note: path, text: "Buy milk", line: 2, status: .idle),
-    ])))
+    agent.apply(
+      .taskRecords(
+        TaskRecordsEvent(
+          notePath: path,
+          records: [
+            .sample(
+              "t1", note: path, text: "Book flights to Lisbon", line: 1, status: .working,
+              summary: "Comparing fares", threadId: "th1"),
+            .sample("t2", note: path, text: "Buy milk", line: 2, status: .idle),
+          ])))
     workspace.editor.recordsDidChange(for: path)
     scheduler.advance(by: 0)
     #expect(workspace.editor.controller.badges.map(\.id) == ["t1"], "idle records get no badge")
@@ -234,19 +251,27 @@ struct EditorIntegrationTests {
 
     // While typing, badges are rebuilt ~150 ms after the last edit (not per keystroke).
     type("Intro\nNew first task\n- [ ] Book flights to Lisbon\n- [ ] Buy milk", in: workspace)
-    agent.apply(.taskRecords(TaskRecordsEvent(notePath: path, records: [
-      .sample("t1", note: path, text: "Book flights to Lisbon", line: 1, status: .working, summary: "Holding seats", threadId: "th1"),
-    ])))
+    agent.apply(
+      .taskRecords(
+        TaskRecordsEvent(
+          notePath: path,
+          records: [
+            .sample(
+              "t1", note: path, text: "Book flights to Lisbon", line: 1, status: .working,
+              summary: "Holding seats", threadId: "th1")
+          ])))
     scheduler.advance(by: 0.1)
     #expect(workspace.editor.controller.badges.first?.label == "Comparing fares")
     scheduler.advance(by: 0.1)
     #expect(workspace.editor.controller.badges.first?.label == "Holding seats")
-    #expect(workspace.editor.controller.badges.first?.line == 2, "re-anchored against the edited text")
+    #expect(
+      workspace.editor.controller.badges.first?.line == 2, "re-anchored against the edited text")
   }
 
   @Test func badgeClickOpensTheThreadInTheInspector() async throws {
     let workspace = makeWorkspace(client: client, scheduler: scheduler)
-    workspace.editorDidClickBadge(EditorBadge(id: "t1", line: 1, status: "working", label: "x", threadId: "th1"))
+    workspace.editorDidClickBadge(
+      EditorBadge(id: "t1", line: 1, status: "working", label: "x", threadId: "th1"))
     #expect(workspace.ui.inspectorPresented)
     #expect(workspace.ui.selectedThreadId == "th1")
     workspace.editorDidClickBadge(EditorBadge(id: "t9", line: 1, status: "triaging", label: "x"))

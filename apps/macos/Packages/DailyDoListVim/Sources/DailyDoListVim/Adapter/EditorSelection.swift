@@ -21,7 +21,9 @@ struct SelRange: Equatable {
   }
 
   /// `EditorSelection.range(anchor, head, goalColumn, bidiLevel, assoc)`.
-  static func range(_ anchor: Int, _ head: Int, goalColumn: Double? = nil, assoc: Int = 0) -> SelRange {
+  static func range(_ anchor: Int, _ head: Int, goalColumn: Double? = nil, assoc: Int = 0)
+    -> SelRange
+  {
     var assoc = assoc
     if assoc == 0 && anchor != head { assoc = head < anchor ? 1 : -1 }
     return head < anchor
@@ -31,7 +33,8 @@ struct SelRange: Equatable {
 
   /// `map(change, assoc)`.
   func map(_ change: ChangeSet, assoc: Int = -1) -> SelRange {
-    let newFrom: Int, newTo: Int
+    let newFrom: Int
+    let newTo: Int
     if isEmpty {
       newFrom = change.map(from, assoc: assoc)
       newTo = newFrom
@@ -40,7 +43,8 @@ struct SelRange: Equatable {
       newTo = change.map(to, assoc: -1)
     }
     if newFrom == from && newTo == to { return self }
-    return SelRange(from: newFrom, to: newTo, assoc: self.assoc, inverted: inverted, goalColumn: goalColumn)
+    return SelRange(
+      from: newFrom, to: newTo, assoc: self.assoc, inverted: inverted, goalColumn: goalColumn)
   }
 
   /// `eq(other, includeAssoc)`.
@@ -82,12 +86,15 @@ struct EditorSelection: Equatable {
     var main = indexed.firstIndex { $0.0 == mainIndex } ?? 0
     var i = 1
     while i < ranges.count {
-      let range = ranges[i], prev = ranges[i - 1]
+      let range = ranges[i]
+      let prev = ranges[i - 1]
       if range.isEmpty ? range.from <= prev.to : range.from < prev.to {
-        let from = prev.from, to = max(range.to, prev.to)
+        let from = prev.from
+        let to = max(range.to, prev.to)
         if i <= main { main -= 1 }
         i -= 1
-        ranges.replaceSubrange(i...(i + 1), with: [range.anchor > range.head ? .range(to, from) : .range(from, to)])
+        ranges.replaceSubrange(
+          i...(i + 1), with: [range.anchor > range.head ? .range(to, from) : .range(from, to)])
       }
       i += 1
     }
@@ -102,7 +109,9 @@ struct EditorSelection: Equatable {
 
   func eq(_ other: EditorSelection, includeAssoc: Bool = false) -> Bool {
     guard ranges.count == other.ranges.count, mainIndex == other.mainIndex else { return false }
-    for (a, b) in zip(ranges, other.ranges) where !a.eq(b, includeAssoc: includeAssoc) { return false }
+    for (a, b) in zip(ranges, other.ranges) where !a.eq(b, includeAssoc: includeAssoc) {
+      return false
+    }
     return true
   }
 

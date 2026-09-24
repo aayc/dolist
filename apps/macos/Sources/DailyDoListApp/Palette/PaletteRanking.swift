@@ -43,14 +43,17 @@ enum PaletteRanking {
         shortcut: command.shortcut?.display, highlights: highlights)
     }
     guard !q.isEmpty else {
-      return commands
+      return
+        commands
         .sorted { $0.paletteTitle.localizedStandardCompare($1.paletteTitle) == .orderedAscending }
         .map { item($0, []) }
     }
-    return commands
+    return
+      commands
       .compactMap { command in Fuzzy.match(q, in: command.paletteTitle).map { (command, $0) } }
       .sorted { a, b in
-        a.1.score != b.1.score ? a.1.score > b.1.score : a.0.paletteTitle.count < b.0.paletteTitle.count
+        a.1.score != b.1.score
+          ? a.1.score > b.1.score : a.0.paletteTitle.count < b.0.paletteTitle.count
       }
       .prefix(commandLimit)
       .map { item($0.0, $0.1.matchedOffsets) }
@@ -65,7 +68,11 @@ enum PaletteRanking {
       let name = NotePaths.displayName(path, isFolder: false)
       let folder = VaultPath.dirname(path)
       if let byName = Fuzzy.match(q, in: name) {
-        ranked.append((note(path, name: name, folder: folder, highlights: byName.matchedOffsets), byName.score + 4))
+        ranked.append(
+          (
+            note(path, name: name, folder: folder, highlights: byName.matchedOffsets),
+            byName.score + 4
+          ))
       } else if let byPath = Fuzzy.match(q, in: strippedMarkdown(path)) {
         ranked.append((note(path, name: name, folder: folder, highlights: []), byPath.score))
       }
@@ -78,23 +85,34 @@ enum PaletteRanking {
 
   /// Empty query: recently used notes first, then open tabs, then the rest newest-path-first
   /// (daily notes sort newest first).
-  static func defaultNotes(files: [String], recent: [String], openTabs: [String], limit: Int = noteLimit) -> [PaletteItem] {
+  static func defaultNotes(
+    files: [String], recent: [String], openTabs: [String], limit: Int = noteLimit
+  ) -> [PaletteItem] {
     let existing = Set(files)
     var seen = Set<String>()
     var ordered: [String] = []
-    for path in recent where existing.contains(path) && seen.insert(path).inserted { ordered.append(path) }
+    for path in recent where existing.contains(path) && seen.insert(path).inserted {
+      ordered.append(path)
+    }
     let open = Set(openTabs)
-    let rest = files
+    let rest =
+      files
       .filter { !seen.contains($0) }
       .sorted { a, b in open.contains(a) != open.contains(b) ? open.contains(a) : a > b }
     ordered.append(contentsOf: rest)
     return ordered.prefix(limit).map {
-      note($0, name: NotePaths.displayName($0, isFolder: false), folder: VaultPath.dirname($0), highlights: [])
+      note(
+        $0, name: NotePaths.displayName($0, isFolder: false), folder: VaultPath.dirname($0),
+        highlights: [])
     }
   }
 
-  private static func note(_ path: String, name: String, folder: String, highlights: [Int]) -> PaletteItem {
-    PaletteItem(kind: .note(path), title: name, subtitle: folder.isEmpty ? nil : folder, shortcut: nil, highlights: highlights)
+  private static func note(_ path: String, name: String, folder: String, highlights: [Int])
+    -> PaletteItem
+  {
+    PaletteItem(
+      kind: .note(path), title: name, subtitle: folder.isEmpty ? nil : folder, shortcut: nil,
+      highlights: highlights)
   }
 
   private static func noteKey(_ item: PaletteItem) -> String {

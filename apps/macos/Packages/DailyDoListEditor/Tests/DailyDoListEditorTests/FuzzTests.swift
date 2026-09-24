@@ -8,8 +8,9 @@ import Testing
 @Suite("Fuzzing")
 @MainActor
 struct FuzzTests {
-  private static let alphabet: [UInt16] = Array(
-    "*_`~=[]()<>!#|\\-+>. \t:/xyzhtpsw1234567890aé\u{00A0}".utf16)
+  private static let alphabet: [UInt16] =
+    Array(
+      "*_`~=[]()<>!#|\\-+>. \t:/xyzhtpsw1234567890aé\u{00A0}".utf16)
     + [0xD83D, 0xDE00, 0xD800, 0xDC00, 0x0000, 0x000D, 0x2028, 0x301C]
 
   private func randomLine(_ rng: inout SeededGenerator, maxLength: Int) -> [UInt16] {
@@ -18,7 +19,9 @@ struct FuzzTests {
   }
 
   private func check(_ tokens: LineTokens, length: Int, _ context: @autoclosure () -> String) {
-    var ranges = tokens.spans.map(\.range) + tokens.markers.map(\.range) + tokens.links.map(\.range) + tokens.tags.map(\.range)
+    var ranges =
+      tokens.spans.map(\.range) + tokens.markers.map(\.range) + tokens.links.map(\.range)
+      + tokens.tags.map(\.range)
     if let task = tokens.task { ranges += [task.markerRange, task.boxRange, task.textRange] }
     if let marker = tokens.listMarker { ranges.append(marker) }
     for range in ranges where range.location < 0 || range.length < 0 || range.end > length {
@@ -44,19 +47,25 @@ struct FuzzTests {
 
   @Test func pathologicalLinesStayFast() {
     let patterns: [String] = [
-      String(repeating: "*a", count: 5000), String(repeating: "_", count: 10000), String(repeating: "`", count: 10000),
-      String(repeating: "` ", count: 5000), String(repeating: "[", count: 10000), String(repeating: "[[a", count: 3000),
+      String(repeating: "*a", count: 5000), String(repeating: "_", count: 10000),
+      String(repeating: "`", count: 10000),
+      String(repeating: "` ", count: 5000), String(repeating: "[", count: 10000),
+      String(repeating: "[[a", count: 3000),
       String(repeating: "](", count: 5000), "https://x.com/" + String(repeating: ")", count: 10000),
-      String(repeating: "**_~~==", count: 1500), String(repeating: "<a", count: 5000), String(repeating: "#a ", count: 3000),
+      String(repeating: "**_~~==", count: 1500), String(repeating: "<a", count: 5000),
+      String(repeating: "#a ", count: 3000),
       String(repeating: "[a](b", count: 2000), String(repeating: "\\*", count: 5000),
     ]
     let clock = ContinuousClock()
     for pattern in patterns {
       let units = Array(pattern.utf16)
       var tokens: LineTokens?
-      let elapsed = clock.measure { tokens = MarkdownTokenizer.tokenizeLine(units, state: .normal).tokens }
+      let elapsed = clock.measure {
+        tokens = MarkdownTokenizer.tokenizeLine(units, state: .normal).tokens
+      }
       check(tokens!, length: units.count, String(pattern.prefix(20)))
-      #expect(PerformanceTests.milliseconds(elapsed) < 1000, "\(pattern.prefix(12))… took \(elapsed)")
+      #expect(
+        PerformanceTests.milliseconds(elapsed) < 1000, "\(pattern.prefix(12))… took \(elapsed)")
     }
   }
 
@@ -69,12 +78,18 @@ struct FuzzTests {
     for step in 0..<400 {
       let length = storage.length
       let location = Int.random(in: 0...length, using: &rng)
-      let range = NSRange(location: location, length: Int.random(in: 0...8, using: &rng)).clamped(to: length)
-      let units = randomLine(&rng, maxLength: 6) + (Bool.random(using: &rng) ? [UTF16Unit.newline] : [])
+      let range = NSRange(location: location, length: Int.random(in: 0...8, using: &rng)).clamped(
+        to: length)
+      let units =
+        randomLine(&rng, maxLength: 6) + (Bool.random(using: &rng) ? [UTF16Unit.newline] : [])
       let replacement = NSString(characters: units, length: units.count) as String
       editor.act { storage.replaceCharacters(in: range, with: replacement) }
       let selection = NSRange(location: Int.random(in: 0...storage.length, using: &rng), length: 0)
-      editor.textView.setSelectedRange(Bool.random(using: &rng) ? selection : NSRange(location: selection.location, length: min(5, storage.length - selection.location)))
+      editor.textView.setSelectedRange(
+        Bool.random(using: &rng)
+          ? selection
+          : NSRange(
+            location: selection.location, length: min(5, storage.length - selection.location)))
       if step % 20 == 0 {
         var configuration = controller.configuration
         configuration.livePreview.toggle()
@@ -82,7 +97,8 @@ struct FuzzTests {
       }
       if step % 25 == 0 {
         editor.layout()
-        let rep = try #require(editor.textView.bitmapImageRepForCachingDisplay(in: editor.textView.visibleRect))
+        let rep = try #require(
+          editor.textView.bitmapImageRepForCachingDisplay(in: editor.textView.visibleRect))
         editor.textView.cacheDisplay(in: editor.textView.visibleRect, to: rep)
         _ = controller.checkboxRects()
         _ = controller.currentBadgeLayouts()

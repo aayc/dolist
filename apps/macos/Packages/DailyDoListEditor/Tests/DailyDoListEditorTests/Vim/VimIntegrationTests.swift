@@ -41,17 +41,23 @@ struct VimIntegrationTests {
     ex(editor, "e!")
     ex(editor, "tabe Notes/Idea.md")
     ex(editor, "tabnew")
-    #expect(editor.delegate.requests == [
-      .openNote("Garden Redesign", newTab: false), .openNote(nil, newTab: false), .openNote(nil, newTab: false),
-      .openNote("Notes/Idea.md", newTab: true), .openNote(nil, newTab: true),
-    ])
+    #expect(
+      editor.delegate.requests == [
+        .openNote("Garden Redesign", newTab: false), .openNote(nil, newTab: false),
+        .openNote(nil, newTab: false),
+        .openNote("Notes/Idea.md", newTab: true), .openNote(nil, newTab: true),
+      ])
     editor.delegate.requests.removeAll()
 
-    for command in ["tabn", "tabn 3", "tabp", "tabp 2", "tabN", "bn", "bp", "bN"] { ex(editor, command) }
-    #expect(editor.delegate.requests == [
-      .switchTab(.delta(1)), .switchTab(.index(2)), .switchTab(.delta(-1)), .switchTab(.delta(-2)), .switchTab(.delta(-1)),
-      .switchTab(.delta(1)), .switchTab(.delta(-1)), .switchTab(.delta(-1)),
-    ])
+    for command in ["tabn", "tabn 3", "tabp", "tabp 2", "tabN", "bn", "bp", "bN"] {
+      ex(editor, command)
+    }
+    #expect(
+      editor.delegate.requests == [
+        .switchTab(.delta(1)), .switchTab(.index(2)), .switchTab(.delta(-1)),
+        .switchTab(.delta(-2)), .switchTab(.delta(-1)),
+        .switchTab(.delta(1)), .switchTab(.delta(-1)), .switchTab(.delta(-1)),
+      ])
     editor.delegate.requests.removeAll()
     ex(editor, "obcommand daily.today")
     #expect(editor.delegate.requests == [.runCommand("daily.today")])
@@ -77,9 +83,11 @@ struct VimIntegrationTests {
     editor.press("2", "g", "T")
     ex(editor, "mapclear")
     editor.press("g", "t")
-    #expect(editor.delegate.requests == [
-      .switchTab(.delta(1)), .switchTab(.index(2)), .switchTab(.delta(-1)), .switchTab(.delta(-2)), .switchTab(.delta(1)),
-    ])
+    #expect(
+      editor.delegate.requests == [
+        .switchTab(.delta(1)), .switchTab(.index(2)), .switchTab(.delta(-1)),
+        .switchTab(.delta(-2)), .switchTab(.delta(1)),
+      ])
   }
 
   // MARK: Clipboard
@@ -126,7 +134,8 @@ struct VimIntegrationTests {
     let editor = VimEditorHarness("one\ntwo", integrated: false)
     weak var released: EditorVimIntegration?
     do {
-      let integration = EditorVimIntegration(vim: editor.vim, pasteboard: SystemVimPasteboard(editor.pasteboard))
+      let integration = EditorVimIntegration(
+        vim: editor.vim, pasteboard: SystemVimPasteboard(editor.pasteboard))
       released = integration
       ex(editor, "set clipboard=unnamed")
     }
@@ -146,7 +155,10 @@ struct VimIntegrationTests {
   @Test func theVimrcIsAppliedAndReappliedReportingBadLines() throws {
     let editor = VimEditorHarness("one two")
     let integration = try #require(editor.integration)
-    #expect(integration.applyVimrc("nmap Q i\n\" comment\nset bogus") == [VimrcProblem(line: 2, message: "Unknown option: bogus")])
+    #expect(
+      integration.applyVimrc("nmap Q i\n\" comment\nset bogus") == [
+        VimrcProblem(line: 2, message: "Unknown option: bogus")
+      ])
     editor.press("Q")
     #expect(editor.mode == .insert)
     editor.press("<Esc>")
@@ -199,7 +211,8 @@ struct VimIntegrationTests {
     #expect(!editor.host.claimsKeyEquivalent(ctrlJ))
     integration.applyVimrc("nmap <C-j> j\nimap <C-k> <Esc>")
     #expect(editor.host.claimsKeyEquivalent(ctrlJ))
-    #expect(!editor.host.claimsKeyEquivalent(VimEditorHarness.event(for: "<C-k>", window: editor.window)))
+    #expect(
+      !editor.host.claimsKeyEquivalent(VimEditorHarness.event(for: "<C-k>", window: editor.window)))
     #expect(editor.textView.performKeyEquivalent(with: ctrlJ))
     #expect(editor.host.vimLineNumber(at: editor.cursor) == 1)
     integration.applyVimrc("")
@@ -211,35 +224,48 @@ struct VimIntegrationTests {
 @Suite("vimrc parsing")
 struct VimrcParsingTests {
   @Test func keepsOneExCommandPerLineAndSkipsBlankAndCommentLines() {
-    let parsed = Vimrc.parse(["\" insert-mode escape", "", "imap jj <Esc>", "   ", "  \" indented comment", "nmap j gj"].joined(separator: "\n"))
+    let parsed = Vimrc.parse(
+      ["\" insert-mode escape", "", "imap jj <Esc>", "   ", "  \" indented comment", "nmap j gj"]
+        .joined(separator: "\n"))
     #expect(parsed.problems.isEmpty)
-    #expect(parsed.commands == [.ex(line: 2, input: "imap jj <Esc>"), .ex(line: 5, input: "nmap j gj")])
+    #expect(
+      parsed.commands == [.ex(line: 2, input: "imap jj <Esc>"), .ex(line: 5, input: "nmap j gj")])
   }
 
   @Test func acceptsCRLFLineEndingsAndLeadingColons() {
-    #expect(Vimrc.parse(":set clipboard=unnamed\r\n::nmap Y y$\r\n").commands == [
-      .ex(line: 0, input: "set clipboard=unnamed"), .ex(line: 1, input: "nmap Y y$"),
-    ])
+    #expect(
+      Vimrc.parse(":set clipboard=unnamed\r\n::nmap Y y$\r\n").commands == [
+        .ex(line: 0, input: "set clipboard=unnamed"), .ex(line: 1, input: "nmap Y y$"),
+      ])
   }
 
   @Test func expandsLeaderWithTheLatestMapleaderABackslashByDefault() {
     let parsed = Vimrc.parse(
       [
-        "nmap <leader>a x", "let mapleader = \",\"", "nmap <Leader>w :w<CR>", "let g:mapleader=\"\\<Space>\"",
+        "nmap <leader>a x", "let mapleader = \",\"", "nmap <Leader>w :w<CR>",
+        "let g:mapleader=\"\\<Space>\"",
         "nmap <leader>q :q<CR>", "let mapleader=' '", "nmap <LEADER>e :e<CR>",
       ].joined(separator: "\n"))
-    #expect(parsed.commands.compactMap { if case .ex(_, let input) = $0 { input } else { nil } } == [
-      "nmap \\a x", "nmap ,w :w<CR>", "nmap <Space>q :q<CR>", "nmap <Space>e :e<CR>",
-    ])
+    #expect(
+      parsed.commands.compactMap { if case .ex(_, let input) = $0 { input } else { nil } } == [
+        "nmap \\a x", "nmap ,w :w<CR>", "nmap <Space>q :q<CR>", "nmap <Space>e :e<CR>",
+      ])
   }
 
   @Test func turnsExmapIntoAnExAliasAndReportsWhatItCantUse() {
-    let parsed = Vimrc.parse(["exmap back obcommand app:go-back", "exmap", "let g:other = 1", "exmap tab :tabnext"].joined(separator: "\n"))
-    #expect(parsed.commands == [.exmap(line: 0, name: "back", command: "obcommand app:go-back"), .exmap(line: 3, name: "tab", command: "tabnext")])
-    #expect(parsed.problems == [
-      VimrcProblem(line: 1, message: "exmap needs a name and a command"),
-      VimrcProblem(line: 2, message: "Only `let mapleader = …` is supported"),
-    ])
+    let parsed = Vimrc.parse(
+      ["exmap back obcommand app:go-back", "exmap", "let g:other = 1", "exmap tab :tabnext"].joined(
+        separator: "\n"))
+    #expect(
+      parsed.commands == [
+        .exmap(line: 0, name: "back", command: "obcommand app:go-back"),
+        .exmap(line: 3, name: "tab", command: "tabnext"),
+      ])
+    #expect(
+      parsed.problems == [
+        VimrcProblem(line: 1, message: "exmap needs a name and a command"),
+        VimrcProblem(line: 2, message: "Only `let mapleader = …` is supported"),
+      ])
   }
 
   @Test func tracksTheOptionsAndExAliasesALineCreates() {

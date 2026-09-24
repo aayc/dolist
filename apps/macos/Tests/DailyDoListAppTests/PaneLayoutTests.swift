@@ -11,8 +11,12 @@ struct PaneLayoutTests {
   }
 
   @Test func hiddenPanesStayHidden() {
-    #expect(PaneLayout.fit(total: 900, sidebar: nil, inspector: 340) == PaneLayout.Widths(sidebar: nil, inspector: 340))
-    #expect(PaneLayout.fit(total: 900, sidebar: 240, inspector: nil) == PaneLayout.Widths(sidebar: 240, inspector: nil))
+    #expect(
+      PaneLayout.fit(total: 900, sidebar: nil, inspector: 340)
+        == PaneLayout.Widths(sidebar: nil, inspector: 340))
+    #expect(
+      PaneLayout.fit(total: 900, sidebar: 240, inspector: nil)
+        == PaneLayout.Widths(sidebar: 240, inspector: nil))
   }
 
   @Test func storedWidthsAreClampedToEachPanesRange() {
@@ -23,11 +27,17 @@ struct PaneLayoutTests {
 
   @Test func aNarrowWindowShrinksTheAgentPanelFirstThenTheSidebar() {
     // 240 + 340 + 400 = 980: 40 short, all taken from the agent panel.
-    #expect(PaneLayout.fit(total: 940, sidebar: 240, inspector: 340) == PaneLayout.Widths(sidebar: 240, inspector: 300))
+    #expect(
+      PaneLayout.fit(total: 940, sidebar: 240, inspector: 340)
+        == PaneLayout.Widths(sidebar: 240, inspector: 300))
     // Past the agent panel's minimum, the sidebar gives the rest.
-    #expect(PaneLayout.fit(total: 900, sidebar: 240, inspector: 340) == PaneLayout.Widths(sidebar: 200, inspector: 300))
+    #expect(
+      PaneLayout.fit(total: 900, sidebar: 240, inspector: 340)
+        == PaneLayout.Widths(sidebar: 200, inspector: 300))
     // Never below the minimums, even when the note can't get its full width.
-    #expect(PaneLayout.fit(total: 700, sidebar: 240, inspector: 340) == PaneLayout.Widths(sidebar: 180, inspector: 300))
+    #expect(
+      PaneLayout.fit(total: 700, sidebar: 240, inspector: 340)
+        == PaneLayout.Widths(sidebar: 180, inspector: 300))
   }
 
   @Test func draggingStopsAtTheRangeAndAtTheNotesMinimum() {
@@ -40,7 +50,9 @@ struct PaneLayoutTests {
   }
 
   @Test func theWindowMinimumFitsTheVisiblePanes() {
-    #expect(PaneLayout.minimumWindowWidth(sidebar: false, inspector: false) == PaneLayout.noteMinWidth)
-    #expect(PaneLayout.minimumWindowWidth(sidebar: true, inspector: true) == CGFloat(180 + 300 + 400))
+    #expect(
+      PaneLayout.minimumWindowWidth(sidebar: false, inspector: false) == PaneLayout.noteMinWidth)
+    #expect(
+      PaneLayout.minimumWindowWidth(sidebar: true, inspector: true) == CGFloat(180 + 300 + 400))
   }
 }

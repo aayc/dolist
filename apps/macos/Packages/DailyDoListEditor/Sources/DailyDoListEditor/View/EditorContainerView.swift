@@ -38,10 +38,13 @@ final class EditorContainerView: NSView {
     super.layout()
     var panelHeight: CGFloat = 0
     if showsPanel, let panel = panel as? VimPanelView {
-      panelHeight = min(panel.fittingHeight(forWidth: bounds.width), (bounds.height * 0.5).rounded(.down))
-      panel.frame = NSRect(x: 0, y: bounds.height - panelHeight, width: bounds.width, height: panelHeight)
+      panelHeight = min(
+        panel.fittingHeight(forWidth: bounds.width), (bounds.height * 0.5).rounded(.down))
+      panel.frame = NSRect(
+        x: 0, y: bounds.height - panelHeight, width: bounds.width, height: panelHeight)
     }
-    let scrollFrame = NSRect(x: 0, y: 0, width: bounds.width, height: max(0, bounds.height - panelHeight))
+    let scrollFrame = NSRect(
+      x: 0, y: 0, width: bounds.width, height: max(0, bounds.height - panelHeight))
     if scrollView.frame != scrollFrame { scrollView.frame = scrollFrame }
   }
 

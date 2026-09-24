@@ -4,14 +4,18 @@ import AppKit
 @MainActor
 protocol MarkdownTextViewHooks: AnyObject {
   /// Lets the editor move a proposed caret out of hidden syntax.
-  func textView(_ textView: MarkdownTextView, adjust proposed: [NSRange], previous: [NSRange]) -> [NSRange]
+  func textView(_ textView: MarkdownTextView, adjust proposed: [NSRange], previous: [NSRange])
+    -> [NSRange]
   func textViewDidChangeSelection(_ textView: MarkdownTextView, stillSelecting: Bool)
   func textViewHandleNewline(_ textView: MarkdownTextView) -> Bool
   func textViewHandleTab(_ textView: MarkdownTextView, backwards: Bool) -> Bool
   func textViewHandleDeleteBackward(_ textView: MarkdownTextView) -> Bool
   func textView(_ textView: MarkdownTextView, performShortcut event: NSEvent) -> Bool
-  func textView(_ textView: MarkdownTextView, mouseDownAt point: NSPoint, modifiers: NSEvent.ModifierFlags) -> Bool
-  func textView(_ textView: MarkdownTextView, mouseMovedTo point: NSPoint?, modifiers: NSEvent.ModifierFlags)
+  func textView(
+    _ textView: MarkdownTextView, mouseDownAt point: NSPoint, modifiers: NSEvent.ModifierFlags
+  ) -> Bool
+  func textView(
+    _ textView: MarkdownTextView, mouseMovedTo point: NSPoint?, modifiers: NSEvent.ModifierFlags)
   func textView(_ textView: MarkdownTextView, toolTipAt point: NSPoint) -> String?
   func textViewWillDraw(_ textView: MarkdownTextView)
   /// After the background, before the text and the selection.
@@ -30,7 +34,8 @@ protocol MarkdownTextViewHooks: AnyObject {
   func textView(_ textView: MarkdownTextView, claimsKeyEquivalent event: NSEvent) -> Bool
   /// The text view is about to replace `ranges` (pre-edit offsets) with `strings`. True when the
   /// editor records the undo step itself (the text view must not register one).
-  func textView(_ textView: MarkdownTextView, willReplace ranges: [NSRange], with strings: [String]) -> Bool
+  func textView(_ textView: MarkdownTextView, willReplace ranges: [NSRange], with strings: [String])
+    -> Bool
   /// The change announced last was refused (nothing was replaced).
   func textViewDidRefuseChange(_ textView: MarkdownTextView)
   /// Runs `body`, an edit the text view makes for a key or command, labeled with CodeMirror's
@@ -59,11 +64,14 @@ final class MarkdownTextView: NSTextView, NSViewToolTipOwner {
   /// Whether the editor counts as focused for live preview. Offscreen (no window) counts as focused.
   var isEditorFocused: Bool { window == nil || hasFocus }
 
-  override func setSelectedRanges(_ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool) {
+  override func setSelectedRanges(
+    _ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool
+  ) {
     var adjusted = ranges
     if let hooks, !ranges.isEmpty {
       let proposed = ranges.map(\.rangeValue)
-      let result = hooks.textView(self, adjust: proposed, previous: selectedRanges.map(\.rangeValue))
+      let result = hooks.textView(
+        self, adjust: proposed, previous: selectedRanges.map(\.rangeValue))
       if result != proposed { adjusted = result.map { NSValue(range: $0) } }
     }
     super.setSelectedRanges(adjusted, affinity: affinity, stillSelecting: stillSelecting)
@@ -84,7 +92,9 @@ final class MarkdownTextView: NSTextView, NSViewToolTipOwner {
 
   override func insertText(_ string: Any, replacementRange: NSRange) {
     let text = (string as? NSAttributedString)?.string ?? (string as? String) ?? ""
-    if !hasMarkedText(), replacementRange.location == NSNotFound, hooks?.textView(self, insertAtEveryCursor: text) == true {
+    if !hasMarkedText(), replacementRange.location == NSNotFound,
+      hooks?.textView(self, insertAtEveryCursor: text) == true
+    {
       return
     }
     edit("input.type") { super.insertText(string, replacementRange: replacementRange) }
@@ -121,17 +131,23 @@ final class MarkdownTextView: NSTextView, NSViewToolTipOwner {
   /// Other key commands (⌥⌫, ⌘⌫, ⌃K, transpose…) keep CodeMirror's labels for vim's undo history.
   override func doCommand(by selector: Selector) {
     let name = NSStringFromSelector(selector)
-    guard name.hasPrefix("delete") || name.hasPrefix("transpose") || name.hasPrefix("yank") || name.hasPrefix("insert") else {
+    guard
+      name.hasPrefix("delete") || name.hasPrefix("transpose") || name.hasPrefix("yank")
+        || name.hasPrefix("insert")
+    else {
       return super.doCommand(by: selector)
     }
     let forward = name.contains("Forward") || name.contains("ToEnd")
-    let userEvent = name.hasPrefix("delete") ? (forward ? "delete.forward" : "delete.backward") : "input"
+    let userEvent =
+      name.hasPrefix("delete") ? (forward ? "delete.forward" : "delete.backward") : "input"
     edit(userEvent) { super.doCommand(by: selector) }
   }
 
   /// An IME composition: vim hears about it once it's committed (its steps aren't typed text).
   override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
-    edit("input.type") { super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange) }
+    edit("input.type") {
+      super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
+    }
   }
 
   override func unmarkText() {
@@ -164,13 +180,19 @@ final class MarkdownTextView: NSTextView, NSViewToolTipOwner {
 
   /// Vim records the undo steps of the edits it sees (CodeMirror's history, which `u` walks), so
   /// the text view must not register its own for them.
-  override func shouldChangeText(inRanges affectedRanges: [NSValue], replacementStrings: [String]?) -> Bool {
+  override func shouldChangeText(inRanges affectedRanges: [NSValue], replacementStrings: [String]?)
+    -> Bool
+  {
     guard let hooks, let replacementStrings, replacementStrings.count == affectedRanges.count,
       hooks.textView(self, willReplace: affectedRanges.map(\.rangeValue), with: replacementStrings)
-    else { return super.shouldChangeText(inRanges: affectedRanges, replacementStrings: replacementStrings) }
+    else {
+      return super.shouldChangeText(
+        inRanges: affectedRanges, replacementStrings: replacementStrings)
+    }
     let manager = undoManager
     manager?.disableUndoRegistration()
-    let allowed = super.shouldChangeText(inRanges: affectedRanges, replacementStrings: replacementStrings)
+    let allowed = super.shouldChangeText(
+      inRanges: affectedRanges, replacementStrings: replacementStrings)
     manager?.enableUndoRegistration()
     if !allowed { hooks.textViewDidRefuseChange(self) }
     return allowed
@@ -218,7 +240,9 @@ final class MarkdownTextView: NSTextView, NSViewToolTipOwner {
 
   override func mouseMoved(with event: NSEvent) {
     super.mouseMoved(with: event)
-    hooks?.textView(self, mouseMovedTo: convert(event.locationInWindow, from: nil), modifiers: event.modifierFlags)
+    hooks?.textView(
+      self, mouseMovedTo: convert(event.locationInWindow, from: nil), modifiers: event.modifierFlags
+    )
   }
 
   override func mouseExited(with event: NSEvent) {
@@ -239,13 +263,18 @@ final class MarkdownTextView: NSTextView, NSViewToolTipOwner {
     super.updateTrackingAreas()
     if let hoverArea, trackingAreas.contains(hoverArea) { return }
     let area = NSTrackingArea(
-      rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self,
+      rect: .zero,
+      options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+      owner: self,
       userInfo: nil)
     addTrackingArea(area)
     hoverArea = area
   }
 
-  func view(_ view: NSView, stringForToolTip tag: NSView.ToolTipTag, point: NSPoint, userData data: UnsafeMutableRawPointer?)
+  func view(
+    _ view: NSView, stringForToolTip tag: NSView.ToolTipTag, point: NSPoint,
+    userData data: UnsafeMutableRawPointer?
+  )
     -> String
   {
     hooks?.textView(self, toolTipAt: point) ?? ""
@@ -301,9 +330,12 @@ final class MarkdownTextView: NSTextView, NSViewToolTipOwner {
   override func viewWillMove(toWindow newWindow: NSWindow?) {
     super.viewWillMove(toWindow: newWindow)
     if let window {
-      NotificationCenter.default.removeObserver(self, name: NSWindow.didChangeOcclusionStateNotification, object: window)
-      NotificationCenter.default.removeObserver(self, name: NSWindow.didBecomeKeyNotification, object: window)
-      NotificationCenter.default.removeObserver(self, name: NSWindow.didResignKeyNotification, object: window)
+      NotificationCenter.default.removeObserver(
+        self, name: NSWindow.didChangeOcclusionStateNotification, object: window)
+      NotificationCenter.default.removeObserver(
+        self, name: NSWindow.didBecomeKeyNotification, object: window)
+      NotificationCenter.default.removeObserver(
+        self, name: NSWindow.didResignKeyNotification, object: window)
     }
   }
 
@@ -318,10 +350,15 @@ final class MarkdownTextView: NSTextView, NSViewToolTipOwner {
     if let window {
       let center = NotificationCenter.default
       center.addObserver(
-        self, selector: #selector(windowDidChangeOcclusion(_:)), name: NSWindow.didChangeOcclusionStateNotification,
+        self, selector: #selector(windowDidChangeOcclusion(_:)),
+        name: NSWindow.didChangeOcclusionStateNotification,
         object: window)
-      center.addObserver(self, selector: #selector(windowDidChangeKey(_:)), name: NSWindow.didBecomeKeyNotification, object: window)
-      center.addObserver(self, selector: #selector(windowDidChangeKey(_:)), name: NSWindow.didResignKeyNotification, object: window)
+      center.addObserver(
+        self, selector: #selector(windowDidChangeKey(_:)), name: NSWindow.didBecomeKeyNotification,
+        object: window)
+      center.addObserver(
+        self, selector: #selector(windowDidChangeKey(_:)), name: NSWindow.didResignKeyNotification,
+        object: window)
     }
   }
 

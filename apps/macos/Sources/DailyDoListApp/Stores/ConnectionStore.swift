@@ -82,7 +82,10 @@ final class ConnectionStore {
 
   var detail: String {
     switch state {
-    case .connected(let version): isDemo ? "Running against the in-memory demo daemon" : "Daemon \(version) at \(endpointDescription)"
+    case .connected(let version):
+      isDemo
+        ? "Running against the in-memory demo daemon"
+        : "Daemon \(version) at \(endpointDescription)"
     case .connecting, .idle: "Connecting to \(endpointDescription)"
     case .reconnecting(let attempt, let reason):
       "Reconnecting (attempt \(attempt))\(reason.map { ": \($0)" } ?? "")"

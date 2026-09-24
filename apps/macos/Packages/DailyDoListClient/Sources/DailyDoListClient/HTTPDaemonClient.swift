@@ -74,7 +74,9 @@ public final class HTTPDaemonClient: DaemonClient {
     try await transport.json(.get, try RequestGuards.noteRoute(path))
   }
 
-  public func writeNote(_ path: String, content: String, baseVersion: BaseVersion) async throws -> WriteNoteResponse {
+  public func writeNote(_ path: String, content: String, baseVersion: BaseVersion) async throws
+    -> WriteNoteResponse
+  {
     try await transport.json(
       .put, try RequestGuards.noteRoute(path),
       body: WriteNoteRequest(content: content, baseVersion: baseVersion), conflict: .note)
@@ -85,7 +87,8 @@ public final class HTTPDaemonClient: DaemonClient {
   }
 
   public func rename(from: String, to: String) async throws -> RenameResponse {
-    try await transport.json(.post, APIRoute.rename, body: RenameRequest(from: from, to: to), conflict: .note)
+    try await transport.json(
+      .post, APIRoute.rename, body: RenameRequest(from: from, to: to), conflict: .note)
   }
 
   public func createFolder(_ path: String) async throws -> CreateFolderResponse {
@@ -112,7 +115,8 @@ public final class HTTPDaemonClient: DaemonClient {
   }
 
   public func updateSettings(_ patch: SettingsPatch) async throws -> AppSettings {
-    try await transport.json(.put, APIRoute.settings, body: patch, as: SettingsResponse.self).settings
+    try await transport.json(.put, APIRoute.settings, body: patch, as: SettingsResponse.self)
+      .settings
   }
 
   public func agentStatus() async throws -> AgentStatusResponse {
@@ -120,7 +124,8 @@ public final class HTTPDaemonClient: DaemonClient {
   }
 
   public func setAgentEnabled(_ enabled: Bool) async throws -> AgentStatusResponse {
-    try await transport.json(.put, APIRoute.agentEnabled, body: SetAgentEnabledRequest(enabled: enabled))
+    try await transport.json(
+      .put, APIRoute.agentEnabled, body: SetAgentEnabledRequest(enabled: enabled))
   }
 
   public func connectors() async throws -> [ConnectorStatus] {
@@ -128,7 +133,8 @@ public final class HTTPDaemonClient: DaemonClient {
   }
 
   public func taskRecords(notePath: String) async throws -> [TaskAgentRecord] {
-    try await transport.json(.get, APIRoute.tasks(notePath: notePath), as: TaskRecordsResponse.self).records
+    try await transport.json(.get, APIRoute.tasks(notePath: notePath), as: TaskRecordsResponse.self)
+      .records
   }
 
   public func threads(notePath: String?, taskId: String?) async throws -> [ThreadSummary] {
@@ -143,22 +149,29 @@ public final class HTTPDaemonClient: DaemonClient {
 
   public func postMessage(threadId: String, text: String) async throws -> ThreadActionResponse {
     let id = try RequestGuards.runtimeID(threadId, "thread id")
-    return try await transport.json(.post, APIRoute.threadMessages(id), body: PostMessageRequest(text: text))
+    return try await transport.json(
+      .post, APIRoute.threadMessages(id), body: PostMessageRequest(text: text))
   }
 
   public func cancelThread(_ id: String) async throws -> ThreadActionResponse {
-    try await transport.json(.post, APIRoute.threadCancel(try RequestGuards.runtimeID(id, "thread id")))
+    try await transport.json(
+      .post, APIRoute.threadCancel(try RequestGuards.runtimeID(id, "thread id")))
   }
 
   public func retryThread(_ id: String) async throws -> ThreadActionResponse {
-    try await transport.json(.post, APIRoute.threadRetry(try RequestGuards.runtimeID(id, "thread id")))
+    try await transport.json(
+      .post, APIRoute.threadRetry(try RequestGuards.runtimeID(id, "thread id")))
   }
 
   public func approvals(status: ApprovalStatus?) async throws -> [ApprovalRequest] {
-    try await transport.json(.get, APIRoute.approvals(status: status), as: ApprovalListResponse.self).approvals
+    try await transport.json(
+      .get, APIRoute.approvals(status: status), as: ApprovalListResponse.self
+    ).approvals
   }
 
-  public func decideApproval(_ id: String, _ decision: ApprovalDecisionRequest) async throws -> ApprovalRequest {
+  public func decideApproval(_ id: String, _ decision: ApprovalDecisionRequest) async throws
+    -> ApprovalRequest
+  {
     let id = try RequestGuards.runtimeID(id, "approval id")
     return try await transport.json(
       .post, APIRoute.approval(id), body: decision, conflict: .approval, as: ApprovalResponse.self

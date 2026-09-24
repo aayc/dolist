@@ -6,10 +6,13 @@ import Testing
 @MainActor
 @Suite struct KeyNotationTests {
   private func key(
-    _ key: String, control: Bool = false, alt: Bool = false, meta: Bool = false, shift: Bool = false, code: String? = nil,
+    _ key: String, control: Bool = false, alt: Bool = false, meta: Bool = false,
+    shift: Bool = false, code: String? = nil,
     isMac: Bool = false
   ) -> String? {
-    VimKeyNotation.vimKey(for: VimKeyInput(key: key, control: control, alt: alt, meta: meta, shift: shift, code: code), isMac: isMac)
+    VimKeyNotation.vimKey(
+      for: VimKeyInput(key: key, control: control, alt: alt, meta: meta, shift: shift, code: code),
+      isMac: isMac)
   }
 
   @Test func characters() {
@@ -48,7 +51,9 @@ import Testing
   }
 
   @Test func modifierOnlyKeysAreIgnored() {
-    for name in ["Shift", "Alt", "Command", "Control", "CapsLock", "AltGraph", "Dead", "Unidentified"] {
+    for name in [
+      "Shift", "Alt", "Command", "Control", "CapsLock", "AltGraph", "Dead", "Unidentified",
+    ] {
       #expect(key(name) == nil, "\(name)")
     }
   }

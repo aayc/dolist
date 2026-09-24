@@ -37,7 +37,9 @@ public final class InMemoryDaemonClient: DaemonClient {
     Task { await daemon.stop() }
   }
 
-  private func call<T: Sendable>(_ body: @Sendable (isolated FakeDaemon) throws(DaemonClientError) -> T) async throws -> T {
+  private func call<T: Sendable>(
+    _ body: @Sendable (isolated FakeDaemon) throws(DaemonClientError) -> T
+  ) async throws -> T {
     if Task.isCancelled { throw DaemonClientError.cancelled }
     return try await daemon.perform(body)
   }
@@ -51,8 +53,12 @@ public final class InMemoryDaemonClient: DaemonClient {
     try await call { daemon throws(DaemonClientError) in try daemon.readNote(path) }
   }
 
-  public func writeNote(_ path: String, content: String, baseVersion: BaseVersion) async throws -> WriteNoteResponse {
-    try await call { daemon throws(DaemonClientError) in try daemon.writeNote(path, content: content, baseVersion: baseVersion) }
+  public func writeNote(_ path: String, content: String, baseVersion: BaseVersion) async throws
+    -> WriteNoteResponse
+  {
+    try await call { daemon throws(DaemonClientError) in
+      try daemon.writeNote(path, content: content, baseVersion: baseVersion)
+    }
   }
 
   public func deleteNote(_ path: String) async throws -> TrashResponse {
@@ -72,7 +78,8 @@ public final class InMemoryDaemonClient: DaemonClient {
   }
 
   public func dailyNote(_ date: String, create: Bool) async throws -> DailyNoteResponse {
-    try await call { daemon throws(DaemonClientError) in try daemon.dailyNote(date, create: create) }
+    try await call { daemon throws(DaemonClientError) in try daemon.dailyNote(date, create: create)
+    }
   }
 
   public func search(_ query: String, limit: Int?) async throws -> SearchResponse {
@@ -98,11 +105,14 @@ public final class InMemoryDaemonClient: DaemonClient {
   }
 
   public func taskRecords(notePath: String) async throws -> [TaskAgentRecord] {
-    try await call { daemon throws(DaemonClientError) in try daemon.taskRecords(notePath: notePath) }
+    try await call { daemon throws(DaemonClientError) in try daemon.taskRecords(notePath: notePath)
+    }
   }
 
   public func threads(notePath: String?, taskId: String?) async throws -> [ThreadSummary] {
-    try await call { daemon throws(DaemonClientError) in try daemon.threadList(notePath: notePath, taskId: taskId) }
+    try await call { daemon throws(DaemonClientError) in
+      try daemon.threadList(notePath: notePath, taskId: taskId)
+    }
   }
 
   public func thread(_ id: String) async throws -> ThreadResponse {
@@ -110,7 +120,9 @@ public final class InMemoryDaemonClient: DaemonClient {
   }
 
   public func postMessage(threadId: String, text: String) async throws -> ThreadActionResponse {
-    try await call { daemon throws(DaemonClientError) in try daemon.postMessage(threadId: threadId, text: text) }
+    try await call { daemon throws(DaemonClientError) in
+      try daemon.postMessage(threadId: threadId, text: text)
+    }
   }
 
   public func cancelThread(_ id: String) async throws -> ThreadActionResponse {
@@ -125,12 +137,16 @@ public final class InMemoryDaemonClient: DaemonClient {
     try await call { $0.approvalList(status: status) }
   }
 
-  public func decideApproval(_ id: String, _ decision: ApprovalDecisionRequest) async throws -> ApprovalRequest {
+  public func decideApproval(_ id: String, _ decision: ApprovalDecisionRequest) async throws
+    -> ApprovalRequest
+  {
     try await call { daemon throws(DaemonClientError) in try daemon.decideApproval(id, decision) }
   }
 
   public func artifact(threadId: String, artifactId: String) async throws -> ArtifactPayload {
-    try await call { daemon throws(DaemonClientError) in try daemon.artifact(threadId: threadId, artifactId: artifactId) }
+    try await call { daemon throws(DaemonClientError) in
+      try daemon.artifact(threadId: threadId, artifactId: artifactId)
+    }
   }
 
   // MARK: - Events
@@ -171,7 +187,9 @@ public final class InMemoryDaemonClient: DaemonClient {
   /// Changes the vault as another program (e.g. Obsidian) would: `vault.changed` with origin
   /// `external`; `nil` content deletes the file.
   public func simulateExternalEdit(_ path: String, content: String?) async throws {
-    try await call { daemon throws(DaemonClientError) in try daemon.simulateExternalEdit(path, content: content) }
+    try await call { daemon throws(DaemonClientError) in
+      try daemon.simulateExternalEdit(path, content: content)
+    }
   }
 }
 

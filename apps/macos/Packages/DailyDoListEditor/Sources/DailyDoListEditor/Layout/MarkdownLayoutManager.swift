@@ -14,7 +14,8 @@ final class MarkdownLayoutManager: NSLayoutManager {
   var invalidateAfterEdit: [NSRange] = []
 
   override func processEditing(
-    for textStorage: NSTextStorage, edited editMask: NSTextStorageEditActions, range newCharRange: NSRange,
+    for textStorage: NSTextStorage, edited editMask: NSTextStorageEditActions,
+    range newCharRange: NSRange,
     changeInLength delta: Int, invalidatedRange invalidatedCharRange: NSRange
   ) {
     super.processEditing(
@@ -31,7 +32,8 @@ final class MarkdownLayoutManager: NSLayoutManager {
       // invalidate here (no display invalidation by character range).
       invalidateGlyphs(forCharacterRange: clamped, changeInLength: 0, actualCharacterRange: nil)
       invalidateLayout(forCharacterRange: clamped, actualCharacterRange: nil)
-      if clamped.location < invalidatedCharRange.location || clamped.end > invalidatedCharRange.end {
+      if clamped.location < invalidatedCharRange.location || clamped.end > invalidatedCharRange.end
+      {
         beyondEditedLines = true
       }
     }

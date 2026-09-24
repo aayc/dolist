@@ -12,8 +12,12 @@ struct RecordedRequest: Sendable {
   let body: Data?
 
   /// Raw (still percent-encoded) path, e.g. `/api/notes/Caf%C3%A9.md`.
-  var path: String { URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedPath ?? "" }
-  var query: String? { URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedQuery }
+  var path: String {
+    URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedPath ?? ""
+  }
+  var query: String? {
+    URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedQuery
+  }
   /// Path plus `?query`, exactly as sent.
   var target: String { query.map { "\(path)?\($0)" } ?? path }
 
@@ -117,7 +121,9 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
       body: request.httpBody ?? request.httpBodyStream.map(Self.read))
     switch stub.handle(recorded) {
     case .respond(let status, let headers, let body):
-      guard let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)
+      guard
+        let response = HTTPURLResponse(
+          url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)
       else { return }
       client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
       client?.urlProtocol(self, didLoad: body)

@@ -141,7 +141,9 @@ extension DomainTests {
       var check = VectorCheck("dates-format.json localDate")
       for c in file.localDate {
         let actual = MomentFormat.format(c.date, c.format, timeZone: Vectors.timeZone)
-        check.expect(same(actual, c.expected), "\(c.date) \(c.format.debug): \(actual.debug) ≠ \(c.expected.debug)")
+        check.expect(
+          same(actual, c.expected),
+          "\(c.date) \(c.format.debug): \(actual.debug) ≠ \(c.expected.debug)")
       }
       check.verify(atLeast: 1000)
     }
@@ -150,8 +152,11 @@ extension DomainTests {
       let file = try Vectors.load("dates-format.json", as: FormatFile.self)
       var check = VectorCheck("dates-format.json instant")
       for c in file.instant {
-        let actual = MomentFormat.format(instant: Vectors.date(ms: c.ms), c.format, timeZone: Vectors.timeZone)
-        check.expect(same(actual, c.expected), "\(c.ms) \(c.format.debug): \(actual.debug) ≠ \(c.expected.debug)")
+        let actual = MomentFormat.format(
+          instant: Vectors.date(ms: c.ms), c.format, timeZone: Vectors.timeZone)
+        check.expect(
+          same(actual, c.expected),
+          "\(c.ms) \(c.format.debug): \(actual.debug) ≠ \(c.expected.debug)")
       }
       check.verify(atLeast: 100)
     }
@@ -163,11 +168,15 @@ extension DomainTests {
         let tz = try #require(TimeZone(identifier: zone.timeZone))
         for c in zone.localDate {
           let actual = MomentFormat.format(c.date, c.format, timeZone: tz)
-          check.expect(same(actual, c.expected), "\(zone.timeZone) \(c.date): \(actual.debug) ≠ \(c.expected.debug)")
+          check.expect(
+            same(actual, c.expected),
+            "\(zone.timeZone) \(c.date): \(actual.debug) ≠ \(c.expected.debug)")
         }
         for c in zone.instant {
           let actual = MomentFormat.format(instant: Vectors.date(ms: c.ms), c.format, timeZone: tz)
-          check.expect(same(actual, c.expected), "\(zone.timeZone) \(c.ms): \(actual.debug) ≠ \(c.expected.debug)")
+          check.expect(
+            same(actual, c.expected),
+            "\(zone.timeZone) \(c.ms): \(actual.debug) ≠ \(c.expected.debug)")
         }
         for c in zone.startOfDay {
           let actual = Int((c.date.startOfDay(in: tz).timeIntervalSince1970 * 1000).rounded())
@@ -175,7 +184,8 @@ extension DomainTests {
         }
         for c in zone.toLocalDate {
           let actual = LocalDate(date: Vectors.date(ms: c.ms), timeZone: tz)
-          check.expect(actual == c.date, "\(zone.timeZone) toLocalDate \(c.ms): \(actual) ≠ \(c.date)")
+          check.expect(
+            actual == c.date, "\(zone.timeZone) toLocalDate \(c.ms): \(actual) ≠ \(c.date)")
         }
       }
       check.verify(atLeast: 100)
@@ -214,7 +224,8 @@ extension DomainTests {
         check.expect(c.date.isValid == c.valid, "isValid(\(c.date)) ≠ \(c.valid)")
       }
       for c in calendar.toISODate {
-        check.expect(same(c.date.isoString, c.text), "toISODate(\(c.date)) = \(c.date.isoString) ≠ \(c.text)")
+        check.expect(
+          same(c.date.isoString, c.text), "toISODate(\(c.date)) = \(c.date.isoString) ≠ \(c.text)")
       }
       check.verify(atLeast: 500)
     }
@@ -252,15 +263,18 @@ extension DomainTests {
       var check = VectorCheck("dates-parse.json")
       var accepted = 0
       for c in file.cases {
-        let actual = MomentFormat.parse(c.input, format: c.format, referenceYear: file.referenceYear)
+        let actual = MomentFormat.parse(
+          c.input, format: c.format, referenceYear: file.referenceYear)
         if actual != nil { accepted += 1 }
         check.expect(
           actual == c.expected,
-          "parse(\(c.input.debug), \(c.format.debug)) = \(actual.map(\.description) ?? "nil") ≠ \(c.expected.map(\.description) ?? "nil")")
+          "parse(\(c.input.debug), \(c.format.debug)) = \(actual.map(\.description) ?? "nil") ≠ \(c.expected.map(\.description) ?? "nil")"
+        )
       }
       for c in file.iso {
         let actual = LocalDate(iso: c.input)
-        check.expect(actual == c.expected, "LocalDate(iso: \(c.input.debug)) = \(String(describing: actual))")
+        check.expect(
+          actual == c.expected, "LocalDate(iso: \(c.input.debug)) = \(String(describing: actual))")
       }
       check.verify(atLeast: 1000)
       // Both outcomes are well represented.

@@ -52,7 +52,9 @@ public struct VimVectorJSONError: Error, CustomStringConvertible {
 
 extension VimVectorJSON {
   /// Parses strict JSON (RFC 8259) from UTF-8 bytes.
-  public static func parse(_ bytes: some Collection<UInt8>) throws(VimVectorJSONError) -> VimVectorJSON {
+  public static func parse(_ bytes: some Collection<UInt8>) throws(VimVectorJSONError)
+    -> VimVectorJSON
+  {
     var parser = Parser(bytes: Array(bytes))
     parser.skipWhitespace()
     let value = try parser.parseValue()
@@ -114,7 +116,9 @@ private struct Parser {
     }
     while true {
       skipWhitespace()
-      guard index < bytes.count, bytes[index] == UInt8(ascii: "\"") else { throw error("expected a key") }
+      guard index < bytes.count, bytes[index] == UInt8(ascii: "\"") else {
+        throw error("expected a key")
+      }
       let key = try parseString().string
       skipWhitespace()
       try expect(":")
@@ -205,10 +209,18 @@ private struct Parser {
       var scalar: UInt32
       var extra: Int
       switch byte {
-      case 0x00..<0x80: scalar = UInt32(byte); extra = 0
-      case 0xC0..<0xE0: scalar = UInt32(byte & 0x1F); extra = 1
-      case 0xE0..<0xF0: scalar = UInt32(byte & 0x0F); extra = 2
-      case 0xF0..<0xF8: scalar = UInt32(byte & 0x07); extra = 3
+      case 0x00..<0x80:
+        scalar = UInt32(byte)
+        extra = 0
+      case 0xC0..<0xE0:
+        scalar = UInt32(byte & 0x1F)
+        extra = 1
+      case 0xE0..<0xF0:
+        scalar = UInt32(byte & 0x0F)
+        extra = 2
+      case 0xF0..<0xF8:
+        scalar = UInt32(byte & 0x07)
+        extra = 3
       default: throw error("invalid UTF-8")
       }
       index += 1
@@ -230,7 +242,8 @@ private struct Parser {
   private mutating func parseNumber() throws(VimVectorJSONError) -> Double {
     let start = index
     while index < bytes.count, "+-0123456789.eE".utf8.contains(bytes[index]) { index += 1 }
-    guard index > start, let value = Double(String(decoding: bytes[start..<index], as: UTF8.self)) else {
+    guard index > start, let value = Double(String(decoding: bytes[start..<index], as: UTF8.self))
+    else {
       throw error("bad number")
     }
     return value

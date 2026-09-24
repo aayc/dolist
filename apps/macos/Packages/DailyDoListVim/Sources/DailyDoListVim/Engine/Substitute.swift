@@ -5,7 +5,8 @@ extension Vim {
   /// `exCommands.substitute(cm, params)`: `:[range]s/pattern/replacement/[flags] [count]`.
   func exSubstitute(_ cm: EditorAdapter, _ params: ExParams) throws {
     let argString = params.argString
-    let tokens: [VimText]? = argString.flatMap { $0.isEmpty ? [] : splitBySeparator($0, $0[0]) } ?? []
+    let tokens: [VimText]? =
+      argString.flatMap { $0.isEmpty ? [] : splitBySeparator($0, $0[0]) } ?? []
     var regexPart = VimText()
     var replacePart: VimText?
     var trailing: [VimText]?
@@ -20,7 +21,8 @@ extension Vim {
       if let part = replacePart {
         let translated: VimText
         if pcre {
-          translated = unescapeRegexReplace(JSReplace.replace(part, Self.ampersandRegex, with: "$1$$&"))
+          translated = unescapeRegexReplace(
+            JSReplace.replace(part, Self.ampersandRegex, with: "$1$$&"))
         } else {
           translated = translateRegexReplace(part)
         }
@@ -46,7 +48,9 @@ extension Vim {
         if pcre {
           regexPart = regexPart + "/" + flagsPart
         } else {
-          regexPart = VimText(units: regexPart.units.flatMap { $0 == 0x2F ? [0x5C, 0x2F] : [$0] }) + "/" + flagsPart
+          regexPart =
+            VimText(units: regexPart.units.flatMap { $0 == 0x2F ? [0x5C, 0x2F] : [$0] }) + "/"
+            + flagsPart
         }
       }
     }
@@ -60,7 +64,9 @@ extension Vim {
         return
       }
     }
-    if replacePart == nil || replacePart!.isEmpty { replacePart = globalState.lastSubstituteReplacePart }
+    if replacePart == nil || replacePart!.isEmpty {
+      replacePart = globalState.lastSubstituteReplacePart
+    }
     guard let replaceWith = replacePart else {
       showConfirm(cm, "No previous substitute regular expression")
       return
@@ -77,7 +83,8 @@ extension Vim {
     }
     let startPos = clipCursorToContent(cm, Pos(lineStart, 0))
     let cursor = cm.getSearchCursor(query, startPos)
-    try doReplace(cm, confirm, global, lineStart, lineEnd, cursor, query, replaceWith, params.callback)
+    try doReplace(
+      cm, confirm, global, lineStart, lineEnd, cursor, query, replaceWith, params.callback)
   }
 
   /// `/([^\\])&/g`: an `&` not preceded by a backslash.
@@ -85,7 +92,8 @@ extension Vim {
 
   /// `doReplace(cm, confirm, global, lineStart, lineEnd, searchCursor, query, replaceWith, callback)`.
   func doReplace(
-    _ cm: EditorAdapter, _ confirm: Bool, _ global: Bool, _ lineStart: Int, _ lineEndIn: Int, _ searchCursor: SearchCursor,
+    _ cm: EditorAdapter, _ confirm: Bool, _ global: Bool, _ lineStart: Int, _ lineEndIn: Int,
+    _ searchCursor: SearchCursor,
     _ query: JSRegExp, _ replaceWith: VimText, _ callbackIn: (() throws -> Void)?
   ) throws {
     // Set up all the functions.
@@ -116,7 +124,7 @@ extension Vim {
     func findNextValidMatch() throws -> JSMatch? {
       let lastMatchTo = lastPos != nil ? searchCursor.to() : nil
       var match = try searchCursor.findNext()
-      if let m = match, (m[0]?.isEmpty ?? true), let lastMatchTo, searchCursor.from() == lastMatchTo {
+      if let m = match, m[0]?.isEmpty ?? true, let lastMatchTo, searchCursor.from() == lastMatchTo {
         match = try searchCursor.findNext()
       }
       if match != nil { matches += 1 }
@@ -153,7 +161,9 @@ extension Vim {
         try callback()
       } else if done {
         showConfirm(
-          cm, (matches > 0 ? "Found \(matches) matches" : "No matches found") + " for pattern: " + query.description
+          cm,
+          (matches > 0 ? "Found \(matches) matches" : "No matches found") + " for pattern: "
+            + query.description
             + (pcre ? " (set nopcre to use Vim regexps)" : ""))
       }
     }
@@ -171,7 +181,9 @@ extension Vim {
     // Actually do replace.
     try next()
     if done {
-      showConfirm(cm, "No matches for " + query.description + (pcre ? " (set nopcre to use vim regexps)" : ""))
+      showConfirm(
+        cm, "No matches for " + query.description + (pcre ? " (set nopcre to use vim regexps)" : "")
+      )
       return
     }
     if !confirm {
@@ -239,7 +251,9 @@ extension Vim {
         while end < u.count && end < i + 4 && isASCIIDigit(u[end]) { end += 1 }
         let x = VimText(u[(i + 1)..<end])
         var x1 = x
-        while !x1.isEmpty && JSNumber.parseInt(x1) >= Double(match.count) { x1 = x1.slice(0, x1.length - 1) }
+        while !x1.isEmpty && JSNumber.parseInt(x1) >= Double(match.count) {
+          x1 = x1.slice(0, x1.length - 1)
+        }
         if !x1.isEmpty {
           // `match[x1]`: an array index only in canonical form ("1", not "01").
           let isCanonical = x1.length == 1 || x1[0] != 0x30

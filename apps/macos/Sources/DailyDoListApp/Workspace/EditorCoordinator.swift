@@ -44,13 +44,20 @@ final class EditorCoordinator {
   @ObservationIgnored private let scheduler: AppScheduler
   @ObservationIgnored private var badgeRefreshScheduled = false
 
-  init(controller: MarkdownEditorController? = nil, scheduler: AppScheduler, badgeDelay: TimeInterval = 0.15, wordDelay: TimeInterval = 0.6) {
+  init(
+    controller: MarkdownEditorController? = nil, scheduler: AppScheduler,
+    badgeDelay: TimeInterval = 0.15, wordDelay: TimeInterval = 0.6
+  ) {
     let controller = controller ?? MarkdownEditorController()
     self.controller = controller
     self.scheduler = scheduler
     configuration = controller.configuration
-    badgeTimer = IdleTimer(scheduler: scheduler, delay: badgeDelay) { [weak self] in self?.recomputeBadges() }
-    wordTimer = IdleTimer(scheduler: scheduler, delay: wordDelay) { [weak self] in self?.updateWordCount() }
+    badgeTimer = IdleTimer(scheduler: scheduler, delay: badgeDelay) { [weak self] in
+      self?.recomputeBadges()
+    }
+    wordTimer = IdleTimer(scheduler: scheduler, delay: wordDelay) { [weak self] in
+      self?.updateWordCount()
+    }
     controller.delegate = self
   }
 
@@ -192,7 +199,8 @@ extension EditorCoordinator: MarkdownEditorDelegate {
     host?.editorPreview(for: link)
   }
 
-  func editor(_ editor: MarkdownEditorController, didClickWikiLink target: String, newWindow: Bool) {
+  func editor(_ editor: MarkdownEditorController, didClickWikiLink target: String, newWindow: Bool)
+  {
     host?.editorDidClickWikiLink(target, newTab: newWindow)
   }
 
@@ -215,7 +223,9 @@ extension EditorCoordinator: MarkdownEditorDelegate {
     vimStatus = status
   }
 
-  func editor(_ editor: MarkdownEditorController, perform request: EditorVimRequest) -> EditorVimRequestResult {
+  func editor(_ editor: MarkdownEditorController, perform request: EditorVimRequest)
+    -> EditorVimRequestResult
+  {
     host?.editorPerform(request) ?? .unavailable
   }
 }

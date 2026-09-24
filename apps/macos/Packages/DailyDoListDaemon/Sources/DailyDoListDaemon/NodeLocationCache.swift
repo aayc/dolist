@@ -28,11 +28,13 @@ struct NodeLocationCache: Sendable {
       entry.key == key
     else { return nil }
     let url = URL(fileURLWithPath: entry.path)
-    guard fileSystem.isExecutableFile(at: url), fileSystem.fingerprint(of: url) == entry.fingerprint,
+    guard fileSystem.isExecutableFile(at: url),
+      fileSystem.fingerprint(of: url) == entry.fingerprint,
       let version = NodeVersion(parsing: entry.version),
       let source = NodeLocator.Source(rawValue: entry.source)
     else { return nil }
-    return ResolvedNode(url: url, version: version, source: source, loginShellPATH: entry.loginShellPATH)
+    return ResolvedNode(
+      url: url, version: version, source: source, loginShellPATH: entry.loginShellPATH)
   }
 
   /// Forgets the entry (a launch from it failed; version-manager shims can change what they run
@@ -44,7 +46,8 @@ struct NodeLocationCache: Sendable {
   func save(_ node: ResolvedNode, key: String) {
     guard let fingerprint = fileSystem.fingerprint(of: node.url) else { return }
     let entry = Entry(
-      key: key, path: node.url.path, version: node.version.description, source: node.source.rawValue,
+      key: key, path: node.url.path, version: node.version.description,
+      source: node.source.rawValue,
       loginShellPATH: node.loginShellPATH, fingerprint: fingerprint)
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.withoutEscapingSlashes]

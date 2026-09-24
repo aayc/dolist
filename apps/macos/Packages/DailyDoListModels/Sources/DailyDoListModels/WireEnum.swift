@@ -4,8 +4,8 @@ import Foundation
 /// categories, error codes…). Decoding never fails on an unknown value; code compares against the
 /// known constants and handles anything else generically.
 public protocol WireEnum: RawRepresentable, Codable, Hashable, Sendable, CustomStringConvertible,
-  ExpressibleByStringLiteral where RawValue == String
-{
+  ExpressibleByStringLiteral
+where RawValue == String {
   init(rawValue: String)
 }
 

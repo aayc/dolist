@@ -22,7 +22,8 @@ final class PromptOptions {
 extension Vim {
   /// `showConfirm(cm, template, long, duration)`: a notification. Long ones stay until the next
   /// key (which `<CR>` only dismisses).
-  func showConfirm(_ cm: EditorAdapter, _ text: String, long: Bool = false, duration: Double? = nil) {
+  func showConfirm(_ cm: EditorAdapter, _ text: String, long: Bool = false, duration: Double? = nil)
+  {
     if long {
       cm.closeVimNotification?()
       cm.closeVimNotification = cm.openNotification(text, long: true, duration: 0)
@@ -51,7 +52,8 @@ extension EditorAdapter {
   @discardableResult
   func openDialog(_ options: PromptOptions) -> (VimText?) -> Void {
     closeNotification(nil)
-    let panel = VimPanel(kind: .prompt, text: options.prefix, value: options.value, detail: options.desc)
+    let panel = VimPanel(
+      kind: .prompt, text: options.prefix, value: options.value, detail: options.desc)
     panel.onKeyDown = options.onKeyDown
     panel.onKeyUp = options.onKeyUp
     panel.onSubmit = options.onClose

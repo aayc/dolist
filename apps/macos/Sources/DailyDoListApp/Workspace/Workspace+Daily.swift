@@ -49,7 +49,9 @@ extension Workspace {
   @discardableResult
   func openAdjacentDaily(_ direction: DailyNotes.Direction) async -> Bool {
     guard let target = adjacentDailyPath(direction, from: navTarget ?? activePath) else {
-      toasts.show(.info, direction == .previous ? "No previous daily note" : "No next daily note", timeout: 2.5)
+      toasts.show(
+        .info, direction == .previous ? "No previous daily note" : "No next daily note",
+        timeout: 2.5)
       return false
     }
     return await openNote(target)
@@ -59,7 +61,8 @@ extension Workspace {
   func adjacentDailyPath(_ direction: DailyNotes.Direction, from path: String?) -> String? {
     let dailySettings = settings.settings.dailyNotes
     let anchor = DailyNotes.navigationAnchor(activePath: path, settings: dailySettings, now: now())
-    return DailyNotes.adjacent(paths: vault.files, from: anchor, direction: direction, settings: dailySettings)?.path
+    return DailyNotes.adjacent(
+      paths: vault.files, from: anchor, direction: direction, settings: dailySettings)?.path
   }
 
   /// This week's note (`weeklyNotes` settings): opens it, or creates it from the weekly template
@@ -75,7 +78,8 @@ extension Workspace {
     var content = ""
     if let template = DailyNotes.templatePath(weekly.template), vault.isFile(template) {
       if let body = try? await client.readNote(template).content {
-        content = NoteTemplate.render(body, context: NoteTemplate.Context(title: VaultPath.stem(path), date: date, now: now()))
+        content = NoteTemplate.render(
+          body, context: NoteTemplate.Context(title: VaultPath.stem(path), date: date, now: now()))
       }
     }
     await createNote(at: path, content: content, newTab: false, focusTitle: false)

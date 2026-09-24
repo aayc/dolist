@@ -29,17 +29,22 @@ enum BadgeBuilder {
     guard !visible.isEmpty else { return [] }
     let tasks = visible.filter { $0.0.anchor != .line }
     let anchored = visible.filter { $0.0.anchor == .line }
-    let taskLines = tasks.isEmpty ? [:] : TaskAnchors.resolve(document, anchors: tasks.map { TaskAnchor(record: $0.0) })
+    let taskLines =
+      tasks.isEmpty
+      ? [:] : TaskAnchors.resolve(document, anchors: tasks.map { TaskAnchor(record: $0.0) })
     let anchorLines =
-      anchored.isEmpty ? [:] : LineAnchors.resolve(document, anchors: anchored.map { LineAnchor(record: $0.0) })
+      anchored.isEmpty
+      ? [:] : LineAnchors.resolve(document, anchors: anchored.map { LineAnchor(record: $0.0) })
     func badge(_ record: TaskAgentRecord, _ label: String, line: Int?) -> EditorBadge? {
       line.map {
         EditorBadge(
-          id: record.taskId, line: $0, status: record.status.rawValue, label: label, unread: record.unread,
+          id: record.taskId, line: $0, status: record.status.rawValue, label: label,
+          unread: record.unread,
           threadId: record.threadId, highlightsLine: record.anchor == .line)
       }
     }
-    return (tasks.compactMap { badge($0, $1, line: taskLines[$0.taskId]) }
+    return
+      (tasks.compactMap { badge($0, $1, line: taskLines[$0.taskId]) }
       + anchored.compactMap { badge($0, $1, line: anchorLines[$0.taskId]?.line) })
       .sorted { ($0.line, $0.id) < ($1.line, $1.id) }
   }
@@ -47,7 +52,8 @@ enum BadgeBuilder {
   /// The current line of a record's task or anchored line in `document`, if it's still there.
   static func line(of record: TaskAgentRecord, in document: String) -> Int? {
     if record.anchor == .line {
-      return LineAnchors.resolve(document, anchors: [LineAnchor(record: record)])[record.taskId]?.line
+      return LineAnchors.resolve(document, anchors: [LineAnchor(record: record)])[record.taskId]?
+        .line
     }
     return TaskAnchors.resolve(document, anchors: [TaskAnchor(record: record)])[record.taskId]
   }

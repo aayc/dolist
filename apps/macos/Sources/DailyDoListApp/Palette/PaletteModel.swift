@@ -21,7 +21,10 @@ final class PaletteModel {
   @ObservationIgnored private let recent: [String]
   @ObservationIgnored private let openTabs: [String]
 
-  init(mode: PaletteMode, commands: [AppCommand] = [], files: [String] = [], recent: [String] = [], openTabs: [String] = []) {
+  init(
+    mode: PaletteMode, commands: [AppCommand] = [], files: [String] = [], recent: [String] = [],
+    openTabs: [String] = []
+  ) {
     self.mode = mode
     self.commands = commands
     self.files = files
@@ -67,7 +70,8 @@ final class PaletteModel {
     case .commands:
       items = PaletteRanking.commands(query, from: commands)
     case .switcher:
-      items = PaletteRanking.normalize(query).isEmpty
+      items =
+        PaletteRanking.normalize(query).isEmpty
         ? PaletteRanking.defaultNotes(files: files, recent: recent, openTabs: openTabs)
         : PaletteRanking.notes(query, files: files)
     }

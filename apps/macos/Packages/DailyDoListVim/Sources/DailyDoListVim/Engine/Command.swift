@@ -103,8 +103,10 @@ final class MotionArgs {
   var noRepeat = false
 
   init(
-    forward: Bool = false, linewise: Bool = false, toJumplist: Bool = false, wordEnd: Bool = false, bigWord: Bool = false,
-    inclusive: Bool = false, explicitRepeat: Bool = false, repeatOffset: Int = 0, toFirstChar: Bool = false,
+    forward: Bool = false, linewise: Bool = false, toJumplist: Bool = false, wordEnd: Bool = false,
+    bigWord: Bool = false,
+    inclusive: Bool = false, explicitRepeat: Bool = false, repeatOffset: Int = 0,
+    toFirstChar: Bool = false,
     sameLine: Bool = false, textObjectInner: Bool = false, count: Int = 0
   ) {
     self.forward = forward
@@ -123,8 +125,10 @@ final class MotionArgs {
 
   func copy() -> MotionArgs {
     let c = MotionArgs(
-      forward: forward, linewise: linewise, toJumplist: toJumplist, wordEnd: wordEnd, bigWord: bigWord, inclusive: inclusive,
-      explicitRepeat: explicitRepeat, repeatOffset: repeatOffset, toFirstChar: toFirstChar, sameLine: sameLine,
+      forward: forward, linewise: linewise, toJumplist: toJumplist, wordEnd: wordEnd,
+      bigWord: bigWord, inclusive: inclusive,
+      explicitRepeat: explicitRepeat, repeatOffset: repeatOffset, toFirstChar: toFirstChar,
+      sameLine: sameLine,
       textObjectInner: textObjectInner, count: self.repeat)
     c.selectedCharacter = selectedCharacter
     c.repeatIsExplicit = repeatIsExplicit
@@ -155,7 +159,10 @@ final class OperatorArgs {
   var registerName: String?
   var selectedCharacter: VimText?
 
-  init(indentRight: Bool = false, toLower: Bool? = nil, linewise: Bool = false, fullLine: Bool = false, shouldMoveCursor: Bool = false, keepCursor: Bool = false) {
+  init(
+    indentRight: Bool = false, toLower: Bool? = nil, linewise: Bool = false, fullLine: Bool = false,
+    shouldMoveCursor: Bool = false, keepCursor: Bool = false
+  ) {
     self.indentRight = indentRight
     self.toLower = toLower
     self.linewise = linewise
@@ -165,7 +172,9 @@ final class OperatorArgs {
   }
 
   func copy() -> OperatorArgs {
-    let c = OperatorArgs(indentRight: indentRight, toLower: toLower, linewise: linewise, fullLine: fullLine, shouldMoveCursor: shouldMoveCursor, keepCursor: keepCursor)
+    let c = OperatorArgs(
+      indentRight: indentRight, toLower: toLower, linewise: linewise, fullLine: fullLine,
+      shouldMoveCursor: shouldMoveCursor, keepCursor: keepCursor)
     c.lastSel = lastSel
     c.repeat = self.repeat
     c.registerName = registerName
@@ -197,9 +206,12 @@ final class ActionArgs {
   var head: Pos?
 
   init(
-    forward: Bool = false, linewise: Bool? = nil, blockwise: Bool = false, insertAt: String? = nil, after: Bool = false,
-    isEdit: Bool = false, matchIndent: Bool = false, keepSpaces: Bool = false, replace: Bool = false,
-    position: String? = nil, increase: Bool = false, backtrack: Bool = false, indentRight: Bool = false
+    forward: Bool = false, linewise: Bool? = nil, blockwise: Bool = false, insertAt: String? = nil,
+    after: Bool = false,
+    isEdit: Bool = false, matchIndent: Bool = false, keepSpaces: Bool = false,
+    replace: Bool = false,
+    position: String? = nil, increase: Bool = false, backtrack: Bool = false,
+    indentRight: Bool = false
   ) {
     self.forward = forward
     self.linewise = linewise
@@ -218,8 +230,10 @@ final class ActionArgs {
 
   func copy() -> ActionArgs {
     let c = ActionArgs(
-      forward: forward, linewise: linewise, blockwise: blockwise, insertAt: insertAt, after: after, isEdit: isEdit,
-      matchIndent: matchIndent, keepSpaces: keepSpaces, replace: replace, position: position, increase: increase,
+      forward: forward, linewise: linewise, blockwise: blockwise, insertAt: insertAt, after: after,
+      isEdit: isEdit,
+      matchIndent: matchIndent, keepSpaces: keepSpaces, replace: replace, position: position,
+      increase: increase,
       backtrack: backtrack, indentRight: indentRight)
     c.repeat = self.repeat
     c.repeatIsExplicit = repeatIsExplicit

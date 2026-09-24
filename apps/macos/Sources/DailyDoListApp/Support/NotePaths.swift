@@ -31,7 +31,9 @@ enum NotePaths {
   }
 
   /// `folder/base.md`, `folder/base 1.md`, … — the first path `exists` doesn't know.
-  static func uniquePath(folder: String, base: String, fileExtension: String = ".md", exists: (String) -> Bool) -> String {
+  static func uniquePath(
+    folder: String, base: String, fileExtension: String = ".md", exists: (String) -> Bool
+  ) -> String {
     let prefix = folder.isEmpty ? "" : "\(folder)/"
     var n = 0
     while true {

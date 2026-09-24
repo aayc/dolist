@@ -123,7 +123,10 @@ final class RegisterController {
   }
 
   /// `pushText(registerName, operator, text, linewise, blockwise)`.
-  func pushText(_ registerName: String?, _ op: String, _ input: VimText, linewise: Bool = false, blockwise: Bool = false) {
+  func pushText(
+    _ registerName: String?, _ op: String, _ input: VimText, linewise: Bool = false,
+    blockwise: Bool = false
+  ) {
     if registerName == "_" { return }
     defer { vim.didPushText?(registerName, linewise, blockwise) }
     var text = input

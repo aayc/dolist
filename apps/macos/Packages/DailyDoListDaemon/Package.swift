@@ -6,7 +6,7 @@ let package = Package(
   name: "DailyDoListDaemon",
   platforms: [.macOS(.v14)],
   products: [
-    .library(name: "DailyDoListDaemon", targets: ["DailyDoListDaemon"]),
+    .library(name: "DailyDoListDaemon", targets: ["DailyDoListDaemon"])
   ],
   targets: [
     .target(name: "DailyDoListDaemon"),

@@ -11,8 +11,10 @@ extension Vim {
       }
     }
     for (name, context, noremap) in [
-      ("map", nil, false), ("imap", KeyContext.insert, false), ("nmap", .normal, false), ("vmap", .visual, false),
-      ("omap", .operatorPending, false), ("noremap", nil, true), ("inoremap", .insert, true), ("nnoremap", .normal, true),
+      ("map", nil, false), ("imap", KeyContext.insert, false), ("nmap", .normal, false),
+      ("vmap", .visual, false),
+      ("omap", .operatorPending, false), ("noremap", nil, true), ("inoremap", .insert, true),
+      ("nnoremap", .normal, true),
       ("vnoremap", .visual, true), ("onoremap", .operatorPending, true),
     ] as [(String, KeyContext?, Bool)] {
       exCommands[name] = { [unowned self] cm, params throws in
@@ -33,7 +35,9 @@ extension Vim {
     exCommands["imapclear"] = { [unowned self] _, _ throws in self.mapclear(KeyContext.insert) }
     exCommands["nmapclear"] = { [unowned self] _, _ throws in self.mapclear(KeyContext.normal) }
     exCommands["vmapclear"] = { [unowned self] _, _ throws in self.mapclear(KeyContext.visual) }
-    exCommands["omapclear"] = { [unowned self] _, _ throws in self.mapclear(KeyContext.operatorPending) }
+    exCommands["omapclear"] = { [unowned self] _, _ throws in
+      self.mapclear(KeyContext.operatorPending)
+    }
     exCommands["move"] = { [unowned self] cm, params throws in
       let command = VimCommand(keys: "", type: .motion)
       command.motion = "moveToLineOrEdgeOfDocument"
@@ -72,9 +76,12 @@ extension Vim {
     exCommands["marks"] = { [unowned self] cm, params throws in
       let marks = self.maybeInitVimState(cm).marks
       var regInfo = "-----------Marks-----------\nmark\tline\tcol\n\n"
-      let names = params.args.map { $0.joined().units.map { VimText(unit: $0).string } } ?? marks.keys
+      let names =
+        params.args.map { $0.joined().units.map { VimText(unit: $0).string } } ?? marks.keys
       for name in names {
-        if let marker = marks[name]?.find() { regInfo += name + "\t" + String(marker.line) + "\t" + String(marker.ch) + "\n" }
+        if let marker = marks[name]?.find() {
+          regInfo += name + "\t" + String(marker.line) + "\t" + String(marker.ch) + "\n"
+        }
       }
       self.showConfirm(cm, regInfo, long: true)
     }
@@ -111,7 +118,9 @@ extension Vim {
         if self.maybeInitVimState(cm).insertMode { try self.exitInsertMode(cm, keepCursor: true) }
       }
     }
-    exCommands["substitute"] = { [unowned self] cm, params throws in try self.exSubstitute(cm, params) }
+    exCommands["substitute"] = { [unowned self] cm, params throws in
+      try self.exSubstitute(cm, params)
+    }
     exCommands["startinsert"] = { [unowned self] cm, params throws in
       try self.doKeyToKey(cm, params.argString == "!" ? "A" : "i", NoremapSource(noremap: true))
     }
@@ -120,24 +129,39 @@ extension Vim {
     exCommands["write"] = { cm, _ throws in cm.host.vimSave() }
     exCommands["nohlsearch"] = { [unowned self] cm, _ throws in self.clearSearchHighlight(cm) }
     exCommands["yank"] = { [unowned self] cm, params throws in
-      guard var line = params.selectionLine else { throw JSException.rangeError("Invalid line number NaN") }
+      guard var line = params.selectionLine else {
+        throw JSException.rangeError("Invalid line number NaN")
+      }
       var lineEnd = params.selectionLineEnd ?? line
       if lineEnd < line { swap(&line, &lineEnd) }
       let text = cm.getRange(Pos(line, 0), Pos(lineEnd + 1, 0))
-      let registerName = params.args.flatMap { $0.first.map(\.string) }.flatMap { $0.isEmpty ? nil : $0 } ?? "0"
-      self.globalState.registerController.pushText(registerName, "yank", text, linewise: true, blockwise: false)
-      self.showConfirm(cm, String(lineEnd + 1 - line) + " lines yanked" + " into \"" + registerName, long: false, duration: 1.5)
+      let registerName =
+        params.args.flatMap { $0.first.map(\.string) }.flatMap { $0.isEmpty ? nil : $0 } ?? "0"
+      self.globalState.registerController.pushText(
+        registerName, "yank", text, linewise: true, blockwise: false)
+      self.showConfirm(
+        cm, String(lineEnd + 1 - line) + " lines yanked" + " into \"" + registerName, long: false,
+        duration: 1.5)
     }
-    exCommands["put"] = { [unowned self] cm, params throws in try self.exPut(cm, params, matchIndent: false) }
-    exCommands["iput"] = { [unowned self] cm, params throws in try self.exPut(cm, params, matchIndent: true) }
+    exCommands["put"] = { [unowned self] cm, params throws in
+      try self.exPut(cm, params, matchIndent: false)
+    }
+    exCommands["iput"] = { [unowned self] cm, params throws in
+      try self.exPut(cm, params, matchIndent: true)
+    }
     exCommands["delete"] = { [unowned self] cm, params throws in
-      guard let line = params.selectionLine else { throw JSException.rangeError("Invalid line number NaN") }
+      guard let line = params.selectionLine else {
+        throw JSException.rangeError("Invalid line number NaN")
+      }
       let lineEnd = params.selectionLineEnd ?? line
       let args = OperatorArgs(linewise: true)
-      _ = try self.operators["delete"]!(cm, args, [VimRange(anchor: Pos(line, 0), head: Pos(lineEnd + 1, 0))], Pos(line, 0), nil)
+      _ = try self.operators["delete"]!(
+        cm, args, [VimRange(anchor: Pos(line, 0), head: Pos(lineEnd + 1, 0))], Pos(line, 0), nil)
     }
     exCommands["join"] = { [unowned self] cm, params throws in
-      guard let line = params.selectionLine else { throw JSException.rangeError("Invalid line number NaN") }
+      guard let line = params.selectionLine else {
+        throw JSException.rangeError("Invalid line number NaN")
+      }
       let lineEnd = params.selectionLineEnd ?? line
       cm.setCursor(Pos(line, 0))
       let args = ActionArgs()
@@ -178,7 +202,9 @@ extension Vim {
     var forceToggle = false
     if optionName.charAt(optionName.length - 1) == "?" {
       // If post-fixed with ?, then the set is actually a get.
-      if let v = value, v.isTruthy { throw JSException.error("Trailing characters: " + (params.argString?.string ?? "undefined")) }
+      if let v = value, v.isTruthy {
+        throw JSException.error("Trailing characters: " + (params.argString?.string ?? "undefined"))
+      }
       optionName = optionName.substring(0, optionName.length - 1)
       forceGet = true
     } else if optionName.charAt(optionName.length - 1) == "!" {
@@ -247,7 +273,8 @@ extension Vim {
         // The range must terminate at an alphabetic character which shares the same case as the
         // start of the range.
         if startMark.isLowerCaseLetter == finishMark.isLowerCaseLetter {
-          let start = startMark[0], finish = finishMark[0]
+          let start = startMark[0]
+          let finish = finishMark[0]
           if start >= finish {
             showConfirm(cm, "Invalid argument: " + argString.substring(count).string)
             return
@@ -285,7 +312,8 @@ extension Vim {
     let lineEnd = nonZero(params.lineEnd) ?? nonZero(params.line) ?? cm.lastLine()
     // get the tokens from argString
     let tokens = splitBySeparator(argString, 0x2F)
-    var regexPart = argString, cmd = VimText()
+    var regexPart = argString
+    var cmd = VimText()
     if let tokens, !tokens.isEmpty {
       regexPart = tokens[0]
       cmd = Array(tokens.dropFirst()).joined("/")
@@ -311,7 +339,11 @@ extension Vim {
       let line = cm.getLine(i)
       let matched = query.test(line)
       if matched != inverted {
-        if cmd.isEmpty { matchedLines.append(line) } else { matchedHandles.append(cm.getLineHandle(i)) }
+        if cmd.isEmpty {
+          matchedLines.append(line)
+        } else {
+          matchedHandles.append(cm.getLineHandle(i))
+        }
       }
       i += 1
     }
@@ -370,7 +402,10 @@ extension Vim {
 
   /// `exCommands.sort(cm, params)`: `:sort[!] [dinuoxr] [/pattern/]`.
   private func exSort(_ cm: EditorAdapter, _ params: ExParams) throws {
-    var reverse = false, ignoreCase = false, unique = false, includeMatch = false
+    var reverse = false
+    var ignoreCase = false
+    var unique = false
+    var includeMatch = false
     var number: String?
     var pattern: JSRegExp?
     func parseArgs() throws -> String? {
@@ -407,7 +442,8 @@ extension Vim {
         number = decimal ? "decimal" : hex ? "hex" : octal ? "octal" : nil
       }
       if let patternText {
-        pattern = try JSRegExp.make(patternText.substr(1, patternText.length - 2), ignoreCase ? "i" : "")
+        pattern = try JSRegExp.make(
+          patternText.substr(1, patternText.length - 2), ignoreCase ? "i" : "")
       }
       return nil
     }
@@ -421,12 +457,13 @@ extension Vim {
     let curStart = Pos(lineStart, 0)
     let curEnd = Pos(lineEnd, lineLength(cm, lineEnd))
     var text = cm.getRange(curStart, curEnd).split(unit: 0x0A)
-    let numberRegex: JSRegExp? = switch number {
-    case "decimal": try JSRegExp.make("(-?)([\\d]+)")
-    case "hex": try JSRegExp.make("(-?)(?:0x)?([0-9a-f]+)", "i")
-    case "octal": try JSRegExp.make("([0-7]+)")
-    default: nil
-    }
+    let numberRegex: JSRegExp? =
+      switch number {
+      case "decimal": try JSRegExp.make("(-?)([\\d]+)")
+      case "hex": try JSRegExp.make("(-?)(?:0x)?([0-9a-f]+)", "i")
+      case "octal": try JSRegExp.make("([0-7]+)")
+      default: nil
+      }
     let radix = number == "decimal" ? 10 : number == "hex" ? 16 : 8
     var numPart: [SortEntry] = []
     var textPart: [VimText] = []
@@ -449,17 +486,22 @@ extension Vim {
       textPart = text
     }
     func compareFn(_ a0: VimText, _ b0: VimText) -> Double {
-      var a = a0, b = b0
+      var a = a0
+      var b = b0
       if reverse { swap(&a, &b) }
       if ignoreCase {
         a = a.toLowerCase()
         b = b.toLowerCase()
       }
-      guard let numberRegex, let amatch = numberRegex.firstMatch(in: a), let bmatch = numberRegex.firstMatch(in: b) else {
+      guard let numberRegex, let amatch = numberRegex.firstMatch(in: a),
+        let bmatch = numberRegex.firstMatch(in: b)
+      else {
         return a < b ? -1 : 1
       }
-      let anum = JSNumber.parseInt(((amatch[1] ?? "") + (amatch[2] ?? "undefined")).toLowerCase(), radix: radix)
-      let bnum = JSNumber.parseInt(((bmatch[1] ?? "") + (bmatch[2] ?? "undefined")).toLowerCase(), radix: radix)
+      let anum = JSNumber.parseInt(
+        ((amatch[1] ?? "") + (amatch[2] ?? "undefined")).toLowerCase(), radix: radix)
+      let bnum = JSNumber.parseInt(
+        ((bmatch[1] ?? "") + (bmatch[2] ?? "undefined")).toLowerCase(), radix: radix)
       return anum - bnum
     }
     func key(_ entry: SortEntry) -> VimText? {
@@ -473,12 +515,15 @@ extension Vim {
         for (i, entry) in numPart.enumerated() {
           switch entry {
           case .match(let k, let input): numPart[i] = .match(key: k.toLowerCase(), input: input)
-          case .plain(let line): throw JSException.typeError("Cannot assign to read only property '0' of string '\(line.string)'")
+          case .plain(let line):
+            throw JSException.typeError(
+              "Cannot assign to read only property '0' of string '\(line.string)'")
           }
         }
       }
       numPart = stableSorted(numPart) { a, b in
-        var ka = key(a), kb = key(b)
+        var ka = key(a)
+        var kb = key(b)
         if reverse { swap(&ka, &kb) }
         guard let x = ka, let y = kb else { return false }
         return x < y
@@ -495,7 +540,9 @@ extension Vim {
       case .plain(let line): return pattern != nil ? VimText() : line
       }
     }
-    if pattern == nil && number == nil { textPart = stableSorted(textPart) { compareFn($0, $1) < 0 } }
+    if pattern == nil && number == nil {
+      textPart = stableSorted(textPart) { compareFn($0, $1) < 0 }
+    }
     text = !reverse ? textPart + numLines : numLines + textPart
     if unique {
       // Remove duplicate lines

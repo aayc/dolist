@@ -153,7 +153,8 @@ extension ServerEvent: Codable {
     case "thread.delta": self = .threadDelta(try ThreadDeltaEvent(from: decoder))
     case "approval.upsert":
       self = .approvalUpsert(try c.decode(ApprovalRequest.self, forKey: .approval))
-    case "agent.status": self = .agentStatus(try c.decode(AgentStatusResponse.self, forKey: .status))
+    case "agent.status":
+      self = .agentStatus(try c.decode(AgentStatusResponse.self, forKey: .status))
     case "surface.frame": self = .surfaceFrame(try SurfaceFrame(from: decoder))
     case "settings.changed":
       self = .settingsChanged(try c.decode(AppSettings.self, forKey: .settings))
@@ -167,14 +168,19 @@ extension ServerEvent: Codable {
     case .hello(let e): try encodeTagged(e, kind: "hello", key: "type", to: encoder)
     case .vaultChanged(let e): try encodeTagged(e, kind: "vault.changed", key: "type", to: encoder)
     case .taskRecords(let e): try encodeTagged(e, kind: "task.records", key: "type", to: encoder)
-    case .taskRecord(let record): try encodeWrapped(record, key: .record, type: "task.record", to: encoder)
-    case .threadUpsert(let thread): try encodeWrapped(thread, key: .thread, type: "thread.upsert", to: encoder)
-    case .threadMessage(let e): try encodeTagged(e, kind: "thread.message", key: "type", to: encoder)
+    case .taskRecord(let record):
+      try encodeWrapped(record, key: .record, type: "task.record", to: encoder)
+    case .threadUpsert(let thread):
+      try encodeWrapped(thread, key: .thread, type: "thread.upsert", to: encoder)
+    case .threadMessage(let e):
+      try encodeTagged(e, kind: "thread.message", key: "type", to: encoder)
     case .threadDelta(let e): try encodeTagged(e, kind: "thread.delta", key: "type", to: encoder)
     case .approvalUpsert(let approval):
       try encodeWrapped(approval, key: .approval, type: "approval.upsert", to: encoder)
-    case .agentStatus(let status): try encodeWrapped(status, key: .status, type: "agent.status", to: encoder)
-    case .surfaceFrame(let frame): try encodeTagged(frame, kind: "surface.frame", key: "type", to: encoder)
+    case .agentStatus(let status):
+      try encodeWrapped(status, key: .status, type: "agent.status", to: encoder)
+    case .surfaceFrame(let frame):
+      try encodeTagged(frame, kind: "surface.frame", key: "type", to: encoder)
     case .settingsChanged(let settings):
       try encodeWrapped(settings, key: .settings, type: "settings.changed", to: encoder)
     case .error(let e): try encodeTagged(e, kind: "error", key: "type", to: encoder)
@@ -182,7 +188,9 @@ extension ServerEvent: Codable {
     }
   }
 
-  private func encodeWrapped<T: Encodable>(_ value: T, key: Keys, type: String, to encoder: Encoder) throws {
+  private func encodeWrapped<T: Encodable>(_ value: T, key: Keys, type: String, to encoder: Encoder)
+    throws
+  {
     var c = encoder.container(keyedBy: Keys.self)
     try c.encode(type, forKey: .type)
     try c.encode(value, forKey: key)
@@ -193,7 +201,8 @@ extension ServerEvent: Codable {
 
 /// Signals a client sends on `/ws`.
 public enum ClientEvent: Hashable, Sendable {
-  case hello(clientId: String, apiVersion: Int = DaemonProtocol.apiVersion, clientVersion: String? = nil)
+  case hello(
+    clientId: String, apiVersion: Int = DaemonProtocol.apiVersion, clientVersion: String? = nil)
   case ping
   case surfaceSubscribe(threadId: String, surface: SurfaceKind)
   case surfaceUnsubscribe(threadId: String, surface: SurfaceKind)
@@ -257,7 +266,8 @@ extension ClientEvent: Codable {
       try c.encodeIfPresent(clientVersion, forKey: .clientVersion)
     case .ping:
       break
-    case .surfaceSubscribe(let threadId, let surface), .surfaceUnsubscribe(let threadId, let surface):
+    case .surfaceSubscribe(let threadId, let surface),
+      .surfaceUnsubscribe(let threadId, let surface):
       try c.encode(threadId, forKey: .threadId)
       try c.encode(surface, forKey: .surface)
     case .threadRead(let threadId):

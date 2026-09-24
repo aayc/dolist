@@ -1,7 +1,9 @@
 /// Task statuses. Beyond Obsidian's `[ ]`/`[x]`, the common "alternate checkbox" conventions:
 /// `[/]` in progress, `[-]` cancelled, `[>]` (or `[<]`) deferred/forwarded.
 public enum TaskStatus: String, Sendable, Hashable, Codable, CaseIterable {
-  case open, done, inProgress = "in_progress", cancelled, deferred, other
+  case open, done
+  case inProgress = "in_progress"
+  case cancelled, deferred, other
 
   /// `statusFromChar`: the status a checkbox character stands for.
   public init(statusChar: String) {

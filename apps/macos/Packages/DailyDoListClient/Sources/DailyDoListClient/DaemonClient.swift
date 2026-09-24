@@ -15,7 +15,8 @@ public protocol DaemonClient: AnyObject, Sendable {
   func tree() async throws -> VaultTreeResponse
   func readNote(_ path: String) async throws -> NoteResponse
   /// Throws `.conflict` when `baseVersion` no longer matches.
-  func writeNote(_ path: String, content: String, baseVersion: BaseVersion) async throws -> WriteNoteResponse
+  func writeNote(_ path: String, content: String, baseVersion: BaseVersion) async throws
+    -> WriteNoteResponse
   /// Soft delete (moves into `.trash/`).
   func deleteNote(_ path: String) async throws -> TrashResponse
   /// Renames a note or a folder. A note whose target exists throws `.conflict` (with the existing
@@ -44,7 +45,8 @@ public protocol DaemonClient: AnyObject, Sendable {
   func retryThread(_ id: String) async throws -> ThreadActionResponse
   func approvals(status: ApprovalStatus?) async throws -> [ApprovalRequest]
   /// Throws `.approvalConflict` when it was already decided.
-  func decideApproval(_ id: String, _ decision: ApprovalDecisionRequest) async throws -> ApprovalRequest
+  func decideApproval(_ id: String, _ decision: ApprovalDecisionRequest) async throws
+    -> ApprovalRequest
   func artifact(threadId: String, artifactId: String) async throws -> ArtifactPayload
 
   // Events (WebSocket)

@@ -7,9 +7,11 @@ extension MarkdownEditorController {
   public func toggleTask(atLine line: Int) -> Bool {
     let index = highlighter.lineIndex
     guard configuration.isEditable, line >= 0, line < index.count, !highlighter.isLiteralLine(line),
-      let replacement = TaskCommands.toggleTask(in: storage.mutableString, lineContaining: index.start(ofLine: line))
+      let replacement = TaskCommands.toggleTask(
+        in: storage.mutableString, lineContaining: index.start(ofLine: line))
     else { return false }
-    let edit = TextEdit(replacements: [replacement], selection: textView.selectedRanges.map(\.rangeValue))
+    let edit = TextEdit(
+      replacements: [replacement], selection: textView.selectedRanges.map(\.rangeValue))
     guard perform(edit, actionName: "Toggle Task", scroll: false) else { return false }
     animateChecks(in: edit)
     return true
@@ -20,7 +22,8 @@ extension MarkdownEditorController {
   @discardableResult
   public func toggleChecklist() -> Bool {
     guard configuration.isEditable,
-      let edit = TaskCommands.toggleChecklist(in: storage.mutableString, selection: currentSelection),
+      let edit = TaskCommands.toggleChecklist(
+        in: storage.mutableString, selection: currentSelection),
       perform(edit, actionName: "Toggle Checkbox")
     else { return false }
     animateChecks(in: edit)
@@ -49,12 +52,16 @@ extension MarkdownEditorController {
   @discardableResult
   public func insertLink() -> Bool {
     guard configuration.isEditable else { return false }
-    return perform(FormattingCommands.insertLink(in: storage.mutableString, selection: currentSelection), actionName: "Insert Link")
+    return perform(
+      FormattingCommands.insertLink(in: storage.mutableString, selection: currentSelection),
+      actionName: "Insert Link")
   }
 
   private func toggle(_ style: FormattingCommands.MarkupStyle, actionName: String) -> Bool {
     guard configuration.isEditable else { return false }
-    return perform(FormattingCommands.toggle(style, in: storage.mutableString, selection: currentSelection), actionName: actionName)
+    return perform(
+      FormattingCommands.toggle(style, in: storage.mutableString, selection: currentSelection),
+      actionName: actionName)
   }
 
   var currentSelection: [NSRange] {
@@ -65,7 +72,9 @@ extension MarkdownEditorController {
   /// command's selection. Each replacement is its own storage edit, so styles and badge anchors are
   /// remapped precisely.
   @discardableResult
-  func perform(_ edit: TextEdit, actionName: String, scroll: Bool = true, userEvent: String = "input") -> Bool {
+  func perform(
+    _ edit: TextEdit, actionName: String, scroll: Bool = true, userEvent: String = "input"
+  ) -> Bool {
     guard textView.isEditable else { return false }
     beginEditorOperation(userEvent: userEvent)
     defer { endEditorOperation() }
@@ -77,7 +86,10 @@ extension MarkdownEditorController {
     markdownTextView.breakUndoCoalescing()
     var applied = false
     withUndoGroup {
-      guard textView.shouldChangeText(inRanges: ranges, replacementStrings: edit.replacements.map(\.text)) else { return }
+      guard
+        textView.shouldChangeText(
+          inRanges: ranges, replacementStrings: edit.replacements.map(\.text))
+      else { return }
       replacingText = true
       for replacement in edit.replacements.reversed() {
         storage.replaceCharacters(in: replacement.range, with: replacement.text)

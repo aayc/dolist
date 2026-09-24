@@ -8,7 +8,9 @@ public struct CommandResult: Hashable, Sendable {
   public var standardError: String
   public var timedOut: Bool
 
-  public init(status: Int32, standardOutput: String, standardError: String = "", timedOut: Bool = false) {
+  public init(
+    status: Int32, standardOutput: String, standardError: String = "", timedOut: Bool = false
+  ) {
     self.status = status
     self.standardOutput = standardOutput
     self.standardError = standardError
@@ -52,7 +54,8 @@ public struct ProcessCommandRunner: CommandRunning {
     } catch {
       stdout.close()
       stderr.close()
-      return CommandResult(status: -1, standardOutput: "", standardError: "\(error.localizedDescription)")
+      return CommandResult(
+        status: -1, standardOutput: "", standardError: "\(error.localizedDescription)")
     }
     let clock = SystemDaemonClock()
     var status = await exit.wait(timeout: timeout, clock: clock)

@@ -8,7 +8,8 @@ struct ReducerRecordTests {
   @Test func upsertsAndIgnoresStaleUpdates() {
     var state = AgentState()
     #expect(state.apply(.taskRecord(Fixture.record()), now: 0) == .records)
-    _ = state.apply(.taskRecord(Fixture.record(status: .working, threadId: "thr_1", updatedAt: 20)), now: 0)
+    _ = state.apply(
+      .taskRecord(Fixture.record(status: .working, threadId: "thr_1", updatedAt: 20)), now: 0)
     #expect(state.recordsByNote[Fixture.note]?.first?.status == .working)
 
     let before = state
@@ -41,7 +42,8 @@ struct ReducerRecordTests {
 
   @Test func ignoresAStaleRecordForATaskThatMovedToAnotherNote() {
     var state = AgentState()
-    _ = state.upsertRecord(Fixture.record(notePath: Fixture.otherNote, status: .done, updatedAt: 50))
+    _ = state.upsertRecord(
+      Fixture.record(notePath: Fixture.otherNote, status: .done, updatedAt: 50))
     _ = state.upsertRecord(Fixture.record(updatedAt: 40))
     #expect(state.record(forTaskId: "tsk_1")?.notePath == Fixture.otherNote)
     #expect(state.recordsByNote[Fixture.note] == nil)
@@ -51,7 +53,8 @@ struct ReducerRecordTests {
     var state = AgentState()
     _ = state.upsertRecord(Fixture.record(status: .done, updatedAt: 50))
     _ = state.upsertRecord(Fixture.record("tsk_gone", updatedAt: 1))
-    _ = state.applyRecordsSnapshot(notePath: Fixture.note, records: [Fixture.record(status: .working, updatedAt: 40)])
+    _ = state.applyRecordsSnapshot(
+      notePath: Fixture.note, records: [Fixture.record(status: .working, updatedAt: 40)])
     let bucket = state.recordsByNote[Fixture.note] ?? []
     #expect(bucket.map(\.taskId) == ["tsk_1"])
     #expect(bucket.first?.status == .done)
@@ -61,7 +64,9 @@ struct ReducerRecordTests {
     var state = AgentState()
     _ = state.upsertRecord(Fixture.record("tsk_old"))
     _ = state.apply(
-      .taskRecords(TaskRecordsEvent(notePath: Fixture.note, records: [Fixture.record("a"), Fixture.record("b")])),
+      .taskRecords(
+        TaskRecordsEvent(
+          notePath: Fixture.note, records: [Fixture.record("a"), Fixture.record("b")])),
       now: 0)
     #expect(state.recordsByNote[Fixture.note]?.map(\.taskId) == ["a", "b"])
   }
@@ -71,7 +76,8 @@ struct ReducerRecordTests {
     var state = AgentState()
     _ = state.upsertRecord(Fixture.record())
     _ = state.applyRecordsSnapshot(
-      notePath: Fixture.otherNote, records: [Fixture.record(notePath: Fixture.otherNote, updatedAt: 10)])
+      notePath: Fixture.otherNote,
+      records: [Fixture.record(notePath: Fixture.otherNote, updatedAt: 10)])
     #expect(state.recordsByNote[Fixture.note]?.isEmpty == true)
     #expect(state.recordsByNote[Fixture.otherNote]?.count == 1)
     // A stale snapshot of the old path doesn't pull the task back.

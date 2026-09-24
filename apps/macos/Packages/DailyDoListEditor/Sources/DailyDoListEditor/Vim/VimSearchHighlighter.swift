@@ -32,11 +32,14 @@ final class VimSearchHighlighter {
     let length = host.storage.length
     if textChanged, !marked.isEmpty {
       // Edits moved the marked text: clear everywhere.
-      layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: NSRange(location: 0, length: length))
+      layoutManager.removeTemporaryAttribute(
+        .backgroundColor, forCharacterRange: NSRange(location: 0, length: length))
     } else {
       for range in marked {
         let clamped = range.clamped(to: length)
-        if clamped.length > 0 { layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: clamped) }
+        if clamped.length > 0 {
+          layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: clamped)
+        }
       }
     }
     marked = []
@@ -46,7 +49,8 @@ final class VimSearchHighlighter {
     for match in highlight.matches(from: visible.location, to: visible.end) where match.count > 0 {
       let range = NSRange(location: match.lowerBound, length: match.count).clamped(to: length)
       guard range.length > 0 else { continue }
-      layoutManager.addTemporaryAttribute(.backgroundColor, value: Self.matchColor, forCharacterRange: range)
+      layoutManager.addTemporaryAttribute(
+        .backgroundColor, value: Self.matchColor, forCharacterRange: range)
       marked.append(range)
     }
   }
@@ -54,9 +58,11 @@ final class VimSearchHighlighter {
   private func visibleCharacters(_ host: TextViewVimHost) -> NSRange {
     let textView = host.textView
     let origin = textView.textContainerOrigin
-    let visible = textView.visibleRect.isEmpty
+    let visible =
+      textView.visibleRect.isEmpty
       ? NSRect(origin: .zero, size: host.controller.scrollView.contentSize) : textView.visibleRect
-    let area = visible.offsetBy(dx: -origin.x, dy: -origin.y).insetBy(dx: 0, dy: -visible.height / 2)
+    let area = visible.offsetBy(dx: -origin.x, dy: -origin.y).insetBy(
+      dx: 0, dy: -visible.height / 2)
     let glyphs = host.layoutManager.glyphRange(forBoundingRect: area, in: host.textContainer)
     return host.layoutManager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
   }

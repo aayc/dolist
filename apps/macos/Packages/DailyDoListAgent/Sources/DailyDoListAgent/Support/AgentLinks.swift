@@ -49,7 +49,9 @@ enum WikiLinkURL {
   static func url(for target: String) -> URL? {
     var allowed = CharacterSet.urlPathAllowed
     allowed.remove(charactersIn: "#?/")
-    return target.addingPercentEncoding(withAllowedCharacters: allowed).flatMap { URL(string: "\(scheme):\($0)") }
+    return target.addingPercentEncoding(withAllowedCharacters: allowed).flatMap {
+      URL(string: "\(scheme):\($0)")
+    }
   }
 
   /// The note a wikilink URL names.

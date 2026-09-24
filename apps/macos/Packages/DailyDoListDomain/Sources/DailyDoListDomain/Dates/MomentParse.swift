@@ -4,7 +4,9 @@ extension MomentFormat {
   /// month or day resolves to its first day (or to the weekday given with it), in
   /// `referenceYear` when the format has no year (default: the current year, like the core).
   /// A weekday contradicting the date, a week the year doesn't have, or an `X`/`x` token → nil.
-  public static func parse(_ string: String, format: String, referenceYear: Int? = nil) -> LocalDate? {
+  public static func parse(_ string: String, format: String, referenceYear: Int? = nil)
+    -> LocalDate?
+  {
     let formatUnits = UTF16Buffer(format)
     guard let pattern = formatUnits.withPointer({ p, n in ParsePattern(p, n) }) else { return nil }
     let input = UTF16Buffer(string)
@@ -73,7 +75,8 @@ extension MomentFormat {
       if let yearDay {
         guard yearDay >= 1, yearDay <= CivilCalendar.daysInYear(year) else { return nil }
         let resolved = LocalDate(year: year, month: 1, day: 1).adding(days: yearDay - 1)
-        guard (month ?? resolved.month) == resolved.month, (day ?? resolved.day) == resolved.day else {
+        guard (month ?? resolved.month) == resolved.month, (day ?? resolved.day) == resolved.day
+        else {
           return nil
         }
         date = resolved
@@ -148,7 +151,9 @@ struct ParsePattern {
     }
   }
 
-  private static let suffixes: [[UInt16]] = ["st", "nd", "rd", "th"].map { $0.utf16.map(JSCase.canonicalize) }
+  private static let suffixes: [[UInt16]] = ["st", "nd", "rd", "th"].map {
+    $0.utf16.map(JSCase.canonicalize)
+  }
 
   /// The span of every element in the first match of the whole input, or nil.
   func match(_ p: UnsafePointer<UInt16>, _ n: Int) -> [Range<Int>]? {

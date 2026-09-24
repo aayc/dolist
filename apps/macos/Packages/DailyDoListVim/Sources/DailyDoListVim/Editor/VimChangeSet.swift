@@ -15,7 +15,8 @@ public struct VimChangeSet: Sendable {
   /// The replacements `changes` (offsets in a document of `length`, sorted, not overlapping).
   public init(changes: [VimChange], length: Int) throws {
     base = try ChangeSet.of(
-      changes.map { .init(from: $0.from, to: $0.to, insert: $0.text) }, length: length, normalizingLineBreaks: false)
+      changes.map { .init(from: $0.from, to: $0.to, insert: $0.text) }, length: length,
+      normalizingLineBreaks: false)
   }
 
   /// No change to a document of `length`.
@@ -30,7 +31,9 @@ public struct VimChangeSet: Sendable {
   /// The replacements, in offsets of the document before the changes (adjacent ones joined).
   public var changes: [VimChange] {
     var list: [VimChange] = []
-    base.iterChanges { fromA, toA, _, _, text in list.append(VimChange(from: fromA, to: toA, text: text)) }
+    base.iterChanges { fromA, toA, _, _, text in
+      list.append(VimChange(from: fromA, to: toA, text: text))
+    }
     return list
   }
 
@@ -44,7 +47,9 @@ public struct VimChangeSet: Sendable {
 
   public var changedRanges: [ChangedRange] {
     var list: [ChangedRange] = []
-    base.iterChangedRanges { fromA, toA, fromB, toB in list.append(ChangedRange(fromA: fromA, toA: toA, fromB: fromB, toB: toB)) }
+    base.iterChangedRanges { fromA, toA, fromB, toB in
+      list.append(ChangedRange(fromA: fromA, toA: toA, fromB: fromB, toB: toB))
+    }
     return list
   }
 
@@ -76,7 +81,8 @@ public struct VimChangeSet: Sendable {
         }
         let from = mapPosition(range.from, assoc: 1)
         let to = mapPosition(range.to, assoc: -1)
-        return range.anchor <= range.head ? .init(anchor: from, head: to) : .init(anchor: to, head: from)
+        return range.anchor <= range.head
+          ? .init(anchor: from, head: to) : .init(anchor: to, head: from)
       },
       mainIndex: selection.mainIndex)
   }
@@ -85,8 +91,13 @@ public struct VimChangeSet: Sendable {
 extension VimTransaction {
   /// A transaction of `changes` exactly as given (inserted line breaks aren't normalized), for a
   /// host reporting its own edits (`VimSession.editorDidChange`) or what an undo applied.
-  public init(changeSet changes: VimChangeSet, selection: VimSelection, userEvent: String? = nil, scrollIntoView: Bool = false) {
-    self.init(changes: changes.changes, selection: selection, userEvent: userEvent, scrollIntoView: scrollIntoView)
+  public init(
+    changeSet changes: VimChangeSet, selection: VimSelection, userEvent: String? = nil,
+    scrollIntoView: Bool = false
+  ) {
+    self.init(
+      changes: changes.changes, selection: selection, userEvent: userEvent,
+      scrollIntoView: scrollIntoView)
     changeSet = changes.base
   }
 }

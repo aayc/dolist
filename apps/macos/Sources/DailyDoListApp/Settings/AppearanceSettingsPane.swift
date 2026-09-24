@@ -11,9 +11,11 @@ struct AppearanceSettingsPane: View {
     let editor = settings.settings.editor
     Form {
       Section("Theme") {
-        Picker("Appearance", selection: Binding(
-          get: { settings.settings.theme },
-          set: { theme in update(SettingsPatch(theme: theme)) })
+        Picker(
+          "Appearance",
+          selection: Binding(
+            get: { settings.settings.theme },
+            set: { theme in update(SettingsPatch(theme: theme)) })
         ) {
           Text("System").tag(ThemePreference.system)
           Text("Light").tag(ThemePreference.light)
@@ -33,9 +35,13 @@ struct AppearanceSettingsPane: View {
         }
         Toggle("Live preview", isOn: editorBinding(editor.livePreview) { .init(livePreview: $0) })
         SettingsNote(text: "Hide markdown syntax away from the cursor, like Obsidian.")
-        Toggle("Readable line length", isOn: editorBinding(editor.readableLineLength) { .init(readableLineLength: $0) })
+        Toggle(
+          "Readable line length",
+          isOn: editorBinding(editor.readableLineLength) { .init(readableLineLength: $0) })
         Toggle("Spellcheck", isOn: editorBinding(editor.spellcheck) { .init(spellcheck: $0) })
-        Toggle("Line numbers", isOn: editorBinding(editor.showLineNumbers) { .init(showLineNumbers: $0) })
+        Toggle(
+          "Line numbers", isOn: editorBinding(editor.showLineNumbers) { .init(showLineNumbers: $0) }
+        )
         Toggle("Vim key bindings", isOn: editorBinding(editor.vimMode) { .init(vimMode: $0) })
         SettingsNote(text: "Edit with vim's modes and commands, like Obsidian's vim key bindings.")
         if editor.vimMode {
@@ -50,12 +56,16 @@ struct AppearanceSettingsPane: View {
   }
 
   private func commitFontSize() {
-    let value = min(SettingsRanges.fontSize.upperBound, max(SettingsRanges.fontSize.lowerBound, fontSize.rounded()))
+    let value = min(
+      SettingsRanges.fontSize.upperBound,
+      max(SettingsRanges.fontSize.lowerBound, fontSize.rounded()))
     guard value != settings.settings.editor.fontSize else { return }
     update(SettingsPatch(editor: .init(fontSize: value)))
   }
 
-  private func editorBinding(_ value: Bool, _ patch: @escaping (Bool) -> SettingsPatch.EditorPatch) -> Binding<Bool> {
+  private func editorBinding(_ value: Bool, _ patch: @escaping (Bool) -> SettingsPatch.EditorPatch)
+    -> Binding<Bool>
+  {
     Binding(get: { value }, set: { update(SettingsPatch(editor: patch($0))) })
   }
 

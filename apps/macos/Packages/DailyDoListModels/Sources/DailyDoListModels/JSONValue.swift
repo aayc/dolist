@@ -53,8 +53,11 @@ public enum JSONValue: Sendable, Hashable {
   private func json(prettyPrinted: Bool) -> String {
     let encoder = JSONEncoder()
     encoder.outputFormatting =
-      prettyPrinted ? [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes] : [.sortedKeys, .withoutEscapingSlashes]
-    guard let data = try? encoder.encode(self), let text = String(data: data, encoding: .utf8) else {
+      prettyPrinted
+      ? [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+      : [.sortedKeys, .withoutEscapingSlashes]
+    guard let data = try? encoder.encode(self), let text = String(data: data, encoding: .utf8)
+    else {
       return "null"
     }
     return text
@@ -94,7 +97,8 @@ extension JSONValue: Codable {
   }
 }
 
-extension JSONValue: ExpressibleByNilLiteral, ExpressibleByBooleanLiteral, ExpressibleByFloatLiteral,
+extension JSONValue: ExpressibleByNilLiteral, ExpressibleByBooleanLiteral,
+  ExpressibleByFloatLiteral,
   ExpressibleByIntegerLiteral, ExpressibleByStringLiteral, ExpressibleByArrayLiteral,
   ExpressibleByDictionaryLiteral
 {

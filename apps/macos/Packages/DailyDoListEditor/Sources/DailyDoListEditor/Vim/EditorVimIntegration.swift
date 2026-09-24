@@ -73,12 +73,22 @@ public final class EditorVimIntegration {
     define("tabedit", "tabe") { app, session, command in app.open(session, command, newTab: true) }
     define("tabnew", "tabnew") { app, session, command in app.open(session, command, newTab: true) }
     define("tabclose", "tabc") { app, session, _ in app.close(session, all: false) }
-    define("tabnext", "tabn") { app, session, command in app.switchTab(session, command, forward: true) }
-    define("tabprevious", "tabp") { app, session, command in app.switchTab(session, command, forward: false) }
-    define("tabNext", "tabN") { app, session, command in app.switchTab(session, command, forward: false) }
-    define("bnext", "bn") { app, session, command in app.switchTab(session, command, forward: true) }
-    define("bprevious", "bp") { app, session, command in app.switchTab(session, command, forward: false) }
-    define("bNext", "bN") { app, session, command in app.switchTab(session, command, forward: false) }
+    define("tabnext", "tabn") { app, session, command in
+      app.switchTab(session, command, forward: true)
+    }
+    define("tabprevious", "tabp") { app, session, command in
+      app.switchTab(session, command, forward: false)
+    }
+    define("tabNext", "tabN") { app, session, command in
+      app.switchTab(session, command, forward: false)
+    }
+    define("bnext", "bn") { app, session, command in app.switchTab(session, command, forward: true)
+    }
+    define("bprevious", "bp") { app, session, command in
+      app.switchTab(session, command, forward: false)
+    }
+    define("bNext", "bN") { app, session, command in app.switchTab(session, command, forward: false)
+    }
     define("bdelete", "bd") { app, session, _ in app.close(session, all: false) }
     // Obsidian's name, so vimrc lines like `exmap back obcommand …` carry over.
     define("obcommand", "obcommand") { app, session, command in app.runCommand(session, command) }
@@ -100,13 +110,17 @@ public final class EditorVimIntegration {
 
   private func open(_ session: VimSession, _ command: VimExCommand, newTab: Bool) {
     let target = Self.argument(command)
-    request(.openNote(target.isEmpty ? nil : target, newTab: newTab), in: session, command: newTab ? "tabedit" : "edit")
+    request(
+      .openNote(target.isEmpty ? nil : target, newTab: newTab), in: session,
+      command: newTab ? "tabedit" : "edit")
   }
 
   private func runCommand(_ session: VimSession, _ command: VimExCommand) {
     let id = Self.argument(command)
     guard !id.isEmpty else { return session.notify("Usage: :obcommand <command id>") }
-    if request(.runCommand(id), in: session, command: "obcommand") == .failed { session.notify("No command \(id)") }
+    if request(.runCommand(id), in: session, command: "obcommand") == .failed {
+      session.notify("No command \(id)")
+    }
   }
 
   /// `:tabnext 3` goes to tab 3; `:tabprevious 2` goes back two.
@@ -124,10 +138,13 @@ public final class EditorVimIntegration {
 
   /// Asks the editor's host; tells the user when it can't be done here.
   @discardableResult
-  private func request(_ request: EditorVimRequest, in session: VimSession, command: String) -> EditorVimRequestResult {
-    let result = Self.controller(of: session).map { controller in
-      controller.delegate?.editor(controller, perform: request) ?? .unavailable
-    } ?? .unavailable
+  private func request(_ request: EditorVimRequest, in session: VimSession, command: String)
+    -> EditorVimRequestResult
+  {
+    let result =
+      Self.controller(of: session).map { controller in
+        controller.delegate?.editor(controller, perform: request) ?? .unavailable
+      } ?? .unavailable
     if result == .unavailable { session.notify(":\(command) isn't available here") }
     return result
   }
@@ -146,7 +163,10 @@ public final class EditorVimIntegration {
 
   private func defineAppKeys() {
     vim.defineAction("ddlSwitchTab") { [weak self] session, args in
-      let to: EditorTabSwitch = args.forward ? (args.repeatIsExplicit ? .index(args.repeat - 1) : .delta(1)) : .delta(-max(args.repeat, 1))
+      let to: EditorTabSwitch =
+        args.forward
+        ? (args.repeatIsExplicit ? .index(args.repeat - 1) : .delta(1))
+        : .delta(-max(args.repeat, 1))
       self?.request(.switchTab(to), in: session, command: args.forward ? "tabnext" : "tabprevious")
     }
     mapAppKeys()
@@ -171,13 +191,18 @@ public final class EditorVimIntegration {
     vim.installRegister("*", clipboardRegister)
     // `set clipboard=unnamed(plus)`: `p` pastes what another app copied…
     vim.unnamedPasteRegister = { [weak self] session in
-      guard let self, Self.mirrorsUnnamed(try? vim.getOption("clipboard", in: session)) else { return nil }
+      guard let self, Self.mirrorsUnnamed(try? vim.getOption("clipboard", in: session)) else {
+        return nil
+      }
       return clipboardRegister
     }
     // …and whatever goes to the unnamed register also goes to the system clipboard.
     vim.didPushText = { [weak self] name, linewise, blockwise in
-      guard let self, name == nil || name == "\"", Self.mirrorsUnnamed(try? vim.getOption("clipboard")) else { return }
-      clipboard.write(.init(text: vim.register("\"").text.string, linewise: linewise, blockwise: blockwise))
+      guard let self, name == nil || name == "\"",
+        Self.mirrorsUnnamed(try? vim.getOption("clipboard"))
+      else { return }
+      clipboard.write(
+        .init(text: vim.register("\"").text.string, linewise: linewise, blockwise: blockwise))
     }
   }
 
@@ -230,7 +255,9 @@ public final class EditorVimIntegration {
       } catch {
         message = String(describing: error)
       }
-      if message == nil, scratch.notifications.count > notified { message = scratch.notifications.last }
+      if message == nil, scratch.notifications.count > notified {
+        message = scratch.notifications.last
+      }
       if let message { problems.append(VimrcProblem(line: command.line, message: message)) }
     }
     lastEx.setText(lastExText)

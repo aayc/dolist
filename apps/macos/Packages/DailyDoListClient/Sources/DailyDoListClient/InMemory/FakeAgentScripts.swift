@@ -80,8 +80,10 @@ struct AgentScript: Sendable {
 
   /// The task text without wikilink brackets, collapsed, at most 70 characters.
   static func topicOf(_ text: String) -> String {
-    let clean = text.replacingOccurrences(of: "[[", with: "").replacingOccurrences(of: "]]", with: "")
-      .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    let clean = text.replacingOccurrences(of: "[[", with: "").replacingOccurrences(
+      of: "]]", with: ""
+    )
+    .split(whereSeparator: \.isWhitespace).joined(separator: " ")
     return clean.count > 70 ? String(clean.prefix(69)) + "…" : clean
   }
 
@@ -95,7 +97,8 @@ struct AgentScript: Sendable {
     let reviews = "https://reviews.example/\(slug(topic))"
     var steps = [
       ToolStep(
-        toolName: "web_search", label: "Web search", input: ["query": .string(topic), "maxResults": 8],
+        toolName: "web_search", label: "Web search",
+        input: ["query": .string(topic), "maxResults": 8],
         resultPreview: "8 results · 3 look relevant", durationMs: 800)
     ]
     if browse {
@@ -117,7 +120,8 @@ struct AgentScript: Sendable {
     }
     return AgentScript(
       subagent: "research", workingSummary: "Researching…",
-      intro: "On it. I'll research **\(topic)**, compare the strongest options and write up a short summary.",
+      intro:
+        "On it. I'll research **\(topic)**, compare the strongest options and write up a short summary.",
       steps: steps,
       artifact: Artifact(
         title: "Comparison — \(topic)",
@@ -150,7 +154,9 @@ struct AgentScript: Sendable {
         CitedSource(
           url: guide, title: "The best \(topic) — Guide Example",
           snippet: "Option A ($129) balances price and quality; Option C ($79) is the budget pick."),
-        CitedSource(url: reviews, title: "\(topic): long-term reviews", snippet: "Option B ($189) has the sturdiest build."),
+        CitedSource(
+          url: reviews, title: "\(topic): long-term reviews",
+          snippet: "Option B ($189) has the sturdiest build."),
       ],
       noteLine: "Option A ($129) is the best value ([Guide Example](\(guide)))")
   }
@@ -159,13 +165,15 @@ struct AgentScript: Sendable {
     let url = "https://shop.example/p/\(slug(topic))"
     return AgentScript(
       subagent: "shopper", workingSummary: "Shopping…",
-      intro: "I'll find a good match for **\(topic)** and get it ready to order. I'll ask before anything is paid for.",
+      intro:
+        "I'll find a good match for **\(topic)** and get it ready to order. I'll ask before anything is paid for.",
       steps: [
         ToolStep(
           toolName: "web_search", label: "Web search", input: ["query": .string(topic)],
           resultPreview: "Best match on shop.example ($24.99, 4.6 ★)", durationMs: 800),
         ToolStep(
-          toolName: "browser_click", label: "Click in browser", input: ["element": "Add to cart button", "ref": "e31"],
+          toolName: "browser_click", label: "Click in browser",
+          input: ["element": "Add to cart button", "ref": "e31"],
           resultPreview: "Added to cart — subtotal $24.99", durationMs: 900,
           page: browse ? BrowserPage(url: url, title: "\(topic) — Shop", action: "click") : nil),
       ],
@@ -181,12 +189,14 @@ struct AgentScript: Sendable {
           Delivery in 2 days. _(Synthetic demo data.)_
           """),
       risky: RiskyAction(
-        toolName: "browser_click", toolLabel: "Click in browser", input: ["element": "Place order button", "ref": "e57"],
+        toolName: "browser_click", toolLabel: "Click in browser",
+        input: ["element": "Place order button", "ref": "e57"],
         summary: "Place order for “\(topic)” — $24.99 with the saved card", risk: .high,
         categories: [.payment, .formSubmission], reason: "This spends money on your behalf.",
         approvedText: "Order placed ✅ Confirmation **#DDL-4821**, arriving in 2 days.",
         approvedSummary: "Ordered · arrives in 2 days",
-        deniedText: "Okay — I did **not** place the order. The item is still in the cart if you want to finish it yourself.",
+        deniedText:
+          "Okay — I did **not** place the order. The item is still in the cart if you want to finish it yourself.",
         deniedSummary: "Not ordered"),
       finalText: "", doneSummary: "")
   }
@@ -195,14 +205,18 @@ struct AgentScript: Sendable {
     let url = "https://booking.example/availability?q=\(slug(topic))"
     return AgentScript(
       subagent: "booker", workingSummary: "Checking availability…",
-      intro: "Looking for availability for **\(topic)**. I'll pick the earliest good slot and check with you before confirming.",
+      intro:
+        "Looking for availability for **\(topic)**. I'll pick the earliest good slot and check with you before confirming.",
       steps: [
         ToolStep(
           toolName: "browser_navigate", label: "Open page", input: ["url": .string(url)],
           resultPreview: "3 open slots this week", durationMs: 1200,
-          page: browse ? BrowserPage(url: url, title: "Availability — booking.example", action: "navigate") : nil),
+          page: browse
+            ? BrowserPage(url: url, title: "Availability — booking.example", action: "navigate")
+            : nil),
         ToolStep(
-          toolName: "browser_select_option", label: "Select option", input: ["element": "Time slot", "values": ["Tue 9:30 AM"]],
+          toolName: "browser_select_option", label: "Select option",
+          input: ["element": "Time slot", "values": ["Tue 9:30 AM"]],
           resultPreview: "Selected Tue 9:30 AM", durationMs: 900),
       ],
       artifact: Artifact(
@@ -217,42 +231,55 @@ struct AgentScript: Sendable {
           _(Synthetic demo data.)_
           """),
       risky: RiskyAction(
-        toolName: "browser_click", toolLabel: "Click in browser", input: ["element": "Confirm booking button", "ref": "e12"],
-        summary: "Book “\(topic)” for Tue 9:30 AM", risk: .medium, categories: [.booking, .formSubmission],
+        toolName: "browser_click", toolLabel: "Click in browser",
+        input: ["element": "Confirm booking button", "ref": "e12"],
+        summary: "Book “\(topic)” for Tue 9:30 AM", risk: .medium,
+        categories: [.booking, .formSubmission],
         reason: "This makes a reservation in your name.",
-        approvedText: "Booked for **Tue 9:30 AM** [1](\(url)) ✅ A confirmation was sent to your inbox.",
+        approvedText:
+          "Booked for **Tue 9:30 AM** [1](\(url)) ✅ A confirmation was sent to your inbox.",
         approvedSummary: "Booked · Tue 9:30 AM",
-        deniedText: "No problem — nothing was booked. Tue 9:30 AM was the earliest open slot [1](\(url)).",
+        deniedText:
+          "No problem — nothing was booked. Tue 9:30 AM was the earliest open slot [1](\(url)).",
         deniedSummary: "Not booked"),
       finalText: "", doneSummary: "",
       sources: [
         CitedSource(
-          url: url, title: "Availability — booking.example", snippet: "3 open slots this week; Tue 9:30 AM is the earliest.")
+          url: url, title: "Availability — booking.example",
+          snippet: "3 open slots this week; Tue 9:30 AM is the earliest.")
       ])
   }
 
   private static func message(_ topic: String) -> AgentScript {
-    let body = "Hi Sam,\n\nQuick update on “\(topic)”: everything is on track and I'll share details by Friday.\n\nThanks!"
+    let body =
+      "Hi Sam,\n\nQuick update on “\(topic)”: everything is on track and I'll share details by Friday.\n\nThanks!"
     return AgentScript(
       subagent: "writer", workingSummary: "Drafting…",
-      intro: "I'll draft a message for **\(topic)** using your notes, then check with you before sending.",
+      intro:
+        "I'll draft a message for **\(topic)** using your notes, then check with you before sending.",
       steps: [
         ToolStep(
-          toolName: "search_notes", label: "Search notes", input: ["query": .string(topic), "limit": 5],
+          toolName: "search_notes", label: "Search notes",
+          input: ["query": .string(topic), "limit": 5],
           resultPreview: "2 related notes", durationMs: 700),
         ToolStep(
-          toolName: "create_artifact", label: "Create artifact", input: ["title": "Draft email", "kind": "markdown"],
+          toolName: "create_artifact", label: "Create artifact",
+          input: ["title": "Draft email", "kind": "markdown"],
           resultPreview: "Draft ready (24 words)", durationMs: 700),
       ],
-      artifact: Artifact(title: "Draft email", content: "**To:** sam@example.com\n**Subject:** Quick update\n\n\(body)"),
+      artifact: Artifact(
+        title: "Draft email",
+        content: "**To:** sam@example.com\n**Subject:** Quick update\n\n\(body)"),
       risky: RiskyAction(
         toolName: "mcp__mail__send_message", toolLabel: "Send email",
         input: ["to": "sam@example.com", "subject": "Quick update", "body": .string(body)],
-        summary: "Send email to sam@example.com — “Quick update”", risk: .medium, categories: [.communication],
+        summary: "Send email to sam@example.com — “Quick update”", risk: .medium,
+        categories: [.communication],
         reason: "This sends a message to another person on your behalf.",
         approvedText: "Sent ✅ The email to **sam@example.com** is on its way.",
         approvedSummary: "Sent",
-        deniedText: "Understood — I didn't send it. The draft is saved as an artifact if you want to reuse it.",
+        deniedText:
+          "Understood — I didn't send it. The draft is saved as an artifact if you want to reuse it.",
         deniedSummary: "Draft ready · not sent"),
       finalText: "", doneSummary: "")
   }

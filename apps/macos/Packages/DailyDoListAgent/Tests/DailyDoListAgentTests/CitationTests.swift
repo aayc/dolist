@@ -10,7 +10,8 @@ import Testing
 @MainActor
 struct CitationTests {
   private func paragraph(_ source: String) throws -> AttributedString {
-    guard case .paragraph(_, let text) = try #require(MarkdownRenderer.blocks(from: source).first) else {
+    guard case .paragraph(_, let text) = try #require(MarkdownRenderer.blocks(from: source).first)
+    else {
       Issue.record("not a paragraph: \(source)")
       return AttributedString()
     }
@@ -24,11 +25,16 @@ struct CitationTests {
   // MARK: Wikilinks
 
   @Test func wikilinksBecomeNoteLinksShownByTheirLabel() throws {
-    let text = try paragraph("See [[Ideas]], [[Projects/Launch Plan#Goals|the plan]] and [[Projects/Garden Redesign#Beds]].")
+    let text = try paragraph(
+      "See [[Ideas]], [[Projects/Launch Plan#Goals|the plan]] and [[Projects/Garden Redesign#Beds]]."
+    )
     #expect(String(text.characters) == "See Ideas, the plan and Garden Redesign › Beds.")
     let found = links(text)
     #expect(found.map(\.0) == ["Ideas", "the plan", "Garden Redesign › Beds"])
-    #expect(found.map { WikiLinkURL.target(of: $0.1) } == ["Ideas", "Projects/Launch Plan#Goals", "Projects/Garden Redesign#Beds"])
+    #expect(
+      found.map { WikiLinkURL.target(of: $0.1) } == [
+        "Ideas", "Projects/Launch Plan#Goals", "Projects/Garden Redesign#Beds",
+      ])
     // Emphasis around a wikilink is kept.
     let bold = try paragraph("**[[Ideas]]**")
     #expect(bold.runs.first?.inlinePresentationIntent?.contains(.stronglyEmphasized) == true)
@@ -57,40 +63,74 @@ struct CitationTests {
 
   @Test func pagePreviewsComeFromTheSourcesElseTheLink() {
     let sources = SampleData.desksSources
-    let cited = LinkPreview.make(url: "https://office-shop.example/lift-2#deals", label: "2", sources: sources)
+    let cited = LinkPreview.make(
+      url: "https://office-shop.example/lift-2#deals", label: "2", sources: sources)
     #expect(cited.title == "Sample Lift 2 standing desk")
     #expect(cited.host == "office-shop.example")
     #expect(cited.snippet == "Single motor, 27–47 in. Regularly discounted to $349.")
     #expect(cited.url == "https://office-shop.example/lift-2#deals")
-    #expect(cited.text == "Sample Lift 2 standing desk\noffice-shop.example\nSingle motor, 27–47 in. Regularly discounted to $349.\nhttps://office-shop.example/lift-2#deals")
+    #expect(
+      cited.text
+        == "Sample Lift 2 standing desk\noffice-shop.example\nSingle motor, 27–47 in. Regularly discounted to $349.\nhttps://office-shop.example/lift-2#deals"
+    )
     // Matching ignores www., a trailing slash and http vs https.
-    #expect(LinkPreview.make(url: "http://www.desks.example/rise-pro/", label: nil, sources: sources).title == "Example Rise Pro — Desks Example")
+    #expect(
+      LinkPreview.make(url: "http://www.desks.example/rise-pro/", label: nil, sources: sources)
+        .title == "Example Rise Pro — Desks Example")
     // Without a source: the link text, or the hostname for a bare number.
-    let plain = LinkPreview.make(url: "https://www.news.example/story?id=4", label: "The story", sources: sources)
-    #expect(plain == LinkPreview(title: "The story", host: "news.example", url: "https://www.news.example/story?id=4"))
-    #expect(LinkPreview.make(url: "https://news.example/a", label: "7", sources: []).title == "news.example")
-    #expect(LinkPreview.make(url: "https://news.example/a", label: "https://news.example/a", sources: []).text == "news.example\nhttps://news.example/a")
-    #expect(LinkPreview.isCitationLabel("12") && !LinkPreview.isCitationLabel("1a") && !LinkPreview.isCitationLabel("1234"))
-    #expect(NotePreview(title: "Ideas", lines: ["# Ideas", "- one"]).text == "Ideas\n# Ideas\n- one")
+    let plain = LinkPreview.make(
+      url: "https://www.news.example/story?id=4", label: "The story", sources: sources)
+    #expect(
+      plain
+        == LinkPreview(
+          title: "The story", host: "news.example", url: "https://www.news.example/story?id=4"))
+    #expect(
+      LinkPreview.make(url: "https://news.example/a", label: "7", sources: []).title
+        == "news.example")
+    #expect(
+      LinkPreview.make(url: "https://news.example/a", label: "https://news.example/a", sources: [])
+        .text == "news.example\nhttps://news.example/a")
+    #expect(
+      LinkPreview.isCitationLabel("12") && !LinkPreview.isCitationLabel("1a")
+        && !LinkPreview.isCitationLabel("1234"))
+    #expect(
+      NotePreview(title: "Ideas", lines: ["# Ideas", "- one"]).text == "Ideas\n# Ideas\n- one")
   }
 
   // MARK: Rich text
 
   @Test func citationsAreRaisedChipsAndLinksAreUnderlined() throws {
-    let text = try paragraph("Pick **Rise Pro**[1](https://desks.example/rise-pro), see [the review](https://reviews.example/x) and `code`.")
+    let text = try paragraph(
+      "Pick **Rise Pro**[1](https://desks.example/rise-pro), see [the review](https://reviews.example/x) and `code`."
+    )
     let attributed = AgentRichText.attributed(text, style: .body)
     let string = attributed.string as NSString
     let citation = string.range(of: "1")
-    #expect(attributed.attribute(.agentCitation, at: citation.location, effectiveRange: nil) as? Bool == true)
-    #expect(attributed.attribute(.baselineOffset, at: citation.location, effectiveRange: nil) as? CGFloat == AgentRichText.citationBaselineOffset)
-    #expect(attributed.attribute(.kern, at: citation.location - 1, effectiveRange: nil) != nil, "room before the chip")
-    #expect(attributed.attribute(.underlineStyle, at: citation.location, effectiveRange: nil) == nil)
+    #expect(
+      attributed.attribute(.agentCitation, at: citation.location, effectiveRange: nil) as? Bool
+        == true)
+    #expect(
+      attributed.attribute(.baselineOffset, at: citation.location, effectiveRange: nil) as? CGFloat
+        == AgentRichText.citationBaselineOffset)
+    #expect(
+      attributed.attribute(.kern, at: citation.location - 1, effectiveRange: nil) != nil,
+      "room before the chip")
+    #expect(
+      attributed.attribute(.underlineStyle, at: citation.location, effectiveRange: nil) == nil)
     let review = string.range(of: "the review")
-    #expect(attributed.attribute(.underlineStyle, at: review.location, effectiveRange: nil) as? Int == NSUnderlineStyle.single.rawValue)
-    #expect(attributed.attribute(.link, at: review.location, effectiveRange: nil) as? URL == URL(string: "https://reviews.example/x"))
-    let bold = try #require(attributed.attribute(.font, at: string.range(of: "Rise").location, effectiveRange: nil) as? NSFont)
+    #expect(
+      attributed.attribute(.underlineStyle, at: review.location, effectiveRange: nil) as? Int
+        == NSUnderlineStyle.single.rawValue)
+    #expect(
+      attributed.attribute(.link, at: review.location, effectiveRange: nil) as? URL
+        == URL(string: "https://reviews.example/x"))
+    let bold = try #require(
+      attributed.attribute(.font, at: string.range(of: "Rise").location, effectiveRange: nil)
+        as? NSFont)
     #expect(bold.fontDescriptor.symbolicTraits.contains(.bold))
-    let code = try #require(attributed.attribute(.font, at: string.range(of: "code").location, effectiveRange: nil) as? NSFont)
+    let code = try #require(
+      attributed.attribute(.font, at: string.range(of: "code").location, effectiveRange: nil)
+        as? NSFont)
     #expect(code.isFixedPitch)
   }
 
@@ -98,7 +138,9 @@ struct CitationTests {
     var targets: [String] = []
   }
 
-  private func textView(_ source: String, sources: [CitedSource] = [], opened: OpenedNotes = OpenedNotes()) throws -> CitationTextView {
+  private func textView(
+    _ source: String, sources: [CitedSource] = [], opened: OpenedNotes = OpenedNotes()
+  ) throws -> CitationTextView {
     let view = CitationTextView()
     view.sources = sources
     view.noteLinks = AgentNoteLinks(open: { opened.targets.append($0) }, preview: { _ in nil })
@@ -143,7 +185,8 @@ struct CitationTests {
 
   @Test func hoveringALinkTracksItUntilThePointerLeaves() throws {
     let view = try textView(
-      "Tallest downtown [2](https://skyline.example/towers#ridge), saved to [[Ideas]].", sources: SampleData.questionSources)
+      "Tallest downtown [2](https://skyline.example/towers#ridge), saved to [[Ideas]].",
+      sources: SampleData.questionSources)
     view.hover(at: center(of: "2", in: view))
     #expect(view.hoveredLink?.url.absoluteString == "https://skyline.example/towers#ridge")
     view.hover(at: center(of: "Ideas", in: view))
@@ -164,14 +207,21 @@ struct CitationTests {
       var found = NSRect.null
       for y in 0..<rep.pixelsHigh {
         for x in Int((digit.minX - 8) * scale)..<Int((digit.maxX + 4) * scale) {
-          guard let color = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB), matches(color) else { continue }
-          found = found.union(NSRect(x: CGFloat(x) / scale, y: CGFloat(y) / scale, width: 1 / scale, height: 1 / scale))
+          guard let color = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB), matches(color) else {
+            continue
+          }
+          found = found.union(
+            NSRect(
+              x: CGFloat(x) / scale, y: CGFloat(y) / scale, width: 1 / scale, height: 1 / scale))
         }
       }
       return found
     }
     let ink = bounds { $0.alphaComponent > 0.5 && $0.blueComponent > $0.redComponent + 0.3 }
-    let chip = bounds { $0.alphaComponent > 0.05 && $0.alphaComponent < 0.4 && $0.blueComponent > $0.redComponent + 0.2 }
+    let chip = bounds {
+      $0.alphaComponent > 0.05 && $0.alphaComponent < 0.4
+        && $0.blueComponent > $0.redComponent + 0.2
+    }
     #expect(!ink.isNull && !chip.isNull)
     #expect(chip.insetBy(dx: -0.5, dy: -0.5).contains(ink), "chip \(chip) around digit \(ink)")
     #expect(abs(chip.midX - ink.midX) < 1 && abs(chip.midY - ink.midY) < 1.5)

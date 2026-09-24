@@ -18,11 +18,13 @@ enum EditorColors {
   static let tertiaryText = tone(light: 0x8492A6, dark: 0x7A8594)
   static let accent = tone(light: 0x1D6FE8, dark: 0x3B8BFF)
   static let accentStrong = tone(light: 0x1557C0, dark: 0x5CA0FF)
-  static let accentSoft = dynamic(light: rgb(0x1D6FE8, alpha: 0.12), dark: rgb(0x3B8BFF, alpha: 0.16))
+  static let accentSoft = dynamic(
+    light: rgb(0x1D6FE8, alpha: 0.12), dark: rgb(0x3B8BFF, alpha: 0.16))
   /// Text the agent wrote into the note.
   static let agentText = tone(light: 0x1D5FC4, dark: 0x8CC2FF)
   /// The band behind a line a thread is anchored to.
-  static let anchorBackground = dynamic(light: rgb(0x1D6FE8, alpha: 0.08), dark: rgb(0x3B8BFF, alpha: 0.10))
+  static let anchorBackground = dynamic(
+    light: rgb(0x1D6FE8, alpha: 0.08), dark: rgb(0x3B8BFF, alpha: 0.10))
   static let success = tone(light: 0x0F9D58, dark: 0x34D399)
   static let warning = tone(light: 0xB7791F, dark: 0xFBBF24)
   static let danger = tone(light: 0xD92D20, dark: 0xF87171)
@@ -30,12 +32,15 @@ enum EditorColors {
 
   // MARK: Text
 
-  static let selection = dynamic(light: rgb(0x1D6FE8, alpha: 0.22), dark: rgb(0x3B8BFF, alpha: 0.32))
-  static let linkUnderline = dynamic(light: rgb(0x1D6FE8, alpha: 0.45), dark: rgb(0x3B8BFF, alpha: 0.55))
+  static let selection = dynamic(
+    light: rgb(0x1D6FE8, alpha: 0.22), dark: rgb(0x3B8BFF, alpha: 0.32))
+  static let linkUnderline = dynamic(
+    light: rgb(0x1D6FE8, alpha: 0.45), dark: rgb(0x3B8BFF, alpha: 0.55))
   static let codeBackground = hover
   static let codeBlockBackground = dynamic(light: rgb(0xF3F5F8), dark: rgb(0x1A2029))
   static let tagBackground = accentSoft
-  static let highlightBackground = dynamic(light: rgb(0xFFE45C, alpha: 0.6), dark: rgb(0xE5C542, alpha: 0.32))
+  static let highlightBackground = dynamic(
+    light: rgb(0xFFE45C, alpha: 0.6), dark: rgb(0xE5C542, alpha: 0.32))
   static let quoteBar = dynamic(light: rgb(0x1D6FE8, alpha: 0.75), dark: rgb(0x3B8BFF, alpha: 0.75))
   static let rule = separator
   static let bullet = secondaryText
@@ -43,7 +48,8 @@ enum EditorColors {
   static let currentLineNumber = secondaryText
 
   /// Vim's search matches (the web app's `.cm-searchMatch`: warning at 25 %).
-  static let warningFill = dynamic(light: rgb(0xB7791F, alpha: 0.25), dark: rgb(0xFBBF24, alpha: 0.25))
+  static let warningFill = dynamic(
+    light: rgb(0xB7791F, alpha: 0.25), dark: rgb(0xFBBF24, alpha: 0.25))
   /// Vim's command-line panel.
   static let panelBackground = secondaryBackground
   static let panelBorder = separator
@@ -55,10 +61,14 @@ enum EditorColors {
   static let badgeBackground = dynamic(light: rgb(0xF3F5F8), dark: rgb(0x1A2029))
   static let badgeHoverBackground = hover
   static let badgeBorder = separator
-  static let badgeWarningFill = dynamic(light: rgb(0xB7791F, alpha: 0.14), dark: rgb(0xFBBF24, alpha: 0.14))
-  static let badgeWarningHoverFill = dynamic(light: rgb(0xB7791F, alpha: 0.22), dark: rgb(0xFBBF24, alpha: 0.22))
-  static let badgeDangerFill = dynamic(light: rgb(0xD92D20, alpha: 0.10), dark: rgb(0xF87171, alpha: 0.10))
-  static let badgeDangerHoverFill = dynamic(light: rgb(0xD92D20, alpha: 0.16), dark: rgb(0xF87171, alpha: 0.16))
+  static let badgeWarningFill = dynamic(
+    light: rgb(0xB7791F, alpha: 0.14), dark: rgb(0xFBBF24, alpha: 0.14))
+  static let badgeWarningHoverFill = dynamic(
+    light: rgb(0xB7791F, alpha: 0.22), dark: rgb(0xFBBF24, alpha: 0.22))
+  static let badgeDangerFill = dynamic(
+    light: rgb(0xD92D20, alpha: 0.10), dark: rgb(0xF87171, alpha: 0.10))
+  static let badgeDangerHoverFill = dynamic(
+    light: rgb(0xD92D20, alpha: 0.16), dark: rgb(0xF87171, alpha: 0.16))
 
   static func dynamic(light: NSColor, dark: NSColor) -> NSColor {
     NSColor(name: nil) { appearance in

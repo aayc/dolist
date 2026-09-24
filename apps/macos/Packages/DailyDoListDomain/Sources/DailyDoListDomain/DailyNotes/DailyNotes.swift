@@ -36,15 +36,19 @@ public enum DailyNotes {
   public static func path(
     for date: LocalDate, settings: DailyNoteSettings, timeZone: TimeZone = .current
   ) -> String {
-    if let path = try? checkedPath(for: date, settings: settings, timeZone: timeZone) { return path }
-    return notePath(date, folder: settings.folder, format: settings.format, fallback: defaultFormat, timeZone)
+    if let path = try? checkedPath(for: date, settings: settings, timeZone: timeZone) {
+      return path
+    }
+    return notePath(
+      date, folder: settings.folder, format: settings.format, fallback: defaultFormat, timeZone)
   }
 
   /// `dailyNotePath`, throwing where the core throws.
   public static func checkedPath(
     for date: LocalDate, settings: DailyNoteSettings, timeZone: TimeZone = .current
   ) throws(InvalidPathError) -> String {
-    try checkedNotePath(date, folder: settings.folder, format: settings.format, fallback: defaultFormat, timeZone)
+    try checkedNotePath(
+      date, folder: settings.folder, format: settings.format, fallback: defaultFormat, timeZone)
   }
 
   /// `todayDailyNotePath`.
@@ -58,15 +62,20 @@ public enum DailyNotes {
   public static func weeklyPath(
     for date: LocalDate, settings: WeeklyNoteSettings, timeZone: TimeZone = .current
   ) -> String {
-    if let path = try? checkedWeeklyPath(for: date, settings: settings, timeZone: timeZone) { return path }
-    return notePath(date, folder: settings.folder, format: settings.format, fallback: defaultWeeklyFormat, timeZone)
+    if let path = try? checkedWeeklyPath(for: date, settings: settings, timeZone: timeZone) {
+      return path
+    }
+    return notePath(
+      date, folder: settings.folder, format: settings.format, fallback: defaultWeeklyFormat,
+      timeZone)
   }
 
   public static func checkedWeeklyPath(
     for date: LocalDate, settings: WeeklyNoteSettings, timeZone: TimeZone = .current
   ) throws(InvalidPathError) -> String {
     try checkedNotePath(
-      date, folder: settings.folder, format: settings.format, fallback: defaultWeeklyFormat, timeZone)
+      date, folder: settings.folder, format: settings.format, fallback: defaultWeeklyFormat,
+      timeZone)
   }
 
   /// `templateNotePath`: the template note (with `.md`), or nil when there is none. A template
@@ -104,10 +113,14 @@ public enum DailyNotes {
   }
 
   /// `listDailyNotes`: every daily note among `paths`, oldest first (ties keep their order).
-  public static func list(paths: some Sequence<String>, settings: DailyNoteSettings) -> [DailyNoteRef] {
+  public static func list(paths: some Sequence<String>, settings: DailyNoteSettings)
+    -> [DailyNoteRef]
+  {
     let folder = (try? VaultPath.validated(settings.folder)) ?? VaultPath.normalize(settings.folder)
     let notes = paths.enumerated().compactMap { index, path -> (Int, DailyNoteRef)? in
-      parse(path, folder: folder, format: settings.format).map { (index, DailyNoteRef(path: path, date: $0)) }
+      parse(path, folder: folder, format: settings.format).map {
+        (index, DailyNoteRef(path: path, date: $0))
+      }
     }
     return notes.sorted { a, b in
       let order = LocalDate.compare(a.1.date, b.1.date)
@@ -139,22 +152,28 @@ public enum DailyNotes {
   /// `navigationAnchorDate`: what daily-note navigation is relative to, the open daily note or
   /// else today.
   public static func navigationAnchor(
-    activePath: String?, settings: DailyNoteSettings, now: Date = Date(), timeZone: TimeZone = .current
+    activePath: String?, settings: DailyNoteSettings, now: Date = Date(),
+    timeZone: TimeZone = .current
   ) -> LocalDate {
-    if let activePath, !activePath.isEmpty, let date = date(forPath: activePath, settings: settings) {
+    if let activePath, !activePath.isEmpty, let date = date(forPath: activePath, settings: settings)
+    {
       return date
     }
     return LocalDate(date: now, timeZone: timeZone)
   }
 
   /// `isWithinWindow`: `date` lies in `[from - pastDays, from + futureDays]`.
-  public static func isWithinWindow(_ date: LocalDate, from: LocalDate, pastDays: Int, futureDays: Int) -> Bool {
+  public static func isWithinWindow(
+    _ date: LocalDate, from: LocalDate, pastDays: Int, futureDays: Int
+  ) -> Bool {
     LocalDate.compare(date, from.adding(days: -pastDays)) >= 0
       && LocalDate.compare(date, from.adding(days: futureDays)) <= 0
   }
 
   /// "Wednesday, September 23, 2026" (Gregorian, localized by `locale`).
-  public static func friendlyTitle(_ date: LocalDate, locale: Locale = Locale(identifier: "en_US")) -> String {
+  public static func friendlyTitle(_ date: LocalDate, locale: Locale = Locale(identifier: "en_US"))
+    -> String
+  {
     let utc = TimeZone(identifier: "UTC")!
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = utc

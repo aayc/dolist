@@ -15,7 +15,8 @@ final class LineNumberRulerView: NSRulerView {
     self.textView = textView
     self.lineIndex = lineIndex
     self.caretLine = caretLine
-    numberFont = NSFont.monospacedDigitSystemFont(ofSize: max(9, (fontSize * 0.72).rounded()), weight: .regular)
+    numberFont = NSFont.monospacedDigitSystemFont(
+      ofSize: max(9, (fontSize * 0.72).rounded()), weight: .regular)
     super.init(scrollView: textView.enclosingScrollView, orientation: .verticalRuler)
     clientView = textView
     ruleThickness = 40
@@ -29,7 +30,8 @@ final class LineNumberRulerView: NSRulerView {
   override var isFlipped: Bool { true }
 
   func setFontSize(_ fontSize: CGFloat) {
-    numberFont = NSFont.monospacedDigitSystemFont(ofSize: max(9, (fontSize * 0.72).rounded()), weight: .regular)
+    numberFont = NSFont.monospacedDigitSystemFont(
+      ofSize: max(9, (fontSize * 0.72).rounded()), weight: .regular)
     needsDisplay = true
   }
 
@@ -42,7 +44,8 @@ final class LineNumberRulerView: NSRulerView {
   }
 
   override func drawHashMarksAndLabels(in rect: NSRect) {
-    guard let textView, let layoutManager = textView.layoutManager, let container = textView.textContainer,
+    guard let textView, let layoutManager = textView.layoutManager,
+      let container = textView.textContainer,
       let storage = textView.textStorage
     else { return }
     EditorColors.background.setFill()
@@ -50,7 +53,8 @@ final class LineNumberRulerView: NSRulerView {
     let index = lineIndex()
     let origin = textView.textContainerOrigin
     let visible = textView.visibleRect
-    let glyphs = layoutManager.glyphRange(forBoundingRect: visible.offsetBy(dx: -origin.x, dy: -origin.y), in: container)
+    let glyphs = layoutManager.glyphRange(
+      forBoundingRect: visible.offsetBy(dx: -origin.x, dy: -origin.y), in: container)
     let chars = layoutManager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
     let length = storage.length
     let current = caretLine()
@@ -62,7 +66,9 @@ final class LineNumberRulerView: NSRulerView {
       if start >= length {
         let extra = layoutManager.extraLineFragmentRect
         guard extra.height > 0 else { break }
-        baseline = extra.minY + numberFont.ascender + (extra.height - (numberFont.ascender - numberFont.descender)) / 2
+        baseline =
+          extra.minY + numberFont.ascender
+          + (extra.height - (numberFont.ascender - numberFont.descender)) / 2
       } else {
         let glyph = layoutManager.glyphIndexForCharacter(at: start)
         let fragment = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
@@ -73,7 +79,9 @@ final class LineNumberRulerView: NSRulerView {
       let label = String(line + 1) as NSString
       let attributes: [NSAttributedString.Key: Any] = [.font: numberFont, .foregroundColor: color]
       let size = label.size(withAttributes: attributes)
-      label.draw(at: NSPoint(x: ruleThickness - size.width - 8, y: y - numberFont.ascender), withAttributes: attributes)
+      label.draw(
+        at: NSPoint(x: ruleThickness - size.width - 8, y: y - numberFont.ascender),
+        withAttributes: attributes)
       line += 1
     }
   }

@@ -31,7 +31,9 @@ struct HTTPDaemonClientRESTTests {
       verify: { ($0 as? HealthResponse) == SampleWire.health }),
     Operation(
       name: "tree", method: "GET", target: "/api/vault/tree", body: nil, attributed: false,
-      response: .json(#"{"vaultName":"V","entries":[{"path":"Daily","kind":"folder"},{"path":"a.md","kind":"file","size":3,"mtime":1,"version":"v"}]}"#),
+      response: .json(
+        #"{"vaultName":"V","entries":[{"path":"Daily","kind":"folder"},{"path":"a.md","kind":"file","size":3,"mtime":1,"version":"v"}]}"#
+      ),
       call: { try await $0.tree() },
       verify: { ($0 as? VaultTreeResponse)?.entries.map(\.path) == ["Daily", "a.md"] }),
     Operation(
@@ -66,13 +68,18 @@ struct HTTPDaemonClientRESTTests {
       body: ["from": "Ideas.md", "to": "Archive/Ideas.md"], attributed: true,
       response: .json(#"{"path":"Archive/Ideas.md","version":"v","mtime":1}"#),
       call: { try await $0.rename(from: "Ideas.md", to: "Archive/Ideas.md") },
-      verify: { ($0 as? RenameResponse) == .note(WriteNoteResponse(path: "Archive/Ideas.md", version: "v", mtime: 1)) }),
+      verify: {
+        ($0 as? RenameResponse)
+          == .note(WriteNoteResponse(path: "Archive/Ideas.md", version: "v", mtime: 1))
+      }),
     Operation(
       name: "rename (folder)", method: "POST", target: "/api/notes-rename",
       body: ["from": "Projects", "to": "Work/Projects"], attributed: true,
       response: .json(#"{"path":"Work/Projects","moved":3}"#),
       call: { try await $0.rename(from: "Projects", to: "Work/Projects") },
-      verify: { ($0 as? RenameResponse) == .folder(FolderRenameResponse(path: "Work/Projects", moved: 3)) }),
+      verify: {
+        ($0 as? RenameResponse) == .folder(FolderRenameResponse(path: "Work/Projects", moved: 3))
+      }),
     Operation(
       name: "createFolder", method: "POST", target: "/api/folders", body: ["path": "Projects/New"],
       attributed: true, response: .json(201, #"{"path":"Projects/New"}"#),
@@ -80,29 +87,38 @@ struct HTTPDaemonClientRESTTests {
       verify: { ($0 as? CreateFolderResponse)?.path == "Projects/New" }),
     Operation(
       name: "deleteFolder", method: "DELETE", target: "/api/folders?path=Projects%2FOld%20stuff",
-      body: nil, attributed: true, response: .json(#"{"ok":true,"trashedTo":".trash/Projects/Old stuff"}"#),
+      body: nil, attributed: true,
+      response: .json(#"{"ok":true,"trashedTo":".trash/Projects/Old stuff"}"#),
       call: { try await $0.deleteFolder("Projects/Old stuff") },
       verify: { ($0 as? TrashResponse)?.trashedTo == ".trash/Projects/Old stuff" }),
     Operation(
       name: "dailyNote (create)", method: "GET", target: "/api/daily/today?create=1", body: nil,
       attributed: true,
-      response: .json(#"{"path":"Daily/2026-09-23.md","content":"- [ ] ","version":"v","mtime":1,"date":"2026-09-23","created":true}"#),
+      response: .json(
+        #"{"path":"Daily/2026-09-23.md","content":"- [ ] ","version":"v","mtime":1,"date":"2026-09-23","created":true}"#
+      ),
       call: { try await $0.dailyNote("today", create: true) },
       verify: { ($0 as? DailyNoteResponse)?.created == true }),
     Operation(
       name: "dailyNote (read)", method: "GET", target: "/api/daily/2026-09-22", body: nil,
       attributed: false,
-      response: .json(#"{"path":"Daily/2026-09-22.md","content":"","version":"v","mtime":1,"date":"2026-09-22","created":false}"#),
+      response: .json(
+        #"{"path":"Daily/2026-09-22.md","content":"","version":"v","mtime":1,"date":"2026-09-22","created":false}"#
+      ),
       call: { try await $0.dailyNote("2026-09-22", create: false) },
       verify: { ($0 as? DailyNoteResponse)?.date == "2026-09-22" }),
     Operation(
-      name: "search", method: "GET", target: "/api/search?q=buy%20milk%20%26%20eggs&limit=5", body: nil,
-      attributed: false, response: .json(#"{"hits":[{"path":"a.md","kind":"content","line":3,"preview":"buy milk"}]}"#),
+      name: "search", method: "GET", target: "/api/search?q=buy%20milk%20%26%20eggs&limit=5",
+      body: nil,
+      attributed: false,
+      response: .json(
+        #"{"hits":[{"path":"a.md","kind":"content","line":3,"preview":"buy milk"}]}"#),
       call: { try await $0.search("buy milk & eggs", limit: 5) },
       verify: { ($0 as? SearchResponse)?.hits.first?.line == 3 }),
     Operation(
       name: "settings", method: "GET", target: "/api/settings", body: nil, attributed: false,
-      response: .json(value: SettingsResponse(settings: .defaults)), call: { try await $0.settings() },
+      response: .json(value: SettingsResponse(settings: .defaults)),
+      call: { try await $0.settings() },
       verify: { ($0 as? AppSettings) == .defaults }),
     Operation(
       name: "updateSettings", method: "PUT", target: "/api/settings",
@@ -118,7 +134,8 @@ struct HTTPDaemonClientRESTTests {
       response: .json(value: SampleWire.status), call: { try await $0.agentStatus() },
       verify: { ($0 as? AgentStatusResponse) == SampleWire.status }),
     Operation(
-      name: "setAgentEnabled", method: "PUT", target: "/api/agent/enabled", body: ["enabled": false],
+      name: "setAgentEnabled", method: "PUT", target: "/api/agent/enabled",
+      body: ["enabled": false],
       attributed: true, response: .json(value: SampleWire.status),
       call: { try await $0.setAgentEnabled(false) },
       verify: { ($0 as? AgentStatusResponse) == SampleWire.status }),
@@ -128,48 +145,60 @@ struct HTTPDaemonClientRESTTests {
       call: { try await $0.connectors() },
       verify: { ($0 as? [ConnectorStatus]) == SampleWire.status.connectors }),
     Operation(
-      name: "taskRecords", method: "GET", target: "/api/tasks?notePath=Daily%2F2026-09-23.md", body: nil,
+      name: "taskRecords", method: "GET", target: "/api/tasks?notePath=Daily%2F2026-09-23.md",
+      body: nil,
       attributed: false, response: .json(value: TaskRecordsResponse(records: [SampleWire.record])),
       call: { try await $0.taskRecords(notePath: "Daily/2026-09-23.md") },
       verify: { ($0 as? [TaskAgentRecord]) == [SampleWire.record] }),
     Operation(
-      name: "threads (filtered)", method: "GET", target: "/api/threads?notePath=Daily%2F2026-09-23.md&taskId=tsk_1",
-      body: nil, attributed: false, response: .json(value: ThreadListResponse(threads: [SampleWire.summary])),
+      name: "threads (filtered)", method: "GET",
+      target: "/api/threads?notePath=Daily%2F2026-09-23.md&taskId=tsk_1",
+      body: nil, attributed: false,
+      response: .json(value: ThreadListResponse(threads: [SampleWire.summary])),
       call: { try await $0.threads(notePath: "Daily/2026-09-23.md", taskId: "tsk_1") },
       verify: { ($0 as? [ThreadSummary]) == [SampleWire.summary] }),
     Operation(
       name: "threads (all)", method: "GET", target: "/api/threads", body: nil, attributed: false,
-      response: .json(#"{"threads":[]}"#), call: { try await $0.threads(notePath: nil, taskId: nil) },
+      response: .json(#"{"threads":[]}"#),
+      call: { try await $0.threads(notePath: nil, taskId: nil) },
       verify: { ($0 as? [ThreadSummary])?.isEmpty == true }),
     Operation(
       name: "thread", method: "GET", target: "/api/threads/thr_1", body: nil, attributed: false,
-      response: .json(value: ThreadResponse(thread: SampleWire.thread, approvals: [SampleWire.approval])),
+      response: .json(
+        value: ThreadResponse(thread: SampleWire.thread, approvals: [SampleWire.approval])),
       call: { try await $0.thread("thr_1") },
       verify: { ($0 as? ThreadResponse)?.approvals == [SampleWire.approval] }),
     Operation(
       name: "postMessage (202)", method: "POST", target: "/api/threads/thr_1/messages",
-      body: ["text": "Prefer mornings"], attributed: true, response: .json(202, #"{"ok":true,"pending":true}"#),
+      body: ["text": "Prefer mornings"], attributed: true,
+      response: .json(202, #"{"ok":true,"pending":true}"#),
       call: { try await $0.postMessage(threadId: "thr_1", text: "Prefer mornings") },
       verify: { ($0 as? ThreadActionResponse) == ThreadActionResponse(pending: true) }),
     Operation(
       name: "cancelThread (200)", method: "POST", target: "/api/threads/thr_1/cancel", body: nil,
-      attributed: true, response: .json(#"{"ok":true}"#), call: { try await $0.cancelThread("thr_1") },
+      attributed: true, response: .json(#"{"ok":true}"#),
+      call: { try await $0.cancelThread("thr_1") },
       verify: { ($0 as? ThreadActionResponse) == ThreadActionResponse() }),
     Operation(
-      name: "retryThread (202)", method: "POST", target: "/api/threads/thr%3A1.a-b/retry", body: nil,
+      name: "retryThread (202)", method: "POST", target: "/api/threads/thr%3A1.a-b/retry",
+      body: nil,
       attributed: true, response: .json(202, #"{"ok":true,"pending":true}"#),
       call: { try await $0.retryThread("thr:1.a-b") },
       verify: { ($0 as? ThreadActionResponse)?.pending == true }),
     Operation(
       name: "approvals", method: "GET", target: "/api/approvals?status=pending", body: nil,
-      attributed: false, response: .json(value: ApprovalListResponse(approvals: [SampleWire.approval])),
+      attributed: false,
+      response: .json(value: ApprovalListResponse(approvals: [SampleWire.approval])),
       call: { try await $0.approvals(status: .pending) },
       verify: { ($0 as? [ApprovalRequest]) == [SampleWire.approval] }),
     Operation(
       name: "decideApproval", method: "POST", target: "/api/approvals/apr_1",
       body: ["decision": "deny", "note": "I'll call instead"], attributed: true,
       response: .json(value: ApprovalResponse(approval: SampleWire.approval)),
-      call: { try await $0.decideApproval("apr_1", ApprovalDecisionRequest(decision: .deny, note: "I'll call instead")) },
+      call: {
+        try await $0.decideApproval(
+          "apr_1", ApprovalDecisionRequest(decision: .deny, note: "I'll call instead"))
+      },
       verify: { ($0 as? ApprovalRequest) == SampleWire.approval }),
   ]
 
@@ -186,7 +215,8 @@ struct HTTPDaemonClientRESTTests {
     #expect(request.target == operation.target)
     #expect(request.header("Authorization") == "Bearer test-token")
     #expect(request.header("Accept") == "application/json")
-    #expect(request.header(DaemonProtocol.clientIdHeader) == (operation.attributed ? "macos_test" : nil))
+    #expect(
+      request.header(DaemonProtocol.clientIdHeader) == (operation.attributed ? "macos_test" : nil))
     #expect(request.jsonBody == operation.body)
     #expect(request.header("Content-Type") == (operation.body == nil ? nil : "application/json"))
     #expect(request.header("Origin") == nil)
@@ -214,13 +244,18 @@ struct HTTPDaemonClientRESTTests {
   // MARK: - Status mapping
 
   @Test func unauthorizedIsMapped() async throws {
-    let stub = Stub { _ in .json(401, #"{"error":"unauthorized","message":"Missing or invalid bearer token"}"#) }
+    let stub = Stub { _ in
+      .json(401, #"{"error":"unauthorized","message":"Missing or invalid bearer token"}"#)
+    }
     await #expect(throws: DaemonClientError.unauthorized) { try await stub.client().tree() }
   }
 
   @Test func notFoundCarriesTheErrorBody() async throws {
     let stub = Stub { _ in .json(404, #"{"error":"not_found","message":"No note at \"x.md\""}"#) }
-    await #expect(throws: DaemonClientError.http(status: 404, body: ApiErrorBody(error: .notFound, message: #"No note at "x.md""#))) {
+    await #expect(
+      throws: DaemonClientError.http(
+        status: 404, body: ApiErrorBody(error: .notFound, message: #"No note at "x.md""#))
+    ) {
       try await stub.client().readNote("x.md")
     }
   }
@@ -242,8 +277,12 @@ struct HTTPDaemonClientRESTTests {
   }
 
   @Test func folderRenameConflictsArePlainHTTPErrors() async throws {
-    let stub = Stub { _ in .json(409, #"{"error":"conflict","message":"\"Work\" already exists"}"#) }
-    await #expect(throws: DaemonClientError.http(status: 409, body: ApiErrorBody(error: .conflict, message: #""Work" already exists"#))) {
+    let stub = Stub { _ in .json(409, #"{"error":"conflict","message":"\"Work\" already exists"}"#)
+    }
+    await #expect(
+      throws: DaemonClientError.http(
+        status: 409, body: ApiErrorBody(error: .conflict, message: #""Work" already exists"#))
+    ) {
       try await stub.client().rename(from: "Projects", to: "Work")
     }
   }
@@ -259,7 +298,10 @@ struct HTTPDaemonClientRESTTests {
     }
     // A 409 elsewhere is a plain HTTP error.
     stub.setHandler { _ in .json(409, value: body) }
-    await #expect(throws: DaemonClientError.http(status: 409, body: ApiErrorBody(error: .conflict, message: "Approval is already denied"))) {
+    await #expect(
+      throws: DaemonClientError.http(
+        status: 409, body: ApiErrorBody(error: .conflict, message: "Approval is already denied"))
+    ) {
       try await stub.client().createFolder("x")
     }
   }
@@ -267,11 +309,18 @@ struct HTTPDaemonClientRESTTests {
   @Test func badRequestsAndServerErrorsAreMapped() async throws {
     let stub = Stub { _ in .json(400, #"{"error":"invalid_request","message":"✖ Too big"}"#) }
     let client = stub.client()
-    await #expect(throws: DaemonClientError.http(status: 400, body: ApiErrorBody(error: .invalidRequest, message: "✖ Too big"))) {
+    await #expect(
+      throws: DaemonClientError.http(
+        status: 400, body: ApiErrorBody(error: .invalidRequest, message: "✖ Too big"))
+    ) {
       try await client.updateSettings(SettingsPatch(editor: .init(fontSize: 400)))
     }
-    stub.setHandler { _ in .respond(status: 500, headers: ["Content-Type": "text/plain"], body: Data("boom".utf8)) }
-    await #expect(throws: DaemonClientError.http(status: 500, body: nil)) { try await client.health() }
+    stub.setHandler { _ in
+      .respond(status: 500, headers: ["Content-Type": "text/plain"], body: Data("boom".utf8))
+    }
+    await #expect(throws: DaemonClientError.http(status: 500, body: nil)) {
+      try await client.health()
+    }
     stub.setHandler { _ in .json(503, #"{"error":"agent_unavailable","message":"off"}"#) }
     do {
       _ = try await client.retryThread("thr_1")
@@ -291,7 +340,9 @@ struct HTTPDaemonClientRESTTests {
       #expect(detail.hasPrefix("HealthResponse at <root>: "), "\(detail)")
     }
     stub.setHandler { _ in
-      .json(#"{"thread":{"id":"thr_1","taskId":null,"notePath":null,"title":"x","status":"idle","createdAt":0,"updatedAt":0,"messages":[{"id":"m","author":"system","createdAt":"soon","kind":"status","status":"done"}],"artifacts":[],"surfaces":[]},"approvals":[]}"#)
+      .json(
+        #"{"thread":{"id":"thr_1","taskId":null,"notePath":null,"title":"x","status":"idle","createdAt":0,"updatedAt":0,"messages":[{"id":"m","author":"system","createdAt":"soon","kind":"status","status":"done"}],"artifacts":[],"surfaces":[]},"approvals":[]}"#
+      )
     }
     do {
       _ = try await client.thread("thr_1")
@@ -299,7 +350,11 @@ struct HTTPDaemonClientRESTTests {
     } catch let DaemonClientError.decoding(detail) {
       #expect(detail.hasPrefix("ThreadResponse at thread.messages[0].createdAt: "), "\(detail)")
     }
-    stub.setHandler { _ in .json(#"{"thread":{"id":"t","taskId":null,"notePath":null,"title":"","status":"idle","createdAt":0,"updatedAt":0,"messages":[],"artifacts":[],"surfaces":[]}}"#) }
+    stub.setHandler { _ in
+      .json(
+        #"{"thread":{"id":"t","taskId":null,"notePath":null,"title":"","status":"idle","createdAt":0,"updatedAt":0,"messages":[],"artifacts":[],"surfaces":[]}}"#
+      )
+    }
     do {
       _ = try await client.thread("thr_1")
       Issue.record("expected a decoding error")
@@ -333,7 +388,9 @@ struct HTTPDaemonClientRESTTests {
       #expect(!reason.isEmpty)
     }
     stub.setHandler { _ in .fail(URLError(.networkConnectionLost)) }
-    await #expect(throws: DaemonClientError.unreachable(URLError(.networkConnectionLost).localizedDescription)) {
+    await #expect(
+      throws: DaemonClientError.unreachable(URLError(.networkConnectionLost).localizedDescription)
+    ) {
       try await client.health()
     }
   }
@@ -360,19 +417,28 @@ struct HTTPDaemonClientRESTTests {
     let stub = Stub { _ in .json(#"{}"#) }
     let client = stub.client()
     for path in ["a/../b.md", "./x.md", "a/./b.md", ".."] {
-      await #expect(throws: DaemonClientError.http(status: 400, body: ApiErrorBody(error: .invalidPath, message: "Invalid note path \"\(path)\""))) {
+      await #expect(
+        throws: DaemonClientError.http(
+          status: 400,
+          body: ApiErrorBody(error: .invalidPath, message: "Invalid note path \"\(path)\""))
+      ) {
         try await client.readNote(path)
       }
     }
     for id in ["..", ".", "thr/1", "", "thr 1", String(repeating: "t", count: 201)] {
-      await #expect(throws: DaemonClientError.http(status: 400, body: ApiErrorBody(error: .invalidRequest, message: "Invalid thread id"))) {
+      await #expect(
+        throws: DaemonClientError.http(
+          status: 400, body: ApiErrorBody(error: .invalidRequest, message: "Invalid thread id"))
+      ) {
         try await client.thread(id)
       }
     }
     await #expect(throws: DaemonClientError.self) {
       try await client.decideApproval("..", ApprovalDecisionRequest(decision: .approve))
     }
-    await #expect(throws: DaemonClientError.self) { try await client.artifact(threadId: "thr_1", artifactId: "a/b") }
+    await #expect(throws: DaemonClientError.self) {
+      try await client.artifact(threadId: "thr_1", artifactId: "a/b")
+    }
     #expect(stub.requests.isEmpty)
   }
 

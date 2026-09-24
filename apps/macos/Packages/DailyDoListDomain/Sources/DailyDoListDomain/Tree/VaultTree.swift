@@ -43,7 +43,9 @@ public enum VaultTree {
   /// listed) and sorts every level: folders first, then case- and accent-insensitive natural
   /// order of the names (`Day 2` < `Day 10`), then of the paths, then code units, so the result
   /// doesn't depend on the input order.
-  public static func build(_ entries: some Sequence<VaultEntry>, locale: Locale = .current) -> [VaultTreeNode] {
+  public static func build(_ entries: some Sequence<VaultEntry>, locale: Locale = .current)
+    -> [VaultTreeNode]
+  {
     var folders: Set<ExactString> = [ExactString("")]
     var children: [ExactString: [(path: String, kind: VaultEntryKind)]] = [:]
     func addFolder(_ path: String) {
@@ -78,7 +80,9 @@ public enum VaultTree {
   }
 
   /// `compareNodes`: folders first, then natural order of names, then of paths, then code units.
-  public static func compare(_ a: VaultTreeNode, _ b: VaultTreeNode, locale: Locale = .current) -> Int {
+  public static func compare(_ a: VaultTreeNode, _ b: VaultTreeNode, locale: Locale = .current)
+    -> Int
+  {
     if a.kind != b.kind { return a.kind == .folder ? -1 : 1 }
     let byName = VaultPath.compare(a.name, b.name, locale: locale)
     if byName != 0 { return byName }
@@ -108,7 +112,8 @@ public enum VaultTree {
   }
 
   /// The rows a flat outline shows: every node whose ancestors are all in `expanded`.
-  public static func visibleRows(_ nodes: [VaultTreeNode], expanded: Set<String>) -> [VaultTreeRow] {
+  public static func visibleRows(_ nodes: [VaultTreeNode], expanded: Set<String>) -> [VaultTreeRow]
+  {
     var rows: [VaultTreeRow] = []
     func visit(_ level: [VaultTreeNode], depth: Int) {
       for node in level {

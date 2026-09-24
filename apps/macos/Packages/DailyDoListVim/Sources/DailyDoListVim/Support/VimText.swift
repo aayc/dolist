@@ -26,7 +26,9 @@ public struct VimText: Hashable, Sendable {
     let count = string.length
     var buffer = [UInt16](repeating: 0, count: count)
     if count > 0 {
-      buffer.withUnsafeMutableBufferPointer { string.getCharacters($0.baseAddress!, range: NSRange(location: 0, length: count)) }
+      buffer.withUnsafeMutableBufferPointer {
+        string.getCharacters($0.baseAddress!, range: NSRange(location: 0, length: count))
+      }
     }
     units = buffer
   }
@@ -36,7 +38,9 @@ public struct VimText: Hashable, Sendable {
 
   /// The text as an `NSString` (lossless).
   public var nsString: NSString {
-    units.withUnsafeBufferPointer { NSString(characters: $0.baseAddress ?? UnsafePointer(bitPattern: 1)!, length: $0.count) }
+    units.withUnsafeBufferPointer {
+      NSString(characters: $0.baseAddress ?? UnsafePointer(bitPattern: 1)!, length: $0.count)
+    }
   }
 
   /// JavaScript's `length`: the number of UTF-16 code units.
@@ -120,7 +124,8 @@ extension VimText {
 
   /// `indexOf(search, fromIndex)`.
   func indexOf(_ search: VimText, _ fromIndex: Int = 0) -> Int {
-    let n = units.count, m = search.units.count
+    let n = units.count
+    let m = search.units.count
     var i = min(max(fromIndex, 0), n)
     if m == 0 { return i }
     let first = search.units[0]
@@ -146,7 +151,8 @@ extension VimText {
 
   /// `lastIndexOf(search, fromIndex)`.
   func lastIndexOf(_ search: VimText, _ fromIndex: Int? = nil) -> Int {
-    let n = units.count, m = search.units.count
+    let n = units.count
+    let m = search.units.count
     var i = min(max(fromIndex ?? n, 0), n - m)
     if m == 0 { return min(max(fromIndex ?? n, 0), n) }
     while i >= 0 {
@@ -165,7 +171,8 @@ extension VimText {
   func hasPrefix(_ prefix: VimText) -> Bool { units.starts(with: prefix.units) }
 
   func hasSuffix(_ suffix: VimText) -> Bool {
-    suffix.units.count <= units.count && units[(units.count - suffix.units.count)...].elementsEqual(suffix.units)
+    suffix.units.count <= units.count
+      && units[(units.count - suffix.units.count)...].elementsEqual(suffix.units)
   }
 
   /// `split(separator)` with a string separator ("" splits into code units).
@@ -204,7 +211,8 @@ extension VimText {
 
   /// `trim()`: strips JavaScript whitespace (`\s`).
   func trim() -> VimText {
-    var a = 0, b = units.count
+    var a = 0
+    var b = units.count
     while a < b && isJSWhitespace(units[a]) { a += 1 }
     while b > a && isJSWhitespace(units[b - 1]) { b -= 1 }
     return VimText(units[a..<b])

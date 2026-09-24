@@ -19,17 +19,25 @@ struct GeneralSettingsPane: View {
         }
         .pickerStyle(.segmented)
         if model.isDemo {
-          SettingsNote(text: "Running in demo mode (--demo): an in-memory daemon with sample notes. Connection settings apply on the next normal launch.")
+          SettingsNote(
+            text:
+              "Running in demo mode (--demo): an in-memory daemon with sample notes. Connection settings apply on the next normal launch."
+          )
         }
         switch preferences.daemonMode {
         case .external:
-          CommitTextField(title: "URL", value: preferences.externalBaseURL, prompt: "http://127.0.0.1:7331") {
+          CommitTextField(
+            title: "URL", value: preferences.externalBaseURL, prompt: "http://127.0.0.1:7331"
+          ) {
             preferences.externalBaseURL = $0.trimmingCharacters(in: .whitespaces)
           }
           if preferences.externalURL == nil {
             SettingsNote(text: "Enter an http(s) URL.", tone: Theme.danger)
           }
-          SettingsNote(text: "Connects to a daemon started elsewhere (e.g. `pnpm dev`) using the token in DDL_HOME.")
+          SettingsNote(
+            text:
+              "Connects to a daemon started elsewhere (e.g. `pnpm dev`) using the token in DDL_HOME."
+          )
         case .managed:
           CommitTextField(
             title: "Port", value: preferences.managedPortOverride.map(String.init) ?? "",
@@ -51,7 +59,9 @@ struct GeneralSettingsPane: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
               Button("Choose…") {
-                if let url = FolderPicker.choose(title: "Choose the vault folder", startingAt: preferences.vaultPath) {
+                if let url = FolderPicker.choose(
+                  title: "Choose the vault folder", startingAt: preferences.vaultPath)
+                {
                   preferences.vaultPath = url.path
                 }
               }
@@ -67,7 +77,9 @@ struct GeneralSettingsPane: View {
               .lineLimit(1)
               .truncationMode(.middle)
             Button("Choose…") {
-              if let url = FolderPicker.choose(title: "Choose DDL_HOME", startingAt: preferences.homeURL.path) {
+              if let url = FolderPicker.choose(
+                title: "Choose DDL_HOME", startingAt: preferences.homeURL.path)
+              {
                 preferences.homeOverride = url.path
               }
             }
@@ -89,7 +101,8 @@ struct GeneralSettingsPane: View {
 
       Section("Status") {
         LabeledContent("Connection") {
-          Text(model.connection.label).foregroundStyle(model.connection.isOnline ? Theme.success : Theme.warning)
+          Text(model.connection.label).foregroundStyle(
+            model.connection.isOnline ? Theme.success : Theme.warning)
         }
         SettingsNote(text: model.connection.detail)
         if preferences.daemonMode == .managed, !model.isDemo {
@@ -99,7 +112,8 @@ struct GeneralSettingsPane: View {
           }
         }
         if let health = model.connection.health {
-          LabeledContent("Daemon", value: "\(health.version) · API v\(health.apiVersion) · \(health.vaultName)")
+          LabeledContent(
+            "Daemon", value: "\(health.version) · API v\(health.apiVersion) · \(health.vaultName)")
         }
         if preferences.daemonMode == .managed, !model.isDemo {
           DaemonLogView(supervisor: model.supervisor)
@@ -107,25 +121,33 @@ struct GeneralSettingsPane: View {
       }
 
       Section("Startup") {
-        Toggle("Open Daily Do List at login", isOn: Binding(
-          get: { model.systemIntegration.isLaunchAtLoginEnabled },
-          set: { loginError = model.setLaunchAtLogin($0) }))
-          .disabled(isUnavailable(model.systemIntegration.launchAtLoginAvailability))
+        Toggle(
+          "Open Daily Do List at login",
+          isOn: Binding(
+            get: { model.systemIntegration.isLaunchAtLoginEnabled },
+            set: { loginError = model.setLaunchAtLogin($0) })
+        )
+        .disabled(isUnavailable(model.systemIntegration.launchAtLoginAvailability))
         if let message = loginError ?? model.systemIntegration.launchAtLoginAvailability.message {
           SettingsNote(text: message, tone: loginError == nil ? .secondary : Theme.danger)
           if case .requiresApproval = model.systemIntegration.launchAtLoginAvailability {
-            Button("Open Login Items Settings…") { model.systemIntegration.openLoginItemsSettings() }
+            Button("Open Login Items Settings…") {
+              model.systemIntegration.openLoginItemsSettings()
+            }
           }
         }
-        Toggle("Global shortcut opens today's note", isOn: Binding(
-          get: { preferences.globalHotkeyEnabled },
-          set: {
-            preferences.globalHotkeyEnabled = $0
-            hotkeyError = model.applyGlobalHotkeyPreference()
-          }))
+        Toggle(
+          "Global shortcut opens today's note",
+          isOn: Binding(
+            get: { preferences.globalHotkeyEnabled },
+            set: {
+              preferences.globalHotkeyEnabled = $0
+              hotkeyError = model.applyGlobalHotkeyPreference()
+            }))
         if preferences.globalHotkeyEnabled {
           CommitTextField(
-            title: "Shortcut", value: preferences.globalHotkey ?? model.systemIntegration.defaultGlobalShortcut,
+            title: "Shortcut",
+            value: preferences.globalHotkey ?? model.systemIntegration.defaultGlobalShortcut,
             prompt: model.systemIntegration.defaultGlobalShortcut
           ) { text in
             let trimmed = text.trimmingCharacters(in: .whitespaces)
@@ -180,7 +202,8 @@ struct DaemonLogView: View {
       HStack {
         Button("Copy") {
           NSPasteboard.general.clearContents()
-          NSPasteboard.general.setString(supervisor.logLines.joined(separator: "\n"), forType: .string)
+          NSPasteboard.general.setString(
+            supervisor.logLines.joined(separator: "\n"), forType: .string)
         }
         Button("Clear") { supervisor.clearLogs() }
       }

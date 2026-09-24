@@ -30,7 +30,8 @@ final class ToastStore {
     _ kind: Toast.Kind, _ title: String, body: String? = nil, actionLabel: String? = nil,
     timeout: TimeInterval? = nil, action: (@MainActor () -> Void)? = nil
   ) {
-    let toast = Toast(kind: kind, title: title, body: body, actionLabel: actionLabel, action: action)
+    let toast = Toast(
+      kind: kind, title: title, body: body, actionLabel: actionLabel, action: action)
     toasts.append(toast)
     if toasts.count > maxVisible { toasts.removeFirst(toasts.count - maxVisible) }
     let duration = timeout ?? (kind == .error ? 8 : 4)

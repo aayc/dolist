@@ -55,7 +55,8 @@ public enum AgentTheme {
 enum AgentPalette {
   static let accent = NSColor(light: 0x1D6FE8, dark: 0x3B8BFF)
   static let accentStrong = NSColor(light: 0x1557C0, dark: 0x5CA0FF)
-  static let accentSoft = NSColor(light: 0x1D6FE8, dark: 0x3B8BFF, lightAlpha: 0.12, darkAlpha: 0.16)
+  static let accentSoft = NSColor(
+    light: 0x1D6FE8, dark: 0x3B8BFF, lightAlpha: 0.12, darkAlpha: 0.16)
   static let text = NSColor(light: 0x0B1220, dark: 0xF2F5F9)
   static let mutedText = NSColor(light: 0x475467, dark: 0xB4BDC9)
   static let faintText = NSColor(light: 0x8492A6, dark: 0x7A8594)

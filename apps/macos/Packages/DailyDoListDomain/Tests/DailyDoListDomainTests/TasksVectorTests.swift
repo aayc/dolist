@@ -81,9 +81,16 @@ extension DomainTests {
         if document.name.hasPrefix("generated") { generated += 1 }
         if !document.doc.unicodeScalars.allSatisfy(\.isASCII) { nonASCII += 1 }
         let actual = TaskParser.parse(document.doc)
-        let ok = actual.count == document.tasks.count && zip(document.tasks, actual).allSatisfy { $0.matches($1) }
-        let firstDifference = zip(document.tasks, actual).first { !$0.matches($1) }.map { "expected \($0) got \($1)" }
-        check.expect(ok, "\(document.name) \(document.doc.debug): \(actual.count) vs \(document.tasks.count) tasks; \(firstDifference ?? "")")
+        let ok =
+          actual.count == document.tasks.count
+          && zip(document.tasks, actual).allSatisfy { $0.matches($1) }
+        let firstDifference = zip(document.tasks, actual).first { !$0.matches($1) }.map {
+          "expected \($0) got \($1)"
+        }
+        check.expect(
+          ok,
+          "\(document.name) \(document.doc.debug): \(actual.count) vs \(document.tasks.count) tasks; \(firstDifference ?? "")"
+        )
       }
       check.verify(atLeast: 250)
       #expect(generated >= 200)
@@ -99,15 +106,19 @@ extension DomainTests {
         check.expect(same(toggled, c.toggled), "toggleLine(\(c.line.debug)) = \(toggled.debug)")
         for pair in c.setStatus {
           let actual = TaskParser.setStatusChar(pair[0], onLine: c.line)
-          check.expect(same(actual, pair[1]), "setStatusChar(\(pair[0].debug), \(c.line.debug)) = \(actual.debug)")
+          check.expect(
+            same(actual, pair[1]),
+            "setStatusChar(\(pair[0].debug), \(c.line.debug)) = \(actual.debug)")
         }
       }
       for c in file.blank {
-        check.expect(TaskParser.isBlankTaskText(c.text) == c.value, "isBlankTaskText(\(c.text.debug))")
+        check.expect(
+          TaskParser.isBlankTaskText(c.text) == c.value, "isBlankTaskText(\(c.text.debug))")
       }
       for pair in file.statusFromChar {
         let status = TaskStatus(statusChar: pair[0])
-        check.expect(status.rawValue == pair[1], "TaskStatus(statusChar: \(pair[0].debug)) = \(status)")
+        check.expect(
+          status.rawValue == pair[1], "TaskStatus(statusChar: \(pair[0].debug)) = \(status)")
       }
       for c in file.statuses {
         let status = try #require(TaskStatus(rawValue: c.status))
@@ -142,7 +153,8 @@ extension DomainTests {
       }
 
       func matches(_ t: TrackedTask) -> Bool {
-        same(t.id, id) && same(t.text, text) && t.status.rawValue == status && t.line == line && t.depth == depth
+        same(t.id, id) && same(t.text, text) && t.status.rawValue == status && t.line == line
+          && t.depth == depth
           && same(t.parentId, parentId) && same(t.notes, notes) && t.firstSeenAt == firstSeenAt
           && t.updatedAt == updatedAt
       }
@@ -193,41 +205,56 @@ extension DomainTests {
         for (index, step) in sequence.steps.enumerated() {
           let result = TaskTracker.track(
             previous: state, parsed: TaskParser.parse(step.doc), now: step.now,
-            similarityThreshold: sequence.similarityThreshold ?? TaskTracker.defaultSimilarityThreshold,
+            similarityThreshold: sequence.similarityThreshold
+              ?? TaskTracker.defaultSimilarityThreshold,
             idFactory: {
               counter += 1
               return "t\(counter)"
             })
           let label = "\(sequence.name) step \(index)"
           if let rows = step.tasks {
-            let tasksMatch = result.tasks.count == rows.count && zip(rows, result.tasks).allSatisfy { $0.matches($1) }
-            check.expect(tasksMatch, "\(label): tasks \(result.tasks.map(\.id)) ≠ \(rows.map(\.id))")
+            let tasksMatch =
+              result.tasks.count == rows.count
+              && zip(rows, result.tasks).allSatisfy { $0.matches($1) }
+            check.expect(
+              tasksMatch, "\(label): tasks \(result.tasks.map(\.id)) ≠ \(rows.map(\.id))")
           } else {
             let ids = result.tasks.map(\.id)
             let firstDifference = zip(ids, step.ids ?? []).enumerated().first { $1.0 != $1.1 }
-            check.expect(ids == step.ids, "\(label): ids differ at \(String(describing: firstDifference))")
+            check.expect(
+              ids == step.ids, "\(label): ids differ at \(String(describing: firstDifference))")
           }
 
           // The diff reports the same task values as the result and the previous state.
           let byId = Dictionary(result.tasks.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
           let previousById = Dictionary(state.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
           let diff = result.diff
-          check.expect(diff.added.map(\.id) == step.diff.added, "\(label): added \(diff.added.map(\.id))")
+          check.expect(
+            diff.added.map(\.id) == step.diff.added, "\(label): added \(diff.added.map(\.id))")
           check.expect(diff.added.allSatisfy { byId[$0.id] == $0 }, "\(label): added values")
           check.expect(
             diff.updated.map(\.task.id) == step.diff.updated.map(\.id)
-              && zip(diff.updated, step.diff.updated).allSatisfy { $0.changes.map(\.rawValue) == $1.changes },
+              && zip(diff.updated, step.diff.updated).allSatisfy {
+                $0.changes.map(\.rawValue) == $1.changes
+              },
             "\(label): updated \(diff.updated.map { ($0.task.id, $0.changes) })")
           check.expect(
-            diff.updated.allSatisfy { byId[$0.task.id] == $0.task && previousById[$0.task.id] == $0.previous },
+            diff.updated.allSatisfy {
+              byId[$0.task.id] == $0.task && previousById[$0.task.id] == $0.previous
+            },
             "\(label): updated values")
           check.expect(
             diff.statusChanged.map(\.task.id) == step.diff.statusChanged, "\(label): statusChanged")
           check.expect(
-            diff.statusChanged.allSatisfy { byId[$0.task.id] == $0.task && previousById[$0.task.id] == $0.previous },
+            diff.statusChanged.allSatisfy {
+              byId[$0.task.id] == $0.task && previousById[$0.task.id] == $0.previous
+            },
             "\(label): statusChanged values")
-          check.expect(diff.removed.map(\.id) == step.diff.removed, "\(label): removed \(diff.removed.map(\.id))")
-          check.expect(diff.removed.allSatisfy { previousById[$0.id] == $0 }, "\(label): removed values")
+          check.expect(
+            diff.removed.map(\.id) == step.diff.removed,
+            "\(label): removed \(diff.removed.map(\.id))")
+          check.expect(
+            diff.removed.allSatisfy { previousById[$0.id] == $0 }, "\(label): removed values")
           state = result.tasks
         }
       }

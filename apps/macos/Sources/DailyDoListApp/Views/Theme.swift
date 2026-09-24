@@ -8,7 +8,8 @@ enum Theme {
   /// Hovered and pressed accent.
   static let accentStrong = Color(lightHex: 0x1557C0, darkHex: 0x5CA0FF)
   /// Tinted backgrounds.
-  static let accentSoft = Color(lightHex: 0x1D6FE8, darkHex: 0x3B8BFF, lightOpacity: 0.12, darkOpacity: 0.16)
+  static let accentSoft = Color(
+    lightHex: 0x1D6FE8, darkHex: 0x3B8BFF, lightOpacity: 0.12, darkOpacity: 0.16)
   static let success = Color(lightHex: 0x0F9D58, darkHex: 0x34D399)
   static let warning = Color(lightHex: 0xB7791F, darkHex: 0xFBBF24)
   static let danger = Color(lightHex: 0xD92D20, darkHex: 0xF87171)
@@ -51,7 +52,8 @@ extension Color {
     self.init(
       nsColor: NSColor(name: nil) { appearance in
         let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        return isDark ? NSColor(rgbHex: dark, alpha: darkOpacity) : NSColor(rgbHex: light, alpha: lightOpacity)
+        return isDark
+          ? NSColor(rgbHex: dark, alpha: darkOpacity) : NSColor(rgbHex: light, alpha: lightOpacity)
       })
   }
 }
@@ -73,7 +75,9 @@ struct Hairline: View {
     let thickness = 1 / max(displayScale, 1)
     Rectangle()
       .fill(Theme.separator)
-      .frame(width: axis == .vertical ? thickness : nil, height: axis == .horizontal ? thickness : nil)
+      .frame(
+        width: axis == .vertical ? thickness : nil, height: axis == .horizontal ? thickness : nil
+      )
       .accessibilityHidden(true)
   }
 }
@@ -112,7 +116,8 @@ struct IconButton: View {
         .foregroundStyle(isActive ? Theme.accent : (isEnabled ? Theme.mutedText : Theme.faintText))
         .background(
           RoundedRectangle(cornerRadius: 6)
-            .fill(hovering && isEnabled ? Theme.hover : .clear))
+            .fill(hovering && isEnabled ? Theme.hover : .clear)
+        )
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)

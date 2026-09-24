@@ -33,14 +33,16 @@ final class DecorationRenderer {
 
   // MARK: Backgrounds
 
-  func drawBackground(in layoutManager: MarkdownLayoutManager, glyphRange: NSRange, origin: NSPoint) {
+  func drawBackground(in layoutManager: MarkdownLayoutManager, glyphRange: NSRange, origin: NSPoint)
+  {
     guard glyphRange.length > 0, let storage = layoutManager.textStorage,
       let container = layoutManager.textContainers.first
     else { return }
     let charRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
     guard charRange.length > 0 else { return }
     let length = storage.length
-    layoutManager.enumerateLineFragments(forGlyphRange: glyphRange) { rect, usedRect, _, fragment, _ in
+    layoutManager.enumerateLineFragments(forGlyphRange: glyphRange) {
+      rect, usedRect, _, fragment, _ in
       let first = layoutManager.characterIndexForGlyph(at: fragment.location)
       guard first < length else { return }
       let attributes = storage.attributes(at: first, effectiveRange: nil)
@@ -57,12 +59,20 @@ final class DecorationRenderer {
         !self.livePreview.isLineRevealed(containing: first)
       {
         let depth = (attributes[.ddlQuoteDepth] as? NSNumber)?.intValue ?? 0
-        self.drawRule(box, indent: CGFloat(min(depth, self.theme.maxQuoteIndentLevels)) * self.theme.quoteIndent)
+        self.drawRule(
+          box, indent: CGFloat(min(depth, self.theme.maxQuoteIndentLevels)) * self.theme.quoteIndent
+        )
       }
     }
-    drawPills(.ddlInlineCode, color: EditorColors.codeBackground, layoutManager, storage, container, charRange, origin)
-    drawPills(.ddlTag, color: EditorColors.tagBackground, layoutManager, storage, container, charRange, origin)
-    drawPills(.ddlHighlight, color: EditorColors.highlightBackground, layoutManager, storage, container, charRange, origin)
+    drawPills(
+      .ddlInlineCode, color: EditorColors.codeBackground, layoutManager, storage, container,
+      charRange, origin)
+    drawPills(
+      .ddlTag, color: EditorColors.tagBackground, layoutManager, storage, container, charRange,
+      origin)
+    drawPills(
+      .ddlHighlight, color: EditorColors.highlightBackground, layoutManager, storage, container,
+      charRange, origin)
   }
 
   private func drawCodeBlock(_ box: NSRect, storage: NSTextStorage, first: Int, last: Int) {
@@ -73,7 +83,9 @@ final class DecorationRenderer {
       && (first == 0 || storage.attribute(.ddlCodeBlock, at: first - 1, effectiveRange: nil) == nil)
     let endsLine = last >= storage.length - 1 || text.character(at: last) == UTF16Unit.newline
     let endsBlock =
-      endsLine && (last + 1 >= storage.length || storage.attribute(.ddlCodeBlock, at: last + 1, effectiveRange: nil) == nil)
+      endsLine
+      && (last + 1 >= storage.length
+        || storage.attribute(.ddlCodeBlock, at: last + 1, effectiveRange: nil) == nil)
     EditorColors.codeBlockBackground.setFill()
     Self.roundedRect(box, top: startsBlock ? radius : 0, bottom: endsBlock ? radius : 0).fill()
   }
@@ -94,7 +106,8 @@ final class DecorationRenderer {
   }
 
   private func drawPills(
-    _ key: NSAttributedString.Key, color: NSColor, _ layoutManager: MarkdownLayoutManager, _ storage: NSTextStorage,
+    _ key: NSAttributedString.Key, color: NSColor, _ layoutManager: MarkdownLayoutManager,
+    _ storage: NSTextStorage,
     _ container: NSTextContainer, _ charRange: NSRange, _ origin: NSPoint
   ) {
     storage.enumerateAttribute(key, in: charRange) { value, run, _ in
@@ -108,7 +121,8 @@ final class DecorationRenderer {
         guard bounds.width > 0.5 else { return }
         let baseline = rect.minY + layoutManager.location(forGlyphAt: piece.location).y
         let index = layoutManager.characterIndexForGlyph(at: piece.location)
-        let font = storage.attribute(.font, at: index, effectiveRange: nil) as? NSFont ?? self.theme.bodyFont
+        let font =
+          storage.attribute(.font, at: index, effectiveRange: nil) as? NSFont ?? self.theme.bodyFont
         let top = baseline - font.ascender - 1
         let bottom = baseline - font.descender + 1
         let pill = NSRect(x: bounds.minX - 3, y: top, width: bounds.width + 6, height: bottom - top)
@@ -121,29 +135,39 @@ final class DecorationRenderer {
 
   // MARK: Checkboxes, bullets and sparkles
 
-  func drawReplacements(in layoutManager: MarkdownLayoutManager, glyphRange: NSRange, origin: NSPoint) {
-    guard livePreview.isEnabled, glyphRange.length > 0, let storage = layoutManager.textStorage else { return }
+  func drawReplacements(
+    in layoutManager: MarkdownLayoutManager, glyphRange: NSRange, origin: NSPoint
+  ) {
+    guard livePreview.isEnabled, glyphRange.length > 0, let storage = layoutManager.textStorage
+    else { return }
     let charRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
     guard charRange.length > 0 else { return }
     let text = storage.mutableString
     storage.enumerateAttribute(.ddlMarker, in: charRange) { value, run, _ in
-      guard let raw = value as? Int, let kind = MarkerKind(rawValue: raw), kind.isReplacement else { return }
+      guard let raw = value as? Int, let kind = MarkerKind(rawValue: raw), kind.isReplacement else {
+        return
+      }
       var full = run
       _ = storage.attribute(.ddlMarker, at: run.location, effectiveRange: &full)
-      guard full.location == run.location, let slot = self.slot(forMarker: full, kind: kind, in: layoutManager)
+      guard full.location == run.location,
+        let slot = self.slot(forMarker: full, kind: kind, in: layoutManager)
       else { return }
       let rect = slot.rect.offsetBy(dx: origin.x, dy: origin.y)
       let baseline = slot.baseline + origin.y
       if kind == .task, full.length >= 3 {
         let statusOffset = full.end - 2
         self.drawCheckbox(
-          status: text.character(at: statusOffset), in: self.checkboxRect(inSlot: rect, baseline: baseline, font: slot.font),
+          status: text.character(at: statusOffset),
+          in: self.checkboxRect(inSlot: rect, baseline: baseline, font: slot.font),
           check: self.motion?.checkPaint(statusOffset: statusOffset))
       } else if kind == .bullet {
         self.drawBullet(inSlot: rect, baseline: baseline, font: slot.font)
       } else if kind == .agent {
-        let color = self.hoveredSparkle == full.location ? EditorColors.accentStrong : EditorColors.accent
-        self.drawSymbol("sparkle", color: color, in: self.sparkleRect(inSlot: rect, baseline: baseline, font: slot.font))
+        let color =
+          self.hoveredSparkle == full.location ? EditorColors.accentStrong : EditorColors.accent
+        self.drawSymbol(
+          "sparkle", color: color,
+          in: self.sparkleRect(inSlot: rect, baseline: baseline, font: slot.font))
       }
     }
   }
@@ -152,22 +176,32 @@ final class DecorationRenderer {
   func sparkleRect(inSlot slot: NSRect, baseline: CGFloat, font: NSFont) -> NSRect {
     let size = (font.pointSize * 0.8).rounded()
     let centerY = baseline - font.xHeight / 2
-    return NSRect(x: (slot.midX - size / 2).rounded(), y: (centerY - size / 2).rounded(), width: size, height: size)
+    return NSRect(
+      x: (slot.midX - size / 2).rounded(), y: (centerY - size / 2).rounded(), width: size,
+      height: size)
   }
 
   /// The reserved slot of a replaced marker, or nil while the marker shows as text.
-  func slot(forMarker marker: NSRange, kind: MarkerKind, in layoutManager: MarkdownLayoutManager) -> Slot? {
-    guard let storage = layoutManager.textStorage, let container = layoutManager.textContainers.first,
+  func slot(forMarker marker: NSRange, kind: MarkerKind, in layoutManager: MarkdownLayoutManager)
+    -> Slot?
+  {
+    guard let storage = layoutManager.textStorage,
+      let container = layoutManager.textContainers.first,
       marker.location < storage.length, livePreview.isHidden(kind, range: marker)
     else { return nil }
     let glyph = layoutManager.glyphIndexForCharacter(at: marker.location)
-    guard glyph < layoutManager.numberOfGlyphs, layoutManager.propertyForGlyph(at: glyph) == .controlCharacter else {
+    guard glyph < layoutManager.numberOfGlyphs,
+      layoutManager.propertyForGlyph(at: glyph) == .controlCharacter
+    else {
       return nil
     }
-    let bounds = layoutManager.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: container)
+    let bounds = layoutManager.boundingRect(
+      forGlyphRange: NSRange(location: glyph, length: 1), in: container)
     let fragment = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
     let baseline = fragment.minY + layoutManager.location(forGlyphAt: glyph).y
-    let font = storage.attribute(.font, at: marker.location, effectiveRange: nil) as? NSFont ?? theme.bodyFont
+    let font =
+      storage.attribute(.font, at: marker.location, effectiveRange: nil) as? NSFont
+      ?? theme.bodyFont
     return Slot(rect: bounds, baseline: baseline, font: font)
   }
 
@@ -182,8 +216,11 @@ final class DecorationRenderer {
     let diameter = theme.bulletDiameter
     let centerY = baseline - font.xHeight / 2
     EditorColors.bullet.setFill()
-    NSBezierPath(ovalIn: NSRect(x: slot.midX - diameter / 2, y: centerY - diameter / 2, width: diameter, height: diameter))
-      .fill()
+    NSBezierPath(
+      ovalIn: NSRect(
+        x: slot.midX - diameter / 2, y: centerY - diameter / 2, width: diameter, height: diameter)
+    )
+    .fill()
   }
 
   static func checkboxSymbol(for status: UInt16) -> (name: String, color: NSColor) {
@@ -231,15 +268,21 @@ final class DecorationRenderer {
   /// An SF Symbol fitted in `rect` and tinted with `color`; false when the symbol is unavailable.
   @discardableResult
   private func drawSymbol(_ name: String, color: NSColor, in rect: NSRect) -> Bool {
-    guard let image = symbol(name, pointSize: rect.height), let context = NSGraphicsContext.current?.cgContext else {
+    guard let image = symbol(name, pointSize: rect.height),
+      let context = NSGraphicsContext.current?.cgContext
+    else {
       return false
     }
     let scale = min(rect.width / max(image.size.width, 1), rect.height / max(image.size.height, 1))
     let size = NSSize(width: image.size.width * scale, height: image.size.height * scale)
-    let fitted = NSRect(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2, width: size.width, height: size.height)
+    let fitted = NSRect(
+      x: rect.midX - size.width / 2, y: rect.midY - size.height / 2, width: size.width,
+      height: size.height)
     context.saveGState()
     context.beginTransparencyLayer(in: fitted.insetBy(dx: -1, dy: -1), auxiliaryInfo: nil)
-    image.draw(in: fitted, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+    image.draw(
+      in: fitted, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil
+    )
     color.setFill()
     fitted.insetBy(dx: -1, dy: -1).fill(using: .sourceAtop)
     context.endTransparencyLayer()
@@ -251,8 +294,9 @@ final class DecorationRenderer {
     let key = SymbolKey(name: name, pointSize: pointSize)
     if let cached = symbolCache[key] { return cached }
     let configuration = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .regular)
-    guard let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
-      .withSymbolConfiguration(configuration)
+    guard
+      let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+        .withSymbolConfiguration(configuration)
     else { return nil }
     symbolCache[key] = image
     return image
@@ -263,17 +307,27 @@ final class DecorationRenderer {
     let path = NSBezierPath()
     path.move(to: NSPoint(x: r.minX + top, y: r.minY))
     path.line(to: NSPoint(x: r.maxX - top, y: r.minY))
-    if top > 0 { path.appendArc(from: NSPoint(x: r.maxX, y: r.minY), to: NSPoint(x: r.maxX, y: r.minY + top), radius: top) }
+    if top > 0 {
+      path.appendArc(
+        from: NSPoint(x: r.maxX, y: r.minY), to: NSPoint(x: r.maxX, y: r.minY + top), radius: top)
+    }
     path.line(to: NSPoint(x: r.maxX, y: r.maxY - bottom))
     if bottom > 0 {
-      path.appendArc(from: NSPoint(x: r.maxX, y: r.maxY), to: NSPoint(x: r.maxX - bottom, y: r.maxY), radius: bottom)
+      path.appendArc(
+        from: NSPoint(x: r.maxX, y: r.maxY), to: NSPoint(x: r.maxX - bottom, y: r.maxY),
+        radius: bottom)
     }
     path.line(to: NSPoint(x: r.minX + bottom, y: r.maxY))
     if bottom > 0 {
-      path.appendArc(from: NSPoint(x: r.minX, y: r.maxY), to: NSPoint(x: r.minX, y: r.maxY - bottom), radius: bottom)
+      path.appendArc(
+        from: NSPoint(x: r.minX, y: r.maxY), to: NSPoint(x: r.minX, y: r.maxY - bottom),
+        radius: bottom)
     }
     path.line(to: NSPoint(x: r.minX, y: r.minY + top))
-    if top > 0 { path.appendArc(from: NSPoint(x: r.minX, y: r.minY), to: NSPoint(x: r.minX + top, y: r.minY), radius: top) }
+    if top > 0 {
+      path.appendArc(
+        from: NSPoint(x: r.minX, y: r.minY), to: NSPoint(x: r.minX + top, y: r.minY), radius: top)
+    }
     path.close()
     return path
   }

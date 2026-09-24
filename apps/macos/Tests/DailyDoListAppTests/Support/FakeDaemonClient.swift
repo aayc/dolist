@@ -24,10 +24,15 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
     var folders: Set<String> = []
     var versionCounter = 0
     var settings = AppSettings.defaults
-    var health = HealthResponse(version: "0.1.0-test", apiVersion: DaemonProtocol.apiVersion, vaultName: "Test Vault", agentMode: .mock)
+    var health = HealthResponse(
+      version: "0.1.0-test", apiVersion: DaemonProtocol.apiVersion, vaultName: "Test Vault",
+      agentMode: .mock)
     var agentStatus = AgentStatusResponse(
       mode: .mock, enabled: true, model: "test/model", running: 0, queued: 0, pendingApprovals: 0,
-      connectors: [], execution: ExecutionStatus(provider: "local", capabilities: ExecutionCapabilities(shell: true, browser: false, computer: false)))
+      connectors: [],
+      execution: ExecutionStatus(
+        provider: "local",
+        capabilities: ExecutionCapabilities(shell: true, browser: false, computer: false)))
     var records: [String: [TaskAgentRecord]] = [:]
     var searchHits: [SearchHit]?
     var today = "2026-09-23"
@@ -63,12 +68,21 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
 
   func removeNote(_ path: String) { lock.withLock { state.notes[path] = nil } }
   func note(_ path: String) -> Note? { lock.withLock { state.notes[path] } }
-  func fail(_ method: String, with error: DaemonClientError?) { lock.withLock { state.failures[method] = error } }
+  func fail(_ method: String, with error: DaemonClientError?) {
+    lock.withLock { state.failures[method] = error }
+  }
   var calls: [String] { lock.withLock { state.calls } }
-  var writes: [(path: String, content: String, base: BaseVersion)] { lock.withLock { state.writes } }
+  var writes: [(path: String, content: String, base: BaseVersion)] {
+    lock.withLock { state.writes }
+  }
   var sent: [ClientEvent] { lock.withLock { state.sent } }
   func calls(_ prefix: String) -> [String] { calls.filter { $0.hasPrefix(prefix) } }
-  func resetLog() { lock.withLock { state.calls = []; state.writes = [] } }
+  func resetLog() {
+    lock.withLock {
+      state.calls = []
+      state.writes = []
+    }
+  }
 
   var holdWrites: Bool {
     get { lock.withLock { state.holdWrites } }
@@ -79,7 +93,9 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
 
   /// Lets the oldest held write proceed.
   func releaseNextWrite() {
-    let next: CheckedContinuation<Void, Never>? = lock.withLock { heldWrites.isEmpty ? nil : heldWrites.removeFirst() }
+    let next: CheckedContinuation<Void, Never>? = lock.withLock {
+      heldWrites.isEmpty ? nil : heldWrites.removeFirst()
+    }
     next?.resume()
   }
 
@@ -128,7 +144,9 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
   func tree() async throws -> VaultTreeResponse {
     try begin("tree")
     return lock.withLock {
-      let files = state.notes.map { VaultEntry(path: $0.key, kind: .file, version: $0.value.version) }
+      let files = state.notes.map {
+        VaultEntry(path: $0.key, kind: .file, version: $0.value.version)
+      }
       let folders = state.folders.map { VaultEntry(path: $0, kind: .folder) }
       return VaultTreeResponse(vaultName: state.vaultName, entries: files + folders)
     }
@@ -142,7 +160,9 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
     }
   }
 
-  func writeNote(_ path: String, content: String, baseVersion: BaseVersion) async throws -> WriteNoteResponse {
+  func writeNote(_ path: String, content: String, baseVersion: BaseVersion) async throws
+    -> WriteNoteResponse
+  {
     let hold = lock.withLock { () -> Bool in
       state.writes.append((path, content, baseVersion))
       return state.holdWrites
@@ -158,7 +178,9 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
       switch baseVersion {
       case .unconditional: break
       case .createOnly:
-        if let existing { throw DaemonClientError.conflict(ConflictResponse(current: response(path, existing))) }
+        if let existing {
+          throw DaemonClientError.conflict(ConflictResponse(current: response(path, existing)))
+        }
       case .match(let version):
         guard let existing else { throw DaemonClientError.conflict(ConflictResponse(current: nil)) }
         if existing.version != version {
@@ -196,7 +218,10 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
       for path in inside {
         state.notes["\(to)\(path.dropFirst(from.count))"] = state.notes.removeValue(forKey: path)
       }
-      state.folders = Set(state.folders.map { $0 == from || $0.hasPrefix("\(from)/") ? "\(to)\($0.dropFirst(from.count))" : $0 })
+      state.folders = Set(
+        state.folders.map {
+          $0 == from || $0.hasPrefix("\(from)/") ? "\(to)\($0.dropFirst(from.count))" : $0
+        })
       return .folder(FolderRenameResponse(path: to, moved: inside.count))
     }
   }
@@ -229,7 +254,9 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
         created = true
       }
       let note = state.notes[path] ?? Note(content: "", version: "v0")
-      return DailyNoteResponse(path: path, content: note.content, version: note.version, mtime: 1_000, date: iso, created: created)
+      return DailyNoteResponse(
+        path: path, content: note.content, version: note.version, mtime: 1_000, date: iso,
+        created: created)
     }
   }
 
@@ -242,7 +269,8 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
         if path.localizedCaseInsensitiveContains(query) {
           hits.append(SearchHit(path: path, kind: .name, line: 0, preview: path))
         }
-        for (index, line) in note.content.components(separatedBy: "\n").enumerated() where line.localizedCaseInsensitiveContains(query) {
+        for (index, line) in note.content.components(separatedBy: "\n").enumerated()
+        where line.localizedCaseInsensitiveContains(query) {
           hits.append(SearchHit(path: path, kind: .content, line: index, preview: line))
         }
       }
@@ -318,7 +346,9 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
     return []
   }
 
-  func decideApproval(_ id: String, _ decision: ApprovalDecisionRequest) async throws -> ApprovalRequest {
+  func decideApproval(_ id: String, _ decision: ApprovalDecisionRequest) async throws
+    -> ApprovalRequest
+  {
     try begin("decideApproval")
     throw Self.notFound(id)
   }

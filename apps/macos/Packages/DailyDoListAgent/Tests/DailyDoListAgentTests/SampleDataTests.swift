@@ -23,7 +23,9 @@ struct SampleDataTests {
         default: break
         }
       }
-      for artifact in thread.artifacts { #expect(snapshot.artifacts[artifact.id] != nil, "\(artifact.id) has a body") }
+      for artifact in thread.artifacts {
+        #expect(snapshot.artifacts[artifact.id] != nil, "\(artifact.id) has a body")
+      }
     }
     #expect(Set(snapshot.records.map(\.taskId)).count == snapshot.records.count)
     #expect(Set(snapshot.threads.map(\.id)).count == snapshot.threads.count)
@@ -43,9 +45,13 @@ struct SampleDataTests {
       for block in rendered {
         guard case .paragraph(_, let paragraph) = block else { continue }
         for run in paragraph.runs {
-          guard let url = run.link, LinkPreview.isCitationLabel(String(paragraph[run.range].characters)) else { continue }
+          guard let url = run.link,
+            LinkPreview.isCitationLabel(String(paragraph[run.range].characters))
+          else { continue }
           citations += 1
-          #expect(CitedSourceMatch.source(for: url.absoluteString, in: sources) != nil, "\(url) is a source of \(id)")
+          #expect(
+            CitedSourceMatch.source(for: url.absoluteString, in: sources) != nil,
+            "\(url) is a source of \(id)")
         }
       }
       #expect(citations >= 2)
@@ -55,7 +61,8 @@ struct SampleDataTests {
 
   @Test func theBookingThreadHasEveryMessageKind() throws {
     let booking = try #require(snapshot.loadedThreads.first { $0.id == SampleData.bookingThreadId })
-    #expect(Set(booking.messages.map(\.kind)) == ["text", "tool_call", "approval", "artifact", "status"])
+    #expect(
+      Set(booking.messages.map(\.kind)) == ["text", "tool_call", "approval", "artifact", "status"])
     let statuses = booking.messages.compactMap { message -> ToolCallStatus? in
       if case .toolCall(let call) = message { return call.status }
       return nil
@@ -66,7 +73,10 @@ struct SampleDataTests {
       return nil
     }
     #expect(Set(roles) == [.agent, .user, .system])
-    #expect(booking.messages.contains { if case .text(let text) = $0 { text.streaming == true } else { false } })
+    #expect(
+      booking.messages.contains {
+        if case .text(let text) = $0 { text.streaming == true } else { false }
+      })
   }
 
   @Test func framesAreRealImagesOfTheDeclaredSize() throws {
@@ -90,14 +100,17 @@ struct SampleDataTests {
     let sections = store.inboxSections(now: FormattingTests.now)
     #expect(sections.map(\.group) == [.needsYou, .working, .done, .other])
     #expect(sections.first?.threads.map(\.id).contains(SampleData.bookingThreadId) == true)
-    #expect(!sections.flatMap(\.threads).contains { $0.id == SampleData.libraryThreadId }, "yesterday's done task is hidden")
+    #expect(
+      !sections.flatMap(\.threads).contains { $0.id == SampleData.libraryThreadId },
+      "yesterday's done task is hidden")
     #expect(store.latestFrame(threadId: SampleData.bookingThreadId, surface: .browser) != nil)
     #expect(store.recentActions(threadId: SampleData.coffeeThreadId, surface: .computer).count == 1)
 
     // Actions work against the sample client.
     #expect(await store.decide(SampleData.reserveApprovalId, .approve, scope: .once))
     #expect(store.pendingApprovalCount == 1)
-    let payload = try await store.fetchArtifact(threadId: SampleData.desksThreadId, artifactId: "art_sample_desks")
+    let payload = try await store.fetchArtifact(
+      threadId: SampleData.desksThreadId, artifactId: "art_sample_desks")
     #expect(String(decoding: payload.data, as: UTF8.self).hasPrefix("# Standing desks"))
   }
 
@@ -105,11 +118,13 @@ struct SampleDataTests {
     let client = SampleDaemonClient(snapshot: snapshot)
     let pending = try await client.approvals(status: .pending)
     #expect(pending.count == 2)
-    let decided = try await client.decideApproval(SampleData.emailApprovalId, ApprovalDecisionRequest(decision: .deny, note: "Not yet"))
+    let decided = try await client.decideApproval(
+      SampleData.emailApprovalId, ApprovalDecisionRequest(decision: .deny, note: "Not yet"))
     #expect(decided.status == .denied)
     #expect(decided.decisionNote == "Not yet")
     await #expect(throws: (any Error).self) {
-      _ = try await client.decideApproval(SampleData.emailApprovalId, ApprovalDecisionRequest(decision: .approve))
+      _ = try await client.decideApproval(
+        SampleData.emailApprovalId, ApprovalDecisionRequest(decision: .approve))
     }
     let status = try await client.setAgentEnabled(false)
     #expect(!status.enabled)

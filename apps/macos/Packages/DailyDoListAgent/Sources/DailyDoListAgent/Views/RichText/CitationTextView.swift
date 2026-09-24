@@ -26,13 +26,16 @@ final class CitationTextView: NSTextView, NSTextViewDelegate {
   private var hoverArea: NSTrackingArea?
   private var source: (text: AttributedString, style: RichTextStyle)?
   /// A second text system that measures the content at any width without resizing the view.
-  private let measuring = (storage: NSTextStorage(), layout: NSLayoutManager(), container: NSTextContainer())
+  private let measuring = (
+    storage: NSTextStorage(), layout: NSLayoutManager(), container: NSTextContainer()
+  )
   private var measured: (width: CGFloat, height: CGFloat)?
 
   init() {
     let storage = NSTextStorage()
     let layoutManager = CitationLayoutManager()
-    let container = NSTextContainer(size: NSSize(width: 300, height: CGFloat.greatestFiniteMagnitude))
+    let container = NSTextContainer(
+      size: NSSize(width: 300, height: CGFloat.greatestFiniteMagnitude))
     container.widthTracksTextView = true
     container.lineFragmentPadding = 0
     layoutManager.addTextContainer(container)
@@ -88,15 +91,24 @@ final class CitationTextView: NSTextView, NSTextViewDelegate {
 
   /// The link whose glyphs are under `point` (view coordinates).
   func link(at point: NSPoint) -> (range: NSRange, url: URL)? {
-    guard let layoutManager, let textContainer, let storage = textStorage, storage.length > 0 else { return nil }
+    guard let layoutManager, let textContainer, let storage = textStorage, storage.length > 0 else {
+      return nil
+    }
     let local = NSPoint(x: point.x - textContainerOrigin.x, y: point.y - textContainerOrigin.y)
-    let glyph = layoutManager.glyphIndex(for: local, in: textContainer, fractionOfDistanceThroughGlyph: nil)
+    let glyph = layoutManager.glyphIndex(
+      for: local, in: textContainer, fractionOfDistanceThroughGlyph: nil)
     guard glyph < layoutManager.numberOfGlyphs else { return nil }
-    let bounds = layoutManager.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: textContainer)
-    guard bounds.insetBy(dx: -AgentRichText.citationPadding, dy: -1).contains(local) else { return nil }
+    let bounds = layoutManager.boundingRect(
+      forGlyphRange: NSRange(location: glyph, length: 1), in: textContainer)
+    guard bounds.insetBy(dx: -AgentRichText.citationPadding, dy: -1).contains(local) else {
+      return nil
+    }
     var range = NSRange()
-    let value = storage.attribute(.link, at: layoutManager.characterIndexForGlyph(at: glyph), effectiveRange: &range)
-    guard let url = (value as? URL) ?? (value as? String).flatMap(URL.init(string:)) else { return nil }
+    let value = storage.attribute(
+      .link, at: layoutManager.characterIndexForGlyph(at: glyph), effectiveRange: &range)
+    guard let url = (value as? URL) ?? (value as? String).flatMap(URL.init(string:)) else {
+      return nil
+    }
     return (range, url)
   }
 
@@ -113,7 +125,8 @@ final class CitationTextView: NSTextView, NSTextViewDelegate {
     let glyphs = layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
     var first = NSRect.zero
     layoutManager.enumerateEnclosingRects(
-      forGlyphRange: glyphs, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0), in: textContainer
+      forGlyphRange: glyphs, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0),
+      in: textContainer
     ) { rect, stop in
       first = rect
       stop.pointee = true
@@ -123,7 +136,9 @@ final class CitationTextView: NSTextView, NSTextViewDelegate {
 
   func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
     closePreview()
-    guard let url = (link as? URL) ?? (link as? String).flatMap(URL.init(string:)) else { return true }
+    guard let url = (link as? URL) ?? (link as? String).flatMap(URL.init(string:)) else {
+      return true
+    }
     if let target = WikiLinkURL.target(of: url) {
       noteLinks.open(target)
     } else {
@@ -138,7 +153,9 @@ final class CitationTextView: NSTextView, NSTextViewDelegate {
     super.updateTrackingAreas()
     if let hoverArea, trackingAreas.contains(hoverArea) { return }
     let area = NSTrackingArea(
-      rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self,
+      rect: .zero,
+      options: [.mouseMoved, .mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+      owner: self,
       userInfo: nil)
     addTrackingArea(area)
     hoverArea = area
@@ -176,7 +193,8 @@ final class CitationTextView: NSTextView, NSTextViewDelegate {
 
   private func showPreview(for link: (range: NSRange, url: URL)) {
     guard window != nil else { return }
-    let controller = NSHostingController(rootView: LinkPreviewCard(content: previewContent(for: link), noteLinks: noteLinks))
+    let controller = NSHostingController(
+      rootView: LinkPreviewCard(content: previewContent(for: link), noteLinks: noteLinks))
     controller.sizingOptions = .preferredContentSize
     let popover = NSPopover()
     popover.behavior = .applicationDefined
@@ -204,13 +222,17 @@ final class CitationLayoutManager: NSLayoutManager {
       guard glyphs.length > 0 else { return }
       let fragment = lineFragmentRect(forGlyphAt: glyphs.location, effectiveRange: nil)
       let first = location(forGlyphAt: glyphs.location)
-      let font = storage.attribute(.font, at: run.location, effectiveRange: nil) as? NSFont ?? .systemFont(ofSize: 9.5)
-      let digits = (storage.attributedSubstring(from: run).string as NSString).size(withAttributes: [.font: font]).width
+      let font =
+        storage.attribute(.font, at: run.location, effectiveRange: nil) as? NSFont
+        ?? .systemFont(ofSize: 9.5)
+      let digits = (storage.attributedSubstring(from: run).string as NSString).size(
+        withAttributes: [.font: font]).width
       // The glyph's location already includes its baseline offset.
       let baseline = fragment.minY + first.y
       let padding = AgentRichText.citationPadding - 0.5
       let chip = NSRect(
-        x: fragment.minX + first.x - padding, y: baseline - font.capHeight - 2, width: digits + 2 * padding,
+        x: fragment.minX + first.x - padding, y: baseline - font.capHeight - 2,
+        width: digits + 2 * padding,
         height: font.capHeight + 3.5
       ).offsetBy(dx: origin.x, dy: origin.y)
       AgentPalette.accentSoft.setFill()

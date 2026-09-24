@@ -103,7 +103,8 @@ public enum AgentFormat {
   ) -> String {
     let date = Date(epochMillis: expiresAt)
     let when = timestamp(date, now: now, calendar: calendar, locale: locale)
-    return calendar.isDate(date, inSameDayAs: now) ? "Auto-denies at \(when)" : "Auto-denies \(when)"
+    return calendar.isDate(date, inSameDayAs: now)
+      ? "Auto-denies at \(when)" : "Auto-denies \(when)"
   }
 
   /// Why a decision was refused (409): the approval's actual state.
@@ -127,7 +128,8 @@ public enum AgentFormat {
     case "system": return "System"
     default:
       guard let name = author.subagentName else { return author }
-      let words = name.replacingOccurrences(of: "_", with: " ").replacingOccurrences(of: "-", with: " ")
+      let words = name.replacingOccurrences(of: "_", with: " ").replacingOccurrences(
+        of: "-", with: " ")
       guard let first = words.first else { return "Agent" }
       return "\(first.uppercased())\(words.dropFirst()) agent"
     }

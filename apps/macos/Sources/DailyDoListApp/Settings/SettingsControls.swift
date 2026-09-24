@@ -74,8 +74,10 @@ struct ClampedNumberField: View {
           .focused($focused)
           .onSubmit(commit)
           .onChange(of: focused) { _, isFocused in if !isFocused { commit() } }
-        Stepper(title, value: Binding(get: { value }, set: { onCommit(clamp($0)) }), in: range, step: step)
-          .labelsHidden()
+        Stepper(
+          title, value: Binding(get: { value }, set: { onCommit(clamp($0)) }), in: range, step: step
+        )
+        .labelsHidden()
         if let unit { Text(unit).foregroundStyle(.secondary) }
       }
     }
@@ -120,7 +122,8 @@ enum FolderPicker {
     panel.canCreateDirectories = true
     panel.allowsMultipleSelection = false
     if let path, !path.isEmpty {
-      panel.directoryURL = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
+      panel.directoryURL = URL(
+        fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
     }
     return panel.runModal() == .OK ? panel.url : nil
   }

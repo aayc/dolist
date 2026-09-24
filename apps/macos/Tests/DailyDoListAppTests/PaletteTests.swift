@@ -12,21 +12,29 @@ struct PaletteTests {
   }
 
   @Test func emptyQueryListsCommandsAlphabeticallyWithShortcuts() {
-    let palette = PaletteModel(mode: .commands, commands: [
-      command(.todaysNote, "Open today's daily note", shortcut: Shortcut("d", [.command, .shift])),
-      command(.newNote, "Create new note", shortcut: Shortcut("n")),
-      command(.toggleTheme, "Toggle light/dark theme"),
-    ])
-    #expect(palette.items.map(\.title) == ["Create new note", "Open today's daily note", "Toggle light/dark theme"])
+    let palette = PaletteModel(
+      mode: .commands,
+      commands: [
+        command(
+          .todaysNote, "Open today's daily note", shortcut: Shortcut("d", [.command, .shift])),
+        command(.newNote, "Create new note", shortcut: Shortcut("n")),
+        command(.toggleTheme, "Toggle light/dark theme"),
+      ])
+    #expect(
+      palette.items.map(\.title) == [
+        "Create new note", "Open today's daily note", "Toggle light/dark theme",
+      ])
     #expect(palette.items.map(\.shortcut) == ["⌘N", "⇧⌘D", nil])
   }
 
   @Test func queryRanksMatchesAndHighlightsCharacters() throws {
-    let palette = PaletteModel(mode: .commands, commands: [
-      command(.todaysNote, "Open today's daily note"),
-      command(.newNote, "Create new note"),
-      command(.toggleTheme, "Toggle light/dark theme"),
-    ])
+    let palette = PaletteModel(
+      mode: .commands,
+      commands: [
+        command(.todaysNote, "Open today's daily note"),
+        command(.newNote, "Create new note"),
+        command(.toggleTheme, "Toggle light/dark theme"),
+      ])
     palette.query = "today"
     let first = try #require(palette.items.first)
     #expect(first.kind == .command(.todaysNote))
@@ -36,9 +44,11 @@ struct PaletteTests {
   }
 
   @Test func keyboardSelectionWrapsAndResetsOnTyping() {
-    let palette = PaletteModel(mode: .commands, commands: [
-      command(.newNote, "A"), command(.newFolder, "B"), command(.toggleTheme, "C"),
-    ])
+    let palette = PaletteModel(
+      mode: .commands,
+      commands: [
+        command(.newNote, "A"), command(.newFolder, "B"), command(.toggleTheme, "C"),
+      ])
     #expect(palette.selectedIndex == 0)
     palette.moveSelection(by: -1)
     #expect(palette.selectedItem?.title == "C")
@@ -51,14 +61,16 @@ struct PaletteTests {
 
   @Test func switcherShowsRecentNotesFirstForAnEmptyQuery() {
     let palette = PaletteModel(
-      mode: .switcher, files: ["Daily/2026-09-21.md", "Daily/2026-09-23.md", "Ideas.md", "Projects/Plan.md"],
+      mode: .switcher,
+      files: ["Daily/2026-09-21.md", "Daily/2026-09-23.md", "Ideas.md", "Projects/Plan.md"],
       recent: ["Projects/Plan.md", "Missing.md"], openTabs: ["Ideas.md"])
     #expect(palette.items.map(\.title) == ["Plan", "Ideas", "2026-09-23", "2026-09-21"])
     #expect(palette.items.first?.subtitle == "Projects")
   }
 
   @Test func switcherPrefersNameMatchesOverPathMatches() {
-    let items = PaletteRanking.notes("plan", files: ["Planning/Other.md", "Projects/Plan.md", "Archive/Old Plan.md"])
+    let items = PaletteRanking.notes(
+      "plan", files: ["Planning/Other.md", "Projects/Plan.md", "Archive/Old Plan.md"])
     #expect(items.first?.kind == .note("Projects/Plan.md"))
     #expect(items.contains { $0.kind == .note("Planning/Other.md") }, "path matches still count")
   }
@@ -72,7 +84,9 @@ struct PaletteTests {
 
   @Test func highlightingMarksMatchedCharacters() {
     let attributed = HighlightedText.attributed("Plan 🚀 x", highlights: [0, 5, 99])
-    let highlighted = attributed.runs.filter { $0.foregroundColor != nil }.map { String(attributed[$0.range].characters) }
+    let highlighted = attributed.runs.filter { $0.foregroundColor != nil }.map {
+      String(attributed[$0.range].characters)
+    }
     #expect(highlighted.contains("P"))
     #expect(highlighted.contains("🚀"), "a surrogate-pair offset highlights the whole character")
   }
@@ -100,8 +114,10 @@ struct CommandCatalogTests {
     let model = AppModel(environment: makeEnvironment(client: FakeDaemonClient()))
     let catalog = CommandCatalog(model: model)
     let expected: [CommandID: String] = [
-      .newNote: "⌘N", .todaysNote: "⇧⌘D", .previousDaily: "⇧⌘P", .nextDaily: "⇧⌘N", .weeklyNote: "⇧⌘W",
-      .quickOpen: "⌘O", .closeTab: "⌘W", .reopenTab: "⇧⌘T", .toggleAgentPanel: "⌘\\", .agentInbox: "⇧⌘A",
+      .newNote: "⌘N", .todaysNote: "⇧⌘D", .previousDaily: "⇧⌘P", .nextDaily: "⇧⌘N",
+      .weeklyNote: "⇧⌘W",
+      .quickOpen: "⌘O", .closeTab: "⌘W", .reopenTab: "⇧⌘T", .toggleAgentPanel: "⌘\\",
+      .agentInbox: "⇧⌘A",
       .search: "⇧⌘F", .commandPalette: "⌘P", .back: "⌘[", .forward: "⌘]", .increaseFontSize: "⌘+",
       .decreaseFontSize: "⌘-", .resetFontSize: "⌘0", .tab1: "⌘1", .tab9: "⌘9",
     ]
@@ -123,7 +139,8 @@ struct CommandCatalogTests {
     #expect(catalog.command(.save)?.isEnabled() == true)
     #expect(catalog.command(.back)?.isEnabled() == false)
     #expect(catalog.command(.reopenTab)?.isEnabled() == false)
-    #expect(!catalog.paletteCommands.contains { $0.id == .back }, "unavailable commands aren't listed")
+    #expect(
+      !catalog.paletteCommands.contains { $0.id == .back }, "unavailable commands aren't listed")
     #expect(!catalog.paletteCommands.contains { $0.id == .commandPalette })
     #expect(!catalog.paletteCommands.contains { $0.id == .tab1 })
 

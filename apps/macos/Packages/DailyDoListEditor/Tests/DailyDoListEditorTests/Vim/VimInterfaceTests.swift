@@ -72,10 +72,15 @@ struct VimInterfaceTests {
     editor.press(":")
     editor.type("s/x")
     #expect(editor.session?.activePrompt != nil)
-    let click = try #require(NSEvent.mouseEvent(
-      with: .leftMouseDown, location: editor.textView.convert(NSPoint(x: 40, y: 30), to: nil), modifierFlags: [], timestamp: 0,
-      windowNumber: editor.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
-    _ = editor.controller.textView(editor.textView, mouseDownAt: editor.textView.convert(click.locationInWindow, from: nil), modifiers: [])
+    let click = try #require(
+      NSEvent.mouseEvent(
+        with: .leftMouseDown, location: editor.textView.convert(NSPoint(x: 40, y: 30), to: nil),
+        modifierFlags: [], timestamp: 0,
+        windowNumber: editor.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
+        pressure: 1))
+    _ = editor.controller.textView(
+      editor.textView, mouseDownAt: editor.textView.convert(click.locationInWindow, from: nil),
+      modifiers: [])
     #expect(editor.session?.activePrompt == nil)
     #expect(editor.host.panelView == nil)
     #expect(editor.text == "some text")
@@ -98,14 +103,21 @@ struct VimInterfaceTests {
     editor.press("<CR>")
     editor.scheduler.advance(by: 0.1)
     let highlighted = editor.host.searchHighlighter.markedRanges
-    #expect(highlighted == [NSRange(location: 0, length: 3), NSRange(location: 8, length: 3), NSRange(location: 17, length: 3)])
-    let color = editor.controller.layoutManager.temporaryAttribute(.backgroundColor, atCharacterIndex: 8, effectiveRange: nil)
+    #expect(
+      highlighted == [
+        NSRange(location: 0, length: 3), NSRange(location: 8, length: 3),
+        NSRange(location: 17, length: 3),
+      ])
+    let color = editor.controller.layoutManager.temporaryAttribute(
+      .backgroundColor, atCharacterIndex: 8, effectiveRange: nil)
     #expect(color as? NSColor == VimSearchHighlighter.matchColor)
     editor.press(":")
     editor.type("noh")
     editor.press("<CR>")
     #expect(editor.host.searchHighlighter.markedRanges.isEmpty)
-    #expect(editor.controller.layoutManager.temporaryAttribute(.backgroundColor, atCharacterIndex: 8, effectiveRange: nil) == nil)
+    #expect(
+      editor.controller.layoutManager.temporaryAttribute(
+        .backgroundColor, atCharacterIndex: 8, effectiveRange: nil) == nil)
   }
 
   @Test func incrementalSearchHighlightsWhileTyping() {
@@ -119,16 +131,23 @@ struct VimInterfaceTests {
 
   @Test func theStatusIsReportedOnlyWhenItChanges() {
     let editor = VimEditorHarness("one two\nthree")
-    let summary = { editor.delegate.statuses.compactMap { $0 }.map { "\($0.mode.rawValue):\($0.pending):\($0.recording ?? "")" } }
+    let summary = {
+      editor.delegate.statuses.compactMap { $0 }.map {
+        "\($0.mode.rawValue):\($0.pending):\($0.recording ?? "")"
+      }
+    }
     editor.press("i")
     editor.type("hello")
     editor.press("<Esc>", "v", "<Esc>", "V", "<Esc>", "<C-v>", "<Esc>", "R", "<Esc>")
     editor.press("2", "d", "<Esc>", "\"", "a", "y", "y", "q", "q", "q")
-    #expect(summary() == [
-      "insert::", "normal::", "visual::", "normal::", "visual-line::", "normal::", "visual-block::", "normal::",
-      "replace::", "normal::", "normal:2:", "normal:2d:", "normal::", "normal:\":", "normal:\"a:", "normal:\"ay:",
-      "normal::", "normal:q:", "normal::q", "normal::",
-    ])
+    #expect(
+      summary() == [
+        "insert::", "normal::", "visual::", "normal::", "visual-line::", "normal::",
+        "visual-block::", "normal::",
+        "replace::", "normal::", "normal:2:", "normal:2d:", "normal::", "normal:\":", "normal:\"a:",
+        "normal:\"ay:",
+        "normal::", "normal:q:", "normal::q", "normal::",
+      ])
     #expect(editor.controller.vimStatus == EditorVimStatus(mode: .normal))
     editor.controller.configure(EditorConfiguration(livePreview: false, vimMode: false))
     #expect(editor.delegate.statuses.last == .some(nil))
@@ -140,7 +159,8 @@ struct VimInterfaceTests {
     #expect(editor.host.drawsBlockCursor)
     #expect(!editor.textView.shouldDrawInsertionPoint)
     let block = try #require(editor.host.cursor.blocks.first)
-    let glyph = editor.controller.layoutManager.boundingRect(forGlyphRange: NSRange(location: 0, length: 1), in: editor.controller.textContainer)
+    let glyph = editor.controller.layoutManager.boundingRect(
+      forGlyphRange: NSRange(location: 0, length: 1), in: editor.controller.textContainer)
     #expect(abs(block.rect.minX - (glyph.minX + editor.textView.textContainerOrigin.x)) < 0.5)
     #expect(abs(block.rect.width - glyph.width) < 0.5)
     #expect(block.glyphs != nil)
@@ -152,7 +172,8 @@ struct VimInterfaceTests {
     editor.press("<Esc>")
     // Replace mode: a fifth; insert mode: the text view's own caret.
     editor.press("R")
-    #expect(abs((editor.host.cursor.blocks.first?.rect.height ?? 0) - block.rect.height * 0.2) < 0.5)
+    #expect(
+      abs((editor.host.cursor.blocks.first?.rect.height ?? 0) - block.rect.height * 0.2) < 0.5)
     editor.press("<Esc>", "a")
     #expect(editor.host.cursor.blocks.isEmpty)
     #expect(!editor.host.drawsBlockCursor)
@@ -160,13 +181,15 @@ struct VimInterfaceTests {
     // A forward visual selection shows it on its last character.
     editor.press("0", "v", "l", "l")
     let visual = try #require(editor.host.cursor.blocks.first)
-    let third = editor.controller.layoutManager.boundingRect(forGlyphRange: NSRange(location: 2, length: 1), in: editor.controller.textContainer)
+    let third = editor.controller.layoutManager.boundingRect(
+      forGlyphRange: NSRange(location: 2, length: 1), in: editor.controller.textContainer)
     #expect(abs(visual.rect.minX - (third.minX + editor.textView.textContainerOrigin.x)) < 0.5)
   }
 
   @Test(arguments: [("light", NSAppearance.Name.aqua), ("dark", NSAppearance.Name.darkAqua)])
   func theBlockCursorIsDrawnInTheAccentColor(name: String, appearance: NSAppearance.Name) throws {
-    let editor = VimEditorHarness("Plan the week\n- [ ] Book flights", size: NSSize(width: 520, height: 160))
+    let editor = VimEditorHarness(
+      "Plan the week\n- [ ] Book flights", size: NSSize(width: 520, height: 160))
     editor.window.appearance = NSAppearance(named: appearance)
     editor.window.reportsKey = true
     #expect(editor.textView.isKeyFocus)
@@ -176,17 +199,23 @@ struct VimInterfaceTests {
     let inside = NSPoint(x: block.rect.midX, y: block.rect.minY + 2)
     let focused = try render(editor)
     let pixel = try #require(focused.color(at: inside, in: editor.textView))
-    let background = try #require(focused.color(at: NSPoint(x: block.rect.maxX + 30, y: inside.y), in: editor.textView))
+    let background = try #require(
+      focused.color(at: NSPoint(x: block.rect.maxX + 30, y: inside.y), in: editor.textView))
     #expect(distance(pixel, background) > 0.3, "the block is filled on \(name)")
-    #expect(pixel.blueComponent > pixel.greenComponent, "the block has the accent's blue on \(name)")
-    try FileManager.default.createDirectory(at: RenderSnapshotTests.outputDirectory, withIntermediateDirectories: true)
+    #expect(
+      pixel.blueComponent > pixel.greenComponent, "the block has the accent's blue on \(name)")
+    try FileManager.default.createDirectory(
+      at: RenderSnapshotTests.outputDirectory, withIntermediateDirectories: true)
     if let png = focused.representation(using: .png, properties: [:]) {
-      try png.write(to: RenderSnapshotTests.outputDirectory.appendingPathComponent("vim-block-cursor-\(name).png"))
+      try png.write(
+        to: RenderSnapshotTests.outputDirectory.appendingPathComponent(
+          "vim-block-cursor-\(name).png"))
     }
     // An inactive window shows only the outline.
     editor.window.reportsKey = false
     let inactive = try render(editor)
-    #expect(distance(try #require(inactive.color(at: inside, in: editor.textView)), background) < 0.1)
+    #expect(
+      distance(try #require(inactive.color(at: inside, in: editor.textView)), background) < 0.1)
     // In insert mode the text view draws its own caret, and there's no block.
     editor.window.reportsKey = true
     editor.press("i")
@@ -210,13 +239,15 @@ struct VimInterfaceTests {
 
   private func render(_ editor: VimEditorHarness) throws -> NSBitmapImageRep {
     editor.controller.layoutManager.ensureLayout(for: editor.controller.textContainer)
-    let rep = try #require(editor.textView.bitmapImageRepForCachingDisplay(in: editor.textView.bounds))
+    let rep = try #require(
+      editor.textView.bitmapImageRepForCachingDisplay(in: editor.textView.bounds))
     editor.textView.cacheDisplay(in: editor.textView.bounds, to: rep)
     return rep
   }
 
   private func distance(_ a: NSColor, _ b: NSColor) -> CGFloat {
-    abs(a.redComponent - b.redComponent) + abs(a.greenComponent - b.greenComponent) + abs(a.blueComponent - b.blueComponent)
+    abs(a.redComponent - b.redComponent) + abs(a.greenComponent - b.greenComponent)
+      + abs(a.blueComponent - b.blueComponent)
   }
 }
 

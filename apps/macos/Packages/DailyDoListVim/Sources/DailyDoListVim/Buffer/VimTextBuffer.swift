@@ -101,10 +101,13 @@ public final class VimTextBuffer: VimEditor {
 
   public func vimLineNumber(at offset: Int) -> Int {
     // Extend the known line starts until they cover `offset`.
-    while validStarts < lines.count, offset > starts[validStarts - 1] + lines[validStarts - 1].length {
+    while validStarts < lines.count,
+      offset > starts[validStarts - 1] + lines[validStarts - 1].length
+    {
       ensureStarts(through: validStarts)
     }
-    var lo = 0, hi = validStarts - 1
+    var lo = 0
+    var hi = validStarts - 1
     while lo < hi {
       let mid = (lo + hi + 1) >> 1
       if starts[mid] <= offset { lo = mid } else { hi = mid - 1 }
@@ -114,7 +117,9 @@ public final class VimTextBuffer: VimEditor {
 
   private func ensureStarts(through line: Int) {
     guard line >= validStarts else { return }
-    if starts.count < lines.count { starts.append(contentsOf: repeatElement(0, count: lines.count - starts.count)) }
+    if starts.count < lines.count {
+      starts.append(contentsOf: repeatElement(0, count: lines.count - starts.count))
+    }
     var i = validStarts
     while i <= line {
       starts[i] = starts[i - 1] + lines[i - 1].length + 1
@@ -130,7 +135,8 @@ public final class VimTextBuffer: VimEditor {
 
   private func slice(_ from: Int, _ to: Int) -> VimText {
     if from >= to { return VimText() }
-    let a = position(from), b = position(to)
+    let a = position(from)
+    let b = position(to)
     if a.line == b.line { return lines[a.line].slice(a.ch, b.ch) }
     var out = lines[a.line].slice(a.ch).units
     for l in (a.line + 1)..<b.line {
@@ -145,7 +151,9 @@ public final class VimTextBuffer: VimEditor {
   // MARK: Selection
 
   public var vimSelection: VimSelection {
-    VimSelection(ranges: selection.ranges.map { .init(anchor: $0.anchor, head: $0.head) }, mainIndex: selection.mainIndex)
+    VimSelection(
+      ranges: selection.ranges.map { .init(anchor: $0.anchor, head: $0.head) },
+      mainIndex: selection.mainIndex)
   }
 
   /// The selection as positions.
@@ -173,9 +181,11 @@ public final class VimTextBuffer: VimEditor {
     let inverted = changes.isEmpty ? nil : changes.invert { self.slice($0, $1) }
     apply(changes)
     selection = EditorSelection(
-      ranges: transaction.selection.ranges.map { SelRange.range($0.anchor, $0.head) }, mainIndex: transaction.selection.mainIndex)
+      ranges: transaction.selection.ranges.map { SelRange.range($0.anchor, $0.head) },
+      mainIndex: transaction.selection.mainIndex)
     history.record(
-      changes: changes, inverted: inverted, startSelection: before, selectionSet: transaction.selectionIsExplicit, time: clock(),
+      changes: changes, inverted: inverted, startSelection: before,
+      selectionSet: transaction.selectionIsExplicit, time: clock(),
       userEvent: transaction.userEvent)
     if !changes.isEmpty, let target = pendingScroll { pendingScroll = target.map(changes) }
     if transaction.scrollIntoView { pendingScroll = selection.main }
@@ -186,22 +196,32 @@ public final class VimTextBuffer: VimEditor {
   public func vimRedo() -> VimTransaction? { popHistory(undo: false) }
 
   private func popHistory(undo: Bool) -> VimTransaction? {
-    guard !isReadOnly, let popped = history.pop(undo: undo, currentSelection: selection) else { return nil }
+    guard !isReadOnly, let popped = history.pop(undo: undo, currentSelection: selection) else {
+      return nil
+    }
     let before = selection
     let inverted = popped.changes.invert { self.slice($0, $1) }
     apply(popped.changes)
     selection = popped.selection ?? before.map(popped.changes)
-    history.recordPop(undo: undo, rest: popped.rest, applied: popped.changes, inverted: inverted, remembered: popped.remembered, startSelection: before)
+    history.recordPop(
+      undo: undo, rest: popped.rest, applied: popped.changes, inverted: inverted,
+      remembered: popped.remembered, startSelection: before)
     pendingScroll = selection.main
     var list: [VimChange] = []
-    popped.changes.iterChanges { fromA, toA, _, _, text in list.append(VimChange(from: fromA, to: toA, text: text)) }
-    var transaction = VimTransaction(changes: list, selection: vimSelection, userEvent: undo ? "undo" : "redo", scrollIntoView: true)
+    popped.changes.iterChanges { fromA, toA, _, _, text in
+      list.append(VimChange(from: fromA, to: toA, text: text))
+    }
+    var transaction = VimTransaction(
+      changes: list, selection: vimSelection, userEvent: undo ? "undo" : "redo",
+      scrollIntoView: true)
     transaction.changeSet = popped.changes
     return transaction
   }
 
   private func changeSet(for changes: [VimChange]) -> ChangeSet {
-    (try? ChangeSet.of(changes.map { .init(from: $0.from, to: $0.to, insert: $0.text) }, length: vimLength)) ?? .empty(vimLength)
+    (try? ChangeSet.of(
+      changes.map { .init(from: $0.from, to: $0.to, insert: $0.text) }, length: vimLength))
+      ?? .empty(vimLength)
   }
 
   /// Applies `changes` to the lines, last change first.
@@ -209,11 +229,13 @@ public final class VimTextBuffer: VimEditor {
     var list: [(Int, Int, VimText)] = []
     changes.iterChanges { fromA, toA, _, _, text in list.append((fromA, toA, text)) }
     for (from, to, text) in list.reversed() {
-      let a = position(from), b = position(to)
+      let a = position(from)
+      let b = position(to)
       let inserted = text.split(unit: 0x0A)
       var replacement = inserted
       replacement[0] = lines[a.line].slice(0, a.ch) + replacement[0]
-      replacement[replacement.count - 1] = replacement[replacement.count - 1] + lines[b.line].slice(b.ch)
+      replacement[replacement.count - 1] =
+        replacement[replacement.count - 1] + lines[b.line].slice(b.ch)
       lines.replaceSubrange(a.line...b.line, with: replacement)
       validStarts = min(validStarts, a.line + 1)
       vimLength += text.length - (to - from)
@@ -233,7 +255,9 @@ public final class VimTextBuffer: VimEditor {
   public var vimTextHeight: Double { textHeight }
 
   public var vimViewport: VimViewport {
-    VimViewport(scrollTop: scrollTop, scrollLeft: scrollLeft, clientHeight: clientHeight, clientWidth: clientWidth, contentHeight: contentHeight)
+    VimViewport(
+      scrollTop: scrollTop, scrollLeft: scrollLeft, clientHeight: clientHeight,
+      clientWidth: clientWidth, contentHeight: contentHeight)
   }
 
   private var contentHeight: Double { Double(lines.count) * lineHeight }
@@ -271,12 +295,15 @@ public final class VimTextBuffer: VimEditor {
   private func scrollRangeIntoView(_ range: SelRange) {
     guard var rect = vimCoords(at: min(range.head, vimLength), side: 1) else { return }
     if !range.isEmpty, let other = vimCoords(at: min(range.anchor, vimLength), side: 1) {
-      rect = VimRect(left: min(rect.left, other.left), top: min(rect.top, other.top), right: max(rect.right, other.right), bottom: max(rect.bottom, other.bottom))
+      rect = VimRect(
+        left: min(rect.left, other.left), top: min(rect.top, other.top),
+        right: max(rect.right, other.right), bottom: max(rect.bottom, other.bottom))
     }
     guard contentHeight > clientHeight else { return }
     let side = range.head < range.anchor ? -1 : 1
     let yMargin = 5.0
-    let top = rect.top - scrollTop, bottom = rect.bottom - scrollTop
+    let top = rect.top - scrollTop
+    let bottom = rect.bottom - scrollTop
     var moveY = 0.0
     if top < yMargin {
       moveY = top - yMargin
@@ -324,7 +351,9 @@ public final class VimTextBuffer: VimEditor {
       if u == 0x09 {
         let tab = Double(tabSize) * charWidth
         x = ((x / tab).rounded(.down) + 1) * tab
-      } else if !(isLowSurrogate(u) && i > 0 && isHighSurrogate(text[i - 1])) && !ClusterBreak.isExtendingChar(UInt32(u)) {
+      } else if !(isLowSurrogate(u) && i > 0 && isHighSurrogate(text[i - 1]))
+        && !ClusterBreak.isExtendingChar(UInt32(u))
+      {
         x += charWidth
       }
       i += 1
@@ -376,11 +405,15 @@ public final class VimTextBuffer: VimEditor {
     apply(changes)
     selection = newSelection
     history.record(
-      changes: changes, inverted: inverted, startSelection: before, selectionSet: true, time: clock(), userEvent: userEvent)
+      changes: changes, inverted: inverted, startSelection: before, selectionSet: true,
+      time: clock(), userEvent: userEvent)
     pendingScroll = selection.main
     var list: [VimChange] = []
-    changes.iterChanges { fromA, toA, _, _, text in list.append(VimChange(from: fromA, to: toA, text: text)) }
-    var transaction = VimTransaction(changes: list, selection: vimSelection, userEvent: userEvent, scrollIntoView: true)
+    changes.iterChanges { fromA, toA, _, _, text in
+      list.append(VimChange(from: fromA, to: toA, text: text))
+    }
+    var transaction = VimTransaction(
+      changes: list, selection: vimSelection, userEvent: userEvent, scrollIntoView: true)
     transaction.changeSet = changes
     session.editorDidChange(transaction)
     return true
@@ -390,8 +423,10 @@ public final class VimTextBuffer: VimEditor {
 
   /// Replaces the document and puts the cursor at the start (history kept).
   public func setText(_ text: String) {
-    session?.cm.setValue(VimText(text)) ?? vimApply(VimTransaction(
-      changes: [VimChange(from: 0, to: vimLength, text: VimText(text))], selection: .cursor(0)))
+    session?.cm.setValue(VimText(text))
+      ?? vimApply(
+        VimTransaction(
+          changes: [VimChange(from: 0, to: vimLength, text: VimText(text))], selection: .cursor(0)))
   }
 
   /// Sets the selection (outside vim, like a mouse selection) and tells vim.
@@ -399,7 +434,8 @@ public final class VimTextBuffer: VimEditor {
     if let session {
       session.cm.setSelections(ranges, primary)
     } else {
-      selection = EditorSelection.create(ranges.map { SelRange.range(offset($0.anchor), offset($0.head)) }, mainIndex: primary)
+      selection = EditorSelection.create(
+        ranges.map { SelRange.range(offset($0.anchor), offset($0.head)) }, mainIndex: primary)
     }
   }
 

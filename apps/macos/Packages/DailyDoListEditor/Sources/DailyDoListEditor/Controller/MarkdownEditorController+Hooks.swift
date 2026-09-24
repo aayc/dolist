@@ -6,8 +6,11 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
   /// A caret landing strictly inside hidden syntax (vertical moves, clicks next to a checkbox) is
   /// moved to the edge of the hidden run in the direction of travel; one landing after a hidden
   /// agent marker goes before it.
-  func textView(_ textView: MarkdownTextView, adjust proposed: [NSRange], previous: [NSRange]) -> [NSRange] {
-    guard !suppressSelectionAdjustment, livePreview.isEnabled, proposed.count == 1, let range = proposed.first,
+  func textView(_ textView: MarkdownTextView, adjust proposed: [NSRange], previous: [NSRange])
+    -> [NSRange]
+  {
+    guard !suppressSelectionAdjustment, livePreview.isEnabled, proposed.count == 1,
+      let range = proposed.first,
       range.length == 0
     else { return proposed }
     var caret = range.location
@@ -45,9 +48,12 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
   private func updateTypingAttributes(line: Int) {
     let content = highlighter.lineIndex.contentRange(ofLine: line, textLength: storage.length)
     let caret = textView.selectedRange().location
-    let source = content.length == 0 ? content.location : min(max(content.location, caret - 1), content.end - 1)
+    let source =
+      content.length == 0
+      ? content.location : min(max(content.location, caret - 1), content.end - 1)
     markdownTextView.typingAttributes =
-      source < storage.length ? storage.attributes(at: source, effectiveRange: nil) : theme.baseAttributes
+      source < storage.length
+      ? storage.attributes(at: source, effectiveRange: nil) : theme.baseAttributes
   }
 
   func textViewDidChangeFocus(_ textView: MarkdownTextView) {
@@ -64,7 +70,9 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
     {
       setSelection([NSRange(location: end, length: 0)], adjust: false)
     }
-    guard let edit = ListCommands.newline(in: storage.mutableString, selection: currentSelection, isLiteralLine: isLiteral)
+    guard
+      let edit = ListCommands.newline(
+        in: storage.mutableString, selection: currentSelection, isLiteralLine: isLiteral)
     else { return false }
     return perform(edit, actionName: "Typing")
   }
@@ -73,12 +81,18 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
     guard configuration.isEditable else { return false }
     let selection = currentSelection
     if backwards {
-      return perform(ListCommands.outdent(in: storage.mutableString, selection: selection), actionName: "Outdent", userEvent: "delete.dedent")
+      return perform(
+        ListCommands.outdent(in: storage.mutableString, selection: selection),
+        actionName: "Outdent", userEvent: "delete.dedent")
     }
-    if selection.allSatisfy({ $0.length == 0 }), let caret = selection.first, isLiteral(caret.location) {
+    if selection.allSatisfy({ $0.length == 0 }), let caret = selection.first,
+      isLiteral(caret.location)
+    {
       return false
     }
-    guard let edit = ListCommands.indent(in: storage.mutableString, selection: selection) else { return false }
+    guard let edit = ListCommands.indent(in: storage.mutableString, selection: selection) else {
+      return false
+    }
     return perform(edit, actionName: "Indent", userEvent: "input.indent")
   }
 
@@ -100,7 +114,9 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
 
   // MARK: Mouse
 
-  func textView(_ textView: MarkdownTextView, mouseDownAt point: NSPoint, modifiers: NSEvent.ModifierFlags) -> Bool {
+  func textView(
+    _ textView: MarkdownTextView, mouseDownAt point: NSPoint, modifiers: NSEvent.ModifierFlags
+  ) -> Bool {
     vimHost.textWasClicked()
     return handleClick(at: point, modifiers: modifiers)
   }
@@ -132,7 +148,9 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
     return false
   }
 
-  func textView(_ textView: MarkdownTextView, mouseMovedTo point: NSPoint?, modifiers: NSEvent.ModifierFlags) {
+  func textView(
+    _ textView: MarkdownTextView, mouseMovedTo point: NSPoint?, modifiers: NSEvent.ModifierFlags
+  ) {
     let layout = point.flatMap { badgeLayout(at: $0) }
     if layout?.badge.id != hoveredBadgeID {
       for rect in drawnBadgeRects { textView.setNeedsDisplay(rect.insetBy(dx: -2, dy: -2)) }
@@ -151,7 +169,9 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
     hoverLinkDidChange(hoveredLink)
     var clickable = layout != nil || sparkle != nil
     if !clickable, configuration.isEditable { clickable = checkboxLine(at: point) != nil }
-    if !clickable, let hoveredLink { clickable = modifiers.contains(.command) || isRendered(hoveredLink.range) }
+    if !clickable, let hoveredLink {
+      clickable = modifiers.contains(.command) || isRendered(hoveredLink.range)
+    }
     (clickable ? NSCursor.pointingHand : NSCursor.iBeam).set()
   }
 
@@ -195,7 +215,9 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
     }
     let motion = self.motion
     let now = motion.now
-    badgeRenderer.draw(layouts, hovered: hoveredBadgeID, dirtyRect: dirtyRect) { motion.paint(for: $0.badge, now: now) }
+    badgeRenderer.draw(layouts, hovered: hoveredBadgeID, dirtyRect: dirtyRect) {
+      motion.paint(for: $0.badge, now: now)
+    }
   }
 
   /// Back on screen: redrawing the badges resumes a pulse (frames stop by themselves when hidden).
@@ -219,7 +241,9 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
     vimHost.claimsKeyEquivalent(event)
   }
 
-  func textView(_ textView: MarkdownTextView, willReplace ranges: [NSRange], with strings: [String]) -> Bool {
+  func textView(_ textView: MarkdownTextView, willReplace ranges: [NSRange], with strings: [String])
+    -> Bool
+  {
     vimHost.willReplace(ranges, with: strings)
   }
 
@@ -261,7 +285,8 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
   func currentBadgeLayouts() -> [BadgeRenderer.Layout] {
     guard !badgeStore.isEmpty else { return [] }
     return badgeRenderer.layouts(
-      for: badgeStore.items, in: markdownTextView, layoutManager: layoutManager, visibleRect: markdownTextView.visibleRect)
+      for: badgeStore.items, in: markdownTextView, layoutManager: layoutManager,
+      visibleRect: markdownTextView.visibleRect)
   }
 
   func badgeLayout(at point: NSPoint) -> BadgeRenderer.Layout? {
@@ -284,8 +309,13 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
       guard full.location == run.location,
         let slot = decorations.slot(forMarker: full, kind: .task, in: layoutManager)
       else { return }
-      let box = decorations.checkboxRect(inSlot: slot.rect, baseline: slot.baseline, font: slot.font)
-      result.append((highlighter.lineIndex.line(containing: full.location), box.offsetBy(dx: origin.x, dy: origin.y)))
+      let box = decorations.checkboxRect(
+        inSlot: slot.rect, baseline: slot.baseline, font: slot.font)
+      result.append(
+        (
+          highlighter.lineIndex.line(containing: full.location),
+          box.offsetBy(dx: origin.x, dy: origin.y)
+        ))
     }
     return result
   }
@@ -302,14 +332,17 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
     guard storage.length > 0 else { return nil }
     let origin = markdownTextView.textContainerOrigin
     let local = NSPoint(x: point.x - origin.x, y: point.y - origin.y)
-    let glyph = layoutManager.glyphIndex(for: local, in: textContainer, fractionOfDistanceThroughGlyph: nil)
+    let glyph = layoutManager.glyphIndex(
+      for: local, in: textContainer, fractionOfDistanceThroughGlyph: nil)
     guard glyph < layoutManager.numberOfGlyphs else { return nil }
-    let bounds = layoutManager.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: textContainer)
+    let bounds = layoutManager.boundingRect(
+      forGlyphRange: NSRange(location: glyph, length: 1), in: textContainer)
     guard bounds.insetBy(dx: -1, dy: -1).contains(local) else { return nil }
     let index = layoutManager.characterIndexForGlyph(at: glyph)
     var range = NSRange()
     guard index < storage.length,
-      let attribute = storage.attribute(.ddlLink, at: index, effectiveRange: &range) as? LinkAttribute
+      let attribute = storage.attribute(.ddlLink, at: index, effectiveRange: &range)
+        as? LinkAttribute
     else { return nil }
     return (attribute.target, range)
   }
@@ -322,9 +355,9 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
   func follow(_ target: LinkTarget, newWindow: Bool) {
     guard let destination = LinkClassifier.destination(for: target) else { return }
     switch destination {
-    case let .external(url):
+    case .external(let url):
       delegate?.editor(self, didClickLink: url)
-    case let .note(note, _):
+    case .note(let note, _):
       delegate?.editor(self, didClickWikiLink: note, newWindow: newWindow)
     }
   }

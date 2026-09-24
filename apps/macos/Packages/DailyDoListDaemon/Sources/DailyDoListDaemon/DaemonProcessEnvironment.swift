@@ -32,7 +32,9 @@ enum DaemonProcessEnvironment {
 
   /// Node's directory, then the login shell's PATH, then the inherited PATH (or the system
   /// default), without duplicates.
-  static func searchPath(nodeDirectory: String, loginShellPATH: String?, inherited: String?) -> String {
+  static func searchPath(nodeDirectory: String, loginShellPATH: String?, inherited: String?)
+    -> String
+  {
     let fallback = "/usr/bin:/bin:/usr/sbin:/sbin"
     var seen = Set<String>()
     let parts = [nodeDirectory] + components(loginShellPATH) + components(inherited ?? fallback)

@@ -41,6 +41,9 @@ struct SettingsView: View {
 /// Shown in daemon-backed panes before a connection exists.
 struct NotConnectedNote: View {
   var body: some View {
-    SettingsNote(text: "Not connected to the daemon. These settings are stored by the daemon and can be changed once it's connected.")
+    SettingsNote(
+      text:
+        "Not connected to the daemon. These settings are stored by the daemon and can be changed once it's connected."
+    )
   }
 }

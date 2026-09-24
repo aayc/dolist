@@ -58,8 +58,15 @@ enum CommandID: String, CaseIterable, Sendable {
   case reopenTab = "tab.reopen"
   case nextTab = "tab.next"
   case previousTab = "tab.previous"
-  case tab1 = "tab.1", tab2 = "tab.2", tab3 = "tab.3", tab4 = "tab.4", tab5 = "tab.5"
-  case tab6 = "tab.6", tab7 = "tab.7", tab8 = "tab.8", tab9 = "tab.9"
+  case tab1 = "tab.1"
+  case tab2 = "tab.2"
+  case tab3 = "tab.3"
+  case tab4 = "tab.4"
+  case tab5 = "tab.5"
+  case tab6 = "tab.6"
+  case tab7 = "tab.7"
+  case tab8 = "tab.8"
+  case tab9 = "tab.9"
   case back = "nav.back"
   case forward = "nav.forward"
   case toggleSidebar = "sidebar.toggle"
@@ -95,14 +102,17 @@ enum CommandID: String, CaseIterable, Sendable {
     let parts = id.split(separator: ":", maxSplits: 1)
     guard parts.count == 2 else { return nil }
     let words = parts[1].split(separator: "-")
-    let name = words.enumerated().map { $0.offset == 0 ? String($0.element) : $0.element.capitalized }.joined()
+    let name = words.enumerated().map {
+      $0.offset == 0 ? String($0.element) : $0.element.capitalized
+    }.joined()
     guard let command = CommandID(rawValue: "\(parts[0]).\(name)") else { return nil }
     self = command
   }
 
   /// Web command ids that don't follow the naming scheme above.
   private static let webAliases: [String: CommandID] = [
-    "panel:left": .toggleSidebar, "panel:right": .toggleAgentPanel, "tab:next": .nextTab, "tab:previous": .previousTab,
+    "panel:left": .toggleSidebar, "panel:right": .toggleAgentPanel, "tab:next": .nextTab,
+    "tab:previous": .previousTab,
   ]
 }
 

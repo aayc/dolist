@@ -9,29 +9,37 @@ extension Workspace {
 
   /// New note: `name` (may include folders) or a unique "Untitled" whose title gets focus.
   @discardableResult
-  func createNote(in folder: String = "", name: String? = nil, newTab: Bool = true) async -> String? {
+  func createNote(in folder: String = "", name: String? = nil, newTab: Bool = true) async -> String?
+  {
     if let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
-      let path = VaultPath.ensureMarkdownExtension(VaultPath.normalize(folder.isEmpty ? name : "\(folder)/\(name)"))
+      let path = VaultPath.ensureMarkdownExtension(
+        VaultPath.normalize(folder.isEmpty ? name : "\(folder)/\(name)"))
       if let problem = NotePaths.validateName(VaultPath.stem(path)) {
         toasts.show(.error, "Invalid note name", body: problem)
         return nil
       }
       return await createNote(at: path, newTab: newTab, focusTitle: false)
     }
-    let path = NotePaths.uniquePath(folder: folder, base: "Untitled") { vault.has($0) || notes.has($0) }
+    let path = NotePaths.uniquePath(folder: folder, base: "Untitled") {
+      vault.has($0) || notes.has($0)
+    }
     return await createNote(at: path, newTab: newTab, focusTitle: true)
   }
 
   /// Creates `path` (or opens it if it already exists) and shows it.
   @discardableResult
-  func createNote(at path: String, content: String = "", newTab: Bool, focusTitle: Bool) async -> String? {
+  func createNote(at path: String, content: String = "", newTab: Bool, focusTitle: Bool) async
+    -> String?
+  {
     if vault.isFile(path) {
       await openNote(path, OpenOptions(newTab: newTab))
       return path
     }
     do {
       let response = try await vault.createNote(path, content: content)
-      notes.adopt(NoteResponse(path: response.path, content: content, version: response.version, mtime: response.mtime))
+      notes.adopt(
+        NoteResponse(
+          path: response.path, content: content, version: response.version, mtime: response.mtime))
       activate(response.path, OpenOptions(newTab: newTab, focusEditor: !focusTitle))
       if focusTitle { ui.titleFocusPath = response.path }
       return response.path
@@ -49,7 +57,9 @@ extension Workspace {
 
   @discardableResult
   func createFolder(in parent: String = "") async -> String? {
-    let path = NotePaths.uniquePath(folder: parent, base: "Untitled folder", fileExtension: "") { vault.has($0) }
+    let path = NotePaths.uniquePath(folder: parent, base: "Untitled folder", fileExtension: "") {
+      vault.has($0)
+    }
     do {
       try await vault.createFolder(path)
     } catch {
@@ -141,7 +151,8 @@ extension Workspace {
   @discardableResult
   func deletePath(_ path: String) async -> Bool {
     let isFolder = vault.isFolder(path)
-    let affected = isFolder
+    let affected =
+      isFolder
       ? Set(vault.files(inside: path) + notes.paths.filter { $0.hasPrefix("\(path)/") })
       : [path]
     do {

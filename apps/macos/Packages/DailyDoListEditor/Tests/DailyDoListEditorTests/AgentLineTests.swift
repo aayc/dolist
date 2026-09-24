@@ -10,10 +10,12 @@ struct AgentLineTests {
 
   @Test func aMarkerEndingTheLineMakesItTheAgents() throws {
     let task = tokenizeLine("- [ ] Call the restaurant %%agent:thr_9%%")
-    #expect(task.agent == AgentMarkerToken(range: NSRange(location: 25, length: 16), threadId: "thr_9"))
+    #expect(
+      task.agent == AgentMarkerToken(range: NSRange(location: 25, length: 16), threadId: "thr_9"))
     #expect(task.task?.status == UTF16Unit.space)
     #expect(markers("- [ ] Call the restaurant %%agent:thr_9%%", .agent) == [" %%agent:thr_9%%"])
-    #expect(spans("- [ ] Call the restaurant %%agent:thr_9%%", .agent) == ["- [ ] Call the restaurant"])
+    #expect(
+      spans("- [ ] Call the restaurant %%agent:thr_9%%", .agent) == ["- [ ] Call the restaurant"])
 
     // The text before the marker is tokenized like any line: no closing heading hashes, links.
     #expect(markers("## Trip to Lisbon %%agent%%", .heading) == ["## "])
@@ -26,7 +28,8 @@ struct AgentLineTests {
 
   @Test func onlyAMarkerAtTheEndCounts() {
     for line in [
-      "%%agent%% in the middle", "text %%agent%% x", "- a %%agent:%%", "- a %%Agent%%", "- a %%agent:bad id%%",
+      "%%agent%% in the middle", "text %%agent%% x", "- a %%agent:%%", "- a %%Agent%%",
+      "- a %%agent:bad id%%",
       "- a %%agent:\(String(repeating: "a", count: 65))%%",
     ] {
       #expect(tokenizeLine(line).agent == nil, "\(line)")
@@ -36,8 +39,10 @@ struct AgentLineTests {
   }
 
   @Test func codeAndFrontmatterStayLiteral() {
-    let lines = MarkdownTokenizer.tokenize("---\ntitle: x %%agent%%\n---\n```\ncode %%agent%%\n```\ntext %%agent%%")
-    #expect(lines.map { $0.tokens.agent != nil } == [false, false, false, false, false, false, true])
+    let lines = MarkdownTokenizer.tokenize(
+      "---\ntitle: x %%agent%%\n---\n```\ncode %%agent%%\n```\ntext %%agent%%")
+    #expect(
+      lines.map { $0.tokens.agent != nil } == [false, false, false, false, false, false, true])
   }
 
   // MARK: Styling and live preview
@@ -50,16 +55,20 @@ struct AgentLineTests {
     "End",
   ].joined(separator: "\n")
 
-  private func editor(_ configuration: EditorConfiguration = EditorConfiguration()) -> EditorHarness {
+  private func editor(_ configuration: EditorConfiguration = EditorConfiguration()) -> EditorHarness
+  {
     let length = (Self.note as NSString).length
-    return EditorHarness(text: Self.note, selection: NSRange(location: length, length: 0), configuration: configuration)
+    return EditorHarness(
+      text: Self.note, selection: NSRange(location: length, length: 0), configuration: configuration
+    )
   }
 
   @Test func agentTextHasItsOwnColorAndTheMarkerIsFaint() throws {
     let editor = editor()
     let storage = editor.controller.storage
     func color(at needle: String, offset: Int = 0) -> NSColor? {
-      storage.attribute(.foregroundColor, at: editor.offset(of: needle) + offset, effectiveRange: nil) as? NSColor
+      storage.attribute(
+        .foregroundColor, at: editor.offset(of: needle) + offset, effectiveRange: nil) as? NSColor
     }
     #expect(color(at: "Trattoria") == EditorColors.agentText)
     #expect(color(at: "OpenTable") == EditorColors.accent)
@@ -75,12 +84,16 @@ struct AgentLineTests {
     let editor = editor()
     editor.layout()
     let marker = editor.range(of: " %%agent:thr_ab12%%\n- [ ] Call")
-    let markerRange = NSRange(location: marker.location, length: (" %%agent:thr_ab12%%" as NSString).length)
+    let markerRange = NSRange(
+      location: marker.location, length: (" %%agent:thr_ab12%%" as NSString).length)
     // Everything but the sparkle's slot (the blank before the marker) is hidden.
     #expect(editor.hiddenCharacters(in: markerRange) == markerRange.length - 1)
     #expect(editor.glyphProperty(at: markerRange.location) == .controlCharacter)
-    let slot = editor.advance(ofGlyph: editor.controller.layoutManager.glyphIndexForCharacter(at: markerRange.location))
-    #expect(abs(slot - editor.controller.theme.agentSlotWidth(font: editor.controller.theme.bodyFont)) < 0.5)
+    let slot = editor.advance(
+      ofGlyph: editor.controller.layoutManager.glyphIndexForCharacter(at: markerRange.location))
+    #expect(
+      abs(slot - editor.controller.theme.agentSlotWidth(font: editor.controller.theme.bodyFont))
+        < 0.5)
 
     let sparkles = editor.controller.agentSparkles()
     #expect(sparkles.map(\.threadId) == ["thr_ab12", "thr_ab12", nil])
@@ -100,7 +113,8 @@ struct AgentLineTests {
     #expect(editor.hiddenCharacters(in: marker) == 0)
     #expect(editor.controller.agentSparkles().isEmpty)
     #expect(
-      editor.controller.storage.attribute(.foregroundColor, at: editor.offset(of: "tallest"), effectiveRange: nil) as? NSColor
+      editor.controller.storage.attribute(
+        .foregroundColor, at: editor.offset(of: "tallest"), effectiveRange: nil) as? NSColor
         == EditorColors.agentText)
   }
 
@@ -109,13 +123,19 @@ struct AgentLineTests {
     editor.layout()
     let sparkles = editor.controller.agentSparkles()
     let first = try #require(sparkles.first)
-    #expect(editor.controller.handleClick(at: NSPoint(x: first.rect.midX, y: first.rect.midY), modifiers: []))
+    #expect(
+      editor.controller.handleClick(
+        at: NSPoint(x: first.rect.midX, y: first.rect.midY), modifiers: []))
     #expect(editor.delegate.agentThreadClicks == ["thr_ab12"])
-    #expect(editor.controller.textView(editor.textView, toolTipAt: NSPoint(x: first.rect.midX, y: first.rect.midY))
-      == "Written by the agent — open thread")
+    #expect(
+      editor.controller.textView(
+        editor.textView, toolTipAt: NSPoint(x: first.rect.midX, y: first.rect.midY))
+        == "Written by the agent — open thread")
     // Without a thread the sparkle is just a mark.
     let plain = try #require(sparkles.last)
-    #expect(!editor.controller.handleClick(at: NSPoint(x: plain.rect.midX, y: plain.rect.midY), modifiers: []))
+    #expect(
+      !editor.controller.handleClick(
+        at: NSPoint(x: plain.rect.midX, y: plain.rect.midY), modifiers: []))
     #expect(editor.delegate.agentThreadClicks == ["thr_ab12"])
     #expect(editor.text == Self.note)
   }
@@ -139,7 +159,9 @@ struct AgentLineTests {
     let editor = editor()
     editor.select(NSRange(location: editor.offset(of: "\nWhat's"), length: 0))
     editor.enter()
-    #expect(editor.text.contains("- [ ] Call the restaurant to confirm %%agent:thr_ab12%%\n- [ ] \nWhat's"))
+    #expect(
+      editor.text.contains(
+        "- [ ] Call the restaurant to confirm %%agent:thr_ab12%%\n- [ ] \nWhat's"))
     let prose = editor.offset(of: " %%agent%%")
     editor.select(NSRange(location: prose, length: 0))
     editor.enter()
@@ -152,7 +174,8 @@ struct AgentLineTests {
     let editor = editor()
     let question = 3
     editor.controller.setBadges([
-      EditorBadge(id: "anc_q", line: question, status: "done", label: "Done · 1,250 ft", highlightsLine: true),
+      EditorBadge(
+        id: "anc_q", line: question, status: "done", label: "Done · 1,250 ft", highlightsLine: true),
       EditorBadge(id: "t1", line: 0, status: "working", label: "Working…"),
     ])
     editor.layout()
@@ -168,27 +191,39 @@ struct AgentLineTests {
     editor.select(NSRange(location: 0, length: 0))
     editor.type("x\n")
     editor.layout()
-    let moved = try #require(editor.controller.anchoredLineBands(in: editor.textView.visibleRect).first)
+    let moved = try #require(
+      editor.controller.anchoredLineBands(in: editor.textView.visibleRect).first)
     #expect(moved.minY > band.minY)
-    editor.controller.setBadges([EditorBadge(id: "anc_q", line: 4, status: "idle", label: "", highlightsLine: true)])
+    editor.controller.setBadges([
+      EditorBadge(id: "anc_q", line: 4, status: "idle", label: "", highlightsLine: true)
+    ])
     #expect(editor.controller.anchoredLineBands(in: editor.textView.visibleRect).isEmpty)
   }
 
   // MARK: Link previews
 
   @Test func linkPreviewsKnowTheLabelAndTheAgentThreadOfTheLine() throws {
-    let text = "[[Projects/Launch Plan#Goals|the plan]] and https://site.example/a\n- note [Site](https://site.example/b) %%agent:thr_7%%\nx"
-    let editor = EditorHarness(text: text, selection: NSRange(location: (text as NSString).length, length: 0))
+    let text =
+      "[[Projects/Launch Plan#Goals|the plan]] and https://site.example/a\n- note [Site](https://site.example/b) %%agent:thr_7%%\nx"
+    let editor = EditorHarness(
+      text: text, selection: NSRange(location: (text as NSString).length, length: 0))
     editor.layout()
-    let wiki = try #require(editor.controller.link(at: editor.point(at: editor.range(of: "the plan"))))
+    let wiki = try #require(
+      editor.controller.link(at: editor.point(at: editor.range(of: "the plan"))))
     #expect(
       editor.controller.linkPreview(for: wiki)
-        == EditorLinkPreview(target: .note(target: "Projects/Launch Plan", subpath: "Goals"), label: "the plan"))
-    let bare = try #require(editor.controller.link(at: editor.point(at: editor.range(of: "site.example/a"))))
+        == EditorLinkPreview(
+          target: .note(target: "Projects/Launch Plan", subpath: "Goals"), label: "the plan"))
+    let bare = try #require(
+      editor.controller.link(at: editor.point(at: editor.range(of: "site.example/a"))))
     #expect(editor.controller.linkPreview(for: bare)?.label == "https://site.example/a")
     let cited = try #require(editor.controller.link(at: editor.point(at: editor.range(of: "Site"))))
     let preview = try #require(editor.controller.linkPreview(for: cited))
-    #expect(preview == EditorLinkPreview(target: .external(URL(string: "https://site.example/b")!), label: "Site", agentThreadId: "thr_7"))
+    #expect(
+      preview
+        == EditorLinkPreview(
+          target: .external(URL(string: "https://site.example/b")!), label: "Site",
+          agentThreadId: "thr_7"))
     #expect(preview.fallbackText == "Site\nsite.example\nhttps://site.example/b")
 
     // The tooltip asks the host, and falls back without an answer.
@@ -200,14 +235,17 @@ struct AgentLineTests {
     // Hovering a link asks once, so the host can start loading.
     editor.delegate.previewRequests.removeAll()
     editor.controller.textView(editor.textView, mouseMovedTo: point, modifiers: [])
-    editor.controller.textView(editor.textView, mouseMovedTo: NSPoint(x: point.x + 1, y: point.y), modifiers: [])
+    editor.controller.textView(
+      editor.textView, mouseMovedTo: NSPoint(x: point.x + 1, y: point.y), modifiers: [])
     #expect(editor.delegate.previewRequests == [preview])
-    #expect(EditorLinkPreview(target: .note(target: "A", subpath: nil), label: "A").fallbackText == "A")
+    #expect(
+      EditorLinkPreview(target: .note(target: "A", subpath: nil), label: "A").fallbackText == "A")
   }
 
   @Test func linksGetTooltipAreas() throws {
     let text = "[[Note]] and [docs](https://docs.example/x)\nplain"
-    let editor = EditorHarness(text: text, selection: NSRange(location: (text as NSString).length, length: 0))
+    let editor = EditorHarness(
+      text: text, selection: NSRange(location: (text as NSString).length, length: 0))
     editor.layout()
     let rects = editor.controller.visibleLinkRects()
     #expect(rects.count == 2)
@@ -230,18 +268,25 @@ struct AgentLineTests {
   @Test func remoteChangesKeepTheCaretAndTheUsersUndo() throws {
     let editor = EditorHarness("# Day\n- [ ] Book a table|\n- [ ] Renew passport\nNotes")
     editor.type(" for two")
-    editor.controller.setBadges([EditorBadge(id: "t2", line: 2, status: "working", label: "Working…")])
+    editor.controller.setBadges([
+      EditorBadge(id: "t2", line: 2, status: "working", label: "Working…")
+    ])
     let caret = editor.selection
     let insert = editor.offset(of: "- [ ] Renew")
     let notes = editor.range(of: "Notes")
     let reported = editor.delegate.textChanges.count
     editor.act {
       editor.controller.applyRemoteChanges([
-        EditorTextChange(range: NSRange(location: insert, length: 0), text: "  - Trattoria Sole at 7 PM %%agent:thr_1%%\n"),
+        EditorTextChange(
+          range: NSRange(location: insert, length: 0),
+          text: "  - Trattoria Sole at 7 PM %%agent:thr_1%%\n"),
         EditorTextChange(range: notes, text: "Notes (updated)"),
       ])
     }
-    #expect(editor.text == "# Day\n- [ ] Book a table for two\n  - Trattoria Sole at 7 PM %%agent:thr_1%%\n- [ ] Renew passport\nNotes (updated)")
+    #expect(
+      editor.text
+        == "# Day\n- [ ] Book a table for two\n  - Trattoria Sole at 7 PM %%agent:thr_1%%\n- [ ] Renew passport\nNotes (updated)"
+    )
     #expect(editor.selection == caret)
     #expect(editor.controller.badges.map(\.line) == [3])
     #expect(editor.delegate.textChanges.count == reported)

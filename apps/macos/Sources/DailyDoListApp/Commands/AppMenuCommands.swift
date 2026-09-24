@@ -6,7 +6,8 @@ struct AppMenuCommands: Commands {
   let model: AppModel
 
   var body: some Commands {
-    let commands = Dictionary(uniqueKeysWithValues: CommandCatalog(model: model).all.map { ($0.id, $0) })
+    let commands = Dictionary(
+      uniqueKeysWithValues: CommandCatalog(model: model).all.map { ($0.id, $0) })
     let item = { (id: CommandID) in MenuItem(command: commands[id]) }
 
     CommandGroup(replacing: .newItem) {
@@ -79,8 +80,11 @@ private struct MenuItem: View {
   var body: some View {
     if let command {
       if command.isOn != nil {
-        Toggle(command.title, isOn: Binding(get: { command.isOn?() ?? false }, set: { _ in command.run() }))
-          .disabled(!command.isEnabled())
+        Toggle(
+          command.title,
+          isOn: Binding(get: { command.isOn?() ?? false }, set: { _ in command.run() })
+        )
+        .disabled(!command.isEnabled())
       } else if let shortcut = command.shortcut {
         Button(command.title) { command.run() }
           .keyboardShortcut(shortcut.keyboardShortcut)

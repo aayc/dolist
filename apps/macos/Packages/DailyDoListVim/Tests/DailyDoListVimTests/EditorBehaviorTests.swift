@@ -121,7 +121,8 @@ import Testing
     t.session.lastMessage = nil
     t.keys(":", "%", "s", "/", "a", "/", "b", "/", "g", "<CR>")
     t.expect(doc: VimText("bb\nbb"), selection: [[1, 1]], mode: .normal)
-    #expect(t.session.lastMessage == "Found 4 matches for pattern: /a/im (set nopcre to use Vim regexps)")
+    #expect(
+      t.session.lastMessage == "Found 4 matches for pattern: /a/im (set nopcre to use Vim regexps)")
     #expect(t.register("/")?.text == VimText("a/g"))
     t.keys("u")
     t.expect(doc: VimText("aa\naa"), selection: [[0, 0]], mode: .normal)
@@ -311,7 +312,8 @@ import Testing
     t.session.lastMessage = nil
     t.keys(":", "'", "a", ",", "'", "b", "s", "/", "x", "/", "y", "/", "<CR>")
     t.expect(doc: VimText("x\ny\ny\nx"), selection: [[2, 0]], mode: .normal)
-    #expect(t.session.lastMessage == "Found 3 matches for pattern: /x/im (set nopcre to use Vim regexps)")
+    #expect(
+      t.session.lastMessage == "Found 3 matches for pattern: /x/im (set nopcre to use Vim regexps)")
     #expect(t.register("/")?.text == VimText("x"))
   }
 
@@ -360,7 +362,8 @@ import Testing
     t.session.lastMessage = nil
     t.keys(":", "s", "/", "a", "/", "b", "/", "g", " ", "2", "<CR>")
     t.expect(doc: VimText("bbb\nbbb\naaa"), selection: [[1, 2]], mode: .normal)
-    #expect(t.session.lastMessage == "Found 7 matches for pattern: /a/im (set nopcre to use Vim regexps)")
+    #expect(
+      t.session.lastMessage == "Found 7 matches for pattern: /a/im (set nopcre to use Vim regexps)")
     #expect(t.register("/")?.text == VimText("a/g"))
   }
 

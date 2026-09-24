@@ -41,9 +41,12 @@ enum SampleNote {
     let lines = text.components(separatedBy: "\n")
     func line(_ prefix: String) -> Int { lines.firstIndex { $0.hasPrefix(prefix) } ?? 0 }
     return [
-      EditorBadge(id: "t1", line: line("- [ ] Research"), status: "working", label: "Researching…", unread: 0),
-      EditorBadge(id: "t2", line: line("- [x] Book"), status: "done", label: "Done · 3 options", unread: 2),
-      EditorBadge(id: "t3", line: line("- [/] Draft"), status: "waiting_approval", label: "Needs approval"),
+      EditorBadge(
+        id: "t1", line: line("- [ ] Research"), status: "working", label: "Researching…", unread: 0),
+      EditorBadge(
+        id: "t2", line: line("- [x] Book"), status: "done", label: "Done · 3 options", unread: 2),
+      EditorBadge(
+        id: "t3", line: line("- [/] Draft"), status: "waiting_approval", label: "Needs approval"),
       EditorBadge(id: "t4", line: line("\t- [ ] Nested"), status: "queued", label: "Queued"),
       EditorBadge(id: "t5", line: line("- [-] Cancelled"), status: "idle", label: "Hidden"),
     ]

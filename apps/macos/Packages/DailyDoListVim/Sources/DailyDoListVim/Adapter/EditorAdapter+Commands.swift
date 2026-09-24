@@ -44,7 +44,9 @@ extension EditorAdapter {
   }
 
   /// `changeBySelectedLine(state, f)`.
-  private func changeBySelectedLine(_ f: (Int, inout [ChangeSet.Spec], SelRange) -> Void) -> (ChangeSet, EditorSelection) {
+  private func changeBySelectedLine(_ f: (Int, inout [ChangeSet.Spec], SelRange) -> Void) -> (
+    ChangeSet, EditorSelection
+  ) {
     var atLine = -1
     return changeByRange { range in
       var specs: [ChangeSet.Spec] = []
@@ -58,7 +60,9 @@ extension EditorAdapter {
         pos = lineEnd(line) + 1
       }
       let changeSet = (try? ChangeSet.of(specs, length: docLength)) ?? .empty(docLength)
-      return (specs, .range(changeSet.map(range.anchor, assoc: 1), changeSet.map(range.head, assoc: 1)))
+      return (
+        specs, .range(changeSet.map(range.anchor, assoc: 1), changeSet.map(range.head, assoc: 1))
+      )
     }
   }
 
@@ -137,13 +141,16 @@ extension EditorAdapter {
   func newlineAndIndent() {
     if host.vimIsReadOnly { return }
     let (changes, sel) = changeByRange { range in
-      var from = range.from, to = range.to
+      var from = range.from
+      var to = range.to
       let line = host.vimLineNumber(at: from)
       let lineFrom = host.vimLineStart(line)
       let lineTo = lineEnd(line)
       let text = host.vimLine(line)
       let explode = from == to && isBetweenBrackets(from)
-      let indent = languageIndentation(at: from) ?? countColumn(text.slice(0, text.leadingWhitespaceCount()), tabSize: tabSize)
+      let indent =
+        languageIndentation(at: from)
+        ?? countColumn(text.slice(0, text.leadingWhitespaceCount()), tabSize: tabSize)
       while to < lineTo && isJSWhitespace(text[to - lineFrom]) { to += 1 }
       if explode {
         from = range.from
@@ -158,7 +165,11 @@ extension EditorAdapter {
         // `cx.lineIndent(line.from, -1)` with the break simulated at the cursor.
         let before = text.slice(0, range.from - lineFrom)
         let firstNonBlank = before.firstNonWhitespace()
-        let lineIndent = range.from == lineFrom ? 0 : countColumn(before, tabSize: tabSize, to: firstNonBlank < 0 ? before.length : firstNonBlank)
+        let lineIndent =
+          range.from == lineFrom
+          ? 0
+          : countColumn(
+            before, tabSize: tabSize, to: firstNonBlank < 0 ? before.length : firstNonBlank)
         insert += VimText("\n") + indentString(lineIndent)
       }
       return ([.init(from: from, to: to, insert: insert)], .cursor(from + 1 + indentText.length))
@@ -186,7 +197,8 @@ extension EditorAdapter {
   func cursorLineBoundary(forward: Bool) {
     moveSel { start in
       let line = host.vimLineNumber(at: start.head)
-      let from = host.vimLineStart(line), to = lineEnd(line)
+      let from = host.vimLineStart(line)
+      let to = lineEnd(line)
       var moved = SelRange.cursor(forward ? to : from, assoc: forward ? -1 : 1)
       if !forward && moved.head == from && to > from {
         let space = sliceDoc(from, min(from + 100, to)).leadingWhitespaceCount()
@@ -318,14 +330,19 @@ extension EditorAdapter {
 
   /// `scanForBracket(where, dir, style, config)` of the CodeMirror 6 adapter: the first unmatched
   /// bracket accepted by `bracketRegex` from `pos` in direction `dir` (nil when there is none).
-  func scanForBracket(_ pos: Pos, _ dir: Int, bracketRegex: (UInt16) -> Bool) -> (pos: Pos, ch: UInt16)? {
+  func scanForBracket(_ pos: Pos, _ dir: Int, bracketRegex: (UInt16) -> Bool) -> (
+    pos: Pos, ch: UInt16
+  )? {
     let matching: [UInt16: (UInt16, Bool)] = [
       0x28: (0x29, true), 0x29: (0x28, false), 0x5B: (0x5D, true), 0x5D: (0x5B, false),
       0x7B: (0x7D, true), 0x7D: (0x7B, false), 0x3C: (0x3E, true), 0x3E: (0x3C, false),
     ]
-    let maxScanLen = 10000, maxScanLines = 1000
+    let maxScanLen = 10000
+    let maxScanLines = 1000
     var stack: [UInt16] = []
-    let lineEndLimit = dir > 0 ? min(pos.line + maxScanLines, lastLine() + 1) : max(firstLine() - 1, pos.line - maxScanLines)
+    let lineEndLimit =
+      dir > 0
+      ? min(pos.line + maxScanLines, lastLine() + 1) : max(firstLine() - 1, pos.line - maxScanLines)
     var lineNo = pos.line
     while lineNo != lineEndLimit {
       let line = getLine(lineNo)

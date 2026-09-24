@@ -45,8 +45,12 @@ extension Vim {
   /// JavaScript pattern.
   func translateRegex(_ str: VimText) -> VimText {
     // When these match, add a '\' if unescaped or remove one if escaped.
-    let modes: [UInt16: String] = [0x56: "|(){+?*.[$^", 0x4D: "|(){+?*.[", 0x6D: "|(){+?", 0x76: "<>"]
-    let escapes: [UInt16: String] = [0x3E: "(?<=[\\w])(?=[^\\w]|$)", 0x3C: "(?<=[^\\w]|^)(?=[\\w])"]
+    let modes: [UInt16: String] = [
+      0x56: "|(){+?*.[$^", 0x4D: "|(){+?*.[", 0x6D: "|(){+?", 0x76: "<>",
+    ]
+    let escapes: [UInt16: String] = [
+      0x3E: "(?<=[\\w])(?=[^\\w]|$)", 0x3C: "(?<=[^\\w]|^)(?=[\\w])",
+    ]
     var specials = Set(modes[0x6D]!.utf16)
     let candidates = Set("[|(){+*?.$^<>".utf16)
     let u = str.units
@@ -130,7 +134,9 @@ extension Vim {
   func unescapeRegexReplace(_ str: VimText) -> VimText {
     var stream = StringStream(str)
     var output: [UInt16] = []
-    let unescapes: [(String, UInt16)] = [("\\/", 0x2F), ("\\\\", 0x5C), ("\\n", 0x0A), ("\\r", 0x0D), ("\\t", 0x09), ("\\&", 0x26)]
+    let unescapes: [(String, UInt16)] = [
+      ("\\/", 0x2F), ("\\\\", 0x5C), ("\\n", 0x0A), ("\\r", 0x0D), ("\\t", 0x09), ("\\&", 0x26),
+    ]
     while !stream.eol() {
       // Search for \.
       while let c = stream.peek(), c != "\\" { output.append(contentsOf: stream.next()!.units) }
@@ -172,7 +178,9 @@ extension Vim {
 
   /// `updateSearchQuery(cm, rawQuery, ignoreCase, smartCase)`.
   @discardableResult
-  func updateSearchQuery(_ cm: EditorAdapter, _ rawQuery: VimText, _ ignoreCase: Bool = false, _ smartCase: Bool = false) throws -> JSRegExp? {
+  func updateSearchQuery(
+    _ cm: EditorAdapter, _ rawQuery: VimText, _ ignoreCase: Bool = false, _ smartCase: Bool = false
+  ) throws -> JSRegExp? {
     if rawQuery.isEmpty { return nil }
     let state = getSearchState(cm)
     _ = state
@@ -216,7 +224,9 @@ extension Vim {
 
   /// `findNext(cm, prev, query, repeat)`: the start of the `repeat`th match after (or before) the
   /// cursor, wrapping around the document.
-  func findNext(_ cm: EditorAdapter, _ prev: Bool, _ query: JSRegExp, _ repeatIn: Int? = nil) throws -> Pos? {
+  func findNext(_ cm: EditorAdapter, _ prev: Bool, _ query: JSRegExp, _ repeatIn: Int? = nil) throws
+    -> Pos?
+  {
     try cm.operation { () throws -> Pos? in
       let count = repeatIn ?? 1
       let pos = cm.getCursor()
@@ -226,13 +236,14 @@ extension Vim {
         if i == 0, found != nil, cursor.from() == pos {
           let lastEndPos = prev ? cursor.from()! : cursor.to()!
           found = try cursor.find(prev)
-          if let f = found, (f[0]?.isEmpty ?? true), cursor.from() == lastEndPos {
+          if let f = found, f[0]?.isEmpty ?? true, cursor.from() == lastEndPos {
             if cm.getLine(lastEndPos.line).length == lastEndPos.ch { found = try cursor.find(prev) }
           }
         }
         if found == nil {
           // SearchCursor may have returned null because it hit EOF, wrap around and try again.
-          cursor = cm.getSearchCursor(query, prev ? Pos(cm.lastLine(), Pos.endOfLine) : Pos(cm.firstLine(), 0))
+          cursor = cm.getSearchCursor(
+            query, prev ? Pos(cm.lastLine(), Pos.endOfLine) : Pos(cm.firstLine(), 0))
           if try cursor.find(prev) == nil { return nil }
         }
       }
@@ -241,7 +252,9 @@ extension Vim {
   }
 
   /// `findNextFromAndToInclusive(cm, prev, query, repeat, vim)`.
-  func findNextFromAndToInclusive(_ cm: EditorAdapter, _ prev: Bool, _ query: JSRegExp, _ repeatIn: Int?, _ vim: VimState) throws -> (Pos, Pos)? {
+  func findNextFromAndToInclusive(
+    _ cm: EditorAdapter, _ prev: Bool, _ query: JSRegExp, _ repeatIn: Int?, _ vim: VimState
+  ) throws -> (Pos, Pos)? {
     try cm.operation { () throws -> (Pos, Pos)? in
       let count = repeatIn ?? 1
       let pos = cm.getCursor()
@@ -253,7 +266,8 @@ extension Vim {
       for _ in 0..<max(0, count) {
         if try cursor.find(prev) == nil {
           // SearchCursor may have returned null because it hit EOF, wrap around and try again.
-          cursor = cm.getSearchCursor(query, prev ? Pos(cm.lastLine(), Pos.endOfLine) : Pos(cm.firstLine(), 0))
+          cursor = cm.getSearchCursor(
+            query, prev ? Pos(cm.lastLine(), Pos.endOfLine) : Pos(cm.firstLine(), 0))
           if try cursor.find(prev) == nil { return nil }
         }
       }
@@ -263,11 +277,15 @@ extension Vim {
   }
 
   /// `motions.findAndSelectNextInclusive`: `gn` / `gN`.
-  func findAndSelectNextInclusive(_ cm: EditorAdapter, _ args: MotionArgs, _ vim: VimState, _ prevInputState: InputState) throws -> MotionResult? {
+  func findAndSelectNextInclusive(
+    _ cm: EditorAdapter, _ args: MotionArgs, _ vim: VimState, _ prevInputState: InputState
+  ) throws -> MotionResult? {
     guard let query = globalState.query else { return nil }
     var prev = !args.forward
     prev = globalState.isReversed ? !prev : prev
-    guard let next = try findNextFromAndToInclusive(cm, prev, query, args.repeat, vim) else { return nil }
+    guard let next = try findNextFromAndToInclusive(cm, prev, query, args.repeat, vim) else {
+      return nil
+    }
     // If there's an operator that will be executed, return the selection.
     if prevInputState.operator != nil { return .range(next.0, next.1) }
     let from = next.0
@@ -371,7 +389,9 @@ extension Vim {
 
     let onPromptKeyDown: VimPanel.KeyHook = { [unowned self] e, query, close in
       let keyName = self.vimKeyFromEvent(e)
-      if keyName == "<Esc>" || keyName == "<C-c>" || keyName == "<C-[>" || (keyName == "<BS>" && query.isEmpty) {
+      if keyName == "<Esc>" || keyName == "<C-c>" || keyName == "<C-[>"
+        || (keyName == "<BS>" && query.isEmpty)
+      {
         self.globalState.searchHistoryController.pushInput(query)
         self.globalState.searchHistoryController.reset()
         _ = try? self.updateSearchQuery(cm, originalQuery?.source ?? VimText())
@@ -395,7 +415,9 @@ extension Vim {
     case "prompt":
       let macroModeState = globalState.macroModeState
       if macroModeState.isPlaying {
-        let query = macroModeState.replaySearchQueries.isEmpty ? VimText() : macroModeState.replaySearchQueries.removeFirst()
+        let query =
+          macroModeState.replaySearchQueries.isEmpty
+          ? VimText() : macroModeState.replaySearchQueries.removeFirst()
         try handleQuery(query, true, false)
       } else {
         let options = PromptOptions(prefix: promptPrefix)

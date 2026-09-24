@@ -68,25 +68,32 @@ public enum MarkdownRenderer {
         continue
       }
       var close = index + 2
-      while close + 1 < characters.count, !(characters[close] == "]" && characters[close + 1] == "]"),
+      while close + 1 < characters.count,
+        !(characters[close] == "]" && characters[close + 1] == "]"),
         characters[close] != "[", !characters[close].isNewline
       {
         close += 1
       }
-      guard close + 1 < characters.count, characters[close] == "]", characters[close + 1] == "]" else {
+      guard close + 1 < characters.count, characters[close] == "]", characters[close + 1] == "]"
+      else {
         index += 1
         continue
       }
       let inner = String(characters[(index + 2)..<close])
-      let alias = inner.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false).dropFirst().first
+      let alias = inner.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false)
+        .dropFirst().first
         .map { $0.trimmingCharacters(in: .whitespaces) }
-      let target = (inner.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? "")
+      let target =
+        (inner.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false).first.map(
+          String.init) ?? "")
         .trimmingCharacters(in: .whitespaces)
       let parts = target.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
       let note = parts.first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
       if !note.isEmpty, let url = WikiLinkURL.url(for: target) {
         let heading = parts.count > 1 ? parts[1].trimmingCharacters(in: .whitespaces) : ""
-        let name = heading.isEmpty ? WikiLinkURL.noteName(note) : "\(WikiLinkURL.noteName(note)) › \(heading)"
+        let name =
+          heading.isEmpty
+          ? WikiLinkURL.noteName(note) : "\(WikiLinkURL.noteName(note)) › \(heading)"
         matches.append((index..<(close + 2), alias.flatMap { $0.isEmpty ? nil : $0 } ?? name, url))
       }
       index = close + 2
@@ -103,7 +110,8 @@ public enum MarkdownRenderer {
       }
       guard !isLiteral, lower >= cursor else { continue }
       result.append(text[cursor..<lower])
-      var link = AttributedString(match.display, attributes: original.runs.first?.attributes ?? AttributeContainer())
+      var link = AttributedString(
+        match.display, attributes: original.runs.first?.attributes ?? AttributeContainer())
       link.link = match.url
       result.append(link)
       cursor = upper
@@ -146,7 +154,9 @@ private struct BlockBuilder {
 
   mutating func add(content: AttributedString, intent: PresentationIntent?) {
     let components = intent?.components ?? []
-    if let tableIndex = components.firstIndex(where: { if case .table = $0.kind { true } else { false } }) {
+    if let tableIndex = components.firstIndex(where: {
+      if case .table = $0.kind { true } else { false }
+    }) {
       addTableCell(content, components: components, tableId: components[tableIndex].identity)
       return
     }
@@ -163,21 +173,27 @@ private struct BlockBuilder {
     case .codeBlock(let language):
       var code = String(content.characters)
       if code.hasSuffix("\n") { code.removeLast() }
-      blocks.append(.code(id: id, language: language?.isEmpty == false ? language : nil, code: code))
+      blocks.append(
+        .code(id: id, language: language?.isEmpty == false ? language : nil, code: code))
     case .header(let level):
       blocks.append(.heading(id: id, level: level, text: text))
     case .thematicBreak:
       blocks.append(.rule(id: id))
     default:
-      if let item = components.first(where: { if case .listItem = $0.kind { true } else { false } }) {
+      if let item = components.first(where: { if case .listItem = $0.kind { true } else { false } })
+      {
         let depth = components.filter(\.isList).count
-        let ordered = components.first(where: \.isList).map { if case .orderedList = $0.kind { true } else { false } } ?? false
+        let ordered =
+          components.first(where: \.isList).map {
+            if case .orderedList = $0.kind { true } else { false }
+          } ?? false
         var marker: String?
         if listItemsWithMarker.insert(item.identity).inserted {
           if case .listItem(let ordinal) = item.kind { marker = ordered ? "\(ordinal)." : "•" }
         }
         blocks.append(.listItem(id: id, marker: marker, depth: max(depth, 1), text: text))
-      } else if components.contains(where: { if case .blockQuote = $0.kind { true } else { false } }) {
+      } else if components.contains(where: { if case .blockQuote = $0.kind { true } else { false } }
+      ) {
         blocks.append(.quote(id: id, text: text))
       } else {
         blocks.append(.paragraph(id: id, text: text))

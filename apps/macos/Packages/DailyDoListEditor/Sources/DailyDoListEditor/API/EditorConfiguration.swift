@@ -14,7 +14,8 @@ public struct EditorConfiguration: Hashable, Sendable {
 
   public init(
     fontSize: Double = 16, livePreview: Bool = true, readableLineLength: Bool = true,
-    spellcheck: Bool = false, showLineNumbers: Bool = false, isEditable: Bool = true, vimMode: Bool = false
+    spellcheck: Bool = false, showLineNumbers: Bool = false, isEditable: Bool = true,
+    vimMode: Bool = false
   ) {
     self.fontSize = fontSize
     self.livePreview = livePreview

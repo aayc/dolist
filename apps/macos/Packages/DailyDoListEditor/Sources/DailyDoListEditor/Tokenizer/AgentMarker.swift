@@ -31,7 +31,8 @@ enum AgentMarker {
     var threadId: String?
     if close - idStart == 5, idStart >= 2, matches(s, idStart - 2, keyword) {
       start = idStart - 2
-    } else if (1...maxThreadIdLength).contains(close - idStart), idStart >= 8, s[idStart - 1] == UTF16Unit.colon,
+    } else if (1...maxThreadIdLength).contains(close - idStart), idStart >= 8,
+      s[idStart - 1] == UTF16Unit.colon,
       matches(s, idStart - 8, keyword)
     {
       start = idStart - 8

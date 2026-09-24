@@ -31,7 +31,9 @@ public struct SurfaceAction: Hashable, Sendable, Identifiable {
   /// Timestamp of the frame that carried it.
   public var ts: EpochMillis
 
-  public init(kind: String, x: Double? = nil, y: Double? = nil, text: String? = nil, ts: EpochMillis) {
+  public init(
+    kind: String, x: Double? = nil, y: Double? = nil, text: String? = nil, ts: EpochMillis
+  ) {
     self.kind = kind
     self.x = x
     self.y = y

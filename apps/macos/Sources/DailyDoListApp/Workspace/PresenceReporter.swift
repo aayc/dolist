@@ -17,7 +17,10 @@ final class PresenceReporter {
     var key: String { "\(path)\u{0}\(line)" }
   }
 
-  init(scheduler: AppScheduler, interval: TimeInterval = 0.4, send: @escaping @MainActor (String, Int) -> Void) {
+  init(
+    scheduler: AppScheduler, interval: TimeInterval = 0.4,
+    send: @escaping @MainActor (String, Int) -> Void
+  ) {
     self.send = send
     throttle = Throttle(scheduler: scheduler, interval: interval) { [weak self] position in
       self?.lastSent = position.key

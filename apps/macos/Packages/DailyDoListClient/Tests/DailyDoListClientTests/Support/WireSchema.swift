@@ -59,7 +59,9 @@ struct WireSchema: Sendable {
     return resolve(target)
   }
 
-  private func check(_ value: JSONValue, against raw: JSONValue, at path: String, into issues: inout [String]) {
+  private func check(
+    _ value: JSONValue, against raw: JSONValue, at path: String, into issues: inout [String]
+  ) {
     let schema = resolve(raw)
     guard case .object(let keywords) = schema else { return }
 
@@ -92,33 +94,51 @@ struct WireSchema: Sendable {
       issues.append("\(path): expected \(constant.jsonString), got \(value.jsonString.prefix(80))")
     }
     if case .array(let allowed)? = keywords["enum"], !allowed.contains(value) {
-      issues.append("\(path): \(value.jsonString) is not one of \(JSONValue.array(allowed).jsonString)")
+      issues.append(
+        "\(path): \(value.jsonString) is not one of \(JSONValue.array(allowed).jsonString)")
     }
     switch value {
     case .string(let string):
       let length = string.utf16.count
-      if let min = keywords["minLength"]?.numberValue, Double(length) < min { issues.append("\(path): shorter than \(Int(min))") }
-      if let max = keywords["maxLength"]?.numberValue, Double(length) > max { issues.append("\(path): longer than \(Int(max))") }
+      if let min = keywords["minLength"]?.numberValue, Double(length) < min {
+        issues.append("\(path): shorter than \(Int(min))")
+      }
+      if let max = keywords["maxLength"]?.numberValue, Double(length) > max {
+        issues.append("\(path): longer than \(Int(max))")
+      }
       if let pattern = keywords["pattern"]?.stringValue, !Self.matches(string, pattern: pattern) {
         issues.append("\(path): \(string.prefix(80).debugDescription) does not match \(pattern)")
       }
     case .number(let number):
-      if let min = keywords["minimum"]?.numberValue, number < min { issues.append("\(path): \(number) < \(min)") }
-      if let max = keywords["maximum"]?.numberValue, number > max { issues.append("\(path): \(number) > \(max)") }
+      if let min = keywords["minimum"]?.numberValue, number < min {
+        issues.append("\(path): \(number) < \(min)")
+      }
+      if let max = keywords["maximum"]?.numberValue, number > max {
+        issues.append("\(path): \(number) > \(max)")
+      }
     case .array(let items):
       if let itemSchema = keywords["items"] {
-        for (index, item) in items.enumerated() { check(item, against: itemSchema, at: "\(path)[\(index)]", into: &issues) }
+        for (index, item) in items.enumerated() {
+          check(item, against: itemSchema, at: "\(path)[\(index)]", into: &issues)
+        }
       }
     case .object(let object):
-      let properties: [String: JSONValue] = if case .object(let declared)? = keywords["properties"] { declared } else { [:] }
+      let properties: [String: JSONValue] =
+        if case .object(let declared)? = keywords["properties"] { declared } else { [:] }
       if case .array(let required)? = keywords["required"] {
-        for case .string(let key) in required where object[key] == nil { issues.append("\(path): missing \(key)") }
+        for case .string(let key) in required where object[key] == nil {
+          issues.append("\(path): missing \(key)")
+        }
       }
       if keywords["properties"] != nil {
-        for key in object.keys.sorted() where properties[key] == nil { issues.append("\(path): undeclared key \(key)") }
+        for key in object.keys.sorted() where properties[key] == nil {
+          issues.append("\(path): undeclared key \(key)")
+        }
       }
       for (key, propertySchema) in properties {
-        if let child = object[key] { check(child, against: propertySchema, at: "\(path).\(key)", into: &issues) }
+        if let child = object[key] {
+          check(child, against: propertySchema, at: "\(path).\(key)", into: &issues)
+        }
       }
     default:
       break
@@ -128,9 +148,12 @@ struct WireSchema: Sendable {
   private static func matches(_ value: JSONValue, type: JSONValue) -> Bool {
     if case .array(let types) = type { return types.contains { matches(value, type: $0) } }
     switch (type.stringValue, value) {
-    case ("string", .string), ("boolean", .bool), ("null", .null), ("object", .object), ("array", .array): return true
+    case ("string", .string), ("boolean", .bool), ("null", .null), ("object", .object),
+      ("array", .array):
+      return true
     case ("number", .number): return true
-    case ("integer", .number(let number)): return number.rounded() == number && abs(number) <= 9_007_199_254_740_991
+    case ("integer", .number(let number)):
+      return number.rounded() == number && abs(number) <= 9_007_199_254_740_991
     default: return false
     }
   }

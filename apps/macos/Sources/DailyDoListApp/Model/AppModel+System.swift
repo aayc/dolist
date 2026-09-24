@@ -34,11 +34,16 @@ extension AppModel {
       Task { @MainActor in await self?.flushAll() }
     }
     windowObservers.append(
-      center.addObserver(forName: NSApplication.willResignActiveNotification, object: nil, queue: .main, using: flush))
+      center.addObserver(
+        forName: NSApplication.willResignActiveNotification, object: nil, queue: .main, using: flush
+      ))
     windowObservers.append(
-      center.addObserver(forName: NSWindow.didResignKeyNotification, object: nil, queue: .main, using: flush))
+      center.addObserver(
+        forName: NSWindow.didResignKeyNotification, object: nil, queue: .main, using: flush))
     windowObservers.append(
-      center.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+      center.addObserver(
+        forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+      ) { [weak self] _ in
         Task { @MainActor in self?.systemIntegration.refresh() }
       })
     // The menu's ⌘+ only matches ⇧⌘=; accept plain ⌘= too, like most Mac apps.
@@ -59,7 +64,8 @@ extension AppModel {
   /// message when registration failed.
   @discardableResult
   func applyGlobalHotkeyPreference() -> String? {
-    let shortcut = preferences.globalHotkeyEnabled
+    let shortcut =
+      preferences.globalHotkeyEnabled
       ? (preferences.globalHotkey ?? systemIntegration.defaultGlobalShortcut) : nil
     do {
       try systemIntegration.setGlobalHotkey(shortcut) { [weak self] in self?.openTodaysNote() }

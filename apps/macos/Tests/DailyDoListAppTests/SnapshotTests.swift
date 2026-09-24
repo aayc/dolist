@@ -18,18 +18,18 @@ struct SnapshotTests {
 
   static let sampleNotes: [String: String] = [
     "Daily/2026-09-23.md": """
-      # Wednesday
-      - [x] Compare standing desks under $400
-        - Example Rise Pro is the pick at $449, dual motor ([Desks Example](https://desks.example/rise-pro)) %%agent:thr_sample_desks%%
-      - [ ] Reserve a table for Friday dinner
-      - [ ] Call Trattoria Sole to confirm the table %%agent:thr_sample_booking%%
-      - [ ] Draft the offsite agenda
-        - 3 sessions, 1 walk
-      How tall is Ridge Tower downtown?
-      - [ ] Renew passport
+    # Wednesday
+    - [x] Compare standing desks under $400
+      - Example Rise Pro is the pick at $449, dual motor ([Desks Example](https://desks.example/rise-pro)) %%agent:thr_sample_desks%%
+    - [ ] Reserve a table for Friday dinner
+    - [ ] Call Trattoria Sole to confirm the table %%agent:thr_sample_booking%%
+    - [ ] Draft the offsite agenda
+      - 3 sessions, 1 walk
+    How tall is Ridge Tower downtown?
+    - [ ] Renew passport
 
-      Notes from standup: ship the [[Launch Plan]] review by Friday.
-      """,
+    Notes from standup: ship the [[Launch Plan]] review by Friday.
+    """,
     "Daily/2026-09-22.md": "- [x] Book dentist\n- [x] Pay electricity bill",
     "Daily/2026-09-19.md": "- [x] Plan hiking weekend",
     "Projects/Launch Plan.md": "# Launch plan\n- [ ] Draft announcement",
@@ -45,8 +45,11 @@ struct SnapshotTests {
     model.ui.selectedThreadId = SampleData.bookingThreadId
     let size = NSSize(width: 1180, height: 780)
     let hosting = NSHostingView(
-      rootView: WorkspaceView(model: model, workspace: workspace, ui: model.ui).agentReferenceDate(referenceNow))
-    let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
+      rootView: WorkspaceView(model: model, workspace: workspace, ui: model.ui).agentReferenceDate(
+        referenceNow))
+    let window = NSWindow(
+      contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered,
+      defer: false)
     window.isReleasedWhenClosed = false
     window.contentView = hosting
     hosting.frame = NSRect(origin: .zero, size: size)
@@ -57,7 +60,9 @@ struct SnapshotTests {
       window.displayIfNeeded()
       Self.pumpRunLoop(0.03)
     }
-    #expect(hosting.fittingSize.width <= size.width, "sidebar, note and agent panel need \(hosting.fittingSize.width)pt")
+    #expect(
+      hosting.fittingSize.width <= size.width,
+      "sidebar, note and agent panel need \(hosting.fittingSize.width)pt")
     #expect(hosting.frame.width <= size.width, "the workspace grew to \(hosting.frame.width)pt")
     window.close()
     await model.teardown()
@@ -67,14 +72,21 @@ struct SnapshotTests {
     let client = FakeDaemonClient(notes: Self.sampleNotes)
     let daily = "Daily/2026-09-23.md"
     var question = TaskAgentRecord.sample(
-      SampleData.questionAnchorId, note: daily, text: "How tall is Ridge Tower downtown?", line: 7, status: .done,
+      SampleData.questionAnchorId, note: daily, text: "How tall is Ridge Tower downtown?", line: 7,
+      status: .done,
       summary: "About 1,250 ft", threadId: SampleData.questionThreadId)
     question.anchor = .line
     client.withState {
       $0.records[daily] = [
-        .sample("t1", note: daily, text: "Compare standing desks under $400", line: 1, status: .done, summary: "3 options", threadId: SampleData.desksThreadId),
-        .sample("t2", note: daily, text: "Reserve a table for Friday dinner", line: 3, status: .waitingApproval, threadId: SampleData.bookingThreadId),
-        .sample("t3", note: daily, text: "Draft the offsite agenda", line: 5, status: .working, summary: "Outlining sessions", threadId: SampleData.emailThreadId),
+        .sample(
+          "t1", note: daily, text: "Compare standing desks under $400", line: 1, status: .done,
+          summary: "3 options", threadId: SampleData.desksThreadId),
+        .sample(
+          "t2", note: daily, text: "Reserve a table for Friday dinner", line: 3,
+          status: .waitingApproval, threadId: SampleData.bookingThreadId),
+        .sample(
+          "t3", note: daily, text: "Draft the offsite agenda", line: 5, status: .working,
+          summary: "Outlining sessions", threadId: SampleData.emailThreadId),
         question,
       ]
       $0.agentStatus.running = 1
@@ -90,11 +102,16 @@ struct SnapshotTests {
     await workspace.openNote("Projects/Launch Plan.md", OpenOptions(newTab: true))
     workspace.activateTab(daily)
     await settle()
-    agent.apply(.taskRecords(TaskRecordsEvent(notePath: daily, records: client.withState { $0.records[daily] ?? [] })))
+    agent.apply(
+      .taskRecords(
+        TaskRecordsEvent(notePath: daily, records: client.withState { $0.records[daily] ?? [] })))
     workspace.editor.recomputeBadges()
     #expect(
-      workspace.editor.controller.badges.map(\.label) == ["Done · 3 options", "Needs approval", "Outlining sessions", "Done · About 1,250 ft"])
-    #expect(workspace.editor.controller.badges.map(\.highlightsLine) == [false, false, false, true])
+      workspace.editor.controller.badges.map(\.label) == [
+        "Done · 3 options", "Needs approval", "Outlining sessions", "Done · About 1,250 ft",
+      ])
+    #expect(
+      workspace.editor.controller.badges.map(\.highlightsLine) == [false, false, false, true])
     return (model, workspace)
   }
 
@@ -105,15 +122,23 @@ struct SnapshotTests {
     let repaintBadges = { controller.setBadges(controller.badges) }
     for dark in [false, true] {
       model.ui.inspectorPresented = false
-      try await render(MainWindowView(model: model), size: CGSize(width: 1200, height: 760), dark: dark, name: "main-window", afterDisplay: repaintBadges)
+      try await render(
+        MainWindowView(model: model), size: CGSize(width: 1200, height: 760), dark: dark,
+        name: "main-window", afterDisplay: repaintBadges)
       model.ui.inspectorPresented = true
       model.ui.selectedThreadId = nil
-      try await render(MainWindowView(model: model), size: CGSize(width: 1440, height: 800), dark: dark, name: "main-window-agent-panel", afterDisplay: repaintBadges)
+      try await render(
+        MainWindowView(model: model), size: CGSize(width: 1440, height: 800), dark: dark,
+        name: "main-window-agent-panel", afterDisplay: repaintBadges)
       model.ui.selectedThreadId = SampleData.bookingThreadId
-      try await render(MainWindowView(model: model), size: CGSize(width: 1440, height: 800), dark: dark, name: "main-window-thread", afterDisplay: repaintBadges)
+      try await render(
+        MainWindowView(model: model), size: CGSize(width: 1440, height: 800), dark: dark,
+        name: "main-window-thread", afterDisplay: repaintBadges)
       // The anchored question's thread: an answer citing its sources and a note.
       model.ui.selectedThreadId = SampleData.questionThreadId
-      try await render(MainWindowView(model: model), size: CGSize(width: 1440, height: 800), dark: dark, name: "main-window-citations", afterDisplay: repaintBadges)
+      try await render(
+        MainWindowView(model: model), size: CGSize(width: 1440, height: 800), dark: dark,
+        name: "main-window-citations", afterDisplay: repaintBadges)
     }
     await model.teardown()
   }
@@ -139,19 +164,26 @@ struct SnapshotTests {
     for dark in [false, true] {
       model.ui.inspectorPresented = true
       model.ui.selectedThreadId = question.threadId
-      try await render(MainWindowView(model: model), size: CGSize(width: 1440, height: 800), dark: dark, name: "main-window-demo", afterDisplay: repaint)
+      try await render(
+        MainWindowView(model: model), size: CGSize(width: 1440, height: 800), dark: dark,
+        name: "main-window-demo", afterDisplay: repaint)
     }
     await model.teardown()
   }
 
   @Test func paletteAndSwitcher() async throws {
     let (model, workspace) = try await bootedModel()
-    let commands = PaletteModel(mode: .commands, commands: CommandCatalog(model: model).paletteCommands)
-    let switcher = PaletteModel(mode: .switcher, files: workspace.vault.files, recent: workspace.recent, openTabs: workspace.tabs.tabs)
+    let commands = PaletteModel(
+      mode: .commands, commands: CommandCatalog(model: model).paletteCommands)
+    let switcher = PaletteModel(
+      mode: .switcher, files: workspace.vault.files, recent: workspace.recent,
+      openTabs: workspace.tabs.tabs)
     switcher.query = "pla"
     for dark in [false, true] {
-      try await render(panel(commands), size: CGSize(width: 640, height: 520), dark: dark, name: "command-palette")
-      try await render(panel(switcher), size: CGSize(width: 640, height: 360), dark: dark, name: "quick-switcher")
+      try await render(
+        panel(commands), size: CGSize(width: 640, height: 520), dark: dark, name: "command-palette")
+      try await render(
+        panel(switcher), size: CGSize(width: 640, height: 360), dark: dark, name: "quick-switcher")
     }
     await model.teardown()
   }
@@ -159,19 +191,31 @@ struct SnapshotTests {
   @Test func settingsPanes() async throws {
     let (model, _) = try await bootedModel()
     let panes: [(String, AnyView)] = [
-      ("settings-general", AnyView(GeneralSettingsPane(model: model, preferences: model.preferences))),
-      ("settings-appearance", AnyView(AppearanceSettingsPane(model: model, settings: model.settings))),
-      ("settings-daily-notes", AnyView(DailyNotesSettingsPane(model: model, settings: model.settings))),
+      (
+        "settings-general",
+        AnyView(GeneralSettingsPane(model: model, preferences: model.preferences))
+      ),
+      (
+        "settings-appearance",
+        AnyView(AppearanceSettingsPane(model: model, settings: model.settings))
+      ),
+      (
+        "settings-daily-notes",
+        AnyView(DailyNotesSettingsPane(model: model, settings: model.settings))
+      ),
       ("settings-agent", AnyView(AgentSettingsPane(model: model, settings: model.settings))),
       ("settings-connectors", AnyView(ConnectorsSettingsPane(model: model))),
       ("settings-about", AnyView(AboutSettingsPane(model: model))),
     ]
     for dark in [false, true] {
       for (name, view) in panes {
-        try await render(view.frame(width: 600, height: 640), size: CGSize(width: 600, height: 640), dark: dark, name: name)
+        try await render(
+          view.frame(width: 600, height: 640), size: CGSize(width: 600, height: 640), dark: dark,
+          name: name)
       }
     }
-    await model.settings.update(SettingsPatch(agent: .init(harness: .cursor, cursorModel: "gpt-5.5[reasoning=high]")))
+    await model.settings.update(
+      SettingsPatch(agent: .init(harness: .cursor, cursorModel: "gpt-5.5[reasoning=high]")))
     for dark in [false, true] {
       try await render(
         AgentSettingsPane(model: model, settings: model.settings).frame(width: 600, height: 1_000),
@@ -183,12 +227,18 @@ struct SnapshotTests {
   @Test func statusBarAndBootScreen() async throws {
     let (model, workspace) = try await bootedModel()
     let failed = AppModel(environment: makeEnvironment(client: FakeDaemonClient()))
-    failed.phase = .failed(.nodeMissing(detail: "Node.js 24.4 or newer is required to run the Daily Do List daemon, but no Node binary was found."))
+    failed.phase = .failed(
+      .nodeMissing(
+        detail:
+          "Node.js 24.4 or newer is required to run the Daily Do List daemon, but no Node binary was found."
+      ))
     let bar = StatusBar(model: model, workspace: workspace)
     let size = CGSize(width: 1000, height: 26)
     for dark in [false, true] {
       try await render(bar, size: size, dark: dark, name: "status-bar-quiet")
-      try await render(BootScreen(model: failed), size: CGSize(width: 900, height: 520), dark: dark, name: "boot-error")
+      try await render(
+        BootScreen(model: failed), size: CGSize(width: 900, height: 520), dark: dark,
+        name: "boot-error")
     }
     type("- [ ] unsaved change", in: workspace)
     model.connection.update(.reconnecting(attempt: 2, reason: nil))
@@ -212,7 +262,9 @@ struct SnapshotTests {
     for dark in [false, true] {
       for (name, path) in headers {
         try await render(
-          NoteHeaderView(workspace: workspace, path: path).frame(maxHeight: .infinity, alignment: .top).background(Theme.background),
+          NoteHeaderView(workspace: workspace, path: path).frame(
+            maxHeight: .infinity, alignment: .top
+          ).background(Theme.background),
           size: CGSize(width: 760, height: 90), dark: dark, name: name)
       }
     }
@@ -237,7 +289,8 @@ struct SnapshotTests {
     let content = SnapshotContent()
     let hosting = NSHostingView(
       rootView: SnapshotHost(content: content) {
-        view.environment(\.colorScheme, dark ? .dark : .light).tint(Theme.accent).agentReferenceDate(referenceNow)
+        view.environment(\.colorScheme, dark ? .dark : .light).tint(Theme.accent)
+          .agentReferenceDate(referenceNow)
       })
     let window = NSWindow(
       contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
@@ -263,8 +316,11 @@ struct SnapshotTests {
     hosting.cacheDisplay(in: bounds, to: drawn)
     // Layer-backed content (grouped forms) only shows up when rendering the layer tree, and
     // split-view columns only in the window server's copy of the window.
-    let candidates = [drawn, Self.renderLayers(of: hosting, appearance: appearance), Self.windowServerCapture(window)]
-      .compactMap { $0 }
+    let candidates = [
+      drawn, Self.renderLayers(of: hosting, appearance: appearance),
+      Self.windowServerCapture(window),
+    ]
+    .compactMap { $0 }
     let rep = candidates.max { Self.distinctColors($0) < Self.distinctColors($1) } ?? drawn
     window.close()
     // The host outlives this call; emptied, it stops laying out views it shares with the next
@@ -274,21 +330,26 @@ struct SnapshotTests {
     let data = try #require(rep.representation(using: .png, properties: [:]))
     #expect(data.count > 2_000, "\(name) rendered something")
     #expect(Self.distinctColors(rep) > 4, "\(name) isn't a blank image")
-    try FileManager.default.createDirectory(at: Self.outputDirectory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(
+      at: Self.outputDirectory, withIntermediateDirectories: true)
     let url = Self.outputDirectory.appendingPathComponent("\(name)-\(dark ? "dark" : "light").png")
     try data.write(to: url)
     return url
   }
 
   /// Renders `view`'s layer tree into a bitmap (2x), over the window background color.
-  private static func renderLayers(of view: NSView, appearance: NSAppearance?) -> NSBitmapImageRep? {
+  private static func renderLayers(of view: NSView, appearance: NSAppearance?) -> NSBitmapImageRep?
+  {
     guard let layer = view.layer else { return nil }
     let scale: CGFloat = 2
     let width = Int(view.bounds.width * scale)
     let height = Int(view.bounds.height * scale)
-    guard let rep = NSBitmapImageRep(
-      bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8, samplesPerPixel: 4,
-      hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+    guard
+      let rep = NSBitmapImageRep(
+        bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8,
+        samplesPerPixel: 4,
+        hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+      ),
       let context = NSGraphicsContext(bitmapImageRep: rep)
     else { return nil }
     let cg = context.cgContext
@@ -309,8 +370,10 @@ struct SnapshotTests {
 
   /// The window server's image of `window` (nil without screen-capture access).
   private static func windowServerCapture(_ window: NSWindow) -> NSBitmapImageRep? {
-    guard let image = CGWindowListCreateImage(
-      .null, .optionIncludingWindow, CGWindowID(window.windowNumber), [.boundsIgnoreFraming, .bestResolution])
+    guard
+      let image = CGWindowListCreateImage(
+        .null, .optionIncludingWindow, CGWindowID(window.windowNumber),
+        [.boundsIgnoreFraming, .bestResolution])
     else { return nil }
     return NSBitmapImageRep(cgImage: image)
   }
@@ -328,7 +391,10 @@ struct SnapshotTests {
     for x in stride(from: 0, to: rep.pixelsWide, by: stepX) {
       for y in stride(from: 0, to: rep.pixelsHigh, by: stepY) {
         guard let color = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
-        colors.insert(String(format: "%.2f-%.2f-%.2f", color.redComponent, color.greenComponent, color.blueComponent))
+        colors.insert(
+          String(
+            format: "%.2f-%.2f-%.2f", color.redComponent, color.greenComponent, color.blueComponent)
+        )
       }
     }
     return colors.count

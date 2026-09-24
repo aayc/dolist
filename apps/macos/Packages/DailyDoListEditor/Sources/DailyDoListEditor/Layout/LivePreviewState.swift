@@ -75,7 +75,8 @@ final class LivePreviewState {
       revealed.location += delta
     } else if location <= revealed.end {
       let start = min(revealed.location, location)
-      let end = max(revealed.end > oldEnd ? revealed.end + delta : location + newLength, location + newLength)
+      let end = max(
+        revealed.end > oldEnd ? revealed.end + delta : location + newLength, location + newLength)
       revealed = NSRange(start, end)
     }
     revealedLines = revealed
@@ -85,8 +86,11 @@ final class LivePreviewState {
     in range: NSRange, old: [NSRange], new: [NSRange], storage: NSTextStorage
   ) -> Bool {
     var changed = false
-    storage.enumerateAttribute(.ddlMarker, in: range.clamped(to: storage.length)) { value, run, stop in
-      guard let raw = value as? Int, MarkerKind(rawValue: raw)?.revealsOnTouch == true else { return }
+    storage.enumerateAttribute(.ddlMarker, in: range.clamped(to: storage.length)) {
+      value, run, stop in
+      guard let raw = value as? Int, MarkerKind(rawValue: raw)?.revealsOnTouch == true else {
+        return
+      }
       let touchedBefore = old.contains { $0.touches(run) }
       let touchedNow = new.contains { $0.touches(run) }
       if touchedBefore != touchedNow {

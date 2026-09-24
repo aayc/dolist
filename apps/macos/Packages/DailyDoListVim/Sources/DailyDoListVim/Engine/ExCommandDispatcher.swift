@@ -49,7 +49,8 @@ extension Vim {
   func buildCommandMap() {
     exCommandMap = [:]
     for entry in DefaultKeymap.exCommands {
-      let definition = ExCommandDefinition(name: entry.name, shortName: entry.shortName, type: .builtin)
+      let definition = ExCommandDefinition(
+        name: entry.name, shortName: entry.shortName, type: .builtin)
       definition.possiblyAsync = entry.possiblyAsync
       definition.excludeFromCommandHistory = entry.excludeFromCommandHistory
       exCommandMap[entry.shortName ?? entry.name] = definition
@@ -78,7 +79,9 @@ extension Vim {
     options.onKeyDown = { [unowned self] e, inputIn, close in
       let keyName = self.vimKeyFromEvent(e)
       var input = inputIn
-      if keyName == "<Esc>" || keyName == "<C-c>" || keyName == "<C-[>" || (keyName == "<BS>" && input.isEmpty) {
+      if keyName == "<Esc>" || keyName == "<C-c>" || keyName == "<C-[>"
+        || (keyName == "<BS>" && input.isEmpty)
+      {
         self.globalState.exCommandHistoryController.pushInput(input)
         self.globalState.exCommandHistoryController.reset()
         e.preventDefault()
@@ -114,7 +117,9 @@ extension Vim {
         guard let command = self.matchExCommand(params.commandName!) else { return false }
         self.parseCommandArgs(&inputStream, params, command)
         guard let argString = params.argString, !argString.isEmpty else { return false }
-        if let regex = try self.parseQuery(argString.slice(1), true, true) { self.highlightSearchMatches(cm, regex) }
+        if let regex = try self.parseQuery(argString.slice(1), true, true) {
+          self.highlightSearchMatches(cm, regex)
+        }
       } catch {}
       return false
     }
@@ -137,7 +142,9 @@ extension Vim {
     }
   }
 
-  private func exProcessCommandInner(_ cm: EditorAdapter, _ input: VimText, _ params: ExParams) throws {
+  private func exProcessCommandInner(_ cm: EditorAdapter, _ input: VimText, _ params: ExParams)
+    throws
+  {
     let vim = maybeInitVimState(cm)
     let commandHistoryRegister = globalState.registerController.getRegister(":")
     let previousCommand = commandHistoryRegister.text
@@ -179,7 +186,9 @@ extension Vim {
       return
     }
     do {
-      guard let fn = exCommands[commandName] else { throw JSException.typeError("exCommands[commandName] is not a function") }
+      guard let fn = exCommands[commandName] else {
+        throw JSException.typeError("exCommands[commandName] is not a function")
+      }
       try fn(cm, params)
       // Possibly asynchronous commands (e.g. substitute, which might have a user confirmation),
       // are responsible for calling the callback when done. All others have it taken care of for
@@ -192,7 +201,8 @@ extension Vim {
   }
 
   /// `parseInput_(cm, inputStream, result)`: the range and the command name.
-  func parseInput(_ cm: EditorAdapter, _ inputStream: inout StringStream, _ result: ExParams) throws {
+  func parseInput(_ cm: EditorAdapter, _ inputStream: inout StringStream, _ result: ExParams) throws
+  {
     let vim = maybeInitVimState(cm)
     inputStream.eatWhile(":")
     // Parse range.
@@ -243,7 +253,8 @@ extension Vim {
   }
 
   /// `parseLineSpec_(cm, inputStream)`.
-  private func parseLineSpec(_ cm: EditorAdapter, _ inputStream: inout StringStream) throws -> Int? {
+  private func parseLineSpec(_ cm: EditorAdapter, _ inputStream: inout StringStream) throws -> Int?
+  {
     let rest = inputStream.string.slice(inputStream.pos)
     var digits = 0
     while digits < rest.length && isASCIIDigit(rest[digits]) { digits += 1 }
@@ -260,7 +271,9 @@ extension Vim {
       return try parseLineSpecOffset(cm, &inputStream, cm.lastLine())
     case "'":
       let markName = inputStream.next()?.string ?? ""
-      guard let markPos = getMarkPos(cm, vim, markName) else { throw JSException.error("Mark not set") }
+      guard let markPos = getMarkPos(cm, vim, markName) else {
+        throw JSException.error("Mark not set")
+      }
       return try parseLineSpecOffset(cm, &inputStream, markPos.line)
     case "-", "+", "/", "?":
       inputStream.backUp(1)
@@ -273,7 +286,9 @@ extension Vim {
   }
 
   /// `parseLineSpecOffset_(cm, inputStream, line)`: `+3`, `-`, `/pattern/`, `?pattern?`, `\/`.
-  private func parseLineSpecOffset(_ cm: EditorAdapter, _ inputStream: inout StringStream, _ lineIn: Int) throws -> Int {
+  private func parseLineSpecOffset(
+    _ cm: EditorAdapter, _ inputStream: inout StringStream, _ lineIn: Int
+  ) throws -> Int {
     var line = lineIn
     while true {
       // /^([\/\?]|\\[\?\/])|([+-]?)(\d*)/
@@ -281,7 +296,9 @@ extension Vim {
       var search: VimText?
       if let first = rest.code(at: 0), first == 0x2F || first == 0x3F {
         search = rest.slice(0, 1)
-      } else if rest.code(at: 0) == 0x5C, let second = rest.code(at: 1), second == 0x3F || second == 0x2F {
+      } else if rest.code(at: 0) == 0x5C, let second = rest.code(at: 1),
+        second == 0x3F || second == 0x2F
+      {
         search = rest.slice(0, 2)
       }
       if let search {
@@ -293,20 +310,32 @@ extension Vim {
           var end = 0
           while end < r.length {
             if forward {
-              if r[end] != 0x2F && r[end] != 0x5C { end += 1 } else if r[end] == 0x5C && r.code(at: end + 1) == 0x2F { end += 2 } else { break }
+              if r[end] != 0x2F && r[end] != 0x5C {
+                end += 1
+              } else if r[end] == 0x5C && r.code(at: end + 1) == 0x2F {
+                end += 2
+              } else {
+                break
+              }
             } else {
               if r[end] != 0x2F && r[end] != 0x3F { end += 1 } else { break }
             }
           }
           queryString = r.slice(0, end)
           inputStream.pos += end
-          if inputStream.string.code(at: inputStream.pos) == (forward ? 0x2F : 0x3F) { inputStream.pos += 1 }
+          if inputStream.string.code(at: inputStream.pos) == (forward ? 0x2F : 0x3F) {
+            inputStream.pos += 1
+          }
         }
-        if queryString.isEmpty { queryString = globalState.registerController.getRegister("/").text }
+        if queryString.isEmpty {
+          queryString = globalState.registerController.getRegister("/").text
+        }
         let query = try JSRegExp.make(queryString)
         let cursor = cm.getSearchCursor(query, Pos(line + (forward ? 1 : 0), 0))
         if forward { _ = try cursor.findNext() } else { _ = try cursor.findPrevious() }
-        guard let nextPos = cursor.from() else { throw JSException.error("Pattern not found" + query.description) }
+        guard let nextPos = cursor.from() else {
+          throw JSException.error("Pattern not found" + query.description)
+        }
         line = nextPos.line
         continue
       }
@@ -328,7 +357,9 @@ extension Vim {
   }
 
   /// `parseCommandArgs_(inputStream, params, command)`.
-  func parseCommandArgs(_ inputStream: inout StringStream, _ params: ExParams, _ command: ExCommandDefinition) {
+  func parseCommandArgs(
+    _ inputStream: inout StringStream, _ params: ExParams, _ command: ExCommandDefinition
+  ) {
     if inputStream.eol() { return }
     params.argString = inputStream.matchRestOfLine()
     // Parse command-line arguments: trim(argString).split(/\s+/)
@@ -361,7 +392,9 @@ extension Vim {
     var i = commandName.length
     while i > 0 {
       let prefix = commandName.substring(0, i).string
-      if let command = exCommandMap[prefix], VimText(command.name).indexOf(commandName) == 0 { return command }
+      if let command = exCommandMap[prefix], VimText(command.name).indexOf(commandName) == 0 {
+        return command
+      }
       i -= 1
     }
     return nil
@@ -402,7 +435,9 @@ extension Vim {
   func exUnmap(_ lhs: VimText, _ ctx: KeyContext?, rawContext: String? = nil) throws -> Bool {
     if lhs != ":" && lhs.charAt(0) == ":" {
       // Ex to Ex or Ex to key mapping
-      if ctx != nil || !(rawContext ?? "").isEmpty { throw JSException.error("Mode not supported for ex mappings") }
+      if ctx != nil || !(rawContext ?? "").isEmpty {
+        throw JSException.error("Mode not supported for ex mappings")
+      }
       let commandName = lhs.substring(1).string
       if let definition = exCommandMap[commandName], definition.user {
         exCommandMap[commandName] = nil

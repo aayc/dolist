@@ -8,7 +8,8 @@ import Testing
 struct LivePreviewTests {
   @Test func hidesSyntaxAwayFromTheCaretAndRevealsTheCaretLine() {
     let text = "# Title\n**bold** and `code`\n[[Note|alias]] [x](https://e.com)\nplain"
-    let editor = EditorHarness(text: text, selection: NSRange(location: (text as NSString).length, length: 0))
+    let editor = EditorHarness(
+      text: text, selection: NSRange(location: (text as NSString).length, length: 0))
     let heading = editor.range(of: "# ")
     let boldLine = editor.range(of: "**bold** and `code`")
     let linkLine = editor.range(of: "[[Note|alias]] [x](https://e.com)")
@@ -78,10 +79,14 @@ struct LivePreviewTests {
   }
 
   @Test func sourceModeShowsEverythingDimmed() throws {
-    let editor = EditorHarness("# Title\n- [ ] task\n**b**\nx|", configuration: EditorConfiguration(livePreview: false))
-    #expect(editor.hiddenCharacters(in: NSRange(location: 0, length: (editor.text as NSString).length)) == 0)
+    let editor = EditorHarness(
+      "# Title\n- [ ] task\n**b**\nx|", configuration: EditorConfiguration(livePreview: false))
+    #expect(
+      editor.hiddenCharacters(in: NSRange(location: 0, length: (editor.text as NSString).length))
+        == 0)
     #expect(editor.glyphProperty(at: editor.offset(of: "- [ ]")) != .controlCharacter)
-    let color = editor.controller.storage.attribute(.foregroundColor, at: editor.offset(of: "**"), effectiveRange: nil)
+    let color = editor.controller.storage.attribute(
+      .foregroundColor, at: editor.offset(of: "**"), effectiveRange: nil)
     #expect(color as? NSColor == EditorColors.tertiaryText)
     // Toggling live preview on hides the syntax without restyling.
     var configuration = editor.controller.configuration
@@ -93,7 +98,8 @@ struct LivePreviewTests {
   @Test func unfocusedEditorRevealsNothing() {
     let editor = EditorHarness("**bold**|")
     let window = NSWindow(
-      contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled], backing: .buffered, defer: true)
+      contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled],
+      backing: .buffered, defer: true)
     window.contentView = editor.controller.scrollView
     window.makeFirstResponder(editor.textView)
     editor.controller.refreshLivePreview()
@@ -116,19 +122,22 @@ struct LivePreviewTests {
   }
 
   @Test func selectionChangesInvalidateOnlyTheLinesThatChange() {
-    let editor = EditorHarness(text: SampleNote.long(lines: 400), selection: NSRange(location: 0, length: 0))
+    let editor = EditorHarness(
+      text: SampleNote.long(lines: 400), selection: NSRange(location: 0, length: 0))
     let preview = editor.controller.livePreview
     let index = editor.controller.highlighter.lineIndex
     let storage = editor.controller.storage
     let from = index.start(ofLine: 100)
     editor.select(NSRange(location: from, length: 0))
     let invalid = preview.update(
-      selection: [NSRange(location: index.start(ofLine: 101), length: 0)], focused: true, lineIndex: index,
+      selection: [NSRange(location: index.start(ofLine: 101), length: 0)], focused: true,
+      lineIndex: index,
       storage: storage)
     #expect(invalid.count == 2)
     #expect(invalid.allSatisfy { $0.length < 200 })
     let same = preview.update(
-      selection: [NSRange(location: index.start(ofLine: 101) + 1, length: 0)], focused: true, lineIndex: index,
+      selection: [NSRange(location: index.start(ofLine: 101) + 1, length: 0)], focused: true,
+      lineIndex: index,
       storage: storage)
     #expect(same.isEmpty)
   }
@@ -147,6 +156,7 @@ struct LivePreviewTests {
     let textX = fragment.minX + layoutManager.location(forGlyphAt: glyph).x
     let wrapped = layoutManager.lineFragmentUsedRect(forGlyphAt: firstLine.end, effectiveRange: nil)
     #expect(wrapped.minY > fragment.minY, "item didn't wrap")
-    #expect(abs(wrapped.minX - textX) < 1, "wrapped line starts at \(wrapped.minX), text at \(textX)")
+    #expect(
+      abs(wrapped.minX - textX) < 1, "wrapped line starts at \(wrapped.minX), text at \(textX)")
   }
 }

@@ -33,7 +33,9 @@ extension VimSession {
   /// The oracle editor's native edit for a token vim left to the editor (the vectors README, rule
   /// 2): a character, `<Space>`, `<CR>` or `<Tab>` replaces every selection; `<BS>`/`<Del>` delete
   /// each selection or the grapheme cluster before/after each cursor. nil for other tokens.
-  package func replayNativeEdit(for token: String) -> (changes: VimChangeSet, selection: VimSelection, userEvent: String)? {
+  package func replayNativeEdit(for token: String) -> (
+    changes: VimChangeSet, selection: VimSelection, userEvent: String
+  )? {
     let event = DOMKeyEvent(vimKey: token)
     let edit: (ChangeSet, EditorSelection)
     let userEvent: String
@@ -47,15 +49,19 @@ extension VimSession {
       return nil
     }
     let selection = VimSelection(
-      ranges: edit.1.ranges.map { .init(anchor: $0.anchor, head: $0.head) }, mainIndex: edit.1.mainIndex)
+      ranges: edit.1.ranges.map { .init(anchor: $0.anchor, head: $0.head) },
+      mainIndex: edit.1.mainIndex)
     return (VimChangeSet(edit.0), selection, userEvent)
   }
 }
 
 extension Vim {
   /// `Vim.getRegisterController().pushText(name, operator, text, linewise, blockwise)`.
-  package func replayPushText(_ name: String?, _ op: String, _ text: VimText, linewise: Bool, blockwise: Bool) {
-    globalState.registerController.pushText(name, op, text, linewise: linewise, blockwise: blockwise)
+  package func replayPushText(
+    _ name: String?, _ op: String, _ text: VimText, linewise: Bool, blockwise: Bool
+  ) {
+    globalState.registerController.pushText(
+      name, op, text, linewise: linewise, blockwise: blockwise)
   }
 
   /// The register called `name` if it exists (reading doesn't create it).

@@ -35,7 +35,10 @@ final class BadgeRenderer {
     /// The room the pill was fitted in (a crossfade fits the badge's old look in the same room).
     var available: CGFloat
 
-    init(badge: EditorBadge, anchor: Int, rect: NSRect, label: String? = nil, available: CGFloat = .greatestFiniteMagnitude) {
+    init(
+      badge: EditorBadge, anchor: Int, rect: NSRect, label: String? = nil,
+      available: CGFloat = .greatestFiniteMagnitude
+    ) {
       self.badge = badge
       self.anchor = anchor
       self.rect = rect
@@ -102,9 +105,12 @@ final class BadgeRenderer {
 
   /// Layouts of the drawn badges whose line intersects `visibleRect` (text-view coordinates).
   func layouts(
-    for items: [BadgeStore.Item], in textView: NSTextView, layoutManager: NSLayoutManager, visibleRect: NSRect
+    for items: [BadgeStore.Item], in textView: NSTextView, layoutManager: NSLayoutManager,
+    visibleRect: NSRect
   ) -> [Layout] {
-    guard !items.isEmpty, let container = textView.textContainer, let storage = layoutManager.textStorage else {
+    guard !items.isEmpty, let container = textView.textContainer,
+      let storage = layoutManager.textStorage
+    else {
       return []
     }
     let origin = textView.textContainerOrigin
@@ -118,9 +124,13 @@ final class BadgeRenderer {
     var y: CGFloat = 0
     var lastAnchor = -1
     for item in items where item.badge.isDrawn {
-      guard item.lineEnd >= chars.location, item.anchor <= chars.end, item.anchor <= length else { continue }
+      guard item.lineEnd >= chars.location, item.anchor <= chars.end, item.anchor <= length else {
+        continue
+      }
       if item.anchor != lastAnchor {
-        guard let end = lineEndPoint(of: item, layoutManager: layoutManager, container: container, length: length)
+        guard
+          let end = lineEndPoint(
+            of: item, layoutManager: layoutManager, container: container, length: length)
         else { continue }
         x = origin.x + end.x + gap
         y = (origin.y + end.midY - height / 2).rounded()
@@ -132,7 +142,8 @@ final class BadgeRenderer {
       let (label, width) = fitted(item.badge, maxWidth: available)
       result.append(
         Layout(
-          badge: item.badge, anchor: item.anchor, rect: NSRect(x: x, y: y, width: width, height: height), label: label,
+          badge: item.badge, anchor: item.anchor,
+          rect: NSRect(x: x, y: y, width: width, height: height), label: label,
           available: available))
       x += width + gap / 2
     }
@@ -152,9 +163,13 @@ final class BadgeRenderer {
     return result
   }
 
-  private func shortened(_ badge: EditorBadge, fullWidth full: CGFloat, maxWidth: CGFloat) -> (label: String, width: CGFloat) {
+  private func shortened(_ badge: EditorBadge, fullWidth full: CGFloat, maxWidth: CGFloat) -> (
+    label: String, width: CGFloat
+  ) {
     let chrome = full - labelWidth(badge.displayLabel)
-    var characters = Array(badge.displayLabel.hasSuffix("…") ? String(badge.displayLabel.dropLast()) : badge.displayLabel)
+    var characters = Array(
+      badge.displayLabel.hasSuffix("…") ? String(badge.displayLabel.dropLast()) : badge.displayLabel
+    )
     while !characters.isEmpty {
       characters.removeLast()
       let label = String(characters).trimmingCharacters(in: .whitespaces) + "…"
@@ -167,7 +182,8 @@ final class BadgeRenderer {
   /// End of the text on the last line fragment of the badge's line: x and the vertical center of
   /// the line box (text-container coordinates).
   private func lineEndPoint(
-    of item: BadgeStore.Item, layoutManager: NSLayoutManager, container: NSTextContainer, length: Int
+    of item: BadgeStore.Item, layoutManager: NSLayoutManager, container: NSTextContainer,
+    length: Int
   ) -> (x: CGFloat, midY: CGFloat)? {
     let index = item.lineEnd > item.anchor ? item.lineEnd - 1 : item.anchor
     if index >= length {
@@ -184,7 +200,9 @@ final class BadgeRenderer {
 
   /// The status dot inside a pill.
   func dotRect(in rect: NSRect) -> NSRect {
-    NSRect(x: rect.minX + padding, y: rect.midY - dotDiameter / 2, width: dotDiameter, height: dotDiameter)
+    NSRect(
+      x: rect.minX + padding, y: rect.midY - dotDiameter / 2, width: dotDiameter,
+      height: dotDiameter)
   }
 
   /// Everything a badge may cover while it moves: its pill, the pill 2 pt lower (settling in) and
@@ -192,7 +210,9 @@ final class BadgeRenderer {
   func motionRect(of layout: Layout, previous: EditorBadge?) -> NSRect {
     var rect = layout.rect.union(layout.rect.offsetBy(dx: 0, dy: MotionTimeline.appearDistance))
     if let previous {
-      let old = NSRect(origin: layout.rect.origin, size: NSSize(width: fitted(previous, maxWidth: layout.available).width, height: height))
+      let old = NSRect(
+        origin: layout.rect.origin,
+        size: NSSize(width: fitted(previous, maxWidth: layout.available).width, height: height))
       rect = rect.union(old)
     }
     return rect.insetBy(dx: -1, dy: -1)
@@ -201,7 +221,10 @@ final class BadgeRenderer {
   // MARK: Drawing
 
   /// Draws the badges that intersect `dirtyRect`; `paint` gives each one's motion (default: at rest).
-  func draw(_ layouts: [Layout], hovered: String?, dirtyRect: NSRect, paint: (Layout) -> BadgePaint = { _ in .rest }) {
+  func draw(
+    _ layouts: [Layout], hovered: String?, dirtyRect: NSRect,
+    paint: (Layout) -> BadgePaint = { _ in .rest }
+  ) {
     guard let context = NSGraphicsContext.current?.cgContext else { return }
     for layout in layouts {
       let frame = paint(layout)
@@ -216,18 +239,23 @@ final class BadgeRenderer {
     if let previous = paint.previous, paint.previousOpacity > 0 {
       let (label, width) = fitted(previous, maxWidth: layout.available)
       drawPill(
-        previous, label: label, in: NSRect(origin: origin, size: NSSize(width: width, height: height)), isHovered: isHovered,
+        previous, label: label,
+        in: NSRect(origin: origin, size: NSSize(width: width, height: height)),
+        isHovered: isHovered,
         opacity: paint.opacity * paint.previousOpacity, dotOpacity: 1, context: context)
     }
     drawPill(
-      layout.badge, label: layout.label, in: NSRect(origin: origin, size: layout.rect.size), isHovered: isHovered,
-      opacity: paint.opacity * (1 - paint.previousOpacity), dotOpacity: paint.dotOpacity, context: context)
+      layout.badge, label: layout.label, in: NSRect(origin: origin, size: layout.rect.size),
+      isHovered: isHovered,
+      opacity: paint.opacity * (1 - paint.previousOpacity), dotOpacity: paint.dotOpacity,
+      context: context)
   }
 
   /// One pill; below full opacity it's composited as a whole (a transparency layer), so its fill,
   /// border and text don't show through each other.
   private func drawPill(
-    _ badge: EditorBadge, label: String, in rect: NSRect, isHovered: Bool, opacity: CGFloat, dotOpacity: CGFloat,
+    _ badge: EditorBadge, label: String, in rect: NSRect, isHovered: Bool, opacity: CGFloat,
+    dotOpacity: CGFloat,
     context: CGContext
   ) {
     guard opacity > 0.001 else { return }
@@ -238,7 +266,9 @@ final class BadgeRenderer {
       context.beginTransparencyLayer(in: rect.insetBy(dx: -1, dy: -1), auxiliaryInfo: nil)
     }
     let style = BadgeStyle(status: badge.status, isHovered: isHovered)
-    let pill = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: rect.height / 2, yRadius: rect.height / 2)
+    let pill = NSBezierPath(
+      roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: rect.height / 2,
+      yRadius: rect.height / 2)
     if let fill = style.fill {
       fill.setFill()
       pill.fill()
@@ -259,15 +289,21 @@ final class BadgeRenderer {
     var x = dot.maxX
     if !label.isEmpty {
       x += dotDiameter * 0.8
-      let attributes: [NSAttributedString.Key: Any] = [.font: labelFont, .foregroundColor: style.text]
+      let attributes: [NSAttributedString.Key: Any] = [
+        .font: labelFont, .foregroundColor: style.text,
+      ]
       let size = (label as NSString).size(withAttributes: attributes)
-      (label as NSString).draw(at: NSPoint(x: x, y: rect.midY - size.height / 2), withAttributes: attributes)
+      (label as NSString).draw(
+        at: NSPoint(x: x, y: rect.midY - size.height / 2), withAttributes: attributes)
       x += labelWidth(label)
     }
     if badge.unread > 0 {
       let diameter = Self.unreadDotDiameter
       EditorColors.accent.setFill()
-      NSBezierPath(ovalIn: NSRect(x: x + unreadGap, y: rect.midY - diameter / 2, width: diameter, height: diameter)).fill()
+      NSBezierPath(
+        ovalIn: NSRect(
+          x: x + unreadGap, y: rect.midY - diameter / 2, width: diameter, height: diameter)
+      ).fill()
     }
     if layered {
       context.endTransparencyLayer()

@@ -57,6 +57,7 @@ enum TextDiff {
   /// `\r\n` and lone `\r` become `\n` (the editor's line model).
   static func normalizeLineEndings(_ text: String) -> String {
     guard text.utf8.contains(0x0D) else { return text }
-    return text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+    return text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(
+      of: "\r", with: "\n")
   }
 }

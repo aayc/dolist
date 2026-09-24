@@ -595,7 +595,8 @@ public struct AgentThread: Codable, Hashable, Sendable, Identifiable {
   }
 
   enum CodingKeys: String, CodingKey {
-    case id, taskId, notePath, title, status, createdAt, updatedAt, messages, artifacts, surfaces, sources
+    case id, taskId, notePath, title, status, createdAt, updatedAt, messages, artifacts, surfaces,
+      sources
   }
 
   public func encode(to encoder: Encoder) throws {

@@ -64,7 +64,10 @@ final class FakeSupervisor: DaemonSupervising {
   private(set) var startCount = 0
   private(set) var stopCount = 0
 
-  init(connection: DaemonConnectionInfo? = DaemonConnectionInfo(baseURL: URL(string: "http://127.0.0.1:7331")!, token: "test-token")) {
+  init(
+    connection: DaemonConnectionInfo? = DaemonConnectionInfo(
+      baseURL: URL(string: "http://127.0.0.1:7331")!, token: "test-token")
+  ) {
     startResult = connection
   }
 
@@ -93,7 +96,8 @@ final class FakeSupervisor: DaemonSupervising {
     let (stream, continuation) = AsyncStream.makeStream(of: DaemonSupervisorState.self)
     let id = UUID()
     observers[id] = continuation
-    continuation.onTermination = { [weak self] _ in Task { @MainActor in self?.observers[id] = nil } }
+    continuation.onTermination = { [weak self] _ in Task { @MainActor in self?.observers[id] = nil }
+    }
     continuation.yield(state)
     return stream
   }

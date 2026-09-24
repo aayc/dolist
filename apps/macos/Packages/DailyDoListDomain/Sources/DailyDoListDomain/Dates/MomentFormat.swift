@@ -10,13 +10,18 @@ public enum MomentFormat {
 
   /// `formatLocalDate`: calendar tokens come from `date`; time tokens (`HH`, `X`, …) read local
   /// midnight of that date in `timeZone` (01:00 where a clock change skips midnight).
-  public static func format(_ date: LocalDate, _ format: String, timeZone: TimeZone = .current) -> String {
+  public static func format(_ date: LocalDate, _ format: String, timeZone: TimeZone = .current)
+    -> String
+  {
     guard date.isValid else { return invalidDate }
-    return render(date, format, instant: { date.startOfDayMilliseconds(in: timeZone) }, timeZone: timeZone)
+    return render(
+      date, format, instant: { date.startOfDayMilliseconds(in: timeZone) }, timeZone: timeZone)
   }
 
   /// `formatDate`: formats an instant on the wall clock of `timeZone`.
-  public static func format(instant: Date, _ format: String, timeZone: TimeZone = .current) -> String {
+  public static func format(instant: Date, _ format: String, timeZone: TimeZone = .current)
+    -> String
+  {
     guard instant.timeIntervalSince1970.isFinite else { return invalidDate }
     let ms = instant.jsMilliseconds
     let local = LocalDate(date: Date(jsMilliseconds: ms), timeZone: timeZone)
@@ -34,7 +39,8 @@ public enum MomentFormat {
     func time() -> (ms: Int, hours: Int, minutes: Int, seconds: Int) {
       if let clock { return clock }
       let ms = instant()
-      let offset = timeZone.secondsFromGMT(for: Date(timeIntervalSince1970: Double(floorDiv(ms, 1000))))
+      let offset = timeZone.secondsFromGMT(
+        for: Date(timeIntervalSince1970: Double(floorDiv(ms, 1000))))
       let msOfDay = floorMod(ms + offset * 1000, 86_400_000)
       let value = (ms, msOfDay / 3_600_000, msOfDay / 60_000 % 60, msOfDay / 1000 % 60)
       clock = value

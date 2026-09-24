@@ -22,20 +22,32 @@ struct UnscriptedCall: Error, Equatable {
 /// client signals sent.
 final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
   struct Script: Sendable {
-    var agentStatus: @Sendable () async throws -> AgentStatusResponse = { throw UnscriptedCall(name: "agentStatus") }
-    var setAgentEnabled: @Sendable (Bool) async throws -> AgentStatusResponse = { _ in throw UnscriptedCall(name: "setAgentEnabled") }
+    var agentStatus: @Sendable () async throws -> AgentStatusResponse = {
+      throw UnscriptedCall(name: "agentStatus")
+    }
+    var setAgentEnabled: @Sendable (Bool) async throws -> AgentStatusResponse = { _ in
+      throw UnscriptedCall(name: "setAgentEnabled")
+    }
     var taskRecords: @Sendable (String) async throws -> [TaskAgentRecord] = { _ in [] }
     var threads: @Sendable (String?, String?) async throws -> [ThreadSummary] = { _, _ in [] }
     var thread: @Sendable (String) async throws -> ThreadResponse = { _ in
-      throw DaemonClientError.http(status: 404, body: ApiErrorBody(error: .notFound, message: "Thread not found"))
+      throw DaemonClientError.http(
+        status: 404, body: ApiErrorBody(error: .notFound, message: "Thread not found"))
     }
-    var postMessage: @Sendable (String, String) async throws -> ThreadActionResponse = { _, _ in ThreadActionResponse() }
-    var cancelThread: @Sendable (String) async throws -> ThreadActionResponse = { _ in ThreadActionResponse() }
-    var retryThread: @Sendable (String) async throws -> ThreadActionResponse = { _ in ThreadActionResponse() }
+    var postMessage: @Sendable (String, String) async throws -> ThreadActionResponse = { _, _ in
+      ThreadActionResponse()
+    }
+    var cancelThread: @Sendable (String) async throws -> ThreadActionResponse = { _ in
+      ThreadActionResponse()
+    }
+    var retryThread: @Sendable (String) async throws -> ThreadActionResponse = { _ in
+      ThreadActionResponse()
+    }
     var approvals: @Sendable (ApprovalStatus?) async throws -> [ApprovalRequest] = { _ in [] }
-    var decideApproval: @Sendable (String, ApprovalDecisionRequest) async throws -> ApprovalRequest = { _, _ in
-      throw UnscriptedCall(name: "decideApproval")
-    }
+    var decideApproval:
+      @Sendable (String, ApprovalDecisionRequest) async throws -> ApprovalRequest = { _, _ in
+        throw UnscriptedCall(name: "decideApproval")
+      }
     var artifact: @Sendable (String, String) async throws -> ArtifactPayload = { _, _ in
       throw UnscriptedCall(name: "artifact")
     }
@@ -59,15 +71,21 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
   func health() async throws -> HealthResponse { throw Self.noVault }
   func tree() async throws -> VaultTreeResponse { throw Self.noVault }
   func readNote(_ path: String) async throws -> NoteResponse { throw Self.noVault }
-  func writeNote(_ path: String, content: String, baseVersion: BaseVersion) async throws -> WriteNoteResponse { throw Self.noVault }
+  func writeNote(_ path: String, content: String, baseVersion: BaseVersion) async throws
+    -> WriteNoteResponse
+  { throw Self.noVault }
   func deleteNote(_ path: String) async throws -> TrashResponse { throw Self.noVault }
   func rename(from: String, to: String) async throws -> RenameResponse { throw Self.noVault }
   func createFolder(_ path: String) async throws -> CreateFolderResponse { throw Self.noVault }
   func deleteFolder(_ path: String) async throws -> TrashResponse { throw Self.noVault }
-  func dailyNote(_ date: String, create: Bool) async throws -> DailyNoteResponse { throw Self.noVault }
+  func dailyNote(_ date: String, create: Bool) async throws -> DailyNoteResponse {
+    throw Self.noVault
+  }
   func search(_ query: String, limit: Int?) async throws -> SearchResponse { throw Self.noVault }
   func settings() async throws -> AppSettings { .defaults }
-  func updateSettings(_ patch: SettingsPatch) async throws -> AppSettings { AppSettings.defaults.applying(patch) }
+  func updateSettings(_ patch: SettingsPatch) async throws -> AppSettings {
+    AppSettings.defaults.applying(patch)
+  }
   func connectors() async throws -> [ConnectorStatus] { [] }
 
   // Agent
@@ -116,7 +134,9 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
     return try await current.approvals(status)
   }
 
-  func decideApproval(_ id: String, _ decision: ApprovalDecisionRequest) async throws -> ApprovalRequest {
+  func decideApproval(_ id: String, _ decision: ApprovalDecisionRequest) async throws
+    -> ApprovalRequest
+  {
     log("decideApproval:\(id):\(decision.decision.rawValue):\(decision.scope?.rawValue ?? "-")")
     return try await current.decideApproval(id, decision)
   }
@@ -164,7 +184,8 @@ func eventually(timeout: Duration = .seconds(3), _ condition: () -> Bool) async 
 }
 
 /// Waits until the gate has at least `count` arrivals.
-func waitForArrivals(_ gate: Gate, _ count: Int = 1, timeout: Duration = .seconds(3)) async -> Bool {
+func waitForArrivals(_ gate: Gate, _ count: Int = 1, timeout: Duration = .seconds(3)) async -> Bool
+{
   let deadline = ContinuousClock.now + timeout
   while ContinuousClock.now < deadline {
     if await gate.arrivals >= count { return true }

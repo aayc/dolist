@@ -28,9 +28,12 @@ struct DaemonEndpointTests {
     #expect(endpoint.webSocketURL.absoluteString == "ws://127.0.0.1:7331/ws?token=abc123")
     let secure = DaemonEndpoint(baseURL: URL(string: "https://localhost:8443/")!, token: "t")
     #expect(secure.webSocketURL.absoluteString == "wss://localhost:8443/ws?token=t")
-    #expect(endpoint.url(forPath: "/api/health")?.absoluteString == "http://127.0.0.1:7331/api/health")
+    #expect(
+      endpoint.url(forPath: "/api/health")?.absoluteString == "http://127.0.0.1:7331/api/health")
     let trailing = DaemonEndpoint(baseURL: URL(string: "http://127.0.0.1:7331/")!, token: "t")
-    #expect(trailing.url(forPath: "/api/notes/a%20b.md")?.absoluteString == "http://127.0.0.1:7331/api/notes/a%20b.md")
+    #expect(
+      trailing.url(forPath: "/api/notes/a%20b.md")?.absoluteString
+        == "http://127.0.0.1:7331/api/notes/a%20b.md")
   }
 
   @Test func discoverReadsAndTrimsTheToken() throws {
@@ -38,8 +41,11 @@ struct DaemonEndpointTests {
     defer { home.cleanup() }
     try home.write("daemon-token", "  0123abcd\n")
     let endpoint = try DaemonEndpoint.discover(home: home.url, port: 7331)
-    #expect(endpoint == DaemonEndpoint(baseURL: URL(string: "http://127.0.0.1:7331")!, token: "0123abcd"))
-    #expect(try DaemonEndpoint.discover(home: home.url, port: 9000).baseURL.absoluteString == "http://127.0.0.1:9000")
+    #expect(
+      endpoint == DaemonEndpoint(baseURL: URL(string: "http://127.0.0.1:7331")!, token: "0123abcd"))
+    #expect(
+      try DaemonEndpoint.discover(home: home.url, port: 9000).baseURL.absoluteString
+        == "http://127.0.0.1:9000")
   }
 
   @Test func discoverFailsWithTypedErrors() throws {
@@ -57,9 +63,13 @@ struct DaemonEndpointTests {
     #expect(throws: DaemonDiscoveryError.invalidPort(70000)) {
       try DaemonEndpoint.discover(home: home.url, port: 70000)
     }
-    let message = DaemonDiscoveryError.tokenFileMissing(path: NSHomeDirectory() + "/.daily-do-list/daemon-token")
+    let message =
+      DaemonDiscoveryError.tokenFileMissing(
+        path: NSHomeDirectory() + "/.daily-do-list/daemon-token"
+      )
       .errorDescription ?? ""
-    #expect(message.contains("~/.daily-do-list/daemon-token") && !message.contains(NSHomeDirectory()))
+    #expect(
+      message.contains("~/.daily-do-list/daemon-token") && !message.contains(NSHomeDirectory()))
   }
 
   @Test func portResolvesLikeTheDaemon() throws {
@@ -68,7 +78,8 @@ struct DaemonEndpointTests {
     #expect(DaemonEndpoint.configuredPort(home: home.url, environment: [:]) == nil)
     try home.write("config.json", #"{"vaultPath":"~/Notes","port":7440}"#)
     #expect(DaemonEndpoint.configuredPort(home: home.url, environment: [:]) == 7440)
-    #expect(DaemonEndpoint.configuredPort(home: home.url, environment: ["DDL_PORT": "7550"]) == 7550)
+    #expect(
+      DaemonEndpoint.configuredPort(home: home.url, environment: ["DDL_PORT": "7550"]) == 7550)
     try home.write("config.json", #"{"port":0}"#)
     #expect(DaemonEndpoint.configuredPort(home: home.url, environment: [:]) == nil)
   }
@@ -84,9 +95,11 @@ struct DaemonEndpointTests {
   @Test func waitUntilHealthyRetriesUntilTheDaemonAnswers() async throws {
     let calls = Counter()
     let stub = Stub { _ in
-      calls.increment() <= 2 ? .fail(URLError(.cannotConnectToHost)) : .json(value: SampleWire.health)
+      calls.increment() <= 2
+        ? .fail(URLError(.cannotConnectToHost)) : .json(value: SampleWire.health)
     }
-    let healthy = await stub.client().waitUntilHealthy(timeout: .seconds(5), pollInterval: .milliseconds(5))
+    let healthy = await stub.client().waitUntilHealthy(
+      timeout: .seconds(5), pollInterval: .milliseconds(5))
     #expect(healthy)
     #expect(calls.value == 3)
   }
@@ -104,7 +117,9 @@ struct DaemonEndpointTests {
     let clock = ContinuousClock()
     let refused = Stub { _ in .fail(URLError(.cannotConnectToHost)) }
     var start = clock.now
-    #expect(await !refused.client().waitUntilHealthy(timeout: .milliseconds(150), pollInterval: .milliseconds(10)))
+    #expect(
+      await !refused.client().waitUntilHealthy(
+        timeout: .milliseconds(150), pollInterval: .milliseconds(10)))
     #expect(start.duration(to: clock.now) < .seconds(2))
 
     // A daemon that accepts but never answers doesn't hold the caller past the deadline.

@@ -22,7 +22,8 @@ import Testing
     let range = try parse("2,4d", in: t)
     #expect(range.line == 1 && range.lineEnd == 3 && range.commandName == "d")
     let all = try parse("%s/a/b/g", in: t)
-    #expect(all.line == 0 && all.lineEnd == 5 && all.commandName == "s" && all.argString == "/a/b/g")
+    #expect(
+      all.line == 0 && all.lineEnd == 5 && all.commandName == "s" && all.argString == "/a/b/g")
     let last = try parse("$-1y", in: t)
     #expect(last.line == 4)
     let current = try parse(".,+2y", in: t)

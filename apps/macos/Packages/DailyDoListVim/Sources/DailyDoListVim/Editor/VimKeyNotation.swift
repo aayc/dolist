@@ -22,7 +22,10 @@ public struct VimKeyInput: Hashable, Sendable {
   /// keyboard layouts to Latin commands. Optional.
   public var code: String?
 
-  public init(key: String, control: Bool = false, alt: Bool = false, meta: Bool = false, shift: Bool = false, code: String? = nil) {
+  public init(
+    key: String, control: Bool = false, alt: Bool = false, meta: Bool = false, shift: Bool = false,
+    code: String? = nil
+  ) {
     self.key = key
     self.control = control
     self.alt = alt
@@ -37,7 +40,10 @@ public enum VimKeyNotation {
   /// or nil for modifier-only keys. With `isMac`, a lone Option modifier is dropped for keys that
   /// type a character (Option-8 types "{" on a Swiss layout). This is vim.js's `vimKeyFromEvent`.
   public static func vimKey(for input: VimKeyInput, isMac: Bool = true) -> String? {
-    vimKeyFromEvent(DOMKeyEvent(key: input.key, ctrlKey: input.control, altKey: input.alt, metaKey: input.meta, shiftKey: input.shift, code: input.code), isMac: isMac, langmap: nil)
+    vimKeyFromEvent(
+      DOMKeyEvent(
+        key: input.key, ctrlKey: input.control, altKey: input.alt, metaKey: input.meta,
+        shiftKey: input.shift, code: input.code), isMac: isMac, langmap: nil)
   }
 
   /// vim.js's `specialKey`, in its declaration order (which `vimToCmKeyMap` depends on).
@@ -47,9 +53,12 @@ public enum VimKeyNotation {
     ("Enter", "CR"), (" ", "Space"),
   ]
 
-  static let specialKey: [String: String] = Dictionary(specialKeyOrder, uniquingKeysWith: { a, _ in a })
+  static let specialKey: [String: String] = Dictionary(
+    specialKeyOrder, uniquingKeysWith: { a, _ in a })
 
-  static let ignoredKeys: Set<String> = ["Shift", "Alt", "Command", "Control", "CapsLock", "AltGraph", "Dead", "Unidentified"]
+  static let ignoredKeys: Set<String> = [
+    "Shift", "Alt", "Command", "Control", "CapsLock", "AltGraph", "Dead", "Unidentified",
+  ]
 
   /// `vimToCmKeyMap`: lower-cased vim and DOM names → DOM key names.
   static let vimToCmKeyMap: [String: String] = {
@@ -73,7 +82,9 @@ public enum VimKeyNotation {
   static func vimKeyFromEvent(_ e: DOMKeyEvent, isMac: Bool, langmap: LangmapContext?) -> String? {
     var key = e.key
     if ignoredKeys.contains(key) { return nil }
-    if key.utf16.count > 1, key.hasPrefix("n") { key = key.replacingOccurrences(of: "Numpad", with: "") }
+    if key.utf16.count > 1, key.hasPrefix("n") {
+      key = key.replacingOccurrences(of: "Numpad", with: "")
+    }
     key = specialKey[key] ?? key
     var name = ""
     if e.ctrlKey { name += "C-" }
@@ -122,7 +133,9 @@ public enum VimKeyNotation {
       case "A": parsed.alt = true
       case "M", "D": parsed.meta = true
       case "S": parsed.shift = true
-      default: parsed.name = inner; return parsed
+      default:
+        parsed.name = inner
+        return parsed
       }
       inner.removeFirst(2)
     }

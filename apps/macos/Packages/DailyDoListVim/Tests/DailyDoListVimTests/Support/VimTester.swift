@@ -23,7 +23,9 @@ final class VimTester {
     buffer.measure()
   }
 
-  convenience init(_ doc: String, cursor: (Int, Int) = (0, 0), tabSize: Int = 4, indentUnit: String = "\t") {
+  convenience init(
+    _ doc: String, cursor: (Int, Int) = (0, 0), tabSize: Int = 4, indentUnit: String = "\t"
+  ) {
     self.init(VimText(doc), cursor: cursor, tabSize: tabSize, indentUnit: indentUnit)
   }
 
@@ -47,13 +49,19 @@ final class VimTester {
 
   /// The selections as `[line, ch]` cursors or `[anchorLine, anchorCh, headLine, headCh]` ranges.
   var selection: [[Int]] {
-    buffer.selections.map { $0.anchor == $0.head ? [$0.head.line, $0.head.ch] : [$0.anchor.line, $0.anchor.ch, $0.head.line, $0.head.ch] }
+    buffer.selections.map {
+      $0.anchor == $0.head
+        ? [$0.head.line, $0.head.ch] : [$0.anchor.line, $0.anchor.ch, $0.head.line, $0.head.ch]
+    }
   }
 
-  func register(_ name: String) -> VimRegister? { vim.globalState.registerController.registers[name] }
+  func register(_ name: String) -> VimRegister? {
+    vim.globalState.registerController.registers[name]
+  }
 
   func expect(
-    doc: VimText, selection: [[Int]], mode: VimSession.Mode = .normal, sourceLocation: SourceLocation = #_sourceLocation
+    doc: VimText, selection: [[Int]], mode: VimSession.Mode = .normal,
+    sourceLocation: SourceLocation = #_sourceLocation
   ) {
     #expect(self.doc == doc, sourceLocation: sourceLocation)
     #expect(self.selection == selection, sourceLocation: sourceLocation)

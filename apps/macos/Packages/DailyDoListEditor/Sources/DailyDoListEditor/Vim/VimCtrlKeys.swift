@@ -5,7 +5,8 @@ import Foundation
 /// starts with.
 enum VimCtrlKeys {
   static let defaults: Set<String> = [
-    "<C-Space>", "<C-BS>", "<C-n>", "<C-p>", "<C-[>", "<C-c>", "<C-Esc>", "<C-f>", "<C-b>", "<C-d>", "<C-u>", "<C-w>",
+    "<C-Space>", "<C-BS>", "<C-n>", "<C-p>", "<C-[>", "<C-c>", "<C-Esc>", "<C-f>", "<C-b>", "<C-d>",
+    "<C-u>", "<C-w>",
     "<C-i>", "<C-o>", "<C-e>", "<C-y>", "<C-v>", "<C-q>", "<C-r>", "<C-a>", "<C-x>",
   ]
 

@@ -40,7 +40,9 @@ struct MotionState: Equatable {
   private(set) var checking: [Int: TimeInterval] = [:]
 
   /// Nothing moves and nothing could pulse.
-  var isIdle: Bool { appearing.isEmpty && crossfading.isEmpty && pulsing.isEmpty && checking.isEmpty }
+  var isIdle: Bool {
+    appearing.isEmpty && crossfading.isEmpty && pulsing.isEmpty && checking.isEmpty
+  }
   /// Something plays for a limited time (appear, crossfade, checkmark).
   var hasTransitions: Bool { !appearing.isEmpty || !crossfading.isEmpty || !checking.isEmpty }
   var hasPulses: Bool { !pulsing.isEmpty }
@@ -61,7 +63,9 @@ struct MotionState: Equatable {
       }
       guard animated else { continue }
       if let old {
-        if old.looksDifferent(from: badge) { crossfading[id] = Crossfade(previous: old, start: now) }
+        if old.looksDifferent(from: badge) {
+          crossfading[id] = Crossfade(previous: old, start: now)
+        }
       } else {
         appearing[id] = now
       }
@@ -145,6 +149,7 @@ struct MotionState: Equatable {
 extension EditorBadge {
   /// Whether switching from this badge to `other` changes what's drawn (status, label, unread dot).
   func looksDifferent(from other: EditorBadge) -> Bool {
-    status != other.status || displayLabel != other.displayLabel || (unread > 0) != (other.unread > 0)
+    status != other.status || displayLabel != other.displayLabel
+      || (unread > 0) != (other.unread > 0)
   }
 }

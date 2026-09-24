@@ -28,7 +28,8 @@ public enum AgentText {
     return UTF16Buffer(line).withPointer { p, n in
       guard let marker = findMarker(p, 0, n) else { return nil }
       return AgentLine(
-        text: String(utf16: p, 0..<marker.from), threadId: marker.threadId.map { String(utf16: p, $0) },
+        text: String(utf16: p, 0..<marker.from),
+        threadId: marker.threadId.map { String(utf16: p, $0) },
         markerFrom: marker.from)
     }
   }
@@ -69,7 +70,8 @@ public enum AgentText {
 
   @inline(__always)
   static func isThreadIdUnit(_ u: UInt16) -> Bool {
-    (u >= 0x41 && u <= 0x5A) || (u >= 0x61 && u <= 0x7A) || (u >= 0x30 && u <= 0x39) || u == 0x5F || u == 0x2D
+    (u >= 0x41 && u <= 0x5A) || (u >= 0x61 && u <= 0x7A) || (u >= 0x30 && u <= 0x39) || u == 0x5F
+      || u == 0x2D
   }
 
   /// `AGENT_MARKER_RE` on the code units `start..<end`, which the regex anchors at the end: where
@@ -91,7 +93,8 @@ public enum AgentText {
     var threadId: Range<Int>?
     if close - idStart == 5, idStart - start >= 2, matches(p, idStart - 2, "%%agent") {
       matchStart = idStart - 2
-    } else if (1...maxThreadIdLength).contains(close - idStart), idStart - start >= 8, p[idStart - 1] == 0x3A,
+    } else if (1...maxThreadIdLength).contains(close - idStart), idStart - start >= 8,
+      p[idStart - 1] == 0x3A,
       matches(p, idStart - 8, "%%agent")
     {
       matchStart = idStart - 8
@@ -105,9 +108,13 @@ public enum AgentText {
   }
 
   /// Whether the ASCII `literal` occurs at `index`.
-  private static func matches(_ p: UnsafePointer<UInt16>, _ index: Int, _ literal: StaticString) -> Bool {
+  private static func matches(_ p: UnsafePointer<UInt16>, _ index: Int, _ literal: StaticString)
+    -> Bool
+  {
     literal.withUTF8Buffer { bytes in
-      for (offset, byte) in bytes.enumerated() where p[index + offset] != UInt16(byte) { return false }
+      for (offset, byte) in bytes.enumerated() where p[index + offset] != UInt16(byte) {
+        return false
+      }
       return true
     }
   }

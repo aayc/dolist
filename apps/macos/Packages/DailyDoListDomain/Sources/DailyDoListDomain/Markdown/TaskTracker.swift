@@ -110,24 +110,31 @@ public enum TaskTracker {
       guard ci >= 0 else {
         tasks.append(
           TrackedTask(
-            id: idFactory(), text: p.text, status: p.status, line: p.line, depth: p.depth, parentId: nil,
+            id: idFactory(), text: p.text, status: p.status, line: p.line, depth: p.depth,
+            parentId: nil,
             notes: p.notes, firstSeenAt: now, updatedAt: now, agent: p.agent))
         changes.append(nil)
         continue
       }
       let prev = previous[ci]
       usedPrevious[ci] = true
-      let change = (text: !prev.text.jsEquals(p.text), notes: !sameNotes(prev.notes, p.notes), status: prev.status != p.status)
+      let change = (
+        text: !prev.text.jsEquals(p.text), notes: !sameNotes(prev.notes, p.notes),
+        status: prev.status != p.status
+      )
       tasks.append(
         TrackedTask(
           id: prev.id, text: p.text, status: p.status, line: p.line, depth: p.depth, parentId: nil,
           notes: p.notes, firstSeenAt: prev.firstSeenAt,
-          updatedAt: change.text || change.notes || change.status ? now : prev.updatedAt, agent: p.agent))
+          updatedAt: change.text || change.notes || change.status ? now : prev.updatedAt,
+          agent: p.agent))
       changes.append(change)
     }
     let taskAtLine = lineLookup(parsed)
     for (pi, p) in parsed.enumerated() {
-      if let line = p.parentLine, let parent = taskAtLine(line) { tasks[pi].parentId = tasks[parent].id }
+      if let line = p.parentLine, let parent = taskAtLine(line) {
+        tasks[pi].parentId = tasks[parent].id
+      }
     }
 
     var diff = TaskDiff()
@@ -177,7 +184,8 @@ public enum TaskTracker {
   public static func makeID() -> String {
     let alphabet = Array("0123456789abcdefghijklmnopqrstuvwxyz".utf8)
     var generator = SystemRandomNumberGenerator()
-    let body = (0..<10).map { _ in alphabet[Int(UInt8.random(in: 0...255, using: &generator)) % 36] }
+    let body = (0..<10).map { _ in alphabet[Int(UInt8.random(in: 0...255, using: &generator)) % 36]
+    }
     return "tsk_" + String(decoding: body, as: UTF8.self)
   }
 
@@ -207,7 +215,9 @@ struct TaskMatcher {
   let parsedText: [TextFeatures]
   let threshold: Double
 
-  init(previous: [(text: String, line: Int)], parsed: [(text: String, line: Int)], threshold: Double) {
+  init(
+    previous: [(text: String, line: Int)], parsed: [(text: String, line: Int)], threshold: Double
+  ) {
     previousLines = previous.map(\.line)
     parsedLines = parsed.map(\.line)
     previousText = previous.map { TextFeatures($0.text) }
@@ -228,7 +238,10 @@ struct TaskMatcher {
       groupOf.withUnsafeMutableBufferPointer { groupBuffer in
         let s = slotBuffer.baseAddress!
         for (index, text) in features.enumerated() {
-          var slot = Int(truncatingIfNeeded: UInt64(bitPattern: Int64(text.hash)) &* 0x9E37_79B9_7F4A_7C15 >> 32) & mask
+          var slot =
+            Int(
+              truncatingIfNeeded: UInt64(bitPattern: Int64(text.hash)) &* 0x9E37_79B9_7F4A_7C15
+                >> 32) & mask
           while true {
             let first = s[slot]
             if first < 0 {
@@ -343,13 +356,19 @@ struct TaskMatcher {
       }
     }
     pairs.sort { $0.score != $1.score ? $0.score > $1.score : $0.order < $1.order }
-    for pair in pairs where matchOf[pair.pi] < 0 && !usedPrevious[pair.ci] { link(pair.pi, pair.ci) }
+    for pair in pairs where matchOf[pair.pi] < 0 && !usedPrevious[pair.ci] {
+      link(pair.pi, pair.ci)
+    }
 
     // Pass 3: in-place rewrite on the same line.
     var openByLine: [Int: [Int]] = [:]
-    for ci in previousLines.indices where !usedPrevious[ci] { openByLine[previousLines[ci], default: []].append(ci) }
+    for ci in previousLines.indices where !usedPrevious[ci] {
+      openByLine[previousLines[ci], default: []].append(ci)
+    }
     for pi in parsedLines.indices where matchOf[pi] < 0 {
-      guard let ci = openByLine[parsedLines[pi]]?.first(where: { !usedPrevious[$0] }) else { continue }
+      guard let ci = openByLine[parsedLines[pi]]?.first(where: { !usedPrevious[$0] }) else {
+        continue
+      }
       if parsedText[pi].similarity(previousText[ci]) >= 0.3 { link(pi, ci) }
     }
     return matchOf

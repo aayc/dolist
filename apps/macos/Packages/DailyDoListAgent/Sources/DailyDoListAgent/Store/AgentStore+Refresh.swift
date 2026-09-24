@@ -24,7 +24,9 @@ extension AgentStore {
     async let pending = Self.capture { try await client.approvals(status: .pending) }
     async let list = Self.capture { try await client.threads(notePath: listFilter, taskId: nil) }
     async let records = Self.fetchRecords(client: client, notes: notes)
-    let (statusResult, pendingResult, listResult, recordResults) = await (status, pending, list, records)
+    let (statusResult, pendingResult, listResult, recordResults) = await (
+      status, pending, list, records
+    )
     guard generation == refreshGeneration else { return }
 
     var failure: Error?

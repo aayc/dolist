@@ -7,7 +7,9 @@
 func namedKeyEnd(_ u: [UInt16], _ i: Int) -> Int? {
   guard i < u.count, u[i] == 0x3C else { return nil }
   var j = i + 1
-  while j + 1 < u.count, [0x43, 0x53, 0x4D, 0x41, 0x63, 0x73, 0x6D, 0x61].contains(u[j]), u[j + 1] == 0x2D { j += 2 }
+  while j + 1 < u.count, [0x43, 0x53, 0x4D, 0x41, 0x63, 0x73, 0x6D, 0x61].contains(u[j]),
+    u[j + 1] == 0x2D
+  { j += 2 }
   let start = j
   while j < u.count, isJSAsciiWordChar(u[j]) { j += 1 }
   guard j > start, j < u.count, u[j] == 0x3E else { return nil }
@@ -42,9 +44,12 @@ extension Vim {
   /// `enterVimMode(cm)`.
   func enterVimMode(_ cm: EditorAdapter) {
     cm.signal(.vimModeChange, .modeChange(mode: "normal", subMode: nil))
-    cm.on(.cursorActivity, onCursorActivityToken) { [unowned self, unowned cm] _ in self.onCursorActivity(cm) }
+    cm.on(.cursorActivity, onCursorActivityToken) { [unowned self, unowned cm] _ in
+      self.onCursorActivity(cm)
+    }
     maybeInitVimState(cm)
-    cm.inputFieldPaste.append((onCursorActivityToken, { [unowned self, unowned cm] in self.onPaste(cm) }))
+    cm.inputFieldPaste.append(
+      (onCursorActivityToken, { [unowned self, unowned cm] in self.onPaste(cm) }))
   }
 
   /// `leaveVimMode(cm)`.
@@ -81,7 +86,9 @@ extension Vim {
   }
 
   /// `findKey(cm, key, origin)`: nil when the key isn't handled, else the function to run.
-  func findKey(_ cm: EditorAdapter, _ key: VimText, _ origin: String?) throws -> (() throws -> Bool)? {
+  func findKey(_ cm: EditorAdapter, _ key: VimText, _ origin: String?) throws -> (
+    () throws -> Bool
+  )? {
     let vim = maybeInitVimState(cm)
 
     func handleMacroRecording() -> Bool {
@@ -133,7 +140,8 @@ extension Vim {
         lastInsertModeKeyTimer = nil
         if keysAreChars {
           let delay = (option("insertModeEscKeysTimeout")?.numberValue ?? 0) / 1000
-          lastInsertModeKeyTimer = scheduler.schedule(after: delay) { [unowned self, unowned cm, unowned vim] in
+          lastInsertModeKeyTimer = scheduler.schedule(after: delay) {
+            [unowned self, unowned cm, unowned vim] in
             if vim.insertMode && !vim.inputState.keyBuffer.isEmpty { self.clearInputState(cm) }
           }
           let selections = cm.listSelections()
@@ -166,7 +174,9 @@ extension Vim {
       if command != nil, let changeQueue {
         for (i, sel) in cm.listSelections().enumerated() {
           let here = sel.head
-          try cm.replaceRange(i < changeQueue.removed.count ? changeQueue.removed[i] : VimText(), here.offsetting(0, -changeQueue.inserted.length), here)
+          try cm.replaceRange(
+            i < changeQueue.removed.count ? changeQueue.removed[i] : VimText(),
+            here.offsetting(0, -changeQueue.inserted.length), here)
         }
         if !globalState.macroModeState.lastInsertModeChanges.changes.isEmpty {
           globalState.macroModeState.lastInsertModeChanges.changes.removeLast()
@@ -243,7 +253,10 @@ extension Vim {
   private func isAltKey(_ key: VimText) -> Bool {
     let u = key.units
     guard u.count >= 5 else { return false }
-    for i in 0...(u.count - 5) where u[i] == 0x3C && u[i + 1] == 0x41 && u[i + 2] == 0x2D && !isJSLineTerminator(u[i + 3]) && u[i + 4] == 0x3E {
+    for i in 0...(u.count - 5)
+    where u[i] == 0x3C && u[i + 1] == 0x41 && u[i + 2] == 0x2D && !isJSLineTerminator(u[i + 3])
+      && u[i + 4] == 0x3E
+    {
       return true
     }
     return false
@@ -274,11 +287,14 @@ extension Vim {
   }
 
   /// `commandDispatcher.matchCommand(keys, keyMap, inputState, context)`.
-  func matchCommand(_ keys: VimText, _ inputState: InputState, _ context: KeyContext) -> CommandMatch {
+  func matchCommand(_ keys: VimText, _ inputState: InputState, _ context: KeyContext)
+    -> CommandMatch
+  {
     let (partial, full) = commandMatches(keys, context, inputState)
     guard let bestMatch = full.first else {
       if !partial.isEmpty {
-        return .partial(expectLiteralNext: partial.count == 1 && partial[0].keys.slice(-11) == "<character>")
+        return .partial(
+          expectLiteralNext: partial.count == 1 && partial[0].keys.slice(-11) == "<character>")
       }
       return .none
     }
@@ -291,7 +307,9 @@ extension Vim {
   }
 
   /// `commandMatches(keys, keyMap, context, inputState)`.
-  private func commandMatches(_ keys: VimText, _ contextIn: KeyContext, _ inputState: InputState) -> ([VimCommand], [VimCommand]) {
+  private func commandMatches(_ keys: VimText, _ contextIn: KeyContext, _ inputState: InputState)
+    -> ([VimCommand], [VimCommand])
+  {
     var context = contextIn
     if inputState.operator != nil { context = .operatorPending }
     var partial: [VimCommand] = []
@@ -335,7 +353,8 @@ extension Vim {
     // /^.*(<[^>]+>)$/: a named key at the very end, after no line terminator.
     var selected = keys.slice(-1)
     let u = keys.units
-    if u.last == 0x3E, !u.contains(where: isJSLineTerminator), let open = u.lastIndex(of: 0x3C), open < u.count - 2,
+    if u.last == 0x3E, !u.contains(where: isJSLineTerminator), let open = u.lastIndex(of: 0x3C),
+      open < u.count - 2,
       !u[(open + 1)..<(u.count - 1)].contains(0x3E)
     {
       selected = VimText(u[open...])

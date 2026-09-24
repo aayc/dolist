@@ -33,10 +33,13 @@ extension FakeDaemon {
     return Self.noteResponse(path, file)
   }
 
-  func writeNote(_ input: String, content: String, baseVersion: BaseVersion) throws(DaemonClientError) -> WriteNoteResponse {
+  func writeNote(_ input: String, content: String, baseVersion: BaseVersion)
+    throws(DaemonClientError) -> WriteNoteResponse
+  {
     let path = try FakeVaultPaths.resolveNotePath(input)
     guard content.utf16.count <= Self.maxNoteCharacters else {
-      throw .invalidRequest("✖ Too big: expected string to have <=\(Self.maxNoteCharacters) characters\n  → at content")
+      throw .invalidRequest(
+        "✖ Too big: expected string to have <=\(Self.maxNoteCharacters) characters\n  → at content")
     }
     if case .match(let version) = baseVersion, version.isEmpty || version.utf16.count > 256 {
       throw .invalidRequest("✖ Invalid baseVersion\n  → at baseVersion")
@@ -50,7 +53,10 @@ extension FakeDaemon {
       throw Self.internalError()
     }
     emitVaultChange(
-      [VaultChange(path: path, kind: result.created ? .created : .modified, version: result.file.version)], origin: .client)
+      [
+        VaultChange(
+          path: path, kind: result.created ? .created : .modified, version: result.file.version)
+      ], origin: .client)
     observeNote(path, content: content)
     return WriteNoteResponse(path: path, version: result.file.version, mtime: result.file.mtime)
   }
@@ -78,10 +84,14 @@ extension FakeDaemon {
       do {
         moves = try vault.renameFolder(folder, to: target)
       } catch .targetExists {
-        throw .http(status: 409, body: ApiErrorBody(error: .conflict, message: "\"\(target)\" already exists"))
+        throw .http(
+          status: 409, body: ApiErrorBody(error: .conflict, message: "\"\(target)\" already exists")
+        )
       } catch {
         throw .http(
-          status: 409, body: ApiErrorBody(error: .conflict, message: "\"\(target)\" already exists or is inside \"\(folder)\""))
+          status: 409,
+          body: ApiErrorBody(
+            error: .conflict, message: "\"\(target)\" already exists or is inside \"\(folder)\""))
       }
       emitMoves(moves)
       return .folder(FolderRenameResponse(path: target, moved: moves.count))
@@ -122,12 +132,15 @@ extension FakeDaemon {
     } catch {
       throw Self.internalError()
     }
-    emitVaultChange(result.moves.map { VaultChange(path: $0.from, kind: .deleted) }, origin: .client)
+    emitVaultChange(
+      result.moves.map { VaultChange(path: $0.from, kind: .deleted) }, origin: .client)
     for move in result.moves { forgetNote(move.from) }
     return TrashResponse(trashedTo: result.trashedTo)
   }
 
-  func dailyNote(_ dateParameter: String, create: Bool) throws(DaemonClientError) -> DailyNoteResponse {
+  func dailyNote(_ dateParameter: String, create: Bool) throws(DaemonClientError)
+    -> DailyNoteResponse
+  {
     let date: LocalDate
     if dateParameter == "today" {
       date = today
@@ -147,16 +160,19 @@ extension FakeDaemon {
     }
     if let existing = vault.file(path) {
       return DailyNoteResponse(
-        path: path, content: existing.content, version: existing.version, mtime: existing.mtime, date: date.iso,
+        path: path, content: existing.content, version: existing.version, mtime: existing.mtime,
+        date: date.iso,
         created: false)
     }
     guard create else { throw .notFound("No daily note for \(date.iso)") }
     let content = renderDailyNote(path, date: date)
     let (file, _) = vault.store(path, content, mtime: nowMillis)
-    emitVaultChange([VaultChange(path: path, kind: .created, version: file.version)], origin: .client)
+    emitVaultChange(
+      [VaultChange(path: path, kind: .created, version: file.version)], origin: .client)
     observeNote(path, content: content)
     return DailyNoteResponse(
-      path: path, content: content, version: file.version, mtime: file.mtime, date: date.iso, created: true)
+      path: path, content: content, version: file.version, mtime: file.mtime, date: date.iso,
+      created: true)
   }
 
   /// The template rendered for `date`, or `- [ ] ` without a (readable) template.
@@ -164,21 +180,26 @@ extension FakeDaemon {
     guard let templatePath = try? FakeCalendar.templateNotePath(settings.dailyNotes.template),
       !FakeVaultPaths.isSidecar(templatePath), let template = vault.file(templatePath)
     else { return FakeCalendar.defaultDailyNoteContent }
-    return calendar.renderTemplate(template.content, title: FakeVaultPaths.stem(path), date: date, now: now)
+    return calendar.renderTemplate(
+      template.content, title: FakeVaultPaths.stem(path), date: date, now: now)
   }
 
   func search(_ query: String, limit: Int?) throws(DaemonClientError) -> SearchResponse {
     let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-    if trimmed.utf16.count > 500 { throw .invalidRequest("✖ Too big: expected string to have <=500 characters\n  → at q") }
+    if trimmed.utf16.count > 500 {
+      throw .invalidRequest("✖ Too big: expected string to have <=500 characters\n  → at q")
+    }
     if let limit, limit < 1 { throw .invalidRequest("✖ must be a positive integer\n  → at limit") }
     let max = min(limit ?? 50, 200)
-    return SearchResponse(hits: FakeVaultSearch.search(trimmed, in: vault.searchableNotes, limit: max))
+    return SearchResponse(
+      hits: FakeVaultSearch.search(trimmed, in: vault.searchableNotes, limit: max))
   }
 
   func updateSettings(_ patch: SettingsPatch) throws(DaemonClientError) -> AppSettings {
     let validated = try FakeSettings.validate(patch)
     let next = settings.applying(validated)
-    let problems = FakeSettings.pathProblems(next, touched: validated, today: today, calendar: calendar)
+    let problems = FakeSettings.pathProblems(
+      next, touched: validated, today: today, calendar: calendar)
     if !problems.isEmpty { throw .invalidRequest(problems.joined(separator: "; ")) }
     let agentChanged = next.agent != settings.agent
     let disabled = settings.agent.enabled && !next.agent.enabled
@@ -211,7 +232,9 @@ extension FakeDaemon {
       return
     }
     let (file, created) = vault.store(path, content, mtime: nowMillis)
-    emitVaultChange([VaultChange(path: path, kind: created ? .created : .modified, version: file.version)], origin: .external)
+    emitVaultChange(
+      [VaultChange(path: path, kind: created ? .created : .modified, version: file.version)],
+      origin: .external)
     observeNote(path, content: content)
   }
 

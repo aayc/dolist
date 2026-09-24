@@ -11,7 +11,8 @@ func captureError<T>(
 ) async -> DaemonClientError? {
   do {
     _ = try await body()
-    Issue.record("expected a DaemonClientError, but the call succeeded", sourceLocation: sourceLocation)
+    Issue.record(
+      "expected a DaemonClientError, but the call succeeded", sourceLocation: sourceLocation)
     return nil
   } catch let error as DaemonClientError {
     return error
@@ -42,7 +43,8 @@ extension EventLog {
     from: Int = 0, text: String, status statuses: Set<TaskAgentStatus> = [],
     timeout: Duration = .seconds(60)
   ) async throws -> TaskAgentRecord {
-    let wanted = statuses.isEmpty ? "any status" : statuses.map(\.rawValue).sorted().joined(separator: "/")
+    let wanted =
+      statuses.isEmpty ? "any status" : statuses.map(\.rawValue).sorted().joined(separator: "/")
     return try await event(from: from, timeout: timeout, "task “\(text)” (\(wanted))") { event in
       let records: [TaskAgentRecord]
       switch event {
@@ -67,7 +69,8 @@ extension EventLog {
     -> VaultChangedEvent
   {
     try await event(from: from, timeout: timeout, "vault.changed for \(path)") { event in
-      guard case .vaultChanged(let change) = event, change.changes.contains(where: { $0.path == path })
+      guard case .vaultChanged(let change) = event,
+        change.changes.contains(where: { $0.path == path })
       else { return nil }
       return change
     }

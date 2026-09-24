@@ -12,7 +12,8 @@ struct MarkdownTests {
   private func allLinks(_ blocks: [MarkdownBlock]) -> [URL] {
     blocks.flatMap { block -> [URL] in
       switch block {
-      case .paragraph(_, let text), .heading(_, _, let text), .listItem(_, _, _, let text), .quote(_, let text):
+      case .paragraph(_, let text), .heading(_, _, let text), .listItem(_, _, _, let text),
+        .quote(_, let text):
         return links(in: text)
       case .table(_, let header, let rows):
         return (header + rows.flatMap { $0 }).flatMap(links(in:))
@@ -24,8 +25,11 @@ struct MarkdownTests {
 
   @Test func onlyWebAndMailLinksSurvive() {
     let blocks = MarkdownRenderer.blocks(
-      from: "[ok](https://example.com) [mail](mailto:sam@example.com) [js](javascript:alert(1)) [file](file:///etc/hosts) [rel](../notes) [app](x-apple.systempreferences:com.apple)")
-    #expect(allLinks(blocks).map(\.absoluteString) == ["https://example.com", "mailto:sam@example.com"])
+      from:
+        "[ok](https://example.com) [mail](mailto:sam@example.com) [js](javascript:alert(1)) [file](file:///etc/hosts) [rel](../notes) [app](x-apple.systempreferences:com.apple)"
+    )
+    #expect(
+      allLinks(blocks).map(\.absoluteString) == ["https://example.com", "mailto:sam@example.com"])
     guard case .paragraph(_, let text) = blocks.first else {
       Issue.record("expected a paragraph")
       return
@@ -72,27 +76,31 @@ struct MarkdownTests {
       switch block {
       case .heading(_, let level, let text): kinds.append("h\(level):\(String(text.characters))")
       case .paragraph(_, let text): kinds.append("p:\(String(text.characters))")
-      case .listItem(_, let marker, let depth, let text): kinds.append("li\(depth)\(marker ?? "_"):\(String(text.characters))")
+      case .listItem(_, let marker, let depth, let text):
+        kinds.append("li\(depth)\(marker ?? "_"):\(String(text.characters))")
       case .quote(_, let text): kinds.append("q:\(String(text.characters))")
       case .code(_, let language, let code): kinds.append("code(\(language ?? "")):\(code)")
       case .table(_, let header, let rows):
-        kinds.append("table:\(header.map { String($0.characters) })|\(rows.map { $0.map { String($0.characters) } })")
+        kinds.append(
+          "table:\(header.map { String($0.characters) })|\(rows.map { $0.map { String($0.characters) } })"
+        )
       case .rule: kinds.append("rule")
       }
     }
-    #expect(kinds == [
-      "h1:Title",
-      "p:Line one\nline two",
-      "li1•:first",
-      "li1•:second",
-      "li2•:nested",
-      "li11.:one",
-      "li12.:two",
-      "q:quoted",
-      "code(swift):let x = 1",
-      "table:[\"A\", \"B\"]|[[\"1\", \"2\"], [\"3\", \"4\"]]",
-      "rule",
-    ])
+    #expect(
+      kinds == [
+        "h1:Title",
+        "p:Line one\nline two",
+        "li1•:first",
+        "li1•:second",
+        "li2•:nested",
+        "li11.:one",
+        "li12.:two",
+        "q:quoted",
+        "code(swift):let x = 1",
+        "table:[\"A\", \"B\"]|[[\"1\", \"2\"], [\"3\", \"4\"]]",
+        "rule",
+      ])
   }
 
   @Test func continuationParagraphsOfAListItemHaveNoMarker() {
@@ -105,7 +113,8 @@ struct MarkdownTests {
   }
 
   @Test func rawHTMLIsDroppedAndImagesShowTheirAltText() {
-    let blocks = MarkdownRenderer.blocks(from: "Hello <b>bold</b> ![a cat](https://example.com/cat.png)")
+    let blocks = MarkdownRenderer.blocks(
+      from: "Hello <b>bold</b> ![a cat](https://example.com/cat.png)")
     guard case .paragraph(_, let text) = blocks.first else {
       Issue.record("expected a paragraph")
       return
@@ -114,7 +123,10 @@ struct MarkdownTests {
   }
 
   @Test func blockIdsAreUnique() {
-    let blocks = MarkdownRenderer.blocks(from: SampleData.snapshot().artifacts["art_sample_desks"].map { String(decoding: $0.data, as: UTF8.self) } ?? "")
+    let blocks = MarkdownRenderer.blocks(
+      from: SampleData.snapshot().artifacts["art_sample_desks"].map {
+        String(decoding: $0.data, as: UTF8.self)
+      } ?? "")
     #expect(!blocks.isEmpty)
     #expect(Set(blocks.map(\.id)).count == blocks.count)
   }
@@ -129,10 +141,12 @@ struct MarkdownTests {
 @Suite("Link and HTML policies")
 struct SafetyPolicyTests {
   @Test(arguments: [
-    ("https://example.com/path?q=1", true), ("http://example.com", true), ("HTTPS://EXAMPLE.COM", true),
+    ("https://example.com/path?q=1", true), ("http://example.com", true),
+    ("HTTPS://EXAMPLE.COM", true),
     ("mailto:sam@example.com", true), ("mailto:", false), ("javascript:alert(1)", false),
     ("file:///etc/hosts", false), ("ftp://example.com", false), ("http:relative", false),
-    ("x-apple.systempreferences:com.apple.preference.security", false), ("data:text/html,hi", false),
+    ("x-apple.systempreferences:com.apple.preference.security", false),
+    ("data:text/html,hi", false),
     ("ddl://open", false),
   ])
   func linkPolicy(link: String, allowed: Bool) throws {
@@ -190,21 +204,35 @@ struct InboxGroupingTests {
   @Test func showsTodayPlusOlderThreadsThatStillNeedAttentionNewestFirst() {
     let sections = InboxGrouping.sections(
       for: [
-        Fixture.summary("old-done", status: .done, createdAt: Self.yesterday, updatedAt: Self.yesterday),
-        Fixture.summary("old-waiting", status: .waitingApproval, createdAt: Self.yesterday, updatedAt: Self.yesterday),
-        Fixture.summary("old-working", status: .working, createdAt: Self.yesterday, updatedAt: Self.yesterday),
-        Fixture.summary("done-a", status: .done, createdAt: Self.nowMillis - 9_000, updatedAt: Self.nowMillis - 5_000),
-        Fixture.summary("done-b", status: .done, createdAt: Self.nowMillis - 9_000, updatedAt: Self.nowMillis - 100),
-        Fixture.summary("created-today", status: .failed, createdAt: Self.nowMillis - 1_000, updatedAt: Self.yesterday),
+        Fixture.summary(
+          "old-done", status: .done, createdAt: Self.yesterday, updatedAt: Self.yesterday),
+        Fixture.summary(
+          "old-waiting", status: .waitingApproval, createdAt: Self.yesterday,
+          updatedAt: Self.yesterday),
+        Fixture.summary(
+          "old-working", status: .working, createdAt: Self.yesterday, updatedAt: Self.yesterday),
+        Fixture.summary(
+          "done-a", status: .done, createdAt: Self.nowMillis - 9_000,
+          updatedAt: Self.nowMillis - 5_000),
+        Fixture.summary(
+          "done-b", status: .done, createdAt: Self.nowMillis - 9_000,
+          updatedAt: Self.nowMillis - 100),
+        Fixture.summary(
+          "created-today", status: .failed, createdAt: Self.nowMillis - 1_000,
+          updatedAt: Self.yesterday),
       ],
       now: Self.now, calendar: Self.calendar)
     #expect(sections.map(\.group) == [.needsYou, .working, .done, .other])
-    #expect(sections.map { $0.threads.map(\.id) } == [["old-waiting"], ["old-working"], ["done-b", "done-a"], ["created-today"]])
+    #expect(
+      sections.map { $0.threads.map(\.id) } == [
+        ["old-waiting"], ["old-working"], ["done-b", "done-a"], ["created-today"],
+      ])
   }
 
   @Test func aLocallyKnownPendingApprovalMovesAThreadUp() {
     let sections = InboxGrouping.sections(
-      for: [Fixture.summary(status: .working, updatedAt: Self.nowMillis)], pendingApprovalThreadIds: ["thr_1"],
+      for: [Fixture.summary(status: .working, updatedAt: Self.nowMillis)],
+      pendingApprovalThreadIds: ["thr_1"],
       now: Self.now, calendar: Self.calendar)
     #expect(sections.map(\.group) == [.needsYou])
   }

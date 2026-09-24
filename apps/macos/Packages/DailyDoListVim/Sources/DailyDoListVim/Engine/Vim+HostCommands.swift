@@ -31,7 +31,9 @@ extension Vim {
   /// `Vim.mapCommand(keys, "action", name, {forward}, {context})`: maps `keys` to a defined
   /// action in `context` ("normal", "insert", "visual"; nil for all). Like any user mapping it
   /// goes first and `:mapclear` removes it (see `didMapclear`).
-  public func mapAction(_ keys: String, action: String, forward: Bool = false, context: String? = nil) {
+  public func mapAction(
+    _ keys: String, action: String, forward: Bool = false, context: String? = nil
+  ) {
     let command = VimCommand(keys: VimText(keys), type: .action)
     command.action = action
     command.actionArgs = ActionArgs(forward: forward)

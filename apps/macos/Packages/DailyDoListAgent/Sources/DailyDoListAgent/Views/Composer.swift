@@ -11,21 +11,26 @@ struct Composer: View {
 
   var body: some View {
     let unavailable = store.unavailableReason
-    let canSend = unavailable == nil && !sending
+    let canSend =
+      unavailable == nil && !sending
       && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     VStack(alignment: .leading, spacing: 4) {
       HStack(alignment: .bottom, spacing: 8) {
         ZStack(alignment: .topLeading) {
           if text.isEmpty {
-            Text(unavailable == nil ? "Reply to the agent…" : "Replies are off while the agent can't act")
-              .foregroundStyle(AgentTheme.faint)
-              .padding(.leading, 7)
-              .padding(.top, 3)
-              .allowsHitTesting(false)
+            Text(
+              unavailable == nil
+                ? "Reply to the agent…" : "Replies are off while the agent can't act"
+            )
+            .foregroundStyle(AgentTheme.faint)
+            .padding(.leading, 7)
+            .padding(.top, 3)
+            .allowsHitTesting(false)
           }
           ComposerTextView(
-            text: $text, height: $height, isEditable: unavailable == nil, onSubmit: send)
-            .frame(height: height)
+            text: $text, height: $height, isEditable: unavailable == nil, onSubmit: send
+          )
+          .frame(height: height)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 5)

@@ -27,7 +27,9 @@ struct UTF16Buffer {
 }
 
 /// Calls `body` with a pointer to `units` and their count (a dummy pointer when empty).
-func withUTF16Pointer<R>(_ units: [UInt16], _ body: (UnsafePointer<UInt16>, Int) throws -> R) rethrows -> R {
+func withUTF16Pointer<R>(_ units: [UInt16], _ body: (UnsafePointer<UInt16>, Int) throws -> R)
+  rethrows -> R
+{
   try units.withUnsafeBufferPointer { buffer in
     if let base = buffer.baseAddress { return try body(base, buffer.count) }
     var zero: UInt16 = 0

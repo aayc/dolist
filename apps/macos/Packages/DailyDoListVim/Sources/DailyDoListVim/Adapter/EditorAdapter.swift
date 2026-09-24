@@ -105,12 +105,15 @@ final class EditorAdapter {
 
   // MARK: Events
 
-  func on(_ event: EditorEvent, _ token: HandlerToken, _ fn: @escaping (EditorEventPayload) -> Void) {
+  func on(_ event: EditorEvent, _ token: HandlerToken, _ fn: @escaping (EditorEventPayload) -> Void)
+  {
     handlers[event, default: []].append((token, fn))
   }
 
   func off(_ event: EditorEvent, _ token: HandlerToken) {
-    guard var list = handlers[event], let index = list.firstIndex(where: { $0.0 === token }) else { return }
+    guard var list = handlers[event], let index = list.firstIndex(where: { $0.0 === token }) else {
+      return
+    }
     list.remove(at: index)
     handlers[event] = list
   }
@@ -121,13 +124,17 @@ final class EditorAdapter {
     for (_, fn) in list { fn(payload) }
   }
 
-  private func signalTo(_ list: [(HandlerToken, (EditorEventPayload) -> Void)]?, _ payload: EditorEventPayload) {
+  private func signalTo(
+    _ list: [(HandlerToken, (EditorEventPayload) -> Void)]?, _ payload: EditorEventPayload
+  ) {
     guard let list else { return }
     for (_, fn) in list { fn(payload) }
   }
 
   func onInputFieldKeydown(_ token: HandlerToken, _ fn: @escaping (DOMKeyEvent) -> Void) {
-    if !inputFieldKeydown.contains(where: { $0.0 === token }) { inputFieldKeydown.append((token, fn)) }
+    if !inputFieldKeydown.contains(where: { $0.0 === token }) {
+      inputFieldKeydown.append((token, fn))
+    }
   }
 
   func offInputFieldKeydown(_ token: HandlerToken) {
@@ -180,7 +187,8 @@ final class EditorAdapter {
   /// outside the document.
   func posFromIndexChecked(_ offset: Int) throws -> Pos {
     guard offset >= 0 && offset <= host.vimLength else {
-      throw JSException.rangeError("Invalid position \(offset) in document of length \(host.vimLength)")
+      throw JSException.rangeError(
+        "Invalid position \(offset) in document of length \(host.vimLength)")
     }
     return posFromIndex(offset)
   }
@@ -231,13 +239,18 @@ final class EditorAdapter {
   /// The current selection (with the flags of the last applied selection when unchanged).
   var selection: EditorSelection {
     let current = host.vimSelection
-    if let applied = appliedSelection, applied.ranges.count == current.ranges.count, applied.mainIndex == current.mainIndex,
-      zip(applied.ranges, current.ranges).allSatisfy({ $0.anchor == $1.anchor && $0.head == $1.head })
+    if let applied = appliedSelection, applied.ranges.count == current.ranges.count,
+      applied.mainIndex == current.mainIndex,
+      zip(applied.ranges, current.ranges).allSatisfy({
+        $0.anchor == $1.anchor && $0.head == $1.head
+      })
     {
       return applied
     }
     let ranges = current.ranges.map { SelRange.range($0.anchor, $0.head) }
-    let sel = EditorSelection(ranges: ranges.isEmpty ? [.cursor(0)] : ranges, mainIndex: ranges.isEmpty ? 0 : current.mainIndex)
+    let sel = EditorSelection(
+      ranges: ranges.isEmpty ? [.cursor(0)] : ranges,
+      mainIndex: ranges.isEmpty ? 0 : current.mainIndex)
     appliedSelection = sel
     return sel
   }
@@ -298,12 +311,16 @@ final class EditorAdapter {
   // MARK: Changes
 
   /// `dispatchChange`: vim's edits are labeled so one command is one undo step.
-  func dispatchChange(_ changes: ChangeSet, selection: EditorSelection? = nil, userEvent: String? = nil, scrollIntoView: Bool = false) {
+  func dispatchChange(
+    _ changes: ChangeSet, selection: EditorSelection? = nil, userEvent: String? = nil,
+    scrollIntoView: Bool = false
+  ) {
     if host.vimIsReadOnly { return }
     var type = "input.type.compose"
     if let op = curOp, op.lastChange == nil { type = "input.type.compose.start" }
     let event = userEvent == nil || userEvent == "input" ? type : userEvent
-    dispatch(changes: changes, selection: selection, userEvent: event, scrollIntoView: scrollIntoView)
+    dispatch(
+      changes: changes, selection: selection, userEvent: event, scrollIntoView: scrollIntoView)
   }
 
   func replaceRange(_ text: VimText, _ s: Pos, _ e: Pos? = nil) throws {
@@ -315,21 +332,27 @@ final class EditorAdapter {
 
   func replaceSelection(_ text: VimText) {
     let (changes, sel) = changeByRange { range in
-      ([.init(from: range.from, to: range.to, insert: text)], .cursor(range.from + ChangeSet.normalizeLineBreaks(text).length, assoc: -1))
+      (
+        [.init(from: range.from, to: range.to, insert: text)],
+        .cursor(range.from + ChangeSet.normalizeLineBreaks(text).length, assoc: -1)
+      )
     }
     dispatchChange(changes, selection: sel)
   }
 
   func replaceSelections(_ replacements: [VimText]) {
     let specs = selection.ranges.enumerated().map { i, r in
-      ChangeSet.Spec(from: r.from, to: r.to, insert: i < replacements.count ? replacements[i] : VimText())
+      ChangeSet.Spec(
+        from: r.from, to: r.to, insert: i < replacements.count ? replacements[i] : VimText())
     }
     // Selection ranges are sorted and don't overlap, so this can't throw.
     dispatchChange((try? ChangeSet.of(specs, length: docLength)) ?? .empty(docLength))
   }
 
   /// `EditorState.changeByRange`.
-  func changeByRange(_ f: (SelRange) -> ([ChangeSet.Spec], SelRange)) -> (ChangeSet, EditorSelection) {
+  func changeByRange(_ f: (SelRange) -> ([ChangeSet.Spec], SelRange)) -> (
+    ChangeSet, EditorSelection
+  ) {
     let sel = selection
     let length = docLength
     let first = f(sel.ranges[0])
@@ -348,21 +371,30 @@ final class EditorAdapter {
   }
 
   func setValue(_ text: VimText) {
-    let changes = (try? ChangeSet.of([.init(from: 0, to: docLength, insert: text)], length: docLength)) ?? .empty(docLength)
+    let changes =
+      (try? ChangeSet.of([.init(from: 0, to: docLength, insert: text)], length: docLength))
+      ?? .empty(docLength)
     dispatch(changes: changes, selection: .single(0))
   }
 
   // MARK: Transactions
 
   /// `view.dispatch(transaction)` followed by the vim view plugin's `update`.
-  func dispatch(changes: ChangeSet? = nil, selection newSelection: EditorSelection? = nil, userEvent: String? = nil, scrollIntoView: Bool = false) {
+  func dispatch(
+    changes: ChangeSet? = nil, selection newSelection: EditorSelection? = nil,
+    userEvent: String? = nil, scrollIntoView: Bool = false
+  ) {
     let changes = changes ?? .empty(docLength)
     let resulting = newSelection ?? selection.map(changes)
     var list: [VimChange] = []
-    changes.iterChanges { fromA, toA, _, _, text in list.append(VimChange(from: fromA, to: toA, text: text)) }
+    changes.iterChanges { fromA, toA, _, _, text in
+      list.append(VimChange(from: fromA, to: toA, text: text))
+    }
     var transaction = VimTransaction(
       changes: list,
-      selection: VimSelection(ranges: resulting.ranges.map { .init(anchor: $0.anchor, head: $0.head) }, mainIndex: resulting.mainIndex),
+      selection: VimSelection(
+        ranges: resulting.ranges.map { .init(anchor: $0.anchor, head: $0.head) },
+        mainIndex: resulting.mainIndex),
       userEvent: userEvent, scrollIntoView: scrollIntoView)
     transaction.changeSet = changes
     transaction.selectionIsExplicit = newSelection != nil
@@ -373,8 +405,11 @@ final class EditorAdapter {
 
   /// What the host applied on its own (typing, undo, a mouse selection), reported to vim.
   func hostDidApply(_ transaction: VimTransaction, selectionSet: Bool = true) {
-    let changes = transaction.changeSet ?? ((try? ChangeSet.of(
-      transaction.changes.map { .init(from: $0.from, to: $0.to, insert: $0.text) }, length: docLengthBefore(transaction))) ?? .empty(docLength))
+    let changes =
+      transaction.changeSet
+      ?? ((try? ChangeSet.of(
+        transaction.changes.map { .init(from: $0.from, to: $0.to, insert: $0.text) },
+        length: docLengthBefore(transaction))) ?? .empty(docLength))
     appliedSelection = nil
     viewUpdate(changes: changes.isEmpty ? nil : changes, selectionSet: selectionSet)
   }
@@ -510,7 +545,8 @@ final class EditorAdapter {
     case "tabSize": return .number(Double(host.vimTabSize > 0 ? host.vimTabSize : 4))
     case "readOnly": return .bool(host.vimIsReadOnly)
     case "indentWithTabs": return .bool(host.vimIndentUnit == "\t")
-    case "indentUnit": return .number(Double(host.vimIndentUnit.utf16.isEmpty ? 2 : host.vimIndentUnit.utf16.count))
+    case "indentUnit":
+      return .number(Double(host.vimIndentUnit.utf16.isEmpty ? 2 : host.vimIndentUnit.utf16.count))
     case "textwidth": return textwidth.map { .number(Double($0)) }
     case "keyMap": return .string(keyMap ?? "vim")
     default: return nil
@@ -557,7 +593,9 @@ final class EditorAdapter {
   func runInsertModeKey(_ key: String) {
     let bound = ["Left", "Right", "Up", "Down", "Backspace", "Delete"]
     var name: String? = bound.contains(key) ? key : nil
-    if name == nil, key.hasPrefix("Arrow"), bound.contains(String(key.dropFirst(5))) { name = String(key.dropFirst(5)) }
+    if name == nil, key.hasPrefix("Arrow"), bound.contains(String(key.dropFirst(5))) {
+      name = String(key.dropFirst(5))
+    }
     guard let name else { return }
     if host.vimPerformKey(name) { return }
     switch name {
@@ -574,7 +612,9 @@ final class EditorAdapter {
   func deleteByGrapheme(forward: Bool, scrollIntoView: Bool) {
     if host.vimIsReadOnly { return }
     let (changes, sel) = graphemeDeletion(forward: forward)
-    dispatch(changes: changes, selection: sel, userEvent: forward ? "delete.forward" : "delete.backward", scrollIntoView: scrollIntoView)
+    dispatch(
+      changes: changes, selection: sel, userEvent: forward ? "delete.forward" : "delete.backward",
+      scrollIntoView: scrollIntoView)
   }
 
   /// The changes of `deleteByGrapheme`: each non-empty selection, otherwise the grapheme cluster
@@ -586,11 +626,17 @@ final class EditorAdapter {
       let lineFrom = host.vimLineStart(line)
       let text = host.vimLine(line)
       let offset = range.head - lineFrom
-      var from = range.head, to = range.head
+      var from = range.head
+      var to = range.head
       if forward {
-        to = offset < text.length ? lineFrom + graphemeBoundary(text, offset, forward: true) : min(lineEnd(line) + 1, docLength)
+        to =
+          offset < text.length
+          ? lineFrom + graphemeBoundary(text, offset, forward: true)
+          : min(lineEnd(line) + 1, docLength)
       } else {
-        from = offset > 0 ? lineFrom + graphemeBoundary(text, offset, forward: false) : max(lineFrom - 1, 0)
+        from =
+          offset > 0
+          ? lineFrom + graphemeBoundary(text, offset, forward: false) : max(lineFrom - 1, 0)
       }
       return ([.init(from: from, to: to)], .cursor(from))
     }
@@ -598,7 +644,9 @@ final class EditorAdapter {
 
   /// `state.replaceSelection(text)`: every selection replaced, the cursor after the text.
   func selectionReplacement(_ text: VimText) -> (ChangeSet, EditorSelection) {
-    changeByRange { range in ([.init(from: range.from, to: range.to, insert: text)], .cursor(range.from + text.length)) }
+    changeByRange { range in
+      ([.init(from: range.from, to: range.to, insert: text)], .cursor(range.from + text.length))
+    }
   }
 
   /// `overWriteSelection(text)`: replace mode typing.

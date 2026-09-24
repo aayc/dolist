@@ -31,7 +31,10 @@ extension Vim {
       self.highlightSearchMatches(cm, query)
       let result = try self.findNext(cm, prev, query, args.repeat)
       if result == nil {
-        self.showConfirm(cm, "No match found " + query.description + (self.pcre ? " (set nopcre to use Vim regexps)" : ""))
+        self.showConfirm(
+          cm,
+          "No match found " + query.description
+            + (self.pcre ? " (set nopcre to use Vim regexps)" : ""))
       }
       return result.map { .pos($0) }
     }
@@ -39,8 +42,12 @@ extension Vim {
       try self.findAndSelectNextInclusive(cm, args, vim, prevInputState)
     }
     define("goToMark") { [unowned self] cm, _, args, vim, _ throws in
-      guard let pos = self.getMarkPos(cm, vim, args.selectedCharacter?.string ?? "") else { return nil }
-      return .pos(args.linewise ? Pos(pos.line, self.findFirstNonWhiteSpaceCharacter(cm.getLine(pos.line))) : pos)
+      guard let pos = self.getMarkPos(cm, vim, args.selectedCharacter?.string ?? "") else {
+        return nil
+      }
+      return .pos(
+        args.linewise
+          ? Pos(pos.line, self.findFirstNonWhiteSpaceCharacter(cm.getLine(pos.line))) : pos)
     }
     define("moveToOtherHighlightedEnd") { [unowned self] cm, _, args, vim, _ throws in
       let sel = vim.sel
@@ -57,12 +64,16 @@ extension Vim {
         let cursor = best
         for key in vim.marks.keys where VimText(key).isLowerCaseLetter {
           // vim.js reads `mark.line` of a mark deleted by edits.
-          guard let mark = vim.marks[key]?.find() else { throw JSException.typeError("Cannot read properties of null (reading 'line')") }
-          let isWrongDirection = args.forward ? cursorIsBefore(mark, cursor) : cursorIsBefore(cursor, mark)
+          guard let mark = vim.marks[key]?.find() else {
+            throw JSException.typeError("Cannot read properties of null (reading 'line')")
+          }
+          let isWrongDirection =
+            args.forward ? cursorIsBefore(mark, cursor) : cursorIsBefore(cursor, mark)
           if isWrongDirection { continue }
           if args.linewise && mark.line == cursor.line { continue }
           let equal = cursor == best
-          let between = args.forward ? cursorIsBetween(cursor, mark, best) : cursorIsBetween(best, mark, cursor)
+          let between =
+            args.forward ? cursorIsBetween(cursor, mark, best) : cursorIsBetween(best, mark, cursor)
           if equal || between { best = mark }
         }
       }
@@ -75,7 +86,9 @@ extension Vim {
       return .pos(best)
     }
     define("moveByCharacters") { _, head, args, _, _ throws in
-      let ch = args.forward ? chAdd(head.ch, args.repeat) : (head.ch == Pos.endOfLine ? head.ch : head.ch - args.repeat)
+      let ch =
+        args.forward
+        ? chAdd(head.ch, args.repeat) : (head.ch == Pos.endOfLine ? head.ch : head.ch - args.repeat)
       return .pos(Pos(head.line, ch))
     }
     define("moveByLines") { [unowned self] cm, head, args, vim, input throws in
@@ -88,7 +101,10 @@ extension Vim {
       // CodeMirror only exposes functions that move the cursor page down, so doing this bad hack
       // to move the cursor and move it back. evalInput will move the cursor to where it should
       // be in the end.
-      .pos(cm.findPosV(head, Double(args.forward ? args.repeat : -args.repeat), page: true, goalColumn: nil).pos)
+      .pos(
+        cm.findPosV(
+          head, Double(args.forward ? args.repeat : -args.repeat), page: true, goalColumn: nil
+        ).pos)
     }
     define("moveByParagraph") { [unowned self] cm, head, args, _, _ throws in
       .pos(self.findParagraph(cm, head, args.repeat, args.forward ? 1 : -1).start)
@@ -110,7 +126,9 @@ extension Vim {
       return .pos(curEnd)
     }
     define("moveByWords") { [unowned self] cm, head, args, _, _ throws in
-      self.moveToWord(cm, head, args.repeat, args.forward, args.wordEnd, args.bigWord).map { .pos($0) }
+      self.moveToWord(cm, head, args.repeat, args.forward, args.wordEnd, args.bigWord).map {
+        .pos($0)
+      }
     }
     define("moveTillCharacter") { [unowned self] cm, head, args, _, _ throws in
       let curEnd = self.moveToCharacter(cm, args.repeat, args.forward, args.selectedCharacter, head)
@@ -122,7 +140,8 @@ extension Vim {
     }
     define("moveToCharacter") { [unowned self] cm, head, args, _, _ throws in
       self.recordLastCharacterSearch(0, args)
-      return .pos(self.moveToCharacter(cm, args.repeat, args.forward, args.selectedCharacter, head) ?? head)
+      return .pos(
+        self.moveToCharacter(cm, args.repeat, args.forward, args.selectedCharacter, head) ?? head)
     }
     define("moveToSymbol") { [unowned self] cm, head, args, _, _ throws in
       guard let character = args.selectedCharacter, !character.isEmpty else { return .pos(head) }
@@ -187,7 +206,10 @@ extension Vim {
       let forward = args.forward == lastSearch.forward
       let increment = (lastSearch.increment != 0 ? 1 : 0) * (forward ? -1 : 1)
       args.inclusive = forward
-      guard var curEnd = self.moveToCharacter(cm, args.repeat, forward, lastSearch.selectedCharacter, head.offsetting(0, -increment)) else {
+      guard
+        var curEnd = self.moveToCharacter(
+          cm, args.repeat, forward, lastSearch.selectedCharacter, head.offsetting(0, -increment))
+      else {
         return .pos(head)
       }
       curEnd.ch += increment
@@ -196,7 +218,9 @@ extension Vim {
   }
 
   /// `motions.moveByLines`.
-  private func moveByLines(_ cm: EditorAdapter, _ head: Pos, _ args: MotionArgs, _ vim: VimState, _ input: InputState) throws -> MotionResult? {
+  private func moveByLines(
+    _ cm: EditorAdapter, _ head: Pos, _ args: MotionArgs, _ vim: VimState, _ input: InputState
+  ) throws -> MotionResult? {
     let cur = head
     var endCh = cur.ch
     // Depending what our last motion was, we may want to do different things. If our last motion
@@ -213,7 +237,8 @@ extension Vim {
     var line = args.forward ? cur.line + count : cur.line - count
     let first = cm.firstLine()
     let last = cm.lastLine()
-    let posV = cm.findPosV(cur, Double(args.forward ? count : -count), page: false, goalColumn: vim.lastHSPos)
+    let posV = cm.findPosV(
+      cur, Double(args.forward ? count : -count), page: false, goalColumn: vim.lastHSPos)
     let hasMarkedText = args.forward ? posV.pos.line > line : posV.pos.line < line
     if hasMarkedText {
       line = posV.pos.line
@@ -235,7 +260,9 @@ extension Vim {
   }
 
   /// `motions.moveByDisplayLines`.
-  func moveByDisplayLines(_ cm: EditorAdapter, _ head: Pos, _ args: MotionArgs, _ vim: VimState) -> Pos {
+  func moveByDisplayLines(_ cm: EditorAdapter, _ head: Pos, _ args: MotionArgs, _ vim: VimState)
+    -> Pos
+  {
     var cur = head
     switch vim.lastMotion {
     case "moveByDisplayLines", "moveByScroll", "moveByLines", "moveToColumn", "moveToEol":
@@ -256,7 +283,9 @@ extension Vim {
   }
 
   /// `motions.textObjectManipulation`.
-  private func textObjectManipulation(_ cm: EditorAdapter, _ headIn: Pos, _ args: MotionArgs, _ vim: VimState) throws -> MotionResult? {
+  private func textObjectManipulation(
+    _ cm: EditorAdapter, _ headIn: Pos, _ args: MotionArgs, _ vim: VimState
+  ) throws -> MotionResult? {
     var head = headIn
     let mirroredPairs: Set<String> = ["(", ")", "{", "}", "[", "]", "<", ">"]
     let selfPaired: Set<String> = ["'", "\"", "`"]
@@ -287,7 +316,9 @@ extension Vim {
       var count = args.repeat != 0 ? args.repeat : 1
       while count > 0 {
         count -= 1
-        let options = WordOptions(inclusive: inclusive, innerWord: !inclusive, bigWord: character == "W", noSymbol: character == "W", multiline: true)
+        let options = WordOptions(
+          inclusive: inclusive, innerWord: !inclusive, bigWord: character == "W",
+          noSymbol: character == "W", multiline: true)
         if let repeated = expandWordUnderCursor(cm, options, tmp?.end) {
           if tmp == nil { tmp = repeated }
           tmp!.end = repeated.end

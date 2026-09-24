@@ -28,7 +28,10 @@ import Testing
     let report = VimVectorReplayer(header: file.header).runAll(
       file, filter: filter, exclusions: Set(Self.exclusions.keys)
     ) { VimTextBuffer.vectorHost($0) }
-    print(report.summary(title: "vim vectors through VimTextBuffer (\(VimVectorFile.defaultURL.lastPathComponent)):"))
+    print(
+      report.summary(
+        title: "vim vectors through VimTextBuffer (\(VimVectorFile.defaultURL.lastPathComponent)):")
+    )
     for message in report.issueMessages(verbose: environment["VIM_VECTORS_VERBOSE"] == "1") {
       Issue.record("\(message)")
     }

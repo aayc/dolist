@@ -10,7 +10,9 @@ import Testing
 struct EditorMotionTests {
   private let doc = "- [ ] one\n- [ ] two\n- [ ] three"
 
-  private func badge(_ id: String, line: Int, _ status: String = "working", label: String? = nil) -> EditorBadge {
+  private func badge(_ id: String, line: Int, _ status: String = "working", label: String? = nil)
+    -> EditorBadge
+  {
     EditorBadge(id: id, line: line, status: status, label: label ?? "Label \(id)")
   }
 
@@ -23,14 +25,18 @@ struct EditorMotionTests {
     return (editor, motion)
   }
 
-  private func paint(_ editor: EditorHarness, _ motion: ManualMotion, id: String) throws -> BadgePaint {
+  private func paint(_ editor: EditorHarness, _ motion: ManualMotion, id: String) throws
+    -> BadgePaint
+  {
     let layout = try #require(editor.controller.currentBadgeLayouts().first { $0.badge.id == id })
     return editor.controller.motion.paint(for: layout.badge, now: motion.now)
   }
 
   private func click(_ editor: EditorHarness, checkboxOnLine line: Int) throws -> NSRect {
     let checkbox = try #require(editor.controller.checkboxRects().first { $0.line == line })
-    #expect(editor.controller.handleClick(at: NSPoint(x: checkbox.rect.midX, y: checkbox.rect.midY), modifiers: []))
+    #expect(
+      editor.controller.handleClick(
+        at: NSPoint(x: checkbox.rect.midX, y: checkbox.rect.midY), modifiers: []))
     return checkbox.rect
   }
 
@@ -62,7 +68,8 @@ struct EditorMotionTests {
     let middle = try paint(editor, motion, id: "a")
     #expect(middle.opacity > 0.3 && middle.opacity < 1)
     let rect = try #require(editor.controller.currentBadgeLayouts().first).rect
-    let area = rect.insetBy(dx: -2, dy: -2).union(rect.offsetBy(dx: 0, dy: MotionTimeline.appearDistance + 1))
+    let area = rect.insetBy(dx: -2, dy: -2).union(
+      rect.offsetBy(dx: 0, dy: MotionTimeline.appearDistance + 1))
     #expect(!motion.invalidated.isEmpty)
     #expect(motion.invalidated.allSatisfy { area.contains($0) }, "only the badge is redrawn")
 
@@ -91,7 +98,8 @@ struct EditorMotionTests {
     let (editor, motion) = shownEditor()
     editor.controller.setBadges([badge("a", line: 0, "working", label: "Working…")])
     motion.run(for: 0.3)
-    editor.controller.setBadges([badge("a", line: 0, "done", label: "Done · a much longer summary")])
+    editor.controller.setBadges([badge("a", line: 0, "done", label: "Done · a much longer summary")]
+    )
     #expect(motion.isTicking)
     motion.clearInvalidated()
     motion.frame(after: 0.05)
@@ -100,8 +108,11 @@ struct EditorMotionTests {
     #expect(paint.previousOpacity > 0 && paint.previousOpacity < 1)
     #expect(paint.opacity == 1, "a crossfade isn't a fade-in")
     let layout = try #require(editor.controller.currentBadgeLayouts().first)
-    let old = editor.controller.badgeRenderer.fitted(try #require(paint.previous), maxWidth: layout.available)
-    #expect(motion.invalidated.contains { $0.width >= max(layout.rect.width, old.width) }, "old and new pills are redrawn")
+    let old = editor.controller.badgeRenderer.fitted(
+      try #require(paint.previous), maxWidth: layout.available)
+    #expect(
+      motion.invalidated.contains { $0.width >= max(layout.rect.width, old.width) },
+      "old and new pills are redrawn")
     motion.run(for: 0.2)
     #expect(!motion.isTicking)
     #expect(try self.paint(editor, motion, id: "a") == .rest)
@@ -119,7 +130,8 @@ struct EditorMotionTests {
 
     motion.clearInvalidated()
     motion.frame(after: 0.6)
-    #expect(abs(try paint(editor, motion, id: "a").dotOpacity - MotionTimeline.pulseLowOpacity) < 0.01)
+    #expect(
+      abs(try paint(editor, motion, id: "a").dotOpacity - MotionTimeline.pulseLowOpacity) < 0.01)
     let layout = try #require(editor.controller.currentBadgeLayouts().first)
     let dot = editor.controller.badgeRenderer.dotRect(in: layout.rect).insetBy(dx: -1, dy: -1)
     #expect(!motion.invalidated.isEmpty)
@@ -197,7 +209,9 @@ struct EditorMotionTests {
     let middle = try #require(editor.controller.motion.checkPaint(statusOffset: status))
     #expect(middle.scale > start.scale && middle.opacity > 0)
     #expect(!motion.invalidated.isEmpty)
-    #expect(motion.invalidated.allSatisfy { checkbox.insetBy(dx: -1.5, dy: -1.5).contains($0) }, "only the checkbox is redrawn")
+    #expect(
+      motion.invalidated.allSatisfy { checkbox.insetBy(dx: -1.5, dy: -1.5).contains($0) },
+      "only the checkbox is redrawn")
 
     motion.frame(after: 0.07)
     #expect(!motion.isTicking, "over after 120 ms")
@@ -231,7 +245,8 @@ struct EditorMotionTests {
     editor.layout()
     editor.willDraw()
     editor.controller.setBadges([badge("b", line: 1), badge("c", line: 0)])
-    #expect(editor.controller.motion.state.isTransitioning("c"), "badges that come later animate in")
+    #expect(
+      editor.controller.motion.state.isTransitioning("c"), "badges that come later animate in")
     #expect(!editor.controller.motion.state.isTransitioning("b"))
   }
 

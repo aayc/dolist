@@ -70,7 +70,9 @@ public final class Vim {
     registerExCommands()
     defineDefaultOptions()
     resetVimGlobalState()
-    let version: ExCommandFn = { [unowned self] cm, _ in self.showConfirm(cm, "Codemirror-vim version: <DEV>") }
+    let version: ExCommandFn = { [unowned self] cm, _ in
+      self.showConfirm(cm, "Codemirror-vim version: <DEV>")
+    }
     try? defineEx("version", "ve", version)
   }
 
@@ -96,12 +98,14 @@ public final class Vim {
 
   /// `:map lhs rhs` in `context` ("normal", "insert", "visual" or nil for all).
   public func map(_ lhs: String, _ rhs: String, context: String? = nil) throws {
-    try exMap(VimText(lhs), VimText(rhs), context.flatMap(KeyContext.init(rawValue:)), noremap: false)
+    try exMap(
+      VimText(lhs), VimText(rhs), context.flatMap(KeyContext.init(rawValue:)), noremap: false)
   }
 
   /// `:noremap lhs rhs`: the right-hand side isn't mapped again.
   public func noremap(_ lhs: String, _ rhs: String, context: String? = nil) throws {
-    try exMap(VimText(lhs), VimText(rhs), context.flatMap(KeyContext.init(rawValue:)), noremap: true)
+    try exMap(
+      VimText(lhs), VimText(rhs), context.flatMap(KeyContext.init(rawValue:)), noremap: true)
   }
 
   /// `:unmap lhs`; returns whether a mapping was removed.
@@ -175,12 +179,19 @@ public final class Vim {
   /// `Vim.setOption(name, value, cm, {scope})`: sets the global value and, with `session`, the
   /// editor's. Throws for an unknown option or a non-boolean value for a boolean option (vim.js
   /// returns the error instead).
-  public func setOption(_ name: String, _ value: VimOptionValue?, in session: VimSession? = nil, scope: VimOptionScope? = nil) throws {
-    if let error = setOptionValue(name, value, session?.cm, scope: scope) { throw JSException.error(error.message) }
+  public func setOption(
+    _ name: String, _ value: VimOptionValue?, in session: VimSession? = nil,
+    scope: VimOptionScope? = nil
+  ) throws {
+    if let error = setOptionValue(name, value, session?.cm, scope: scope) {
+      throw JSException.error(error.message)
+    }
   }
 
   /// `Vim.getOption(name, cm, {scope})`: with `session`, the editor's value if it has one.
-  public func getOption(_ name: String, in session: VimSession? = nil, scope: VimOptionScope? = nil) throws -> VimOptionValue? {
+  public func getOption(_ name: String, in session: VimSession? = nil, scope: VimOptionScope? = nil)
+    throws -> VimOptionValue?
+  {
     switch getOptionValue(name, session?.cm, scope: scope) {
     case .success(let value): return value
     case .failure(let error): throw JSException.error(error.message)
@@ -191,13 +202,16 @@ public final class Vim {
   /// callback stores the value itself: it is called with (value, session) to set (session nil for
   /// the global value) and with (nil, session) to read.
   public func defineOption(
-    _ name: String, defaultValue: VimOptionValue?, type: VimOptionType = .string, aliases: [String] = [],
+    _ name: String, defaultValue: VimOptionValue?, type: VimOptionType = .string,
+    aliases: [String] = [],
     callback: ((_ value: VimOptionValue?, _ session: VimSession?) -> VimOptionValue?)? = nil
   ) throws {
     if defaultValue == nil && callback == nil {
       throw JSException.error("defaultValue is required unless callback is provided")
     }
-    defineOption(name, defaultValue, type, aliases: aliases, callback: callback.map { callback in { value, cm in callback(value, cm?.session) } })
+    defineOption(
+      name, defaultValue, type, aliases: aliases,
+      callback: callback.map { callback in { value, cm in callback(value, cm?.session) } })
   }
 
   /// `Vim.langmap(string, remapCtrl)`.
@@ -209,7 +223,10 @@ public final class Vim {
 
   /// `Vim.defineEx(name, prefix, fn)`: adds (or replaces) an ex command, e.g. `:write` with
   /// prefix "w". The prefix must start `name`.
-  public func defineEx(_ name: String, _ prefix: String? = nil, _ handler: @escaping @MainActor (VimSession, VimExCommand) throws -> Void) throws {
+  public func defineEx(
+    _ name: String, _ prefix: String? = nil,
+    _ handler: @escaping @MainActor (VimSession, VimExCommand) throws -> Void
+  ) throws {
     try defineEx(name, prefix) { cm, params in
       guard let session = cm.session else { return }
       do {
@@ -227,7 +244,8 @@ public final class Vim {
     if prefix.isEmpty {
       prefix = name
     } else if VimText(name).indexOf(VimText(prefix)) != 0 {
-      throw JSException.error("(Vim.defineEx) \"\(prefix)\" is not a prefix of \"\(name)\", command not registered")
+      throw JSException.error(
+        "(Vim.defineEx) \"\(prefix)\" is not a prefix of \"\(name)\", command not registered")
     }
     exCommands[name] = fn
     exCommandMap[prefix] = ExCommandDefinition(name: name, shortName: prefix, type: .api)
@@ -235,8 +253,12 @@ public final class Vim {
 
   /// `Vim.defineRegister(name, register)`: a one-character register backed by `register`.
   public func defineRegister(_ name: String, _ register: VimRegister) throws {
-    guard name.utf16.count == 1 else { throw JSException.error("Register name must be 1 character") }
-    if globalState.registerController.registers[name] != nil { throw JSException.error("Register already defined " + name) }
+    guard name.utf16.count == 1 else {
+      throw JSException.error("Register name must be 1 character")
+    }
+    if globalState.registerController.registers[name] != nil {
+      throw JSException.error("Register already defined " + name)
+    }
     globalState.registerController.registers[name] = register
     validRegisters.append(name)
   }

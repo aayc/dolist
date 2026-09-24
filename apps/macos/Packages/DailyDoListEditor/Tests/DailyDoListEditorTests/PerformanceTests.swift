@@ -11,7 +11,8 @@ import Testing
 @Suite("Performance", .serialized)
 @MainActor
 struct PerformanceTests {
-  static let multiplier = Double(ProcessInfo.processInfo.environment["EDITOR_PERF_BUDGET_MULTIPLIER"] ?? "") ?? 1
+  static let multiplier =
+    Double(ProcessInfo.processInfo.environment["EDITOR_PERF_BUDGET_MULTIPLIER"] ?? "") ?? 1
   static let note = SampleNote.long(lines: 2000)
 
   struct Stats: CustomStringConvertible {
@@ -26,7 +27,9 @@ struct PerformanceTests {
       return sorted[Swift.min(sorted.count - 1, Int((Double(sorted.count) * p).rounded(.up)) - 1)]
     }
     var description: String {
-      String(format: "avg %.3f ms, p50 %.3f ms, p95 %.3f ms, max %.3f ms (n=%d)", average, median, p95, max, samples.count)
+      String(
+        format: "avg %.3f ms, p50 %.3f ms, p95 %.3f ms, max %.3f ms (n=%d)", average, median, p95,
+        max, samples.count)
     }
   }
 
@@ -45,7 +48,9 @@ struct PerformanceTests {
     let taskLines = lines.indices.filter { lines[$0].hasPrefix("- [") }
     let statuses = ["working", "done", "waiting_approval", "queued", "triaging", "failed"]
     return taskLines.prefix(30).enumerated().map { index, line in
-      EditorBadge(id: "t\(index)", line: line, status: statuses[index % statuses.count], label: "Agent status \(index)", unread: index % 3)
+      EditorBadge(
+        id: "t\(index)", line: line, status: statuses[index % statuses.count],
+        label: "Agent status \(index)", unread: index % 3)
     }
   }
 
@@ -75,7 +80,9 @@ struct PerformanceTests {
     editor.controller.setBadges(badges(for: editor))
     let start = editor.offset(of: "Research flights") + (Self.note as NSString).length / 2
     let line = editor.controller.highlighter.lineIndex.line(containing: start)
-    let caret = editor.controller.highlighter.lineIndex.contentRange(ofLine: line, textLength: (editor.text as NSString).length).end
+    let caret = editor.controller.highlighter.lineIndex.contentRange(
+      ofLine: line, textLength: (editor.text as NSString).length
+    ).end
     editor.select(NSRange(location: caret, length: 0))
     editor.controller.scrollToLine(line)
     editor.layout()
@@ -85,9 +92,11 @@ struct PerformanceTests {
       for index in 0..<300 {
         let character = index % 7 == 6 ? " " : "x"
         let elapsed = clock.measure {
-          editor.textView.insertText(character, replacementRange: NSRange(location: NSNotFound, length: 0))
+          editor.textView.insertText(
+            character, replacementRange: NSRange(location: NSNotFound, length: 0))
           let caret = editor.selection.location
-          editor.controller.layoutManager.ensureLayout(forCharacterRange: NSRange(location: max(0, caret - 1), length: 1))
+          editor.controller.layoutManager.ensureLayout(
+            forCharacterRange: NSRange(location: max(0, caret - 1), length: 1))
         }
         samples.append(Self.milliseconds(elapsed))
       }
@@ -116,7 +125,8 @@ struct PerformanceTests {
       }
       handling.append(Self.milliseconds(elapsed))
       let relayout = clock.measure {
-        editor.controller.layoutManager.ensureLayout(forCharacterRange: NSRange(location: target, length: 0))
+        editor.controller.layoutManager.ensureLayout(
+          forCharacterRange: NSRange(location: target, length: 0))
       }
       withLayout.append(Self.milliseconds(elapsed) + Self.milliseconds(relayout))
     }
@@ -157,7 +167,9 @@ struct PerformanceTests {
     let elapsed = clock.measure {
       lines = MarkdownTokenizer.tokenize(Self.note).count
     }
-    print("PERF tokenize 2000-line note (pure): \(String(format: "%.3f", Self.milliseconds(elapsed))) ms")
+    print(
+      "PERF tokenize 2000-line note (pure): \(String(format: "%.3f", Self.milliseconds(elapsed))) ms"
+    )
     #expect(lines == 2000)
     #expect(Self.milliseconds(elapsed) < 300 * Self.multiplier)
   }

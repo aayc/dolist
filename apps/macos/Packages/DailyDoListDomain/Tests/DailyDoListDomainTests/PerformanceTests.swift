@@ -8,7 +8,8 @@ extension DomainTests {
   /// `PERF_BUDGET_MULTIPLIER` scales them for slow CI runners. Release numbers are in README.md.
   @Suite(.serialized)
   struct PerformanceTests {
-    static let multiplier = Double(ProcessInfo.processInfo.environment["PERF_BUDGET_MULTIPLIER"] ?? "") ?? 1
+    static let multiplier =
+      Double(ProcessInfo.processInfo.environment["PERF_BUDGET_MULTIPLIER"] ?? "") ?? 1
 
     /// 2,000 lines: headings, notes under tasks, and tasks (a quarter of them done).
     static func makeNote(lines: Int) -> String {
@@ -22,8 +23,11 @@ extension DomainTests {
     static let note = makeNote(lines: 2000)
     static let parsed = TaskParser.parse(note)
     static let tracked = TaskTracker.track(previous: [], parsed: parsed, now: 0).tasks
-    static let edited = TaskParser.parse(note.replacingOccurrences(of: "Task number 502:", with: "Task number 502 (edited):"))
-    static let anchors = tracked.prefix(50).map { TaskAnchor(taskId: $0.id, text: $0.text, line: $0.line) }
+    static let edited = TaskParser.parse(
+      note.replacingOccurrences(of: "Task number 502:", with: "Task number 502 (edited):"))
+    static let anchors = tracked.prefix(50).map {
+      TaskAnchor(taskId: $0.id, text: $0.text, line: $0.line)
+    }
 
     /// Median wall time of `runs` calls after a warm-up call, in milliseconds.
     static func median(runs: Int = 11, _ body: () -> Void) -> Double {
@@ -55,14 +59,16 @@ extension DomainTests {
 
     @Test func trackOneEdit() async {
       let result = TaskTracker.track(previous: Self.tracked, parsed: Self.edited, now: 1)
-      #expect(result.diff.updated.count == 1 && result.diff.added.isEmpty && result.diff.removed.isEmpty)
+      #expect(
+        result.diff.updated.count == 1 && result.diff.added.isEmpty && result.diff.removed.isEmpty)
       await Self.check("trackTasks 2k lines, one edit", budget: 15) {
         _ = TaskTracker.track(previous: Self.tracked, parsed: Self.edited, now: 1)
       }
     }
 
     @Test func resolveFiftyAnchors() async {
-      let doc = Self.note.replacingOccurrences(of: "Task number 5:", with: "Task number 5 (edited):")
+      let doc = Self.note.replacingOccurrences(
+        of: "Task number 5:", with: "Task number 5 (edited):")
       #expect(TaskAnchors.resolve(doc, anchors: Self.anchors).count == 50)
       await Self.check("resolveTaskAnchors 50 anchors, 2k lines", budget: 15) {
         _ = TaskAnchors.resolve(doc, anchors: Self.anchors)

@@ -44,15 +44,19 @@ enum Fixture {
   }
 
   static func text(
-    _ id: String = "msg_1", _ text: String = "", streaming: Bool? = true, role: MessageRole = .agent,
+    _ id: String = "msg_1", _ text: String = "", streaming: Bool? = true,
+    role: MessageRole = .agent,
     author: MessageAuthor = "orchestrator", createdAt: EpochMillis = 1
   ) -> ThreadMessage {
-    .text(TextMessage(id: id, author: author, createdAt: createdAt, role: role, text: text, streaming: streaming))
+    .text(
+      TextMessage(
+        id: id, author: author, createdAt: createdAt, role: role, text: text, streaming: streaming))
   }
 
   static func toolCall(
     _ id: String = "msg_tool", status: ToolCallStatus = .running, toolName: String = "web_search",
-    author: MessageAuthor = "subagent:research", createdAt: EpochMillis = 1, endedAt: EpochMillis? = nil
+    author: MessageAuthor = "subagent:research", createdAt: EpochMillis = 1,
+    endedAt: EpochMillis? = nil
   ) -> ThreadMessage {
     .toolCall(
       ToolCallMessage(
@@ -80,7 +84,8 @@ enum Fixture {
       mode: mode, enabled: enabled, model: "m", running: running, queued: queued,
       pendingApprovals: 0, connectors: [],
       execution: ExecutionStatus(
-        provider: "mock", capabilities: ExecutionCapabilities(shell: false, browser: true, computer: true)),
+        provider: "mock",
+        capabilities: ExecutionCapabilities(shell: false, browser: true, computer: true)),
       problem: problem)
   }
 
@@ -98,14 +103,20 @@ enum Fixture {
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 
   /// State with one loaded thread (like the web tests' `loaded()`).
-  static func loaded(_ thread: AgentThread = thread(), approvals: [ApprovalRequest] = []) -> AgentState {
+  static func loaded(_ thread: AgentThread = thread(), approvals: [ApprovalRequest] = [])
+    -> AgentState
+  {
     var state = AgentState()
     _ = state.applyThreadResponse(ThreadResponse(thread: thread, approvals: approvals))
     return state
   }
 
-  static func messageText(_ state: AgentState, _ threadId: String = "thr_1", _ id: String = "msg_1") -> TextMessage? {
-    guard case .text(let text) = state.loadedThreads[threadId]?.messages.first(where: { $0.id == id }) else {
+  static func messageText(_ state: AgentState, _ threadId: String = "thr_1", _ id: String = "msg_1")
+    -> TextMessage?
+  {
+    guard
+      case .text(let text) = state.loadedThreads[threadId]?.messages.first(where: { $0.id == id })
+    else {
       return nil
     }
     return text

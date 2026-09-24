@@ -40,13 +40,18 @@ extension TextViewVimHost {
   func willReplace(_ ranges: [NSRange], with strings: [String]) -> Bool {
     guard isAttached, !controller.replacingDocument, !ranges.isEmpty else { return false }
     let pairs = zip(ranges, strings).sorted { $0.0.location < $1.0.location }
-    let changes = pairs.map { VimChange(from: $0.0.location, to: $0.0.end, text: VimText($0.1 as NSString)) }
-    guard let set = try? VimChangeSet(changes: changes, length: storage.length) else { return false }
+    let changes = pairs.map {
+      VimChange(from: $0.0.location, to: $0.0.end, text: VimText($0.1 as NSString))
+    }
+    guard let set = try? VimChangeSet(changes: changes, length: storage.length) else {
+      return false
+    }
     let start = changes[0].from
     let end = changes.map(\.to).max() ?? start
     announcements.append(
       EditAnnouncement(
-        changes: set, originalStart: start, originalText: text(in: NSRange(start, end)), selectionBefore: selection,
+        changes: set, originalStart: start, originalText: text(in: NSRange(start, end)),
+        selectionBefore: selection,
         kind: applying, userEvent: currentUserEvent))
     return true
   }
@@ -85,7 +90,8 @@ extension TextViewVimHost {
     switch announcement.kind {
     case .vim(let userEvent)?:
       recorder.record(
-        changes, inverse: inverse, startSelection: announcement.selectionBefore, userEvent: userEvent, time: clock(),
+        changes, inverse: inverse, startSelection: announcement.selectionBefore,
+        userEvent: userEvent, time: clock(),
         in: controller)
     case .history?:
       if vimRunsHistory, var capture = historyCapture {
@@ -96,7 +102,8 @@ extension TextViewVimHost {
       }
     case nil:
       recorder.record(
-        changes, inverse: inverse, startSelection: announcement.selectionBefore, userEvent: announcement.userEvent,
+        changes, inverse: inverse, startSelection: announcement.selectionBefore,
+        userEvent: announcement.userEvent,
         time: clock(), in: controller)
       addPending(changes, userEvent: announcement.userEvent)
     }
@@ -112,10 +119,13 @@ extension TextViewVimHost {
     // Nobody announced this edit: the text view's own undo action ran, or the storage was edited
     // directly.
     let lengthBefore = storage.length - newLength + oldLength
-    let change = VimChange(from: location, to: location + oldLength, text: text(in: NSRange(location: location, length: newLength)))
+    let change = VimChange(
+      from: location, to: location + oldLength,
+      text: text(in: NSRange(location: location, length: newLength)))
     guard let set = try? VimChangeSet(changes: [change], length: lengthBefore) else { return }
     if var capture = historyCapture {
-      capture.changes = capture.changes.length == lengthBefore ? capture.changes.composed(with: set) : set
+      capture.changes =
+        capture.changes.length == lengthBefore ? capture.changes.composed(with: set) : set
       historyCapture = capture
       return
     }
@@ -136,7 +146,8 @@ extension TextViewVimHost {
     if let changes = pendingChanges {
       pendingChanges = nil
       pendingSelectionMove = false
-      session.editorDidChange(VimTransaction(changeSet: changes, selection: selection, userEvent: pendingUserEvent))
+      session.editorDidChange(
+        VimTransaction(changeSet: changes, selection: selection, userEvent: pendingUserEvent))
     } else if pendingSelectionMove {
       pendingSelectionMove = false
       session.editorSelectionDidChange()
@@ -162,7 +173,9 @@ extension TextViewVimHost {
       delta += insert.length - (range.to - range.from)
     }
     let changes = ranges.map { VimChange(from: $0.from, to: $0.to, text: insert) }
-    applyEditorEdit(changes, selection: VimSelection(ranges: cursors, mainIndex: selection.mainIndex), userEvent: "input.type")
+    applyEditorEdit(
+      changes, selection: VimSelection(ranges: cursors, mainIndex: selection.mainIndex),
+      userEvent: "input.type")
     return true
   }
 
@@ -182,7 +195,9 @@ extension TextViewVimHost {
           deletion = string.rangeOfComposedCharacterSequence(at: range.head - 1)
         }
       }
-      if let last = deletions.last, deletion.location < last.end { deletion = NSRange(last.end, max(last.end, deletion.end)) }
+      if let last = deletions.last, deletion.location < last.end {
+        deletion = NSRange(last.end, max(last.end, deletion.end))
+      }
       deletions.append(deletion)
     }
     var cursors: [VimSelection.Range] = []
@@ -191,7 +206,9 @@ extension TextViewVimHost {
       cursors.append(.init(cursor: deletion.location - delta))
       delta += deletion.length
     }
-    let changes = deletions.filter { $0.length > 0 }.map { VimChange(from: $0.location, to: $0.end, text: VimText()) }
+    let changes = deletions.filter { $0.length > 0 }.map {
+      VimChange(from: $0.location, to: $0.end, text: VimText())
+    }
     applyEditorEdit(
       changes, selection: VimSelection(ranges: cursors, mainIndex: selection.mainIndex),
       userEvent: forward ? "delete.forward" : "delete.backward")
@@ -199,7 +216,9 @@ extension TextViewVimHost {
   }
 
   private var hasSeveralCursorsInInsertMode: Bool {
-    guard let session, selection.ranges.count > 1, !textView.hasMarkedText(), controller.configuration.isEditable else { return false }
+    guard let session, selection.ranges.count > 1, !textView.hasMarkedText(),
+      controller.configuration.isEditable
+    else { return false }
     return session.mode == .insert
   }
 
@@ -226,7 +245,9 @@ extension TextViewVimHost {
   func willPaste() -> Bool {
     guard let session else { return false }
     if let prompt = session.activePrompt {
-      let pasted = (NSPasteboard.general.string(forType: .string) ?? "").filter { $0 != "\n" && $0 != "\r" && $0 != "\r\n" }
+      let pasted = (NSPasteboard.general.string(forType: .string) ?? "").filter {
+        $0 != "\n" && $0 != "\r" && $0 != "\r\n"
+      }
       guard !pasted.isEmpty else { return true }
       prompt.setValue(prompt.value.string + pasted)
       prompt.keyUp("<M-v>")
@@ -256,6 +277,8 @@ extension TextViewVimHost {
     pendingSelectionMove = false
     if capture?.applied == nil { recorder.forgetTop() }
     let changes = capture?.applied ?? capture?.changes ?? .empty(length: storage.length)
-    return VimTransaction(changeSet: changes, selection: selection, userEvent: undo ? "undo" : "redo", scrollIntoView: true)
+    return VimTransaction(
+      changeSet: changes, selection: selection, userEvent: undo ? "undo" : "redo",
+      scrollIntoView: true)
   }
 }

@@ -142,7 +142,8 @@ struct ListPrefixLayout: Equatable, Sendable {
 
   func offset(by delta: Int) -> ListPrefixLayout {
     ListPrefixLayout(
-      indentStart: indentStart + delta, markerStart: markerStart + delta, markerEnd: markerEnd + delta,
+      indentStart: indentStart + delta, markerStart: markerStart + delta,
+      markerEnd: markerEnd + delta,
       box: box?.shifted(by: delta), textStart: textStart + delta)
   }
 }

@@ -22,7 +22,9 @@ enum JSNumber {
     } else {
       r = 10
     }
-    if stripPrefix, i + 1 < units.count, units[i] == 0x30, units[i + 1] == 0x78 || units[i + 1] == 0x58 {
+    if stripPrefix, i + 1 < units.count, units[i] == 0x30,
+      units[i + 1] == 0x78 || units[i + 1] == 0x58
+    {
       i += 2
       r = 16
     }

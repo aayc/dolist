@@ -25,7 +25,9 @@ extension AppModel {
     switch item {
     case .state(let state):
       connection.update(state)
-      if case .incompatible(let server) = state { phase = .failed(.incompatibleApiVersion(server: server)) }
+      if case .incompatible(let server) = state {
+        phase = .failed(.incompatibleApiVersion(server: server))
+      }
     case .event(let event):
       route(event)
     case .resync:

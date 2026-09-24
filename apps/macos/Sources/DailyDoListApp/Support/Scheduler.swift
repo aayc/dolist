@@ -26,7 +26,8 @@ public protocol AppScheduler: AnyObject {
   var now: TimeInterval { get }
   /// Runs `action` on the main actor after `delay` seconds unless the returned handle is cancelled.
   @discardableResult
-  func schedule(after delay: TimeInterval, _ action: @escaping @MainActor () -> Void) -> ScheduledAction
+  func schedule(after delay: TimeInterval, _ action: @escaping @MainActor () -> Void)
+    -> ScheduledAction
 }
 
 /// Real time: `systemUptime` + the main dispatch queue.
@@ -39,7 +40,9 @@ public final class LiveScheduler: AppScheduler {
   public var now: TimeInterval { ProcessInfo.processInfo.systemUptime }
 
   @discardableResult
-  public func schedule(after delay: TimeInterval, _ action: @escaping @MainActor () -> Void) -> ScheduledAction {
+  public func schedule(after delay: TimeInterval, _ action: @escaping @MainActor () -> Void)
+    -> ScheduledAction
+  {
     let item = DispatchWorkItem {
       MainActor.assumeIsolated { action() }
     }
@@ -69,7 +72,9 @@ public final class ManualScheduler: AppScheduler {
   public var pendingCount: Int { entries.count }
 
   @discardableResult
-  public func schedule(after delay: TimeInterval, _ action: @escaping @MainActor () -> Void) -> ScheduledAction {
+  public func schedule(after delay: TimeInterval, _ action: @escaping @MainActor () -> Void)
+    -> ScheduledAction
+  {
     nextId += 1
     let id = nextId
     entries.append(Entry(id: id, due: now + max(0, delay), action: action))

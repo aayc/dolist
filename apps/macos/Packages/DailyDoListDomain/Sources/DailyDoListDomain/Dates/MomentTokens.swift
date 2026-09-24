@@ -1,4 +1,6 @@
 /// The Moment format tokens @ddl/core understands.
+// swift-format-ignore: AlwaysUseLowerCamelCase
+// Each case is spelled as its token, and case matters (`MM` is the month, `mm` the minute).
 enum MomentToken: String, CaseIterable, Sendable {
   case YYYY, YY, gggg, gg, GGGG, GG, MMMM, MMM, MM, M, DDDD, DDD, Do, DD, D
   case dddd, ddd, dd, d, E, e, ww, w, WW, W
@@ -47,7 +49,8 @@ enum MomentTokenizer {
     return segments
   }
 
-  private static func token(at i: Int, _ p: UnsafePointer<UInt16>, _ n: Int) -> (MomentToken, Int)? {
+  private static func token(at i: Int, _ p: UnsafePointer<UInt16>, _ n: Int) -> (MomentToken, Int)?
+  {
     let c = p[i]
     var run = 1
     while run < 4 && i + run < n && p[i + run] == c { run += 1 }
@@ -88,5 +91,7 @@ enum MomentNames {
     "January", "February", "March", "April", "May", "June", "July", "August", "September",
     "October", "November", "December",
   ]
-  static let weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+  static let weekdays = [
+    "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+  ]
 }

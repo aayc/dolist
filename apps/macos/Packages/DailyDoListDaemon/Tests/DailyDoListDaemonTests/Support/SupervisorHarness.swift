@@ -8,7 +8,8 @@ import Foundation
 struct SupervisorHarness {
   static let homeDirectory = URL(fileURLWithPath: "/Users/me")
   static let nodePath = "/opt/homebrew/bin/node"
-  static let appResources = URL(fileURLWithPath: "/Applications/Daily Do List.app/Contents/Resources")
+  static let appResources = URL(
+    fileURLWithPath: "/Applications/Daily Do List.app/Contents/Resources")
   static let bundledEntry = appResources.appendingPathComponent("daemon/dist/main.js").path
 
   let machine: FakeMachine

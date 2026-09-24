@@ -31,7 +31,9 @@ final class RecordingNotesDelegate: NotesStoreDelegate {
   func notesStore(_ store: NotesStore, noteWasDeletedRemotely path: String, restored: Bool) {
     deletions.append((path, restored))
   }
-  func notesStore(_ store: NotesStore, didFailToSave path: String, error: Error) { failures.append(path) }
+  func notesStore(_ store: NotesStore, didFailToSave path: String, error: Error) {
+    failures.append(path)
+  }
   func notesStore(_ store: NotesStore, pathExists path: String) -> Bool { existing.contains(path) }
 }
 
@@ -191,14 +193,17 @@ struct NotesStoreTests {
 
   @Test func anAgentEditToOtherLinesMergesWithTheUsersTyping() async throws {
     let day = try await loadDay()
-    delegate.live[day] = Self.day.replacingOccurrences(of: "Book a table", with: "Book a table for two")
+    delegate.live[day] = Self.day.replacingOccurrences(
+      of: "Book a table", with: "Book a table for two")
     store.markDirty(day)
-    let remote = Self.day.replacingOccurrences(of: "- [ ] Book a table\n", with: "- [ ] Book a table\n\(Self.agentLine)\n")
+    let remote = Self.day.replacingOccurrences(
+      of: "- [ ] Book a table\n", with: "- [ ] Book a table\n\(Self.agentLine)\n")
     let version = client.setNote(day, remote)
     client.resetLog()
     await store.handleRemoteChange(day, version: version)
 
-    let merged = "# Thursday\n- [ ] Book a table for two\n\(Self.agentLine)\n- [ ] Renew passport\nNotes"
+    let merged =
+      "# Thursday\n- [ ] Book a table for two\n\(Self.agentLine)\n- [ ] Renew passport\nNotes"
     #expect(delegate.merged.map(\.content) == [merged])
     #expect(store.serverContent(day) == remote)
     try await eventually("saved") { store.saveStates[day] == .saved }
@@ -211,14 +216,17 @@ struct NotesStoreTests {
 
   @Test func aSaveThatMeetsAnAgentEditMergesInsteadOfCopying() async throws {
     let day = try await loadDay()
-    let remote = Self.day.replacingOccurrences(of: "Notes", with: "Notes\n- [ ] Call to confirm %%agent:thr_1%%")
+    let remote = Self.day.replacingOccurrences(
+      of: "Notes", with: "Notes\n- [ ] Call to confirm %%agent:thr_1%%")
     client.setNote(day, remote)
-    delegate.live[day] = Self.day.replacingOccurrences(of: "Renew passport", with: "Renew passport by June")
+    delegate.live[day] = Self.day.replacingOccurrences(
+      of: "Renew passport", with: "Renew passport by June")
     store.markDirty(day)
     scheduler.advance(by: 0.3)
     try await eventually("saved") { store.saveStates[day] == .saved }
 
-    let merged = "# Thursday\n- [ ] Book a table\n- [ ] Renew passport by June\nNotes\n- [ ] Call to confirm %%agent:thr_1%%"
+    let merged =
+      "# Thursday\n- [ ] Book a table\n- [ ] Renew passport by June\nNotes\n- [ ] Call to confirm %%agent:thr_1%%"
     #expect(client.note(day)?.content == merged)
     #expect(delegate.merged.last?.content == merged)
     #expect(delegate.conflictCopies.isEmpty)

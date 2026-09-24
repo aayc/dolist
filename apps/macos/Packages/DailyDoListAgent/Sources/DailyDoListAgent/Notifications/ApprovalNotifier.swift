@@ -124,7 +124,8 @@ public final class ApprovalNotifier {
     let decided = handledApprovals.subtracting(pendingIds)
     let stale = postedApprovals.intersection(decided)
     if !stale.isEmpty {
-      center.removeNotifications(withIdentifiers: stale.sorted().map(Self.notificationId(approvalId:)))
+      center.removeNotifications(
+        withIdentifiers: stale.sorted().map(Self.notificationId(approvalId:)))
     }
     handledApprovals.subtract(decided)
     postedApprovals.subtract(decided)

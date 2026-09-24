@@ -13,7 +13,8 @@ public enum BootTrace {
     var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
     guard sysctl(&mib, u_int(mib.count), &info, &size, nil, 0) == 0 else { return Date() }
     let start = info.kp_proc.p_un.__p_starttime
-    return Date(timeIntervalSince1970: TimeInterval(start.tv_sec) + TimeInterval(start.tv_usec) / 1_000_000)
+    return Date(
+      timeIntervalSince1970: TimeInterval(start.tv_sec) + TimeInterval(start.tv_usec) / 1_000_000)
   }()
 
   public static func mark(_ phase: @autoclosure () -> String) {

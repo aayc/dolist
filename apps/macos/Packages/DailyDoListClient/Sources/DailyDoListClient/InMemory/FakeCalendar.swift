@@ -89,7 +89,8 @@ struct FakeCalendar: Sendable {
 
   /// Local midnight of `date` (the instant daily-note names format their time tokens from).
   func midnight(_ date: LocalDate) -> Date {
-    calendar.date(from: DateComponents(year: date.year, month: date.month, day: date.day)) ?? Date(timeIntervalSince1970: 0)
+    calendar.date(from: DateComponents(year: date.year, month: date.month, day: date.day))
+      ?? Date(timeIntervalSince1970: 0)
   }
 
   func format(_ instant: Date, _ format: String) -> String {
@@ -104,7 +105,9 @@ struct FakeCalendar: Sendable {
     "January", "February", "March", "April", "May", "June", "July", "August", "September",
     "October", "November", "December",
   ]
-  private static let weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+  private static let weekdays = [
+    "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+  ]
   /// Same alternation order as `TOKEN_RE` in `@ddl/core` dates.
   private static let tokens = [
     "YYYY", "YY", "gggg", "gg", "GGGG", "GG", "MMMM", "MMM", "MM", "M", "DDDD", "DDD", "Do", "DD",
@@ -125,7 +128,8 @@ struct FakeCalendar: Sendable {
         continue
       }
       for token in Self.tokens where Self.hasPrefix(characters, at: index, token) {
-        out += value(of: token, date, instant, hour: hour, minute: time.minute ?? 0, second: time.second ?? 0)
+        out += value(
+          of: token, date, instant, hour: hour, minute: time.minute ?? 0, second: time.second ?? 0)
         index += token.count
         continue scan
       }
@@ -141,7 +145,9 @@ struct FakeCalendar: Sendable {
     return Array(characters[index..<(index + token.count)]) == token
   }
 
-  private func value(of token: String, _ date: LocalDate, _ instant: Date, hour: Int, minute: Int, second: Int) -> String {
+  private func value(
+    of token: String, _ date: LocalDate, _ instant: Date, hour: Int, minute: Int, second: Int
+  ) -> String {
     switch token {
     case "YYYY": pad(date.year, 4)
     case "YY": pad(date.year % 100, 2)
@@ -196,13 +202,16 @@ struct FakeCalendar: Sendable {
 
   private static func firstWeekOffset(_ year: Int, dow: Int, doy: Int) -> Int {
     let fwd = 7 + dow - doy
-    let fwdlw = (7 + LocalDate(year: year, month: 1, day: 1).adding(days: fwd - 1).weekday - dow) % 7
+    let fwdlw =
+      (7 + LocalDate(year: year, month: 1, day: 1).adding(days: fwd - 1).weekday - dow) % 7
     return -fwdlw + fwd - 1
   }
 
   private static func weeksInYear(_ year: Int, dow: Int, doy: Int) -> Int {
     let days = LocalDate.isLeap(year) ? 366 : 365
-    return (days - firstWeekOffset(year, dow: dow, doy: doy) + firstWeekOffset(year + 1, dow: dow, doy: doy)) / 7
+    return
+      (days - firstWeekOffset(year, dow: dow, doy: doy)
+      + firstWeekOffset(year + 1, dow: dow, doy: doy)) / 7
   }
 
   private static func ordinal(_ n: Int) -> String {
@@ -221,16 +230,22 @@ struct FakeCalendar: Sendable {
   static let defaultDailyNoteContent = "- [ ] "
 
   /// `dailyNotePath`: `<folder>/<format>.md`, normalized (throws when it escapes the vault).
-  func dailyNotePath(_ date: LocalDate, _ settings: DailyNoteSettings) throws(FakeVaultPaths.EscapeError) -> String {
+  func dailyNotePath(_ date: LocalDate, _ settings: DailyNoteSettings) throws(FakeVaultPaths
+    .EscapeError) -> String
+  {
     let folder = try FakeVaultPaths.normalize(settings.folder)
     let name = format(date, settings.format.isEmpty ? "YYYY-MM-DD" : settings.format)
-    return try FakeVaultPaths.normalize((folder.isEmpty ? "" : folder + "/") + FakeVaultPaths.ensureMarkdownExtension(name))
+    return try FakeVaultPaths.normalize(
+      (folder.isEmpty ? "" : folder + "/") + FakeVaultPaths.ensureMarkdownExtension(name))
   }
 
-  func weeklyNotePath(_ date: LocalDate, _ settings: WeeklyNoteSettings) throws(FakeVaultPaths.EscapeError) -> String {
+  func weeklyNotePath(_ date: LocalDate, _ settings: WeeklyNoteSettings) throws(FakeVaultPaths
+    .EscapeError) -> String
+  {
     let folder = try FakeVaultPaths.normalize(settings.folder)
     let name = format(date, settings.format.isEmpty ? "gggg-[W]ww" : settings.format)
-    return try FakeVaultPaths.normalize((folder.isEmpty ? "" : folder + "/") + FakeVaultPaths.ensureMarkdownExtension(name))
+    return try FakeVaultPaths.normalize(
+      (folder.isEmpty ? "" : folder + "/") + FakeVaultPaths.ensureMarkdownExtension(name))
   }
 
   /// `templateNotePath`: nil when no template is configured.
@@ -251,9 +266,11 @@ struct FakeCalendar: Sendable {
     var out = ""
     var cursor = 0
     for match in regex.matches(in: template, range: NSRange(location: 0, length: source.length)) {
-      out += source.substring(with: NSRange(location: cursor, length: match.range.location - cursor))
+      out += source.substring(
+        with: NSRange(location: cursor, length: match.range.location - cursor))
       let name = source.substring(with: match.range(at: 1)).lowercased()
-      let custom = match.range(at: 2).location == NSNotFound ? nil : source.substring(with: match.range(at: 2))
+      let custom =
+        match.range(at: 2).location == NSNotFound ? nil : source.substring(with: match.range(at: 2))
       switch name {
       case "title": out += title
       case "date": out += format(date, custom ?? "YYYY-MM-DD")
@@ -268,5 +285,6 @@ struct FakeCalendar: Sendable {
 
 private func pad(_ value: Int, _ width: Int) -> String {
   let digits = String(abs(value))
-  return (value < 0 ? "-" : "") + String(repeating: "0", count: max(0, width - digits.count)) + digits
+  return (value < 0 ? "-" : "") + String(repeating: "0", count: max(0, width - digits.count))
+    + digits
 }

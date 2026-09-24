@@ -23,7 +23,9 @@ extension EditorAdapter {
   /// `charCoords(pos, mode)`: the box of `pos` relative to the content (zeros if unmeasurable).
   func charCoords(_ pos: Pos) -> Coords {
     let offset = indexFromPos(pos)
-    guard let rect = host.vimCoords(at: offset, side: 1) else { return Coords(left: 0, top: 0, bottom: 0) }
+    guard let rect = host.vimCoords(at: offset, side: 1) else {
+      return Coords(left: 0, top: 0, bottom: 0)
+    }
     return Coords(left: rect.left, top: rect.top, bottom: rect.bottom)
   }
 
@@ -43,7 +45,8 @@ extension EditorAdapter {
   func getScrollInfo() -> ScrollInfo {
     let viewport = host.vimViewport
     return ScrollInfo(
-      left: viewport.scrollLeft, top: viewport.scrollTop, height: max(viewport.contentHeight, viewport.clientHeight),
+      left: viewport.scrollLeft, top: viewport.scrollTop,
+      height: max(viewport.contentHeight, viewport.clientHeight),
       clientHeight: viewport.clientHeight, clientWidth: viewport.clientWidth)
   }
 
@@ -74,7 +77,8 @@ extension EditorAdapter {
     }
     var result = PosV(pos: posFromIndex(range.head))
     if (amount < 0 && range.head == 0 && goalColumn != 0 && start.line == 0 && start.ch != 0)
-      || (amount > 0 && range.head == docLength && Double(result.pos.ch) != (goalColumn ?? .nan) && start.line == result.pos.line)
+      || (amount > 0 && range.head == docLength && Double(result.pos.ch) != (goalColumn ?? .nan)
+        && start.line == result.pos.line)
     {
       result.hitSide = true
     }
@@ -87,7 +91,9 @@ extension EditorAdapter {
     let dir: Double = forward ? 1 : -1
     if startPos == (forward ? docLength : 0) { return .cursor(startPos, assoc: start.assoc) }
     var goal = start.goalColumn
-    let side = start.assoc != 0 ? start.assoc : ((start.isEmpty ? forward : start.head == start.from) ? 1 : -1)
+    let side =
+      start.assoc != 0
+      ? start.assoc : ((start.isEmpty ? forward : start.head == start.from) ? 1 : -1)
     let startY: Double
     if let coords = host.vimCoords(at: startPos, side: side) {
       if goal == nil { goal = coords.left }
@@ -131,7 +137,8 @@ extension EditorAdapter {
       let halfLine = host.vimTextHeight / 2
       y = scanY > 0 ? host.vimLineTop(line + 1) + halfLine : host.vimLineTop(line) - halfLine
     }
-    let from = host.vimLineStart(line), to = lineEnd(line)
+    let from = host.vimLineStart(line)
+    let to = lineEnd(line)
     let offset = host.vimOffset(at: VimPoint(x: x, y: y))
     // The scan's association: after the character it hit (-1) or before it (1).
     let assoc: Int

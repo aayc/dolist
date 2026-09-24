@@ -29,7 +29,11 @@ struct VaultStoreTests {
     #expect(projects.children.map(\.path) == ["Projects/Launch"])
     #expect(vault.isFolder("Projects/Launch"), "folders implied by file paths exist")
     #expect(!vault.has(".obsidian/app.json"), "hidden paths are skipped")
-    #expect(vault.files == ["Daily/2026-09-22.md", "Daily/2026-09-23.md", "Day 10.md", "Day 2.md", "Ideas.md", "Projects/Launch/Plan.md"])
+    #expect(
+      vault.files == [
+        "Daily/2026-09-22.md", "Daily/2026-09-23.md", "Day 10.md", "Day 2.md", "Ideas.md",
+        "Projects/Launch/Plan.md",
+      ])
   }
 
   @Test func visibleRowsFollowExpansion() async throws {
@@ -91,7 +95,8 @@ struct VaultStoreTests {
 
   @Test func refreshKeepsNotesTheSnapshotMayPredate() async throws {
     let vault = try await loadedStore()
-    vault.setTree(VaultTreeResponse(vaultName: "Test Vault", entries: []), keeping: [("Just Created.md", "v1")])
+    vault.setTree(
+      VaultTreeResponse(vaultName: "Test Vault", entries: []), keeping: [("Just Created.md", "v1")])
     #expect(vault.isFile("Just Created.md"))
     #expect(vault.files == ["Just Created.md"])
   }

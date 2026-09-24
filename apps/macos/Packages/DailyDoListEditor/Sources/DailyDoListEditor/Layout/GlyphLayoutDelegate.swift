@@ -44,7 +44,8 @@ final class GlyphLayoutDelegate: NSObject {
 extension GlyphLayoutDelegate: @preconcurrency NSLayoutManagerDelegate {
   func layoutManager(
     _ layoutManager: NSLayoutManager, shouldGenerateGlyphs glyphs: UnsafePointer<CGGlyph>,
-    properties props: UnsafePointer<NSLayoutManager.GlyphProperty>, characterIndexes charIndexes: UnsafePointer<Int>,
+    properties props: UnsafePointer<NSLayoutManager.GlyphProperty>,
+    characterIndexes charIndexes: UnsafePointer<Int>,
     font aFont: NSFont, forGlyphRange glyphRange: NSRange
   ) -> Int {
     guard livePreview.isEnabled, let storage, glyphRange.length > 0 else { return 0 }
@@ -71,11 +72,13 @@ extension GlyphLayoutDelegate: @preconcurrency NSLayoutManagerDelegate {
       while next < hidden.count, hidden[next].range.end <= index { next += 1 }
       guard next < hidden.count, hidden[next].range.location <= index else { continue }
       let lineStart = index == 0 || text.character(at: index - 1) == UTF16Unit.newline
-      properties[i] = hidden[next].replacementStart == index || lineStart ? .controlCharacter : .null
+      properties[i] =
+        hidden[next].replacementStart == index || lineStart ? .controlCharacter : .null
     }
     properties.withUnsafeBufferPointer { buffer in
       layoutManager.setGlyphs(
-        glyphs, properties: buffer.baseAddress!, characterIndexes: charIndexes, font: aFont, forGlyphRange: glyphRange)
+        glyphs, properties: buffer.baseAddress!, characterIndexes: charIndexes, font: aFont,
+        forGlyphRange: glyphRange)
     }
     return count
   }
@@ -85,11 +88,13 @@ extension GlyphLayoutDelegate: @preconcurrency NSLayoutManagerDelegate {
     forControlCharacterAt charIndex: Int
   ) -> NSLayoutManager.ControlCharacterAction {
     guard let marker = hiddenMarker(at: charIndex) else { return action }
-    return marker.kind.isReplacement && marker.range.location == charIndex ? .whitespace : .zeroAdvancement
+    return marker.kind.isReplacement && marker.range.location == charIndex
+      ? .whitespace : .zeroAdvancement
   }
 
   func layoutManager(
-    _ layoutManager: NSLayoutManager, boundingBoxForControlGlyphAt glyphIndex: Int, for textContainer: NSTextContainer,
+    _ layoutManager: NSLayoutManager, boundingBoxForControlGlyphAt glyphIndex: Int,
+    for textContainer: NSTextContainer,
     proposedLineFragment proposedRect: NSRect, glyphPosition: NSPoint, characterIndex charIndex: Int
   ) -> NSRect {
     guard let marker = hiddenMarker(at: charIndex), marker.kind.isReplacement else {
@@ -100,8 +105,10 @@ extension GlyphLayoutDelegate: @preconcurrency NSLayoutManagerDelegate {
   }
 
   func layoutManager(
-    _ layoutManager: NSLayoutManager, shouldSetLineFragmentRect lineFragmentRect: UnsafeMutablePointer<NSRect>,
-    lineFragmentUsedRect: UnsafeMutablePointer<NSRect>, baselineOffset: UnsafeMutablePointer<CGFloat>,
+    _ layoutManager: NSLayoutManager,
+    shouldSetLineFragmentRect lineFragmentRect: UnsafeMutablePointer<NSRect>,
+    lineFragmentUsedRect: UnsafeMutablePointer<NSRect>,
+    baselineOffset: UnsafeMutablePointer<CGFloat>,
     in textContainer: NSTextContainer, forGlyphRange glyphRange: NSRange
   ) -> Bool {
     guard let storage, glyphRange.length > 0 else { return false }

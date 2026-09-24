@@ -21,7 +21,8 @@ struct SidebarView: View {
     HStack(spacing: 2) {
       Spacer(minLength: 0)
       IconButton(
-        systemImage: "magnifyingglass", help: ui.sidebarMode == .search ? "Show files" : "Search (⇧⌘F)",
+        systemImage: "magnifyingglass",
+        help: ui.sidebarMode == .search ? "Show files" : "Search (⇧⌘F)",
         isActive: ui.sidebarMode == .search
       ) {
         if ui.sidebarMode == .search { ui.sidebarMode = .files } else { ui.focusSearch() }

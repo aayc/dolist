@@ -146,9 +146,11 @@ public enum VaultPath {
 
   private static func foldSharpS(_ text: String) -> String {
     guard text.unicodeScalars.contains(where: { $0 == "ß" || $0 == "ẞ" }) else { return text }
-    return String(String.UnicodeScalarView(text.unicodeScalars.flatMap { scalar -> [Unicode.Scalar] in
-      scalar == "ß" || scalar == "ẞ" ? ["s", "s"] : [scalar]
-    }))
+    return String(
+      String.UnicodeScalarView(
+        text.unicodeScalars.flatMap { scalar -> [Unicode.Scalar] in
+          scalar == "ß" || scalar == "ẞ" ? ["s", "s"] : [scalar]
+        }))
   }
 
   /// Splits on `/` and `\`, resolves `.` and `..`; nil if `..` escapes and clamping is off.

@@ -48,8 +48,11 @@ public final class VimSession {
       self.onCommandDone?()
     }
     cm.on(.vimModeChange, modeToken) { [unowned self] payload in
-      guard let state = self.cm.vim, case .modeChange(let mode, let subMode) = payload else { return }
-      state.mode = mode + (subMode.map { $0.isEmpty ? "" : $0 == "linewise" ? " line" : " block" } ?? "")
+      guard let state = self.cm.vim, case .modeChange(let mode, let subMode) = payload else {
+        return
+      }
+      state.mode =
+        mode + (subMode.map { $0.isEmpty ? "" : $0 == "linewise" ? " line" : " block" } ?? "")
       state.status = ""
       self.onModeChange?(mode, subMode)
     }
@@ -99,7 +102,8 @@ public final class VimSession {
   /// The vim view plugin's `handleKey`, the host's native edit, then vim's own keydown listener
   /// (registered in insert mode), which sees Backspace and Delete if it was listening before the
   /// key and still is.
-  private func sendToEditor(_ key: String, _ event: DOMKeyEvent, nativeEdit: (() -> Bool)?) -> Bool {
+  private func sendToEditor(_ key: String, _ event: DOMKeyEvent, nativeEdit: (() -> Bool)?) -> Bool
+  {
     let listening = cm.inputFieldKeydown.map(\.0)
     var state = vim.maybeInitVimState(cm)
     // The web app clears the search highlight on <Esc> in normal mode.
@@ -133,7 +137,8 @@ public final class VimSession {
       handled = nativeEdit()
     }
     if event.key == "Backspace" || event.key == "Delete" {
-      for (token, listener) in cm.inputFieldKeydown where listening.contains(where: { $0 === token }) { listener(event) }
+      for (token, listener) in cm.inputFieldKeydown
+      where listening.contains(where: { $0 === token }) { listener(event) }
     }
     return handled
   }
@@ -142,8 +147,11 @@ public final class VimSession {
   public func vimKey(for input: VimKeyInput) -> String? {
     let state = vim.maybeInitVimState(cm)
     let context = VimKeyNotation.LangmapContext(
-      expectLiteralNext: state.expectLiteralNext, keymap: vim.langmap.keymap, remapCtrl: vim.langmap.remapCtrl, usedKeys: vim.usedKeys)
-    let event = DOMKeyEvent(key: input.key, ctrlKey: input.control, altKey: input.alt, metaKey: input.meta, shiftKey: input.shift, code: input.code)
+      expectLiteralNext: state.expectLiteralNext, keymap: vim.langmap.keymap,
+      remapCtrl: vim.langmap.remapCtrl, usedKeys: vim.usedKeys)
+    let event = DOMKeyEvent(
+      key: input.key, ctrlKey: input.control, altKey: input.alt, metaKey: input.meta,
+      shiftKey: input.shift, code: input.code)
     return VimKeyNotation.vimKeyFromEvent(event, isMac: vim.isMac, langmap: context)
   }
 

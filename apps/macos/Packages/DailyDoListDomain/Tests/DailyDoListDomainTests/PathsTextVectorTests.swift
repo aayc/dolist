@@ -76,10 +76,16 @@ extension DomainTests {
         let result = attempt { () throws(InvalidPathError) in try VaultPath.validated(c.input) }
         switch result {
         case .success(let output):
-          check.expect(same(output, c.output), "validated(\(c.input.debug)) = \(output.debug) ≠ \(String(describing: c.output))")
-          check.expect(same(VaultPath.normalize(c.input), output), "normalize(\(c.input.debug)) differs from validated")
+          check.expect(
+            same(output, c.output),
+            "validated(\(c.input.debug)) = \(output.debug) ≠ \(String(describing: c.output))")
+          check.expect(
+            same(VaultPath.normalize(c.input), output),
+            "normalize(\(c.input.debug)) differs from validated")
         case .failure(let error):
-          check.expect(Self.reason(error) == c.error, "validated(\(c.input.debug)) threw \(error), expected \(String(describing: c.error))")
+          check.expect(
+            Self.reason(error) == c.error,
+            "validated(\(c.input.debug)) threw \(error), expected \(String(describing: c.error))")
           let lenient = VaultPath.normalize(c.input)
           check.expect(
             error.reason == .nulByte || same(try? VaultPath.validated(lenient), lenient),
@@ -89,15 +95,26 @@ extension DomainTests {
       for h in file.helpers {
         let p = h.path
         check.expect(VaultPath.isSafe(p) == h.isSafe, "isSafe(\(p.debug))")
-        check.expect(same(VaultPath.dirname(p), h.dirname), "dirname(\(p.debug)) = \(VaultPath.dirname(p).debug)")
-        check.expect(same(VaultPath.basename(p), h.basename), "basename(\(p.debug)) = \(VaultPath.basename(p).debug)")
-        check.expect(same(VaultPath.extname(p), h.extname), "extname(\(p.debug)) = \(VaultPath.extname(p).debug)")
-        check.expect(same(VaultPath.stem(p), h.stem), "stem(\(p.debug)) = \(VaultPath.stem(p).debug)")
+        check.expect(
+          same(VaultPath.dirname(p), h.dirname),
+          "dirname(\(p.debug)) = \(VaultPath.dirname(p).debug)")
+        check.expect(
+          same(VaultPath.basename(p), h.basename),
+          "basename(\(p.debug)) = \(VaultPath.basename(p).debug)")
+        check.expect(
+          same(VaultPath.extname(p), h.extname),
+          "extname(\(p.debug)) = \(VaultPath.extname(p).debug)")
+        check.expect(
+          same(VaultPath.stem(p), h.stem), "stem(\(p.debug)) = \(VaultPath.stem(p).debug)")
         check.expect(VaultPath.isMarkdown(p) == h.isMarkdown, "isMarkdown(\(p.debug))")
-        check.expect(same(VaultPath.ensureMarkdownExtension(p), h.ensureMarkdown), "ensureMarkdownExtension(\(p.debug))")
+        check.expect(
+          same(VaultPath.ensureMarkdownExtension(p), h.ensureMarkdown),
+          "ensureMarkdownExtension(\(p.debug))")
         check.expect(VaultPath.isHidden(p) == h.isHidden, "isHidden(\(p.debug))")
         check.expect(VaultPath.isSidecar(p) == h.isSidecar, "isSidecar(\(p.debug))")
-        check.expect(same(VaultPath.ancestorFolders(p), h.ancestors), "ancestorFolders(\(p.debug)) = \(VaultPath.ancestorFolders(p))")
+        check.expect(
+          same(VaultPath.ancestorFolders(p), h.ancestors),
+          "ancestorFolders(\(p.debug)) = \(VaultPath.ancestorFolders(p))")
       }
       for c in file.join {
         let result = attempt { () throws(InvalidPathError) in try VaultPath.validatedJoin(c.parts) }
@@ -118,7 +135,8 @@ extension DomainTests {
       var check = VectorCheck("paths.json compare")
       for c in file.compare {
         let actual = VaultPath.compare(c.a, c.b, locale: locale)
-        check.expect(actual == c.sign, "compare(\(c.a.debug), \(c.b.debug)) = \(actual) ≠ \(c.sign)")
+        check.expect(
+          actual == c.sign, "compare(\(c.a.debug), \(c.b.debug)) = \(actual) ≠ \(c.sign)")
       }
       check.verify(atLeast: 1000)
     }
@@ -207,11 +225,14 @@ extension DomainTests {
       }
       for c in file.truncate {
         let actual = TextTools.truncate(c.text, max: c.max)
-        check.expect(same(actual, c.output), "truncate(\(c.text.debug), \(c.max)) = \(actual.debug) ≠ \(c.output.debug)")
+        check.expect(
+          same(actual, c.output),
+          "truncate(\(c.text.debug), \(c.max)) = \(actual.debug) ≠ \(c.output.debug)")
       }
       for c in file.hash {
         let actual = TextTools.hash(c.text, seed: c.max)
-        check.expect(actual == c.output, "hash(\(c.text.debug), \(c.max)) = \(actual) ≠ \(c.output)")
+        check.expect(
+          actual == c.output, "hash(\(c.text.debug), \(c.max)) = \(actual) ≠ \(c.output)")
       }
       for c in file.splitLines {
         let actual = TextTools.splitLines(c.text)
@@ -253,14 +274,17 @@ extension DomainTests {
         let ok =
           actual.count == c.links.count
           && zip(actual, c.links).allSatisfy { a, e in
-            same(a.target, e.target) && same(a.subpath, e.subpath) && same(a.alias, e.alias) && a.embed == e.embed
+            same(a.target, e.target) && same(a.subpath, e.subpath) && same(a.alias, e.alias)
+              && a.embed == e.embed
               && a.from == e.from && a.to == e.to
           }
         check.expect(ok, "parse(\(c.text.debug)) = \(actual) ≠ \(c.links)")
       }
       for c in file.resolve {
         let actual = WikiLinks.resolve(c.target, in: c.paths)
-        check.expect(same(actual, c.result), "resolve(\(c.target.debug), \(c.paths)) = \(String(describing: actual))")
+        check.expect(
+          same(actual, c.result),
+          "resolve(\(c.target.debug), \(c.paths)) = \(String(describing: actual))")
       }
       check.verify(atLeast: 200)
     }

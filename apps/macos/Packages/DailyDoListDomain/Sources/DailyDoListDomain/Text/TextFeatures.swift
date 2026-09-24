@@ -28,7 +28,9 @@ final class TextFeatures {
   func isEqual(to other: TextFeatures) -> Bool {
     guard hash == other.hash, count == other.count else { return false }
     return normalized.withUnsafeBytes { a in
-      other.normalized.withUnsafeBytes { b in a.count == 0 || memcmp(a.baseAddress!, b.baseAddress!, a.count) == 0 }
+      other.normalized.withUnsafeBytes { b in
+        a.count == 0 || memcmp(a.baseAddress!, b.baseAddress!, a.count) == 0
+      }
     }
   }
 
@@ -38,7 +40,9 @@ final class TextFeatures {
     if isEqual(to: other) { return 1 }
     if count < 2 || other.count < 2 { return 0 }
     if other.table == nil { other.table = BigramTable(other.normalized) }
-    let overlap = withUTF16Pointer(normalized) { p, n in other.table!.overlap(streaming: p, count: n) }
+    let overlap = withUTF16Pointer(normalized) { p, n in
+      other.table!.overlap(streaming: p, count: n)
+    }
     return Double(2 * overlap) / Double(count - 1 + (other.count - 1))
   }
 
@@ -54,7 +58,9 @@ final class TextFeatures {
     guard count >= minLength, other.count >= minLength else { return false }
     let length = Swift.min(count, other.count)
     return normalized.withUnsafeBytes { a in
-      other.normalized.withUnsafeBytes { b in length == 0 || memcmp(a.baseAddress!, b.baseAddress!, length * 2) == 0 }
+      other.normalized.withUnsafeBytes { b in
+        length == 0 || memcmp(a.baseAddress!, b.baseAddress!, length * 2) == 0
+      }
     }
   }
 
@@ -73,8 +79,12 @@ final class TextFeatures {
       // ASCII whitespace for `\s`: 0x09-0x0D and space.
       var start = 0
       var end = n
-      while start < end && (p[start] == 0x20 || (p[start] >= 0x09 && p[start] <= 0x0D)) { start += 1 }
-      while end > start && (p[end - 1] == 0x20 || (p[end - 1] >= 0x09 && p[end - 1] <= 0x0D)) { end -= 1 }
+      while start < end && (p[start] == 0x20 || (p[start] >= 0x09 && p[start] <= 0x0D)) {
+        start += 1
+      }
+      while end > start && (p[end - 1] == 0x20 || (p[end - 1] >= 0x09 && p[end - 1] <= 0x0D)) {
+        end -= 1
+      }
       return [UInt16](unsafeUninitializedCapacity: end - start) { out, count in
         guard let o = out.baseAddress else {
           count = 0

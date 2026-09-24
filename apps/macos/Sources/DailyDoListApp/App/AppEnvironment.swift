@@ -31,7 +31,8 @@ struct AppEnvironment {
   /// The real app. Demo mode keeps its own preferences so demo tabs never replace real ones.
   static func live() -> AppEnvironment {
     let options = LaunchOptions.current
-    let defaults = options.demo ? UserDefaults(suiteName: "app.dailydolist.demo") ?? .standard : .standard
+    let defaults =
+      options.demo ? UserDefaults(suiteName: "app.dailydolist.demo") ?? .standard : .standard
     return AppEnvironment(
       preferences: AppPreferences(defaults: defaults),
       launchOptions: options,

@@ -27,7 +27,8 @@ final class EventBroadcaster: Sendable {
   /// A new stream that yields the current state first. Buffering is unbounded: consumers are
   /// expected to keep up, and dropping an event would silently corrupt their state.
   func stream() -> AsyncStream<DaemonStreamItem> {
-    let (stream, continuation) = AsyncStream<DaemonStreamItem>.makeStream(bufferingPolicy: .unbounded)
+    let (stream, continuation) = AsyncStream<DaemonStreamItem>.makeStream(
+      bufferingPolicy: .unbounded)
     let id = state.withLock { state in
       defer { state.nextID &+= 1 }
       return state.nextID

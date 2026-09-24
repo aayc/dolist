@@ -15,7 +15,11 @@ enum RichTextStyle: Hashable, Sendable {
   var baseFont: NSFont {
     switch self {
     case .body, .quote: .systemFont(ofSize: 13)
-    case .heading(let level): level == 1 ? .systemFont(ofSize: 17, weight: .bold) : level == 2 ? .systemFont(ofSize: 15, weight: .semibold) : .systemFont(ofSize: 13, weight: .semibold)
+    case .heading(let level):
+      level == 1
+        ? .systemFont(ofSize: 17, weight: .bold)
+        : level == 2
+          ? .systemFont(ofSize: 15, weight: .semibold) : .systemFont(ofSize: 13, weight: .semibold)
     }
   }
 
@@ -40,9 +44,12 @@ enum AgentRichText {
       guard !string.isEmpty else { continue }
       let intent = run.inlinePresentationIntent ?? []
       var attributes: [NSAttributedString.Key: Any] = [
-        .font: font(for: intent, style: style), .foregroundColor: style.color, .paragraphStyle: paragraph,
+        .font: font(for: intent, style: style), .foregroundColor: style.color,
+        .paragraphStyle: paragraph,
       ]
-      if intent.contains(.strikethrough) { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
+      if intent.contains(.strikethrough) {
+        attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
+      }
       if let link = run.link {
         attributes[.link] = link
         attributes[.foregroundColor] = AgentPalette.accent
@@ -63,21 +70,28 @@ enum AgentRichText {
     let text = result.string as NSString
     for citation in citations {
       if citation.location > 0, text.character(at: citation.location - 1) != 0x20 {
-        result.addAttribute(.kern, value: citationPadding + 1, range: NSRange(location: citation.location - 1, length: 1))
+        result.addAttribute(
+          .kern, value: citationPadding + 1,
+          range: NSRange(location: citation.location - 1, length: 1))
       }
-      result.addAttribute(.kern, value: citationPadding + 1, range: NSRange(location: citation.location + citation.length - 1, length: 1))
+      result.addAttribute(
+        .kern, value: citationPadding + 1,
+        range: NSRange(location: citation.location + citation.length - 1, length: 1))
     }
     return result
   }
 
   private static func font(for intent: InlinePresentationIntent, style: RichTextStyle) -> NSFont {
     var font = style.baseFont
-    if intent.contains(.code) { font = .monospacedSystemFont(ofSize: font.pointSize - 1, weight: .regular) }
+    if intent.contains(.code) {
+      font = .monospacedSystemFont(ofSize: font.pointSize - 1, weight: .regular)
+    }
     var traits: NSFontDescriptor.SymbolicTraits = []
     if intent.contains(.stronglyEmphasized) { traits.insert(.bold) }
     if intent.contains(.emphasized) { traits.insert(.italic) }
     guard !traits.isEmpty else { return font }
-    let descriptor = font.fontDescriptor.withSymbolicTraits(font.fontDescriptor.symbolicTraits.union(traits))
+    let descriptor = font.fontDescriptor.withSymbolicTraits(
+      font.fontDescriptor.symbolicTraits.union(traits))
     return NSFont(descriptor: descriptor, size: font.pointSize) ?? font
   }
 }

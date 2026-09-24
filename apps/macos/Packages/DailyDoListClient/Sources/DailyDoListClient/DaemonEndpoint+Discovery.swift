@@ -15,7 +15,8 @@ extension DaemonDiscoveryError: LocalizedError {
     switch self {
     case .tokenFileMissing(let path):
       "No daemon token at \(DaemonEndpoint.displayPath(path)). Start the daemon once to create it."
-    case .tokenFileEmpty(let path): "The daemon token file \(DaemonEndpoint.displayPath(path)) is empty."
+    case .tokenFileEmpty(let path):
+      "The daemon token file \(DaemonEndpoint.displayPath(path)) is empty."
     case .tokenFileUnreadable(let path, let reason):
       "Can't read the daemon token \(DaemonEndpoint.displayPath(path)): \(reason)"
     case .invalidPort(let port): "\(port) is not a usable daemon port."
@@ -30,11 +31,14 @@ extension DaemonEndpoint {
   /// `$DDL_HOME` when set (like the daemon), else `~/.daily-do-list`.
   public static var defaultHome: URL {
     let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-    if let raw = ProcessInfo.processInfo.environment["DDL_HOME"]?.trimmingCharacters(in: .whitespaces),
+    if let raw = ProcessInfo.processInfo.environment["DDL_HOME"]?.trimmingCharacters(
+      in: .whitespaces),
       !raw.isEmpty
     {
       if raw == "~" { return home }
-      if raw.hasPrefix("~/") { return home.appendingPathComponent(String(raw.dropFirst(2)), isDirectory: true) }
+      if raw.hasPrefix("~/") {
+        return home.appendingPathComponent(String(raw.dropFirst(2)), isDirectory: true)
+      }
       return URL(fileURLWithPath: raw, isDirectory: true)
     }
     return home.appendingPathComponent(".daily-do-list", isDirectory: true)
@@ -58,10 +62,12 @@ extension DaemonEndpoint {
       }
       throw .tokenFileUnreadable(path: tokenURL.path, reason: error.localizedDescription)
     }
-    let token = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+    let token = String(decoding: data, as: UTF8.self).trimmingCharacters(
+      in: .whitespacesAndNewlines)
     guard !token.isEmpty else { throw .tokenFileEmpty(path: tokenURL.path) }
     let resolved = port ?? configuredPort(home: home) ?? defaultPort
-    guard (1...65535).contains(resolved), let url = URL(string: "http://127.0.0.1:\(resolved)") else {
+    guard (1...65535).contains(resolved), let url = URL(string: "http://127.0.0.1:\(resolved)")
+    else {
       throw .invalidPort(resolved)
     }
     return DaemonEndpoint(baseURL: url, token: token)

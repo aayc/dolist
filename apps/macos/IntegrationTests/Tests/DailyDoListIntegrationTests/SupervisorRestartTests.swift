@@ -31,10 +31,11 @@ extension RealDaemonTests {
         return false
       }
       let resyncAt = try await log.index(from: lostAt, for: "resync") { $0 == .resync }
-      #expect(log.items[lostAt..<resyncAt].contains { item in
-        if case .state(.connected) = item { return true }
-        return false
-      }, "reconnected before asking consumers to refetch")
+      #expect(
+        log.items[lostAt..<resyncAt].contains { item in
+          if case .state(.connected) = item { return true }
+          return false
+        }, "reconnected before asking consumers to refetch")
 
       // The client is live again: REST works and writes are echoed on the new connection.
       #expect(try await client.health().ok)

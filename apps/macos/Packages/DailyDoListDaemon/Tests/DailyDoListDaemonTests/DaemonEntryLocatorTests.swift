@@ -39,8 +39,9 @@ struct DaemonEntryLocatorTests {
 
   @Test func missingConfiguredEntryIsAnError() {
     files.addFile("\(repo)/apps/daemon/dist/main.js")
-    #expect(throws: DaemonSupervisorError.configuredEntryMissing(
-      path: "~/gone/main.js", source: "the app's configuration")
+    #expect(
+      throws: DaemonSupervisorError.configuredEntryMissing(
+        path: "~/gone/main.js", source: "the app's configuration")
     ) {
       try locator(configured: "/Users/me/gone/main.js", currentDirectory: repo).locate()
     }
@@ -52,7 +53,10 @@ struct DaemonEntryLocatorTests {
     #expect(entry.entry.path == "/Users/me/daemon/dist/main.js")
     #expect(entry.source == .environment)
 
-    #expect(throws: DaemonSupervisorError.configuredEntryMissing(path: "/nope.js", source: "DDL_DAEMON_ENTRY")) {
+    #expect(
+      throws: DaemonSupervisorError.configuredEntryMissing(
+        path: "/nope.js", source: "DDL_DAEMON_ENTRY")
+    ) {
       try locator(environment: ["DDL_DAEMON_ENTRY": "/nope.js"]).locate()
     }
   }
@@ -80,7 +84,9 @@ struct DaemonEntryLocatorTests {
   @Test func walksUpFromTheExecutable() throws {
     files.addFile("\(repo)/apps/daemon/dist/main.js")
 
-    let fromSwiftRun = try locator(executable: "\(repo)/apps/macos/.build/arm64-apple-macosx/debug/DailyDoList").locate()
+    let fromSwiftRun = try locator(
+      executable: "\(repo)/apps/macos/.build/arm64-apple-macosx/debug/DailyDoList"
+    ).locate()
     let fromBuiltApp = try locator(
       bundle: URL(fileURLWithPath: "\(repo)/apps/macos/build/Daily Do List.app/Contents/Resources"),
       executable: "\(repo)/apps/macos/build/Daily Do List.app/Contents/MacOS/DailyDoList"
@@ -93,21 +99,25 @@ struct DaemonEntryLocatorTests {
   @Test func walksUpFromTheCurrentDirectory() throws {
     files.addFile("\(repo)/apps/daemon/dist/main.js")
 
-    let entry = try locator(executable: "/usr/local/bin/tool", currentDirectory: "\(repo)/apps/macos").locate()
+    let entry = try locator(
+      executable: "/usr/local/bin/tool", currentDirectory: "\(repo)/apps/macos"
+    ).locate()
 
     #expect(entry.entry.path == "\(repo)/apps/daemon/dist/main.js")
   }
 
   @Test func notFoundListsTheSearch() {
     do {
-      _ = try locator(bundle: resources, executable: "/Applications/X.app/Contents/MacOS/X").locate()
+      _ = try locator(bundle: resources, executable: "/Applications/X.app/Contents/MacOS/X")
+        .locate()
       Issue.record("expected an error")
     } catch {
       guard case .daemonEntryNotFound(let searched) = error else {
         Issue.record("unexpected \(error)")
         return
       }
-      #expect(searched.first == "/Applications/Daily Do List.app/Contents/Resources/daemon/dist/main.js")
+      #expect(
+        searched.first == "/Applications/Daily Do List.app/Contents/Resources/daemon/dist/main.js")
       #expect(searched.contains("parents of the app's executable"))
       #expect(searched.contains("parents of the current directory"))
     }

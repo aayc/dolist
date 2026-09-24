@@ -27,8 +27,10 @@ enum Vimrc {
     var commands: [Command] = []
     var problems: [VimrcProblem] = []
     var leader = defaultLeader
-    let lines = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
-      .components(separatedBy: "\n")
+    let lines = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(
+      of: "\r", with: "\n"
+    )
+    .components(separatedBy: "\n")
     for (line, raw) in lines.enumerated() {
       let trimmed = raw.trimmingCharacters(in: .whitespaces)
       if trimmed.isEmpty || trimmed.hasPrefix("\"") { continue }
@@ -38,7 +40,8 @@ enum Vimrc {
         if let match = input.wholeMatch(of: /let\s+(?:g:)?mapleader\s*=\s*(["'])(.*)\1/) {
           leader = leaderKeys(String(match.2))
         } else {
-          problems.append(VimrcProblem(line: line, message: "Only `let mapleader = …` is supported"))
+          problems.append(
+            VimrcProblem(line: line, message: "Only `let mapleader = …` is supported"))
         }
         continue
       }
@@ -65,7 +68,9 @@ enum Vimrc {
 
   /// Option names a `set` line changes (`set noic`, `setlocal tw=40`, `se clipboard=unnamed`).
   static func optionsSet(by input: String) -> [String] {
-    guard let match = input.wholeMatch(of: /(?:se|set|setl|setlocal|setg|setglobal)\s+(.+)/) else { return [] }
+    guard let match = input.wholeMatch(of: /(?:se|set|setl|setlocal|setg|setglobal)\s+(.+)/) else {
+      return []
+    }
     let argument = String(match.1).trimmingCharacters(in: .whitespaces)
     guard let name = argument.prefixMatch(of: /(?:no)?([A-Za-z]\w*)/) else { return [] }
     return [String(name.1)]
@@ -77,7 +82,8 @@ enum Vimrc {
     case .exmap(_, let name, _):
       return [":" + name]
     case .ex(_, let input):
-      guard let match = input.prefixMatch(of: /(?:map|no|nor|nore|norem|norema|noremap)!?\s+(:\S+)/) else { return [] }
+      guard let match = input.prefixMatch(of: /(?:map|no|nor|nore|norem|norema|noremap)!?\s+(:\S+)/)
+      else { return [] }
       return [String(match.1)]
     }
   }

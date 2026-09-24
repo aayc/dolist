@@ -32,7 +32,10 @@ struct ConnectorsSettingsPane: View {
             .disabled(isLoading || model.client == nil)
         }
       } footer: {
-        SettingsNote(text: "MCP servers from ~/.daily-do-list/mcp.json (the same format as Claude Desktop and Cursor).")
+        SettingsNote(
+          text:
+            "MCP servers from ~/.daily-do-list/mcp.json (the same format as Claude Desktop and Cursor)."
+        )
       }
     }
     .formStyle(.grouped)

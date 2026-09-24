@@ -79,7 +79,8 @@ extension DaemonClientError {
     }
     let (path, reason): ([any CodingKey], String) =
       switch error {
-      case .typeMismatch(_, let context), .valueNotFound(_, let context), .dataCorrupted(let context):
+      case .typeMismatch(_, let context), .valueNotFound(_, let context),
+        .dataCorrupted(let context):
         (context.codingPath, context.debugDescription)
       case .keyNotFound(let key, let context):
         (context.codingPath + [key], context.debugDescription)

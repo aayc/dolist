@@ -34,7 +34,9 @@ extension TextViewVimHost {
     keyDepth += 1
     beginOperation(userEvent: "input")
     let handled = session.handleKey(key, nativeEdit: native)
-    if !handled, input?.meta == true, session.isAttached, session.mode != .insert, session.mode != .replace {
+    if !handled, input?.meta == true, session.isAttached, session.mode != .insert,
+      session.mode != .replace
+    {
       _ = native()
     }
     endOperation()
@@ -57,7 +59,8 @@ extension TextViewVimHost {
     let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
     guard flags.contains(.control), !flags.contains(.command) else { return false }
     if session.activePrompt != nil { return true }
-    guard session.mode != .insert, session.mode != .replace, let input = VimKeyEvents.input(for: event),
+    guard session.mode != .insert, session.mode != .replace,
+      let input = VimKeyEvents.input(for: event),
       let key = session.vimKey(for: input)
     else { return false }
     return VimCtrlKeys.isClaimed(key, mapped: EditorVimIntegration.mappedCtrlKeys(for: session.vim))

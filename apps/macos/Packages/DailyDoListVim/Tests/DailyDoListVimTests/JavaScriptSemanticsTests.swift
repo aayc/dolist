@@ -17,11 +17,16 @@ import Testing
     }
     // Surrogate halves are punctuation: an emoji is a two-unit "word" of its own.
     #expect(!isWordChar(0xD83D) && isPunctuationChar(0xD83D))
-    #expect(isPunctuationChar(unit("-")) && !isPunctuationChar(unit("é")) && !isPunctuationChar(unit(" ")))
+    #expect(
+      isPunctuationChar(unit("-")) && !isPunctuationChar(unit("é")) && !isPunctuationChar(unit(" "))
+    )
   }
 
   @Test func whitespaceIsJavaScripts() {
-    for c: Unicode.Scalar in ["\t", "\n", "\u{B}", "\u{C}", "\r", " ", "\u{A0}", "\u{1680}", "\u{2000}", "\u{200A}", "\u{2028}", "\u{2029}", "\u{202F}", "\u{205F}", "\u{3000}", "\u{FEFF}"] {
+    for c: Unicode.Scalar in [
+      "\t", "\n", "\u{B}", "\u{C}", "\r", " ", "\u{A0}", "\u{1680}", "\u{2000}", "\u{200A}",
+      "\u{2028}", "\u{2029}", "\u{202F}", "\u{205F}", "\u{3000}", "\u{FEFF}",
+    ] {
       #expect(isJSWhitespace(unit(c)), "U+\(String(c.value, radix: 16))")
     }
     for c: Unicode.Scalar in ["\u{85}", "\u{180E}", "\u{200B}", "a"] {
@@ -30,8 +35,12 @@ import Testing
   }
 
   @Test func caseMappingIsFullAndContextual() {
-    func lower(_ s: String) -> String { String(decoding: JSCase.lowercase(Array(s.utf16)), as: UTF16.self) }
-    func upper(_ s: String) -> String { String(decoding: JSCase.uppercase(Array(s.utf16)), as: UTF16.self) }
+    func lower(_ s: String) -> String {
+      String(decoding: JSCase.lowercase(Array(s.utf16)), as: UTF16.self)
+    }
+    func upper(_ s: String) -> String {
+      String(decoding: JSCase.uppercase(Array(s.utf16)), as: UTF16.self)
+    }
     #expect(lower("ΟΔΟΣ") == "οδος")
     #expect(lower("Σ") == "σ")
     #expect(lower("ΑΣ Σ") == "ας σ")
@@ -52,9 +61,9 @@ import Testing
     #expect(JSNumber.parseInt("123", radix: 2) == 1)
     #expect(JSNumber.parseInt("ff", radix: 16) == 255)
     #expect(JSNumber.parseInt("99999999999999999999") == 1e20)
-    #expect(JSNumber.parseInt("9007199254740993") == 9007199254740992)
-    #expect(JSNumber.parseInt("9007199254740995") == 9007199254740996)
-    #expect(JSNumber.parseInt("fffffffffffffffff", radix: 16) == 295147905179352825856)
+    #expect(JSNumber.parseInt("9007199254740993") == 9_007_199_254_740_992)
+    #expect(JSNumber.parseInt("9007199254740995") == 9_007_199_254_740_996)
+    #expect(JSNumber.parseInt("fffffffffffffffff", radix: 16) == 295_147_905_179_352_825_856)
   }
 
   @Test func numbersFormatLikeJavaScript() {

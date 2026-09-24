@@ -156,7 +156,8 @@ final class Workspace {
     let wasActive = tabs.active == path
     let next = tabs.close(path)
     if wasActive {
-      editor.show(next, content: next.flatMap(content(of:)), caretAtEnd: next.map(isDailyNote) ?? false)
+      editor.show(
+        next, content: next.flatMap(content(of:)), caretAtEnd: next.map(isDailyNote) ?? false)
       if let next { afterActivate(next, OpenOptions()) } else { onNoActiveNote() }
     }
     onTabsChanged?()
@@ -190,7 +191,9 @@ final class Workspace {
   }
 
   func reopenClosedTab() async {
-    guard let closed = tabs.popClosedTab(isValid: { vault.isFile($0) || notes.has($0) }) else { return }
+    guard let closed = tabs.popClosedTab(isValid: { vault.isFile($0) || notes.has($0) }) else {
+      return
+    }
     if !notes.has(closed.path) {
       do {
         try await notes.load(closed.path)
@@ -209,7 +212,9 @@ final class Workspace {
   }
 
   func goForward() async {
-    guard let target = tabs.popForward(isValid: { vault.isFile($0) || notes.has($0) }) else { return }
+    guard let target = tabs.popForward(isValid: { vault.isFile($0) || notes.has($0) }) else {
+      return
+    }
     await openNote(target, OpenOptions(recordHistory: false))
   }
 
@@ -234,7 +239,8 @@ final class Workspace {
       toasts.show(.error, "Invalid link target", body: rawTarget)
       return
     }
-    await createNote(at: VaultPath.ensureMarkdownExtension(normalized), newTab: newTab, focusTitle: false)
+    await createNote(
+      at: VaultPath.ensureMarkdownExtension(normalized), newTab: newTab, focusTitle: false)
   }
 
   /// Restores last session's tabs (existing notes only), loading them in parallel.

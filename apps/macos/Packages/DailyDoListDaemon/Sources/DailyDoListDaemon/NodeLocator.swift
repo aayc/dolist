@@ -47,7 +47,9 @@ public struct ResolvedNode: Hashable, Sendable {
   /// `/usr/bin:/bin:/usr/sbin:/sbin`; the daemon's connectors often need `npx`, `uvx`, …).
   public var loginShellPATH: String?
 
-  public init(url: URL, version: NodeVersion, source: NodeLocator.Source, loginShellPATH: String? = nil) {
+  public init(
+    url: URL, version: NodeVersion, source: NodeLocator.Source, loginShellPATH: String? = nil
+  ) {
     self.url = url
     self.version = version
     self.source = source
@@ -175,7 +177,8 @@ public struct NodeLocator: Sendable {
       .map { nvmVersions.appendingPathComponent($0.0).appendingPathComponent("bin/node") }
     return nvm + [
       homeDirectory.appendingPathComponent(".local/share/fnm/aliases/default/bin/node"),
-      homeDirectory.appendingPathComponent("Library/Application Support/fnm/aliases/default/bin/node"),
+      homeDirectory.appendingPathComponent(
+        "Library/Application Support/fnm/aliases/default/bin/node"),
       homeDirectory.appendingPathComponent(".asdf/shims/node"),
     ]
   }
@@ -206,7 +209,8 @@ public struct NodeLocator: Sendable {
   }
 
   private func probeVersion(_ url: URL) async -> Probe {
-    let result = await commands.run(url, arguments: ["--version"], environment: nil, timeout: timeout)
+    let result = await commands.run(
+      url, arguments: ["--version"], environment: nil, timeout: timeout)
     if result.timedOut { return .failure("`node --version` timed out") }
     guard result.succeeded else {
       let detail = nonEmpty(result.standardError).map { ": \($0.prefix(200))" } ?? ""

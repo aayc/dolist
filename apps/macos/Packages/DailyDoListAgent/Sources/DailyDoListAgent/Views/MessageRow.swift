@@ -182,9 +182,11 @@ struct ArtifactRow: View {
           Text(verbatim: meta?.title ?? "Artifact")
             .font(.system(size: 13, weight: .medium))
             .lineLimit(1)
-          Text(verbatim: meta.map { "\($0.kindLabel) · \(AgentFormat.bytes($0.size))" } ?? "Loading…")
-            .font(.caption)
-            .foregroundStyle(AgentTheme.mutedText)
+          Text(
+            verbatim: meta.map { "\($0.kindLabel) · \(AgentFormat.bytes($0.size))" } ?? "Loading…"
+          )
+          .font(.caption)
+          .foregroundStyle(AgentTheme.mutedText)
         }
         Spacer(minLength: 4)
         Image(systemName: "chevron.right")

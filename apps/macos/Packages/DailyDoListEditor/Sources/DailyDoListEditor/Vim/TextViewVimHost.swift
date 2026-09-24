@@ -83,7 +83,9 @@ final class TextViewVimHost: VimEditor {
     detach()
     textView.breakUndoCoalescing()
     recorder.reset()
-    selection = derivedSelection(textView.selectedRanges.map(\.rangeValue), previous: .cursor(textView.selectedRange().location))
+    selection = derivedSelection(
+      textView.selectedRanges.map(\.rangeValue),
+      previous: .cursor(textView.selectedRange().location))
     shownRanges = textView.selectedRanges.map(\.rangeValue)
     let session = vim.attach(to: self)
     self.session = session
@@ -92,7 +94,8 @@ final class TextViewVimHost: VimEditor {
     session.onKeypress = { [weak self] _ in self?.statusDidChange() }
     for name in [NSNotification.Name.NSUndoManagerDidUndoChange, .NSUndoManagerDidRedoChange] {
       undoObservers.append(
-        NotificationCenter.default.addObserver(forName: name, object: nil, queue: nil) { [weak self] notification in
+        NotificationCenter.default.addObserver(forName: name, object: nil, queue: nil) {
+          [weak self] notification in
           let manager = (notification.object as AnyObject?).map(ObjectIdentifier.init)
           MainActor.assumeIsolated { self?.undoManagerDidRevert(manager) }
         })
@@ -175,7 +178,9 @@ final class TextViewVimHost: VimEditor {
     let range = range.clamped(to: storage.length)
     guard range.length > 0 else { return VimText() }
     var units = [UInt16](repeating: 0, count: range.length)
-    units.withUnsafeMutableBufferPointer { storage.mutableString.getCharacters($0.baseAddress!, range: range) }
+    units.withUnsafeMutableBufferPointer {
+      storage.mutableString.getCharacters($0.baseAddress!, range: range)
+    }
     return VimText(units: units)
   }
 
@@ -191,7 +196,9 @@ final class TextViewVimHost: VimEditor {
   func setSelection(_ next: VimSelection) {
     let length = storage.length
     let clamped = VimSelection(
-      ranges: next.ranges.map { .init(anchor: min(max($0.anchor, 0), length), head: min(max($0.head, 0), length)) },
+      ranges: next.ranges.map {
+        .init(anchor: min(max($0.anchor, 0), length), head: min(max($0.head, 0), length))
+      },
       mainIndex: min(max(next.mainIndex, 0), max(next.ranges.count - 1, 0)))
     selection = clamped
     let shown = Self.displayRanges(clamped)
@@ -204,8 +211,10 @@ final class TextViewVimHost: VimEditor {
 
   /// What NSTextView can show of `selection`: its non-empty ranges, else the main cursor.
   static func displayRanges(_ selection: VimSelection) -> [NSRange] {
-    let ranges = selection.ranges.filter { !$0.isEmpty }.map { NSRange(location: $0.from, length: $0.to - $0.from) }
-      .sorted { $0.location < $1.location }
+    let ranges = selection.ranges.filter { !$0.isEmpty }.map {
+      NSRange(location: $0.from, length: $0.to - $0.from)
+    }
+    .sorted { $0.location < $1.location }
     if !ranges.isEmpty { return ranges }
     let main = selection.main
     return [NSRange(location: main.head, length: 0)]
@@ -232,7 +241,9 @@ final class TextViewVimHost: VimEditor {
       return
     }
     // A selection change that isn't part of an edit (a click, an arrow key in insert mode).
-    if pendingChanges == nil { recorder.recordSelection(previous, userEvent: "select", time: clock()) }
+    if pendingChanges == nil {
+      recorder.recordSelection(previous, userEvent: "select", time: clock())
+    }
     pendingSelectionMove = true
     if operationDepth == 0 { flushToVim() }
   }
@@ -243,18 +254,22 @@ final class TextViewVimHost: VimEditor {
     let length = storage.length
     let clamped = ranges.map { $0.clamped(to: length) }
     guard clamped.count == 1, let range = clamped.first else {
-      return VimSelection(ranges: clamped.map { .init(anchor: $0.location, head: $0.end) }, mainIndex: 0)
+      return VimSelection(
+        ranges: clamped.map { .init(anchor: $0.location, head: $0.end) }, mainIndex: 0)
     }
     if range.length == 0 { return .cursor(range.location) }
     let anchor = previous.main.anchor
-    if anchor == range.end && anchor != range.location { return VimSelection(ranges: [.init(anchor: range.end, head: range.location)]) }
+    if anchor == range.end && anchor != range.location {
+      return VimSelection(ranges: [.init(anchor: range.end, head: range.location)])
+    }
     return VimSelection(ranges: [.init(anchor: range.location, head: range.end)])
   }
 
   /// ⌘Z or ⇧⌘Z ran an undo action of the note (not vim's `u`): the cursor goes to the start of
   /// what it selected, like `u`, and vim hears about it.
   private func undoManagerDidRevert(_ manager: ObjectIdentifier?) {
-    guard isAttached, !vimRunsHistory, manager == ObjectIdentifier(controller.noteUndoManager) else { return }
+    guard isAttached, !vimRunsHistory, manager == ObjectIdentifier(controller.noteUndoManager)
+    else { return }
     let main = selection.main
     if !main.isEmpty || selection.ranges.count > 1 {
       setSelection(.cursor(main.from))
@@ -284,7 +299,9 @@ final class TextViewVimHost: VimEditor {
     guard !changes.isEmpty else { return true }
     let ranges = changes.map { NSValue(range: NSRange(location: $0.from, length: $0.to - $0.from)) }
     let strings = changes.map { $0.text.nsString as String }
-    guard textView.shouldChangeText(inRanges: ranges, replacementStrings: strings) else { return false }
+    guard textView.shouldChangeText(inRanges: ranges, replacementStrings: strings) else {
+      return false
+    }
     controller.replacingText = true
     for (range, string) in zip(ranges, strings).reversed() {
       storage.replaceCharacters(in: range.rangeValue, with: string)
@@ -364,7 +381,9 @@ final class TextViewVimHost: VimEditor {
     statusIsStale = false
     guard let session else { return }
     let mode = EditorVimStatus.Mode(rawValue: session.mode.rawValue) ?? .normal
-    let pending = mode == .insert || mode == .replace ? "" : (session.pendingRegister.map { "\"" + $0 } ?? "") + session.pendingKeys
+    let pending =
+      mode == .insert || mode == .replace
+      ? "" : (session.pendingRegister.map { "\"" + $0 } ?? "") + session.pendingKeys
     let next = EditorVimStatus(mode: mode, pending: pending, recording: session.recordingRegister)
     guard next != status else { return }
     let blockChanged = status.map { Self.blockStyle(of: $0) != Self.blockStyle(of: next) } ?? true

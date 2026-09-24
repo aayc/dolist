@@ -12,11 +12,13 @@ struct WikiLinkParts: Equatable, Sendable {
     let pipe = inner.firstIndex(of: "|")
     let targetText = pipe.map { inner[..<$0] } ?? inner[...]
     let hash = targetText.firstIndex(of: "#")
-    target = String(hash.map { targetText[..<$0] } ?? targetText).trimmingCharacters(in: .whitespaces)
+    target = String(hash.map { targetText[..<$0] } ?? targetText).trimmingCharacters(
+      in: .whitespaces)
     let subpath = hash.map { String(targetText[targetText.index(after: $0)...]) }?
       .trimmingCharacters(in: .whitespaces)
     self.subpath = subpath?.isEmpty == false ? subpath : nil
-    let alias = pipe.map { String(inner[inner.index(after: $0)...]) }?.trimmingCharacters(in: .whitespaces)
+    let alias = pipe.map { String(inner[inner.index(after: $0)...]) }?.trimmingCharacters(
+      in: .whitespaces)
     self.alias = alias?.isEmpty == false ? alias : nil
   }
 }
@@ -36,9 +38,9 @@ enum LinkClassifier {
   /// and are never handed to the host.
   static func destination(for target: LinkTarget) -> LinkDestination? {
     switch target {
-    case let .wiki(target, subpath, _, _):
+    case .wiki(let target, let subpath, _, _):
       return target.isEmpty ? nil : .note(target: target, subpath: subpath)
-    case let .url(raw):
+    case .url(let raw):
       return classify(raw)
     }
   }
@@ -75,7 +77,9 @@ enum LinkClassifier {
     let candidate = url[..<colon]
     guard let first = candidate.unicodeScalars.first, first.isASCII, first.properties.isAlphabetic,
       candidate.unicodeScalars.allSatisfy({
-        $0.isASCII && ($0.properties.isAlphabetic || ("0"..."9").contains($0) || "+.-".unicodeScalars.contains($0))
+        $0.isASCII
+          && ($0.properties.isAlphabetic || ("0"..."9").contains($0)
+            || "+.-".unicodeScalars.contains($0))
       })
     else { return nil }
     return String(candidate)

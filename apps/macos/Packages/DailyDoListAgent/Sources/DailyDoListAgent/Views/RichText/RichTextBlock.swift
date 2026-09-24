@@ -19,7 +19,9 @@ struct RichTextBlock: NSViewRepresentable {
     view.setContent(text, style: style)
   }
 
-  func sizeThatFits(_ proposal: ProposedViewSize, nsView: CitationTextView, context: Context) -> CGSize? {
+  func sizeThatFits(_ proposal: ProposedViewSize, nsView: CitationTextView, context: Context)
+    -> CGSize?
+  {
     let width = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? nsView.naturalWidth
     return CGSize(width: width, height: nsView.height(forWidth: width))
   }

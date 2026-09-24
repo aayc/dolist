@@ -18,7 +18,8 @@ enum JSCase {
       let (scalar, width) = decodeScalar(p, i, range.upperBound)
       if let scalar, scalar.value == 0x03A3 {
         let final =
-          isPrecededByCased(p, i, range.lowerBound) && !isFollowedByCased(p, i + 1, range.upperBound)
+          isPrecededByCased(p, i, range.lowerBound)
+          && !isFollowedByCased(p, i + 1, range.upperBound)
         out.append(final ? 0x03C2 : 0x03C3)
       } else if let scalar, scalar.properties.changesWhenLowercased {
         out.append(contentsOf: scalar.properties.lowercaseMapping.utf16)
@@ -81,7 +82,9 @@ enum JSCase {
 
   // MARK: Final_Sigma context (Unicode 3.13, as ICU implements it)
 
-  private static func isPrecededByCased(_ p: UnsafePointer<UInt16>, _ index: Int, _ start: Int) -> Bool {
+  private static func isPrecededByCased(_ p: UnsafePointer<UInt16>, _ index: Int, _ start: Int)
+    -> Bool
+  {
     var i = index
     while i > start {
       let (scalar, width) = decodeScalarBackward(p, i, start)
@@ -93,7 +96,9 @@ enum JSCase {
     return false
   }
 
-  private static func isFollowedByCased(_ p: UnsafePointer<UInt16>, _ index: Int, _ end: Int) -> Bool {
+  private static func isFollowedByCased(_ p: UnsafePointer<UInt16>, _ index: Int, _ end: Int)
+    -> Bool
+  {
     var i = index
     while i < end {
       let (scalar, width) = decodeScalar(p, i, end)
@@ -120,7 +125,9 @@ func decodeScalar(_ p: UnsafePointer<UInt16>, _ i: Int, _ end: Int) -> (Unicode.
 
 /// The scalar ending just before `i`.
 @inline(__always)
-func decodeScalarBackward(_ p: UnsafePointer<UInt16>, _ i: Int, _ start: Int) -> (Unicode.Scalar?, Int) {
+func decodeScalarBackward(_ p: UnsafePointer<UInt16>, _ i: Int, _ start: Int) -> (
+  Unicode.Scalar?, Int
+) {
   let u = p[i - 1]
   if u & 0xFC00 == 0xDC00, i - 2 >= start, p[i - 2] & 0xFC00 == 0xD800 {
     return decodeScalar(p, i - 2, i)

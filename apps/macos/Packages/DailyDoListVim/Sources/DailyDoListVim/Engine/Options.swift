@@ -23,7 +23,10 @@ final class VimOption {
   let callback: ((VimOptionValue?, EditorAdapter?) -> VimOptionValue?)?
   var value: VimOptionValue?
 
-  init(kind: Kind, defaultValue: VimOptionValue?, callback: ((VimOptionValue?, EditorAdapter?) -> VimOptionValue?)?) {
+  init(
+    kind: Kind, defaultValue: VimOptionValue?,
+    callback: ((VimOptionValue?, EditorAdapter?) -> VimOptionValue?)?
+  ) {
     self.kind = kind
     self.defaultValue = defaultValue
     self.callback = callback
@@ -48,7 +51,9 @@ extension Vim {
 
   /// `setOption(name, value, cm, cfg)`; nil value stands for `undefined`.
   @discardableResult
-  func setOptionValue(_ name: String, _ input: VimOptionValue?, _ cm: EditorAdapter?, scope: VimOptionScope? = nil) -> OptionError? {
+  func setOptionValue(
+    _ name: String, _ input: VimOptionValue?, _ cm: EditorAdapter?, scope: VimOptionScope? = nil
+  ) -> OptionError? {
     guard let option = options[name] else { return OptionError(message: "Unknown option: " + name) }
     var value = input
     if option.kind == .boolean {
@@ -73,8 +78,12 @@ extension Vim {
   }
 
   /// `getOption(name, cm, cfg)`: nil for `undefined`.
-  func getOptionValue(_ name: String, _ cm: EditorAdapter? = nil, scope: VimOptionScope? = nil) -> Result<VimOptionValue?, OptionError> {
-    guard let option = options[name] else { return .failure(OptionError(message: "Unknown option: " + name)) }
+  func getOptionValue(_ name: String, _ cm: EditorAdapter? = nil, scope: VimOptionScope? = nil)
+    -> Result<VimOptionValue?, OptionError>
+  {
+    guard let option = options[name] else {
+      return .failure(OptionError(message: "Unknown option: " + name))
+    }
     if let callback = option.callback {
       let local = cm.flatMap { callback(nil, $0) }
       if scope != .global, let local { return .success(local) }

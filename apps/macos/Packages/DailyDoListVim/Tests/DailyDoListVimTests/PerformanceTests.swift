@@ -1,7 +1,6 @@
+import DailyDoListVim
 import Foundation
 import Testing
-
-import DailyDoListVim
 
 /// Keystroke latency on a 10,000-line note: every command below runs in one `handleKey` call
 /// (the host's keystroke path). Budgets hold in the unoptimized test build;
@@ -9,15 +8,20 @@ import DailyDoListVim
 @MainActor
 @Suite(.serialized)
 struct PerformanceTests {
-  static let multiplier = Double(ProcessInfo.processInfo.environment["PERF_BUDGET_MULTIPLIER"] ?? "") ?? 1
+  static let multiplier =
+    Double(ProcessInfo.processInfo.environment["PERF_BUDGET_MULTIPLIER"] ?? "") ?? 1
   static let budgetMilliseconds = 1.0
 
   static let note: String = (0..<10_000).map { i in
-    i % 7 == 0 ? "## Section \(i / 7)" : "- [ ] Task \(i): follow up with the vendor about item \(i % 97) today"
+    i % 7 == 0
+      ? "## Section \(i / 7)"
+      : "- [ ] Task \(i): follow up with the vendor about item \(i % 97) today"
   }.joined(separator: "\n")
 
   /// The 99th percentile of `samples` key presses, in milliseconds, after a warm-up.
-  private func p99(_ samples: Int, setUp: (VimSession, VimTextBuffer) -> Void = { _, _ in }, _ keys: [String]) -> Double {
+  private func p99(
+    _ samples: Int, setUp: (VimSession, VimTextBuffer) -> Void = { _, _ in }, _ keys: [String]
+  ) -> Double {
     let vim = Vim(scheduler: ManualVimScheduler(), isMac: false)
     let buffer = VimTextBuffer(Self.note)
     let session = buffer.attach(to: vim)
@@ -40,7 +44,10 @@ struct PerformanceTests {
 
   private func check(_ name: String, _ milliseconds: Double) {
     let limit = Self.budgetMilliseconds * Self.multiplier
-    print(String(format: "perf handleKey %@ on 10k lines: p99 %.3f ms (budget %.1f ms)", name, milliseconds, limit))
+    print(
+      String(
+        format: "perf handleKey %@ on 10k lines: p99 %.3f ms (budget %.1f ms)", name, milliseconds,
+        limit))
     #expect(milliseconds < limit, "\(name) p99 \(milliseconds) ms")
   }
 
@@ -61,6 +68,13 @@ struct PerformanceTests {
   }
 
   @Test func p() {
-    check("p", p99(500, setUp: { session, _ in session.handleKey("y"); session.handleKey("y") }, ["p"]))
+    check(
+      "p",
+      p99(
+        500,
+        setUp: { session, _ in
+          session.handleKey("y")
+          session.handleKey("y")
+        }, ["p"]))
   }
 }

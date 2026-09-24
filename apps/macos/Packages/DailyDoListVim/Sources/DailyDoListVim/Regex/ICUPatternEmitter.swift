@@ -30,7 +30,8 @@ struct ICUPatternEmitter {
   private static let anyCodePoint = "[\\x{0}-\\x{10FFFF}]"
 
   private func wordChars(_ scope: Scope) -> String {
-    "\\x{30}-\\x{39}\\x{41}-\\x{5A}\\x{5F}\\x{61}-\\x{7A}" + (unicode && scope.ignoreCase ? "\\x{17F}\\x{212A}" : "")
+    "\\x{30}-\\x{39}\\x{41}-\\x{5A}\\x{5F}\\x{61}-\\x{7A}"
+      + (unicode && scope.ignoreCase ? "\\x{17F}\\x{212A}" : "")
   }
 
   private static let spaceChars =
@@ -39,10 +40,13 @@ struct ICUPatternEmitter {
   private static func hasMultiCharCaseMapping(_ value: UInt32) -> Bool {
     guard let scalar = Unicode.Scalar(value) else { return false }
     let properties = scalar.properties
-    return properties.uppercaseMapping.unicodeScalars.count > 1 || properties.lowercaseMapping.unicodeScalars.count > 1
+    return properties.uppercaseMapping.unicodeScalars.count > 1
+      || properties.lowercaseMapping.unicodeScalars.count > 1
   }
 
-  private static func hex(_ value: UInt32) -> String { "\\x{" + String(value, radix: 16, uppercase: true) + "}" }
+  private static func hex(_ value: UInt32) -> String {
+    "\\x{" + String(value, radix: 16, uppercase: true) + "}"
+  }
 
   private func write(_ node: RegexNode, _ scope: Scope, into out: inout String) {
     switch node {
@@ -51,18 +55,22 @@ struct ICUPatternEmitter {
     case .char(let c):
       // ICU folds literals with full case folding ("ß" matches "SS"); inside a set it uses simple
       // folding, which is closer to JavaScript's canonicalization.
-      out += scope.ignoreCase && Self.hasMultiCharCaseMapping(c) ? "[" + Self.hex(c) + "]" : Self.hex(c)
+      out +=
+        scope.ignoreCase && Self.hasMultiCharCaseMapping(c) ? "[" + Self.hex(c) + "]" : Self.hex(c)
     case .any:
       out += scope.dotAll ? Self.anyCodePoint : "[^" + Self.lineTerminators + "]"
     case .set(let set):
       writeSet(set, scope, into: &out)
     case .lineStart:
-      out += scope.multiline ? "(?<![^" + Self.lineTerminators + "])" : "(?<!" + Self.anyCodePoint + ")"
+      out +=
+        scope.multiline ? "(?<![^" + Self.lineTerminators + "])" : "(?<!" + Self.anyCodePoint + ")"
     case .lineEnd:
-      out += scope.multiline ? "(?![^" + Self.lineTerminators + "])" : "(?!" + Self.anyCodePoint + ")"
+      out +=
+        scope.multiline ? "(?![^" + Self.lineTerminators + "])" : "(?!" + Self.anyCodePoint + ")"
     case .wordBoundary(let isBoundary):
       let w = "[" + wordChars(scope) + "]"
-      out += isBoundary
+      out +=
+        isBoundary
         ? "(?-i:(?<=\(w))(?!\(w))|(?<!\(w))(?=\(w)))"
         : "(?-i:(?<=\(w))(?=\(w))|(?<!\(w))(?!\(w)))"
     case .group(let body, let capture):
@@ -212,8 +220,10 @@ struct ICUPatternEmitter {
   static func captureCount(_ node: RegexNode) -> Int {
     switch node {
     case .group(let body, let capture): return (capture == nil ? 0 : 1) + captureCount(body)
-    case .look(let body, _, _), .modifiers(let body, _, _), .quantified(let body, _, _, _): return captureCount(body)
-    case .sequence(let nodes), .alternation(let nodes): return nodes.reduce(0) { $0 + captureCount($1) }
+    case .look(let body, _, _), .modifiers(let body, _, _), .quantified(let body, _, _, _):
+      return captureCount(body)
+    case .sequence(let nodes), .alternation(let nodes):
+      return nodes.reduce(0) { $0 + captureCount($1) }
     default: return 0
     }
   }
@@ -221,9 +231,11 @@ struct ICUPatternEmitter {
   static func containsBackref(_ node: RegexNode) -> Bool {
     switch node {
     case .backref, .namedBackref: return true
-    case .group(let body, _), .look(let body, _, _), .modifiers(let body, _, _), .quantified(let body, _, _, _):
+    case .group(let body, _), .look(let body, _, _), .modifiers(let body, _, _),
+      .quantified(let body, _, _, _):
       return containsBackref(body)
-    case .sequence(let nodes), .alternation(let nodes): return nodes.contains(where: containsBackref)
+    case .sequence(let nodes), .alternation(let nodes):
+      return nodes.contains(where: containsBackref)
     default: return false
     }
   }

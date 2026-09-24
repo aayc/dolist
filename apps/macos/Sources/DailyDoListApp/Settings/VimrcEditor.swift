@@ -12,8 +12,11 @@ struct VimrcEditor: View {
   @State private var committed = ""
   @FocusState private var focused: Bool
 
-  static let placeholder = ["\" One ex command per line, for example:", "imap jj <Esc>", "nmap j gj", "set clipboard=unnamed"]
-    .joined(separator: "\n")
+  static let placeholder = [
+    "\" One ex command per line, for example:", "imap jj <Esc>", "nmap j gj",
+    "set clipboard=unnamed",
+  ]
+  .joined(separator: "\n")
   static let commitDelay: Duration = .milliseconds(800)
 
   var body: some View {

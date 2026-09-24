@@ -16,12 +16,14 @@ struct MainWindowView: View {
     }
     .frame(minWidth: 720, maxWidth: .infinity, minHeight: 440, maxHeight: .infinity)
     .tint(Theme.accent)
-    .background(WindowAccessor { window in
-      WindowHandles.shared.mainWindow = window
-      window.tabbingMode = .disallowed
-      WindowChrome.centerTrafficLights(in: window)
-      WindowHandles.shared.fullScreen.observe(window) { model.ui.isFullScreen = $0 }
-    })
+    .background(
+      WindowAccessor { window in
+        WindowHandles.shared.mainWindow = window
+        window.tabbingMode = .disallowed
+        WindowChrome.centerTrafficLights(in: window)
+        WindowHandles.shared.fullScreen.observe(window) { model.ui.isFullScreen = $0 }
+      }
+    )
     .onAppear {
       WindowHandles.shared.openMainWindow = { openWindow(id: MainWindowID.value) }
       model.start()
@@ -111,7 +113,9 @@ struct WorkspaceView: View {
   }
 
   private var minimumWidth: CGFloat {
-    max(720, PaneLayout.minimumWindowWidth(sidebar: ui.sidebarVisible, inspector: ui.inspectorPresented))
+    max(
+      720,
+      PaneLayout.minimumWindowWidth(sidebar: ui.sidebarVisible, inspector: ui.inspectorPresented))
   }
 
   private var deletionBinding: Binding<Bool> {
@@ -124,7 +128,9 @@ struct WorkspaceView: View {
   }
 
   /// An invisible strip over the line at `x` that drags the pane's edge.
-  private func resizeHandle(_ pane: Pane, at x: CGFloat, total: CGFloat, otherPane: CGFloat?) -> some View {
+  private func resizeHandle(_ pane: Pane, at x: CGFloat, total: CGFloat, otherPane: CGFloat?)
+    -> some View
+  {
     let range = pane == .sidebar ? PaneLayout.sidebarRange : PaneLayout.inspectorRange
     return PaneResizeHandle(
       onBegin: {
@@ -134,11 +140,16 @@ struct WorkspaceView: View {
       onDrag: { delta in
         guard let current = resizing, current.pane == pane else { return }
         let proposed = pane == .sidebar ? current.start + delta : current.start - delta
-        resizing?.width = PaneLayout.dragged(proposed, range: range, total: total, otherPane: otherPane)
+        resizing?.width = PaneLayout.dragged(
+          proposed, range: range, total: total, otherPane: otherPane)
       },
       onEnd: {
         guard let current = resizing, current.pane == pane else { return }
-        if pane == .sidebar { ui.sidebarWidth = current.width } else { ui.inspectorWidth = current.width }
+        if pane == .sidebar {
+          ui.sidebarWidth = current.width
+        } else {
+          ui.inspectorWidth = current.width
+        }
         resizing = nil
       },
       onReset: {

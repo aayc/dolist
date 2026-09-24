@@ -13,8 +13,12 @@ final class VimRecordingDelegate: MarkdownEditorDelegate {
   /// What `perform` answers.
   var result: EditorVimRequestResult = .done
 
-  func editor(_ editor: MarkdownEditorController, vimStatusDidChange status: EditorVimStatus?) { statuses.append(status) }
-  func editor(_ editor: MarkdownEditorController, perform request: EditorVimRequest) -> EditorVimRequestResult {
+  func editor(_ editor: MarkdownEditorController, vimStatusDidChange status: EditorVimStatus?) {
+    statuses.append(status)
+  }
+  func editor(_ editor: MarkdownEditorController, perform request: EditorVimRequest)
+    -> EditorVimRequestResult
+  {
     requests.append(request)
     return result
   }
@@ -44,14 +48,17 @@ final class VimEditorHarness {
 
   /// `marked` uses `|` for the caret (see `parseMarked`); without one the caret starts at 0.
   init(
-    _ marked: String = "", configuration: EditorConfiguration = EditorConfiguration(livePreview: false, vimMode: true),
+    _ marked: String = "",
+    configuration: EditorConfiguration = EditorConfiguration(livePreview: false, vimMode: true),
     size: NSSize = NSSize(width: 800, height: 600), integrated: Bool = true
   ) {
     let hasMarker = marked.contains("|") || marked.contains("«")
     let (text, parsed) = hasMarker ? parseMarked(marked) : (marked, NSRange(location: 0, length: 0))
     let selection = parsed
     controller = MarkdownEditorController(configuration: configuration)
-    window = VimTestWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
+    window = VimTestWindow(
+      contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered,
+      defer: false)
     window.isReleasedWhenClosed = false
     window.contentView = controller.view
     controller.view.frame = NSRect(origin: .zero, size: size)
@@ -61,12 +68,14 @@ final class VimEditorHarness {
     controller.noteUndoManager.groupsByEvent = false
     vim = Vim(scheduler: scheduler, isMac: true)
     pasteboard = NSPasteboard(name: NSPasteboard.Name("ddl.tests.vim.\(UUID().uuidString)"))
-    integration = integrated ? EditorVimIntegration(vim: vim, pasteboard: SystemVimPasteboard(pasteboard)) : nil
+    integration =
+      integrated ? EditorVimIntegration(vim: vim, pasteboard: SystemVimPasteboard(pasteboard)) : nil
     controller.vim = vim
     window.makeFirstResponder(controller.textView)
     host.clock = { [weak self] in self?.now ?? 0 }
     if selection.location > 0 || selection.length > 0 {
-      host.setSelection(VimSelection(ranges: [.init(anchor: selection.location, head: selection.end)]))
+      host.setSelection(
+        VimSelection(ranges: [.init(anchor: selection.location, head: selection.end)]))
       session?.editorSelectionDidChange()
     }
     delegate.statuses.removeAll()
@@ -138,9 +147,12 @@ final class VimEditorHarness {
       name = inner
     }
     let named: [String: (UInt16, String)] = [
-      "Esc": (53, "\u{1b}"), "CR": (36, "\r"), "BS": (51, "\u{7f}"), "Del": (117, "\u{F728}"), "Tab": (48, "\t"),
-      "Left": (123, "\u{F702}"), "Right": (124, "\u{F703}"), "Down": (125, "\u{F701}"), "Up": (126, "\u{F700}"),
-      "Home": (115, "\u{F729}"), "End": (119, "\u{F72B}"), "PageUp": (116, "\u{F72C}"), "PageDown": (121, "\u{F72D}"),
+      "Esc": (53, "\u{1b}"), "CR": (36, "\r"), "BS": (51, "\u{7f}"), "Del": (117, "\u{F728}"),
+      "Tab": (48, "\t"),
+      "Left": (123, "\u{F702}"), "Right": (124, "\u{F703}"), "Down": (125, "\u{F701}"),
+      "Up": (126, "\u{F700}"),
+      "Home": (115, "\u{F729}"), "End": (119, "\u{F72B}"), "PageUp": (116, "\u{F72C}"),
+      "PageDown": (121, "\u{F72D}"),
       "F1": (122, "\u{F704}"), "F12": (111, "\u{F70F}"), "Space": (49, " "),
     ]
     let keyCode: UInt16
@@ -155,16 +167,21 @@ final class VimEditorHarness {
       keyCode = codes[name.lowercased()] ?? 0x7F
       ignoring = flags.contains(.shift) ? name.uppercased() : name
       characters = ignoring
-      if flags.contains(.control), let scalar = name.lowercased().unicodeScalars.first, scalar.isASCII,
+      if flags.contains(.control), let scalar = name.lowercased().unicodeScalars.first,
+        scalar.isASCII,
         (97...122).contains(scalar.value)
       {
         characters = String(UnicodeScalar(UInt8(scalar.value - 96)))
       }
     }
-    if flags.contains(.shift), name.count == 1, named[name] == nil { characters = name.uppercased() }
+    if flags.contains(.shift), name.count == 1, named[name] == nil {
+      characters = name.uppercased()
+    }
     return NSEvent.keyEvent(
-      with: .keyDown, location: .zero, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime,
-      windowNumber: window?.windowNumber ?? 0, context: nil, characters: characters, charactersIgnoringModifiers: ignoring,
+      with: .keyDown, location: .zero, modifierFlags: flags,
+      timestamp: ProcessInfo.processInfo.systemUptime,
+      windowNumber: window?.windowNumber ?? 0, context: nil, characters: characters,
+      charactersIgnoringModifiers: ignoring,
       isARepeat: isRepeat, keyCode: keyCode)!
   }
 

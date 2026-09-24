@@ -21,7 +21,8 @@ struct FlowLayout: Layout {
       for index in row.indices {
         let size = subviews[index].sizeThatFits(.unspecified)
         subviews[index].place(
-          at: CGPoint(x: x, y: y + (row.height - size.height) / 2), proposal: ProposedViewSize(size))
+          at: CGPoint(x: x, y: y + (row.height - size.height) / 2), proposal: ProposedViewSize(size)
+        )
         x += size.width + spacing
       }
       y += row.height + lineSpacing

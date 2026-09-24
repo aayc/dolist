@@ -102,6 +102,7 @@ final class UIState {
   func renameExpandedFolders(from: String, to: String) {
     let moved = expandedFolders.compactMap { NotePaths.renamed($0, from: from, to: to) }
     guard !moved.isEmpty else { return }
-    expandedFolders = Set(expandedFolders.filter { !NotePaths.isSameOrInside($0, from) }).union(moved)
+    expandedFolders = Set(expandedFolders.filter { !NotePaths.isSameOrInside($0, from) }).union(
+      moved)
   }
 }

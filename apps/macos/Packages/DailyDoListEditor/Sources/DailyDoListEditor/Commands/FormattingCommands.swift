@@ -12,7 +12,9 @@ enum FormattingCommands {
 
     static let bold = MarkupStyle(character: UTF16Unit.asterisk, width: 2) { $0 >= 2 ? 2 : 0 }
     /// A run of 3 is bold + italic; a run of 2 is bold only, so italic is not active there.
-    static let italic = MarkupStyle(character: UTF16Unit.asterisk, width: 1) { $0 == 1 || $0 == 3 ? 1 : 0 }
+    static let italic = MarkupStyle(character: UTF16Unit.asterisk, width: 1) {
+      $0 == 1 || $0 == 3 ? 1 : 0
+    }
     static let strikethrough = MarkupStyle(character: UTF16Unit.tilde, width: 2) { $0 >= 2 ? 2 : 0 }
     static let highlight = MarkupStyle(character: UTF16Unit.equals, width: 2) { $0 >= 2 ? 2 : 0 }
     static let inlineCode = MarkupStyle(character: UTF16Unit.backtick, width: 1) { $0 >= 1 ? 1 : 0 }
@@ -31,7 +33,9 @@ enum FormattingCommands {
       selections.append(local.shifted(by: delta))
       delta += ownDelta
     }
-    return TextEdit(replacements: replacements.sorted { $0.range.location < $1.range.location }, selection: selections)
+    return TextEdit(
+      replacements: replacements.sorted { $0.range.location < $1.range.location },
+      selection: selections)
   }
 
   /// Changes for one range, and the range's selection after its own changes.
@@ -97,9 +101,12 @@ enum FormattingCommands {
         replacement = TextEdit.Replacement(range: range, text: "[]()")
         caret = range.location + 1
       } else if let url = urlLike(selected) {
-        let lead = (selected as NSString).length - (selected.drop { $0.isWhitespace } as Substring).utf16.count
+        let lead =
+          (selected as NSString).length
+          - (selected.drop { $0.isWhitespace } as Substring).utf16.count
         let start = range.location + lead
-        replacement = TextEdit.Replacement(range: NSRange(location: start, length: (url as NSString).length), text: "[](\(url))")
+        replacement = TextEdit.Replacement(
+          range: NSRange(location: start, length: (url as NSString).length), text: "[](\(url))")
         caret = start + 1
       } else {
         replacement = TextEdit.Replacement(range: range, text: "[\(selected)]()")
@@ -121,7 +128,10 @@ enum FormattingCommands {
     let scheme = lower[..<schemeEnd.lowerBound]
     let units = Array(scheme.utf16)
     guard let first = units.first, CharClass.isASCIILetter(first),
-      units.allSatisfy({ CharClass.isASCIIAlphanumeric($0) || $0 == UTF16Unit.plus || $0 == UTF16Unit.dot || $0 == UTF16Unit.dash }),
+      units.allSatisfy({
+        CharClass.isASCIIAlphanumeric($0) || $0 == UTF16Unit.plus || $0 == UTF16Unit.dot
+          || $0 == UTF16Unit.dash
+      }),
       trimmed.utf16.count > units.count + 3
     else { return nil }
     return trimmed
@@ -145,7 +155,8 @@ enum FormattingCommands {
   }
 
   /// Length of the marker run directly around `[from, to)` on both sides (same line only).
-  private static func surroundingRun(_ text: NSString, from: Int, to: Int, character: UInt16) -> Int {
+  private static func surroundingRun(_ text: NSString, from: Int, to: Int, character: UInt16) -> Int
+  {
     var before = 0
     while before < maxRun, from - before - 1 >= 0 {
       let c = text.character(at: from - before - 1)

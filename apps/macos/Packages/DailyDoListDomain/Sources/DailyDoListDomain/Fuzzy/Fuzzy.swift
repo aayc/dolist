@@ -43,7 +43,9 @@ public enum Fuzzy {
 
   /// Matches and ranks `candidates`: best score first, then the shorter candidate, then input
   /// order (so equal candidates keep their order). At most `limit` results.
-  public static func rank(query: String, candidates: [String], limit: Int = 50) -> [FuzzyResult<String>] {
+  public static func rank(query: String, candidates: [String], limit: Int = 50) -> [FuzzyResult<
+    String
+  >] {
     rank(query: query, in: candidates, limit: limit) { $0 }
   }
 
@@ -61,10 +63,14 @@ public enum Fuzzy {
       } else {
         found = text.withPointer { p, n in match(q, p, n) }
       }
-      if let found { results.append((FuzzyResult(element: element, index: index, match: found), text.count)) }
+      if let found {
+        results.append((FuzzyResult(element: element, index: index, match: found), text.count))
+      }
     }
     results.sort { a, b in
-      if a.result.match.score != b.result.match.score { return a.result.match.score > b.result.match.score }
+      if a.result.match.score != b.result.match.score {
+        return a.result.match.score > b.result.match.score
+      }
       if a.length != b.length { return a.length < b.length }
       return a.result.index < b.result.index
     }
@@ -88,13 +94,17 @@ public enum Fuzzy {
     return Query(original: units, folded: folded)
   }
 
-  private static func match(_ query: Query, _ target: UnsafePointer<UInt16>, _ n: Int) -> FuzzyMatch? {
+  private static func match(_ query: Query, _ target: UnsafePointer<UInt16>, _ n: Int)
+    -> FuzzyMatch?
+  {
     let q = query.folded
     guard q.count <= n else { return nil }
     let lower = JSCase.foldOneToOne(target, n)
     guard let last = latestPositions(lower, q, from: 0) else { return nil }
 
-    var candidates = [greedy(lower, q, from: 0), boundaryPreferring(target, lower, q, last, from: 0)]
+    var candidates = [
+      greedy(lower, q, from: 0), boundaryPreferring(target, lower, q, last, from: 0),
+    ]
     candidates += contiguous(lower, q, from: 0)
     // The file name of a path: align the query inside it too, when it fits there.
     let nameStart = (0..<n).last(where: { target[$0] == 0x2F }).map { $0 + 1 } ?? 0
@@ -107,7 +117,9 @@ public enum Fuzzy {
     var best: FuzzyMatch?
     for indices in candidates where indices.count == q.count {
       let score = score(indices, target, n, query.original, nameStart: nameStart)
-      if best.map({ score > $0.score }) ?? true { best = FuzzyMatch(score: score, matchedOffsets: indices) }
+      if best.map({ score > $0.score }) ?? true {
+        best = FuzzyMatch(score: score, matchedOffsets: indices)
+      }
     }
     return best
   }

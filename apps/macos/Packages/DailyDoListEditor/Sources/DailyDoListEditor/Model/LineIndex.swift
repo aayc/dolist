@@ -31,13 +31,15 @@ struct LineIndex: Equatable, Sendable {
   mutating func applyEdit(location: Int, oldLength: Int, newLength: Int, text: NSString) -> Change {
     let firstLine = line(containing: location)
     let oldLastLine = line(containing: location + oldLength)
-    let inserted = Self.newlineStarts(in: text, range: NSRange(location: location, length: newLength))
+    let inserted = Self.newlineStarts(
+      in: text, range: NSRange(location: location, length: newLength))
     starts.replaceSubrange((firstLine + 1)..<(oldLastLine + 1), with: inserted)
     let delta = newLength - oldLength
     if delta != 0 {
       for k in (firstLine + 1 + inserted.count)..<starts.count { starts[k] += delta }
     }
-    return Change(firstLine: firstLine, oldLastLine: oldLastLine, newLastLine: firstLine + inserted.count)
+    return Change(
+      firstLine: firstLine, oldLastLine: oldLastLine, newLastLine: firstLine + inserted.count)
   }
 
   /// The 0-based line containing `offset` (clamped to the document).

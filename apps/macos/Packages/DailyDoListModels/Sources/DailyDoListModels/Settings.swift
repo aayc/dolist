@@ -51,7 +51,8 @@ public struct EditorSettings: Codable, Hashable, Sendable {
   public var showLineNumbers: Bool
 
   public init(
-    vimMode: Bool, vimrc: String = "", livePreview: Bool, readableLineLength: Bool, fontSize: Double,
+    vimMode: Bool, vimrc: String = "", livePreview: Bool, readableLineLength: Bool,
+    fontSize: Double,
     spellcheck: Bool, showLineNumbers: Bool
   ) {
     self.vimMode = vimMode
@@ -147,10 +148,12 @@ public struct AgentSettings: Codable, Hashable, Sendable {
     enabled = try container.decode(Bool.self, forKey: .enabled)
     settleMs = try container.decode(Int.self, forKey: .settleMs)
     maxConcurrentSubagents = try container.decode(Int.self, forKey: .maxConcurrentSubagents)
-    harness = try container.decodeIfPresent(String.self, forKey: .harness)
+    harness =
+      try container.decodeIfPresent(String.self, forKey: .harness)
       .flatMap(AgentHarnessKind.init(rawValue:)) ?? .pi
     model = try container.decode(String.self, forKey: .model)
-    cursorModel = try container.decodeIfPresent(String.self, forKey: .cursorModel) ?? Self.defaultCursorModel
+    cursorModel =
+      try container.decodeIfPresent(String.self, forKey: .cursorModel) ?? Self.defaultCursorModel
     judgeModel = try container.decode(String.self, forKey: .judgeModel)
     watch = try container.decode(AgentWatchWindow.self, forKey: .watch)
     actOnExistingTasks = try container.decode(Bool.self, forKey: .actOnExistingTasks)

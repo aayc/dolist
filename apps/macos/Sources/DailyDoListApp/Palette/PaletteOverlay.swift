@@ -11,7 +11,8 @@ struct PaletteOverlay: View {
     self.workspace = workspace
     _palette = State(
       initialValue: PaletteModel(
-        mode: mode, commands: CommandCatalog(model: model).paletteCommands, files: workspace.vault.files,
+        mode: mode, commands: CommandCatalog(model: model).paletteCommands,
+        files: workspace.vault.files,
         recent: workspace.recent, openTabs: workspace.tabs.tabs))
   }
 
@@ -66,10 +67,13 @@ struct PalettePanel: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      PaletteSearchField(text: Binding(get: { palette.query }, set: { palette.query = $0 }), placeholder: palette.placeholder, onKey: onKey)
-        .frame(height: 24)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+      PaletteSearchField(
+        text: Binding(get: { palette.query }, set: { palette.query = $0 }),
+        placeholder: palette.placeholder, onKey: onKey
+      )
+      .frame(height: 24)
+      .padding(.horizontal, 14)
+      .padding(.vertical, 12)
       Divider()
       results
       Divider()

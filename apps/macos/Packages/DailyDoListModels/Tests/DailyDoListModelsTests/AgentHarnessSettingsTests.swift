@@ -8,15 +8,17 @@ import Testing
 struct AgentHarnessSettingsTests {
   /// The daemon's default agent settings as JSON, with `changes` applied (`nil` drops a key).
   static func agentJSON(_ changes: [String: JSONValue?]) throws -> JSONValue {
-    guard case .object(var agent) = try JSONDecoder.daemon.decode(
-      JSONValue.self, from: JSONEncoder.daemon.encode(AgentSettings.defaults))
+    guard
+      case .object(var agent) = try JSONDecoder.daemon.decode(
+        JSONValue.self, from: JSONEncoder.daemon.encode(AgentSettings.defaults))
     else { throw CocoaError(.coderInvalidValue) }
     for (key, value) in changes { agent[key] = value }
     return .object(agent)
   }
 
   static func decodeAgent(_ changes: [String: JSONValue?]) throws -> AgentSettings {
-    try JSONDecoder.daemon.decode(AgentSettings.self, from: JSONEncoder.daemon.encode(agentJSON(changes)))
+    try JSONDecoder.daemon.decode(
+      AgentSettings.self, from: JSONEncoder.daemon.encode(agentJSON(changes)))
   }
 
   @Test func defaultsToPiWithTheDefaultCursorModel() {
@@ -26,7 +28,9 @@ struct AgentHarnessSettingsTests {
   }
 
   @Test func settingsFromADaemonOlderThanTheHarnessSettingDecodeAsPi() throws {
-    let agent = try Self.decodeAgent(["harness": nil, "cursorModel": nil, "model": "vendor/model-a"])
+    let agent = try Self.decodeAgent([
+      "harness": nil, "cursorModel": nil, "model": "vendor/model-a",
+    ])
     #expect(agent.harness == .pi)
     #expect(agent.cursorModel == AgentSettings.defaultCursorModel)
     #expect(agent.agentModel == "vendor/model-a")
@@ -44,10 +48,14 @@ struct AgentHarnessSettingsTests {
   }
 
   @Test func theCursorHarnessRunsOnTheCursorModel() throws {
-    let agent = try Self.decodeAgent(["harness": "cursor", "cursorModel": "gpt-5.5[reasoning=high]"])
+    let agent = try Self.decodeAgent([
+      "harness": "cursor", "cursorModel": "gpt-5.5[reasoning=high]",
+    ])
     #expect(agent.harness == .cursor)
     #expect(agent.agentModel == "gpt-5.5[reasoning=high]")
-    #expect(try JSONDecoder.daemon.decode(AgentSettings.self, from: JSONEncoder.daemon.encode(agent)) == agent)
+    #expect(
+      try JSONDecoder.daemon.decode(AgentSettings.self, from: JSONEncoder.daemon.encode(agent))
+        == agent)
   }
 
   @Test func patchesCarryOnlyTheHarnessFieldsTheyChange() throws {

@@ -18,7 +18,8 @@ extension TextViewVimHost {
     let clip = controller.scrollView.contentView.bounds
     let origin = textView.textContainerOrigin
     return VimViewport(
-      scrollTop: Double(clip.minY - origin.y), scrollLeft: Double(clip.minX - origin.x), clientHeight: Double(clip.height),
+      scrollTop: Double(clip.minY - origin.y), scrollLeft: Double(clip.minX - origin.x),
+      clientHeight: Double(clip.height),
       clientWidth: Double(clip.width), contentHeight: Double(contentHeight))
   }
 
@@ -47,7 +48,8 @@ extension TextViewVimHost {
     if clip.bounds.origin != origin {
       let visible = NSRect(origin: origin, size: clip.bounds.size)
       let container = textView.textContainerOrigin
-      layoutManager.ensureLayout(forBoundingRect: visible.offsetBy(dx: -container.x, dy: -container.y), in: textContainer)
+      layoutManager.ensureLayout(
+        forBoundingRect: visible.offsetBy(dx: -container.x, dy: -container.y), in: textContainer)
       let maxY = max(0, textView.frame.height - clip.bounds.height)
       controller.scroll(to: NSPoint(x: origin.x, y: min(origin.y, maxY)))
     }
@@ -81,7 +83,8 @@ extension TextViewVimHost {
     guard var rect = vimCoords(at: min(target.head, length), side: 1) else { return }
     if !target.isEmpty, let other = vimCoords(at: min(target.anchor, length), side: 1) {
       rect = VimRect(
-        left: min(rect.left, other.left), top: min(rect.top, other.top), right: max(rect.right, other.right),
+        left: min(rect.left, other.left), top: min(rect.top, other.top),
+        right: max(rect.right, other.right),
         bottom: max(rect.bottom, other.bottom))
     }
     let viewport = vimViewport
@@ -121,7 +124,8 @@ extension TextViewVimHost {
       return box(x: x, fragment: fragment, baseline: nil, fontIndex: max(0, offset - 1))
     }
     var index = offset < length ? offset : length - 1
-    if side < 0, offset > 0, offset < length, string.character(at: offset - 1) != UTF16Unit.newline {
+    if side < 0, offset > 0, offset < length, string.character(at: offset - 1) != UTF16Unit.newline
+    {
       // At a wrap, the position attached to the previous character is the end of the line above.
       let previous = layoutManager.glyphIndexForCharacter(at: offset - 1)
       let current = layoutManager.glyphIndexForCharacter(at: offset)
@@ -137,14 +141,17 @@ extension TextViewVimHost {
     var x = fragment.minX + location.x
     if index < offset {
       // After the character at `index` (the end of the document, or the end of a wrapped line).
-      let bounds = layoutManager.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: textContainer)
+      let bounds = layoutManager.boundingRect(
+        forGlyphRange: NSRange(location: glyph, length: 1), in: textContainer)
       x = max(x, bounds.maxX)
     }
     return box(x: x, fragment: fragment, baseline: location.y, fontIndex: index)
   }
 
   private func box(x: CGFloat, fragment: NSRect, baseline: CGFloat?, fontIndex: Int) -> VimRect {
-    let font = fontIndex < storage.length ? (storage.attribute(.font, at: fontIndex, effectiveRange: nil) as? NSFont) : nil
+    let font =
+      fontIndex < storage.length
+      ? (storage.attribute(.font, at: fontIndex, effectiveRange: nil) as? NSFont) : nil
     let used = font ?? controller.theme.bodyFont
     let ascender = used.ascender
     let textHeight = ascender - used.descender
@@ -154,7 +161,8 @@ extension TextViewVimHost {
     } else {
       top = fragment.minY + (fragment.height - textHeight) / 2
     }
-    return VimRect(left: Double(x), top: Double(top), right: Double(x), bottom: Double(top + textHeight))
+    return VimRect(
+      left: Double(x), top: Double(top), right: Double(x), bottom: Double(top + textHeight))
   }
 
   func vimOffset(at point: VimPoint) -> Int {
@@ -165,11 +173,14 @@ extension TextViewVimHost {
     let length = storage.length
     guard length > 0 else { return 0 }
     let p = NSPoint(x: max(0, point.x), y: max(0, point.y))
-    layoutManager.ensureLayout(forBoundingRect: NSRect(x: 0, y: p.y - 1, width: textContainer.size.width, height: 2), in: textContainer)
+    layoutManager.ensureLayout(
+      forBoundingRect: NSRect(x: 0, y: p.y - 1, width: textContainer.size.width, height: 2),
+      in: textContainer)
     let extra = layoutManager.extraLineFragmentRect
     if !extra.isEmpty, p.y >= extra.minY { return length }
     var fraction: CGFloat = 0
-    let index = layoutManager.characterIndex(for: p, in: textContainer, fractionOfDistanceBetweenInsertionPoints: &fraction)
+    let index = layoutManager.characterIndex(
+      for: p, in: textContainer, fractionOfDistanceBetweenInsertionPoints: &fraction)
     guard index < length else { return length }
     let string = storage.mutableString
     if string.character(at: index) == UTF16Unit.newline { return index }
@@ -211,8 +222,12 @@ extension TextViewVimHost {
   func prepareLayout() {
     measuring {
       let origin = textView.textContainerOrigin
-      layoutManager.ensureLayout(forBoundingRect: textView.visibleRect.offsetBy(dx: -origin.x, dy: -origin.y), in: textContainer)
-      let line = lineIndex.fullRange(ofLine: vimLineNumber(at: min(selection.main.head, storage.length)), textLength: storage.length)
+      layoutManager.ensureLayout(
+        forBoundingRect: textView.visibleRect.offsetBy(dx: -origin.x, dy: -origin.y),
+        in: textContainer)
+      let line = lineIndex.fullRange(
+        ofLine: vimLineNumber(at: min(selection.main.head, storage.length)),
+        textLength: storage.length)
       if line.length > 0 { layoutManager.ensureLayout(forCharacterRange: line) }
     }
   }

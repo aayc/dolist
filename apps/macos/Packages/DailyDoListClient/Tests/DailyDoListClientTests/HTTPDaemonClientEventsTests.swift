@@ -12,10 +12,13 @@ struct HTTPDaemonClientEventsTests {
     helloTimeout: .seconds(2),
     pingInterval: nil)
 
-  static func client(_ server: TestWebSocketServer, options: HTTPDaemonClient.Options = fastOptions) -> HTTPDaemonClient {
+  static func client(_ server: TestWebSocketServer, options: HTTPDaemonClient.Options = fastOptions)
+    -> HTTPDaemonClient
+  {
     HTTPDaemonClient(
       endpoint: DaemonEndpoint(baseURL: server.baseURL, token: "test-token"),
-      session: URLSession(configuration: .ephemeral), clientId: "macos_test", clientVersion: "macos/test",
+      session: URLSession(configuration: .ephemeral), clientId: "macos_test",
+      clientVersion: "macos/test",
       options: options)
   }
 
@@ -34,22 +37,32 @@ struct HTTPDaemonClientEventsTests {
     #expect(upgrade.method == "GET")
     #expect(upgrade.target == "/ws?token=test-token")
     #expect(upgrade.headers["host"] == "127.0.0.1:\(server.port)")
-    #expect(upgrade.headers["origin"] == nil, "the daemon rejects unknown origins; native clients send none")
+    #expect(
+      upgrade.headers["origin"] == nil,
+      "the daemon rejects unknown origins; native clients send none")
     #expect(upgrade.headers["upgrade"]?.lowercased() == "websocket")
 
     let firstMessage = try await waitFor("client hello") { peer.messages.first }
     let clientHello = try JSONDecoder.daemon.decode(ClientEvent.self, from: Data(firstMessage.utf8))
-    #expect(clientHello == .hello(clientId: "macos_test", apiVersion: DaemonProtocol.apiVersion, clientVersion: "macos/test"))
-    #expect(recorder.items == [
-      .state(.idle), .state(.connecting), .state(.connected(serverVersion: "test-1")), .event(.hello(Self.hello)),
-    ])
+    #expect(
+      clientHello
+        == .hello(
+          clientId: "macos_test", apiVersion: DaemonProtocol.apiVersion, clientVersion: "macos/test"
+        ))
+    #expect(
+      recorder.items == [
+        .state(.idle), .state(.connecting), .state(.connected(serverVersion: "test-1")),
+        .event(.hello(Self.hello)),
+      ])
     #expect(client.connectionState == .connected(serverVersion: "test-1"))
     #expect(server.connectionCount == 1)
     await client.disconnect()
   }
 
   @Test func incompatibleHelloStopsReconnecting() async throws {
-    let server = try await TestWebSocketServer { $0.send(#"{"type":"hello","serverVersion":"9.0.0","apiVersion":2}"#) }
+    let server = try await TestWebSocketServer {
+      $0.send(#"{"type":"hello","serverVersion":"9.0.0","apiVersion":2}"#)
+    }
     let client = Self.client(server)
     let recorder = StreamRecorder(client.events())
     await client.connect()
@@ -73,7 +86,9 @@ struct HTTPDaemonClientEventsTests {
     try await recorder.waitForState(.incompatible(serverApiVersion: 1))
     try await Task.sleep(for: .milliseconds(150))
     #expect(server.connectionCount == 1)
-    #expect(recorder.events.contains(.error(ServerErrorEvent(message: "Update the app", code: .incompatibleApiVersion))))
+    #expect(
+      recorder.events.contains(
+        .error(ServerErrorEvent(message: "Update the app", code: .incompatibleApiVersion))))
     #expect(!recorder.states.contains { if case .reconnecting = $0 { true } else { false } })
     await client.disconnect()
   }
@@ -119,9 +134,13 @@ struct HTTPDaemonClientEventsTests {
     peer.send(#"{"no":"type"}"#)
     peer.sendBinary(Data([0x00, 0x01]))
     peer.send(#"{"type":"task.deleted","taskId":"tsk_1"}"#)
-    peer.send(#"{"type":"agent.status","status":{"mode":"live","enabled":true,"model":"m","running":0,"queued":0,"pendingApprovals":0,"connectors":[],"execution":{"provider":"local","capabilities":{"shell":true,"browser":false,"computer":false}},"newField":1}}"#)
+    peer.send(
+      #"{"type":"agent.status","status":{"mode":"live","enabled":true,"model":"m","running":0,"queued":0,"pendingApprovals":0,"connectors":[],"execution":{"provider":"local","capabilities":{"shell":true,"browser":false,"computer":false}},"newField":1}}"#
+    )
 
-    try await recorder.waitFor("agent.status") { if case .event(.agentStatus) = $0 { true } else { false } }
+    try await recorder.waitFor("agent.status") {
+      if case .event(.agentStatus) = $0 { true } else { false }
+    }
     let events = recorder.events.filter { if case .hello = $0 { false } else { true } }
     #expect(events.count == 2)
     #expect(events.first?.type == "task.deleted")
@@ -151,12 +170,17 @@ struct HTTPDaemonClientEventsTests {
     }
     #expect(reconnecting.count == 1)
     #expect(reconnecting.first?.0 == 1)
-    #expect(reconnecting.first?.1?.contains("1001") == true, "\(String(describing: reconnecting.first?.1))")
-    let tail = Array(recorder.items.drop { $0 != .state(.reconnecting(attempt: 1, reason: reconnecting.first?.1)) })
-    #expect(tail == [
-      .state(.reconnecting(attempt: 1, reason: reconnecting.first?.1)),
-      .state(.connected(serverVersion: "test-1")), .event(.hello(Self.hello)), .resync,
-    ])
+    #expect(
+      reconnecting.first?.1?.contains("1001") == true,
+      "\(String(describing: reconnecting.first?.1))")
+    let tail = Array(
+      recorder.items.drop { $0 != .state(.reconnecting(attempt: 1, reason: reconnecting.first?.1)) }
+    )
+    #expect(
+      tail == [
+        .state(.reconnecting(attempt: 1, reason: reconnecting.first?.1)),
+        .state(.connected(serverVersion: "test-1")), .event(.hello(Self.hello)), .resync,
+      ])
     #expect(recorder.resyncCount == 1)
 
     // An abrupt drop (no close frame) reconnects too.
@@ -169,7 +193,11 @@ struct HTTPDaemonClientEventsTests {
   @Test func failedAttemptsBackOffUntilTheDaemonAnswers() async throws {
     // (A TCP drop before the 101 reaches the client is retried by URLSession itself, invisibly.)
     let server = try await TestWebSocketServer { peer in
-      if peer.id < 2 { peer.close(code: 1013, reason: "Try again later") } else { peer.send(TestWebSocketServer.hello) }
+      if peer.id < 2 {
+        peer.close(code: 1013, reason: "Try again later")
+      } else {
+        peer.send(TestWebSocketServer.hello)
+      }
     }
     let client = Self.client(server)
     let recorder = StreamRecorder(client.events())
@@ -187,15 +215,21 @@ struct HTTPDaemonClientEventsTests {
   @Test func rejectedUpgradesAndSilentDaemonsAreRetried() async throws {
     let server = try await TestWebSocketServer { _ in }
     server.setRejectStatus(401)
-    let client = Self.client(server, options: {
-      var options = Self.fastOptions
-      options.helloTimeout = .milliseconds(100)
-      return options
-    }())
+    let client = Self.client(
+      server,
+      options: {
+        var options = Self.fastOptions
+        options.helloTimeout = .milliseconds(100)
+        return options
+      }())
     let recorder = StreamRecorder(client.events())
     await client.connect()
     try await recorder.waitFor("401 reason") {
-      if case .state(.reconnecting(_, let reason?)) = $0 { reason.contains("HTTP 401") } else { false }
+      if case .state(.reconnecting(_, let reason?)) = $0 {
+        reason.contains("HTTP 401")
+      } else {
+        false
+      }
     }
     server.setRejectStatus(nil)  // now it accepts but never says hello
     try await recorder.waitFor("hello timeout") {
@@ -210,7 +244,8 @@ struct HTTPDaemonClientEventsTests {
     let server = try await TestWebSocketServer()
     let client = Self.client(server)
     let recorder = StreamRecorder(client.events())
-    await client.send(.surfaceSubscribe(threadId: "thr_0", surface: .computer))  // before connect: remembered
+    // Sent before connecting: the client remembers it.
+    await client.send(.surfaceSubscribe(threadId: "thr_0", surface: .computer))
     await client.connect()
     let first = try await server.peer(1)
     try await recorder.waitForState(.connected(serverVersion: "test-1"))
@@ -220,25 +255,27 @@ struct HTTPDaemonClientEventsTests {
     await client.send(.surfaceUnsubscribe(threadId: "thr_2", surface: .computer))
     await client.send(.surfaceUnsubscribe(threadId: "thr_0", surface: .computer))
     try await waitUntil("signals on connection 1") { first.messages.count == 7 }
-    #expect(try first.messages.map(Self.decode) == [
-      .hello(clientId: "macos_test", apiVersion: 1, clientVersion: "macos/test"),
-      .surfaceSubscribe(threadId: "thr_0", surface: .computer),
-      .surfaceSubscribe(threadId: "thr_1", surface: .browser),
-      .surfaceSubscribe(threadId: "thr_2", surface: .computer),
-      .surfaceSubscribe(threadId: "thr_1", surface: .browser),
-      .surfaceUnsubscribe(threadId: "thr_2", surface: .computer),
-      .surfaceUnsubscribe(threadId: "thr_0", surface: .computer),
-    ])
+    #expect(
+      try first.messages.map(Self.decode) == [
+        .hello(clientId: "macos_test", apiVersion: 1, clientVersion: "macos/test"),
+        .surfaceSubscribe(threadId: "thr_0", surface: .computer),
+        .surfaceSubscribe(threadId: "thr_1", surface: .browser),
+        .surfaceSubscribe(threadId: "thr_2", surface: .computer),
+        .surfaceSubscribe(threadId: "thr_1", surface: .browser),
+        .surfaceUnsubscribe(threadId: "thr_2", surface: .computer),
+        .surfaceUnsubscribe(threadId: "thr_0", surface: .computer),
+      ])
 
     first.drop()
     let second = try await server.peer(2)
     try await recorder.waitFor("resync") { $0 == .resync }
     try await waitUntil("replayed subscriptions") { second.messages.count == 2 }
     try await Task.sleep(for: .milliseconds(50))
-    #expect(try second.messages.map(Self.decode) == [
-      .hello(clientId: "macos_test", apiVersion: 1, clientVersion: "macos/test"),
-      .surfaceSubscribe(threadId: "thr_1", surface: .browser),
-    ])
+    #expect(
+      try second.messages.map(Self.decode) == [
+        .hello(clientId: "macos_test", apiVersion: 1, clientVersion: "macos/test"),
+        .surfaceSubscribe(threadId: "thr_1", surface: .browser),
+      ])
     await client.disconnect()
   }
 
@@ -256,10 +293,11 @@ struct HTTPDaemonClientEventsTests {
     await client.disconnect()
     await client.send(.threadRead(threadId: "thr_late"))
     try await Task.sleep(for: .milliseconds(50))
-    #expect(try peer.messages.map(Self.decode) == [
-      .hello(clientId: "macos_test", apiVersion: 1, clientVersion: "macos/test"),
-      .threadRead(threadId: "thr_live"),
-    ])
+    #expect(
+      try peer.messages.map(Self.decode) == [
+        .hello(clientId: "macos_test", apiVersion: 1, clientVersion: "macos/test"),
+        .threadRead(threadId: "thr_live"),
+      ])
   }
 
   @Test func disconnectFinishesStreamsAndClosesTheSocket() async throws {
@@ -291,7 +329,9 @@ struct HTTPDaemonClientEventsTests {
 
     // A consumer that stops listening is unregistered.
     after.cancel()
-    try await waitUntil("cancelled stream to unregister") { client.connection.broadcaster.subscriberCount == 0 }
+    try await waitUntil("cancelled stream to unregister") {
+      client.connection.broadcaster.subscriberCount == 0
+    }
 
     // connect() works again afterwards (and is a reconnect: resync).
     let again = StreamRecorder(client.events())
@@ -307,7 +347,8 @@ struct HTTPDaemonClientEventsTests {
       endpoint: DaemonEndpoint(baseURL: URL(string: "http://127.0.0.1:\(port)")!, token: "t"),
       session: URLSession(configuration: .ephemeral),
       options: HTTPDaemonClient.Options(
-        reconnectBackoff: ReconnectBackoff(initialDelay: .milliseconds(5), maximumDelay: .milliseconds(20), jitter: 0),
+        reconnectBackoff: ReconnectBackoff(
+          initialDelay: .milliseconds(5), maximumDelay: .milliseconds(20), jitter: 0),
         pingInterval: nil))
     let recorder = StreamRecorder(client.events())
     await client.connect()
@@ -335,7 +376,8 @@ struct HTTPDaemonClientEventsTests {
 
   @Test func backoffDelaysGrowAndAreCapped() {
     let backoff = ReconnectBackoff(
-      initialDelay: .milliseconds(250), maximumDelay: .seconds(30), multiplier: 2, jitter: 0.2, random: { 0.5 })
+      initialDelay: .milliseconds(250), maximumDelay: .seconds(30), multiplier: 2, jitter: 0.2,
+      random: { 0.5 })
     #expect(backoff.delay(forAttempt: 1) == .milliseconds(250))
     #expect(backoff.delay(forAttempt: 2) == .milliseconds(500))
     #expect(backoff.delay(forAttempt: 8) == .seconds(30))

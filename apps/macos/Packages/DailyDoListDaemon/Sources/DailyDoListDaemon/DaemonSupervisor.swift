@@ -51,7 +51,8 @@ public final class DaemonSupervisor {
   /// Restart backoff, or the health watch of an attached daemon.
   @ObservationIgnored private var watchTask: Task<Void, Never>?
   @ObservationIgnored private var failures = FailureHistory()
-  @ObservationIgnored private var stateObservers: [UUID: AsyncStream<DaemonSupervisorState>.Continuation] = [:]
+  @ObservationIgnored private var stateObservers:
+    [UUID: AsyncStream<DaemonSupervisorState>.Continuation] = [:]
 
   public init(
     configuration: DaemonLaunchConfiguration = .standard(),
@@ -235,7 +236,8 @@ public final class DaemonSupervisor {
     let nodeCache = NodeLocationCache(
       file: configuration.home.appendingPathComponent("node-location.json"),
       fileSystem: dependencies.fileSystem)
-    let nodeCacheKey = NodeLocationCache.key(configuredPath: configuration.nodePath, environment: host.variables)
+    let nodeCacheKey = NodeLocationCache.key(
+      configuredPath: configuration.nodePath, environment: host.variables)
     let node: ResolvedNode
     var nodeFromCache = false
     if reuseResolvedNode, let cached = resolvedNode,
@@ -349,7 +351,9 @@ public final class DaemonSupervisor {
           handle, DaemonConnectionInfo(baseURL: configuration.baseURL, token: token), health)
       }
       if clock.now >= deadline {
-        log("No healthy answer within \(timing.startupTimeout.wholeSeconds) s; stopping pid \(handle.pid)")
+        log(
+          "No healthy answer within \(timing.startupTimeout.wholeSeconds) s; stopping pid \(handle.pid)"
+        )
         await abandon(handle)
         return .failed(
           .startupTimedOut(seconds: timing.startupTimeout.wholeSeconds, logTail: failureTail()))

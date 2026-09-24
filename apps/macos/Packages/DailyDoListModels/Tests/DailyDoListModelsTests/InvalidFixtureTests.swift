@@ -31,7 +31,8 @@ struct InvalidFixtureTests {
       "model with surrounding whitespace": .tolerated(constraint),
       "watch window over a year": .tolerated(constraint),
       "vimrc that is not a string": .rejected,
-      "unknown harness": .tolerated("a harness a newer daemon added decodes as .pi (AgentSettings.harness)"),
+      "unknown harness": .tolerated(
+        "a harness a newer daemon added decodes as .pi (AgentSettings.harness)"),
       "empty Cursor model": .tolerated(constraint),
       "agent settings of a daemon older than the harness setting": .tolerated(
         "absent harness and cursorModel decode as .pi and the default Cursor model"),
@@ -47,7 +48,8 @@ struct InvalidFixtureTests {
       "unknown category": .tolerated(openEnum),
       "missing input": .tolerated("an absent `input` decodes as JSONValue.null"),
       "negative createdAt": .tolerated(constraint),
-      "id with a slash": .tolerated("ids are opaque; the HTTP client refuses unsafe ids before a request"),
+      "id with a slash": .tolerated(
+        "ids are opaque; the HTTP client refuses unsafe ids before a request"),
       "dot-segment id (URL parsers would drop it)": .tolerated(
         "ids are opaque; the HTTP client refuses unsafe ids before a request"),
     ],
@@ -66,7 +68,8 @@ struct InvalidFixtureTests {
     "ConflictResponse": [
       "another code": .tolerated("`error` is an open ApiErrorCode"),
       "missing current": .tolerated(
-        "decodes with current == nil; the HTTP client checks for the key to tell note conflicts apart"),
+        "decodes with current == nil; the HTTP client checks for the key to tell note conflicts apart"
+      ),
     ],
     "CreateFolderRequest": [
       "empty path": .tolerated(constraint),
@@ -90,9 +93,11 @@ struct InvalidFixtureTests {
       "extra key": .tolerated(unknownKey),
     ],
     "ServerEvent": [
-      "unknown event type": .tolerated("unknown event types decode as .unknown (forward compatibility)"),
+      "unknown event type": .tolerated(
+        "unknown event types decode as .unknown (forward compatibility)"),
       "missing discriminant": .rejected,
-      "hello with apiVersion 0": .tolerated("the client's version check reports it as incompatible"),
+      "hello with apiVersion 0": .tolerated(
+        "the client's version check reports it as incompatible"),
       "vault.changed with a non-canonical path": .tolerated(constraint),
       "vault.changed with an unknown origin": .tolerated(openEnum),
       "task.record with an unknown status": .tolerated(openEnum),
@@ -157,7 +162,8 @@ struct InvalidFixtureTests {
     "WriteNoteRequest": [
       "missing content": .rejected,
       "unknown key": .tolerated(unknownKey),
-      "misspelled baseVersion": .tolerated("the misspelled key is ignored: decodes as .unconditional"),
+      "misspelled baseVersion": .tolerated(
+        "the misspelled key is ignored: decodes as .unconditional"),
       "empty baseVersion": .tolerated(constraint),
       "numeric baseVersion": .rejected,
       "content is not a string": .rejected,
@@ -172,7 +178,8 @@ struct InvalidFixtureTests {
     let model = try #require(Fixtures.models[schema], "no Swift model for \(schema)")
     let expected = try #require(Self.expectations[schema], "no expectations for \(schema)")
     let cases = try Fixtures.cases(schema, .invalid)
-    #expect(Set(cases.map(\.name)) == Set(expected.keys), "cases and expectations differ for \(schema)")
+    #expect(
+      Set(cases.map(\.name)) == Set(expected.keys), "cases and expectations differ for \(schema)")
     for fixture in cases {
       guard let expectation = expected[fixture.name] else { continue }
       let decoded = Self.decodes(model, fixture.value)
@@ -199,11 +206,13 @@ struct InvalidFixtureTests {
     }
     #expect(type == "task.deleted")
     #expect(raw["taskId"] == "tsk_1")
-    #expect(try JSONDecoder.daemon.decode(JSONValue.self, from: JSONEncoder.daemon.encode(event)) == raw)
+    #expect(
+      try JSONDecoder.daemon.decode(JSONValue.self, from: JSONEncoder.daemon.encode(event)) == raw)
 
     // Unknown message kinds keep their id so a thread still renders.
     let message = try Fixtures.decode(
-      ThreadMessage.self, ["id": "msg_1", "author": "system", "createdAt": 1, "kind": "image", "url": "x.png"])
+      ThreadMessage.self,
+      ["id": "msg_1", "author": "system", "createdAt": 1, "kind": "image", "url": "x.png"])
     guard case .unknown(let kind, let id, _) = message else {
       Issue.record("expected .unknown, got \(message)")
       return
@@ -212,18 +221,23 @@ struct InvalidFixtureTests {
 
     // Open enums keep unknown values (and re-encode them unchanged).
     let status = try Fixtures.decode(TaskAgentStatus.self, "zombie")
-    #expect(status.rawValue == "zombie" && !status.isActive && !TaskAgentStatus.active.contains(status))
+    #expect(
+      status.rawValue == "zombie" && !status.isActive && !TaskAgentStatus.active.contains(status))
     #expect(try Fixtures.decode(ApiErrorCode.self, "teapot").rawValue == "teapot")
     #expect(try Fixtures.decode(ActionCategory.self, "money") == ActionCategory(rawValue: "money"))
     #expect(try Fixtures.decode(SurfaceKind.self, "terminal").rawValue == "terminal")
     #expect(try Fixtures.decode(VaultChangeOrigin.self, "cloud").rawValue == "cloud")
     #expect(try Fixtures.decode(AgentMode.self, "auto").rawValue == "auto")
-    #expect(try JSONEncoder.daemon.encode(RiskLevel(rawValue: "extreme")) == Data(#""extreme""#.utf8))
+    #expect(
+      try JSONEncoder.daemon.encode(RiskLevel(rawValue: "extreme")) == Data(#""extreme""#.utf8))
 
     // Unknown keys in responses are ignored.
     let health = try Fixtures.decode(
       HealthResponse.self,
-      ["ok": true, "version": "9.0.0", "apiVersion": 1, "vaultName": "V", "agentMode": "live", "uptime": 5])
+      [
+        "ok": true, "version": "9.0.0", "apiVersion": 1, "vaultName": "V", "agentMode": "live",
+        "uptime": 5,
+      ])
     #expect(health.version == "9.0.0")
 
     // Closed Swift enums (fields clients send, and response shapes the contract fixes) reject

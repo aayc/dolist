@@ -44,7 +44,7 @@ struct ContractFixtureTests {
 
   /// Fixtures whose Swift re-encoding intentionally differs from the fixture JSON.
   static let reencodingExceptions: [String: String] = [
-    "ClientEvent/hello (legacy, no version)": "Swift clients always send the apiVersion they speak",
+    "ClientEvent/hello (legacy, no version)": "Swift clients always send the apiVersion they speak"
   ]
 
   /// Fixtures are canonical: re-encoding a decoded value gives back the same JSON (no key is
@@ -79,7 +79,9 @@ struct ContractFixtureTests {
 
   @Test func writeNoteBaseVersionEncodings() throws {
     func encoded(_ base: BaseVersion) throws -> String {
-      String(decoding: try JSONEncoder.daemon.encode(WriteNoteRequest(content: "x", baseVersion: base)), as: UTF8.self)
+      String(
+        decoding: try JSONEncoder.daemon.encode(WriteNoteRequest(content: "x", baseVersion: base)),
+        as: UTF8.self)
     }
     #expect(try encoded(.unconditional) == #"{"content":"x"}"#)
     #expect(try encoded(.createOnly) == #"{"baseVersion":null,"content":"x"}"#)
@@ -97,7 +99,9 @@ struct ContractFixtureTests {
 
   @Test func vaultPathEncodingMatchesEncodeURIComponent() {
     #expect(APIRoute.note("Daily/2026-09-23.md") == "/api/notes/Daily/2026-09-23.md")
-    #expect(APIRoute.note("C# & notes/50% off?.md") == "/api/notes/C%23%20%26%20notes/50%25%20off%3F.md")
-    #expect(APIRoute.encodeURIComponent("Café 日記 (1)!~*'") == "Caf%C3%A9%20%E6%97%A5%E8%A8%98%20(1)!~*'")
+    #expect(
+      APIRoute.note("C# & notes/50% off?.md") == "/api/notes/C%23%20%26%20notes/50%25%20off%3F.md")
+    #expect(
+      APIRoute.encodeURIComponent("Café 日記 (1)!~*'") == "Caf%C3%A9%20%E6%97%A5%E8%A8%98%20(1)!~*'")
   }
 }

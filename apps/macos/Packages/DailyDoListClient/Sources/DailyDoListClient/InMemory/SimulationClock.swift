@@ -33,11 +33,15 @@ public struct SimulationClock: Sendable {
     SimulationClock(mode: .realTime(speed: max(0.001, speed)))
   }
 
-  public static func immediate(start: Date = referenceDate, timeZone: TimeZone = referenceTimeZone) -> SimulationClock {
+  public static func immediate(start: Date = referenceDate, timeZone: TimeZone = referenceTimeZone)
+    -> SimulationClock
+  {
     SimulationClock(mode: .immediate, start: start, timeZone: timeZone)
   }
 
-  public static func manual(start: Date = referenceDate, timeZone: TimeZone = referenceTimeZone) -> SimulationClock {
+  public static func manual(start: Date = referenceDate, timeZone: TimeZone = referenceTimeZone)
+    -> SimulationClock
+  {
     SimulationClock(mode: .manual, start: start, timeZone: timeZone)
   }
 

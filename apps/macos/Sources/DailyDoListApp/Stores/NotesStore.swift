@@ -31,7 +31,10 @@ final class NotesStore {
   @ObservationIgnored private var docs: [String: NoteDoc] = [:]
   @ObservationIgnored private var loading: [String: Task<Void, Error>] = [:]
 
-  init(client: DaemonClient, scheduler: AppScheduler, saveDelay: TimeInterval = 0.3, retryDelay: TimeInterval = 2) {
+  init(
+    client: DaemonClient, scheduler: AppScheduler, saveDelay: TimeInterval = 0.3,
+    retryDelay: TimeInterval = 2
+  ) {
     self.client = client
     self.scheduler = scheduler
     self.saveDelay = saveDelay
@@ -63,7 +66,8 @@ final class NotesStore {
   func state(_ path: String) -> NoteState? {
     guard let doc = docs[path] else { return nil }
     let dirty = doc.localRev != doc.savedRev
-    let local = dirty ? (delegate?.notesStore(self, liveContentOf: path) ?? doc.pendingContent) : nil
+    let local =
+      dirty ? (delegate?.notesStore(self, liveContentOf: path) ?? doc.pendingContent) : nil
     return NoteState(
       path: path, content: local ?? doc.serverContent, version: doc.version, dirty: dirty,
       saving: doc.inflight != nil, conflict: doc.conflict)
@@ -180,7 +184,8 @@ final class NotesStore {
   /// delegate applies only the other side's changes) and the merged text is returned; nil on a
   /// conflict, leaving everything as it was.
   private func merge(_ doc: NoteDoc, with current: NoteResponse) -> String? {
-    let local = delegate?.notesStore(self, liveContentOf: doc.path) ?? doc.pendingContent ?? doc.serverContent
+    let local =
+      delegate?.notesStore(self, liveContentOf: doc.path) ?? doc.pendingContent ?? doc.serverContent
     let merged = TextMerge.merge(base: doc.serverContent, local: local, remote: current.content)
     guard !merged.conflict else { return nil }
     doc.serverContent = current.content
@@ -188,7 +193,9 @@ final class NotesStore {
     doc.mtime = current.mtime
     doc.conflict = false
     doc.pendingContent = merged.text
-    if !Self.same(merged.text, local) { delegate?.notesStore(self, applyMerged: merged.text, to: doc.path) }
+    if !Self.same(merged.text, local) {
+      delegate?.notesStore(self, applyMerged: merged.text, to: doc.path)
+    }
     return merged.text
   }
 
@@ -300,7 +307,8 @@ final class NotesStore {
 
   private func write(_ doc: NoteDoc, content: String, rev: Int, depth: Int) async {
     do {
-      let response = try await client.writeNote(doc.path, content: content, baseVersion: .match(doc.version))
+      let response = try await client.writeNote(
+        doc.path, content: content, baseVersion: .match(doc.version))
       acknowledge(doc, content: content, rev: rev, version: response.version, mtime: response.mtime)
     } catch {
       // Forgotten meanwhile (deleted, closed): resolving a 409 would recreate a deleted note.
@@ -310,17 +318,21 @@ final class NotesStore {
         return
       }
       do {
-        try await resolveConflict(doc, content: content, rev: rev, current: conflict.current, depth: depth)
+        try await resolveConflict(
+          doc, content: content, rev: rev, current: conflict.current, depth: depth)
       } catch {
         fail(doc, error)
       }
     }
   }
 
-  private func resolveConflict(_ doc: NoteDoc, content: String, rev: Int, current: NoteResponse?, depth: Int) async throws {
+  private func resolveConflict(
+    _ doc: NoteDoc, content: String, rev: Int, current: NoteResponse?, depth: Int
+  ) async throws {
     guard let current else {
       // Deleted elsewhere while we had edits: write them back.
-      let response = try await client.writeNote(doc.path, content: content, baseVersion: .createOnly)
+      let response = try await client.writeNote(
+        doc.path, content: content, baseVersion: .createOnly)
       acknowledge(doc, content: content, rev: rev, version: response.version, mtime: response.mtime)
       delegate?.notesStore(self, noteWasDeletedRemotely: doc.path, restored: true)
       return
@@ -346,7 +358,8 @@ final class NotesStore {
     if let merged = merge(doc, with: current) {
       let mergedRev = doc.localRev
       if Self.same(merged, current.content) {
-        acknowledge(doc, content: merged, rev: mergedRev, version: current.version, mtime: current.mtime)
+        acknowledge(
+          doc, content: merged, rev: mergedRev, version: current.version, mtime: current.mtime)
       } else {
         await write(doc, content: merged, rev: mergedRev, depth: depth + 1)
       }
@@ -377,7 +390,9 @@ final class NotesStore {
     throw NotesStoreError.conflictCopyFailed(path)
   }
 
-  private func acknowledge(_ doc: NoteDoc, content: String, rev: Int, version: String, mtime: EpochMillis) {
+  private func acknowledge(
+    _ doc: NoteDoc, content: String, rev: Int, version: String, mtime: EpochMillis
+  ) {
     doc.version = version
     doc.mtime = mtime
     doc.serverContent = content
@@ -408,11 +423,9 @@ final class NotesStore {
 
   private func updateStatus(_ doc: NoteDoc) {
     let next: SaveState =
-      if doc.conflict { .conflict }
-      else if doc.inflight != nil { .saving }
-      else if doc.failed { .error }
-      else if doc.localRev != doc.savedRev { .dirty }
-      else { .saved }
+      if doc.conflict { .conflict } else if doc.inflight != nil { .saving } else if doc.failed {
+        .error
+      } else if doc.localRev != doc.savedRev { .dirty } else { .saved }
     guard next != doc.status else { return }
     doc.status = next
     saveStates[doc.path] = next

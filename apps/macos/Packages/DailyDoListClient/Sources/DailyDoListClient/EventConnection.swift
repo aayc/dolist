@@ -130,7 +130,10 @@ actor EventConnection {
     startHelloTimer(for: task, generation: generation)
     defer { if socket === task { closeSocket() } }
 
-    await transmit(.hello(clientId: clientId, apiVersion: DaemonProtocol.apiVersion, clientVersion: clientVersion), on: task)
+    await transmit(
+      .hello(
+        clientId: clientId, apiVersion: DaemonProtocol.apiVersion, clientVersion: clientVersion),
+      on: task)
     while true {
       let message: URLSessionWebSocketTask.Message
       do {
@@ -153,7 +156,8 @@ actor EventConnection {
         event = try JSONDecoder.daemon.decode(ServerEvent.self, from: Data(text.utf8))
       } catch {
         let detail = DaemonClientError.decoding(error, type: ServerEvent.self)
-        logger.error("Skipping a malformed server event: \(String(describing: detail), privacy: .public)")
+        logger.error(
+          "Skipping a malformed server event: \(String(describing: detail), privacy: .public)")
         continue
       }
       if case .hello(let hello) = event, !isOpen {
@@ -180,7 +184,8 @@ actor EventConnection {
     if reconnected { broadcaster.emit(.resync) }
     startPingTimer(for: task, generation: generation)
     for subscription in subscriptions {
-      await transmit(.surfaceSubscribe(threadId: subscription.threadId, surface: subscription.surface), on: task)
+      await transmit(
+        .surfaceSubscribe(threadId: subscription.threadId, surface: subscription.surface), on: task)
     }
   }
 
@@ -251,7 +256,8 @@ actor EventConnection {
     if task.closeCode != .invalid {
       let reason = task.closeReason.flatMap { String(data: $0, encoding: .utf8) } ?? ""
       let code = task.closeCode.rawValue
-      return reason.isEmpty ? "closed by the daemon (\(code))" : "closed by the daemon (\(code) \(reason))"
+      return reason.isEmpty
+        ? "closed by the daemon (\(code))" : "closed by the daemon (\(code) \(reason))"
     }
     if let error = error as? URLError { return error.localizedDescription }
     return (error as NSError).localizedDescription

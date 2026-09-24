@@ -20,7 +20,8 @@ public struct DaemonHealth: Codable, Hashable, Sendable {
   public var vaultName: String?
   public var agentMode: String?
 
-  public init(version: String, apiVersion: Int, vaultName: String? = nil, agentMode: String? = nil) {
+  public init(version: String, apiVersion: Int, vaultName: String? = nil, agentMode: String? = nil)
+  {
     self.version = version
     self.apiVersion = apiVersion
     self.vaultName = vaultName

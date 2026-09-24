@@ -2,8 +2,10 @@
 // Haverbeke and others): processing of motions, operators, actions, searches and ex commands,
 // and `evalInput`, which runs an operator over a motion.
 
-typealias MotionFn = @MainActor (EditorAdapter, Pos, MotionArgs, VimState, InputState) throws -> MotionResult?
-typealias OperatorFn = @MainActor (EditorAdapter, OperatorArgs, [VimRange], Pos, Pos?) throws -> Pos?
+typealias MotionFn =
+  @MainActor (EditorAdapter, Pos, MotionArgs, VimState, InputState) throws -> MotionResult?
+typealias OperatorFn =
+  @MainActor (EditorAdapter, OperatorArgs, [VimRange], Pos, Pos?) throws -> Pos?
 typealias ActionFn = @MainActor (EditorAdapter, ActionArgs, VimState) throws -> Void
 
 extension Vim {
@@ -121,7 +123,9 @@ extension Vim {
     motionArgs.repeat = count
     clearInputState(cm)
     if let motion {
-      guard let fn = motions[motion] else { throw JSException.typeError("motions[motion] is not a function") }
+      guard let fn = motions[motion] else {
+        throw JSException.typeError("motions[motion] is not a function")
+      }
       let motionResult = try fn(cm, origHead, motionArgs, vim, inputState)
       vim.lastMotion = motion
       guard let motionResult else { return }
@@ -188,9 +192,12 @@ extension Vim {
       vim.sel = sel
       updateCmSelection(cm)
     } else if vim.visualMode {
-      operatorArgs.lastSel = LastSel(anchor: sel.anchor, head: sel.head, visualBlock: vim.visualBlock, visualLine: vim.visualLine)
+      operatorArgs.lastSel = LastSel(
+        anchor: sel.anchor, head: sel.head, visualBlock: vim.visualBlock, visualLine: vim.visualLine
+      )
     }
-    var curStart: Pos, curEnd: Pos
+    var curStart: Pos
+    var curEnd: Pos
     let linewise: Bool
     var cmSel: (ranges: [VimRange], primary: Int)
     if vim.visualMode {
@@ -200,11 +207,14 @@ extension Vim {
       linewise = vim.visualLine || operatorArgs.linewise
       let mode: SelectionMode = vim.visualBlock ? .block : linewise ? .line : .char
       let newPositions = updateSelectionForSurrogateCharacters(cm, curStart, curEnd)
-      cmSel = makeCmSelection(cm, VimRange(anchor: newPositions.start, head: newPositions.end), mode)
+      cmSel = makeCmSelection(
+        cm, VimRange(anchor: newPositions.start, head: newPositions.end), mode)
       if linewise {
         if mode == .block {
           // Linewise operators in visual block mode extend to end of line
-          for i in cmSel.ranges.indices { cmSel.ranges[i].head.ch = lineLength(cm, cmSel.ranges[i].head.line) }
+          for i in cmSel.ranges.indices {
+            cmSel.ranges[i].head.ch = lineLength(cm, cmSel.ranges[i].head.line)
+          }
         } else if mode == .line {
           cmSel.ranges[0].head = Pos(cmSel.ranges[0].head.line + 1, 0)
         }
@@ -224,7 +234,9 @@ extension Vim {
       }
       let exclusive = !motionArgs.inclusive || linewise
       let newPositions = updateSelectionForSurrogateCharacters(cm, curStart, curEnd)
-      cmSel = makeCmSelection(cm, VimRange(anchor: newPositions.start, head: newPositions.end), .char, exclusive: exclusive)
+      cmSel = makeCmSelection(
+        cm, VimRange(anchor: newPositions.start, head: newPositions.end), .char,
+        exclusive: exclusive)
     }
     cm.setSelections(cmSel.ranges, cmSel.primary)
     vim.lastMotion = nil
@@ -232,20 +244,24 @@ extension Vim {
     operatorArgs.registerName = registerName
     // Keep track of linewise as it affects how paste and change behave.
     operatorArgs.linewise = linewise
-    guard let fn = operators[op] else { throw JSException.typeError("operators[operator] is not a function") }
+    guard let fn = operators[op] else {
+      throw JSException.typeError("operators[operator] is not a function")
+    }
     let operatorMoveTo = try fn(cm, operatorArgs, cmSel.ranges, oldAnchor, newHead)
     if vim.visualMode { try exitVisualMode(cm, moveHead: operatorMoveTo != nil) }
     if let operatorMoveTo { cm.setCursor(operatorMoveTo) }
   }
 
   /// `recordLastEdit(vim, inputState, actionCommand)`: what `.` repeats.
-  func recordLastEdit(_ vim: VimState, _ inputState: InputState, _ actionCommand: VimCommand? = nil) {
+  func recordLastEdit(_ vim: VimState, _ inputState: InputState, _ actionCommand: VimCommand? = nil)
+  {
     let macroModeState = globalState.macroModeState
     if macroModeState.isPlaying { return }
     vim.lastEditInputState = inputState
     vim.lastEditActionCommand = actionCommand
     macroModeState.lastInsertModeChanges.changes = []
     macroModeState.lastInsertModeChanges.expectCursorActivityForChange = false
-    macroModeState.lastInsertModeChanges.visualBlock = vim.visualBlock ? vim.sel.head.line - vim.sel.anchor.line : 0
+    macroModeState.lastInsertModeChanges.visualBlock =
+      vim.visualBlock ? vim.sel.head.line - vim.sel.anchor.line : 0
   }
 }

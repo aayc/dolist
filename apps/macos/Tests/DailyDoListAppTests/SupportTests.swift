@@ -16,7 +16,10 @@ struct TimerTests {
     scheduler.schedule(after: 0.1) { log.append("a") }
     let cancelled = scheduler.schedule(after: 0.15) { log.append("x") }
     cancelled.cancel()
-    scheduler.schedule(after: 0.1) { log.append("a2"); scheduler.schedule(after: 0.05) { log.append("nested") } }
+    scheduler.schedule(after: 0.1) {
+      log.append("a2")
+      scheduler.schedule(after: 0.05) { log.append("nested") }
+    }
     scheduler.advance(by: 0.3)
     #expect(log == ["a", "a2", "nested", "b"])
     #expect(scheduler.pendingCount == 0)
@@ -72,7 +75,10 @@ struct NotePathsTests {
   @Test func helpers() {
     #expect(NotePaths.renamed("Projects/a.md", from: "Projects", to: "Work") == "Work/a.md")
     #expect(NotePaths.renamed("Projects2/a.md", from: "Projects", to: "Work") == nil)
-    #expect(NotePaths.uniquePath(folder: "F", base: "Untitled") { ["F/Untitled.md", "F/Untitled 1.md"].contains($0) } == "F/Untitled 2.md")
+    #expect(
+      NotePaths.uniquePath(folder: "F", base: "Untitled") {
+        ["F/Untitled.md", "F/Untitled 1.md"].contains($0)
+      } == "F/Untitled 2.md")
     #expect(NotePaths.displayName("a/Plan.md", isFolder: false) == "Plan")
     #expect(NotePaths.displayName("a/image.png", isFolder: false) == "image.png")
   }
@@ -97,7 +103,8 @@ struct TextSupportTests {
 
   @Test func badgeLabelsMatchTheWeb() {
     func label(_ status: TaskAgentStatus, _ summary: String? = nil) -> String? {
-      BadgeBuilder.label(for: .sample("t", note: "n.md", text: "x", line: 0, status: status, summary: summary))
+      BadgeBuilder.label(
+        for: .sample("t", note: "n.md", text: "x", line: 0, status: status, summary: summary))
     }
     #expect(label(.triaging) == "Triaging…")
     #expect(label(.working) == "Working…")
@@ -136,7 +143,10 @@ struct SettingsStoreTests {
 
   @Test func failedPatchIsRevertedAndReported() async {
     let client = FakeDaemonClient()
-    client.fail("updateSettings", with: .http(status: 400, body: ApiErrorBody(error: .invalidSettings, message: "fontSize out of range")))
+    client.fail(
+      "updateSettings",
+      with: .http(
+        status: 400, body: ApiErrorBody(error: .invalidSettings, message: "fontSize out of range")))
     let store = SettingsStore()
     store.client = client
     var errors: [String] = []
@@ -151,7 +161,9 @@ struct SettingsStoreTests {
 @Suite("Search")
 struct SearchModelTests {
   @Test func resultsAreDebouncedAndGroupedByNote() async throws {
-    let client = FakeDaemonClient(notes: ["Plan.md": "flights\nhotel", "Daily/2026-09-23.md": "- [ ] book flights"])
+    let client = FakeDaemonClient(notes: [
+      "Plan.md": "flights\nhotel", "Daily/2026-09-23.md": "- [ ] book flights",
+    ])
     let scheduler = ManualScheduler()
     let search = SearchModel(client: client, scheduler: scheduler)
     search.query = "fli"
@@ -203,7 +215,8 @@ struct DailyPreviewTests {
 
   @Test func formatsWithoutADateAreFlagged() {
     let preview = DailyNotePreview.make(
-      DailyNoteSettings(folder: "Daily", format: "notes", template: ""), files: [], today: LocalDate(year: 2026, month: 9, day: 23))
+      DailyNoteSettings(folder: "Daily", format: "notes", template: ""), files: [],
+      today: LocalDate(year: 2026, month: 9, day: 23))
     #expect(!preview.problems.isEmpty)
   }
 }
@@ -213,7 +226,8 @@ struct DailyPreviewTests {
 struct PreferencesTests {
   @Test func overridesPersistAndLayerOnTheStandardConfiguration() {
     let defaults = testDefaults()
-    let preferences = AppPreferences(defaults: defaults, environment: ["DDL_HOME": "/opt/ddl-test-home", "DDL_PORT": "7444"])
+    let preferences = AppPreferences(
+      defaults: defaults, environment: ["DDL_HOME": "/opt/ddl-test-home", "DDL_PORT": "7444"])
     #expect(preferences.launchConfiguration.home.path == "/opt/ddl-test-home")
     #expect(preferences.launchConfiguration.port == 7444)
     preferences.managedPortOverride = 7555

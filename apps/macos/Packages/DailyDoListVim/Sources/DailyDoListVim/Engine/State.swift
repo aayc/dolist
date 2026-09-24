@@ -165,7 +165,10 @@ final class LastSelection {
   var visualLine: Bool
   var visualBlock: Bool
 
-  init(anchorMark: Marker, headMark: Marker, anchor: Pos, head: Pos, visualMode: Bool, visualLine: Bool, visualBlock: Bool) {
+  init(
+    anchorMark: Marker, headMark: Marker, anchor: Pos, head: Pos, visualMode: Bool,
+    visualLine: Bool, visualBlock: Bool
+  ) {
     self.anchorMark = anchorMark
     self.headMark = headMark
     self.anchor = anchor

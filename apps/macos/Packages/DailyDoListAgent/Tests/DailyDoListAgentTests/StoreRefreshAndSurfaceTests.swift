@@ -24,7 +24,10 @@ struct StoreRefreshTests {
     store.apply(.taskRecord(Fixture.record("tsk_gone")))
     client.script {
       $0.thread = { id in
-        ThreadResponse(thread: Fixture.thread(id, status: .done, updatedAt: 30, messages: [Fixture.text("m", "Done", streaming: false)]), approvals: [])
+        ThreadResponse(
+          thread: Fixture.thread(
+            id, status: .done, updatedAt: 30,
+            messages: [Fixture.text("m", "Done", streaming: false)]), approvals: [])
       }
     }
     await store.loadThread("thr_1")
@@ -33,11 +36,18 @@ struct StoreRefreshTests {
     client.script {
       $0.agentStatus = { Fixture.status(running: 0) }
       $0.approvals = { _ in [Fixture.approval("apr_new")] }
-      $0.threads = { _, _ in [Fixture.summary("thr_1", status: .done, updatedAt: 30), Fixture.summary("thr_2")] }
+      $0.threads = { _, _ in
+        [Fixture.summary("thr_1", status: .done, updatedAt: 30), Fixture.summary("thr_2")]
+      }
       $0.taskRecords = { _ in [Fixture.record("tsk_1", status: .done, updatedAt: 30)] }
       $0.thread = { id in
         ThreadResponse(
-          thread: Fixture.thread(id, status: .done, updatedAt: 30, messages: [Fixture.text("m", "Done", streaming: false), Fixture.text("m2", "Anything else?", streaming: false)]),
+          thread: Fixture.thread(
+            id, status: .done, updatedAt: 30,
+            messages: [
+              Fixture.text("m", "Done", streaming: false),
+              Fixture.text("m2", "Anything else?", streaming: false),
+            ]),
           approvals: [])
       }
     }
@@ -128,7 +138,8 @@ struct StoreRefreshTests {
     }
     let pause = Task { await store.setEnabled(false) }
     #expect(await waitForArrivals(gate))
-    store.apply(.agentStatus(Fixture.status(enabled: false, problem: "The Cursor CLI isn't signed in")))
+    store.apply(
+      .agentStatus(Fixture.status(enabled: false, problem: "The Cursor CLI isn't signed in")))
     await gate.open()
     await pause.value
     #expect(store.status?.problem == "The Cursor CLI isn't signed in")
@@ -192,7 +203,9 @@ struct StoreRefreshTests {
     }
     let load = Task { await store.loadRecords(for: Fixture.note) }
     #expect(await waitForArrivals(gate))
-    store.apply(.taskRecords(TaskRecordsEvent(notePath: Fixture.note, records: [Fixture.record("tsk_pushed")])))
+    store.apply(
+      .taskRecords(
+        TaskRecordsEvent(notePath: Fixture.note, records: [Fixture.record("tsk_pushed")])))
     await gate.open()
     await load.value
     #expect(store.records(for: Fixture.note).map(\.taskId) == ["tsk_pushed"])
@@ -214,16 +227,21 @@ struct StoreSurfaceTests {
     store.subscribe(threadId: "thr_1", surface: .browser)
     store.subscribe(threadId: "thr_1", surface: .computer)
     store.unsubscribe(threadId: "thr_1", surface: .browser)
-    #expect(store.subscribedSurfaces == [SurfaceKey(threadId: "thr_1", surface: .browser), SurfaceKey(threadId: "thr_1", surface: .computer)])
+    #expect(
+      store.subscribedSurfaces == [
+        SurfaceKey(threadId: "thr_1", surface: .browser),
+        SurfaceKey(threadId: "thr_1", surface: .computer),
+      ])
     store.unsubscribe(threadId: "thr_1", surface: .browser)
     store.unsubscribe(threadId: "thr_1", surface: .browser)
     store.unsubscribe(threadId: "thr_2", surface: .computer)
     await store.flushClientEvents()
-    #expect(client.sent == [
-      .surfaceSubscribe(threadId: "thr_1", surface: .browser),
-      .surfaceSubscribe(threadId: "thr_1", surface: .computer),
-      .surfaceUnsubscribe(threadId: "thr_1", surface: .browser),
-    ])
+    #expect(
+      client.sent == [
+        .surfaceSubscribe(threadId: "thr_1", surface: .browser),
+        .surfaceSubscribe(threadId: "thr_1", surface: .computer),
+        .surfaceUnsubscribe(threadId: "thr_1", surface: .browser),
+      ])
   }
 
   @Test func subscribeAndUnsubscribeReachTheDaemonInOrder() async {
@@ -233,7 +251,10 @@ struct StoreSurfaceTests {
     }
     await store.flushClientEvents()
     let expected = Array(
-      repeating: [ClientEvent.surfaceSubscribe(threadId: "thr_1", surface: .browser), .surfaceUnsubscribe(threadId: "thr_1", surface: .browser)],
+      repeating: [
+        ClientEvent.surfaceSubscribe(threadId: "thr_1", surface: .browser),
+        .surfaceUnsubscribe(threadId: "thr_1", surface: .browser),
+      ],
       count: 20
     ).flatMap { $0 }
     #expect(client.sent == expected)
@@ -257,7 +278,10 @@ struct StoreSurfaceTests {
     let click = SurfaceFrameAction(kind: "click", x: 10, y: 20)
     store.apply(.surfaceFrame(Fixture.frame(surface: .computer, ts: 1, action: click)))
     store.apply(.surfaceFrame(Fixture.frame(surface: .computer, ts: 2, action: click)))
-    store.apply(.surfaceFrame(Fixture.frame(surface: .computer, ts: 3, action: SurfaceFrameAction(kind: "type", text: "beans"))))
+    store.apply(
+      .surfaceFrame(
+        Fixture.frame(
+          surface: .computer, ts: 3, action: SurfaceFrameAction(kind: "type", text: "beans"))))
     store.apply(.surfaceFrame(Fixture.frame(surface: .computer, ts: 4, action: click)))
     let actions = store.recentActions(threadId: "thr_1", surface: .computer)
     #expect(actions.map(\.kind) == ["click", "type", "click"])
@@ -269,7 +293,10 @@ struct StoreSurfaceTests {
   @Test func theActionLogIsCapped() {
     for index in 0..<60 {
       store.apply(
-        .surfaceFrame(Fixture.frame(surface: .computer, ts: EpochMillis(index), action: SurfaceFrameAction(kind: "click", x: Double(index), y: 1))))
+        .surfaceFrame(
+          Fixture.frame(
+            surface: .computer, ts: EpochMillis(index),
+            action: SurfaceFrameAction(kind: "click", x: Double(index), y: 1))))
     }
     let actions = store.recentActions(threadId: "thr_1", surface: .computer)
     #expect(actions.count == SurfaceFeed.maxActions)
@@ -307,16 +334,20 @@ struct StoreSurfaceTests {
   }
 
   @Test func markersMapFramePixelsIntoTheView() {
-    let point = SurfaceGeometry.point(x: 640, y: 200, frameWidth: 1280, frameHeight: 800, viewSize: CGSize(width: 320, height: 200))
+    let point = SurfaceGeometry.point(
+      x: 640, y: 200, frameWidth: 1280, frameHeight: 800, viewSize: CGSize(width: 320, height: 200))
     #expect(point == CGPoint(x: 160, y: 50))
-    let clamped = SurfaceGeometry.point(x: 5_000, y: -3, frameWidth: 1280, frameHeight: 800, viewSize: CGSize(width: 100, height: 50))
+    let clamped = SurfaceGeometry.point(
+      x: 5_000, y: -3, frameWidth: 1280, frameHeight: 800, viewSize: CGSize(width: 100, height: 50))
     #expect(clamped == CGPoint(x: 100, y: 0))
-    let degenerate = SurfaceGeometry.point(x: 1, y: 1, frameWidth: 0, frameHeight: 0, viewSize: CGSize(width: 10, height: 10))
+    let degenerate = SurfaceGeometry.point(
+      x: 1, y: 1, frameWidth: 0, frameHeight: 0, viewSize: CGSize(width: 10, height: 10))
     #expect(degenerate == CGPoint(x: 10, y: 10))
   }
 
   @Test func computerMarkersFadeAndOnlyTheLatestIsLabeled() {
-    let actions = (1...7).map { SurfaceAction(kind: "click", x: Double($0), y: 1, ts: EpochMillis($0)) }
+    let actions =
+      (1...7).map { SurfaceAction(kind: "click", x: Double($0), y: 1, ts: EpochMillis($0)) }
       + [SurfaceAction(kind: "type", text: "hi", ts: 8)]
     let markers = ComputerSurfaceView.markers(for: actions)
     #expect(markers.count == 5)
@@ -324,7 +355,12 @@ struct StoreSurfaceTests {
     #expect(markers.last?.label == "click")
     #expect(markers.dropLast().allSatisfy { $0.label == nil })
     #expect(markers.first?.opacity == 0.2)
-    #expect(BrowserSurfaceView.markers(for: Fixture.frame(action: SurfaceFrameAction(kind: "click", x: 1, y: 2, text: "Buy"))).first?.label == "Buy")
-    #expect(BrowserSurfaceView.markers(for: Fixture.frame(action: SurfaceFrameAction(kind: "scroll"))).isEmpty)
+    #expect(
+      BrowserSurfaceView.markers(
+        for: Fixture.frame(action: SurfaceFrameAction(kind: "click", x: 1, y: 2, text: "Buy"))
+      ).first?.label == "Buy")
+    #expect(
+      BrowserSurfaceView.markers(for: Fixture.frame(action: SurfaceFrameAction(kind: "scroll")))
+        .isEmpty)
   }
 }

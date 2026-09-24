@@ -154,10 +154,19 @@ struct TokenizerBlockTests {
   @Test func frontmatter() {
     #expect(
       lineKinds("---\ntitle: x\ntags: [a]\n---\n# H")
-        == [.frontmatterDelimiter, .frontmatter, .frontmatter, .frontmatterDelimiter, .heading(level: 1)])
-    #expect(lineKinds("---\nkey: v\n...\ntext") == [.frontmatterDelimiter, .frontmatter, .frontmatterDelimiter, .paragraph])
+        == [
+          .frontmatterDelimiter, .frontmatter, .frontmatter, .frontmatterDelimiter,
+          .heading(level: 1),
+        ])
+    #expect(
+      lineKinds("---\nkey: v\n...\ntext") == [
+        .frontmatterDelimiter, .frontmatter, .frontmatterDelimiter, .paragraph,
+      ])
     #expect(lineKinds("---\nno close") == [.horizontalRule, .paragraph])
-    #expect(lineKinds("text\n---\nmore\n---") == [.paragraph, .horizontalRule, .paragraph, .horizontalRule])
+    #expect(
+      lineKinds("text\n---\nmore\n---") == [
+        .paragraph, .horizontalRule, .paragraph, .horizontalRule,
+      ])
     #expect(lineKinds("---") == [.horizontalRule])
     let far = "---\n" + String(repeating: "k: v\n", count: 250) + "---"
     #expect(lineKinds(far).first == .horizontalRule)

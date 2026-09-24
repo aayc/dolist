@@ -54,7 +54,8 @@ final class MarkdownHighlighter {
     let text = storage.mutableString
     let oldLength = editedRange.length - delta
     let change = lineIndex.applyEdit(
-      location: editedRange.location, oldLength: oldLength, newLength: editedRange.length, text: text)
+      location: editedRange.location, oldLength: oldLength, newLength: editedRange.length,
+      text: text)
     let inserted = change.newLastLine - change.firstLine
     lines.replaceSubrange(
       (change.firstLine + 1)..<(change.oldLastLine + 1),
@@ -67,7 +68,8 @@ final class MarkdownHighlighter {
       if frontmatterEnd != old {
         from = 0
         let mappedOld = old.map {
-          $0 > change.oldLastLine ? $0 + change.newLastLine - change.oldLastLine : min($0, change.newLastLine)
+          $0 > change.oldLastLine
+            ? $0 + change.newLastLine - change.oldLastLine : min($0, change.newLastLine)
         }
         through = max(through, mappedOld ?? 0, frontmatterEnd ?? 0)
       }
@@ -94,7 +96,8 @@ final class MarkdownHighlighter {
     while line < lines.count {
       let content = lineIndex.contentRange(ofLine: line, textLength: length)
       let units = text.utf16Units(in: content)
-      let (tokens, next) = MarkdownTokenizer.tokenizeLine(units, state: state, frontmatter: frontmatterRole(ofLine: line))
+      let (tokens, next) = MarkdownTokenizer.tokenizeLine(
+        units, state: state, frontmatter: frontmatterRole(ofLine: line))
       apply(tokens, units: units, content: content, hasNewline: line + 1 < lines.count)
       lines[line] = LineState(entry: state, kind: tokens.kind)
       count += 1
@@ -113,12 +116,16 @@ final class MarkdownHighlighter {
   private func apply(_ tokens: LineTokens, units: [UInt16], content: NSRange, hasNewline: Bool) {
     let block = BlockStyle(tokens.kind)
     let depth = tokens.quoteDepth
-    let hanging = tokens.listPrefix == nil ? 0 : theme.hangingIndent(for: tokens, units: units, livePreview: livePreview)
+    let hanging =
+      tokens.listPrefix == nil
+      ? 0 : theme.hangingIndent(for: tokens, units: units, livePreview: livePreview)
     var position = content.location
     for segment in StyleSegments.build(tokens, length: content.length) {
       let key = StyleKey(
-        block: block, quoteDepth: depth, inline: segment.style, marker: segment.marker, hangingIndent: hanging)
-      storage.setAttributes(theme.attributes(for: key), range: NSRange(location: position, length: segment.length))
+        block: block, quoteDepth: depth, inline: segment.style, marker: segment.marker,
+        hangingIndent: hanging)
+      storage.setAttributes(
+        theme.attributes(for: key), range: NSRange(location: position, length: segment.length))
       position += segment.length
     }
     if hasNewline {
@@ -127,7 +134,9 @@ final class MarkdownHighlighter {
         range: NSRange(location: position, length: 1))
     }
     for link in tokens.links {
-      storage.addAttribute(.ddlLink, value: LinkAttribute(link.target), range: link.range.shifted(by: content.location))
+      storage.addAttribute(
+        .ddlLink, value: LinkAttribute(link.target), range: link.range.shifted(by: content.location)
+      )
     }
   }
 

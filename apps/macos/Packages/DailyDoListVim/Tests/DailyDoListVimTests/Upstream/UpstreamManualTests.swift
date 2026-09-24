@@ -88,7 +88,8 @@ import Testing
     try expectScopes(t, local: "e", global: "d")
   }
 
-  private func expectScopes(_ t: UpstreamVim, local: VimOptionValue, global: VimOptionValue) throws {
+  private func expectScopes(_ t: UpstreamVim, local: VimOptionValue, global: VimOptionValue) throws
+  {
     #expect(try t.vim.getOption("testopt", in: t.session) == local)
     #expect(try t.vim.getOption("testopt", in: t.session, scope: .local) == local)
     #expect(try t.vim.getOption("testopt", in: t.session, scope: .global) == global)
@@ -160,7 +161,9 @@ import Testing
     let t = UpstreamVim()
     var history: [String] = []
     t.doKeys("<Esc>", "<Esc>")
-    t.session.onModeChange = { mode, subMode in history.append(mode + (subMode.map { $0.isEmpty ? "" : ":" + $0 } ?? "")) }
+    t.session.onModeChange = { mode, subMode in
+      history.append(mode + (subMode.map { $0.isEmpty ? "" : ":" + $0 } ?? ""))
+    }
     func check(_ key: String, _ modes: String, sourceLocation: SourceLocation = #_sourceLocation) {
       history.removeAll()
       t.doKeys(key)
@@ -332,13 +335,17 @@ import Testing
     #expect(t.value == "xoo4\nfoo8\nfoodefg")
     t.doKeys("i")
     t.cm.setSelections([
-      VimRange(anchor: VimPosition(0, 1), head: VimPosition(0, 0)), VimRange(anchor: VimPosition(1, 2), head: VimPosition(1, 0)),
+      VimRange(anchor: VimPosition(0, 1), head: VimPosition(0, 0)),
+      VimRange(anchor: VimPosition(1, 2), head: VimPosition(1, 0)),
     ])
     t.doKeys("j")
     #expect(t.value == "joo4\njo8\nfoodefg")
     t.doKeys("j")
     #expect(t.value == "xoo4\nfoo8\nfoodefg")
-    t.cm.setSelections([VimRange(cursor: VimPosition(0, 2)), VimRange(cursor: VimPosition(1, 2)), VimRange(cursor: VimPosition(2, 4))])
+    t.cm.setSelections([
+      VimRange(cursor: VimPosition(0, 2)), VimRange(cursor: VimPosition(1, 2)),
+      VimRange(cursor: VimPosition(2, 4)),
+    ])
     t.doKeys("R", "x")
     #expect(t.value == "xox4\nfox8\nfoodxfg")
     t.doKeys("j")
@@ -431,7 +438,8 @@ import Testing
   @Test("[*, ]*, [/, ]/", arguments: ["*", "/"])
   func commentMotions(_ key: String) {
     let t = UpstreamVim(
-      value: "({\n  ({\n  /*comment {\n            */(\n#else                \n  /*       )\n#if        }\n  )}*/\n)}\n{}\n#else {{\n{}\n}\n{\n#endif\n}\n}\n#else"
+      value:
+        "({\n  ({\n  /*comment {\n            */(\n#else                \n  /*       )\n#if        }\n  )}*/\n)}\n{}\n#else {{\n{}\n}\n{\n#endif\n}\n}\n#else"
     )
     t.setCursor(7, 0)
     t.doKeys("2", "[", key)

@@ -6,7 +6,7 @@ let package = Package(
   name: "DailyDoListModels",
   platforms: [.macOS(.v14), .iOS(.v17)],
   products: [
-    .library(name: "DailyDoListModels", targets: ["DailyDoListModels"]),
+    .library(name: "DailyDoListModels", targets: ["DailyDoListModels"])
   ],
   targets: [
     .target(name: "DailyDoListModels"),

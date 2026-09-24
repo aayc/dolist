@@ -141,12 +141,18 @@ extension Vim {
         lastChange.changes = []
         lastChange.maybeReset = false
       }
-      lastChange.changes.append(.key(InsertModeKey(keyName: keyName, key: e.key, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey, shiftKey: e.shiftKey)))
+      lastChange.changes.append(
+        .key(
+          InsertModeKey(
+            keyName: keyName, key: e.key, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey,
+            shiftKey: e.shiftKey)))
     }
   }
 
   /// `repeatLastEdit(cm, vim, repeat, repeatForInsert)`: `.`, and the count of `3i…`.
-  func repeatLastEdit(_ cm: EditorAdapter, _ vim: VimState, _ count: Int, repeatForInsert: Bool) throws {
+  func repeatLastEdit(_ cm: EditorAdapter, _ vim: VimState, _ count: Int, repeatForInsert: Bool)
+    throws
+  {
     let macroModeState = globalState.macroModeState
     macroModeState.isPlaying = true
     let lastAction = vim.lastEditActionCommand
@@ -192,13 +198,17 @@ extension Vim {
   }
 
   /// `repeatInsertModeChanges(cm, changes, repeat)`.
-  func repeatInsertModeChanges(_ cm: EditorAdapter, _ changes: [InsertModeChange], _ repeatIn: Int) throws {
+  func repeatInsertModeChanges(_ cm: EditorAdapter, _ changes: [InsertModeChange], _ repeatIn: Int)
+    throws
+  {
     var count = repeatIn
     let head = cm.getCursor(.head)
     let visualBlock = globalState.macroModeState.lastInsertModeChanges.visualBlock
     if visualBlock != 0 {
       // Set up block selection again for repeating the changes.
-      if visualBlock + 1 <= 0 { throw JSException.rangeError("A selection needs at least one range") }
+      if visualBlock + 1 <= 0 {
+        throw JSException.rangeError("A selection needs at least one range")
+      }
       selectForInsert(cm, head, visualBlock + 1)
       count = cm.listSelections().count
       cm.setCursor(head)
@@ -243,11 +253,15 @@ extension Vim {
   }
 
   /// `executeMacroRegister(cm, vim, macroModeState, registerName)`: `@q`.
-  func executeMacroRegister(_ cm: EditorAdapter, _ vim: VimState, _ macroModeState: MacroModeState, _ registerName: String) throws {
+  func executeMacroRegister(
+    _ cm: EditorAdapter, _ vim: VimState, _ macroModeState: MacroModeState, _ registerName: String
+  ) throws {
     let register = globalState.registerController.getRegister(registerName)
     if registerName == ":" {
       // Read-only register containing last Ex command.
-      if let command = register.keyBuffer.first, !command.isEmpty { try exProcessCommand(cm, command) }
+      if let command = register.keyBuffer.first, !command.isEmpty {
+        try exProcessCommand(cm, command)
+      }
       macroModeState.isPlaying = false
       return
     }
@@ -284,7 +298,8 @@ extension Vim {
   /// `logInsertModeChange(macroModeState)`.
   func logInsertModeChange(_ macroModeState: MacroModeState) {
     if macroModeState.isPlaying { return }
-    globalState.registerController.getRegister(macroModeState.latestRegister).pushInsertModeChanges(macroModeState.lastInsertModeChanges)
+    globalState.registerController.getRegister(macroModeState.latestRegister).pushInsertModeChanges(
+      macroModeState.lastInsertModeChanges)
   }
 
   /// `logSearchQuery(macroModeState, query)`.
@@ -314,7 +329,9 @@ extension Vim {
     } else if wasMultiselect && vim.visualBlock {
       vim.wasInVisualBlock = true
     }
-    if key == "<Esc>" && !vim.insertMode && !vim.visualMode && wasMultiselect && vim.status == "<Esc>" {
+    if key == "<Esc>" && !vim.insertMode && !vim.visualMode && wasMultiselect
+      && vim.status == "<Esc>"
+    {
       // allow editor to exit multiselect
       clearInputState(cm)
     } else if visualBlock || !wasMultiselect {
@@ -326,7 +343,8 @@ extension Vim {
         cm.curOp?.isVimOp = true
         var index = 0
         try cm.forEachSelection { () throws in
-          cm.vim?.inputState.changeQueue = index < changeQueueList.count ? changeQueueList[index] : nil
+          cm.vim?.inputState.changeQueue =
+            index < changeQueueList.count ? changeQueueList[index] : nil
           var head = cm.getCursor(.head)
           var anchor = cm.getCursor(.anchor)
           let headOffset = !cursorIsBefore(head, anchor) ? -1 : 0
@@ -338,7 +356,11 @@ extension Vim {
           isHandled = try self.handleKey(cm, key, origin)
           if cm.virtualSelection != nil {
             let queue = cm.vim?.inputState.changeQueue
-            if index < changeQueueList.count { changeQueueList[index] = queue } else { changeQueueList.append(queue) }
+            if index < changeQueueList.count {
+              changeQueueList[index] = queue
+            } else {
+              changeQueueList.append(queue)
+            }
             cm.vim = old.clone()
           }
           index += 1

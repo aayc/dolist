@@ -15,6 +15,7 @@ struct LaunchOptions: Equatable, Sendable {
   }
 
   static var current: LaunchOptions {
-    LaunchOptions(arguments: CommandLine.arguments, environment: ProcessInfo.processInfo.environment)
+    LaunchOptions(
+      arguments: CommandLine.arguments, environment: ProcessInfo.processInfo.environment)
   }
 }

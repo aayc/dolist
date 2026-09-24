@@ -29,7 +29,10 @@ public struct VimVectorEditorSpec: Sendable {
   /// within CodeMirror's 500 ms undo grouping delay.
   public let clock: Double
 
-  public init(doc: VimText, tabSize: Int, indentUnit: String, header: VimVectorHeader, clock: Double = 1_700_000_000_000) {
+  public init(
+    doc: VimText, tabSize: Int, indentUnit: String, header: VimVectorHeader,
+    clock: Double = 1_700_000_000_000
+  ) {
     self.doc = doc
     self.tabSize = tabSize
     self.indentUnit = indentUnit
@@ -76,10 +79,13 @@ public struct VimVectorReplayer {
   }
 
   /// Runs `vector` on a host made by `makeHost`; nil when every step matches.
-  public func run(_ vector: VimVectorCase, makeHost: (VimVectorEditorSpec) -> any VimVectorHost) -> VimVectorMismatch? {
+  public func run(_ vector: VimVectorCase, makeHost: (VimVectorEditorSpec) -> any VimVectorHost)
+    -> VimVectorMismatch?
+  {
     let vim = Vim(scheduler: ManualVimScheduler(), isMac: false)
     let spec = VimVectorEditorSpec(
-      doc: vector.doc, tabSize: vector.tabSize ?? header.tabSize, indentUnit: vector.indentUnit ?? header.indentUnit,
+      doc: vector.doc, tabSize: vector.tabSize ?? header.tabSize,
+      indentUnit: vector.indentUnit ?? header.indentUnit,
       header: header, clock: Self.clock)
     let host = makeHost(spec)
     let session = host.replayAttach(vim)
@@ -90,7 +96,8 @@ public struct VimVectorReplayer {
       try? vim.setOption(name, Self.optionValue(value), in: session)
     }
     for (name, register) in vector.registers {
-      vim.register(name).setText(register.text, linewise: register.linewise, blockwise: register.blockwise)
+      vim.register(name).setText(
+        register.text, linewise: register.linewise, blockwise: register.blockwise)
     }
     if let top = vector.scrollTop {
       host.replayScroll(toLine: top)
@@ -113,18 +120,22 @@ public struct VimVectorReplayer {
         do {
           try applyApi(op, args, vim: vim, session: session)
         } catch {
-          return VimVectorMismatch(step: index, history: history, differences: ["api \(op) threw \(error)"])
+          return VimVectorMismatch(
+            step: index, history: history, differences: ["api \(op) threw \(error)"])
         }
         host.replayLayoutPass()
       }
       let actual = snapshot(host, session, viewport: vector.scrollTop != nil)
       let differences = Self.differences(expected: step.expect, actual: actual)
-      if !differences.isEmpty { return VimVectorMismatch(step: index, history: history, differences: differences) }
+      if !differences.isEmpty {
+        return VimVectorMismatch(step: index, history: history, differences: differences)
+      }
     }
     return nil
   }
 
-  private func applyApi(_ op: String, _ args: [VimVectorJSON], vim: Vim, session: VimSession) throws {
+  private func applyApi(_ op: String, _ args: [VimVectorJSON], vim: Vim, session: VimSession) throws
+  {
     func arg(_ i: Int) -> VimVectorJSON? { i < args.count ? args[i] : nil }
     func string(_ i: Int) -> String? { arg(i)?.text?.string }
     func pos(_ value: VimVectorJSON?) -> VimPosition? {
@@ -135,11 +146,14 @@ public struct VimVectorReplayer {
     case "setCursor":
       session.replaySetCursor(line: arg(0)?.int ?? 0, ch: arg(1)?.int ?? 0)
     case "setSelections":
-      session.replaySetSelections(try vectorRanges(arg(0)).map(Self.range), primary: arg(1)?.int ?? 0)
+      session.replaySetSelections(
+        try vectorRanges(arg(0)).map(Self.range), primary: arg(1)?.int ?? 0)
     case "setValue":
       session.replaySetValue(arg(0)?.text ?? VimText())
     case "replaceRange":
-      try session.replayReplaceRange(arg(0)?.text ?? VimText(), from: pos(arg(1)) ?? VimPosition(line: 0, ch: 0), to: pos(arg(2)))
+      try session.replayReplaceRange(
+        arg(0)?.text ?? VimText(), from: pos(arg(1)) ?? VimPosition(line: 0, ch: 0), to: pos(arg(2))
+      )
     case "setOption":
       session.replaySetEditorOption(string(0) ?? "", arg(1).flatMap(Self.optionValue))
     case "vimSetOption":
@@ -153,9 +167,13 @@ public struct VimVectorReplayer {
     case "mapclear":
       vim.mapclear(context: string(0))
     case "setRegister":
-      vim.register(string(0) ?? "").setText(arg(1)?.text ?? VimText(), linewise: arg(2)?.bool ?? false, blockwise: arg(3)?.bool ?? false)
+      vim.register(string(0) ?? "").setText(
+        arg(1)?.text ?? VimText(), linewise: arg(2)?.bool ?? false, blockwise: arg(3)?.bool ?? false
+      )
     case "pushText":
-      vim.replayPushText(string(0), string(1) ?? "", arg(2)?.text ?? VimText(), linewise: arg(3)?.bool ?? false, blockwise: arg(4)?.bool ?? false)
+      vim.replayPushText(
+        string(0), string(1) ?? "", arg(2)?.text ?? VimText(), linewise: arg(3)?.bool ?? false,
+        blockwise: arg(4)?.bool ?? false)
     case "ex":
       try vim.handleEx(string(0) ?? "", in: session)
     default:
@@ -164,15 +182,21 @@ public struct VimVectorReplayer {
   }
 
   /// The README's "Expected state" of the host.
-  private func snapshot(_ host: any VimVectorHost, _ session: VimSession, viewport: Bool) -> VimVectorState {
+  private func snapshot(_ host: any VimVectorHost, _ session: VimSession, viewport: Bool)
+    -> VimVectorState
+  {
     let ranges = session.selections.map { range -> VimVectorRange in
       range.anchor == range.head
-        ? [range.anchor.line, range.anchor.ch] : [range.anchor.line, range.anchor.ch, range.head.line, range.head.ch]
+        ? [range.anchor.line, range.anchor.ch]
+        : [range.anchor.line, range.anchor.ch, range.head.line, range.head.ch]
     }
     var registers: [String: VimVectorRegister] = [:]
     for name in Self.snapshotRegisters {
-      guard let register = session.vim.replayExistingRegister(name), !register.text.isEmpty else { continue }
-      registers[name] = VimVectorRegister(text: register.text, linewise: register.linewise, blockwise: register.blockwise)
+      guard let register = session.vim.replayExistingRegister(name), !register.text.isEmpty else {
+        continue
+      }
+      registers[name] = VimVectorRegister(
+        text: register.text, linewise: register.linewise, blockwise: register.blockwise)
     }
     var doc: [UInt16] = []
     for line in 0..<host.vimLineCount {
@@ -185,15 +209,20 @@ public struct VimVectorReplayer {
       primary: ranges.count > 1 ? session.replayMainIndex : nil,
       mode: session.mode.rawValue,
       registers: registers.isEmpty ? nil : registers,
-      prompt: session.activePrompt.map { VimVectorPrompt(prefix: VimText($0.text), text: $0.value) },
+      prompt: session.activePrompt.map {
+        VimVectorPrompt(prefix: VimText($0.text), text: $0.value)
+      },
       message: session.lastMessage.map { VimText($0) },
-      scrollTop: viewport ? Int((host.replayScrollOffset / header.lineHeight + 0.5).rounded(.down)) : nil)
+      scrollTop: viewport
+        ? Int((host.replayScrollOffset / header.lineHeight + 0.5).rounded(.down)) : nil)
   }
 
   public static func range(_ range: VimVectorRange) -> VimRange {
     range.count == 2
       ? VimRange(cursor: VimPosition(line: range[0], ch: range[1]))
-      : VimRange(anchor: VimPosition(line: range[0], ch: range[1]), head: VimPosition(line: range[2], ch: range[3]))
+      : VimRange(
+        anchor: VimPosition(line: range[0], ch: range[1]),
+        head: VimPosition(line: range[2], ch: range[3]))
   }
 
   public static func optionValue(_ json: VimVectorJSON) -> VimOptionValue? {
@@ -216,11 +245,14 @@ public struct VimVectorReplayer {
         "selection: expected \(expected.selection)\(expected.primary.map { " primary \($0)" } ?? "") actual \(actual.selection)\(actual.primary.map { " primary \($0)" } ?? "")"
       )
     }
-    if expected.mode != actual.mode { out.append("mode: expected \(expected.mode) actual \(actual.mode)") }
+    if expected.mode != actual.mode {
+      out.append("mode: expected \(expected.mode) actual \(actual.mode)")
+    }
     if expected.registers != actual.registers {
       let names = Set((expected.registers ?? [:]).keys).union((actual.registers ?? [:]).keys)
       for name in snapshotRegisters where names.contains(name) {
-        let e = expected.registers?[name], a = actual.registers?[name]
+        let e = expected.registers?[name]
+        let a = actual.registers?[name]
         if e != a { out.append("register \(name): expected \(describe(e)) actual \(describe(a))") }
       }
     }
@@ -228,17 +260,22 @@ public struct VimVectorReplayer {
       out.append("prompt: expected \(describe(expected.prompt)) actual \(describe(actual.prompt))")
     }
     if expected.message != actual.message {
-      out.append("message: expected \(expected.message.map(quote) ?? "none") actual \(actual.message.map(quote) ?? "none")")
+      out.append(
+        "message: expected \(expected.message.map(quote) ?? "none") actual \(actual.message.map(quote) ?? "none")"
+      )
     }
     if expected.scrollTop != actual.scrollTop {
-      out.append("scrollTop: expected \(expected.scrollTop.map(String.init) ?? "none") actual \(actual.scrollTop.map(String.init) ?? "none")")
+      out.append(
+        "scrollTop: expected \(expected.scrollTop.map(String.init) ?? "none") actual \(actual.scrollTop.map(String.init) ?? "none")"
+      )
     }
     return out
   }
 
   private static func describe(_ register: VimVectorRegister?) -> String {
     guard let register else { return "empty" }
-    return quote(register.text) + (register.linewise ? " linewise" : "") + (register.blockwise ? " blockwise" : "")
+    return quote(register.text) + (register.linewise ? " linewise" : "")
+      + (register.blockwise ? " blockwise" : "")
   }
 
   private static func describe(_ prompt: VimVectorPrompt?) -> String {

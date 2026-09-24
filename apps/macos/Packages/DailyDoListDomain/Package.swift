@@ -8,14 +8,15 @@ let package = Package(
   name: "DailyDoListDomain",
   platforms: [.macOS(.v14), .iOS(.v17)],
   products: [
-    .library(name: "DailyDoListDomain", targets: ["DailyDoListDomain"]),
+    .library(name: "DailyDoListDomain", targets: ["DailyDoListDomain"])
   ],
   dependencies: [
-    .package(path: "../DailyDoListModels"),
+    .package(path: "../DailyDoListModels")
   ],
   targets: [
     .target(name: "DailyDoListDomain", dependencies: ["DailyDoListModels"]),
     // The vectors are read from the source tree (#filePath), not bundled as resources.
-    .testTarget(name: "DailyDoListDomainTests", dependencies: ["DailyDoListDomain"], exclude: ["Vectors"]),
+    .testTarget(
+      name: "DailyDoListDomainTests", dependencies: ["DailyDoListDomain"], exclude: ["Vectors"]),
   ]
 )

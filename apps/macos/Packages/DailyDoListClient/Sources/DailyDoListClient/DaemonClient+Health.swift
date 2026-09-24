@@ -5,7 +5,9 @@ extension DaemonClient {
   /// Polls `health()` until the daemon answers, e.g. right after launching it. Returns false when
   /// `timeout` elapses, the task is cancelled, or the daemon rejects the token (waiting won't
   /// help). The API version is not checked here: compare `health().apiVersion` separately.
-  public func waitUntilHealthy(timeout: Duration, pollInterval: Duration = .milliseconds(100)) async -> Bool {
+  public func waitUntilHealthy(timeout: Duration, pollInterval: Duration = .milliseconds(100)) async
+    -> Bool
+  {
     let clock = ContinuousClock()
     let deadline = clock.now.advanced(by: timeout)
     var interval = pollInterval

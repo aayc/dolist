@@ -52,7 +52,8 @@ struct PaletteSearchField: NSViewRepresentable {
       parent.text = field.stringValue
     }
 
-    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool
+    {
       switch selector {
       case #selector(NSResponder.moveUp(_:)):
         parent.onKey(.up)
@@ -69,7 +70,10 @@ struct PaletteSearchField: NSViewRepresentable {
         guard let event = NSApp.currentEvent, event.type == .keyDown,
           event.keyCode == 36 || event.keyCode == 76
         else { return false }
-        parent.onKey(.submit(command: event.modifierFlags.contains(.command), shift: event.modifierFlags.contains(.shift)))
+        parent.onKey(
+          .submit(
+            command: event.modifierFlags.contains(.command),
+            shift: event.modifierFlags.contains(.shift)))
       default:
         return false
       }

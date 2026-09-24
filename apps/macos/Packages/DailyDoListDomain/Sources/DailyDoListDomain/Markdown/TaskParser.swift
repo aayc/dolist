@@ -103,7 +103,8 @@ public enum TaskParser {
 
         let agentMarker = AgentText.findMarker(p, lineStart, rawEnd)
         if let match = matchTaskLine(p, wsEnd, rawEnd, checkNewlines: false) {
-          let textRange = jsTrim(p, match.bodyStart..<max(match.bodyStart, agentMarker?.from ?? rawEnd))
+          let textRange = jsTrim(
+            p, match.bodyStart..<max(match.bodyStart, agentMarker?.from ?? rawEnd))
           var links: [String] = []
           if mayContainLink(p, textRange) {
             WikiLinks.scan(p, textRange) { links.append(String(utf16: p, $0.target)) }
@@ -115,16 +116,20 @@ public enum TaskParser {
               statusChar: shortString(p, match.statusIndex..<(match.statusIndex + 1)),
               status: TaskStatus(unit: p[match.statusIndex]), text: String(utf16: p, textRange),
               raw: String(utf16: p, lineStart..<rawEnd), from: lineStart, to: rawEnd,
-              textFrom: match.bodyStart, parentLine: owner >= 0 ? tasks[owner].line : nil, notes: [],
+              textFrom: match.bodyStart, parentLine: owner >= 0 ? tasks[owner].line : nil,
+              notes: [],
               links: links, agent: agentMarker != nil))
           stackIndent.append(indent)
           stackOwner.append(tasks.count - 1)
         } else {
           // A non-task line nested under a task (sub-bullet or continuation) is agent context.
           if owner >= 0 {
-            tasks[owner].notes.append(noteText(p, jsTrim(p, lineStart..<(agentMarker?.from ?? rawEnd))))
+            tasks[owner].notes.append(
+              noteText(p, jsTrim(p, lineStart..<(agentMarker?.from ?? rawEnd))))
           }
-          if let markerEnd = matchMarker(p, wsEnd, rawEnd), markerEnd < rawEnd, isBlank(p[markerEnd]) {
+          if let markerEnd = matchMarker(p, wsEnd, rawEnd), markerEnd < rawEnd,
+            isBlank(p[markerEnd])
+          {
             stackIndent.append(indent)
             stackOwner.append(owner)
           }
@@ -139,7 +144,9 @@ public enum TaskParser {
 
   /// A marker or status character: single ASCII characters come from a table.
   private static func shortString(_ p: UnsafePointer<UInt16>, _ range: Range<Int>) -> String {
-    if range.count == 1, p[range.lowerBound] < 0x80 { return asciiStrings[Int(p[range.lowerBound])] }
+    if range.count == 1, p[range.lowerBound] < 0x80 {
+      return asciiStrings[Int(p[range.lowerBound])]
+    }
     return String(utf16: p, range)
   }
 
@@ -171,10 +178,14 @@ public enum TaskParser {
   }
 
   /// `^---\s*$`, or also `^\.\.\.\s*$` when `allowDots`.
-  private static func isDelimiter(_ p: UnsafePointer<UInt16>, _ start: Int, _ end: Int, allowDots: Bool) -> Bool {
+  private static func isDelimiter(
+    _ p: UnsafePointer<UInt16>, _ start: Int, _ end: Int, allowDots: Bool
+  ) -> Bool {
     guard end - start >= 3 else { return false }
     let c = p[start]
-    guard c == 0x2D || (allowDots && c == 0x2E), p[start + 1] == c, p[start + 2] == c else { return false }
+    guard c == 0x2D || (allowDots && c == 0x2E), p[start + 1] == c, p[start + 2] == c else {
+      return false
+    }
     for i in (start + 3)..<end where !isJSWhitespace(p[i]) { return false }
     return true
   }
@@ -214,9 +225,13 @@ public enum TaskParser {
     guard let markerEnd = matchMarker(p, i, end) else { return nil }
     var j = markerEnd
     while j < end && isBlank(p[j]) { j += 1 }
-    guard j > markerEnd, j + 2 < end, p[j] == 0x5B, p[j + 2] == 0x5D, p[j + 1] != 0x0A else { return nil }
+    guard j > markerEnd, j + 2 < end, p[j] == 0x5B, p[j + 2] == 0x5D, p[j + 1] != 0x0A else {
+      return nil
+    }
     let afterBox = j + 3
-    if afterBox == end { return TaskLineMatch(markerEnd: markerEnd, statusIndex: j + 1, bodyStart: end) }
+    if afterBox == end {
+      return TaskLineMatch(markerEnd: markerEnd, statusIndex: j + 1, bodyStart: end)
+    }
     guard isBlank(p[afterBox]) else { return nil }
     var body = afterBox
     while body < end && isBlank(p[body]) { body += 1 }
@@ -233,7 +248,8 @@ public enum TaskParser {
     if c == 0x2D || c == 0x2A || c == 0x2B { return i + 1 }
     var digits = 0
     while i + digits < end && isASCIIDigit(p[i + digits]) { digits += 1 }
-    guard digits >= 1, digits <= 9, i + digits < end, p[i + digits] == 0x2E || p[i + digits] == 0x29 else {
+    guard digits >= 1, digits <= 9, i + digits < end, p[i + digits] == 0x2E || p[i + digits] == 0x29
+    else {
       return nil
     }
     return i + digits + 1
@@ -254,7 +270,8 @@ public enum TaskParser {
   private static func replaceStatus(
     _ p: UnsafePointer<UInt16>, _ n: Int, _ match: TaskLineMatch, with statusChar: String
   ) -> String {
-    String(utf16: p, 0..<match.statusIndex) + statusChar + String(utf16: p, (match.statusIndex + 1)..<n)
+    String(utf16: p, 0..<match.statusIndex) + statusChar
+      + String(utf16: p, (match.statusIndex + 1)..<n)
   }
 }
 

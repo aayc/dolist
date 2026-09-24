@@ -29,7 +29,8 @@ struct BootTests {
   @Test func managedDaemonIsStartedThroughTheSupervisor() async throws {
     let client = FakeDaemonClient()
     let supervisor = FakeSupervisor()
-    let model = AppModel(environment: makeEnvironment(client: client, supervisor: supervisor, mode: .managed))
+    let model = AppModel(
+      environment: makeEnvironment(client: client, supervisor: supervisor, mode: .managed))
     await model.boot()
     #expect(model.phase == .ready)
     #expect(supervisor.startCount == 1)
@@ -40,7 +41,9 @@ struct BootTests {
 
   @Test func supervisorRestartOnTheSameEndpointKeepsTheSession() async throws {
     let supervisor = FakeSupervisor()
-    let model = AppModel(environment: makeEnvironment(client: FakeDaemonClient(), supervisor: supervisor, mode: .managed))
+    let model = AppModel(
+      environment: makeEnvironment(
+        client: FakeDaemonClient(), supervisor: supervisor, mode: .managed))
     await model.boot()
     let workspace = try #require(model.workspace)
     try await eventually("watching the supervisor") { supervisor.observerCount == 1 }
@@ -55,11 +58,14 @@ struct BootTests {
 
   @Test func supervisorRestartOnANewPortRebootsOntoIt() async throws {
     let supervisor = FakeSupervisor()
-    let model = AppModel(environment: makeEnvironment(client: FakeDaemonClient(), supervisor: supervisor, mode: .managed))
+    let model = AppModel(
+      environment: makeEnvironment(
+        client: FakeDaemonClient(), supervisor: supervisor, mode: .managed))
     await model.boot()
     let workspace = try #require(model.workspace)
     try await eventually("watching the supervisor") { supervisor.observerCount == 1 }
-    let moved = DaemonConnectionInfo(baseURL: URL(string: "http://127.0.0.1:7444")!, token: "new-token")
+    let moved = DaemonConnectionInfo(
+      baseURL: URL(string: "http://127.0.0.1:7444")!, token: "new-token")
     supervisor.startResult = moved
     supervisor.state = .running(pid: 43, connection: moved)
     try await eventually("rebooted onto the new port") {
@@ -72,11 +78,15 @@ struct BootTests {
 
   @Test func supervisorGivingUpOffersARestartAndRetryRestarts() async throws {
     let supervisor = FakeSupervisor()
-    let model = AppModel(environment: makeEnvironment(client: FakeDaemonClient(), supervisor: supervisor, mode: .managed))
+    let model = AppModel(
+      environment: makeEnvironment(
+        client: FakeDaemonClient(), supervisor: supervisor, mode: .managed))
     await model.boot()
     try await eventually("watching the supervisor") { supervisor.observerCount == 1 }
     supervisor.state = .failed(reason: "The daemon crashed 5 times in a row.")
-    try await eventually("a toast") { model.toasts.toasts.contains { $0.title == "The daemon stopped" } }
+    try await eventually("a toast") {
+      model.toasts.toasts.contains { $0.title == "The daemon stopped" }
+    }
     let toast = try #require(model.toasts.toasts.first { $0.title == "The daemon stopped" })
     #expect(toast.body == "The daemon crashed 5 times in a row.")
     #expect(toast.actionLabel == "Restart")
@@ -84,7 +94,8 @@ struct BootTests {
 
     await model.retry()
     #expect(model.phase == .ready)
-    #expect(supervisor.startCount == 2, "retry restarts the daemon instead of reconnecting to nothing")
+    #expect(
+      supervisor.startCount == 2, "retry restarts the daemon instead of reconnecting to nothing")
     await model.teardown()
   }
 
@@ -123,9 +134,13 @@ struct BootTests {
 
   @Test func missingTokenInExternalModeExplainsHowToStart() async {
     let client = FakeDaemonClient()
-    let model = AppModel(environment: makeEnvironment(client: client, discover: { home, _ in
-      throw DaemonDiscoveryError.tokenFileMissing(path: home.appendingPathComponent("daemon-token").path)
-    }))
+    let model = AppModel(
+      environment: makeEnvironment(
+        client: client,
+        discover: { home, _ in
+          throw DaemonDiscoveryError.tokenFileMissing(
+            path: home.appendingPathComponent("daemon-token").path)
+        }))
     await model.boot()
     guard case .failed(.daemonNotRunning(let detail)) = model.phase else {
       Issue.record("expected daemonNotRunning, got \(model.phase)")
@@ -146,7 +161,9 @@ struct BootTests {
   func supervisorFailuresAreClassified(error: DaemonSupervisorError, kind: String) async {
     let supervisor = FakeSupervisor()
     supervisor.failure = error
-    let model = AppModel(environment: makeEnvironment(client: FakeDaemonClient(), supervisor: supervisor, mode: .managed))
+    let model = AppModel(
+      environment: makeEnvironment(
+        client: FakeDaemonClient(), supervisor: supervisor, mode: .managed))
     await model.boot()
     guard case .failed(let failure) = model.phase else {
       Issue.record("expected a failure, got \(model.phase)")
@@ -154,15 +171,22 @@ struct BootTests {
     }
     switch (kind, failure) {
     case ("node", .nodeMissing): #expect(failure.helpURL != nil)
-    case ("entry", .daemonNotFound), ("port", .portInUse), ("token", .unauthorized), ("failed", .daemonFailed): break
+    case ("entry", .daemonNotFound), ("port", .portInUse), ("token", .unauthorized),
+      ("failed", .daemonFailed):
+      break
     default: Issue.record("\(error) classified as \(failure)")
     }
   }
 
   @Test func demoModeUsesTheInMemoryDaemon() async throws {
-    let model = AppModel(environment: makeEnvironment(
-      client: FakeDaemonClient(), demo: true,
-      demoClient: { InMemoryDaemonClient(seed: .demo, clock: .immediate(start: referenceNow, timeZone: .current), agent: .disabled) }))
+    let model = AppModel(
+      environment: makeEnvironment(
+        client: FakeDaemonClient(), demo: true,
+        demoClient: {
+          InMemoryDaemonClient(
+            seed: .demo, clock: .immediate(start: referenceNow, timeZone: .current),
+            agent: .disabled)
+        }))
     await model.boot()
     #expect(model.phase == .ready)
     #expect(model.connection.isDemo)
@@ -174,7 +198,8 @@ struct BootTests {
   }
 
   @Test func demoModeWithoutAFakeDaemonExplainsIt() async {
-    let model = AppModel(environment: makeEnvironment(client: FakeDaemonClient(), demo: true, demoClient: nil))
+    let model = AppModel(
+      environment: makeEnvironment(client: FakeDaemonClient(), demo: true, demoClient: nil))
     await model.boot()
     guard case .failed(.other) = model.phase else {
       Issue.record("expected a failure, got \(model.phase)")
@@ -194,7 +219,10 @@ struct BootTests {
     #expect(workspace.tabs.tabs == ["Ideas.md", "Daily/2026-09-23.md", "Projects/Plan.md"])
     #expect(workspace.activePath == "Daily/2026-09-23.md")
     model.persistTabs()
-    #expect(environment.preferences.lastOpenTabs == ["Ideas.md", "Daily/2026-09-23.md", "Projects/Plan.md"])
+    #expect(
+      environment.preferences.lastOpenTabs == [
+        "Ideas.md", "Daily/2026-09-23.md", "Projects/Plan.md",
+      ])
     await model.teardown()
   }
 

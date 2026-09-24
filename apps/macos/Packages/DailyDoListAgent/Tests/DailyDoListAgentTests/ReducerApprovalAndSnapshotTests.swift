@@ -9,7 +9,8 @@ struct ReducerApprovalTests {
     var state = AgentState()
     #expect(state.apply(.approvalUpsert(Fixture.approval()), now: 0) == .approvals)
     #expect(state.pendingApprovals.map(\.id) == ["apr_1"])
-    _ = state.apply(.approvalUpsert(Fixture.approval(status: .approved, scope: .once, decidedAt: 2)), now: 0)
+    _ = state.apply(
+      .approvalUpsert(Fixture.approval(status: .approved, scope: .once, decidedAt: 2)), now: 0)
     #expect(state.pendingApprovals.isEmpty)
   }
 
@@ -65,7 +66,9 @@ struct ReducerApprovalTests {
     let before = state
     let events: [ServerEvent] = [
       .hello(HelloEvent(serverVersion: "1", apiVersion: 1)),
-      .vaultChanged(VaultChangedEvent(changes: [VaultChange(path: Fixture.note, kind: .modified)], origin: .external)),
+      .vaultChanged(
+        VaultChangedEvent(
+          changes: [VaultChange(path: Fixture.note, kind: .modified)], origin: .external)),
       .settingsChanged(.defaults),
       .error(ServerErrorEvent(message: "boom")),
       .surfaceFrame(Fixture.frame()),
@@ -77,9 +80,13 @@ struct ReducerApprovalTests {
 
   @Test func unknownMessageKindsAreKeptAndReplacedById() {
     var state = Fixture.loaded()
-    let raw: JSONValue = ["kind": "poll", "id": "msg_poll", "author": "orchestrator", "createdAt": 3]
+    let raw: JSONValue = [
+      "kind": "poll", "id": "msg_poll", "author": "orchestrator", "createdAt": 3,
+    ]
     _ = state.apply(
-      .threadMessage(ThreadMessageEvent(threadId: "thr_1", message: .unknown(kind: "poll", id: "msg_poll", raw: raw))),
+      .threadMessage(
+        ThreadMessageEvent(
+          threadId: "thr_1", message: .unknown(kind: "poll", id: "msg_poll", raw: raw))),
       now: 0)
     #expect(state.loadedThreads["thr_1"]?.messages.map(\.kind) == ["poll"])
     #expect(state.loadedThreads["thr_1"]?.messages.first?.author == "orchestrator")
@@ -92,7 +99,9 @@ struct ReducerSnapshotTests {
     var state = AgentState()
     _ = state.upsertSummary(Fixture.summary("thr_gone"))
     _ = state.upsertSummary(Fixture.summary("thr_1", status: .working))
-    #expect(state.applyThreadList([Fixture.summary("thr_1", status: .done, updatedAt: 5)], notePath: nil) == .threads)
+    #expect(
+      state.applyThreadList([Fixture.summary("thr_1", status: .done, updatedAt: 5)], notePath: nil)
+        == .threads)
     #expect(state.threads.keys.sorted() == ["thr_1"])
     #expect(state.threads["thr_1"]?.status == .done)
   }
@@ -118,7 +127,8 @@ struct ReducerSnapshotTests {
 
   @Test func theListUpdatesLoadedThreadHeaders() {
     var state = Fixture.loaded(Fixture.thread(status: .working, updatedAt: 1))
-    let changes = state.applyThreadList([Fixture.summary(status: .done, updatedAt: 9)], notePath: nil)
+    let changes = state.applyThreadList(
+      [Fixture.summary(status: .done, updatedAt: 9)], notePath: nil)
     #expect(changes.contains(.loadedThreads))
     #expect(state.loadedThreads["thr_1"]?.status == .done)
   }
@@ -143,10 +153,16 @@ struct ReducerSnapshotTests {
   @Test func aThreadResponseMergesApprovalsAndComputesTheSummary() {
     var state = AgentState()
     let thread = Fixture.thread(
-      updatedAt: 7, messages: [Fixture.text("m1", "First", streaming: false), Fixture.toolCall("t"), Fixture.text("m2", "Latest **news**", streaming: false)],
+      updatedAt: 7,
+      messages: [
+        Fixture.text("m1", "First", streaming: false), Fixture.toolCall("t"),
+        Fixture.text("m2", "Latest **news**", streaming: false),
+      ],
       surfaces: [.browser])
     let changes = state.applyThreadResponse(
-      ThreadResponse(thread: thread, approvals: [Fixture.approval(), Fixture.approval("apr_2", status: .denied)]))
+      ThreadResponse(
+        thread: thread, approvals: [Fixture.approval(), Fixture.approval("apr_2", status: .denied)])
+    )
     #expect(changes == [.approvals, .threads, .loadedThreads])
     #expect(state.approvals["apr_1"]?.isPending == true)
     let summary = state.threads["thr_1"]
@@ -159,8 +175,10 @@ struct ReducerSnapshotTests {
 
   @Test func aNewerSummaryWinsOverAnOlderThreadResponse() {
     var state = AgentState()
-    _ = state.upsertSummary(Fixture.summary(title: "Renamed", status: .done, updatedAt: 20, surfaces: [.computer]))
-    _ = state.applyThreadResponse(ThreadResponse(thread: Fixture.thread(status: .working, updatedAt: 10), approvals: []))
+    _ = state.upsertSummary(
+      Fixture.summary(title: "Renamed", status: .done, updatedAt: 20, surfaces: [.computer]))
+    _ = state.applyThreadResponse(
+      ThreadResponse(thread: Fixture.thread(status: .working, updatedAt: 10), approvals: []))
     let thread = state.loadedThreads["thr_1"]
     #expect(thread?.status == .done)
     #expect(thread?.title == "Renamed")
@@ -170,11 +188,20 @@ struct ReducerSnapshotTests {
 
   @Test func aThreadResponseKeepsInFlightOptimisticMessagesOnly() {
     var state = Fixture.loaded()
-    _ = state.insertOptimisticMessage(TextMessage(id: "local-a", author: "you", createdAt: 1, role: .user, text: "A"), threadId: "thr_1")
-    _ = state.insertOptimisticMessage(TextMessage(id: "local-b", author: "you", createdAt: 2, role: .user, text: "B"), threadId: "thr_1")
-    _ = state.insertOptimisticMessage(TextMessage(id: "local-c", author: "you", createdAt: 3, role: .user, text: "C"), threadId: "thr_1")
-    let response = Fixture.thread(updatedAt: 5, messages: [Fixture.text("srv_a", "A", streaming: nil, role: .user, author: "you")])
-    _ = state.applyThreadResponse(ThreadResponse(thread: response, approvals: []), inFlight: ["local-a", "local-b"])
+    _ = state.insertOptimisticMessage(
+      TextMessage(id: "local-a", author: "you", createdAt: 1, role: .user, text: "A"),
+      threadId: "thr_1")
+    _ = state.insertOptimisticMessage(
+      TextMessage(id: "local-b", author: "you", createdAt: 2, role: .user, text: "B"),
+      threadId: "thr_1")
+    _ = state.insertOptimisticMessage(
+      TextMessage(id: "local-c", author: "you", createdAt: 3, role: .user, text: "C"),
+      threadId: "thr_1")
+    let response = Fixture.thread(
+      updatedAt: 5,
+      messages: [Fixture.text("srv_a", "A", streaming: nil, role: .user, author: "you")])
+    _ = state.applyThreadResponse(
+      ThreadResponse(thread: response, approvals: []), inFlight: ["local-a", "local-b"])
     // A arrived with the response, B is still being sent, C's request already finished.
     #expect(state.loadedThreads["thr_1"]?.messages.map(\.id) == ["srv_a", "local-b"])
     #expect(state.optimisticMessages["thr_1"] == ["local-b"])
@@ -184,7 +211,8 @@ struct ReducerSnapshotTests {
     var state = Fixture.loaded()
     _ = state.appendDelta("partial", messageId: "msg_x", threadId: "thr_1", now: 0)
     #expect(state.deltaPlaceholders.count == 1)
-    _ = state.applyThreadResponse(ThreadResponse(thread: Fixture.thread(updatedAt: 3), approvals: []))
+    _ = state.applyThreadResponse(
+      ThreadResponse(thread: Fixture.thread(updatedAt: 3), approvals: []))
     #expect(state.deltaPlaceholders.isEmpty)
     #expect(state.loadedThreads["thr_1"]?.messages.isEmpty == true)
   }

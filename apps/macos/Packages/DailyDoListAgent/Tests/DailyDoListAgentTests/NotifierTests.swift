@@ -37,8 +37,13 @@ struct NotifierTests {
     notifier = ApprovalNotifier(store: store, center: center)
   }
 
-  private func approval(_ id: String = "apr_1", thread: String = "thr_1", status: ApprovalStatus = .pending, minutesAgo: Double = 0) -> ApprovalRequest {
-    Fixture.approval(id, threadId: thread, status: status, createdAt: Self.now.epochMillis - minutesAgo * 60_000, summary: "Send an email to sam@example.com")
+  private func approval(
+    _ id: String = "apr_1", thread: String = "thr_1", status: ApprovalStatus = .pending,
+    minutesAgo: Double = 0
+  ) -> ApprovalRequest {
+    Fixture.approval(
+      id, threadId: thread, status: status, createdAt: Self.now.epochMillis - minutesAgo * 60_000,
+      summary: "Send an email to sam@example.com")
   }
 
   private func settle() async {
@@ -60,12 +65,15 @@ struct NotifierTests {
   }
 
   @Test func postsOneNotificationPerNewPendingApproval() async {
-    store.apply(.threadUpsert(Fixture.summary(title: "Email Sam the Q3 report", updatedAt: Self.now.epochMillis)))
+    store.apply(
+      .threadUpsert(
+        Fixture.summary(title: "Email Sam the Q3 report", updatedAt: Self.now.epochMillis)))
     notifier.start()
     store.apply(.approvalUpsert(approval()))
     #expect(await eventually { center.posted.count == 1 })
     store.apply(.approvalUpsert(approval()))
-    store.apply(.threadUpsert(Fixture.summary(title: "Renamed", updatedAt: Self.now.epochMillis + 1)))
+    store.apply(
+      .threadUpsert(Fixture.summary(title: "Renamed", updatedAt: Self.now.epochMillis + 1)))
     await settle()
     #expect(center.posted.count == 1)
     #expect(center.authorizationRequests == 1)
@@ -87,7 +95,10 @@ struct NotifierTests {
     notifier.start()
     store.apply(.approvalUpsert(approval()))
     #expect(await eventually { center.posted.count == 1 })
-    store.apply(.approvalUpsert(Fixture.approval(threadId: "thr_1", status: .approved, createdAt: Self.now.epochMillis, decidedAt: 5)))
+    store.apply(
+      .approvalUpsert(
+        Fixture.approval(
+          threadId: "thr_1", status: .approved, createdAt: Self.now.epochMillis, decidedAt: 5)))
     #expect(await eventually { center.removed == ["ddl.approval.apr_1"] })
   }
 
@@ -121,13 +132,22 @@ struct NotifierTests {
   }
 
   @Test func actionButtonsDecide() async {
-    client.script { $0.decideApproval = { id, request in Fixture.approval(id, status: request.decision == .approve ? .approved : .denied, decidedAt: 9) } }
+    client.script {
+      $0.decideApproval = { id, request in
+        Fixture.approval(
+          id, status: request.decision == .approve ? .approved : .denied, decidedAt: 9)
+      }
+    }
     store.apply(.approvalUpsert(approval()))
     store.apply(.approvalUpsert(approval("apr_2")))
     await notifier.handle(
-      AgentNotificationResponse(notificationId: "n1", actionIdentifier: ApprovalNotifier.approveOnceAction, userInfo: ["approvalId": "apr_1", "threadId": "thr_1"]))
+      AgentNotificationResponse(
+        notificationId: "n1", actionIdentifier: ApprovalNotifier.approveOnceAction,
+        userInfo: ["approvalId": "apr_1", "threadId": "thr_1"]))
     await notifier.handle(
-      AgentNotificationResponse(notificationId: "n2", actionIdentifier: ApprovalNotifier.denyAction, userInfo: ["approvalId": "apr_2"]))
+      AgentNotificationResponse(
+        notificationId: "n2", actionIdentifier: ApprovalNotifier.denyAction,
+        userInfo: ["approvalId": "apr_2"]))
     #expect(client.callLog == ["decideApproval:apr_1:approve:once", "decideApproval:apr_2:deny:-"])
     #expect(store.approvals["apr_1"]?.status == .approved)
     #expect(store.approvals["apr_2"]?.status == .denied)
@@ -140,20 +160,35 @@ struct NotifierTests {
     notifier.onOpenThread = { opened.append($0) }
     notifier.start()
     center.onResponse?(
-      AgentNotificationResponse(notificationId: "n", actionIdentifier: AgentNotificationResponse.defaultAction, userInfo: ["approvalId": "apr_1", "threadId": "thr_1"]))
+      AgentNotificationResponse(
+        notificationId: "n", actionIdentifier: AgentNotificationResponse.defaultAction,
+        userInfo: ["approvalId": "apr_1", "threadId": "thr_1"]))
     #expect(await eventually { opened == ["thr_1"] })
     #expect(activated)
-    await notifier.handle(AgentNotificationResponse(notificationId: "n", actionIdentifier: AgentNotificationResponse.dismissAction, userInfo: [:]))
+    await notifier.handle(
+      AgentNotificationResponse(
+        notificationId: "n", actionIdentifier: AgentNotificationResponse.dismissAction,
+        userInfo: [:]))
     #expect(opened == ["thr_1"])
   }
 
   @Test func finishedTasksAreAnnouncedWhenAskedTo() async {
-    store.apply(.threadUpsert(Fixture.summary("thr_a", title: "Compare desks", status: .working, updatedAt: 1, preview: "**Pick:** Example Rise Pro")))
-    store.apply(.threadUpsert(Fixture.summary("thr_b", title: "Quiet task", status: .done, updatedAt: 1)))
+    store.apply(
+      .threadUpsert(
+        Fixture.summary(
+          "thr_a", title: "Compare desks", status: .working, updatedAt: 1,
+          preview: "**Pick:** Example Rise Pro")))
+    store.apply(
+      .threadUpsert(Fixture.summary("thr_b", title: "Quiet task", status: .done, updatedAt: 1)))
     notifier.notifiesTaskCompletion = true
     notifier.start()
-    store.apply(.threadUpsert(Fixture.summary("thr_a", title: "Compare desks", status: .done, updatedAt: 2, preview: "**Pick:** Example Rise Pro")))
-    store.apply(.threadUpsert(Fixture.summary("thr_b", title: "Quiet task", status: .done, updatedAt: 2)))
+    store.apply(
+      .threadUpsert(
+        Fixture.summary(
+          "thr_a", title: "Compare desks", status: .done, updatedAt: 2,
+          preview: "**Pick:** Example Rise Pro")))
+    store.apply(
+      .threadUpsert(Fixture.summary("thr_b", title: "Quiet task", status: .done, updatedAt: 2)))
     #expect(await eventually { center.posted.count == 1 })
     await settle()
     #expect(center.posted.map(\.id) == ["ddl.done.thr_a"])

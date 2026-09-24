@@ -95,7 +95,9 @@ public struct AgentMenuBarContent: View {
             isDeciding: store.decidingApprovalIds.contains(approval.id),
             onApprove: { Task { await store.decide(approval.id, .approve, scope: .once) } },
             onDeny: { Task { await store.decide(approval.id, .deny) } },
-            onOpen: approval.threadId.flatMap { threadId in openThread.map { open in { open(threadId) } } })
+            onOpen: approval.threadId.flatMap { threadId in
+              openThread.map { open in { open(threadId) } }
+            })
         }
         if pending.count > Self.maxApprovals {
           Text("+\(pending.count - Self.maxApprovals) more in the app")
@@ -150,10 +152,13 @@ private struct MenuApprovalRow: View {
               .font(.callout.weight(.medium))
               .lineLimit(3)
               .fixedSize(horizontal: false, vertical: true)
-            Text(verbatim: [threadTitle, approval.risk.displayLabel].compactMap { $0 }.joined(separator: " · "))
-              .font(.caption)
-              .foregroundStyle(AgentTheme.mutedText)
-              .lineLimit(1)
+            Text(
+              verbatim: [threadTitle, approval.risk.displayLabel].compactMap { $0 }.joined(
+                separator: " · ")
+            )
+            .font(.caption)
+            .foregroundStyle(AgentTheme.mutedText)
+            .lineLimit(1)
           }
           Spacer(minLength: 0)
         }

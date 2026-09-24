@@ -14,7 +14,8 @@ struct DaemonSupervisorTests {
 
     let connection = await harness.supervisor.start()
 
-    #expect(connection == DaemonConnectionInfo(baseURL: harness.configuration.baseURL, token: "abc"))
+    #expect(
+      connection == DaemonConnectionInfo(baseURL: harness.configuration.baseURL, token: "abc"))
     #expect(harness.supervisor.state == .attached(connection: connection!))
     #expect(harness.supervisor.health?.version == "9.9.9")
     #expect(harness.machine.requests.isEmpty)
@@ -39,12 +40,18 @@ struct DaemonSupervisorTests {
     #expect(connection.baseURL.absoluteString == "http://127.0.0.1:7555")
     let request = try #require(harness.machine.requests.first)
     #expect(request.executable.path == SupervisorHarness.nodePath)
-    #expect(request.arguments == ["--import", DaemonProcessEnvironment.watchdogPreload, SupervisorHarness.bundledEntry])
+    #expect(
+      request.arguments == [
+        "--import", DaemonProcessEnvironment.watchdogPreload, SupervisorHarness.bundledEntry,
+      ])
     #expect(request.keepsStandardInputOpen)
-    #expect(request.workingDirectory.path == SupervisorHarness.appResources.appendingPathComponent("daemon").path)
+    #expect(
+      request.workingDirectory.path
+        == SupervisorHarness.appResources.appendingPathComponent("daemon").path)
     #expect(request.environment["DDL_HOME"] == "/Users/me/.ddl-test")
     #expect(request.environment["DDL_VAULT"] == "/Users/me/Notes")
-    #expect(request.environment["DDL_PORT"] == "7555", "the configured port wins over the inherited one")
+    #expect(
+      request.environment["DDL_PORT"] == "7555", "the configured port wins over the inherited one")
     #expect(request.environment["DDL_AGENT_MODE"] == "mock")
     #expect(request.environment["DDL_LOG_LEVEL"] == "debug")
     #expect(request.environment["LANG"] == "en_US.UTF-8")
@@ -52,7 +59,9 @@ struct DaemonSupervisorTests {
     #expect(harness.supervisor.resolvedNode?.version == NodeVersion(major: 24, minor: 4, patch: 1))
     #expect(harness.supervisor.resolvedEntry?.source == .appBundle)
     #expect(harness.supervisor.logLines.contains { $0.hasPrefix("[supervisor] Launched") })
-    #expect(await harness.waitUntil { harness.supervisor.logLines.contains("listening") }, "output is pumped asynchronously")
+    #expect(
+      await harness.waitUntil { harness.supervisor.logLines.contains("listening") },
+      "output is pumped asynchronously")
   }
 
   // MARK: Remembered Node location
@@ -70,13 +79,16 @@ struct DaemonSupervisorTests {
     await harness.supervisor.stop()
 
     // A lookup would now fail, so only the remembered location can launch the daemon.
-    harness.commands.setResult(CommandResult(status: 1, standardOutput: ""), for: SupervisorHarness.nodePath)
+    harness.commands.setResult(
+      CommandResult(status: 1, standardOutput: ""), for: SupervisorHarness.nodePath)
     harness.commands.setLoginShellOutput("")
     let connection = await harness.supervisor.start()
 
     #expect(connection != nil)
     #expect(harness.machine.requests.last?.executable.path == SupervisorHarness.nodePath)
-    #expect(harness.machine.requests.last?.environment["PATH"] == firstPATH, "the login shell's PATH is remembered too")
+    #expect(
+      harness.machine.requests.last?.environment["PATH"] == firstPATH,
+      "the login shell's PATH is remembered too")
   }
 
   @Test func aReplacedNodeBinaryIsLookedUpAgain() async throws {
@@ -86,7 +98,8 @@ struct DaemonSupervisorTests {
     await harness.supervisor.stop()
 
     harness.files.replace(SupervisorHarness.nodePath)
-    harness.commands.setResult(CommandResult(status: 1, standardOutput: ""), for: SupervisorHarness.nodePath)
+    harness.commands.setResult(
+      CommandResult(status: 1, standardOutput: ""), for: SupervisorHarness.nodePath)
     harness.commands.setLoginShellOutput("")
 
     #expect(await harness.supervisor.start() == nil, "the stale entry isn't trusted")
@@ -110,10 +123,14 @@ struct DaemonSupervisorTests {
     _ = try #require(await harness.supervisor.start())
     await harness.supervisor.stop()
 
-    harness.commands.setLoginShellOutput("\(SupervisorHarness.nodePath)\n\(NodeLocator.pathMarker)/opt/new/bin:/usr/bin\n")
+    harness.commands.setLoginShellOutput(
+      "\(SupervisorHarness.nodePath)\n\(NodeLocator.pathMarker)/opt/new/bin:/usr/bin\n")
     _ = try #require(await harness.supervisor.start())
 
-    #expect(await harness.waitUntil { harness.files.readString(at: cacheFile)?.contains("/opt/new/bin") == true })
+    #expect(
+      await harness.waitUntil {
+        harness.files.readString(at: cacheFile)?.contains("/opt/new/bin") == true
+      })
   }
 
   @Test func withoutTheWatchdogStdinIsNotKeptOpen() async throws {
@@ -192,7 +209,8 @@ struct DaemonSupervisorTests {
 
     #expect(await harness.supervisor.start() == nil)
 
-    #expect(harness.supervisor.lastError == .portInUse(port: 7444, detail: "HTTP 404, Server: nginx"))
+    #expect(
+      harness.supervisor.lastError == .portInUse(port: 7444, detail: "HTTP 404, Server: nginx"))
     let reason = try #require(harness.supervisor.state.failureReason)
     #expect(reason.contains("Port 7444 on 127.0.0.1 is in use by another program"))
     #expect(reason.contains("nginx"))
@@ -211,7 +229,8 @@ struct DaemonSupervisorTests {
     #expect(await harness.supervisor.start() == nil)
 
     guard case .portInUse(let port, _) = harness.supervisor.lastError else {
-      Issue.record("expected a port conflict, got \(String(describing: harness.supervisor.lastError))")
+      Issue.record(
+        "expected a port conflict, got \(String(describing: harness.supervisor.lastError))")
       return
     }
     #expect(port == 7444)
@@ -261,7 +280,9 @@ struct DaemonSupervisorTests {
 
     #expect(await harness.supervisor.start() == nil)
 
-    #expect(harness.supervisor.lastError == .nodeUnsupported(found: ["v22.11.0 at /opt/homebrew/bin/node"]))
+    #expect(
+      harness.supervisor.lastError
+        == .nodeUnsupported(found: ["v22.11.0 at /opt/homebrew/bin/node"]))
   }
 
   @Test func missingDaemonEntryFailsClearly() async throws {
@@ -292,7 +313,10 @@ struct DaemonSupervisorTests {
 
     first.crash(status: 1)
 
-    #expect(await harness.waitUntil { harness.machine.processes.count == 2 && harness.supervisor.state.isRunning })
+    #expect(
+      await harness.waitUntil {
+        harness.machine.processes.count == 2 && harness.supervisor.state.isRunning
+      })
     await collector.value
     let second = try #require(harness.lastProcess)
     #expect(second.pid != first.pid)
@@ -301,8 +325,11 @@ struct DaemonSupervisorTests {
     #expect(states.last?.pid == second.pid)
     #expect(harness.clock.sleeps.contains(.seconds(1)), "first backoff is 1 s")
     #expect(harness.supervisor.lastError == nil)
-    #expect(await harness.waitUntil { harness.supervisor.logLines.contains("fatal: something broke") })
-    #expect(harness.commands.calls.filter { $0.arguments == ["--version"] }.count == 1, "restarts reuse the resolved Node")
+    #expect(
+      await harness.waitUntil { harness.supervisor.logLines.contains("fatal: something broke") })
+    #expect(
+      harness.commands.calls.filter { $0.arguments == ["--version"] }.count == 1,
+      "restarts reuse the resolved Node")
   }
 
   @Test func givesUpAfterFiveFailuresWithinTwoMinutes() async throws {
@@ -337,7 +364,10 @@ struct DaemonSupervisorTests {
     for round in 1...6 {
       let process = try #require(harness.lastProcess)
       process.crash()
-      #expect(await harness.waitUntil { harness.machine.processes.count == round + 1 && harness.supervisor.state.isRunning })
+      #expect(
+        await harness.waitUntil {
+          harness.machine.processes.count == round + 1 && harness.supervisor.state.isRunning
+        })
       harness.clock.advance(by: .seconds(121))
     }
 
@@ -360,7 +390,8 @@ struct DaemonSupervisorTests {
 
     #expect(await harness.waitUntil { harness.supervisor.state.isRunning })
     #expect(harness.machine.requests.count == 1)
-    #expect(harness.supervisor.state.connection?.token == "ext", "the new daemon reuses the token file")
+    #expect(
+      harness.supervisor.state.connection?.token == "ext", "the new daemon reuses the token file")
   }
 
   @Test func attachedDaemonHealthUpdatesAreQuietWhenUnchanged() async throws {
@@ -386,7 +417,9 @@ struct DaemonSupervisorTests {
     await harness.supervisor.stop()
 
     #expect(harness.supervisor.state == .stopped)
-    #expect(process.signals == [SIGTERM], "a second SIGTERM would make the daemon skip its graceful shutdown")
+    #expect(
+      process.signals == [SIGTERM],
+      "a second SIGTERM would make the daemon skip its graceful shutdown")
     #expect(process.exitStatus == .signaled(signal: SIGTERM))
     try? await Task.sleep(for: .milliseconds(50))
     #expect(harness.machine.requests.count == 1, "a requested stop is not a crash")
@@ -421,7 +454,8 @@ struct DaemonSupervisorTests {
 
   @Test func stopDuringStartupCancelsTheLaunch() async throws {
     let harness = SupervisorHarness(
-      timing: DaemonSupervisorTiming(pollInterval: .seconds(90), attachedCheckInterval: .seconds(300)))
+      timing: DaemonSupervisorTiming(
+        pollInterval: .seconds(90), attachedCheckInterval: .seconds(300)))
     harness.machine.script(.neverHealthy)
     let start = Task { await harness.supervisor.start() }
     #expect(await harness.waitUntil { harness.clock.parkedCount == 1 })
@@ -439,7 +473,10 @@ struct DaemonSupervisorTests {
       restartPolicy: DaemonRestartPolicy(initialDelay: .seconds(100), maxDelay: .seconds(100)))
     _ = try #require(await harness.supervisor.start())
     harness.lastProcess?.crash()
-    #expect(await harness.waitUntil { harness.supervisor.state.restartAttempt == 1 && harness.clock.parkedCount == 1 })
+    #expect(
+      await harness.waitUntil {
+        harness.supervisor.state.restartAttempt == 1 && harness.clock.parkedCount == 1
+      })
 
     await harness.supervisor.stop()
 

@@ -51,7 +51,9 @@ public enum VimOptionValue: Hashable, Sendable, CustomStringConvertible {
   public static func from(_ value: String) -> VimOptionValue { .string(value) }
 }
 
-extension VimOptionValue: ExpressibleByBooleanLiteral, ExpressibleByIntegerLiteral, ExpressibleByStringLiteral {
+extension VimOptionValue: ExpressibleByBooleanLiteral, ExpressibleByIntegerLiteral,
+  ExpressibleByStringLiteral
+{
   public init(booleanLiteral value: Bool) { self = .bool(value) }
   public init(integerLiteral value: Int) { self = .number(Double(value)) }
   public init(stringLiteral value: String) { self = .string(value) }

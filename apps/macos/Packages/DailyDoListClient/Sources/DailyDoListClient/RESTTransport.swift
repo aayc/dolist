@@ -5,7 +5,10 @@ import Foundation
 /// through `URLSession`, and maps the answer to a value or a `DaemonClientError`.
 struct RESTTransport: Sendable {
   enum Method: String, Sendable {
-    case get = "GET", put = "PUT", post = "POST", delete = "DELETE"
+    case get = "GET"
+    case put = "PUT"
+    case post = "POST"
+    case delete = "DELETE"
   }
 
   /// Which 409 body the operation can answer.
@@ -60,13 +63,16 @@ struct RESTTransport: Sendable {
     let (payload, response) = try await send(request)
     try check(response, payload, conflict: .none)
     let contentType = response.value(forHTTPHeaderField: "Content-Type") ?? ""
-    let mimeType = contentType.split(separator: ";", maxSplits: 1).first
+    let mimeType =
+      contentType.split(separator: ";", maxSplits: 1).first
       .map { $0.trimmingCharacters(in: .whitespaces).lowercased() } ?? ""
-    return ArtifactPayload(data: payload, mimeType: mimeType.isEmpty ? "application/octet-stream" : mimeType)
+    return ArtifactPayload(
+      data: payload, mimeType: mimeType.isEmpty ? "application/octet-stream" : mimeType)
   }
 
   func makeRequest(
-    _ method: Method, _ path: String, body: Data?, accept: String, timeout: Duration, attribute: Bool
+    _ method: Method, _ path: String, body: Data?, accept: String, timeout: Duration,
+    attribute: Bool
   ) throws(DaemonClientError) -> URLRequest {
     guard let url = endpoint.url(forPath: path) else {
       throw .unreachable("invalid daemon URL for \(path)")
@@ -84,7 +90,9 @@ struct RESTTransport: Sendable {
     return request
   }
 
-  private func send(_ request: URLRequest) async throws(DaemonClientError) -> (Data, HTTPURLResponse) {
+  private func send(_ request: URLRequest) async throws(DaemonClientError) -> (
+    Data, HTTPURLResponse
+  ) {
     if Task.isCancelled { throw .cancelled }
     let result: (Data, URLResponse)
     do {

@@ -64,7 +64,9 @@ final class Throttle<Value> {
   private var pendingValue: Value?
   private var pending: ScheduledAction?
 
-  init(scheduler: AppScheduler, interval: TimeInterval, action: @escaping @MainActor (Value) -> Void) {
+  init(
+    scheduler: AppScheduler, interval: TimeInterval, action: @escaping @MainActor (Value) -> Void
+  ) {
     self.scheduler = scheduler
     self.interval = interval
     self.action = action

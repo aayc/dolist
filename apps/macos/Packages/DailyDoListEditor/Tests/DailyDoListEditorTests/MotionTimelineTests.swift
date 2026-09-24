@@ -92,7 +92,8 @@ struct MotionTimelineTests {
 @Suite("Motion state")
 struct MotionStateTests {
   private func badge(
-    _ id: String, _ status: String = "working", label: String = "Working…", unread: Int = 0, line: Int = 0
+    _ id: String, _ status: String = "working", label: String = "Working…", unread: Int = 0,
+    line: Int = 0
   ) -> EditorBadge {
     EditorBadge(id: id, line: line, status: status, label: label, unread: unread)
   }
@@ -108,7 +109,8 @@ struct MotionStateTests {
     var state = MotionState()
     state.setBadges([badge("a", line: 1)], now: 0, animated: false)
     // "a" was remapped to another line by typing; "b" is new.
-    state.setBadges([badge("a", line: 4), badge("b", "queued", label: "Queued")], now: 1, animated: true)
+    state.setBadges(
+      [badge("a", line: 4), badge("b", "queued", label: "Queued")], now: 1, animated: true)
     #expect(state.isTransitioning("b"))
     #expect(!state.isTransitioning("a"), "moving to another line isn't appearing")
     let paint = state.paint(for: badge("b", "queued", label: "Queued"), now: 1)
@@ -116,7 +118,8 @@ struct MotionStateTests {
     #expect(paint.offsetY == MotionTimeline.appearDistance)
     // Set again with the same id and look: nothing new starts.
     state.prune(now: 2)
-    state.setBadges([badge("a", line: 4), badge("b", "queued", label: "Queued")], now: 2, animated: true)
+    state.setBadges(
+      [badge("a", line: 4), badge("b", "queued", label: "Queued")], now: 2, animated: true)
     #expect(!state.hasTransitions)
   }
 
@@ -150,8 +153,12 @@ struct MotionStateTests {
     state.setBadges([triaging], now: 5, animated: false)
     #expect(state.isPulsing("a"))
     state.setBadges([triaging], now: 7, animated: true)
-    #expect(abs(state.paint(for: triaging, now: 5.6, pulses: true).dotOpacity - 0.35) < 1e-9, "phase kept from 5 s")
-    #expect(state.paint(for: triaging, now: 5.6, pulses: false).dotOpacity == 1, "a stopped pulse is solid")
+    #expect(
+      abs(state.paint(for: triaging, now: 5.6, pulses: true).dotOpacity - 0.35) < 1e-9,
+      "phase kept from 5 s")
+    #expect(
+      state.paint(for: triaging, now: 5.6, pulses: false).dotOpacity == 1,
+      "a stopped pulse is solid")
     state.setBadges([badge("a")], now: 8, animated: true)
     #expect(!state.isPulsing("a"))
     #expect(!state.hasPulses)
@@ -207,14 +214,19 @@ struct MotionStateTests {
 
   @Test func checkedOffsetsAreThoseOfTasksToggledToDoneAfterTheEdit() throws {
     let text = "plain\n- [ ] open\n- [x] done" as NSString
-    let edit = try #require(TaskCommands.toggleChecklist(in: text, selection: [NSRange(location: 0, length: text.length)]))
+    let edit = try #require(
+      TaskCommands.toggleChecklist(in: text, selection: [NSRange(location: 0, length: text.length)])
+    )
     let after = edit.applied(to: text as String) as NSString
     #expect(after as String == "- [ ] plain\n- [x] open\n- [ ] done")
     let offsets = TaskCommands.checkedStatusOffsets(in: edit)
     #expect(offsets == [after.range(of: "[x] open").location + 1])
     let single = try #require(TaskCommands.toggleTask(in: text, lineContaining: 7))
-    #expect(TaskCommands.checkedStatusOffsets(in: TextEdit(replacements: [single], selection: [])) == [9])
+    #expect(
+      TaskCommands.checkedStatusOffsets(in: TextEdit(replacements: [single], selection: [])) == [9])
     let reopen = try #require(TaskCommands.toggleTask(in: text, lineContaining: 20))
-    #expect(TaskCommands.checkedStatusOffsets(in: TextEdit(replacements: [reopen], selection: [])).isEmpty)
+    #expect(
+      TaskCommands.checkedStatusOffsets(in: TextEdit(replacements: [reopen], selection: [])).isEmpty
+    )
   }
 }

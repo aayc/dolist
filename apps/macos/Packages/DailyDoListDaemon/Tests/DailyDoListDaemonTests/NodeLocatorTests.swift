@@ -17,7 +17,9 @@ struct NodeVersionTests {
     #expect(NodeVersion(parsing: text) == expected)
   }
 
-  @Test(arguments: ["", "node", "v", "vx.1.2", "24.", "1.2.3.4", "v24.4.1abc", "zsh: command not found: node"])
+  @Test(arguments: [
+    "", "node", "v", "vx.1.2", "24.", "1.2.3.4", "v24.4.1abc", "zsh: command not found: node",
+  ])
   func rejects(_ text: String) {
     #expect(NodeVersion(parsing: text) == nil)
   }
@@ -54,7 +56,8 @@ struct NodeLocatorTests {
     install("/custom/node", version: "v24.5.0")
     install("/opt/homebrew/bin/node", version: "v25.0.0")
 
-    let node = try await locator(configured: "/custom/node", environment: ["DDL_NODE": "/other"]).locate()
+    let node = try await locator(configured: "/custom/node", environment: ["DDL_NODE": "/other"])
+      .locate()
 
     #expect(node.url.path == "/custom/node")
     #expect(node.source == .configuration)
@@ -65,18 +68,20 @@ struct NodeLocatorTests {
     install("/custom/node", version: "v22.1.0")
     install("/opt/homebrew/bin/node", version: "v24.4.0")
 
-    await #expect(throws: DaemonSupervisorError.configuredNodeUnusable(
-      path: "/custom/node", source: "the app's configuration",
-      detail: "it is v22.1.0, but v24.4.0 or newer is required")
+    await #expect(
+      throws: DaemonSupervisorError.configuredNodeUnusable(
+        path: "/custom/node", source: "the app's configuration",
+        detail: "it is v22.1.0, but v24.4.0 or newer is required")
     ) {
       try await locator(configured: "/custom/node").locate()
     }
   }
 
   @Test func missingConfiguredPathIsRejected() async {
-    await #expect(throws: DaemonSupervisorError.configuredNodeUnusable(
-      path: "~/bin/node", source: "the app's configuration",
-      detail: "it doesn't exist or isn't executable")
+    await #expect(
+      throws: DaemonSupervisorError.configuredNodeUnusable(
+        path: "~/bin/node", source: "the app's configuration",
+        detail: "it doesn't exist or isn't executable")
     ) {
       try await locator(configured: "/Users/me/bin/node").locate()
     }
@@ -93,11 +98,14 @@ struct NodeLocatorTests {
 
   @Test func brokenDdlNodeReportsTheFailure() async {
     files.addExecutable("/broken/node")
-    commands.setResult(CommandResult(status: 1, standardOutput: "", standardError: "dyld: missing library"), for: "/broken/node")
+    commands.setResult(
+      CommandResult(status: 1, standardOutput: "", standardError: "dyld: missing library"),
+      for: "/broken/node")
 
-    await #expect(throws: DaemonSupervisorError.configuredNodeUnusable(
-      path: "/broken/node", source: "DDL_NODE",
-      detail: "`node --version` failed with status 1: dyld: missing library")
+    await #expect(
+      throws: DaemonSupervisorError.configuredNodeUnusable(
+        path: "/broken/node", source: "DDL_NODE",
+        detail: "`node --version` failed with status 1: dyld: missing library")
     ) {
       try await locator(environment: ["DDL_NODE": "/broken/node"]).locate()
     }
@@ -117,7 +125,8 @@ struct NodeLocatorTests {
 
     #expect(node.url.path == "/Users/me/.local/share/mise/installs/node/24.4.1/bin/node")
     #expect(node.source == .loginShell)
-    #expect(node.loginShellPATH == "/Users/me/.local/share/mise/installs/node/24.4.1/bin:/usr/bin:/bin")
+    #expect(
+      node.loginShellPATH == "/Users/me/.local/share/mise/installs/node/24.4.1/bin:/usr/bin:/bin")
     let shell = try #require(commands.calls.first)
     #expect(shell.executable == "/bin/zsh")
     #expect(shell.arguments.first == "-lc")
@@ -127,7 +136,8 @@ struct NodeLocatorTests {
   @Test func anOldNodeEarlierOnThePathDoesNotHideANewerOne() async throws {
     install("/usr/local/bin/node", version: "v20.19.0")
     install("/Users/me/.volta/bin/node", version: "v24.6.0")
-    commands.setLoginShellOutput("/usr/local/bin/node\n/Users/me/.volta/bin/node\n\(NodeLocator.pathMarker)/usr/local/bin\n")
+    commands.setLoginShellOutput(
+      "/usr/local/bin/node\n/Users/me/.volta/bin/node\n\(NodeLocator.pathMarker)/usr/local/bin\n")
 
     let node = try await locator().locate()
 
@@ -139,7 +149,8 @@ struct NodeLocatorTests {
     install("/opt/toolcache/node/24.4.1/bin/node", version: "v24.4.1")
     install("/opt/homebrew/bin/node", version: "v25.0.0")
 
-    let node = try await locator(environment: ["PATH": "/usr/bin:/opt/toolcache/node/24.4.1/bin"]).locate()
+    let node = try await locator(environment: ["PATH": "/usr/bin:/opt/toolcache/node/24.4.1/bin"])
+      .locate()
 
     #expect(node.url.path == "/opt/toolcache/node/24.4.1/bin/node")
     #expect(node.source == .inheritedPath)
@@ -193,13 +204,17 @@ struct NodeLocatorTests {
     install("/usr/local/bin/node", version: "v18.20.0")
     install("/opt/homebrew/bin/node", version: "v22.9.0")
     files.addExecutable("/Users/me/.volta/bin/node")
-    commands.setResult(CommandResult(status: -1, standardOutput: "", timedOut: true), for: "/Users/me/.volta/bin/node")
+    commands.setResult(
+      CommandResult(status: -1, standardOutput: "", timedOut: true),
+      for: "/Users/me/.volta/bin/node")
 
-    await #expect(throws: DaemonSupervisorError.nodeUnsupported(found: [
-      "v22.9.0 at /opt/homebrew/bin/node",
-      "v18.20.0 at /usr/local/bin/node",
-      "~/.volta/bin/node (`node --version` timed out)",
-    ])) {
+    await #expect(
+      throws: DaemonSupervisorError.nodeUnsupported(found: [
+        "v22.9.0 at /opt/homebrew/bin/node",
+        "v18.20.0 at /usr/local/bin/node",
+        "~/.volta/bin/node (`node --version` timed out)",
+      ])
+    ) {
       try await locator().locate()
     }
   }

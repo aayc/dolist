@@ -67,7 +67,9 @@ struct FileExplorerView: View {
     if let path {
       Divider()
       if workspace.vault.isFile(path) {
-        Button("Open in New Tab") { Task { await workspace.openNote(path, OpenOptions(newTab: true)) } }
+        Button("Open in New Tab") {
+          Task { await workspace.openNote(path, OpenOptions(newTab: true)) }
+        }
       }
       Button("Rename…") { ui.renamingPath = path }
       Button("Delete…", role: .destructive) { workspace.requestDelete(path) }
@@ -130,7 +132,9 @@ struct ExplorerRowView: View {
 
   private var icon: String {
     if isFolder { return "folder" }
-    if DailyNotes.isDailyNote(row.path, settings: workspace.settings.settings.dailyNotes) { return "calendar" }
+    if DailyNotes.isDailyNote(row.path, settings: workspace.settings.settings.dailyNotes) {
+      return "calendar"
+    }
     return VaultPath.isMarkdown(row.path) ? "doc.text" : "doc"
   }
 }

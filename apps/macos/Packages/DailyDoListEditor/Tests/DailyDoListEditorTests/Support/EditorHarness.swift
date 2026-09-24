@@ -28,8 +28,10 @@ func renderMarked(_ text: String, _ selection: NSRange) -> String {
   if selection.length == 0 {
     return ns.replacingCharacters(in: NSRange(location: selection.location, length: 0), with: "|")
   }
-  let withEnd = ns.replacingCharacters(in: NSRange(location: selection.end, length: 0), with: "»") as NSString
-  return withEnd.replacingCharacters(in: NSRange(location: selection.location, length: 0), with: "«")
+  let withEnd =
+    ns.replacingCharacters(in: NSRange(location: selection.end, length: 0), with: "»") as NSString
+  return withEnd.replacingCharacters(
+    in: NSRange(location: selection.location, length: 0), with: "«")
 }
 
 @MainActor
@@ -52,13 +54,20 @@ final class RecordingDelegate: MarkdownEditorDelegate {
     previewRequests.append(link)
     return previewAnswer
   }
-  func editorTextDidChange(_ editor: MarkdownEditorController, text: String) { textChanges.append(text) }
-  func editor(_ editor: MarkdownEditorController, didClickBadge badge: EditorBadge) { badgeClicks.append(badge) }
-  func editor(_ editor: MarkdownEditorController, didClickWikiLink target: String, newWindow: Bool) {
+  func editorTextDidChange(_ editor: MarkdownEditorController, text: String) {
+    textChanges.append(text)
+  }
+  func editor(_ editor: MarkdownEditorController, didClickBadge badge: EditorBadge) {
+    badgeClicks.append(badge)
+  }
+  func editor(_ editor: MarkdownEditorController, didClickWikiLink target: String, newWindow: Bool)
+  {
     wikiLinks.append((target, newWindow))
   }
   func editor(_ editor: MarkdownEditorController, didClickLink url: URL) { links.append(url) }
-  func editor(_ editor: MarkdownEditorController, cursorDidMoveToLine line: Int) { cursorLines.append(line) }
+  func editor(_ editor: MarkdownEditorController, cursorDidMoveToLine line: Int) {
+    cursorLines.append(line)
+  }
   func editorDidRequestSave(_ editor: MarkdownEditorController) { saves += 1 }
 }
 
@@ -82,7 +91,8 @@ final class EditorHarness {
   /// An editor with raw text (no markers parsed).
   init(
     text: String, selection: NSRange = NSRange(location: 0, length: 0),
-    configuration: EditorConfiguration = EditorConfiguration(), size: NSSize = NSSize(width: 900, height: 700)
+    configuration: EditorConfiguration = EditorConfiguration(),
+    size: NSSize = NSSize(width: 900, height: 700)
   ) {
     controller = MarkdownEditorController(configuration: configuration)
     controller.scrollView.frame = NSRect(origin: .zero, size: size)
@@ -121,7 +131,8 @@ final class EditorHarness {
         if character == "\n" {
           textView.insertNewline(nil)
         } else {
-          textView.insertText(String(character), replacementRange: NSRange(location: NSNotFound, length: 0))
+          textView.insertText(
+            String(character), replacementRange: NSRange(location: NSNotFound, length: 0))
         }
       }
     }
@@ -173,7 +184,9 @@ final class EditorHarness {
         continue
       }
       let unit = text.character(at: index)
-      guard property == .controlCharacter, unit != UTF16Unit.newline, unit != UTF16Unit.tab else { continue }
+      guard property == .controlCharacter, unit != UTF16Unit.newline, unit != UTF16Unit.tab else {
+        continue
+      }
       if advance(ofGlyph: glyph) < 0.5 { hidden += 1 }
     }
     return hidden
@@ -183,7 +196,8 @@ final class EditorHarness {
   func advance(ofGlyph glyph: Int) -> CGFloat {
     let layoutManager = controller.layoutManager
     var fragmentGlyphs = NSRange()
-    let used = layoutManager.lineFragmentUsedRect(forGlyphAt: glyph, effectiveRange: &fragmentGlyphs)
+    let used = layoutManager.lineFragmentUsedRect(
+      forGlyphAt: glyph, effectiveRange: &fragmentGlyphs)
     let x = layoutManager.location(forGlyphAt: glyph).x
     if glyph + 1 < fragmentGlyphs.end {
       return layoutManager.location(forGlyphAt: glyph + 1).x - x

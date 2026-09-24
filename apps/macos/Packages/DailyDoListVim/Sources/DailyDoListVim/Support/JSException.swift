@@ -14,9 +14,15 @@ public struct JSException: Error, Equatable, Sendable, CustomStringConvertible {
   /// `String(e)`, which vim.js shows as a notification: "Error: Mark not set".
   public var description: String { message.isEmpty ? name : name + ": " + message }
 
-  static func error(_ message: String) -> JSException { JSException(name: "Error", message: message) }
-  static func rangeError(_ message: String) -> JSException { JSException(name: "RangeError", message: message) }
-  static func typeError(_ message: String) -> JSException { JSException(name: "TypeError", message: message) }
+  static func error(_ message: String) -> JSException {
+    JSException(name: "Error", message: message)
+  }
+  static func rangeError(_ message: String) -> JSException {
+    JSException(name: "RangeError", message: message)
+  }
+  static func typeError(_ message: String) -> JSException {
+    JSException(name: "TypeError", message: message)
+  }
 
   static func syntax(_ error: JSRegexSyntaxError) -> JSException {
     JSException(name: "SyntaxError", message: error.message)

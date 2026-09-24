@@ -53,7 +53,9 @@ public final class AppModel {
 
   @ObservationIgnored let environment: AppEnvironment
   @ObservationIgnored var supervisor: DaemonSupervising { environment.supervisor }
-  @ObservationIgnored var systemIntegration: SystemIntegrationBridge { environment.systemIntegration }
+  @ObservationIgnored var systemIntegration: SystemIntegrationBridge {
+    environment.systemIntegration
+  }
   @ObservationIgnored var eventTask: Task<Void, Never>?
   @ObservationIgnored var supervisorTask: Task<Void, Never>?
   @ObservationIgnored var bootTask: Task<Void, Never>?

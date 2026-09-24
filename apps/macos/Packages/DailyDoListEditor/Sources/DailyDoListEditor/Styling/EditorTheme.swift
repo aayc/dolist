@@ -48,7 +48,7 @@ enum BlockStyle: Hashable, Sendable {
 
   init(_ kind: LineKind) {
     switch kind {
-    case let .heading(level): self = .heading(min(max(level, 1), 6))
+    case .heading(let level): self = .heading(min(max(level, 1), 6))
     case .code: self = .codeBlock
     case .codeFenceOpen, .codeFenceClose: self = .codeFence
     case .frontmatter: self = .frontmatter
@@ -170,9 +170,11 @@ final class EditorTheme {
       mono = true
       size = (size * 0.92 * 2).rounded() / 2
     }
-    attributes[.font] = font(size: size, weight: weight, italic: key.inline.contains(.italic), mono: mono)
+    attributes[.font] = font(
+      size: size, weight: weight, italic: key.inline.contains(.italic), mono: mono)
     attributes[.foregroundColor] = color(for: key)
-    attributes[.paragraphStyle] = paragraphStyle(block: block, quoteDepth: key.quoteDepth, hangingIndent: key.hangingIndent)
+    attributes[.paragraphStyle] = paragraphStyle(
+      block: block, quoteDepth: key.quoteDepth, hangingIndent: key.hangingIndent)
     attributes[.ddlBaseline] = NSNumber(value: Double(baselineOffset(block)))
     let tasky = key.inline.contains(.taskDone) || key.inline.contains(.taskCancelled)
     if key.inline.contains(.strikethrough) || (tasky && key.marker == nil) {
@@ -195,7 +197,9 @@ final class EditorTheme {
   }
 
   func blockFont(_ block: BlockStyle) -> NSFont {
-    font(size: blockFontSize(block), weight: blockFontWeight(block), italic: false, mono: block.isMonospaced)
+    font(
+      size: blockFontSize(block), weight: blockFontWeight(block), italic: false,
+      mono: block.isMonospaced)
   }
 
   func lineHeight(_ block: BlockStyle) -> CGFloat {
@@ -215,7 +219,9 @@ final class EditorTheme {
     return ((lineHeight(block) - textHeight) / 2 + font.ascender).rounded()
   }
 
-  func paragraphStyle(block: BlockStyle, quoteDepth: Int, hangingIndent: Int = 0) -> NSParagraphStyle {
+  func paragraphStyle(block: BlockStyle, quoteDepth: Int, hangingIndent: Int = 0)
+    -> NSParagraphStyle
+  {
     let key = ParagraphKey(block: block, quoteDepth: quoteDepth, hangingIndent: hangingIndent)
     if let cached = paragraphCache[key] { return cached }
     let style = NSMutableParagraphStyle()
@@ -227,7 +233,7 @@ final class EditorTheme {
     style.tabStops = []
     var indent = CGFloat(min(quoteDepth, maxQuoteIndentLevels)) * quoteIndent
     switch block {
-    case let .heading(level) where uniform == nil:
+    case .heading(let level) where uniform == nil:
       style.paragraphSpacingBefore = (fontSize * Self.headingSpacing[level - 1]).rounded()
     case .codeBlock, .codeFence:
       indent += codeInset
@@ -253,7 +259,8 @@ final class EditorTheme {
   /// it (checkbox and bullet slots) or as raw text, in quarter points: the indent of its wrapped
   /// lines. Tabs advance to the next multiple of the tab interval, like TextKit.
   func hangingIndent(for tokens: LineTokens, units: [UInt16], livePreview: Bool) -> Int {
-    guard let list = tokens.listPrefix, list.textStart <= units.count, list.markerEnd <= units.count else { return 0 }
+    guard let list = tokens.listPrefix, list.textStart <= units.count, list.markerEnd <= units.count
+    else { return 0 }
     let font = bodyFont
     var x = CGFloat(min(tokens.quoteDepth, maxQuoteIndentLevels)) * quoteIndent
     func advance(over range: Range<Int>) {
@@ -278,7 +285,9 @@ final class EditorTheme {
       x += checkboxSlotWidth
       advance(over: box.end..<list.textStart)
     } else {
-      x += isOrdered ? textWidth(marker, font: font) : bulletSlotWidth(units[list.markerStart], font: font)
+      x +=
+        isOrdered
+        ? textWidth(marker, font: font) : bulletSlotWidth(units[list.markerStart], font: font)
       advance(over: list.markerEnd..<list.textStart)
     }
     return Int((x * 4).rounded())
@@ -295,7 +304,7 @@ final class EditorTheme {
   private func blockFontSize(_ block: BlockStyle) -> CGFloat {
     if uniform != nil { return fontSize }
     return switch block {
-    case let .heading(level): (fontSize * Self.headingScale[level - 1]).rounded()
+    case .heading(let level): (fontSize * Self.headingScale[level - 1]).rounded()
     case .codeBlock, .codeFence: (fontSize * 0.9 * 2).rounded() / 2
     case .frontmatter, .frontmatterDelimiter: (fontSize * 0.85 * 2).rounded() / 2
     case .body, .horizontalRule: fontSize
@@ -306,15 +315,20 @@ final class EditorTheme {
     block.isHeading ? .semibold : .regular
   }
 
-  private func font(size sizeIn: CGFloat, weight: NSFont.Weight, italic: Bool, mono monoIn: Bool) -> NSFont {
+  private func font(size sizeIn: CGFloat, weight: NSFont.Weight, italic: Bool, mono monoIn: Bool)
+    -> NSFont
+  {
     let size = uniform == nil ? sizeIn : fontSize
     let mono = uniform != nil || monoIn
     let key = FontKey(size: size, weight: weight.rawValue, italic: italic, mono: mono)
     if let cached = fontCache[key] { return cached }
     var font =
-      mono ? NSFont.monospacedSystemFont(ofSize: size, weight: weight) : NSFont.systemFont(ofSize: size, weight: weight)
+      mono
+      ? NSFont.monospacedSystemFont(ofSize: size, weight: weight)
+      : NSFont.systemFont(ofSize: size, weight: weight)
     if italic {
-      let descriptor = font.fontDescriptor.withSymbolicTraits(font.fontDescriptor.symbolicTraits.union(.italic))
+      let descriptor = font.fontDescriptor.withSymbolicTraits(
+        font.fontDescriptor.symbolicTraits.union(.italic))
       font = NSFont(descriptor: descriptor, size: size) ?? font
     }
     fontCache[key] = font
@@ -323,11 +337,14 @@ final class EditorTheme {
 
   private func color(for key: StyleKey) -> NSColor {
     if let marker = key.marker {
-      return marker == .bullet || marker == .task ? EditorColors.secondaryText : EditorColors.tertiaryText
+      return marker == .bullet || marker == .task
+        ? EditorColors.secondaryText : EditorColors.tertiaryText
     }
     if key.inline.contains(.taskCancelled) { return EditorColors.tertiaryText }
     if !key.inline.isDisjoint(with: [.link, .wikilink, .tag]) { return EditorColors.accent }
-    if key.inline.contains(.taskDone) || key.inline.contains(.listNumber) { return EditorColors.secondaryText }
+    if key.inline.contains(.taskDone) || key.inline.contains(.listNumber) {
+      return EditorColors.secondaryText
+    }
     if key.inline.contains(.agent) { return EditorColors.agentText }
     switch key.block {
     case .frontmatter: return EditorColors.secondaryText

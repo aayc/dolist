@@ -15,7 +15,8 @@ struct TextGeometry: Equatable {
   /// - Parameters:
   ///   - badgeReserve: width that must stay free right of the column (0 without badges).
   static func compute(
-    viewWidth: CGFloat, readable: Bool, horizontalPadding: CGFloat, topPadding: CGFloat, badgeReserve: CGFloat
+    viewWidth: CGFloat, readable: Bool, horizontalPadding: CGFloat, topPadding: CGFloat,
+    badgeReserve: CGFloat
   ) -> TextGeometry {
     var column = max(minColumnWidth, viewWidth - 2 * horizontalPadding)
     var left = horizontalPadding
@@ -27,6 +28,7 @@ struct TextGeometry: Equatable {
       let right = viewWidth - left - column
       if right < badgeReserve { column = max(minColumnWidth, viewWidth - left - badgeReserve) }
     }
-    return TextGeometry(inset: CGSize(width: left, height: topPadding), columnWidth: column.rounded(.down))
+    return TextGeometry(
+      inset: CGSize(width: left, height: topPadding), columnWidth: column.rounded(.down))
   }
 }

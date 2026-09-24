@@ -21,21 +21,27 @@ enum RealProcesses {
   }
 
   /// Starts the fake daemon outside any supervisor (a daemon "someone else" runs).
-  static func launchUnsupervised(home: URL, port: Int, extra: [String: String] = [:]) async throws -> Process {
+  static func launchUnsupervised(home: URL, port: Int, extra: [String: String] = [:]) async throws
+    -> Process
+  {
     let nodeURL: URL = try #require(await node.value)
     let process = Process()
     process.executableURL = nodeURL
     process.arguments = [fakeDaemon.path]
     process.environment = ProcessInfo.processInfo.environment.merging(
-      ["DDL_HOME": home.path, "DDL_PORT": String(port)].merging(extra) { $1 }) { $1 }
+      ["DDL_HOME": home.path, "DDL_PORT": String(port)].merging(extra) { $1 }
+    ) { $1 }
     process.standardOutput = FileHandle.nullDevice
     process.standardError = FileHandle.nullDevice
     try process.run()
     let checker = URLSessionHealthChecker()
     let base = URL(string: "http://127.0.0.1:\(port)")!
     for _ in 0..<200 {
-      let token = try? String(contentsOf: home.appendingPathComponent("daemon-token"), encoding: .utf8)
-      switch await checker.check(baseURL: base, token: token?.trimmingCharacters(in: .whitespacesAndNewlines)) {
+      let token = try? String(
+        contentsOf: home.appendingPathComponent("daemon-token"), encoding: .utf8)
+      switch await checker.check(
+        baseURL: base, token: token?.trimmingCharacters(in: .whitespacesAndNewlines))
+      {
       case .healthy, .foreign: return process
       default: try await Task.sleep(for: .milliseconds(50))
       }
@@ -80,7 +86,8 @@ struct RealProcessTests {
     try? FileManager.default.removeItem(at: home)
   }
 
-  func waitUntil(timeout: Duration = .seconds(20), _ condition: @MainActor () -> Bool) async -> Bool {
+  func waitUntil(timeout: Duration = .seconds(20), _ condition: @MainActor () -> Bool) async -> Bool
+  {
     let deadline = ContinuousClock.now + timeout
     while ContinuousClock.now < deadline {
       if condition() { return true }
@@ -94,20 +101,30 @@ struct RealProcessTests {
       let connection = try #require(await supervisor.start(), "\(supervisor.state)")
       let pid = try #require(supervisor.state.pid)
 
-      let token = try String(contentsOf: home.appendingPathComponent("daemon-token"), encoding: .utf8)
+      let token = try String(
+        contentsOf: home.appendingPathComponent("daemon-token"), encoding: .utf8)
       #expect(connection.token == token.trimmingCharacters(in: .whitespacesAndNewlines))
-      #expect(await URLSessionHealthChecker().check(baseURL: connection.baseURL, token: connection.token)
-        == .healthy(DaemonHealth(version: "0.0.0-fake", apiVersion: 1, vaultName: "Fake", agentMode: "mock")))
+      #expect(
+        await URLSessionHealthChecker().check(baseURL: connection.baseURL, token: connection.token)
+          == .healthy(
+            DaemonHealth(version: "0.0.0-fake", apiVersion: 1, vaultName: "Fake", agentMode: "mock")
+          ))
       #expect(supervisor.health?.version == "0.0.0-fake")
-      #expect(await waitUntil { supervisor.logLines.contains { $0.contains("fake daemon listening") } })
-      #expect(await waitUntil { supervisor.logLines.contains("fake daemon stderr line") }, "stderr is captured too")
+      #expect(
+        await waitUntil { supervisor.logLines.contains { $0.contains("fake daemon listening") } })
+      #expect(
+        await waitUntil { supervisor.logLines.contains("fake daemon stderr line") },
+        "stderr is captured too")
       #expect(getpgid(pid) == pid, "the daemon leads its own process group")
 
       await supervisor.stop()
 
       #expect(supervisor.state == .stopped)
       #expect(!RealProcesses.isAlive(pid))
-      guard case .unreachable = await URLSessionHealthChecker().check(baseURL: connection.baseURL, token: connection.token) else {
+      guard
+        case .unreachable = await URLSessionHealthChecker().check(
+          baseURL: connection.baseURL, token: connection.token)
+      else {
         Issue.record("the port should be free after stop()")
         return
       }
@@ -116,7 +133,8 @@ struct RealProcessTests {
 
   @Test func attachesToADaemonItDidNotStartAndLeavesItRunning() async throws {
     try await withSupervisor { supervisor, home in
-      let external = try await RealProcesses.launchUnsupervised(home: home, port: supervisor.configuration.port)
+      let external = try await RealProcesses.launchUnsupervised(
+        home: home, port: supervisor.configuration.port)
       defer { external.terminate() }
 
       let connection = try #require(await supervisor.start())
@@ -126,7 +144,10 @@ struct RealProcessTests {
 
       #expect(supervisor.state == .stopped)
       #expect(external.isRunning)
-      guard case .healthy = await URLSessionHealthChecker().check(baseURL: connection.baseURL, token: connection.token) else {
+      guard
+        case .healthy = await URLSessionHealthChecker().check(
+          baseURL: connection.baseURL, token: connection.token)
+      else {
         Issue.record("the external daemon should still answer")
         return
       }
@@ -134,7 +155,9 @@ struct RealProcessTests {
   }
 
   @Test func restartsAfterACrash() async throws {
-    try await withSupervisor(extra: ["FAKE_DAEMON_CRASH_AFTER_MS": "300", "FAKE_DAEMON_CRASH_TIMES": "1"]) {
+    try await withSupervisor(extra: [
+      "FAKE_DAEMON_CRASH_AFTER_MS": "300", "FAKE_DAEMON_CRASH_TIMES": "1",
+    ]) {
       supervisor, _ in
       let first = try #require(await supervisor.start())
       let firstPid = try #require(supervisor.state.pid)
@@ -220,15 +243,19 @@ struct RealProcessTests {
   }
 
   @Test func watchdogStopsTheDaemonWhenTheAppGoesAway() async throws {
-    let home = FileManager.default.temporaryDirectory.appendingPathComponent("ddl-watchdog-\(UUID().uuidString)")
+    let home = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "ddl-watchdog-\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: home) }
     let port = try LocalPort.findFree()
     let launcher = FoundationProcessLauncher()
     let process = try launcher.launch(
       DaemonLaunchRequest(
         executable: try #require(await RealProcesses.node.value),
-        arguments: DaemonProcessEnvironment.arguments(entry: RealProcesses.fakeDaemon, stopsWhenAppExits: true),
-        environment: ProcessInfo.processInfo.environment.merging(["DDL_HOME": home.path, "DDL_PORT": String(port)]) { $1 },
+        arguments: DaemonProcessEnvironment.arguments(
+          entry: RealProcesses.fakeDaemon, stopsWhenAppExits: true),
+        environment: ProcessInfo.processInfo.environment.merging([
+          "DDL_HOME": home.path, "DDL_PORT": String(port),
+        ]) { $1 },
         workingDirectory: FileManager.default.temporaryDirectory,
         keepsStandardInputOpen: true))
     defer { process.signal(SIGKILL) }

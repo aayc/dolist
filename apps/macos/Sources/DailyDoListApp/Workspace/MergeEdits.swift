@@ -21,11 +21,16 @@ enum MergeEdits {
       if hunk.start == hunk.end {
         // Whole lines inserted before a line, or after the last one.
         return isAtEnd
-          ? EditorTextChange(range: NSRange(location: length, length: 0), text: "\n" + hunk.lines.joined(separator: "\n"))
-          : EditorTextChange(range: NSRange(location: starts[hunk.start], length: 0), text: hunk.lines.map { $0 + "\n" }.joined())
+          ? EditorTextChange(
+            range: NSRange(location: length, length: 0),
+            text: "\n" + hunk.lines.joined(separator: "\n"))
+          : EditorTextChange(
+            range: NSRange(location: starts[hunk.start], length: 0),
+            text: hunk.lines.map { $0 + "\n" }.joined())
       }
       if !isAtEnd {
-        let range = NSRange(location: starts[hunk.start], length: starts[hunk.end] - starts[hunk.start])
+        let range = NSRange(
+          location: starts[hunk.start], length: starts[hunk.end] - starts[hunk.start])
         return EditorTextChange(range: range, text: hunk.lines.map { $0 + "\n" }.joined())
       }
       // Lines up to the end of the text (no line break after the last one).

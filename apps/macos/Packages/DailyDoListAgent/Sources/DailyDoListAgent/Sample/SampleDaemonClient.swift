@@ -38,19 +38,28 @@ public final class SampleDaemonClient: DaemonClient, @unchecked Sendable {
 
   public func health() async throws -> HealthResponse {
     HealthResponse(
-      version: "sample", apiVersion: DaemonProtocol.apiVersion, vaultName: "Sample", agentMode: .mock)
+      version: "sample", apiVersion: DaemonProtocol.apiVersion, vaultName: "Sample",
+      agentMode: .mock)
   }
   public func tree() async throws -> VaultTreeResponse { throw Self.noVault }
   public func readNote(_ path: String) async throws -> NoteResponse { throw Self.noVault }
-  public func writeNote(_ path: String, content: String, baseVersion: BaseVersion) async throws -> WriteNoteResponse {
+  public func writeNote(_ path: String, content: String, baseVersion: BaseVersion) async throws
+    -> WriteNoteResponse
+  {
     throw Self.noVault
   }
   public func deleteNote(_ path: String) async throws -> TrashResponse { throw Self.noVault }
   public func rename(from: String, to: String) async throws -> RenameResponse { throw Self.noVault }
-  public func createFolder(_ path: String) async throws -> CreateFolderResponse { throw Self.noVault }
+  public func createFolder(_ path: String) async throws -> CreateFolderResponse {
+    throw Self.noVault
+  }
   public func deleteFolder(_ path: String) async throws -> TrashResponse { throw Self.noVault }
-  public func dailyNote(_ date: String, create: Bool) async throws -> DailyNoteResponse { throw Self.noVault }
-  public func search(_ query: String, limit: Int?) async throws -> SearchResponse { SearchResponse(hits: []) }
+  public func dailyNote(_ date: String, create: Bool) async throws -> DailyNoteResponse {
+    throw Self.noVault
+  }
+  public func search(_ query: String, limit: Int?) async throws -> SearchResponse {
+    SearchResponse(hits: [])
+  }
 
   // MARK: Settings & agent
 
@@ -103,14 +112,20 @@ public final class SampleDaemonClient: DaemonClient, @unchecked Sendable {
     return ThreadActionResponse(ok: true, pending: true)
   }
 
-  public func cancelThread(_ id: String) async throws -> ThreadActionResponse { ThreadActionResponse() }
-  public func retryThread(_ id: String) async throws -> ThreadActionResponse { ThreadActionResponse() }
+  public func cancelThread(_ id: String) async throws -> ThreadActionResponse {
+    ThreadActionResponse()
+  }
+  public func retryThread(_ id: String) async throws -> ThreadActionResponse {
+    ThreadActionResponse()
+  }
 
   public func approvals(status: ApprovalStatus?) async throws -> [ApprovalRequest] {
     read { $0.approvals.filter { status == nil || $0.status == status } }
   }
 
-  public func decideApproval(_ id: String, _ decision: ApprovalDecisionRequest) async throws -> ApprovalRequest {
+  public func decideApproval(_ id: String, _ decision: ApprovalDecisionRequest) async throws
+    -> ApprovalRequest
+  {
     let result: Result<ApprovalRequest, DaemonClientError> = lock.withLock {
       guard let index = snapshot.approvals.firstIndex(where: { $0.id == id }) else {
         return .failure(Self.notFound("Approval"))

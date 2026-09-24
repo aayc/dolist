@@ -62,7 +62,8 @@ enum CharClass {
   }
 
   @inline(__always) static func isASCIILetter(_ c: UInt16) -> Bool {
-    (c >= UTF16Unit.upperA && c <= UTF16Unit.upperZ) || (c >= UTF16Unit.lowerA && c <= UTF16Unit.lowerZ)
+    (c >= UTF16Unit.upperA && c <= UTF16Unit.upperZ)
+      || (c >= UTF16Unit.lowerA && c <= UTF16Unit.lowerZ)
   }
 
   @inline(__always) static func isASCIIAlphanumeric(_ c: UInt16) -> Bool {

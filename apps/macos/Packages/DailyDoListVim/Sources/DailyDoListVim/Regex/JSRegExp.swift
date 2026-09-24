@@ -39,12 +39,14 @@ final class JSRegExp: @unchecked Sendable, CustomStringConvertible {
     groupCount = parser.groupCount
     groupNames = parser.groupNames
     let emitter = ICUPatternEmitter(unicode: flags.unicode, groupNames: parser.groupNames)
-    let scope = ICUPatternEmitter.Scope(ignoreCase: flags.ignoreCase, multiline: flags.multiline, dotAll: flags.dotAll)
+    let scope = ICUPatternEmitter.Scope(
+      ignoreCase: flags.ignoreCase, multiline: flags.multiline, dotAll: flags.dotAll)
     let options: NSRegularExpression.Options = flags.ignoreCase ? [.caseInsensitive] : []
 
     if ICUPatternEmitter.containsUnboundedLookbehind(tree),
       let (behind, negated, rest) = Self.leadingLookbehind(tree),
-      !ICUPatternEmitter.containsUnboundedLookbehind(behind), !ICUPatternEmitter.containsUnboundedLookbehind(rest),
+      !ICUPatternEmitter.containsUnboundedLookbehind(behind),
+      !ICUPatternEmitter.containsUnboundedLookbehind(rest),
       !ICUPatternEmitter.containsBackref(rest)
     {
       let behindGroups = ICUPatternEmitter.captureCount(behind)
@@ -53,7 +55,8 @@ final class JSRegExp: @unchecked Sendable, CustomStringConvertible {
       let behindPattern = "(?:" + emitter.emit(behind, scope) + ")\\z"
       regex = try Self.compile(restEmitter.emit(rest, scope), options, pattern, flags)
       emulation = LookbehindEmulation(
-        behind: try Self.compile(behindPattern, options, pattern, flags), negated: negated, behindGroups: behindGroups)
+        behind: try Self.compile(behindPattern, options, pattern, flags), negated: negated,
+        behindGroups: behindGroups)
     } else {
       regex = try Self.compile(emitter.emit(tree, scope), options, pattern, flags)
       emulation = nil
@@ -67,7 +70,8 @@ final class JSRegExp: @unchecked Sendable, CustomStringConvertible {
       return try NSRegularExpression(pattern: icu.isEmpty ? "(?:)" : icu, options: options)
     } catch {
       // Valid JavaScript that ICU can't run (an unbounded look-behind that isn't leading).
-      throw JSRegexSyntaxError(reason: "Unsupported by this engine", pattern: pattern, flags: flags.string)
+      throw JSRegexSyntaxError(
+        reason: "Unsupported by this engine", pattern: pattern, flags: flags.string)
     }
   }
 
@@ -103,19 +107,26 @@ final class JSRegExp: @unchecked Sendable, CustomStringConvertible {
   /// The first match starting at or after `from` (JavaScript's `exec` with `lastIndex = from`).
   func exec(_ subject: JSSubject, from: Int = 0) -> JSMatch? {
     guard from <= subject.length else { return nil }
-    let options: NSRegularExpression.MatchingOptions = [.withTransparentBounds, .withoutAnchoringBounds]
+    let options: NSRegularExpression.MatchingOptions = [
+      .withTransparentBounds, .withoutAnchoringBounds,
+    ]
     if let emulation {
       var q = from
       while q <= subject.length {
-        guard let m = regex.firstMatch(in: subject.string, options: options, range: NSRange(location: q, length: subject.length - q))
+        guard
+          let m = regex.firstMatch(
+            in: subject.string, options: options,
+            range: NSRange(location: q, length: subject.length - q))
         else { return nil }
         let start = m.range.location
         let behind = emulation.behind.firstMatch(
-          in: subject.string, options: [.withTransparentBounds], range: NSRange(location: 0, length: start))
+          in: subject.string, options: [.withTransparentBounds],
+          range: NSRange(location: 0, length: start))
         if (behind != nil) != emulation.negated {
           var captures: [NSRange] = [m.range]
           for g in 0..<emulation.behindGroups {
-            captures.append(behind.map { $0.range(at: g + 1) } ?? NSRange(location: NSNotFound, length: 0))
+            captures.append(
+              behind.map { $0.range(at: g + 1) } ?? NSRange(location: NSNotFound, length: 0))
           }
           for g in 1..<m.numberOfRanges { captures.append(m.range(at: g)) }
           return JSMatch(subject: subject, ranges: captures, groupNames: groupNames)
@@ -124,9 +135,14 @@ final class JSRegExp: @unchecked Sendable, CustomStringConvertible {
       }
       return nil
     }
-    guard let m = regex.firstMatch(in: subject.string, options: options, range: NSRange(location: from, length: subject.length - from))
+    guard
+      let m = regex.firstMatch(
+        in: subject.string, options: options,
+        range: NSRange(location: from, length: subject.length - from))
     else { return nil }
-    return JSMatch(subject: subject, ranges: (0..<m.numberOfRanges).map { m.range(at: $0) }, groupNames: groupNames)
+    return JSMatch(
+      subject: subject, ranges: (0..<m.numberOfRanges).map { m.range(at: $0) },
+      groupNames: groupNames)
   }
 
   /// A match starting exactly at `index` (the `y` flag), used by `split`.
@@ -135,10 +151,17 @@ final class JSRegExp: @unchecked Sendable, CustomStringConvertible {
       if let m = exec(subject, from: index), m.index == index { return m }
       return nil
     }
-    let options: NSRegularExpression.MatchingOptions = [.withTransparentBounds, .withoutAnchoringBounds, .anchored]
-    guard let m = regex.firstMatch(in: subject.string, options: options, range: NSRange(location: index, length: subject.length - index))
+    let options: NSRegularExpression.MatchingOptions = [
+      .withTransparentBounds, .withoutAnchoringBounds, .anchored,
+    ]
+    guard
+      let m = regex.firstMatch(
+        in: subject.string, options: options,
+        range: NSRange(location: index, length: subject.length - index))
     else { return nil }
-    return JSMatch(subject: subject, ranges: (0..<m.numberOfRanges).map { m.range(at: $0) }, groupNames: groupNames)
+    return JSMatch(
+      subject: subject, ranges: (0..<m.numberOfRanges).map { m.range(at: $0) },
+      groupNames: groupNames)
   }
 
   /// The first match in `text` (`text.match(regexp)` without the `g` flag).
@@ -253,7 +276,8 @@ enum JSUnicodeProperties {
       guard !value.isEmpty else { return false }
       switch key {
       case "General_Category", "gc": return generalCategories.contains(String(value))
-      case "Script", "sc", "Script_Extensions", "scx": return value.allSatisfy { $0.isLetter || $0 == "_" }
+      case "Script", "sc", "Script_Extensions", "scx":
+        return value.allSatisfy { $0.isLetter || $0 == "_" }
       default: return false
       }
     }
@@ -262,29 +286,45 @@ enum JSUnicodeProperties {
 
   static let generalCategories: Set<String> = [
     "L", "Letter", "LC", "Cased_Letter", "Lu", "Uppercase_Letter", "Ll", "Lowercase_Letter", "Lt",
-    "Titlecase_Letter", "Lm", "Modifier_Letter", "Lo", "Other_Letter", "M", "Mark", "Combining_Mark", "Mn",
-    "Nonspacing_Mark", "Mc", "Spacing_Mark", "Me", "Enclosing_Mark", "N", "Number", "Nd", "Decimal_Number",
+    "Titlecase_Letter", "Lm", "Modifier_Letter", "Lo", "Other_Letter", "M", "Mark",
+    "Combining_Mark", "Mn",
+    "Nonspacing_Mark", "Mc", "Spacing_Mark", "Me", "Enclosing_Mark", "N", "Number", "Nd",
+    "Decimal_Number",
     "digit", "Nl", "Letter_Number", "No", "Other_Number", "P", "Punctuation", "punct", "Pc",
-    "Connector_Punctuation", "Pd", "Dash_Punctuation", "Ps", "Open_Punctuation", "Pe", "Close_Punctuation", "Pi",
-    "Initial_Punctuation", "Pf", "Final_Punctuation", "Po", "Other_Punctuation", "S", "Symbol", "Sm",
-    "Math_Symbol", "Sc", "Currency_Symbol", "Sk", "Modifier_Symbol", "So", "Other_Symbol", "Z", "Separator",
-    "Zs", "Space_Separator", "Zl", "Line_Separator", "Zp", "Paragraph_Separator", "C", "Other", "Cc", "Control",
+    "Connector_Punctuation", "Pd", "Dash_Punctuation", "Ps", "Open_Punctuation", "Pe",
+    "Close_Punctuation", "Pi",
+    "Initial_Punctuation", "Pf", "Final_Punctuation", "Po", "Other_Punctuation", "S", "Symbol",
+    "Sm",
+    "Math_Symbol", "Sc", "Currency_Symbol", "Sk", "Modifier_Symbol", "So", "Other_Symbol", "Z",
+    "Separator",
+    "Zs", "Space_Separator", "Zl", "Line_Separator", "Zp", "Paragraph_Separator", "C", "Other",
+    "Cc", "Control",
     "cntrl", "Cf", "Format", "Cs", "Surrogate", "Co", "Private_Use", "Cn", "Unassigned",
   ]
 
   static let binary: Set<String> = [
-    "ASCII", "ASCII_Hex_Digit", "AHex", "Alphabetic", "Alpha", "Any", "Assigned", "Bidi_Control", "Bidi_C",
+    "ASCII", "ASCII_Hex_Digit", "AHex", "Alphabetic", "Alpha", "Any", "Assigned", "Bidi_Control",
+    "Bidi_C",
     "Bidi_Mirrored", "Bidi_M", "Case_Ignorable", "CI", "Cased", "Changes_When_Casefolded", "CWCF",
-    "Changes_When_Casemapped", "CWCM", "Changes_When_Lowercased", "CWL", "Changes_When_NFKC_Casefolded", "CWKCF",
-    "Changes_When_Titlecased", "CWT", "Changes_When_Uppercased", "CWU", "Dash", "Default_Ignorable_Code_Point",
-    "DI", "Deprecated", "Dep", "Diacritic", "Dia", "Emoji", "Emoji_Component", "EComp", "Emoji_Modifier", "EMod",
-    "Emoji_Modifier_Base", "EBase", "Emoji_Presentation", "EPres", "Extended_Pictographic", "ExtPict", "Extender",
-    "Ext", "Grapheme_Base", "Gr_Base", "Grapheme_Extend", "Gr_Ext", "Hex_Digit", "Hex", "IDS_Binary_Operator",
-    "IDSB", "IDS_Trinary_Operator", "IDST", "ID_Continue", "IDC", "ID_Start", "IDS", "Ideographic", "Ideo",
+    "Changes_When_Casemapped", "CWCM", "Changes_When_Lowercased", "CWL",
+    "Changes_When_NFKC_Casefolded", "CWKCF",
+    "Changes_When_Titlecased", "CWT", "Changes_When_Uppercased", "CWU", "Dash",
+    "Default_Ignorable_Code_Point",
+    "DI", "Deprecated", "Dep", "Diacritic", "Dia", "Emoji", "Emoji_Component", "EComp",
+    "Emoji_Modifier", "EMod",
+    "Emoji_Modifier_Base", "EBase", "Emoji_Presentation", "EPres", "Extended_Pictographic",
+    "ExtPict", "Extender",
+    "Ext", "Grapheme_Base", "Gr_Base", "Grapheme_Extend", "Gr_Ext", "Hex_Digit", "Hex",
+    "IDS_Binary_Operator",
+    "IDSB", "IDS_Trinary_Operator", "IDST", "ID_Continue", "IDC", "ID_Start", "IDS", "Ideographic",
+    "Ideo",
     "Join_Control", "Join_C", "Logical_Order_Exception", "LOE", "Lowercase", "Lower", "Math",
-    "Noncharacter_Code_Point", "NChar", "Pattern_Syntax", "Pat_Syn", "Pattern_White_Space", "Pat_WS",
-    "Quotation_Mark", "QMark", "Radical", "Regional_Indicator", "RI", "Sentence_Terminal", "STerm", "Soft_Dotted",
-    "SD", "Terminal_Punctuation", "Term", "Unified_Ideograph", "UIdeo", "Uppercase", "Upper", "Variation_Selector",
+    "Noncharacter_Code_Point", "NChar", "Pattern_Syntax", "Pat_Syn", "Pattern_White_Space",
+    "Pat_WS",
+    "Quotation_Mark", "QMark", "Radical", "Regional_Indicator", "RI", "Sentence_Terminal", "STerm",
+    "Soft_Dotted",
+    "SD", "Terminal_Punctuation", "Term", "Unified_Ideograph", "UIdeo", "Uppercase", "Upper",
+    "Variation_Selector",
     "VS", "White_Space", "space", "XID_Continue", "XIDC", "XID_Start", "XIDS",
   ]
 }

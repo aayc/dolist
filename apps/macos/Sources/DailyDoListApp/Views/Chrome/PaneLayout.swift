@@ -41,7 +41,8 @@ enum PaneLayout {
 
   /// The smallest window that fits the visible panes at their minimum widths.
   static func minimumWindowWidth(sidebar: Bool, inspector: Bool) -> CGFloat {
-    (sidebar ? sidebarRange.lowerBound : 0) + (inspector ? inspectorRange.lowerBound : 0) + noteMinWidth
+    (sidebar ? sidebarRange.lowerBound : 0) + (inspector ? inspectorRange.lowerBound : 0)
+      + noteMinWidth
   }
 
   private static func clamp(_ value: CGFloat, to range: ClosedRange<CGFloat>) -> CGFloat {

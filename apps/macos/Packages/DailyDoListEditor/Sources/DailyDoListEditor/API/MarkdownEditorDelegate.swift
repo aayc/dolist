@@ -16,7 +16,8 @@ public protocol MarkdownEditorDelegate: AnyObject {
   /// on changes, never for every key typed in insert mode.
   func editor(_ editor: MarkdownEditorController, vimStatusDidChange status: EditorVimStatus?)
   /// An app command from vim (`:q`, `:e note`, `gt`, `:obcommand id`…).
-  func editor(_ editor: MarkdownEditorController, perform request: EditorVimRequest) -> EditorVimRequestResult
+  func editor(_ editor: MarkdownEditorController, perform request: EditorVimRequest)
+    -> EditorVimRequestResult
   /// The sparkle ending a line the agent wrote was clicked: open the thread its marker names.
   func editor(_ editor: MarkdownEditorController, didClickAgentThread threadId: String)
   /// The hover preview of a link: asked when the pointer starts hovering the link (a chance to
@@ -28,14 +29,22 @@ public protocol MarkdownEditorDelegate: AnyObject {
 extension MarkdownEditorDelegate {
   public func editorTextDidChange(_ editor: MarkdownEditorController, text: String) {}
   public func editor(_ editor: MarkdownEditorController, didClickBadge badge: EditorBadge) {}
-  public func editor(_ editor: MarkdownEditorController, didClickWikiLink target: String, newWindow: Bool) {}
+  public func editor(
+    _ editor: MarkdownEditorController, didClickWikiLink target: String, newWindow: Bool
+  ) {}
   public func editor(_ editor: MarkdownEditorController, didClickLink url: URL) {}
   public func editor(_ editor: MarkdownEditorController, cursorDidMoveToLine line: Int) {}
   public func editorDidRequestSave(_ editor: MarkdownEditorController) {}
-  public func editor(_ editor: MarkdownEditorController, vimStatusDidChange status: EditorVimStatus?) {}
-  public func editor(_ editor: MarkdownEditorController, perform request: EditorVimRequest) -> EditorVimRequestResult {
+  public func editor(
+    _ editor: MarkdownEditorController, vimStatusDidChange status: EditorVimStatus?
+  ) {}
+  public func editor(_ editor: MarkdownEditorController, perform request: EditorVimRequest)
+    -> EditorVimRequestResult
+  {
     .unavailable
   }
   public func editor(_ editor: MarkdownEditorController, didClickAgentThread threadId: String) {}
-  public func editor(_ editor: MarkdownEditorController, previewFor link: EditorLinkPreview) -> String? { nil }
+  public func editor(_ editor: MarkdownEditorController, previewFor link: EditorLinkPreview)
+    -> String?
+  { nil }
 }

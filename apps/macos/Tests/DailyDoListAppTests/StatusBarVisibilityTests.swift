@@ -7,7 +7,8 @@ import Testing
 @Suite("Quiet status bar")
 struct StatusBarVisibilityTests {
   private func visibility(
-    save: SaveState? = .saved, connection: ConnectionState = .connected(serverVersion: "1.0.0"), demo: Bool = false,
+    save: SaveState? = .saved, connection: ConnectionState = .connected(serverVersion: "1.0.0"),
+    demo: Bool = false,
     mode: AgentMode? = .live
   ) -> StatusBarVisibility {
     StatusBarVisibility(saveState: save, connection: connection, isDemo: demo, agentMode: mode)
@@ -30,12 +31,15 @@ struct StatusBarVisibilityTests {
   }
 
   @Test(arguments: [
-    ConnectionState.idle, .connecting, .reconnecting(attempt: 2, reason: "timeout"), .incompatible(serverApiVersion: 9),
+    ConnectionState.idle, .connecting, .reconnecting(attempt: 2, reason: "timeout"),
+    .incompatible(serverApiVersion: 9),
     .disconnected,
   ])
   func connectionShowsOnlyWhileNotConnected(state: ConnectionState) {
     #expect(visibility(connection: state).connection == .problem)
-    #expect(visibility(connection: state, demo: true).connection == .problem, "a demo problem is still a problem")
+    #expect(
+      visibility(connection: state, demo: true).connection == .problem,
+      "a demo problem is still a problem")
   }
 
   @Test func demoModeKeepsASmallMarker() {
@@ -53,11 +57,16 @@ struct StatusBarVisibilityTests {
 
 @Suite("Agent status item")
 struct AgentStatusPresentationTests {
-  private func status(mode: AgentMode = .live, enabled: Bool = true, problem: String? = nil) -> AgentStatusResponse {
+  private func status(mode: AgentMode = .live, enabled: Bool = true, problem: String? = nil)
+    -> AgentStatusResponse
+  {
     AgentStatusResponse(
-      mode: mode, enabled: enabled, model: "claude-opus-5-5", running: 0, queued: 0, pendingApprovals: 0,
+      mode: mode, enabled: enabled, model: "claude-opus-5-5", running: 0, queued: 0,
+      pendingApprovals: 0,
       connectors: [],
-      execution: ExecutionStatus(provider: "local", capabilities: ExecutionCapabilities(shell: true, browser: true, computer: true)),
+      execution: ExecutionStatus(
+        provider: "local",
+        capabilities: ExecutionCapabilities(shell: true, browser: true, computer: true)),
       problem: problem)
   }
 
@@ -93,7 +102,9 @@ struct AgentStatusPresentationTests {
   }
 
   @Test func theOffModeIsOffNotUnavailable() throws {
-    let item = try #require(AgentStatusPresentation(status: status(mode: .off, enabled: false, problem: "The agent is off.")))
+    let item = try #require(
+      AgentStatusPresentation(
+        status: status(mode: .off, enabled: false, problem: "The agent is off.")))
     #expect(item.state == .off)
     #expect(item.label == "Agent off")
     #expect(item.detail == "The agent is off.")

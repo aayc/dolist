@@ -7,7 +7,8 @@ import Testing
 private func run(_ marked: String, _ command: (NSString, [NSRange]) -> TextEdit?) -> String? {
   let (text, selection) = parseMarked(marked)
   guard let edit = command(text as NSString, [selection]) else { return nil }
-  return renderMarked(edit.applied(to: text), edit.selection.first ?? NSRange(location: 0, length: 0))
+  return renderMarked(
+    edit.applied(to: text), edit.selection.first ?? NSRange(location: 0, length: 0))
 }
 
 /// `isLiteralLine` for pure commands: code and frontmatter lines per the tokenizer.
@@ -23,7 +24,8 @@ private func enter(_ text: NSString, _ selection: [NSRange]) -> TextEdit? {
 }
 
 private func backspace(_ text: NSString, _ selection: [NSRange]) -> TextEdit? {
-  ListCommands.deleteMarkupBackward(in: text, selection: selection, isLiteralLine: literalLines(text))
+  ListCommands.deleteMarkupBackward(
+    in: text, selection: selection, isLiteralLine: literalLines(text))
 }
 
 @Suite("Commands: list editing")
@@ -95,7 +97,10 @@ struct ListCommandTests {
     #expect(run(input, enter) == output)
   }
 
-  @Test(arguments: ["```\n- a|\n```", "text|", "|- [ ] a", "-| [ ] a", "- «a»", "---\ntitle: - x|\n---", "# Heading|"])
+  @Test(arguments: [
+    "```\n- a|\n```", "text|", "|- [ ] a", "-| [ ] a", "- «a»", "---\ntitle: - x|\n---",
+    "# Heading|",
+  ])
   func leavesOtherLinesToTheDefaultNewline(input: String) {
     #expect(run(input, enter) == nil)
   }
@@ -184,13 +189,16 @@ struct TaskCommandTests {
     #expect(TaskCommands.toggleTask(in: text, lineContaining: 8) == nil)
     #expect(TaskCommands.toggleTask(in: text, lineContaining: 16)?.text == " ")
     #expect(TaskCommands.toggleTask(in: text, lineContaining: 25)?.text == "x")
-    #expect(TaskCommands.toggleTask(in: text, lineContaining: 25)?.range == NSRange(location: 26, length: 1))
+    #expect(
+      TaskCommands.toggleTask(in: text, lineContaining: 25)?.range
+        == NSRange(location: 26, length: 1))
   }
 }
 
 @Suite("Commands: formatting")
 struct FormattingCommandTests {
-  private func style(_ style: FormattingCommands.MarkupStyle) -> (NSString, [NSRange]) -> TextEdit? {
+  private func style(_ style: FormattingCommands.MarkupStyle) -> (NSString, [NSRange]) -> TextEdit?
+  {
     { FormattingCommands.toggle(style, in: $0, selection: $1) }
   }
 
@@ -249,24 +257,33 @@ struct TextDiffTests {
     #expect(
       TextDiff.minimalChange(from: "- [ ] book flights", to: "- [ ] book cheap flights")
         == TextDiff.Change(range: NSRange(location: 11, length: 0), replacement: "cheap "))
-    #expect(TextDiff.minimalChange(from: "abc", to: "aXc") == TextDiff.Change(range: NSRange(location: 1, length: 1), replacement: "X"))
-    #expect(TextDiff.minimalChange(from: "abc", to: "") == TextDiff.Change(range: NSRange(location: 0, length: 3), replacement: ""))
+    #expect(
+      TextDiff.minimalChange(from: "abc", to: "aXc")
+        == TextDiff.Change(range: NSRange(location: 1, length: 1), replacement: "X"))
+    #expect(
+      TextDiff.minimalChange(from: "abc", to: "")
+        == TextDiff.Change(range: NSRange(location: 0, length: 3), replacement: ""))
     #expect(
       TextDiff.minimalChange(from: "- [ ] A\n- [ ] B", to: "- [ ] New\n- [ ] A\n- [ ] B")
         == TextDiff.Change(range: NSRange(location: 0, length: 0), replacement: "- [ ] New\n"))
     #expect(
       TextDiff.minimalChange(from: "- [ ] X\n- [ ] A", to: "- [ ] A")
         == TextDiff.Change(range: NSRange(location: 0, length: 8), replacement: ""))
-    #expect(TextDiff.minimalChange(from: "a😀b", to: "a😁b") == TextDiff.Change(range: NSRange(location: 1, length: 2), replacement: "😁"))
+    #expect(
+      TextDiff.minimalChange(from: "a😀b", to: "a😁b")
+        == TextDiff.Change(range: NSRange(location: 1, length: 2), replacement: "😁"))
   }
 
   @Test(arguments: [
-    ("", "x"), ("aaaa", "aaaaaa"), ("line\nline\n", "line\nline\nline\n"), ("a\nb\nc", "a\nc"), ("one two", "one\ntwo"),
+    ("", "x"), ("aaaa", "aaaaaa"), ("line\nline\n", "line\nline\nline\n"), ("a\nb\nc", "a\nc"),
+    ("one two", "one\ntwo"),
     ("😀😀", "😀"), ("x", ""),
   ])
   func alwaysProducesTheTarget(current: String, next: String) {
     let change = TextDiff.minimalChange(from: current, to: next)
-    let result = change.map { (current as NSString).replacingCharacters(in: $0.range, with: $0.replacement) } ?? current
+    let result =
+      change.map { (current as NSString).replacingCharacters(in: $0.range, with: $0.replacement) }
+      ?? current
     #expect(result == next)
   }
 
@@ -288,7 +305,8 @@ struct TextDiffTests {
     #expect(index == LineIndex(text))
     #expect(index.line(containing: 0) == 0)
     #expect(index.line(containing: text.length) == index.count - 1)
-    #expect(index.contentRange(ofLine: 0, textLength: text.length) == NSRange(location: 0, length: 3))
+    #expect(
+      index.contentRange(ofLine: 0, textLength: text.length) == NSRange(location: 0, length: 3))
   }
 
   @Test func lineIndexMatchesRebuildAfterRandomEdits() {
@@ -301,7 +319,8 @@ struct TextDiffTests {
       let length = Int.random(in: 0...min(6, text.length - location), using: &rng)
       let piece = pieces.randomElement(using: &rng)!
       text.replaceCharacters(in: NSRange(location: location, length: length), with: piece)
-      index.applyEdit(location: location, oldLength: length, newLength: (piece as NSString).length, text: text)
+      index.applyEdit(
+        location: location, oldLength: length, newLength: (piece as NSString).length, text: text)
       #expect(index == LineIndex(text))
     }
   }

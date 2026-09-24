@@ -44,14 +44,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     false
   }
 
-  func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+  func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool
+  {
     if !flag { model.showMainWindow() }
     return true
   }
 
   func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
     let menu = NSMenu()
-    let today = NSMenuItem(title: "Open Today's Note", action: #selector(openTodaysNote(_:)), keyEquivalent: "")
+    let today = NSMenuItem(
+      title: "Open Today's Note", action: #selector(openTodaysNote(_:)), keyEquivalent: "")
     today.target = self
     menu.addItem(today)
     return menu

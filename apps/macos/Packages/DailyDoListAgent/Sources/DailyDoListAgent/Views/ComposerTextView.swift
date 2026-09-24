@@ -75,7 +75,9 @@ struct ComposerTextView: NSViewRepresentable {
     }
 
     func updateHeight(of textView: NSTextView) {
-      guard let container = textView.textContainer, let layout = textView.layoutManager else { return }
+      guard let container = textView.textContainer, let layout = textView.layoutManager else {
+        return
+      }
       layout.ensureLayout(for: container)
       let used = layout.usedRect(for: container).height + textView.textContainerInset.height * 2
       let clamped = min(max(used.rounded(.up), parent.minHeight), parent.maxHeight)

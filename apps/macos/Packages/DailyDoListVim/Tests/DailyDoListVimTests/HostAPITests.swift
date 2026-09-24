@@ -1,6 +1,5 @@
-import Testing
-
 import DailyDoListVim
+import Testing
 
 /// The public API a host uses, exercised without `@testable` access.
 @MainActor
@@ -60,7 +59,9 @@ import DailyDoListVim
     let (_, buffer, session, _) = make("abc")
     defer { withExtendedLifetime(buffer) {} }
     var events: [String] = []
-    session.onModeChange = { mode, subMode in events.append("mode \(mode)\(subMode.map { " " + $0 } ?? "")") }
+    session.onModeChange = { mode, subMode in
+      events.append("mode \(mode)\(subMode.map { " " + $0 } ?? "")")
+    }
     session.onKeypress = { events.append("key \($0)") }
     session.onCommandDone = { events.append("done") }
     session.handleKey("V")
@@ -69,7 +70,11 @@ import DailyDoListVim
     session.handleKey("x")
     // The web app's order (recorded in Chromium): an action clears the pending keys before it
     // runs, and leaving visual mode with <Esc> reports "normal" twice.
-    #expect(events == ["done", "mode visual linewise", "key V", "mode normal", "mode normal", "done", "key <Esc>", "key 2", "done", "key x"])
+    #expect(
+      events == [
+        "done", "mode visual linewise", "key V", "mode normal", "mode normal", "done", "key <Esc>",
+        "key 2", "done", "key x",
+      ])
     #expect(session.pendingKeys == "")
   }
 
@@ -150,7 +155,9 @@ import DailyDoListVim
 
   @Test func insertModeMappingsTypeFirstAndTimeOut() throws {
     let (vim, buffer, session, scheduler) = make("")
-    func type(_ key: String) { session.handleKey(key, nativeEdit: { buffer.performNativeEdit(for: key) }) }
+    func type(_ key: String) {
+      session.handleKey(key, nativeEdit: { buffer.performNativeEdit(for: key) })
+    }
     try vim.map("jk", "<Esc>", context: "insert")
     type("i")
     // The first key of the mapping is typed right away…
@@ -226,7 +233,9 @@ private final class CustomHost: VimEditor {
   var vimViewport: VimViewport { storage.vimViewport }
   func vimScroll(top: Double?, left: Double?) { storage.vimScroll(top: top, left: left) }
   func vimScrollIntoView(_ offset: Int?) { storage.vimScrollIntoView(offset) }
-  func vimCoords(at offset: Int, side: Int) -> VimRect? { storage.vimCoords(at: offset, side: side) }
+  func vimCoords(at offset: Int, side: Int) -> VimRect? {
+    storage.vimCoords(at: offset, side: side)
+  }
   func vimOffset(at point: VimPoint) -> Int { storage.vimOffset(at: point) }
   func vimShowPanel(_ panel: VimPanel?) {}
   func vimShowSearchHighlight(_ highlight: VimSearchHighlight?) {}

@@ -19,7 +19,8 @@ final class NotePreviewCache {
   private var loads: [String: Task<NotePreview?, Never>] = [:]
 
   init(
-    resolve: @escaping @MainActor (String) -> String?, loadedContent: @escaping @MainActor (String) -> String?,
+    resolve: @escaping @MainActor (String) -> String?,
+    loadedContent: @escaping @MainActor (String) -> String?,
     read: @escaping @MainActor (String) async throws -> String
   ) {
     self.resolve = resolve
@@ -53,7 +54,9 @@ final class NotePreviewCache {
 
   /// Starts reading `target` so a later `cachedPreview` has it.
   func prefetch(_ target: String) {
-    guard cachedPreview(for: target) == nil, let path = resolve(target), loads[path] == nil else { return }
+    guard cachedPreview(for: target) == nil, let path = resolve(target), loads[path] == nil else {
+      return
+    }
     Task { _ = await self.preview(for: target) }
   }
 
@@ -66,11 +69,15 @@ final class NotePreviewCache {
   static func preview(path: String, content: String) -> NotePreview {
     var lines = TextTools.splitLines(content)
     if lines.first?.trimmingCharacters(in: .whitespaces) == "---",
-      let close = lines.dropFirst().firstIndex(where: { ["---", "..."].contains($0.trimmingCharacters(in: .whitespaces)) })
+      let close = lines.dropFirst().firstIndex(where: {
+        ["---", "..."].contains($0.trimmingCharacters(in: .whitespaces))
+      })
     {
       lines.removeSubrange(0...close)
     }
-    let body = lines.lazy.map { AgentText.stripMarker($0) }.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+    let body = lines.lazy.map { AgentText.stripMarker($0) }.filter {
+      !$0.trimmingCharacters(in: .whitespaces).isEmpty
+    }
     return NotePreview(title: VaultPath.stem(path), lines: Array(body.prefix(lineCount)))
   }
 }

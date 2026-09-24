@@ -22,12 +22,17 @@ struct SmokeTests {
     let storage = editor.controller.storage
     let headingFont = try #require(storage.attribute(.font, at: 3, effectiveRange: nil) as? NSFont)
     #expect(headingFont.pointSize == (16 * 1.6).rounded())
-    #expect(storage.attribute(.ddlMarker, at: 0, effectiveRange: nil) as? Int == MarkerKind.heading.rawValue)
-    let boldFont = try #require(storage.attribute(.font, at: editor.offset(of: "bold"), effectiveRange: nil) as? NSFont)
+    #expect(
+      storage.attribute(.ddlMarker, at: 0, effectiveRange: nil) as? Int
+        == MarkerKind.heading.rawValue)
+    let boldFont = try #require(
+      storage.attribute(.font, at: editor.offset(of: "bold"), effectiveRange: nil) as? NSFont)
     #expect(boldFont.fontDescriptor.symbolicTraits.contains(.bold))
-    let codeFont = try #require(storage.attribute(.font, at: editor.offset(of: "code"), effectiveRange: nil) as? NSFont)
+    let codeFont = try #require(
+      storage.attribute(.font, at: editor.offset(of: "code"), effectiveRange: nil) as? NSFont)
     #expect(codeFont.isFixedPitch)
-    #expect(storage.attribute(.ddlInlineCode, at: editor.offset(of: "code"), effectiveRange: nil) != nil)
+    #expect(
+      storage.attribute(.ddlInlineCode, at: editor.offset(of: "code"), effectiveRange: nil) != nil)
   }
 
   @Test func typingRestylesTheLine() throws {

@@ -3,7 +3,8 @@ import Foundation
 
 /// Synthetic wire values for tests.
 enum SampleWire {
-  static let note = NoteResponse(path: "Ideas.md", content: "theirs", version: "9f8e7d6c5b4a39", mtime: 1_790_000_000_000)
+  static let note = NoteResponse(
+    path: "Ideas.md", content: "theirs", version: "9f8e7d6c5b4a39", mtime: 1_790_000_000_000)
 
   static let record = TaskAgentRecord(
     taskId: "tsk_1", notePath: "Daily/2026-09-23.md", date: "2026-09-23", text: "Book a table",
@@ -25,13 +26,19 @@ enum SampleWire {
     id: "thr_1", taskId: "tsk_1", notePath: "Daily/2026-09-23.md", title: "Book a table",
     status: .working, createdAt: 1_790_000_000_000, updatedAt: 1_790_000_005_000,
     messages: [
-      .text(TextMessage(id: "msg_1", author: "orchestrator", createdAt: 1_790_000_001_000, role: .agent, text: "On it"))
+      .text(
+        TextMessage(
+          id: "msg_1", author: "orchestrator", createdAt: 1_790_000_001_000, role: .agent,
+          text: "On it"))
     ])
 
   static let status = AgentStatusResponse(
     mode: .live, enabled: true, model: "test/model", running: 1, queued: 0, pendingApprovals: 1,
     connectors: [ConnectorStatus(name: "mail", transport: .http, state: .connected, toolCount: 3)],
-    execution: ExecutionStatus(provider: "local", capabilities: ExecutionCapabilities(shell: true, browser: true, computer: false)))
+    execution: ExecutionStatus(
+      provider: "local",
+      capabilities: ExecutionCapabilities(shell: true, browser: true, computer: false)))
 
-  static let health = HealthResponse(version: "0.1.0", apiVersion: 1, vaultName: "Test Vault", agentMode: .live)
+  static let health = HealthResponse(
+    version: "0.1.0", apiVersion: 1, vaultName: "Test Vault", agentMode: .live)
 }

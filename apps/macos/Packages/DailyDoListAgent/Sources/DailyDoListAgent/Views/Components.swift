@@ -81,7 +81,9 @@ struct IconButton: View {
         .font(.system(size: 13))
         .foregroundStyle(AgentTheme.mutedText)
         .frame(width: 28, height: 28)
-        .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? AgentTheme.hoverFill : .clear))
+        .background(
+          RoundedRectangle(cornerRadius: 6).fill(hovering ? AgentTheme.hoverFill : .clear)
+        )
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)

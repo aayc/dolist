@@ -13,13 +13,17 @@ struct InspectorPanel: View {
         AgentPanel(
           store: agent, selectedThreadId: $ui.selectedThreadId,
           onShowInNote: { location in
-            Task { await workspace.revealTask(notePath: location.notePath, record: location.record) }
+            Task {
+              await workspace.revealTask(notePath: location.notePath, record: location.record)
+            }
           },
           headerHeight: Theme.headerHeight,
           onHide: { ui.inspectorPresented = false },
           noteLinks: workspace.agentNoteLinks)
       } else {
-        ContentUnavailableView("Agent unavailable", systemImage: "sparkles", description: Text("Not connected to the daemon."))
+        ContentUnavailableView(
+          "Agent unavailable", systemImage: "sparkles",
+          description: Text("Not connected to the daemon."))
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)

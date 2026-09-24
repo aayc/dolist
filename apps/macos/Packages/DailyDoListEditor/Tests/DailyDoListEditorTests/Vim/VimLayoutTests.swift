@@ -12,16 +12,20 @@ struct VimLayoutTests {
   static let note = (0..<200).map { index -> String in
     switch index % 10 {
     case 0: "# Heading \(index)"
-    case 3: "A long paragraph that wraps across several lines of the readable column: \(String(repeating: "word ", count: 40))end \(index)"
+    case 3:
+      "A long paragraph that wraps across several lines of the readable column: \(String(repeating: "word ", count: 40))end \(index)"
     case 6: ""
     default: "- [ ] Task \(index)"
     }
   }.joined(separator: "\n")
 
-  private func line(_ editor: VimEditorHarness) -> Int { editor.host.vimLineNumber(at: editor.cursor) }
+  private func line(_ editor: VimEditorHarness) -> Int {
+    editor.host.vimLineNumber(at: editor.cursor)
+  }
 
   @Test func jAndKMoveOneLineAtATimeWhateverTheLineHeights() {
-    let editor = VimEditorHarness(Self.note, configuration: EditorConfiguration(livePreview: true, vimMode: true))
+    let editor = VimEditorHarness(
+      Self.note, configuration: EditorConfiguration(livePreview: true, vimMode: true))
     for expected in 1...60 {
       editor.press("j")
       #expect(line(editor) == expected)
@@ -33,7 +37,8 @@ struct VimLayoutTests {
   }
 
   @Test func gjMovesThroughAWrappedLine() {
-    let editor = VimEditorHarness(Self.note, configuration: EditorConfiguration(livePreview: true, vimMode: true))
+    let editor = VimEditorHarness(
+      Self.note, configuration: EditorConfiguration(livePreview: true, vimMode: true))
     editor.press("3", "G")
     #expect(line(editor) == 2)
     editor.press("g", "j")
@@ -47,14 +52,19 @@ struct VimLayoutTests {
   }
 
   @Test func screenLinesAndScrollingStayOnScreen() {
-    let editor = VimEditorHarness(Self.note, configuration: EditorConfiguration(livePreview: true, vimMode: true))
+    let editor = VimEditorHarness(
+      Self.note, configuration: EditorConfiguration(livePreview: true, vimMode: true))
     let visible = { () -> ClosedRange<Int> in
       let rect = editor.textView.visibleRect
       let origin = editor.textView.textContainerOrigin
       let glyphs = editor.controller.layoutManager.glyphRange(
-        forBoundingRect: rect.offsetBy(dx: -origin.x, dy: -origin.y), in: editor.controller.textContainer)
-      let characters = editor.controller.layoutManager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
-      return editor.host.vimLineNumber(at: characters.location)...editor.host.vimLineNumber(at: max(characters.location, characters.end - 1))
+        forBoundingRect: rect.offsetBy(dx: -origin.x, dy: -origin.y),
+        in: editor.controller.textContainer)
+      let characters = editor.controller.layoutManager.characterRange(
+        forGlyphRange: glyphs, actualGlyphRange: nil)
+      return editor.host.vimLineNumber(
+        at: characters.location)...editor.host.vimLineNumber(
+          at: max(characters.location, characters.end - 1))
     }
     editor.press("<C-d>")
     #expect(line(editor) > 5)

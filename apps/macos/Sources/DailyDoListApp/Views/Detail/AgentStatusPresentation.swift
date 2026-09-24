@@ -26,13 +26,15 @@ struct AgentStatusPresentation: Equatable {
     guard let status else { return nil }
     let problem = status.problem?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
     if status.mode == .off {
-      self.init(.off, "Agent off", "moon.zzz", problem ?? "The agent is turned off for this daemon.")
+      self.init(
+        .off, "Agent off", "moon.zzz", problem ?? "The agent is turned off for this daemon.")
     } else if let problem {
       self.init(.unavailable, "Agent unavailable", "exclamationmark.triangle.fill", problem)
     } else if !status.enabled {
       self.init(.paused, "Agent paused", "pause.circle", "The agent is paused. Click to resume.")
     } else {
-      self.init(.on, "Agent on", "sparkles", "The agent is watching your daily notes. Click to pause.")
+      self.init(
+        .on, "Agent on", "sparkles", "The agent is watching your daily notes. Click to pause.")
     }
   }
 

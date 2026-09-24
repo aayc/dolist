@@ -65,8 +65,11 @@ extension MarkdownEditorController {
   func revertVimUndoStep(_ step: VimUndoStep, in manager: UndoManager) {
     let redoing = manager.isRedoing
     let host = vimHost
-    let forward = step.inverse.inverted { from, to in host.text(in: NSRange(location: from, length: to - from)) }
-    let remembered = step.selectionsAfter.first ?? forward.mapSelection(step.startSelection, assoc: 1)
+    let forward = step.inverse.inverted { from, to in
+      host.text(in: NSRange(location: from, length: to - from))
+    }
+    let remembered =
+      step.selectionsAfter.first ?? forward.mapSelection(step.startSelection, assoc: 1)
     beginEditorOperation(userEvent: redoing ? "redo" : "undo")
     let changes = step.inverse.changes
     if vimHost.isAttached {
@@ -78,7 +81,8 @@ extension MarkdownEditorController {
       } else {
         // ⌘Z in vim mode ends like `u`: the cursor at the start of the change (the restored
         // selection would otherwise read as a mouse selection and start visual mode).
-        vimHost.setSelection(.cursor(step.inverse.changedRanges.first?.fromB ?? step.startSelection.main.from))
+        vimHost.setSelection(
+          .cursor(step.inverse.changedRanges.first?.fromB ?? step.startSelection.main.from))
       }
       vimHost.pendingScroll = vimHost.selection.main
     } else {
@@ -86,7 +90,8 @@ extension MarkdownEditorController {
     }
     endEditorOperation()
     let counterpart = VimUndoStep(
-      inverse: forward, startSelection: remembered, below: redoing ? vimHost.recorder.top : nil, actionName: step.actionName)
+      inverse: forward, startSelection: remembered, below: redoing ? vimHost.recorder.top : nil,
+      actionName: step.actionName)
     manager.registerUndo(withTarget: counterpart) { [weak self, weak manager, counterpart] _ in
       MainActor.assumeIsolated {
         guard let self, let manager else { return }

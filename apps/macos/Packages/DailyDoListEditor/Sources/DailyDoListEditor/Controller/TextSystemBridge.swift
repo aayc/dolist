@@ -10,9 +10,11 @@ final class TextSystemBridge: NSObject, NSTextViewDelegate {
     clipView.postsBoundsChangedNotifications = true
     clipView.postsFrameChangedNotifications = true
     NotificationCenter.default.addObserver(
-      self, selector: #selector(clipViewDidChange(_:)), name: NSView.boundsDidChangeNotification, object: clipView)
+      self, selector: #selector(clipViewDidChange(_:)), name: NSView.boundsDidChangeNotification,
+      object: clipView)
     NotificationCenter.default.addObserver(
-      self, selector: #selector(clipViewDidChange(_:)), name: NSView.frameDidChangeNotification, object: clipView)
+      self, selector: #selector(clipViewDidChange(_:)), name: NSView.frameDidChangeNotification,
+      object: clipView)
   }
 
   @objc private func clipViewDidChange(_ notification: Notification) {
@@ -35,7 +37,8 @@ extension TextSystemBridge: @preconcurrency NSTextStorageDelegate {
   /// reported to the layout manager, so it invalidates the restyled lines itself once it has
   /// processed the edit (`MarkdownLayoutManager.invalidateAfterEdit`).
   func textStorage(
-    _ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorageEditActions, range editedRange: NSRange,
+    _ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorageEditActions,
+    range editedRange: NSRange,
     changeInLength delta: Int
   ) {
     guard editedMask.contains(.editedCharacters) else { return }

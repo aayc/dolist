@@ -21,10 +21,14 @@ struct EventRoutingTests {
 
   private var workspace: Workspace { model.workspace! }
 
-  private func changed(_ path: String, _ kind: VaultChangeKind = .modified, version: String? = nil, clientId: String? = nil) -> ServerEvent {
-    .vaultChanged(VaultChangedEvent(
-      changes: [VaultChange(path: path, kind: kind, version: version)],
-      origin: clientId == nil ? .external : .client, clientId: clientId))
+  private func changed(
+    _ path: String, _ kind: VaultChangeKind = .modified, version: String? = nil,
+    clientId: String? = nil
+  ) -> ServerEvent {
+    .vaultChanged(
+      VaultChangedEvent(
+        changes: [VaultChange(path: path, kind: kind, version: version)],
+        origin: clientId == nil ? .external : .client, clientId: clientId))
   }
 
   @Test func ownEchoesAreIgnored() async throws {
@@ -42,7 +46,9 @@ struct EventRoutingTests {
   @Test func externalChangeToTheOpenNoteIsApplied() async throws {
     let version = client.setNote(daily, "- [ ] edited in Obsidian")
     client.emit(changed(daily, version: version))
-    try await eventually("editor updated") { workspace.editor.controller.text == "- [ ] edited in Obsidian" }
+    try await eventually("editor updated") {
+      workspace.editor.controller.text == "- [ ] edited in Obsidian"
+    }
     #expect(workspace.notes.saveStates[daily] == .saved)
   }
 
@@ -91,9 +97,15 @@ struct EventRoutingTests {
     let version = client.note(daily)?.version
     client.emit(changed(daily, version: version))
     try await eventually { workspace.editor.controller.text == "- [ ] Book a table" }
-    client.emit(.taskRecords(TaskRecordsEvent(notePath: daily, records: [
-      .sample("t1", note: daily, text: "Book a table", line: 0, status: .waitingApproval, threadId: "th1"),
-    ])))
+    client.emit(
+      .taskRecords(
+        TaskRecordsEvent(
+          notePath: daily,
+          records: [
+            .sample(
+              "t1", note: daily, text: "Book a table", line: 0, status: .waitingApproval,
+              threadId: "th1")
+          ])))
     try await eventually("records applied") { model.agent?.records(for: daily).count == 1 }
     scheduler.advance(by: 0)
     #expect(workspace.editor.controller.badges.map(\.label) == ["Needs approval"])
@@ -113,7 +125,8 @@ struct EventRoutingTests {
     client.emit(.resync)
     try await eventually("refetched") {
       let calls = client.calls
-      return calls.contains("settings") && calls.contains("tree") && calls.contains("readNote:\(daily)")
+      return calls.contains("settings") && calls.contains("tree")
+        && calls.contains("readNote:\(daily)")
         && calls.contains("agentStatus")
     }
   }
@@ -133,7 +146,9 @@ struct EventRoutingTests {
     var settings = AppSettings.defaults
     settings.editor.fontSize = 19
     client.emit(.settingsChanged(settings))
-    try await eventually("events still routed after retry") { model.settings.settings.editor.fontSize == 19 }
+    try await eventually("events still routed after retry") {
+      model.settings.settings.editor.fontSize == 19
+    }
   }
 
   @Test func incompatibleDaemonAfterReconnectShowsTheErrorScreen() async throws {

@@ -7,7 +7,9 @@ import Testing
 @MainActor
 struct HighlighterTests {
   /// A freshly (fully) styled copy of `text` with the same theme.
-  private func fullyStyled(_ text: String, theme: EditorTheme) -> (NSTextStorage, MarkdownHighlighter) {
+  private func fullyStyled(_ text: String, theme: EditorTheme) -> (
+    NSTextStorage, MarkdownHighlighter
+  ) {
     let storage = NSTextStorage(string: text)
     let highlighter = MarkdownHighlighter(storage: storage, theme: theme)
     highlighter.restyleAll()
@@ -25,7 +27,8 @@ struct HighlighterTests {
       let attributesB = b.attributes(at: index, effectiveRange: &rangeB) as NSDictionary
       if !attributesA.isEqual(to: attributesB as! [AnyHashable: Any]) {
         let line = (a.string as NSString).lineRange(for: NSRange(location: index, length: 0))
-        return "offset \(index) in line \((a.string as NSString).substring(with: line).debugDescription): "
+        return
+          "offset \(index) in line \((a.string as NSString).substring(with: line).debugDescription): "
           + "\(attributesA) vs \(attributesB)"
       }
       index = min(rangeA.end, rangeB.end)
@@ -34,10 +37,14 @@ struct HighlighterTests {
   }
 
   private static let snippets = [
-    "# ", "## Heading ", "- [ ] task ", "- [x] done ", "* ", "1. ", "> ", "> > ", "**bold** ", "*it* ", "_u_ ",
-    "`code` ", "``", "```", "```swift\n", "~~~\n", "\n```\n", "---", "---\n", "...\n", "[[Link|alias]] ",
-    "[t](http://x.com) ", "<https://a.b> ", "https://e.com/a_b ", "#tag ", "==hi== ", "~~s~~ ", "\\*", "\t", "\n",
-    "\n\n", "text ", "é", "[", "]", "(", ")", "|", "*", "_", "`", "~", "=", "#", "-", " ", "- [", "x] ",
+    "# ", "## Heading ", "- [ ] task ", "- [x] done ", "* ", "1. ", "> ", "> > ", "**bold** ",
+    "*it* ", "_u_ ",
+    "`code` ", "``", "```", "```swift\n", "~~~\n", "\n```\n", "---", "---\n", "...\n",
+    "[[Link|alias]] ",
+    "[t](http://x.com) ", "<https://a.b> ", "https://e.com/a_b ", "#tag ", "==hi== ", "~~s~~ ",
+    "\\*", "\t", "\n",
+    "\n\n", "text ", "é", "[", "]", "(", ")", "|", "*", "_", "`", "~", "=", "#", "-", " ", "- [",
+    "x] ",
   ]
 
   @Test(arguments: [UInt64(1), 2, 3])
@@ -57,10 +64,12 @@ struct HighlighterTests {
         range = NSRange(location: location, length: 0)
         replacement = snippet
       } else if roll < 80 {
-        range = NSRange(location: location, length: Int.random(in: 1...20, using: &rng)).clamped(to: length)
+        range = NSRange(location: location, length: Int.random(in: 1...20, using: &rng)).clamped(
+          to: length)
         replacement = ""
       } else {
-        range = NSRange(location: location, length: Int.random(in: 1...12, using: &rng)).clamped(to: length)
+        range = NSRange(location: location, length: Int.random(in: 1...12, using: &rng)).clamped(
+          to: length)
         replacement = snippet
       }
       storage.replaceCharacters(in: range, with: replacement)
@@ -92,7 +101,8 @@ struct HighlighterTests {
   /// made the storage re-fix the rest of the paragraph, widening each keystroke's edit to the next
   /// line.
   @Test(arguments: [
-    "- [ ] Research flights\n- [x] Book dinner 🍝\nend", "\t- nested item\n- next\nend", "> - quoted\n> more\nend",
+    "- [ ] Research flights\n- [x] Book dinner 🍝\nend", "\t- nested item\n- next\nend",
+    "> - quoted\n> more\nend",
     "1. First ordered\n2. second\nend",
   ])
   func typingInAnyLineRestylesJustThatLine(text: String) {
@@ -142,9 +152,13 @@ struct HighlighterTests {
   @Test func linksCarryTheirTargets() throws {
     let editor = EditorHarness(text: "See [[Note#Part|alias]] and [x](https://example.com)")
     let storage = editor.controller.storage
-    let wiki = try #require(storage.attribute(.ddlLink, at: editor.offset(of: "alias"), effectiveRange: nil) as? LinkAttribute)
+    let wiki = try #require(
+      storage.attribute(.ddlLink, at: editor.offset(of: "alias"), effectiveRange: nil)
+        as? LinkAttribute)
     #expect(wiki.target == .wiki(target: "Note", subpath: "Part", alias: "alias", isEmbed: false))
-    let url = try #require(storage.attribute(.ddlLink, at: editor.offset(of: "x]"), effectiveRange: nil) as? LinkAttribute)
+    let url = try #require(
+      storage.attribute(.ddlLink, at: editor.offset(of: "x]"), effectiveRange: nil)
+        as? LinkAttribute)
     #expect(url.target == .url("https://example.com"))
   }
 
@@ -152,10 +166,16 @@ struct HighlighterTests {
     let editor = EditorHarness(text: "- [x] done task\n- [-] dropped")
     let storage = editor.controller.storage
     let done = editor.offset(of: "done task")
-    #expect(storage.attribute(.strikethroughStyle, at: done, effectiveRange: nil) as? Int == NSUnderlineStyle.single.rawValue)
-    #expect(storage.attribute(.foregroundColor, at: done, effectiveRange: nil) as? NSColor == EditorColors.secondaryText)
+    #expect(
+      storage.attribute(.strikethroughStyle, at: done, effectiveRange: nil) as? Int
+        == NSUnderlineStyle.single.rawValue)
+    #expect(
+      storage.attribute(.foregroundColor, at: done, effectiveRange: nil) as? NSColor
+        == EditorColors.secondaryText)
     let dropped = editor.offset(of: "dropped")
-    #expect(storage.attribute(.foregroundColor, at: dropped, effectiveRange: nil) as? NSColor == EditorColors.tertiaryText)
+    #expect(
+      storage.attribute(.foregroundColor, at: dropped, effectiveRange: nil) as? NSColor
+        == EditorColors.tertiaryText)
     #expect(storage.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) == nil)
   }
 
@@ -167,7 +187,8 @@ struct HighlighterTests {
     let storage = editor.controller.storage
     let heading = try #require(storage.attribute(.font, at: 3, effectiveRange: nil) as? NSFont)
     #expect(heading.pointSize == 32)
-    let body = try #require(storage.attribute(.font, at: editor.offset(of: "body"), effectiveRange: nil) as? NSFont)
+    let body = try #require(
+      storage.attribute(.font, at: editor.offset(of: "body"), effectiveRange: nil) as? NSFont)
     #expect(body.pointSize == 20)
   }
 }

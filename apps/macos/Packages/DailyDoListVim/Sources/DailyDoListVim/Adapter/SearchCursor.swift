@@ -50,7 +50,8 @@ struct RegExpCursor {
     for i in u.indices {
       switch u[i] {
       case 0x0A, 0x0D: return true
-      case 0x5C where i + 1 < u.count && [0x73, 0x57, 0x44, 0x6E, 0x72].contains(u[i + 1]): return true
+      case 0x5C where i + 1 < u.count && [0x73, 0x57, 0x44, 0x6E, 0x72].contains(u[i + 1]):
+        return true
       case 0x5B where i + 1 < u.count && u[i + 1] == 0x5E: return true
       default: continue
       }
@@ -273,7 +274,8 @@ final class SearchCursor {
 
   func replace(_ text: VimText) throws {
     guard let current = last else { return }
-    let changes = try ChangeSet.of([.init(from: current.from, to: current.to, insert: text)], length: cm.docLength)
+    let changes = try ChangeSet.of(
+      [.init(from: current.from, to: current.to, insert: text)], length: cm.docLength)
     cm.dispatchChange(changes)
     // CodeMirror adds the raw length (a "\r\n" counts two though it becomes one line break).
     let newTo = current.from + text.length

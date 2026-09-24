@@ -63,8 +63,10 @@ public struct VimVectorHeader: Sendable {
 
   init(_ json: VimVectorJSON) throws {
     guard json["format"]?.text == "ddl-vim-vectors", let version = json["version"]?.int,
-      let tabSize = json["defaults"]?["tabSize"]?.int, let indentUnit = json["defaults"]?["indentUnit"]?.text,
-      let rows = json["viewport"]?["rows"]?.int, let lineHeight = json["viewport"]?["lineHeight"]?.number
+      let tabSize = json["defaults"]?["tabSize"]?.int,
+      let indentUnit = json["defaults"]?["indentUnit"]?.text,
+      let rows = json["viewport"]?["rows"]?.int,
+      let lineHeight = json["viewport"]?["lineHeight"]?.number
     else { throw VimVectorFormatError(reason: "bad header") }
     self.version = version
     self.tabSize = tabSize
@@ -90,7 +92,9 @@ public struct VimVectorRegister: Equatable, Sendable {
 
   init(_ json: VimVectorJSON) throws {
     guard let text = json["text"]?.text else { throw VimVectorFormatError(reason: "bad register") }
-    self.init(text: text, linewise: json["linewise"]?.bool ?? false, blockwise: json["blockwise"]?.bool ?? false)
+    self.init(
+      text: text, linewise: json["linewise"]?.bool ?? false,
+      blockwise: json["blockwise"]?.bool ?? false)
   }
 }
 
@@ -124,7 +128,8 @@ public struct VimVectorState: Equatable, Sendable {
   public var scrollTop: Int?
 
   init(
-    doc: VimText, selection: [VimVectorRange], primary: Int?, mode: String, registers: [String: VimVectorRegister]?,
+    doc: VimText, selection: [VimVectorRange], primary: Int?, mode: String,
+    registers: [String: VimVectorRegister]?,
     prompt: VimVectorPrompt?, message: VimText?, scrollTop: Int?
   ) {
     self.doc = doc
@@ -138,7 +143,9 @@ public struct VimVectorState: Equatable, Sendable {
   }
 
   init(_ json: VimVectorJSON) throws {
-    guard let doc = json["doc"]?.text, let mode = json["mode"]?.text else { throw VimVectorFormatError(reason: "bad expect") }
+    guard let doc = json["doc"]?.text, let mode = json["mode"]?.text else {
+      throw VimVectorFormatError(reason: "bad expect")
+    }
     self.doc = doc
     selection = try vectorRanges(json["selection"])
     primary = json["primary"]?.int
@@ -148,7 +155,9 @@ public struct VimVectorState: Equatable, Sendable {
       for member in members { registers[member.key] = try VimVectorRegister(member.value) }
       self.registers = registers
     }
-    if let prompt = json["prompt"], let prefix = prompt["prefix"]?.text, let text = prompt["text"]?.text {
+    if let prompt = json["prompt"], let prefix = prompt["prefix"]?.text,
+      let text = prompt["text"]?.text
+    {
       self.prompt = VimVectorPrompt(prefix: prefix, text: text)
     }
     message = json["message"]?.text
@@ -183,7 +192,8 @@ public struct VimVectorCase: Sendable {
   public var category: String { String(name.prefix { $0 != "/" }) }
 
   init(_ json: VimVectorJSON) throws {
-    guard let name = json["name"]?.text, let origin = json["origin"]?.text, let doc = json["doc"]?.text,
+    guard let name = json["name"]?.text, let origin = json["origin"]?.text,
+      let doc = json["doc"]?.text,
       let steps = json["steps"]?.array
     else { throw VimVectorFormatError(reason: "bad case") }
     self.name = name.string
@@ -194,15 +204,23 @@ public struct VimVectorCase: Sendable {
     tabSize = json["options"]?["tabSize"]?.int
     indentUnit = json["options"]?["indentUnit"]?.text?.string
     vimOptions = json["vim"]?.members?.map { ($0.key, $0.value) } ?? []
-    registers = try json["registers"]?.members?.map { ($0.key, try VimVectorRegister($0.value)) } ?? []
+    registers =
+      try json["registers"]?.members?.map { ($0.key, try VimVectorRegister($0.value)) } ?? []
     scrollTop = json["scrollTop"]?.int
     self.steps = try steps.map { step in
-      guard let expect = step["expect"] else { throw VimVectorFormatError(reason: "step without expect") }
-      if let keys = step["keys"]?.array {
-        return VimVectorStep(action: .keys(keys.compactMap { $0.text?.string }), expect: try VimVectorState(expect))
+      guard let expect = step["expect"] else {
+        throw VimVectorFormatError(reason: "step without expect")
       }
-      guard let api = step["api"], let op = api["op"]?.text else { throw VimVectorFormatError(reason: "bad step") }
-      return VimVectorStep(action: .api(op: op.string, args: api["args"]?.array ?? []), expect: try VimVectorState(expect))
+      if let keys = step["keys"]?.array {
+        return VimVectorStep(
+          action: .keys(keys.compactMap { $0.text?.string }), expect: try VimVectorState(expect))
+      }
+      guard let api = step["api"], let op = api["op"]?.text else {
+        throw VimVectorFormatError(reason: "bad step")
+      }
+      return VimVectorStep(
+        action: .api(op: op.string, args: api["args"]?.array ?? []),
+        expect: try VimVectorState(expect))
     }
   }
 }

@@ -69,7 +69,9 @@ public struct ApprovalCard: View {
       }
     }
     .padding(12)
-    .background(RoundedRectangle(cornerRadius: 10).fill(tint.opacity(approval.isPending ? 0.09 : 0.06)))
+    .background(
+      RoundedRectangle(cornerRadius: 10).fill(tint.opacity(approval.isPending ? 0.09 : 0.06))
+    )
     .overlay(
       RoundedRectangle(cornerRadius: 10).strokeBorder(tint.opacity(approval.isPending ? 0.6 : 0.35))
     )
@@ -156,8 +158,10 @@ public struct ApprovalCard: View {
 
   private func decision(now: Date) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 6) {
-      Image(systemName: approval.status == .approved ? "checkmark.circle.fill" : "xmark.circle.fill")
-        .foregroundStyle(tint)
+      Image(
+        systemName: approval.status == .approved ? "checkmark.circle.fill" : "xmark.circle.fill"
+      )
+      .foregroundStyle(tint)
       VStack(alignment: .leading, spacing: 2) {
         Text(verbatim: AgentFormat.decision(of: approval, now: now) ?? "")
           .font(.callout.weight(.medium))

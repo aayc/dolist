@@ -7,8 +7,10 @@ import Testing
 
 /// The document most upstream tests start from (`code` in vim_test.js).
 let upstreamCode =
-  " wOrd1 (#%\n" + " word3] \n" + "aopop pop 0 1 2 3 4\n" + " (a) [b] {c} \n" + "int getchar(void) {\n"
-  + "  static char buf[BUFSIZ];\n" + "  static char *bufp = buf;\n" + "  if (n == 0) {  /* buffer is empty */\n"
+  " wOrd1 (#%\n" + " word3] \n" + "aopop pop 0 1 2 3 4\n" + " (a) [b] {c} \n"
+  + "int getchar(void) {\n"
+  + "  static char buf[BUFSIZ];\n" + "  static char *bufp = buf;\n"
+  + "  if (n == 0) {  /* buffer is empty */\n"
   + "    n = read(0, buf, sizeof buf);\n" + "    bufp = buf;\n" + "  }\n" + "\n"
   + "  return (--n >= 0) ? (unsigned char) *bufp++ : EOF;\n" + " \n" + "}\n"
 
@@ -26,10 +28,14 @@ final class UpstreamVim {
 
   /// The options of `testVim(name, run, opts)`; the editor is built like upstream's CodeMirror 6
   /// runner (`tabSize: opts.tabSize || opts.indentUnit || 4`, `indentUnit` spaces or a tab).
-  init(value: String = upstreamCode, indentUnit: Int? = nil, tabSize: Int? = nil, indentWithTabs: Bool = false) {
+  init(
+    value: String = upstreamCode, indentUnit: Int? = nil, tabSize: Int? = nil,
+    indentWithTabs: Bool = false
+  ) {
     vim = Vim(scheduler: ManualVimScheduler(), isMac: false)
     buffer = VimTextBuffer(
-      value, tabSize: tabSize ?? indentUnit ?? 4, indentUnit: indentWithTabs ? "\t" : String(repeating: " ", count: indentUnit ?? 2))
+      value, tabSize: tabSize ?? indentUnit ?? 4,
+      indentUnit: indentWithTabs ? "\t" : String(repeating: " ", count: indentUnit ?? 2))
     buffer.clock = { 1_700_000_000_000 }
     session = buffer.attach(to: vim)
   }
@@ -81,7 +87,9 @@ final class UpstreamVim {
     for key in keys {
       for token in Self.tokens(key) {
         let event = DOMKeyEvent(vimKey: token)
-        let input = VimKeyInput(key: event.key, control: event.ctrlKey, alt: event.altKey, meta: event.metaKey, shift: event.shiftKey)
+        let input = VimKeyInput(
+          key: event.key, control: event.ctrlKey, alt: event.altKey, meta: event.metaKey,
+          shift: event.shiftKey)
         guard let vimKey = session.vimKey(for: input) else { continue }
         session.handleKey(vimKey, nativeEdit: { self.nativeEdit(token) })
         buffer.measure()
@@ -102,11 +110,15 @@ final class UpstreamVim {
   }
 
   /// CodeMirror key names upstream types directly (`typeKey('Backspace')`).
-  static let keyNames = ["Space": "<Space>", "Backspace": "<BS>", "Delete": "<Del>", "Up": "<Up>", "Down": "<Down>"]
+  static let keyNames = [
+    "Space": "<Space>", "Backspace": "<BS>", "Delete": "<Del>", "Up": "<Up>", "Down": "<Down>",
+  ]
 
   static func tokens(_ key: String) -> [String] {
     if let named = keyNames[key] { return [named] }
-    if DOMKeyEvent.isNamed(key) || key.unicodeScalars.count <= 1 { return [key == "\n" ? "<CR>" : key] }
+    if DOMKeyEvent.isNamed(key) || key.unicodeScalars.count <= 1 {
+      return [key == "\n" ? "<CR>" : key]
+    }
     return key.unicodeScalars.map { $0 == "\n" ? "<CR>" : String($0) }
   }
 

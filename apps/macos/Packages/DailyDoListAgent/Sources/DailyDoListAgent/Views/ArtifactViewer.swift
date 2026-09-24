@@ -74,7 +74,10 @@ struct ArtifactViewerContent: View {
       Image(systemName: kind.systemImage).foregroundStyle(AgentTheme.accent)
       Text(verbatim: meta?.title ?? "Artifact").font(.headline).lineLimit(1)
       Chip(text: meta?.kindLabel ?? kind.displayLabel)
-      if let meta { Text(verbatim: AgentFormat.bytes(meta.size)).font(.caption).foregroundStyle(AgentTheme.mutedText) }
+      if let meta {
+        Text(verbatim: AgentFormat.bytes(meta.size)).font(.caption).foregroundStyle(
+          AgentTheme.mutedText)
+      }
       Spacer(minLength: 8)
       Button {
         if let payload { ArtifactFiles.copy(payload, kind: kind) }
@@ -84,7 +87,10 @@ struct ArtifactViewerContent: View {
       .disabled(payload == nil || !ArtifactFiles.canCopy(kind))
       Button {
         if let payload {
-          ArtifactFiles.save(payload, suggestedName: ArtifactFiles.fileName(meta: meta, kind: kind, mimeType: payload.mimeType))
+          ArtifactFiles.save(
+            payload,
+            suggestedName: ArtifactFiles.fileName(
+              meta: meta, kind: kind, mimeType: payload.mimeType))
         }
       } label: {
         Label("Save As…", systemImage: "square.and.arrow.down")
@@ -205,7 +211,10 @@ struct CodeArtifactView: View {
 /// Artifact bytes: kinds, names, text decoding, copy and save.
 enum ArtifactFiles {
   static func kind(forMimeType mimeType: String) -> ArtifactKind {
-    let type = mimeType.split(separator: ";").first.map { $0.trimmingCharacters(in: .whitespaces).lowercased() } ?? ""
+    let type =
+      mimeType.split(separator: ";").first.map {
+        $0.trimmingCharacters(in: .whitespaces).lowercased()
+      } ?? ""
     if type.hasPrefix("image/") { return .image }
     switch type {
     case "text/markdown": return .markdown
@@ -259,7 +268,8 @@ enum ArtifactFiles {
     let unsafe = CharacterSet(charactersIn: "\\/:*?\"<>|").union(.controlCharacters)
     let base = (meta?.title ?? "artifact").components(separatedBy: unsafe).joined(separator: "-")
       .trimmingCharacters(in: .whitespaces)
-    return "\(base.isEmpty ? "artifact" : base).\(fileExtension(kind: kind, language: meta?.language, mimeType: mimeType))"
+    return
+      "\(base.isEmpty ? "artifact" : base).\(fileExtension(kind: kind, language: meta?.language, mimeType: mimeType))"
   }
 
   static func fileExtension(kind: ArtifactKind, language: String?, mimeType: String) -> String {

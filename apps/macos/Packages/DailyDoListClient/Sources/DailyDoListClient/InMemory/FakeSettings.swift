@@ -14,20 +14,30 @@ enum FakeSettings {
       }
     }
     func checkLength(_ value: String?, _ max: Int, _ path: String) {
-      if let value, value.utf16.count > max { problems.append("\(path) is longer than \(max) characters") }
+      if let value, value.utf16.count > max {
+        problems.append("\(path) is longer than \(max) characters")
+      }
     }
     check(patch.editor?.fontSize, SettingsRanges.fontSize, "editor.fontSize")
     checkLength(patch.editor?.vimrc, SettingsRanges.vimrcLength, "editor.vimrc")
-    for (name, section) in [("dailyNotes", patch.dailyNotes), ("weeklyNotes", patch.weeklyNotes.map {
-      SettingsPatch.DailyNotesPatch(folder: $0.folder, format: $0.format, template: $0.template)
-    })] {
+    for (name, section) in [
+      ("dailyNotes", patch.dailyNotes),
+      (
+        "weeklyNotes",
+        patch.weeklyNotes.map {
+          SettingsPatch.DailyNotesPatch(folder: $0.folder, format: $0.format, template: $0.template)
+        }
+      ),
+    ] {
       checkLength(section?.folder, SettingsRanges.folderLength, "\(name).folder")
       checkLength(section?.format, SettingsRanges.formatLength, "\(name).format")
       checkLength(section?.template, SettingsRanges.templateLength, "\(name).template")
     }
     if let agent = patch.agent {
       check(agent.settleMs, SettingsRanges.settleMs, "agent.settleMs")
-      check(agent.maxConcurrentSubagents, SettingsRanges.maxConcurrentSubagents, "agent.maxConcurrentSubagents")
+      check(
+        agent.maxConcurrentSubagents, SettingsRanges.maxConcurrentSubagents,
+        "agent.maxConcurrentSubagents")
       check(agent.watch?.pastDays, SettingsRanges.watchDays, "agent.watch.pastDays")
       check(agent.watch?.futureDays, SettingsRanges.watchDays, "agent.watch.futureDays")
       check(agent.approvalTimeoutMs, SettingsRanges.approvalTimeoutMs, "agent.approvalTimeoutMs")
@@ -35,11 +45,15 @@ enum FakeSettings {
       patch.agent?.cursorModel = trimmedModel(agent.cursorModel, "agent.cursorModel", &problems)
       patch.agent?.judgeModel = trimmedModel(agent.judgeModel, "agent.judgeModel", &problems)
     }
-    if !problems.isEmpty { throw .invalidRequest("Invalid settings: " + problems.joined(separator: "; ")) }
+    if !problems.isEmpty {
+      throw .invalidRequest("Invalid settings: " + problems.joined(separator: "; "))
+    }
     return patch
   }
 
-  private static func trimmedModel(_ value: String?, _ path: String, _ problems: inout [String]) -> String? {
+  private static func trimmedModel(_ value: String?, _ path: String, _ problems: inout [String])
+    -> String?
+  {
     guard let value else { return nil }
     let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
     if trimmed.isEmpty || trimmed.utf16.count > SettingsRanges.modelIdLength {
@@ -58,7 +72,9 @@ enum FakeSettings {
         if FakeVaultPaths.isHidden(try calendar.dailyNotePath(today, settings.dailyNotes)) {
           problems.append("dailyNotes: notes would be created in a hidden folder")
         }
-        if let template = try FakeCalendar.templateNotePath(settings.dailyNotes.template), FakeVaultPaths.isSidecar(template) {
+        if let template = try FakeCalendar.templateNotePath(settings.dailyNotes.template),
+          FakeVaultPaths.isSidecar(template)
+        {
           problems.append("dailyNotes: template cannot live in the sidecar")
         }
       } catch {
@@ -70,7 +86,9 @@ enum FakeSettings {
         if FakeVaultPaths.isHidden(try calendar.weeklyNotePath(today, settings.weeklyNotes)) {
           problems.append("weeklyNotes: notes would be created in a hidden folder")
         }
-        if let template = try FakeCalendar.templateNotePath(settings.weeklyNotes.template), FakeVaultPaths.isSidecar(template) {
+        if let template = try FakeCalendar.templateNotePath(settings.weeklyNotes.template),
+          FakeVaultPaths.isSidecar(template)
+        {
           problems.append("weeklyNotes: template cannot live in the sidecar")
         }
       } catch {

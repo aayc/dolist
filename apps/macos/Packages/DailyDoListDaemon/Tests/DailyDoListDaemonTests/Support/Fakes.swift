@@ -78,14 +78,18 @@ final class FakeFileSystem: DaemonFileSystem, @unchecked Sendable {
   func addExecutable(_ path: String) { _ = lock.withLock { executables.insert(path) } }
   func removeExecutable(_ path: String) { _ = lock.withLock { executables.remove(path) } }
   func addFile(_ path: String) { write("", to: path) }
-  func setDirectory(_ path: String, entries: [String]) { lock.withLock { directories[path] = entries } }
+  func setDirectory(_ path: String, entries: [String]) {
+    lock.withLock { directories[path] = entries }
+  }
 
   func readString(at url: URL) -> String? { lock.withLock { files[url.path] } }
   func fileExists(at url: URL) -> Bool {
     lock.withLock { files[url.path] != nil || executables.contains(url.path) }
   }
   func isExecutableFile(at url: URL) -> Bool { lock.withLock { executables.contains(url.path) } }
-  func contentsOfDirectory(at url: URL) -> [String] { lock.withLock { directories[url.path] ?? [] } }
+  func contentsOfDirectory(at url: URL) -> [String] {
+    lock.withLock { directories[url.path] ?? [] }
+  }
 
   private var fingerprints = false
   private var revisions: [String: Int] = [:]
@@ -97,7 +101,9 @@ final class FakeFileSystem: DaemonFileSystem, @unchecked Sendable {
   func writeString(_ string: String, to url: URL) { write(string, to: url.path) }
   func fingerprint(of url: URL) -> String? {
     lock.withLock {
-      guard fingerprints, files[url.path] != nil || executables.contains(url.path) else { return nil }
+      guard fingerprints, files[url.path] != nil || executables.contains(url.path) else {
+        return nil
+      }
       return "\(url.path)#\(revisions[url.path] ?? 0)"
     }
   }

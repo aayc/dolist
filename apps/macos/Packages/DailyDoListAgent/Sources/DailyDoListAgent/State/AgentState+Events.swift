@@ -18,7 +18,8 @@ extension AgentState {
     case .threadMessage(let event):
       return upsertMessage(event.message, threadId: event.threadId)
     case .threadDelta(let event):
-      return appendDelta(event.delta, messageId: event.messageId, threadId: event.threadId, now: now)
+      return appendDelta(
+        event.delta, messageId: event.messageId, threadId: event.threadId, now: now)
     case .approvalUpsert(let approval):
       return upsertApproval(approval)
     case .agentStatus(let status):
@@ -82,7 +83,8 @@ extension AgentState {
       }
       bucket.append(record)
     }
-    for record in previous where preserving.contains(record.taskId) && !listed.contains(record.taskId) {
+    for record in previous
+    where preserving.contains(record.taskId) && !listed.contains(record.taskId) {
       bucket.append(record)
     }
     recordsByNote[notePath] = bucket
@@ -133,7 +135,8 @@ extension AgentState {
     thread.updatedAt = summary.updatedAt
     thread.surfaces = summary.surfaces
     thread.notePath = summary.notePath
-    guard before != (thread.title, thread.status, thread.updatedAt, thread.surfaces, thread.notePath)
+    guard
+      before != (thread.title, thread.status, thread.updatedAt, thread.surfaces, thread.notePath)
     else { return false }
     loadedThreads[id] = thread
     return true

@@ -11,7 +11,9 @@ public struct WikiLink: Hashable, Sendable, Codable {
   /// UTF-16 offset just past the closing `]]`.
   public var to: Int
 
-  public init(target: String, subpath: String? = nil, alias: String? = nil, embed: Bool, from: Int, to: Int) {
+  public init(
+    target: String, subpath: String? = nil, alias: String? = nil, embed: Bool, from: Int, to: Int
+  ) {
     self.target = target
     self.subpath = subpath
     self.alias = alias
@@ -141,6 +143,7 @@ public enum WikiLinks {
       i = j
     }
     guard i + 1 < end, p[i] == 0x5D, p[i + 1] == 0x5D else { return nil }
-    return Match(target: target, subpath: subpath, alias: alias, embed: embed, from: start, to: i + 2)
+    return Match(
+      target: target, subpath: subpath, alias: alias, embed: embed, from: start, to: i + 2)
   }
 }

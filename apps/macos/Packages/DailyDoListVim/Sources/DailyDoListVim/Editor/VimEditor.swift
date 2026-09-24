@@ -96,7 +96,9 @@ public protocol VimEditor: AnyObject {
 
 extension VimEditor {
   public var vimTextHeight: Double { vimLineHeight }
-  public func vimLine(atY y: Double) -> Int { min(max(Int((y / vimLineHeight).rounded(.down)), 0), vimLineCount - 1) }
+  public func vimLine(atY y: Double) -> Int {
+    min(max(Int((y / vimLineHeight).rounded(.down)), 0), vimLineCount - 1)
+  }
   public func vimLineTop(_ line: Int) -> Double { Double(line) * vimLineHeight }
   public func vimSave() {}
   public func vimPerformKey(_ key: String) -> Bool { false }
@@ -131,7 +133,9 @@ public struct VimSelection: Hashable, Sendable {
     self.mainIndex = mainIndex
   }
 
-  public static func cursor(_ offset: Int) -> VimSelection { VimSelection(ranges: [Range(cursor: offset)]) }
+  public static func cursor(_ offset: Int) -> VimSelection {
+    VimSelection(ranges: [Range(cursor: offset)])
+  }
 
   public var main: Range { ranges[mainIndex] }
 }
@@ -169,7 +173,10 @@ public struct VimTransaction: Sendable {
   /// CodeMirror's history records a selection-only transaction only when it sets the selection.
   public internal(set) var selectionIsExplicit = true
 
-  public init(changes: [VimChange], selection: VimSelection, userEvent: String? = nil, scrollIntoView: Bool = false) {
+  public init(
+    changes: [VimChange], selection: VimSelection, userEvent: String? = nil,
+    scrollIntoView: Bool = false
+  ) {
     self.changes = changes
     self.selection = selection
     self.userEvent = userEvent
@@ -190,7 +197,10 @@ public struct VimViewport: Hashable, Sendable {
   /// The total height of the text content (all lines plus content insets).
   public var contentHeight: Double
 
-  public init(scrollTop: Double, scrollLeft: Double = 0, clientHeight: Double, clientWidth: Double, contentHeight: Double) {
+  public init(
+    scrollTop: Double, scrollLeft: Double = 0, clientHeight: Double, clientWidth: Double,
+    contentHeight: Double
+  ) {
     self.scrollTop = scrollTop
     self.scrollLeft = scrollLeft
     self.clientHeight = clientHeight

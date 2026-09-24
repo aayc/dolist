@@ -53,12 +53,16 @@ struct StoreCommandTests {
 
   @Test func streamedTokensOnlyWakeThreadObservers() async {
     await loadThread(Fixture.thread(messages: [Fixture.text()]))
-    let delta = ServerEvent.threadDelta(ThreadDeltaEvent(threadId: "thr_1", messageId: "msg_1", delta: "Hi"))
+    let delta = ServerEvent.threadDelta(
+      ThreadDeltaEvent(threadId: "thr_1", messageId: "msg_1", delta: "Hi"))
     #expect(!notifies({ _ = store.recordsByNote }, when: { store.apply(delta) }))
     #expect(!notifies({ _ = store.approvals }, when: { store.apply(delta) }))
     #expect(!notifies({ _ = store.threads }, when: { store.apply(delta) }))
     #expect(notifies({ _ = store.loadedThreads }, when: { store.apply(delta) }))
-    #expect(notifies({ _ = store.records(for: Fixture.note) }, when: { store.apply(.taskRecord(Fixture.record())) }))
+    #expect(
+      notifies(
+        { _ = store.records(for: Fixture.note) },
+        when: { store.apply(.taskRecord(Fixture.record())) }))
   }
 
   @Test func duplicateEventsNotifyNobody() {
@@ -71,12 +75,13 @@ struct StoreCommandTests {
       _ = store.threads
       _ = store.status
     }
-    #expect(!notifies(read) {
-      store.apply(.approvalUpsert(Fixture.approval()))
-      store.apply(.taskRecord(Fixture.record()))
-      store.apply(.threadUpsert(Fixture.summary()))
-      store.apply(.hello(HelloEvent(serverVersion: "1", apiVersion: 1)))
-    })
+    #expect(
+      !notifies(read) {
+        store.apply(.approvalUpsert(Fixture.approval()))
+        store.apply(.taskRecord(Fixture.record()))
+        store.apply(.threadUpsert(Fixture.summary()))
+        store.apply(.hello(HelloEvent(serverVersion: "1", apiVersion: 1)))
+      })
   }
 
   @Test func runningCountFallsBackToThreadsUntilTheStatusIsKnown() {
@@ -113,7 +118,9 @@ struct StoreCommandTests {
     client.script {
       $0.thread = { _ in
         await gate.wait()
-        return ThreadResponse(thread: Fixture.thread(messages: [Fixture.text("m1", "Hi", streaming: false)]), approvals: [])
+        return ThreadResponse(
+          thread: Fixture.thread(messages: [Fixture.text("m1", "Hi", streaming: false)]),
+          approvals: [])
       }
     }
     async let first: Void = store.loadThread("thr_1")
@@ -121,7 +128,8 @@ struct StoreCommandTests {
     #expect(await waitForArrivals(gate))
     #expect(store.loadingThreadIds == ["thr_1"])
     // Pushed while the fetch is in flight (after the daemon took its snapshot).
-    store.apply(.threadMessage(ThreadMessageEvent(threadId: "thr_1", message: Fixture.toolCall("m2"))))
+    store.apply(
+      .threadMessage(ThreadMessageEvent(threadId: "thr_1", message: Fixture.toolCall("m2"))))
     await gate.open()
     _ = await (first, second)
     #expect(client.count("thread:") == 1)
@@ -151,7 +159,11 @@ struct StoreCommandTests {
         ThreadResponse(
           thread: Fixture.thread(
             updatedAt: 3,
-            messages: [.artifact(ArtifactMessage(id: "m_art", author: "subagent:writer", createdAt: 2, artifactId: "art_1"))],
+            messages: [
+              .artifact(
+                ArtifactMessage(
+                  id: "m_art", author: "subagent:writer", createdAt: 2, artifactId: "art_1"))
+            ],
             artifacts: [artifact]),
           approvals: [])
       }
@@ -160,8 +172,11 @@ struct StoreCommandTests {
       .threadMessage(
         ThreadMessageEvent(
           threadId: "thr_1",
-          message: .artifact(ArtifactMessage(id: "m_art", author: "subagent:writer", createdAt: 2, artifactId: "art_1")))))
-    #expect(await eventually { store.artifactMeta(threadId: "thr_1", artifactId: "art_1") == artifact })
+          message: .artifact(
+            ArtifactMessage(
+              id: "m_art", author: "subagent:writer", createdAt: 2, artifactId: "art_1")))))
+    #expect(
+      await eventually { store.artifactMeta(threadId: "thr_1", artifactId: "art_1") == artifact })
     #expect(client.count("thread:") == 2)
   }
 
@@ -177,11 +192,18 @@ struct StoreCommandTests {
     #expect(await store.cancelThread("thr_1"))
     #expect(await store.retryThread("thr_1"))
     client.script {
-      $0.cancelThread = { _ in throw DaemonClientError.http(status: 503, body: ApiErrorBody(error: .agentUnavailable, message: "The agent is off")) }
+      $0.cancelThread = { _ in
+        throw DaemonClientError.http(
+          status: 503, body: ApiErrorBody(error: .agentUnavailable, message: "The agent is off"))
+      }
       $0.retryThread = { _ in throw DaemonClientError.unreachable("connection refused") }
     }
     #expect(await store.cancelThread("thr_1") == false)
-    #expect(store.lastError == AgentAlert(id: store.lastError?.id ?? UUID(), title: "Couldn't stop the task", message: "The agent is off"))
+    #expect(
+      store.lastError
+        == AgentAlert(
+          id: store.lastError?.id ?? UUID(), title: "Couldn't stop the task",
+          message: "The agent is off"))
     #expect(await store.retryThread("thr_1") == false)
     #expect(store.lastError?.title == "Couldn't retry the task")
     store.dismissError(UUID())
@@ -236,14 +258,17 @@ struct StoreCommandTests {
       }
     }
     #expect(await store.decide("apr_1", .deny, scope: .task, note: "  Too pricey \n"))
-    #expect(received.current == ApprovalDecisionRequest(decision: .deny, scope: nil, note: "Too pricey"))
+    #expect(
+      received.current == ApprovalDecisionRequest(decision: .deny, scope: nil, note: "Too pricey"))
   }
 
   @Test func aConflictAdoptsTheDaemonsState() async {
     store.apply(.approvalUpsert(Fixture.approval()))
     let expired = Fixture.approval(status: .expired, decidedAt: 500)
     client.script {
-      $0.decideApproval = { _, _ in throw DaemonClientError.approvalConflict(ApprovalConflictResponse(approval: expired)) }
+      $0.decideApproval = { _, _ in
+        throw DaemonClientError.approvalConflict(ApprovalConflictResponse(approval: expired))
+      }
     }
     #expect(await store.decide("apr_1", .approve) == false)
     #expect(store.approvals["apr_1"] == expired)
@@ -276,7 +301,11 @@ struct StoreCommandTests {
   }
 
   @Test func anApprovalWeDontKnowIsStillDecided() async {
-    client.script { $0.decideApproval = { id, _ in Fixture.approval(id, status: .approved, scope: .once, decidedAt: 4) } }
+    client.script {
+      $0.decideApproval = { id, _ in
+        Fixture.approval(id, status: .approved, scope: .once, decidedAt: 4)
+      }
+    }
     #expect(await store.decide("apr_remote", .approve))
     #expect(store.approvals["apr_remote"]?.status == .approved)
   }
@@ -305,7 +334,10 @@ struct StoreCommandTests {
     // The daemon echoes the message (it trims it too) before answering the request.
     store.apply(
       .threadMessage(
-        ThreadMessageEvent(threadId: "thr_1", message: Fixture.text("msg_srv", "Patio please", streaming: nil, role: .user, author: "you"))))
+        ThreadMessageEvent(
+          threadId: "thr_1",
+          message: Fixture.text(
+            "msg_srv", "Patio please", streaming: nil, role: .user, author: "you"))))
     #expect(store.thread("thr_1")?.messages.map(\.id) == ["msg_srv"])
     await gate.open()
     #expect(await reply.value)
@@ -314,7 +346,9 @@ struct StoreCommandTests {
 
   @Test func aFailedReplyIsRemovedAndReported() async {
     await loadThread()
-    client.script { $0.postMessage = { _, _ in throw DaemonClientError.http(status: 503, body: nil) } }
+    client.script {
+      $0.postMessage = { _, _ in throw DaemonClientError.http(status: 503, body: nil) }
+    }
     #expect(await store.postMessage(threadId: "thr_1", text: "Hello") == false)
     #expect(store.thread("thr_1")?.messages.isEmpty == true)
     #expect(store.lastError?.title == "Couldn't send your message")
@@ -357,7 +391,9 @@ struct StoreCommandTests {
   // MARK: Artifacts
 
   @Test func fetchesArtifactBytes() async throws {
-    client.script { $0.artifact = { _, _ in ArtifactPayload(data: Data("# Hi".utf8), mimeType: "text/markdown") } }
+    client.script {
+      $0.artifact = { _, _ in ArtifactPayload(data: Data("# Hi".utf8), mimeType: "text/markdown") }
+    }
     let payload = try await store.fetchArtifact(threadId: "thr_1", artifactId: "art_1")
     #expect(payload.mimeType == "text/markdown")
     #expect(client.callLog == ["artifact:thr_1/art_1"])

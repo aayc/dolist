@@ -145,7 +145,9 @@ struct JSRegexParser {
     return UInt32(c)
   }
 
-  private mutating func parseQuantifier(_ atom: RegexNode, quantifiable: Bool) throws(JSRegexSyntaxError) -> RegexNode {
+  private mutating func parseQuantifier(_ atom: RegexNode, quantifiable: Bool)
+    throws(JSRegexSyntaxError) -> RegexNode
+  {
     guard let c = peek() else { return atom }
     var min = 0
     var max: Int?
@@ -308,7 +310,9 @@ struct JSRegexParser {
         i += 1
         guard peekIs("u") else { throw error("Invalid capture group name") }
         i += 1
-        guard let v = parseUnicodeEscapeBody(allowBraces: true) else { throw error("Invalid capture group name") }
+        guard let v = parseUnicodeEscapeBody(allowBraces: true) else {
+          throw error("Invalid capture group name")
+        }
         value = v
       } else {
         i += 1
@@ -319,8 +323,11 @@ struct JSRegexParser {
         }
       }
       guard let scalar = Unicode.Scalar(value) else { throw error("Invalid capture group name") }
-      let ok = value == 0x24 || value == 0x5F
-        || (first ? scalar.properties.isIDStart : scalar.properties.isIDContinue || value == 0x200C || value == 0x200D)
+      let ok =
+        value == 0x24 || value == 0x5F
+        || (first
+          ? scalar.properties.isIDStart
+          : scalar.properties.isIDContinue || value == 0x200C || value == 0x200D)
       guard ok else { throw error("Invalid capture group name") }
       scalars.append(scalar)
       first = false
@@ -335,9 +342,15 @@ struct JSRegexParser {
     i += 1  // backslash
     guard let c = peek() else { throw error("\\ at end of pattern") }
     switch c {
-    case 0x64, 0x44: i += 1; return .set(RegexSet(items: [.digit(negated: c == 0x44)]))
-    case 0x73, 0x53: i += 1; return .set(RegexSet(items: [.space(negated: c == 0x53)]))
-    case 0x77, 0x57: i += 1; return .set(RegexSet(items: [.word(negated: c == 0x57)]))
+    case 0x64, 0x44:
+      i += 1
+      return .set(RegexSet(items: [.digit(negated: c == 0x44)]))
+    case 0x73, 0x53:
+      i += 1
+      return .set(RegexSet(items: [.space(negated: c == 0x53)]))
+    case 0x77, 0x57:
+      i += 1
+      return .set(RegexSet(items: [.word(negated: c == 0x57)]))
     case 0x70 where unicode, 0x50 where unicode:
       i += 1
       return .set(RegexSet(items: [try parseProperty(negated: c == 0x50)]))
@@ -387,11 +400,15 @@ struct JSRegexParser {
     var name = ""
     while j < p.count, p[j] != 0x7D {
       let c = p[j]
-      guard isASCIILetter(c) || isASCIIDigit(c) || c == 0x5F || c == 0x3D else { throw error("Invalid property name") }
+      guard isASCIILetter(c) || isASCIIDigit(c) || c == 0x5F || c == 0x3D else {
+        throw error("Invalid property name")
+      }
       name.append(Character(Unicode.Scalar(UInt8(c))))
       j += 1
     }
-    guard j < p.count, !name.isEmpty, JSUnicodeProperties.isSupported(name) else { throw error("Invalid property name") }
+    guard j < p.count, !name.isEmpty, JSUnicodeProperties.isSupported(name) else {
+      throw error("Invalid property name")
+    }
     i = j + 1
     return .property(name, negated: negated)
   }
@@ -400,11 +417,21 @@ struct JSRegexParser {
   private mutating func parseCharacterEscape(inClass: Bool) throws(JSRegexSyntaxError) -> UInt32 {
     let c = p[i]
     switch c {
-    case 0x66: i += 1; return 0x0C  // f
-    case 0x6E: i += 1; return 0x0A  // n
-    case 0x72: i += 1; return 0x0D  // r
-    case 0x74: i += 1; return 0x09  // t
-    case 0x76: i += 1; return 0x0B  // v
+    case 0x66:
+      i += 1
+      return 0x0C  // f
+    case 0x6E:
+      i += 1
+      return 0x0A  // n
+    case 0x72:
+      i += 1
+      return 0x0D  // r
+    case 0x74:
+      i += 1
+      return 0x09  // t
+    case 0x76:
+      i += 1
+      return 0x0B  // v
     case 0x63:  // c
       if let letter = peek(1), isASCIILetter(letter) {
         i += 2
@@ -435,7 +462,9 @@ struct JSRegexParser {
       return 0x75
     default:
       if unicode {
-        let syntax: Set<UInt16> = [0x5E, 0x24, 0x5C, 0x2E, 0x2A, 0x2B, 0x3F, 0x28, 0x29, 0x5B, 0x5D, 0x7B, 0x7D, 0x7C, 0x2F]
+        let syntax: Set<UInt16> = [
+          0x5E, 0x24, 0x5C, 0x2E, 0x2A, 0x2B, 0x3F, 0x28, 0x29, 0x5B, 0x5D, 0x7B, 0x7D, 0x7C, 0x2F,
+        ]
         if syntax.contains(c) || (inClass && c == 0x2D) {
           i += 1
           return UInt32(c)
@@ -464,7 +493,8 @@ struct JSRegexParser {
     }
     guard let value = hex4(at: i) else { return nil }
     i += 4
-    if unicode, isHighSurrogate(UInt16(value)), peekIs("\\"), peekIs("u", 1), let low = hex4(at: i + 2),
+    if unicode, isHighSurrogate(UInt16(value)), peekIs("\\"), peekIs("u", 1),
+      let low = hex4(at: i + 2),
       isLowSurrogate(UInt16(low))
     {
       i += 6
@@ -539,11 +569,21 @@ struct JSRegexParser {
     i += 1
     guard let e = peek() else { throw error("\\ at end of pattern") }
     switch e {
-    case 0x62: i += 1; return .char(0x08)  // \b
-    case 0x2D: i += 1; return .char(0x2D)  // \-
-    case 0x64, 0x44: i += 1; return .digit(negated: e == 0x44)
-    case 0x73, 0x53: i += 1; return .space(negated: e == 0x53)
-    case 0x77, 0x57: i += 1; return .word(negated: e == 0x57)
+    case 0x62:
+      i += 1
+      return .char(0x08)  // \b
+    case 0x2D:
+      i += 1
+      return .char(0x2D)  // \-
+    case 0x64, 0x44:
+      i += 1
+      return .digit(negated: e == 0x44)
+    case 0x73, 0x53:
+      i += 1
+      return .space(negated: e == 0x53)
+    case 0x77, 0x57:
+      i += 1
+      return .word(negated: e == 0x57)
     case 0x70 where unicode, 0x50 where unicode:
       i += 1
       return try parseProperty(negated: e == 0x50)
@@ -590,7 +630,8 @@ struct JSRegexParser {
         inClass = true
       } else if c == 0x28 {
         if i + 1 < p.count, p[i + 1] == 0x3F {
-          if i + 2 < p.count, p[i + 2] == 0x3C, i + 3 < p.count, p[i + 3] != 0x3D, p[i + 3] != 0x21 {
+          if i + 2 < p.count, p[i + 2] == 0x3C, i + 3 < p.count, p[i + 3] != 0x3D, p[i + 3] != 0x21
+          {
             count += 1
             var j = i + 3
             var name = [UInt16]()

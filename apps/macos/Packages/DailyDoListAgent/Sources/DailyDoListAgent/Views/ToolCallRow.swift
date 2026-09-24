@@ -68,7 +68,8 @@ struct ToolCallRow: View {
     .background(RoundedRectangle(cornerRadius: 8).fill(AgentTheme.subtleFill))
     .overlay(
       RoundedRectangle(cornerRadius: 8)
-        .strokeBorder(call.status == .blocked ? AgentTheme.warning.opacity(0.55) : AgentTheme.border)
+        .strokeBorder(
+          call.status == .blocked ? AgentTheme.warning.opacity(0.55) : AgentTheme.border)
     )
   }
 }

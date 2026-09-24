@@ -10,7 +10,8 @@ struct NoteHeaderView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
-      if let date = DailyNotes.date(forPath: path, settings: workspace.settings.settings.dailyNotes) {
+      if let date = DailyNotes.date(forPath: path, settings: workspace.settings.settings.dailyNotes)
+      {
         DailyHeaderView(workspace: workspace, path: path, date: date)
       } else {
         if !VaultPath.dirname(path).isEmpty {
@@ -22,7 +23,10 @@ struct NoteHeaderView: View {
       }
     }
     .lineLimit(1)
-    .frame(maxWidth: workspace.settings.settings.editor.readableLineLength ? Theme.readableWidth : .infinity, alignment: .leading)
+    .frame(
+      maxWidth: workspace.settings.settings.editor.readableLineLength
+        ? Theme.readableWidth : .infinity, alignment: .leading
+    )
     .frame(maxWidth: .infinity)
     .padding(.horizontal, 28)
     .padding(.top, 22)
@@ -127,11 +131,17 @@ struct DailyNavigationRow: View {
     let hasPrevious = workspace.adjacentDailyPath(.previous, from: path) != nil
     let hasNext = workspace.adjacentDailyPath(.next, from: path) != nil
     HStack(spacing: 2) {
-      IconButton(systemImage: "chevron.left", help: "Previous daily note (⇧⌘P)", isEnabled: hasPrevious, isCompact: true) {
+      IconButton(
+        systemImage: "chevron.left", help: "Previous daily note (⇧⌘P)", isEnabled: hasPrevious,
+        isCompact: true
+      ) {
         Task { await workspace.openAdjacentDaily(.previous) }
       }
       TodayButton(isToday: isToday) { Task { await workspace.openToday() } }
-      IconButton(systemImage: "chevron.right", help: "Next daily note (⇧⌘N)", isEnabled: hasNext, isCompact: true) {
+      IconButton(
+        systemImage: "chevron.right", help: "Next daily note (⇧⌘N)", isEnabled: hasNext,
+        isCompact: true
+      ) {
         Task { await workspace.openAdjacentDaily(.next) }
       }
     }
@@ -151,7 +161,9 @@ struct TodayButton: View {
         .foregroundStyle(isToday ? Theme.faintText : (hovering ? Theme.text : Theme.mutedText))
         .padding(.horizontal, 8)
         .frame(height: 22)
-        .background(RoundedRectangle(cornerRadius: 6).fill(hovering && !isToday ? Theme.hover : .clear))
+        .background(
+          RoundedRectangle(cornerRadius: 6).fill(hovering && !isToday ? Theme.hover : .clear)
+        )
         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.separator))
         .contentShape(Rectangle())
     }

@@ -82,7 +82,9 @@ final class PasteboardRegister: VimRegister {
   /// Takes the clipboard's content without writing it back.
   func sync() {
     let content = clipboard.content
-    if super.text.string != content.text || linewise != content.linewise || blockwise != content.blockwise {
+    if super.text.string != content.text || linewise != content.linewise
+      || blockwise != content.blockwise
+    {
       super.setText(VimText(content.text), linewise: content.linewise, blockwise: content.blockwise)
     }
   }
@@ -97,7 +99,8 @@ final class PasteboardRegister: VimRegister {
     let current = clipboard.content
     let separator = linewise && !current.linewise && !current.text.isEmpty ? "\n" : ""
     let next = VimSystemClipboard.Content(
-      text: current.text + separator + text.string, linewise: current.linewise || linewise, blockwise: false)
+      text: current.text + separator + text.string, linewise: current.linewise || linewise,
+      blockwise: false)
     clipboard.write(next)
     super.setText(VimText(next.text), linewise: next.linewise, blockwise: false)
   }

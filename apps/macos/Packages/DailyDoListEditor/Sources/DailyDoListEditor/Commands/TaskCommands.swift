@@ -39,16 +39,24 @@ enum TaskCommands {
       let prefix = LinePrefix.parse(s)
       if let box = prefix.box, let status = prefix.status {
         let range = NSRange(location: line.location + box.location + 1, length: 1)
-        replacements.append(TextEdit.Replacement(range: range, text: String(utf16Units: [nextStatus(status)][...])))
+        replacements.append(
+          TextEdit.Replacement(range: range, text: String(utf16Units: [nextStatus(status)][...])))
       } else if let marker = prefix.marker {
         if prefix.markerSpace.length > 0 {
-          replacements.append(TextEdit.Replacement(range: NSRange(location: line.location + prefix.markerSpace.end, length: 0), text: "[ ] "))
+          replacements.append(
+            TextEdit.Replacement(
+              range: NSRange(location: line.location + prefix.markerSpace.end, length: 0),
+              text: "[ ] "))
         } else {
-          replacements.append(TextEdit.Replacement(range: NSRange(location: line.location + marker.end, length: 0), text: " [ ] "))
+          replacements.append(
+            TextEdit.Replacement(
+              range: NSRange(location: line.location + marker.end, length: 0), text: " [ ] "))
         }
       } else {
         if !allowBlank, prefix.indentEnd == s.count { continue }
-        replacements.append(TextEdit.Replacement(range: NSRange(location: line.location + prefix.indentEnd, length: 0), text: "- [ ] "))
+        replacements.append(
+          TextEdit.Replacement(
+            range: NSRange(location: line.location + prefix.indentEnd, length: 0), text: "- [ ] "))
       }
     }
     guard !replacements.isEmpty else { return nil }

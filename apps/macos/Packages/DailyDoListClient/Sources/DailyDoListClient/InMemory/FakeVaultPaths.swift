@@ -17,7 +17,9 @@ enum FakeVaultPaths {
   static func normalize(_ input: String) throws(EscapeError) -> String {
     if input.contains("\0") { throw EscapeError() }
     var segments: [Substring] = []
-    for segment in input.replacingOccurrences(of: "\\", with: "/").split(separator: "/", omittingEmptySubsequences: false) {
+    for segment in input.replacingOccurrences(of: "\\", with: "/").split(
+      separator: "/", omittingEmptySubsequences: false)
+    {
       if segment.isEmpty || segment == "." { continue }
       if segment == ".." {
         if segments.isEmpty { throw EscapeError() }

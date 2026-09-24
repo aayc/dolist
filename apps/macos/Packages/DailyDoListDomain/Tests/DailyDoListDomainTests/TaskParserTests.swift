@@ -107,11 +107,15 @@ extension DomainTests {
         n += 1
         return "t\(n)"
       }
-      let first = TaskTracker.track(previous: [], markdown: "- [ ] Book den\n- [ ] pay rent", now: 1000, idFactory: ids)
+      let first = TaskTracker.track(
+        previous: [], markdown: "- [ ] Book den\n- [ ] pay rent", now: 1000, idFactory: ids)
       let second = TaskTracker.track(
-        previous: first.tasks, markdown: "- [x] pay rent\n- [ ] Book dentist for Tuesday", now: 2000, idFactory: ids)
+        previous: first.tasks, markdown: "- [x] pay rent\n- [ ] Book dentist for Tuesday",
+        now: 2000, idFactory: ids)
       #expect(second.tasks.map(\.id) == ["t2", "t1"])
-      #expect(second.diff.updated.map(\.task.id) == ["t1"] && second.diff.statusChanged.map(\.task.id) == ["t2"])
+      #expect(
+        second.diff.updated.map(\.task.id) == ["t1"]
+          && second.diff.statusChanged.map(\.task.id) == ["t2"])
       #expect(second.tasks[1].firstSeenAt == 1000 && second.tasks[1].updatedAt == 2000)
       #expect(!second.diff.isEmpty && TaskTracker.makeID().hasPrefix("tsk_"))
 
@@ -132,11 +136,14 @@ extension DomainTests {
         n += 1
         return "t\(n)"
       }
-      let first = TaskTracker.track(previous: [], markdown: texts.map { "- [ ] \($0)" }.joined(separator: "\n"), now: 1, idFactory: ids)
+      let first = TaskTracker.track(
+        previous: [], markdown: texts.map { "- [ ] \($0)" }.joined(separator: "\n"), now: 1,
+        idFactory: ids)
       var generator = SeededGenerator(seed: 7)
       let shuffled = texts.shuffled(using: &generator)
       let second = TaskTracker.track(
-        previous: first.tasks, markdown: shuffled.map { "- [ ] \($0)" }.joined(separator: "\n"), now: 2, idFactory: ids)
+        previous: first.tasks, markdown: shuffled.map { "- [ ] \($0)" }.joined(separator: "\n"),
+        now: 2, idFactory: ids)
       #expect(second.diff.isEmpty)
       let before = Dictionary(uniqueKeysWithValues: first.tasks.map { ($0.text, $0.id) })
       #expect(second.tasks.allSatisfy { before[$0.text] == $0.id })
@@ -148,10 +155,14 @@ extension DomainTests {
       var edited = parsed
       edited[1].parentLine = 1  // a blank line
       edited[2].parentLine = 7  // past the end
-      let result = TaskTracker.track(previous: [], parsed: edited, now: 0, idFactory: { "id\(UUID().uuidString)" })
+      let result = TaskTracker.track(
+        previous: [], parsed: edited, now: 0, idFactory: { "id\(UUID().uuidString)" })
       #expect(result.tasks[1].parentId == nil)
       #expect(result.tasks[2].parentId == nil)
-      #expect(TaskTracker.track(previous: [], parsed: parsed, now: 0).tasks.map(\.parentId).compactMap { $0 }.count == 2)
+      #expect(
+        TaskTracker.track(previous: [], parsed: parsed, now: 0).tasks.map(\.parentId).compactMap {
+          $0
+        }.count == 2)
     }
   }
 }

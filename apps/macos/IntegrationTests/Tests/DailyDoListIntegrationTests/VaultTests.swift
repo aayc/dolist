@@ -25,7 +25,8 @@ extension RealDaemonTests {
     @Test func aWrongTokenIsUnauthorized() async throws {
       let connection = try Fixtures.current().connection
       let client = HTTPDaemonClient(
-        endpoint: DaemonEndpoint(baseURL: connection.baseURL, token: String(repeating: "0", count: 64)),
+        endpoint: DaemonEndpoint(
+          baseURL: connection.baseURL, token: String(repeating: "0", count: 64)),
         session: URLSession(configuration: .ephemeral))
 
       #expect(await captureError { try await client.health() } == .unauthorized)
@@ -60,13 +61,17 @@ extension RealDaemonTests {
       let duplicate = await captureError {
         try await client.writeNote(path, content: "again", baseVersion: .createOnly)
       }
-      let updated = try await client.writeNote(path, content: "v2", baseVersion: .match(created.version))
+      let updated = try await client.writeNote(
+        path, content: "v2", baseVersion: .match(created.version))
       let stale = await captureError {
-        try await client.writeNote(path, content: "lost update", baseVersion: .match(created.version))
+        try await client.writeNote(
+          path, content: "lost update", baseVersion: .match(created.version))
       }
 
       guard case .conflict(let exists)? = duplicate, case .conflict(let changed)? = stale else {
-        Issue.record("expected conflicts, got \(String(describing: duplicate)) and \(String(describing: stale))")
+        Issue.record(
+          "expected conflicts, got \(String(describing: duplicate)) and \(String(describing: stale))"
+        )
         return
       }
       #expect(exists.error == .conflict)
@@ -82,7 +87,9 @@ extension RealDaemonTests {
       _ = try await client.writeNote(path, content: "v3", baseVersion: .unconditional)
       #expect(try await client.readNote(path).content == "v3")
 
-      let missing = await captureError { try await client.readNote("Projects/Missing \(unique()).md") }
+      let missing = await captureError {
+        try await client.readNote("Projects/Missing \(unique()).md")
+      }
       #expect(missing?.httpStatus == 404)
       #expect(missing?.apiErrorCode == .notFound)
     }
@@ -92,24 +99,31 @@ extension RealDaemonTests {
       let client = try fixture.makeClient()
       let id = unique()
 
-      _ = try await client.writeNote("Scratch \(id)/Idea.md", content: "idea", baseVersion: .createOnly)
+      _ = try await client.writeNote(
+        "Scratch \(id)/Idea.md", content: "idea", baseVersion: .createOnly)
       let trashed = try await client.deleteNote("Scratch \(id)/Idea.md")
       #expect(trashed.ok)
       #expect(trashed.trashedTo.hasPrefix(".trash/"))
       #expect(
-        FileManager.default.fileExists(atPath: fixture.vault.appendingPathComponent(trashed.trashedTo).path),
+        FileManager.default.fileExists(
+          atPath: fixture.vault.appendingPathComponent(trashed.trashedTo).path),
         "moved into the vault's trash, not deleted")
       var tree = try await client.tree()
       #expect(!tree.entries.contains { $0.path == "Scratch \(id)/Idea.md" })
       #expect(!tree.entries.contains { $0.path.hasPrefix(".trash") }, "the trash is hidden")
 
       #expect(try await client.createFolder("Areas \(id)/Health").path == "Areas \(id)/Health")
-      _ = try await client.writeNote("Areas \(id)/Health/Sleep.md", content: "8h", baseVersion: .createOnly)
-      _ = try await client.writeNote("Areas \(id)/Health/Food.md", content: "veg", baseVersion: .createOnly)
+      _ = try await client.writeNote(
+        "Areas \(id)/Health/Sleep.md", content: "8h", baseVersion: .createOnly)
+      _ = try await client.writeNote(
+        "Areas \(id)/Health/Food.md", content: "veg", baseVersion: .createOnly)
       let renamed = try await client.rename(from: "Areas \(id)", to: "Archive \(id)/Areas")
       #expect(renamed == .folder(FolderRenameResponse(path: "Archive \(id)/Areas", moved: 2)))
       tree = try await client.tree()
-      #expect(tree.entries.contains { $0.path == "Archive \(id)/Areas/Health/Sleep.md" && $0.kind == .file })
+      #expect(
+        tree.entries.contains {
+          $0.path == "Archive \(id)/Areas/Health/Sleep.md" && $0.kind == .file
+        })
       #expect(!tree.entries.contains { $0.path.hasPrefix("Areas \(id)") })
 
       let removed = try await client.deleteFolder("Archive \(id)")
@@ -118,11 +132,14 @@ extension RealDaemonTests {
       #expect(!tree.entries.contains { $0.path.hasPrefix("Archive \(id)") })
 
       _ = try await client.writeNote("Names \(id)/Old.md", content: "old", baseVersion: .createOnly)
-      _ = try await client.writeNote("Names \(id)/Taken.md", content: "taken", baseVersion: .createOnly)
+      _ = try await client.writeNote(
+        "Names \(id)/Taken.md", content: "taken", baseVersion: .createOnly)
       let moved = try await client.rename(from: "Names \(id)/Old.md", to: "Names \(id)/New.md")
       #expect(moved.path == "Names \(id)/New.md")
       #expect(try await client.readNote("Names \(id)/New.md").content == "old")
-      let clash = await captureError { try await client.rename(from: "Names \(id)/New.md", to: "Names \(id)/Taken.md") }
+      let clash = await captureError {
+        try await client.rename(from: "Names \(id)/New.md", to: "Names \(id)/Taken.md")
+      }
       guard case .conflict(let conflict)? = clash else {
         Issue.record("expected a rename conflict, got \(String(describing: clash))")
         return
@@ -133,27 +150,37 @@ extension RealDaemonTests {
     @Test func searchFindsNamesFirstThenMatchingLines() async throws {
       let client = try Fixtures.current().makeClient()
       let id = unique()
-      _ = try await client.writeNote("Search \(id)/Fox facts.md", content: "nothing to see", baseVersion: .createOnly)
+      _ = try await client.writeNote(
+        "Search \(id)/Fox facts.md", content: "nothing to see", baseVersion: .createOnly)
       _ = try await client.writeNote(
         "Search \(id)/Notes.md", content: "first line\nThe quick brown FOX jumps\nlazy dog\n",
         baseVersion: .createOnly)
 
       let hits = try await client.search("fox", limit: nil).hits
 
-      let name = try #require(hits.firstIndex { $0.kind == .name && $0.path == "Search \(id)/Fox facts.md" })
-      let line = try #require(hits.firstIndex { $0.kind == .content && $0.path == "Search \(id)/Notes.md" })
+      let name = try #require(
+        hits.firstIndex { $0.kind == .name && $0.path == "Search \(id)/Fox facts.md" })
+      let line = try #require(
+        hits.firstIndex { $0.kind == .content && $0.path == "Search \(id)/Notes.md" })
       #expect(name < line, "name matches come first")
       #expect(hits[name].preview == "Search \(id)/Fox facts.md")
       #expect(hits[line].line == 1, "lines are 0-based")
       #expect(hits[line].preview == "The quick brown FOX jumps", "case-insensitive")
-      #expect(try await client.search("quick fox", limit: nil).hits.map(\.path) == ["Search \(id)/Notes.md"])
-      #expect(try await client.search("quick dog", limit: nil).hits.isEmpty, "all terms on one line")
+      #expect(
+        try await client.search("quick fox", limit: nil).hits.map(\.path) == [
+          "Search \(id)/Notes.md"
+        ])
+      #expect(
+        try await client.search("quick dog", limit: nil).hits.isEmpty, "all terms on one line")
       #expect(try await client.search("fox", limit: 1).hits.count == 1)
 
-      _ = try await client.writeNote("Search \(id)/Gone.md", content: "zebra \(id)", baseVersion: .createOnly)
+      _ = try await client.writeNote(
+        "Search \(id)/Gone.md", content: "zebra \(id)", baseVersion: .createOnly)
       #expect(try await client.search("zebra \(id)", limit: nil).hits.count == 1)
       _ = try await client.deleteNote("Search \(id)/Gone.md")
-      #expect(try await client.search("zebra \(id)", limit: nil).hits.isEmpty, "trashed notes aren't searched")
+      #expect(
+        try await client.search("zebra \(id)", limit: nil).hits.isEmpty,
+        "trashed notes aren't searched")
     }
 
     @Test func settingsPatchesMergeAndInvalidValuesAreRejected() async throws {
@@ -161,7 +188,9 @@ extension RealDaemonTests {
       let before = try await client.settings()
 
       let after = try await client.updateSettings(SettingsPatch(editor: .init(fontSize: 17)))
-      let rejected = await captureError { try await client.updateSettings(SettingsPatch(editor: .init(fontSize: 500))) }
+      let rejected = await captureError {
+        try await client.updateSettings(SettingsPatch(editor: .init(fontSize: 500)))
+      }
 
       #expect(after.editor.fontSize == 17)
       #expect(after.editor.vimMode == before.editor.vimMode, "untouched fields keep their values")
@@ -169,7 +198,8 @@ extension RealDaemonTests {
       #expect(rejected?.httpStatus == 400)
       #expect([ApiErrorCode.invalidRequest, .invalidSettings].contains(rejected?.apiErrorCode))
       #expect(try await client.settings().editor.fontSize == 17, "a rejected patch changes nothing")
-      _ = try await client.updateSettings(SettingsPatch(editor: .init(fontSize: before.editor.fontSize)))
+      _ = try await client.updateSettings(
+        SettingsPatch(editor: .init(fontSize: before.editor.fontSize)))
     }
   }
 }

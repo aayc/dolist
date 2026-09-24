@@ -9,7 +9,9 @@ struct ReducerThreadTests {
     .threadMessage(ThreadMessageEvent(threadId: threadId, message: message))
   }
 
-  private func delta(_ text: String, _ messageId: String = "msg_1", _ threadId: String = "thr_1") -> ServerEvent {
+  private func delta(_ text: String, _ messageId: String = "msg_1", _ threadId: String = "thr_1")
+    -> ServerEvent
+  {
     .threadDelta(ThreadDeltaEvent(threadId: threadId, messageId: messageId, delta: text))
   }
 
@@ -78,13 +80,15 @@ struct ReducerThreadTests {
     _ = state.apply(message(Fixture.text()), now: 0)
     for piece in ["Looking ", "for ", "options…"] { _ = state.apply(delta(piece), now: 0) }
     #expect(Fixture.messageText(state)?.text == "Looking for options…")
-    _ = state.apply(message(Fixture.text("msg_1", "Looking for options…", streaming: false)), now: 0)
+    _ = state.apply(
+      message(Fixture.text("msg_1", "Looking for options…", streaming: false)), now: 0)
     #expect(state.loadedThreads["thr_1"]?.messages.count == 1)
     #expect(Fixture.messageText(state)?.streaming == false)
   }
 
   @Test func deltaBeforeItsMessageStartsAPlaceholderSoNoTextIsLost() {
-    var state = Fixture.loaded(Fixture.thread(messages: [Fixture.toolCall("t", author: "subagent:booking")]))
+    var state = Fixture.loaded(
+      Fixture.thread(messages: [Fixture.toolCall("t", author: "subagent:booking")]))
     #expect(state.apply(delta("for "), now: 42) == .loadedThreads)
     let placeholder = Fixture.messageText(state)
     #expect(placeholder?.text == "for ")
@@ -98,7 +102,8 @@ struct ReducerThreadTests {
     #expect(Fixture.messageText(state)?.text == "Looking for ")
     _ = state.apply(delta("options"), now: 0)
     #expect(Fixture.messageText(state)?.text == "Looking for options")
-    _ = state.apply(message(Fixture.text("msg_1", "Looking for options!", streaming: false)), now: 0)
+    _ = state.apply(
+      message(Fixture.text("msg_1", "Looking for options!", streaming: false)), now: 0)
     #expect(Fixture.messageText(state)?.text == "Looking for options!")
     #expect(Fixture.messageText(state)?.streaming == false)
     #expect(state.deltaPlaceholders.isEmpty)
@@ -182,25 +187,32 @@ struct ReducerThreadTests {
 
   @Test func theDaemonsCopyReplacesTheOptimisticMessageInPlace() {
     var state = Fixture.loaded()
-    let local = TextMessage(id: "local-1", author: "you", createdAt: 5, role: .user, text: "Patio please")
+    let local = TextMessage(
+      id: "local-1", author: "you", createdAt: 5, role: .user, text: "Patio please")
     #expect(state.insertOptimisticMessage(local, threadId: "thr_1") == .loadedThreads)
     _ = state.apply(message(Fixture.toolCall("t")), now: 0)
     _ = state.apply(
-      message(Fixture.text("msg_srv", "Patio please", streaming: nil, role: .user, author: "you")), now: 0)
+      message(Fixture.text("msg_srv", "Patio please", streaming: nil, role: .user, author: "you")),
+      now: 0)
     #expect(state.loadedThreads["thr_1"]?.messages.map(\.id) == ["msg_srv", "t"])
     #expect(state.optimisticMessages.isEmpty)
     // A duplicate of the daemon's copy changes nothing.
     let before = state
     _ = state.apply(
-      message(Fixture.text("msg_srv", "Patio please", streaming: nil, role: .user, author: "you")), now: 0)
+      message(Fixture.text("msg_srv", "Patio please", streaming: nil, role: .user, author: "you")),
+      now: 0)
     #expect(state == before)
   }
 
   @Test func someoneElsesMessageDoesNotConsumeTheOptimisticOne() {
     var state = Fixture.loaded()
-    let local = TextMessage(id: "local-1", author: "you", createdAt: 5, role: .user, text: "Patio please")
+    let local = TextMessage(
+      id: "local-1", author: "you", createdAt: 5, role: .user, text: "Patio please")
     _ = state.insertOptimisticMessage(local, threadId: "thr_1")
-    _ = state.apply(message(Fixture.text("msg_web", "From the web app", streaming: nil, role: .user, author: "you")), now: 0)
+    _ = state.apply(
+      message(
+        Fixture.text("msg_web", "From the web app", streaming: nil, role: .user, author: "you")),
+      now: 0)
     #expect(state.loadedThreads["thr_1"]?.messages.map(\.id) == ["local-1", "msg_web"])
     #expect(state.optimisticMessages["thr_1"] == ["local-1"])
     #expect(state.removeOptimisticMessage(id: "local-1", threadId: "thr_1") == .loadedThreads)

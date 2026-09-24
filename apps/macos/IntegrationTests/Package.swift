@@ -21,6 +21,6 @@ let package = Package(
         .product(name: "DailyDoListClient", package: "DailyDoListClient"),
         .product(name: "DailyDoListDaemon", package: "DailyDoListDaemon"),
       ]
-    ),
+    )
   ]
 )

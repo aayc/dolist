@@ -6,7 +6,9 @@ import Foundation
 enum ListCommands {
   /// Enter. Returns nil to let the text view insert a plain newline (plain text, code, a selection,
   /// a caret before the list marker).
-  static func newline(in text: NSString, selection: [NSRange], isLiteralLine: (Int) -> Bool) -> TextEdit? {
+  static func newline(in text: NSString, selection: [NSRange], isLiteralLine: (Int) -> Bool)
+    -> TextEdit?
+  {
     guard selection.count == 1, let caret = selection.first, caret.length == 0 else { return nil }
     let lines = TextLines(text)
     let line = lines.line(containing: caret.location)
@@ -22,18 +24,25 @@ enum ListCommands {
         return endItem(line: line, prefix: prefix, lines: lines)
       }
       var from = caret.location
-      while from > line.location + marker.end, CharClass.isSpaceOrTab(text.character(at: from - 1)) { from -= 1 }
-      let space = prefix.markerSpace.length > 0 ? lines.string(prefix.markerSpace.shifted(by: line.location)) : " "
+      while from > line.location + marker.end, CharClass.isSpaceOrTab(text.character(at: from - 1))
+      { from -= 1 }
+      let space =
+        prefix.markerSpace.length > 0
+        ? lines.string(prefix.markerSpace.shifted(by: line.location)) : " "
       let keepsBox = prefix.box.map { column >= $0.end } ?? false
       let continuation =
         "\n" + lines.string(NSRange(line.location, line.location + prefix.indentEnd))
         + nextMarker(prefix, s) + space + (keepsBox ? "[ ] " : "")
-      var replacements = [TextEdit.Replacement(range: NSRange(from, caret.location), text: continuation)]
+      var replacements = [
+        TextEdit.Replacement(range: NSRange(from, caret.location), text: continuation)
+      ]
       if let ordered = prefix.ordered {
-        replacements += renumbering(after: line, from: ordered.number + 1, prefix: prefix, lines: lines)
+        replacements += renumbering(
+          after: line, from: ordered.number + 1, prefix: prefix, lines: lines)
       }
       let caretAfter = from + (continuation as NSString).length
-      return TextEdit(replacements: replacements, selection: [NSRange(location: caretAfter, length: 0)])
+      return TextEdit(
+        replacements: replacements, selection: [NSRange(location: caretAfter, length: 0)])
     }
 
     if prefix.quoteDepth > 0 {
@@ -43,7 +52,9 @@ enum ListCommands {
       let quote = lines.string(NSRange(line.location, line.location + prefix.quoteEnd))
       let continuation = "\n" + quote
       return TextEdit(
-        replacements: [TextEdit.Replacement(range: NSRange(from, caret.location), text: continuation)],
+        replacements: [
+          TextEdit.Replacement(range: NSRange(from, caret.location), text: continuation)
+        ],
         selection: [NSRange(location: from + (continuation as NSString).length, length: 0)])
     }
     return nil
@@ -52,13 +63,19 @@ enum ListCommands {
   /// Enter on an empty item: outdent a nested item under its parent, otherwise remove the list
   /// markup (keeping a blockquote prefix), which ends the list.
   private static func endItem(line: NSRange, prefix: LinePrefix, lines: TextLines) -> TextEdit {
-    if prefix.indentEnd > prefix.quoteEnd, let parent = parentItem(of: line, prefix: prefix, lines: lines) {
+    if prefix.indentEnd > prefix.quoteEnd,
+      let parent = parentItem(of: line, prefix: prefix, lines: lines)
+    {
       let parentUnits = lines.units(parent)
       let parentPrefix = LinePrefix.parse(parentUnits)
-      let space = parentPrefix.markerSpace.length > 0 ? lines.string(parentPrefix.markerSpace.shifted(by: parent.location)) : " "
+      let space =
+        parentPrefix.markerSpace.length > 0
+        ? lines.string(parentPrefix.markerSpace.shifted(by: parent.location)) : " "
       let replacement =
         lines.string(NSRange(line.location, line.location + prefix.quoteEnd))
-        + lines.string(NSRange(parent.location + parentPrefix.quoteEnd, parent.location + parentPrefix.indentEnd))
+        + lines.string(
+          NSRange(parent.location + parentPrefix.quoteEnd, parent.location + parentPrefix.indentEnd)
+        )
         + nextMarker(parentPrefix, parentUnits) + space
       return TextEdit(
         replacements: [TextEdit.Replacement(range: line, text: replacement)],
@@ -72,7 +89,8 @@ enum ListCommands {
 
   /// The nearest list item above with a smaller indentation (same quote depth), scanning at most a
   /// few hundred lines and stopping at a less-indented non-list line.
-  private static func parentItem(of line: NSRange, prefix: LinePrefix, lines: TextLines) -> NSRange? {
+  private static func parentItem(of line: NSRange, prefix: LinePrefix, lines: TextLines) -> NSRange?
+  {
     let s = lines.units(line)
     let width = indentWidth(s, prefix.quoteEnd, prefix.indentEnd)
     var current = line
@@ -135,7 +153,9 @@ enum ListCommands {
 
   /// Backspace right at the start of an item's text removes the list markup (the whole task prefix
   /// at once) or the innermost blockquote marker.
-  static func deleteMarkupBackward(in text: NSString, selection: [NSRange], isLiteralLine: (Int) -> Bool) -> TextEdit? {
+  static func deleteMarkupBackward(
+    in text: NSString, selection: [NSRange], isLiteralLine: (Int) -> Bool
+  ) -> TextEdit? {
     guard selection.count == 1, let caret = selection.first, caret.length == 0 else { return nil }
     let lines = TextLines(text)
     let line = lines.line(containing: caret.location)
@@ -145,11 +165,15 @@ enum ListCommands {
     guard column > 0 else { return nil }
     if let marker = prefix.marker, column == prefix.contentStart {
       let removed = NSRange(line.location + marker.location, caret.location)
-      return TextEdit(replacements: [TextEdit.Replacement(range: removed, text: "")], selection: [NSRange(location: removed.location, length: 0)])
+      return TextEdit(
+        replacements: [TextEdit.Replacement(range: removed, text: "")],
+        selection: [NSRange(location: removed.location, length: 0)])
     }
     if prefix.marker == nil, let last = prefix.quoteMarkers.last, column == prefix.quoteEnd {
       let removed = last.shifted(by: line.location)
-      return TextEdit(replacements: [TextEdit.Replacement(range: removed, text: "")], selection: [NSRange(location: removed.location, length: 0)])
+      return TextEdit(
+        replacements: [TextEdit.Replacement(range: removed, text: "")],
+        selection: [NSRange(location: removed.location, length: 0)])
     }
     return nil
   }
@@ -164,7 +188,8 @@ enum ListCommands {
     guard hasListItem || selection.contains(where: { $0.length > 0 }) else { return nil }
     let replacements = selected.map { line in
       let prefix = LinePrefix.parse(lines.units(line))
-      return TextEdit.Replacement(range: NSRange(location: line.location + prefix.quoteEnd, length: 0), text: "\t")
+      return TextEdit.Replacement(
+        range: NSRange(location: line.location + prefix.quoteEnd, length: 0), text: "\t")
     }
     return withMappedSelection(replacements, selection)
   }
@@ -184,13 +209,16 @@ enum ListCommands {
         while end < s.count, end - start < 4, s[end] == UTF16Unit.space { end += 1 }
       }
       if end > start {
-        replacements.append(TextEdit.Replacement(range: NSRange(start, end).shifted(by: line.location), text: ""))
+        replacements.append(
+          TextEdit.Replacement(range: NSRange(start, end).shifted(by: line.location), text: ""))
       }
     }
     return withMappedSelection(replacements, selection)
   }
 
-  static func withMappedSelection(_ replacements: [TextEdit.Replacement], _ selection: [NSRange]) -> TextEdit {
+  static func withMappedSelection(_ replacements: [TextEdit.Replacement], _ selection: [NSRange])
+    -> TextEdit
+  {
     var edit = TextEdit(replacements: replacements, selection: [])
     edit.selection = selection.map { range in
       let start = edit.map(range.location, forward: true)

@@ -50,7 +50,8 @@ extension MomentFormat {
 
   static func firstWeekOffset(year: Int, dow: Int, doy: Int) -> Int {
     let fwd = 7 + dow - doy
-    let weekday = CivilCalendar.weekday(dayNumber: CivilCalendar.dayNumber(year: year, month: 1, day: fwd))
+    let weekday = CivilCalendar.weekday(
+      dayNumber: CivilCalendar.dayNumber(year: year, month: 1, day: fwd))
     let fwdlw = (7 + weekday - dow) % 7
     return -fwdlw + fwd - 1
   }

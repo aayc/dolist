@@ -150,7 +150,8 @@ struct InlineTokenizer {
 
   // MARK: Emphasis, strikethrough, highlight
 
-  private mutating func pushDelimiterRun(at start: Int, marker: UInt16, requiredLength: Int?) -> Int {
+  private mutating func pushDelimiterRun(at start: Int, marker: UInt16, requiredLength: Int?) -> Int
+  {
     var end = start
     while end < upper, s[end] == marker { end += 1 }
     let length = end - start
@@ -466,8 +467,9 @@ struct InlineTokenizer {
     while end < upper {
       let c = s[end]
       if c < 0x80 {
-        guard CharClass.isASCIIAlphanumeric(c) || c == UTF16Unit.underscore || c == UTF16Unit.dash
-          || c == UTF16Unit.slash
+        guard
+          CharClass.isASCIIAlphanumeric(c) || c == UTF16Unit.underscore || c == UTF16Unit.dash
+            || c == UTF16Unit.slash
         else { break }
         if !CharClass.isASCIIDigit(c) { hasNonDigit = true }
         end += 1
@@ -481,7 +483,8 @@ struct InlineTokenizer {
     }
     guard hasNonDigit else { return nil }
     spans.append(StyledSpan(range: NSRange(start, end), style: .tag))
-    tags.append(TagToken(range: NSRange(start, end), name: String(utf16Units: s[(start + 1)..<end])))
+    tags.append(
+      TagToken(range: NSRange(start, end), name: String(utf16Units: s[(start + 1)..<end])))
     return end
   }
 
@@ -523,7 +526,8 @@ struct InlineTokenizer {
     var closes = 0
     // Inside potential link text a `]` ends the URL, so the link can still close (links win).
     let insideBrackets = brackets.contains { $0.active && !$0.isImage }
-    while end < upper, !CharClass.isSpaceOrTab(s[end]), s[end] != UTF16Unit.lessThan, s[end] >= 0x20,
+    while end < upper, !CharClass.isSpaceOrTab(s[end]), s[end] != UTF16Unit.lessThan,
+      s[end] >= 0x20,
       !(insideBrackets && s[end] == UTF16Unit.closeBracket)
     {
       if s[end] == UTF16Unit.openParen { opens += 1 }
@@ -556,7 +560,8 @@ struct InlineTokenizer {
     }
     guard end > bodyStart else { return nil }
     spans.append(StyledSpan(range: NSRange(start, end), style: .link))
-    links.append(LinkToken(range: NSRange(start, end), target: .url(String(utf16Units: s[start..<end]))))
+    links.append(
+      LinkToken(range: NSRange(start, end), target: .url(String(utf16Units: s[start..<end]))))
     return end
   }
 }

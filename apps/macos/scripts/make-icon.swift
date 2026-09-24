@@ -29,7 +29,11 @@ func squircle(in rect: CGRect, exponent: CGFloat = 5) -> CGPath {
     let s = sin(t)
     let x = rect.midX + a * copysign(pow(abs(c), 2 / exponent), c)
     let y = rect.midY + b * copysign(pow(abs(s), 2 / exponent), s)
-    if step == 0 { path.move(to: CGPoint(x: x, y: y)) } else { path.addLine(to: CGPoint(x: x, y: y)) }
+    if step == 0 {
+      path.move(to: CGPoint(x: x, y: y))
+    } else {
+      path.addLine(to: CGPoint(x: x, y: y))
+    }
   }
   path.closeSubpath()
   return path
@@ -69,7 +73,8 @@ func drawIcon(in context: CGContext, size: CGFloat) {
   let sheen = CGGradient(
     colorsSpace: space,
     colors: [
-      CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.16), CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0),
+      CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.16),
+      CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0),
     ] as CFArray,
     locations: [0, 1])!
   context.drawLinearGradient(
@@ -79,7 +84,8 @@ func drawIcon(in context: CGContext, size: CGFloat) {
 
   // The checkbox: a white rounded square with a soft shadow.
   let boxSize = (tiny ? 600 : small ? 520 : 430) * unit
-  let box = CGRect(x: (size - boxSize) / 2, y: (size - boxSize) / 2 - 6 * unit, width: boxSize, height: boxSize)
+  let box = CGRect(
+    x: (size - boxSize) / 2, y: (size - boxSize) / 2 - 6 * unit, width: boxSize, height: boxSize)
   let boxPath = CGPath(
     roundedRect: box, cornerWidth: boxSize * 0.22, cornerHeight: boxSize * 0.22, transform: nil)
   context.saveGState()
@@ -119,10 +125,13 @@ func renderPNG(size pixels: Int, to url: URL) throws {
   context.setShouldAntialias(true)
   drawIcon(in: context, size: CGFloat(pixels))
   guard let image = context.makeImage(),
-    let destination = CGImageDestinationCreateWithURL(url as CFURL, "public.png" as CFString, 1, nil)
+    let destination = CGImageDestinationCreateWithURL(
+      url as CFURL, "public.png" as CFString, 1, nil)
   else { throw IconError("could not encode \(url.lastPathComponent)") }
   CGImageDestinationAddImage(destination, image, nil)
-  guard CGImageDestinationFinalize(destination) else { throw IconError("could not write \(url.path)") }
+  guard CGImageDestinationFinalize(destination) else {
+    throw IconError("could not write \(url.path)")
+  }
 }
 
 struct IconError: Error, CustomStringConvertible {
@@ -146,7 +155,10 @@ func run() throws {
     case "--iconset": iconset = arguments.isEmpty ? nil : arguments.removeFirst()
     case "--png": png = arguments.isEmpty ? nil : arguments.removeFirst()
     case "--size": size = arguments.isEmpty ? size : Int(arguments.removeFirst()) ?? size
-    default: throw IconError("unknown argument \(argument). Usage: make-icon.swift [--iconset DIR] [--png FILE [--size N]]")
+    default:
+      throw IconError(
+        "unknown argument \(argument). Usage: make-icon.swift [--iconset DIR] [--png FILE [--size N]]"
+      )
     }
   }
   if iconset == nil && png == nil { iconset = "AppIcon.iconset" }

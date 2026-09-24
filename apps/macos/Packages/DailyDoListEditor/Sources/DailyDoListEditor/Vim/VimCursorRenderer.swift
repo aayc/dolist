@@ -38,12 +38,14 @@ final class VimCursorRenderer {
         if let glyphs = block.glyphs {
           NSGraphicsContext.saveGraphicsState()
           NSBezierPath(rect: block.rect).addClip()
-          host.layoutManager.drawGlyphs(forGlyphRange: glyphs, at: host.textView.textContainerOrigin)
+          host.layoutManager.drawGlyphs(
+            forGlyphRange: glyphs, at: host.textView.textContainerOrigin)
           NSGraphicsContext.restoreGraphicsState()
         }
       } else {
         accent.withAlphaComponent(0.7).setStroke()
-        let outline = NSBezierPath(roundedRect: block.rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 1, yRadius: 1)
+        let outline = NSBezierPath(
+          roundedRect: block.rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 1, yRadius: 1)
         outline.lineWidth = 1
         outline.stroke()
       }
@@ -54,29 +56,38 @@ final class VimCursorRenderer {
     guard let session = host.session, let status = host.status else { return [] }
     let selection = host.selection
     let ranges = status.mode == .visualBlock ? [selection.main] : selection.ranges
-    let heightFraction: CGFloat = status.mode == .replace ? 0.2 : (session.pendingKeys.isEmpty ? 1 : 0.5)
+    let heightFraction: CGFloat =
+      status.mode == .replace ? 0.2 : (session.pendingKeys.isEmpty ? 1 : 0.5)
     return ranges.compactMap { block(at: $0, heightFraction: heightFraction, host: host) }
   }
 
-  private static func block(at range: VimSelection.Range, heightFraction: CGFloat, host: TextViewVimHost) -> Block? {
+  private static func block(
+    at range: VimSelection.Range, heightFraction: CGFloat, host: TextViewVimHost
+  ) -> Block? {
     let storage = host.storage
     let string = storage.mutableString
     let length = storage.length
     let layoutManager = host.layoutManager
     var head = range.head
-    if range.anchor < head, head == length || string.character(at: head) != UTF16Unit.newline { head -= 1 }
+    if range.anchor < head, head == length || string.character(at: head) != UTF16Unit.newline {
+      head -= 1
+    }
     head = min(max(head, 0), length)
     if head > 1, head < length, (0xDC00..<0xE000).contains(string.character(at: head)) { head -= 1 }
     guard let caret = host.vimCoords(at: head, side: 1) else { return nil }
     let origin = host.textView.textContainerOrigin
-    let font = head < length ? (storage.attribute(.font, at: head, effectiveRange: nil) as? NSFont) : nil
-    let space = (" " as NSString).size(withAttributes: [.font: font ?? host.controller.theme.bodyFont]).width
+    let font =
+      head < length ? (storage.attribute(.font, at: head, effectiveRange: nil) as? NSFont) : nil
+    let space = (" " as NSString).size(withAttributes: [
+      .font: font ?? host.controller.theme.bodyFont
+    ]).width
     var x = CGFloat(caret.left)
     var width = space
     var glyphs: NSRange?
     if head < length, string.character(at: head) != UTF16Unit.newline {
       let characters = string.rangeOfComposedCharacterSequence(at: head)
-      let glyphRange = layoutManager.glyphRange(forCharacterRange: characters, actualCharacterRange: nil)
+      let glyphRange = layoutManager.glyphRange(
+        forCharacterRange: characters, actualCharacterRange: nil)
       let bounds = layoutManager.boundingRect(forGlyphRange: glyphRange, in: host.textContainer)
       if string.character(at: head) == UTF16Unit.tab {
         // One column at the end of the tab, like the web.

@@ -76,14 +76,16 @@ public final class MarkdownEditorController {
     storage = NSTextStorage()
     layoutManager = MarkdownLayoutManager()
     layoutManager.allowsNonContiguousLayout = true
-    textContainer = NSTextContainer(size: NSSize(width: 480, height: CGFloat.greatestFiniteMagnitude))
+    textContainer = NSTextContainer(
+      size: NSSize(width: 480, height: CGFloat.greatestFiniteMagnitude))
     textContainer.widthTracksTextView = false
     textContainer.heightTracksTextView = false
     textContainer.lineFragmentPadding = 0
     layoutManager.addTextContainer(textContainer)
     storage.addLayoutManager(layoutManager)
     scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 640, height: 480))
-    markdownTextView = MarkdownTextView(frame: NSRect(origin: .zero, size: scrollView.contentSize), textContainer: textContainer)
+    markdownTextView = MarkdownTextView(
+      frame: NSRect(origin: .zero, size: scrollView.contentSize), textContainer: textContainer)
     textView = markdownTextView
     containerView = EditorContainerView(scrollView: scrollView)
     view = containerView
@@ -138,7 +140,8 @@ public final class MarkdownEditorController {
     view.isHorizontallyResizable = false
     view.autoresizingMask = [.width]
     view.minSize = NSSize(width: 0, height: scrollView.contentSize.height)
-    view.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+    view.maxSize = NSSize(
+      width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
   }
 
   private func configureScrollView() {
@@ -173,7 +176,8 @@ public final class MarkdownEditorController {
     replacingText = true
     applyExternalChange(change)
     replacingText = false
-    setSelection(selection.map { Self.map($0, through: change, in: storage.mutableString) }, adjust: false)
+    setSelection(
+      selection.map { Self.map($0, through: change, in: storage.mutableString) }, adjust: false)
   }
 
   /// Applies changes someone else made (e.g. the remote side of a merge) without notifying the
@@ -198,8 +202,10 @@ public final class MarkdownEditorController {
     if textView.isEditable, textView.allowsUndo {
       markdownTextView.breakUndoCoalescing()
       withUndoGroup {
-        guard textView.shouldChangeText(
-          inRanges: ordered.map { NSValue(range: $0.range) }, replacementStrings: ordered.map(\.text))
+        guard
+          textView.shouldChangeText(
+            inRanges: ordered.map { NSValue(range: $0.range) },
+            replacementStrings: ordered.map(\.text))
         else { return }
         for change in sorted { storage.replaceCharacters(in: change.range, with: change.text) }
         textView.didChangeText()
@@ -253,7 +259,8 @@ public final class MarkdownEditorController {
       markdownTextView.breakUndoCoalescing()
       var applied = false
       withUndoGroup {
-        guard textView.shouldChangeText(in: change.range, replacementString: change.replacement) else { return }
+        guard textView.shouldChangeText(in: change.range, replacementString: change.replacement)
+        else { return }
         storage.replaceCharacters(in: change.range, with: change.replacement)
         textView.didChangeText()
         applied = true
@@ -318,8 +325,12 @@ public final class MarkdownEditorController {
     applyConfiguration(configuration, previous: previous)
   }
 
-  private func applyConfiguration(_ configuration: EditorConfiguration, previous: EditorConfiguration?) {
-    if previous?.fontSize != configuration.fontSize || previous?.livePreview != configuration.livePreview {
+  private func applyConfiguration(
+    _ configuration: EditorConfiguration, previous: EditorConfiguration?
+  ) {
+    if previous?.fontSize != configuration.fontSize
+      || previous?.livePreview != configuration.livePreview
+    {
       if previous?.fontSize != configuration.fontSize {
         theme = EditorTheme(fontSize: CGFloat(configuration.fontSize), uniform: uniformMetrics)
       }
@@ -344,7 +355,9 @@ public final class MarkdownEditorController {
       setLineNumbersVisible(configuration.showLineNumbers)
     }
     updateTextGeometry()
-    if previous != nil, previous?.vimMode != configuration.vimMode || previous?.isEditable != configuration.isEditable {
+    if previous != nil,
+      previous?.vimMode != configuration.vimMode || previous?.isEditable != configuration.isEditable
+    {
       updateVimAttachment()
     }
   }
@@ -382,19 +395,24 @@ public final class MarkdownEditorController {
     let width = markdownTextView.frame.width
     guard width > 0 else { return }
     if uniformMetrics != nil {
-      if markdownTextView.textContainerInset != .zero { markdownTextView.textContainerInset = .zero }
-      textContainer.size = NSSize(width: TextGeometry.unwrappedWidth, height: CGFloat.greatestFiniteMagnitude)
+      if markdownTextView.textContainerInset != .zero {
+        markdownTextView.textContainerInset = .zero
+      }
+      textContainer.size = NSSize(
+        width: TextGeometry.unwrappedWidth, height: CGFloat.greatestFiniteMagnitude)
       return
     }
     let geometry = TextGeometry.compute(
       viewWidth: width, readable: configuration.readableLineLength,
-      horizontalPadding: (theme.fontSize * 1.75).rounded(), topPadding: (theme.fontSize * 1.25).rounded(),
+      horizontalPadding: (theme.fontSize * 1.75).rounded(),
+      topPadding: (theme.fontSize * 1.25).rounded(),
       badgeReserve: badgeReserve)
     if markdownTextView.textContainerInset != geometry.inset {
       markdownTextView.textContainerInset = geometry.inset
     }
     if abs(textContainer.size.width - geometry.columnWidth) > 0.5 {
-      textContainer.size = NSSize(width: geometry.columnWidth, height: CGFloat.greatestFiniteMagnitude)
+      textContainer.size = NSSize(
+        width: geometry.columnWidth, height: CGFloat.greatestFiniteMagnitude)
     }
   }
 
@@ -443,7 +461,8 @@ public final class MarkdownEditorController {
 
   public func snapshot() -> EditorSnapshot {
     EditorSnapshot(
-      text: text, selectedRange: textView.selectedRange(), scrollOffset: scrollView.contentView.bounds.origin,
+      text: text, selectedRange: textView.selectedRange(),
+      scrollOffset: scrollView.contentView.bounds.origin,
       undoManager: noteUndoManager)
   }
 
@@ -469,7 +488,8 @@ public final class MarkdownEditorController {
     vimHost.documentDidReset()
     let origin = markdownTextView.textContainerOrigin
     let visible = NSRect(origin: snapshot.scrollOffset, size: scrollView.contentView.bounds.size)
-    layoutManager.ensureLayout(forBoundingRect: visible.offsetBy(dx: -origin.x, dy: -origin.y), in: textContainer)
+    layoutManager.ensureLayout(
+      forBoundingRect: visible.offsetBy(dx: -origin.x, dy: -origin.y), in: textContainer)
     scroll(to: snapshot.scrollOffset)
   }
 
@@ -482,7 +502,8 @@ public final class MarkdownEditorController {
   func lineRectInTextView(at offset: Int) -> NSRect {
     let origin = markdownTextView.textContainerOrigin
     var rect: NSRect
-    if offset >= storage.length, !layoutManager.extraLineFragmentRect.isEmpty || storage.length == 0 {
+    if offset >= storage.length, !layoutManager.extraLineFragmentRect.isEmpty || storage.length == 0
+    {
       layoutManager.ensureLayout(for: textContainer)
       rect = layoutManager.extraLineFragmentRect
     } else {
@@ -512,13 +533,18 @@ public final class MarkdownEditorController {
     badgeStore.applyEdit(
       location: editedRange.location, oldLength: oldLength, newLength: editedRange.length,
       lineIndex: highlighter.lineIndex, text: storage.mutableString)
-    motion.textDidEdit(location: editedRange.location, oldLength: oldLength, newLength: editedRange.length)
-    livePreview.textDidChange(location: editedRange.location, oldLength: oldLength, newLength: editedRange.length)
+    motion.textDidEdit(
+      location: editedRange.location, oldLength: oldLength, newLength: editedRange.length)
+    livePreview.textDidChange(
+      location: editedRange.location, oldLength: oldLength, newLength: editedRange.length)
     if let ruler = lineNumberRuler {
       if highlighter.lineIndex.count != linesBefore { ruler.updateThickness() }
       ruler.needsDisplay = true
     }
-    if !replacingDocument { vimHost.storageDidEdit(location: editedRange.location, oldLength: oldLength, newLength: editedRange.length) }
+    if !replacingDocument {
+      vimHost.storageDidEdit(
+        location: editedRange.location, oldLength: oldLength, newLength: editedRange.length)
+    }
   }
 
   /// Runs `body` inside an undo group when the note's undo manager has none open and doesn't group
@@ -561,7 +587,8 @@ public final class MarkdownEditorController {
     for range in ranges {
       let clamped = range.clamped(to: storage.length)
       guard clamped.length > 0 else { continue }
-      layoutManager.invalidateGlyphs(forCharacterRange: clamped, changeInLength: 0, actualCharacterRange: nil)
+      layoutManager.invalidateGlyphs(
+        forCharacterRange: clamped, changeInLength: 0, actualCharacterRange: nil)
       layoutManager.invalidateLayout(forCharacterRange: clamped, actualCharacterRange: nil)
       invalidated = true
     }
@@ -571,7 +598,8 @@ public final class MarkdownEditorController {
   /// Recomputes what live preview reveals for the current selection and focus.
   func refreshLivePreview() {
     let ranges = livePreview.update(
-      selection: textView.selectedRanges.map(\.rangeValue), focused: markdownTextView.isEditorFocused,
+      selection: textView.selectedRanges.map(\.rangeValue),
+      focused: markdownTextView.isEditorFocused,
       lineIndex: highlighter.lineIndex, storage: storage)
     if !ranges.isEmpty { invalidateGlyphs(in: ranges) }
   }

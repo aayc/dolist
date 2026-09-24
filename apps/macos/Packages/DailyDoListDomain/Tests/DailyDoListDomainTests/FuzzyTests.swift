@@ -29,7 +29,9 @@ extension DomainTests {
       #expect(Fuzzy.match("gr", in: "Garden Redesign")?.matchedOffsets == [0, 7])
       #expect(Fuzzy.match("dn", in: "Daily/2026-09-23 notes")?.matchedOffsets == [0, 17])
       #expect(Fuzzy.match("fb", in: "fooBar")?.matchedOffsets == [0, 3])  // camelCase hump
-      let commands = ["Open today's daily note", "Toggle agent panel", "Toggle light/dark theme", "Open settings"]
+      let commands = [
+        "Open today's daily note", "Toggle agent panel", "Toggle light/dark theme", "Open settings",
+      ]
       #expect(ranked("tap", commands).first == "Toggle agent panel")
       #expect(ranked("theme", commands).first == "Toggle light/dark theme")
     }
@@ -50,18 +52,28 @@ extension DomainTests {
     }
 
     @Test func fileNameBeatsFolderNames() {
-      let paths = ["Plans archive/notes.md", "p/l/a/n.md", "Projects/Plan.md", "Archive/Old plan ideas.md"]
+      let paths = [
+        "Plans archive/notes.md", "p/l/a/n.md", "Projects/Plan.md", "Archive/Old plan ideas.md",
+      ]
       #expect(ranked("plan", paths).first == "Projects/Plan.md")
-      #expect(ranked("daily", ["Daily/2026-09-23.md", "Projects/daily standup.md"]).first == "Projects/daily standup.md")
-      #expect(ranked("0923", ["Daily/2026-09-23.md", "Archive/2026/09/23/x.md"]).first == "Daily/2026-09-23.md")
+      #expect(
+        ranked("daily", ["Daily/2026-09-23.md", "Projects/daily standup.md"]).first
+          == "Projects/daily standup.md")
+      #expect(
+        ranked("0923", ["Daily/2026-09-23.md", "Archive/2026/09/23/x.md"]).first
+          == "Daily/2026-09-23.md")
     }
 
     @Test func rankingIsDeterministic() {
       // Equal scores: the shorter candidate first, then input order.
-      #expect(ranked("note", ["note b.md", "note a.md", "note.md"]) == ["note.md", "note b.md", "note a.md"])
+      #expect(
+        ranked("note", ["note b.md", "note a.md", "note.md"]) == [
+          "note.md", "note b.md", "note a.md",
+        ])
       let same = ["Daily/x.md", "Daily/x.md", "Daily/x.md"]
       #expect(Fuzzy.rank(query: "x", candidates: same).map(\.index) == [0, 1, 2])
-      #expect(Fuzzy.rank(query: "", candidates: ["bb", "a", "b"]).map(\.element) == ["a", "b", "bb"])
+      #expect(
+        Fuzzy.rank(query: "", candidates: ["bb", "a", "b"]).map(\.element) == ["a", "b", "bb"])
       #expect(Fuzzy.rank(query: "o", candidates: ["one", "two", "four"], limit: 2).count == 2)
       #expect(Fuzzy.rank(query: "zzz", candidates: ["one"]).isEmpty)
     }

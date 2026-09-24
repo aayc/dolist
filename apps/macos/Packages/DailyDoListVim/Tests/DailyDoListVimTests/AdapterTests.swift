@@ -10,7 +10,9 @@ import Testing
     var units = Array(text.utf16)
     var list: [(Int, Int, VimText)] = []
     changes.iterChanges { fromA, toA, _, _, inserted in list.append((fromA, toA, inserted)) }
-    for (from, to, inserted) in list.reversed() { units.replaceSubrange(from..<to, with: inserted.units) }
+    for (from, to, inserted) in list.reversed() {
+      units.replaceSubrange(from..<to, with: inserted.units)
+    }
     return String(decoding: units, as: UTF16.self)
   }
 
@@ -19,7 +21,8 @@ import Testing
   @Test func changeSpecsUseStartOffsetsInAnyOrder() throws {
     let replace = try ChangeSet.of([.init(from: 1, to: 3, insert: "XY")], length: 5)
     #expect(apply(replace, to: "abcde") == "aXYde")
-    let unsorted = try ChangeSet.of([.init(from: 4, insert: "!"), .init(from: 0, insert: "^")], length: 5)
+    let unsorted = try ChangeSet.of(
+      [.init(from: 4, insert: "!"), .init(from: 0, insert: "^")], length: 5)
     #expect(apply(unsorted, to: "abcde") == "^abcd!e")
     #expect(unsorted.newLength == 7)
   }
@@ -28,7 +31,8 @@ import Testing
     #expect {
       try ChangeSet.of([.init(from: 3, to: 2)], length: 5)
     } throws: { error in
-      JSException.from(error).description == "RangeError: Invalid change range 3 to 2 (in doc of length 5)"
+      JSException.from(error).description
+        == "RangeError: Invalid change range 3 to 2 (in doc of length 5)"
     }
   }
 
@@ -128,18 +132,23 @@ import Testing
     let cursor = t.cm.getSearchCursor(query, VimPosition(line: 1, ch: 2))
     var found: [VimPosition] = []
     while try cursor.findPrevious() != nil, let from = cursor.from() { found.append(from) }
-    #expect(found == [VimPosition(line: 1, ch: 0), VimPosition(line: 0, ch: 3), VimPosition(line: 0, ch: 0)])
+    #expect(
+      found == [
+        VimPosition(line: 1, ch: 0), VimPosition(line: 0, ch: 3), VimPosition(line: 0, ch: 0),
+      ])
   }
 
   @Test func searchCursorEscapesBracesAndUsesUnicodeMode() throws {
     let t = VimTester("x{2} 😀")
     // "x{2" is a literal without the u flag; the cursor recompiles the source in unicode mode,
     // where a brace that doesn't form a quantifier is a syntax error unless escaped.
-    let braces = t.cm.getSearchCursor(try JSRegExp(VimText("x{2"), flags: "m"), VimPosition(line: 0, ch: 0))
+    let braces = t.cm.getSearchCursor(
+      try JSRegExp(VimText("x{2"), flags: "m"), VimPosition(line: 0, ch: 0))
     #expect(try braces.findNext() != nil)
     #expect(braces.from() == VimPosition(line: 0, ch: 0))
     #expect(braces.to() == VimPosition(line: 0, ch: 3))
-    let astral = t.cm.getSearchCursor(try JSRegExp(VimText("."), flags: "m"), VimPosition(line: 0, ch: 5))
+    let astral = t.cm.getSearchCursor(
+      try JSRegExp(VimText("."), flags: "m"), VimPosition(line: 0, ch: 5))
     #expect(try astral.findNext() != nil)
     #expect(astral.to() == VimPosition(line: 0, ch: 7))
   }

@@ -6,10 +6,10 @@ let package = Package(
   name: "DailyDoListClient",
   platforms: [.macOS(.v14), .iOS(.v17)],
   products: [
-    .library(name: "DailyDoListClient", targets: ["DailyDoListClient"]),
+    .library(name: "DailyDoListClient", targets: ["DailyDoListClient"])
   ],
   dependencies: [
-    .package(path: "../DailyDoListModels"),
+    .package(path: "../DailyDoListModels")
   ],
   targets: [
     .target(name: "DailyDoListClient", dependencies: ["DailyDoListModels"]),

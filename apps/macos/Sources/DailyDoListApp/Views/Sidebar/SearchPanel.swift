@@ -39,11 +39,13 @@ struct SearchPanel: View {
       if let error = search.error {
         Text(error).font(.caption).foregroundStyle(Theme.danger).padding(.horizontal, 10)
       } else if !search.trimmedQuery.isEmpty, !search.isLoading {
-        Text("\(TextMetrics.pluralize(search.hitCount, "result")) in \(TextMetrics.pluralize(search.groups.count, "note"))")
-          .font(.caption)
-          .foregroundStyle(Theme.faintText)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(.horizontal, 12)
+        Text(
+          "\(TextMetrics.pluralize(search.hitCount, "result")) in \(TextMetrics.pluralize(search.groups.count, "note"))"
+        )
+        .font(.caption)
+        .foregroundStyle(Theme.faintText)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
       }
 
       List {
@@ -56,12 +58,17 @@ struct SearchPanel: View {
             }
           } header: {
             Button {
-              Task { await workspace.openNote(group.path, OpenOptions(newTab: NSEvent.modifierFlags.contains(.command))) }
+              Task {
+                await workspace.openNote(
+                  group.path, OpenOptions(newTab: NSEvent.modifierFlags.contains(.command)))
+              }
             } label: {
               HStack(spacing: 6) {
-                Text(group.title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.text)
+                Text(group.title).font(.system(size: 12, weight: .semibold)).foregroundStyle(
+                  Theme.text)
                 if !group.folder.isEmpty {
-                  Text(group.folder).font(.system(size: 11)).foregroundStyle(Theme.faintText).lineLimit(1)
+                  Text(group.folder).font(.system(size: 11)).foregroundStyle(Theme.faintText)
+                    .lineLimit(1)
                 }
               }
             }
@@ -78,7 +85,8 @@ struct SearchPanel: View {
   private func open(_ hit: SearchHit) {
     let newTab = NSEvent.modifierFlags.contains(.command)
     Task {
-      await workspace.openNote(hit.path, OpenOptions(newTab: newTab, line: hit.kind == .content ? hit.line : nil))
+      await workspace.openNote(
+        hit.path, OpenOptions(newTab: newTab, line: hit.kind == .content ? hit.line : nil))
     }
   }
 }

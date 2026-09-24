@@ -65,7 +65,8 @@ extension AgentState {
     if let previous, let locals = optimisticMessages[thread.id] {
       let seen = Set(previous.messages.map(\.id))
       var delivered: [String: Int] = [:]
-      for case .text(let text) in thread.messages where text.role == .user && !seen.contains(text.id) {
+      for case .text(let text) in thread.messages
+      where text.role == .user && !seen.contains(text.id) {
         delivered[text.text, default: 0] += 1
       }
       for id in locals where inFlight.contains(id) {

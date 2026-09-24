@@ -67,7 +67,9 @@ public enum APIRoute {
     "/api/approvals/\(encodeURIComponent(id))"
   }
 
-  public static func artifact(threadId: String, artifactId: String, download: Bool = false) -> String {
+  public static func artifact(threadId: String, artifactId: String, download: Bool = false)
+    -> String
+  {
     let base = "/api/artifacts/\(encodeURIComponent(threadId))/\(encodeURIComponent(artifactId))"
     return download ? "\(base)?download=1" : base
   }
@@ -90,7 +92,8 @@ public enum APIRoute {
 
   private static let uriComponentAllowed: CharacterSet = {
     var set = CharacterSet()
-    set.insert(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()")
+    set.insert(
+      charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()")
     return set
   }()
 }
@@ -112,7 +115,9 @@ public struct HealthResponse: Codable, Hashable, Sendable {
   public var vaultName: String
   public var agentMode: AgentMode
 
-  public init(ok: Bool = true, version: String, apiVersion: Int, vaultName: String, agentMode: AgentMode) {
+  public init(
+    ok: Bool = true, version: String, apiVersion: Int, vaultName: String, agentMode: AgentMode
+  ) {
     self.ok = ok
     self.version = version
     self.apiVersion = apiVersion
@@ -134,7 +139,10 @@ public struct VaultEntry: Codable, Hashable, Sendable, Identifiable {
 
   public var id: String { path }
 
-  public init(path: String, kind: VaultEntryKind, size: Int? = nil, mtime: EpochMillis? = nil, version: String? = nil) {
+  public init(
+    path: String, kind: VaultEntryKind, size: Int? = nil, mtime: EpochMillis? = nil,
+    version: String? = nil
+  ) {
     self.path = path
     self.kind = kind
     self.size = size
@@ -326,7 +334,9 @@ public struct DailyNoteResponse: Codable, Hashable, Sendable {
   public var date: String
   public var created: Bool
 
-  public init(path: String, content: String, version: String, mtime: EpochMillis, date: String, created: Bool) {
+  public init(
+    path: String, content: String, version: String, mtime: EpochMillis, date: String, created: Bool
+  ) {
     self.path = path
     self.content = content
     self.version = version
@@ -396,7 +406,10 @@ public struct ConnectorStatus: Codable, Hashable, Sendable, Identifiable {
 
   public var id: String { name }
 
-  public init(name: String, transport: ConnectorTransport, state: ConnectorState, toolCount: Int, error: String? = nil) {
+  public init(
+    name: String, transport: ConnectorTransport, state: ConnectorState, toolCount: Int,
+    error: String? = nil
+  ) {
     self.name = name
     self.transport = transport
     self.state = state

@@ -50,7 +50,10 @@ public final class VimPanel {
   var closeAction: (() -> Void)?
   var onDetailClick: (() -> Void)?
 
-  init(kind: Kind, text: String, value: VimText = VimText(), detail: String? = nil, duration: Double? = nil) {
+  init(
+    kind: Kind, text: String, value: VimText = VimText(), detail: String? = nil,
+    duration: Double? = nil
+  ) {
     self.kind = kind
     self.text = text
     self.value = value
@@ -170,7 +173,8 @@ final class DOMKeyEvent {
   private(set) var defaultPrevented = false
 
   init(
-    key: String, keyCode: Int = 0, ctrlKey: Bool = false, altKey: Bool = false, metaKey: Bool = false, shiftKey: Bool = false,
+    key: String, keyCode: Int = 0, ctrlKey: Bool = false, altKey: Bool = false,
+    metaKey: Bool = false, shiftKey: Bool = false,
     code: String? = nil, token: String? = nil
   ) {
     self.key = key
@@ -184,7 +188,8 @@ final class DOMKeyEvent {
   }
 
   private static let namedKeys: [String: (key: String, keyCode: Int)] = [
-    "esc": ("Escape", 27), "cr": ("Enter", 13), "bs": ("Backspace", 8), "del": ("Delete", 46), "tab": ("Tab", 9),
+    "esc": ("Escape", 27), "cr": ("Enter", 13), "bs": ("Backspace", 8), "del": ("Delete", 46),
+    "tab": ("Tab", 9),
     "space": (" ", 32), "up": ("ArrowUp", 38), "down": ("ArrowDown", 40), "left": ("ArrowLeft", 37),
     "right": ("ArrowRight", 39), "home": ("Home", 36), "end": ("End", 35), "pageup": ("PageUp", 33),
     "pagedown": ("PageDown", 34), "ins": ("Insert", 45), "lt": ("<", 188),
@@ -198,7 +203,9 @@ final class DOMKeyEvent {
   /// Letters and digits get their legacy key code; nothing reads the others.
   private static func legacyKeyCode(_ char: String) -> Int {
     let upper = VimText(units: JSCase.uppercase(VimText(char).units))
-    guard upper.length == 1, let u = upper.code(at: 0), (0x41...0x5A).contains(u) || (0x30...0x39).contains(u) else { return 0 }
+    guard upper.length == 1, let u = upper.code(at: 0),
+      (0x41...0x5A).contains(u) || (0x30...0x39).contains(u)
+    else { return 0 }
     return Int(u)
   }
 
@@ -207,7 +214,10 @@ final class DOMKeyEvent {
   convenience init(vimKey token: String) {
     var key = token
     var keyCode = DOMKeyEvent.legacyKeyCode(token)
-    var ctrl = false, shift = false, alt = false, meta = false
+    var ctrl = false
+    var shift = false
+    var alt = false
+    var meta = false
     if DOMKeyEvent.isNamed(token) {
       var parts = String(token.dropFirst().dropLast()).components(separatedBy: "-")
       var name = parts.popLast() ?? ""
@@ -233,7 +243,9 @@ final class DOMKeyEvent {
         keyCode = DOMKeyEvent.legacyKeyCode(name)
       }
     }
-    self.init(key: key, keyCode: keyCode, ctrlKey: ctrl, altKey: alt, metaKey: meta, shiftKey: shift, token: token)
+    self.init(
+      key: key, keyCode: keyCode, ctrlKey: ctrl, altKey: alt, metaKey: meta, shiftKey: shift,
+      token: token)
   }
 
   func preventDefault() { defaultPrevented = true }

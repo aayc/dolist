@@ -26,7 +26,8 @@ struct ChatView: View {
   private var followKey: FollowKey {
     var length = 0
     if case .text(let text) = thread.messages.last { length = text.text.utf16.count }
-    return FollowKey(count: thread.messages.count, lastId: thread.messages.last?.id, lastLength: length)
+    return FollowKey(
+      count: thread.messages.count, lastId: thread.messages.last?.id, lastLength: length)
   }
 
   var body: some View {
@@ -72,7 +73,9 @@ struct ChatView: View {
         }
         .coordinateSpace(name: Self.space)
         .modifier(StartAtBottom())
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+        .onGeometryChange(for: CGFloat.self) {
+          $0.size.height
+        } action: { height in
           if height != viewportHeight { viewportHeight = height }
         }
         .onAppear { proxy.scrollTo(Self.bottomId, anchor: .bottom) }

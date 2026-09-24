@@ -99,7 +99,10 @@ struct TokenizerInlineTests {
     #expect(spans("go to https://example.com/a_b_c.", .link) == ["https://example.com/a_b_c"])
     #expect(spans("go to https://example.com/a_b_c.", .italic).isEmpty)
     #expect(spans("(https://x.com/foo)", .link) == ["https://x.com/foo"])
-    #expect(spans("https://en.wikipedia.org/wiki/Foo_(bar)", .link) == ["https://en.wikipedia.org/wiki/Foo_(bar)"])
+    #expect(
+      spans("https://en.wikipedia.org/wiki/Foo_(bar)", .link) == [
+        "https://en.wikipedia.org/wiki/Foo_(bar)"
+      ])
     #expect(spans("*https://x.com*", .link) == ["https://x.com"])
     #expect(spans("*https://x.com*", .italic) == ["*https://x.com*"])
     #expect(spans("HTTPS://X.COM/Path", .link) == ["HTTPS://X.COM/Path"])
@@ -112,14 +115,19 @@ struct TokenizerInlineTests {
   @Test func wikilinks() {
     #expect(spans("[[Note]]", .wikilink) == ["Note"])
     #expect(markers("[[Note]]", .wikilink) == ["[[", "]]"])
-    #expect(linkTargets("[[Note]]") == [.wiki(target: "Note", subpath: nil, alias: nil, isEmbed: false)])
+    #expect(
+      linkTargets("[[Note]]") == [.wiki(target: "Note", subpath: nil, alias: nil, isEmbed: false)])
     #expect(spans("[[Note|Alias]]", .wikilink) == ["Alias"])
     #expect(markers("[[Note|Alias]]", .wikilink) == ["[[Note|", "]]"])
-    #expect(linkTargets("[[Daily/2026-06-19#Tasks|today]]") == [
-      .wiki(target: "Daily/2026-06-19", subpath: "Tasks", alias: "today", isEmbed: false)
-    ])
+    #expect(
+      linkTargets("[[Daily/2026-06-19#Tasks|today]]") == [
+        .wiki(target: "Daily/2026-06-19", subpath: "Tasks", alias: "today", isEmbed: false)
+      ])
     #expect(spans("[[Note#Heading]]", .wikilink) == ["Note#Heading"])
-    #expect(linkTargets("![[image.png]]") == [.wiki(target: "image.png", subpath: nil, alias: nil, isEmbed: true)])
+    #expect(
+      linkTargets("![[image.png]]") == [
+        .wiki(target: "image.png", subpath: nil, alias: nil, isEmbed: true)
+      ])
     #expect(markers("![[image.png]]", .wikilink) == ["![[", "]]"])
     #expect(markers("[[Note|]]", .wikilink) == ["[[", "|]]"])
     #expect(linkTargets("[[]]").isEmpty)
@@ -162,7 +170,9 @@ struct TokenizerInlineTests {
     for line in lines {
       let length = (line as NSString).length
       let tokens = tokenizeLine(line)
-      for range in tokens.markers.map(\.range) + tokens.spans.map(\.range) + tokens.links.map(\.range) {
+      for range in tokens.markers.map(\.range) + tokens.spans.map(\.range)
+        + tokens.links.map(\.range)
+      {
         #expect(range.location >= 0 && range.end <= length, "\(line) \(range)")
       }
     }

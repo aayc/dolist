@@ -119,12 +119,18 @@ struct VimTypingTests {
     editor.press("a")
     #expect(editor.mode == .insert)
     let textView = editor.textView
-    textView.setMarkedText("k", selectedRange: NSRange(location: 1, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+    textView.setMarkedText(
+      "k", selectedRange: NSRange(location: 1, length: 0),
+      replacementRange: NSRange(location: NSNotFound, length: 0))
     #expect(textView.hasMarkedText())
     // While composing, keys belong to the input method: vim doesn't see this Escape.
-    #expect(editor.host.handleKeyDown(VimEditorHarness.event(for: "<Esc>", window: editor.window)) == false)
+    #expect(
+      editor.host.handleKeyDown(VimEditorHarness.event(for: "<Esc>", window: editor.window))
+        == false)
     #expect(editor.mode == .insert)
-    textView.setMarkedText("か", selectedRange: NSRange(location: 1, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+    textView.setMarkedText(
+      "か", selectedRange: NSRange(location: 1, length: 0),
+      replacementRange: NSRange(location: NSNotFound, length: 0))
     textView.insertText("か", replacementRange: NSRange(location: NSNotFound, length: 0))
     #expect(!textView.hasMarkedText())
     #expect(editor.text == "aかb")
@@ -204,7 +210,9 @@ struct VimTypingTests {
   }
 
   @Test func readOnlyEditorsIgnoreVimEdits() {
-    let editor = VimEditorHarness("keep", configuration: EditorConfiguration(livePreview: false, isEditable: false, vimMode: true))
+    let editor = VimEditorHarness(
+      "keep",
+      configuration: EditorConfiguration(livePreview: false, isEditable: false, vimMode: true))
     editor.press("d", "d", "x", "i")
     editor.type("zz")
     #expect(editor.text == "keep")

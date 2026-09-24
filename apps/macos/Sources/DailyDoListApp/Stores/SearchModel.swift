@@ -98,7 +98,8 @@ final class SearchModel {
     }
     return order.map { path in
       let hits = byPath[path] ?? []
-      return SearchGroup(path: path, hits: hits.filter { $0.kind == .name } + hits.filter { $0.kind == .content })
+      return SearchGroup(
+        path: path, hits: hits.filter { $0.kind == .name } + hits.filter { $0.kind == .content })
     }
   }
 }

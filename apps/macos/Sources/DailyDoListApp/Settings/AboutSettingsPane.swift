@@ -21,14 +21,21 @@ struct AboutSettingsPane: View {
       Section("Versions") {
         LabeledContent("App", value: AppInfo.version)
         LabeledContent("API version", value: "v\(DaemonProtocol.apiVersion)")
-        LabeledContent("Daemon", value: model.connection.health.map { "\($0.version) (API v\($0.apiVersion))" } ?? "—")
+        LabeledContent(
+          "Daemon",
+          value: model.connection.health.map { "\($0.version) (API v\($0.apiVersion))" } ?? "—")
         LabeledContent("Vault", value: model.connection.health?.vaultName ?? "—")
-        LabeledContent("Agent mode", value: model.agent?.status?.mode.rawValue ?? model.connection.health?.agentMode.rawValue ?? "—")
+        LabeledContent(
+          "Agent mode",
+          value: model.agent?.status?.mode.rawValue ?? model.connection.health?.agentMode.rawValue
+            ?? "—")
         LabeledContent("Endpoint", value: model.connection.endpointDescription)
       }
       Section("Links") {
         Link("OpenRouter models", destination: URL(string: "https://openrouter.ai/models")!)
-        Link("Model Context Protocol (connectors)", destination: URL(string: "https://modelcontextprotocol.io")!)
+        Link(
+          "Model Context Protocol (connectors)",
+          destination: URL(string: "https://modelcontextprotocol.io")!)
         Link("Node.js downloads", destination: URL(string: "https://nodejs.org/en/download")!)
       }
     }
@@ -40,8 +47,12 @@ enum AppInfo {
   /// `CFBundleShortVersionString (CFBundleVersion)`, or "dev" outside an app bundle.
   static var version: String {
     let info = Bundle.main.infoDictionary
-    guard let short = info?["CFBundleShortVersionString"] as? String, !short.isEmpty else { return "dev" }
-    if let build = info?["CFBundleVersion"] as? String, !build.isEmpty, build != short { return "\(short) (\(build))" }
+    guard let short = info?["CFBundleShortVersionString"] as? String, !short.isEmpty else {
+      return "dev"
+    }
+    if let build = info?["CFBundleVersion"] as? String, !build.isEmpty, build != short {
+      return "\(short) (\(build))"
+    }
     return short
   }
 }

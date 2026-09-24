@@ -32,10 +32,13 @@ struct VimVectorReplayTests {
     let environment = ProcessInfo.processInfo.environment
     let filter = environment["VIM_VECTORS_FILTER"].flatMap { $0.isEmpty ? nil : $0 }
     let hosts = EditorVectorHosts(header: file.header, livePreview: livePreview)
-    let report = VimVectorReplayer(header: file.header).runAll(file, filter: filter, exclusions: Set(Self.exclusions.keys)) {
+    let report = VimVectorReplayer(header: file.header).runAll(
+      file, filter: filter, exclusions: Set(Self.exclusions.keys)
+    ) {
       hosts.host(for: $0)
     }
-    let title = "vim vectors through MarkdownEditorController, live preview \(livePreview ? "on" : "off") (\(VimVectorFile.defaultURL.lastPathComponent)):"
+    let title =
+      "vim vectors through MarkdownEditorController, live preview \(livePreview ? "on" : "off") (\(VimVectorFile.defaultURL.lastPathComponent)):"
     print(report.summary(title: title))
     for message in report.issueMessages(verbose: environment["VIM_VECTORS_VERBOSE"] == "1") {
       Issue.record("\(message)")

@@ -31,11 +31,15 @@ extension Vim {
 
   /// `updateSelectionForSurrogateCharacters(cm, curStart, curEnd)`: widens a one-character range
   /// that starts on a high surrogate (vim.js tests 0xD800...0xD8FF only).
-  func updateSelectionForSurrogateCharacters(_ cm: EditorAdapter, _ curStart: Pos, _ curEnd: Pos) -> (start: Pos, end: Pos) {
+  func updateSelectionForSurrogateCharacters(_ cm: EditorAdapter, _ curStart: Pos, _ curEnd: Pos)
+    -> (start: Pos, end: Pos)
+  {
     var end = curEnd
     if curStart.line == curEnd.line && curStart.ch >= curEnd.ch - 1 {
       let text = cm.getLine(curStart.line)
-      if let code = text.code(at: curStart.ch), code >= 0xD800 && code <= 0xD8FF { end.ch = chAdd(end.ch, 1) }
+      if let code = text.code(at: curStart.ch), code >= 0xD800 && code <= 0xD8FF {
+        end.ch = chAdd(end.ch, 1)
+      }
     }
     return (curStart, end)
   }
@@ -96,7 +100,8 @@ extension Vim {
     var base = ranges[index].anchor
     let firstLine = min(base.line, head.line)
     let lastLine = Swift.max(base.line, head.line)
-    var baseCh = base.ch, headCh = head.ch
+    var baseCh = base.ch
+    var headCh = head.ch
     let dir = ranges[index].head.ch - baseCh
     let newDir = headCh - baseCh
     if dir > 0 && newDir <= 0 {
@@ -159,16 +164,20 @@ extension Vim {
       vim.lastPastedText = nil
     }
     vim.lastSelection = LastSelection(
-      anchorMark: cm.setBookmark(anchor), headMark: cm.setBookmark(head), anchor: anchor, head: head,
+      anchorMark: cm.setBookmark(anchor), headMark: cm.setBookmark(head), anchor: anchor,
+      head: head,
       visualMode: vim.visualMode, visualLine: vim.visualLine, visualBlock: vim.visualBlock)
   }
 
   /// `expandSelection(cm, start, end, move)`: grows the visual selection over a text object.
-  func expandSelection(_ cm: EditorAdapter, _ startIn: Pos, _ endIn: Pos, _ move: Bool) -> (Pos, Pos) {
+  func expandSelection(_ cm: EditorAdapter, _ startIn: Pos, _ endIn: Pos, _ move: Bool) -> (
+    Pos, Pos
+  ) {
     let sel = cm.vim!.sel
     var head = move ? startIn : sel.head
     var anchor = move ? startIn : sel.anchor
-    var start = startIn, end = endIn
+    var start = startIn
+    var end = endIn
     if cursorIsBefore(end, start) { swap(&start, &end) }
     if cursorIsBefore(head, anchor) {
       head = cursorMin(start, head)
@@ -185,7 +194,9 @@ extension Vim {
   }
 
   /// `updateCmSelection(cm, sel, mode)`: shows the vim selection in the editor.
-  func updateCmSelection(_ cm: EditorAdapter, _ selIn: VimRange? = nil, _ modeIn: SelectionMode? = nil) {
+  func updateCmSelection(
+    _ cm: EditorAdapter, _ selIn: VimRange? = nil, _ modeIn: SelectionMode? = nil
+  ) {
     guard let vim = cm.vim else { return }
     let sel = selIn ?? vim.sel
     let mode = modeIn ?? (vim.visualLine ? .line : vim.visualBlock ? .block : .char)
@@ -194,7 +205,9 @@ extension Vim {
   }
 
   /// `makeCmSelection(cm, sel, mode, exclusive)`: CodeMirror ranges for a vim selection.
-  func makeCmSelection(_ cm: EditorAdapter, _ sel: VimRange, _ mode: SelectionMode, exclusive: Bool = false) -> (ranges: [VimRange], primary: Int) {
+  func makeCmSelection(
+    _ cm: EditorAdapter, _ sel: VimRange, _ mode: SelectionMode, exclusive: Bool = false
+  ) -> (ranges: [VimRange], primary: Int) {
     var head = sel.head
     var anchor = sel.anchor
     switch mode {
@@ -308,7 +321,9 @@ extension Vim {
   }
 
   /// `charIdxInLine(start, line, character, forward, includeChar)`.
-  func charIdxInLine(_ start: Int, _ line: VimText, _ character: VimText, _ forward: Bool, _ includeChar: Bool) -> Int {
+  func charIdxInLine(
+    _ start: Int, _ line: VimText, _ character: VimText, _ forward: Bool, _ includeChar: Bool
+  ) -> Int {
     var idx: Int
     if forward {
       idx = line.indexOf(character, start + 1)
@@ -321,7 +336,9 @@ extension Vim {
   }
 
   /// `moveToCharacter(cm, repeat, forward, character, head)`.
-  func moveToCharacter(_ cm: EditorAdapter, _ count: Int, _ forward: Bool, _ character: VimText?, _ head: Pos?) -> Pos? {
+  func moveToCharacter(
+    _ cm: EditorAdapter, _ count: Int, _ forward: Bool, _ character: VimText?, _ head: Pos?
+  ) -> Pos? {
     guard let character, !character.isEmpty else { return nil }
     let cur = head ?? cm.getCursor()
     var start = cur.ch
@@ -344,7 +361,9 @@ extension Vim {
   }
 
   /// `moveToEol(cm, head, motionArgs, vim, keepHPos)`.
-  func moveToEol(_ cm: EditorAdapter, _ head: Pos, _ motionArgs: MotionArgs, _ vim: VimState, _ keepHPos: Bool) -> Pos {
+  func moveToEol(
+    _ cm: EditorAdapter, _ head: Pos, _ motionArgs: MotionArgs, _ vim: VimState, _ keepHPos: Bool
+  ) -> Pos {
     let retval = Pos(head.line + motionArgs.repeat - 1, Pos.endOfLine)
     var end = cm.clipPos(retval)
     end.ch -= 1

@@ -106,7 +106,8 @@ import Testing
 
   @Test("(")
   func u009_x() {
-    let t = UpstreamVim(value: "sentence1.\n\n\nsentence2\n\nsentence3. sentence4\n   sentence5? sentence6!")
+    let t = UpstreamVim(
+      value: "sentence1.\n\n\nsentence2\n\nsentence3. sentence4\n   sentence5? sentence6!")
 
     t.setCursor(6, 23)
     t.doKeys("(")
@@ -127,7 +128,8 @@ import Testing
 
   @Test(")")
   func u010_x() {
-    let t = UpstreamVim(value: "sentence1.\n\n\nsentence2\n\nsentence3. sentence4\n   sentence5? sentence6!")
+    let t = UpstreamVim(
+      value: "sentence1.\n\n\nsentence2\n\nsentence3. sentence4\n   sentence5? sentence6!")
 
     t.setCursor(0, 0)
     t.doKeys("2", ")")
@@ -213,7 +215,10 @@ import Testing
 
   @Test("sentence_selections")
   func u012_sentence_selections() {
-    let t = UpstreamVim(value: "Test sentence. Test question?\nAgain.Never. Again.Test.\n\nHello. This is more text. No end of sentence symbol\n")
+    let t = UpstreamVim(
+      value:
+        "Test sentence. Test question?\nAgain.Never. Again.Test.\n\nHello. This is more text. No end of sentence symbol\n"
+    )
 
     // vis at beginning of line
     t.setCursor(0, 0)
@@ -343,7 +348,7 @@ import Testing
     let register = t.registerController.getRegister(nil)
     #expect("o" == register.text.string)
     #expect(!register.linewise)
-    #expect(curStart.offsetting(0 , -1) == t.cursor)
+    #expect(curStart.offsetting(0, -1) == t.cursor)
   }
 
   @Test("dj")
@@ -1663,7 +1668,8 @@ import Testing
     let t = UpstreamVim(value: "___")
 
     t.setCursor(0, 1)
-    t.registerController.pushText("\"", "yank", VimText("abc\ndef"), linewise: false, blockwise: false)
+    t.registerController.pushText(
+      "\"", "yank", VimText("abc\ndef"), linewise: false, blockwise: false)
     t.doKeys("p")
     #expect("__abc\ndef_" == t.value)
     t.assertCursorAt(0, 2)
@@ -1678,7 +1684,8 @@ import Testing
     let t = UpstreamVim(value: "___")
 
     t.setCursor(0, 1)
-    t.registerController.getRegister("a").setText(VimText("abc\ndef"), linewise: false, blockwise: false)
+    t.registerController.getRegister("a").setText(
+      VimText("abc\ndef"), linewise: false, blockwise: false)
     t.doKeys("\"", "a", "p")
     #expect("__abc\ndef_" == t.value)
     t.assertCursorAt(0, 2)
@@ -1689,7 +1696,8 @@ import Testing
     let t = UpstreamVim(value: "___")
 
     t.setCursor(0, 1)
-    t.registerController.getRegister("a").setText(VimText("abc\ndef"), linewise: false, blockwise: false)
+    t.registerController.getRegister("a").setText(
+      VimText("abc\ndef"), linewise: false, blockwise: false)
     t.doKeys("p")
     #expect("___" == t.value)
     t.assertCursorAt(0, 1)
@@ -1700,7 +1708,8 @@ import Testing
     let t = UpstreamVim(value: "___")
 
     t.setCursor(0, 1)
-    t.registerController.pushText("\"", "yank", VimText("  a\nd\n"), linewise: true, blockwise: false)
+    t.registerController.pushText(
+      "\"", "yank", VimText("  a\nd\n"), linewise: true, blockwise: false)
     t.doKeys("2", "p")
     #expect("___\n  a\nd\n  a\nd" == t.value)
     t.assertCursorAt(1, 2)
@@ -1721,7 +1730,8 @@ import Testing
   func u127_p_first_indent_is_smaller() {
     let t = UpstreamVim(value: "  ___")
 
-    t.registerController.pushText("\"", "yank", VimText("  abc\n    def\n"), linewise: true, blockwise: false)
+    t.registerController.pushText(
+      "\"", "yank", VimText("  abc\n    def\n"), linewise: true, blockwise: false)
     t.doKeys("]", "p")
     #expect("  ___\n  abc\n    def" == t.value)
   }
@@ -1730,7 +1740,8 @@ import Testing
   func u128_p_first_indent_is_larger() {
     let t = UpstreamVim(value: "  ___")
 
-    t.registerController.pushText("\"", "yank", VimText("    abc\n  def\n"), linewise: true, blockwise: false)
+    t.registerController.pushText(
+      "\"", "yank", VimText("    abc\n  def\n"), linewise: true, blockwise: false)
     t.doKeys("]", "p")
     #expect("  ___\n  abc\ndef" == t.value)
   }
@@ -1739,7 +1750,8 @@ import Testing
   func u129_p_with_tab_indents() {
     let t = UpstreamVim(value: "\t___", indentWithTabs: true)
 
-    t.registerController.pushText("\"", "yank", VimText("\t\tabc\n\t\t\tdef\n"), linewise: true, blockwise: false)
+    t.registerController.pushText(
+      "\"", "yank", VimText("\t\tabc\n\t\t\tdef\n"), linewise: true, blockwise: false)
     t.doKeys("]", "p")
     #expect("\t___\n\tabc\n\t\tdef" == t.value)
   }
@@ -1748,7 +1760,8 @@ import Testing
   func u130_p_with_spaces_translated_to_tabs() {
     let t = UpstreamVim(value: "\t___", tabSize: 2, indentWithTabs: true)
 
-    t.registerController.pushText("\"", "yank", VimText("  abc\n    def\n"), linewise: true, blockwise: false)
+    t.registerController.pushText(
+      "\"", "yank", VimText("  abc\n    def\n"), linewise: true, blockwise: false)
     t.doKeys("]", "p")
     #expect("\t___\n\tabc\n\t\tdef" == t.value)
   }
@@ -1757,7 +1770,8 @@ import Testing
   func u131_p() {
     let t = UpstreamVim(value: "  ___")
 
-    t.registerController.pushText("\"", "yank", VimText("  abc\n    def\n"), linewise: true, blockwise: false)
+    t.registerController.pushText(
+      "\"", "yank", VimText("  abc\n    def\n"), linewise: true, blockwise: false)
     t.doKeys("[", "p")
     #expect("  abc\n    def\n  ___" == t.value)
   }
@@ -1767,7 +1781,8 @@ import Testing
     let t = UpstreamVim(value: "___")
 
     t.setCursor(0, 1)
-    t.registerController.pushText("\"", "yank", VimText("abc\ndef"), linewise: false, blockwise: false)
+    t.registerController.pushText(
+      "\"", "yank", VimText("abc\ndef"), linewise: false, blockwise: false)
     t.doKeys("P")
     #expect("_abc\ndef__" == t.value)
     t.assertCursorAt(0, 1)
@@ -1782,7 +1797,8 @@ import Testing
     let t = UpstreamVim(value: "___")
 
     t.setCursor(0, 1)
-    t.registerController.pushText("\"", "yank", VimText("  a\nd\n"), linewise: true, blockwise: false)
+    t.registerController.pushText(
+      "\"", "yank", VimText("  a\nd\n"), linewise: true, blockwise: false)
     t.doKeys("2", "P")
     #expect("  a\nd\n  a\nd\n___" == t.value)
     t.assertCursorAt(0, 2)
@@ -4070,7 +4086,10 @@ import Testing
 
   @Test("[[, ]]")
   func u296_x() {
-    let t = UpstreamVim(value: "({\n  ({\n  /*comment {\n            */(\n#else                \n  /*       )\n#if        }\n  )}*/\n)}\n{}\n#else {{\n{}\n}\n{\n#endif\n}\n}\n#else")
+    let t = UpstreamVim(
+      value:
+        "({\n  ({\n  /*comment {\n            */(\n#else                \n  /*       )\n#if        }\n  )}*/\n)}\n{}\n#else {{\n{}\n}\n{\n#endif\n}\n}\n#else"
+    )
 
     t.setCursor(0, 0)
     t.doKeys("]", "]")
@@ -4089,7 +4108,10 @@ import Testing
 
   @Test("[], ][")
   func u297_x() {
-    let t = UpstreamVim(value: "({\n  ({\n  /*comment {\n            */(\n#else                \n  /*       )\n#if        }\n  )}*/\n)}\n{}\n#else {{\n{}\n}\n{\n#endif\n}\n}\n#else")
+    let t = UpstreamVim(
+      value:
+        "({\n  ({\n  /*comment {\n            */(\n#else                \n  /*       )\n#if        }\n  )}*/\n)}\n{}\n#else {{\n{}\n}\n{\n#endif\n}\n}\n#else"
+    )
 
     t.setCursor(0, 0)
     t.doKeys("]", "[")
@@ -4108,7 +4130,10 @@ import Testing
 
   @Test("[{, ]}")
   func u298_x() {
-    let t = UpstreamVim(value: "({\n  ({\n  /*comment {\n            */(\n#else                \n  /*       )\n#if        }\n  )}*/\n)}\n{}\n#else {{\n{}\n}\n{\n#endif\n}\n}\n#else")
+    let t = UpstreamVim(
+      value:
+        "({\n  ({\n  /*comment {\n            */(\n#else                \n  /*       )\n#if        }\n  )}*/\n)}\n{}\n#else {{\n{}\n}\n{\n#endif\n}\n}\n#else"
+    )
 
     t.setCursor(4, 10)
     t.doKeys("[", "{")
@@ -4129,7 +4154,10 @@ import Testing
 
   @Test("[(, ])")
   func u299_x() {
-    let t = UpstreamVim(value: "({\n  ({\n  /*comment {\n            */(\n#else                \n  /*       )\n#if        }\n  )}*/\n)}\n{}\n#else {{\n{}\n}\n{\n#endif\n}\n}\n#else")
+    let t = UpstreamVim(
+      value:
+        "({\n  ({\n  /*comment {\n            */(\n#else                \n  /*       )\n#if        }\n  )}*/\n)}\n{}\n#else {{\n{}\n}\n{\n#endif\n}\n}\n#else"
+    )
 
     t.setCursor(4, 10)
     t.doKeys("[", "(")
@@ -4149,7 +4177,10 @@ import Testing
 
   @Test("[#, ]#")
   func u300_x() {
-    let t = UpstreamVim(value: "({\n  ({\n  /*comment {\n            */(\n#else                \n  /*       )\n#if        }\n  )}*/\n)}\n{}\n#else {{\n{}\n}\n{\n#endif\n}\n}\n#else")
+    let t = UpstreamVim(
+      value:
+        "({\n  ({\n  /*comment {\n            */(\n#else                \n  /*       )\n#if        }\n  )}*/\n)}\n{}\n#else {{\n{}\n}\n{\n#endif\n}\n}\n#else"
+    )
 
     t.setCursor(10, 3)
     t.doKeys("2", "[", "#")
@@ -4163,7 +4194,10 @@ import Testing
 
   @Test("[m, ]m, [M, ]M")
   func u301_m_m_M_M() {
-    let t = UpstreamVim(value: "({\n  ({\n  /*comment {\n            */(\n#else                \n  /*       )\n#if        }\n  )}*/\n)}\n{}\n#else {{\n{}\n}\n{\n#endif\n}\n}\n#else")
+    let t = UpstreamVim(
+      value:
+        "({\n  ({\n  /*comment {\n            */(\n#else                \n  /*       )\n#if        }\n  )}*/\n)}\n{}\n#else {{\n{}\n}\n{\n#endif\n}\n}\n#else"
+    )
 
     t.setCursor(11, 0)
     t.doKeys("[", "m")
@@ -4395,7 +4429,8 @@ import Testing
 
   @Test("ex_sort_pattern_alpha_longer")
   func u325_ex_sort_pattern_alpha_longer() {
-    let t = UpstreamVim(value: "z\nab\naa\nade\nadelle\nalexandra\nalex\nadriana\nadele\ny\nc\nb\na")
+    let t = UpstreamVim(
+      value: "z\nab\naa\nade\nadelle\nalexandra\nalex\nadriana\nadele\ny\nc\nb\na")
 
     t.doEx("sort r/[a-z]+/")
     #expect("a\naa\nab\nade\nadele\nadelle\nadriana\nalex\nalexandra\nb\nc\ny\nz" == t.value)
@@ -4694,7 +4729,11 @@ import Testing
 
     try? t.vim.setOption("pcre", false)
     t.setValue("aabb1cxyz$^o aabb2cxyz$^o aabb3cxyz$^o aabb4cxyz$^o ")
-    t.doEx("s/" + "\\v<a*(b|\\d){3}c?[x-z]+\\$\\^.> " + "\\V\\<a\\*\\(b\\|\\d\\)\\{3\\}c\\?\\[x-z]\\+$^\\.\\> " + "\\m\\<a*\\(b\\|\\d\\)\\{3}c\\?[x-z]\\+\\$\\^.\\> " + "\\M\\<a\\*\\(b\\|\\d\\)\\{3}c\\?\\[x-z]\\+\\$\\^\\.\\>" + "/M\\4 m\\3 V\\2 v\\1/")
+    t.doEx(
+      "s/" + "\\v<a*(b|\\d){3}c?[x-z]+\\$\\^.> "
+        + "\\V\\<a\\*\\(b\\|\\d\\)\\{3\\}c\\?\\[x-z]\\+$^\\.\\> "
+        + "\\m\\<a*\\(b\\|\\d\\)\\{3}c\\?[x-z]\\+\\$\\^.\\> "
+        + "\\M\\<a\\*\\(b\\|\\d\\)\\{3}c\\?\\[x-z]\\+\\$\\^\\.\\>" + "/M\\4 m\\3 V\\2 v\\1/")
     #expect("M4 m3 V2 v1 " == t.value)
     t.setValue("10 12 13 42")
     t.doEx("s/\\m\\(1\\)\\v\\ze(\\d+)/\\2\\1 a\\1/g")

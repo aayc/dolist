@@ -4,7 +4,9 @@
 
 extension Vim {
   /// `selectCompanionObject(cm, head, symb, inclusive)`: the bracket pair around `head`.
-  func selectCompanionObject(_ cm: EditorAdapter, _ head: Pos, _ symb: VimText, _ inclusive: Bool) -> (start: Pos, end: Pos)? {
+  func selectCompanionObject(_ cm: EditorAdapter, _ head: Pos, _ symb: VimText, _ inclusive: Bool)
+    -> (start: Pos, end: Pos)?
+  {
     let cur = head
     let pairs: [String: (open: UInt16, close: UInt16)] = [
       "(": (0x28, 0x29), ")": (0x28, 0x29), "[": (0x5B, 0x5D), "]": (0x5B, 0x5D),
@@ -16,8 +18,10 @@ extension Vim {
     // Due to the behavior of scanForBracket, we need to add an offset if the cursor is on a
     // matching open bracket.
     let offset = curChar == pair.open ? 1 : 0
-    let startBracket = cm.scanForBracket(Pos(cur.line, cur.ch + offset), -1, bracketRegex: bracketRegex)
-    let endBracket = cm.scanForBracket(Pos(cur.line, cur.ch + offset), 1, bracketRegex: bracketRegex)
+    let startBracket = cm.scanForBracket(
+      Pos(cur.line, cur.ch + offset), -1, bracketRegex: bracketRegex)
+    let endBracket = cm.scanForBracket(
+      Pos(cur.line, cur.ch + offset), 1, bracketRegex: bracketRegex)
     guard var start = startBracket?.pos, var end = endBracket?.pos else { return nil }
     if (start.line == end.line && start.ch > end.ch) || start.line > end.line { swap(&start, &end) }
     if inclusive { end.ch += 1 } else { start.ch += 1 }
@@ -25,7 +29,9 @@ extension Vim {
   }
 
   /// `findBeginningAndEnd(cm, head, symb, inclusive)`: quotes around the cursor on its line.
-  func findBeginningAndEnd(_ cm: EditorAdapter, _ head: Pos, _ symb: UInt16, _ inclusive: Bool) -> (start: Pos, end: Pos) {
+  func findBeginningAndEnd(_ cm: EditorAdapter, _ head: Pos, _ symb: UInt16, _ inclusive: Bool) -> (
+    start: Pos, end: Pos
+  ) {
     var cur = head
     let chars = cm.getLine(cur.line).units
     var start: Int?
@@ -71,7 +77,9 @@ extension Vim {
   }
 
   /// `findParagraph(cm, head, repeat, dir, inclusive)`.
-  func findParagraph(_ cm: EditorAdapter, _ head: Pos, _ repeatIn: Int, _ dir: Int, _ inclusiveIn: Bool = false) -> (start: Pos, end: Pos) {
+  func findParagraph(
+    _ cm: EditorAdapter, _ head: Pos, _ repeatIn: Int, _ dir: Int, _ inclusiveIn: Bool = false
+  ) -> (start: Pos, end: Pos) {
     var line = head.line
     let min = cm.firstLine()
     let max = cm.lastLine()
@@ -120,7 +128,9 @@ extension Vim {
 
   /// `getSentence(cm, cur, repeat, dir, inclusive)`: the start or end of the sentence at the
   /// cursor, for `is` / `as`.
-  func getSentence(_ cm: EditorAdapter, _ cur: Pos, _ repeatIn: Int, _ dir: Int, _ inclusive: Bool) -> Pos {
+  func getSentence(_ cm: EditorAdapter, _ cur: Pos, _ repeatIn: Int, _ dir: Int, _ inclusive: Bool)
+    -> Pos
+  {
     struct Index {
       var line: VimText?
       var ln: Int
@@ -309,7 +319,9 @@ extension Vim {
 
   /// `expandTagUnderCursor(cm, head, inclusive)`: plain text has no tags, so the empty range at
   /// the cursor (like the CodeMirror 6 adapter without an XML language).
-  func expandTagUnderCursor(_ cm: EditorAdapter, _ head: Pos, _ inclusive: Bool) -> (start: Pos, end: Pos) {
+  func expandTagUnderCursor(_ cm: EditorAdapter, _ head: Pos, _ inclusive: Bool) -> (
+    start: Pos, end: Pos
+  ) {
     (head, head)
   }
 
@@ -338,9 +350,11 @@ extension Vim {
     let reverseTable: [String: String] = forward ? [")": "(", "}": "{"] : ["(": ")", "{": "}"]
     var state = FindSymbolState(
       lineText: lineText, nextCh: lineText.charAt(curCh), lastCh: nil, index: curCh, symb: symb,
-      reverseSymb: reverseTable[symb.string].map(VimText.init), forward: forward, depth: 0, curMoveThrough: false)
+      reverseSymb: reverseTable[symb.string].map(VimText.init), forward: forward, depth: 0,
+      curMoveThrough: false)
     let symbolToMode: [String: String] = [
-      "(": "bracket", ")": "bracket", "{": "bracket", "}": "bracket", "[": "section", "]": "section",
+      "(": "bracket", ")": "bracket", "{": "bracket", "}": "bracket", "[": "section",
+      "]": "section",
       "*": "comment", "/": "comment", "m": "method", "M": "method", "#": "preprocess",
     ]
     guard let mode = symbolToMode[symb.string] else { return cur }

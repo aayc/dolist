@@ -17,16 +17,21 @@ struct AgentSettingsPane: View {
         }
       }
       Section("Agent") {
-        Toggle("Agent enabled", isOn: Binding(
-          get: { status?.enabled ?? agent.enabled },
-          set: { enabled in
-            Task {
-              await model.setAgentEnabled(enabled)
-              await settings.update(SettingsPatch(agent: .init(enabled: enabled)))
-            }
-          }))
+        Toggle(
+          "Agent enabled",
+          isOn: Binding(
+            get: { status?.enabled ?? agent.enabled },
+            set: { enabled in
+              Task {
+                await model.setAgentEnabled(enabled)
+                await settings.update(SettingsPatch(agent: .init(enabled: enabled)))
+              }
+            }))
         SettingsNote(text: "When off, the orchestrator ignores changes to your notes.")
-        ClampedNumberField(title: "Settle delay", value: agent.settleMs, range: SettingsRanges.settleMs, step: 250, unit: "ms") {
+        ClampedNumberField(
+          title: "Settle delay", value: agent.settleMs, range: SettingsRanges.settleMs, step: 250,
+          unit: "ms"
+        ) {
           update(.init(settleMs: $0))
         }
         SettingsNote(text: "Quiet time after you stop editing a task before the agent looks at it.")
@@ -36,21 +41,29 @@ struct AgentSettingsPane: View {
         ) { update(.init(maxConcurrentSubagents: $0)) }
         ClampedNumberField(
           title: "Approval timeout", value: agent.approvalTimeoutMs / 60_000,
-          range: (SettingsRanges.approvalTimeoutMs.lowerBound / 60_000)...(SettingsRanges.approvalTimeoutMs.upperBound / 60_000),
+          range: (SettingsRanges.approvalTimeoutMs.lowerBound / 60_000)...(SettingsRanges
+            .approvalTimeoutMs.upperBound / 60_000),
           step: 15, unit: "min"
         ) { update(.init(approvalTimeoutMs: $0 * 60_000)) }
         SettingsNote(text: "Risky actions waiting longer than this are denied automatically.")
-        Toggle("Act on tasks that already exist", isOn: Binding(
-          get: { agent.actOnExistingTasks },
-          set: { update(.init(actOnExistingTasks: $0)) }))
+        Toggle(
+          "Act on tasks that already exist",
+          isOn: Binding(
+            get: { agent.actOnExistingTasks },
+            set: { update(.init(actOnExistingTasks: $0)) }))
       }
       Section("Models") {
-        Picker("Agent", selection: Binding(get: { agent.harness }, set: { update(.init(harness: $0)) })) {
+        Picker(
+          "Agent", selection: Binding(get: { agent.harness }, set: { update(.init(harness: $0)) })
+        ) {
           ForEach(AgentHarnessKind.allCases, id: \.self) { Text($0.settingsLabel).tag($0) }
         }
         SettingsNote(text: "What runs the orchestrator and its subagents.")
         let field = AgentModelField(agent)
-        CommitTextField(title: field.title, value: field.value, prompt: field.prompt, monospaced: true, required: true) {
+        CommitTextField(
+          title: field.title, value: field.value, prompt: field.prompt, monospaced: true,
+          required: true
+        ) {
           update(field.patch($0))
         }
         .id(field.harness)
@@ -65,10 +78,16 @@ struct AgentSettingsPane: View {
         }
       }
       Section("Watch window") {
-        ClampedNumberField(title: "Days before today", value: agent.watch.pastDays, range: SettingsRanges.watchDays, unit: "days") {
+        ClampedNumberField(
+          title: "Days before today", value: agent.watch.pastDays, range: SettingsRanges.watchDays,
+          unit: "days"
+        ) {
           update(.init(watch: .init(pastDays: $0)))
         }
-        ClampedNumberField(title: "Days after today", value: agent.watch.futureDays, range: SettingsRanges.watchDays, unit: "days") {
+        ClampedNumberField(
+          title: "Days after today", value: agent.watch.futureDays, range: SettingsRanges.watchDays,
+          unit: "days"
+        ) {
           update(.init(watch: .init(futureDays: $0)))
         }
         SettingsNote(text: "Daily notes in this window are watched for tasks.")
@@ -113,7 +132,8 @@ struct AgentModelField: Equatable {
       title = "Cursor model"
       value = agent.cursorModel
       prompt = AgentSettings.defaultCursorModel
-      note = "A model from `agent models`, e.g. claude-opus-5-5 or composer-2.5. The CLI runs each model's preset: effort and fast variants can't be picked."
+      note =
+        "A model from `agent models`, e.g. claude-opus-5-5 or composer-2.5. The CLI runs each model's preset: effort and fast variants can't be picked."
     }
   }
 

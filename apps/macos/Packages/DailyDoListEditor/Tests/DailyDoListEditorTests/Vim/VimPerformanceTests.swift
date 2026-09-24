@@ -18,16 +18,20 @@ struct VimPerformanceTests {
 
   private func makeEditor(vimMode: Bool = true) -> VimEditorHarness {
     let editor = VimEditorHarness(
-      "", configuration: EditorConfiguration(livePreview: true, vimMode: vimMode), size: NSSize(width: 900, height: 800))
+      "", configuration: EditorConfiguration(livePreview: true, vimMode: vimMode),
+      size: NSSize(width: 900, height: 800))
     editor.controller.setText(Self.note, resetUndo: true)
     // Without vim the text view's undo groups open with the event, as in the app.
     editor.controller.noteUndoManager.groupsByEvent = !vimMode
     editor.controller.scrollToLine(5_000)
-    editor.controller.layoutManager.ensureLayout(forBoundingRect: editor.textView.visibleRect, in: editor.controller.textContainer)
+    editor.controller.layoutManager.ensureLayout(
+      forBoundingRect: editor.textView.visibleRect, in: editor.controller.textContainer)
     return editor
   }
 
-  private func measure(_ editor: VimEditorHarness, _ keys: [String], repeat count: Int) -> PerformanceTests.Stats {
+  private func measure(_ editor: VimEditorHarness, _ keys: [String], repeat count: Int)
+    -> PerformanceTests.Stats
+  {
     let clock = ContinuousClock()
     var samples: [Double] = []
     let events = keys.map { VimEditorHarness.event(for: $0, window: editor.window) }
@@ -36,7 +40,8 @@ struct VimPerformanceTests {
       let elapsed = clock.measure {
         editor.send(event)
         let caret = editor.textView.selectedRange().location
-        editor.controller.layoutManager.ensureLayout(forCharacterRange: NSRange(location: max(0, caret - 1), length: 1))
+        editor.controller.layoutManager.ensureLayout(
+          forCharacterRange: NSRange(location: max(0, caret - 1), length: 1))
       }
       samples.append(PerformanceTests.milliseconds(elapsed))
     }
@@ -53,7 +58,8 @@ struct VimPerformanceTests {
     editor.press("A")
     let stats = measure(editor, keys, repeat: 300)
     editor.press("<Esc>")
-    print("PERF vim insert-mode keystroke (10k lines, keyDown → vim → NSTextView → report): \(stats)")
+    print(
+      "PERF vim insert-mode keystroke (10k lines, keyDown → vim → NSTextView → report): \(stats)")
     print("PERF the same keystroke without vim: \(plain)")
     #expect(stats.average < 12 * Self.multiplier)
     #expect(stats.p95 < 30 * Self.multiplier)

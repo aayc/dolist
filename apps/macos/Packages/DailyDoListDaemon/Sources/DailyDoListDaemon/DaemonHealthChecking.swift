@@ -42,7 +42,8 @@ public struct URLSessionHealthChecker: DaemonHealthChecking {
     do {
       let (data, response) = try await session.data(for: request)
       guard let http = response as? HTTPURLResponse else { return .foreign("not an HTTP server") }
-      return Self.classify(status: http.statusCode, body: data, server: http.value(forHTTPHeaderField: "Server"))
+      return Self.classify(
+        status: http.statusCode, body: data, server: http.value(forHTTPHeaderField: "Server"))
     } catch let error as URLError {
       switch error.code {
       case .badServerResponse, .cannotParseResponse, .cannotDecodeRawData,

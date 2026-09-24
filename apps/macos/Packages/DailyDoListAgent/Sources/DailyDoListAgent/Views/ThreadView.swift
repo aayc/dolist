@@ -62,11 +62,13 @@ public struct ThreadView: View {
     store: AgentStore, threadId: String, onShowInNote: ((TaskLocation) -> Void)? = nil,
     onClose: (() -> Void)? = nil
   ) {
-    self.init(store: store, threadId: threadId, tab: .chat, onShowInNote: onShowInNote, onClose: onClose)
+    self.init(
+      store: store, threadId: threadId, tab: .chat, onShowInNote: onShowInNote, onClose: onClose)
   }
 
   init(
-    store: AgentStore, threadId: String, tab: ThreadTab, onShowInNote: ((TaskLocation) -> Void)? = nil,
+    store: AgentStore, threadId: String, tab: ThreadTab,
+    onShowInNote: ((TaskLocation) -> Void)? = nil,
     onClose: (() -> Void)? = nil
   ) {
     self.store = store
@@ -149,7 +151,8 @@ public struct ThreadView: View {
       case .computer:
         ComputerSurfaceView(store: store, threadId: thread.id)
       }
-    } else if store.failedThreadIds.contains(threadId) && !store.loadingThreadIds.contains(threadId) {
+    } else if store.failedThreadIds.contains(threadId) && !store.loadingThreadIds.contains(threadId)
+    {
       ContentUnavailableView {
         Label("Couldn't load this thread", systemImage: "exclamationmark.triangle")
       } description: {
@@ -193,9 +196,12 @@ struct ThreadHeader: View {
       Spacer(minLength: 8)
       HStack(spacing: 0) {
         if let onStop { IconButton(systemImage: "stop.circle", help: "Stop", action: onStop) }
-        if let onRetry { IconButton(systemImage: "arrow.clockwise", help: "Retry", action: onRetry) }
+        if let onRetry {
+          IconButton(systemImage: "arrow.clockwise", help: "Retry", action: onRetry)
+        }
         if let onShowInNote {
-          IconButton(systemImage: "arrow.up.forward.square", help: "Show in Note", action: onShowInNote)
+          IconButton(
+            systemImage: "arrow.up.forward.square", help: "Show in Note", action: onShowInNote)
         }
         if let onClose { IconButton(systemImage: "xmark", help: "Close", action: onClose) }
       }
@@ -216,7 +222,8 @@ struct ThreadTabBar: View {
   var body: some View {
     HStack(spacing: 2) {
       ForEach(tabs) { tab in
-        ThreadTabChip(title: tab.title(artifactCount: artifactCount), isSelected: tab == selection) {
+        ThreadTabChip(title: tab.title(artifactCount: artifactCount), isSelected: tab == selection)
+        {
           selection = tab
         }
       }
@@ -240,7 +247,8 @@ private struct ThreadTabChip: View {
         .frame(height: 26)
         .background(
           RoundedRectangle(cornerRadius: 6)
-            .fill(isSelected ? AgentTheme.selectedFill : hovering ? AgentTheme.hoverFill : .clear))
+            .fill(isSelected ? AgentTheme.selectedFill : hovering ? AgentTheme.hoverFill : .clear)
+        )
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)

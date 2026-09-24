@@ -77,7 +77,9 @@ public final class ManualVimScheduler: VimScheduler {
   /// Advances the clock by `seconds`, running what falls due in order.
   public func advance(by seconds: Double) {
     let target = now + seconds
-    while let next = entries.filter({ !$0.timer.isCancelled && $0.due <= target }).min(by: { ($0.due, $0.order) < ($1.due, $1.order) }) {
+    while let next = entries.filter({ !$0.timer.isCancelled && $0.due <= target }).min(by: {
+      ($0.due, $0.order) < ($1.due, $1.order)
+    }) {
       entries.removeAll { $0.order == next.order }
       now = next.due
       next.action()

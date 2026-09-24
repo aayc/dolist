@@ -27,7 +27,9 @@ extension EditorAdapter {
           let mergedLine = trimmedLine + " " + trimmedNextLine
           let space = Self.findSpace(mergedLine, max, 5)
           if (space != nil && space!.start > trimmedLine.length) || mergedLine.length < max {
-            try replaceRange(" ", Pos(row, trimmedLine.length), Pos(row + 1, nextLine.length - trimmedNextLine.length))
+            try replaceRange(
+              " ", Pos(row, trimmedLine.length),
+              Pos(row + 1, nextLine.length - trimmedNextLine.length))
             row -= 1
             endRow -= 1
           } else if trimmedLine.length < line.length {
@@ -40,7 +42,8 @@ extension EditorAdapter {
     return row
   }
 
-  private static func findSpace(_ line: VimText, _ max: Int, _ min: Int) -> (start: Int, end: Int)? {
+  private static func findSpace(_ line: VimText, _ max: Int, _ min: Int) -> (start: Int, end: Int)?
+  {
     if line.length < max { return nil }
     let before = line.slice(0, max)
     let after = line.slice(max)
@@ -107,9 +110,12 @@ public final class VimSearchHighlight {
   /// The matches overlapping `from..<to` (document offsets), as CodeMirror's search highlighter
   /// finds them (scanning 250 characters beyond both ends).
   public func matches(from: Int, to: Int) -> [Range<Int>] {
-    guard let regex = try? JSRegExp(query.source, flags: "gmu" + (query.ignoreCase ? "i" : "")) else { return [] }
+    guard let regex = try? JSRegExp(query.source, flags: "gmu" + (query.ignoreCase ? "i" : ""))
+    else { return [] }
     let length = adapter.docLength
-    var cursor = RegExpCursor(adapter, regex: regex, source: query.source, from: max(0, from - 250), to: min(to + 250, length))
+    var cursor = RegExpCursor(
+      adapter, regex: regex, source: query.source, from: max(0, from - 250),
+      to: min(to + 250, length))
     var result: [Range<Int>] = []
     while let m = cursor.next() { result.append(m.from..<m.to) }
     return result

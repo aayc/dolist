@@ -115,7 +115,8 @@ extension AppModel {
     case .running(_, let info), .attached(let info):
       if needsNewClient(for: info) { bootTask = Task { await boot() } }
     case .failed(let reason):
-      toasts.show(.error, "The daemon stopped", body: reason, actionLabel: "Restart") { [weak self] in
+      toasts.show(.error, "The daemon stopped", body: reason, actionLabel: "Restart") {
+        [weak self] in
         guard let self else { return }
         bootTask = Task { await self.boot() }
       }
@@ -148,7 +149,9 @@ extension AppModel {
       return .success(DaemonEndpoint(baseURL: info.baseURL, token: info.token))
     case .external:
       guard let url = preferences.externalURL else {
-        return .failure(.invalidConfiguration(detail: "“\(preferences.externalBaseURL)” isn't a valid http(s) URL."))
+        return .failure(
+          .invalidConfiguration(
+            detail: "“\(preferences.externalBaseURL)” isn't a valid http(s) URL."))
       }
       phase = .booting("Connecting to \(url.absoluteString)…")
       do {
@@ -248,14 +251,16 @@ extension AppModel {
       return fileManager.fileExists(atPath: vault.path) ? vault : nil
     }
     // The daemon's default vault, when it's the one being served.
-    let fallback = fileManager.homeDirectoryForCurrentUser.appendingPathComponent("DailyDoList", isDirectory: true)
+    let fallback = fileManager.homeDirectoryForCurrentUser.appendingPathComponent(
+      "DailyDoList", isDirectory: true)
     guard fileManager.fileExists(atPath: fallback.path),
       connection.health.map({ $0.vaultName == fallback.lastPathComponent }) ?? false
     else { return nil }
     return fallback
   }
 
-  static func capture<T: Sendable>(_ body: @Sendable () async throws -> T) async -> Result<T, Error> {
+  static func capture<T: Sendable>(_ body: @Sendable () async throws -> T) async -> Result<T, Error>
+  {
     do {
       return .success(try await body())
     } catch {

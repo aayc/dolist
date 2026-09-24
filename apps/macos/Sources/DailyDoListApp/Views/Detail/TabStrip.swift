@@ -11,12 +11,18 @@ struct EditorHeader: View {
   var body: some View {
     HStack(spacing: 2) {
       if !ui.sidebarVisible {
-        IconButton(systemImage: "sidebar.left", help: "Show sidebar (⌃⌘S)") { ui.sidebarVisible = true }
+        IconButton(systemImage: "sidebar.left", help: "Show sidebar (⌃⌘S)") {
+          ui.sidebarVisible = true
+        }
       }
-      IconButton(systemImage: "chevron.left", help: "Back (⌘[)", isEnabled: workspace.tabs.canGoBack) {
+      IconButton(
+        systemImage: "chevron.left", help: "Back (⌘[)", isEnabled: workspace.tabs.canGoBack
+      ) {
         Task { await workspace.goBack() }
       }
-      IconButton(systemImage: "chevron.right", help: "Forward (⌘])", isEnabled: workspace.tabs.canGoForward) {
+      IconButton(
+        systemImage: "chevron.right", help: "Forward (⌘])", isEnabled: workspace.tabs.canGoForward
+      ) {
         Task { await workspace.goForward() }
       }
       TabStrip(workspace: workspace)
@@ -25,7 +31,9 @@ struct EditorHeader: View {
         Task { await workspace.createNote() }
       }
       if !ui.inspectorPresented {
-        AgentPanelToggle(pending: model.agent?.pendingApprovalCount ?? 0) { ui.inspectorPresented = true }
+        AgentPanelToggle(pending: model.agent?.pendingApprovalCount ?? 0) {
+          ui.inspectorPresented = true
+        }
       }
     }
     .padding(.leading, !ui.sidebarVisible && !ui.isFullScreen ? Theme.trafficLightsWidth : 6)
@@ -44,7 +52,8 @@ private struct AgentPanelToggle: View {
   var body: some View {
     IconButton(
       systemImage: "sidebar.right",
-      help: pending > 0 ? "Show agent panel: \(pending) waiting for approval (⌘\\)" : "Show agent panel (⌘\\)",
+      help: pending > 0
+        ? "Show agent panel: \(pending) waiting for approval (⌘\\)" : "Show agent panel (⌘\\)",
       action: action
     )
     .overlay(alignment: .topTrailing) {
@@ -119,7 +128,8 @@ private struct TabItem: View {
           .buttonStyle(.plain)
           .help("Close tab (⌘W)")
         } else if saveState?.hasUnsavedChanges == true {
-          Circle().fill(saveState == .conflict ? Theme.warning : Theme.mutedText).frame(width: 6, height: 6)
+          Circle().fill(saveState == .conflict ? Theme.warning : Theme.mutedText).frame(
+            width: 6, height: 6)
         }
       }
       .frame(width: 16)
@@ -129,7 +139,8 @@ private struct TabItem: View {
     .frame(minWidth: 90, maxWidth: 200, minHeight: 28, maxHeight: 28)
     .background(
       RoundedRectangle(cornerRadius: 6)
-        .fill(isActive ? Theme.selectedTab : (hovering ? Theme.hover : .clear)))
+        .fill(isActive ? Theme.selectedTab : (hovering ? Theme.hover : .clear))
+    )
     .contentShape(Rectangle())
     .onTapGesture { workspace.activateTab(path) }
     .onHover { hovering = $0 }

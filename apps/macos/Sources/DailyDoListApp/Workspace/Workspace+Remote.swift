@@ -85,8 +85,11 @@ extension Workspace {
 
   /// Badge click: open the task's thread (or the inbox until the orchestrator creates one).
   func openTaskThread(_ badge: EditorBadge) {
-    let threadId = badge.threadId
-      ?? activePath.flatMap { path in agent?.records(for: path).first { $0.taskId == badge.id }?.threadId }
+    let threadId =
+      badge.threadId
+      ?? activePath.flatMap { path in
+        agent?.records(for: path).first { $0.taskId == badge.id }?.threadId
+      }
     if let threadId {
       ui.showThread(threadId)
     } else {

@@ -10,7 +10,8 @@ public struct EditorSnapshot {
   public var undoManager: UndoManager?
 
   public init(
-    text: String, selectedRange: NSRange = NSRange(location: 0, length: 0), scrollOffset: CGPoint = .zero,
+    text: String, selectedRange: NSRange = NSRange(location: 0, length: 0),
+    scrollOffset: CGPoint = .zero,
     undoManager: UndoManager? = nil
   ) {
     self.text = text

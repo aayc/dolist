@@ -62,7 +62,10 @@ actor FakeDaemon {
   var surfaceSubscriptions: Set<SurfaceKey> = []
   var editorActivity: (notePath: String, line: Int, at: EpochMillis)?
 
-  init(seed: InMemoryDaemonClient.Seed, clock: SimulationClock, simulation: AgentSimulation, clientId: String) {
+  init(
+    seed: InMemoryDaemonClient.Seed, clock: SimulationClock, simulation: AgentSimulation,
+    clientId: String
+  ) {
     self.clientId = clientId
     self.simulation = simulation
     mode = clock.mode
@@ -126,8 +129,10 @@ actor FakeDaemon {
 
   func schedule(_ action: TimedAction, after milliseconds: Double) {
     sequence += 1
-    let item = Scheduled(due: nowMillis + max(0, milliseconds.rounded()), sequence: sequence, action: action)
-    let index = queue.firstIndex { ($0.due, $0.sequence) > (item.due, item.sequence) } ?? queue.endIndex
+    let item = Scheduled(
+      due: nowMillis + max(0, milliseconds.rounded()), sequence: sequence, action: action)
+    let index =
+      queue.firstIndex { ($0.due, $0.sequence) > (item.due, item.sequence) } ?? queue.endIndex
     queue.insert(item, at: index)
   }
 
@@ -196,7 +201,10 @@ actor FakeDaemon {
     broadcaster.emit(.state(.connecting))
     isConnected = true
     broadcaster.emit(.state(.connected(serverVersion: Self.serverVersion)))
-    broadcaster.emit(.event(.hello(HelloEvent(serverVersion: Self.serverVersion, apiVersion: DaemonProtocol.apiVersion))))
+    broadcaster.emit(
+      .event(
+        .hello(HelloEvent(serverVersion: Self.serverVersion, apiVersion: DaemonProtocol.apiVersion))
+      ))
     if everConnected { broadcaster.emit(.resync) }
     everConnected = true
   }
@@ -236,7 +244,10 @@ actor FakeDaemon {
   func emitVaultChange(_ changes: [VaultChange], origin: VaultChangeOrigin) {
     let visible = changes.filter { !FakeVaultPaths.isHidden($0.path) }
     guard !visible.isEmpty else { return }
-    emit(.vaultChanged(VaultChangedEvent(changes: visible, origin: origin, clientId: origin == .client ? clientId : nil)))
+    emit(
+      .vaultChanged(
+        VaultChangedEvent(
+          changes: visible, origin: origin, clientId: origin == .client ? clientId : nil)))
   }
 }
 
