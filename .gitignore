@@ -65,3 +65,10 @@ pnpm-debug.log*
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
 apps/mobile/ios/build/
+
+# ── Swift (apps/macos) ───────────────────────────────────────
+.build/
+.swiftpm/
+DerivedData/
+apps/macos/build/
+*.xcuserstate
