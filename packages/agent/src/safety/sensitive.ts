@@ -13,12 +13,83 @@ export interface SensitiveMatch {
   length: number;
 }
 
-/** 13–19 digits, optionally grouped by single spaces or dashes, not glued to other digits. */
-const CARD_CANDIDATE_RE = /(?<![\d.-])\d(?:[ -]?\d){12,18}(?![\d-])/g;
+/** What may separate the digit groups of one card number. */
+const CARD_SEPARATOR_RE = /^[ .-]{1,3}$/;
 /** Issuer prefixes (Visa, Mastercard, Amex, Diners, JCB, Discover, UnionPay, Maestro). */
 const CARD_PREFIX_RE = /^(?:4|5[0-8]|2[2-7]|3[04-9]|6)/;
 
-const SSN_RE = /\b(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}\b/g;
+const SSN_RE = /\b(?!000|666|9\d\d)\d{3}([- ])(?!00)\d{2}\1(?!0000)\d{4}\b/g;
+
+/**
+ * The text as number detectors should read it, with the same length (so match positions carry
+ * over): exotic and invisible spaces become spaces, full-width and Arabic-Indic digits become ASCII.
+ */
+function digitView(text: string): string {
+  return text
+    .replace(/[\u00A0\u00AD\u2000-\u200D\u202F\u205F\u2060\u3000\uFEFF]/g, " ")
+    .replace(/[\uFF10-\uFF19]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xff10 + 48))
+    .replace(/[\u0660-\u0669]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0x0660 + 48))
+    .replace(/[\u06F0-\u06F9]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0x06f0 + 48));
+}
+
+interface Span {
+  index: number;
+  length: number;
+  digits: string;
+}
+
+/**
+ * Card numbers in the digit view: 13–19 digits in groups joined by short separators, starting and
+ * ending on group boundaries, so a card that follows other numbers (`qty 2 4111 1111 …`) is found.
+ * A run glued to a preceding or following dot/dash continues something else (decimals, long ids).
+ */
+function cardSpans(view: string): Span[] {
+  const groups = [...view.matchAll(/\d+/g)].map((m) => ({
+    start: m.index,
+    end: m.index + m[0].length,
+    digits: m[0],
+  }));
+  const spans: Span[] = [];
+  for (let i = 0; i < groups.length; ) {
+    let best: { j: number; digits: string } | undefined;
+    if (!/[.-]/.test(view[groups[i]!.start - 1] ?? "")) {
+      let digits = "";
+      for (let j = i; j < groups.length; j++) {
+        if (j > i && !CARD_SEPARATOR_RE.test(view.slice(groups[j - 1]!.end, groups[j]!.start)))
+          break;
+        digits += groups[j]!.digits;
+        if (digits.length > 19) break;
+        if (view[groups[j]!.end] !== "-" && isCardNumber(digits)) best = { j, digits };
+      }
+    }
+    if (!best) {
+      i++;
+      continue;
+    }
+    const start = groups[i]!.start;
+    spans.push({ index: start, length: groups[best.j]!.end - start, digits: best.digits });
+    i = best.j + 1;
+  }
+  return spans;
+}
+
+function ssnSpans(view: string): Span[] {
+  return [...view.matchAll(SSN_RE)].map((m) => ({
+    index: m.index,
+    length: m[0].length,
+    digits: m[0],
+  }));
+}
+
+function replaceSpans(text: string, spans: readonly Span[], mask: (span: Span) => string): string {
+  let out = "";
+  let last = 0;
+  for (const span of spans) {
+    out += text.slice(last, span.index) + mask(span);
+    last = span.index + span.length;
+  }
+  return out + text.slice(last);
+}
 
 interface SecretPattern {
   label: string;
@@ -73,21 +144,20 @@ export function isCardNumber(digits: string): boolean {
 }
 
 export function findCardNumbers(text: string): SensitiveMatch[] {
-  const out: SensitiveMatch[] = [];
-  for (const m of text.matchAll(CARD_CANDIDATE_RE)) {
-    if (isCardNumber(m[0].replace(/[ -]/g, ""))) {
-      out.push({ kind: "card", label: "card number", index: m.index ?? 0, length: m[0].length });
-    }
-  }
-  return out;
+  return cardSpans(digitView(text)).map(({ index, length }) => ({
+    kind: "card" as const,
+    label: "card number",
+    index,
+    length,
+  }));
 }
 
 export function findSsns(text: string): SensitiveMatch[] {
-  return [...text.matchAll(SSN_RE)].map((m) => ({
+  return ssnSpans(digitView(text)).map(({ index, length }) => ({
     kind: "ssn" as const,
     label: "social security number",
-    index: m.index ?? 0,
-    length: m[0].length,
+    index,
+    length,
   }));
 }
 
@@ -135,11 +205,8 @@ export function looksLikeSecret(value: string): boolean {
 export function maskSensitiveText(text: string): string {
   let out = text;
   for (const { label, re } of SECRET_PATTERNS) out = out.replace(re, `[hidden ${label}]`);
-  out = out.replace(CARD_CANDIDATE_RE, (m) => {
-    const digits = m.replace(/[ -]/g, "");
-    return isCardNumber(digits) ? `•••• ${digits.slice(-4)}` : m;
-  });
-  return out.replace(SSN_RE, "•••-••-••••");
+  out = replaceSpans(out, cardSpans(digitView(out)), (span) => `•••• ${span.digits.slice(-4)}`);
+  return replaceSpans(out, ssnSpans(digitView(out)), () => "•••-••-••••");
 }
 
 const SENSITIVE_KEY_RE =

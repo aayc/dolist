@@ -243,6 +243,27 @@ describe("live preview: viewport", () => {
     }
   });
 
+  it("decorates inline syntax that ends where a fold ends only once", () => {
+    // Folding the first item leaves visible ranges [start, end of line 1] and [end of line 2, …];
+    // the link and the emphasis continue onto line 2 and end exactly at the fold end.
+    for (const doc of [
+      "- [text\nmore](https://example.com)\n- next",
+      "- *emphasis\nacross*\n- next",
+    ]) {
+      const state = parsedState(doc);
+      const ranges = [
+        { from: 0, to: state.doc.line(1).to },
+        { from: state.doc.line(2).to, to: doc.length },
+      ];
+      const s = preview(doc, { ranges, cursor: doc.length });
+      const replaced = s.decorations
+        .filter((d) => !(d.deco.spec as { class?: string }).class)
+        .map((d) => `${d.from}-${d.to}`);
+      expect(replaced.length, doc).toBeGreaterThan(0);
+      expect(new Set(replaced).size, doc).toBe(replaced.length);
+    }
+  });
+
   it("never hides a line break", () => {
     const doc = [
       "# H #",

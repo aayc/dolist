@@ -1,6 +1,7 @@
 import {
   type AgentStatusResponse,
   API_ROUTES,
+  API_VERSION,
   type ApprovalDecisionRequest,
   type ApprovalListResponse,
   type ApprovalRequest,
@@ -11,6 +12,7 @@ import {
   createId,
   type DailyNoteResponse,
   type HealthResponse,
+  isCompatibleApiVersion,
   type NoteResponse,
   type PostMessageRequest,
   type RenameRequest,
@@ -26,6 +28,7 @@ import {
   type VaultTreeResponse,
   type WriteNoteRequest,
   type WriteNoteResponse,
+  WS_CLOSE_CODES,
 } from "@ddl/core";
 import { reportError } from "../lib/report-error";
 import type {
@@ -45,6 +48,8 @@ export interface HttpDaemonClientOptions {
   /** Bearer token (production: from the injected meta tag; dev: the proxy adds it). */
   token?: string | null;
   clientId?: string;
+  /** Sent in the WebSocket hello for diagnostics. */
+  clientVersion?: string;
   fetch?: typeof fetch;
   createSocket?: (url: string) => SocketLike;
   requestTimeoutMs?: number;
@@ -60,10 +65,20 @@ function surfaceKey(threadId: string, surface: string): string {
   return `${threadId}\u0000${surface}`;
 }
 
+/** URL parsers resolve `.`/`..` segments (even `%2e`) before a request leaves, changing the route. */
+function hasDotSegment(path: string): boolean {
+  return path.split("/").some((segment) => segment === "." || segment === "..");
+}
+
+function isIncompatibleClose(event: unknown): boolean {
+  return isObject(event) && event.code === WS_CLOSE_CODES.incompatibleApiVersion;
+}
+
 export class HttpDaemonClient implements DaemonClient {
   readonly kind = "http" as const;
   readonly clientId: string;
   readonly endpoint: string;
+  private readonly clientVersion: string;
   private readonly baseUrl: string;
   private readonly token: string | null;
   private readonly fetchImpl: typeof fetch;
@@ -78,6 +93,7 @@ export class HttpDaemonClient implements DaemonClient {
     this.baseUrl = (options.baseUrl ?? "").replace(/\/$/, "");
     this.token = options.token ?? null;
     this.clientId = options.clientId ?? createId("web");
+    this.clientVersion = options.clientVersion ?? `web/${__APP_VERSION__}`;
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.timeoutMs = options.requestTimeoutMs ?? 20_000;
     this.endpoint = this.baseUrl || (typeof location === "undefined" ? "" : location.origin);
@@ -87,6 +103,7 @@ export class HttpDaemonClient implements DaemonClient {
       pingMessage: JSON.stringify({ type: "ping" } satisfies ClientEvent),
       onOpen: () => this.handleOpen(),
       onMessage: (data) => this.handleMessage(data),
+      isFatalClose: isIncompatibleClose,
       onStateChange: (state, reconnected) => {
         this.state = state;
         for (const listener of this.connectionListeners) listener({ state, reconnected });
@@ -134,9 +151,13 @@ export class HttpDaemonClient implements DaemonClient {
   }
 
   private handleOpen(): void {
-    this.socket.send(
-      JSON.stringify({ type: "hello", clientId: this.clientId } satisfies ClientEvent),
-    );
+    const hello: ClientEvent = {
+      type: "hello",
+      clientId: this.clientId,
+      apiVersion: API_VERSION,
+      clientVersion: this.clientVersion,
+    };
+    this.socket.send(JSON.stringify(hello));
     for (const subscription of this.surfaces.values())
       this.socket.send(JSON.stringify(subscription));
   }
@@ -150,6 +171,12 @@ export class HttpDaemonClient implements DaemonClient {
     }
     const event = parseServerEvent(raw);
     if (!event) return;
+    if (event.type === "hello" && !isCompatibleApiVersion(event.apiVersion)) {
+      reportError(
+        new Error(`The daemon speaks API ${event.apiVersion}; this app needs ${API_VERSION}`),
+      );
+      this.socket.close();
+    }
     for (const listener of this.listeners) {
       try {
         listener(event);
@@ -199,10 +226,10 @@ export class HttpDaemonClient implements DaemonClient {
       }
     }
     if (!response.ok) {
-      if (response.status === 409 && isObject(data) && data.error === "conflict") {
-        throw new ConflictError(
-          isObject(data.current) ? (data.current as unknown as NoteResponse) : null,
-        );
+      // Only note conflicts carry `current`; other 409s (e.g. an approval already decided) don't.
+      if (response.status === 409 && isObject(data) && "current" in data) {
+        const current = isObject(data.current) ? (data.current as unknown as NoteResponse) : null;
+        throw new ConflictError(current, data);
       }
       const message =
         (isObject(data) && typeof data.message === "string" && data.message) ||
@@ -222,20 +249,20 @@ export class HttpDaemonClient implements DaemonClient {
     return this.request("GET", API_ROUTES.tree);
   }
 
-  readNote(path: string): Promise<NoteResponse> {
-    return this.request("GET", API_ROUTES.note(path));
+  async readNote(path: string): Promise<NoteResponse> {
+    return this.request("GET", noteRoute(path));
   }
 
-  writeNote(
+  async writeNote(
     path: string,
     body: WriteNoteRequest,
     options: WriteOptions = {},
   ): Promise<WriteNoteResponse> {
-    return this.request("PUT", API_ROUTES.note(path), body, options.keepalive ?? false);
+    return this.request("PUT", noteRoute(path), body, options.keepalive ?? false);
   }
 
   async deleteNote(path: string): Promise<void> {
-    await this.request("DELETE", API_ROUTES.note(path));
+    await this.request("DELETE", noteRoute(path));
   }
 
   async renamePath(from: string, to: string): Promise<void> {
@@ -337,4 +364,11 @@ export class HttpDaemonClient implements DaemonClient {
       "application/octet-stream";
     return { mimeType, blob };
   }
+}
+
+function noteRoute(path: string): string {
+  if (hasDotSegment(path)) {
+    throw new HttpError(400, `Invalid note path "${path}"`, { error: "invalid_path" });
+  }
+  return API_ROUTES.note(path);
 }

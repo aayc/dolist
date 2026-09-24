@@ -1,0 +1,2347 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:daily-do-list:wire:v1",
+  "title": "Daily Do List wire protocol",
+  "description": "Every REST body and WebSocket message exchanged with the daemon. Requests reject unknown keys; responses and events may gain keys (clients must ignore them).",
+  "x-api-version": 1,
+  "$defs": {
+    "TaskAgentStatus": {
+      "type": "string",
+      "enum": [
+        "idle",
+        "triaging",
+        "queued",
+        "working",
+        "waiting_approval",
+        "waiting_user",
+        "done",
+        "failed",
+        "cancelled",
+        "ignored"
+      ],
+      "description": "Lifecycle of the agent's work on one to-do item (drives the badge next to the task)."
+    },
+    "TaskAgentRecord": {
+      "type": "object",
+      "properties": {
+        "taskId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Identifier."
+        },
+        "notePath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments)."
+        },
+        "date": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+              "description": "Local calendar date YYYY-MM-DD."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Local ISO date when the note is a daily note."
+        },
+        "text": {
+          "type": "string",
+          "description": "Latest task text."
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Last known 0-based line."
+        },
+        "status": {
+          "$ref": "#/$defs/TaskAgentStatus"
+        },
+        "summary": {
+          "description": "One-line status shown inline in the editor.",
+          "type": "string"
+        },
+        "threadId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+              "description": "Runtime id, safe to use in URLs."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updatedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "unread": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Agent messages the user has not seen yet."
+        }
+      },
+      "required": [
+        "taskId",
+        "notePath",
+        "date",
+        "text",
+        "line",
+        "status",
+        "threadId",
+        "updatedAt",
+        "unread"
+      ],
+      "additionalProperties": {},
+      "description": "Everything a client needs to render the agent badge for one task line."
+    },
+    "RiskLevel": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"],
+      "description": "Safety evaluator's risk estimate for an action."
+    },
+    "ActionCategory": {
+      "type": "string",
+      "enum": [
+        "read",
+        "compute",
+        "network",
+        "file_write",
+        "browser_input",
+        "form_submission",
+        "computer_control",
+        "communication",
+        "publishing",
+        "payment",
+        "booking",
+        "account",
+        "credentials",
+        "privacy",
+        "destructive",
+        "system",
+        "unknown"
+      ],
+      "description": "Coarse effect category used by the safety evaluator and shown on approval cards."
+    },
+    "ApprovalScope": {
+      "type": "string",
+      "enum": ["once", "task", "always"],
+      "description": "How far an approval reaches: this call, the rest of this task, or always."
+    },
+    "ApprovalDecision": {
+      "type": "string",
+      "enum": ["approve", "deny"],
+      "description": "The user's answer to an approval request."
+    },
+    "ApprovalStatus": {
+      "type": "string",
+      "enum": ["pending", "approved", "denied", "expired", "cancelled"],
+      "description": "Lifecycle of an approval request."
+    },
+    "ApprovalRequest": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        },
+        "threadId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+              "description": "Runtime id, safe to use in URLs."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "taskId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "Identifier."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "toolName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Tool name, e.g. `browser_click`."
+        },
+        "toolLabel": {
+          "type": "string"
+        },
+        "input": {
+          "description": "Tool arguments exactly as the agent proposed them."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Human-readable description of the action."
+        },
+        "risk": {
+          "$ref": "#/$defs/RiskLevel"
+        },
+        "categories": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ActionCategory"
+          }
+        },
+        "reason": {
+          "type": "string",
+          "description": "Why the safety evaluator wants a human in the loop."
+        },
+        "status": {
+          "$ref": "#/$defs/ApprovalStatus"
+        },
+        "scope": {
+          "description": "Scope the user granted when approving.",
+          "$ref": "#/$defs/ApprovalScope"
+        },
+        "decisionNote": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "decidedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "expiresAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        }
+      },
+      "required": [
+        "id",
+        "threadId",
+        "taskId",
+        "toolName",
+        "input",
+        "summary",
+        "risk",
+        "categories",
+        "reason",
+        "status",
+        "createdAt"
+      ],
+      "additionalProperties": {},
+      "description": "A risky action paused by the safety gate until the user decides."
+    },
+    "ArtifactKind": {
+      "type": "string",
+      "enum": ["markdown", "code", "html", "image", "json", "text", "file"],
+      "description": "How a client should render an artifact."
+    },
+    "ArtifactMeta": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        },
+        "threadId": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        },
+        "title": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "mimeType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "language": {
+          "description": "Code language hint for `code` artifacts.",
+          "type": "string",
+          "maxLength": 100
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Vault-relative sidecar path of the artifact body."
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        }
+      },
+      "required": ["id", "threadId", "title", "kind", "mimeType", "path", "size", "createdAt"],
+      "additionalProperties": {},
+      "description": "An agent-produced file attached to a thread (bytes via `GET /api/artifacts/:threadId/:artifactId`)."
+    },
+    "MessageAuthor": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "you"
+        },
+        {
+          "type": "string",
+          "const": "orchestrator"
+        },
+        {
+          "type": "string",
+          "const": "system"
+        },
+        {
+          "type": "string",
+          "pattern": "^subagent:[\\s\\S]{1,100}$"
+        }
+      ],
+      "description": "Who wrote a thread message: `you`, `orchestrator`, `system` or `subagent:<name>`."
+    },
+    "TextMessage": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Identifier."
+        },
+        "author": {
+          "$ref": "#/$defs/MessageAuthor"
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "kind": {
+          "type": "string",
+          "const": "text"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["agent", "user", "system"]
+        },
+        "text": {
+          "type": "string"
+        },
+        "streaming": {
+          "description": "True while tokens are still streaming in (see `thread.delta`).",
+          "type": "boolean"
+        }
+      },
+      "required": ["id", "author", "createdAt", "kind", "role", "text"],
+      "additionalProperties": {},
+      "description": "Markdown text from the agent, the user or the system."
+    },
+    "ToolCallStatus": {
+      "type": "string",
+      "enum": ["running", "ok", "error", "blocked"],
+      "description": "`blocked`: the safety gate refused the call."
+    },
+    "ToolCallMessage": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Identifier."
+        },
+        "author": {
+          "$ref": "#/$defs/MessageAuthor"
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "kind": {
+          "type": "string",
+          "const": "tool_call"
+        },
+        "toolCallId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Identifier."
+        },
+        "toolName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Tool name, e.g. `browser_click`."
+        },
+        "label": {
+          "type": "string"
+        },
+        "input": {},
+        "status": {
+          "$ref": "#/$defs/ToolCallStatus"
+        },
+        "resultPreview": {
+          "description": "Short, UI-safe preview of the result.",
+          "type": "string"
+        },
+        "endedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        }
+      },
+      "required": [
+        "id",
+        "author",
+        "createdAt",
+        "kind",
+        "toolCallId",
+        "toolName",
+        "input",
+        "status"
+      ],
+      "additionalProperties": {},
+      "description": "A tool call made by an agent, updated in place as it runs."
+    },
+    "ApprovalMessage": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Identifier."
+        },
+        "author": {
+          "$ref": "#/$defs/MessageAuthor"
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "kind": {
+          "type": "string",
+          "const": "approval"
+        },
+        "approvalId": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        }
+      },
+      "required": ["id", "author", "createdAt", "kind", "approvalId"],
+      "additionalProperties": {},
+      "description": "Marks where in the thread an approval was requested."
+    },
+    "ArtifactMessage": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Identifier."
+        },
+        "author": {
+          "$ref": "#/$defs/MessageAuthor"
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "kind": {
+          "type": "string",
+          "const": "artifact"
+        },
+        "artifactId": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        }
+      },
+      "required": ["id", "author", "createdAt", "kind", "artifactId"],
+      "additionalProperties": {},
+      "description": "Marks where in the thread an artifact was created."
+    },
+    "StatusMessage": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Identifier."
+        },
+        "author": {
+          "$ref": "#/$defs/MessageAuthor"
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "kind": {
+          "type": "string",
+          "const": "status"
+        },
+        "status": {
+          "$ref": "#/$defs/TaskAgentStatus"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "author", "createdAt", "kind", "status"],
+      "additionalProperties": {},
+      "description": "A task status change, with an optional note."
+    },
+    "ThreadMessage": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/TextMessage"
+        },
+        {
+          "$ref": "#/$defs/ToolCallMessage"
+        },
+        {
+          "$ref": "#/$defs/ApprovalMessage"
+        },
+        {
+          "$ref": "#/$defs/ArtifactMessage"
+        },
+        {
+          "$ref": "#/$defs/StatusMessage"
+        }
+      ],
+      "description": "One entry of a task thread, discriminated by `kind`."
+    },
+    "SurfaceKind": {
+      "type": "string",
+      "enum": ["browser", "computer"],
+      "description": "A live visual surface a thread can expose."
+    },
+    "Thread": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        },
+        "taskId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "Identifier."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "notePath": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "description": "Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments)."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "type": "string",
+          "description": "Task text snapshot (kept in sync as the task is edited)."
+        },
+        "status": {
+          "$ref": "#/$defs/TaskAgentStatus"
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "updatedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "surfaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SurfaceKind"
+          }
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ThreadMessage"
+          }
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactMeta"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "taskId",
+        "notePath",
+        "title",
+        "status",
+        "createdAt",
+        "updatedAt",
+        "surfaces",
+        "messages",
+        "artifacts"
+      ],
+      "additionalProperties": {},
+      "description": "A task's full conversation: messages, artifacts and live surfaces."
+    },
+    "ThreadSummary": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        },
+        "taskId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "Identifier."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "notePath": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "description": "Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments)."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "type": "string",
+          "description": "Task text snapshot (kept in sync as the task is edited)."
+        },
+        "status": {
+          "$ref": "#/$defs/TaskAgentStatus"
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "updatedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "surfaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SurfaceKind"
+          }
+        },
+        "messageCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "lastMessagePreview": {
+          "type": "string"
+        },
+        "artifactCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "pendingApprovals": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "taskId",
+        "notePath",
+        "title",
+        "status",
+        "createdAt",
+        "updatedAt",
+        "surfaces",
+        "messageCount",
+        "artifactCount",
+        "pendingApprovals"
+      ],
+      "additionalProperties": {},
+      "description": "A thread without its messages, for lists and badges."
+    },
+    "SurfaceFrameAction": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": ["kind"],
+      "additionalProperties": {},
+      "description": "The action that produced a frame, for overlays (x/y in frame pixels)."
+    },
+    "SurfaceFrame": {
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        },
+        "surface": {
+          "$ref": "#/$defs/SurfaceKind"
+        },
+        "mimeType": {
+          "type": "string",
+          "enum": ["image/jpeg", "image/png"]
+        },
+        "data": {
+          "type": "string",
+          "minLength": 1,
+          "format": "base64",
+          "contentEncoding": "base64",
+          "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+          "description": "Base64-encoded image bytes."
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "url": {
+          "description": "Browser only.",
+          "type": "string"
+        },
+        "title": {
+          "description": "Browser only.",
+          "type": "string"
+        },
+        "action": {
+          "$ref": "#/$defs/SurfaceFrameAction"
+        },
+        "ts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        }
+      },
+      "required": ["threadId", "surface", "mimeType", "data", "width", "height", "ts"],
+      "additionalProperties": {},
+      "description": "One frame of a live surface (browser screencast or desktop screenshot)."
+    },
+    "ThemePreference": {
+      "type": "string",
+      "enum": ["system", "light", "dark"],
+      "description": "UI theme."
+    },
+    "EditorSettings": {
+      "type": "object",
+      "properties": {
+        "vimMode": {
+          "type": "boolean"
+        },
+        "livePreview": {
+          "type": "boolean",
+          "description": "Obsidian-style live preview."
+        },
+        "readableLineLength": {
+          "type": "boolean"
+        },
+        "fontSize": {
+          "type": "number",
+          "minimum": 8,
+          "maximum": 48
+        },
+        "spellcheck": {
+          "type": "boolean"
+        },
+        "showLineNumbers": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "vimMode",
+        "livePreview",
+        "readableLineLength",
+        "fontSize",
+        "spellcheck",
+        "showLineNumbers"
+      ],
+      "additionalProperties": {},
+      "description": "Editor preferences."
+    },
+    "DailyNoteSettings": {
+      "type": "object",
+      "properties": {
+        "folder": {
+          "type": "string",
+          "maxLength": 512,
+          "description": "Vault folder for the notes; empty = vault root."
+        },
+        "format": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Moment-style file name format; may contain `/` for nested folders."
+        },
+        "template": {
+          "type": "string",
+          "maxLength": 512,
+          "description": "Template note path; empty = no template."
+        }
+      },
+      "required": ["folder", "format", "template"],
+      "additionalProperties": {},
+      "description": "Where daily notes live (mirrors Obsidian's daily-notes config)."
+    },
+    "WeeklyNoteSettings": {
+      "type": "object",
+      "properties": {
+        "folder": {
+          "type": "string",
+          "maxLength": 512,
+          "description": "Vault folder for the notes; empty = vault root."
+        },
+        "format": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Moment-style file name format; may contain `/` for nested folders."
+        },
+        "template": {
+          "type": "string",
+          "maxLength": 512,
+          "description": "Template note path; empty = no template."
+        }
+      },
+      "required": ["folder", "format", "template"],
+      "additionalProperties": {},
+      "description": "Where weekly notes live."
+    },
+    "AgentWatchWindow": {
+      "type": "object",
+      "properties": {
+        "pastDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 366
+        },
+        "futureDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 366
+        }
+      },
+      "required": ["pastDays", "futureDays"],
+      "additionalProperties": {},
+      "description": "Days around today whose daily notes the orchestrator watches."
+    },
+    "AgentSettings": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Master switch: when false the orchestrator ignores note changes."
+        },
+        "settleMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 120000,
+          "description": "Quiet period after the last edit to a task before the orchestrator looks at it."
+        },
+        "maxConcurrentSubagents": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "actOnExistingTasks": {
+          "type": "boolean"
+        },
+        "approvalTimeoutMs": {
+          "type": "integer",
+          "minimum": 60000,
+          "maximum": 2592000000,
+          "description": "How long an approval request waits before it is auto-denied."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+          "description": "OpenRouter model id for the orchestrator and subagents."
+        },
+        "judgeModel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+          "description": "OpenRouter model id for the safety judge."
+        },
+        "watch": {
+          "$ref": "#/$defs/AgentWatchWindow"
+        }
+      },
+      "required": [
+        "enabled",
+        "settleMs",
+        "maxConcurrentSubagents",
+        "actOnExistingTasks",
+        "approvalTimeoutMs",
+        "model",
+        "judgeModel",
+        "watch"
+      ],
+      "additionalProperties": {},
+      "description": "Orchestrator and subagent settings."
+    },
+    "AppSettings": {
+      "type": "object",
+      "properties": {
+        "theme": {
+          "$ref": "#/$defs/ThemePreference"
+        },
+        "editor": {
+          "$ref": "#/$defs/EditorSettings"
+        },
+        "dailyNotes": {
+          "$ref": "#/$defs/DailyNoteSettings"
+        },
+        "weeklyNotes": {
+          "$ref": "#/$defs/WeeklyNoteSettings"
+        },
+        "agent": {
+          "$ref": "#/$defs/AgentSettings"
+        }
+      },
+      "required": ["theme", "editor", "dailyNotes", "weeklyNotes", "agent"],
+      "additionalProperties": {},
+      "description": "All user settings (stored in the vault sidecar so they travel with the vault)."
+    },
+    "UpdateSettingsRequest": {
+      "type": "object",
+      "properties": {
+        "theme": {
+          "$ref": "#/$defs/ThemePreference"
+        },
+        "editor": {
+          "type": "object",
+          "properties": {
+            "vimMode": {
+              "type": "boolean"
+            },
+            "livePreview": {
+              "type": "boolean",
+              "description": "Obsidian-style live preview."
+            },
+            "readableLineLength": {
+              "type": "boolean"
+            },
+            "fontSize": {
+              "type": "number",
+              "minimum": 8,
+              "maximum": 48
+            },
+            "spellcheck": {
+              "type": "boolean"
+            },
+            "showLineNumbers": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "dailyNotes": {
+          "type": "object",
+          "properties": {
+            "folder": {
+              "type": "string",
+              "maxLength": 512,
+              "description": "Vault folder for the notes; empty = vault root."
+            },
+            "format": {
+              "type": "string",
+              "maxLength": 128,
+              "description": "Moment-style file name format; may contain `/` for nested folders."
+            },
+            "template": {
+              "type": "string",
+              "maxLength": 512,
+              "description": "Template note path; empty = no template."
+            }
+          },
+          "additionalProperties": false
+        },
+        "weeklyNotes": {
+          "type": "object",
+          "properties": {
+            "folder": {
+              "type": "string",
+              "maxLength": 512,
+              "description": "Vault folder for the notes; empty = vault root."
+            },
+            "format": {
+              "type": "string",
+              "maxLength": 128,
+              "description": "Moment-style file name format; may contain `/` for nested folders."
+            },
+            "template": {
+              "type": "string",
+              "maxLength": 512,
+              "description": "Template note path; empty = no template."
+            }
+          },
+          "additionalProperties": false
+        },
+        "agent": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Master switch: when false the orchestrator ignores note changes."
+            },
+            "settleMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 120000,
+              "description": "Quiet period after the last edit to a task before the orchestrator looks at it."
+            },
+            "maxConcurrentSubagents": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 32
+            },
+            "actOnExistingTasks": {
+              "type": "boolean"
+            },
+            "approvalTimeoutMs": {
+              "type": "integer",
+              "minimum": 60000,
+              "maximum": 2592000000,
+              "description": "How long an approval request waits before it is auto-denied."
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "judgeModel": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "watch": {
+              "type": "object",
+              "properties": {
+                "pastDays": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 366
+                },
+                "futureDays": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 366
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "description": "A deep partial of AppSettings (PATCH semantics). Unknown keys are rejected."
+    },
+    "AgentMode": {
+      "type": "string",
+      "enum": ["live", "mock", "off"],
+      "description": "`live` (real model), `mock` (deterministic scripts) or `off`."
+    },
+    "HealthResponse": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Daemon build version."
+        },
+        "apiVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Protocol major version (see API_VERSION)."
+        },
+        "vaultName": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "agentMode": {
+          "$ref": "#/$defs/AgentMode"
+        }
+      },
+      "required": ["ok", "version", "apiVersion", "vaultName", "agentMode"],
+      "additionalProperties": {},
+      "description": "Liveness and versions. Clients should check `apiVersion` before anything else."
+    },
+    "VaultEntry": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments)."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["file", "folder"]
+        },
+        "size": {
+          "description": "Bytes (files only).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "mtime": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Opaque content version."
+        }
+      },
+      "required": ["path", "kind"],
+      "additionalProperties": {},
+      "description": "A visible file or folder of the vault (hidden paths are never listed)."
+    },
+    "VaultTreeResponse": {
+      "type": "object",
+      "properties": {
+        "vaultName": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/VaultEntry"
+          }
+        }
+      },
+      "required": ["vaultName", "entries"],
+      "additionalProperties": {},
+      "description": "Every visible file and folder of the vault."
+    },
+    "NoteResponse": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments)."
+        },
+        "content": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Send back as `baseVersion` for optimistic concurrency."
+        },
+        "mtime": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        }
+      },
+      "required": ["path", "content", "version", "mtime"],
+      "additionalProperties": {},
+      "description": "A note's content and version."
+    },
+    "WriteNoteRequest": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "maxLength": 5242880
+        },
+        "baseVersion": {
+          "description": "Version edited from; `null` = create only (409 if it exists); omit to overwrite.",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Opaque content version."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["content"],
+      "additionalProperties": false,
+      "description": "Body of `PUT /api/notes/<path>`."
+    },
+    "WriteNoteResponse": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments)."
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Opaque content version."
+        },
+        "mtime": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        }
+      },
+      "required": ["path", "version", "mtime"],
+      "additionalProperties": {},
+      "description": "The written note's canonical path and new version."
+    },
+    "RenameRequest": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": ["from", "to"],
+      "additionalProperties": false,
+      "description": "Renames a note, or a folder with everything inside it when `from` is a folder."
+    },
+    "FolderRenameResponse": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments)."
+        },
+        "moved": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Number of files moved."
+        }
+      },
+      "required": ["path", "moved"],
+      "additionalProperties": {},
+      "description": "Result of renaming a folder."
+    },
+    "RenameResponse": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WriteNoteResponse"
+        },
+        {
+          "$ref": "#/$defs/FolderRenameResponse"
+        }
+      ],
+      "description": "A renamed note answers like a write; a renamed folder reports how many files moved."
+    },
+    "CreateFolderRequest": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": false,
+      "description": "Body of `POST /api/folders`."
+    },
+    "CreateFolderResponse": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments)."
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": {},
+      "description": "The created folder's canonical path."
+    },
+    "TrashResponse": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "trashedTo": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Where it went, e.g. `.trash/Old.md`."
+        }
+      },
+      "required": ["ok", "trashedTo"],
+      "additionalProperties": {},
+      "description": "Deletes are soft: the note or folder moved into the vault's `.trash/` folder."
+    },
+    "OkResponse": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": ["ok"],
+      "additionalProperties": {},
+      "description": "Success without data."
+    },
+    "ThreadActionResponse": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "pending": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": ["ok"],
+      "additionalProperties": {},
+      "description": "200 when the runtime finished the action; 202 with `pending: true` when it continues in the background."
+    },
+    "DailyNoteResponse": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments)."
+        },
+        "content": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Send back as `baseVersion` for optimistic concurrency."
+        },
+        "mtime": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "date": {
+          "type": "string",
+          "format": "date",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+          "description": "Local calendar date YYYY-MM-DD."
+        },
+        "created": {
+          "type": "boolean",
+          "description": "True when this request created the note."
+        }
+      },
+      "required": ["path", "content", "version", "mtime", "date", "created"],
+      "additionalProperties": {},
+      "description": "A daily note, created from the template when requested."
+    },
+    "SearchHit": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments)."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["name", "content"]
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "preview": {
+          "type": "string"
+        }
+      },
+      "required": ["path", "kind", "line", "preview"],
+      "additionalProperties": {},
+      "description": "`name`: the note's name matched (line 0); `content`: the 0-based `line` matched."
+    },
+    "SearchResponse": {
+      "type": "object",
+      "properties": {
+        "hits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SearchHit"
+          }
+        }
+      },
+      "required": ["hits"],
+      "additionalProperties": {},
+      "description": "Search hits, best first."
+    },
+    "SettingsResponse": {
+      "type": "object",
+      "properties": {
+        "settings": {
+          "$ref": "#/$defs/AppSettings"
+        }
+      },
+      "required": ["settings"],
+      "additionalProperties": {},
+      "description": "The effective settings."
+    },
+    "ConnectorStatus": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "transport": {
+          "type": "string",
+          "enum": ["stdio", "http", "sse"]
+        },
+        "state": {
+          "type": "string",
+          "enum": ["disabled", "idle", "connecting", "connected", "error"]
+        },
+        "toolCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": ["name", "transport", "state", "toolCount"],
+      "additionalProperties": {},
+      "description": "State of one MCP connector."
+    },
+    "ExecutionStatus": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "shell": {
+              "type": "boolean"
+            },
+            "browser": {
+              "type": "boolean"
+            },
+            "computer": {
+              "type": "boolean"
+            }
+          },
+          "required": ["shell", "browser", "computer"],
+          "additionalProperties": {}
+        }
+      },
+      "required": ["provider", "capabilities"],
+      "additionalProperties": {},
+      "description": "The execution provider and what it can do."
+    },
+    "AgentStatusResponse": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/AgentMode"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^\\S(?:[\\s\\S]*\\S)?$"
+        },
+        "running": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "queued": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "pendingApprovals": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "connectors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConnectorStatus"
+          }
+        },
+        "execution": {
+          "$ref": "#/$defs/ExecutionStatus"
+        },
+        "problem": {
+          "description": "Why the agent cannot run, when it can't.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "enabled",
+        "model",
+        "running",
+        "queued",
+        "pendingApprovals",
+        "connectors",
+        "execution"
+      ],
+      "additionalProperties": {},
+      "description": "The agent runtime's state (also pushed as `agent.status`)."
+    },
+    "SetAgentEnabledRequest": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": ["enabled"],
+      "additionalProperties": false,
+      "description": "Body of `PUT|POST /api/agent/enabled` (persisted as `agent.enabled`)."
+    },
+    "TaskRecordsResponse": {
+      "type": "object",
+      "properties": {
+        "records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TaskAgentRecord"
+          }
+        }
+      },
+      "required": ["records"],
+      "additionalProperties": {},
+      "description": "The agent records of one note's tasks."
+    },
+    "ThreadListResponse": {
+      "type": "object",
+      "properties": {
+        "threads": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ThreadSummary"
+          }
+        }
+      },
+      "required": ["threads"],
+      "additionalProperties": {},
+      "description": "Thread summaries."
+    },
+    "ThreadResponse": {
+      "type": "object",
+      "properties": {
+        "thread": {
+          "$ref": "#/$defs/Thread"
+        },
+        "approvals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ApprovalRequest"
+          }
+        }
+      },
+      "required": ["thread", "approvals"],
+      "additionalProperties": {},
+      "description": "A full thread and every approval requested in it."
+    },
+    "PostMessageRequest": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        }
+      },
+      "required": ["text"],
+      "additionalProperties": false,
+      "description": "A user reply in a thread. Surrounding whitespace is trimmed; it must not be empty."
+    },
+    "ApprovalListResponse": {
+      "type": "object",
+      "properties": {
+        "approvals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ApprovalRequest"
+          }
+        }
+      },
+      "required": ["approvals"],
+      "additionalProperties": {},
+      "description": "Approval requests."
+    },
+    "ApprovalResponse": {
+      "type": "object",
+      "properties": {
+        "approval": {
+          "$ref": "#/$defs/ApprovalRequest"
+        }
+      },
+      "required": ["approval"],
+      "additionalProperties": {},
+      "description": "One approval request."
+    },
+    "ApprovalDecisionRequest": {
+      "type": "object",
+      "properties": {
+        "decision": {
+          "$ref": "#/$defs/ApprovalDecision"
+        },
+        "scope": {
+          "$ref": "#/$defs/ApprovalScope"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      },
+      "required": ["decision"],
+      "additionalProperties": false,
+      "description": "Body of `POST /api/approvals/:id`."
+    },
+    "ConnectorsResponse": {
+      "type": "object",
+      "properties": {
+        "connectors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConnectorStatus"
+          }
+        }
+      },
+      "required": ["connectors"],
+      "additionalProperties": {},
+      "description": "Every configured MCP connector."
+    },
+    "ApiErrorCode": {
+      "type": "string",
+      "enum": [
+        "invalid_json",
+        "invalid_request",
+        "invalid_path",
+        "invalid_settings",
+        "unauthorized",
+        "forbidden_host",
+        "forbidden_origin",
+        "not_found",
+        "conflict",
+        "payload_too_large",
+        "upgrade_required",
+        "http_error",
+        "agent_error",
+        "internal_error",
+        "agent_unavailable"
+      ],
+      "description": "Machine-readable error code. Treat unknown codes like any failure with that HTTP status."
+    },
+    "ApiErrorBody": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/ApiErrorCode"
+        },
+        "message": {
+          "description": "Human-readable explanation.",
+          "type": "string"
+        }
+      },
+      "required": ["error"],
+      "additionalProperties": {},
+      "description": "Body of every error response."
+    },
+    "ConflictResponse": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string",
+          "const": "conflict"
+        },
+        "message": {
+          "type": "string"
+        },
+        "current": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NoteResponse"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["error", "current"],
+      "additionalProperties": {},
+      "description": "409 of a note write or rename whose target changed; `current` is null if the note is gone."
+    },
+    "ApprovalConflictResponse": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string",
+          "const": "conflict"
+        },
+        "message": {
+          "type": "string"
+        },
+        "approval": {
+          "$ref": "#/$defs/ApprovalRequest"
+        }
+      },
+      "required": ["error", "approval"],
+      "additionalProperties": {},
+      "description": "409 of an approval decision when the approval is no longer pending."
+    },
+    "VaultChangeOrigin": {
+      "type": "string",
+      "enum": ["external", "client", "agent", "sync"],
+      "description": "Who changed the vault: another program, a client (see `clientId`), the agent, or sync."
+    },
+    "VaultChange": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments)."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["created", "modified", "deleted"]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Opaque content version."
+        }
+      },
+      "required": ["path", "kind"],
+      "additionalProperties": {},
+      "description": "One changed path."
+    },
+    "WsErrorCode": {
+      "type": "string",
+      "enum": [
+        "invalid_json",
+        "invalid_message",
+        "binary_unsupported",
+        "too_many_subscriptions",
+        "subscribe_failed",
+        "incompatible_api_version"
+      ],
+      "description": "Machine-readable reason of a server `error` event."
+    },
+    "ServerHelloEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "hello"
+        },
+        "serverVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "apiVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": ["type", "serverVersion", "apiVersion"],
+      "additionalProperties": {},
+      "description": "First event on every connection."
+    },
+    "VaultChangedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "vault.changed"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/VaultChange"
+          }
+        },
+        "origin": {
+          "$ref": "#/$defs/VaultChangeOrigin"
+        },
+        "clientId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,128}$",
+          "description": "Client id chosen by the client."
+        }
+      },
+      "required": ["type", "changes", "origin"],
+      "additionalProperties": {},
+      "description": "Vault paths changed (coalesced). Clients skip batches carrying their own `clientId`."
+    },
+    "TaskRecordsEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "task.records"
+        },
+        "notePath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments)."
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TaskAgentRecord"
+          }
+        }
+      },
+      "required": ["type", "notePath", "records"],
+      "additionalProperties": {},
+      "description": "Snapshot of a note's task records."
+    },
+    "TaskRecordEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "task.record"
+        },
+        "record": {
+          "$ref": "#/$defs/TaskAgentRecord"
+        }
+      },
+      "required": ["type", "record"],
+      "additionalProperties": {},
+      "description": "One task record changed."
+    },
+    "ThreadUpsertEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "thread.upsert"
+        },
+        "thread": {
+          "$ref": "#/$defs/ThreadSummary"
+        }
+      },
+      "required": ["type", "thread"],
+      "additionalProperties": {},
+      "description": "A thread was created or its summary changed."
+    },
+    "ThreadMessageEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "thread.message"
+        },
+        "threadId": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        },
+        "message": {
+          "$ref": "#/$defs/ThreadMessage"
+        }
+      },
+      "required": ["type", "threadId", "message"],
+      "additionalProperties": {},
+      "description": "A message was added or replaced (same `id`) in a thread."
+    },
+    "ThreadDeltaEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "thread.delta"
+        },
+        "threadId": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        },
+        "messageId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Identifier."
+        },
+        "delta": {
+          "type": "string"
+        }
+      },
+      "required": ["type", "threadId", "messageId", "delta"],
+      "additionalProperties": {},
+      "description": "Streaming text appended to a `streaming` text message (droppable; the final message repairs gaps)."
+    },
+    "ApprovalUpsertEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "approval.upsert"
+        },
+        "approval": {
+          "$ref": "#/$defs/ApprovalRequest"
+        }
+      },
+      "required": ["type", "approval"],
+      "additionalProperties": {},
+      "description": "An approval request was created or decided."
+    },
+    "AgentStatusEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "agent.status"
+        },
+        "status": {
+          "$ref": "#/$defs/AgentStatusResponse"
+        }
+      },
+      "required": ["type", "status"],
+      "additionalProperties": {},
+      "description": "The agent status changed."
+    },
+    "SurfaceFrameEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "surface.frame"
+        },
+        "threadId": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        },
+        "surface": {
+          "$ref": "#/$defs/SurfaceKind"
+        },
+        "mimeType": {
+          "type": "string",
+          "enum": ["image/jpeg", "image/png"]
+        },
+        "data": {
+          "type": "string",
+          "minLength": 1,
+          "format": "base64",
+          "contentEncoding": "base64",
+          "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+          "description": "Base64-encoded image bytes."
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "url": {
+          "description": "Browser only.",
+          "type": "string"
+        },
+        "title": {
+          "description": "Browser only.",
+          "type": "string"
+        },
+        "action": {
+          "$ref": "#/$defs/SurfaceFrameAction"
+        },
+        "ts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        }
+      },
+      "required": ["type", "threadId", "surface", "mimeType", "data", "width", "height", "ts"],
+      "additionalProperties": {},
+      "description": "A live surface frame; only sent to clients subscribed to that thread's surface (droppable)."
+    },
+    "SettingsChangedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "settings.changed"
+        },
+        "settings": {
+          "$ref": "#/$defs/AppSettings"
+        }
+      },
+      "required": ["type", "settings"],
+      "additionalProperties": {},
+      "description": "The effective settings changed."
+    },
+    "ServerErrorEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "error"
+        },
+        "message": {
+          "type": "string"
+        },
+        "code": {
+          "$ref": "#/$defs/WsErrorCode"
+        }
+      },
+      "required": ["type", "message"],
+      "additionalProperties": {},
+      "description": "Something the client sent was rejected (or the connection is about to close)."
+    },
+    "ServerEvent": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ServerHelloEvent"
+        },
+        {
+          "$ref": "#/$defs/VaultChangedEvent"
+        },
+        {
+          "$ref": "#/$defs/TaskRecordsEvent"
+        },
+        {
+          "$ref": "#/$defs/TaskRecordEvent"
+        },
+        {
+          "$ref": "#/$defs/ThreadUpsertEvent"
+        },
+        {
+          "$ref": "#/$defs/ThreadMessageEvent"
+        },
+        {
+          "$ref": "#/$defs/ThreadDeltaEvent"
+        },
+        {
+          "$ref": "#/$defs/ApprovalUpsertEvent"
+        },
+        {
+          "$ref": "#/$defs/AgentStatusEvent"
+        },
+        {
+          "$ref": "#/$defs/SurfaceFrameEvent"
+        },
+        {
+          "$ref": "#/$defs/SettingsChangedEvent"
+        },
+        {
+          "$ref": "#/$defs/ServerErrorEvent"
+        }
+      ],
+      "description": "Every server → client WebSocket message, discriminated by `type`."
+    },
+    "ClientHelloEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "hello"
+        },
+        "clientId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,128}$",
+          "description": "Client id chosen by the client."
+        },
+        "apiVersion": {
+          "description": "API_VERSION the client was built against; absent = 1 (legacy clients).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "clientVersion": {
+          "description": "e.g. `web/0.1.0`.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        }
+      },
+      "required": ["type", "clientId"],
+      "additionalProperties": false,
+      "description": "First message a client sends: its id and the API version it speaks."
+    },
+    "ClientPingEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "ping"
+        }
+      },
+      "required": ["type"],
+      "additionalProperties": false,
+      "description": "Keep-alive."
+    },
+    "SurfaceSubscribeEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "surface.subscribe"
+        },
+        "threadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Identifier."
+        },
+        "surface": {
+          "$ref": "#/$defs/SurfaceKind"
+        }
+      },
+      "required": ["type", "threadId", "surface"],
+      "additionalProperties": false,
+      "description": "Start receiving `surface.frame` events for a thread's surface."
+    },
+    "SurfaceUnsubscribeEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "surface.unsubscribe"
+        },
+        "threadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Identifier."
+        },
+        "surface": {
+          "$ref": "#/$defs/SurfaceKind"
+        }
+      },
+      "required": ["type", "threadId", "surface"],
+      "additionalProperties": false,
+      "description": "Stop receiving frames for a thread's surface."
+    },
+    "ThreadReadEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "thread.read"
+        },
+        "threadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Identifier."
+        }
+      },
+      "required": ["type", "threadId"],
+      "additionalProperties": false,
+      "description": "The user has seen a thread (clears its unread count)."
+    },
+    "EditorActivityEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "editor.activity"
+        },
+        "notePath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": ["type", "notePath", "line"],
+      "additionalProperties": false,
+      "description": "Where the user is typing, so the orchestrator never jumps on a half-written task."
+    },
+    "ClientEvent": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ClientHelloEvent"
+        },
+        {
+          "$ref": "#/$defs/ClientPingEvent"
+        },
+        {
+          "$ref": "#/$defs/SurfaceSubscribeEvent"
+        },
+        {
+          "$ref": "#/$defs/SurfaceUnsubscribeEvent"
+        },
+        {
+          "$ref": "#/$defs/ThreadReadEvent"
+        },
+        {
+          "$ref": "#/$defs/EditorActivityEvent"
+        }
+      ],
+      "description": "Every client → server WebSocket message, discriminated by `type`."
+    }
+  }
+}

@@ -1,0 +1,4 @@
+[
+  { "name": "pause", "value": { "enabled": false } },
+  { "name": "resume", "value": { "enabled": true } }
+]

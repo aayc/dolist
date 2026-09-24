@@ -1,6 +1,5 @@
 import { IS_MAC } from "../lib/platform";
-import { reportError } from "../lib/report-error";
-import type { CommandRegistry } from "./registry";
+import { type CommandRegistry, runIsolated } from "./registry";
 
 /**
  * Global hotkeys, registered in the capture phase so they win over the editor and over browser
@@ -14,7 +13,7 @@ export function installGlobalHotkeys(registry: CommandRegistry, isMac = IS_MAC):
     if (!command) return;
     event.preventDefault();
     event.stopPropagation();
-    void Promise.resolve(command.run({ event })).catch(reportError);
+    runIsolated(command, { event });
   };
   window.addEventListener("keydown", onKeyDown, { capture: true });
   return () => window.removeEventListener("keydown", onKeyDown, { capture: true });

@@ -79,6 +79,8 @@ export class Workspace {
   private readonly recent: string[] = [];
   private readonly errorToasted = new Set<string>();
   private navToken = 0;
+  /** Where the latest navigation is going while its note loads. */
+  private navTarget: string | null = null;
   private treeRefresh: ReturnType<typeof setTimeout> | undefined;
   private mountWaiters: Array<() => void> = [];
 
@@ -154,8 +156,18 @@ export class Workspace {
 
   // ── Opening notes ──────────────────────────────────────────────────────
 
+  /** Starts a navigation, superseding any that is still loading. `target`: where it is going. */
+  private beginNavigation(target: string | null): number {
+    this.navTarget = target;
+    return ++this.navToken;
+  }
+
+  private endNavigation(token: number): void {
+    if (token === this.navToken) this.navTarget = null;
+  }
+
   async openNote(path: string, options: OpenOptions = {}): Promise<boolean> {
-    const token = ++this.navToken;
+    const token = this.beginNavigation(path);
     if (!this.notes.has(path)) {
       try {
         await this.notes.load(path);
@@ -168,6 +180,7 @@ export class Workspace {
             body: errorMessage(error),
           });
         }
+        this.endNavigation(token);
         return false;
       }
       if (token !== this.navToken) {
@@ -175,6 +188,7 @@ export class Workspace {
         return false;
       }
     }
+    this.endNavigation(token);
     this.activate(path, options);
     return true;
   }
@@ -189,6 +203,8 @@ export class Workspace {
   }
 
   activateTab(path: string, start?: number): void {
+    // The click wins over a note still loading from an earlier navigation.
+    this.beginNavigation(null);
     if (useTabsStore.getState().active === path) return;
     perfStart("tab:switch", start);
     this.activate(path, { metric: "tab:switch" });
@@ -295,21 +311,24 @@ export class Workspace {
     perfStart(metric, start);
     const path = dailyPathFor(date, getSettings().dailyNotes);
     if (path && this.notes.has(path)) {
+      this.beginNavigation(null);
       perfAnnotate(metric, { cached: true });
       this.activate(path, { metric });
       return;
     }
     perfAnnotate(metric, { cached: false });
-    const token = ++this.navToken;
+    const token = this.beginNavigation(path);
     try {
       const note = await this.client.getDailyNote(toISODate(date), true);
       if (token !== this.navToken) {
         perfCancel(metric);
         return;
       }
+      this.endNavigation(token);
       this.adoptDaily(note);
       this.activate(note.path, { metric });
     } catch (error) {
+      this.endNavigation(token);
       perfCancel(metric);
       toast({ kind: "error", title: "Couldn't open the daily note", body: errorMessage(error) });
     }
@@ -330,7 +349,9 @@ export class Workspace {
 
   openAdjacentDaily(direction: -1 | 1, start?: number): Promise<boolean> {
     const settings = getSettings().dailyNotes;
-    const target = adjacentDailyTarget(vaultActions.files(), this.activePath, direction, settings);
+    // Repeated keys continue from the note still loading, instead of re-picking the same one.
+    const from = this.navTarget ?? this.activePath;
+    const target = adjacentDailyTarget(vaultActions.files(), from, direction, settings);
     if (!target) {
       toast({
         kind: "info",

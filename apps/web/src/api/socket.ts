@@ -25,6 +25,8 @@ export interface ReconnectingSocketOptions {
   pingMessage?: string;
   pingIntervalMs?: number;
   random?(): number;
+  /** A close the server meant as final (e.g. incompatible API version): stop reconnecting. */
+  isFatalClose?(event: unknown): boolean;
 }
 
 /** WebSocket with exponential backoff + jitter, keep-alive pings and fast retry on network/visibility changes. */
@@ -104,11 +106,15 @@ export class ReconnectingSocket {
       if (this.socket === socket && typeof event.data === "string")
         this.options.onMessage(event.data);
     };
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       if (this.socket !== socket) return;
       this.socket = null;
       this.stopPing();
       if (this.stopped) return;
+      if (this.options.isFatalClose?.(event)) {
+        this.close();
+        return;
+      }
       this.options.onStateChange(this.everOpened ? "reconnecting" : "connecting", false);
       this.scheduleRetry();
     };

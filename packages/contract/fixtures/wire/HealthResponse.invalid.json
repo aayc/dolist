@@ -1,0 +1,38 @@
+[
+  {
+    "name": "ok false",
+    "value": {
+      "ok": false,
+      "version": "0.1.0",
+      "apiVersion": 1,
+      "vaultName": "V",
+      "agentMode": "live"
+    },
+    "path": ["ok"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "string apiVersion",
+    "value": {
+      "ok": true,
+      "version": "0.1.0",
+      "apiVersion": "1",
+      "vaultName": "V",
+      "agentMode": "live"
+    },
+    "path": ["apiVersion"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "unknown agent mode",
+    "value": {
+      "ok": true,
+      "version": "0.1.0",
+      "apiVersion": 1,
+      "vaultName": "V",
+      "agentMode": "auto"
+    },
+    "path": ["agentMode"],
+    "code": "invalid_value"
+  }
+]

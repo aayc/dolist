@@ -1,5 +1,6 @@
 import type { AgentRuntime } from "@ddl/agent";
 import type { ConnectorToolSource } from "@ddl/connectors";
+import { WIRE_LIMITS } from "@ddl/contract";
 import type { Logger } from "@ddl/core";
 import { type StorageProvider, searchVault } from "@ddl/storage";
 import { Hono, type MiddlewareHandler } from "hono";
@@ -21,7 +22,7 @@ import type { SettingsStore } from "./settings-store";
 import { DAEMON_VERSION } from "./version";
 import { WriteTracker } from "./write-tracker";
 
-export const MAX_BODY_BYTES = 5 * 1024 * 1024;
+export const MAX_BODY_BYTES = WIRE_LIMITS.bodyBytes;
 
 export interface AppDeps {
   storage: StorageProvider;

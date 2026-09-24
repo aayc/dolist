@@ -2,7 +2,13 @@
  * `createMarkdownEditor`: the host-facing wrapper around one EditorView. The public contract lives
  * in ./types.ts; everything here is glue between that contract and the extensions.
  */
-import { EditorState, Transaction } from "@codemirror/state";
+import {
+  type ChangeSet,
+  EditorSelection,
+  EditorState,
+  type Text,
+  Transaction,
+} from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { setAnnotationsEffect } from "./annotations/field";
 import {
@@ -12,11 +18,40 @@ import {
   resolveConfig,
   vimEffect,
 } from "./config";
-import { minimalChange, normalizeLineEndings } from "./diff";
+import { minimalChange, normalizeLineEndings, type TextChange } from "./diff";
 import { editorExtensions } from "./extensions";
 import { cursorLine } from "./listeners";
 import type { CreateEditorOptions, EditorConfig, MarkdownEditor } from "./types";
 import { isVimLoaded, onVimLoaded } from "./vim";
+
+/**
+ * Whole lines inserted at the start of a line belong above it, so a caret or selection edge at
+ * that line start moves down with its line instead of landing on the inserted text.
+ */
+function selectionAfterLinesInserted(
+  state: EditorState,
+  change: TextChange,
+  changes: ChangeSet,
+): EditorSelection | undefined {
+  const { from, to, insert } = change;
+  if (from !== to || !insert.endsWith("\n") || !isLineStart(state.doc, from)) return undefined;
+  const { selection } = state;
+  if (!selection.ranges.some((r) => r.from === from || r.to === from)) return undefined;
+  return EditorSelection.create(
+    selection.ranges.map((r) => {
+      const start = changes.mapPos(r.from, 1);
+      const end = r.empty ? start : changes.mapPos(r.to, -1);
+      return r.anchor === r.from
+        ? EditorSelection.range(start, end)
+        : EditorSelection.range(end, start);
+    }),
+    selection.mainIndex,
+  );
+}
+
+function isLineStart(doc: Text, pos: number): boolean {
+  return pos === 0 || doc.sliceString(pos - 1, pos) === "\n";
+}
 
 export function createMarkdownEditor(
   parent: HTMLElement,
@@ -73,9 +108,12 @@ export function createMarkdownEditor(
       }
       const change = minimalChange(view.state.doc.toString(), next);
       if (!change) return;
+      const changes = view.state.changes(change);
+      const selection = selectionAfterLinesInserted(view.state, change, changes);
       // External edits are not undoable; local history is mapped through them instead.
       view.dispatch({
-        changes: change,
+        changes,
+        ...(selection ? { selection } : {}),
         annotations: [Transaction.addToHistory.of(false), Transaction.remote.of(true)],
       });
     },

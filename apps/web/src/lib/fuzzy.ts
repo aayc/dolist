@@ -102,11 +102,23 @@ function boundaryPreferring(target: string, lower: string, q: string, last: numb
   return out;
 }
 
+/**
+ * Lowercase with exactly one output unit per input unit (so indices stay valid in `text`) and
+ * without context: "İ" lowercases to "i" + U+0307, and Σ to ς at the end of a word.
+ */
+function foldCase(text: string): string {
+  const lower = text.toLowerCase();
+  if (lower.length === text.length && !text.includes("Σ")) return lower;
+  let out = "";
+  for (const ch of text) out += ch.toLowerCase().slice(0, ch.length);
+  return out;
+}
+
 export function fuzzyMatch(query: string, target: string): FuzzyMatch | null {
-  const q = query.replace(/\s+/g, "").toLowerCase();
+  const q = foldCase(query.replace(/\s+/g, ""));
   if (!q) return { score: 0, indices: [] };
   if (q.length > target.length) return null;
-  const lower = target.toLowerCase();
+  const lower = foldCase(target);
   const last = latestPositions(lower, q);
   if (!last) return null;
 

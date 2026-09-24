@@ -1,0 +1,1140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:daily-do-list:routes:v1",
+  "title": "Daily Do List REST routes",
+  "description": "Path patterns use `:name` for one segment and `*` for the rest (a percent-encoded vault path). Every bearer route may also answer the `common` errors.",
+  "x-api-version": 1,
+  "common": {
+    "401": {
+      "description": "Missing or invalid bearer token.",
+      "codes": ["unauthorized"],
+      "schema": {
+        "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+      }
+    },
+    "403": {
+      "description": "Foreign Host or Origin header.",
+      "codes": ["forbidden_host", "forbidden_origin"],
+      "schema": {
+        "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+      }
+    },
+    "500": {
+      "description": "Unexpected daemon failure.",
+      "codes": ["internal_error"],
+      "schema": {
+        "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+      }
+    }
+  },
+  "routes": {
+    "health": {
+      "path": "/api/health",
+      "auth": "bearer",
+      "methods": {
+        "GET": {
+          "summary": "Liveness, daemon and API versions.",
+          "responses": {
+            "200": {
+              "description": "Healthy.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/HealthResponse"
+              }
+            }
+          }
+        }
+      }
+    },
+    "tree": {
+      "path": "/api/vault/tree",
+      "auth": "bearer",
+      "methods": {
+        "GET": {
+          "summary": "Every visible file and folder.",
+          "responses": {
+            "200": {
+              "description": "The vault tree.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/VaultTreeResponse"
+              }
+            }
+          }
+        }
+      }
+    },
+    "note": {
+      "path": "/api/notes/*",
+      "auth": "bearer",
+      "params": {
+        "$ref": "#/$defs/note.params"
+      },
+      "methods": {
+        "GET": {
+          "summary": "Read a note.",
+          "responses": {
+            "200": {
+              "description": "The note.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/NoteResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed, hidden or non-text path.",
+              "codes": ["invalid_path"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "No such note.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        },
+        "PUT": {
+          "summary": "Create or overwrite a note (optimistic concurrency via `baseVersion`).",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/WriteNoteRequest"
+          },
+          "responses": {
+            "200": {
+              "description": "Overwritten.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/WriteNoteResponse"
+              }
+            },
+            "201": {
+              "description": "Created.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/WriteNoteResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request", "invalid_path"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "409": {
+              "description": "`baseVersion` is stale (or `null` and the note exists).",
+              "codes": ["conflict"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ConflictResponse"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        },
+        "DELETE": {
+          "summary": "Move a note to `.trash/`.",
+          "responses": {
+            "200": {
+              "description": "Moved to the trash.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/TrashResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed, hidden or non-text path.",
+              "codes": ["invalid_path"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "No such note.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "rename": {
+      "path": "/api/notes-rename",
+      "auth": "bearer",
+      "methods": {
+        "POST": {
+          "summary": "Rename or move a note, or a folder with its contents.",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/RenameRequest"
+          },
+          "responses": {
+            "200": {
+              "description": "Renamed.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/RenameResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request", "invalid_path"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "The source doesn't exist.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "409": {
+              "description": "The target exists (a note conflict carries the existing note).",
+              "codes": ["conflict"],
+              "schema": {
+                "$ref": "#/$defs/rename.POST.409"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "folders": {
+      "path": "/api/folders",
+      "auth": "bearer",
+      "methods": {
+        "POST": {
+          "summary": "Create a folder (and its parents).",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/CreateFolderRequest"
+          },
+          "responses": {
+            "201": {
+              "description": "Created (or already there).",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/CreateFolderResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request", "invalid_path"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        },
+        "DELETE": {
+          "summary": "Move a folder and everything in it to `.trash/`.",
+          "query": {
+            "$ref": "#/$defs/folders.DELETE.query"
+          },
+          "responses": {
+            "200": {
+              "description": "Moved to the trash.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/TrashResponse"
+              }
+            },
+            "400": {
+              "description": "Missing, malformed or hidden path.",
+              "codes": ["invalid_request", "invalid_path"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "No such folder.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "daily": {
+      "path": "/api/daily/:date",
+      "auth": "bearer",
+      "params": {
+        "$ref": "#/$defs/daily.params"
+      },
+      "methods": {
+        "GET": {
+          "summary": "Read a daily note; with `?create=1`, create it from the template if missing.",
+          "query": {
+            "$ref": "#/$defs/daily.GET.query"
+          },
+          "responses": {
+            "200": {
+              "description": "The daily note (`created` tells whether it's new).",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/DailyNoteResponse"
+              }
+            },
+            "400": {
+              "description": "Bad date or unusable settings.",
+              "codes": ["invalid_request", "invalid_settings"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "Missing and `create` was not requested.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "search": {
+      "path": "/api/search",
+      "auth": "bearer",
+      "methods": {
+        "GET": {
+          "summary": "Search note names and contents.",
+          "query": {
+            "$ref": "#/$defs/search.GET.query"
+          },
+          "responses": {
+            "200": {
+              "description": "Hits, best first.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/SearchResponse"
+              }
+            },
+            "400": {
+              "description": "Query too long or bad limit.",
+              "codes": ["invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "settings": {
+      "path": "/api/settings",
+      "auth": "bearer",
+      "methods": {
+        "GET": {
+          "summary": "The effective settings.",
+          "responses": {
+            "200": {
+              "description": "Settings.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/SettingsResponse"
+              }
+            }
+          }
+        },
+        "PUT": {
+          "summary": "Apply a deep-partial settings patch.",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/UpdateSettingsRequest"
+          },
+          "responses": {
+            "200": {
+              "description": "The new effective settings.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/SettingsResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        },
+        "PATCH": {
+          "summary": "Alias of PUT.",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/UpdateSettingsRequest"
+          },
+          "responses": {
+            "200": {
+              "description": "The new effective settings.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/SettingsResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "agentStatus": {
+      "path": "/api/agent/status",
+      "auth": "bearer",
+      "methods": {
+        "GET": {
+          "summary": "The agent runtime's state.",
+          "responses": {
+            "200": {
+              "description": "Status.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/AgentStatusResponse"
+              }
+            }
+          }
+        }
+      }
+    },
+    "agentEnabled": {
+      "path": "/api/agent/enabled",
+      "auth": "bearer",
+      "methods": {
+        "PUT": {
+          "summary": "Pause or resume the agent (persisted as `agent.enabled`).",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/SetAgentEnabledRequest"
+          },
+          "responses": {
+            "200": {
+              "description": "The resulting status.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/AgentStatusResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        },
+        "POST": {
+          "summary": "Alias of PUT.",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/SetAgentEnabledRequest"
+          },
+          "responses": {
+            "200": {
+              "description": "The resulting status.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/AgentStatusResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "tasks": {
+      "path": "/api/tasks",
+      "auth": "bearer",
+      "methods": {
+        "GET": {
+          "summary": "Agent records of a note's tasks.",
+          "query": {
+            "$ref": "#/$defs/tasks.GET.query"
+          },
+          "responses": {
+            "200": {
+              "description": "Records.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/TaskRecordsResponse"
+              }
+            },
+            "400": {
+              "description": "Missing or invalid note path.",
+              "codes": ["invalid_request", "invalid_path"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "threads": {
+      "path": "/api/threads",
+      "auth": "bearer",
+      "methods": {
+        "GET": {
+          "summary": "Thread summaries, optionally filtered by note or task (empty = no filter).",
+          "query": {
+            "$ref": "#/$defs/threads.GET.query"
+          },
+          "responses": {
+            "200": {
+              "description": "Summaries.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ThreadListResponse"
+              }
+            },
+            "400": {
+              "description": "Invalid filter.",
+              "codes": ["invalid_request", "invalid_path"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "thread": {
+      "path": "/api/threads/:id",
+      "auth": "bearer",
+      "params": {
+        "$ref": "#/$defs/thread.params"
+      },
+      "methods": {
+        "GET": {
+          "summary": "A full thread with its approvals.",
+          "responses": {
+            "200": {
+              "description": "The thread.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ThreadResponse"
+              }
+            },
+            "400": {
+              "description": "Invalid thread id.",
+              "codes": ["invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "Unknown thread.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "threadMessages": {
+      "path": "/api/threads/:id/messages",
+      "auth": "bearer",
+      "params": {
+        "$ref": "#/$defs/thread.params"
+      },
+      "methods": {
+        "POST": {
+          "summary": "Reply in a thread (steers a running subagent or resumes a finished one).",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/PostMessageRequest"
+          },
+          "responses": {
+            "200": {
+              "description": "The runtime finished the action.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ThreadActionResponse"
+              }
+            },
+            "202": {
+              "description": "Still running in the background (`pending: true`).",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ThreadActionResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "Unknown thread.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "500": {
+              "description": "The runtime failed the action.",
+              "codes": ["agent_error", "internal_error"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "503": {
+              "description": "The agent can't act right now.",
+              "codes": ["agent_unavailable"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "threadCancel": {
+      "path": "/api/threads/:id/cancel",
+      "auth": "bearer",
+      "params": {
+        "$ref": "#/$defs/thread.params"
+      },
+      "methods": {
+        "POST": {
+          "summary": "Stop the task's agent.",
+          "responses": {
+            "200": {
+              "description": "The runtime finished the action.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ThreadActionResponse"
+              }
+            },
+            "202": {
+              "description": "Still running in the background (`pending: true`).",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ThreadActionResponse"
+              }
+            },
+            "400": {
+              "description": "Invalid thread id.",
+              "codes": ["invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "Unknown thread.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "500": {
+              "description": "The runtime failed the action.",
+              "codes": ["agent_error", "internal_error"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "503": {
+              "description": "The agent can't act right now.",
+              "codes": ["agent_unavailable"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "threadRetry": {
+      "path": "/api/threads/:id/retry",
+      "auth": "bearer",
+      "params": {
+        "$ref": "#/$defs/thread.params"
+      },
+      "methods": {
+        "POST": {
+          "summary": "Run the task again.",
+          "responses": {
+            "200": {
+              "description": "The runtime finished the action.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ThreadActionResponse"
+              }
+            },
+            "202": {
+              "description": "Still running in the background (`pending: true`).",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ThreadActionResponse"
+              }
+            },
+            "400": {
+              "description": "Invalid thread id.",
+              "codes": ["invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "Unknown thread.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "500": {
+              "description": "The runtime failed the action.",
+              "codes": ["agent_error", "internal_error"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "503": {
+              "description": "The agent can't act right now.",
+              "codes": ["agent_unavailable"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "approvals": {
+      "path": "/api/approvals",
+      "auth": "bearer",
+      "methods": {
+        "GET": {
+          "summary": "Approval requests, optionally by status.",
+          "query": {
+            "$ref": "#/$defs/approvals.GET.query"
+          },
+          "responses": {
+            "200": {
+              "description": "Approvals.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApprovalListResponse"
+              }
+            },
+            "400": {
+              "description": "Unknown status.",
+              "codes": ["invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "approval": {
+      "path": "/api/approvals/:id",
+      "auth": "bearer",
+      "params": {
+        "$ref": "#/$defs/approval.params"
+      },
+      "methods": {
+        "GET": {
+          "summary": "One approval request.",
+          "responses": {
+            "200": {
+              "description": "The approval.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApprovalResponse"
+              }
+            },
+            "400": {
+              "description": "Invalid approval id.",
+              "codes": ["invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "Unknown approval.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        },
+        "POST": {
+          "summary": "Approve or deny a pending request.",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/ApprovalDecisionRequest"
+          },
+          "responses": {
+            "200": {
+              "description": "The decided approval.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApprovalResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "Unknown approval.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "409": {
+              "description": "Already decided, expired or cancelled (carries its current state).",
+              "codes": ["conflict"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApprovalConflictResponse"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "500": {
+              "description": "The runtime failed to record it.",
+              "codes": ["agent_error", "internal_error"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "503": {
+              "description": "The approval system is unavailable.",
+              "codes": ["agent_unavailable"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "artifact": {
+      "path": "/api/artifacts/:threadId/:artifactId",
+      "auth": "bearer",
+      "params": {
+        "$ref": "#/$defs/artifact.params"
+      },
+      "methods": {
+        "GET": {
+          "summary": "Artifact bytes, sandboxed (`Content-Security-Policy: sandbox`, nosniff).",
+          "query": {
+            "$ref": "#/$defs/artifact.GET.query"
+          },
+          "responses": {
+            "200": {
+              "description": "The bytes with the artifact's type; active content (HTML, SVG, PDF…) is always an attachment.",
+              "content": "binary"
+            },
+            "400": {
+              "description": "Invalid id.",
+              "codes": ["invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "Unknown artifact.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "connectors": {
+      "path": "/api/connectors",
+      "auth": "bearer",
+      "methods": {
+        "GET": {
+          "summary": "MCP connector states.",
+          "responses": {
+            "200": {
+              "description": "Connectors.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ConnectorsResponse"
+              }
+            }
+          }
+        }
+      }
+    },
+    "ws": {
+      "path": "/ws",
+      "auth": "upgrade",
+      "methods": {
+        "GET": {
+          "summary": "WebSocket upgrade (`?token=`). Rejected upgrades answer 401/403/404 with an empty body.",
+          "query": {
+            "$ref": "#/$defs/ws.GET.query"
+          },
+          "responses": {
+            "403": {
+              "description": "Foreign Host header.",
+              "codes": ["forbidden_host"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "426": {
+              "description": "Plain HTTP request without a WebSocket upgrade.",
+              "codes": ["upgrade_required"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      },
+      "websocket": {
+        "server": {
+          "$ref": "wire.schema.json#/$defs/ServerEvent"
+        },
+        "client": {
+          "$ref": "wire.schema.json#/$defs/ClientEvent"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "approval.params": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "approvals.GET.query": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "wire.schema.json#/$defs/ApprovalStatus"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "artifact.GET.query": {
+      "type": "object",
+      "properties": {
+        "download": {
+          "description": "`1`, `true` or `yes` = on; anything else = off.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "artifact.params": {
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        },
+        "artifactId": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        }
+      },
+      "required": ["threadId", "artifactId"],
+      "additionalProperties": false
+    },
+    "daily.GET.query": {
+      "type": "object",
+      "properties": {
+        "create": {
+          "description": "`1`, `true` or `yes` = on; anything else = off.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "daily.params": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "today"
+            },
+            {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+              "description": "Local calendar date YYYY-MM-DD."
+            }
+          ],
+          "description": "`today` (the daemon's local date) or YYYY-MM-DD."
+        }
+      },
+      "required": ["date"],
+      "additionalProperties": false
+    },
+    "folders.DELETE.query": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "Folder path."
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": {}
+    },
+    "note.params": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "Vault path of a text note, each segment percent-encoded."
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    },
+    "rename.POST.409": {
+      "anyOf": [
+        {
+          "$ref": "wire.schema.json#/$defs/ConflictResponse"
+        },
+        {
+          "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+        }
+      ]
+    },
+    "search.GET.query": {
+      "type": "object",
+      "properties": {
+        "q": {
+          "description": "Query; blank = no hits.",
+          "type": "string",
+          "maxLength": 500
+        },
+        "limit": {
+          "description": "Maximum hits (default 50, capped at 200).",
+          "type": "string",
+          "pattern": "^0*[1-9][0-9]*$"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "tasks.GET.query": {
+      "type": "object",
+      "properties": {
+        "notePath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "The note."
+        }
+      },
+      "required": ["notePath"],
+      "additionalProperties": {}
+    },
+    "thread.params": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "threads.GET.query": {
+      "type": "object",
+      "properties": {
+        "notePath": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "taskId": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "additionalProperties": {}
+    },
+    "ws.GET.query": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "description": "The bearer token.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    }
+  }
+}

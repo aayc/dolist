@@ -18,6 +18,7 @@ import {
   CREDENTIAL_FIELD,
   DESTRUCTIVE_CONTROL,
   FORM_SUBMIT_CONTROL,
+  ID_NUMBER_FIELD,
   MESSAGE_FIELD,
   NON_POSTAL_ADDRESS,
   PAYMENT_CONTROL,
@@ -72,9 +73,7 @@ function isComputerNonRead(f: ActionFacts): boolean {
 /** True when typing targets something whose value must never be shown. */
 export function isSensitiveField(element: string): boolean {
   return (
-    CREDENTIAL_FIELD.test(element) ||
-    CARD_FIELD.test(element) ||
-    /(?:^| )(?:ssn|social security|passport|tax id)(?= |$)/.test(element)
+    CREDENTIAL_FIELD.test(element) || CARD_FIELD.test(element) || ID_NUMBER_FIELD.test(element)
   );
 }
 

@@ -11,6 +11,8 @@ import { isPlainObject, type PlainObject, typeName } from "./util";
 export const MAX_RESULT_TEXT_CHARS = 100_000;
 /** Roughly 6 MB decoded; larger images are rejected by model providers anyway. */
 export const MAX_IMAGE_BASE64_CHARS = 8 * 1024 * 1024;
+/** All images of one result together (about 12 MB decoded); later images become placeholders. */
+export const MAX_RESULT_IMAGE_BASE64_CHARS = 2 * MAX_IMAGE_BASE64_CHARS;
 const MODEL_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 
 export interface McpToolResultDetails {
@@ -50,7 +52,7 @@ export function projectCallToolResult(
       ),
     );
   }
-  const capped = capText(content, options.maxTextChars ?? MAX_RESULT_TEXT_CHARS);
+  const capped = capText(capImages(content), options.maxTextChars ?? MAX_RESULT_TEXT_CHARS);
   const details: McpToolResultDetails = {
     server: options.server,
     tool: options.tool,
@@ -92,7 +94,32 @@ function image(data: string, mimeType: string): ToolContent {
   if (data.length > MAX_IMAGE_BASE64_CHARS) {
     return text(`[Image omitted: ${formatBytes(base64Bytes(data))} exceeds the size limit]`);
   }
-  return { type: "image", data, mimeType: type };
+  // Providers reject a whole request over one undecodable image.
+  const base64 = canonicalBase64(data);
+  if (base64 === undefined) return text(`[Image omitted: ${type} data is not valid base64]`);
+  return { type: "image", data: base64, mimeType: type };
+}
+
+/** Standard padded base64 from what servers send (data: URLs, line breaks, URL-safe or unpadded), or undefined. */
+function canonicalBase64(data: string): string | undefined {
+  let body = data.startsWith("data:") ? data.slice(data.indexOf(",") + 1) : data;
+  body = body.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+  if (body.length % 4 !== 0) body += "=".repeat(4 - (body.length % 4));
+  return body.length > 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(body) && body.length % 4 === 0
+    ? body
+    : undefined;
+}
+
+/** Keeps images until their combined size reaches the per-result limit. */
+function capImages(content: ToolContent[]): ToolContent[] {
+  let budget = MAX_RESULT_IMAGE_BASE64_CHARS;
+  return content.map((block) => {
+    if (block.type !== "image") return block;
+    budget -= block.data.length;
+    return budget >= 0
+      ? block
+      : text(`[Image omitted: this result's images exceed the combined size limit]`);
+  });
 }
 
 function embeddedResource(resource: unknown): ToolContent {

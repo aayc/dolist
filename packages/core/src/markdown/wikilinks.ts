@@ -1,4 +1,4 @@
-import { basename, stem } from "../paths";
+import { extname, isMarkdownPath } from "../paths";
 
 export interface WikiLink {
   /** Link target without heading/block suffix, e.g. `Daily/2026-06-19`. */
@@ -13,11 +13,14 @@ export interface WikiLink {
 
 const WIKILINK_RE = /(!?)\[\[([^\]|#\n]+)(?:#([^\]|\n]+))?(?:\|([^\]\n]+))?]]/g;
 
+/** Links to notes in `text`. Same-note links (`[[#Heading]]`) and blank targets are skipped. */
 export function parseWikiLinks(text: string): WikiLink[] {
   const out: WikiLink[] = [];
   for (const m of text.matchAll(WIKILINK_RE)) {
+    const target = m[2]!.trim();
+    if (!target) continue;
     const link: WikiLink = {
-      target: m[2]!.trim(),
+      target,
       embed: m[1] === "!",
       from: m.index,
       to: m.index + m[0].length,
@@ -30,23 +33,32 @@ export function parseWikiLinks(text: string): WikiLink[] {
 }
 
 /**
- * Resolves a wikilink target like Obsidian: exact vault path (with or without `.md`) first,
- * then the shortest path whose file stem matches (case-insensitive).
+ * Resolves a wikilink target like Obsidian, ignoring case and Unicode normalization: the exact
+ * vault path first, then the shortest path that ends with it. `[[Plan]]` names `Plan.md`; a target
+ * with another extension (`[[image.png]]`) may also name that file itself.
  */
 export function resolveWikiLink(target: string, paths: readonly string[]): string | null {
-  const wanted = target.replace(/\\/g, "/").replace(/^\//, "");
-  const withMd = wanted.toLowerCase().endsWith(".md") ? wanted : `${wanted}.md`;
-  const lower = withMd.toLowerCase();
+  const wanted = fold(target.replace(/\\/g, "/").replace(/^\//, ""));
+  if (!wanted) return null;
+  const names = isMarkdownPath(wanted)
+    ? [wanted]
+    : extname(wanted)
+      ? [`${wanted}.md`, wanted]
+      : [`${wanted}.md`];
   let best: string | null = null;
   for (const p of paths) {
-    const pl = p.toLowerCase();
-    if (pl === lower) return p;
+    const pl = fold(p);
+    if (names.includes(pl)) return p;
     if (
-      pl.endsWith(`/${lower}`) ||
-      stem(p).toLowerCase() === stem(basename(wanted)).toLowerCase()
+      names.some((name) => pl.endsWith(`/${name}`)) &&
+      (best === null || p.length < best.length)
     ) {
-      if (!best || p.length < best.length) best = p;
+      best = p;
     }
   }
   return best;
+}
+
+function fold(path: string): string {
+  return path.normalize("NFC").toLowerCase();
 }

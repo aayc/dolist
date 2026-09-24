@@ -37,9 +37,14 @@ export function isPrefixExtension(a: string, b: string, minLength = 3): boolean 
   return x.startsWith(y) || y.startsWith(x);
 }
 
+/** At most `max` UTF-16 units, ending in `…` when cut. Never splits a surrogate pair. */
 export function truncate(input: string, max: number): string {
   if (input.length <= max) return input;
-  return `${input.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+  if (max < 1) return "";
+  let end = max - 1;
+  const last = input.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end--;
+  return `${input.slice(0, end).trimEnd()}…`;
 }
 
 /** Fast non-cryptographic 53-bit hash (cyrb53) rendered as hex. For change detection only. */

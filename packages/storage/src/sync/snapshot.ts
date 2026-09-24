@@ -35,8 +35,8 @@ export function serializeSnapshot(
   snapshot: SyncSnapshot,
   savedAt: number,
 ): string {
-  const entries: Record<string, SnapshotEntry> = {};
-  for (const [path, entry] of snapshot.entries) entries[path] = entry;
+  // `Object.fromEntries` defines own properties, so even a note named `__proto__` is kept.
+  const entries: Record<string, SnapshotEntry> = Object.fromEntries(snapshot.entries);
   return JSON.stringify({
     format: FORMAT,
     targetId,

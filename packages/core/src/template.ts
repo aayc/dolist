@@ -1,4 +1,4 @@
-import { formatDate, fromLocalDate, type LocalDate } from "./dates";
+import { formatDate, formatLocalDate, type LocalDate } from "./dates";
 
 export interface TemplateContext {
   /** Title of the note being created (its file stem). */
@@ -17,7 +17,6 @@ export interface TemplateContext {
  */
 export function renderTemplate(template: string, ctx: TemplateContext): string {
   const now = ctx.now ?? new Date();
-  const noteDate = fromLocalDate(ctx.date);
   const dateFormat = ctx.dateFormat ?? "YYYY-MM-DD";
   const timeFormat = ctx.timeFormat ?? "HH:mm";
   return template.replace(
@@ -27,7 +26,7 @@ export function renderTemplate(template: string, ctx: TemplateContext): string {
         case "title":
           return ctx.title;
         case "date":
-          return formatDate(noteDate, format ?? dateFormat);
+          return formatLocalDate(ctx.date, format ?? dateFormat);
         case "time":
           return formatDate(now, format ?? timeFormat);
         default:

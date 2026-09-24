@@ -1,0 +1,16 @@
+[
+  { "name": "empty text", "value": { "text": "" }, "path": ["text"], "code": "too_small" },
+  {
+    "name": "whitespace only (trimmed to empty)",
+    "value": { "text": " \n\t " },
+    "path": ["text"],
+    "code": "too_small"
+  },
+  { "name": "missing text", "value": {}, "path": ["text"], "code": "invalid_type" },
+  {
+    "name": "extra key",
+    "value": { "text": "hi", "role": "system" },
+    "path": [],
+    "code": "unrecognized_keys"
+  }
+]

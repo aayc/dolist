@@ -133,10 +133,14 @@ export const insertLink: StateCommand = ({ state, dispatch }) => {
         range: EditorSelection.cursor(range.from + 1),
       };
     }
-    if (URL_LIKE.test(text.trim())) {
+    const url = text.trim();
+    if (URL_LIKE.test(url)) {
+      // Whitespace around the URL (a drag selection, a selected line break) stays outside.
+      const lead = text.length - text.trimStart().length;
+      const from = range.from + lead;
       return {
-        changes: { from: range.from, to: range.to, insert: `[](${text.trim()})` },
-        range: EditorSelection.cursor(range.from + 1),
+        changes: { from, to: from + url.length, insert: `[](${url})` },
+        range: EditorSelection.cursor(from + 1),
       };
     }
     return {

@@ -1,0 +1,5 @@
+{
+  "version": 2,
+  "theme": { "mode": "dark", "accent": "teal" },
+  "editor": { "vimMode": true }
+}

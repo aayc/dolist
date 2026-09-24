@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it } from "vitest";
 import { createMarkdownEditor } from "./editor";
+import { typeText } from "./test-helpers";
 import type { MarkdownEditor } from "./types";
 
 const editors: MarkdownEditor[] = [];
@@ -17,23 +17,6 @@ function mount(doc: string): MarkdownEditor {
   editors.push(editor);
   editor.view.dispatch({ selection: { anchor: doc.length } });
   return editor;
-}
-
-/** Types like a user: each character goes through the view's input handlers (closeBrackets…). */
-function typeText(view: EditorView, text: string): void {
-  for (const ch of text) {
-    const { from, to } = view.state.selection.main;
-    const insert = () =>
-      view.state.update({
-        changes: { from, to, insert: ch },
-        selection: { anchor: from + ch.length },
-        userEvent: "input.type",
-      });
-    const handled = view.state
-      .facet(EditorView.inputHandler)
-      .some((handler) => handler(view, from, to, ch, insert));
-    if (!handled) view.dispatch(insert());
-  }
 }
 
 describe("typing markdown syntax", () => {

@@ -64,6 +64,15 @@ const CODE_MARKS = new Set(["CodeMark"]);
 const LINK_CONTAINERS = new Set(["Link", "Image", "Autolink"]);
 /** Nodes rendered as source: nothing inside them is decorated. */
 const OPAQUE = new Set(["Table", "Image", "HTMLBlock", "CommentBlock", "LinkReference"]);
+/** Inline syntax that can continue on the next line, and so end right where a fold ends. */
+const MULTILINE_INLINE = new Set([
+  "Emphasis",
+  "StrongEmphasis",
+  "Strikethrough",
+  "Highlight",
+  "InlineCode",
+  "Link",
+]);
 const CLOSING_FENCE = /^\s*(?:`{3,}|~{3,})\s*$/;
 const FRONTMATTER_OPEN = /^---\s*$/;
 const FRONTMATTER_CLOSE = /^(?:---|\.\.\.)\s*$/;
@@ -104,6 +113,8 @@ class LivePreviewBuilder {
   private readonly frontmatterEnd: number;
   private rangeFrom = 0;
   private rangeTo = 0;
+  /** End of the previous visible range (-1 while decorating the first one). */
+  private previousTo = -1;
   private firstVisibleLine = 1;
   private lastVisibleLine = 1;
   private quoteLine = -1;
@@ -129,6 +140,7 @@ class LivePreviewBuilder {
       );
     }
     tree.iterate({ from, to, enter: (node) => this.enter(node) });
+    this.previousTo = to;
   }
 
   finish(): DecorationSet {
@@ -155,6 +167,8 @@ class LivePreviewBuilder {
     const { name } = node;
     if (node.from < this.frontmatterEnd && name !== "Document") return false;
     if (OPAQUE.has(name)) return false;
+    // Already decorated in the visible range it overlaps before a fold (still visit its children).
+    if (node.from <= this.previousTo && MULTILINE_INLINE.has(name)) return name !== "InlineCode";
     const level = HEADING_LEVEL[name];
     if (level !== undefined) {
       if (name.startsWith("ATX")) this.atxHeading(node.node, level);

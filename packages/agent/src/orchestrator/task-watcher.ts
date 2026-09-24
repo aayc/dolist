@@ -1,4 +1,11 @@
 import {
+  decodePersistedTaskState,
+  encodePersistedTaskState,
+  PERSISTED_PATHS,
+  PersistedFile,
+  type PersistedTaskState,
+} from "@ddl/contract";
+import {
   type AppSettings,
   Emitter,
   hashString,
@@ -11,7 +18,6 @@ import {
   type ParsedTask,
   parseDailyNotePath,
   parseTasks,
-  SIDECAR_DIR,
   silentLogger,
   type TaskChangeKind,
   type TrackedTask,
@@ -23,7 +29,7 @@ import {
 import type { StorageEvent, StorageProvider } from "@ddl/storage";
 import type { TaskEvent } from "./types";
 
-export const TASK_STATE_DIR = `${SIDECAR_DIR}/state/tasks`;
+export const TASK_STATE_DIR = PERSISTED_PATHS.taskState;
 
 const DEFAULT_ACTIVITY_WINDOW_MS = 1_500;
 const DEFAULT_QUICK_SETTLE_MS = 700;
@@ -68,14 +74,6 @@ interface SettledSnapshot {
   announced: boolean;
 }
 
-interface PersistedNoteState {
-  version: 1;
-  notePath: string;
-  contentVersion: string | null;
-  tasks: TrackedTask[];
-  settled: Record<string, SettledSnapshot>;
-}
-
 interface NoteState {
   notePath: string;
   date: string | null;
@@ -117,6 +115,7 @@ export class TaskWatcher implements TaskLookup {
   private readonly idFactory: (() => string) | undefined;
   private readonly emitter = new Emitter<TaskWatcherEvents>();
   private readonly notes = new Map<string, NoteState>();
+  private readonly stateFiles = new Map<string, PersistedFile<PersistedTaskState>>();
   private readonly pending = new Map<string, PendingSettle>();
   private readonly activity = new Map<string, { line: number; at: number }>();
   private settings: AppSettings;
@@ -595,15 +594,21 @@ export class TaskWatcher implements TaskLookup {
     return state;
   }
 
+  /**
+   * Tracker state follows the shared file rules (format in @ddl/contract): a corrupt file (or one
+   * recorded for another note) is moved aside, one from a newer app is never overwritten.
+   */
   private async loadState(state: NoteState): Promise<void> {
     try {
-      const file = await this.storage.read(taskStatePath(state.notePath));
-      const persisted = file ? parsePersistedState(file.content) : null;
-      if (persisted && !state.tracked) {
-        state.tasks = persisted.tasks;
-        state.contentVersion = persisted.contentVersion;
-        state.settled = new Map(Object.entries(persisted.settled));
+      const result = await this.stateFile(state.notePath).load();
+      if (result.status === "loaded" && !state.tracked) {
+        state.tasks = result.value.tasks;
+        state.contentVersion = result.value.contentVersion;
+        state.settled = new Map(Object.entries(result.value.settled));
         state.tracked = true;
+        if (result.issues.length > 0) this.scheduleSave(state);
+      } else if ((result.status === "quarantined" || result.status === "newer") && !state.tracked) {
+        await this.baselineExisting(state);
       }
     } catch (error) {
       this.logger.warn("Failed to load task tracker state", {
@@ -612,6 +617,43 @@ export class TaskWatcher implements TaskLookup {
       });
     }
     state.loaded = true;
+  }
+
+  /**
+   * Tracker state existed but cannot be used, so the note is not new: its current tasks count as
+   * already known (as without `actOnExistingTasks`) rather than being acted on again under fresh
+   * ids. Later edits are detected against this baseline.
+   */
+  private async baselineExisting(state: NoteState): Promise<void> {
+    const file = await this.storage.read(state.notePath);
+    if (!file) return;
+    const { tasks } = trackTasks([], parseTasks(file.content), this.trackOptions(this.now()));
+    state.tasks = tasks;
+    state.contentVersion = file.version;
+    state.settled = new Map(
+      tasks.map((task) => [
+        task.id,
+        { task: cloneTask(task), announced: !isBlankTaskText(task.text) },
+      ]),
+    );
+    state.tracked = true;
+    this.emitter.emit("tasks", { notePath: state.notePath, date: state.date, tasks: state.tasks });
+    this.scheduleSave(state);
+  }
+
+  private stateFile(notePath: string): PersistedFile<PersistedTaskState> {
+    let file = this.stateFiles.get(notePath);
+    if (!file) {
+      file = new PersistedFile({
+        storage: this.storage,
+        path: taskStatePath(notePath),
+        decode: (text) => decodePersistedTaskState(text, notePath),
+        logger: this.logger,
+        now: this.now,
+      });
+      this.stateFiles.set(notePath, file);
+    }
+    return file;
   }
 
   private scheduleSave(state: NoteState): void {
@@ -623,15 +665,15 @@ export class TaskWatcher implements TaskLookup {
   }
 
   private async saveState(state: NoteState): Promise<void> {
-    const persisted: PersistedNoteState = {
-      version: 1,
-      notePath: state.notePath,
-      contentVersion: state.contentVersion,
-      tasks: state.tasks,
-      settled: Object.fromEntries(state.settled),
-    };
     try {
-      await this.storage.write(taskStatePath(state.notePath), `${JSON.stringify(persisted)}\n`);
+      await this.stateFile(state.notePath).save(() =>
+        encodePersistedTaskState({
+          notePath: state.notePath,
+          contentVersion: state.contentVersion,
+          tasks: state.tasks,
+          settled: Object.fromEntries(state.settled),
+        }),
+      );
     } catch (error) {
       this.logger.warn("Failed to persist task tracker state", {
         notePath: state.notePath,
@@ -670,46 +712,6 @@ function sameNotes(a: readonly string[], b: readonly string[]): boolean {
 
 function cloneTask(task: TrackedTask): TrackedTask {
   return { ...task, notes: [...task.notes] };
-}
-
-function isTrackedTask(value: unknown): value is TrackedTask {
-  if (typeof value !== "object" || value === null) return false;
-  const t = value as Record<string, unknown>;
-  return (
-    typeof t.id === "string" &&
-    typeof t.text === "string" &&
-    typeof t.status === "string" &&
-    typeof t.line === "number" &&
-    Array.isArray(t.notes)
-  );
-}
-
-function parsePersistedState(content: string): PersistedNoteState | null {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(content);
-  } catch {
-    return null;
-  }
-  if (typeof raw !== "object" || raw === null) return null;
-  const r = raw as Record<string, unknown>;
-  if (r.version !== 1 || !Array.isArray(r.tasks)) return null;
-  const settled: Record<string, SettledSnapshot> = {};
-  if (typeof r.settled === "object" && r.settled !== null) {
-    for (const [id, value] of Object.entries(r.settled as Record<string, unknown>)) {
-      const snap = value as Record<string, unknown> | null;
-      if (snap && isTrackedTask(snap.task)) {
-        settled[id] = { task: snap.task, announced: snap.announced === true };
-      }
-    }
-  }
-  return {
-    version: 1,
-    notePath: typeof r.notePath === "string" ? r.notePath : "",
-    contentVersion: typeof r.contentVersion === "string" ? r.contentVersion : null,
-    tasks: r.tasks.filter(isTrackedTask),
-    settled,
-  };
 }
 
 function errorText(error: unknown): string {

@@ -1,0 +1,1 @@
+An artifact body whose metadata was never written (the app died between the two writes).

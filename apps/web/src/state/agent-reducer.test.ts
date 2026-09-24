@@ -123,6 +123,30 @@ describe("records", () => {
     expect(bucket.tsk_gone).toBeUndefined();
   });
 
+  it("ignores a stale task.record for a task that has moved to another note", () => {
+    let state = reduceAgentEvent(initialAgentState, {
+      type: "task.record",
+      record: record({ notePath: "Journal/2026-09-23.md", status: "done", updatedAt: 50 }),
+    });
+    state = reduceAgentEvent(state, { type: "task.record", record: record({ updatedAt: 40 }) });
+    expect(findRecordIn(state.records, "tsk_1")?.notePath).toBe("Journal/2026-09-23.md");
+    expect(state.records["Daily/2026-09-23.md"]?.tsk_1).toBeUndefined();
+  });
+
+  it("keeps a task in one note when another note's snapshot contains it", () => {
+    // A rename: the new path's snapshot arrives while the old path still lists the task.
+    let state = reduceAgentEvent(initialAgentState, { type: "task.record", record: record() });
+    state = applyRecordsSnapshot(state, "Journal/2026-09-23.md", [
+      record({ notePath: "Journal/2026-09-23.md", updatedAt: 10 }),
+    ]);
+    expect(state.records["Daily/2026-09-23.md"]?.tsk_1).toBeUndefined();
+    expect(state.records["Journal/2026-09-23.md"]?.tsk_1).toBeDefined();
+    // A stale snapshot of the old path doesn't pull the task back.
+    state = applyRecordsSnapshot(state, "Daily/2026-09-23.md", [record({ updatedAt: 5 })]);
+    expect(state.records["Daily/2026-09-23.md"]?.tsk_1).toBeUndefined();
+    expect(findRecordIn(state.records, "tsk_1")?.notePath).toBe("Journal/2026-09-23.md");
+  });
+
   it("task.records replaces the bucket", () => {
     const state = reduceAgentEvent(initialAgentState, {
       type: "task.records",
@@ -199,6 +223,23 @@ describe("threads", () => {
       delta: "x",
     });
     expect(state.details.thr_1!.messages[0]).toBe(before);
+  });
+
+  it("ignores deltas that arrive after the message finished streaming", () => {
+    // E.g. a thread refetch returned the final text before in-flight deltas were delivered.
+    let state = reduceAgentEvent(loaded(), {
+      type: "thread.message",
+      threadId: "thr_1",
+      message: textMessage({ text: "Found 3 options", streaming: false }),
+    });
+    const final = state;
+    state = reduceAgentEvent(state, {
+      type: "thread.delta",
+      threadId: "thr_1",
+      messageId: "msg_1",
+      delta: " options",
+    });
+    expect(state).toBe(final);
   });
 
   it("returns the same state for deltas to unknown messages", () => {

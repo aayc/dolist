@@ -168,7 +168,7 @@ async function decide(
       );
       reasons.push(verdict.reason);
     } else if (
-      ctx.hints?.readOnly ||
+      ctx.hints?.readOnly === true ||
       analysis.facts.family === "browser" ||
       (analysis.facts.family === "mcp" && analysis.facts.ui?.surface === "browser")
     ) {
@@ -226,7 +226,9 @@ export function fallbackVerdict(
   reason: string,
   latencyMs: number,
 ): SafetyVerdict {
-  let summary = ctx.toolName;
+  let summary =
+    (typeof ctx.toolName === "string" ? ctx.toolName.trim().slice(0, 200) : "") ||
+    "Unrecognized action";
   try {
     summary = describeAction(ctx);
   } catch {
@@ -272,11 +274,21 @@ export function createSafetyEvaluator(options: SafetyEvaluatorOptions = {}): Saf
           tool: ctx.toolName,
           error: error instanceof Error ? error.message : String(error),
         });
-        return fallbackVerdict(
+        const fallback = fallbackVerdict(
           ctx,
           "The safety check failed internally, so this needs your approval.",
           performance.now() - started,
         );
+        return policy.denyCategories.includes("unknown")
+          ? {
+              ...fallback,
+              decision: "deny",
+              risk: "high",
+              reason:
+                "The safety check failed and unverifiable actions are blocked by your policy.",
+              source: "policy",
+            }
+          : fallback;
       }
     },
   };

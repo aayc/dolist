@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "theme": "neon",
+  "editor": {
+    "vimMode": true,
+    "fontSize": 999,
+    "ligatures": true
+  },
+  "dailyNotes": {
+    "folder": ".secret",
+    "format": "YYYY-MM-DD"
+  },
+  "agent": {
+    "enabled": false,
+    "maxConcurrentSubagents": 0,
+    "watch": "all of them"
+  },
+  "notifications": {
+    "approvals": "push"
+  }
+}

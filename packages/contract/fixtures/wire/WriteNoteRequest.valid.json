@@ -1,0 +1,9 @@
+[
+  { "name": "overwrite (no baseVersion)", "value": { "content": "- [ ] Find a dentist\n" } },
+  { "name": "create only", "value": { "content": "- [ ] ", "baseVersion": null } },
+  {
+    "name": "optimistic write",
+    "value": { "content": "# Title\n\nCafé ☕ 👩‍👩‍👧", "baseVersion": "0b5f3c2a91d4e7" }
+  },
+  { "name": "empty note", "value": { "content": "" } }
+]

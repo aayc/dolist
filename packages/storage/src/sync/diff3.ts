@@ -312,9 +312,24 @@ export function mergeText(
   if (ours === theirs) return { clean: true, text: ours };
   if (base === ours) return { clean: true, text: theirs };
   if (base === theirs) return { clean: true, text: ours };
-  const result = mergeLines(base.split("\n"), ours.split("\n"), theirs.split("\n"), options);
-  const text = result.lines.join("\n");
+  const result = mergeLines(textLines(base), textLines(ours), textLines(theirs), options);
+  // A side's last line carries no line ending; if the notes use CRLF, so do the breaks we add.
+  const crlf = [base, ours, theirs].some(usesCrlf) && ![base, ours, theirs].some(hasBareLf);
+  const lines = crlf
+    ? result.lines.map((line, i) =>
+        i < result.lines.length - 1 && !line.endsWith("\r") ? `${line}\r` : line,
+      )
+    : result.lines;
+  const text = lines.join("\n");
   return result.clean ? { clean: true, text } : { clean: false, text, conflicts: result.conflicts };
+}
+
+const usesCrlf = (text: string) => text.includes("\r\n");
+const hasBareLf = (text: string) => /(^|[^\r])\n/.test(text);
+
+/** An empty text has no lines (not one empty line), so emptying a note merges like deleting. */
+function textLines(text: string): string[] {
+  return text === "" ? [] : text.split("\n");
 }
 
 function resolveRegion(

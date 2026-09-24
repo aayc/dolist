@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "grants": [
+    {
+      "toolName": "browser_click",
+      "scope": "al

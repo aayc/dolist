@@ -75,7 +75,9 @@ daemon's environment (for example `~/.daily-do-list/.env`):
 
 Placeholders work in `command`, `args`, `env` values, `cwd`, `url` and `headers` values. A missing
 variable puts that server in `error` — e.g. `Environment variable not set: GITHUB_TOKEN (in
-headers.Authorization)` — without starting it. Messages name variables and fields, never values.
+headers.Authorization)` — without starting it. Placeholders don't nest: a default such as
+`${A:-${B}}` is an error rather than a silently wrong value. Messages name variables and fields,
+never values.
 
 A stdio server receives only the SDK's safe defaults (`HOME`, `LOGNAME`, `PATH`, `SHELL`, `TERM`,
 `USER`) plus the `env` you configure, never the daemon's full environment, so pass what it needs
@@ -117,12 +119,23 @@ characters are clamped with an 8-hex SHA-256 suffix. When two tools map to the s
 `read.file` and `read_file`, compared case-insensitively), the first in sorted order keeps it and the
 others get a hash suffix. Naming depends only on the set of tools, never on connection order.
 
+## Input schemas
+
+`inputSchema` becomes an object schema with `properties`: `required` keeps declared properties
+only, root `allOf`/`anyOf`/`oneOf` are folded into the root, root `$schema`/`$id`/`not`/`enum`/
+`const` are dropped, and so are a root `description`/`title` that are not strings. The rest is
+kept as plain JSON: `__proto__` keys, non-JSON values and cycles are removed. `$ref`s are left for
+the harness to resolve.
+
 ## Results
 
 MCP output is untrusted and is projected into `ToolResult`:
 
 - **Text and images**: text passes through; images the models accept (PNG, JPEG, GIF, WebP, up to
-  about 6 MB) are passed on as images.
+  about 6 MB each and about 12 MB per result) are passed on as images. Image data is normalized to
+  standard base64 (`data:` URL prefixes, line breaks, URL-safe or unpadded base64 are accepted);
+  data that is not base64 becomes a placeholder, since one undecodable image makes providers
+  reject the whole request.
 - **Other binary content**: audio and other binaries become short placeholders.
 - **Resources**: embedded resource text gets a `[Resource: <uri>]` header; resource links become
   text.

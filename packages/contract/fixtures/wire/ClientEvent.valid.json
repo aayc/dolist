@@ -1,0 +1,33 @@
+[
+  {
+    "name": "hello (legacy, no version)",
+    "value": { "type": "hello", "clientId": "web_k3j9x0q2m1ab" }
+  },
+  {
+    "name": "hello with versions",
+    "value": {
+      "type": "hello",
+      "clientId": "ios_7F3A-22",
+      "apiVersion": 1,
+      "clientVersion": "ios/1.0 (42)"
+    }
+  },
+  { "name": "ping", "value": { "type": "ping" } },
+  {
+    "name": "surface.subscribe",
+    "value": { "type": "surface.subscribe", "threadId": "thr_k3j9x0q2m1ab", "surface": "browser" }
+  },
+  {
+    "name": "surface.unsubscribe",
+    "value": {
+      "type": "surface.unsubscribe",
+      "threadId": "thr_k3j9x0q2m1ab",
+      "surface": "computer"
+    }
+  },
+  { "name": "thread.read", "value": { "type": "thread.read", "threadId": "thr_k3j9x0q2m1ab" } },
+  {
+    "name": "editor.activity on an unnormalized path",
+    "value": { "type": "editor.activity", "notePath": "Daily//2026-09-23.md", "line": 0 }
+  }
+]

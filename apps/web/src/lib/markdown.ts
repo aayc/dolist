@@ -26,7 +26,10 @@ export function renderMarkdown(source: string): string {
   installHooks();
   const html = DOMPurify.sanitize(marked.parse(source, { async: false }), {
     USE_PROFILES: { html: true },
-    FORBID_TAGS: ["style", "form", "button", "textarea", "select"],
+    FORBID_TAGS: ["style", "form", "button", "textarea", "select", "template"],
+    // Agent text can quote untrusted pages: no inline styles, app classes or ids, so it can't
+    // escape its message (a fixed full-window overlay over the approval buttons) or pose as app UI.
+    FORBID_ATTR: ["style", "class", "id"],
   });
   if (cache.size >= CACHE_MAX) {
     const oldest = cache.keys().next().value;

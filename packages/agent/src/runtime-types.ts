@@ -13,11 +13,11 @@ import type {
   AppSettings,
   ArtifactMeta,
   Logger,
-  SurfaceFrame,
+  ServerEventOf,
+  ServerEventPayload,
   SurfaceKind,
   TaskAgentRecord,
   Thread,
-  ThreadMessage,
   ThreadSummary,
   Unsubscribe,
 } from "@ddl/core";
@@ -27,15 +27,19 @@ import type { Harness } from "./harness/types";
 import type { LlmClient } from "./llm/types";
 import type { SafetyPolicy } from "./safety/types";
 
+/**
+ * Runtime events are the agent's `ServerEvent`s, which the daemon's WebSocket hub forwards as-is
+ * (`status` goes out as `agent.status`).
+ */
 export interface AgentRuntimeEvents {
-  "task.record": TaskAgentRecord;
-  "task.records": { notePath: string; records: TaskAgentRecord[] };
-  "thread.upsert": ThreadSummary;
-  "thread.message": { threadId: string; message: ThreadMessage };
-  "thread.delta": { threadId: string; messageId: string; delta: string };
-  "approval.upsert": ApprovalRequest;
-  status: AgentStatusResponse;
-  "surface.frame": SurfaceFrame;
+  "task.record": ServerEventOf<"task.record">["record"];
+  "task.records": ServerEventPayload<"task.records">;
+  "thread.upsert": ServerEventOf<"thread.upsert">["thread"];
+  "thread.message": ServerEventPayload<"thread.message">;
+  "thread.delta": ServerEventPayload<"thread.delta">;
+  "approval.upsert": ServerEventOf<"approval.upsert">["approval"];
+  status: ServerEventOf<"agent.status">["status"];
+  "surface.frame": ServerEventPayload<"surface.frame">;
 }
 
 export interface AgentRuntime {

@@ -12,6 +12,7 @@ import {
   DEFAULT_SETTINGS,
   dailyNotePath,
   type HealthResponse,
+  isHiddenPath,
   mergeSettings,
   type NoteResponse,
   normalizePath,
@@ -22,6 +23,8 @@ import {
   type TaskRecordsResponse,
   type ThreadListResponse,
   type ThreadResponse,
+  today,
+  toISODate,
   type Unsubscribe,
   type UpdateSettingsRequest,
   type VaultChange,
@@ -70,7 +73,23 @@ function clone<T>(value: T): T {
 }
 
 function notFound(what: string): HttpError {
-  return new HttpError(404, `${what} not found`, { error: "not_found" });
+  const message = `${what} not found`;
+  return new HttpError(404, message, { error: "not_found", message });
+}
+
+/** The daemon's path rules: canonical, inside the vault, never hidden (dot-files, the sidecar). */
+function vaultPath(input: string): string {
+  let path: string;
+  try {
+    path = normalizePath(input);
+  } catch {
+    path = "";
+  }
+  if (!path || isHiddenPath(path)) {
+    const message = `Invalid vault path "${input}"`;
+    throw new HttpError(400, message, { error: "invalid_path", message });
+  }
+  return path;
 }
 
 /** Fully in-browser daemon: in-memory vault + simulated agent speaking the real protocol. */
@@ -174,7 +193,7 @@ export class MockDaemonClient implements DaemonClient {
         try {
           resolve(clone(produce()));
         } catch (error) {
-          reject(error instanceof MockNotFoundError ? notFound(error.message) : error);
+          reject(error instanceof MockNotFoundError ? notFound(error.what) : error);
         }
       }, this.latencyMs);
     });
@@ -207,7 +226,7 @@ export class MockDaemonClient implements DaemonClient {
 
   readNote(path: string): Promise<NoteResponse> {
     return this.respond(() => {
-      const note = this.vault.toResponse(path);
+      const note = this.vault.toResponse(vaultPath(path));
       if (!note) throw notFound("Note");
       return note;
     });
@@ -215,7 +234,7 @@ export class MockDaemonClient implements DaemonClient {
 
   writeNote(path: string, body: WriteNoteRequest): Promise<WriteNoteResponse> {
     return this.respond(() => {
-      const target = normalizePath(path);
+      const target = vaultPath(path);
       const existing = this.vault.toResponse(target);
       if (body.baseVersion === null && existing) throw new ConflictError(existing);
       if (typeof body.baseVersion === "string" && existing?.version !== body.baseVersion) {
@@ -231,8 +250,9 @@ export class MockDaemonClient implements DaemonClient {
     });
   }
 
-  deleteNote(path: string): Promise<void> {
+  deleteNote(input: string): Promise<void> {
     return this.respond(() => {
+      const path = vaultPath(input);
       if (!this.vault.delete(path)) throw notFound("Note");
       this.vaultChanged([{ path, kind: "deleted" }], "client");
       this.agent.observeNote(path, null);
@@ -241,11 +261,13 @@ export class MockDaemonClient implements DaemonClient {
 
   renamePath(from: string, to: string): Promise<void> {
     return this.respond(() => {
-      const target = normalizePath(to);
+      const source = vaultPath(from);
+      const target = vaultPath(to);
       if (this.vault.has(target) || this.vault.isFolder(target)) {
-        throw new HttpError(409, `“${target}” already exists`, { error: "exists" });
+        const message = `“${target}” already exists`;
+        throw new HttpError(409, message, { error: "conflict", message });
       }
-      const moves = this.vault.rename(from, target);
+      const moves = this.vault.rename(source, target);
       if (moves.length === 0 && !this.vault.isFolder(target)) throw notFound("Path");
       const changes: VaultChange[] = [];
       for (const move of moves) {
@@ -259,13 +281,15 @@ export class MockDaemonClient implements DaemonClient {
 
   createFolder(path: string): Promise<void> {
     return this.respond(() => {
-      this.vault.createFolder(normalizePath(path));
+      this.vault.createFolder(vaultPath(path));
     });
   }
 
   deleteFolder(path: string): Promise<void> {
     return this.respond(() => {
-      const removed = this.vault.deleteFolder(path);
+      const folder = vaultPath(path);
+      if (!this.vault.isFolder(folder)) throw notFound("Folder");
+      const removed = this.vault.deleteFolder(folder);
       for (const notePath of removed) this.agent.observeNote(notePath, null);
       this.vaultChanged(
         removed.map((p) => ({ path: p, kind: "deleted" as const })),
@@ -274,10 +298,14 @@ export class MockDaemonClient implements DaemonClient {
     });
   }
 
-  getDailyNote(date: string, create = true): Promise<DailyNoteResponse> {
+  getDailyNote(dateParam: string, create = true): Promise<DailyNoteResponse> {
     return this.respond(() => {
-      const local = parseISODate(date);
-      if (!local) throw new HttpError(400, "Invalid date", { error: "bad_request" });
+      const local = dateParam === "today" ? today() : parseISODate(dateParam);
+      if (!local) {
+        const message = 'Date must be "today" or YYYY-MM-DD';
+        throw new HttpError(400, message, { error: "invalid_request", message });
+      }
+      const date = toISODate(local);
       const path = dailyNotePath(local, this.settings.dailyNotes);
       const existing = this.vault.toResponse(path);
       if (existing) return { ...existing, date, created: false };
@@ -352,7 +380,14 @@ export class MockDaemonClient implements DaemonClient {
   }
 
   decideApproval(id: string, decision: ApprovalDecisionRequest): Promise<ApprovalRequest> {
-    return this.respond(() => this.agent.decide(id, decision));
+    return this.respond(() => {
+      const current = this.agent.listApprovals().find((approval) => approval.id === id);
+      if (current && current.status !== "pending") {
+        const message = `Approval is already ${current.status}`;
+        throw new HttpError(409, message, { error: "conflict", message, approval: current });
+      }
+      return this.agent.decide(id, decision);
+    });
   }
 
   async getArtifact(threadId: string, artifactId: string): Promise<ArtifactContent> {

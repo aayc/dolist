@@ -269,8 +269,10 @@ export class NotesController {
     const live = this.hooks.readLive(doc.path);
     if (live !== null) doc.pendingContent = live;
     if (doc.inflight) {
-      if (doc.localRev !== doc.savedRev) doc.resave = true;
-      return doc.inflight;
+      if (doc.localRev === doc.savedRev) return doc.inflight;
+      doc.resave = true;
+      // Settles with the follow-up write that carries these edits (started when this one ends).
+      return doc.inflight.then(() => doc.inflight ?? undefined);
     }
     if (doc.localRev === doc.savedRev) return Promise.resolve();
 
@@ -278,8 +280,8 @@ export class NotesController {
     const rev = doc.localRev;
     const run = this.write(doc, content, rev, options, 0).finally(() => {
       doc.inflight = null;
+      if (!this.tracks(doc)) return;
       this.updateStatus(doc);
-      if (this.docs.get(doc.path) !== doc) return;
       if (doc.recheck) {
         doc.recheck = false;
         void this.handleRemoteChange(doc.path);
@@ -313,6 +315,8 @@ export class NotesController {
       );
       this.acknowledge(doc, content, rev, res.version, res.mtime);
     } catch (error) {
+      // Forgotten meanwhile (deleted, closed): resolving a 409 would recreate a deleted note.
+      if (!this.tracks(doc)) return;
       if (!(error instanceof ConflictError) || depth >= 3) {
         this.fail(doc, error);
         return;
@@ -356,6 +360,7 @@ export class NotesController {
     }
     const copyPath = await this.writeConflictCopy(doc.path, current.content);
     this.hooks.onConflictCopy(doc.path, copyPath);
+    if (!this.tracks(doc)) return;
     doc.version = current.version;
     await this.write(doc, content, rev, options, depth + 1);
   }
@@ -388,13 +393,19 @@ export class NotesController {
     if (doc.savedRev === doc.localRev) doc.pendingContent = null;
   }
 
+  /** False once the note was forgotten (or replaced by a reload); late results are dropped. */
+  private tracks(doc: NoteDoc): boolean {
+    return this.docs.get(doc.path) === doc;
+  }
+
   private fail(doc: NoteDoc, error: unknown): void {
+    if (!this.tracks(doc)) return;
     doc.failed = true;
     doc.failures++;
     this.hooks.onSaveError(doc.path, error);
     const delay = Math.min(30_000, this.retryDelayMs * 2 ** (doc.failures - 1));
     setTimeout(() => {
-      if (this.docs.get(doc.path) !== doc || doc.localRev === doc.savedRev) return;
+      if (!this.tracks(doc) || doc.localRev === doc.savedRev) return;
       doc.failed = false;
       void this.save(doc);
     }, delay);

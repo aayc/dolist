@@ -1,4 +1,4 @@
-import { CLIENT_ID_HEADER, type ServerEvent } from "@ddl/core";
+import { API_VERSION, CLIENT_ID_HEADER, type ServerEvent } from "@ddl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionChange } from "./client";
 import { ConflictError, HttpError } from "./errors";
@@ -149,7 +149,12 @@ describe("HttpDaemonClient event stream", () => {
     const socket = sockets[0]!;
     expect(socket.url).toBe("ws://127.0.0.1:7331/ws?token=test-token");
     socket.open();
-    expect(JSON.parse(socket.sent[0]!)).toEqual({ type: "hello", clientId: "web_test" });
+    expect(JSON.parse(socket.sent[0]!)).toEqual({
+      type: "hello",
+      clientId: "web_test",
+      apiVersion: API_VERSION,
+      clientVersion: expect.stringMatching(/^web\//),
+    });
     socket.receive({ type: "thread.delta", threadId: "t", messageId: "m", delta: "hi" });
     socket.receive({ type: "thread.delta", threadId: "t" });
     socket.receive({ type: "unknown" });

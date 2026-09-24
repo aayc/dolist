@@ -67,8 +67,11 @@ export function isApiPath(path: string): boolean {
  */
 export function requestGuard(policy: SecurityPolicy): MiddlewareHandler {
   return async (c, next) => {
-    const host = c.req.header("host") ?? new URL(c.req.url).host;
-    if (!policy.isHostAllowed(host)) {
+    // An absolute-form request line (`GET http://evil.example/ HTTP/1.1`) names its own authority,
+    // which takes precedence over the Host header, so both must be allowlisted.
+    const authority = new URL(c.req.url).host;
+    const host = c.req.header("host") ?? authority;
+    if (!policy.isHostAllowed(host) || !policy.isHostAllowed(authority)) {
       return c.json(errorBody("forbidden_host", "Unexpected Host header"), 403);
     }
     if (isApiPath(c.req.path)) {

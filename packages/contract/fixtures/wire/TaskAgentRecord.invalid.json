@@ -1,0 +1,113 @@
+[
+  {
+    "name": "impossible date",
+    "value": {
+      "taskId": "t",
+      "notePath": "a.md",
+      "date": "2023-02-29",
+      "text": "x",
+      "line": 0,
+      "status": "idle",
+      "threadId": null,
+      "updatedAt": 0,
+      "unread": 0
+    },
+    "path": ["date"],
+    "code": "invalid_format"
+  },
+  {
+    "name": "date in the wrong format",
+    "value": {
+      "taskId": "t",
+      "notePath": "a.md",
+      "date": "23/09/2026",
+      "text": "x",
+      "line": 0,
+      "status": "idle",
+      "threadId": null,
+      "updatedAt": 0,
+      "unread": 0
+    },
+    "path": ["date"],
+    "code": "invalid_format"
+  },
+  {
+    "name": "fractional line",
+    "value": {
+      "taskId": "t",
+      "notePath": "a.md",
+      "date": null,
+      "text": "x",
+      "line": 1.5,
+      "status": "idle",
+      "threadId": null,
+      "updatedAt": 0,
+      "unread": 0
+    },
+    "path": ["line"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "missing date (null is required when not a daily note)",
+    "value": {
+      "taskId": "t",
+      "notePath": "a.md",
+      "text": "x",
+      "line": 0,
+      "status": "idle",
+      "threadId": null,
+      "updatedAt": 0,
+      "unread": 0
+    },
+    "path": ["date"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "empty task id",
+    "value": {
+      "taskId": "",
+      "notePath": "a.md",
+      "date": null,
+      "text": "x",
+      "line": 0,
+      "status": "idle",
+      "threadId": null,
+      "updatedAt": 0,
+      "unread": 0
+    },
+    "path": ["taskId"],
+    "code": "too_small"
+  },
+  {
+    "name": "path escaping the vault",
+    "value": {
+      "taskId": "t",
+      "notePath": "../secrets.md",
+      "date": null,
+      "text": "x",
+      "line": 0,
+      "status": "idle",
+      "threadId": null,
+      "updatedAt": 0,
+      "unread": 0
+    },
+    "path": ["notePath"],
+    "code": "custom"
+  },
+  {
+    "name": "negative unread",
+    "value": {
+      "taskId": "t",
+      "notePath": "a.md",
+      "date": null,
+      "text": "x",
+      "line": 0,
+      "status": "idle",
+      "threadId": null,
+      "updatedAt": 0,
+      "unread": -1
+    },
+    "path": ["unread"],
+    "code": "too_small"
+  }
+]

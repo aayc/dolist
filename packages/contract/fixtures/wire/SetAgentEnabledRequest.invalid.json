@@ -1,0 +1,15 @@
+[
+  {
+    "name": "string boolean",
+    "value": { "enabled": "false" },
+    "path": ["enabled"],
+    "code": "invalid_type"
+  },
+  { "name": "missing", "value": {}, "path": ["enabled"], "code": "invalid_type" },
+  {
+    "name": "extra key",
+    "value": { "enabled": true, "mode": "mock" },
+    "path": [],
+    "code": "unrecognized_keys"
+  }
+]

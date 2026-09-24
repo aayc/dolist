@@ -1,0 +1,39 @@
+[
+  {
+    "name": "missing content",
+    "value": { "baseVersion": "v1" },
+    "path": ["content"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "unknown key",
+    "value": { "content": "x", "sneaky": true },
+    "path": [],
+    "code": "unrecognized_keys"
+  },
+  {
+    "name": "misspelled baseVersion",
+    "value": { "content": "x", "baseversion": "v1" },
+    "path": [],
+    "code": "unrecognized_keys"
+  },
+  {
+    "name": "empty baseVersion",
+    "value": { "content": "x", "baseVersion": "" },
+    "path": ["baseVersion"],
+    "code": "too_small"
+  },
+  {
+    "name": "numeric baseVersion",
+    "value": { "content": "x", "baseVersion": 3 },
+    "path": ["baseVersion"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "content is not a string",
+    "value": { "content": ["- [ ] a"] },
+    "path": ["content"],
+    "code": "invalid_type"
+  },
+  { "name": "body is an array", "value": [{ "content": "x" }], "path": [], "code": "invalid_type" }
+]

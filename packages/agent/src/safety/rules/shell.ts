@@ -308,17 +308,35 @@ const RM_HOME = info(
 const FIND_FILTERS_RE =
   /^-(?:i?name|i?path|i?wholename|i?regex|newer\w*|[amc](?:time|min)|size|user|group|perm|empty|links|inum|samefile|uid|gid)$/;
 
-/** What a deletion removes wholesale: rm operands, or the roots of an unfiltered `find -delete`. */
+/** A filter that limits what `find` matches; name patterns that match everything (`-name '*'`) don't. */
+function narrowsFind(cmd: ShellCommand): boolean {
+  return cmd.argv.some((arg, i) => {
+    if (!FIND_FILTERS_RE.test(arg)) return false;
+    const value = cmd.argv[i + 1] ?? "";
+    if (/^-i?(?:name|path|wholename)$/.test(arg)) return !/^\*+$/.test(value);
+    if (/^-i?regex$/.test(arg)) return !/^\^?(?:\.\*)+\$?$/.test(value);
+    return true;
+  });
+}
+
+/**
+ * What a deletion removes wholesale: rm operands, the roots of an unfiltered `find -delete` /
+ * `find -exec rm`, or the roots of an unfiltered `find` piped into `xargs rm`.
+ */
 function deletionRoots(cmd: ShellCommand, env: ShellEnv): Target[] {
-  if (DELETE_NAMES.has(cmd.name) && cmd.name !== "rmdir")
-    return targets(cmd, env).filter((t) => t.role === "delete");
+  if (DELETE_NAMES.has(cmd.name) && cmd.name !== "rmdir") {
+    const direct = targets(cmd, env).filter((t) => t.role === "delete");
+    if (!cmd.wrappers.includes("xargs")) return direct;
+    const find = feeders(cmd, env).find((f) => f.name === "find");
+    return find && !narrowsFind(find) ? [...direct, ...findRoots(find, env)] : direct;
+  }
   const deletes =
     cmd.name === "find" &&
     (cmd.argv.includes("-delete") ||
       env.analysis.commands.some(
         (c) => c.parent === cmd && c.via === "find-exec" && DELETE_NAMES.has(c.name),
       ));
-  if (deletes && !cmd.argv.some((a) => FIND_FILTERS_RE.test(a))) return findRoots(cmd, env);
+  if (deletes && !narrowsFind(cmd)) return findRoots(cmd, env);
   return [];
 }
 
@@ -707,12 +725,18 @@ export const SHELL_APPROVAL_RULES: readonly ShellRule[] = [
       if (!DELETE_NAMES.has(cmd.name)) return null;
       const recursive = hasFlag(cmd, "rR", ["--recursive"]);
       const direct = targets(cmd, env).filter((t) => t.role === "delete");
-      const candidates = indirectDeleteTargets(cmd, env) ?? direct;
-      const outside = candidates.find(
+      const indirect = indirectDeleteTargets(cmd, env);
+      const outside = (indirect ?? direct).find(
         (t) => t.resolved.location === "outside" || t.resolved.location === "unknown",
       );
-      if (!outside || catastrophicTarget(outside.resolved.path, env.home)) return null;
-      return { evidence: display(cmd), risk: deleteRisk(outside, recursive) };
+      if (!outside) return null;
+      const catastrophic = catastrophicTarget(outside.resolved.path, env.home) !== null;
+      // Direct deletions of these are hard denies; a filtered `find` feeding rm still reaches into them.
+      if (catastrophic && indirect === undefined) return null;
+      return {
+        evidence: display(cmd),
+        risk: catastrophic ? "critical" : deleteRisk(outside, recursive),
+      };
     },
   ),
   rule(
@@ -749,7 +773,10 @@ export const SHELL_APPROVAL_RULES: readonly ShellRule[] = [
       const root = findRoots(cmd, env).find(
         (t) => t.resolved.location === "outside" || t.resolved.location === "unknown",
       );
-      return root && !catastrophicTarget(root.resolved.path, env.home) ? display(cmd) : null;
+      if (!root) return null;
+      if (catastrophicTarget(root.resolved.path, env.home) === null) return display(cmd);
+      // Unfiltered, this is a hard deny; filtered, it still deletes inside home/root/system dirs.
+      return narrowsFind(cmd) ? { evidence: display(cmd), risk: "critical" } : null;
     },
   ),
   rule(
@@ -1563,12 +1590,32 @@ function pathHits(cmd: ShellCommand, env: ShellEnv): RuleHit[] {
   return hits;
 }
 
-/** URL rules for HTTP clients (scheme-less URLs are treated as http). Local files go through path rules. */
+/** `host:port` endpoints of raw sockets (`nc localhost 7331`, `> /dev/tcp/127.0.0.1/7331`) as URLs. */
+function socketUrls(cmd: ShellCommand): string[] {
+  const out: string[] = [];
+  for (const r of cmd.redirects) {
+    const m = /^\/dev\/(?:tcp|udp)\/([^/]+)\/(\d+)$/.exec(r.target);
+    if (m) out.push(`http://${m[1]}:${m[2]}`);
+  }
+  if (/^(?:nc|ncat|netcat|telnet)$/.test(cmd.name)) {
+    const ops = operands(cmd).map((o) => o.value);
+    const port = ops.findLastIndex((o) => /^\d+$/.test(o));
+    if (port > 0) out.push(`http://${ops[port - 1]}:${ops[port]}`);
+  }
+  if (cmd.name === "socat") {
+    for (const arg of cmd.argv.slice(1)) {
+      const m = /^(?:tcp|udp)[46]?(?:-connect)?:(\[[^\]]+\]|[^:,]+):(\d+)/i.exec(arg);
+      if (m) out.push(`http://${m[1]}:${m[2]}`);
+    }
+  }
+  return out;
+}
+
+/** URL rules for HTTP clients and raw sockets (scheme-less URLs are http). Local files go through path rules. */
 function urlRuleHits(cmd: ShellCommand, env: ShellEnv): RuleHit[] {
-  const request = httpRequestOf(cmd);
-  if (!request) return [];
+  const urls = [...(httpRequestOf(cmd)?.urls ?? []), ...socketUrls(cmd)];
   const hits: RuleHit[] = [];
-  for (const raw of request.urls) {
+  for (const raw of urls) {
     const url = parseUrl(withScheme(raw));
     if (!url) continue;
     if (url.scheme === "file") {
@@ -1609,6 +1656,8 @@ export function commandHits(cmd: ShellCommand, env: ShellEnv): RuleHit[] {
   }
   const inline = interpreterCall(cmd)?.inlineCode;
   if (inline !== undefined) hits.push(...executedTextHits(inline, `${cmd.name} inline code`));
+  const awkProgram = /^(?:g|m|n)?awk$/.test(cmd.name) ? operands(cmd)[0]?.value : undefined;
+  if (awkProgram) hits.push(...executedTextHits(awkProgram, `${cmd.name} program`));
   hits.push(...pathHits(cmd, env), ...urlRuleHits(cmd, env));
   return hits;
 }
@@ -1675,7 +1724,15 @@ export function analysisHits(env: ShellEnv): RuleHit[] {
   if (analysis.error === "command is too large to analyze") {
     return [{ rule: SHELL_TOO_LARGE, evidence: `${analysis.source.length} characters` }];
   }
-  if (analysis.error) hits.push({ rule: SHELL_UNPARSEABLE, evidence: analysis.error });
+  if (analysis.error) {
+    hits.push({ rule: SHELL_UNPARSEABLE, evidence: analysis.error });
+    // What the parser could not follow (past its limits, broken syntax) may still run.
+    hits.push(
+      ...executedTextHits(analysis.source, "a command that could not be fully analyzed").filter(
+        (h) => !/fork bomb/.test(h.evidence),
+      ),
+    );
+  }
   const carriers = analysis.commands.some((c) => c.via === "shell-c" || c.via === "eval");
   const text = carriers ? analysis.source : maskQuoted(analysis.source);
   const bomb = executedTextHits(text, "command").find((h) => /fork bomb/.test(h.evidence));

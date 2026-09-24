@@ -1,4 +1,4 @@
-import type { ApiErrorBody, Logger } from "@ddl/core";
+import type { ApiErrorBody, ApiErrorCode, Logger } from "@ddl/core";
 import type { ErrorHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
@@ -7,12 +7,12 @@ import { SettingsValidationError } from "./settings-schema";
 /** An error with a precise HTTP mapping. `details` are merged into the JSON body. */
 export class ApiError extends Error {
   readonly status: ContentfulStatusCode;
-  readonly code: string;
+  readonly code: ApiErrorCode;
   readonly details: Record<string, unknown> | undefined;
 
   constructor(
     status: ContentfulStatusCode,
-    code: string,
+    code: ApiErrorCode,
     message: string,
     details?: Record<string, unknown>,
   ) {
@@ -28,7 +28,7 @@ export class ApiError extends Error {
  * Errors thrown by the storage provider and the agent runtime, matched by name: the daemon's null
  * runtime and @ddl/agent each define an `AgentUnavailableError`.
  */
-const NAMED_ERRORS = new Map<string, { status: ContentfulStatusCode; code: string }>([
+const NAMED_ERRORS = new Map<string, { status: ContentfulStatusCode; code: ApiErrorCode }>([
   ["InvalidPathError", { status: 400, code: "invalid_path" }],
   ["NotFoundError", { status: 404, code: "not_found" }],
   ["UnknownThreadError", { status: 404, code: "not_found" }],
@@ -36,7 +36,7 @@ const NAMED_ERRORS = new Map<string, { status: ContentfulStatusCode; code: strin
   ["AgentUnavailableError", { status: 503, code: "agent_unavailable" }],
 ]);
 
-export function errorBody(code: string, message?: string): ApiErrorBody {
+export function errorBody(code: ApiErrorCode, message?: string): ApiErrorBody {
   return message === undefined ? { error: code } : { error: code, message };
 }
 

@@ -1,6 +1,7 @@
 import { type AppSettings, DEFAULT_SETTINGS, type DeepPartial, mergeSettings } from "@ddl/core";
 import { preloadVim } from "@ddl/editor";
 import { create } from "zustand";
+import { reportError } from "../lib/report-error";
 import { readJson, STORAGE_KEYS, writeJson } from "../lib/storage";
 
 export interface SettingsState {
@@ -18,7 +19,7 @@ function cachedSettings(): AppSettings {
 
 /** Vim is code-split; fetch it in parallel with startup instead of after the editor mounts. */
 function warmUp(settings: AppSettings): AppSettings {
-  if (settings.editor.vimMode) void preloadVim();
+  if (settings.editor.vimMode) preloadVim().catch(reportError);
   return settings;
 }
 

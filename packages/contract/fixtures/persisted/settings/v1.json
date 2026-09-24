@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "theme": "dark",
+  "editor": {
+    "vimMode": true,
+    "fontSize": 18
+  },
+  "dailyNotes": {
+    "folder": "Journal/Daily",
+    "format": "YYYY/MM/YYYY-MM-DD",
+    "template": "Templates/Daily"
+  },
+  "agent": {
+    "settleMs": 4000,
+    "model": "vendor/model-a",
+    "watch": {
+      "futureDays": 2
+    }
+  }
+}

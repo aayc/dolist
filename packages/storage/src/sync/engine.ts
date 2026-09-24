@@ -244,7 +244,7 @@ export class SyncEngine {
     ]);
     const primary = this.syncableFiles(primaryListing);
     const target = this.syncableFiles(targetListing);
-    this.refuseMassDeletion(snapshot, primary.files, target.files);
+    this.refuseMassDeletion(snapshot, primary, target);
 
     const ctx: RunContext = {
       snapshot,
@@ -500,10 +500,7 @@ export class SyncEngine {
     return !this.rules.isIgnored(path) && !isBinaryPath(path);
   }
 
-  private syncableFiles(listing: FileEntry[]): {
-    files: Map<string, FileEntry>;
-    unavailable: Set<string>;
-  } {
+  private syncableFiles(listing: FileEntry[]): SideListing {
     const files = new Map<string, FileEntry>();
     const unavailable = new Set<string>();
     for (const entry of listing) {
@@ -516,24 +513,30 @@ export class SyncEngine {
 
   /**
    * An unmounted drive or a wiped/unsynced cloud folder lists as empty. Propagating that would
-   * delete every note on the other side, so refuse instead.
+   * delete every note on the other side, so refuse whenever an empty side would delete synced
+   * files that are unchanged on the other (edited ones would be restored, not deleted).
    */
   private refuseMassDeletion(
     snapshot: SyncSnapshot,
-    primary: Map<string, FileEntry>,
-    target: Map<string, FileEntry>,
+    primary: SideListing,
+    target: SideListing,
   ): void {
-    const synced = snapshot.entries.size;
-    if (synced === 0) return;
-    if (target.size === 0 && primary.size > 0) {
-      throw new SyncAbortedError(
-        `Sync target "${this.target.displayName}" is empty; refusing to delete ${synced} synced file(s) from the vault. Make sure it is available, or remove ${this.snapshotFile} to start over.`,
-      );
+    if (snapshot.entries.size === 0) return;
+    if (target.files.size === 0 && primary.files.size > 0) {
+      const doomed = doomedBy(snapshot, primary.files, "p", target.unavailable);
+      if (doomed > 0) {
+        throw new SyncAbortedError(
+          `Sync target "${this.target.displayName}" is empty; refusing to delete ${doomed} synced file(s) from the vault. Make sure it is available, or remove ${this.snapshotFile} to start over.`,
+        );
+      }
     }
-    if (primary.size === 0 && target.size > 0) {
-      throw new SyncAbortedError(
-        `The vault is empty; refusing to delete ${synced} synced file(s) from "${this.target.displayName}". Remove ${this.snapshotFile} to start over.`,
-      );
+    if (primary.files.size === 0 && target.files.size > 0) {
+      const doomed = doomedBy(snapshot, target.files, "t", primary.unavailable);
+      if (doomed > 0) {
+        throw new SyncAbortedError(
+          `The vault is empty; refusing to delete ${doomed} synced file(s) from "${this.target.displayName}". Remove ${this.snapshotFile} to start over.`,
+        );
+      }
     }
   }
 
@@ -582,6 +585,26 @@ export class SyncEngine {
       }
     }
   }
+}
+
+interface SideListing {
+  files: Map<string, FileEntry>;
+  /** Paths present only as cloud placeholders: waiting for a download, not deleted. */
+  unavailable: Set<string>;
+}
+
+/** Synced files on the listed side that an empty other side would get deleted. */
+function doomedBy(
+  snapshot: SyncSnapshot,
+  files: Map<string, FileEntry>,
+  side: "p" | "t",
+  unavailableOnEmptySide: Set<string>,
+): number {
+  let doomed = 0;
+  for (const [path, entry] of snapshot.entries) {
+    if (!unavailableOnEmptySide.has(path) && files.get(path)?.version === entry[side]) doomed++;
+  }
+  return doomed;
 }
 
 function targetKind(target: StorageProvider): SyncTargetConfig["kind"] {

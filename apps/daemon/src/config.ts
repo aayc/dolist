@@ -204,9 +204,15 @@ export function summarizeConfig(
 
 function readConfigFile(path: string, homedir: string): ConfigFile {
   if (!existsSync(path)) return {};
+  let source: string;
+  try {
+    source = readFileSync(path, "utf8");
+  } catch (error) {
+    throw new ConfigError(`Could not read ${displayPath(path, homedir)}: ${errorMessage(error)}`);
+  }
   let raw: unknown;
   try {
-    raw = JSON.parse(readFileSync(path, "utf8"));
+    raw = JSON.parse(source);
   } catch (error) {
     throw new ConfigError(
       `${displayPath(path, homedir)} is not valid JSON: ${errorMessage(error)}`,

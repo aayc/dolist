@@ -1,24 +1,24 @@
 /**
  * On-disk format of the approval broker's state: standing grants plus pending and recent
- * approvals, stored in the vault sidecar. Parsing is defensive — malformed entries are dropped,
- * never trusted — because the file lives next to user-editable notes.
+ * approvals, stored in the vault sidecar (schema in @ddl/contract). Parsing is defensive —
+ * malformed entries are dropped, never trusted — because the file lives next to user-editable
+ * notes; a malformed grant disappears rather than turning into a broader one.
  */
-import type { ApprovalRequest, ApprovalScope, ApprovalStatus, RiskLevel } from "@ddl/core";
-import { SIDECAR_DIR } from "@ddl/core";
-import { ACTION_CATEGORIES, RISK_LEVELS } from "./policy";
+import {
+  decodePersistedApprovals,
+  encodePersistedApprovals,
+  mergePersistedApprovals,
+  PERSISTED_PATHS,
+  type PersistedApprovals,
+  PersistedFile,
+  type PersistedStorage,
+} from "@ddl/contract";
+import type { ApprovalRequest, Logger } from "@ddl/core";
+import { silentLogger } from "@ddl/core";
 import type { ApprovalGrant } from "./types";
 
-export const APPROVALS_STATE_PATH = `${SIDECAR_DIR}/state/approvals.json`;
+export const APPROVALS_STATE_PATH = PERSISTED_PATHS.approvals;
 export const MAX_PERSISTED_DECIDED = 200;
-
-const STATUSES: readonly ApprovalStatus[] = [
-  "pending",
-  "approved",
-  "denied",
-  "expired",
-  "cancelled",
-];
-const SCOPES: readonly ApprovalScope[] = ["once", "task", "always"];
 
 export interface ApprovalState {
   version: 1;
@@ -26,101 +26,10 @@ export interface ApprovalState {
   approvals: ApprovalRequest[];
 }
 
-type Json = Record<string, unknown>;
-
-function isObject(value: unknown): value is Json {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-const isString = (v: unknown): v is string => typeof v === "string";
-const isNumber = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-const isNullableString = (v: unknown): v is string | null => v === null || typeof v === "string";
-
-function categories(value: unknown): ApprovalRequest["categories"] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  return value.filter((c): c is ApprovalRequest["categories"][number] =>
-    ACTION_CATEGORIES.includes(c),
-  );
-}
-
-function parseGrant(value: unknown): ApprovalGrant | undefined {
-  if (!isObject(value)) return undefined;
-  const { toolName, scope, taskId, createdAt, risk } = value;
-  if (
-    !isString(toolName) ||
-    (scope !== "task" && scope !== "always") ||
-    !isNullableString(taskId) ||
-    !isNumber(createdAt)
-  ) {
-    return undefined;
-  }
-  if (scope === "task" && taskId === null) return undefined;
-  const cats = categories(value.categories);
-  return {
-    toolName,
-    scope,
-    taskId: scope === "always" ? null : taskId,
-    createdAt,
-    ...(cats ? { categories: cats } : {}),
-    ...(RISK_LEVELS.includes(risk as RiskLevel) ? { risk: risk as RiskLevel } : {}),
-  };
-}
-
-function parseApproval(value: unknown): ApprovalRequest | undefined {
-  if (!isObject(value)) return undefined;
-  const v = value;
-  const cats = categories(v.categories);
-  if (
-    !isString(v.id) ||
-    !isNullableString(v.threadId) ||
-    !isNullableString(v.taskId) ||
-    !isString(v.toolName) ||
-    !isString(v.summary) ||
-    !isString(v.reason) ||
-    !RISK_LEVELS.includes(v.risk as RiskLevel) ||
-    !STATUSES.includes(v.status as ApprovalStatus) ||
-    !isNumber(v.createdAt) ||
-    !cats
-  ) {
-    return undefined;
-  }
-  return {
-    id: v.id,
-    threadId: v.threadId,
-    taskId: v.taskId,
-    toolName: v.toolName,
-    ...(isString(v.toolLabel) ? { toolLabel: v.toolLabel } : {}),
-    input: v.input,
-    summary: v.summary,
-    risk: v.risk as RiskLevel,
-    categories: cats,
-    reason: v.reason,
-    status: v.status as ApprovalStatus,
-    ...(SCOPES.includes(v.scope as ApprovalScope) ? { scope: v.scope as ApprovalScope } : {}),
-    ...(isString(v.decisionNote) ? { decisionNote: v.decisionNote } : {}),
-    createdAt: v.createdAt,
-    ...(isNumber(v.decidedAt) ? { decidedAt: v.decidedAt } : {}),
-    ...(isNumber(v.expiresAt) ? { expiresAt: v.expiresAt } : {}),
-  };
-}
-
-/** Returns undefined for unreadable files; drops individual malformed entries. */
+/** Returns undefined for unreadable files and files from a newer app; drops malformed entries. */
 export function parseApprovalState(text: string): ApprovalState | undefined {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-  if (!isObject(raw) || !Array.isArray(raw.grants) || !Array.isArray(raw.approvals))
-    return undefined;
-  return {
-    version: 1,
-    grants: raw.grants.map(parseGrant).filter((g): g is ApprovalGrant => g !== undefined),
-    approvals: raw.approvals
-      .map(parseApproval)
-      .filter((a): a is ApprovalRequest => a !== undefined),
-  };
+  const result = decodePersistedApprovals(text);
+  return result.ok ? toState(result.value) : undefined;
 }
 
 /** Keeps every pending approval and the most recently decided ones. */
@@ -128,15 +37,101 @@ export function serializeApprovalState(
   grants: readonly ApprovalGrant[],
   approvals: readonly ApprovalRequest[],
 ): string {
+  return encodePersistedApprovals(prune(grants, approvals));
+}
+
+export interface ApprovalStateFileOptions {
+  storage: PersistedStorage;
+  logger?: Logger;
+  now?: () => number;
+}
+
+export interface ApprovalStateFile {
+  /**
+   * The persisted state, or undefined when there is none to use: missing, corrupt (moved to
+   * `.daily-do-list/corrupt/`) or written by a newer app (left untouched; see `blocked`).
+   */
+  load(): Promise<ApprovalState | undefined>;
+  /**
+   * Writes the state unless the file is blocked. If another device changed the file meanwhile,
+   * `onExternal` receives its content first (merge it, then `current` is read again). Never
+   * throws: failures are logged and reported as "failed" (retry on the next change).
+   */
+  save(
+    current: () => { grants: readonly ApprovalGrant[]; approvals: readonly ApprovalRequest[] },
+    onExternal?: (theirs: ApprovalState) => void,
+  ): Promise<"written" | "blocked" | "failed">;
+  /** Why the file is never written this run, if so. */
+  readonly blocked: string | null;
+}
+
+/**
+ * approvals.json bound to a storage provider with the shared compatibility rules (corrupt files
+ * are moved aside, newer ones are never overwritten, writes are conditional).
+ */
+export function createApprovalStateFile(options: ApprovalStateFileOptions): ApprovalStateFile {
+  const logger = options.logger ?? silentLogger;
+  const file = new PersistedFile({
+    storage: options.storage,
+    path: APPROVALS_STATE_PATH,
+    decode: decodePersistedApprovals,
+    logger,
+    ...(options.now ? { now: options.now } : {}),
+  });
+  return {
+    get blocked() {
+      return file.blocked;
+    },
+    async load() {
+      try {
+        const result = await file.load();
+        return result.status === "loaded" ? toState(result.value) : undefined;
+      } catch (error) {
+        logger.warn("Failed to read approvals state", { error: errorText(error) });
+        return undefined;
+      }
+    },
+    async save(current, onExternal) {
+      try {
+        return await file.save(
+          () => {
+            const { grants, approvals } = current();
+            return encodePersistedApprovals(prune(grants, approvals));
+          },
+          (theirs) => onExternal?.(toState(theirs)),
+        );
+      } catch (error) {
+        logger.warn("Failed to persist approvals", { error: errorText(error) });
+        return "failed";
+      }
+    },
+  };
+}
+
+/** Union of both sides (see `mergePersistedApprovals`): a decided copy beats a pending one. */
+export function mergeApprovalStates(ours: ApprovalState, theirs: ApprovalState): ApprovalState {
+  return toState(mergePersistedApprovals(ours, theirs));
+}
+
+function prune(
+  grants: readonly ApprovalGrant[],
+  approvals: readonly ApprovalRequest[],
+): PersistedApprovals {
   const pending = approvals.filter((a) => a.status === "pending");
   const decided = approvals
     .filter((a) => a.status !== "pending")
     .sort((a, b) => (b.decidedAt ?? b.createdAt) - (a.decidedAt ?? a.createdAt))
     .slice(0, MAX_PERSISTED_DECIDED);
-  const state: ApprovalState = {
-    version: 1,
+  return {
     grants: [...grants],
     approvals: [...pending, ...decided].sort((a, b) => a.createdAt - b.createdAt),
   };
-  return `${JSON.stringify(state, null, 2)}\n`;
+}
+
+function toState(value: PersistedApprovals): ApprovalState {
+  return { version: 1, grants: value.grants, approvals: value.approvals };
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

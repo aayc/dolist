@@ -18,15 +18,24 @@ function registerExCommands(module: VimModule): void {
   });
 }
 
-/** Starts loading vim (idempotent). Hosts call this early when the user has vim mode on. */
+/**
+ * Starts loading vim (idempotent). Hosts call this early when the user has vim mode on. Rejects if
+ * the chunk can't be loaded; the next call (or enabling vim again) retries.
+ */
 export function preloadVim(): Promise<void> {
-  loading ??= import("@replit/codemirror-vim").then((module) => {
-    registerExCommands(module);
-    vimModule = module;
-    for (const listener of [...loadedListeners]) listener();
-    loadedListeners.clear();
-    return module;
-  });
+  loading ??= import("@replit/codemirror-vim").then(
+    (module) => {
+      registerExCommands(module);
+      vimModule = module;
+      for (const listener of [...loadedListeners]) listener();
+      loadedListeners.clear();
+      return module;
+    },
+    (error: unknown) => {
+      loading = null;
+      throw error;
+    },
+  );
   return loading.then(() => undefined);
 }
 
@@ -44,7 +53,8 @@ export function onVimLoaded(listener: () => void): () => void {
 export function vimMode(enabled: boolean): Extension {
   if (!enabled) return [];
   if (!vimModule) {
-    void preloadVim();
+    // A failed load leaves vim off; it is retried the next time vim is (re)applied.
+    preloadVim().catch(() => {});
     return [];
   }
   return vimModule.vim();

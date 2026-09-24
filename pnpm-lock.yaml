@@ -182,6 +182,9 @@ importers:
       '@ddl/connectors':
         specifier: workspace:*
         version: link:../connectors
+      '@ddl/contract':
+        specifier: workspace:*
+        version: link:../contract
       '@ddl/core':
         specifier: workspace:*
         version: link:../core
@@ -204,9 +207,6 @@ importers:
         specifier: 'catalog:'
         version: 1.3.34
     devDependencies:
-      '@ddl/contract':
-        specifier: workspace:*
-        version: link:../contract
       tsx:
         specifier: ^4.23.15
         version: 4.23.15

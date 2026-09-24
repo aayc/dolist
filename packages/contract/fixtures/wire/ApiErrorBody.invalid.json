@@ -1,0 +1,20 @@
+[
+  {
+    "name": "unknown code",
+    "value": { "error": "bad_request" },
+    "path": ["error"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "missing code",
+    "value": { "message": "Something broke" },
+    "path": ["error"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "numeric message",
+    "value": { "error": "internal_error", "message": 500 },
+    "path": ["message"],
+    "code": "invalid_type"
+  }
+]

@@ -4,24 +4,73 @@
  * patterns are written in lowercase with single spaces and match on word boundaries.
  */
 
-/** Lowercase, straight quotes, camelCase and punctuation split into single spaces. */
-export function normalizePhrase(text: string): string {
+/** Characters that render as nothing (soft hyphens, zero-width spaces/joiners, bidi controls, fillers). */
+const INVISIBLE_RE = /\p{Cf}|\p{Default_Ignorable_Code_Point}/gu;
+
+/** Cyrillic, Greek and IPA letters that look like Latin ones (`Plаce order` with a Cyrillic `а`). */
+const CONFUSABLES: ReadonlyMap<string, string> = new Map(
+  [
+    "аa вb еe ёe кk мm нh оo рp сc тt уy хx ѕs іi їi јj ԁd ԛq ԝw һh үy ӏl",
+    "АA ВB ЕE ЁE КK МM НH ОO РP СC ТT УY ХX ЅS ІI ЇI ЈJ ԚQ ԜW ҺH ҮY ӀI",
+    "ɡg ıi ɑa οo αa εe ιi κk νv ρp τt υu χx ωw ϲc օo սu",
+    "ΟO ΑA ΒB ΕE ΖZ ΗH ΙI ΚK ΜM ΝN ΡP ΤT ΥY ΧX ϹC",
+  ]
+    .join(" ")
+    .split(" ")
+    .map((pair) => [pair[0]!, pair[1]!] as const),
+);
+
+/** Folds lookalikes in words written only with Latin letters and lookalikes; real Cyrillic/Greek words stay. */
+function foldConfusables(text: string): string {
+  return text.replace(/\p{L}+/gu, (word) => {
+    let folded = false;
+    for (const ch of word) {
+      if (CONFUSABLES.has(ch)) folded = true;
+      else if (!/[A-Za-z]/.test(ch)) return word;
+    }
+    return folded ? [...word].map((ch) => CONFUSABLES.get(ch) ?? ch).join("") : word;
+  });
+}
+
+/** Separates two readings of one text; no phrase pattern can match across it. */
+const READINGS_SEPARATOR = " \n ";
+
+function words(text: string): string {
   return text
-    .normalize("NFKC")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
     .toLowerCase()
     .replace(/[’‘`´]/g, "'")
-    .replace(/[^a-z0-9$€£¥%&'+#@]+/g, " ")
+    .replace(/[^\p{L}\p{N}$€£¥%&'+#@]+/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * Lowercase, straight quotes, punctuation split into single spaces. Invisible characters are
+ * removed (not split on), Latin accents are dropped (`réserver` → `reserver`) and lookalike
+ * letters folded, so spelling tricks can't hide a phrase; letters of other scripts stay.
+ * camelCase is ambiguous (`placeOrder` is two words, `PlAcE` is one), so when splitting it changes
+ * the text, both readings are returned, joined by `READINGS_SEPARATOR`.
+ */
+export function normalizePhrase(text: string): string {
+  const visible = foldConfusables(
+    text
+      .normalize("NFKC")
+      .replace(INVISIBLE_RE, "")
+      .normalize("NFKD")
+      .replace(/(?<=[A-Za-z])\p{M}+/gu, "")
+      .normalize("NFC"),
+  );
+  const split = words(visible.replace(/([a-z])([A-Z])/g, "$1 $2"));
+  const whole = words(visible);
+  return split === whole ? split : `${split}${READINGS_SEPARATOR}${whole}`;
 }
 
 function phrases(...alternatives: string[]): RegExp {
   return new RegExp(`(?:^| )(?:${alternatives.join("|")})(?= |$)`);
 }
 
-/** End of an element description, allowing a trailing widget word ("Share button"). */
-const END = "(?: (?:button|btn|link|icon|tab|cta|control))?$";
+/** End of an element description (or of one reading), allowing a trailing widget word ("Share button"). */
+const END = "(?: (?:button|btn|link|icon|tab|cta|control))?(?= \\n|$)";
 
 // ── Clickable controls ──────────────────────────────────────────────────────
 
@@ -72,6 +121,37 @@ export const PAYMENT_CONTROL = phrases(
   "donation",
   "pledge",
   "sponsor",
+  "(?:transfer|send|wire|give|tip|donate|contribute|gift) (?:[$€£¥] ?\\d[\\d,.]*|\\d[\\d,.]* ?(?:[$€£¥]|usd|eur|gbp|chf|dollars?|euros?|pounds?))",
+  `order${END}`,
+  // Other languages (accents are stripped by normalizePhrase).
+  `(?:jetzt |sofort |zahlungspflichtig |kostenpflichtig )?(?:kaufen|bestellen|bezahlen)${END}`,
+  "zur kasse(?: gehen)?",
+  "kauf abschlie(?:ss|ß)en",
+  "bestellung (?:abschicken|absenden|aufgeben|abschlie(?:ss|ß)en)",
+  "(?:nu )?(?:kopen|betalen|afrekenen)",
+  "(?:koop|bestel|betaal) nu",
+  "bestelling plaatsen|plaats bestelling",
+  `commander${END}`,
+  "(?:passer|valider|confirmer|finaliser) (?:la |ma |votre )?commande",
+  "acheter(?: maintenant)?",
+  `payer(?: maintenant)?${END}`,
+  "(?:proceder|passer) au paiement",
+  "(?:valider|confirmer) (?:le |mon |votre )?paiement",
+  "comprar(?: ahora| ya| agora)?",
+  "pagar(?: ahora| ya| agora)?",
+  "(?:realizar|hacer|tramitar|confirmar|finalizar|fazer) (?:el |o )?pedido",
+  "(?:finalizar|confirmar) (?:la |a )?compra",
+  "confirmar (?:el |o )?pag(?:o|amento)",
+  "ir a pagar",
+  `(?:acquista|paga|ordina)${END}`,
+  "(?:acquista|compra|paga|ordina) (?:ora|adesso|subito)",
+  "(?:conferma|effettua|invia|concludi) (?:l'|il )?ordine",
+  "procedi (?:all'acquisto|al pagamento|al checkout)",
+  "купить(?: сейчас)?",
+  "оформить заказ",
+  "оплатить",
+  "заказать",
+  "\\S*(?:購入|注文|決済|支払|购买|購買|付款|支付|结账|結帳|下单|구매|주문|결제)\\S*",
 );
 
 export const SUBSCRIPTION_CONTROL = phrases(
@@ -84,6 +164,13 @@ export const SUBSCRIPTION_CONTROL = phrases(
   "renew(?: now| plan| subscription| membership)?",
   "choose (?:this )?plan",
   "select (?:this )?plan",
+  "(?:jetzt )?abonnieren",
+  "s'abonner",
+  "suscribirse",
+  "abbonati",
+  "assinar",
+  "abonneren",
+  "подписаться",
 );
 
 export const PAYMENT_METHOD_CONTROL = phrases(
@@ -112,6 +199,18 @@ export const BOOKING_CONTROL = phrases(
   "web check ?in",
   "get boarding pass",
   "hold (?:this )?(?:seat|room|reservation|table)",
+  `(?:jetzt |verbindlich |zahlungspflichtig )?(?:buchen|reservieren)${END}`,
+  "termin (?:buchen|vereinbaren|reservieren)",
+  "(?:nu )?(?:boeken|reserveren)",
+  "boek nu",
+  "reserver(?: maintenant)?",
+  "confirmer (?:la |ma |votre )?reservation",
+  "reservar(?: ahora| ya| agora)?",
+  "confirmar (?:la |a )?reserva",
+  "prenota(?:re)?(?: ora| adesso| subito)?",
+  "conferma (?:la )?prenotazione",
+  "забронировать",
+  "\\S*(?:予約|预订|預訂|预约|預約|예약)\\S*",
 );
 
 export const BOOKING_CHANGE_CONTROL = phrases(
@@ -144,6 +243,17 @@ export const COMMUNICATION_CONTROL = phrases(
   "start (?:a )?(?:chat|conversation|call|video call)",
   "join (?:the )?(?:meeting|call|room|webinar|video|huddle)",
   "contact (?:seller|host|owner|agent|landlord)",
+  `(?:nachricht )?(?:senden|absenden|abschicken|verschicken)${END}`,
+  `antworten${END}`,
+  "envoyer(?: le message| maintenant)?",
+  "repondre",
+  "enviar(?: mensaje| mensagem| ahora| agora)?",
+  "invia(?:re)?(?: messaggio| ora)?",
+  "rispondi",
+  "verzenden|versturen|verstuur",
+  "отправить",
+  "ответить",
+  "\\S*(?:送信|返信|发送|發送|回复|回覆|보내기|전송|답장)\\S*",
 );
 
 export const PUBLISHING_CONTROL = phrases(
@@ -164,6 +274,13 @@ export const PUBLISHING_CONTROL = phrases(
   `(?:like|unlike|follow|unfollow|connect|upvote|downvote|star|unstar|vote|endorse|clap|favorite|favourite|heart)(?: button| this| [a-z]+)?${END}`,
   "list (?:it|item|for sale)",
   "create (?:listing|post|ad)",
+  "(?:jetzt )?(?:veroffentlichen|posten|teilen)",
+  "publier|partager",
+  "publicar|compartir|compartilhar",
+  "pubblica(?:re)?|condividi",
+  "publiceren",
+  "опубликовать|поделиться",
+  "\\S*(?:投稿|发布|發布|分享|게시|공유)\\S*",
 );
 
 export const ACCOUNT_CONTROL = phrases(
@@ -205,6 +322,12 @@ export const ACCOUNT_CONTROL = phrases(
   "make (?:admin|owner)",
   "(?:add|remove) (?:member|user|collaborator|admin|owner)",
   "change (?:role|permissions)",
+  "(?:jetzt )?registrieren|konto erstellen",
+  "s'inscrire|creer (?:un |mon )?compte",
+  "registrarse|crear (?:una |mi )?cuenta|criar (?:uma )?conta",
+  "registrati|iscriviti",
+  "registreren|account aanmaken",
+  "зарегистрироваться",
 );
 
 export const DESTRUCTIVE_CONTROL = phrases(
@@ -224,6 +347,13 @@ export const DESTRUCTIVE_CONTROL = phrases(
   "permanently",
   "uninstall",
   "terminate",
+  "(?:endgultig |dauerhaft )?loschen",
+  "supprimer|effacer",
+  "eliminar|borrar|excluir|apagar",
+  "elimina(?:re)?|cancella(?:re)?",
+  "verwijderen",
+  "удалить",
+  "\\S*(?:削除|删除|刪除|삭제)\\S*",
 );
 
 export const FORM_SUBMIT_CONTROL = phrases(
@@ -245,6 +375,13 @@ export const FORM_SUBMIT_CONTROL = phrases(
   "get (?:a )?(?:quote|estimate)",
   "yes,? (?:continue|proceed|confirm|i'm sure|delete|cancel|remove|send)",
   "i'm sure",
+  "bestatigen|einreichen",
+  "confirmer|valider|soumettre",
+  "confirmar",
+  "conferma(?:re)?",
+  "bevestigen|indienen",
+  "подтвердить",
+  "\\S*(?:確定|确认|確認|提交)\\S*",
 );
 
 /** Controls that navigate, filter or reveal content without committing anything. */
@@ -385,6 +522,13 @@ export const CREDENTIAL_FIELD = phrases(
   "recovery (?:phrase|key|code)",
   "mnemonic",
   "wallet (?:phrase|key)",
+  "passwort|kennwort|geheimzahl",
+  "mot de passe",
+  "contrasena|senha",
+  "wachtwoord",
+  "has[lł]o|sifre",
+  "пароль",
+  "\\S*(?:パスワード|暗証番号|密码|密碼|비밀번호)\\S*",
 );
 
 export const CARD_FIELD = phrases(
@@ -407,6 +551,27 @@ export const CARD_FIELD = phrases(
   "bank account",
   "sort code",
   "swift(?: code)?",
+  "karten ?nummer|kartenprufnummer|prufnummer|prufziffer|sicherheitscode|karteninhaber",
+  "ablaufdatum|gultig bis|bankleitzahl",
+  "numero de (?:la )?carte|cryptogramme(?: visuel)?|code de securite|date d'expiration",
+  "titulaire de la carte",
+  "numero de (?:la )?tarjeta|codigo de seguridad|titular de la tarjeta",
+  "fecha de (?:caducidad|vencimiento|expiracion)",
+  "numero (?:della )?carta|codice di sicurezza|data di scadenza",
+  "numero do cartao|codigo de seguranca|data de validade",
+  "kaart ?nummer|vervaldatum",
+  "номер карты",
+  "\\S*(?:カード番号|セキュリティコード|卡号|卡號|安全码|카드 ?번호)\\S*",
+);
+
+/** ID numbers whose typed value is never displayed (a subset of the personal fields). */
+export const ID_NUMBER_FIELD = phrases(
+  "ssn",
+  "social security",
+  "passport",
+  "tax id",
+  "sozialversicherungsnummer|steuer ?(?:id|nummer|identifikationsnummer)|reisepass ?nummer",
+  "numero de securite sociale|numero de passeport|numero de pasaporte|codice fiscale",
 );
 
 export const AMOUNT_FIELD = phrases(
@@ -449,6 +614,13 @@ export const PERSONAL_FIELD = phrases(
   "insurance (?:id|member|policy|number)(?: number)?",
   "member id",
   "mother'?s maiden name",
+  "geburtsdatum|sozialversicherungsnummer|steuer ?(?:id|nummer|identifikationsnummer)",
+  "reisepass ?nummer|telefonnummer|handynummer",
+  "date de naissance|numero de securite sociale|numero de passeport|numero de telephone",
+  "fecha de nacimiento|numero de pasaporte|numero de telefono",
+  "data di nascita|codice fiscale|numero di telefono",
+  "data de nascimento|geboortedatum|telefoonnummer",
+  "номер телефона|дата рождения",
 );
 
 /** Fields named "address" that are not a postal address. */
@@ -571,6 +743,10 @@ export const COMMITTING_INTENT = phrases(
   "log ?in",
   "sign ?in",
   "confirm",
+  "kaufen|bestellen|buchen|reservieren|bezahlen|senden",
+  "acheter|commander|reserver|payer|envoyer",
+  "comprar|pedir|reservar|pagar|enviar",
+  "acquistare|ordinare|prenotare|pagare|inviare",
 );
 
 /** Free text that asks for or announces a money transfer (also a classic prompt-injection payload). */

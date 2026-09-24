@@ -9,6 +9,7 @@
 import type { ActionCategory, JsonSchema, Logger, RiskLevel, SafetyDecision } from "@ddl/core";
 import type { LlmClient } from "../llm/types";
 import { ACTION_CATEGORIES, RISK_LEVELS, SAFETY_DECISIONS } from "./policy";
+import { maskSensitiveText } from "./sensitive";
 import type { ActionContext } from "./types";
 
 export interface JudgeRequest {
@@ -95,11 +96,19 @@ function hasCommand(input: unknown): input is { command: string } {
   );
 }
 
+/** Untrusted text inside a fence must not be able to close it (`</agent_rationale>…`) or open another. */
+function fenced(text: string): string {
+  return text.replace(/</g, "‹").replace(/>/g, "›");
+}
+
 function inputForJudge(request: JudgeRequest): string {
   const input = hasCommand(request.input)
     ? { ...request.input, command: stripShellComments(request.input.command) }
     : request.input;
-  return clip(JSON.stringify(input, null, 1) ?? "null", 2000);
+  const json = (JSON.stringify(input, null, 1) ?? "null")
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e");
+  return clip(json, 2000);
 }
 
 export function buildJudgePrompt(request: JudgeRequest): string {
@@ -108,18 +117,20 @@ export function buildJudgePrompt(request: JudgeRequest): string {
     ? stripShellComments(request.summary)
     : request.summary;
   const lines = [
-    `<task>${clip(ctx.taskText?.trim() || "(no task text)", 500)}</task>`,
-    `<agent_role>${ctx.role}</agent_role>`,
+    `<task>${fenced(clip(maskSensitiveText(ctx.taskText?.trim() || "(no task text)"), 500))}</task>`,
+    `<agent_role>${fenced(String(ctx.role))}</agent_role>`,
     "<action>",
-    `tool: ${ctx.toolName}${ctx.toolLabel ? ` (${ctx.toolLabel})` : ""}`,
-    `description: ${description}`,
+    `tool: ${fenced(ctx.toolName)}${ctx.toolLabel ? ` (${fenced(ctx.toolLabel)})` : ""}`,
+    `description: ${fenced(description)}`,
     `input: ${inputForJudge(request)}`,
     "</action>",
   ];
   if (ctx.rationale?.trim())
-    lines.push(`<agent_rationale>${clip(ctx.rationale.trim(), 500)}</agent_rationale>`);
+    lines.push(
+      `<agent_rationale>${fenced(clip(maskSensitiveText(ctx.rationale.trim()), 500))}</agent_rationale>`,
+    );
   if (request.signals.length > 0)
-    lines.push(`<rule_signals>${request.signals.join("; ")}</rule_signals>`);
+    lines.push(`<rule_signals>${fenced(request.signals.join("; "))}</rule_signals>`);
   lines.push("Respond with the JSON verdict.");
   return lines.join("\n");
 }

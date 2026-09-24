@@ -1,38 +1,34 @@
 import {
+  API_CONTRACT,
+  CreateFolderRequestSchema,
+  RenameRequestSchema,
+  WriteNoteRequestSchema,
+} from "@ddl/contract";
+import {
   API_ROUTES,
   type ConflictResponse,
+  type CreateFolderResponse,
+  type FolderRenameResponse,
+  joinPath,
   type NoteResponse,
   type TrashResponse,
   type WriteNoteResponse,
 } from "@ddl/core";
 import type { FileContent, StorageProvider, WriteOptions, WriteResult } from "@ddl/storage";
 import type { Context, Hono } from "hono";
-import { z } from "zod";
 import type { AppContext } from "../context";
 import { ApiError, isNamedError } from "../errors";
-import { clientWriteSource, readJson } from "../http-utils";
+import { clientWriteSource, readJson, readQuery } from "../http-utils";
 import {
   folderExists,
   type MovedFile,
   moveFolder,
   moveFolderToTrash,
   moveNoteToTrash,
+  TRASH_DIR,
+  trashCandidate,
 } from "../vault-ops";
 import { notePathFromUrl, resolveNotePath, resolveVaultPath } from "../vault-paths";
-
-const MAX_NOTE_CHARS = 5 * 1024 * 1024;
-
-const WriteNoteSchema = z.strictObject({
-  content: z.string().max(MAX_NOTE_CHARS),
-  baseVersion: z.string().min(1).max(256).nullable().optional(),
-});
-
-const RenameSchema = z.strictObject({
-  from: z.string().min(1).max(1024),
-  to: z.string().min(1).max(1024),
-});
-
-const CreateFolderSchema = z.strictObject({ path: z.string().min(1).max(1024) });
 
 export function registerNoteRoutes(app: Hono, ctx: AppContext): void {
   app.get("/api/notes/*", async (c) => {
@@ -44,7 +40,7 @@ export function registerNoteRoutes(app: Hono, ctx: AppContext): void {
 
   app.put("/api/notes/*", async (c) => {
     const path = notePathFromUrl(c.req.url);
-    const body = await readJson(c, WriteNoteSchema);
+    const body = await readJson(c, WriteNoteRequestSchema);
     // `null` = create only; omitted = unconditional overwrite.
     const options: WriteOptions =
       body.baseVersion === undefined ? {} : { ifMatch: body.baseVersion };
@@ -68,14 +64,14 @@ export function registerNoteRoutes(app: Hono, ctx: AppContext): void {
     const path = notePathFromUrl(c.req.url);
     if (!(await ctx.storage.stat(path)))
       throw new ApiError(404, "not_found", `No note at "${path}"`);
-    const moved = await moveNoteToTrash(ctx.storage, path);
+    const moved = await moveNoteToTrash(ctx.storage, path, ctx.now());
     recordMoves(ctx, c, [moved]);
     const response: TrashResponse = { ok: true, trashedTo: moved.to };
     return c.json(response);
   });
 
   app.post(API_ROUTES.rename, async (c) => {
-    const body = await readJson(c, RenameSchema);
+    const body = await readJson(c, RenameRequestSchema);
     const fromFolder = resolveVaultPath(body.from);
     if (await folderExists(ctx.storage, fromFolder)) {
       return renameFolder(c, ctx, fromFolder, resolveVaultPath(body.to));
@@ -102,17 +98,20 @@ export function registerNoteRoutes(app: Hono, ctx: AppContext): void {
   });
 
   app.post(API_ROUTES.folders, async (c) => {
-    const body = await readJson(c, CreateFolderSchema);
+    const body = await readJson(c, CreateFolderRequestSchema);
     const path = resolveVaultPath(body.path);
     await ctx.storage.createFolder(path);
-    return c.json({ path }, 201);
+    const response: CreateFolderResponse = { path };
+    return c.json(response, 201);
   });
 
   app.delete(API_ROUTES.folders, async (c) => {
-    const path = resolveVaultPath(c.req.query("path") ?? "");
+    const query = readQuery(c, API_CONTRACT.folders.methods.DELETE.query);
+    const path = resolveVaultPath(query.path);
+    const now = ctx.now();
     let moved: MovedFile[];
     try {
-      moved = await moveFolderToTrash(ctx.storage, path);
+      moved = await moveFolderToTrash(ctx.storage, path, now);
     } catch (error) {
       if (isNamedError(error, "NotFoundError")) {
         throw new ApiError(404, "not_found", `No folder at "${path}"`);
@@ -120,7 +119,9 @@ export function registerNoteRoutes(app: Hono, ctx: AppContext): void {
       throw error;
     }
     recordMoves(ctx, c, moved);
-    const response: TrashResponse = { ok: true, trashedTo: joinTrash(path, moved) };
+    const trashedTo =
+      moved.length > 0 ? joinTrash(path, moved) : await emptyFolderTrash(ctx.storage, path, now);
+    const response: TrashResponse = { ok: true, trashedTo };
     return c.json(response);
   });
 }
@@ -132,6 +133,10 @@ async function renameFolder(
   to: string,
 ): Promise<Response> {
   if (from === to) throw new ApiError(400, "invalid_request", "Source and target are the same");
+  // moveFolder would merge into an existing folder; a rename must not.
+  if (from.toLowerCase() !== to.toLowerCase() && (await folderExists(ctx.storage, to))) {
+    throw new ApiError(409, "conflict", `"${to}" already exists`);
+  }
   let moved: MovedFile[];
   try {
     moved = await moveFolder(ctx.storage, from, to);
@@ -142,7 +147,8 @@ async function renameFolder(
     throw error;
   }
   recordMoves(ctx, c, moved);
-  return c.json({ path: to, moved: moved.length });
+  const response: FolderRenameResponse = { path: to, moved: moved.length };
+  return c.json(response);
 }
 
 function recordMoves(ctx: AppContext, c: Context, moved: readonly MovedFile[]): void {
@@ -154,8 +160,21 @@ function recordMoves(ctx: AppContext, c: Context, moved: readonly MovedFile[]): 
 }
 
 function joinTrash(folder: string, moved: readonly MovedFile[]): string {
-  const first = moved[0];
-  return first ? first.to.slice(0, first.to.length - (first.from.length - folder.length)) : "";
+  const first = moved[0]!;
+  return first.to.slice(0, first.to.length - (first.from.length - folder.length));
+}
+
+/**
+ * Where `moveFolderToTrash` put an empty folder (no moved files to derive it from): its first
+ * candidate that is now a folder without files.
+ */
+async function emptyFolderTrash(storage: StorageProvider, folder: string, now: Date) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const to = trashCandidate(folder, true, now, attempt);
+    if (!(await folderExists(storage, to))) continue;
+    if ((await storage.list({ prefix: to, includeHidden: true })).length === 0) return to;
+  }
+  return joinPath(TRASH_DIR, folder);
 }
 
 export function toNoteResponse(file: FileContent): NoteResponse {

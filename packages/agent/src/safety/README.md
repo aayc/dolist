@@ -73,17 +73,36 @@ command, MCP server/tool words, every string in the input). Then per family:
   to; typed text is checked for card numbers (issuer prefix + Luhn), secrets (known token formats
   and high-entropy strings), SSNs, money-transfer wording, and terminal commands; keys, uploads and
   page scripts have their own rules. Every non-screenshot `computer_*` action needs approval.
+  Element text is normalized so spelling tricks can't hide a phrase: invisible characters (soft
+  hyphens, zero-width spaces, bidi controls) are removed, Latin accents dropped, Cyrillic/Greek
+  lookalike letters folded inside Latin words, and camelCase matched both split (`placeOrder`) and
+  whole (`pLaCe oRdEr`). The vocabularies cover commit controls and secret fields in English,
+  German, French, Spanish, Portuguese, Italian and Dutch, plus common Russian, Chinese, Japanese
+  and Korean terms. Card numbers are found however they are grouped (spaces, dashes, dots,
+  non-breaking spaces, full-width or Arabic-Indic digits, after other numbers); keypad Enter and
+  `⌘↩` count as Enter.
 - **URLs** (`rules/web.ts`): schemes, loopback/private/link-local hosts (the daemon port 7331 is a
   hard deny), cloud metadata, secrets or personal data in URLs, and GET links that act
-  (unsubscribe, confirm/verify magic links, delete).
+  (unsubscribe, confirm/verify magic links, delete). URLs are read the way the tools that open
+  them do: tabs/newlines and surrounding control characters are dropped (`java\tscript:` is
+  `javascript:`), a scheme hidden by invisible or full-width characters still counts, a bare host
+  (`127.0.0.1:7331/x`, `example.com`) is an http URL, `localhost.` is `localhost`, and well-known
+  loopback DNS names (`localtest.me`, `127.0.0.1.nip.io`) are loopback.
 - **Shell** (`shell.ts` + `shell-commands.ts` + `rules/shell.ts`): a conservative parser splits
   `&&`, `||`, `;`, `|`, subshells and `$(…)`/backticks/`<(…)`, follows `bash -c`, `eval`, `su -c`,
   heredocs fed to shells, `find -exec` and `xargs`, strips `sudo`/`env`/`nohup`/`timeout`/…,
   undoes obfuscation (`r\m`, `$'\x2f'`, `${IFS}`, full-width characters) and tracks `cd` (with
-  subshell scoping) so relative paths are placed inside or outside the workspace. Each simple
-  command is checked by the rules; pipelines and substitutions are followed for flows such as
-  `cat .env | curl …`. Commands the parser cannot fully read need approval. Running local code
-  (`python3 script.py`, `npm test`, `./run.sh`) is uncertain by design: its effects are invisible.
+  subshell scoping) so relative paths are placed inside or outside the workspace. Function bodies
+  (`f() { … }` and `function f { … }`) and alias values (zsh expands them in `eval`ed text) are
+  analyzed like any other commands, and `awk` programs are scanned like inline code. A `find`
+  deletion over a home, root or system folder is a hard deny unless it is really filtered
+  (`-name '*'` is not a filter), and needs approval when it is. Each simple command is checked by
+  the rules; pipelines and substitutions are followed for flows such as `cat .env | curl …`.
+  HTTP clients and raw sockets resolve bare hosts like the tools do (`curl localhost:7331`,
+  `http :7331`, `nc localhost 7331`, `/dev/tcp/…`). Commands the parser cannot fully read need
+  approval, and their raw text is still scanned for catastrophic commands (hard deny). Running
+  local code (`python3 script.py`, `npm test`, `./run.sh`) is uncertain by design: its effects are
+  invisible.
 - **Files** (`rules/files.ts`, `rules/path-rules.ts`): reads of keys/credential stores are denied,
   other secret-bearing files need approval; writes inside the workspace or the temp area are fine,
   elsewhere they need approval (stricter for the app's own config/approval state, startup files,
@@ -91,8 +110,9 @@ command, MCP server/tool words, every string in the input). Then per family:
   in the workspace and run later.
 - **MCP connectors** (`rules/mcp.ts`): tool-name verbs map to categories (`send`/`reply` →
   communication, `create_event` → booking, `pay`/`charge` → payment, `delete` → destructive, …;
-  `create_draft` is allowed, `get/list/search` are reads); recipients and amounts in arguments add
-  categories; a `readOnly` annotation never hides a risky verb.
+  `create_draft` is allowed, `get/list/search` are reads); after a conjunction a new verb starts
+  (`read_and_reply` sends); recipients and amounts in arguments add categories; a `readOnly`
+  annotation never hides a risky verb.
 
 ## Rules
 
@@ -237,7 +257,9 @@ Stable ids, grouped by decision (generated from `SAFETY_RULES`; 132 rules).
 
 Only consulted for uncertain, effectful actions (a handful per task). The prompt fences the task,
 the action (tool, summary, redacted and truncated input with shell comments stripped) and the
-agent's rationale, and tells the judge that everything inside is untrusted. Output is a strict JSON
+agent's rationale, and tells the judge that everything inside is untrusted. Angle brackets in
+untrusted text are neutralized so it cannot close a fence or forge `<rule_signals>`, and secrets
+are masked in the task text and rationale as well as the input. Output is a strict JSON
 schema (`decision`, `risk`, `categories`, `reason`); `reasoning: "off"`, `temperature: 0`, a
 `policy.llmJudgeTimeoutMs` deadline (default 8 s). Anything unusable → `require_approval`.
 
@@ -282,7 +304,10 @@ approvals return `User denied[: note]`, `Approval expired` or `Approval cancelle
    honest category/decision/risk, and a description phrased for the user (it appears in reasons).
 3. Register its metadata in `rules/index.ts` if it is not part of an exported rule list already
    (the `SAFETY_RULES` test fails for unregistered ids).
-4. Add positive **and** negative cases to the colocated tests (`*-rules.test.ts`).
+4. Add positive **and** negative cases to the colocated tests (`*-rules.test.ts`), and to the
+   adversarial corpora when the rule has spellings an attacker could vary (`shell-corpus`,
+   `ui-corpus`, `mcp-corpus`). `fuzz`, `invariants`, `judge-injection` and `gate-concurrency` hold
+   the properties every rule must keep; `regressions.test.ts` has one case per fixed false allow.
 5. Add eval cases to `evals/datasets/safety.jsonl` and run the suite.
 
 A new `allow` classifier must never fire on something a risky rule should catch: risky hits always
@@ -320,3 +345,5 @@ run where the judge never answered does not pass.
 - Symlinks are not resolved (no file system access); creating links that point outside the
   workspace needs approval instead.
 - MCP tools are classified by name and arguments; annotations are hints and cannot relax rules.
+- Commit phrases in languages the vocabularies don't cover are unrecognized clicks: the judge
+  decides them, and without a judge they are allowed like "Continue".

@@ -77,8 +77,9 @@ export class AttributedStorage implements StorageProvider {
   async deleteFolder(path: string): Promise<void> {
     const folder = normalizePath(path);
     const files = await this.inner.list({ prefix: folder, includeHidden: true });
-    await this.inner.deleteFolder(folder);
+    // Recorded up front: providers emit each deletion as they go, and the hub may flush mid-way.
     for (const file of files) this.writes.record(file.path, undefined, this.source);
+    await this.inner.deleteFolder(folder);
   }
 
   watch(listener: (event: StorageEvent) => void): Unsubscribe {

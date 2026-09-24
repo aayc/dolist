@@ -57,6 +57,44 @@ describe("resolveOpenRouterModel", () => {
   });
 });
 
+describe("resolveOpenRouterModel baseUrl", () => {
+  let dir: string;
+  let runtime: ModelRuntime;
+
+  beforeAll(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), "ddl-model-url-"));
+    runtime = await ModelRuntime.create({
+      authPath: path.join(dir, "auth.json"),
+      modelsPath: path.join(dir, "models.json"),
+      allowModelNetwork: false,
+    });
+  });
+
+  afterAll(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("points catalog and fallback models at another endpoint, trimming trailing slashes", () => {
+    const catalog = resolveOpenRouterModel("deepseek/deepseek-v4.1-flash", runtime, {
+      baseUrl: "http://127.0.0.1:9999/api/v1/",
+    });
+    expect(catalog).toMatchObject({ baseUrl: "http://127.0.0.1:9999/api/v1", maxTokens: 131_072 });
+    const fallback = resolveOpenRouterModel("acme/brand-new-model", runtime, {
+      baseUrl: "http://localhost:1/v1",
+    });
+    expect(fallback.baseUrl).toBe("http://localhost:1/v1");
+  });
+
+  it("keeps OpenRouter when no (or a blank) baseUrl is given", () => {
+    expect(resolveOpenRouterModel("deepseek/deepseek-v4.1-flash", runtime).baseUrl).toBe(
+      "https://openrouter.ai/api/v1",
+    );
+    expect(resolveOpenRouterModel("acme/x", runtime, { baseUrl: "  " }).baseUrl).toBe(
+      "https://openrouter.ai/api/v1",
+    );
+  });
+});
+
 describe("toPiThinkingLevel", () => {
   it("passes levels through and defaults to medium", () => {
     expect(toPiThinkingLevel("off")).toBe("off");

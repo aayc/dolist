@@ -1,0 +1,14 @@
+[
+  {
+    "name": "another code",
+    "value": { "error": "not_found", "current": null },
+    "path": ["error"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "missing current",
+    "value": { "error": "conflict" },
+    "path": ["current"],
+    "code": "invalid_type"
+  }
+]

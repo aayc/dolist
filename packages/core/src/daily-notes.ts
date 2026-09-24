@@ -58,12 +58,16 @@ export function todayDailyNotePath(settings: DailyNoteSettings, now: Date = new 
   return dailyNotePath(today(now), settings);
 }
 
-/** Returns the note's date if `path` is a daily note under the configured folder/format. */
+/**
+ * Returns the note's date if `path` is a daily note under the configured folder/format. Unicode
+ * normalization doesn't matter: macOS may spell a folder decomposed (NFD) on disk.
+ */
 export function parseDailyNotePath(path: string, settings: DailyNoteSettings): LocalDate | null {
   if (!isMarkdownPath(path)) return null;
-  const prefix = folderPrefix(settings.folder);
-  if (prefix && !path.startsWith(prefix)) return null;
-  const name = path.slice(prefix.length, -".md".length);
+  const nfcPath = path.normalize("NFC");
+  const prefix = folderPrefix(settings.folder).normalize("NFC");
+  if (prefix && !nfcPath.startsWith(prefix)) return null;
+  const name = nfcPath.slice(prefix.length, -".md".length);
   return parseDateWithFormat(name, settings.format || DEFAULT_DAILY_NOTE_SETTINGS.format);
 }
 

@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "grants": [
+    {
+      "toolName": "browser_click",
+      "scope": "task",
+      "taskId": "tsk_7fq2m9x0ab",
+      "createdAt": 1790154004500,
+      "categories": ["form_submission"],
+      "risk": "medium"
+    },
+    {
+      "toolName": "mcp__calendar__create_event",
+      "scope": "always",
+      "taskId": null,
+      "createdAt": 1790150000000,
+      "categories": ["booking"],
+      "risk": "high"
+    }
+  ],
+  "approvals": [
+    {
+      "id": "apr_book01",
+      "threadId": "thr_k3j9x0q2m1ab",
+      "taskId": "tsk_7fq2m9x0ab",
+      "toolName": "browser_click",
+      "toolLabel": "Click",
+      "input": { "element": "Confirm booking", "ref": "e42" },
+      "summary": "Click “Confirm booking” on the dentist's site",
+      "risk": "medium",
+      "categories": ["form_submission"],
+      "reason": "Submits a booking form",
+      "status": "approved",
+      "scope": "task",
+      "decisionNote": "Tuesday works",
+      "createdAt": 1790154004000,
+      "decidedAt": 1790154004500,
+      "expiresAt": 1790197204000
+    },
+    {
+      "id": "apr_ink0001",
+      "threadId": "thr_ink0000001",
+      "taskId": "tsk_wait000001",
+      "toolName": "browser_click",
+      "input": { "element": "Place order" },
+      "summary": "Click “Place order” (€34.90)",
+      "risk": "high",
+      "categories": ["payment"],
+      "reason": "Completes a purchase",
+      "status": "pending",
+      "createdAt": 1790154006000,
+      "expiresAt": 1790197206000
+    }
+  ]
+}

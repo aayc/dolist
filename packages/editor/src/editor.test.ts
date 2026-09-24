@@ -99,6 +99,23 @@ describe("setDocument", () => {
     expect(editor.getDocument()).toContain("new task");
   });
 
+  it("keeps a caret at a line start on its line when remote lines are inserted above it", () => {
+    // The caret waits on the empty line after Enter; another device adds a task above it.
+    const editor = mount({ doc: "- [ ] A\n" });
+    editor.view.dispatch({ selection: { anchor: 8 } });
+    editor.setDocument("- [ ] A\n- [ ] remote\n");
+    expect(editor.view.state.selection.main.head).toBe(editor.getDocument().length);
+    editor.view.dispatch(editor.view.state.replaceSelection("typed"));
+    expect(editor.getDocument()).toBe("- [ ] A\n- [ ] remote\ntyped");
+
+    // A selection that ends at that line start doesn't grow over the inserted lines.
+    editor.setDocument("one\ntwo\n", { resetHistory: true });
+    editor.view.dispatch({ selection: { anchor: 0, head: 4 } });
+    editor.setDocument("one\nnew\ntwo\n");
+    const { from, to } = editor.view.state.selection.main;
+    expect(editor.view.state.sliceDoc(from, to)).toBe("one\n");
+  });
+
   it("normalizes line endings and ignores no-op updates", () => {
     const onDocChange = vi.fn();
     const editor = mount({ doc: "a\nb", callbacks: { onDocChange } });

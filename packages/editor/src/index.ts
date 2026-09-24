@@ -14,7 +14,12 @@ export {
   toggleItalic,
   toggleStrikethrough,
 } from "./commands/formatting";
-export { continueListItem, continueMarkup, indentListItemOrInsertTab } from "./commands/lists";
+export {
+  continueAlternateTask,
+  continueListItem,
+  continueMarkup,
+  indentListItemOrInsertTab,
+} from "./commands/lists";
 export { type CommandTarget, toggleChecklist, toggleTaskAtLine } from "./commands/tasks";
 export { minimalChange, type TextChange } from "./diff";
 export * from "./editor";

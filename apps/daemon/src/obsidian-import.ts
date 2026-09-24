@@ -1,3 +1,4 @@
+import { parsePersistedJson } from "@ddl/contract";
 import {
   type AppSettings,
   type DeepPartial,
@@ -90,7 +91,12 @@ async function readConfig<S extends z.ZodType>(
   try {
     const file = await storage.read(path);
     if (!file) return null;
-    const parsed = schema.safeParse(JSON.parse(file.content));
+    const json = parsePersistedJson(file.content);
+    if (!json.ok) {
+      logger.warn("Could not read Obsidian config", { path, error: json.reason });
+      return null;
+    }
+    const parsed = schema.safeParse(json.value);
     if (parsed.success) return parsed.data;
     logger.warn("Ignoring unexpected Obsidian config", { path });
   } catch (error) {

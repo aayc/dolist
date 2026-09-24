@@ -1,0 +1,8 @@
+[
+  { "name": "rename a note", "value": { "from": "Ideas.md", "to": "Archive/Ideas 2026.md" } },
+  { "name": "rename a folder", "value": { "from": "Projects", "to": "Work/Projects" } },
+  {
+    "name": "unnormalized paths (the daemon normalizes)",
+    "value": { "from": "a//b.md", "to": "./c.md" }
+  }
+]

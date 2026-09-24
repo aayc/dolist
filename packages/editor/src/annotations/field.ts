@@ -90,26 +90,64 @@ function placeAnnotations(
   return { entries, decorations: buildDecorations(entries, doc) };
 }
 
+/**
+ * Start positions (in the new document) of the whole lines a change set inserts, by line text.
+ * Moving a line up/down deletes its neighbour and inserts it again on the other side.
+ */
+function insertedLines(changes: ChangeSet, newDoc: Text): Map<string, number[]> {
+  const lines = new Map<string, number[]>();
+  changes.iterChanges((_fromA, _toA, fromB, _toB, inserted) => {
+    for (let n = 1; n <= inserted.lines; n++) {
+      const part = inserted.line(n);
+      if (!part.text.trim()) continue;
+      const pos = fromB + part.from;
+      const line = newDoc.lineAt(pos);
+      if (line.from !== pos || line.text !== part.text) continue;
+      const known = lines.get(part.text);
+      if (known) known.push(pos);
+      else lines.set(part.text, [pos]);
+    }
+  });
+  return lines;
+}
+
 function mapAnnotations(
   value: AnnotationState,
   changes: ChangeSet,
   oldDoc: Text,
   newDoc: Text,
 ): AnnotationState {
-  const deletions: Array<[number, number]> = [];
-  changes.iterChangedRanges((fromA, toA) => {
-    if (toA > fromA) deletions.push([fromA, toA]);
+  /** `[fromA, toA, toB]` of every change that deletes text. */
+  const deletions: Array<[number, number, number]> = [];
+  changes.iterChangedRanges((fromA, toA, _fromB, toB) => {
+    if (toA > fromA) deletions.push([fromA, toA, toB]);
   });
+  let reinserted: Map<string, number[]> | null = null;
+  let reordered = false;
   const entries: AnchoredAnnotation[] = [];
   for (const entry of value.entries) {
+    let replacedAt: number | undefined;
     if (deletions.length > 0) {
       const line = oldDoc.lineAt(entry.anchor);
-      if (deletions.some(([from, to]) => from <= line.from && to >= line.to)) continue;
+      if (deletions.some(([from, to]) => from <= line.from && to >= line.to)) {
+        // The whole line was removed: keep the badge only if the same change inserted that exact
+        // line again (line moves, undoing them, external reorders).
+        reinserted ??= insertedLines(changes, newDoc);
+        const at = reinserted.get(line.text)?.shift();
+        if (at === undefined) continue;
+        entries.push({ ...entry, anchor: at });
+        reordered = true;
+        continue;
+      }
+      // mapPos keeps a position at the start of a replaced range before the insertion, which
+      // would leave the badge on a line break inserted there instead of with the line's text.
+      replacedAt = deletions.find(([from]) => from === entry.anchor)?.[2];
     }
-    const anchor = changes.mapPos(entry.anchor, 1);
+    const anchor = replacedAt ?? changes.mapPos(entry.anchor, 1);
     entries.push(anchor === entry.anchor ? entry : { ...entry, anchor });
   }
   if (entries.length === 0) return EMPTY;
+  if (reordered) entries.sort((a, b) => a.anchor - b.anchor);
   return { entries, decorations: buildDecorations(entries, newDoc) };
 }
 

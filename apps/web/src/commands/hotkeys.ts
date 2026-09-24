@@ -75,6 +75,9 @@ export function matchHotkey(hotkey: Hotkey, event: KeyLike, isMac: boolean): boo
   if (isMac ? Boolean(hotkey.ctrl) !== event.ctrlKey : event.metaKey) return false;
   const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
   if (key === hotkey.key) return true;
+  // A Latin letter is what the layout produced (Dvorak ⌘B sits on the physical N key); only
+  // other characters (Cyrillic, ⌥-symbols, dead keys, shifted digits) fall back to the key position.
+  if (/^[a-z]$/.test(key)) return false;
   const code = codeFor(hotkey.key);
   return code !== null && event.code === code;
 }

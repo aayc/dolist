@@ -12,12 +12,15 @@ export class HttpError extends Error {
   }
 }
 
-/** 409 from a note write whose `baseVersion` is stale. `current` is null if the note was deleted. */
+/**
+ * 409 from a note write or rename whose target changed (a `ConflictResponse`). `current` is the
+ * note now on disk, or null if it was deleted.
+ */
 export class ConflictError extends HttpError {
   readonly current: NoteResponse | null;
 
-  constructor(current: NoteResponse | null) {
-    super(409, "The note changed on disk", { error: "conflict", current });
+  constructor(current: NoteResponse | null, body: unknown = { error: "conflict", current }) {
+    super(409, "The note changed on disk", body);
     this.name = "ConflictError";
     this.current = current;
   }

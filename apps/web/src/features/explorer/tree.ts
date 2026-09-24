@@ -12,7 +12,12 @@ const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "bas
 /** Obsidian order: folders first, then case-insensitive natural sort ("Day 2" < "Day 10"). */
 export function compareNodes(a: TreeNode, b: TreeNode): number {
   if (a.kind !== b.kind) return a.kind === "folder" ? -1 : 1;
-  return collator.compare(a.name, b.name) || collator.compare(a.path, b.path);
+  return (
+    collator.compare(a.name, b.name) ||
+    collator.compare(a.path, b.path) ||
+    // "Note" and "note" (or "resume" and "résumé") are equal to the collator: keep a total order.
+    (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
+  );
 }
 
 export function displayName(path: string, kind: "file" | "folder"): string {

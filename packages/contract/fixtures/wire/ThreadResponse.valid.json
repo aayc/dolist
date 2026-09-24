@@ -1,0 +1,135 @@
+[
+  {
+    "name": "a finished risky task with every message kind",
+    "value": {
+      "thread": {
+        "id": "thr_k3j9x0q2m1ab",
+        "taskId": "tsk_a1b2c3d4e5",
+        "notePath": "Daily/2026-09-23.md",
+        "title": "Order a new kettle",
+        "status": "done",
+        "createdAt": 1790000000000,
+        "updatedAt": 1790000090000,
+        "messages": [
+          {
+            "id": "msg_1",
+            "author": "system",
+            "createdAt": 1790000000000,
+            "kind": "status",
+            "status": "working",
+            "text": "Started a researcher subagent"
+          },
+          {
+            "id": "msg_2",
+            "author": "orchestrator",
+            "createdAt": 1790000001000,
+            "kind": "text",
+            "role": "agent",
+            "text": "Picked this up — handing it to a **researcher** subagent."
+          },
+          {
+            "id": "msg_3",
+            "author": "subagent:researcher",
+            "createdAt": 1790000002000,
+            "kind": "tool_call",
+            "toolCallId": "call_00_Xk2",
+            "toolName": "web_search",
+            "label": "Search the web",
+            "input": { "query": "best electric kettle 2026" },
+            "status": "ok",
+            "resultPreview": "10 results",
+            "endedAt": 1790000004000
+          },
+          {
+            "id": "msg_4",
+            "author": "subagent:researcher",
+            "createdAt": 1790000005000,
+            "kind": "artifact",
+            "artifactId": "art_m5n6b7v8c9x0"
+          },
+          {
+            "id": "msg_apr_q1w2e3r4t5y6",
+            "author": "system",
+            "createdAt": 1790000006000,
+            "kind": "approval",
+            "approvalId": "apr_q1w2e3r4t5y6"
+          },
+          {
+            "id": "msg_5",
+            "author": "subagent:researcher",
+            "createdAt": 1790000007000,
+            "kind": "tool_call",
+            "toolCallId": "call_01_Yz9",
+            "toolName": "mock_irreversible_action",
+            "input": { "action": "order", "details": "order for “Order a new kettle”" },
+            "status": "blocked",
+            "resultPreview": "Denied by you"
+          },
+          {
+            "id": "msg_6",
+            "author": "you",
+            "createdAt": 1790000008000,
+            "kind": "text",
+            "role": "user",
+            "text": "Only ones under $50"
+          },
+          {
+            "id": "msg_7",
+            "author": "system",
+            "createdAt": 1790000090000,
+            "kind": "status",
+            "status": "done"
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "art_m5n6b7v8c9x0",
+            "threadId": "thr_k3j9x0q2m1ab",
+            "title": "Summary: Order a new kettle",
+            "kind": "markdown",
+            "mimeType": "text/markdown",
+            "path": ".daily-do-list/artifacts/thr_k3j9x0q2m1ab/art_m5n6b7v8c9x0.md",
+            "size": 412,
+            "createdAt": 1790000005000
+          }
+        ],
+        "surfaces": ["browser"]
+      },
+      "approvals": [
+        {
+          "id": "apr_q1w2e3r4t5y6",
+          "threadId": "thr_k3j9x0q2m1ab",
+          "taskId": "tsk_a1b2c3d4e5",
+          "toolName": "mock_irreversible_action",
+          "input": { "action": "order", "details": "order for “Order a new kettle”" },
+          "summary": "Order a new kettle",
+          "risk": "high",
+          "categories": ["payment"],
+          "reason": "Spends money",
+          "status": "denied",
+          "decisionNote": "Too expensive",
+          "createdAt": 1790000006000,
+          "decidedAt": 1790000007500
+        }
+      ]
+    }
+  },
+  {
+    "name": "a thread not attached to a task",
+    "value": {
+      "thread": {
+        "id": "thr_orphan",
+        "taskId": null,
+        "notePath": null,
+        "title": "",
+        "status": "idle",
+        "createdAt": 0,
+        "updatedAt": 0,
+        "messages": [],
+        "artifacts": [],
+        "surfaces": []
+      },
+      "approvals": []
+    }
+  }
+]

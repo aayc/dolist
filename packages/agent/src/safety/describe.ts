@@ -233,7 +233,8 @@ function describeFromFacts(f: ActionFacts): string {
       return (f.ui && describeUi(f)) || describeMcp(f);
     case "custom": {
       const preview = clip(JSON.stringify(redactSensitiveInput(f.input)) ?? "", 100);
-      return `Run ${f.ctx.toolLabel ?? f.ctx.toolName}${preview && preview !== "{}" ? ` ${preview}` : ""}`;
+      const name = (f.ctx.toolLabel ?? f.ctx.toolName).trim() || "an unnamed tool";
+      return `Run ${name}${preview && preview !== "{}" ? ` ${preview}` : ""}`;
     }
   }
 }

@@ -1,40 +1,31 @@
 import type { AgentRuntime } from "@ddl/agent";
 import {
+  API_CONTRACT,
+  ApprovalDecisionRequestSchema,
+  PostMessageRequestSchema,
+  SetAgentEnabledRequestSchema,
+} from "@ddl/contract";
+import {
   API_ROUTES,
   type ApprovalListResponse,
   type ApprovalRequest,
-  type ApprovalStatus,
+  type ApprovalResponse,
+  type ConnectorsResponse,
+  type SetAgentEnabledResponse,
   type TaskRecordsResponse,
+  type ThreadActionResponse,
   type ThreadListResponse,
   type ThreadResponse,
 } from "@ddl/core";
 import type { Context, Hono } from "hono";
-import { z } from "zod";
 import type { AppContext } from "../context";
 import { ApiError, errorMessage, toApiError } from "../errors";
-import { idParam, readJson } from "../http-utils";
+import { idParam, readJson, readQuery } from "../http-utils";
 import { resolveNotePath } from "../vault-paths";
 import { applySettings } from "./settings";
 
 /** Thread actions that are still running after this long answer 202 and finish in the background. */
 const ACTION_GRACE_MS = 3_000;
-
-const APPROVAL_STATUSES = [
-  "pending",
-  "approved",
-  "denied",
-  "expired",
-  "cancelled",
-] as const satisfies readonly ApprovalStatus[];
-
-const SetEnabledSchema = z.strictObject({ enabled: z.boolean() });
-const PostMessageSchema = z.strictObject({ text: z.string().trim().min(1).max(20_000) });
-const ApprovalDecisionSchema = z.strictObject({
-  decision: z.enum(["approve", "deny"]),
-  scope: z.enum(["once", "task", "always"]).optional(),
-  note: z.string().max(2_000).optional(),
-});
-const ApprovalStatusSchema = z.enum(APPROVAL_STATUSES);
 
 export function registerAgentRoutes(app: Hono, ctx: AppContext): void {
   const { runtime } = ctx;
@@ -43,14 +34,14 @@ export function registerAgentRoutes(app: Hono, ctx: AppContext): void {
 
   // Persisted as `agent.enabled` so the switch survives restarts and syncs with the vault.
   app.on(["PUT", "POST"], API_ROUTES.agentEnabled, async (c) => {
-    const { enabled } = await readJson(c, SetEnabledSchema);
+    const { enabled } = await readJson(c, SetAgentEnabledRequestSchema);
     await applySettings(ctx, { agent: { enabled } });
-    return c.json(runtime.status());
+    const body: SetAgentEnabledResponse = runtime.status();
+    return c.json(body);
   });
 
   app.get("/api/tasks", (c) => {
-    const notePath = c.req.query("notePath");
-    if (!notePath) throw new ApiError(400, "invalid_request", "notePath is required");
+    const { notePath } = readQuery(c, API_CONTRACT.tasks.methods.GET.query);
     const body: TaskRecordsResponse = {
       records: runtime.getTaskRecords(resolveNotePath(notePath)),
     };
@@ -58,8 +49,7 @@ export function registerAgentRoutes(app: Hono, ctx: AppContext): void {
   });
 
   app.get(API_ROUTES.threads, (c) => {
-    const notePath = c.req.query("notePath");
-    const taskId = c.req.query("taskId");
+    const { notePath, taskId } = readQuery(c, API_CONTRACT.threads.methods.GET.query);
     const filter = {
       ...(notePath ? { notePath: resolveNotePath(notePath) } : {}),
       ...(taskId ? { taskId } : {}),
@@ -77,7 +67,7 @@ export function registerAgentRoutes(app: Hono, ctx: AppContext): void {
 
   app.post("/api/threads/:id/messages", async (c) => {
     const id = idParam(c, "id");
-    const { text } = await readJson(c, PostMessageSchema);
+    const { text } = await readJson(c, PostMessageRequestSchema);
     requireThread(runtime, id);
     return runAction(c, ctx, "postUserMessage", () => runtime.postUserMessage(id, text));
   });
@@ -95,30 +85,25 @@ export function registerAgentRoutes(app: Hono, ctx: AppContext): void {
   });
 
   app.get(API_ROUTES.approvals, (c) => {
-    const status = c.req.query("status");
-    let approvals: ApprovalRequest[];
-    if (status === undefined) {
-      approvals = runtime.listApprovals();
-    } else {
-      const parsed = ApprovalStatusSchema.safeParse(status);
-      if (!parsed.success) throw new ApiError(400, "invalid_request", "Unknown approval status");
-      approvals = runtime.listApprovals({ status: parsed.data });
-    }
-    const body: ApprovalListResponse = { approvals };
+    const { status } = readQuery(c, API_CONTRACT.approvals.methods.GET.query);
+    const body: ApprovalListResponse = {
+      approvals: runtime.listApprovals(status === undefined ? undefined : { status }),
+    };
     return c.json(body);
   });
 
-  app.get("/api/approvals/:id", (c) =>
-    c.json({ approval: requireApproval(runtime, idParam(c, "id")) }),
-  );
+  app.get("/api/approvals/:id", (c) => {
+    const body: ApprovalResponse = { approval: requireApproval(runtime, idParam(c, "id")) };
+    return c.json(body);
+  });
 
   app.post("/api/approvals/:id", async (c) => {
     const id = idParam(c, "id");
-    const decision = await readJson(c, ApprovalDecisionSchema);
+    const decision = await readJson(c, ApprovalDecisionRequestSchema);
     assertPending(requireApproval(runtime, id));
     try {
-      const approval = await runtime.decideApproval(id, decision);
-      return c.json({ approval });
+      const body: ApprovalResponse = { approval: await runtime.decideApproval(id, decision) };
+      return c.json(body);
     } catch (error) {
       // Decided or expired concurrently (another tab, timeout): report the real state.
       assertPending(requireApproval(runtime, id));
@@ -126,9 +111,12 @@ export function registerAgentRoutes(app: Hono, ctx: AppContext): void {
     }
   });
 
-  app.get(API_ROUTES.connectors, (c) =>
-    c.json({ connectors: ctx.connectors?.status() ?? runtime.status().connectors }),
-  );
+  app.get(API_ROUTES.connectors, (c) => {
+    const body: ConnectorsResponse = {
+      connectors: ctx.connectors?.status() ?? runtime.status().connectors,
+    };
+    return c.json(body);
+  });
 }
 
 function requireThread(runtime: AgentRuntime, id: string): ThreadResponse {
@@ -176,9 +164,11 @@ async function runAction(
       promise.catch((error: unknown) => {
         ctx.logger.warn("Agent action failed", { action: name, error: errorMessage(error) });
       });
-      return c.json({ ok: true, pending: true }, 202);
+      const body: ThreadActionResponse = { ok: true, pending: true };
+      return c.json(body, 202);
     }
-    return c.json({ ok: true });
+    const body: ThreadActionResponse = { ok: true };
+    return c.json(body);
   } catch (error) {
     throw agentError(error);
   } finally {

@@ -1,4 +1,4 @@
-import { moveLineDown } from "@codemirror/commands";
+import { moveLineDown, moveLineUp, undo } from "@codemirror/commands";
 import { insertNewlineContinueMarkup } from "@codemirror/lang-markdown";
 import type { EditorState, TransactionSpec } from "@codemirror/state";
 import type { TaskAgentStatus } from "@ddl/core";
@@ -153,6 +153,29 @@ describe("annotations", () => {
     const moved = run(initial, moveLineDown);
     expect(moved?.doc.line(3).text).toBe("- [ ] book flights");
     expect(moved && lines(moved)).toEqual({ a: 2 });
+  });
+
+  it("keeps the badge of the neighbour a moved line swaps with, also after undo", () => {
+    const initial = withAnnotations(DOC, [annotation("a", 1), annotation("b", 2)]);
+    const down = run(edit(initial, { selection: { anchor: DOC.indexOf("book") } }), moveLineDown);
+    expect(down?.doc.line(2).text).toBe("- [ ] email Sam");
+    expect(down && lines(down)).toEqual({ a: 2, b: 1 });
+    expect(down && badges(down).every(([, , atEnd]) => atEnd)).toBe(true);
+    const undone = down && run(down, undo);
+    expect(undone?.doc.toString()).toBe(DOC);
+    expect(undone && lines(undone)).toEqual({ a: 1, b: 2 });
+
+    const up = run(edit(initial, { selection: { anchor: DOC.indexOf("email") } }), moveLineUp);
+    expect(up && lines(up)).toEqual({ a: 2, b: 1 });
+  });
+
+  it("moves with the task text when a replacement at the line start inserts a line break", () => {
+    // Select the start of the line (here the bullet) and paste text ending in a line break.
+    let state = withAnnotations(DOC, [annotation("a", 1)]);
+    const line = state.doc.line(2);
+    state = edit(state, { changes: { from: line.from, to: line.from + 1, insert: "new\n" } });
+    expect(state.doc.line(3).text).toBe(" [ ] book flights");
+    expect(lines(state)).toEqual({ a: 2 });
   });
 
   it("replaces the whole set and reuses widgets for unchanged annotations", () => {

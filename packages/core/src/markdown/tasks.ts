@@ -36,9 +36,19 @@ export interface ParsedTask {
   links: string[];
 }
 
-const TASK_RE = /^([ \t]*)([-*+]|\d{1,9}[.)])[ \t]+\[(.)\](?:[ \t]+(.*))?$/;
-const LIST_ITEM_RE = /^([ \t]*)([-*+]|\d{1,9}[.)])[ \t]+(.*)$/;
-const FENCE_RE = /^[ \t]*(`{3,}|~{3,})/;
+// `[^\n]` rather than `.`: a stray `\r` or U+2028 inside a line must neither end the match (the
+// editor still shows a task) nor make `[ \t]+…$` backtrack quadratically on long lines.
+const TASK_RE = /^([ \t]*)([-*+]|\d{1,9}[.)])[ \t]+\[([^\n])\](?:[ \t]+([^\n]*))?$/;
+const STATUS_RE = /^([ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+\[)[^\n](\](?:[ \t][^\n]*)?)$/;
+const LIST_ITEM_RE = /^([ \t]*)([-*+]|\d{1,9}[.)])[ \t]+([^\n]*)$/;
+/** CommonMark fences: a backtick fence's info string can't contain backticks (that's inline code). */
+const FENCE_OPEN_RE = /^[ \t]*(?:(`{3,})[^`\n]*|(~{3,})[^\n]*)$/;
+/** A closing fence has nothing but blanks after it. */
+const FENCE_CLOSE_RE = /^[ \t]*(`{3,}|~{3,})[ \t]*$/;
+// Same frontmatter rules as the editor's live preview, so both agree on which lines are YAML.
+const FRONTMATTER_OPEN_RE = /^---\s*$/;
+const FRONTMATTER_CLOSE_RE = /^(?:---|\.\.\.)\s*$/;
+const FRONTMATTER_MAX_LINES = 200;
 
 export function statusFromChar(ch: string): TaskStatus {
   switch (ch) {
@@ -90,15 +100,19 @@ function indentWidth(ws: string): number {
 /**
  * Parses every markdown checkbox task in a document. Skips YAML frontmatter and fenced code blocks.
  * Runs in a single linear pass; a 2k-line note parses in well under a millisecond.
+ *
+ * Lines are separated by `\n` (a trailing `\r` is dropped; a lone `\r` is not a line break). A
+ * leading byte order mark belongs to no line: offsets still index into `markdown` itself.
  */
 export function parseTasks(markdown: string): ParsedTask[] {
   const tasks: ParsedTask[] = [];
-  const lines = markdown.split("\n");
+  const bom = markdown.charCodeAt(0) === 0xfeff ? 1 : 0;
+  const lines = markdown.slice(bom).split("\n");
   // Stack of open list items for depth/parent tracking.
   const stack: Array<{ indent: number; taskIndex: number | null }> = [];
-  let offset = 0;
+  let offset = bom;
   let fence: string | null = null;
-  let inFrontmatter = lines[0]?.replace(/\r$/, "") === "---";
+  const lastFrontmatterLine = frontmatterEnd(lines);
 
   for (let i = 0; i < lines.length; i++) {
     const rawWithCr = lines[i]!;
@@ -106,19 +120,15 @@ export function parseTasks(markdown: string): ParsedTask[] {
     const from = offset;
     offset += rawWithCr.length + 1;
 
-    if (inFrontmatter) {
-      if (i > 0 && (raw === "---" || raw === "...")) inFrontmatter = false;
-      continue;
-    }
-    const fenceMatch = FENCE_RE.exec(raw);
+    if (i <= lastFrontmatterLine) continue;
     if (fence) {
-      if (fenceMatch && fenceMatch[1]![0] === fence[0] && fenceMatch[1]!.length >= fence.length) {
-        fence = null;
-      }
+      const close = FENCE_CLOSE_RE.exec(raw);
+      if (close && close[1]![0] === fence[0] && close[1]!.length >= fence.length) fence = null;
       continue;
     }
-    if (fenceMatch) {
-      fence = fenceMatch[1]!;
+    const open = FENCE_OPEN_RE.exec(raw);
+    if (open) {
+      fence = (open[1] ?? open[2])!;
       continue;
     }
     if (raw.trim() === "") continue;
@@ -163,6 +173,14 @@ export function parseTasks(markdown: string): ParsedTask[] {
   return tasks;
 }
 
+/** Index of the line closing a frontmatter block that opens on the first line, or -1. */
+function frontmatterEnd(lines: readonly string[]): number {
+  if (!FRONTMATTER_OPEN_RE.test(lines[0] ?? "")) return -1;
+  const last = Math.min(lines.length, FRONTMATTER_MAX_LINES);
+  for (let i = 1; i < last; i++) if (FRONTMATTER_CLOSE_RE.test(lines[i]!)) return i;
+  return -1;
+}
+
 function innermostTask(stack: ReadonlyArray<{ taskIndex: number | null }>): number | null {
   for (let i = stack.length - 1; i >= 0; i--) {
     const idx = stack[i]!.taskIndex;
@@ -175,12 +193,13 @@ function innermostTask(stack: ReadonlyArray<{ taskIndex: number | null }>): numb
 export function toggleTaskLine(line: string): string {
   const m = TASK_RE.exec(line);
   if (!m) return line;
-  const next = statusFromChar(m[3]!) === "open" ? "x" : " ";
-  return setStatusCharOnLine(line, next);
+  return setStatusCharOnLine(line, statusFromChar(m[3]!) === "done" ? " " : "x");
 }
 
+/** Replaces the checkbox character of a task line (inserted literally). Non-task lines unchanged. */
 export function setStatusCharOnLine(line: string, statusChar: string): string {
-  return line.replace(/^([ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+\[).(\])/, `$1${statusChar}$2`);
+  const m = STATUS_RE.exec(line);
+  return m ? `${m[1]}${statusChar}${m[2]}` : line;
 }
 
 export function isTaskLine(line: string): boolean {

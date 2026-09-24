@@ -1,0 +1,292 @@
+/** REST bodies. Requests are strict (unknown keys rejected); responses tolerate unknown keys. */
+import { z } from "zod";
+import {
+  ApprovalDecisionSchema,
+  ApprovalRequestSchema,
+  ApprovalScopeSchema,
+  TaskAgentRecordSchema,
+  ThreadSchema,
+  ThreadSummarySchema,
+} from "./domain";
+import {
+  ContentVersionSchema,
+  CountSchema,
+  EpochMsSchema,
+  IsoDateSchema,
+  ModelIdSchema,
+  NameSchema,
+  RequestPathSchema,
+  VaultPathSchema,
+  WIRE_LIMITS,
+} from "./primitives";
+import { named } from "./registry";
+import { AppSettingsSchema } from "./settings";
+
+// ── Vault ─────────────────────────────────────────────────────────────────
+
+export const AgentModeSchema = named(
+  "AgentMode",
+  "`live` (real model), `mock` (deterministic scripts) or `off`.",
+  z.enum(["live", "mock", "off"]),
+);
+
+export const HealthResponseSchema = named(
+  "HealthResponse",
+  "Liveness and versions. Clients should check `apiVersion` before anything else.",
+  z.looseObject({
+    ok: z.literal(true),
+    version: z.string().min(1).max(100).describe("Daemon build version."),
+    apiVersion: z.int().min(1).describe("Protocol major version (see API_VERSION)."),
+    vaultName: z.string().max(WIRE_LIMITS.vaultNameLength),
+    agentMode: AgentModeSchema,
+  }),
+);
+
+export const VaultEntrySchema = named(
+  "VaultEntry",
+  "A visible file or folder of the vault (hidden paths are never listed).",
+  z.looseObject({
+    path: VaultPathSchema,
+    kind: z.enum(["file", "folder"]),
+    size: CountSchema.optional().describe("Bytes (files only)."),
+    mtime: EpochMsSchema.optional(),
+    version: ContentVersionSchema.optional(),
+  }),
+);
+
+export const VaultTreeResponseSchema = named(
+  "VaultTreeResponse",
+  "Every visible file and folder of the vault.",
+  z.looseObject({
+    vaultName: z.string().max(WIRE_LIMITS.vaultNameLength),
+    entries: z.array(VaultEntrySchema),
+  }),
+);
+
+const noteFields = {
+  path: VaultPathSchema,
+  content: z.string(),
+  version: ContentVersionSchema.describe("Send back as `baseVersion` for optimistic concurrency."),
+  mtime: EpochMsSchema,
+};
+
+export const NoteResponseSchema = named(
+  "NoteResponse",
+  "A note's content and version.",
+  z.looseObject(noteFields),
+);
+
+export const WriteNoteRequestSchema = named(
+  "WriteNoteRequest",
+  "Body of `PUT /api/notes/<path>`.",
+  z.strictObject({
+    content: z.string().max(WIRE_LIMITS.noteChars),
+    baseVersion: ContentVersionSchema.nullable()
+      .optional()
+      .describe("Version edited from; `null` = create only (409 if it exists); omit to overwrite."),
+  }),
+);
+
+const writeResultFields = {
+  path: VaultPathSchema,
+  version: ContentVersionSchema,
+  mtime: EpochMsSchema,
+};
+
+export const WriteNoteResponseSchema = named(
+  "WriteNoteResponse",
+  "The written note's canonical path and new version.",
+  z.looseObject(writeResultFields),
+);
+
+export const RenameRequestSchema = named(
+  "RenameRequest",
+  "Renames a note, or a folder with everything inside it when `from` is a folder.",
+  z.strictObject({ from: RequestPathSchema, to: RequestPathSchema }),
+);
+
+export const FolderRenameResponseSchema = named(
+  "FolderRenameResponse",
+  "Result of renaming a folder.",
+  z.looseObject({
+    path: VaultPathSchema,
+    moved: CountSchema.describe("Number of files moved."),
+  }),
+);
+
+export const RenameResponseSchema = named(
+  "RenameResponse",
+  "A renamed note answers like a write; a renamed folder reports how many files moved.",
+  z.union([WriteNoteResponseSchema, FolderRenameResponseSchema]),
+);
+
+export const CreateFolderRequestSchema = named(
+  "CreateFolderRequest",
+  "Body of `POST /api/folders`.",
+  z.strictObject({ path: RequestPathSchema }),
+);
+
+export const CreateFolderResponseSchema = named(
+  "CreateFolderResponse",
+  "The created folder's canonical path.",
+  z.looseObject({ path: VaultPathSchema }),
+);
+
+export const TrashResponseSchema = named(
+  "TrashResponse",
+  "Deletes are soft: the note or folder moved into the vault's `.trash/` folder.",
+  z.looseObject({
+    ok: z.literal(true),
+    trashedTo: VaultPathSchema.describe("Where it went, e.g. `.trash/Old.md`."),
+  }),
+);
+
+export const OkResponseSchema = named(
+  "OkResponse",
+  "Success without data.",
+  z.looseObject({ ok: z.literal(true) }),
+);
+
+export const ThreadActionResponseSchema = named(
+  "ThreadActionResponse",
+  "200 when the runtime finished the action; 202 with `pending: true` when it continues in the background.",
+  z.looseObject({ ok: z.literal(true), pending: z.literal(true).optional() }),
+);
+
+export const DailyNoteResponseSchema = named(
+  "DailyNoteResponse",
+  "A daily note, created from the template when requested.",
+  z.looseObject({
+    ...noteFields,
+    date: IsoDateSchema,
+    created: z.boolean().describe("True when this request created the note."),
+  }),
+);
+
+export const SearchHitSchema = named(
+  "SearchHit",
+  "`name`: the note's name matched (line 0); `content`: the 0-based `line` matched.",
+  z.looseObject({
+    path: VaultPathSchema,
+    kind: z.enum(["name", "content"]),
+    line: CountSchema,
+    preview: z.string(),
+  }),
+);
+
+export const SearchResponseSchema = named(
+  "SearchResponse",
+  "Search hits, best first.",
+  z.looseObject({ hits: z.array(SearchHitSchema) }),
+);
+
+// ── Settings ──────────────────────────────────────────────────────────────
+
+export const SettingsResponseSchema = named(
+  "SettingsResponse",
+  "The effective settings.",
+  z.looseObject({ settings: AppSettingsSchema }),
+);
+
+// ── Agent ─────────────────────────────────────────────────────────────────
+
+export const ConnectorStatusSchema = named(
+  "ConnectorStatus",
+  "State of one MCP connector.",
+  z.looseObject({
+    name: NameSchema,
+    transport: z.enum(["stdio", "http", "sse"]),
+    state: z.enum(["disabled", "idle", "connecting", "connected", "error"]),
+    toolCount: CountSchema,
+    error: z.string().optional(),
+  }),
+);
+
+export const ExecutionStatusSchema = named(
+  "ExecutionStatus",
+  "The execution provider and what it can do.",
+  z.looseObject({
+    provider: NameSchema,
+    capabilities: z.looseObject({
+      shell: z.boolean(),
+      browser: z.boolean(),
+      computer: z.boolean(),
+    }),
+  }),
+);
+
+export const AgentStatusResponseSchema = named(
+  "AgentStatusResponse",
+  "The agent runtime's state (also pushed as `agent.status`).",
+  z.looseObject({
+    mode: AgentModeSchema,
+    enabled: z.boolean(),
+    model: ModelIdSchema,
+    running: CountSchema,
+    queued: CountSchema,
+    pendingApprovals: CountSchema,
+    connectors: z.array(ConnectorStatusSchema),
+    execution: ExecutionStatusSchema,
+    problem: z.string().optional().describe("Why the agent cannot run, when it can't."),
+  }),
+);
+
+export const SetAgentEnabledRequestSchema = named(
+  "SetAgentEnabledRequest",
+  "Body of `PUT|POST /api/agent/enabled` (persisted as `agent.enabled`).",
+  z.strictObject({ enabled: z.boolean() }),
+);
+
+export const SetAgentEnabledResponseSchema = AgentStatusResponseSchema;
+
+export const TaskRecordsResponseSchema = named(
+  "TaskRecordsResponse",
+  "The agent records of one note's tasks.",
+  z.looseObject({ records: z.array(TaskAgentRecordSchema) }),
+);
+
+export const ThreadListResponseSchema = named(
+  "ThreadListResponse",
+  "Thread summaries.",
+  z.looseObject({ threads: z.array(ThreadSummarySchema) }),
+);
+
+export const ThreadResponseSchema = named(
+  "ThreadResponse",
+  "A full thread and every approval requested in it.",
+  z.looseObject({ thread: ThreadSchema, approvals: z.array(ApprovalRequestSchema) }),
+);
+
+export const PostMessageRequestSchema = named(
+  "PostMessageRequest",
+  "A user reply in a thread. Surrounding whitespace is trimmed; it must not be empty.",
+  z.strictObject({ text: z.string().trim().min(1).max(WIRE_LIMITS.userMessageChars) }),
+);
+
+export const ApprovalListResponseSchema = named(
+  "ApprovalListResponse",
+  "Approval requests.",
+  z.looseObject({ approvals: z.array(ApprovalRequestSchema) }),
+);
+
+export const ApprovalResponseSchema = named(
+  "ApprovalResponse",
+  "One approval request.",
+  z.looseObject({ approval: ApprovalRequestSchema }),
+);
+
+export const ApprovalDecisionRequestSchema = named(
+  "ApprovalDecisionRequest",
+  "Body of `POST /api/approvals/:id`.",
+  z.strictObject({
+    decision: ApprovalDecisionSchema,
+    scope: ApprovalScopeSchema.optional(),
+    note: z.string().max(WIRE_LIMITS.decisionNoteChars).optional(),
+  }),
+);
+
+export const ConnectorsResponseSchema = named(
+  "ConnectorsResponse",
+  "Every configured MCP connector.",
+  z.looseObject({ connectors: z.array(ConnectorStatusSchema) }),
+);

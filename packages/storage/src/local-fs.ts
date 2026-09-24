@@ -1,6 +1,6 @@
 import type { Dirent, Stats } from "node:fs";
 import { lstat, mkdir, readdir, realpath, rename, rm, stat, unlink } from "node:fs/promises";
-import { basename, dirname, join, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import {
   hashString,
   InvalidPathError,
@@ -10,7 +10,7 @@ import {
   silentLogger,
   type Unsubscribe,
 } from "@ddl/core";
-import { isBinaryPath } from "./file-types";
+import { isBinaryPath, toStorableText } from "./file-types";
 import { IgnoreRules } from "./ignore-rules";
 import { readTextFile, writeFileAtomic } from "./internal/atomic-write";
 import { ChangeTracker, type ChangeTrackerHost, type PathProbe } from "./internal/change-tracker";
@@ -86,7 +86,10 @@ type Scope =
  *   events immediately; external changes emit `self: false` after a short per-path debounce.
  * - `.git`, `node_modules`, `.trash`, `.DS_Store`, editor temp files and our own temp files are
  *   never listed or watched. Symlinked files inside the vault are followed; symlinked folders are
- *   not (they would list files twice or loop).
+ *   not (they would list files twice or loop). Files we may not read are skipped when listing.
+ * - On case- or normalization-insensitive disks (macOS), a path given in another spelling
+ *   (`notes/A.md` for `Notes/a.md`) is the same file, and results and events use the disk's
+ *   spelling, as listings do.
  */
 export class LocalFsStorageProvider implements StorageProvider {
   readonly kind = "local" as const;
@@ -157,17 +160,18 @@ export class LocalFsStorageProvider implements StorageProvider {
   }
 
   async stat(path: string): Promise<FileEntry | null> {
-    const p = toVaultPath(path);
+    const requested = toVaultPath(path);
     const root = await this.rootPath();
-    const { real } = await this.locate(root, p);
-    return real ? this.entryFor(p, real) : null;
+    const { real } = await this.locate(root, requested);
+    return real ? this.entryFor(onDiskSpelling(root, requested, real), real) : null;
   }
 
   async read(path: string): Promise<FileContent | null> {
-    const p = toVaultPath(path);
+    const requested = toVaultPath(path);
     const root = await this.rootPath();
-    const { real } = await this.locate(root, p);
+    const { real } = await this.locate(root, requested);
     if (!real) return null;
+    const p = onDiskSpelling(root, requested, real);
     const loaded = await this.readLimit(() => readTextFile(real));
     if (!loaded) return null;
     const version = this.remember(p, loaded.stats, loaded.content);
@@ -181,10 +185,12 @@ export class LocalFsStorageProvider implements StorageProvider {
   }
 
   async write(path: string, content: string, options: WriteOptions = {}): Promise<WriteResult> {
-    const p = toVaultPath(path);
+    const requested = toVaultPath(path);
+    const text = toStorableText(content);
     const root = await this.rootPath();
-    return this.locks.run(p, async () => {
-      const { abs, real } = await this.locate(root, p);
+    return this.locks.run(lockKey(requested), async () => {
+      const { abs, real } = await this.locate(root, requested);
+      const p = real ? onDiskSpelling(root, requested, real) : requested;
       // Writing through a symlinked file updates its target instead of replacing the link.
       const target = real ?? abs;
       const before = real ? await statOrNull(real) : null;
@@ -197,26 +203,35 @@ export class LocalFsStorageProvider implements StorageProvider {
       await this.ensureFolder(dirname(target), p);
       const stats = await writeFileAtomic(
         target,
-        content,
+        text,
         before ? before.mode & 0o7777 : undefined,
-      );
-      const version = this.remember(p, stats, content);
-      this.tracking?.tracker.recordSelf(p, version);
-      this.emit({ kind: before ? "modified" : "created", path: p, version, self: true });
-      return { path: p, version, mtime: toEpochMs(stats), size: stats.size, created: !before };
+      ).catch((error: unknown) => Promise.reject(asInvalidIfTooLong(p, error)));
+      // A new file may have landed in an existing folder spelled differently (`notes/` → `Notes/`).
+      const written = before ? p : await spelledOnDisk(root, requested, abs);
+      const version = this.remember(written, stats, text);
+      this.tracking?.tracker.recordSelf(written, version);
+      this.emit({ kind: before ? "modified" : "created", path: written, version, self: true });
+      return {
+        path: written,
+        version,
+        mtime: toEpochMs(stats),
+        size: stats.size,
+        created: !before,
+      };
     });
   }
 
   async delete(path: string, options: WriteOptions = {}): Promise<void> {
-    const p = toVaultPath(path);
+    const requested = toVaultPath(path);
     const root = await this.rootPath();
-    await this.locks.run(p, async () => {
-      const { abs, real } = await this.locate(root, p);
+    await this.locks.run(lockKey(requested), async () => {
+      const { abs, real } = await this.locate(root, requested);
       const before = real ? await statOrNull(real) : null;
       if (!real || !before?.isFile()) {
-        if (typeof options.ifMatch === "string") throw new ConflictError(p, null);
-        throw new NotFoundError(p);
+        if (typeof options.ifMatch === "string") throw new ConflictError(requested, null);
+        throw new NotFoundError(requested);
       }
+      const p = onDiskSpelling(root, requested, real);
       if (options.ifMatch !== undefined) {
         const current = await this.currentVersion(p, real);
         if (options.ifMatch === null || current !== options.ifMatch) {
@@ -237,13 +252,15 @@ export class LocalFsStorageProvider implements StorageProvider {
   }
 
   async rename(from: string, to: string): Promise<WriteResult> {
-    const src = toVaultPath(from);
-    const dst = toVaultPath(to);
+    const requestedSrc = toVaultPath(from);
+    const requestedDst = toVaultPath(to);
     const root = await this.rootPath();
-    return this.locks.runAll([src, dst], async () => {
-      const source = await this.locate(root, src);
+    return this.locks.runAll([lockKey(requestedSrc), lockKey(requestedDst)], async () => {
+      const source = await this.locate(root, requestedSrc);
       const srcStats = source.real ? await statOrNull(source.real) : null;
-      if (!srcStats?.isFile()) throw new NotFoundError(src);
+      if (!source.real || !srcStats?.isFile()) throw new NotFoundError(requestedSrc);
+      const src = onDiskSpelling(root, requestedSrc, source.real);
+      const dst = requestedDst;
       const dest = await this.locate(root, dst);
       const dstStats = dest.real ? await statOrNull(dest.real) : null;
       if (dstStats && !isCaseOnlyRename(src, dst, srcStats, dstStats)) {
@@ -252,7 +269,9 @@ export class LocalFsStorageProvider implements StorageProvider {
         throw new ConflictError(dst, current);
       }
       await this.ensureFolder(dirname(dest.abs), dst);
-      await rename(source.abs, dest.abs);
+      await rename(source.abs, dest.abs).catch((error: unknown) =>
+        Promise.reject(asInvalidIfTooLong(dst, error)),
+      );
 
       const cached = this.versions.get(src);
       this.versions.delete(src);
@@ -265,10 +284,19 @@ export class LocalFsStorageProvider implements StorageProvider {
         // A relative symlink moved to another folder no longer resolves.
         throw new StorageError(`"${dst}" is a symlink that no longer resolves after the move`, dst);
       }
-      this.tracking?.tracker.recordSelf(dst, resolved.version);
-      this.emit({ kind: "created", path: dst, version: resolved.version, self: true });
+      const renamed = await spelledOnDisk(root, dst, dest.abs);
+      if (renamed !== dst) {
+        this.versions.delete(dst);
+        this.versions.set(renamed, {
+          mtimeMs: resolved.stats.mtimeMs,
+          size: resolved.stats.size,
+          version: resolved.version,
+        });
+      }
+      this.tracking?.tracker.recordSelf(renamed, resolved.version);
+      this.emit({ kind: "created", path: renamed, version: resolved.version, self: true });
       return {
-        path: dst,
+        path: renamed,
         version: resolved.version,
         mtime: toEpochMs(resolved.stats),
         size: resolved.stats.size,
@@ -357,7 +385,7 @@ export class LocalFsStorageProvider implements StorageProvider {
       if (!isInside(root, real)) throw new InvalidPathError(p, "resolves outside the vault");
       return { abs, real };
     } catch (error) {
-      if (!isMissingError(error)) throw error;
+      if (!isMissingError(error)) throw asInvalidIfTooLong(p, error);
     }
     for (let dir = dirname(abs); dir.length > root.length; dir = dirname(dir)) {
       try {
@@ -392,7 +420,7 @@ export class LocalFsStorageProvider implements StorageProvider {
       if (code === "EEXIST" || code === "ENOTDIR") {
         throw new StorageError(`Cannot create the folder for "${p}": a file is in the way`, p);
       }
-      throw error;
+      throw asInvalidIfTooLong(p, error);
     }
   }
 
@@ -441,7 +469,15 @@ export class LocalFsStorageProvider implements StorageProvider {
     onFile: (entry: FileEntry) => void,
     stats?: Stats,
   ): Promise<void> {
-    const entry = await this.entryFor(p, abs, stats);
+    let entry: FileEntry | null;
+    try {
+      entry = await this.entryFor(p, abs, stats);
+    } catch (error) {
+      // One file we may not read must not hide the rest of the vault (listing, sync, search).
+      if (!isAccessError(error)) throw error;
+      this.logger.debug("skipping unreadable file", { path: p, error: errorCode(error) });
+      return;
+    }
     if (entry) onFile(entry);
   }
 
@@ -571,7 +607,7 @@ export class LocalFsStorageProvider implements StorageProvider {
         const entries = await this.list({ prefix, includeHidden: true });
         return new Map(entries.map((entry) => [entry.path, entry.version]));
       },
-      withLock: (path, fn) => this.locks.run(path, fn),
+      withLock: (path, fn) => this.locks.run(lockKey(path), fn),
       emit: (event) => this.emit(event),
     };
   }
@@ -609,6 +645,12 @@ export class LocalFsStorageProvider implements StorageProvider {
   }
 }
 
+function asInvalidIfTooLong(p: string, error: unknown): unknown {
+  return errorCode(error) === "ENAMETOOLONG"
+    ? new InvalidPathError(p, "has a name longer than the file system allows")
+    : error;
+}
+
 function toVaultPath(input: string): string {
   const p = normalizePath(input);
   if (p === "") throw new InvalidPathError(input, "is empty");
@@ -626,9 +668,33 @@ function usesStatVersion(p: string, size: number): boolean {
 
 /** `Note.md` → `note.md` on a case-insensitive disk: same file, so not a conflict. */
 function isCaseOnlyRename(src: string, dst: string, a: Stats, b: Stats): boolean {
-  return (
-    src !== dst && src.toLowerCase() === dst.toLowerCase() && a.dev === b.dev && a.ino === b.ino
-  );
+  return src !== dst && lockKey(src) === lockKey(dst) && a.dev === b.dev && a.ino === b.ino;
+}
+
+/**
+ * Serializes every spelling of a path: on case- or normalization-insensitive disks (macOS)
+ * `Notes/A.md` and `notes/a.md` are one file, and its conditional writes must not interleave.
+ */
+function lockKey(p: string): string {
+  return p.normalize("NFC").toLowerCase();
+}
+
+/**
+ * `requested` as the disk spells it, when the file system matched it case- or
+ * normalization-insensitively, so results and events agree with listings. Anything else `real`
+ * could differ by (a symlink's target) keeps the requested path.
+ */
+function onDiskSpelling(root: string, requested: string, real: string): string {
+  const onDisk = relative(root, real).split(sep).join("/");
+  return onDisk !== requested && lockKey(onDisk) === lockKey(requested) ? onDisk : requested;
+}
+
+async function spelledOnDisk(root: string, requested: string, abs: string): Promise<string> {
+  try {
+    return onDiskSpelling(root, requested, await realpath(abs));
+  } catch {
+    return requested;
+  }
 }
 
 function comparePaths(a: string, b: string): number {

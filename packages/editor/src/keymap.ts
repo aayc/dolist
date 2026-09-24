@@ -6,12 +6,18 @@ import { type Extension, Prec } from "@codemirror/state";
 import { type KeyBinding, keymap } from "@codemirror/view";
 import { saveDocument } from "./callbacks";
 import { insertLink, toggleBold, toggleItalic } from "./commands/formatting";
-import { continueListItem, continueMarkup, indentListItemOrInsertTab } from "./commands/lists";
+import {
+  continueAlternateTask,
+  continueListItem,
+  continueMarkup,
+  indentListItemOrInsertTab,
+} from "./commands/lists";
 import { toggleChecklist } from "./commands/tasks";
 import { followLinkAtCursor } from "./links";
 
 /** List/task continuation on Enter, markup-aware Backspace, list indentation with Tab. */
 export const markdownEditingKeymap: readonly KeyBinding[] = [
+  { key: "Enter", run: continueAlternateTask },
   { key: "Enter", run: continueMarkup },
   { key: "Enter", run: continueListItem },
   { key: "Backspace", run: deleteMarkupBackward },

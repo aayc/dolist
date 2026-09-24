@@ -4,8 +4,8 @@
  *
  *   pnpm --filter @ddl/agent exec tsx scripts/smoke-pi.ts [--offline] [--thinking=off|low|medium|high]
  *
- * `--offline` swaps OpenRouter for a local mock speaking the same wire format and checks the
- * requests Pi would send. The API key is read from the environment or ~/.daily-do-list/.env and
+ * `--offline` swaps OpenRouter for the fake OpenRouter (`src/testing`, same wire format) and checks
+ * the requests Pi would send. The API key is read from the environment or ~/.daily-do-list/.env and
  * never printed.
  */
 import { mkdtemp, rm } from "node:fs/promises";
@@ -14,16 +14,14 @@ import { join } from "node:path";
 import { createConsoleLogger, type ToolSpec, textResult, toolResultText } from "@ddl/core";
 import type { ShellExecOptions, ShellExecutor } from "../src/execution/types";
 import { createPiHarness } from "../src/harness/pi";
-import { PiHarness } from "../src/harness/pi/harness";
-import { resolveOpenRouterModel } from "../src/harness/pi/model";
 import type {
   HarnessEvent,
   HarnessSession,
   ThinkingLevel,
   ToolCallRequest,
 } from "../src/harness/types";
+import { createFakeBrain, type FakeOpenRouter, startFakeOpenRouter } from "../src/testing";
 import { loadOpenRouterKey } from "./lib/env";
-import { type MockOpenRouter, startMockOpenRouter } from "./lib/mock-openrouter";
 
 const MODEL = "deepseek/deepseek-v4.1-flash";
 const offline = process.argv.includes("--offline");
@@ -102,22 +100,20 @@ function transcript(getStats: () => RunStats) {
 async function main(): Promise<void> {
   const home = await mkdtemp(join(tmpdir(), "ddl-smoke-pi-home-"));
   const cwd = await mkdtemp(join(tmpdir(), "ddl-smoke-pi-cwd-"));
-  let mock: MockOpenRouter | undefined;
+  let mock: FakeOpenRouter | undefined;
   try {
     const logger = createConsoleLogger("warn");
     let harness: ReturnType<typeof createPiHarness>;
     if (offline) {
-      const server = await startMockOpenRouter();
+      const server = await startFakeOpenRouter({ brain: smokeBrain(), chunkDelayMs: 12 });
       mock = server;
-      harness = new PiHarness(
-        { apiKey: "offline-mock-key", home, logger, appUrl: "https://example.com/daily-do-list" },
-        {
-          resolveModel: (id, runtime) => ({
-            ...resolveOpenRouterModel(id, runtime, { appUrl: "https://example.com/daily-do-list" }),
-            baseUrl: server.baseUrl,
-          }),
-        },
-      );
+      harness = createPiHarness({
+        apiKey: server.apiKey,
+        home,
+        logger,
+        appUrl: "https://example.com/daily-do-list",
+        baseUrl: server.baseUrl,
+      });
     } else {
       harness = createPiHarness({ apiKey: await loadOpenRouterKey(), home, logger });
     }
@@ -312,11 +308,36 @@ async function main(): Promise<void> {
   }
 }
 
-function summarize(main: RunStats & { totalMs: number }, mock: MockOpenRouter | undefined): void {
+/** The generic fake policy calls the tools the prompt names; these rules pin the details. */
+function smokeBrain() {
+  return createFakeBrain()
+    .when(
+      (_request, info) =>
+        /weather in Paris/.test(info.lastUserText) && info.callsSinceUser.length === 0,
+      {
+        reasoning:
+          "The user wants the Paris weather first, then a bash command, then a deletion attempt.",
+        text: "Checking the weather first.",
+        toolCalls: [{ name: "get_weather", arguments: { city: "Paris" } }],
+      },
+    )
+    .when((_request, info) => /which city/i.test(info.lastUserText), { text: "I checked Paris." });
+}
+
+interface WireBody {
+  model?: string;
+  stream?: boolean;
+  reasoning?: unknown;
+  max_completion_tokens?: number;
+  max_tokens?: number;
+  tools?: Array<{ function: { name: string } }>;
+}
+
+function summarize(main: RunStats & { totalMs: number }, mock: FakeOpenRouter | undefined): void {
   // ── wire checks (offline) ──────────────────────────────────────────────
   if (mock) {
-    const agentRequests = mock.requests.filter((r) => r.body.stream);
-    const firstRequest = agentRequests[0];
+    const agentRequests = mock.chatRequests().filter((r) => r.stream);
+    const firstRequest = agentRequests[0] as (typeof agentRequests)[number] & { body: WireBody };
     const toolNames = (firstRequest?.body.tools ?? []).map((t) => t.function.name).sort();
     console.log(`\nmock received ${agentRequests.length} streaming requests; first request:`);
     console.log(

@@ -73,6 +73,8 @@ export type ActionCategory =
 
 export type ApprovalScope = "once" | "task" | "always";
 
+export type ApprovalDecision = "approve" | "deny";
+
 export type ApprovalStatus = "pending" | "approved" | "denied" | "expired" | "cancelled";
 
 export interface ApprovalRequest {
@@ -131,13 +133,16 @@ export interface TextMessage extends BaseMessage {
   streaming?: boolean;
 }
 
+/** `blocked`: the safety gate refused the call (denied or not approved). */
+export type ToolCallStatus = "running" | "ok" | "error" | "blocked";
+
 export interface ToolCallMessage extends BaseMessage {
   kind: "tool_call";
   toolCallId: string;
   toolName: string;
   label?: string;
   input: unknown;
-  status: "running" | "ok" | "error" | "blocked";
+  status: ToolCallStatus;
   /** Short, UI-safe preview of the result (full results stay server-side). */
   resultPreview?: string;
   endedAt?: number;
@@ -165,6 +170,8 @@ export type ThreadMessage =
   | ApprovalMessage
   | ArtifactMessage
   | StatusMessage;
+
+export type ThreadMessageKind = ThreadMessage["kind"];
 
 /** Live visual surfaces a thread can expose (streamed as `surface.frame` events). */
 export type SurfaceKind = "browser" | "computer";
@@ -198,12 +205,21 @@ export interface ThreadSummary {
   pendingApprovals: number;
 }
 
+const PREVIEW_LENGTH = 200;
+
+/** The first `max` UTF-16 units of `text`, never ending on half of a surrogate pair. */
+function preview(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const last = text.charCodeAt(max - 1);
+  return text.slice(0, last >= 0xd800 && last <= 0xdbff ? max - 1 : max);
+}
+
 export function summarizeThread(thread: Thread, pendingApprovals = 0): ThreadSummary {
   let lastMessagePreview: string | undefined;
   for (let i = thread.messages.length - 1; i >= 0; i--) {
     const m = thread.messages[i]!;
     if (m.kind === "text") {
-      lastMessagePreview = m.text.slice(0, 200);
+      lastMessagePreview = preview(m.text, PREVIEW_LENGTH);
       break;
     }
   }
@@ -223,6 +239,14 @@ export function summarizeThread(thread: Thread, pendingApprovals = 0): ThreadSum
   };
 }
 
+/** The action that produced a frame, for overlays (e.g. a click marker at x/y in frame pixels). */
+export interface SurfaceFrameAction {
+  kind: string;
+  x?: number;
+  y?: number;
+  text?: string;
+}
+
 /** One frame of a live surface (browser screencast or desktop screenshot). */
 export interface SurfaceFrame {
   threadId: string;
@@ -230,12 +254,12 @@ export interface SurfaceFrame {
   mimeType: "image/jpeg" | "image/png";
   /** Base64-encoded image bytes. */
   data: string;
+  /** Pixel size of the image. */
   width: number;
   height: number;
   /** Browser only. */
   url?: string;
   title?: string;
-  /** The action that produced this frame, for overlays (e.g. a click marker). */
-  action?: { kind: string; x?: number; y?: number; text?: string };
+  action?: SurfaceFrameAction;
   ts: number;
 }

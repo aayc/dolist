@@ -1,0 +1,62 @@
+[
+  {
+    "name": "unknown theme",
+    "value": { "theme": "neon" },
+    "path": ["theme"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "font size too big",
+    "value": { "editor": { "fontSize": 400 } },
+    "path": ["editor", "fontSize"],
+    "code": "too_big"
+  },
+  {
+    "name": "unknown nested key",
+    "value": { "agent": { "nope": true } },
+    "path": ["agent"],
+    "code": "unrecognized_keys"
+  },
+  {
+    "name": "unknown section",
+    "value": { "plugins": {} },
+    "path": [],
+    "code": "unrecognized_keys"
+  },
+  {
+    "name": "negative settle delay",
+    "value": { "agent": { "settleMs": -1 } },
+    "path": ["agent", "settleMs"],
+    "code": "too_small"
+  },
+  {
+    "name": "fractional concurrency",
+    "value": { "agent": { "maxConcurrentSubagents": 2.5 } },
+    "path": ["agent", "maxConcurrentSubagents"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "approval timeout under a minute",
+    "value": { "agent": { "approvalTimeoutMs": 1000 } },
+    "path": ["agent", "approvalTimeoutMs"],
+    "code": "too_small"
+  },
+  {
+    "name": "blank model",
+    "value": { "agent": { "model": "   " } },
+    "path": ["agent", "model"],
+    "code": "too_small"
+  },
+  {
+    "name": "unknown watch key",
+    "value": { "agent": { "watch": { "days": 3 } } },
+    "path": ["agent", "watch"],
+    "code": "unrecognized_keys"
+  },
+  {
+    "name": "section replaced by null",
+    "value": { "editor": null },
+    "path": ["editor"],
+    "code": "invalid_type"
+  }
+]

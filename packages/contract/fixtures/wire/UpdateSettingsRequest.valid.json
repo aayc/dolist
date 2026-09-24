@@ -1,0 +1,19 @@
+[
+  { "name": "empty patch", "value": {} },
+  { "name": "one editor flag", "value": { "editor": { "vimMode": true } } },
+  {
+    "name": "several sections",
+    "value": {
+      "theme": "dark",
+      "dailyNotes": { "folder": "Journal/Daily", "format": "YYYY/MM/YYYY-MM-DD" },
+      "agent": { "settleMs": 1000, "watch": { "futureDays": 14 } }
+    }
+  },
+  {
+    "name": "range extremes",
+    "value": {
+      "editor": { "fontSize": 48 },
+      "agent": { "maxConcurrentSubagents": 32, "approvalTimeoutMs": 60000 }
+    }
+  }
+]

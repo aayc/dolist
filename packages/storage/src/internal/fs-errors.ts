@@ -4,10 +4,10 @@ export function errorCode(error: unknown): string | undefined {
   return typeof code === "string" ? code : undefined;
 }
 
-/** The path (or one of its parents) does not exist. */
+/** The path (or one of its parents) does not exist, or is a symlink that never resolves. */
 export function isMissingError(error: unknown): boolean {
   const code = errorCode(error);
-  return code === "ENOENT" || code === "ENOTDIR";
+  return code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP";
 }
 
 export function isAccessError(error: unknown): boolean {

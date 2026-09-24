@@ -1,0 +1,22 @@
+[
+  {
+    "name": "live daemon",
+    "value": {
+      "ok": true,
+      "version": "0.1.0",
+      "apiVersion": 1,
+      "vaultName": "My Vault",
+      "agentMode": "live"
+    }
+  },
+  {
+    "name": "mock with an empty vault name",
+    "value": {
+      "ok": true,
+      "version": "mock-0.1.0",
+      "apiVersion": 1,
+      "vaultName": "",
+      "agentMode": "mock"
+    }
+  }
+]

@@ -67,6 +67,13 @@ export function interpolate(
           serverName,
         );
       }
+      // `${A:-${B}}` would otherwise end at the first `}` and leave a stray one in the value.
+      if (parsed[2]?.includes("${")) {
+        throw new ConnectorConfigError(
+          `Nested placeholders are not supported (default of ${parsed[1]} in ${field})`,
+          serverName,
+        );
+      }
       return lookup(parsed[1], parsed[2]);
     },
   );

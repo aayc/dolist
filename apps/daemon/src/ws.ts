@@ -317,21 +317,38 @@ function visiblePath(input: string): string | null {
 
 /** The HTTP status to refuse an upgrade with, or null when it is authorized. */
 function upgradeRejection(req: IncomingMessage, policy: SecurityPolicy): 401 | 403 | 404 | null {
-  const url = parseRequestUrl(req.url);
-  if (url?.pathname !== API_ROUTES.ws) return 404;
-  if (!policy.isHostAllowed(req.headers.host)) return 403;
+  const target = parseRequestTarget(req.url);
+  if (target?.url.pathname !== API_ROUTES.ws) return 404;
+  // Node keeps only the first of repeated Host/Authorization headers while the HTTP guard sees them
+  // joined (and refuses), so ambiguous upgrades are refused as well.
+  if (headerCount(req.rawHeaders, "host") !== 1 || !policy.isHostAllowed(req.headers.host)) {
+    return 403;
+  }
+  if (target.absolute && !policy.isHostAllowed(target.url.host)) return 403;
   const origin = req.headers.origin;
   if (origin !== undefined && !policy.isOriginAllowed(origin)) return 403;
-  const token = url.searchParams.get("token") ?? parseBearer(req.headers.authorization);
+  if (headerCount(req.rawHeaders, "authorization") > 1) return 401;
+  const token = target.url.searchParams.get("token") ?? parseBearer(req.headers.authorization);
   return policy.verifyToken(token) ? null : 401;
 }
 
-function parseRequestUrl(url: string | undefined): URL | null {
+/** Origin-form targets are paths even when they start with `//`; absolute-form ones name a host. */
+function parseRequestTarget(raw: string | undefined): { url: URL; absolute: boolean } | null {
+  const target = raw ?? "/";
+  const absolute = !target.startsWith("/");
   try {
-    return new URL(url ?? "/", "http://localhost");
+    return { url: new URL(absolute ? target : `http://daemon.invalid${target}`), absolute };
   } catch {
     return null;
   }
+}
+
+function headerCount(rawHeaders: readonly string[], name: string): number {
+  let count = 0;
+  for (let i = 0; i < rawHeaders.length; i += 2) {
+    if (rawHeaders[i]?.toLowerCase() === name) count++;
+  }
+  return count;
 }
 
 function rawDataToString(data: RawData): string {

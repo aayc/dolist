@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "id": "thr_partial0001",
+  "taskId": "tsk_partial01",
+  "notePath": "Daily/2026-09-23.md",
+  "title": "Renew passport",
+  "status": "working",
+  "createdAt": 1790154000000,
+  "updatedAt": 1790154003000,
+  "pinned": true,
+  "messages": [
+    { "id": "msg_a", "kind": "text", "role": "agent", "author": "orchestrator", "createdAt": 1790154001000, "text": "On it." },
+    { "id": "msg_b", "kind": "poll", "author": "orchestrator", "createdAt": 1790154001500, "options": ["a", "b"] },
+    { "id": "msg_c", "kind": "text", "role": "agent", "author": "a stranger", "createdAt": 1790154001600, "text": "bad author" },
+    { "id": "msg_d", "kind": "text", "role": "agent", "author": "orchestrator", "createdAt": "yesterday", "text": "bad timestamp" },
+    { "id": "msg_e", "kind": "text", "role": "user", "author": "you", "createdAt": 1790154002000, "text": "Thanks", "reactions": ["👍"] },
+    { "id": "msg_a", "kind": "text", "role": "agent", "author": "orchestrator", "createdAt": 1790154001000, "text": "On it — checking the renewal form." }
+  ],
+  "artifacts": [
+    { "id": "art_ok", "threadId": "thr_partial0001", "title": "Form", "kind": "text", "mimeType": "text/plain", "path": ".daily-do-list/artifacts/thr_partial0001/art_ok.txt", "size": 4, "createdAt": 1790154002500 },
+    { "id": "art_escape", "threadId": "thr_partial0001", "title": "Sneaky", "kind": "text", "mimeType": "text/plain", "path": ".daily-do-list/state/approvals.json", "size": 4, "createdAt": 1790154002600 }
+  ],
+  "surfaces": ["browser", "hologram"]
+}

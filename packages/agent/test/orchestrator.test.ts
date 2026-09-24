@@ -117,7 +117,7 @@ describe("orchestrator (default mock script)", () => {
 
     await t.runtime.decideApproval(approval!.id, { decision: "approve" });
     const done = await t.waitForStatus(task, "done");
-    expect(done.summary).toBe("Done · book (mock)");
+    expect(done.summary).toBe("Booked (mock)");
     const tool = t.thread(task).messages.find((m): m is ToolCallMessage => m.kind === "tool_call");
     expect(tool).toMatchObject({ toolName: "mock_irreversible_action", status: "ok" });
     expect(t.events.approvals.map((a) => a.status)).toEqual(["pending", "approved"]);

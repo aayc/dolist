@@ -51,7 +51,8 @@ function appendDelta(
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i]!;
     if (message.id !== messageId) continue;
-    if (message.kind !== "text") return null;
+    // A late delta (e.g. after a refetch returned the final text) would duplicate text.
+    if (message.kind !== "text" || message.streaming !== true) return null;
     const next = messages.slice();
     next[i] = { ...message, text: message.text + delta };
     return next;
@@ -61,7 +62,8 @@ function appendDelta(
 
 function withRecord(state: AgentState, record: TaskAgentRecord): AgentState {
   const bucket = state.records[record.notePath] ?? {};
-  const previous = bucket[record.taskId];
+  // A task lives in one note; a newer copy anywhere (e.g. after a rename) wins.
+  const previous = findRecordIn(state.records, record.taskId);
   if (previous && previous.updatedAt > record.updatedAt) return state;
   let records: Record<string, RecordBucket> = {
     ...state.records,
@@ -128,19 +130,36 @@ export function reduceAgentEvent(state: AgentState, event: ServerEvent): AgentSt
   }
 }
 
-/** Replaces a note's records with a snapshot, keeping any record we already know to be newer. */
+/**
+ * Replaces a note's records with a snapshot, keeping any record we already know to be newer. A task
+ * lives in one note: a newer copy in another note wins over the snapshot, an older one is dropped.
+ */
 export function applyRecordsSnapshot(
   state: AgentState,
   notePath: string,
   records: readonly TaskAgentRecord[],
 ): AgentState {
   const previous = state.records[notePath] ?? {};
+  const all: Record<string, RecordBucket> = { ...state.records };
   const bucket: Record<string, TaskAgentRecord> = {};
   for (const record of records) {
     const known = previous[record.taskId];
-    bucket[record.taskId] = known && known.updatedAt > record.updatedAt ? known : record;
+    if (known && known.updatedAt > record.updatedAt) {
+      bucket[record.taskId] = known;
+      continue;
+    }
+    const elsewhere = Object.entries(all).find(
+      ([path, other]) => path !== notePath && other[record.taskId],
+    );
+    if (elsewhere) {
+      const [path, other] = elsewhere;
+      if (other[record.taskId]!.updatedAt > record.updatedAt) continue;
+      const { [record.taskId]: _moved, ...rest } = other;
+      all[path] = rest;
+    }
+    bucket[record.taskId] = record;
   }
-  return { ...state, records: { ...state.records, [notePath]: bucket } };
+  return { ...state, records: { ...all, [notePath]: bucket } };
 }
 
 export function applyThreadResponse(state: AgentState, response: ThreadResponse): AgentState {

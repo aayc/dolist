@@ -150,6 +150,16 @@ const KEY_ALIASES: ReadonlyMap<string, string> = new Map([
   ["⌥", "alt"],
   ["⇧", "shift"],
   ["return", "enter"],
+  ["numpadenter", "enter"],
+  ["kp_enter", "enter"],
+  ["kpenter", "enter"],
+  ["↩", "enter"],
+  ["↵", "enter"],
+  ["⏎", "enter"],
+  ["⌤", "enter"],
+  ["⌫", "backspace"],
+  ["⌦", "delete"],
+  ["⎋", "escape"],
   ["esc", "escape"],
   ["del", "delete"],
   ["arrowup", "up"],
@@ -162,6 +172,7 @@ export function normalizeKey(raw: string): string {
   return raw
     .trim()
     .toLowerCase()
+    .replace(/([⌘⌃⌥⇧])(?=\S)/g, "$1+")
     .split(/\s*[+-]\s*|\s+/)
     .filter(Boolean)
     .map((part) => KEY_ALIASES.get(part) ?? part)

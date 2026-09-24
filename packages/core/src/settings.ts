@@ -17,6 +17,13 @@ export interface EditorSettings {
   showLineNumbers: boolean;
 }
 
+/** Days around today whose daily notes the orchestrator watches. */
+export interface AgentWatchWindow {
+  pastDays: number;
+  futureDays: number;
+}
+
+/** Value ranges are enforced by the settings schemas in `@ddl/contract`. */
 export interface AgentSettings {
   /** Master switch. When false the orchestrator ignores note changes entirely. */
   enabled: boolean;
@@ -28,7 +35,7 @@ export interface AgentSettings {
   /** OpenRouter model id for the safety judge (defaults to `model`). */
   judgeModel: string;
   /** Which daily notes are watched, relative to today. */
-  watch: { pastDays: number; futureDays: number };
+  watch: AgentWatchWindow;
   /** Treat tasks that already exist when a note is first seen as new work. */
   actOnExistingTasks: boolean;
   /** How long an approval request waits before it is auto-denied. */

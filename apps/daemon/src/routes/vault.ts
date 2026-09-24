@@ -1,3 +1,4 @@
+import { API_CONTRACT, WIRE_LIMITS } from "@ddl/contract";
 import {
   API_ROUTES,
   API_VERSION,
@@ -9,11 +10,9 @@ import {
 } from "@ddl/core";
 import type { Hono } from "hono";
 import type { AppContext } from "../context";
-import { ApiError } from "../errors";
+import { readQuery } from "../http-utils";
 
 const DEFAULT_SEARCH_LIMIT = 50;
-const MAX_SEARCH_LIMIT = 200;
-const MAX_QUERY_LENGTH = 500;
 
 export function registerVaultRoutes(app: Hono, ctx: AppContext): void {
   app.get(API_ROUTES.health, (c) => {
@@ -48,21 +47,10 @@ export function registerVaultRoutes(app: Hono, ctx: AppContext): void {
   });
 
   app.get("/api/search", async (c) => {
-    const query = (c.req.query("q") ?? "").trim();
-    if (query.length > MAX_QUERY_LENGTH) {
-      throw new ApiError(400, "invalid_request", "Search query is too long");
-    }
-    const limit = parseLimit(c.req.query("limit"));
-    const body: SearchResponse = { hits: query ? await ctx.search(query, limit) : [] };
+    const { q = "", limit } = readQuery(c, API_CONTRACT.search.methods.GET.query);
+    const max =
+      limit === undefined ? DEFAULT_SEARCH_LIMIT : Math.min(Number(limit), WIRE_LIMITS.searchLimit);
+    const body: SearchResponse = { hits: q ? await ctx.search(q, max) : [] };
     return c.json(body);
   });
-}
-
-function parseLimit(value: string | undefined): number {
-  if (value === undefined) return DEFAULT_SEARCH_LIMIT;
-  const limit = Number(value);
-  if (!Number.isInteger(limit) || limit < 1) {
-    throw new ApiError(400, "invalid_request", "limit must be a positive integer");
-  }
-  return Math.min(limit, MAX_SEARCH_LIMIT);
 }

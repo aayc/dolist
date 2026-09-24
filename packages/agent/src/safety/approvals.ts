@@ -222,8 +222,11 @@ export function createApprovalBroker(
 
     request(input: NewApproval, signal?: AbortSignal): Promise<ApprovalOutcome> {
       const createdAt = now();
+      const requested = [input.timeoutMs, defaultTimeoutMs].find(
+        (ms): ms is number => typeof ms === "number" && !Number.isNaN(ms),
+      );
       const timeoutMs = Math.min(
-        Math.max(1, Math.round(input.timeoutMs ?? defaultTimeoutMs)),
+        Math.max(1, Math.round(requested ?? DEFAULT_SETTINGS.agent.approvalTimeoutMs)),
         MAX_TIMER_MS,
       );
       const approval: ApprovalRequest = {

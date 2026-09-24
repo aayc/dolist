@@ -1,0 +1,10 @@
+[
+  { "name": "empty path", "value": { "path": "" }, "path": ["path"], "code": "too_small" },
+  { "name": "path is null", "value": { "path": null }, "path": ["path"], "code": "invalid_type" },
+  {
+    "name": "extra key",
+    "value": { "path": "a", "recursive": true },
+    "path": [],
+    "code": "unrecognized_keys"
+  }
+]

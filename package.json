@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "turbo run dev --filter=@ddl/daemon --filter=@ddl/web",
     "dev:mock": "DDL_AGENT_MODE=mock turbo run dev --filter=@ddl/daemon --filter=@ddl/web",
+    "dev:fake": "pnpm --filter @ddl/agent dev:fake",
     "build": "turbo run build",
     "start": "pnpm --filter @ddl/daemon start",
     "typecheck": "turbo run typecheck",

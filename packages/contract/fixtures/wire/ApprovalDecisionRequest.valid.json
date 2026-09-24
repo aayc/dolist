@@ -1,0 +1,8 @@
+[
+  { "name": "approve once", "value": { "decision": "approve" } },
+  {
+    "name": "approve for the task with a note",
+    "value": { "decision": "approve", "scope": "task", "note": "ok" }
+  },
+  { "name": "deny with a note", "value": { "decision": "deny", "note": "I'll call instead" } }
+]

@@ -1,0 +1,151 @@
+[
+  {
+    "name": "thread id that can't be used in a URL",
+    "value": {
+      "thread": {
+        "id": "thr/1",
+        "taskId": null,
+        "notePath": null,
+        "title": "x",
+        "status": "idle",
+        "createdAt": 0,
+        "updatedAt": 0,
+        "messages": [],
+        "artifacts": [],
+        "surfaces": []
+      },
+      "approvals": []
+    },
+    "path": ["thread", "id"],
+    "code": "invalid_format"
+  },
+  {
+    "name": "tool call without input",
+    "value": {
+      "thread": {
+        "id": "thr_1",
+        "taskId": null,
+        "notePath": null,
+        "title": "x",
+        "status": "working",
+        "createdAt": 0,
+        "updatedAt": 0,
+        "messages": [
+          {
+            "id": "m",
+            "author": "orchestrator",
+            "createdAt": 0,
+            "kind": "tool_call",
+            "toolCallId": "c",
+            "toolName": "t",
+            "status": "running"
+          }
+        ],
+        "artifacts": [],
+        "surfaces": []
+      },
+      "approvals": []
+    },
+    "path": ["thread", "messages", 0, "input"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "unknown author",
+    "value": {
+      "thread": {
+        "id": "thr_1",
+        "taskId": null,
+        "notePath": null,
+        "title": "x",
+        "status": "working",
+        "createdAt": 0,
+        "updatedAt": 0,
+        "messages": [
+          {
+            "id": "m",
+            "author": "bob",
+            "createdAt": 0,
+            "kind": "text",
+            "role": "agent",
+            "text": "hi"
+          }
+        ],
+        "artifacts": [],
+        "surfaces": []
+      },
+      "approvals": []
+    },
+    "path": ["thread", "messages", 0, "author"],
+    "code": "invalid_union"
+  },
+  {
+    "name": "negative artifact size",
+    "value": {
+      "thread": {
+        "id": "thr_1",
+        "taskId": null,
+        "notePath": null,
+        "title": "x",
+        "status": "done",
+        "createdAt": 0,
+        "updatedAt": 0,
+        "messages": [],
+        "artifacts": [
+          {
+            "id": "art_1",
+            "threadId": "thr_1",
+            "title": "R",
+            "kind": "text",
+            "mimeType": "text/plain",
+            "path": ".daily-do-list/artifacts/thr_1/art_1.txt",
+            "size": -5,
+            "createdAt": 0
+          }
+        ],
+        "surfaces": []
+      },
+      "approvals": []
+    },
+    "path": ["thread", "artifacts", 0, "size"],
+    "code": "too_small"
+  },
+  {
+    "name": "unknown surface",
+    "value": {
+      "thread": {
+        "id": "thr_1",
+        "taskId": null,
+        "notePath": null,
+        "title": "x",
+        "status": "done",
+        "createdAt": 0,
+        "updatedAt": 0,
+        "messages": [],
+        "artifacts": [],
+        "surfaces": ["terminal"]
+      },
+      "approvals": []
+    },
+    "path": ["thread", "surfaces", 0],
+    "code": "invalid_value"
+  },
+  {
+    "name": "missing approvals",
+    "value": {
+      "thread": {
+        "id": "thr_1",
+        "taskId": null,
+        "notePath": null,
+        "title": "x",
+        "status": "done",
+        "createdAt": 0,
+        "updatedAt": 0,
+        "messages": [],
+        "artifacts": [],
+        "surfaces": []
+      }
+    },
+    "path": ["approvals"],
+    "code": "invalid_type"
+  }
+]

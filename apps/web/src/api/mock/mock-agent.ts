@@ -63,9 +63,12 @@ class AbortError extends Error {
 }
 
 export class MockNotFoundError extends Error {
+  readonly what: string;
+
   constructor(what: string) {
     super(`${what} not found`);
     this.name = "MockNotFoundError";
+    this.what = what;
   }
 }
 

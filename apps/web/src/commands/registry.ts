@@ -60,7 +60,12 @@ export class CommandRegistry {
   run(id: string, context: CommandContext = {}): boolean {
     const command = this.commands.get(id);
     if (!command || (command.when && !command.when())) return false;
-    void Promise.resolve(command.run(context)).catch(reportError);
+    runIsolated(command, context);
     return true;
   }
+}
+
+/** Runs a command without letting it throw into the caller (sync throws included). */
+export function runIsolated(command: Command, context: CommandContext): void {
+  void new Promise<void>((resolve) => resolve(command.run(context))).catch(reportError);
 }

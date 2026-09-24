@@ -1,0 +1,15 @@
+[
+  { "name": "missing to", "value": { "from": "a.md" }, "path": ["to"], "code": "invalid_type" },
+  {
+    "name": "empty from",
+    "value": { "from": "", "to": "b.md" },
+    "path": ["from"],
+    "code": "too_small"
+  },
+  {
+    "name": "extra key",
+    "value": { "from": "a.md", "to": "b.md", "overwrite": true },
+    "path": [],
+    "code": "unrecognized_keys"
+  }
+]

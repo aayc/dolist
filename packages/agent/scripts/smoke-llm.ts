@@ -4,8 +4,8 @@
  *
  *   pnpm --filter @ddl/agent exec tsx scripts/smoke-llm.ts [--offline] [--rounds=2]
  *
- * `--offline` targets a local mock of OpenRouter (latencies there are simulated). The API key is
- * read from the environment or ~/.daily-do-list/.env and never printed.
+ * `--offline` targets the fake OpenRouter (`src/testing`; latencies there are simulated). The API
+ * key is read from the environment or ~/.daily-do-list/.env and never printed.
  */
 import { createConsoleLogger } from "@ddl/core";
 import { createOpenRouterClient } from "../src/llm/openrouter";
@@ -15,8 +15,31 @@ import {
   LlmError,
   type ReasoningEffort,
 } from "../src/llm/types";
+import { createFakeBrain, type FakeOpenRouter, startFakeOpenRouter } from "../src/testing";
 import { loadOpenRouterKey } from "./lib/env";
-import { type MockOpenRouter, startMockOpenRouter } from "./lib/mock-openrouter";
+
+interface WireBody {
+  reasoning?: unknown;
+  response_format?: unknown;
+  usage?: unknown;
+}
+
+/** Offline stand-in: pinned answers for the structured-output check, reasoning costs latency. */
+function startOfflineServer(): Promise<FakeOpenRouter> {
+  const brain = createFakeBrain()
+    .when((request) => request.responseFormat?.name === "weather", {
+      text: '{"city":"Paris","temperatureC":21}',
+    })
+    .when((_request, info) => /arrive/i.test(info.lastUserText), { text: "It arrives at 6:15pm." });
+  return startFakeOpenRouter({
+    brain,
+    latencyMs: (request) =>
+      ((request.body as WireBody | undefined)?.reasoning as { effort?: string } | undefined)
+        ?.effort === "none"
+        ? 40
+        : 220,
+  });
+}
 
 const MODEL = "deepseek/deepseek-v4.1-flash";
 const offline = process.argv.includes("--offline");
@@ -35,11 +58,11 @@ async function timed(llm: LlmClient, request: LlmCompletionRequest) {
 }
 
 async function main(): Promise<void> {
-  let mock: MockOpenRouter | undefined;
+  let mock: FakeOpenRouter | undefined;
   try {
-    mock = offline ? await startMockOpenRouter() : undefined;
+    mock = offline ? await startOfflineServer() : undefined;
     const llm = createOpenRouterClient({
-      apiKey: offline ? "offline-mock-key" : await loadOpenRouterKey(),
+      apiKey: mock ? mock.apiKey : await loadOpenRouterKey(),
       defaultModel: MODEL,
       ...(mock ? { baseUrl: mock.baseUrl } : {}),
       logger: createConsoleLogger("warn"),
@@ -134,7 +157,7 @@ async function main(): Promise<void> {
     check("web search returned citations", (search.completion.citations?.length ?? 0) > 0);
 
     if (mock) {
-      const bodies = mock.requests.map((r) => r.body);
+      const bodies = mock.chatRequests().map((r) => (r.body ?? {}) as WireBody);
       check(
         "reasoning off sent as effort none",
         bodies.some((b) => JSON.stringify(b.reasoning) === '{"effort":"none"}'),

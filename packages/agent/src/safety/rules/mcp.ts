@@ -423,6 +423,18 @@ function amount(input: Readonly<Record<string, unknown>>): string | undefined {
   return undefined;
 }
 
+const CONJUNCTIONS: ReadonlySet<string> = new Set(["and", "then", "or", "plus", "also"]);
+
+/** `read_and_reply` → [[read], [reply]]: each clause starts with its own verb. */
+function clauses(words: readonly string[]): string[][] {
+  const out: string[][] = [[]];
+  for (const w of words) {
+    if (CONJUNCTIONS.has(w)) out.push([]);
+    else out.at(-1)!.push(w);
+  }
+  return out.filter((clause) => clause.length > 0);
+}
+
 export interface McpAnalysis {
   hits: RuleHit[];
   benign?: RuleHit;
@@ -445,11 +457,12 @@ export function mcpAnalysis(facts: ActionFacts): McpAnalysis {
     if (!categories.has(category)) categories.set(category, evidence);
   };
 
-  const readFirst = READ_VERBS.has(words[0] ?? "");
-  // A noun-able word is a verb when it leads the name (`message_user`) or no read verb leads it.
-  const verbs = words.filter(
-    (w, i) => !(NOUNABLE.has(w) && (readFirst || (i > 0 && w !== "post"))),
-  );
+  // A noun-able word is a verb when it leads its clause (`message_user`, `read_and_reply`) or no
+  // read verb leads the clause.
+  const verbs = clauses(words).flatMap((clause) => {
+    const readFirst = READ_VERBS.has(clause[0] ?? "");
+    return clause.filter((w, i) => !(NOUNABLE.has(w) && (readFirst || (i > 0 && w !== "post"))));
+  });
   const sends = verbs.some((w) => VERBS.communication.has(w));
   const drafting =
     words.some((w) => DRAFT_WORDS.has(w)) &&

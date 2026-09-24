@@ -69,6 +69,18 @@ export const continueListItem: StateCommand = ({ state, dispatch }) => {
   return true;
 };
 
+const ALTERNATE_BULLET_TASK = /^[ \t]*[-*+][ \t]+\[[^ xX]\][ \t]/;
+
+/**
+ * Enter on a bullet task with an Obsidian status other than `[ ]`/`[x]` (`[/]`, `[-]`, `[>]`, …):
+ * `continueMarkup` only knows GFM boxes and would continue with a plain bullet.
+ */
+export const continueAlternateTask: StateCommand = (target) => {
+  const { state } = target;
+  const line = state.doc.lineAt(state.selection.main.head);
+  return ALTERNATE_BULLET_TASK.test(line.text) && continueListItem(target);
+};
+
 /** Tab: indent list items (like Obsidian), otherwise insert a tab / indent the selection. */
 export const indentListItemOrInsertTab: StateCommand = (target) => {
   if (target.state.readOnly) return false;

@@ -117,3 +117,35 @@ pnpm eval -- --suite triage            # real model (needs OPENROUTER_API_KEY)
   and a `describe()`, add safety eval cases.
 - New execution backend: implement `ExecutionProvider` and register it in `createExecutionProvider`.
 - New harness: implement `Harness` in `src/harness/` (only that directory may import Pi).
+
+## Testing with the fake agent
+
+The real model is never used in tests. `@ddl/agent/testing` (see
+`packages/agent/src/testing/README.md`) provides a **FakeBrain** — a deterministic stand-in for
+the model that plays the orchestrator (parses the digest, triages every task), subagents (a
+step-by-step plan that reacts to tool results, blocks and steering), the safety judge (schema-valid
+verdicts) and web search — and runs it two ways:
+
+- **In-process** (`createFakeAgentScript` on `ScriptedHarness`): what `DDL_AGENT_MODE=mock` uses, and
+  the breadth of the scenario matrix in `packages/agent/test/scenarios/` (≈100 end-to-end runtime
+  scenarios in a few seconds: triage, approvals, cancellation, steering, retries, concurrency,
+  restarts, vault changes, midnight, contract checks on every event and sidecar file).
+- **Over HTTP** (`startFakeOpenRouter`): a local OpenAI-compatible server (streaming SSE, tool calls,
+  `/key`, `/models`, fault injection) that the real Pi harness and OpenRouter client talk to.
+
+`createFakeAgentRuntime({ via: "scripted" | "pi-http" })` wires either into the real runtime and
+safety stack, with helpers to write notes, wait for statuses, decide approvals and reply, and an
+audit that every executed tool passed the safety gate.
+
+Point the whole app at the fake — the real daemon and harness at zero cost:
+
+```bash
+pnpm dev:fake                             # daemon + web, live mode, sandboxed fake agent
+pnpm dev:fake -- --scratch                # …with a throwaway DDL_HOME and vault
+pnpm --filter @ddl/agent fake-openrouter  # just the server; prints the env to use
+pnpm --filter @ddl/web e2e:fullstack      # Playwright against daemon + fake model
+```
+
+Plumbing: `DDL_OPENROUTER_BASE_URL` redirects the Pi harness, the key check and the daemon's
+OpenRouter client to another OpenAI-compatible endpoint; `DDL_AGENT_MOCK_ACTIONS=1` gives live-mode
+subagents the simulated `mock_irreversible_action` so approvals can be exercised safely.

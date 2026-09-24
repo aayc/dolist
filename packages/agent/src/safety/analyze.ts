@@ -6,6 +6,7 @@
 import type { ActionCategory } from "@ddl/core";
 import { type ActionFacts, buildFacts } from "./facts";
 import { type Cwd, inferHome, resolvePath } from "./paths";
+import { ACTION_CATEGORIES } from "./policy";
 import { searchQueryHits, sensitiveValueHits, sqlHits, writtenContentHits } from "./rules/content";
 import { fileReadAnalysis, fileWriteAnalysis, NOTES_READ } from "./rules/files";
 import { mcpAnalysis } from "./rules/mcp";
@@ -13,7 +14,7 @@ import { readPathHits, writePathHits } from "./rules/path-rules";
 import { analysisHits, commandHits, SHELL_BENIGN } from "./rules/shell";
 import { quote, type RuleHit, runRules, type ShellEnv } from "./rules/types";
 import { benignUiHit, typedTextHits, UI_RULES } from "./rules/ui";
-import { urlHits, WEB_READ, WEB_SEARCH } from "./rules/web";
+import { asWebUrl, urlHits, WEB_READ, WEB_SEARCH } from "./rules/web";
 import { classifyCommand, redirectRole } from "./shell-commands";
 import type { ActionContext } from "./types";
 
@@ -49,7 +50,7 @@ function dedupe(hits: RuleHit[]): RuleHit[] {
 
 function webUrlHits(urls: readonly string[]): RuleHit[] {
   const hits = urls.flatMap((u) => urlHits(u));
-  const web = urls.find((u) => /^https?:\/\//i.test(u.trim()));
+  const web = urls.find((u) => /^https?:\/\//i.test(asWebUrl(u)));
   if (!isRisky(hits) && web) hits.push({ rule: WEB_READ, evidence: web.slice(0, 120) });
   return hits;
 }
@@ -192,8 +193,11 @@ export function analyzeAction(ctx: ActionContext): ActionAnalysis {
   }
 
   const hintCategories: ActionCategory[] = [];
-  if ((facts.family === "mcp" || facts.family === "custom") && hints.category)
-    hintCategories.push(hints.category);
+  if (
+    (facts.family === "mcp" || facts.family === "custom") &&
+    ACTION_CATEGORIES.includes(hints.category as ActionCategory)
+  )
+    hintCategories.push(hints.category as ActionCategory);
   if (hints.destructive && facts.family !== "internal" && facts.family !== "knowledge")
     hintCategories.push("destructive");
 

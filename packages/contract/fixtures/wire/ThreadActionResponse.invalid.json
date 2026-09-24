@@ -1,0 +1,9 @@
+[
+  {
+    "name": "pending false",
+    "value": { "ok": true, "pending": false },
+    "path": ["pending"],
+    "code": "invalid_value"
+  },
+  { "name": "not ok", "value": { "ok": false }, "path": ["ok"], "code": "invalid_value" }
+]

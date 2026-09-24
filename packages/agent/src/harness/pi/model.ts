@@ -21,6 +21,8 @@ const FALLBACK_MAX_TOKENS = 32_768;
 export interface ModelAttribution {
   appName?: string;
   appUrl?: string;
+  /** OpenAI-compatible endpoint replacing OpenRouter's, e.g. a local fake of its API. */
+  baseUrl?: string;
 }
 
 /**
@@ -32,6 +34,7 @@ export function resolveOpenRouterModel(
   runtime: Pick<ModelRuntime, "getModel">,
   attribution: ModelAttribution = {},
 ): Model<Api> {
+  const baseUrl = attribution.baseUrl?.trim().replace(/\/+$/, "") || undefined;
   const headers = {
     "X-Title": attribution.appName ?? DEFAULT_APP_NAME,
     ...(attribution.appUrl ? { "HTTP-Referer": attribution.appUrl } : {}),
@@ -50,6 +53,7 @@ export function resolveOpenRouterModel(
   if (base) {
     return {
       ...base,
+      ...(baseUrl ? { baseUrl } : {}),
       cost: cost ?? base.cost,
       maxTokens: cap === undefined ? base.maxTokens : Math.min(base.maxTokens, cap),
       headers: { ...base.headers, ...headers },
@@ -60,7 +64,7 @@ export function resolveOpenRouterModel(
     name: modelId,
     api: "openai-completions",
     provider: OPENROUTER_PROVIDER,
-    baseUrl: OPENROUTER_BASE_URL,
+    baseUrl: baseUrl ?? OPENROUTER_BASE_URL,
     reasoning: true,
     input: ["text"],
     cost: cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },

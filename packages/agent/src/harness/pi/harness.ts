@@ -30,6 +30,10 @@ export interface PiHarnessOptions {
   /** OpenRouter attribution (`X-Title`, `HTTP-Referer`). */
   appName?: string;
   appUrl?: string;
+  /** OpenAI-compatible endpoint replacing OpenRouter's (e.g. the fake used by tests and `dev:fake`). */
+  baseUrl?: string;
+  /** Pi's automatic retries of failed model requests. Default: Pi's (3 retries, from 2 s). */
+  retry?: { maxRetries?: number; baseDelayMs?: number };
 }
 
 /** Seams for tests (e.g. an in-process faux provider instead of OpenRouter). */
@@ -77,7 +81,10 @@ export class PiHarness implements Harness {
     const toolNames = definitions.map((d) => d.name);
 
     let gateInstalled = false;
-    const settingsManager = SettingsManager.inMemory(PI_SETTINGS);
+    const retry = this.options.retry;
+    const settingsManager = SettingsManager.inMemory(
+      retry ? { ...PI_SETTINGS, retry: { ...retry } } : PI_SETTINGS,
+    );
     const guidelines = toolGuidelines(options.tools);
     const resourceLoader = new DefaultResourceLoader({
       cwd: options.cwd,
@@ -201,6 +208,7 @@ export class PiHarness implements Harness {
     resolveOpenRouterModel(modelId, runtime, {
       ...(this.options.appName ? { appName: this.options.appName } : {}),
       ...(this.options.appUrl ? { appUrl: this.options.appUrl } : {}),
+      ...(this.options.baseUrl ? { baseUrl: this.options.baseUrl } : {}),
     });
 }
 

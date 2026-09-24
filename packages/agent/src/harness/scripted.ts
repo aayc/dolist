@@ -28,10 +28,20 @@ export interface ScriptContext {
    * Calls a tool through `beforeToolCall` (the safety gate) and executes it if allowed.
    * Blocked calls resolve with `blocked: true` and an error result, like a real model would see.
    */
-  callTool(
-    name: string,
-    input: unknown,
-  ): Promise<{ result: ToolResult; blocked: boolean; reason?: string }>;
+  callTool(name: string, input: unknown): Promise<ScriptToolOutcome>;
+  /**
+   * Steering messages received since the run started, removed from the queue (like Pi delivering
+   * them at the next turn boundary). Messages a script doesn't take re-run it after it ends.
+   */
+  takeSteering(): string[];
+}
+
+export interface ScriptToolOutcome {
+  result: ToolResult;
+  blocked: boolean;
+  reason?: string;
+  /** The id the call carried through the gate and the harness events. */
+  toolCallId: string;
 }
 
 export type AgentScript = (ctx: ScriptContext) => Promise<void>;
@@ -128,6 +138,7 @@ class ScriptedSession implements HarnessSession {
       signal,
       say: (text) => this.say(text, signal),
       callTool: (name, input) => this.callTool(name, input, signal),
+      takeSteering: () => this.drainSteering(),
     };
     try {
       await this.script(ctx);
@@ -157,7 +168,7 @@ class ScriptedSession implements HarnessSession {
     name: string,
     input: unknown,
     signal: AbortSignal,
-  ): Promise<{ result: ToolResult; blocked: boolean; reason?: string }> {
+  ): Promise<ScriptToolOutcome> {
     if (signal.aborted) throw signal.reason;
     const toolCallId = createId("call");
     const spec = this.options.tools.find((t) => t.name === name);
@@ -180,12 +191,12 @@ class ScriptedSession implements HarnessSession {
         isError: true,
         blocked: true,
       });
-      return { result, blocked: true, reason: decision.reason };
+      return { result, blocked: true, reason: decision.reason, toolCallId };
     }
     if (!spec) {
       const result = errorResult(`Unknown tool: ${name}`);
       this.emit({ type: "tool_end", toolCallId, toolName: name, result, isError: true });
-      return { result, blocked: false };
+      return { result, blocked: false, toolCallId };
     }
     try {
       const result = await spec.execute(input, {
@@ -200,11 +211,11 @@ class ScriptedSession implements HarnessSession {
         result,
         isError: !!result.isError,
       });
-      return { result, blocked: false };
+      return { result, blocked: false, toolCallId };
     } catch (error) {
       const result = errorResult(errorMessage(error));
       this.emit({ type: "tool_end", toolCallId, toolName: name, result, isError: true });
-      return { result, blocked: false };
+      return { result, blocked: false, toolCallId };
     }
   }
 }

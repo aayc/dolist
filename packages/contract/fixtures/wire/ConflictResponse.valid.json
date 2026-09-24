@@ -1,0 +1,15 @@
+[
+  {
+    "name": "note changed on disk",
+    "value": {
+      "error": "conflict",
+      "current": {
+        "path": "Ideas.md",
+        "content": "theirs",
+        "version": "9f8e7d6c5b4a39",
+        "mtime": 1790000000000
+      }
+    }
+  },
+  { "name": "note deleted meanwhile", "value": { "error": "conflict", "current": null } }
+]

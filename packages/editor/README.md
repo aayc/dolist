@@ -48,8 +48,8 @@ frontmatter is styled as metadata instead of a rule plus a heading. Images stay 
 **Tasks.** `- [ ]` renders as a checkbox (`role="checkbox"`); clicking toggles `[ ]` ↔ `[x]` with
 user event `input.toggle` (never in read-only mode). Completed tasks are muted and struck through.
 Obsidian's alternate statuses (`[/]` in progress, `[-]` cancelled, `[>]` deferred) are parsed as
-tasks, like `parseTasks` in `@ddl/core`. Enter on a task line starts `- [ ] `; Enter on an empty
-item ends the list.
+tasks, like `parseTasks` in `@ddl/core`. Enter on a task line (any status) starts `- [ ] `; Enter on
+an empty item ends the list.
 
 **Agent badges.** `setAnnotations()` replaces the set of badges. Each badge shows a status dot or
 icon (pulsing for `triaging`/`working`), a truncated label and an unread count, and gives the line
@@ -59,9 +59,11 @@ annotations are not rendered.
 Badges stay attached while the user edits. Each badge is anchored to the start of its line and drawn
 at the end of whichever line holds that anchor. That way, pressing Enter at the end of a task leaves
 the badge on the task (not on the new empty task), Enter at its start moves the badge down with the
-task, and splitting, indenting, moving or joining lines keep it with the task text. A badge is
-dropped when a single change removes its line's whole content (delete line, vim `dd`, cut, select +
-retype). `getAnnotations(state)` returns the annotations with their lines mapped.
+task, and splitting, indenting, moving or joining lines keep it with the task text (also for the
+neighbour a moved line swaps with, and when a replacement at the line start inserts a line break). A
+badge is dropped when a single change removes its line's whole content (delete line, vim `dd`, cut,
+select + retype) unless that change inserts the exact same line again (moving lines, undoing a move,
+an external reorder). `getAnnotations(state)` returns the annotations with their lines mapped.
 
 **Obsidian syntax** as `@lezer/markdown` extensions, so none of it is ever detected inside code:
 `[[target]]`, `[[target#heading|alias]]`, `![[embed]]`, `#tags` (not `#123`, not mid-word),
@@ -70,10 +72,17 @@ retype). `getAnnotations(state)` returns the annotations with their lines mapped
 
 **Indentation** uses tabs displayed 4 columns wide, which is Obsidian's default ("Indent using
 tabs") and what `@ddl/core` expects. Tab indents list items (anywhere on the line) and otherwise
-inserts a tab; Shift-Tab outdents.
+inserts a tab; Shift-Tab outdents. Escape then Tab moves focus out of the editor.
+
+**Auto-pairing** closes `(`, `[` and `{` (typing the closing bracket steps over it) and never quotes.
+Inside HTML blocks and tags, what is typed is inserted literally: no auto-closed tags, no paired
+quotes (lang-markdown mounts lang-html, whose input rules would turn `<div>x</div>` into
+`<div>x</div></div>`).
 
 **Vim** (`vimMode`) via `@replit/codemirror-vim`, always the first extension so it sees keys before
-any keymap. `:w` calls `onSave`. The block cursor uses the accent color.
+any keymap. `:w` calls `onSave`. The block cursor uses the accent color. The module loads lazily;
+toggling vim before it arrives settles on the latest setting, and a failed load is retried the next
+time vim is enabled (`preloadVim()` rejects so hosts can report it).
 
 **Links.** A plain click follows a rendered (not currently edited) link. Mod-click follows any link,
 also in source mode. Mod-click and middle-click open wikilinks in a new pane. External URLs are
@@ -100,8 +109,9 @@ Mod-e is deliberately unbound so the host can use it (for example to toggle read
 
 - `setDocument(doc)` applies external changes as one minimal replacement (common prefix/suffix,
   aligned to line starts for whole-line insertions/deletions), so the selection, scroll position and
-  badges survive. External changes are not added to the undo history (local history is mapped
-  through them), and `onDocChange` reports them with `userEvent: false`.
+  badges survive; a caret at the start of a line that gets lines inserted above it stays on its
+  line. External changes are not added to the undo history (local history is mapped through them),
+  and `onDocChange` reports them with `userEvent: false`.
   `setDocument(doc, { resetHistory: true })` starts a fresh state with the current config (no
   history, no badges).
 - `createState` / `getState` / `setState` support caching one state per open note (instant switching
@@ -120,8 +130,8 @@ Additional exports:
 - state and tests: `createHeadlessEditorState`, `editorExtensions`;
 - annotations: `annotationField`, `setAnnotationsEffect`, `getAnnotations`,
   `HIDDEN_BADGE_STATUSES`;
-- commands: `toggleTaskAtLine`, `toggleChecklist`, the formatting and list commands,
-  `saveDocument`, `followLinkAtCursor`;
+- commands: `toggleTaskAtLine`, `toggleChecklist`, the formatting and list commands (including
+  `continueAlternateTask`), `saveDocument`, `followLinkAtCursor`;
 - links: `findLinkAt`;
 - live preview: `buildLivePreviewDecorations`, `livePreview`;
 - building blocks: `markdownSupport`, `ddlTags`, `splitWikiLink`, `editorTheme`,
@@ -177,6 +187,11 @@ for the first moments after opening a note with code blocks.
 
 ## Development
 
+Property tests (`*.property.test.ts`, fast-check via `@fast-check/vitest`) share generators in
+[`src/test-arbitraries.ts`](src/test-arbitraries.ts): random Obsidian-flavoured markdown,
+selections and CodeMirror-shaped viewports. Reproduce a failure with `FC_SEED=<seed>`, sweep deeper
+with `FC_NUM_RUNS=2000`.
+
 ```sh
 pnpm --filter @ddl/editor typecheck
 pnpm --filter @ddl/editor test          # vitest (DOM tests run in happy-dom)
@@ -188,7 +203,10 @@ pnpm exec biome check --write packages/editor
 
 - No hanging indent for wrapped list items yet (wrapped lines start at the line's left edge).
 - Tables and images are shown as source; callouts (`> [!note]`) render as plain quotes.
-- Ordered-list continuation of tasks (`1. [ ] a` + Enter) doesn't add a checkbox; items after an
-  inserted one are not renumbered by the tab-indentation Enter fallback.
+- Ordered-list continuation of tasks (`1. [ ] a` + Enter) doesn't add a checkbox, nor does Enter
+  on a task with an alternate status inside a blockquote (`> - [/] a`); items after an inserted one
+  are not renumbered by the tab-indentation Enter fallback.
+- Backspace right after the marker of a top-level item indented with a tab (`\t- |a`) deletes one
+  character instead of the list markup.
 - With line numbers and readable line length on, the gutter stays at the left edge of the editor.
 - The `@codemirror/language-data` descriptions and vim are bundled eagerly; languages load lazily.

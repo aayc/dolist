@@ -18,7 +18,7 @@ const hits = await searchVault(vault, "groceries", { limit: 20 });
 | `kind`   | Class                     | Notes                                                    |
 | -------- | ------------------------- | -------------------------------------------------------- |
 | `local`  | `LocalFsStorageProvider`  | A folder on disk; the default vault. Obsidian-compatible. |
-| `memory` | `MemoryStorageProvider`   | Reference implementation for tests and fixtures.         |
+| `memory` | `MemoryStorageProvider`   | Reference model for tests and fixtures; acts like a disk. |
 | `s3`     | `S3StorageProvider`       | **Stub**: every call throws `NotImplementedError`. The planned design is documented in `src/s3.ts`. |
 
 Config shapes (`StorageConfig` / `SyncTargetConfig` in `src/types.ts`):
@@ -37,7 +37,11 @@ Config shapes (`StorageConfig` / `SyncTargetConfig` in `src/types.ts`):
   not listed (to avoid duplicates and loops).
 - Writes are atomic (temp file in the same folder, fsync, rename) and keep the file's permissions.
   `ifMatch` preconditions are checked against the disk under a per-path mutex, so check-and-write is
-  race-free within the process.
+  race-free within one provider instance, whatever spelling of the path callers use.
+- On case- or normalization-insensitive disks (macOS), `notes/A.md` and `Notes/a.md` (or NFC and
+  NFD `Café`) are one file; results and events report the disk's spelling, like listings. Names
+  longer than the file system allows throw `InvalidPathError`. Files that can't be read are
+  skipped when listing; symlink loops behave like dangling links (missing).
 - Versions are content hashes (`contentVersion`), memoized by (path, mtime, size), so listing an
   unchanged vault doesn't re-read files. Binary formats (images, PDFs, …) and files over 16 MiB are
   versioned by stat instead.
@@ -87,9 +91,9 @@ silently dropped.
 
 **Safety.** All writes are conditional on the versions seen during the run. A concurrent edit makes
 a write fail with `ConflictError`, and that path is retried on the next run. Without a snapshot
-entry, files are never deleted. If one side lists no files at all while the snapshot says files
-were synced (for example an unmounted drive or an unsynced cloud folder), the run fails with
-`SyncAbortedError` instead of deleting everything on the other side. Evicted iCloud Drive files
+entry, files are never deleted. If one side lists no files at all (for example an unmounted drive
+or an unsynced cloud folder) and that would delete synced files the other side still has
+unchanged, the run fails with `SyncAbortedError` instead. Evicted iCloud Drive files
 (`.name.icloud` placeholders) are treated as unavailable, not as deletions.
 
 **Never synced:** `.daily-do-list/sync/**`, temp and editor backup files, ignored names, binary
@@ -104,14 +108,16 @@ reconciled and stay pending. The target must not be inside the vault (or the rev
 `searchVault(provider, query, { limit = 50, includeHidden = false, maxFileBytes = 1_000_000 })`
 runs a case-insensitive substring search over markdown files. Note-name matches come first
 (`line: 0`, preview = path; queries containing `/` match the whole path). Then come matching lines
-(1-based), most recently modified notes first, each with a ~160-character preview centred on the
-match.
+(0-based `line`), most recently modified notes first, each with a ~160-character preview centred
+on the match.
 
 ## Adding a provider (S3 is next)
 
 1. Implement `StorageProvider` in `src/<name>.ts`. Keep the semantics of `MemoryStorageProvider`:
-   normalized paths, `ConflictError`/`NotFoundError`, opaque versions, `self` events for own
-   changes.
+   normalized paths (empty ones are invalid), `ConflictError`/`NotFoundError`, opaque versions,
+   `self` events for own changes, folders that outlive their files, no file and folder sharing a
+   path, and junk/temp names that are never listed. `model-based.test.ts` checks `local` against
+   it command by command; do the same for a new provider.
 2. Add a `kind` to `StorageProviderKind` and a config shape, then map it in `createStorageProvider`
    (and in `createSyncTarget` if it can be a sync target).
 3. Run the shared contract suite from a test file:

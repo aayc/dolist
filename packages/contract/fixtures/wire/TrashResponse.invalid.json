@@ -1,0 +1,14 @@
+[
+  {
+    "name": "empty destination",
+    "value": { "ok": true, "trashedTo": "" },
+    "path": ["trashedTo"],
+    "code": "too_small"
+  },
+  {
+    "name": "absolute destination",
+    "value": { "ok": true, "trashedTo": "/srv/vault/.trash/a.md" },
+    "path": ["trashedTo"],
+    "code": "custom"
+  }
+]

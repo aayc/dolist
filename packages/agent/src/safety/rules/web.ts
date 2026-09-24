@@ -18,8 +18,23 @@ export interface ParsedUrl {
   query: URLSearchParams;
 }
 
+/**
+ * How browsers read a URL string (WHATWG URL): leading/trailing control characters and spaces are
+ * dropped and tabs/newlines are removed everywhere, so `java\tscript:` is `javascript:`.
+ */
+export function browserUrlForm(raw: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: the URL parser strips exactly these.
+  return raw.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/g, "").replace(/[\t\n\r]/g, "");
+}
+
+/** The scheme a reader would see: invisible characters, controls and spaces removed, NFKC applied. */
+function visibleScheme(url: string): string | undefined {
+  const skeleton = url.normalize("NFKC").replace(/[\p{Cc}\p{Cf}\p{Z}\s]/gu, "");
+  return /^([a-z][a-z0-9+.-]*):/i.exec(skeleton)?.[1]?.toLowerCase();
+}
+
 export function parseUrl(raw: string): ParsedUrl | undefined {
-  const trimmed = raw.trim();
+  const trimmed = browserUrlForm(raw);
   const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(trimmed)?.[1]?.toLowerCase();
   if (!scheme) return undefined;
   try {
@@ -27,7 +42,11 @@ export function parseUrl(raw: string): ParsedUrl | undefined {
     return {
       raw: trimmed,
       scheme,
-      host: url.hostname.toLowerCase().replace(/^\[|\]$/g, ""),
+      // `localhost.` is `localhost`: a trailing dot only marks the name as fully qualified.
+      host: url.hostname
+        .toLowerCase()
+        .replace(/^\[|\]$/g, "")
+        .replace(/\.+$/, ""),
       port: url.port,
       path: url.pathname,
       query: url.searchParams,
@@ -35,6 +54,51 @@ export function parseUrl(raw: string): ParsedUrl | undefined {
   } catch {
     return { raw: trimmed, scheme, host: "", port: "", path: "", query: new URLSearchParams() };
   }
+}
+
+/** Schemes written without `//`; any other `name:` prefix may be a bare `host:port`. */
+const OPAQUE_SCHEMES: ReadonlySet<string> = new Set([
+  "javascript",
+  "vbscript",
+  "file",
+  "data",
+  "blob",
+  "about",
+  "filesystem",
+  "intent",
+  "view-source",
+  "chrome",
+  "edge",
+  "mailto",
+  "sms",
+  "smsto",
+  "mms",
+  "tel",
+  "callto",
+  "facetime",
+  "facetime-audio",
+  "imessage",
+  "whatsapp",
+  "skype",
+  "zoommtg",
+  "msteams",
+  "tg",
+  "http",
+  "https",
+]);
+
+/**
+ * A URL argument as browser and HTTP tools open it: bare hosts such as `example.com`,
+ * `127.0.0.1:7331/x` or `localhost:7331` get `http://`, like the browser executor and curl do.
+ */
+export function asWebUrl(raw: string): string {
+  const url = browserUrlForm(raw);
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) return url;
+  if (url.startsWith(":")) return `http://localhost${url}`;
+  const prefix = /^([a-z][a-z0-9+.-]*):(.?)/i.exec(url);
+  if (prefix && (OPAQUE_SCHEMES.has(prefix[1]!.toLowerCase()) || !/\d/.test(prefix[2]!)))
+    return url;
+  return `http://${url}`;
 }
 
 function ipv4(host: string): number[] | undefined {
@@ -55,16 +119,29 @@ function isPrivateIpv4(parts: number[]): boolean {
   );
 }
 
+/** Public DNS names that resolve to 127.0.0.1 (for any subdomain). */
+const LOOPBACK_DOMAINS_RE = /(?:^|\.)(?:localtest\.me|lvh\.me|vcap\.me|localho\.st)$/;
+
+/** The IPv4 address spelled inside a wildcard-DNS name (`127.0.0.1.nip.io`, `10-0-0-1.sslip.io`). */
+function wildcardDnsIpv4(host: string): number[] | undefined {
+  if (!/\.(?:nip\.io|sslip\.io|xip\.io|localtest\.me)$/.test(host)) return undefined;
+  const embedded = /(?:^|[.-])((?:\d{1,3}[.-]){3}\d{1,3})(?:[.-]|$)/
+    .exec(host)?.[1]
+    ?.replace(/-/g, ".");
+  return embedded ? ipv4(embedded) : undefined;
+}
+
 export function isLoopbackHost(host: string): boolean {
   if (
     host === "localhost" ||
     host.endsWith(".localhost") ||
     host === "::1" ||
     host === "::" ||
-    host === "0.0.0.0"
+    host === "0.0.0.0" ||
+    LOOPBACK_DOMAINS_RE.test(host)
   )
     return true;
-  const v4 = ipv4(host);
+  const v4 = ipv4(host) ?? wildcardDnsIpv4(host);
   if (v4) return v4[0] === 127 || v4[0] === 0;
   return /^::ffff:(?:127\.|7f[0-9a-f]{2}:)/.test(host);
 }
@@ -88,15 +165,8 @@ export function isPrivateHost(host: string): boolean {
   ) {
     return true;
   }
-  const embedded = /(?:^|[.-])((?:\d{1,3}[.-]){3}\d{1,3})(?:[.-]|$)/
-    .exec(host)?.[1]
-    ?.replace(/-/g, ".");
-  const parts = embedded ? ipv4(embedded) : undefined;
-  return (
-    parts !== undefined &&
-    /\.(?:nip\.io|sslip\.io|xip\.io|localtest\.me)$/.test(host) &&
-    isPrivateIpv4(parts)
-  );
+  const parts = wildcardDnsIpv4(host);
+  return parts !== undefined && isPrivateIpv4(parts);
 }
 
 const METADATA_HOSTS: ReadonlySet<string> = new Set([
@@ -349,8 +419,12 @@ export const URL_RULES: readonly UrlRule[] = [
 export const WEB_READ = info("web.read", "read", "allow", "low", "Reads a public web page");
 export const WEB_SEARCH = info("web.search", "read", "allow", "low", "Searches the web");
 
-/** Rule hits for one URL (a scheme-less string yields none). */
+/** Rule hits for one URL argument; bare hosts are read as http URLs (see `asWebUrl`). */
 export function urlHits(raw: string): RuleHit[] {
-  const url = parseUrl(raw);
-  return url ? runRules(URL_RULES, url) : [];
+  const url = parseUrl(asWebUrl(raw));
+  if (!url) return [];
+  // `\u200Bjavascript:` or full-width letters: judge the scheme a reader would see.
+  const hidden = visibleScheme(browserUrlForm(raw));
+  const scheme = hidden && DENIED_SCHEMES.has(hidden) ? hidden : url.scheme;
+  return runRules(URL_RULES, scheme === url.scheme ? url : { ...url, scheme });
 }

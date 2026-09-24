@@ -1,8 +1,15 @@
 import {
+  decodePersistedRecords,
+  encodePersistedRecords,
+  mergePersistedRecords,
+  PERSISTED_PATHS,
+  PersistedFile,
+  type PersistedRecords,
+} from "@ddl/contract";
+import {
   Emitter,
   isActiveTaskStatus,
   type Logger,
-  SIDECAR_DIR,
   silentLogger,
   type TaskAgentRecord,
   type TaskAgentStatus,
@@ -10,23 +17,14 @@ import {
   type Unsubscribe,
 } from "@ddl/core";
 import type { StorageProvider } from "@ddl/storage";
-import type { Capability } from "../execution/types";
 import type { SubagentSpec } from "./types";
 
-export const RECORDS_PATH = `${SIDECAR_DIR}/state/records.json`;
+export const RECORDS_PATH = PERSISTED_PATHS.records;
 
 const DEFAULT_RETENTION_DAYS = 60;
 const DAY_MS = 86_400_000;
 const NOTE_EVENT_DELAY_MS = 30;
 const SAVE_RETRY_MS = 5_000;
-const CAPABILITIES: readonly Capability[] = [
-  "web",
-  "browser",
-  "computer",
-  "shell",
-  "files",
-  "connectors",
-];
 
 export type TaskRecordEvents = {
   "task.record": TaskAgentRecord;
@@ -51,20 +49,14 @@ export interface TaskRecordsOptions {
   retentionDays?: number;
 }
 
-interface PersistedRecords {
-  version: 1;
-  records: TaskAgentRecord[];
-  /** Last subagent spec per task, so retries survive restarts. */
-  specs: Record<string, SubagentSpec>;
-}
-
 /**
- * The agent badge state for every task (`TaskAgentRecord`), persisted to
- * `.daily-do-list/state/records.json`. Emits `task.record` per change and a debounced
- * `task.records` snapshot when a note's set of records or their positions change.
+ * The agent badge state for every task (`TaskAgentRecord`) plus the last subagent spec per task
+ * (so retries survive restarts), persisted to `.daily-do-list/state/records.json` (format in
+ * @ddl/contract). Emits `task.record` per change and a debounced `task.records` snapshot when a
+ * note's set of records or their positions change.
  */
 export class TaskRecords {
-  private readonly storage: StorageProvider;
+  private readonly file: PersistedFile<PersistedRecords>;
   private readonly now: () => number;
   private readonly logger: Logger;
   private readonly flushDelayMs: number;
@@ -79,30 +71,43 @@ export class TaskRecords {
   private dirty = false;
 
   constructor(options: TaskRecordsOptions) {
-    this.storage = options.storage;
     this.now = options.now ?? Date.now;
     this.logger = options.logger ?? silentLogger;
     this.flushDelayMs = options.flushDelayMs ?? 300;
     this.retentionDays = options.retentionDays ?? DEFAULT_RETENTION_DAYS;
+    this.file = new PersistedFile({
+      storage: options.storage,
+      path: RECORDS_PATH,
+      decode: decodePersistedRecords,
+      logger: this.logger,
+      now: this.now,
+    });
   }
 
+  /**
+   * A corrupt file is moved aside and records start empty; a file from a newer app is left alone
+   * and never overwritten (records then live in memory only). Read errors are retried at save.
+   */
   async load(): Promise<void> {
-    let file: Awaited<ReturnType<StorageProvider["read"]>>;
+    let result: Awaited<ReturnType<PersistedFile<PersistedRecords>["load"]>>;
     try {
-      file = await this.storage.read(RECORDS_PATH);
+      result = await this.file.load();
     } catch (error) {
       this.logger.warn("Failed to read task records", { error: errorText(error) });
       return;
     }
-    const persisted = file ? parsePersisted(file.content) : null;
-    if (!persisted) return;
+    if (result.status !== "loaded") return;
     const cutoff = this.now() - this.retentionDays * DAY_MS;
-    for (const record of persisted.records) {
+    for (const record of result.value.records) {
       if (record.updatedAt < cutoff && !isActiveTaskStatus(record.status)) continue;
       if (!this.records.has(record.taskId)) this.records.set(record.taskId, record);
     }
-    for (const [taskId, spec] of Object.entries(persisted.specs)) {
+    for (const [taskId, spec] of Object.entries(result.value.specs)) {
       if (this.records.has(taskId) && !this.specs.has(taskId)) this.specs.set(taskId, spec);
+    }
+    if (result.issues.length > 0) {
+      this.dirty = true;
+      this.scheduleSave();
     }
   }
 
@@ -298,12 +303,10 @@ export class TaskRecords {
       if (!this.dirty) return;
       this.dirty = false;
       try {
-        const persisted: PersistedRecords = {
-          version: 1,
-          records: [...this.records.values()],
-          specs: Object.fromEntries(this.specs),
-        };
-        await this.storage.write(RECORDS_PATH, `${JSON.stringify(persisted)}\n`);
+        await this.file.save(
+          () => encodePersistedRecords(this.snapshot()),
+          (theirs) => this.mergeExternal(theirs),
+        );
       } catch (error) {
         this.dirty = true;
         this.logger.warn("Failed to persist task records; will retry", {
@@ -314,55 +317,25 @@ export class TaskRecords {
     });
     return this.saving;
   }
-}
 
-function isRecordShape(value: unknown): value is TaskAgentRecord {
-  if (typeof value !== "object" || value === null) return false;
-  const r = value as Record<string, unknown>;
-  return (
-    typeof r.taskId === "string" &&
-    typeof r.notePath === "string" &&
-    typeof r.text === "string" &&
-    typeof r.line === "number" &&
-    typeof r.status === "string" &&
-    typeof r.updatedAt === "number"
-  );
-}
-
-function isSpecShape(value: unknown): value is SubagentSpec {
-  if (typeof value !== "object" || value === null) return false;
-  const s = value as Record<string, unknown>;
-  return (
-    typeof s.taskId === "string" &&
-    typeof s.goal === "string" &&
-    Array.isArray(s.capabilities) &&
-    s.capabilities.every((c) => CAPABILITIES.includes(c as Capability))
-  );
-}
-
-function parsePersisted(content: string): PersistedRecords | null {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(content);
-  } catch {
-    return null;
+  private snapshot(): PersistedRecords {
+    return { records: [...this.records.values()], specs: Object.fromEntries(this.specs) };
   }
-  if (typeof raw !== "object" || raw === null) return null;
-  const r = raw as Record<string, unknown>;
-  if (!Array.isArray(r.records)) return null;
-  const records = r.records.filter(isRecordShape).map((record) => ({
-    ...record,
-    date: typeof record.date === "string" ? record.date : null,
-    threadId: typeof record.threadId === "string" ? record.threadId : null,
-    unread: typeof record.unread === "number" ? record.unread : 0,
-  }));
-  const specs: Record<string, SubagentSpec> = {};
-  if (typeof r.specs === "object" && r.specs !== null) {
-    for (const [taskId, spec] of Object.entries(r.specs as Record<string, unknown>)) {
-      if (isSpecShape(spec)) specs[taskId] = spec;
+
+  /** The file changed underneath us (another device, a restore): keep both sides' records. */
+  private mergeExternal(theirs: PersistedRecords): void {
+    const merged = mergePersistedRecords(this.snapshot(), theirs);
+    for (const record of merged.records) {
+      if (this.records.get(record.taskId) === record) continue;
+      this.records.set(record.taskId, { ...record });
+      this.dirtyNotes.add(record.notePath);
+      this.emitter.emit("task.record", { ...record });
     }
+    for (const [taskId, spec] of Object.entries(merged.specs)) {
+      if (this.records.has(taskId) && !this.specs.has(taskId)) this.specs.set(taskId, spec);
+    }
+    if (this.dirtyNotes.size > 0) this.scheduleNoteEvents();
   }
-  return { version: 1, records, specs };
 }
 
 function errorText(error: unknown): string {

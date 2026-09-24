@@ -1,8 +1,18 @@
 import {
+  decodePersistedThread,
+  encodePersistedThread,
+  isPersistedArtifactPath,
+  mergePersistedThreads,
+  PERSISTED_BINARY_ARTIFACT_SUFFIX,
+  PERSISTED_PATHS,
+  PersistedFile,
+  type PersistedThread,
+  persistedThreadIdFromPath,
+} from "@ddl/contract";
+import {
   type ArtifactMeta,
   createId,
   type Logger,
-  SIDECAR_DIR,
   type SurfaceKind,
   silentLogger,
   summarizeThread,
@@ -16,10 +26,10 @@ import type { StorageProvider } from "@ddl/storage";
 import { artifactExtension, decodeBase64, encodeBase64, utf8Length } from "./artifacts";
 import type { NewArtifact, ThreadStore, ThreadStoreEvent } from "./types";
 
-export const THREADS_DIR = `${SIDECAR_DIR}/threads`;
-export const ARTIFACTS_DIR = `${SIDECAR_DIR}/artifacts`;
+export const THREADS_DIR = PERSISTED_PATHS.threads;
+export const ARTIFACTS_DIR = PERSISTED_PATHS.artifacts;
 /** Storage is text-only: binary artifact bodies are stored base64-encoded under this suffix. */
-export const BINARY_ARTIFACT_SUFFIX = ".b64";
+export const BINARY_ARTIFACT_SUFFIX = PERSISTED_BINARY_ARTIFACT_SUFFIX;
 
 const LOAD_CONCURRENCY = 16;
 const WRITE_RETRY_MS = 5_000;
@@ -42,6 +52,19 @@ export function createThreadStore(options: ThreadStoreOptions): ThreadStore {
   return new SidecarThreadStore(options);
 }
 
+interface LoadedThread {
+  path: string;
+  thread: Thread;
+  repaired: boolean;
+}
+
+/**
+ * Threads persist one file each (`threads/<id>.json`, format in @ddl/contract). Loading follows the
+ * shared rules: unreadable files are moved to `corrupt/`, files from a newer app are skipped and
+ * never overwritten, and other copies of a thread (sync conflict copies) are merged into it.
+ * Writes are conditional: a thread file changed by another device meanwhile is merged, not
+ * clobbered. External changes are not watched live; they show up at the next write or restart.
+ */
 class SidecarThreadStore implements ThreadStore {
   private readonly storage: StorageProvider;
   private readonly now: () => number;
@@ -49,6 +72,7 @@ class SidecarThreadStore implements ThreadStore {
   private readonly flushDelayMs: number;
   private readonly pendingApprovals: (threadId: string) => number;
   private readonly threads = new Map<string, Thread>();
+  private readonly files = new Map<string, PersistedFile<PersistedThread>>();
   private readonly listeners = new Set<(event: ThreadStoreEvent) => void>();
   private readonly dirty = new Set<string>();
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -64,26 +88,32 @@ class SidecarThreadStore implements ThreadStore {
 
   async load(): Promise<void> {
     const entries = (await this.storage.list({ prefix: THREADS_DIR, includeHidden: true })).filter(
-      (entry) => entry.path.endsWith(".json"),
+      (entry) =>
+        entry.path.endsWith(".json") && !entry.path.slice(THREADS_DIR.length + 1).includes("/"),
     );
+    const loaded: LoadedThread[] = [];
     let next = 0;
     const worker = async () => {
       while (next < entries.length) {
-        const entry = entries[next++]!;
+        const { path } = entries[next++]!;
+        const file = this.fileAt(path, undefined);
         try {
-          const file = await this.storage.read(entry.path);
-          const thread = file ? parseThread(file.content) : null;
-          if (!thread) {
-            if (file) this.logger.warn("Skipping unreadable thread file", { path: entry.path });
-            continue;
+          const result = await file.load();
+          if (result.status === "loaded") {
+            loaded.push({ path, thread: result.value, repaired: result.issues.length > 0 });
+          } else if (result.status === "newer") {
+            this.logger.warn("Skipping a thread saved by a newer version of the app", {
+              path,
+              version: result.version,
+            });
           }
-          if (!this.threads.has(thread.id)) this.threads.set(thread.id, thread);
         } catch (error) {
-          this.logger.warn("Failed to load thread", { path: entry.path, error: errorText(error) });
+          this.logger.warn("Failed to load thread", { path, error: errorText(error) });
         }
       }
     };
     await Promise.all(Array.from({ length: Math.min(LOAD_CONCURRENCY, entries.length) }, worker));
+    this.adopt(loaded);
   }
 
   create(input: { taskId: string | null; notePath: string | null; title: string }): Thread {
@@ -101,6 +131,7 @@ class SidecarThreadStore implements ThreadStore {
       surfaces: [],
     };
     this.threads.set(thread.id, thread);
+    this.fileAt(threadPath(thread.id), null);
     this.changed(thread, true);
     return snapshot(thread);
   }
@@ -217,12 +248,17 @@ class SidecarThreadStore implements ThreadStore {
     artifactId: string,
   ): Promise<{ meta: ArtifactMeta; body: Uint8Array } | null> {
     const meta = this.threads.get(threadId)?.artifacts.find((a) => a.id === artifactId);
-    if (!meta) return null;
+    if (!meta || !isPersistedArtifactPath(meta.path)) return null;
     const file = await this.storage.read(meta.path);
     if (!file) return null;
-    const body = meta.path.endsWith(BINARY_ARTIFACT_SUFFIX)
-      ? decodeBase64(file.content)
-      : new TextEncoder().encode(file.content);
+    if (!meta.path.endsWith(BINARY_ARTIFACT_SUFFIX)) {
+      return { meta, body: new TextEncoder().encode(file.content) };
+    }
+    const body = decodeBase64(file.content);
+    if (!body) {
+      this.logger.warn("Artifact body is not valid base64", { threadId, artifactId });
+      return null;
+    }
     return { meta, body };
   }
 
@@ -238,6 +274,67 @@ class SidecarThreadStore implements ThreadStore {
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  /**
+   * One thread can come from several files: its own and copies (sync conflict copies). Its own
+   * file wins, then the most recently updated copy; the others are merged in and the result is
+   * written back to its own file.
+   */
+  private adopt(loaded: LoadedThread[]): void {
+    const own = (entry: LoadedThread) => (entry.path === threadPath(entry.thread.id) ? 0 : 1);
+    loaded.sort(
+      (a, b) =>
+        own(a) - own(b) ||
+        b.thread.updatedAt - a.thread.updatedAt ||
+        (a.path < b.path ? -1 : a.path > b.path ? 1 : 0),
+    );
+    for (const entry of loaded) {
+      const { id } = entry.thread;
+      const current = this.threads.get(id);
+      if (!current) {
+        this.threads.set(id, entry.thread);
+        if (entry.repaired || own(entry) === 1) this.dirty.add(id);
+        continue;
+      }
+      const merged = mergePersistedThreads(current, entry.thread);
+      if (encodePersistedThread(merged) !== encodePersistedThread(current)) {
+        this.threads.set(id, merged);
+        this.dirty.add(id);
+      }
+    }
+    for (const id of this.dirty) this.schedule(id, this.flushDelayMs);
+  }
+
+  /** Another device changed this thread's file since we last read or wrote it. */
+  private mergeExternal(threadId: string, theirs: Thread): void {
+    const ours = this.threads.get(threadId);
+    if (!ours) return;
+    const merged = mergePersistedThreads(ours, theirs);
+    const known = new Set(ours.messages.map((message) => message.id));
+    this.threads.set(threadId, merged);
+    for (const message of merged.messages) {
+      if (!known.has(message.id)) this.emit({ type: "thread.message", threadId, message });
+    }
+    this.emit({ type: "thread.upsert", thread: this.summarize(merged) });
+  }
+
+  /** `known`: what the caller knows about the file (`null` = it does not exist). */
+  private fileAt(path: string, known: string | null | undefined): PersistedFile<PersistedThread> {
+    let file = this.files.get(path);
+    if (!file) {
+      const expectedId = persistedThreadIdFromPath(path) ?? undefined;
+      file = new PersistedFile({
+        storage: this.storage,
+        path,
+        decode: (text) => decodePersistedThread(text, expectedId),
+        logger: this.logger,
+        now: this.now,
+        known,
+      });
+      this.files.set(path, file);
+    }
+    return file;
   }
 
   private summarize(thread: Thread): ThreadSummary {
@@ -271,11 +368,14 @@ class SidecarThreadStore implements ThreadStore {
   }
 
   private async writeNow(threadId: string): Promise<void> {
-    const thread = this.threads.get(threadId);
-    if (!thread || !this.dirty.has(threadId)) return;
+    if (!this.threads.has(threadId) || !this.dirty.has(threadId)) return;
     this.dirty.delete(threadId);
+    const file = this.fileAt(threadPath(threadId), null);
     try {
-      await this.storage.write(threadPath(threadId), `${JSON.stringify(thread)}\n`);
+      await file.save(
+        () => encodePersistedThread(this.threads.get(threadId)!),
+        (theirs) => this.mergeExternal(threadId, theirs),
+      );
     } catch (error) {
       this.dirty.add(threadId);
       this.logger.warn("Failed to persist thread; will retry", {
@@ -312,59 +412,6 @@ function snapshot(thread: Thread): Thread {
     messages: [...thread.messages],
     artifacts: [...thread.artifacts],
     surfaces: [...thread.surfaces],
-  };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/** Validates the persisted shape; messages still marked as streaming were interrupted. */
-export function parseThread(content: string): Thread | null {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(content);
-  } catch {
-    return null;
-  }
-  if (
-    !isRecord(raw) ||
-    typeof raw.id !== "string" ||
-    typeof raw.title !== "string" ||
-    typeof raw.status !== "string" ||
-    typeof raw.createdAt !== "number" ||
-    typeof raw.updatedAt !== "number" ||
-    !Array.isArray(raw.messages)
-  ) {
-    return null;
-  }
-  const messages = raw.messages
-    .filter(
-      (m): m is ThreadMessage =>
-        isRecord(m) &&
-        typeof m.id === "string" &&
-        typeof m.kind === "string" &&
-        typeof m.createdAt === "number",
-    )
-    .map((m) => (m.kind === "text" && m.streaming ? { ...m, streaming: false } : m));
-  return {
-    id: raw.id,
-    taskId: typeof raw.taskId === "string" ? raw.taskId : null,
-    notePath: typeof raw.notePath === "string" ? raw.notePath : null,
-    title: raw.title,
-    status: raw.status as TaskAgentStatus,
-    createdAt: raw.createdAt,
-    updatedAt: raw.updatedAt,
-    messages,
-    artifacts: Array.isArray(raw.artifacts)
-      ? raw.artifacts.filter(
-          (a): a is ArtifactMeta =>
-            isRecord(a) && typeof a.id === "string" && typeof a.path === "string",
-        )
-      : [],
-    surfaces: Array.isArray(raw.surfaces)
-      ? raw.surfaces.filter((s): s is SurfaceKind => s === "browser" || s === "computer")
-      : [],
   };
 }
 

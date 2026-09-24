@@ -6,7 +6,25 @@ import {
   type StateCommand,
   type TransactionSpec,
 } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 import { createHeadlessEditorState, type HeadlessStateOptions } from "./extensions";
+
+/** Types like a user: each character goes through the view's input handlers (closeBrackets…). */
+export function typeText(view: EditorView, text: string): void {
+  for (const ch of text) {
+    const { from, to } = view.state.selection.main;
+    const insert = () =>
+      view.state.update({
+        changes: { from, to, insert: ch },
+        selection: { anchor: from + ch.length },
+        userEvent: "input.type",
+      });
+    const handled = view.state
+      .facet(EditorView.inputHandler)
+      .some((handler) => handler(view, from, to, ch, insert));
+    if (!handled) view.dispatch(insert());
+  }
+}
 
 /** A state whose syntax tree covers the whole document (headless states parse lazily). */
 export function fullyParsed(state: EditorState): EditorState {

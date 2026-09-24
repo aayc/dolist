@@ -579,7 +579,7 @@ const RESERVED_PREFIXES: ReadonlySet<string> = new Set([
   "esac",
   "coproc",
 ]);
-const CONTROL_HEADERS: ReadonlySet<string> = new Set(["for", "select", "case", "function"]);
+const CONTROL_HEADERS: ReadonlySet<string> = new Set(["for", "select", "case"]);
 
 const WRAPPER_OPTIONS_WITH_VALUE: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   [
@@ -784,14 +784,14 @@ class Parser {
       return null;
     }
     const words = partial.words;
-    let start = 0;
-    while (
-      start < words.length &&
-      !words[start]!.quoted &&
-      RESERVED_PREFIXES.has(words[start]!.text)
-    ) {
-      start++;
-    }
+    const skipReserved = (from: number): number => {
+      let k = from;
+      while (k < words.length && !words[k]!.quoted && RESERVED_PREFIXES.has(words[k]!.text)) k++;
+      return k;
+    };
+    let start = skipReserved(0);
+    // `function name { body; }`: the body's first command follows the name and the brace.
+    if (words[start]?.text === "function" && !words[start]!.quoted) start = skipReserved(start + 2);
     const header = words[start];
     const isHeader = header !== undefined && !header.quoted && CONTROL_HEADERS.has(header.text);
     const assignments: WordToken[] = [];
@@ -905,6 +905,14 @@ class Parser {
     }
     if (name === "eval") {
       this.parseSource(argv.slice(1).join(" "), nested("eval"));
+      return;
+    }
+    if (name === "alias") {
+      // zsh expands aliases in text it parses later (`eval`, `source`), so a value is code.
+      for (const arg of argv.slice(1)) {
+        const value = /^[^=]+=([\s\S]+)$/.exec(arg)?.[1];
+        if (value?.trim()) this.parseSource(value, nested("eval"));
+      }
       return;
     }
     if (name === "find") {

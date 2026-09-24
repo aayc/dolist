@@ -761,9 +761,13 @@ export function httpRequestOf(cmd: ShellCommand): HttpRequestInfo | undefined {
   }
 }
 
-/** Adds a scheme to scheme-less URLs (`curl example.com/x`) so they can be parsed. */
+/**
+ * The URL an HTTP client requests: without `scheme://` curl, wget and httpie assume http, so
+ * `localhost:7331/x` is `http://localhost:7331/x` (httpie's `:7331/x` is localhost too).
+ */
 export function withScheme(url: string): string {
-  return /^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `http://${url}`;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) return url;
+  return url.startsWith(":") ? `http://localhost${url}` : `http://${url}`;
 }
 
 // ── Interpreters ────────────────────────────────────────────────────────────
@@ -1244,7 +1248,24 @@ function classifyGit(cmd: ShellCommand): CommandClass {
   return { kind: "unknown", note: `git ${sub}` };
 }
 
+/** Flags that print and exit; `-v` only for runtimes where it means version (`python -v`/`ruby -v` go on to run stdin). */
+function onlyVersionOrHelp(cmd: ShellCommand, family: string): boolean {
+  return (
+    cmd.position === 0 &&
+    cmd.stdinText === undefined &&
+    cmd.argv.length > 1 &&
+    cmd.argv
+      .slice(1)
+      .every(
+        (a) =>
+          /^(?:--version|-VV?|--help|-h)$/.test(a) ||
+          (a === "-v" && /^(?:node|bun|deno)$/.test(family)),
+      )
+  );
+}
+
 function classifyInterpreter(cmd: ShellCommand, call: InterpreterCall): CommandClass {
+  if (onlyVersionOrHelp(cmd, call.family)) return { kind: "read" };
   if (call.inlineCode !== undefined) {
     const risky = riskyCodeReason(call.inlineCode);
     return risky ? { kind: "unknown", note: risky.reason } : { kind: "compute" };

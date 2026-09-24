@@ -6,14 +6,18 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "fake-openrouter": "tsx scripts/fake-openrouter.ts",
+    "dev:fake": "tsx scripts/dev-fake.ts"
   },
   "dependencies": {
     "@ddl/connectors": "workspace:*",
+    "@ddl/contract": "workspace:*",
     "@ddl/core": "workspace:*",
     "@ddl/storage": "workspace:*",
     "@earendil-works/pi-agent-core": "catalog:",
@@ -23,7 +27,6 @@
     "typebox": "catalog:"
   },
   "devDependencies": {
-    "@ddl/contract": "workspace:*",
     "tsx": "^4.23.15"
   }
 }

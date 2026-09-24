@@ -1,0 +1,109 @@
+[
+  {
+    "name": "unknown risk level",
+    "value": {
+      "id": "apr_1",
+      "threadId": null,
+      "taskId": null,
+      "toolName": "t",
+      "input": {},
+      "summary": "s",
+      "risk": "extreme",
+      "categories": [],
+      "reason": "r",
+      "status": "pending",
+      "createdAt": 0
+    },
+    "path": ["risk"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "unknown category",
+    "value": {
+      "id": "apr_1",
+      "threadId": null,
+      "taskId": null,
+      "toolName": "t",
+      "input": {},
+      "summary": "s",
+      "risk": "low",
+      "categories": ["money"],
+      "reason": "r",
+      "status": "pending",
+      "createdAt": 0
+    },
+    "path": ["categories", 0],
+    "code": "invalid_value"
+  },
+  {
+    "name": "missing input",
+    "value": {
+      "id": "apr_1",
+      "threadId": null,
+      "taskId": null,
+      "toolName": "t",
+      "summary": "s",
+      "risk": "low",
+      "categories": [],
+      "reason": "r",
+      "status": "pending",
+      "createdAt": 0
+    },
+    "path": ["input"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "negative createdAt",
+    "value": {
+      "id": "apr_1",
+      "threadId": null,
+      "taskId": null,
+      "toolName": "t",
+      "input": null,
+      "summary": "s",
+      "risk": "low",
+      "categories": [],
+      "reason": "r",
+      "status": "pending",
+      "createdAt": -1
+    },
+    "path": ["createdAt"],
+    "code": "too_small"
+  },
+  {
+    "name": "id with a slash",
+    "value": {
+      "id": "apr/1",
+      "threadId": null,
+      "taskId": null,
+      "toolName": "t",
+      "input": {},
+      "summary": "s",
+      "risk": "low",
+      "categories": [],
+      "reason": "r",
+      "status": "pending",
+      "createdAt": 0
+    },
+    "path": ["id"],
+    "code": "invalid_format"
+  },
+  {
+    "name": "dot-segment id (URL parsers would drop it)",
+    "value": {
+      "id": "..",
+      "threadId": null,
+      "taskId": null,
+      "toolName": "t",
+      "input": {},
+      "summary": "s",
+      "risk": "low",
+      "categories": [],
+      "reason": "r",
+      "status": "pending",
+      "createdAt": 0
+    },
+    "path": ["id"],
+    "code": "invalid_format"
+  }
+]

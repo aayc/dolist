@@ -16,6 +16,8 @@ export const TEXT_NOTE_EXTENSIONS: ReadonlySet<string> = new Set([
 ]);
 
 const MAX_PATH_LENGTH = 1024;
+/** APFS and HFS+ cap each name at 255 UTF-16 code units; longer ones fail with ENAMETOOLONG. */
+const MAX_NAME_LENGTH = 255;
 /** `["", "api", "notes"]` precede the note path in `/api/notes/<path>`. */
 const NOTE_ROUTE_SEGMENTS = 3;
 
@@ -37,6 +39,9 @@ export function resolveVaultPath(input: string): string {
   }
   if (path === "") throw new ApiError(400, "invalid_path", "Path is empty");
   if (path.length > MAX_PATH_LENGTH) throw new ApiError(400, "invalid_path", "Path is too long");
+  if (path.split("/").some((name) => name.length > MAX_NAME_LENGTH)) {
+    throw new ApiError(400, "invalid_path", "A file or folder name is too long");
+  }
   if (hasControlCharacters(path)) {
     throw new ApiError(400, "invalid_path", "Path contains control characters");
   }

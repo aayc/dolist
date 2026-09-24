@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "records": [
+    {
+      "taskId": "tsk_7fq2m9x0ab",
+      "notePath": "Daily/2026-09-23.md",
+      "date": "2026-09-23",
+      "text": "Book a dentist appointment for next week 🦷",
+      "line": 2,
+      "status": "done",
+      "summary": "Booked for Tue 09:30",
+      "threadId": "thr_k3j9x0q2m1ab",
+      "updatedAt": 1790154007000,
+      "unread": 1
+    },
+    {
+      "taskId": "tsk_wait000001",
+      "notePath": "Daily/2026-09-23.md",
+      "date": "2026-09-23",
+      "text": "Order printer ink",
+      "line": 3,
+      "status": "waiting_approval",
+      "summary": "Approve: Place order",
+      "threadId": "thr_ink0000001",
+      "updatedAt": 1790154006000,
+      "unread": 0
+    },
+    {
+      "taskId": "tsk_idle000001",
+      "notePath": "Notes/Someday.md",
+      "date": null,
+      "text": "Learn to juggle",
+      "line": 0,
+      "status": "idle",
+      "threadId": null,
+      "updatedAt": 1790154000000,
+      "unread": 0
+    },
+    {
+      "taskId": "tsk_old0000001",
+      "notePath": "Daily/2026-06-01.md",
+      "date": "2026-06-01",
+      "text": "An old finished task past the 60-day retention",
+      "line": 0,
+      "status": "done",
+      "threadId": "thr_old0000001",
+      "updatedAt": 1780300800000,
+      "unread": 0
+    }
+  ],
+  "specs": {
+    "tsk_7fq2m9x0ab": {
+      "taskId": "tsk_7fq2m9x0ab",
+      "goal": "Book a dentist appointment next week near the user's home",
+      "instructions": "Mornings preferred.",
+      "capabilities": ["web", "browser"]
+    },
+    "tsk_wait000001": {
+      "taskId": "tsk_wait000001",
+      "goal": "Order the usual printer ink",
+      "capabilities": ["browser"]
+    },
+    "tsk_gone000001": {
+      "taskId": "tsk_gone000001",
+      "goal": "A spec whose record no longer exists",
+      "capabilities": []
+    }
+  }
+}

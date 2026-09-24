@@ -13,6 +13,7 @@ import {
   type ArtifactMeta,
   CLIENT_ID_HEADER,
   Emitter,
+  type Logger,
   type SurfaceKind,
   silentLogger,
   summarizeThread,
@@ -21,7 +22,7 @@ import {
   type ThreadSummary,
   type Unsubscribe,
 } from "@ddl/core";
-import { MemoryStorageProvider } from "@ddl/storage";
+import { MemoryStorageProvider, type StorageProvider } from "@ddl/storage";
 import type { Hono } from "hono";
 import { createApp } from "./app";
 import { createSettingsStore, type SettingsStore } from "./settings-store";
@@ -245,18 +246,19 @@ export interface TestRequestInit {
   clientId?: string;
 }
 
-export interface TestAppOptions {
-  storage?: MemoryStorageProvider;
+export interface TestAppOptions<S extends StorageProvider = MemoryStorageProvider> {
+  storage?: S;
   runtime?: AgentRuntime;
   settings?: SettingsStore;
   webDist?: string | null;
   allowedOrigins?: string[];
   now?: () => Date;
+  logger?: Logger;
 }
 
-export interface TestApp {
+export interface TestApp<S extends StorageProvider = MemoryStorageProvider> {
   app: Hono;
-  storage: MemoryStorageProvider;
+  storage: S;
   runtime: AgentRuntime;
   settings: SettingsStore;
   token: string;
@@ -264,9 +266,14 @@ export interface TestApp {
   request(path: string, init?: TestRequestInit): Promise<Response>;
 }
 
-/** The app over an in-memory vault, addressed as `http://127.0.0.1:7331` with a valid token. */
-export async function createTestApp(options: TestAppOptions = {}): Promise<TestApp> {
-  const storage = options.storage ?? new MemoryStorageProvider();
+/**
+ * The app over a vault (in-memory unless `storage` is given), addressed as `http://127.0.0.1:7331`
+ * with a valid token.
+ */
+export async function createTestApp<S extends StorageProvider = MemoryStorageProvider>(
+  options: TestAppOptions<S> = {},
+): Promise<TestApp<S>> {
+  const storage = options.storage ?? (new MemoryStorageProvider() as StorageProvider as S);
   const runtime = options.runtime ?? new FakeAgentRuntime();
   const settings = options.settings ?? (await createSettingsStore({ storage }));
   const token = testToken();
@@ -277,7 +284,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     settings,
     config: { port: TEST_PORT, allowedOrigins: options.allowedOrigins ?? [] },
     token,
-    logger: silentLogger,
+    logger: options.logger ?? silentLogger,
     webDist: options.webDist ?? null,
     writes,
     ...(options.now ? { now: options.now } : {}),

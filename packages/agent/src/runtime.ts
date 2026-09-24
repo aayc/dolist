@@ -70,6 +70,16 @@ export interface AgentRuntimeOverrides {
   quickSettleMs?: number;
   /** Live-mode API key verification (default: `checkOpenRouterKey`). */
   checkApiKey?: (apiKey: string) => Promise<OpenRouterKeyCheck>;
+  /**
+   * Live-mode OpenRouter key and endpoint for the harness and the key check. Defaults:
+   * `OPENROUTER_API_KEY` and `DDL_OPENROUTER_BASE_URL` (unset: OpenRouter itself).
+   */
+  openRouter?: { apiKey?: string; baseUrl?: string };
+  /**
+   * Give live-mode subagents the simulated `mock_irreversible_action` tool for risky tasks, as in
+   * mock mode (for running the real harness against a fake model). Default: `DDL_AGENT_MOCK_ACTIONS=1`.
+   */
+  mockActions?: boolean;
 }
 
 /** The thread id passed to a runtime method does not exist. */
@@ -196,7 +206,9 @@ class Runtime implements AgentRuntime {
       ...(options.connectors ? { connectors: options.connectors } : {}),
       knowledgeTools: () => this.knowledgeTools,
       webTools: () => this.webTools,
-      ...(this.mode === "mock"
+      ...(this.mode === "mock" ||
+      (this.mode === "live" &&
+        (overrides.mockActions ?? process.env.DDL_AGENT_MOCK_ACTIONS?.trim() === "1"))
         ? {
             extraTools: (_spec, task) => {
               const verb = riskyVerb(task.text);
@@ -277,8 +289,11 @@ class Runtime implements AgentRuntime {
       .stop()
       .catch((error: unknown) => this.logError("orchestrator.stop", error));
     await this.subagents.stop().catch((error: unknown) => this.logError("subagents.stop", error));
-    await Promise.all([this.threads.flush(), this.records.flush()]).catch((error: unknown) =>
-      this.logError("flush", error),
+    // The broker persists with a debounce; unflushed approvals would vanish on restart while
+    // their thread messages still point at them.
+    const broker = this.broker as ApprovalBroker & { flush?: () => Promise<void> };
+    await Promise.all([this.threads.flush(), this.records.flush(), broker.flush?.()]).catch(
+      (error: unknown) => this.logError("flush", error),
     );
     for (const dispose of this.disposers.splice(0)) this.safely(dispose, undefined);
     this.surfaceSubscribers.clear();
@@ -528,13 +543,20 @@ class Runtime implements AgentRuntime {
       });
       return;
     }
-    const apiKey = process.env.OPENROUTER_API_KEY;
+    const apiKey = this.overrides.openRouter?.apiKey ?? process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
       this.problem ??=
         "OPENROUTER_API_KEY is not set. Add it to ~/.daily-do-list/.env (or the daemon's environment) and restart, or run with DDL_AGENT_MODE=mock.";
       return;
     }
-    const check = await (this.overrides.checkApiKey ?? checkOpenRouterKey)(apiKey);
+    const baseUrl =
+      this.overrides.openRouter?.baseUrl ??
+      (process.env.DDL_OPENROUTER_BASE_URL?.trim() || undefined);
+    if (baseUrl) this.logger.info("Using a custom OpenRouter endpoint", { baseUrl });
+    const checkKey =
+      this.overrides.checkApiKey ??
+      ((key: string) => checkOpenRouterKey(key, baseUrl ? { baseUrl } : {}));
+    const check = await checkKey(apiKey);
     if (check.status === "invalid") {
       this.problem ??= `OpenRouter rejected OPENROUTER_API_KEY (${check.httpStatus}: ${check.message}). Put a valid key in ~/.daily-do-list/.env and restart.`;
       return;
@@ -550,6 +572,7 @@ class Runtime implements AgentRuntime {
         apiKey,
         home: this.options.home,
         logger: this.logger.child({ component: "harness" }),
+        ...(baseUrl ? { baseUrl } : {}),
       });
     } catch (error) {
       this.problem ??= `The agent harness failed to start: ${errorText(error)}`;

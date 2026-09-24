@@ -4,6 +4,9 @@ import type { Logger } from "@ddl/core";
 
 const TOKEN_RE = /^[0-9a-f]{64}$/;
 const MAX_CANDIDATE_LENGTH = 512;
+/** How long to wait for a concurrent start to finish writing the file it just created. */
+const RACE_READ_ATTEMPTS = 20;
+const RACE_READ_INTERVAL_MS = 5;
 
 /**
  * Returns the daemon's bearer token, creating a fresh 256-bit token (file mode 0600) when the file
@@ -22,13 +25,17 @@ export async function loadOrCreateToken(path: string, logger: Logger): Promise<s
       return token;
     } catch (error) {
       if (errnoCode(error) !== "EEXIST") throw error;
-      const raced = await readTokenFile(path);
-      if (raced !== null && TOKEN_RE.test(raced)) return raced;
+      // Another start created it first and may still be writing: its token wins.
+      const raced = await readValidToken(path);
+      if (raced !== null) return raced;
     }
   }
   logger.warn("Daemon token file was malformed; generated a new token");
+  // Tightened before the new token lands: `mode` only applies when writeFile creates the file.
+  await chmod(path, 0o600).catch((error: unknown) => {
+    if (errnoCode(error) !== "ENOENT") throw error;
+  });
   await writeFile(path, `${token}\n`, { mode: 0o600 });
-  await chmod(path, 0o600);
   return token;
 }
 
@@ -52,6 +59,15 @@ export function parseBearer(header: string | null | undefined): string | undefin
 
 function digest(value: string): Buffer {
   return createHash("sha256").update(value, "utf8").digest();
+}
+
+async function readValidToken(path: string): Promise<string | null> {
+  for (let attempt = 0; attempt < RACE_READ_ATTEMPTS; attempt++) {
+    const content = await readTokenFile(path);
+    if (content !== null && TOKEN_RE.test(content)) return content;
+    await new Promise((resolve) => setTimeout(resolve, RACE_READ_INTERVAL_MS));
+  }
+  return null;
 }
 
 async function readTokenFile(path: string): Promise<string | null> {

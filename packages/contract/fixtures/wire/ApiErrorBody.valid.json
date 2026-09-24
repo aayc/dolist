@@ -1,0 +1,14 @@
+[
+  { "name": "code only", "value": { "error": "not_found" } },
+  {
+    "name": "with message",
+    "value": {
+      "error": "invalid_request",
+      "message": "✖ Invalid input: expected string, received undefined\n  → at content"
+    }
+  },
+  {
+    "name": "unauthorized",
+    "value": { "error": "unauthorized", "message": "Missing or invalid bearer token" }
+  }
+]

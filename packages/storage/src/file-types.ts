@@ -92,6 +92,16 @@ export function isMergeablePath(path: string): boolean {
   return MERGEABLE_EXTENSIONS.has(extname(path).toLowerCase());
 }
 
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+/**
+ * The text a UTF-8 file actually holds: lone surrogates become U+FFFD, as the encoder writes
+ * them. Providers store this form so that what they return (and version) is what a read gives.
+ */
+export function toStorableText(text: string): string {
+  return text.replace(LONE_SURROGATE, "\uFFFD");
+}
+
 /** UTF-8 byte length without Node's Buffer (sync + search stay isomorphic). */
 export function utf8ByteLength(text: string): number {
   let bytes = 0;

@@ -1,0 +1,169 @@
+import { expect, test } from "@playwright/test";
+import { dailyPath, noteTitle, openApp } from "../helpers";
+import {
+  caretToEnd,
+  collectErrors,
+  delayWrites,
+  expectSaved,
+  explorerItem,
+  listPaths,
+  readNote,
+  tab,
+} from "./edge-helpers";
+
+test.describe("saves in flight", () => {
+  test("switching tabs while a save is in flight keeps every note's text", async ({ page }) => {
+    const errors = collectErrors(page);
+    await openApp(page);
+    const today = dailyPath();
+    const initial = (await readNote(page, today)) ?? "";
+    await delayWrites(page, 700);
+
+    await caretToEnd(page);
+    await page.keyboard.type("alpha");
+    await page.waitForTimeout(450); // debounce elapsed: the save is now in flight
+    await explorerItem(page, "Ideas.md").click({ modifiers: ["ControlOrMeta"] });
+    await expect(noteTitle(page)).toHaveValue("Ideas");
+    await caretToEnd(page);
+    await page.keyboard.type(" beta");
+    await tab(page, today).click();
+    await caretToEnd(page);
+    await page.keyboard.type(" gamma");
+    // Bounce between the tabs while writes are still held.
+    for (let i = 0; i < 6; i++) await tab(page, i % 2 ? today : "Ideas.md").click();
+    await delayWrites(page, 0);
+
+    await expect
+      .poll(() => readNote(page, today), { timeout: 15_000 })
+      .toBe(`${initial}alpha gamma`);
+    await expect.poll(() => readNote(page, "Ideas.md")).toMatch(/Small steps every day\. beta$/);
+    await expectSaved(page);
+    expect((await listPaths(page)).filter((p) => p.includes("(conflict"))).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  test("unsaved text is flushed on pagehide / beforeunload / hidden, before the debounce", async ({
+    page,
+  }) => {
+    await openApp(page);
+    const today = dailyPath();
+    const initial = (await readNote(page, today)) ?? "";
+    for (const [i, event] of ["pagehide", "beforeunload", "visibilitychange"].entries()) {
+      await caretToEnd(page);
+      await page.keyboard.type(`w${i}`);
+      await page.evaluate((name) => {
+        if (name === "visibilitychange") {
+          Object.defineProperty(document, "visibilityState", {
+            value: "hidden",
+            configurable: true,
+          });
+          document.dispatchEvent(new Event("visibilitychange"));
+          Object.defineProperty(document, "visibilityState", {
+            value: "visible",
+            configurable: true,
+          });
+        } else {
+          window.dispatchEvent(new Event(name));
+        }
+      }, event);
+      // Well inside the 300 ms autosave debounce: only the flush can have written this.
+      await expect
+        .poll(() => readNote(page, today), { timeout: 250, intervals: [20] })
+        .toBe(initial + ["w0", "w1", "w2"].slice(0, i + 1).join(""));
+    }
+  });
+
+  test("text typed while a save is in flight is saved when the window loses focus", async ({
+    page,
+  }) => {
+    await openApp(page);
+    const today = dailyPath();
+    const initial = (await readNote(page, today)) ?? "";
+    await delayWrites(page, 500);
+    await caretToEnd(page);
+    await page.keyboard.type("first");
+    await page.waitForTimeout(400);
+    await page.keyboard.type(" second");
+    await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+    await delayWrites(page, 0);
+    await expect
+      .poll(() => readNote(page, today), { timeout: 10_000 })
+      .toBe(`${initial}first second`);
+  });
+});
+
+test.describe("deleting open notes", () => {
+  test("a note can't be opened twice; deleting it closes its tab and shows the neighbour", async ({
+    page,
+  }) => {
+    const errors = collectErrors(page);
+    await openApp(page);
+    const ideas = explorerItem(page, "Ideas.md");
+    await ideas.click({ modifiers: ["ControlOrMeta"] });
+    await ideas.click({ modifiers: ["ControlOrMeta"] });
+    await ideas.click({ button: "middle" });
+    await expect(page.getByTestId("tab")).toHaveCount(2);
+    await expect(noteTitle(page)).toHaveValue("Ideas");
+
+    await ideas.click({ button: "right" });
+    await page.getByTestId("context-menu").getByText("Delete").click();
+    await page.getByTestId("confirm-accept").click();
+    await expect(page.getByTestId("tab")).toHaveCount(1);
+    await expect(page.getByTestId("tab")).toHaveAttribute("data-path", dailyPath());
+    await expect(page.locator(".cm-content")).not.toContainText("Small steps every day");
+    await expect.poll(() => readNote(page, "Ideas.md")).toBeNull();
+    expect(errors).toEqual([]);
+  });
+
+  test("deleting a background tab keeps the active note", async ({ page }) => {
+    await openApp(page);
+    const other = "Projects/Home Office.md";
+    await page.getByTestId("explorer-item").filter({ hasText: "Projects" }).first().click();
+    await explorerItem(page, other).click({ modifiers: ["ControlOrMeta"] });
+    await tab(page, dailyPath()).click();
+    await explorerItem(page, other).click({ button: "right" });
+    await page.getByTestId("context-menu").getByText("Delete").click();
+    await page.getByTestId("confirm-accept").click();
+    await expect(tab(page, other)).toHaveCount(0);
+    await expect(page.getByTestId("tab")).toHaveAttribute("data-path", dailyPath());
+  });
+
+  test("deleted elsewhere: unsaved text is written back, a clean note closes", async ({ page }) => {
+    await openApp(page);
+    await page.evaluate(() =>
+      (
+        window as unknown as { __ddlDebug: { openNote(p: string, n: boolean): Promise<boolean> } }
+      ).__ddlDebug.openNote("Ideas.md", true),
+    );
+    await expect(noteTitle(page)).toHaveValue("Ideas");
+    await delayWrites(page, 300);
+    await caretToEnd(page);
+    await page.keyboard.type(" keep this");
+    await page.evaluate(() =>
+      (window as unknown as { __ddlMock: { deleteNote(p: string): void } }).__ddlMock.deleteNote(
+        "Ideas.md",
+      ),
+    );
+    await delayWrites(page, 0);
+    await expect(
+      page.getByTestId("toast").filter({ hasText: "was deleted elsewhere" }),
+    ).toBeVisible();
+    await expect.poll(() => readNote(page, "Ideas.md")).toMatch(/ keep this$/);
+    await expect(tab(page, "Ideas.md")).toHaveCount(1);
+
+    // Now clean: another deletion closes the tab.
+    await expectSaved(page);
+    await page.evaluate(() =>
+      (window as unknown as { __ddlMock: { deleteNote(p: string): void } }).__ddlMock.deleteNote(
+        "Ideas.md",
+      ),
+    );
+    await expect(tab(page, "Ideas.md")).toHaveCount(0);
+    await expect(
+      page
+        .getByTestId("toast")
+        .filter({ hasText: "“Ideas” was deleted" })
+        .filter({ hasNotText: "elsewhere" }),
+    ).toBeVisible();
+  });
+});

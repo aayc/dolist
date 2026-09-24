@@ -1,3 +1,4 @@
+import { SettingsPatchSectionSchemas, UpdateSettingsRequestSchema } from "@ddl/contract";
 import {
   type AppSettings,
   type DeepPartial,
@@ -8,7 +9,6 @@ import {
   today,
   weeklyNotePath,
 } from "@ddl/core";
-import { z } from "zod";
 
 export class SettingsValidationError extends Error {
   constructor(message: string) {
@@ -17,55 +17,11 @@ export class SettingsValidationError extends Error {
   }
 }
 
-const Bool = z.boolean();
-const ModelId = z.string().trim().min(1).max(200);
-
-const PeriodicNotesPatch = z
-  .strictObject({
-    folder: z.string().max(512),
-    format: z.string().max(128),
-    template: z.string().max(512),
-  })
-  .partial();
-
-/** One schema per top-level section so a bad section in a hand-edited file only drops itself. */
-export const SETTINGS_SECTION_SCHEMAS = {
-  theme: z.enum(["system", "light", "dark"]),
-  editor: z
-    .strictObject({
-      vimMode: Bool,
-      livePreview: Bool,
-      readableLineLength: Bool,
-      fontSize: z.number().min(8).max(48),
-      spellcheck: Bool,
-      showLineNumbers: Bool,
-    })
-    .partial(),
-  dailyNotes: PeriodicNotesPatch,
-  weeklyNotes: PeriodicNotesPatch,
-  agent: z
-    .strictObject({
-      enabled: Bool,
-      settleMs: z.int().min(0).max(120_000),
-      maxConcurrentSubagents: z.int().min(1).max(32),
-      model: ModelId,
-      judgeModel: ModelId,
-      watch: z
-        .strictObject({ pastDays: z.int().min(0).max(366), futureDays: z.int().min(0).max(366) })
-        .partial(),
-      actOnExistingTasks: Bool,
-      approvalTimeoutMs: z
-        .int()
-        .min(60_000)
-        .max(30 * 24 * 60 * 60 * 1000),
-    })
-    .partial(),
-};
+/** One patch schema per top-level section (the wire contract's), so a bad section only drops itself. */
+export const SETTINGS_SECTION_SCHEMAS = SettingsPatchSectionSchemas;
 
 /** Body of `PUT /api/settings`: a deep partial of AppSettings; unknown keys are rejected. */
-export const SettingsPatchSchema = z
-  .strictObject(SETTINGS_SECTION_SCHEMAS)
-  .partial() satisfies z.ZodType<DeepPartial<AppSettings>>;
+export const SettingsPatchSchema = UpdateSettingsRequestSchema;
 
 /** Keeps the valid sections of untrusted stored settings and reports the dropped ones. */
 export function sanitizeStoredSettings(raw: unknown): {
@@ -78,7 +34,9 @@ export function sanitizeStoredSettings(raw: unknown): {
     return { settings, dropped: ["(root)"] };
   }
   for (const [key, value] of Object.entries(raw)) {
-    const schema = SETTINGS_SECTION_SCHEMAS[key as keyof typeof SETTINGS_SECTION_SCHEMAS];
+    const schema = Object.hasOwn(SETTINGS_SECTION_SCHEMAS, key)
+      ? SETTINGS_SECTION_SCHEMAS[key as keyof typeof SETTINGS_SECTION_SCHEMAS]
+      : undefined;
     const parsed = schema?.safeParse(value);
     if (parsed?.success) settings[key] = parsed.data;
     else dropped.push(key);

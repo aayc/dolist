@@ -15,7 +15,7 @@ import { callbacksExtension, configCompartments, resolveConfig, vimCompartment }
 import { editorKeymap } from "./keymap";
 import { linkClickHandler } from "./links";
 import { callbackNotifier } from "./listeners";
-import { markdownLanguageData, markdownSupport } from "./syntax/language";
+import { literalHtmlTyping, markdownLanguageData, markdownSupport } from "./syntax/language";
 import { editorTheme, markdownHighlightStyle } from "./theme";
 import type { EditorCallbacks, EditorConfig } from "./types";
 
@@ -26,6 +26,7 @@ import type { EditorCallbacks, EditorConfig } from "./types";
 const baseExtensions: Extension = [
   markdownSupport,
   markdownLanguageData,
+  literalHtmlTyping,
   syntaxHighlighting(markdownHighlightStyle),
   history(),
   drawSelection(),

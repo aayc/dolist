@@ -1,7 +1,31 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, type PlaywrightTestConfig } from "@playwright/test";
 
 const PORT = 4173;
+const FULLSTACK_PORT = 4175;
 const CI = Boolean(process.env.CI);
+/**
+ * `pnpm e2e:fullstack`: the real daemon in live mode (Pi harness) against the fake OpenRouter,
+ * serving the built app. Selected explicitly because it runs a different web server.
+ */
+const FULLSTACK = process.env.DDL_E2E_FULLSTACK === "1";
+
+const previewServer: NonNullable<PlaywrightTestConfig["webServer"]> = {
+  command: `pnpm exec vite build && pnpm exec vite preview --port ${PORT} --strictPort`,
+  url: `http://127.0.0.1:${PORT}`,
+  reuseExistingServer: !CI,
+  timeout: 120_000,
+  stdout: "ignore",
+  stderr: "pipe",
+};
+
+const fullstackServer: NonNullable<PlaywrightTestConfig["webServer"]> = {
+  command: `pnpm exec vite build && pnpm --filter @ddl/agent exec tsx scripts/e2e-fullstack.ts --port=${FULLSTACK_PORT}`,
+  url: `http://127.0.0.1:${FULLSTACK_PORT}`,
+  reuseExistingServer: false,
+  timeout: 180_000,
+  stdout: "ignore",
+  stderr: "pipe",
+};
 
 export default defineConfig({
   testDir: "./e2e",
@@ -21,10 +45,25 @@ export default defineConfig({
   // No device preset: its spoofed user agent would make the app pick the wrong "Mod" key
   // (⌘ vs Ctrl) relative to Playwright's host-based ControlOrMeta.
   projects: [
+    ...(FULLSTACK
+      ? [
+          {
+            name: "fullstack",
+            testMatch: /[\\/]fullstack[\\/].*\.spec\.ts$/,
+            // Kept apart from ./test-results, which every functional run wipes.
+            outputDir: "./.playwright-fullstack/test-results",
+            fullyParallel: false,
+            use: {
+              viewport: { width: 1400, height: 900 },
+              baseURL: `http://127.0.0.1:${FULLSTACK_PORT}`,
+            },
+          },
+        ]
+      : []),
     {
       name: "functional",
       testMatch: /\.spec\.ts$/,
-      testIgnore: /[\\/]perf[\\/]/,
+      testIgnore: /[\\/](perf|fullstack)[\\/]/,
       fullyParallel: true,
       use: { viewport: { width: 1400, height: 900 } },
     },
@@ -41,12 +80,5 @@ export default defineConfig({
       },
     },
   ],
-  webServer: {
-    command: `pnpm exec vite build && pnpm exec vite preview --port ${PORT} --strictPort`,
-    url: `http://127.0.0.1:${PORT}`,
-    reuseExistingServer: !CI,
-    timeout: 120_000,
-    stdout: "ignore",
-    stderr: "pipe",
-  },
+  webServer: FULLSTACK ? fullstackServer : previewServer,
 });

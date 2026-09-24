@@ -149,7 +149,10 @@ async function createExecution(
   }
 }
 
-/** Absent key: the runtime starts degraded and explains the fix in `status().problem`. */
+/**
+ * Absent key: the runtime starts degraded and explains the fix in `status().problem`.
+ * `DDL_OPENROUTER_BASE_URL` points it at another OpenAI-compatible endpoint (e.g. `pnpm dev:fake`).
+ */
 function createLlmClient(
   agent: AgentModule,
   env: Record<string, string | undefined>,
@@ -161,11 +164,13 @@ function createLlmClient(
     logger.warn("OPENROUTER_API_KEY is not set; live agents cannot run until it is added");
     return undefined;
   }
+  const baseUrl = env.DDL_OPENROUTER_BASE_URL?.trim();
   try {
     return agent.createOpenRouterClient({
       apiKey,
       defaultModel: model,
       logger: logger.child({ component: "llm" }),
+      ...(baseUrl ? { baseUrl } : {}),
     });
   } catch (error) {
     logger.error("Could not create the OpenRouter client", { error: errorMessage(error) });

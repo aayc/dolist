@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 
-const ASSIGNMENT_RE = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/;
+// `s`: `.` must also match U+2028/U+2029, which a value may contain (lines split on \r and \n only).
+const ASSIGNMENT_RE = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/s;
 const DOUBLE_QUOTE_ESCAPES: Record<string, string> = { n: "\n", r: "\r", t: "\t" };
 
 /**
@@ -9,7 +10,7 @@ const DOUBLE_QUOTE_ESCAPES: Record<string, string> = { n: "\n", r: "\r", t: "\t"
  */
 export function parseEnvFile(source: string): Map<string, string> {
   const vars = new Map<string, string>();
-  for (const rawLine of source.split(/\r?\n/)) {
+  for (const rawLine of source.split(/\r\n?|\n/)) {
     const line = rawLine.trim();
     if (line === "" || line.startsWith("#")) continue;
     const match = ASSIGNMENT_RE.exec(line);

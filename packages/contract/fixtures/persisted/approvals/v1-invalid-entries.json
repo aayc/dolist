@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "grants": [
+    { "toolName": "bash", "scope": "always", "taskId": "tsk_ignored", "createdAt": 1790150000000 },
+    { "toolName": "browser_click", "scope": "task", "taskId": "tsk_1", "createdAt": 1790150000000, "risk": "extreme" },
+    { "toolName": "browser_click", "scope": "task", "taskId": "tsk_1", "createdAt": 1790150000000, "categories": "payment" },
+    { "toolName": "browser_click", "scope": "task", "taskId": "tsk_1", "createdAt": 1790150000000, "categories": ["payment", "teleport"] },
+    { "toolName": "browser_type", "scope": "task", "taskId": null, "createdAt": 1790150000000 },
+    { "toolName": 42 }
+  ],
+  "approvals": [
+    { "id": "apr_bad", "status": "approved" },
+    { "id": "apr_ok", "threadId": null, "taskId": null, "toolName": "bash", "summary": "Run `ls`", "risk": "low", "categories": ["read"], "reason": "Lists files", "status": "denied", "createdAt": 1790150000000, "decidedAt": 1790150001000 }
+  ]
+}

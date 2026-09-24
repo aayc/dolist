@@ -25,6 +25,9 @@ export interface DebugHooks {
   openNote(path: string, newTab?: boolean): Promise<boolean>;
   /** Sanitizer check in a real browser (DOMPurify needs a full DOM). Loads the lazy chunk. */
   renderMarkdown(source: string): Promise<string>;
+  /** Holds every note write for `ms` before sending it (0 restores), to test saves in flight. */
+  delayWrites(ms: number): void;
+  runCommand(id: string): boolean;
 }
 
 declare global {
@@ -90,11 +93,21 @@ function installSettingsEffects(services: Services, appliedTheme: ThemePreferenc
 
 function installDebugHooks(services: Services): void {
   if (!isMockMode() && !perfDetailed) return;
+  const { client } = services;
+  const writeNote = client.writeNote.bind(client);
   window.__ddlDebug = {
     evictNote: (path) => services.workspace.evict(path),
     activePath: () => services.workspace.activePath,
     openNote: (path, newTab) => services.workspace.openNote(path, { newTab: newTab ?? false }),
     renderMarkdown: async (source) => (await import("../lib/markdown")).renderMarkdown(source),
+    delayWrites: (ms) => {
+      client.writeNote =
+        ms > 0
+          ? (...args) =>
+              new Promise((resolve) => setTimeout(resolve, ms)).then(() => writeNote(...args))
+          : writeNote;
+    },
+    runCommand: (id) => services.commands.run(id),
   };
 }
 

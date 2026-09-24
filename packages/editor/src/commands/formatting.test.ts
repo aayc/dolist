@@ -41,4 +41,14 @@ describe("insertLink (Mod-k)", () => {
     expect(runMarked("«https://example.com»", insertLink)).toBe("[|](https://example.com)");
     expect(runMarked("x |", insertLink)).toBe("x [|]()");
   });
+
+  it("keeps whitespace selected around a URL outside the link", () => {
+    expect(runMarked("visit «https://x.com »today", insertLink)).toBe(
+      "visit [|](https://x.com) today",
+    );
+    expect(runMarked("visit« https://x.com» today", insertLink)).toBe(
+      "visit [|](https://x.com) today",
+    );
+    expect(runMarked("«www.x.com\n»next", insertLink)).toBe("[|](www.x.com)\nnext");
+  });
 });

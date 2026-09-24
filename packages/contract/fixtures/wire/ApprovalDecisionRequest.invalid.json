@@ -1,0 +1,26 @@
+[
+  {
+    "name": "unknown decision",
+    "value": { "decision": "maybe" },
+    "path": ["decision"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "unknown scope",
+    "value": { "decision": "approve", "scope": "forever" },
+    "path": ["scope"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "extra key",
+    "value": { "decision": "deny", "reason": "no" },
+    "path": [],
+    "code": "unrecognized_keys"
+  },
+  {
+    "name": "null note",
+    "value": { "decision": "deny", "note": null },
+    "path": ["note"],
+    "code": "invalid_type"
+  }
+]

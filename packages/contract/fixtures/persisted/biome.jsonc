@@ -1,0 +1,8 @@
+// Golden files are byte-exact on purpose (some are deliberately corrupt JSON, some carry a BOM),
+// so Biome must neither format nor parse them.
+{
+  "root": false,
+  "formatter": { "enabled": false },
+  "linter": { "enabled": false },
+  "assist": { "enabled": false }
+}

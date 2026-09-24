@@ -1,3 +1,4 @@
+import { normalizePersistedBase64 } from "@ddl/contract";
 import type { ArtifactKind } from "@ddl/core";
 
 const LANGUAGE_EXTENSIONS: Record<string, string> = {
@@ -91,8 +92,10 @@ export function encodeBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString("base64");
 }
 
-export function decodeBase64(text: string): Uint8Array {
-  return new Uint8Array(Buffer.from(text.trim(), "base64"));
+/** Null when the body is not base64 (Buffer alone would silently skip invalid characters). */
+export function decodeBase64(text: string): Uint8Array | null {
+  const normalized = normalizePersistedBase64(text);
+  return normalized === null ? null : new Uint8Array(Buffer.from(normalized, "base64"));
 }
 
 export function utf8Length(text: string): number {

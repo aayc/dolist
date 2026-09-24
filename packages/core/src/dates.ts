@@ -31,13 +31,18 @@ const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frida
 const TOKEN_RE =
   /\[([^\]]*)]|YYYY|YY|gggg|gg|GGGG|GG|MMMM|MMM|MM|M|DDDD|DDD|Do|DD|D|dddd|ddd|dd|d|E|e|ww|w|WW|W|HH|H|hh|h|mm|m|ss|s|A|a|X|x/g;
 
+/** What Moment prints for an invalid date. */
+const INVALID_DATE = "Invalid date";
+
 export function toLocalDate(date: Date): LocalDate {
   return { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() };
 }
 
-/** Local midnight for the given calendar date. */
+/** Local midnight for the given calendar date (01:00 where DST skips midnight). */
 export function fromLocalDate(ld: LocalDate): Date {
-  return new Date(ld.year, ld.month - 1, ld.day);
+  const date = new Date(2000, 0, 1);
+  date.setFullYear(ld.year, ld.month - 1, ld.day);
+  return date;
 }
 
 export function today(now: Date = new Date()): LocalDate {
@@ -45,8 +50,9 @@ export function today(now: Date = new Date()): LocalDate {
 }
 
 export function addDays(ld: LocalDate, days: number): LocalDate {
-  // Construct at noon to stay clear of DST transitions.
-  return toLocalDate(new Date(ld.year, ld.month - 1, ld.day + days, 12));
+  // Calendar arithmetic, not clock arithmetic: DST and days a time zone skipped don't matter.
+  const date = utcDate(ld.year, ld.month, ld.day + days);
+  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() };
 }
 
 export function compareLocalDates(a: LocalDate, b: LocalDate): number {
@@ -59,7 +65,7 @@ export function isSameLocalDate(a: LocalDate, b: LocalDate): boolean {
 
 /** Whole days from `a` to `b` (positive when b is later). */
 export function daysBetween(a: LocalDate, b: LocalDate): number {
-  const ms = Date.UTC(b.year, b.month - 1, b.day) - Date.UTC(a.year, a.month - 1, a.day);
+  const ms = utcDate(b.year, b.month, b.day).getTime() - utcDate(a.year, a.month, a.day).getTime();
   return Math.round(ms / 86_400_000);
 }
 
@@ -79,7 +85,18 @@ export function isValidLocalDate(ld: LocalDate): boolean {
 
 /** Formats a date with Moment-style tokens (`YYYY-MM-DD`, `dddd, MMMM Do`, `gggg-[W]ww`, …). */
 export function formatDate(date: Date, format: string): string {
-  const ld = toLocalDate(date);
+  if (Number.isNaN(date.getTime())) return INVALID_DATE;
+  return formatParts(toLocalDate(date), date, format);
+}
+
+export function formatLocalDate(ld: LocalDate, format: string): string {
+  if (!isValidLocalDate(ld)) return INVALID_DATE;
+  return formatParts(ld, fromLocalDate(ld), format);
+}
+
+/** Calendar tokens come from `ld` itself; time-of-day and timestamp tokens from `instant`. */
+function formatParts(ld: LocalDate, instant: Date, format: string): string {
+  const weekday = weekdayOf(ld);
   return format.replace(TOKEN_RE, (token, literal: string | undefined) => {
     if (literal !== undefined) return literal;
     switch (token) {
@@ -114,16 +131,16 @@ export function formatDate(date: Date, format: string): string {
       case "D":
         return String(ld.day);
       case "dddd":
-        return WEEKDAYS[date.getDay()]!;
+        return WEEKDAYS[weekday]!;
       case "ddd":
-        return WEEKDAYS[date.getDay()]!.slice(0, 3);
+        return WEEKDAYS[weekday]!.slice(0, 3);
       case "dd":
-        return WEEKDAYS[date.getDay()]!.slice(0, 2);
+        return WEEKDAYS[weekday]!.slice(0, 2);
       case "d":
       case "e":
-        return String(date.getDay());
+        return String(weekday);
       case "E":
-        return String(date.getDay() === 0 ? 7 : date.getDay());
+        return String(weekday === 0 ? 7 : weekday);
       case "ww":
         return pad(weekOfYear(ld, 0, 6).week, 2);
       case "w":
@@ -133,43 +150,42 @@ export function formatDate(date: Date, format: string): string {
       case "W":
         return String(weekOfYear(ld, 1, 4).week);
       case "HH":
-        return pad(date.getHours(), 2);
+        return pad(instant.getHours(), 2);
       case "H":
-        return String(date.getHours());
+        return String(instant.getHours());
       case "hh":
-        return pad(date.getHours() % 12 || 12, 2);
+        return pad(instant.getHours() % 12 || 12, 2);
       case "h":
-        return String(date.getHours() % 12 || 12);
+        return String(instant.getHours() % 12 || 12);
       case "mm":
-        return pad(date.getMinutes(), 2);
+        return pad(instant.getMinutes(), 2);
       case "m":
-        return String(date.getMinutes());
+        return String(instant.getMinutes());
       case "ss":
-        return pad(date.getSeconds(), 2);
+        return pad(instant.getSeconds(), 2);
       case "s":
-        return String(date.getSeconds());
+        return String(instant.getSeconds());
       case "A":
-        return date.getHours() < 12 ? "AM" : "PM";
+        return instant.getHours() < 12 ? "AM" : "PM";
       case "a":
-        return date.getHours() < 12 ? "am" : "pm";
+        return instant.getHours() < 12 ? "am" : "pm";
       case "X":
-        return String(Math.floor(date.getTime() / 1000));
+        return String(Math.floor(instant.getTime() / 1000));
       case "x":
-        return String(date.getTime());
+        return String(instant.getTime());
       default:
         return token;
     }
   });
 }
 
-export function formatLocalDate(ld: LocalDate, format: string): string {
-  return formatDate(fromLocalDate(ld), format);
-}
-
 /**
- * Strictly parses `input` against a Moment-style `format`. Supports year/month/day tokens,
- * month & weekday names, ordinals, literals, and week-based tokens (which resolve to the first day
- * of that week). Returns null if the input does not match the format exactly.
+ * Strictly parses `input` against a Moment-style `format`, like Moment's strict mode: year, month
+ * and day tokens (or a day of the year), month & weekday names, ordinals, literals, and week-based
+ * tokens (a week without a month/day resolves to its first day, or to the weekday given with it;
+ * next to a full date, as in `gggg/[W]ww/YYYY-MM-DD`, it is just a folder name). A weekday that
+ * contradicts the date, or a week the year doesn't have, is rejected. Time tokens are accepted but
+ * ignored; `X`/`x` timestamps are not supported. Returns null if the input does not match exactly.
  */
 export function parseDateWithFormat(input: string, format: string): LocalDate | null {
   const groups: string[] = [];
@@ -195,13 +211,20 @@ export function parseDateWithFormat(input: string, format: string): LocalDate | 
   if (!m) return null;
 
   let year: number | undefined;
-  let month = 1;
-  let day = 1;
-  let weekYear: { year: number; iso: boolean } | undefined;
+  let month: number | undefined;
+  let day: number | undefined;
+  let yearDay: number | undefined;
+  let weekYear: number | undefined;
   let week: number | undefined;
+  let isoWeeks: boolean | undefined;
+  let isoWeekYear: boolean | undefined;
+  /** 0 = Sunday. */
+  let weekday: number | undefined;
   for (let i = 0; i < groups.length; i++) {
     const token = groups[i]!;
     const value = m[i + 1]!;
+    const named = (names: readonly string[]) =>
+      names.findIndex((name) => name.toLowerCase().startsWith(value.toLowerCase()));
     switch (token) {
       case "YYYY":
         year = Number(value);
@@ -210,14 +233,15 @@ export function parseDateWithFormat(input: string, format: string): LocalDate | 
         year = 2000 + Number(value);
         break;
       case "gggg":
-        weekYear = { year: Number(value), iso: false };
-        break;
+      case "gg":
       case "GGGG":
-        weekYear = { year: Number(value), iso: true };
+      case "GG":
+        weekYear = (token.length === 2 ? 2000 : 0) + Number(value);
+        isoWeekYear = token[0] === "G";
         break;
       case "MMMM":
       case "MMM":
-        month = MONTHS.findIndex((name) => name.toLowerCase().startsWith(value.toLowerCase())) + 1;
+        month = named(MONTHS) + 1;
         break;
       case "MM":
       case "M":
@@ -230,30 +254,60 @@ export function parseDateWithFormat(input: string, format: string): LocalDate | 
       case "Do":
         day = Number.parseInt(value, 10);
         break;
+      case "DDDD":
+      case "DDD":
+        yearDay = Number(value);
+        break;
       case "ww":
       case "w":
       case "WW":
       case "W":
         week = Number(value);
+        isoWeeks = token[0] === "W";
+        break;
+      case "dddd":
+      case "ddd":
+      case "dd":
+        weekday = named(WEEKDAYS);
+        break;
+      case "d":
+      case "e":
+        weekday = Number(value);
+        break;
+      case "E":
+        weekday = Number(value) % 7;
         break;
       default:
-        break; // weekday names, times: informational only
+        break; // times: informational only
     }
   }
 
-  if (week !== undefined) {
-    const wy = weekYear ?? { year: year ?? new Date().getFullYear(), iso: false };
-    return startOfWeek(wy.year, week, wy.iso ? 1 : 0, wy.iso ? 4 : 6);
+  let date: LocalDate | null;
+  // Like Moment, a week only decides the date when no month/day does (`gggg/[W]ww/YYYY-MM-DD`).
+  if (week !== undefined && month === undefined && day === undefined && yearDay === undefined) {
+    // The week token picks the system (`W` is ISO, `w` the locale's), like Moment.
+    const iso = isoWeeks ?? isoWeekYear ?? false;
+    date = weekDate(weekYear ?? year ?? new Date().getFullYear(), week, iso, weekday);
+  } else if (year === undefined) {
+    return null;
+  } else if (yearDay !== undefined) {
+    if (yearDay < 1 || yearDay > daysInYear(year)) return null;
+    date = addDays({ year, month: 1, day: 1 }, yearDay - 1);
+    if ((month ?? date.month) !== date.month || (day ?? date.day) !== date.day) return null;
+  } else {
+    date = validDate(year, month ?? 1, day ?? 1);
   }
-  if (year === undefined) return null;
-  return validDate(year, month, day);
+  if (!date || (weekday !== undefined && weekdayOf(date) !== weekday)) return null;
+  return date;
 }
 
 const TOKEN_PATTERNS: Record<string, string> = {
   YYYY: "\\d{4}",
   YY: "\\d{2}",
   gggg: "\\d{4}",
+  gg: "\\d{2}",
   GGGG: "\\d{4}",
+  GG: "\\d{2}",
   MMMM: MONTHS.join("|"),
   MMM: MONTHS.map((m) => m.slice(0, 3)).join("|"),
   MM: "\\d{2}",
@@ -306,17 +360,26 @@ export function weekOfYear(
   return { week, year: ld.year };
 }
 
-function startOfWeek(year: number, week: number, dow: number, doy: number): LocalDate | null {
-  if (week < 1 || week > 53) return null;
-  const offset = firstWeekOffset(year, dow, doy);
-  // Day-of-year (1-based) of the first day of `week`.
-  const start = offset + 1 + (week - 1) * 7;
-  return addDays({ year, month: 1, day: 1 }, start - 1);
+/** The first day of `week` in `weekYear`, or its `weekday` (0 = Sunday) when given. */
+function weekDate(
+  weekYear: number,
+  week: number,
+  iso: boolean,
+  weekday: number | undefined,
+): LocalDate | null {
+  const dow = iso ? 1 : 0;
+  const doy = iso ? 4 : 6;
+  if (week < 1 || week > weeksInYear(weekYear, dow, doy)) return null;
+  const start = addDays(
+    { year: weekYear, month: 1, day: 1 },
+    firstWeekOffset(weekYear, dow, doy) + (week - 1) * 7,
+  );
+  return weekday === undefined ? start : addDays(start, (weekday - dow + 7) % 7);
 }
 
 function firstWeekOffset(year: number, dow: number, doy: number): number {
   const fwd = 7 + dow - doy;
-  const fwdlw = (7 + new Date(Date.UTC(year, 0, fwd)).getUTCDay() - dow) % 7;
+  const fwdlw = (7 + utcDate(year, 1, fwd).getUTCDay() - dow) % 7;
   return -fwdlw + fwd - 1;
 }
 
@@ -330,6 +393,18 @@ function dayOfYear(ld: LocalDate): number {
   return daysBetween({ year: ld.year, month: 1, day: 1 }, ld) + 1;
 }
 
+/** 0 = Sunday. */
+function weekdayOf(ld: LocalDate): number {
+  return utcDate(ld.year, ld.month, ld.day).getUTCDay();
+}
+
+/** UTC midnight of a proleptic Gregorian date (years 0-99 included); overflow rolls over. */
+function utcDate(year: number, month: number, day: number): Date {
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  return date;
+}
+
 function daysInYear(year: number): number {
   return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 366 : 365;
 }
@@ -337,8 +412,7 @@ function daysInYear(year: number): number {
 function validDate(year: number, month: number, day: number): LocalDate | null {
   if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
   if (month < 1 || month > 12 || day < 1) return null;
-  const dim = new Date(year, month, 0).getDate();
-  if (day > dim) return null;
+  if (day > utcDate(year, month + 1, 0).getUTCDate()) return null;
   return { year, month, day };
 }
 
