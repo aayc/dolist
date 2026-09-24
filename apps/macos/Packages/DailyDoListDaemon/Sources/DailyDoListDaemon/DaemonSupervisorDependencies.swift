@@ -4,7 +4,8 @@ import Foundation
 public struct DaemonSupervisorTiming: Hashable, Sendable {
   /// How long a launched daemon has to answer a health check.
   public var startupTimeout: Duration
-  /// Interval between startup health checks.
+  /// Interval between startup health checks (loopback requests: cheap, and the daemon is usually
+  /// up within a few hundred milliseconds, so waiting longer only delays the window).
   public var pollInterval: Duration
   /// How long `stop()` waits after SIGTERM before SIGKILL.
   public var stopGracePeriod: Duration
@@ -17,7 +18,7 @@ public struct DaemonSupervisorTiming: Hashable, Sendable {
 
   public init(
     startupTimeout: Duration = .seconds(20),
-    pollInterval: Duration = .milliseconds(100),
+    pollInterval: Duration = .milliseconds(20),
     stopGracePeriod: Duration = .seconds(5),
     killTimeout: Duration = .seconds(2),
     attachedCheckInterval: Duration = .seconds(5),

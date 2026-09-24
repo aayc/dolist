@@ -465,7 +465,8 @@ async function run(options: {
     harness = new ScriptedHarness({ script: baselineScript });
   } else {
     const apiKey = process.env.OPENROUTER_API_KEY ?? "";
-    const { createPiHarness, createOpenRouterClient, createWebTools } = await import("@ddl/agent");
+    const { createOpenRouterClient, createWebTools } = await import("@ddl/agent");
+    const { createPiHarness } = await import("@ddl/agent/pi");
     const home = await mkdtemp(join(tmpdir(), "ddl-eval-triage-"));
     cleanup = () => rm(home, { recursive: true, force: true });
     harness = createPiHarness({ apiKey, home });

@@ -24,6 +24,32 @@ Chrome's frame-rate limiter so "→ next frame" measures work, not vsync alignme
 Latest local run (Apple Silicon): keystroke p95 1.7 ms, daily open ~4–5 ms, tab switch 8 ms,
 thread open 15 ms, first load 105 ms, zero long tasks.
 
+## Launch: daemon and macOS app
+
+| Measure | Now | Before |
+| --- | --- | --- |
+| Daemon spawn → first healthy `/api/health` (warm disk cache) | ~250 ms | ~810 ms |
+| Daemon, first start after boot (cold disk cache) | ~400 ms | ~1 400 ms |
+| macOS app: process start → today's note on screen (warm, managed daemon) | ~500 ms | ~2 200 ms |
+
+Measure the daemon with a timer around spawn → token file → `/api/health`; the macOS app prints
+its launch timeline with `DDL_BOOT_TRACE=1` (see `apps/macos/README.md`). The first launch after
+installing or rebuilding the app is slower (~1–2 s) while macOS verifies the new binary.
+
+What keeps it fast:
+
+- **The daemon loads optional dependencies on first use.** It's bundled with esbuild code
+  splitting: the agent runtime, the Pi harness (`@ddl/agent/pi`, ~400 ms to load) and Playwright
+  (~150 ms, imported where Chrome launches) live outside `main.js`. `apps/daemon/build.mjs` fails
+  the build if anything but the Pi harness chunk imports them statically. Never re-export them
+  from a package index.
+- **The app remembers where Node is.** Finding it means running the login shell and
+  `node --version` (~300 ms); `$DDL_HOME/node-location.json` skips that while the binary is
+  unchanged and is refreshed in the background after each launch.
+- **No work on the launch path that scales with the bundle.** Launch-at-login only checks that
+  the app is signed, not the hash of every bundled file (that alone cost ~300 ms, seconds cold).
+- The supervisor polls a starting daemon every 20 ms (loopback requests are cheap).
+
 ## Micro-benchmarks (`pnpm bench` then `pnpm bench:check`)
 
 Vitest 5 benchmarks (`*.bench.ts`) assert p99 budgets inside the test and write

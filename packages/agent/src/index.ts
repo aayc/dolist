@@ -1,6 +1,6 @@
 export * from "./execution";
 export type * from "./execution/types";
-export { createPiHarness } from "./harness/pi";
+export type { PiHarnessOptions } from "./harness/pi";
 export type { AgentScript, ScriptContext, ScriptedHarnessOptions } from "./harness/scripted";
 export { ScriptedHarness } from "./harness/scripted";
 export type * from "./harness/types";

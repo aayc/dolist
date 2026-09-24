@@ -86,7 +86,10 @@ How a managed daemon is found and run:
 1. **Node:** `DaemonLaunchConfiguration.nodePath` if set, `DDL_NODE`, every `node` on your login shell's PATH
    (`/bin/zsh -lc`), the inherited PATH, `/opt/homebrew/bin`, `/usr/local/bin`, mise and Volta
    shims, then nvm, fnm and asdf. The first one reporting `node --version` ≥ 24.4.0 wins; an older
-   Node earlier on the PATH doesn't hide a newer one.
+   Node earlier on the PATH doesn't hide a newer one. The answer (with the login shell's PATH) is
+   remembered in `$DDL_HOME/node-location.json` while that binary is unchanged, so later launches
+   skip the ~300 ms lookup; it's re-checked in the background after each launch and forgotten if
+   a launch from it fails.
 2. **Daemon:** `daemonEntry` if set, `DDL_DAEMON_ENTRY`, the copy bundled in the app
    (`Contents/Resources/daemon/dist/main.js`), then a repository checkout (`DDL_REPO_ROOT`, or
    walking up from the app and from the current directory).
@@ -121,7 +124,7 @@ restarts a managed daemon in place, and connected clients reconnect and resync.
   `pnpm --filter @ddl/daemon deploy --prod --legacy --ignore-scripts` into a scratch folder. pnpm 10
   refuses a plain deploy without `inject-workspace-packages`, and `--legacy` keeps the lockfile
   as is. `dist/`, `package.json` and the production `node_modules` (about 200 MB) are copied into
-  `Contents/Resources/daemon/`. Workspace packages (already inlined into `dist/main.js`), bin
+  `Contents/Resources/daemon/`. Workspace packages (already inlined into `dist/`), bin
   shims, pnpm metadata and dangling links are removed. The bundled daemon still needs the
   system's Node 24.4+.
 - Ad-hoc signature (`codesign --force --deep --sign -`), verified with
@@ -154,6 +157,7 @@ quarantined: right-click → Open, or `xattr -dr com.apple.quarantine "Daily Do 
 | "This app and the daemon don't match" | The major API versions differ (`/api/health` → `apiVersion`). Update whichever side is older; rebuild the daemon after pulling. |
 | The daemon keeps crashing | The failure shows its last output; Settings → General → Status → Daemon log has more. Run `node apps/daemon/dist/main.js` in a terminal to see it directly. |
 | The shortcut does nothing | Check the warning under the shortcut setting (a macOS shortcut may take precedence), then System Settings → Keyboard → Keyboard Shortcuts. |
+| Launch feels slow | Run the binary with `DDL_BOOT_TRACE=1` (`DDL_BOOT_TRACE=1 "Daily Do List.app/Contents/MacOS/DailyDoList"`): each boot phase prints to stderr with the milliseconds since the process started. A warm launch reaches `app: ready` in ~500 ms (see `docs/PERFORMANCE.md`). |
 
 ## Testing
 

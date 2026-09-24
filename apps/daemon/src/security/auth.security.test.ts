@@ -204,7 +204,14 @@ describe("REST authentication", () => {
   test.prop(
     [
       fc.constantFrom("GET", "PUT", "POST", "DELETE", "PATCH", "OPTIONS", "HEAD"),
-      fc.array(fc.stringMatching(/^[A-Za-z0-9._~%-]{1,12}$/), { maxLength: 4 }),
+      // Dot segments (also percent-encoded) resolve away and can leave /api entirely; spellings
+      // that still route to API handlers are covered by the next test.
+      fc.array(
+        fc
+          .stringMatching(/^[A-Za-z0-9._~%-]{1,12}$/)
+          .filter((segment) => !/^(?:\.|%2e){1,2}$/i.test(segment)),
+        { maxLength: 4 },
+      ),
     ],
     { numRuns: 60 },
   )("guards every method on every /api path, known or not", async (method, segments) => {

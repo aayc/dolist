@@ -1,6 +1,6 @@
 import { chmod, mkdir } from "node:fs/promises";
 import { type Logger, silentLogger } from "@ddl/core";
-import { type BrowserContext, chromium, type Page } from "playwright-core";
+import type { BrowserContext, Page } from "playwright-core";
 import { BrowserUnavailableError, ExecutionError } from "../errors";
 import type { BrowserController, BrowserSession } from "../types";
 import { cleanPlaywrightMessage } from "./browser-errors";
@@ -159,6 +159,8 @@ export class LocalBrowserController implements BrowserController {
     const startedAt = performance.now();
     let context: BrowserContext;
     try {
+      // Loaded on first launch: Playwright costs ~150 ms of daemon startup otherwise.
+      const { chromium } = await import("playwright-core");
       context = await chromium.launchPersistentContext(profileDir, {
         executablePath: browser.executablePath,
         headless,

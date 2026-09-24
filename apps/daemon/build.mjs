@@ -1,6 +1,10 @@
 // Bundles the daemon and the workspace packages it uses into dist/main.js. Third-party runtime
 // dependencies stay external: the daemon declares every one of them (versions shared through the
 // pnpm catalog), so bare imports resolve from apps/daemon/node_modules at runtime.
+//
+// Code splitting keeps startup fast: modules reached only through `import()` (the agent runtime,
+// the Pi harness) land in dist/chunks/ and load on first use, so their external dependencies
+// aren't hoisted into main.js and loaded before the daemon can answer.
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,9 +41,21 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-await build({
+/**
+ * Loaded on first use only: Pi from its own chunk (`import("./harness/pi")`), Playwright via
+ * `import()` at the call site. Statically imported from anywhere else, they would load before the
+ * daemon answers (~500 ms on every start).
+ */
+const PI_HARNESS_ENTRY = "packages/agent/src/harness/pi.ts";
+const LAZY_DEPENDENCY = /^(?:@earendil-works\/|playwright-core)/;
+
+const result = await build({
+  metafile: true,
   entryPoints: [resolve(daemonDir, "src/main.ts")],
-  outfile: resolve(daemonDir, "dist/main.js"),
+  outdir: resolve(daemonDir, "dist"),
+  entryNames: "[name]",
+  chunkNames: "chunks/[name]-[hash]",
+  splitting: true,
   bundle: true,
   platform: "node",
   format: "esm",
@@ -57,3 +73,17 @@ await build({
     ].join("\n"),
   },
 });
+
+const eager = Object.entries(result.metafile.outputs).flatMap(([file, output]) => {
+  const isPiChunk = output.entryPoint?.endsWith(PI_HARNESS_ENTRY) ?? false;
+  return output.imports
+    .filter((entry) => entry.kind === "import-statement" && LAZY_DEPENDENCY.test(entry.path))
+    .filter((entry) => !(isPiChunk && entry.path.startsWith("@earendil-works/")))
+    .map((entry) => `${file}: ${entry.path}`);
+});
+if (eager.length > 0) {
+  console.error(
+    `These dependencies must load on first use (import()), not with the daemon:\n  ${[...new Set(eager)].join("\n  ")}`,
+  );
+  process.exit(1);
+}

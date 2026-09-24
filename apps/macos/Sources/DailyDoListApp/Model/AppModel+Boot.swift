@@ -8,6 +8,7 @@ import Foundation
 extension AppModel {
   /// Connects (or reconnects) from scratch with the current preferences.
   func boot() async {
+    BootTrace.mark("app: boot")
     hasStarted = true
     bootGeneration += 1
     let generation = bootGeneration
@@ -28,6 +29,7 @@ extension AppModel {
         if generation == bootGeneration { phase = .failed(failure) }
         return
       case .success(let endpoint):
+        BootTrace.mark("app: daemon endpoint ready")
         client = environment.makeClient(endpoint)
         clientEndpoint = endpoint
         connection.setKind(.daemon(endpoint.baseURL))
@@ -38,6 +40,7 @@ extension AppModel {
     phase = .booting("Connecting…")
     do {
       let health = try await client.health()
+      BootTrace.mark("app: health checked")
       guard generation == bootGeneration else { return }
       guard DaemonProtocol.isCompatible(apiVersion: health.apiVersion) else {
         phase = .failed(.incompatibleApiVersion(server: health.apiVersion))
@@ -54,6 +57,7 @@ extension AppModel {
     await loadInitialData(generation: generation)
     guard generation == bootGeneration else { return }
     phase = .ready
+    BootTrace.mark("app: ready")
   }
 
   /// Retry from the boot screen or the offline banner.

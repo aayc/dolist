@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListDaemon
 import Foundation
 
 /// Lifecycle hooks SwiftUI doesn't offer: boot at launch, flush before quitting, the Dock menu, and
@@ -12,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var pendingReply: TerminationReply?
 
   func applicationDidFinishLaunching(_ notification: Notification) {
+    BootTrace.mark("app: did finish launching")
     model.start()
   }
 

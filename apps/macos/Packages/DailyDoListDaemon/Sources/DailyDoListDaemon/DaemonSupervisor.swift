@@ -206,6 +206,7 @@ public final class DaemonSupervisor {
 
   /// Who answers on the port: nil when nobody does (free to launch).
   private func probe(_ configuration: DaemonLaunchConfiguration) async -> Acquisition? {
+    BootTrace.mark("supervisor: probing port \(configuration.port)")
     let token = readToken(configuration)
     switch await dependencies.healthChecker.check(baseURL: configuration.baseURL, token: token) {
     case .healthy(let health):
@@ -227,16 +228,25 @@ public final class DaemonSupervisor {
     _ configuration: DaemonLaunchConfiguration, _ gen: Int, reuseResolvedNode: Bool
   ) async -> Acquisition {
     let host = dependencies.host
+    let locator = NodeLocator(
+      configuredPath: configuration.nodePath, environment: host.variables,
+      homeDirectory: host.homeDirectory, fileSystem: dependencies.fileSystem,
+      commands: dependencies.commands)
+    let nodeCache = NodeLocationCache(
+      file: configuration.home.appendingPathComponent("node-location.json"),
+      fileSystem: dependencies.fileSystem)
+    let nodeCacheKey = NodeLocationCache.key(configuredPath: configuration.nodePath, environment: host.variables)
     let node: ResolvedNode
+    var nodeFromCache = false
     if reuseResolvedNode, let cached = resolvedNode,
       dependencies.fileSystem.isExecutableFile(at: cached.url)
     {
       node = cached
+    } else if let remembered = nodeCache.load(key: nodeCacheKey) {
+      node = remembered
+      nodeFromCache = true
+      resolvedNode = node
     } else {
-      let locator = NodeLocator(
-        configuredPath: configuration.nodePath, environment: host.variables,
-        homeDirectory: host.homeDirectory, fileSystem: dependencies.fileSystem,
-        commands: dependencies.commands)
       do {
         node = try await locator.locate()
       } catch {
@@ -245,6 +255,7 @@ public final class DaemonSupervisor {
       guard isCurrent(gen) else { return .cancelled }
       resolvedNode = node
     }
+    BootTrace.mark("supervisor: node \(node.version) from \(node.source.rawValue)")
 
     let entry: ResolvedDaemonEntry
     do {
@@ -281,7 +292,32 @@ public final class DaemonSupervisor {
         + "port \(configuration.port)")
     pumpOutput(of: handle)
     watchExit(of: handle)
-    return await awaitHealthy(handle, configuration, gen)
+    BootTrace.mark("supervisor: spawned pid \(handle.pid)")
+    let outcome = await awaitHealthy(handle, configuration, gen)
+    switch outcome {
+    case .launched:
+      // Saved once the daemon has created its home; a cached answer is re-checked off the
+      // launch path, so a new Node or PATH is picked up next time.
+      if nodeFromCache {
+        refreshNodeLocation(locator, nodeCache, key: nodeCacheKey, current: node)
+      } else {
+        nodeCache.save(node, key: nodeCacheKey)
+      }
+    case .failed where nodeFromCache:
+      nodeCache.clear()
+    default:
+      break
+    }
+    return outcome
+  }
+
+  private func refreshNodeLocation(
+    _ locator: NodeLocator, _ cache: NodeLocationCache, key: String, current: ResolvedNode
+  ) {
+    Task {
+      guard let fresh = try? await locator.locate(), fresh != current else { return }
+      cache.save(fresh, key: key)
+    }
   }
 
   /// Polls for the token file and a healthy answer until the startup timeout.
@@ -308,6 +344,7 @@ public final class DaemonSupervisor {
           await abandon(handle)
           return .cancelled
         }
+        BootTrace.mark("supervisor: daemon healthy")
         return .launched(
           handle, DaemonConnectionInfo(baseURL: configuration.baseURL, token: token), health)
       }

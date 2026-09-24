@@ -167,6 +167,10 @@ and package READMEs (`packages/storage`, `packages/connectors`, `packages/editor
   `apps/daemon/build.mjs` fails the build if one is missing.
 - **Turbo:** `typecheck`/`test` depend on a `transit` task so a change in `@ddl/core` invalidates
   every dependent's cache. Env vars reach tasks only via `passThroughEnv`/`globalEnv`.
+- **Daemon startup:** the daemon bundle is code-split; heavy optional dependencies load on first
+ use (the Pi harness from `@ddl/agent/pi`, Playwright via `import()` where Chrome launches).
+ Don't re-export them from a package index or import them statically elsewhere:
+ `apps/daemon/build.mjs` fails the build if they would load before the daemon answers.
 - **Pi harness:** sessions are hermetic (isolated `agentDir` under `$DDL_HOME/pi`, no discovered
   extensions/skills/context files) and refuse to start if the safety-gate extension didn't load.
 - **E2E typing:** use Playwright's real keyboard (`page.keyboard.type`). Automation "fill"-style

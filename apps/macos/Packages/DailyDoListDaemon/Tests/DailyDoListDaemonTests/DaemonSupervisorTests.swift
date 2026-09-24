@@ -55,6 +55,67 @@ struct DaemonSupervisorTests {
     #expect(await harness.waitUntil { harness.supervisor.logLines.contains("listening") }, "output is pumped asynchronously")
   }
 
+  // MARK: Remembered Node location
+
+  private var cacheFile: URL {
+    SupervisorHarness.homeDirectory.appendingPathComponent(".daily-do-list/node-location.json")
+  }
+
+  @Test func aRelaunchUsesTheRememberedNodeWithoutLookingItUp() async throws {
+    let harness = SupervisorHarness()
+    harness.files.enableFingerprints()
+    _ = try #require(await harness.supervisor.start())
+    #expect(harness.files.readString(at: cacheFile) != nil, "saved once the daemon is up")
+    let firstPATH = try #require(harness.machine.requests.last?.environment["PATH"])
+    await harness.supervisor.stop()
+
+    // A lookup would now fail, so only the remembered location can launch the daemon.
+    harness.commands.setResult(CommandResult(status: 1, standardOutput: ""), for: SupervisorHarness.nodePath)
+    harness.commands.setLoginShellOutput("")
+    let connection = await harness.supervisor.start()
+
+    #expect(connection != nil)
+    #expect(harness.machine.requests.last?.executable.path == SupervisorHarness.nodePath)
+    #expect(harness.machine.requests.last?.environment["PATH"] == firstPATH, "the login shell's PATH is remembered too")
+  }
+
+  @Test func aReplacedNodeBinaryIsLookedUpAgain() async throws {
+    let harness = SupervisorHarness()
+    harness.files.enableFingerprints()
+    _ = try #require(await harness.supervisor.start())
+    await harness.supervisor.stop()
+
+    harness.files.replace(SupervisorHarness.nodePath)
+    harness.commands.setResult(CommandResult(status: 1, standardOutput: ""), for: SupervisorHarness.nodePath)
+    harness.commands.setLoginShellOutput("")
+
+    #expect(await harness.supervisor.start() == nil, "the stale entry isn't trusted")
+    #expect(harness.supervisor.state.isFailed)
+  }
+
+  @Test func aLaunchThatFailsFromTheRememberedNodeForgetsIt() async throws {
+    let harness = SupervisorHarness()
+    harness.files.enableFingerprints()
+    _ = try #require(await harness.supervisor.start())
+    await harness.supervisor.stop()
+
+    harness.machine.script(.exits(status: 1, output: ["SyntaxError: Unexpected token"]))
+    #expect(await harness.supervisor.start() == nil)
+    #expect(harness.files.readString(at: cacheFile) == "", "the next attempt looks Node up again")
+  }
+
+  @Test func theRememberedLocationIsRefreshedAfterALaunch() async throws {
+    let harness = SupervisorHarness()
+    harness.files.enableFingerprints()
+    _ = try #require(await harness.supervisor.start())
+    await harness.supervisor.stop()
+
+    harness.commands.setLoginShellOutput("\(SupervisorHarness.nodePath)\n\(NodeLocator.pathMarker)/opt/new/bin:/usr/bin\n")
+    _ = try #require(await harness.supervisor.start())
+
+    #expect(await harness.waitUntil { harness.files.readString(at: cacheFile)?.contains("/opt/new/bin") == true })
+  }
+
   @Test func withoutTheWatchdogStdinIsNotKeptOpen() async throws {
     var configuration = DaemonLaunchConfiguration(
       home: URL(fileURLWithPath: "/Users/me/.daily-do-list"), port: 7444)
@@ -78,8 +139,9 @@ struct DaemonSupervisorTests {
     let process = try #require(harness.lastProcess)
     #expect(connection.token == "rotated-\(process.pid)")
     #expect(harness.supervisor.state.isRunning)
-    #expect(harness.clock.elapsedTime >= .milliseconds(500), "polled every 100 ms")
-    #expect(harness.clock.sleeps.allSatisfy { $0 == .milliseconds(100) })
+    let interval = DaemonSupervisorTiming().pollInterval
+    #expect(harness.clock.elapsedTime >= interval * 5, "polled at the startup interval")
+    #expect(harness.clock.sleeps.allSatisfy { $0 == interval })
   }
 
   @Test func startIsIdempotent() async {

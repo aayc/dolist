@@ -86,6 +86,21 @@ final class FakeFileSystem: DaemonFileSystem, @unchecked Sendable {
   }
   func isExecutableFile(at url: URL) -> Bool { lock.withLock { executables.contains(url.path) } }
   func contentsOfDirectory(at url: URL) -> [String] { lock.withLock { directories[url.path] ?? [] } }
+
+  private var fingerprints = false
+  private var revisions: [String: Int] = [:]
+
+  /// Opts in to `fingerprint(of:)`, which enables the Node location cache (off by default).
+  func enableFingerprints() { lock.withLock { fingerprints = true } }
+  /// Simulates replacing a file, which changes its fingerprint.
+  func replace(_ path: String) { lock.withLock { revisions[path, default: 0] += 1 } }
+  func writeString(_ string: String, to url: URL) { write(string, to: url.path) }
+  func fingerprint(of url: URL) -> String? {
+    lock.withLock {
+      guard fingerprints, files[url.path] != nil || executables.contains(url.path) else { return nil }
+      return "\(url.path)#\(revisions[url.path] ?? 0)"
+    }
+  }
 }
 
 /// Canned results per executable path (`node --version`) and for the login shell.

@@ -89,7 +89,9 @@ struct LaunchAtLoginService {
     SMAppService.openSystemSettingsLoginItems()
   }
 
-  /// This process carries a valid code signature (ad hoc counts).
+  /// This process carries a valid code signature (ad hoc counts). Only the signature itself is
+  /// checked: validating resources hashes every file of the bundled daemon, which costs ~300 ms
+  /// at launch (seconds on a cold disk), and the kernel already validates the executable's pages.
   static func isCodeSigned() -> Bool {
     var code: SecCode?
     guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return false }
@@ -97,6 +99,8 @@ struct LaunchAtLoginService {
     guard SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode else {
       return false
     }
-    return SecStaticCodeCheckValidity(staticCode, [], nil) == errSecSuccess
+    let signatureOnly = SecCSFlags(
+      rawValue: SecCSFlags.RawValue(kSecCSDoNotValidateResources | kSecCSDoNotValidateExecutable))
+    return SecStaticCodeCheckValidity(staticCode, signatureOnly, nil) == errSecSuccess
   }
 }

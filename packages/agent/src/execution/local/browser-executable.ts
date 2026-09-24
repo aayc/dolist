@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { chromium } from "playwright-core";
 
 export type BrowserChannel = "chrome" | "chromium" | "msedge";
 
@@ -32,6 +32,11 @@ const defaultDeps: ResolveBrowserDeps = {
   exists: existsSync,
   playwrightChromium: () => {
     try {
+      // Only reached when no installed browser was found; a static import would load
+      // Playwright (~150 ms) on every daemon start.
+      const { chromium } = createRequire(import.meta.url)(
+        "playwright-core",
+      ) as typeof import("playwright-core");
       return chromium.executablePath();
     } catch {
       return undefined;
