@@ -68,11 +68,15 @@ docs/             Architecture, agent system, performance, security model, cross
 | Benchmarks (with budgets) | `pnpm bench` then `pnpm bench:check` |
 | E2E / perf e2e | `pnpm e2e` / `pnpm e2e:perf` |
 | Evals | `pnpm eval:mock` (CI) / `pnpm eval` (real model, needs `OPENROUTER_API_KEY`) |
-| Everything CI runs | `pnpm check` |
+| Pre-commit essentials | `pnpm check` (lint + typecheck + unit tests + secret scan) |
+| Build / bundle budget | `pnpm build && pnpm size:check` |
 | Build / run production | `pnpm build && pnpm start` → http://127.0.0.1:7331 |
+| Smoke-test the real model | `pnpm --filter @ddl/agent exec tsx scripts/smoke-pi.ts` (also `smoke-llm.ts`) |
 
-Scope commands to the package you are working in while iterating; run the full `pnpm check`
-before you finish.
+Scope commands to the package you are working in while iterating. Before you finish, run
+`pnpm check`; for UI or agent changes also run the relevant parts of what CI runs:
+`pnpm build && pnpm size:check`, `pnpm bench && pnpm bench:check`, `pnpm e2e`, `pnpm e2e:perf`,
+`pnpm eval:mock` (see `docs/CI.md`).
 
 ## Architecture in one screen
 
@@ -96,6 +100,11 @@ before you finish.
 ```
 
 Key flows are documented in `docs/ARCHITECTURE.md` and `docs/AGENT_SYSTEM.md`.
+
+Docs index: `README.md` (product + quick start), `docs/ARCHITECTURE.md`, `docs/AGENT_SYSTEM.md`,
+`docs/PERFORMANCE.md`, `docs/CROSS_PLATFORM.md`, `docs/CI.md`, `SECURITY.md`, `CONTRIBUTING.md`,
+and package READMEs (`packages/storage`, `packages/connectors`, `packages/editor`,
+`packages/agent/src/safety`, `packages/agent/src/execution`, `apps/daemon`).
 
 ## Invariants (do not break these)
 
@@ -121,6 +130,10 @@ Key flows are documented in `docs/ARCHITECTURE.md` and `docs/AGENT_SYSTEM.md`.
 8. **Keystroke path stays O(line).** No network, no full-document parse, no React re-render per
    keystroke. Persistence is debounced; anchors are mapped through CodeMirror transactions.
 9. **Time is local.** Daily notes use the user's local calendar date (`@ddl/core` dates), never UTC.
+10. **Deletes are soft.** The daemon moves deleted notes/folders into the vault's `.trash/`.
+    `StorageProvider.delete`/`deleteFolder` are the permanent primitives — don't expose them raw.
+11. **Line numbers are 0-based** everywhere (tasks, records, search hits, editor `scrollToLine`).
+    Show `line + 1` to humans.
 
 ## Code conventions
 
@@ -137,6 +150,26 @@ Key flows are documented in `docs/ARCHITECTURE.md` and `docs/AGENT_SYSTEM.md`.
   `Logger` (from `@ddl/core`) instead. Never log secrets or full note contents at `info`.
 - Comments explain constraints the code cannot show, not what the next line does.
 - Keep modules small and single-purpose; prefer pure functions + thin stateful shells.
+
+### Toolchain notes (things that bite)
+
+- **TypeScript 7** is the native compiler. TS ≥ 6 defaults `types` to `[]`: list `node`,
+  `vite/client`, … explicitly per tsconfig. `@ddl/core` has no Node types — read env through
+  `globalThis` if you must.
+- **Vitest 5** removed the standalone `bench()`: write `test("…", async ({ bench }) => { const r =
+  await bench("…", fn).run(); expect(r.latency.p99).toBeLessThan(ms * multiplier) })` in
+  `*.bench.ts`, scaled by `BENCH_BUDGET_MULTIPLIER`. Test scripts use `--passWithNoTests`.
+- **Vite 8 / Rolldown:** vendor chunking uses `build.rolldownOptions.output.codeSplitting`, not
+  `manualChunks`. `build.manifest` feeds the bundle-size check.
+- **pnpm catalog:** third-party runtime deps used by bundled workspace packages are pinned once in
+  `pnpm-workspace.yaml` (`catalog:`) and must also be declared by `apps/daemon` —
+  `apps/daemon/build.mjs` fails the build if one is missing.
+- **Turbo:** `typecheck`/`test` depend on a `transit` task so a change in `@ddl/core` invalidates
+  every dependent's cache. Env vars reach tasks only via `passThroughEnv`/`globalEnv`.
+- **Pi harness:** sessions are hermetic (isolated `agentDir` under `$DDL_HOME/pi`, no discovered
+  extensions/skills/context files) and refuse to start if the safety-gate extension didn't load.
+- **E2E typing:** use Playwright's real keyboard (`page.keyboard.type`). Automation "fill"-style
+  typing into CodeMirror rebuilds text from the DOM (including badge widgets) and corrupts notes.
 
 ## Testing expectations
 
