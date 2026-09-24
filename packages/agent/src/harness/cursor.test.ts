@@ -7,7 +7,14 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { deferred, type ToolSpec, textResult } from "@ddl/core";
+import {
+  DEFAULT_CURSOR_MODEL,
+  deferred,
+  type Logger,
+  silentLogger,
+  type ToolSpec,
+  textResult,
+} from "@ddl/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ShellExecOptions, ShellExecutor } from "../execution/types";
 import { createCursorHarness } from "./cursor";
@@ -455,6 +462,34 @@ describe("CursorHarness (fake CLI)", { timeout: SPAWN_TIMEOUT_MS }, () => {
     expect(lastText(s.events)).toBe("model: composer-2.5[fast=true]");
   });
 
+  it("runs the default model, and a variant agent mode can't select as its preset", async () => {
+    const warnings: Array<Record<string, unknown> | undefined> = [];
+    const logger: Logger = {
+      ...silentLogger,
+      warn: (_message, fields) => warnings.push(fields),
+      child: () => logger,
+    };
+    const s = await setup({ harness: { logger } });
+    const session = await s.create({ model: DEFAULT_CURSOR_MODEL });
+    await session.prompt("!model");
+    expect(lastText(s.events)).toBe(
+      "model: claude-opus-5-5[context=300k,effort=medium,fast=false]",
+    );
+    expect(warnings).toEqual([]);
+    const variant = await s.create({
+      sessionId: "thr_variant",
+      model: "claude-opus-5-5-high-fast",
+    });
+    await variant.prompt("!model");
+    expect(lastText(s.events)).toBe(
+      "model: claude-opus-5-5[context=300k,effort=medium,fast=false]",
+    );
+    expect(warnings).toContainEqual({
+      configured: "claude-opus-5-5-high-fast",
+      running: "claude-opus-5-5[context=300k,effort=medium,fast=false]",
+    });
+  });
+
   it("reports a CLI crash mid-turn and resumes with the next prompt", async () => {
     const s = await setup();
     const session = await s.create({ model: "gpt-5.5" });
@@ -543,16 +578,16 @@ describe("CursorHarness (fake CLI)", { timeout: SPAWN_TIMEOUT_MS }, () => {
     expect(types(s.events).filter((t) => t === "turn_start")).toHaveLength(1);
   });
 
-  it("resolves the model by id, base id or display name, and explains unknown ones", async () => {
+  it("resolves the model by id, display name or preset, and explains unknown ones", async () => {
     const s = await setup();
     const byName = await s.create({ model: "Sonnet 4.6" });
     await byName.prompt("!model");
     expect(lastText(s.events)).toBe("model: sonnet-4.6[thinking=true]");
     const withParams = await s.create({ model: "gpt-5.5[reasoning=high]" });
     await withParams.prompt("!model");
-    expect(lastText(s.events)).toBe("model: gpt-5.5[reasoning=high]");
+    expect(lastText(s.events)).toBe("model: gpt-5.5[context=272k,reasoning=medium,fast=false]");
     await expect(s.create({ model: "no-such-model" })).rejects.toThrow(
-      /"no-such-model" isn't available.*composer-2\.5, gpt-5\.5, sonnet-4\.6/,
+      /"no-such-model" isn't available.*composer-2\.5, gpt-5\.5, claude-opus-5-5, sonnet-4\.6/,
     );
     expect(await readdir(path.join(s.home, "cursor", "sessions"))).toHaveLength(2);
   });

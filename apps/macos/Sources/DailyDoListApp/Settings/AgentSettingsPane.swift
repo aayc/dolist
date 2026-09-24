@@ -113,7 +113,7 @@ struct AgentModelField: Equatable {
       title = "Cursor model"
       value = agent.cursorModel
       prompt = AgentSettings.defaultCursorModel
-      note = "A model id from `agent --list-models`, e.g. composer-2.5 or gpt-5.5."
+      note = "A model from `agent models`, e.g. claude-opus-5-5 or composer-2.5. The CLI runs each model's preset: effort and fast variants can't be picked."
     }
   }
 

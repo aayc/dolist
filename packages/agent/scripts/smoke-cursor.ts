@@ -4,20 +4,29 @@
  * fake ShellExecutor, the CLI's own web search routed through the gate, a disabled built-in the
  * CLI must refuse, queued prompts and abort. Uses a little of your Cursor usage.
  *
- *   pnpm --filter @ddl/agent exec tsx scripts/smoke-cursor.ts [--model=composer-2.5] [--binary=agent]
+ *   pnpm --filter @ddl/agent exec tsx scripts/smoke-cursor.ts [--model=claude-opus-5-5] [--binary=agent]
+ *
+ * The model defaults to the app's (`DEFAULT_CURSOR_MODEL`).
  *
  * Runs in a temporary DDL_HOME and workspace (deleted afterwards). Prints events, not account data.
  */
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createConsoleLogger, type ToolSpec, textResult, toolResultText } from "@ddl/core";
+import {
+  createConsoleLogger,
+  DEFAULT_CURSOR_MODEL,
+  type ToolSpec,
+  textResult,
+  toolResultText,
+} from "@ddl/core";
 import type { ShellExecOptions, ShellExecutor } from "../src/execution/types";
 import { checkCursorCli, createCursorHarness, cursorCliProblem } from "../src/harness/cursor";
 import type { HarnessEvent, HarnessSession, ToolCallRequest } from "../src/harness/types";
 
-const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
-const MODEL = arg("model") ?? "composer-2.5";
+const arg = (name: string) =>
+  process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(`--${name}=`.length);
+const MODEL = arg("model") ?? DEFAULT_CURSOR_MODEL;
 const BINARY = arg("binary");
 
 const checks: Array<{ name: string; ok: boolean; detail?: string }> = [];

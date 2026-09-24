@@ -450,8 +450,9 @@ function AgentSection() {
           name="Cursor model"
           description={
             <>
-              A model id from <code>agent --list-models</code>, e.g. <code>composer-2.5</code> or{" "}
-              <code>gpt-5.5</code>.
+              A model from <code>agent models</code>, e.g. <code>claude-opus-5-5</code> or{" "}
+              <code>composer-2.5</code>. The CLI runs each model&apos;s preset: effort and fast
+              variants can&apos;t be picked.
             </>
           }
         >

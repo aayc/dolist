@@ -266,7 +266,8 @@ include `DDL_MODEL` from the daemon config).
 - **Agent harness:** `agent.harness` picks what runs the agent: `pi` on the OpenRouter
   `agent.model`, or `cursor` (the Cursor CLI) on `agent.cursorModel`. `judgeModel` is an OpenRouter
   model with either harness. Files written before these keys existed have neither and load with
-  `pi` and `composer-2.5`; a harness this version doesn't know (written by a newer app) falls back
+  `pi` and the default Cursor model (`claude-opus-5-5`); a harness this version doesn't know
+  (written by a newer app) falls back
   to `pi` like any other invalid value, and stays in the file.
 
 - **Per-field fallback:** each stored value is validated on its own; an invalid one falls back to

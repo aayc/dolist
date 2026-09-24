@@ -173,7 +173,17 @@ export class CursorHarnessSession implements HarnessSession {
       );
       this.acpSessionId = created.sessionId;
       trackAcpSession(created.sessionId);
-      this.modelId = resolveCursorModel(this.init.options.model, created.models.availableModels);
+      const model = resolveCursorModel(this.init.options.model, created.models.availableModels);
+      this.modelId = model.modelId;
+      if (model.presetFor) {
+        this.logger.warn(
+          "The Cursor CLI's agent mode can't run this model variant; using its preset",
+          {
+            configured: model.presetFor,
+            running: model.modelId,
+          },
+        );
+      }
       if (created.models.currentModelId !== this.modelId) {
         await conn.request(
           "session/set_model",

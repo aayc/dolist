@@ -3,30 +3,55 @@ import { MessageMapper } from "./events";
 import { resolveCursorModel } from "./model";
 import { parseSessionUpdate } from "./protocol";
 
+const OPUS = "claude-opus-5-5[context=300k,effort=medium,fast=false]";
+const GPT = "gpt-5.5[context=272k,reasoning=medium,fast=false]";
+const GROK = "grok-4.5[effort=high,fast=true]";
 const MODELS = [
   { modelId: "composer-2.5[fast=true]", name: "Composer 2.5" },
-  { modelId: "gpt-5.5[context=272k,reasoning=medium,fast=false]", name: "GPT-5.5" },
+  { modelId: GPT, name: "GPT-5.5" },
+  { modelId: OPUS, name: "Claude Opus 5.5" },
+  { modelId: GROK, name: "Grok 4.5" },
   { modelId: "auto-smart[optimize_for=balanced]", name: "Auto" },
 ];
 
 describe("resolveCursorModel", () => {
-  it("matches an exact id, then the base id, then the display name", () => {
-    expect(resolveCursorModel("composer-2.5[fast=true]", MODELS)).toBe("composer-2.5[fast=true]");
-    expect(resolveCursorModel("composer-2.5", MODELS)).toBe("composer-2.5[fast=true]");
-    expect(resolveCursorModel("GPT-5.5", MODELS)).toBe(
-      "gpt-5.5[context=272k,reasoning=medium,fast=false]",
-    );
-    expect(resolveCursorModel("auto", MODELS)).toBe("auto-smart[optimize_for=balanced]");
+  it("matches an exact id, then the display name, then the model's preset", () => {
+    expect(resolveCursorModel("composer-2.5[fast=true]", MODELS)).toEqual({
+      modelId: "composer-2.5[fast=true]",
+    });
+    expect(resolveCursorModel("composer-2.5", MODELS)).toEqual({
+      modelId: "composer-2.5[fast=true]",
+    });
+    expect(resolveCursorModel("claude-opus-5-5", MODELS)).toEqual({ modelId: OPUS });
+    expect(resolveCursorModel("GPT-5.5", MODELS)).toEqual({ modelId: GPT });
+    expect(resolveCursorModel("auto", MODELS)).toEqual({
+      modelId: "auto-smart[optimize_for=balanced]",
+    });
   });
 
-  it("keeps configured parameters for a known base model", () => {
-    expect(resolveCursorModel("gpt-5.5[reasoning=high]", MODELS)).toBe("gpt-5.5[reasoning=high]");
+  it("runs a variant agent mode can't select as its model's preset, and says so", () => {
+    for (const variant of [
+      "claude-opus-5-5-high-fast",
+      "claude-opus-5-5-1m-max",
+      "claude-opus-5-5[effort=high,fast=true]",
+    ]) {
+      expect(resolveCursorModel(variant, MODELS)).toEqual({ modelId: OPUS, presetFor: variant });
+    }
+    expect(resolveCursorModel("gpt-5.5[reasoning=high]", MODELS)).toEqual({
+      modelId: GPT,
+      presetFor: "gpt-5.5[reasoning=high]",
+    });
+    expect(resolveCursorModel("cursor-grok-4.5-high-fast", MODELS)).toEqual({
+      modelId: GROK,
+      presetFor: "cursor-grok-4.5-high-fast",
+    });
   });
 
   it("explains unknown models with a few available ids", () => {
     expect(() => resolveCursorModel("claude-9", MODELS)).toThrow(
-      'The Cursor model "claude-9" isn\'t available to this Cursor account (available: composer-2.5, gpt-5.5, auto-smart). Pick one from `agent models`.',
+      'The Cursor model "claude-9" isn\'t available to this Cursor account (available: composer-2.5, gpt-5.5, claude-opus-5-5, grok-4.5, auto-smart). Pick one from `agent models`.',
     );
+    expect(() => resolveCursorModel("claude-opus-9-high", MODELS)).toThrow(/isn't available/);
     expect(() => resolveCursorModel(" ", MODELS)).toThrow(/No Cursor model/);
     expect(() => resolveCursorModel("x", [])).toThrow(/isn't available to this Cursor account\. /);
   });

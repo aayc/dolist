@@ -20,7 +20,7 @@ storage.watch ─▶ TaskWatcher ─▶ Orchestrator ──spawn_subagent──�
 
 | Mode | Harness | Safety | Network |
 | --- | --- | --- | --- |
-| `live` | `settings.agent.harness`: `pi` — the Pi coding-agent SDK on OpenRouter (`deepseek/deepseek-v4.1-flash` by default) — or `cursor` — the Cursor CLI's agent (`composer-2.5` by default, see below) | rules + LLM judge | yes |
+| `live` | `settings.agent.harness`: `pi` — the Pi coding-agent SDK on OpenRouter (`deepseek/deepseek-v4.1-flash` by default) — or `cursor` — the Cursor CLI's agent (Claude Opus 5.5, `claude-opus-5-5`, by default, see below) | rules + LLM judge | yes |
 | `mock` | `ScriptedHarness` with a deterministic script | rules only | no |
 | `off` | — (no watcher) | — | no |
 
@@ -152,10 +152,12 @@ does a session whose CLI crashed.
 finishes in the background; its outcome is sent to the model as a follow-up in the same run.
 
 **Limits.** Browser and computer use come from our execution tools over MCP (the CLI has no
-browser tool, and Cursor's computer use is cloud-only). `thinking` is ignored: reasoning effort is
-part of the Cursor model id. No token usage events. The CLI may add your account's user and team
-rules to the prompt. Session creation takes ~4–8 s and each turn a few seconds more than Pi
-because of process start and the CLI's own tool loop.
+browser tool, and Cursor's computer use is cloud-only). The CLI's agent mode lists one preset per
+model (Opus 5.5 runs with medium effort, not fast) and rejects every other variant, flat
+(`claude-opus-5-5-high-fast`) or bracketed; a configured variant runs as its model's preset, with
+a warning in the log. `thinking` is ignored for the same reason. No token usage events. The CLI may
+add your account's user and team rules to the prompt. Session creation takes ~4–8 s and each turn a
+few seconds more than Pi because of process start and the CLI's own tool loop.
 
 Try it: `pnpm --filter @ddl/agent exec tsx scripts/smoke-cursor.ts` (real CLI, a little usage).
 Tests use a fake CLI (`src/harness/cursor/testing/fake-cursor-cli.ts`) that speaks the same ACP

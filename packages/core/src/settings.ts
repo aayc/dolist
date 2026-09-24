@@ -47,8 +47,9 @@ export interface AgentSettings {
   /** OpenRouter model id for the orchestrator and subagents with the Pi harness. */
   model: string;
   /**
-   * Cursor model for the orchestrator and subagents with the Cursor harness: a model id as the
-   * Cursor CLI lists it (`composer-2.5`), optionally with parameters (`gpt-5.5[reasoning=high]`).
+   * Cursor model for the orchestrator and subagents with the Cursor harness (`claude-opus-5-5`,
+   * `composer-2.5`). The CLI's agent mode runs one preset per model, so a variant id from
+   * `agent models` (`claude-opus-5-5-high-fast`) runs as its model's preset.
    */
   cursorModel: string;
   /** OpenRouter model id for the safety judge (defaults to `model`). */
@@ -70,7 +71,7 @@ export interface AppSettings {
 }
 
 export const DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash";
-export const DEFAULT_CURSOR_MODEL = "composer-2.5";
+export const DEFAULT_CURSOR_MODEL = "claude-opus-5-5";
 
 /** The model id the configured harness runs its conversations on. */
 export function agentModel(agent: AgentSettings): string {

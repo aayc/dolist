@@ -115,7 +115,7 @@ export const AgentSettingsSchema = named(
       "OpenRouter model id for the orchestrator and subagents with the Pi harness.",
     ),
     cursorModel: ModelIdSchema.describe(
-      "Model for the orchestrator and subagents with the Cursor harness, as the Cursor CLI lists it (`composer-2.5`), optionally with parameters (`gpt-5.5[reasoning=high]`).",
+      "Model for the orchestrator and subagents with the Cursor harness (`claude-opus-5-5`, `composer-2.5`). The CLI's agent mode runs one preset per model; a variant id from `agent models` (`claude-opus-5-5-high-fast`) runs as its model's preset.",
     ),
     judgeModel: ModelIdSchema.describe(
       "OpenRouter model id for the safety judge (whichever harness runs the agent).",

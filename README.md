@@ -77,9 +77,11 @@ The model defaults to **DeepSeek V4.1 Flash** via OpenRouter (`deepseek/deepseek
 change it with `DDL_MODEL` or in Settings → Agent.
 
 **Run the agent on the Cursor CLI instead.** Install the CLI and sign in with your Cursor account,
-then pick the Cursor harness in Settings → Agent (its model defaults to `composer-2.5`; any model
-`agent models` lists works). No OpenRouter key is needed; with one, it still powers the safety
-judge and web search.
+then pick the Cursor harness in Settings → Agent. Its model defaults to Claude Opus 5.5
+(`claude-opus-5-5`); any model `agent models` lists works. The CLI's agent mode runs one preset per
+model (Opus 5.5: medium effort, not fast), so a variant such as `claude-opus-5-5-high-fast` runs as
+that preset. No OpenRouter key is needed; with one, it still powers the safety judge and web
+search.
 
 ```bash
 curl https://cursor.com/install -fsS | bash

@@ -35,7 +35,7 @@ test.describe("agent settings", () => {
     await page.getByTestId("setting-harness-cursor").click();
     await expect(cursor).toBeChecked();
     await expect(openRouterModel).toHaveCount(0);
-    await expect(cursorModel).toHaveValue("composer-2.5");
+    await expect(cursorModel).toHaveValue("claude-opus-5-5");
     await retype(page, "setting-cursor-model", "  gpt-5.5[reasoning=high] ");
     await expect(cursorModel).toHaveValue("gpt-5.5[reasoning=high]");
 

@@ -35,6 +35,7 @@ type Json = Record<string, unknown>;
 const MODELS = [
   { modelId: "composer-2.5[fast=true]", name: "Composer 2.5" },
   { modelId: "gpt-5.5[context=272k,reasoning=medium,fast=false]", name: "GPT-5.5" },
+  { modelId: "claude-opus-5-5[context=300k,effort=medium,fast=false]", name: "Claude Opus 5.5" },
   { modelId: "sonnet-4.6[thinking=true]", name: "Sonnet 4.6" },
 ];
 
@@ -450,11 +451,11 @@ async function handle(message: Json): Promise<Json | undefined> {
       return { models: { currentModelId: session.model, availableModels: MODELS } };
     }
     case "session/set_model": {
+      // Like the real CLI: only a listed model id (its preset) is accepted, no other variant.
       const session = sessions.get(String(params.sessionId));
       const wanted = String(params.modelId);
-      const base = wanted.split("[")[0];
-      if (!session || !MODELS.some((m) => m.modelId.split("[")[0] === base)) {
-        throw Object.assign(new Error(`Invalid model ${wanted}`), { code: -32602 });
+      if (!session || !MODELS.some((m) => m.modelId === wanted)) {
+        throw Object.assign(new Error(`Invalid model value: ${wanted}`), { code: -32602 });
       }
       session.model = wanted;
       return {};

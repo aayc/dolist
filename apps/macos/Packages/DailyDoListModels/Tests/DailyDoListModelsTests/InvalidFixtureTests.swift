@@ -34,7 +34,7 @@ struct InvalidFixtureTests {
       "unknown harness": .tolerated("a harness a newer daemon added decodes as .pi (AgentSettings.harness)"),
       "empty Cursor model": .tolerated(constraint),
       "agent settings of a daemon older than the harness setting": .tolerated(
-        "absent harness and cursorModel decode as .pi and composer-2.5"),
+        "absent harness and cursorModel decode as .pi and the default Cursor model"),
     ],
     "ApprovalDecisionRequest": [
       "unknown decision": .rejected,

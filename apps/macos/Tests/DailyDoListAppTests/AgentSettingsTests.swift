@@ -19,8 +19,8 @@ struct AgentSettingsTests {
 
     agent.harness = .cursor
     let cursor = AgentModelField(agent)
-    #expect(cursor.title == "Cursor model" && cursor.value == "gpt-5.5" && cursor.prompt == "composer-2.5")
-    #expect(cursor.note.contains("agent --list-models"))
+    #expect(cursor.title == "Cursor model" && cursor.value == "gpt-5.5" && cursor.prompt == "claude-opus-5-5")
+    #expect(cursor.note.contains("agent models") && cursor.note.contains("preset"))
     #expect(cursor.patch("gpt-5.5[reasoning=high]") == SettingsPatch.AgentPatch(cursorModel: "gpt-5.5[reasoning=high]"))
   }
 

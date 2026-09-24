@@ -802,7 +802,7 @@ Orchestrator and subagent settings.
 | `approvalTimeoutMs` | integer (60000–2592000000) | yes | How long an approval request waits before it is auto-denied. |
 | `harness` | [`AgentHarnessKind`](#agentharnesskind) | yes |  |
 | `model` | string (`^\S(?:[\s\S]*\S)?$`, 1–200 chars) | yes | OpenRouter model id for the orchestrator and subagents with the Pi harness. |
-| `cursorModel` | string (`^\S(?:[\s\S]*\S)?$`, 1–200 chars) | yes | Model for the orchestrator and subagents with the Cursor harness, as the Cursor CLI lists it (`composer-2.5`), optionally with parameters (`gpt-5.5[reasoning=high]`). |
+| `cursorModel` | string (`^\S(?:[\s\S]*\S)?$`, 1–200 chars) | yes | Model for the orchestrator and subagents with the Cursor harness (`claude-opus-5-5`, `composer-2.5`). The CLI's agent mode runs one preset per model; a variant id from `agent models` (`claude-opus-5-5-high-fast`) runs as its model's preset. |
 | `judgeModel` | string (`^\S(?:[\s\S]*\S)?$`, 1–200 chars) | yes | OpenRouter model id for the safety judge (whichever harness runs the agent). |
 | `watch` | [`AgentWatchWindow`](#agentwatchwindow) | yes |  |
 

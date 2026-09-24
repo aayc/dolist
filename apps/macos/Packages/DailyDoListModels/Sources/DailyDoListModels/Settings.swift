@@ -112,8 +112,9 @@ public struct AgentSettings: Codable, Hashable, Sendable {
   public var harness: AgentHarnessKind
   /// OpenRouter model id for the orchestrator and subagents with the Pi harness.
   public var model: String
-  /// Model for the orchestrator and subagents with the Cursor harness, as the Cursor CLI lists it
-  /// (`composer-2.5`), optionally with parameters (`gpt-5.5[reasoning=high]`).
+  /// Model for the orchestrator and subagents with the Cursor harness (`claude-opus-5-5`,
+  /// `composer-2.5`). The CLI's agent mode runs one preset per model; a variant id from
+  /// `agent models` (`claude-opus-5-5-high-fast`) runs as its model's preset.
   public var cursorModel: String
   /// OpenRouter model id for the safety judge (with either harness).
   public var judgeModel: String
@@ -157,7 +158,7 @@ public struct AgentSettings: Codable, Hashable, Sendable {
   }
 
   public static let defaultModel = "deepseek/deepseek-v4.1-flash"
-  public static let defaultCursorModel = "composer-2.5"
+  public static let defaultCursorModel = "claude-opus-5-5"
 
   /// The model id the configured harness runs its conversations on (`agentModel` in `@ddl/core`).
   public var agentModel: String { harness == .cursor ? cursorModel : model }

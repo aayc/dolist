@@ -21,7 +21,7 @@ struct AgentHarnessSettingsTests {
 
   @Test func defaultsToPiWithTheDefaultCursorModel() {
     #expect(AgentSettings.defaults.harness == .pi)
-    #expect(AgentSettings.defaults.cursorModel == "composer-2.5")
+    #expect(AgentSettings.defaults.cursorModel == "claude-opus-5-5")
     #expect(AgentSettings.defaults.agentModel == AgentSettings.defaultModel)
   }
 
