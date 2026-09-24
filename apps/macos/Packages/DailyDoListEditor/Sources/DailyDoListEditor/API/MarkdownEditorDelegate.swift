@@ -10,8 +10,13 @@ public protocol MarkdownEditorDelegate: AnyObject {
   func editor(_ editor: MarkdownEditorController, didClickLink url: URL)
   /// The caret moved to another 0-based line (throttle before sending presence).
   func editor(_ editor: MarkdownEditorController, cursorDidMoveToLine line: Int)
-  /// ⌘S
+  /// ⌘S, vim's `:w` (and `:wq`/`:x` before closing).
   func editorDidRequestSave(_ editor: MarkdownEditorController)
+  /// Vim's mode, pending keys or macro recording changed (nil: vim was turned off). Only called
+  /// on changes, never for every key typed in insert mode.
+  func editor(_ editor: MarkdownEditorController, vimStatusDidChange status: EditorVimStatus?)
+  /// An app command from vim (`:q`, `:e note`, `gt`, `:obcommand id`…).
+  func editor(_ editor: MarkdownEditorController, perform request: EditorVimRequest) -> EditorVimRequestResult
 }
 
 extension MarkdownEditorDelegate {
@@ -21,4 +26,8 @@ extension MarkdownEditorDelegate {
   public func editor(_ editor: MarkdownEditorController, didClickLink url: URL) {}
   public func editor(_ editor: MarkdownEditorController, cursorDidMoveToLine line: Int) {}
   public func editorDidRequestSave(_ editor: MarkdownEditorController) {}
+  public func editor(_ editor: MarkdownEditorController, vimStatusDidChange status: EditorVimStatus?) {}
+  public func editor(_ editor: MarkdownEditorController, perform request: EditorVimRequest) -> EditorVimRequestResult {
+    .unavailable
+  }
 }

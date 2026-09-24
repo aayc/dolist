@@ -9,6 +9,8 @@ struct TextGeometry: Equatable {
 
   static let maxReadableWidth: CGFloat = 700
   static let minColumnWidth: CGFloat = 120
+  /// A text container this wide never wraps a line (plain-text test metrics).
+  static let unwrappedWidth: CGFloat = 1_000_000
 
   /// - Parameters:
   ///   - badgeReserve: width that must stay free right of the column (0 without badges).

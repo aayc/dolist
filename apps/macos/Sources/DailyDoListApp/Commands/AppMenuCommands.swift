@@ -42,6 +42,7 @@ struct AppMenuCommands: Commands {
       item(.toggleLivePreview)
       item(.toggleReadableWidth)
       item(.toggleLineNumbers)
+      item(.toggleVim)
       Divider()
       item(.increaseFontSize)
       item(.decreaseFontSize)

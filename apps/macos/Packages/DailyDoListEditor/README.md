@@ -3,8 +3,8 @@
 Native markdown editor for the Daily Do List macOS app: an `NSTextView` on an explicit TextKit 1
 stack (`NSTextStorage` → `NSLayoutManager` → `NSTextContainer`) that edits plain markdown with
 Obsidian-style live preview, clickable task checkboxes, agent status badges and Obsidian's list and
-formatting commands. It has no dependencies on the other packages; `packages/editor` (the web
-CodeMirror editor) is its behavioral reference.
+formatting commands, and vim mode. Its only dependency is `DailyDoListVim` (the vim engine);
+`packages/editor` (the web CodeMirror editor) is its behavioral reference.
 
 ```swift
 let editor = MarkdownEditorController(configuration: EditorConfiguration(fontSize: 16))
@@ -15,20 +15,28 @@ editor.setBadges([EditorBadge(id: "t1", line: 4, status: "working", label: "Rese
 // SwiftUI
 MarkdownEditorView(controller: editor)
 // AppKit
-container.addSubview(editor.scrollView)
+container.addSubview(editor.view)
+
+// Vim mode: one Vim per app, shared by every editor
+let vim = Vim()
+let integration = EditorVimIntegration(vim: vim)  // app ex commands, clipboard, vimrc
+editor.vim = vim
+editor.configure(EditorConfiguration(fontSize: 16, vimMode: true))
 ```
 
 ## Public API
 
 | API | Notes |
 | --- | --- |
-| `MarkdownEditorController(configuration:)` | One editor. `scrollView` is the view to embed; `textView` is the `NSTextView` inside it. |
+| `MarkdownEditorController(configuration:)` | One editor. `view` is the view to embed: `scrollView` (with the `NSTextView`, `textView`, inside it) and vim's command line under it. |
 | `text`, `setText(_:resetUndo:)` | `setText` never notifies the delegate. Without `resetUndo` it applies one minimal replacement (common prefix/suffix, whole lines aligned), so selection, scroll and badge anchors survive; the change is undoable (read-only editors clear undo instead). With `resetUndo` it replaces the document, clears undo and badges, and puts the caret at the start. `\r\n`/`\r` become `\n`. |
 | `setBadges(_:)`, `badges` | Badges are anchored to their line and remapped through edits; `badges` returns them with current lines. `idle`/`ignored` are kept but not drawn. |
-| `configure(_:)`, `configuration` | Font size (restyles), live preview, readable line length, spellcheck, line numbers, editable. |
+| `configure(_:)`, `configuration` | Font size (restyles), live preview, readable line length, spellcheck, line numbers, editable, vim mode. |
+| `vim`, `vimSession`, `vimStatus` | The app's shared `Vim` (vim mode needs it and `configuration.vimMode`), the session attached to this editor, and its mode line. In a read-only editor vim moves, yanks and searches but doesn't edit. |
+| `EditorVimIntegration(vim:pasteboard:)`, `applyVimrc(_:)`, `vimrcProblems` | Install once per app on the shared `Vim`: the app's ex commands, `gt`/`gT`, the clipboard registers and the vimrc (see [Vim mode](#vim-mode)). `VimPasteboard` puts the pasteboard behind a protocol for tests. |
 | `focus()`, `moveCaretToEnd()`, `scrollToLine(_:)` | `focus()` before the editor is in a window applies once it is (the first note at launch). `moveCaretToEnd` puts the caret after the last line and scrolls to it. `scrollToLine` puts the caret at the line start and centers it (0-based, clamped). |
 | `snapshot()`, `restore(_:)` | Text, selection, scroll offset and the note's own `UndoManager` for instant tab switches. `restore` and `setText(_:resetUndo: true)` start a new document: badges are cleared and the caret line is always reported. |
-| `delegate` | `editorTextDidChange` (user edits only, including undo), `didClickBadge` (with its current line), `didClickWikiLink(target:newWindow:)`, `didClickLink(url:)`, `cursorDidMoveToLine` (only when the line changes), `editorDidRequestSave`. |
+| `delegate` | `editorTextDidChange` (user edits only, including undo), `didClickBadge` (with its current line), `didClickWikiLink(target:newWindow:)`, `didClickLink(url:)`, `cursorDidMoveToLine` (only when the line changes), `editorDidRequestSave` (also `:w`), `vimStatusDidChange` (only when it changes; nil when vim mode ends), `perform(_: EditorVimRequest)` (vim's app commands; the default answers `.unavailable`). |
 
 Additions to the original contract (all source-compatible):
 
@@ -128,6 +136,83 @@ These editor shortcuts win over menu items with the same keys while the editor i
 auto-pairing, and smart quotes/dashes, text replacement, autocorrect, link detection and inline
 predictions are off. Typing coalesces into one undo step per burst; every command is its own step.
 
+## Vim mode
+
+With `configuration.vimMode` and a `vim`, the controller attaches a `VimSession` from
+`DailyDoListVim` (the port of the web editor's vim.js). Its `VimEditor` is `TextViewVimHost`: the
+engine decides what every key does, and the host supplies the text view's real text, selection,
+edits, undo, layout (TextKit line fragments for `gj`, `H`, `zz`, `<C-d>`) and drawing.
+
+**Keys** (`TextViewVimHost+Keys`, `VimKeyEvents`, `VimCtrlKeys`):
+
+- `keyDown` offers every key to vim first, named like the web's `KeyboardEvent`: named keys from
+  key codes, `characters` (or `charactersIgnoringModifiers` with ⌃ or ⌘), the modifiers, and
+  `code` so mappings keep working on non-Latin layouts.
+- While an input method has marked text, keys go to the input method.
+- In normal and visual mode no key reaches the text view or the input system, so there's no
+  accent popup and key repeat works. ⌘ keys vim doesn't bind go on to AppKit. ⌘ shortcuts handled
+  as key equivalents (menus, the editor's own) work in every mode.
+- In normal and visual mode, the Ctrl keys vim binds (vim.js's defaults, as in the web's
+  `vim-keys.ts`, plus those a vimrc maps) win over menus. So does every Ctrl key while the
+  command line is open (`performKeyEquivalent`).
+- In insert and replace mode, keys vim leaves alone get the text view's own handling (typing,
+  list continuation, Tab, Backspace, ⌃A/⌃E), and vim sees the resulting edits. Esc always
+  reaches vim.
+
+**Edits and selection.** Vim's changes go through the text view (`shouldChangeText`,
+`replaceCharacters`, `didChangeText`), so styling, badges, live preview and the delegate work as
+they do for typing. The text view's own edits (typing, list commands, paste, drag and drop, IME
+commits, remote changes) reach vim once per operation, labeled with a CodeMirror user event and
+the selection they end with. Vim's own edits aren't reported back. The host keeps a shadow
+selection for what `NSTextView` can't show: a visual block's empty ranges, which range is the
+main one, and direction. A mouse selection turns into visual mode when the drag ends. After a
+visual-block `I` or `A`, typing, Backspace, Delete, Enter and Tab act at every cursor.
+
+**Undo** (`VimUndoRecorder`, `MarkdownEditorController+Vim`). While vim is attached, edits are
+grouped by CodeMirror 6's history rules and registered on the note's `UndoManager`, one action per
+step:
+
+- `input.type.compose` (every change of a vim command after the first) joins the previous step;
+- typing joins adjacent typing within 500 ms until the selection moves;
+- anything else starts a new step.
+
+`u`/`<C-r>` and ⌘Z/⇧⌘Z undo the same steps. `vimUndo` returns the change and the selection so
+vim's marks and cursor follow. After ⌘Z the cursor goes to the change, instead of reselecting the
+removed text (which would start visual mode). Steps outlive vim mode: ⌘Z still undoes them after
+vim is turned off.
+
+**Notes.** Replacing the document (`setText(_:resetUndo: true)`, `restore`) gives the editor a
+fresh session in normal mode, so no pending command, visual selection or mark crosses notes. A
+note's marks belong to its session. Registers, macros, search and ex history, mappings, options
+and the jump list live in the shared `Vim`. A replacement that happens during a key (`:e`, `gt`)
+waits until the key is done.
+
+**Drawing.** `VimCursorRenderer` draws the block cursor like `@replit/codemirror-vim`:
+
+- the accent at 75 %, with the character under it redrawn in the text color;
+- half height while a command is pending, a fifth in replace mode;
+- a 1 pt outline while the editor isn't focused;
+- on the last character of a forward visual selection, and only on the main range of a visual
+  block.
+
+The text view's caret is hidden while the block shows, and visual modes use the native selection.
+`VimPanelView` shows the command line or a message under the text: monospaced, with the caret at
+the end. ⌘V pastes into it, and a click in the text closes it. `VimSearchHighlighter` marks search
+matches in the visible lines with temporary attributes.
+
+**App integration** (`EditorVimIntegration`, a port of `vim-integration.ts`):
+
+- The app's ex commands become `EditorVimRequest`s for the delegate: `:w`, `:wa`, `:q[!]`, `:qa`,
+  `:wq`, `:x`, `:wqa`, `:xa`, `:e[dit]`, `:tabe[dit]`, `:tabnew`, `:tabc[lose]`, `:tabn[ext]`,
+  `:tabp[revious]`, `:tabN[ext]`, `:bn`, `:bp`, `:bN`, `:bd`, `:obcommand`. An `.unavailable`
+  answer shows "`:quit` isn't available here".
+- `gt`/`gT` with counts.
+- `"+` and `"*` read and write the pasteboard, and `:set clipboard=unnamed|unnamedplus` mirrors
+  the unnamed register.
+- `applyVimrc`, using `Vimrc` (a port of `vimrc.ts`: comments, `let mapleader`, `exmap`).
+  Commands run in a scratch buffer, so their messages never show in a note. A new vimrc first
+  clears the mappings, ex aliases and option values the previous one set.
+
 ## How it works
 
 | File | Role |
@@ -142,6 +227,8 @@ predictions are off. Typing coalesces into one undo step per burst; every comman
 | `Model/` | `LineIndex`, `BadgeStore` (anchors), `TextDiff` (minimal change). |
 | `Motion/` | `MotionTimeline`, `CubicBezier` (pure curves of elapsed time), `MotionState` (what moves, with explicit times), `EditorMotion` (clock, Reduce Motion, frames through a `FrameTicker`: the display link; all injectable via `MotionEnvironment`). |
 | `Controller/` | `MarkdownEditorController` (composition, public API) and its hooks (drawing, motion frames); `TextSystemBridge` (AppKit delegates). |
+| `Vim/` | `TextViewVimHost` (the `VimEditor`: text, selection, edits, keys, layout, one file each), `VimUndoRecorder`, `VimKeyEvents`, `VimCtrlKeys`, `VimCursorRenderer`, `VimPanelView`, `VimSearchHighlighter`, `VimClipboard`, `Vimrc`, `EditorVimIntegration`. |
+| `View/EditorContainerView`, `API/EditorVim` | The embeddable view (scroll view + command line); vim's status and app requests. |
 
 TextKit 1 techniques worth knowing before changing things (each verified experimentally):
 
@@ -183,14 +270,29 @@ Motion adds nothing to these paths: typing and selection changes only check that
 Assertions use generous debug budgets scaled by `EDITOR_PERF_BUDGET_MULTIPLIER`. Release numbers:
 `apps/macos/scripts/test.sh DailyDoListEditor -- -c release -Xswiftc -enable-testing --filter PerformanceTests`.
 
+Vim mode on a 10,000-line note with live preview, keys sent through `keyDown`, every sample counted
+(`VimPerformanceTests`, same budgets as the keystroke test; avg / p95):
+
+| Measurement | Release | Debug |
+| --- | --- | --- |
+| Insert-mode keystroke: vim → NSTextView → restyle → report back to vim | 1.18 / 1.83 ms | 1.86 / 3.75 ms |
+| … the same keystroke without vim | 1.18 / 1.90 ms | 1.70 / 2.55 ms |
+| Normal-mode motions (`j w k b l h e`) | 0.13 / 0.21 ms | 0.26 / 0.35 ms |
+| Normal-mode edits and undo (`x u dd p`) | 0.84 / 1.47 ms | 1.37 / 2.22 ms |
+
+Vertical motion asks TextKit for the line at a height (`vimLine(atY:)`), not a uniform line
+height, so `j` stays this fast next to headings and wrapped lines.
+
 ## Tests
 
 ```sh
 apps/macos/scripts/test.sh DailyDoListEditor                        # everything (plain `swift test` fails with the CLT)
 apps/macos/scripts/test.sh DailyDoListEditor -- --filter HighlighterTests
+apps/macos/scripts/test.sh DailyDoListEditor -- --filter Vim         # vim mode, vectors included
+VIM_VECTORS_FILTER=viewport/ VIM_VECTORS_VERBOSE=1 apps/macos/scripts/test.sh DailyDoListEditor -- --filter VimVectorReplayTests
 ```
 
-Swift Testing, 157 tests (206 parameterized cases): tokenizer tables (unicode offsets, nesting,
+Swift Testing, 222 tests (210 parameterized cases): tokenizer tables (unicode offsets, nesting,
 unterminated constructs, code spans, URLs with underscores, tags vs headings vs URLs), an
 incremental-vs-full equivalence property test (3 seeds × 500 random edits including fence and
 frontmatter toggles, comparing line states and every attribute run), command tables ported from
@@ -204,9 +306,30 @@ pathological lines, random edits with drawing), performance, and offscreen PNG r
 mode with line numbers), badges in every status (light, dark), narrow-window badges, and a frame
 in the middle of every kind of motion.
 
+Vim mode has 65 of these tests (`Tests/DailyDoListEditorTests/Vim/`), all driving the editor with
+real `NSEvent`s through `keyDown`:
+
+- **Vectors** (`VimVectorReplayTests`): every case of `packages/editor/test/vim/vectors.jsonl`,
+  replayed through the real controller with `DailyDoListVimTestSupport`, with live preview both
+  off and on: 11,491/11,491 each, in all 18 categories, with no exclusions. The oracle recorded
+  them in a monospaced, unwrapped editor, so the replay gives the controller those metrics
+  (internal `EditorTheme.Uniform`), and viewport cases (`H`, `zz`, `<C-d>`) compare exactly.
+  An exclusion needs a reason in that file.
+- **Keys**: `NSEvent` to vim key mapping.
+- **Typing and undo**: `.`, list continuation, undo grouping, ⌘Z against `u`, IME, visual block
+  and several cursors.
+- **Interface**: the block cursor (geometry, and pixels with and without focus, rendered to
+  `vim-block-cursor-{light,dark}.png`), the command line (key routing, ⌘V, Esc, clicks), search
+  highlights, the status.
+- **Lifecycle**: mouse selections, paste, badges through `dd`/`u`, switching notes, and turning
+  vim on and off.
+- **Integration**: ex commands, `gt`, the clipboard on a private pasteboard, the vimrc, and the
+  integration being released.
+- **Layout and performance**: headings and wrapped lines, and the numbers above.
+
 ## Integration notes
 
-- Embed `scrollView` (or `MarkdownEditorView`) and keep one controller per editor pane; switch
+- Embed `view` (or `MarkdownEditorView`) and keep one controller per editor pane; switch
   notes with `snapshot()`/`restore(_:)`, then `setBadges` for the new note. If the note changed on
   disk while it was in the background, call `setText(_:)` after `restore` (minimal, undoable diff).
 - Don't replace `textView.delegate`, the text storage's delegate or the layout manager's delegate:
@@ -214,6 +337,9 @@ in the middle of every kind of motion.
 - The host owns saving: debounce `editorTextDidChange`; `editorDidRequestSave` is ⌘S.
 - Menus: editor shortcuts take precedence while it's focused; the standard Edit menu's Undo/Redo
   use the note's undo manager through the text view.
+- Vim: create one `Vim` and one `EditorVimIntegration` per app and keep both (the integration's
+  commands stop when it's released); set `vim` on every controller and apply the vimrc before
+  turning `vimMode` on, so new sessions start with its mappings.
 
 ## Known limitations
 
@@ -225,3 +351,12 @@ in the middle of every kind of motion.
 - `[[#Heading]]` links (same note, no target) aren't reported; the delegate has no subpath.
 - Enter doesn't continue plain indented continuation lines of list items; loose lists continue tight.
 - With line numbers and readable line length, the gutter stays at the left edge.
+- Vim mode:
+  - ⌘Z after a vim operator puts the cursor at the change; the web app reselects the text, which
+    starts visual mode.
+  - The block cursor doesn't blink.
+  - The command line takes no input methods or dead keys.
+  - With several cursors, arrow keys collapse them.
+  - Marks don't survive switching notes (as in the web app).
+  - As in vim.js, a mapping can't start with a key vim binds by itself (`,` or Space as the
+    leader): that key's own command runs first.

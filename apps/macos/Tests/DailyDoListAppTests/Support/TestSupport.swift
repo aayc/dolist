@@ -1,9 +1,11 @@
+import AppKit
 import DailyDoListAgent
 import DailyDoListClient
 import DailyDoListDaemon
 import DailyDoListDomain
 import DailyDoListEditor
 import DailyDoListModels
+import DailyDoListVim
 import Foundation
 import Testing
 
@@ -127,21 +129,28 @@ func makeEnvironment(
     },
     systemIntegration: UnavailableSystemIntegration(),
     now: { referenceNow },
-    enablesSystemServices: false)
+    enablesSystemServices: false,
+    vimPasteboard: { SystemVimPasteboard(privatePasteboard()) })
+}
+
+/// A pasteboard of its own for one test (vim's clipboard registers never touch the user's).
+@MainActor
+func privatePasteboard() -> NSPasteboard {
+  NSPasteboard(name: NSPasteboard.Name("ddl.tests.\(UUID().uuidString)"))
 }
 
 /// A workspace wired to `client` with manual time (no AppModel).
 @MainActor
 func makeWorkspace(
   client: DaemonClient, scheduler: ManualScheduler = ManualScheduler(),
-  settings: AppSettings = .defaults, agent: AgentStore? = nil
+  settings: AppSettings = .defaults, agent: AgentStore? = nil, vim: Vim? = nil
 ) -> Workspace {
   let settingsStore = SettingsStore()
   settingsStore.apply(settings)
   let preferences = AppPreferences(defaults: testDefaults(), environment: [:])
   let workspace = Workspace(
     client: client, settings: settingsStore, ui: UIState(preferences: preferences),
-    toasts: ToastStore(scheduler: scheduler), scheduler: scheduler, now: { referenceNow })
+    toasts: ToastStore(scheduler: scheduler), scheduler: scheduler, vim: vim, now: { referenceNow })
   workspace.agent = agent
   return workspace
 }

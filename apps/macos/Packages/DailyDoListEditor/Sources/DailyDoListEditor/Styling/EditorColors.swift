@@ -21,6 +21,13 @@ enum EditorColors {
   static let danger = tone(light: 0xD1383D, dark: 0xE5534B)
   static let success = tone(light: 0x2F9E5A, dark: 0x4FB477)
   static let info = tone(light: 0x1F6FEB, dark: 0x4EA1FF)
+  /// Vim's search matches (the web app's `.cm-searchMatch`: warning at 25 %).
+  static let warningFill = tone(light: 0xB7791F, dark: 0xE0A526, alpha: 0.25)
+  /// Vim's command-line panel: the app theme's secondary background and border.
+  static let panelBackground = tone(light: 0xF6F6F6, dark: 0x262626)
+  static let panelBorder = tone(light: 0xE3E3E3, dark: 0x333333)
+  static let panelText = tone(light: 0x222222, dark: 0xDCDDDE)
+  static let panelMutedText = tone(light: 0x5C5C5C, dark: 0xA3A3A3)
 
   // Agent badges (see `BadgeStyle`).
   static let badgeBackground = dynamic(light: NSColor(white: 0, alpha: 0.04), dark: NSColor(white: 1, alpha: 0.07))

@@ -3,6 +3,7 @@ import DailyDoListClient
 import DailyDoListDomain
 import DailyDoListEditor
 import DailyDoListModels
+import DailyDoListVim
 import Foundation
 import Observation
 
@@ -45,6 +46,8 @@ final class Workspace {
   private(set) var recent: [String] = []
   /// Called after tabs change (persist them).
   @ObservationIgnored var onTabsChanged: (@MainActor () -> Void)?
+  /// Runs an app command by id (vim's `:obcommand`); false when there's no such command.
+  @ObservationIgnored var commandRunner: (@MainActor (String) -> Bool)?
 
   @ObservationIgnored var navToken = 0
   /// Where the latest navigation is going while its note loads.
@@ -56,7 +59,7 @@ final class Workspace {
 
   init(
     client: DaemonClient, settings: SettingsStore, ui: UIState, toasts: ToastStore,
-    scheduler: AppScheduler, editorController: MarkdownEditorController? = nil,
+    scheduler: AppScheduler, editorController: MarkdownEditorController? = nil, vim: Vim? = nil,
     now: @escaping () -> Date = Date.init
   ) {
     self.client = client
@@ -82,6 +85,7 @@ final class Workspace {
       if state == .saved { self?.errorToasted.remove(path) }
     }
     editor.host = self
+    editor.controller.vim = vim
     editor.configure(settings.settings.editor)
   }
 
@@ -149,6 +153,25 @@ final class Workspace {
 
   func closeActiveTab() {
     if let active = tabs.active { closeTab(active) }
+  }
+
+  /// vim's `:qa`: closes every tab, the last one first.
+  func closeAllTabs() {
+    for path in tabs.tabs.reversed() { closeTab(path) }
+  }
+
+  /// vim's `gt`/`gT`, `:tabnext 3`: the tab `delta` tabs away (wrapping around) or at `index`.
+  func switchTab(_ to: EditorTabSwitch) {
+    let list = tabs.tabs
+    guard !list.isEmpty else { return }
+    let current = tabs.active.flatMap { list.firstIndex(of: $0) } ?? 0
+    let index: Int
+    switch to {
+    case .delta(let delta): index = ((current + delta) % list.count + list.count) % list.count
+    case .index(let target): index = target
+    }
+    guard list.indices.contains(index) else { return }
+    activateTab(list[index])
   }
 
   func closeOtherTabs(except path: String) {

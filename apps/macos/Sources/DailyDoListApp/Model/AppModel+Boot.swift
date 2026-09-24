@@ -169,8 +169,9 @@ extension AppModel {
     let agent = AgentStore(client: client)
     let workspace = Workspace(
       client: client, settings: settings, ui: ui, toasts: toasts, scheduler: environment.scheduler,
-      now: environment.now)
+      vim: vim, now: environment.now)
     workspace.agent = agent
+    workspace.commandRunner = { [weak self] id in self?.runCommand(id: id) ?? false }
     workspace.localVaultURL = localVaultURL()
     workspace.onTabsChanged = { [weak self] in self?.scheduleTabsPersist() }
     self.agent = agent

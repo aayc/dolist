@@ -65,8 +65,10 @@ extension MarkdownEditorController {
   /// command's selection. Each replacement is its own storage edit, so styles and badge anchors are
   /// remapped precisely.
   @discardableResult
-  func perform(_ edit: TextEdit, actionName: String, scroll: Bool = true) -> Bool {
+  func perform(_ edit: TextEdit, actionName: String, scroll: Bool = true, userEvent: String = "input") -> Bool {
     guard textView.isEditable else { return false }
+    beginEditorOperation(userEvent: userEvent)
+    defer { endEditorOperation() }
     guard !edit.replacements.isEmpty else {
       if edit.selection != currentSelection { setSelection(edit.selection) }
       return true
@@ -82,7 +84,8 @@ extension MarkdownEditorController {
       }
       replacingText = false
       textView.didChangeText()
-      noteUndoManager.setActionName(actionName)
+      // In vim mode the step is vim's (registered and named by `VimUndoRecorder`).
+      if !vimHost.isAttached { noteUndoManager.setActionName(actionName) }
       applied = true
     }
     markdownTextView.breakUndoCoalescing()

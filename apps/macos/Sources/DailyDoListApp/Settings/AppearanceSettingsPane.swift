@@ -36,6 +36,11 @@ struct AppearanceSettingsPane: View {
         Toggle("Readable line length", isOn: editorBinding(editor.readableLineLength) { .init(readableLineLength: $0) })
         Toggle("Spellcheck", isOn: editorBinding(editor.spellcheck) { .init(spellcheck: $0) })
         Toggle("Line numbers", isOn: editorBinding(editor.showLineNumbers) { .init(showLineNumbers: $0) })
+        Toggle("Vim key bindings", isOn: editorBinding(editor.vimMode) { .init(vimMode: $0) })
+        SettingsNote(text: "Edit with vim's modes and commands, like Obsidian's vim key bindings.")
+        if editor.vimMode {
+          VimrcEditor(model: model, settings: settings)
+        }
       }
       if !settings.isLoaded { NotConnectedNote() }
     }

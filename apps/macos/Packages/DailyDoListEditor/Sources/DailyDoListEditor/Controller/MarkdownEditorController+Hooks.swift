@@ -18,8 +18,13 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
   }
 
   func textViewDidChangeSelection(_ textView: MarkdownTextView, stillSelecting: Bool) {
-    guard !stillSelecting else { return }
+    guard !stillSelecting else {
+      vimHost.textViewSelectionDidChange(stillSelecting: true)
+      return
+    }
     refreshLivePreview()
+    // After live preview re-laid out the lines it reveals (vim's block cursor measures them).
+    vimHost.textViewSelectionDidChange(stillSelecting: false)
     guard !replacingText else { return }
     let line = caretLine
     if line != lastReportedLine {
@@ -43,6 +48,7 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
 
   func textViewDidChangeFocus(_ textView: MarkdownTextView) {
     refreshLivePreview()
+    vimHost.focusDidChange()
   }
 
   // MARK: Keys
@@ -58,13 +64,13 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
     guard configuration.isEditable else { return false }
     let selection = currentSelection
     if backwards {
-      return perform(ListCommands.outdent(in: storage.mutableString, selection: selection), actionName: "Outdent")
+      return perform(ListCommands.outdent(in: storage.mutableString, selection: selection), actionName: "Outdent", userEvent: "delete.dedent")
     }
     if selection.allSatisfy({ $0.length == 0 }), let caret = selection.first, isLiteral(caret.location) {
       return false
     }
     guard let edit = ListCommands.indent(in: storage.mutableString, selection: selection) else { return false }
-    return perform(edit, actionName: "Indent")
+    return perform(edit, actionName: "Indent", userEvent: "input.indent")
   }
 
   func textViewHandleDeleteBackward(_ textView: MarkdownTextView) -> Bool {
@@ -72,7 +78,7 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
       let edit = ListCommands.deleteMarkupBackward(
         in: storage.mutableString, selection: currentSelection, isLiteralLine: isLiteral)
     else { return false }
-    return perform(edit, actionName: "Delete")
+    return perform(edit, actionName: "Delete", userEvent: "delete.backward")
   }
 
   func textView(_ textView: MarkdownTextView, performShortcut event: NSEvent) -> Bool {
@@ -86,7 +92,8 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
   // MARK: Mouse
 
   func textView(_ textView: MarkdownTextView, mouseDownAt point: NSPoint, modifiers: NSEvent.ModifierFlags) -> Bool {
-    handleClick(at: point, modifiers: modifiers)
+    vimHost.textWasClicked()
+    return handleClick(at: point, modifiers: modifiers)
   }
 
   /// Badge → `didClickBadge`; checkbox → toggle; link → follow (⌘-click always, plain click when its
@@ -144,6 +151,7 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
   }
 
   func textView(_ textView: MarkdownTextView, drawOverlaysIn dirtyRect: NSRect) {
+    vimHost.drawOverlays(in: dirtyRect)
     guard !badgeStore.isEmpty else { return }
     let layouts = currentBadgeLayouts()
     guard !motion.state.isIdle else {
@@ -163,6 +171,53 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
 
   func textViewDidChangeWidth(_ textView: MarkdownTextView) {
     updateTextGeometry()
+    vimHost.layoutDidChange()
+  }
+
+  // MARK: Vim
+
+  func textView(_ textView: MarkdownTextView, handleKeyDown event: NSEvent) -> Bool {
+    vimHost.handleKeyDown(event)
+  }
+
+  func textView(_ textView: MarkdownTextView, claimsKeyEquivalent event: NSEvent) -> Bool {
+    vimHost.claimsKeyEquivalent(event)
+  }
+
+  func textView(_ textView: MarkdownTextView, willReplace ranges: [NSRange], with strings: [String]) -> Bool {
+    vimHost.willReplace(ranges, with: strings)
+  }
+
+  func textViewDidRefuseChange(_ textView: MarkdownTextView) {
+    vimHost.changeWasRefused()
+  }
+
+  func textView(_ textView: MarkdownTextView, edit userEvent: String, _ body: () -> Void) {
+    // In vim mode the text view registers nothing (not even action names outside a group): vim's
+    // history records the edit (`VimUndoRecorder`).
+    let manager = noteUndoManager
+    let recordsItself = vimHost.isAttached
+    if recordsItself { manager.disableUndoRegistration() }
+    beginEditorOperation(userEvent: userEvent)
+    body()
+    endEditorOperation()
+    if recordsItself { manager.enableUndoRegistration() }
+  }
+
+  func textView(_ textView: MarkdownTextView, insertAtEveryCursor text: String) -> Bool {
+    vimHost.insertAtEveryCursor(text)
+  }
+
+  func textView(_ textView: MarkdownTextView, deleteAtEveryCursor forward: Bool) -> Bool {
+    vimHost.deleteAtEveryCursor(forward: forward)
+  }
+
+  func textViewWillPaste(_ textView: MarkdownTextView) -> Bool {
+    vimHost.willPaste()
+  }
+
+  func textViewDrawsInsertionPoint(_ textView: MarkdownTextView) -> Bool {
+    !vimHost.drawsBlockCursor
   }
 
   // MARK: Hit testing

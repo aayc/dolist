@@ -70,6 +70,7 @@ enum CommandID: String, CaseIterable, Sendable {
   case toggleLivePreview = "editor.livePreview"
   case toggleReadableWidth = "editor.readable"
   case toggleLineNumbers = "editor.lineNumbers"
+  case toggleVim = "editor.vim"
   case increaseFontSize = "font.increase"
   case decreaseFontSize = "font.decrease"
   case resetFontSize = "font.reset"
@@ -79,6 +80,30 @@ enum CommandID: String, CaseIterable, Sendable {
   case restartDaemon = "daemon.restart"
 
   static let tabs: [CommandID] = [.tab1, .tab2, .tab3, .tab4, .tab5, .tab6, .tab7, .tab8, .tab9]
+
+  /// A command id as vim's `:obcommand` takes it: ours (`daily.today`) or the web app's
+  /// (`daily:today`, `editor:live-preview`, `panel:left`), so a vimrc works in both apps.
+  init?(vimCommandID id: String) {
+    if let exact = CommandID(rawValue: id) {
+      self = exact
+      return
+    }
+    if let alias = Self.webAliases[id] {
+      self = alias
+      return
+    }
+    let parts = id.split(separator: ":", maxSplits: 1)
+    guard parts.count == 2 else { return nil }
+    let words = parts[1].split(separator: "-")
+    let name = words.enumerated().map { $0.offset == 0 ? String($0.element) : $0.element.capitalized }.joined()
+    guard let command = CommandID(rawValue: "\(parts[0]).\(name)") else { return nil }
+    self = command
+  }
+
+  /// Web command ids that don't follow the naming scheme above.
+  private static let webAliases: [String: CommandID] = [
+    "panel:left": .toggleSidebar, "panel:right": .toggleAgentPanel, "tab:next": .nextTab, "tab:previous": .previousTab,
+  ]
 }
 
 /// One user command: what menus and the palette show, when it's available, and what it does.

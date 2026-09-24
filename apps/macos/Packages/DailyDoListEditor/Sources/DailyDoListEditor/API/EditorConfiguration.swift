@@ -9,10 +9,12 @@ public struct EditorConfiguration: Hashable, Sendable {
   public var spellcheck: Bool
   public var showLineNumbers: Bool
   public var isEditable: Bool
+  /// Vim key bindings. Takes effect once the host gives the controller a `Vim` (`vim`).
+  public var vimMode: Bool
 
   public init(
     fontSize: Double = 16, livePreview: Bool = true, readableLineLength: Bool = true,
-    spellcheck: Bool = false, showLineNumbers: Bool = false, isEditable: Bool = true
+    spellcheck: Bool = false, showLineNumbers: Bool = false, isEditable: Bool = true, vimMode: Bool = false
   ) {
     self.fontSize = fontSize
     self.livePreview = livePreview
@@ -20,5 +22,6 @@ public struct EditorConfiguration: Hashable, Sendable {
     self.spellcheck = spellcheck
     self.showLineNumbers = showLineNumbers
     self.isEditable = isEditable
+    self.vimMode = vimMode
   }
 }

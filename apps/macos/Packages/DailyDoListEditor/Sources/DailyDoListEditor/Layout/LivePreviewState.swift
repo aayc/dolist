@@ -51,10 +51,12 @@ final class LivePreviewState {
       newRevealed = union
     }
     var invalid: [NSRange] = []
-    if newRevealed != revealedLines {
+    if !isEnabled {
+      // Glyphs don't depend on what is revealed while live preview is off.
+    } else if newRevealed != revealedLines {
       if let old = revealedLines { invalid.append(old.clamped(to: length)) }
       if let new = newRevealed { invalid.append(new) }
-    } else if isEnabled, let revealed = newRevealed,
+    } else if let revealed = newRevealed,
       replacementTouchChanges(in: revealed, old: selection, new: clampedSelection, storage: storage)
     {
       invalid.append(revealed)

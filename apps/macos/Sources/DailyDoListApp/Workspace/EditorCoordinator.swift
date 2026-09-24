@@ -13,6 +13,8 @@ protocol EditorCoordinatorHost: AnyObject {
   func editorDidClickWikiLink(_ target: String, newTab: Bool)
   func editorDidMoveCursor(_ path: String, line: Int)
   func editorDidRequestSave(_ path: String)
+  /// An app command from vim (`:q`, `:e note`, `gt`, `:obcommand id`).
+  func editorPerform(_ request: EditorVimRequest) -> EditorVimRequestResult
 }
 
 /// Owns the window's single ``MarkdownEditorController``: switches documents with per-note
@@ -29,6 +31,8 @@ final class EditorCoordinator {
   private(set) var wordCount: Int?
   private(set) var cursorLine: Int?
   private(set) var configuration: EditorConfiguration
+  /// Vim's mode, pending keys and macro recording while vim mode is on (updated only on changes).
+  private(set) var vimStatus: EditorVimStatus?
 
   @ObservationIgnored private var snapshots: [String: EditorSnapshot] = [:]
   @ObservationIgnored private var badgeTimer: IdleTimer!
@@ -105,7 +109,7 @@ final class EditorCoordinator {
     let next = EditorConfiguration(
       fontSize: settings.fontSize, livePreview: settings.livePreview,
       readableLineLength: settings.readableLineLength, spellcheck: settings.spellcheck,
-      showLineNumbers: settings.showLineNumbers, isEditable: true)
+      showLineNumbers: settings.showLineNumbers, isEditable: true, vimMode: settings.vimMode)
     guard next != configuration else { return }
     configuration = next
     controller.configure(next)
@@ -178,5 +182,13 @@ extension EditorCoordinator: MarkdownEditorDelegate {
   func editorDidRequestSave(_ editor: MarkdownEditorController) {
     guard let path = activePath else { return }
     host?.editorDidRequestSave(path)
+  }
+
+  func editor(_ editor: MarkdownEditorController, vimStatusDidChange status: EditorVimStatus?) {
+    vimStatus = status
+  }
+
+  func editor(_ editor: MarkdownEditorController, perform request: EditorVimRequest) -> EditorVimRequestResult {
+    host?.editorPerform(request) ?? .unavailable
   }
 }

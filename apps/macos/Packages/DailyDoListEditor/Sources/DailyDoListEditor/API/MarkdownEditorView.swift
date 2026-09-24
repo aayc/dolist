@@ -9,6 +9,6 @@ public struct MarkdownEditorView: NSViewRepresentable {
     self.controller = controller
   }
 
-  public func makeNSView(context: Context) -> NSScrollView { controller.scrollView }
-  public func updateNSView(_ nsView: NSScrollView, context: Context) {}
+  public func makeNSView(context: Context) -> NSView { controller.view }
+  public func updateNSView(_ nsView: NSView, context: Context) {}
 }

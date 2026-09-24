@@ -1,5 +1,6 @@
 import DailyDoListAgent
 import DailyDoListClient
+import DailyDoListEditor
 import DailyDoListModels
 import SwiftUI
 
@@ -21,6 +22,9 @@ struct StatusBar: View {
       Spacer(minLength: 8)
       if let state = visibility.saveState {
         SaveIndicator(state: state)
+      }
+      if model.settings.settings.editor.vimMode, workspace.tabs.active != nil {
+        VimIndicator(status: workspace.editor.vimStatus)
       }
       if workspace.tabs.active != nil, let words = workspace.editor.wordCount {
         Text(TextMetrics.pluralize(words, "word"))
@@ -100,6 +104,37 @@ struct AgentStatusItems: View {
     return status.enabled
       ? "The agent is watching your daily notes — click to pause"
       : "The agent is paused — click to resume"
+  }
+}
+
+/// Vim's mode line, like the web app's: macro recording, pending keys ("showcmd") and the mode,
+/// in the accent color (insert and replace green, visual modes amber).
+struct VimIndicator: View {
+  let status: EditorVimStatus?
+
+  var body: some View {
+    HStack(spacing: 6) {
+      if let recording = status?.recording {
+        Text("recording @\(recording)").fontWeight(.regular).foregroundStyle(Theme.danger)
+      }
+      if let pending = status?.pending, !pending.isEmpty {
+        Text(pending).fontWeight(.regular).foregroundStyle(Theme.mutedText)
+      }
+      Text(status?.mode.label ?? "VIM").foregroundStyle(Self.color(status?.mode))
+    }
+    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+    .tracking(0.4)
+    .help("Vim mode")
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("Vim \(status?.mode.label.lowercased() ?? "mode")")
+  }
+
+  static func color(_ mode: EditorVimStatus.Mode?) -> Color {
+    switch mode {
+    case .insert, .replace: Theme.success
+    case .visual, .visualLine, .visualBlock: Theme.warning
+    case .normal, nil: Theme.accent
+    }
   }
 }
 

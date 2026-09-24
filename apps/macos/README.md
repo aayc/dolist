@@ -44,7 +44,8 @@ future iPhone app too.
 | `Packages/DailyDoListModels` (iOS) | Swift mirror of the wire protocol (`packages/core/src/protocol.ts`), checked against the `@ddl/contract` fixtures. |
 | `Packages/DailyDoListClient` (iOS) | `DaemonClient`: `HTTPDaemonClient` (REST + WebSocket, reconnects and resyncs) and `InMemoryDaemonClient` (the demo and test fake). |
 | `Packages/DailyDoListDomain` (iOS) | Pure domain logic ported from `@ddl/core`: dates and daily notes, task parsing and tracking, wikilinks, paths, fuzzy matching. |
-| `Packages/DailyDoListEditor` | The TextKit markdown editor: live preview, clickable checkboxes, agent badges. |
+| `Packages/DailyDoListEditor` | The TextKit markdown editor: live preview, clickable checkboxes, agent badges, and vim mode (it hosts `DailyDoListVim`). |
+| `Packages/DailyDoListVim` (iOS) | Vim mode: a port of the web editor's vim.js and its CodeMirror 6 adapter, checked against the web app's vim vectors; hosts implement `VimEditor` ([README](Packages/DailyDoListVim/README.md)). |
 | `Packages/DailyDoListAgent` | Agent state and UI: inbox, threads, approval cards, artifacts, notifications, menu bar, Dock badge. |
 | `Packages/DailyDoListDaemon` | `DaemonSupervisor`: finds Node and the daemon, attaches or launches, health-checks, restarts, stops. |
 | `IntegrationTests/` | End-to-end tests against the real daemon (a separate package). |
@@ -76,6 +77,39 @@ future iPhone app too.
 - **Agent badges** are loud only when they need you, and move gently (fade-ins, crossfades, the
   triaging pulse, checkmarks popping in) unless Reduce Motion is on. See the
   [editor README](Packages/DailyDoListEditor/README.md#behavior).
+
+## Vim mode
+
+Turn it on with **Vim key bindings** in Settings → Appearance, View → Vim Key Bindings, or "Toggle
+vim key bindings" in the command palette. The editor then does what the web app's vim mode does,
+which is Obsidian's: `DailyDoListVim` is a port of the same engine (vim.js), and the web app's
+11,491 recorded vim behaviors replay through the real Mac editor in the tests.
+
+- **Looks:** a block cursor in normal, visual and replace mode (an outline while the window isn't
+  active), the command line (`:`, `/`, `?`) and vim's messages under the editor, highlighted
+  search matches, and the mode in the status bar with the keys of a command being typed (`2d`,
+  `"a`) and `recording @q`.
+- **App commands:** `:w`, `:wa`, `:q`, `:q!`, `:qa`, `:wq`, `:x`, `:wqa`, `:xa`, `:e <note>`
+  (a bare `:e` opens the quick switcher), `:tabe[dit] <note>`, `:tabnew`, `:tabc[lose]`,
+  `:tabn[ext] [N]`, `:tabp[revious]`/`:tabN[ext] [N]`, `:bn`, `:bp`, `:bN`, `:bd`, `gt`/`gT`
+  (`3gt` goes to the third tab), and `:obcommand <id>` for any palette command. It takes the
+  app's ids (`daily.today`, `editor.vim`) or the web app's (`daily:today`, `panel:left`), so one
+  vimrc works in both apps. A command that can't run here says so in the command line.
+- **Clipboard:** `"+` and `"*` are the system clipboard; `:set clipboard=unnamed` (or
+  `unnamedplus`) makes plain `y`, `d` and `p` use it too.
+- **vimrc:** Settings → Appearance shows a vimrc editor while vim is on. It runs at launch and
+  whenever it changes (one ex command per line, `"` comments, `let mapleader = …`, and
+  Obsidian's `exmap name command`); rejected lines are listed under it with vim's message.
+- **Keys:** ⌘ shortcuts keep working in every mode. In normal and visual mode vim gets the Ctrl
+  keys it binds (and those a vimrc maps) before the menus, and no key reaches the text view or
+  the press-and-hold accent popup. In insert mode, keys vim doesn't use keep their macOS
+  behavior, so list continuation, Tab and the Ctrl-A/Ctrl-E line motions still work. While an
+  input method is composing, keys go to it.
+- **Undo:** `u`, `<C-r>`, ⌘Z and ⇧⌘Z share one history per note, grouped the way the web app
+  groups it (one step per command, typing merged until the cursor moves).
+- **Notes and windows:** one vim instance serves every editor, so registers, macros, search and
+  command history, mappings and options are shared. Each note you open starts in normal mode with
+  its own marks, and switching notes never carries a pending command or a visual selection over.
 
 ## Demo mode
 
@@ -189,6 +223,12 @@ quarantined: right-click → Open, or `xattr -dr com.apple.quarantine "Daily Do 
   (hello, echo tagging, external edits), agent flows (streamed threads, artifacts, approve, deny,
   retry, cancel), and a supervisor restart mid-stream (reconnect + resync). They're skipped with
   a message when Node 24.4+ or the built daemon is missing.
+- **Vim**: `DailyDoListVim` replays the web app's vim vectors against its reference buffer, and
+  `DailyDoListEditor` replays all of them again through the real editor, with live preview both
+  off and on. Vim-mode tests drive the editor with real `NSEvent`s (typing, undo grouping, IME,
+  prompts, the block cursor's pixels, mouse selections, paste, badges, switching notes), and
+  `VimAppTests` cover ex commands, the status bar, the vimrc and the clipboard in the app. See the
+  [editor README](Packages/DailyDoListEditor/README.md#vim-mode).
 - **CI**: `.github/workflows/macos.yml` builds the daemon, runs every package's tests and the
   integration tests, builds a release app with the bundled daemon, and uploads the zip.
 - The web UI's e2e and perf budgets don't cover this app. Check UI changes by hand

@@ -115,13 +115,33 @@ final class EditorTheme {
   private static let headingScale: [CGFloat] = [1.6, 1.4, 1.25, 1.1, 1.0, 1.0]
   private static let headingSpacing: [CGFloat] = [0.7, 0.6, 0.5, 0.4, 0.3, 0.3]
 
-  init(fontSize: CGFloat) {
+  /// Plain-text metrics for tests that pin geometry (the vim vector replay reproduces the web
+  /// oracle's viewport): every line in one monospaced font at one fixed height, no heading
+  /// scale, spacing or indents, tab stops every `tabSize` columns.
+  struct Uniform: Hashable, Sendable {
+    var lineHeight: CGFloat
+    var tabSize: Int
+  }
+
+  let uniform: Uniform?
+
+  init(fontSize: CGFloat, uniform: Uniform? = nil) {
     let size = max(8, min(fontSize, 72))
     self.fontSize = size
-    bodyFont = NSFont.systemFont(ofSize: size)
-    quoteIndent = (size * 1.1).rounded()
-    codeInset = (size * 0.75).rounded()
-    tabInterval = (size * 1.75).rounded()
+    self.uniform = uniform
+    if let uniform {
+      let mono = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+      bodyFont = mono
+      quoteIndent = 0
+      codeInset = 0
+      let space = (" " as NSString).size(withAttributes: [.font: mono]).width
+      tabInterval = space * CGFloat(max(1, uniform.tabSize))
+    } else {
+      bodyFont = NSFont.systemFont(ofSize: size)
+      quoteIndent = (size * 1.1).rounded()
+      codeInset = (size * 0.75).rounded()
+      tabInterval = (size * 1.75).rounded()
+    }
     checkboxSlotWidth = (size * 1.3).rounded()
     checkboxSize = (size * 1.05).rounded()
     bulletDiameter = max(3, (size * 0.3).rounded())
@@ -173,7 +193,8 @@ final class EditorTheme {
   }
 
   func lineHeight(_ block: BlockStyle) -> CGFloat {
-    switch block {
+    if let uniform { return uniform.lineHeight }
+    return switch block {
     case .heading: (blockFontSize(block) * 1.3).rounded()
     case .codeBlock, .codeFence: (fontSize * 1.45).rounded()
     case .frontmatter, .frontmatterDelimiter: (fontSize * 1.35).rounded()
@@ -200,7 +221,7 @@ final class EditorTheme {
     style.tabStops = []
     var indent = CGFloat(min(quoteDepth, maxQuoteIndentLevels)) * quoteIndent
     switch block {
-    case let .heading(level):
+    case let .heading(level) where uniform == nil:
       style.paragraphSpacingBefore = (fontSize * Self.headingSpacing[level - 1]).rounded()
     case .codeBlock, .codeFence:
       indent += codeInset
@@ -209,7 +230,7 @@ final class EditorTheme {
       break
     }
     style.firstLineHeadIndent = indent
-    style.headIndent = max(indent, CGFloat(hangingIndent) / 4)
+    style.headIndent = uniform == nil ? max(indent, CGFloat(hangingIndent) / 4) : indent
     paragraphCache[key] = style
     return style
   }
@@ -266,7 +287,8 @@ final class EditorTheme {
   }
 
   private func blockFontSize(_ block: BlockStyle) -> CGFloat {
-    switch block {
+    if uniform != nil { return fontSize }
+    return switch block {
     case let .heading(level): (fontSize * Self.headingScale[level - 1]).rounded()
     case .codeBlock, .codeFence: (fontSize * 0.9 * 2).rounded() / 2
     case .frontmatter, .frontmatterDelimiter: (fontSize * 0.85 * 2).rounded() / 2
@@ -278,7 +300,9 @@ final class EditorTheme {
     block.isHeading ? .semibold : .regular
   }
 
-  private func font(size: CGFloat, weight: NSFont.Weight, italic: Bool, mono: Bool) -> NSFont {
+  private func font(size sizeIn: CGFloat, weight: NSFont.Weight, italic: Bool, mono monoIn: Bool) -> NSFont {
+    let size = uniform == nil ? sizeIn : fontSize
+    let mono = uniform != nil || monoIn
     let key = FontKey(size: size, weight: weight.rawValue, italic: italic, mono: mono)
     if let cached = fontCache[key] { return cached }
     var font =

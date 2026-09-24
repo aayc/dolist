@@ -113,6 +113,11 @@ struct CommandCatalog {
         let value = !model.settings.settings.editor.showLineNumbers
         Task { await model.settings.update(SettingsPatch(editor: .init(showLineNumbers: value))) }
       },
+      AppCommand(.toggleVim, "Vim Key Bindings", palette: "Toggle vim key bindings",
+        isOn: { model.settings.settings.editor.vimMode }, enabled: ready) {
+        let value = !model.settings.settings.editor.vimMode
+        Task { await model.settings.update(SettingsPatch(editor: .init(vimMode: value))) }
+      },
       AppCommand(.increaseFontSize, "Increase Font Size", shortcut: Shortcut("+"), enabled: ready) {
         Self.adjustFontSize(model: model, by: 1)
       },

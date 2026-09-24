@@ -2,8 +2,8 @@ name: macOS app
 
 # The native Swift app (apps/macos): every Swift package's tests, integration tests against the
 # real daemon (mock agent), and a release build of "Daily Do List.app" with the bundled daemon,
-# uploaded as an artifact. Runs when the app, the daemon or what the daemon bundles changes (keep
-# both path lists in sync).
+# uploaded as an artifact. Runs when the app, the daemon, what the daemon bundles or the vim
+# behavior vectors the Swift engine replays change (keep both path lists in sync).
 on:
   push:
     branches: [main]
@@ -15,6 +15,7 @@ on:
       - "packages/agent/**"
       - "packages/storage/**"
       - "packages/connectors/**"
+      - "packages/editor/test/vim/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -30,6 +31,7 @@ on:
       - "packages/agent/**"
       - "packages/storage/**"
       - "packages/connectors/**"
+      - "packages/editor/test/vim/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -75,6 +77,16 @@ jobs:
 
       - name: Swift package tests
         run: apps/macos/scripts/test.sh
+
+      - name: Shared packages build for iOS
+        # The Foundation-only packages the planned iPhone app reuses must not pick up AppKit.
+        run: |
+          for pkg in DailyDoListModels DailyDoListClient DailyDoListDomain DailyDoListVim; do
+            echo "::group::$pkg"
+            (cd "apps/macos/Packages/$pkg" && xcodebuild build -quiet -scheme "$pkg" \
+              -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO)
+            echo "::endgroup::"
+          done
 
       - name: Integration tests (real daemon, mock agent)
         run: apps/macos/scripts/test.sh integration

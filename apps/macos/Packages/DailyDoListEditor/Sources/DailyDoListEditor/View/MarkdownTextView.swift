@@ -19,6 +19,29 @@ protocol MarkdownTextViewHooks: AnyObject {
   func textViewDidChangeFocus(_ textView: MarkdownTextView)
   /// The window was hidden (minimized, covered) or shown again.
   func textViewDidChangeOcclusion(_ textView: MarkdownTextView)
+
+  // MARK: Vim
+
+  /// A key press, before the text view interprets it: true when vim took it.
+  func textView(_ textView: MarkdownTextView, handleKeyDown event: NSEvent) -> Bool
+  /// Whether a key equivalent (a Ctrl key) belongs to vim rather than to a menu.
+  func textView(_ textView: MarkdownTextView, claimsKeyEquivalent event: NSEvent) -> Bool
+  /// The text view is about to replace `ranges` (pre-edit offsets) with `strings`. True when the
+  /// editor records the undo step itself (the text view must not register one).
+  func textView(_ textView: MarkdownTextView, willReplace ranges: [NSRange], with strings: [String]) -> Bool
+  /// The change announced last was refused (nothing was replaced).
+  func textViewDidRefuseChange(_ textView: MarkdownTextView)
+  /// Runs `body`, an edit the text view makes for a key or command, labeled with CodeMirror's
+  /// user event ("input.type", "delete.backward", "input.paste"…).
+  func textView(_ textView: MarkdownTextView, edit userEvent: String, _ body: () -> Void)
+  /// Types `text` at every cursor of a multiple selection (vim's block insert); false otherwise.
+  func textView(_ textView: MarkdownTextView, insertAtEveryCursor text: String) -> Bool
+  /// Deletes backward/forward at every cursor of a multiple selection; false otherwise.
+  func textView(_ textView: MarkdownTextView, deleteAtEveryCursor forward: Bool) -> Bool
+  /// Before a paste: true when the editor took it (vim's command line has the paste).
+  func textViewWillPaste(_ textView: MarkdownTextView) -> Bool
+  /// Whether the text view draws its own caret (vim draws a block in normal mode).
+  func textViewDrawsInsertionPoint(_ textView: MarkdownTextView) -> Bool
 }
 
 /// The editor's `NSTextView` (TextKit 1). Deliberately thin: it forwards selection changes, key
@@ -47,33 +70,140 @@ final class MarkdownTextView: NSTextView, NSViewToolTipOwner {
 
   // MARK: Keys
 
+  override func keyDown(with event: NSEvent) {
+    if hooks?.textView(self, handleKeyDown: event) == true { return }
+    super.keyDown(with: event)
+  }
+
+  /// NSTextView's own key handling (vim's "native edit" in insert mode).
+  func interpretKeyDown(_ event: NSEvent) {
+    super.keyDown(with: event)
+  }
+
+  override func insertText(_ string: Any, replacementRange: NSRange) {
+    let text = (string as? NSAttributedString)?.string ?? (string as? String) ?? ""
+    if !hasMarkedText(), replacementRange.location == NSNotFound, hooks?.textView(self, insertAtEveryCursor: text) == true {
+      return
+    }
+    edit("input.type") { super.insertText(string, replacementRange: replacementRange) }
+  }
+
   override func insertNewline(_ sender: Any?) {
+    if hooks?.textView(self, insertAtEveryCursor: "\n") == true { return }
     if hooks?.textViewHandleNewline(self) == true { return }
-    super.insertNewline(sender)
+    edit("input") { super.insertNewline(sender) }
   }
 
   override func insertTab(_ sender: Any?) {
+    if hooks?.textView(self, insertAtEveryCursor: "\t") == true { return }
     if hooks?.textViewHandleTab(self, backwards: false) == true { return }
-    super.insertTab(sender)
+    edit("input") { super.insertTab(sender) }
   }
 
   override func insertBacktab(_ sender: Any?) {
     if hooks?.textViewHandleTab(self, backwards: true) == true { return }
-    super.insertBacktab(sender)
+    edit("input") { super.insertBacktab(sender) }
   }
 
   override func deleteBackward(_ sender: Any?) {
+    if hooks?.textView(self, deleteAtEveryCursor: false) == true { return }
     if hooks?.textViewHandleDeleteBackward(self) == true { return }
-    super.deleteBackward(sender)
+    edit("delete.backward") { super.deleteBackward(sender) }
+  }
+
+  override func deleteForward(_ sender: Any?) {
+    if hooks?.textView(self, deleteAtEveryCursor: true) == true { return }
+    edit("delete.forward") { super.deleteForward(sender) }
+  }
+
+  /// Other key commands (⌥⌫, ⌘⌫, ⌃K, transpose…) keep CodeMirror's labels for vim's undo history.
+  override func doCommand(by selector: Selector) {
+    let name = NSStringFromSelector(selector)
+    guard name.hasPrefix("delete") || name.hasPrefix("transpose") || name.hasPrefix("yank") || name.hasPrefix("insert") else {
+      return super.doCommand(by: selector)
+    }
+    let forward = name.contains("Forward") || name.contains("ToEnd")
+    let userEvent = name.hasPrefix("delete") ? (forward ? "delete.forward" : "delete.backward") : "input"
+    edit(userEvent) { super.doCommand(by: selector) }
+  }
+
+  /// An IME composition: vim hears about it once it's committed (its steps aren't typed text).
+  override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+    edit("input.type") { super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange) }
+  }
+
+  override func unmarkText() {
+    edit("input.type") { super.unmarkText() }
+  }
+
+  override func paste(_ sender: Any?) {
+    if hooks?.textViewWillPaste(self) == true { return }
+    edit("input.paste") { super.paste(sender) }
+  }
+
+  override func pasteAsPlainText(_ sender: Any?) {
+    if hooks?.textViewWillPaste(self) == true { return }
+    edit("input.paste") { super.pasteAsPlainText(sender) }
+  }
+
+  override func cut(_ sender: Any?) {
+    edit("delete.cut") { super.cut(sender) }
+  }
+
+  override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+    var accepted = false
+    edit("input.drop") { accepted = super.performDragOperation(sender) }
+    return accepted
+  }
+
+  private func edit(_ userEvent: String, _ body: () -> Void) {
+    if let hooks { hooks.textView(self, edit: userEvent, body) } else { body() }
+  }
+
+  /// Vim records the undo steps of the edits it sees (CodeMirror's history, which `u` walks), so
+  /// the text view must not register its own for them.
+  override func shouldChangeText(inRanges affectedRanges: [NSValue], replacementStrings: [String]?) -> Bool {
+    guard let hooks, let replacementStrings, replacementStrings.count == affectedRanges.count,
+      hooks.textView(self, willReplace: affectedRanges.map(\.rangeValue), with: replacementStrings)
+    else { return super.shouldChangeText(inRanges: affectedRanges, replacementStrings: replacementStrings) }
+    let manager = undoManager
+    manager?.disableUndoRegistration()
+    let allowed = super.shouldChangeText(inRanges: affectedRanges, replacementStrings: replacementStrings)
+    manager?.enableUndoRegistration()
+    if !allowed { hooks.textViewDidRefuseChange(self) }
+    return allowed
   }
 
   /// Editor shortcuts (⌘B, ⌘I, ⌘K, ⌘L, ⌘↩, ⌘S, ⌘F, …) win over menu items with the same key while
-  /// the editor has focus. Key equivalents reach every view in the window, hence the check.
+  /// the editor has focus. Key equivalents reach every view in the window, hence the check. In
+  /// vim's normal and visual mode the Ctrl keys vim binds go to vim instead of a menu.
   override func performKeyEquivalent(with event: NSEvent) -> Bool {
-    if event.type == .keyDown, window?.firstResponder === self, hooks?.textView(self, performShortcut: event) == true {
-      return true
+    if event.type == .keyDown, window?.firstResponder === self {
+      if hooks?.textView(self, claimsKeyEquivalent: event) == true {
+        keyDown(with: event)
+        return true
+      }
+      if hooks?.textView(self, performShortcut: event) == true { return true }
     }
     return super.performKeyEquivalent(with: event)
+  }
+
+  // MARK: Scrolling
+
+  /// Set while vim measures text: filling non-contiguous layout holes resizes the text view, which
+  /// then scrolls the selection into view on its own, but vim decides what scrolls.
+  var suppressesAutomaticScrolling = false
+
+  override func scrollToVisible(_ rect: NSRect) -> Bool {
+    if suppressesAutomaticScrolling { return false }
+    return super.scrollToVisible(rect)
+  }
+
+  // MARK: Insertion point
+
+  override var shouldDrawInsertionPoint: Bool {
+    guard hooks?.textViewDrawsInsertionPoint(self) ?? true else { return false }
+    return super.shouldDrawInsertionPoint
   }
 
   // MARK: Mouse
@@ -165,6 +295,8 @@ final class MarkdownTextView: NSTextView, NSViewToolTipOwner {
     super.viewWillMove(toWindow: newWindow)
     if let window {
       NotificationCenter.default.removeObserver(self, name: NSWindow.didChangeOcclusionStateNotification, object: window)
+      NotificationCenter.default.removeObserver(self, name: NSWindow.didBecomeKeyNotification, object: window)
+      NotificationCenter.default.removeObserver(self, name: NSWindow.didResignKeyNotification, object: window)
     }
   }
 
@@ -177,13 +309,23 @@ final class MarkdownTextView: NSTextView, NSViewToolTipOwner {
     hasFocus = window?.firstResponder === self
     hooks?.textViewDidChangeFocus(self)
     if let window {
-      NotificationCenter.default.addObserver(
+      let center = NotificationCenter.default
+      center.addObserver(
         self, selector: #selector(windowDidChangeOcclusion(_:)), name: NSWindow.didChangeOcclusionStateNotification,
         object: window)
+      center.addObserver(self, selector: #selector(windowDidChangeKey(_:)), name: NSWindow.didBecomeKeyNotification, object: window)
+      center.addObserver(self, selector: #selector(windowDidChangeKey(_:)), name: NSWindow.didResignKeyNotification, object: window)
     }
   }
 
+  /// Whether the text view is first responder in the key window (vim's block cursor is solid then).
+  var isKeyFocus: Bool { hasFocus && (window?.isKeyWindow ?? false) }
+
   @objc private func windowDidChangeOcclusion(_ notification: Notification) {
     hooks?.textViewDidChangeOcclusion(self)
+  }
+
+  @objc private func windowDidChangeKey(_ notification: Notification) {
+    hooks?.textViewDidChangeFocus(self)
   }
 }

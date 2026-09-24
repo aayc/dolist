@@ -165,4 +165,26 @@ extension Workspace: EditorCoordinatorHost {
   func editorDidRequestSave(_ path: String) {
     notes.saveNow(path)
   }
+
+  /// vim's app commands (the web app's `onSaveAll`, `onClose`, `onOpenNote`, `onSwitchTab`,
+  /// `runCommand`).
+  func editorPerform(_ request: EditorVimRequest) -> EditorVimRequestResult {
+    switch request {
+    case .saveAll:
+      Task { await notes.flushAll() }
+    case .close(let all):
+      if all { closeAllTabs() } else { closeActiveTab() }
+    case .openNote(let target, let newTab):
+      if let target {
+        Task { await openWikiLink(target, newTab: newTab) }
+      } else {
+        ui.palette = .switcher
+      }
+    case .switchTab(let to):
+      switchTab(to)
+    case .runCommand(let id):
+      return commandRunner?(id) == true ? .done : .failed
+    }
+    return .done
+  }
 }

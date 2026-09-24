@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListVim
 
 /// Imperative handle on one editor instance: a TextKit 1 text system (`NSTextStorage` →
 /// `NSLayoutManager` → `NSTextContainer` → `NSTextView` in an `NSScrollView`) with incremental
@@ -9,9 +10,16 @@ import AppKit
 @MainActor
 public final class MarkdownEditorController {
   public weak var delegate: MarkdownEditorDelegate?
+  /// The view to embed: the scroll view with vim's command-line panel under it.
+  public let view: NSView
   public let scrollView: NSScrollView
   public let textView: NSTextView
   public private(set) var configuration: EditorConfiguration
+  /// The app's vim engine (global state shared by every editor: registers, history, macros,
+  /// mappings). With `configuration.vimMode` on, the editor attaches a `VimSession` to it.
+  public var vim: Vim? {
+    didSet { if vim !== oldValue { updateVimAttachment() } }
+  }
 
   /// Current badges, with their lines mapped through every edit since `setBadges`.
   public var badges: [EditorBadge] { badgeStore.currentBadges(lineIndex: highlighter.lineIndex) }
@@ -23,6 +31,11 @@ public final class MarkdownEditorController {
   let textContainer: NSTextContainer
   let markdownTextView: MarkdownTextView
   private(set) var theme: EditorTheme
+  /// Test-only plain-text metrics (see `EditorTheme.Uniform`), also dropping paddings and wrapping.
+  private(set) var uniformMetrics: EditorTheme.Uniform?
+  /// Vim's view of this editor (a session is attached while vim mode is on).
+  private(set) lazy var vimHost = TextViewVimHost(controller: self)
+  let containerView: EditorContainerView
   let highlighter: MarkdownHighlighter
   let livePreview: LivePreviewState
   let glyphDelegate: GlyphLayoutDelegate
@@ -39,15 +52,22 @@ public final class MarkdownEditorController {
   /// Set while the editor replaces text itself: NSTextView's interim selection fix-ups aren't cursor
   /// moves (the final selection is reported).
   var replacingText = false
+  /// Set while a note switch replaces the whole document (vim starts over afterwards).
+  var replacingDocument = false
   var suppressSelectionAdjustment = false
   var lastReportedLine = 0
   var hoveredBadgeID: String?
   var drawnBadgeRects: [NSRect] = []
   private var badgeReserve: CGFloat = 0
 
-  public init(configuration: EditorConfiguration = EditorConfiguration()) {
+  public convenience init(configuration: EditorConfiguration = EditorConfiguration()) {
+    self.init(configuration: configuration, uniformMetrics: nil)
+  }
+
+  init(configuration: EditorConfiguration, uniformMetrics: EditorTheme.Uniform?) {
     self.configuration = configuration
-    let theme = EditorTheme(fontSize: CGFloat(configuration.fontSize))
+    self.uniformMetrics = uniformMetrics
+    let theme = EditorTheme(fontSize: CGFloat(configuration.fontSize), uniform: uniformMetrics)
     self.theme = theme
     storage = NSTextStorage()
     layoutManager = MarkdownLayoutManager()
@@ -61,6 +81,8 @@ public final class MarkdownEditorController {
     scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 640, height: 480))
     markdownTextView = MarkdownTextView(frame: NSRect(origin: .zero, size: scrollView.contentSize), textContainer: textContainer)
     textView = markdownTextView
+    containerView = EditorContainerView(scrollView: scrollView)
+    view = containerView
     livePreview = LivePreviewState(isEnabled: configuration.livePreview)
     highlighter = MarkdownHighlighter(storage: storage, theme: theme)
     glyphDelegate = GlyphLayoutDelegate(storage: storage, livePreview: livePreview, theme: theme)
@@ -148,24 +170,35 @@ public final class MarkdownEditorController {
     setSelection(selection.map { Self.map($0, through: change, in: storage.mutableString) }, adjust: false)
   }
 
+  /// Replaces the document like a note switch, with `text` exactly as given (tests: the vim vectors
+  /// contain lone surrogates, which `String` can't hold).
+  func replaceDocument(withExactly text: NSString) {
+    replaceDocument(with: text as String)
+  }
+
   private func replaceDocument(with text: String) {
     applyingProgrammaticChange = true
     defer { applyingProgrammaticChange = false }
     markdownTextView.breakUndoCoalescing()
     badgeStore.removeAll()
     motion.documentReplaced()
+    replacingDocument = true
     replacingText = true
     storage.replaceCharacters(in: NSRange(location: 0, length: storage.length), with: text)
     replacingText = false
     noteUndoManager.removeAllActions()
     lastReportedLine = -1  // a new document: always report its caret line
     setSelection([NSRange(location: 0, length: 0)], adjust: false)
+    replacingDocument = false
     scroll(to: .zero)
+    vimHost.documentDidReset()
   }
 
   /// Applies an external change as an undoable edit when possible; otherwise (read-only) replaces
   /// the text directly and clears the undo history, which could no longer be applied safely.
   private func applyExternalChange(_ change: TextDiff.Change) {
+    beginEditorOperation(userEvent: "input.remote")
+    defer { endEditorOperation() }
     if textView.isEditable, textView.allowsUndo {
       markdownTextView.breakUndoCoalescing()
       var applied = false
@@ -233,7 +266,7 @@ public final class MarkdownEditorController {
   private func applyConfiguration(_ configuration: EditorConfiguration, previous: EditorConfiguration?) {
     if previous?.fontSize != configuration.fontSize || previous?.livePreview != configuration.livePreview {
       if previous?.fontSize != configuration.fontSize {
-        theme = EditorTheme(fontSize: CGFloat(configuration.fontSize))
+        theme = EditorTheme(fontSize: CGFloat(configuration.fontSize), uniform: uniformMetrics)
       }
       glyphDelegate.theme = theme
       decorations.theme = theme
@@ -256,6 +289,23 @@ public final class MarkdownEditorController {
       setLineNumbersVisible(configuration.showLineNumbers)
     }
     updateTextGeometry()
+    if previous != nil, previous?.vimMode != configuration.vimMode || previous?.isEditable != configuration.isEditable {
+      updateVimAttachment()
+    }
+  }
+
+  /// Replaces the test-only plain-text metrics (restyles the document).
+  func setUniformMetrics(_ metrics: EditorTheme.Uniform?) {
+    guard metrics != uniformMetrics else { return }
+    uniformMetrics = metrics
+    theme = EditorTheme(fontSize: CGFloat(configuration.fontSize), uniform: metrics)
+    glyphDelegate.theme = theme
+    decorations.theme = theme
+    badgeRenderer.setTheme(theme)
+    highlighter.restyleAll(theme: theme, livePreview: configuration.livePreview)
+    markdownTextView.typingAttributes = theme.baseAttributes
+    updateTextGeometry()
+    invalidateGlyphs(in: [NSRange(location: 0, length: storage.length)])
   }
 
   private func setLineNumbersVisible(_ visible: Bool) {
@@ -276,6 +326,11 @@ public final class MarkdownEditorController {
   func updateTextGeometry() {
     let width = markdownTextView.frame.width
     guard width > 0 else { return }
+    if uniformMetrics != nil {
+      if markdownTextView.textContainerInset != .zero { markdownTextView.textContainerInset = .zero }
+      textContainer.size = NSSize(width: TextGeometry.unwrappedWidth, height: CGFloat.greatestFiniteMagnitude)
+      return
+    }
     let geometry = TextGeometry.compute(
       viewWidth: width, readable: configuration.readableLineLength,
       horizontalPadding: (theme.fontSize * 1.75).rounded(), topPadding: (theme.fontSize * 1.25).rounded(),
@@ -298,6 +353,7 @@ public final class MarkdownEditorController {
       markdownTextView.minSize = NSSize(width: 0, height: height)
     }
     lineNumberRuler?.needsDisplay = true
+    vimHost.viewportDidChange()
   }
 
   // MARK: Focus, scrolling, snapshots
@@ -343,6 +399,7 @@ public final class MarkdownEditorController {
     noteUndoManager = snapshot.undoManager ?? UndoManager()
     badgeStore.removeAll()
     motion.documentReplaced()
+    replacingDocument = true
     let next = TextDiff.normalizeLineEndings(snapshot.text)
     if next != storage.string {
       applyingProgrammaticChange = true
@@ -353,6 +410,8 @@ public final class MarkdownEditorController {
     }
     lastReportedLine = -1  // a new document: always report its caret line
     setSelection([snapshot.selectedRange.clamped(to: storage.length)], adjust: false)
+    replacingDocument = false
+    vimHost.documentDidReset()
     let origin = markdownTextView.textContainerOrigin
     let visible = NSRect(origin: snapshot.scrollOffset, size: scrollView.contentView.bounds.size)
     layoutManager.ensureLayout(forBoundingRect: visible.offsetBy(dx: -origin.x, dy: -origin.y), in: textContainer)
@@ -404,19 +463,22 @@ public final class MarkdownEditorController {
       if highlighter.lineIndex.count != linesBefore { ruler.updateThickness() }
       ruler.needsDisplay = true
     }
+    if !replacingDocument { vimHost.storageDidEdit(location: editedRange.location, oldLength: oldLength, newLength: editedRange.length) }
   }
 
   /// Runs `body` inside an undo group when the note's undo manager has none open and doesn't group
   /// by event (registering undo would otherwise raise).
   func withUndoGroup(_ body: () -> Void) {
     let manager = noteUndoManager
-    let opensGroup = !manager.groupsByEvent && manager.groupingLevel == 0
+    // In vim mode the edits' undo steps are vim's (see `VimUndoRecorder`), which groups them itself.
+    let opensGroup = !vimHost.isAttached && !manager.groupsByEvent && manager.groupingLevel == 0
     if opensGroup { manager.beginUndoGrouping() }
     body()
     if opensGroup { manager.endUndoGrouping() }
   }
 
   func textViewDidChangeText() {
+    vimHost.textDidChange()
     guard !applyingProgrammaticChange else { return }
     delegate?.editorTextDidChange(self, text: textView.string)
   }

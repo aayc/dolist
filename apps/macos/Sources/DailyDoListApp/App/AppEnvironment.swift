@@ -25,6 +25,8 @@ struct AppEnvironment {
   /// OS integrations with side effects: notifications, Dock badge, NSApp appearance, window
   /// observers, global hotkey. Off in tests.
   var enablesSystemServices: Bool
+  /// The pasteboard behind vim's `+` and `*` registers (tests pass a private one).
+  var vimPasteboard: @MainActor () -> VimPasteboard = { SystemVimPasteboard() }
 
   /// The real app. Demo mode keeps its own preferences so demo tabs never replace real ones.
   static func live() -> AppEnvironment {

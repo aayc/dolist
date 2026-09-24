@@ -3,7 +3,9 @@ import DailyDoListAgent
 import DailyDoListClient
 import DailyDoListDaemon
 import DailyDoListDomain
+import DailyDoListEditor
 import DailyDoListModels
+import DailyDoListVim
 import Foundation
 import Observation
 
@@ -41,6 +43,13 @@ public final class AppModel {
   var workspace: Workspace?
   /// Path of today's daily note once known (agent inbox scope).
   var todayNotePath: String?
+  /// Lines of the vimrc vim rejected when it was last applied (Settings lists them).
+  var vimrcProblems: [VimrcProblem] = []
+
+  /// The app's vim engine, like the web page's: registers, history, macros and mappings are
+  /// shared by every editor and survive reconnects.
+  @ObservationIgnored let vim: Vim
+  @ObservationIgnored let vimIntegration: EditorVimIntegration
 
   @ObservationIgnored let environment: AppEnvironment
   @ObservationIgnored var supervisor: DaemonSupervising { environment.supervisor }
@@ -65,6 +74,8 @@ public final class AppModel {
     preferences = environment.preferences
     toasts = ToastStore(scheduler: environment.scheduler)
     ui = UIState(preferences: environment.preferences)
+    vim = Vim()
+    vimIntegration = EditorVimIntegration(vim: vim, pasteboard: environment.vimPasteboard())
     settings.onChange = { [weak self] old, new in self?.settingsDidChange(from: old, to: new) }
     settings.onError = { [weak self] error in self?.toasts.error("Couldn't save settings", error) }
     tabsPersistTimer = IdleTimer(scheduler: environment.scheduler, delay: 0.5) { [weak self] in
@@ -85,8 +96,18 @@ public final class AppModel {
   // MARK: - Settings side effects
 
   private func settingsDidChange(from old: AppSettings, to new: AppSettings) {
+    // The vimrc first: the editors' sessions start with its mappings and options.
+    if new.editor.vimMode { vimrcProblems = vimIntegration.applyVimrc(new.editor.vimrc) }
     workspace?.editor.configure(new.editor)
     if old.theme != new.theme || !settings.isLoaded { applyTheme(new.theme) }
+  }
+
+  /// `:obcommand <id>`: runs an app command by its `CommandID` (the web app's ids work too:
+  /// `daily:today`, `editor:live-preview`). False when there's no such command.
+  func runCommand(id: String) -> Bool {
+    guard let command = CommandID(vimCommandID: id) else { return false }
+    CommandCatalog(model: self).run(command)
+    return true
   }
 
   func applyTheme(_ theme: ThemePreference) {
