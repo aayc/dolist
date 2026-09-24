@@ -199,10 +199,10 @@ const MISSING_BUILD_PAGE = `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Daily Do List</title>
 <style>
-  body { font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: #1e1e1e; color: #dcddde; }
+  body { font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: #0e1116; color: #f2f5f9; }
   main { max-width: 36rem; margin: 15vh auto; padding: 0 1.5rem; }
-  code { background: #2e2e2e; padding: 0.1rem 0.35rem; border-radius: 4px; }
-  a { color: #7f6df2; }
+  code { background: #1a2029; padding: 0.1rem 0.35rem; border-radius: 4px; }
+  a { color: #5ca0ff; }
 </style>
 </head>
 <body>
