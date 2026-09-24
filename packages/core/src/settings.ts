@@ -28,6 +28,14 @@ export interface AgentWatchWindow {
   futureDays: number;
 }
 
+/**
+ * What runs the orchestrator and subagent conversations: `pi` (the Pi coding-agent SDK on an
+ * OpenRouter model) or `cursor` (the Cursor CLI's agent, signed in with the user's Cursor account).
+ */
+export type AgentHarnessKind = "pi" | "cursor";
+
+export const AGENT_HARNESS_KINDS: readonly AgentHarnessKind[] = ["pi", "cursor"];
+
 /** Value ranges are enforced by the settings schemas in `@ddl/contract`. */
 export interface AgentSettings {
   /** Master switch. When false the orchestrator ignores note changes entirely. */
@@ -35,8 +43,14 @@ export interface AgentSettings {
   /** Quiet period after the last edit to a task before the orchestrator looks at it. */
   settleMs: number;
   maxConcurrentSubagents: number;
-  /** OpenRouter model id for the orchestrator and subagents. */
+  harness: AgentHarnessKind;
+  /** OpenRouter model id for the orchestrator and subagents with the Pi harness. */
   model: string;
+  /**
+   * Cursor model for the orchestrator and subagents with the Cursor harness: a model id as the
+   * Cursor CLI lists it (`composer-2.5`), optionally with parameters (`gpt-5.5[reasoning=high]`).
+   */
+  cursorModel: string;
   /** OpenRouter model id for the safety judge (defaults to `model`). */
   judgeModel: string;
   /** Which daily notes are watched, relative to today. */
@@ -56,6 +70,12 @@ export interface AppSettings {
 }
 
 export const DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash";
+export const DEFAULT_CURSOR_MODEL = "composer-2.5";
+
+/** The model id the configured harness runs its conversations on. */
+export function agentModel(agent: AgentSettings): string {
+  return agent.harness === "cursor" ? agent.cursorModel : agent.model;
+}
 
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: "system",
@@ -74,7 +94,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
     enabled: true,
     settleMs: 2500,
     maxConcurrentSubagents: 3,
+    harness: "pi",
     model: DEFAULT_MODEL,
+    cursorModel: DEFAULT_CURSOR_MODEL,
     judgeModel: DEFAULT_MODEL,
     watch: { pastDays: 0, futureDays: 7 },
     actOnExistingTasks: true,

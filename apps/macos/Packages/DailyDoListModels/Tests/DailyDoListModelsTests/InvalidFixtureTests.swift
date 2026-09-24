@@ -31,6 +31,10 @@ struct InvalidFixtureTests {
       "model with surrounding whitespace": .tolerated(constraint),
       "watch window over a year": .tolerated(constraint),
       "vimrc that is not a string": .rejected,
+      "unknown harness": .tolerated("a harness a newer daemon added decodes as .pi (AgentSettings.harness)"),
+      "empty Cursor model": .tolerated(constraint),
+      "agent settings of a daemon older than the harness setting": .tolerated(
+        "absent harness and cursorModel decode as .pi and composer-2.5"),
     ],
     "ApprovalDecisionRequest": [
       "unknown decision": .rejected,
@@ -146,6 +150,9 @@ struct InvalidFixtureTests {
       "unknown watch key": .tolerated(unknownKey),
       "section replaced by null": .tolerated("a null section decodes as nil (not patched)"),
       "vimrc of the wrong type": .rejected,
+      "unknown harness": .rejected,
+      "blank Cursor model": .tolerated(constraint),
+      "Cursor model over 200 characters": .tolerated(constraint),
     ],
     "WriteNoteRequest": [
       "missing content": .rejected,
@@ -225,5 +232,6 @@ struct InvalidFixtureTests {
     #expect(!Self.decodes(ApprovalScope.self, "forever"))
     #expect(!Self.decodes(ThemePreference.self, "neon"))
     #expect(!Self.decodes(VaultEntryKind.self, "symlink"))
+    #expect(!Self.decodes(AgentHarnessKind.self, "claude"))
   }
 }

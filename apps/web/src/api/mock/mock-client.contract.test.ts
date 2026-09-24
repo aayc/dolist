@@ -156,6 +156,10 @@ describe("MockDaemonClient ⇄ wire contract", () => {
       "SettingsResponse",
       await call(client.updateSettings({ editor: { vimMode: true }, agent: { settleMs: 1000 } })),
     );
+    expectWire(
+      "SettingsResponse",
+      await call(client.updateSettings({ agent: { harness: "cursor", cursorModel: " gpt-5.5 " } })),
+    );
     expectWire("AgentStatusResponse", await call(client.setAgentEnabled(false)));
     await checkQueries(client, path);
     client.disconnect();
@@ -184,6 +188,7 @@ describe("MockDaemonClient ⇄ wire contract", () => {
       [() => client.renamePath("Ideas.md", "Welcome.md"), 409, "ApiErrorBody"],
       [() => client.deleteFolder("Nope"), 404, "ApiErrorBody"],
       [() => client.getThread("thr_missing"), 404, "ApiErrorBody"],
+      [() => client.updateSettings({ agent: { cursorModel: " " } }), 400, "ApiErrorBody"],
       [
         () => client.writeNote("Ideas.md", { content: "x", baseVersion: "stale" }),
         409,

@@ -34,6 +34,21 @@ describe("settings routes", () => {
     expect(get.settings).toEqual(body.settings);
   });
 
+  it("hands a harness switch to the runtime", async () => {
+    const runtime = new FakeAgentRuntime();
+    const { request } = await createTestApp({ runtime });
+    const res = await request(API_ROUTES.settings, {
+      method: "PUT",
+      json: { agent: { harness: "cursor", cursorModel: "gpt-5.5" } },
+    });
+    expect(res.status).toBe(200);
+    const [applied] = runtime.callsTo("updateSettings").at(-1) ?? [];
+    expect((applied as AppSettings).agent).toMatchObject({
+      harness: "cursor",
+      cursorModel: "gpt-5.5",
+    });
+  });
+
   it("rejects invalid values and unknown keys without applying anything", async () => {
     const runtime = new FakeAgentRuntime();
     const { request } = await createTestApp({ runtime });
@@ -41,6 +56,8 @@ describe("settings routes", () => {
       { theme: "neon" },
       { editor: { fontSize: 400 } },
       { agent: { nope: true } },
+      { agent: { harness: "claude" } },
+      { agent: { cursorModel: "" } },
       { dailyNotes: { folder: ".hidden" } },
     ]) {
       const res = await request(API_ROUTES.settings, { method: "PUT", json });
@@ -305,5 +322,19 @@ describe("with the null runtime", () => {
       json: { enabled: false },
     });
     expect(((await toggled.json()) as AgentStatusResponse).enabled).toBe(false);
+  });
+
+  it("reports the model of the configured harness", async () => {
+    const runtime = new NullAgentRuntime({ model: "vendor/model-a" });
+    const { request } = await createTestApp({ runtime });
+    const status = async () =>
+      ((await (await request(API_ROUTES.agentStatus)).json()) as AgentStatusResponse).model;
+    expect(await status()).toBe("vendor/model-a");
+    const put = (agent: Record<string, string>) =>
+      request(API_ROUTES.settings, { method: "PUT", json: { agent } });
+    await put({ harness: "cursor", cursorModel: "gpt-5.5" });
+    expect(await status()).toBe("gpt-5.5");
+    await put({ harness: "pi", model: "vendor/model-b" });
+    expect(await status()).toBe("vendor/model-b");
   });
 });

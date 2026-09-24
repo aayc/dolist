@@ -259,9 +259,15 @@ include `DDL_MODEL` from the daemon config).
 { version: 1, theme?, editor?: { vimMode?, vimrc? (≤16384), livePreview?, readableLineLength?,
   fontSize? (8–48), spellcheck?, showLineNumbers? }, dailyNotes?/weeklyNotes?: { folder? (≤512), format? (≤128),
   template? (≤512) }, agent?: { enabled?, settleMs? (0–120000), maxConcurrentSubagents? (1–32),
-  model?, judgeModel? (1–200 chars, trimmed), watch?: { pastDays?, futureDays? (0–366) },
-  actOnExistingTasks?, approvalTimeoutMs? (1 min–30 days) } }
+  harness? ("pi" | "cursor"), model?, cursorModel?, judgeModel? (1–200 chars, trimmed),
+  watch?: { pastDays?, futureDays? (0–366) }, actOnExistingTasks?, approvalTimeoutMs? (1 min–30 days) } }
 ```
+
+- **Agent harness:** `agent.harness` picks what runs the agent: `pi` on the OpenRouter
+  `agent.model`, or `cursor` (the Cursor CLI) on `agent.cursorModel`. `judgeModel` is an OpenRouter
+  model with either harness. Files written before these keys existed have neither and load with
+  `pi` and `composer-2.5`; a harness this version doesn't know (written by a newer app) falls back
+  to `pi` like any other invalid value, and stays in the file.
 
 - **Per-field fallback:** each stored value is validated on its own; an invalid one falls back to
   its default and is reported, the rest of the file still applies. Daily/weekly note settings

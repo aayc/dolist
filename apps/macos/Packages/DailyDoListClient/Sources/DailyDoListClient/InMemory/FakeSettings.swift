@@ -31,18 +31,19 @@ enum FakeSettings {
       check(agent.watch?.pastDays, SettingsRanges.watchDays, "agent.watch.pastDays")
       check(agent.watch?.futureDays, SettingsRanges.watchDays, "agent.watch.futureDays")
       check(agent.approvalTimeoutMs, SettingsRanges.approvalTimeoutMs, "agent.approvalTimeoutMs")
-      patch.agent?.model = try? trimmedModel(agent.model, "agent.model", &problems)
-      patch.agent?.judgeModel = try? trimmedModel(agent.judgeModel, "agent.judgeModel", &problems)
+      patch.agent?.model = trimmedModel(agent.model, "agent.model", &problems)
+      patch.agent?.cursorModel = trimmedModel(agent.cursorModel, "agent.cursorModel", &problems)
+      patch.agent?.judgeModel = trimmedModel(agent.judgeModel, "agent.judgeModel", &problems)
     }
     if !problems.isEmpty { throw .invalidRequest("Invalid settings: " + problems.joined(separator: "; ")) }
     return patch
   }
 
-  private static func trimmedModel(_ value: String?, _ path: String, _ problems: inout [String]) throws -> String? {
+  private static func trimmedModel(_ value: String?, _ path: String, _ problems: inout [String]) -> String? {
     guard let value else { return nil }
     let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-    if trimmed.isEmpty || trimmed.utf16.count > 200 {
-      problems.append("\(path) must be 1-200 characters")
+    if trimmed.isEmpty || trimmed.utf16.count > SettingsRanges.modelIdLength {
+      problems.append("\(path) must be 1-\(SettingsRanges.modelIdLength) characters")
     }
     return trimmed
   }

@@ -413,12 +413,16 @@ const agentWatchWindow = (): Arb<core.AgentWatchWindow> =>
     futureDays: intIn(SETTINGS_RANGES.watchDays),
   });
 
+const agentHarnessKind = () => enumOf<core.AgentHarnessKind>("pi", "cursor");
+
 const agentSettings = (): Arb<core.AgentSettings> =>
   fc.record({
     enabled: fc.boolean(),
     settleMs: intIn(SETTINGS_RANGES.settleMs),
     maxConcurrentSubagents: intIn(SETTINGS_RANGES.maxConcurrentSubagents),
+    harness: agentHarnessKind(),
     model: p.modelId(),
+    cursorModel: p.cursorModelId(),
     judgeModel: p.modelId(),
     watch: agentWatchWindow(),
     actOnExistingTasks: fc.boolean(),
@@ -470,7 +474,9 @@ const updateSettingsRequest = (): Arb<core.UpdateSettingsRequest> =>
           enabled: fc.boolean(),
           settleMs: intIn(SETTINGS_RANGES.settleMs),
           maxConcurrentSubagents: intIn(SETTINGS_RANGES.maxConcurrentSubagents),
+          harness: agentHarnessKind(),
           model: p.modelId(),
+          cursorModel: p.cursorModelId(),
           judgeModel: p.modelId(),
           watch: partialOf<core.AgentWatchWindow>({
             pastDays: intIn(SETTINGS_RANGES.watchDays),
@@ -921,6 +927,7 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   DailyNoteSettings: dailyNoteSettings,
   WeeklyNoteSettings: weeklyNoteSettings,
   AgentWatchWindow: agentWatchWindow,
+  AgentHarnessKind: agentHarnessKind,
   AgentSettings: agentSettings,
   AppSettings: appSettings,
   UpdateSettingsRequest: updateSettingsRequest,
@@ -1014,6 +1021,7 @@ export const arb = plainFactories({
   dailyNoteSettings,
   weeklyNoteSettings,
   agentWatchWindow,
+  agentHarnessKind,
   agentSettings,
   appSettings,
   updateSettingsRequest,
@@ -1092,4 +1100,5 @@ export const arb = plainFactories({
   jsonValue: p.jsonValue,
   base64: p.base64,
   modelId: p.modelId,
+  cursorModelId: p.cursorModelId,
 });

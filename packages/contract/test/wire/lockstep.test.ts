@@ -45,6 +45,7 @@ interface Lockstep {
   DailyNoteSettings: core.DailyNoteSettings;
   WeeklyNoteSettings: core.WeeklyNoteSettings;
   AgentWatchWindow: core.AgentWatchWindow;
+  AgentHarnessKind: core.AgentHarnessKind;
   AgentSettings: core.AgentSettings;
   AppSettings: core.AppSettings;
   UpdateSettingsRequest: core.UpdateSettingsRequest;

@@ -82,7 +82,9 @@ describe("wire ⇄ persisted settings ranges", () => {
     }
   });
 
-  test.prop([fc.constantFrom("model", "judgeModel"), fc.constantFrom("", "   ", "m".repeat(201))])(
+  const MODEL_KEYS = ["model", "cursorModel", "judgeModel"] as const;
+
+  test.prop([fc.constantFrom(...MODEL_KEYS), fc.constantFrom("", "   ", "m".repeat(201))])(
     "both reject unusable model ids",
     (key, value) => {
       const patch = { agent: { [key]: value } };
@@ -90,4 +92,31 @@ describe("wire ⇄ persisted settings ranges", () => {
       expect(PersistedSettingsOverridesSchema.safeParse(patch).success).toBe(false);
     },
   );
+
+  test.prop([
+    fc.constantFrom(...MODEL_KEYS),
+    arb.cursorModelId(),
+    fc.constantFrom("", " ", "\t\n"),
+  ])("both trim model ids the same way", (key, id, padding) => {
+    const patch = { agent: { [key]: `${padding}${id}${padding}` } };
+    const expected = { agent: { [key]: id } };
+    expect(UpdateSettingsRequestSchema.parse(patch)).toEqual(expected);
+    expect(PersistedSettingsOverridesSchema.parse(patch)).toEqual(expected);
+  });
+
+  it("both accept exactly the known harnesses", () => {
+    for (const [harness, ok] of [
+      ["pi", true],
+      ["cursor", true],
+      ["claude", false],
+      ["Cursor", false],
+      ["", false],
+      [1, false],
+      [null, false],
+    ] as const) {
+      const patch = { agent: { harness } };
+      expect(UpdateSettingsRequestSchema.safeParse(patch).success, String(harness)).toBe(ok);
+      expect(PersistedSettingsOverridesSchema.safeParse(patch).success, String(harness)).toBe(ok);
+    }
+  });
 });

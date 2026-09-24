@@ -5,6 +5,7 @@ import {
   type AgentStatusResponse,
   type ApprovalRequest,
   type AppSettings,
+  agentModel,
   DEFAULT_MODEL,
   type TaskAgentRecord,
   type ThreadSummary,
@@ -71,7 +72,7 @@ export class NullAgentRuntime implements AgentRuntime {
 
   updateSettings(settings: AppSettings): void {
     this.enabled = settings.agent.enabled;
-    this.model = settings.agent.model;
+    this.model = agentModel(settings.agent);
   }
 
   noteEditorActivity(): void {}

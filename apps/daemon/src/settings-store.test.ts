@@ -4,7 +4,14 @@ import {
   persistedQuarantinePath,
   resolvePersistedSettings,
 } from "@ddl/contract";
-import { type AppSettings, DEFAULT_SETTINGS, type Logger, mergeSettings } from "@ddl/core";
+import {
+  type AppSettings,
+  agentModel,
+  DEFAULT_CURSOR_MODEL,
+  DEFAULT_SETTINGS,
+  type Logger,
+  mergeSettings,
+} from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
 import { fc, test } from "@fast-check/vitest";
 import { describe, expect, it, vi } from "vitest";
@@ -117,6 +124,45 @@ describe("settings store", () => {
     expect(await storedOverrides(storage)).toEqual({});
   });
 
+  it("switches the agent harness and keeps each harness's model", async () => {
+    const storage = vault();
+    const store = await open(storage);
+    const cursor = await store.update({ agent: { harness: "cursor", cursorModel: "gpt-5.5" } });
+    expect(cursor.agent).toMatchObject({
+      harness: "cursor",
+      cursorModel: "gpt-5.5",
+      model: DEFAULT_SETTINGS.agent.model,
+    });
+    expect(agentModel(cursor.agent)).toBe("gpt-5.5");
+    expect(await storedOverrides(storage)).toEqual({
+      agent: { harness: "cursor", cursorModel: "gpt-5.5" },
+    });
+
+    const pi = await store.update({ agent: { harness: "pi", model: "vendor/model-a" } });
+    expect(pi.agent).toMatchObject({
+      harness: "pi",
+      model: "vendor/model-a",
+      cursorModel: "gpt-5.5",
+    });
+    expect((await open(storage)).get()).toEqual(pi);
+  });
+
+  it("rejects an unknown harness and unusable Cursor models, storing nothing", async () => {
+    const storage = vault();
+    const store = await open(storage);
+    for (const agent of [
+      { harness: "claude" },
+      { cursorModel: "   " },
+      { cursorModel: "c".repeat(201) },
+    ]) {
+      await expect(store.update({ agent } as never)).rejects.toBeInstanceOf(
+        SettingsValidationError,
+      );
+    }
+    expect(store.get()).toEqual(DEFAULT_SETTINGS);
+    expect(await storedOverrides(storage)).toEqual({});
+  });
+
   it("serializes concurrent updates without losing either", async () => {
     const storage = vault();
     const store = await open(storage);
@@ -199,6 +245,30 @@ describe("golden settings fixtures through the real settings store", () => {
         settleMs: 4000,
         model: "vendor/model-a",
         watch: { pastDays: 0, futureDays: 2 },
+      },
+    });
+    expect((await storage.read(SETTINGS_PATH))!.content).toBe(content);
+  });
+
+  it.each(["v1.json", "legacy-unversioned.json"])(
+    "%s, written before the harness setting, loads with the Pi harness and the default Cursor model",
+    async (name) => {
+      const store = await open(vault({ [SETTINGS_PATH]: readFixture("settings", name) }));
+      expect(store.get().agent).toMatchObject({ harness: "pi", cursorModel: DEFAULT_CURSOR_MODEL });
+    },
+  );
+
+  it("v1-cursor-harness.json loads exactly and is not rewritten", async () => {
+    const content = readFixture("settings", "v1-cursor-harness.json");
+    const storage = vault({ [SETTINGS_PATH]: content });
+    const store = await open(storage);
+    expect(store.get()).toEqual({
+      ...DEFAULT_SETTINGS,
+      agent: {
+        ...DEFAULT_SETTINGS.agent,
+        harness: "cursor",
+        cursorModel: "gpt-5.5[reasoning=high]",
+        judgeModel: "vendor/judge-a",
       },
     });
     expect((await storage.read(SETTINGS_PATH))!.content).toBe(content);
@@ -306,6 +376,28 @@ describe("settings.json edge cases", () => {
     expect(await storedOverrides(storage)).toEqual({ theme: "dark", editor: { fontSize: 20 } });
   });
 
+  it("runs Pi when the file holds a harness from a newer app, and keeps that value", async () => {
+    const storage = vault({
+      [SETTINGS_PATH]: JSON.stringify({
+        version: 1,
+        agent: { harness: "claude", cursorModel: "gpt-6" },
+      }),
+    });
+    const { logger, entries } = recordingLogger();
+    const store = await open(storage, logger);
+    expect(store.get().agent).toMatchObject({ harness: "pi", cursorModel: "gpt-6" });
+    expect(entries).toContainEqual({
+      level: "warn",
+      message: "Ignoring invalid settings; their defaults apply",
+      fields: { fields: ["agent.harness"] },
+    });
+    await store.update({ theme: "dark" });
+    expect(await storedOverrides(storage)).toEqual({
+      agent: { harness: "claude", cursorModel: "gpt-6" },
+      theme: "dark",
+    });
+  });
+
   it("refuses updates once a newer app version replaced the file while running", async () => {
     const storage = vault();
     const store = await open(storage);
@@ -331,7 +423,21 @@ describe("persisted settings validation matches PUT /api/settings", () => {
     ["agent.enabled", [true, "true"]],
     ["agent.settleMs", [0, 120_000, -1, 120_001, 1.5]],
     ["agent.maxConcurrentSubagents", [1, 32, 0, 33, 2.5]],
+    ["agent.harness", ["pi", "cursor", "claude", "Cursor", "", 1, null]],
     ["agent.model", ["vendor/model", "  padded  ", "", "   ", "x".repeat(201)]],
+    [
+      "agent.cursorModel",
+      [
+        "composer-2.5",
+        "gpt-5.5[reasoning=high]",
+        " padded ",
+        "",
+        "\t",
+        "x".repeat(200),
+        "x".repeat(201),
+        5,
+      ],
+    ],
     ["agent.judgeModel", ["vendor/judge", ""]],
     ["agent.watch.pastDays", [0, 366, -1, 367, 1.5]],
     ["agent.watch.futureDays", [7, "7"]],

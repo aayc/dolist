@@ -4,6 +4,7 @@ import {
   type ApprovalRequest,
   type AppSettings,
   type ArtifactMeta,
+  agentModel,
   type ConnectorStatus,
   createId,
   type Deferred,
@@ -643,7 +644,7 @@ export class MockAgent {
     return {
       mode: "mock",
       enabled: this.enabled,
-      model: this.host.settings().agent.model,
+      model: agentModel(this.host.settings().agent),
       running,
       queued,
       pendingApprovals,

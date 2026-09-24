@@ -1,4 +1,11 @@
-import { type ServerEvent, type ServerEventOf, today, toISODate } from "@ddl/core";
+import { WIRE_LIMITS } from "@ddl/contract/wire";
+import {
+  type AgentHarnessKind,
+  type ServerEvent,
+  type ServerEventOf,
+  today,
+  toISODate,
+} from "@ddl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConflictError } from "../errors";
 import { MockDaemonClient } from "./mock-client";
@@ -80,6 +87,48 @@ describe("MockDaemonClient vault", () => {
     const { client } = create();
     const { hits } = await call(client.search("cedar"));
     expect(hits[0]).toMatchObject({ path: "Projects/Garden Redesign.md" });
+  });
+});
+
+describe("MockDaemonClient settings", () => {
+  it("switches the harness, trims model ids and reports the harness's model", async () => {
+    const { client, events } = create();
+    const { settings } = await call(
+      client.updateSettings({ agent: { harness: "cursor", cursorModel: "  gpt-5.5  " } }),
+    );
+    expect(settings.agent).toMatchObject({
+      harness: "cursor",
+      cursorModel: "gpt-5.5",
+      model: "mock/scripted-agent",
+    });
+    expect((await call(client.getAgentStatus())).model).toBe("gpt-5.5");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(ofType(events, "settings.changed").at(-1)?.settings.agent.harness).toBe("cursor");
+
+    await call(client.updateSettings({ agent: { harness: "pi" } }));
+    expect((await call(client.getAgentStatus())).model).toBe("mock/scripted-agent");
+    expect((await call(client.getSettings())).settings.agent.cursorModel).toBe("gpt-5.5");
+  });
+
+  it("rejects what the daemon rejects, changing nothing", async () => {
+    const { client } = create();
+    const before = await call(client.getSettings());
+    for (const patch of [
+      { agent: { cursorModel: "   " } },
+      { agent: { model: "m".repeat(WIRE_LIMITS.modelIdLength + 1) } },
+      { agent: { harness: "claude" as AgentHarnessKind } },
+    ]) {
+      const rejected = client.updateSettings(patch).then(
+        () => expect.unreachable(JSON.stringify(patch)),
+        (error: unknown) => error,
+      );
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await rejected).toMatchObject({ status: 400, body: { error: "invalid_request" } });
+    }
+    expect(await call(client.getSettings())).toEqual(before);
+    const longest = "m".repeat(WIRE_LIMITS.modelIdLength);
+    const { settings } = await call(client.updateSettings({ agent: { cursorModel: longest } }));
+    expect(settings.agent.cursorModel).toBe(longest);
   });
 });
 

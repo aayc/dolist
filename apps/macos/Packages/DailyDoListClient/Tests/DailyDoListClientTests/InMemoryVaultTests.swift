@@ -185,6 +185,8 @@ struct InMemoryVaultTests {
       SettingsPatch(editor: .init(fontSize: 400)), SettingsPatch(agent: .init(settleMs: -1)),
       SettingsPatch(agent: .init(maxConcurrentSubagents: 0)), SettingsPatch(agent: .init(approvalTimeoutMs: 1000)),
       SettingsPatch(agent: .init(model: "   ")), SettingsPatch(agent: .init(watch: .init(pastDays: 400))),
+      SettingsPatch(agent: .init(harness: .cursor, cursorModel: " ")),
+      SettingsPatch(agent: .init(cursorModel: String(repeating: "c", count: SettingsRanges.modelIdLength + 1))),
       SettingsPatch(dailyNotes: .init(folder: ".hidden")), SettingsPatch(dailyNotes: .init(folder: "../out")),
       SettingsPatch(dailyNotes: .init(template: ".daily-do-list/t.md")),
       SettingsPatch(weeklyNotes: .init(format: String(repeating: "Y", count: 129))),
@@ -206,6 +208,21 @@ struct InMemoryVaultTests {
     let settingsEvents = recorder.events.filter { if case .settingsChanged = $0 { true } else { false } }
     #expect(settingsEvents.count == 2)
     #expect(recorder.events.contains(.agentStatus(status)))
+  }
+
+  @Test func theHarnessSwitchesAndTheStatusReportsItsModel() async throws {
+    let client = Self.client()
+    await client.connect()
+    let cursor = try await client.updateSettings(SettingsPatch(agent: .init(harness: .cursor, cursorModel: "  gpt-5.5  ")))
+    #expect(cursor.agent.harness == .cursor && cursor.agent.cursorModel == "gpt-5.5", "model ids are trimmed")
+    #expect(try await client.agentStatus().model == "gpt-5.5")
+    let longest = String(repeating: "c", count: SettingsRanges.modelIdLength)
+    #expect(try await client.updateSettings(SettingsPatch(agent: .init(cursorModel: longest))).agent.cursorModel == longest)
+
+    let pi = try await client.updateSettings(SettingsPatch(agent: .init(harness: .pi)))
+    #expect(pi.agent.cursorModel == longest, "each harness keeps its model")
+    #expect(try await client.agentStatus().model == pi.agent.model)
+    await client.disconnect()
   }
 
   @Test func ownWritesAreAttributedAndExternalOnesAreNot() async throws {

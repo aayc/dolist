@@ -932,6 +932,11 @@
       "additionalProperties": {},
       "description": "Days around today whose daily notes the orchestrator watches."
     },
+    "AgentHarnessKind": {
+      "type": "string",
+      "enum": ["pi", "cursor"],
+      "description": "What runs the orchestrator and subagent conversations: `pi` (the Pi coding-agent SDK on the OpenRouter `model`) or `cursor` (the Cursor CLI's agent on `cursorModel`, signed in with the user's Cursor account)."
+    },
     "AgentSettings": {
       "type": "object",
       "properties": {
@@ -959,19 +964,29 @@
           "maximum": 2592000000,
           "description": "How long an approval request waits before it is auto-denied."
         },
+        "harness": {
+          "$ref": "#/$defs/AgentHarnessKind"
+        },
         "model": {
           "type": "string",
           "minLength": 1,
           "maxLength": 200,
           "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
-          "description": "OpenRouter model id for the orchestrator and subagents."
+          "description": "OpenRouter model id for the orchestrator and subagents with the Pi harness."
+        },
+        "cursorModel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+          "description": "Model for the orchestrator and subagents with the Cursor harness, as the Cursor CLI lists it (`composer-2.5`), optionally with parameters (`gpt-5.5[reasoning=high]`)."
         },
         "judgeModel": {
           "type": "string",
           "minLength": 1,
           "maxLength": 200,
           "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
-          "description": "OpenRouter model id for the safety judge."
+          "description": "OpenRouter model id for the safety judge (whichever harness runs the agent)."
         },
         "watch": {
           "$ref": "#/$defs/AgentWatchWindow"
@@ -983,7 +998,9 @@
         "maxConcurrentSubagents",
         "actOnExistingTasks",
         "approvalTimeoutMs",
+        "harness",
         "model",
+        "cursorModel",
         "judgeModel",
         "watch"
       ],
@@ -1120,7 +1137,15 @@
               "maximum": 2592000000,
               "description": "How long an approval request waits before it is auto-denied."
             },
+            "harness": {
+              "$ref": "#/$defs/AgentHarnessKind"
+            },
             "model": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "cursorModel": {
               "type": "string",
               "minLength": 1,
               "maxLength": 200

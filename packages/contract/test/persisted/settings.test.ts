@@ -65,6 +65,28 @@ describe("resolvePersistedSettings", () => {
     });
   });
 
+  it("keeps the agent harness and Cursor model, trimmed, and drops a harness it doesn't know", () => {
+    expect(
+      resolvePersistedSettings({
+        agent: { harness: "cursor", cursorModel: " gpt-5.5[reasoning=high] " },
+      }),
+    ).toEqual({
+      overrides: { agent: { harness: "cursor", cursorModel: "gpt-5.5[reasoning=high]" } },
+      invalid: [],
+      unknown: [],
+    });
+    // A newer app may add harnesses: this one falls back to the default for the field only.
+    expect(
+      resolvePersistedSettings({
+        agent: { harness: "claude", cursorModel: "  ", model: "vendor/m" },
+      }),
+    ).toEqual({
+      overrides: { agent: { model: "vendor/m" } },
+      invalid: ["agent.harness", "agent.cursorModel"],
+      unknown: [],
+    });
+  });
+
   it("drops empty sections and ignores a stray version key", () => {
     expect(resolvePersistedSettings({ version: 1, editor: { fontSize: 2 } })).toEqual({
       overrides: {},

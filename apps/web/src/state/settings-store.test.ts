@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { type AppSettings, DEFAULT_SETTINGS } from "@ddl/core";
+import { type AppSettings, DEFAULT_CURSOR_MODEL, DEFAULT_SETTINGS } from "@ddl/core";
 import { describe, expect, it, vi } from "vitest";
 import { applySettings, getSettings } from "./settings-store";
 
@@ -21,5 +21,26 @@ describe("applySettings", () => {
       editor: { ...DEFAULT_SETTINGS.editor, vimrc: "nmap j gj" },
     });
     expect(getSettings().editor.vimrc).toBe("nmap j gj");
+  });
+
+  it("fills in the harness and Cursor model for a daemon older than the harness setting", () => {
+    const { harness: _harness, cursorModel: _cursorModel, ...olderAgent } = DEFAULT_SETTINGS.agent;
+    applySettings({
+      ...DEFAULT_SETTINGS,
+      agent: { ...olderAgent, model: "vendor/model-a" },
+    } as AppSettings);
+    expect(getSettings().agent).toMatchObject({
+      harness: "pi",
+      model: "vendor/model-a",
+      cursorModel: DEFAULT_CURSOR_MODEL,
+    });
+  });
+
+  it("keeps the harness and Cursor model the daemon sends", () => {
+    applySettings({
+      ...DEFAULT_SETTINGS,
+      agent: { ...DEFAULT_SETTINGS.agent, harness: "cursor", cursorModel: "gpt-5.5" },
+    });
+    expect(getSettings().agent).toMatchObject({ harness: "cursor", cursorModel: "gpt-5.5" });
   });
 });

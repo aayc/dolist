@@ -64,5 +64,27 @@
     "value": { "editor": { "vimrc": 3 } },
     "path": ["editor", "vimrc"],
     "code": "invalid_type"
+  },
+  {
+    "name": "unknown harness",
+    "value": { "agent": { "harness": "claude" } },
+    "path": ["agent", "harness"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "blank Cursor model",
+    "value": { "agent": { "harness": "cursor", "cursorModel": "   " } },
+    "path": ["agent", "cursorModel"],
+    "code": "too_small"
+  },
+  {
+    "name": "Cursor model over 200 characters",
+    "value": {
+      "agent": {
+        "cursorModel": "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    },
+    "path": ["agent", "cursorModel"],
+    "code": "too_big"
   }
 ]

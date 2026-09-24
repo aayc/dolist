@@ -276,3 +276,19 @@ export const modelId = () =>
     { weight: 1, arbitrary: trimmedText(WIRE_LIMITS.modelIdLength) },
     { weight: 1, arbitrary: fc.constant("m".repeat(WIRE_LIMITS.modelIdLength)) },
   );
+
+/** A Cursor CLI model id, optionally with parameters, without surrounding whitespace. */
+export const cursorModelId = () =>
+  fc.oneof(
+    {
+      weight: 4,
+      arbitrary: fc.constantFrom(
+        "composer-2.5",
+        "gpt-5.5",
+        "gpt-5.5[reasoning=high]",
+        "claude-4.5-sonnet-thinking",
+      ),
+    },
+    { weight: 1, arbitrary: trimmedText(WIRE_LIMITS.modelIdLength) },
+    { weight: 1, arbitrary: fc.constant("c".repeat(WIRE_LIMITS.modelIdLength)) },
+  );

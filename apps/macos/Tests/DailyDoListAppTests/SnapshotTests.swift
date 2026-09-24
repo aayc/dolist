@@ -132,6 +132,12 @@ struct SnapshotTests {
         try await render(view.frame(width: 600, height: 640), size: CGSize(width: 600, height: 640), dark: dark, name: name)
       }
     }
+    await model.settings.update(SettingsPatch(agent: .init(harness: .cursor, cursorModel: "gpt-5.5[reasoning=high]")))
+    for dark in [false, true] {
+      try await render(
+        AgentSettingsPane(model: model, settings: model.settings).frame(width: 600, height: 1_000),
+        size: CGSize(width: 600, height: 1_000), dark: dark, name: "settings-agent-cursor")
+    }
     await model.teardown()
   }
 

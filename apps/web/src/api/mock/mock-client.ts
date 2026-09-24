@@ -1,4 +1,5 @@
 import {
+  AGENT_HARNESS_KINDS,
   type AgentStatusResponse,
   API_VERSION,
   type ApprovalDecisionRequest,
@@ -90,6 +91,34 @@ function vaultPath(input: string): string {
     throw new HttpError(400, message, { error: "invalid_path", message });
   }
   return path;
+}
+
+const MODEL_ID_KEYS = ["model", "cursorModel", "judgeModel"] as const;
+/** The contract's `WIRE_LIMITS.modelIdLength` (zod stays out of the bundle). */
+const MAX_MODEL_ID_LENGTH = 200;
+
+/** The daemon's checks on the agent section: a known harness, and model ids trimmed to 1–200 chars. */
+function checkedSettingsPatch(patch: UpdateSettingsRequest): UpdateSettingsRequest {
+  const { agent } = patch;
+  if (!agent) return patch;
+  const problems: string[] = [];
+  if (agent.harness !== undefined && !AGENT_HARNESS_KINDS.includes(agent.harness)) {
+    problems.push(`agent.harness must be one of ${AGENT_HARNESS_KINDS.join(", ")}`);
+  }
+  const trimmed: Partial<Record<(typeof MODEL_ID_KEYS)[number], string>> = {};
+  for (const key of MODEL_ID_KEYS) {
+    const id = agent[key]?.trim();
+    if (id === undefined) continue;
+    if (id === "" || id.length > MAX_MODEL_ID_LENGTH) {
+      problems.push(`agent.${key} must be 1-${MAX_MODEL_ID_LENGTH} characters`);
+    }
+    trimmed[key] = id;
+  }
+  if (problems.length > 0) {
+    const message = `Invalid settings: ${problems.join("; ")}`;
+    throw new HttpError(400, message, { error: "invalid_request", message });
+  }
+  return { ...patch, agent: { ...agent, ...trimmed } };
 }
 
 /** Fully in-browser daemon: in-memory vault + simulated agent speaking the real protocol. */
@@ -328,7 +357,15 @@ export class MockDaemonClient implements DaemonClient {
 
   /** Applied when the request is sent (like the daemon on receipt), so a reload can't lose it. */
   updateSettings(patch: UpdateSettingsRequest): Promise<SettingsResponse> {
-    this.settings = mergeSettings(this.settings, patch);
+    let checked: UpdateSettingsRequest;
+    try {
+      checked = checkedSettingsPatch(patch);
+    } catch (error) {
+      return this.respond(() => {
+        throw error;
+      });
+    }
+    this.settings = mergeSettings(this.settings, checked);
     if (this.persistSettings) writeJson(STORAGE_KEYS.mockSettings, this.settings);
     this.emit({ type: "settings.changed", settings: this.settings });
     this.emit({ type: "agent.status", status: this.agent.status() });

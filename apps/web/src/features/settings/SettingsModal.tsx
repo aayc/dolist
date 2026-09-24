@@ -1,4 +1,9 @@
-import type { ConnectorStatus, ThemePreference } from "@ddl/core";
+import {
+  type ConnectorStatus,
+  DEFAULT_CURSOR_MODEL,
+  DEFAULT_MODEL,
+  type ThemePreference,
+} from "@ddl/core";
 import { X } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { errorMessage } from "../../api/errors";
@@ -12,7 +17,9 @@ import { type SettingsSection, ui } from "../../state/ui-store";
 import { useVaultStore } from "../../state/vault-store";
 import { useVimStore } from "../../state/vim-store";
 import { Modal } from "../overlays/Modal";
+import { HARNESS_OPTIONS, shownHarness } from "./agent-harness";
 import { dailyPreview } from "./daily-preview";
+import { draftToCommit } from "./draft";
 import "../../styles/settings.css";
 
 const SECTIONS: ReadonlyArray<{ key: SettingsSection; label: string }> = [
@@ -103,7 +110,10 @@ function Toggle({
   );
 }
 
-/** Text input that commits after typing pauses (and on blur), keeping a live local draft. */
+/**
+ * Text input that commits after typing pauses (and on blur), keeping a live local draft. A
+ * `required` value is committed trimmed and never blank: a blank draft reverts on blur.
+ */
 function DraftInput({
   value,
   onCommit,
@@ -111,6 +121,7 @@ function DraftInput({
   label,
   testId,
   placeholder,
+  required = false,
 }: {
   value: string;
   onCommit(value: string): void;
@@ -118,14 +129,16 @@ function DraftInput({
   label: string;
   testId?: string;
   placeholder?: string;
+  required?: boolean;
 }) {
   const [draft, setDraft] = useState(value);
+  const next = draftToCommit(draft, value, required);
   useEffect(() => setDraft(value), [value]);
   useEffect(() => {
-    if (draft === value) return;
-    const timer = setTimeout(() => onCommit(draft), 500);
+    if (next === null) return;
+    const timer = setTimeout(() => onCommit(next), 500);
     return () => clearTimeout(timer);
-  }, [draft, value, onCommit]);
+  }, [next, onCommit]);
   return (
     <input
       className="input"
@@ -138,7 +151,7 @@ function DraftInput({
         setDraft(event.target.value);
         onDraft?.(event.target.value);
       }}
-      onBlur={() => draft !== value && onCommit(draft)}
+      onBlur={() => (next === null ? setDraft(value) : onCommit(next))}
     />
   );
 }
@@ -393,6 +406,7 @@ function AgentSection() {
   const settings = useSettingsStore((s) => s.settings.agent);
   const status = useAgentStore((s) => s.status);
   const enabled = status?.enabled ?? settings.enabled;
+  const harness = shownHarness(settings);
   return (
     <section>
       <h2 className="settings-heading">Agent</h2>
@@ -408,6 +422,68 @@ function AgentSection() {
           testId="setting-agent-enabled"
         />
       </Setting>
+      <Setting name="Agent" description="What runs the orchestrator and its subagents.">
+        <fieldset className="segmented" data-testid="setting-harness">
+          <legend className="sr-only">Agent</legend>
+          {HARNESS_OPTIONS.map(({ kind, label }) => (
+            <label
+              key={kind}
+              className={cx("segmented-item", harness === kind && "is-active")}
+              data-testid={`setting-harness-${kind}`}
+            >
+              <input
+                type="radio"
+                className="sr-only"
+                name="agent-harness"
+                value={kind}
+                checked={harness === kind}
+                onChange={() => void updateSettings({ agent: { harness: kind } })}
+              />
+              {label}
+            </label>
+          ))}
+        </fieldset>
+      </Setting>
+      {harness === "cursor" ? (
+        <Setting
+          key="cursor"
+          name="Cursor model"
+          description={
+            <>
+              A model id from <code>agent --list-models</code>, e.g. <code>composer-2.5</code> or{" "}
+              <code>gpt-5.5</code>.
+            </>
+          }
+        >
+          <DraftInput
+            value={settings.cursorModel}
+            label="Cursor model"
+            placeholder={DEFAULT_CURSOR_MODEL}
+            testId="setting-cursor-model"
+            required
+            onCommit={(cursorModel) => void updateSettings({ agent: { cursorModel } })}
+          />
+        </Setting>
+      ) : (
+        <Setting
+          key="pi"
+          name="OpenRouter model"
+          description={
+            <>
+              An OpenRouter model id, e.g. <code>{DEFAULT_MODEL}</code>.
+            </>
+          }
+        >
+          <DraftInput
+            value={settings.model}
+            label="OpenRouter model"
+            placeholder={DEFAULT_MODEL}
+            testId="setting-model"
+            required
+            onCommit={(model) => void updateSettings({ agent: { model } })}
+          />
+        </Setting>
+      )}
       <Setting
         name="Settle delay"
         description="Quiet time (ms) after you stop editing a task before the agent looks at it."
@@ -434,10 +510,10 @@ function AgentSection() {
           testId="setting-max-subagents"
         />
       </Setting>
-      <Setting name="Model" description="Configured on the daemon (OpenRouter model id).">
-        <code className="settings-value">{status?.model ?? settings.model}</code>
-      </Setting>
-      <Setting name="Safety judge model">
+      <Setting
+        name="Safety judge model"
+        description="Checks risky actions. An OpenRouter model with either agent."
+      >
         <code className="settings-value">{settings.judgeModel}</code>
       </Setting>
     </section>

@@ -9,7 +9,13 @@ import {
   EMPTY_CONNECTORS_CONFIG,
   loadConnectorsConfig,
 } from "@ddl/connectors";
-import { type AppSettings, DEFAULT_SETTINGS, type Logger, mergeSettings } from "@ddl/core";
+import {
+  type AppSettings,
+  agentModel,
+  DEFAULT_SETTINGS,
+  type Logger,
+  mergeSettings,
+} from "@ddl/core";
 import {
   createStorageProvider,
   createSyncTarget,
@@ -85,7 +91,7 @@ export async function createAgentStack(options: AgentStackOptions): Promise<Agen
   const { config, logger, settings, connectors } = options;
   const unavailable = (problem: string): AgentStack => ({
     runtime: new NullAgentRuntime({
-      model: settings.agent.model,
+      model: agentModel(settings.agent),
       enabled: settings.agent.enabled,
       connectors,
       problem,
@@ -161,7 +167,9 @@ function createLlmClient(
 ): LlmClient | undefined {
   const apiKey = env.OPENROUTER_API_KEY?.trim();
   if (!apiKey) {
-    logger.warn("OPENROUTER_API_KEY is not set; live agents cannot run until it is added");
+    logger.warn(
+      "OPENROUTER_API_KEY is not set: the Pi harness, the LLM safety judge and the web tools are unavailable until it is added (the Cursor CLI harness runs without it)",
+    );
     return undefined;
   }
   const baseUrl = env.DDL_OPENROUTER_BASE_URL?.trim();

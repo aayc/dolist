@@ -10,6 +10,7 @@
  *
  * v1: the unversioned overrides object written before formats were versioned, plus `version: 1`.
  */
+import { AGENT_HARNESS_KINDS } from "@ddl/core";
 import { z } from "zod";
 import {
   decodePersisted,
@@ -53,7 +54,9 @@ export const PersistedSettingsOverridesSchema = z
         enabled: Bool,
         settleMs: z.int().min(0).max(120_000),
         maxConcurrentSubagents: z.int().min(1).max(32),
+        harness: z.enum(AGENT_HARNESS_KINDS),
         model: ModelId,
+        cursorModel: ModelId,
         judgeModel: ModelId,
         watch: z
           .object({ pastDays: z.int().min(0).max(366), futureDays: z.int().min(0).max(366) })

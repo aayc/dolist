@@ -91,15 +91,31 @@ public struct AgentWatchWindow: Codable, Hashable, Sendable {
   }
 }
 
+/// What runs the orchestrator and subagent conversations: `pi` (the Pi coding-agent SDK on the
+/// OpenRouter `model`) or `cursor` (the Cursor CLI's agent on `cursorModel`, signed in with the
+/// user's Cursor account). Closed, like every value clients send: decoding it on its own rejects
+/// unknown values (`AgentSettings` tolerates them, see `harness`).
+public enum AgentHarnessKind: String, Codable, Hashable, Sendable, CaseIterable {
+  case pi, cursor
+}
+
 public struct AgentSettings: Codable, Hashable, Sendable {
   /// Master switch.
   public var enabled: Bool
   /// Quiet period after the last edit to a task before the orchestrator looks at it.
   public var settleMs: Int
   public var maxConcurrentSubagents: Int
-  /// OpenRouter model id for the orchestrator and subagents.
+  /// What runs the agent. Daemons older than this setting don't send it, and a harness this client
+  /// doesn't know (added by a newer daemon) also decodes as `.pi`, the harness the daemon's
+  /// `agentModel` falls back to. Patches only carry fields the user changes, so it is never
+  /// written back unless the user picks a harness.
+  public var harness: AgentHarnessKind
+  /// OpenRouter model id for the orchestrator and subagents with the Pi harness.
   public var model: String
-  /// OpenRouter model id for the safety judge.
+  /// Model for the orchestrator and subagents with the Cursor harness, as the Cursor CLI lists it
+  /// (`composer-2.5`), optionally with parameters (`gpt-5.5[reasoning=high]`).
+  public var cursorModel: String
+  /// OpenRouter model id for the safety judge (with either harness).
   public var judgeModel: String
   public var watch: AgentWatchWindow
   /// Treat tasks that already exist when a note is first seen as new work.
@@ -108,25 +124,49 @@ public struct AgentSettings: Codable, Hashable, Sendable {
   public var approvalTimeoutMs: Int
 
   public init(
-    enabled: Bool, settleMs: Int, maxConcurrentSubagents: Int, model: String, judgeModel: String,
+    enabled: Bool, settleMs: Int, maxConcurrentSubagents: Int, harness: AgentHarnessKind = .pi,
+    model: String, cursorModel: String = AgentSettings.defaultCursorModel, judgeModel: String,
     watch: AgentWatchWindow, actOnExistingTasks: Bool, approvalTimeoutMs: Int
   ) {
     self.enabled = enabled
     self.settleMs = settleMs
     self.maxConcurrentSubagents = maxConcurrentSubagents
+    self.harness = harness
     self.model = model
+    self.cursorModel = cursorModel
     self.judgeModel = judgeModel
     self.watch = watch
     self.actOnExistingTasks = actOnExistingTasks
     self.approvalTimeoutMs = approvalTimeoutMs
   }
 
+  /// Daemons older than the harness setting send neither `harness` nor `cursorModel`.
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    enabled = try container.decode(Bool.self, forKey: .enabled)
+    settleMs = try container.decode(Int.self, forKey: .settleMs)
+    maxConcurrentSubagents = try container.decode(Int.self, forKey: .maxConcurrentSubagents)
+    harness = try container.decodeIfPresent(String.self, forKey: .harness)
+      .flatMap(AgentHarnessKind.init(rawValue:)) ?? .pi
+    model = try container.decode(String.self, forKey: .model)
+    cursorModel = try container.decodeIfPresent(String.self, forKey: .cursorModel) ?? Self.defaultCursorModel
+    judgeModel = try container.decode(String.self, forKey: .judgeModel)
+    watch = try container.decode(AgentWatchWindow.self, forKey: .watch)
+    actOnExistingTasks = try container.decode(Bool.self, forKey: .actOnExistingTasks)
+    approvalTimeoutMs = try container.decode(Int.self, forKey: .approvalTimeoutMs)
+  }
+
   public static let defaultModel = "deepseek/deepseek-v4.1-flash"
+  public static let defaultCursorModel = "composer-2.5"
+
+  /// The model id the configured harness runs its conversations on (`agentModel` in `@ddl/core`).
+  public var agentModel: String { harness == .cursor ? cursorModel : model }
 
   public static let defaults = AgentSettings(
-    enabled: true, settleMs: 2500, maxConcurrentSubagents: 3, model: defaultModel,
-    judgeModel: defaultModel, watch: AgentWatchWindow(pastDays: 0, futureDays: 7),
-    actOnExistingTasks: true, approvalTimeoutMs: 12 * 60 * 60 * 1000)
+    enabled: true, settleMs: 2500, maxConcurrentSubagents: 3, harness: .pi, model: defaultModel,
+    cursorModel: defaultCursorModel, judgeModel: defaultModel,
+    watch: AgentWatchWindow(pastDays: 0, futureDays: 7), actOnExistingTasks: true,
+    approvalTimeoutMs: 12 * 60 * 60 * 1000)
 }
 
 public struct AppSettings: Codable, Hashable, Sendable {
@@ -163,6 +203,8 @@ public enum SettingsRanges {
   public static let formatLength = 128
   public static let templateLength = 512
   public static let vimrcLength = 16_384
+  /// Model ids (`model`, `cursorModel`, `judgeModel`) after trimming: `WIRE_LIMITS.modelIdLength`.
+  public static let modelIdLength = 200
 }
 
 // MARK: - Settings patch (UpdateSettingsRequest = DeepPartial<AppSettings>)
@@ -243,7 +285,9 @@ public struct SettingsPatch: Codable, Hashable, Sendable {
     public var enabled: Bool?
     public var settleMs: Int?
     public var maxConcurrentSubagents: Int?
+    public var harness: AgentHarnessKind?
     public var model: String?
+    public var cursorModel: String?
     public var judgeModel: String?
     public var watch: WatchPatch?
     public var actOnExistingTasks: Bool?
@@ -251,13 +295,16 @@ public struct SettingsPatch: Codable, Hashable, Sendable {
 
     public init(
       enabled: Bool? = nil, settleMs: Int? = nil, maxConcurrentSubagents: Int? = nil,
-      model: String? = nil, judgeModel: String? = nil, watch: WatchPatch? = nil,
-      actOnExistingTasks: Bool? = nil, approvalTimeoutMs: Int? = nil
+      harness: AgentHarnessKind? = nil, model: String? = nil, cursorModel: String? = nil,
+      judgeModel: String? = nil, watch: WatchPatch? = nil, actOnExistingTasks: Bool? = nil,
+      approvalTimeoutMs: Int? = nil
     ) {
       self.enabled = enabled
       self.settleMs = settleMs
       self.maxConcurrentSubagents = maxConcurrentSubagents
+      self.harness = harness
       self.model = model
+      self.cursorModel = cursorModel
       self.judgeModel = judgeModel
       self.watch = watch
       self.actOnExistingTasks = actOnExistingTasks
@@ -304,7 +351,9 @@ extension AppSettings {
       if let v = p.enabled { next.agent.enabled = v }
       if let v = p.settleMs { next.agent.settleMs = v }
       if let v = p.maxConcurrentSubagents { next.agent.maxConcurrentSubagents = v }
+      if let v = p.harness { next.agent.harness = v }
       if let v = p.model { next.agent.model = v }
+      if let v = p.cursorModel { next.agent.cursorModel = v }
       if let v = p.judgeModel { next.agent.judgeModel = v }
       if let w = p.watch {
         if let v = w.pastDays { next.agent.watch.pastDays = v }

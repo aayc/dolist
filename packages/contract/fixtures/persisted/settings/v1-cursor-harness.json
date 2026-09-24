@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "agent": {
+    "harness": "cursor",
+    "cursorModel": "gpt-5.5[reasoning=high]",
+    "judgeModel": "vendor/judge-a"
+  }
+}

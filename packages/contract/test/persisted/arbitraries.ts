@@ -342,7 +342,9 @@ export const settingsOverridesArb: fc.Arbitrary<PersistedSettingsOverrides> = fc
         enabled: fc.boolean(),
         settleMs: fc.integer({ min: 0, max: 120_000 }),
         maxConcurrentSubagents: fc.integer({ min: 1, max: 32 }),
+        harness: fc.constantFrom("pi" as const, "cursor" as const),
         model: fc.stringMatching(/^[a-z0-9]{1,12}\/[a-z0-9.-]{1,20}$/),
+        cursorModel: fc.stringMatching(/^[a-z0-9][a-z0-9.-]{0,20}(\[[a-z]{1,10}=[a-z]{1,10}\])?$/),
         judgeModel: fc.stringMatching(/^[a-z0-9]{1,12}\/[a-z0-9.-]{1,20}$/),
         watch: fc.record(
           {

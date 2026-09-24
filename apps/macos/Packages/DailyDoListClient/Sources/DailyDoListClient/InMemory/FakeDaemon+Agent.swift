@@ -145,7 +145,7 @@ extension FakeDaemon {
   func status() -> AgentStatusResponse {
     let enabled = simulation == .enabled
     return AgentStatusResponse(
-      mode: enabled ? .mock : .off, enabled: settings.agent.enabled, model: settings.agent.model,
+      mode: enabled ? .mock : .off, enabled: settings.agent.enabled, model: settings.agent.agentModel,
       running: runningTaskJobs, queued: records.values.filter { $0.status == .queued }.count,
       pendingApprovals: approvals.values.filter(\.isPending).count,
       connectors: enabled ? Self.connectors : [],

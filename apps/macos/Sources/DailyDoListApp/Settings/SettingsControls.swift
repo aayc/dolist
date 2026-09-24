@@ -1,19 +1,20 @@
 import AppKit
 import SwiftUI
 
-/// Text field with a local draft that commits on Return or focus loss (not per keystroke).
+/// Text field with a local draft that commits on Return or focus loss (not per keystroke). A
+/// `required` value is committed trimmed and never blank: a blank draft reverts to the value.
 struct CommitTextField: View {
   let title: String
   let value: String
   var prompt: String?
   var monospaced = false
+  var required = false
   let onCommit: (String) -> Void
   @State private var draft = ""
   @FocusState private var focused: Bool
 
   var body: some View {
-    TextField(title, text: $draft, prompt: prompt.map { Text($0) })
-      .font(monospaced ? .system(.body, design: .monospaced) : .body)
+    field
       .focused($focused)
       .onSubmit(commit)
       .onChange(of: focused) { _, isFocused in if !isFocused { commit() } }
@@ -21,8 +22,34 @@ struct CommitTextField: View {
       .onAppear { draft = value }
   }
 
+  /// In a grouped form the title is the row's label, and a font set on the field would reach it
+  /// too: a monospaced value gets its own labeled row.
+  @ViewBuilder private var field: some View {
+    if monospaced {
+      LabeledContent(title) {
+        TextField(title, text: $draft, prompt: prompt.map { Text($0) })
+          .labelsHidden()
+          .multilineTextAlignment(.trailing)
+          .font(.system(.body, design: .monospaced))
+      }
+    } else {
+      TextField(title, text: $draft, prompt: prompt.map { Text($0) })
+    }
+  }
+
+  /// What committing `draft` saves, or nil when nothing changes (the web's `draftToCommit`).
+  static func committed(_ draft: String, value: String, required: Bool) -> String? {
+    let text = required ? draft.trimmingCharacters(in: .whitespacesAndNewlines) : draft
+    return text == value || (required && text.isEmpty) ? nil : text
+  }
+
   private func commit() {
-    if draft != value { onCommit(draft) }
+    guard let text = Self.committed(draft, value: value, required: required) else {
+      draft = value
+      return
+    }
+    draft = text
+    onCommit(text)
   }
 }
 

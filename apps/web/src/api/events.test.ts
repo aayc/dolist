@@ -8,6 +8,8 @@ import { SERVER_EVENT_TYPES, ServerEventSchema } from "@ddl/contract/wire";
 import { DEFAULT_SETTINGS, isHiddenPath, mergeSettings, type ServerEvent } from "@ddl/core";
 import { fc, test } from "@fast-check/vitest";
 import { describe, expect, it } from "vitest";
+import { shownHarness } from "../features/settings/agent-harness";
+import { draftToCommit } from "../features/settings/draft";
 import { initialAgentState, reduceAgentEvent } from "../state/agent-reducer";
 import { parseServerEvent } from "./events";
 
@@ -20,10 +22,16 @@ function handleLikeTheUi(event: ServerEvent): void {
         void /\.[^/]+$/.test(change.path);
       }
       return;
-    case "settings.changed":
-      mergeSettings(DEFAULT_SETTINGS, event.settings);
-      void [event.settings.editor.vimMode, event.settings.agent.watch.pastDays];
+    case "settings.changed": {
+      const { agent } = mergeSettings(DEFAULT_SETTINGS, event.settings);
+      void [
+        event.settings.editor.vimMode,
+        event.settings.agent.watch.pastDays,
+        shownHarness(agent),
+      ];
+      void [draftToCommit(agent.model, "", true), draftToCommit(agent.cursorModel, "", true)];
       return;
+    }
     case "surface.frame":
       void `${event.threadId}:${event.surface}`;
       if (event.action) void { ...event.action, ts: event.ts };
@@ -94,11 +102,23 @@ describe("parseServerEvent", () => {
       { type: "agent.status", status: { mode: "mock", enabled: true } },
       { type: "surface.frame", threadId: "t", surface: "screen", data: "", ts: 1 },
       { type: "settings.changed", settings: { theme: "dark" } },
+      {
+        type: "settings.changed",
+        settings: { ...DEFAULT_SETTINGS, agent: { ...DEFAULT_SETTINGS.agent, cursorModel: 5 } },
+      },
       { type: "error" },
     ];
     for (const raw of cases) {
       expect(ServerEventSchema.safeParse(raw).success).toBe(false);
       expect(parseServerEvent(raw), JSON.stringify(raw)).toBeNull();
     }
+  });
+
+  it("accepts settings from a daemon older than the harness setting", () => {
+    const { harness: _harness, cursorModel: _cursorModel, ...older } = DEFAULT_SETTINGS.agent;
+    const raw = { type: "settings.changed", settings: { ...DEFAULT_SETTINGS, agent: older } };
+    const event = parseServerEvent(raw);
+    expect(event).toBe(raw);
+    expect(() => handleLikeTheUi(event!)).not.toThrow();
   });
 });

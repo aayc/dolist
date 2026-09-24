@@ -437,6 +437,19 @@ async function settingsPatch(observed: Observed, method: "PUT" | "PATCH") {
   ).toMatchObject({
     settings: { editor: { vimMode: true }, agent: { model: "mock" } },
   });
+  expect(
+    (await patch({ agent: { harness: "cursor", cursorModel: " gpt-5.5[reasoning=high] " } })).body,
+  ).toMatchObject({
+    settings: {
+      agent: { harness: "cursor", model: "mock", cursorModel: "gpt-5.5[reasoning=high]" },
+    },
+  });
+  expect((await patch({ agent: { harness: "claude" } })).body).toMatchObject({
+    error: "invalid_request",
+  });
+  expect((await patch({ agent: { cursorModel: "  " } })).body).toMatchObject({
+    error: "invalid_request",
+  });
   expect((await patch({ theme: "neon" })).body).toMatchObject({ error: "invalid_request" });
   expect((await patch({ dailyNotes: { folder: ".hidden" } })).body).toMatchObject({
     error: "invalid_request",

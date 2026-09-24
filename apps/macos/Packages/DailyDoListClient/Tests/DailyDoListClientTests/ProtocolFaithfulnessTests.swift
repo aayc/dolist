@@ -178,6 +178,7 @@ struct ProtocolFaithfulnessTests {
       ("ApprovalDecisionRequest", ApprovalDecisionRequest(decision: .deny, scope: .task, note: "no")),
       ("UpdateSettingsRequest", SettingsPatch()),
       ("UpdateSettingsRequest", SettingsPatch(theme: .dark, editor: .init(vimMode: true), agent: .init(watch: .init(futureDays: 14)))),
+      ("UpdateSettingsRequest", SettingsPatch(agent: .init(harness: .cursor, cursorModel: "gpt-5.5[reasoning=high]"))),
       ("ClientEvent", ClientEvent.hello(clientId: HTTPDaemonClient.makeClientID(), clientVersion: HTTPDaemonClient.defaultClientVersion)),
       ("ClientEvent", ClientEvent.ping),
       ("ClientEvent", ClientEvent.surfaceSubscribe(threadId: "thr_1", surface: .browser)),
@@ -210,6 +211,7 @@ struct ProtocolFaithfulnessTests {
   /// Invalid only after zod's `.trim()`, which JSON Schema can't express.
   static let trimmedCases: Set<String> = [
     "PostMessageRequest/whitespace only (trimmed to empty)", "UpdateSettingsRequest/blank model",
+    "UpdateSettingsRequest/blank Cursor model",
   ]
 
   /// The validator is strict enough to matter: it rejects every invalid fixture except the

@@ -783,6 +783,12 @@ Days around today whose daily notes the orchestrator watches.
 
 _Tolerant: clients must ignore keys they don't know._
 
+#### AgentHarnessKind
+
+What runs the orchestrator and subagent conversations: `pi` (the Pi coding-agent SDK on the OpenRouter `model`) or `cursor` (the Cursor CLI's agent on `cursorModel`, signed in with the user's Cursor account).
+
+Type: `"pi"` | `"cursor"`
+
 #### AgentSettings
 
 Orchestrator and subagent settings.
@@ -794,8 +800,10 @@ Orchestrator and subagent settings.
 | `maxConcurrentSubagents` | integer (1–32) | yes |  |
 | `actOnExistingTasks` | boolean | yes |  |
 | `approvalTimeoutMs` | integer (60000–2592000000) | yes | How long an approval request waits before it is auto-denied. |
-| `model` | string (`^\S(?:[\s\S]*\S)?$`, 1–200 chars) | yes | OpenRouter model id for the orchestrator and subagents. |
-| `judgeModel` | string (`^\S(?:[\s\S]*\S)?$`, 1–200 chars) | yes | OpenRouter model id for the safety judge. |
+| `harness` | [`AgentHarnessKind`](#agentharnesskind) | yes |  |
+| `model` | string (`^\S(?:[\s\S]*\S)?$`, 1–200 chars) | yes | OpenRouter model id for the orchestrator and subagents with the Pi harness. |
+| `cursorModel` | string (`^\S(?:[\s\S]*\S)?$`, 1–200 chars) | yes | Model for the orchestrator and subagents with the Cursor harness, as the Cursor CLI lists it (`composer-2.5`), optionally with parameters (`gpt-5.5[reasoning=high]`). |
+| `judgeModel` | string (`^\S(?:[\s\S]*\S)?$`, 1–200 chars) | yes | OpenRouter model id for the safety judge (whichever harness runs the agent). |
 | `watch` | [`AgentWatchWindow`](#agentwatchwindow) | yes |  |
 
 _Tolerant: clients must ignore keys they don't know._

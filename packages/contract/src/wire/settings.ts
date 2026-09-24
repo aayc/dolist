@@ -2,6 +2,7 @@
  * AppSettings. The full shape is a response (tolerant); `UpdateSettingsRequest` is its strict deep
  * partial. Both share the same field constraints, which are the daemon's accepted ranges.
  */
+import { AGENT_HARNESS_KINDS } from "@ddl/core";
 import { z } from "zod";
 import { ModelIdSchema, WIRE_LIMITS } from "./primitives";
 import { named } from "./registry";
@@ -98,13 +99,27 @@ export const AgentWatchWindowSchema = named(
   z.looseObject(watchFields),
 );
 
+export const AgentHarnessKindSchema = named(
+  "AgentHarnessKind",
+  "What runs the orchestrator and subagent conversations: `pi` (the Pi coding-agent SDK on the OpenRouter `model`) or `cursor` (the Cursor CLI's agent on `cursorModel`, signed in with the user's Cursor account).",
+  z.enum(AGENT_HARNESS_KINDS),
+);
+
 export const AgentSettingsSchema = named(
   "AgentSettings",
   "Orchestrator and subagent settings.",
   z.looseObject({
     ...agentScalarFields,
-    model: ModelIdSchema.describe("OpenRouter model id for the orchestrator and subagents."),
-    judgeModel: ModelIdSchema.describe("OpenRouter model id for the safety judge."),
+    harness: AgentHarnessKindSchema,
+    model: ModelIdSchema.describe(
+      "OpenRouter model id for the orchestrator and subagents with the Pi harness.",
+    ),
+    cursorModel: ModelIdSchema.describe(
+      "Model for the orchestrator and subagents with the Cursor harness, as the Cursor CLI lists it (`composer-2.5`), optionally with parameters (`gpt-5.5[reasoning=high]`).",
+    ),
+    judgeModel: ModelIdSchema.describe(
+      "OpenRouter model id for the safety judge (whichever harness runs the agent).",
+    ),
     watch: AgentWatchWindowSchema,
   }),
 );
@@ -133,7 +148,9 @@ export const SettingsPatchSectionSchemas = {
   agent: z
     .strictObject({
       ...agentScalarFields,
+      harness: AgentHarnessKindSchema,
       model: ModelIdInputSchema,
+      cursorModel: ModelIdInputSchema,
       judgeModel: ModelIdInputSchema,
       watch: z.strictObject(watchFields).partial(),
     })

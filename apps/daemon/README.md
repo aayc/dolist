@@ -86,6 +86,10 @@ daemon imports what it can from an existing Obsidian vault: `.obsidian/daily-not
 format, template; Obsidian's own defaults fill missing keys), `.obsidian/app.json` (vim mode, live
 preview, readable line length, line numbers, spellcheck) and `.obsidian/appearance.json` (theme).
 
+`agent.harness` picks what runs the agent: `pi` on the OpenRouter model `agent.model`, or `cursor`
+(the Cursor CLI, signed in with your Cursor account) on `agent.cursorModel`. The safety judge's
+`agent.judgeModel` is an OpenRouter model with either harness.
+
 ## Security model
 
 - **Loopback only.** The HTTP server listens on `127.0.0.1`; there is no option to bind elsewhere.
