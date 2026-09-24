@@ -6,9 +6,9 @@
 import type { ConnectorStatus, ToolSpec, Unsubscribe } from "@ddl/core";
 
 export interface McpToolFilter {
-  /** Only expose these MCP tool names (exact match). */
+  /** Only expose these MCP tools: exact names or `*` globs (e.g. `read_*`). */
   include?: string[];
-  /** Hide these MCP tool names (exact match). */
+  /** Hide these MCP tools (applied after `include`): exact names or `*` globs. */
   exclude?: string[];
 }
 

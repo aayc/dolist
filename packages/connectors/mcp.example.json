@@ -1,0 +1,50 @@
+{
+  "$comment": "Example connectors for Daily Do List. Copy the servers you want into $DDL_HOME/mcp.json (default ~/.daily-do-list/mcp.json) and set \"enabled\": true. Never put secrets here: \"${NAME}\" placeholders are read from the daemon's environment (for example ~/.daily-do-list/.env). The google-workspace entry is a community, unverified server: review its code and fill in its command first. See packages/connectors/README.md.",
+  "mcpServers": {
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"],
+      "enabled": false,
+      "approval": "auto",
+      "description": "Local browser automation with Playwright"
+    },
+    "filesystem": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "~/Documents"],
+      "enabled": false,
+      "approval": "writes",
+      "description": "Files in ~/Documents"
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_TOKEN}"
+      },
+      "enabled": false,
+      "approval": "writes",
+      "description": "GitHub issues, pull requests and code"
+    },
+    "notion": {
+      "type": "http",
+      "url": "https://mcp.notion.com/mcp",
+      "enabled": false,
+      "approval": "writes",
+      "description": "Notion pages and databases"
+    },
+    "google-workspace": {
+      "type": "stdio",
+      "command": "REPLACE_WITH_THE_SERVER_COMMAND",
+      "args": [],
+      "env": {
+        "GOOGLE_OAUTH_CLIENT_ID": "${GOOGLE_OAUTH_CLIENT_ID}",
+        "GOOGLE_OAUTH_CLIENT_SECRET": "${GOOGLE_OAUTH_CLIENT_SECRET}"
+      },
+      "enabled": false,
+      "approval": "writes",
+      "description": "Gmail, Calendar and Drive (community server, unverified)"
+    }
+  }
+}
