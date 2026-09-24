@@ -1,0 +1,65 @@
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  background: var(--ddl-backdrop);
+  animation: ddl-fade-in var(--transition-fast);
+}
+
+.modal-backdrop.is-center {
+  align-items: center;
+}
+
+.modal-backdrop.is-top {
+  align-items: flex-start;
+  padding-top: 12vh;
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 64px);
+  border: 1px solid var(--ddl-border);
+  border-radius: var(--radius-l);
+  background: var(--ddl-bg-elevated);
+  box-shadow: var(--ddl-shadow);
+  animation: ddl-pop-in var(--transition);
+}
+
+@keyframes ddl-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes ddl-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.99);
+  }
+}
+
+.confirm-dialog {
+  width: 420px;
+  padding: 20px;
+}
+
+.modal-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.modal-body {
+  margin: 0 0 20px;
+  color: var(--ddl-text-muted);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

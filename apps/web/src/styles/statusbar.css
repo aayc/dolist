@@ -1,0 +1,117 @@
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  height: var(--statusbar-height);
+  padding: 0 8px;
+  border-top: 1px solid var(--ddl-border);
+  background: var(--ddl-bg-secondary);
+  color: var(--ddl-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.status-spacer {
+  flex: 1;
+}
+
+.status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+button.status-item:hover {
+  background: var(--ddl-bg-hover);
+  color: var(--ddl-text);
+}
+
+.status-muted {
+  color: var(--ddl-text-faint);
+}
+
+.status-agent.is-on {
+  color: var(--ddl-text);
+}
+
+.status-agent.is-on svg {
+  color: var(--ddl-success);
+}
+
+.status-agent.is-off svg,
+.status-agent.has-problem svg {
+  color: var(--ddl-warning);
+}
+
+.status-approvals {
+  color: var(--ddl-warning);
+  font-weight: 600;
+}
+
+.status-save {
+  min-width: 78px;
+}
+
+.status-save.is-saved svg {
+  color: var(--ddl-success);
+}
+
+.status-save.is-conflict {
+  color: var(--ddl-warning);
+}
+
+.status-save.is-error {
+  color: var(--ddl-danger);
+}
+
+.save-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-save.is-saving .save-dot {
+  animation: ddl-pulse 1s ease-in-out infinite;
+}
+
+.status-vim {
+  color: var(--ddl-accent);
+  font-family: var(--ddl-font-mono);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.connection-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ddl-text-faint);
+}
+
+.status-connection.is-online .connection-dot {
+  background: var(--ddl-success);
+}
+
+.status-connection.is-mock .connection-dot {
+  background: var(--ddl-info);
+}
+
+.status-connection.is-connecting .connection-dot,
+.status-connection.is-reconnecting .connection-dot {
+  background: var(--ddl-warning);
+  animation: ddl-pulse 1s ease-in-out infinite;
+}
+
+.status-connection.is-offline .connection-dot {
+  background: var(--ddl-danger);
+}

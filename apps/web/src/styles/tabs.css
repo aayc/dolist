@@ -1,0 +1,122 @@
+.tab-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  flex: none;
+  height: var(--tabbar-height);
+  padding: 0 6px;
+  border-bottom: 1px solid var(--ddl-border);
+  background: var(--ddl-bg-secondary);
+}
+
+.tab-list {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab-list::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 200px;
+  min-width: 90px;
+  height: 31px;
+  padding: 0 6px 0 12px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: var(--radius-m) var(--radius-m) 0 0;
+  color: var(--ddl-text-muted);
+  font-size: 13px;
+  cursor: default;
+  user-select: none;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.tab:hover {
+  background: var(--ddl-bg-hover);
+  color: var(--ddl-text);
+}
+
+.tab.is-active {
+  border-color: var(--ddl-border);
+  background: var(--ddl-bg);
+  color: var(--ddl-text);
+}
+
+.tab.is-active::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 1px;
+  background: var(--ddl-bg);
+}
+
+.tab-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-unsaved {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ddl-text-muted);
+}
+
+.tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--ddl-text-faint);
+  opacity: 0;
+  transition:
+    opacity var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.tab:hover .tab-close,
+.tab.is-active .tab-close,
+.tab-close:focus-visible {
+  opacity: 1;
+}
+
+.tab-close:hover {
+  background: var(--ddl-bg-active);
+  color: var(--ddl-text);
+}
+
+.tab-new {
+  align-self: center;
+}
+
+.tab-bar-spacer {
+  flex: 1;
+}
+
+.tab-bar > .icon-button {
+  align-self: center;
+}

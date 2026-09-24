@@ -1,0 +1,258 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+.app-main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+body.is-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* ── Ribbon ─────────────────────────────────────────────── */
+
+.ribbon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  width: var(--ribbon-width);
+  padding: 8px 0;
+  border-right: 1px solid var(--ddl-border);
+  background: var(--ddl-bg-secondary);
+}
+
+.ribbon .icon-button {
+  width: 32px;
+  height: 32px;
+}
+
+.ribbon-spacer {
+  flex: 1;
+}
+
+/* ── Sidebars ───────────────────────────────────────────── */
+
+.sidebar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  min-width: 0;
+  background: var(--ddl-bg-secondary);
+}
+
+.sidebar-left {
+  border-right: 1px solid var(--ddl-border);
+}
+
+.sidebar-right {
+  border-left: 1px solid var(--ddl-border);
+}
+
+.resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 5;
+  width: 6px;
+  cursor: col-resize;
+  transition: background-color var(--transition);
+}
+
+.resize-handle-left {
+  right: -3px;
+}
+
+.resize-handle-right {
+  left: -3px;
+}
+
+.resize-handle:hover,
+.resize-handle:focus-visible,
+body.is-resizing .resize-handle:active {
+  background: var(--ddl-accent-soft);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  height: var(--tabbar-height);
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--ddl-border);
+}
+
+.panel-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ddl-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.panel-fallback {
+  flex: 1;
+}
+
+/* ── Center ─────────────────────────────────────────────── */
+
+.center {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  background: var(--ddl-bg);
+}
+
+.note-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.note-view[hidden] {
+  display: none;
+}
+
+/* Horizontal padding matches the editor's content padding so the title lines up with the text. */
+.note-header {
+  flex: none;
+  padding: 18px 24px 0;
+}
+
+.note-header-inner {
+  width: 100%;
+}
+
+.readable-line-length .note-header-inner {
+  max-width: var(--ddl-line-width);
+  margin: 0 auto;
+}
+
+.note-breadcrumb {
+  color: var(--ddl-text-faint);
+  font-size: 12px;
+}
+
+.note-title {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ddl-text);
+  font-family: var(--ddl-font-editor);
+  font-size: 1.9em;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.note-title:focus-visible {
+  outline: none;
+  box-shadow: 0 2px 0 var(--ddl-accent-soft);
+}
+
+.daily-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  color: var(--ddl-text-muted);
+}
+
+.daily-date {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.daily-today-pill {
+  margin-left: 6px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--ddl-accent-soft);
+  color: var(--ddl-accent);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.daily-today-button {
+  margin-left: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--ddl-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ddl-text-muted);
+  font-size: 11px;
+  line-height: 18px;
+  transition: background-color var(--transition-fast);
+}
+
+.daily-today-button:hover {
+  background: var(--ddl-bg-hover);
+}
+
+.editor-host {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  font-family: var(--ddl-font-editor);
+  font-size: var(--ddl-editor-font-size);
+}
+
+.empty-state {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--ddl-text-muted);
+}
+
+.empty-title {
+  margin: 0;
+  color: var(--ddl-text);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.empty-actions {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.empty-actions li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.connection-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ddl-warning) 40%, transparent);
+  background: color-mix(in srgb, var(--ddl-warning) 14%, var(--ddl-bg));
+  font-size: 13px;
+}

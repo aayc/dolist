@@ -1,0 +1,160 @@
+import { Bot, Check, CircleAlert, LoaderCircle, ShieldAlert, TriangleAlert } from "lucide-react";
+import { useServices } from "../../app/services";
+import { cx } from "../../lib/cx";
+import { pluralize } from "../../lib/format";
+import { useAgentStore, usePendingApprovalCount } from "../../state/agent-store";
+import { useConnectionStore } from "../../state/connection-store";
+import { type SaveState, useNotesStore } from "../../state/notes-store";
+import { useSettingsStore } from "../../state/settings-store";
+import { useTabsStore } from "../../state/tabs-store";
+import { ui } from "../../state/ui-store";
+
+export function StatusBar() {
+  return (
+    <footer className="status-bar" data-testid="status-bar">
+      <AgentItems />
+      <div className="status-spacer" />
+      <SaveIndicator />
+      <VimIndicator />
+      <WordCount />
+      <ConnectionIndicator />
+    </footer>
+  );
+}
+
+function AgentItems() {
+  const { agent } = useServices();
+  const enabled = useAgentStore((s) => s.status?.enabled ?? null);
+  const mode = useAgentStore((s) => s.status?.mode ?? null);
+  const running = useAgentStore((s) => s.status?.running ?? 0);
+  const queued = useAgentStore((s) => s.status?.queued ?? 0);
+  const problem = useAgentStore((s) => s.status?.problem ?? null);
+  const pending = usePendingApprovalCount();
+  const title =
+    problem ??
+    (enabled === null
+      ? "Agent status unknown"
+      : enabled
+        ? "The agent is watching your daily notes — click to pause"
+        : "The agent is paused — click to resume");
+  return (
+    <>
+      <button
+        type="button"
+        className={cx(
+          "status-item status-agent",
+          enabled ? "is-on" : "is-off",
+          problem && "has-problem",
+        )}
+        onClick={() => enabled !== null && void agent.setEnabled(!enabled)}
+        aria-pressed={enabled ?? false}
+        title={title}
+        data-testid="status-agent"
+      >
+        <Bot size={13} aria-hidden="true" />
+        <span>{enabled === null ? "Agent" : enabled ? "Agent on" : "Agent off"}</span>
+        {mode ? <span className="status-muted">{mode}</span> : null}
+      </button>
+      {running + queued > 0 ? (
+        <span className="status-item" data-testid="status-running" title={`${queued} queued`}>
+          <LoaderCircle size={12} className="spin" aria-hidden="true" />
+          {running} running
+        </span>
+      ) : null}
+      {pending > 0 ? (
+        <button
+          type="button"
+          className="status-item status-approvals"
+          onClick={() => ui.showInbox()}
+          data-testid="status-approvals"
+        >
+          <ShieldAlert size={13} aria-hidden="true" />
+          {pending} to approve
+        </button>
+      ) : null}
+    </>
+  );
+}
+
+const SAVE_LABELS: Record<SaveState, string> = {
+  saved: "Saved",
+  dirty: "Unsaved",
+  saving: "Saving…",
+  conflict: "Conflict",
+  error: "Save failed",
+};
+
+function SaveIndicator() {
+  const active = useTabsStore((s) => s.active);
+  const state = useNotesStore((s) => (active ? (s.saveState[active] ?? null) : null));
+  if (!state) return null;
+  const Icon =
+    state === "saved"
+      ? Check
+      : state === "error"
+        ? CircleAlert
+        : state === "conflict"
+          ? TriangleAlert
+          : null;
+  return (
+    <span
+      className={cx("status-item status-save", `is-${state}`)}
+      data-testid="status-save"
+      data-state={state}
+    >
+      {Icon ? (
+        <Icon size={12} aria-hidden="true" />
+      ) : (
+        <span className="save-dot" aria-hidden="true" />
+      )}
+      {SAVE_LABELS[state]}
+    </span>
+  );
+}
+
+function VimIndicator() {
+  const vim = useSettingsStore((s) => s.settings.editor.vimMode);
+  if (!vim) return null;
+  return (
+    <span className="status-item status-vim" data-testid="status-vim" title="Vim mode">
+      VIM
+    </span>
+  );
+}
+
+function WordCount() {
+  const hasNote = useTabsStore((s) => s.active !== null);
+  const count = useNotesStore((s) => s.wordCount);
+  if (!hasNote || count === null) return null;
+  return (
+    <span className="status-item status-words" data-testid="status-words">
+      {pluralize(count, "word")}
+    </span>
+  );
+}
+
+function ConnectionIndicator() {
+  const state = useConnectionStore((s) => s.state);
+  const kind = useConnectionStore((s) => s.kind);
+  const label =
+    kind === "mock" && state === "online"
+      ? "Demo (mock)"
+      : state === "online"
+        ? "Connected"
+        : state === "connecting"
+          ? "Connecting…"
+          : state === "reconnecting"
+            ? "Reconnecting…"
+            : "Offline";
+  return (
+    <span
+      className={cx("status-item status-connection", `is-${state}`, kind === "mock" && "is-mock")}
+      data-testid="status-connection"
+      data-state={state}
+      title={kind === "mock" ? "Running against the in-browser mock daemon" : `Daemon: ${state}`}
+    >
+      <span className="connection-dot" aria-hidden="true" />
+      {label}
+    </span>
+  );
+}

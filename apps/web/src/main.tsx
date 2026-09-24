@@ -1,8 +1,13 @@
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
+import "./styles/theme.css";
+import "./styles/base.css";
+import "@ddl/editor/styles.css";
+import "./styles/layout.css";
+import "./styles/explorer.css";
+import "./styles/tabs.css";
+import "./styles/statusbar.css";
+import "./styles/overlays.css";
+import { startApp } from "./app/bootstrap";
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <div>Daily Do List</div>
-  </StrictMode>,
-);
+const root = document.getElementById("root");
+if (!root) throw new Error("Missing #root element");
+void startApp(root);
