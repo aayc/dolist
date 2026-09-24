@@ -1,4 +1,11 @@
-import { createId, hashString, isHiddenPath, normalizePath, type Unsubscribe } from "@ddl/core";
+import {
+  ancestorFolders,
+  createId,
+  hashString,
+  isHiddenPath,
+  normalizePath,
+  type Unsubscribe,
+} from "@ddl/core";
 import {
   ConflictError,
   type FileContent,
@@ -6,6 +13,7 @@ import {
   type ListOptions,
   NotFoundError,
   type StorageCapabilities,
+  StorageError,
   type StorageEvent,
   type StorageProvider,
   type WriteOptions,
@@ -68,10 +76,12 @@ export class MemoryStorageProvider implements StorageProvider {
 
   async listFolders(options: ListOptions = {}): Promise<string[]> {
     const all = new Set<string>();
-    for (const folder of this.folders) all.add(folder);
+    for (const folder of this.folders) {
+      all.add(folder);
+      for (const ancestor of ancestorFolders(folder)) all.add(ancestor);
+    }
     for (const path of this.files.keys()) {
-      const parts = path.split("/");
-      for (let i = 1; i < parts.length; i++) all.add(parts.slice(0, i).join("/"));
+      for (const ancestor of ancestorFolders(path)) all.add(ancestor);
     }
     return [...all].filter((f) => this.matches(f, options)).sort();
   }
@@ -142,6 +152,20 @@ export class MemoryStorageProvider implements StorageProvider {
 
   async createFolder(path: string): Promise<void> {
     this.folders.add(normalizePath(path));
+  }
+
+  async deleteFolder(path: string): Promise<void> {
+    const p = normalizePath(path);
+    if (p === "") throw new StorageError("Refusing to delete the vault root");
+    const inside = (candidate: string) => candidate === p || candidate.startsWith(`${p}/`);
+    const files = [...this.files.keys()].filter(inside);
+    const folders = [...this.folders].filter(inside);
+    if (files.length === 0 && folders.length === 0) throw new NotFoundError(p);
+    for (const folder of folders) this.folders.delete(folder);
+    for (const file of files) {
+      this.files.delete(file);
+      this.emit({ kind: "deleted", path: file, self: true });
+    }
   }
 
   watch(listener: (event: StorageEvent) => void): Unsubscribe {

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { describeStorageContract } from "./contract-suite";
 import { MemoryStorageProvider } from "./memory";
 import { ConflictError, NotFoundError, type StorageEvent } from "./types";
+
+describeStorageContract("MemoryStorageProvider", () => ({ provider: new MemoryStorageProvider() }));
 
 describe("MemoryStorageProvider (reference contract)", () => {
   it("writes, reads and versions content", async () => {
@@ -38,6 +41,12 @@ describe("MemoryStorageProvider (reference contract)", () => {
     expect((await s.list({ includeHidden: true })).length).toBe(3);
     expect((await s.list({ prefix: "Daily" })).map((f) => f.path)).toEqual(["Daily/x.md"]);
     expect(await s.listFolders()).toEqual(["Daily"]);
+  });
+
+  it("reports the parents of created folders", async () => {
+    const s = new MemoryStorageProvider();
+    await s.createFolder("Projects/Active/Empty");
+    expect(await s.listFolders()).toEqual(["Projects", "Projects/Active", "Projects/Active/Empty"]);
   });
 
   it("renames and deletes with events", async () => {

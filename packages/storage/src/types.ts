@@ -87,6 +87,8 @@ export interface StorageProvider {
   /** Renames a file. Fails with `ConflictError` if `to` exists. */
   rename(from: string, to: string): Promise<WriteResult>;
   createFolder(path: string): Promise<void>;
+  /** Permanently deletes a folder and everything in it (emits `deleted` for each file). */
+  deleteFolder(path: string): Promise<void>;
   /** Subscribe to changes. Providers without `capabilities.watch` only emit `self` events. */
   watch(listener: (event: StorageEvent) => void): Unsubscribe;
   dispose(): Promise<void>;
