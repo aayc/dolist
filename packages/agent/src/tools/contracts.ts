@@ -3,6 +3,7 @@
  * execution), the safety rules that inspect them, the evals and the UI's tool-call rendering.
  * Change a name here and every consumer follows.
  */
+import type { Capability } from "../execution/types";
 
 export const TOOL = {
   // Orchestrator-only
@@ -48,6 +49,8 @@ export const TOOL = {
   grep: "grep",
   find: "find",
   ls: "ls",
+  // Mock mode only: a fake irreversible action that always needs approval (exercises the flow).
+  mockIrreversibleAction: "mock_irreversible_action",
 } as const;
 
 export type ToolName = (typeof TOOL)[keyof typeof TOOL];
@@ -155,6 +158,50 @@ export interface FinishTaskInput {
   summary: string;
   /** One-line badge text, e.g. "Booked · Tue 9:30am". */
   shortSummary?: string;
+}
+
+// ── Orchestrator tools ──────────────────────────────────────────────────────
+
+export interface SpawnSubagentInput {
+  taskId: string;
+  /** One-sentence goal with the concrete outcome. */
+  goal: string;
+  instructions?: string;
+  capabilities: Capability[];
+}
+export interface PostCommentInput {
+  taskId: string;
+  /** Markdown shown in the task's thread. */
+  text: string;
+  /** Badge text next to the task; defaults to a shortened `text`. */
+  summary?: string;
+}
+export interface OrchestratorAskUserInput {
+  taskId: string;
+  question: string;
+}
+/** Statuses the orchestrator may set directly (work states are driven by subagents). */
+export type SettableTaskStatus = "ignored" | "done" | "waiting_user" | "failed";
+export interface SetTaskStatusInput {
+  taskId: string;
+  status: SettableTaskStatus;
+  summary?: string;
+}
+export interface MessageSubagentInput {
+  taskId: string;
+  text: string;
+}
+export interface CancelSubagentInput {
+  taskId: string;
+  reason: string;
+}
+export interface ListTasksInput {
+  /** Defaults to today's daily note. */
+  notePath?: string;
+}
+export interface MockIrreversibleActionInput {
+  action: string;
+  details: string;
 }
 
 /** Pi built-in shapes (see @earendil-works/pi-coding-agent tools). */

@@ -1,20 +1,46 @@
 /**
- * Public API of the execution module. (Initial stubs — replaced by the real implementation.)
+ * Public API of the execution module: the provider registry and the model-facing tool factory.
+ * Backend selection happens only here.
  */
-import type { Logger, ToolSpec } from "@ddl/core";
-import type { ExecutionConfig, ExecutionProvider, ExecutionToolContext } from "./types";
+import { type Logger, silentLogger } from "@ddl/core";
+import { CloudExecutionProvider } from "./cloud/provider";
+import { LocalExecutionProvider } from "./local/provider";
+import type { ExecutionConfig, ExecutionProvider } from "./types";
+
+export { CloudExecutionProvider } from "./cloud/provider";
+export {
+  BrowserUnavailableError,
+  ComputerPermissionError,
+  ComputerUnavailableError,
+  ElementNotFoundError,
+  ExecutionError,
+  NavigationBlockedError,
+  NotImplementedError,
+  StaleRefError,
+} from "./errors";
+export { LocalExecutionProvider } from "./local/provider";
+export { createExecutionTools } from "./tools";
 
 export async function createExecutionProvider(
-  _config: ExecutionConfig,
-  _options: { logger?: Logger } = {},
+  config: ExecutionConfig,
+  options: { logger?: Logger } = {},
 ): Promise<ExecutionProvider> {
-  throw new Error("createExecutionProvider: not implemented yet");
-}
-
-/** Model-facing browser_* / computer_* tools for one subagent, per its granted capabilities. */
-export function createExecutionTools(
-  _provider: ExecutionProvider,
-  _ctx: ExecutionToolContext,
-): ToolSpec[] {
-  return [];
+  const logger = (options.logger ?? silentLogger).child({ component: "execution" });
+  switch (config.kind) {
+    case "local": {
+      const provider = new LocalExecutionProvider(config, { logger });
+      logger.info("execution provider ready", {
+        provider: provider.id,
+        ...provider.capabilities,
+        browserSource: provider.browserExecutable?.source ?? null,
+      });
+      return provider;
+    }
+    case "cloud":
+      return new CloudExecutionProvider(config, { logger });
+    default: {
+      const unknown: never = config;
+      throw new Error(`Unknown execution provider: ${JSON.stringify(unknown)}`);
+    }
+  }
 }

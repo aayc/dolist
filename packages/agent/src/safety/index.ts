@@ -1,50 +1,16 @@
 /**
- * Public API of the safety module. (Initial stubs — replaced by the real implementation.)
+ * Public API of the safety module: an independent evaluator for every tool call, the approval
+ * broker, and the gate that plugs both into the harness. See README.md for the pipeline.
  */
-import type { ToolSafetyHints } from "@ddl/core";
-import type {
-  ApprovalBroker,
-  ApprovalBrokerOptions,
-  SafetyEvaluator,
-  SafetyEvaluatorOptions,
-  SafetyGate,
-  SafetyGateOptions,
-  SafetyPolicy,
-} from "./types";
 
-export const DEFAULT_SAFETY_POLICY: SafetyPolicy = {
-  alwaysAllowTools: [],
-  alwaysDenyTools: [],
-  requireApprovalTools: [],
-  approvalCategories: [
-    "payment",
-    "booking",
-    "communication",
-    "publishing",
-    "account",
-    "credentials",
-    "destructive",
-    "computer_control",
-    "system",
-  ],
-  denyCategories: [],
-  llmJudge: true,
-  llmJudgeTimeoutMs: 8000,
-};
-
-export function createSafetyEvaluator(_options: SafetyEvaluatorOptions = {}): SafetyEvaluator {
-  throw new Error("createSafetyEvaluator: not implemented yet");
-}
-
-export function createApprovalBroker(_options: ApprovalBrokerOptions = {}): ApprovalBroker {
-  throw new Error("createApprovalBroker: not implemented yet");
-}
-
-export function createSafetyGate(_options: SafetyGateOptions): SafetyGate {
-  throw new Error("createSafetyGate: not implemented yet");
-}
-
-/** Safety hints for harness built-ins (bash/read/write/edit/grep/find/ls), which have no ToolSpec. */
-export function builtinToolHints(_toolName: string): ToolSafetyHints | undefined {
-  return undefined;
-}
+export { APPROVALS_STATE_PATH } from "./approval-store";
+export type { PersistentApprovalBroker } from "./approvals";
+export { ApprovalNotFoundError, ApprovalStateError, createApprovalBroker } from "./approvals";
+export { describeAction, redactActionInput } from "./describe";
+export { createSafetyEvaluator } from "./evaluator";
+export { createSafetyGate } from "./gate";
+export { builtinToolHints, DEFAULT_SAFETY_POLICY, resolvePolicy } from "./policy";
+export type { RuleDecision, SafetyRuleInfo } from "./rules";
+export { SAFETY_RULES } from "./rules";
+export { luhnValid, maskSensitiveText, redactSensitiveInput } from "./sensitive";
+export type * from "./types";

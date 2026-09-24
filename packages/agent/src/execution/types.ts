@@ -36,6 +36,8 @@ export interface BrowserSnapshot {
   title: string;
   /** Accessibility-tree snapshot; interactive elements carry `[ref=eN]` markers usable as targets. */
   snapshot: string;
+  /** Events since the previous snapshot the model should know about (dialogs, new tabs, downloads). */
+  notes?: string[];
 }
 
 /** Element target: prefer `ref` from the latest snapshot; `selector`/`text` are fallbacks. */

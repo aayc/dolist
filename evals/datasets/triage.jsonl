@@ -1,0 +1,54 @@
+{"id":"research-standing-desks","task":"Research best standing desks under $500","expected":"delegate","capabilities":["web"]}
+{"id":"compare-flights","task":"Compare flights to Denver for Thanksgiving","expected":"delegate","capabilities":["web"]}
+{"id":"plan-kyoto-trip","task":"Plan anniversary trip to Kyoto","notes":["mid-November, 5 nights","budget around $4k"],"expected":"delegate","capabilities":["web"]}
+{"id":"find-plumber","task":"Find a plumber for the leaky kitchen sink","expected":"delegate","capabilities":["web"],"acceptable":["ask_user"]}
+{"id":"gift-ideas","task":"Gift ideas for Sam's 30th birthday","notes":["likes hiking and good coffee"],"expected":"delegate","capabilities":["web"],"acceptable":["comment"]}
+{"id":"ev-tax-credit","task":"Research EV tax credit eligibility for a 2026 model","expected":"delegate","capabilities":["web"]}
+{"id":"summarize-article","task":"Summarize https://example.com/blog/remote-work-study","expected":"delegate","capabilities":["web"],"acceptable":["comment"]}
+{"id":"fence-permit","task":"Look into whether we need a permit for the backyard fence","expected":"delegate","capabilities":["web"],"acceptable":["ask_user"]}
+{"id":"team-offsite","task":"Plan team offsite","notes":["about 12 people","early October","within 2 hours of the office"],"expected":"delegate","capabilities":["web"]}
+{"id":"insurance-quote","task":"Car insurance -> find a cheaper quote","expected":"delegate","capabilities":["web"],"acceptable":["ask_user"]}
+{"id":"meal-plan","task":"Make a meal plan for next week - vegetarian, high protein","expected":"delegate","acceptable":["comment"]}
+{"id":"running-shoes","task":"Which running shoes are best for flat feet?","expected":"delegate","acceptable":["comment"]}
+{"id":"book-dentist","task":"Book dentist appointment next week","expected":"delegate","capabilities":["browser"],"acceptable":["ask_user"]}
+{"id":"reserve-restaurant","task":"Reserve a table for 4 at an Italian place Friday 7pm","expected":"delegate","capabilities":["browser"],"acceptable":["ask_user"]}
+{"id":"order-printer-ink","task":"Order printer ink (HP 63XL)","expected":"delegate","capabilities":["browser"]}
+{"id":"cancel-gym-membership","task":"Cancel gym membership","expected":"delegate","capabilities":["browser"],"acceptable":["ask_user"]}
+{"id":"pay-parking-ticket","task":"Pay parking ticket #A12345 online","expected":"delegate","capabilities":["browser"]}
+{"id":"renew-car-registration","task":"Renew car registration","expected":"delegate","capabilities":["browser"],"acceptable":["ask_user"]}
+{"id":"dmv-appointment","task":"Get a DMV appointment for my license renewal","expected":"delegate","capabilities":["browser"],"acceptable":["ask_user"]}
+{"id":"cancel-streaming","task":"Cancel the streaming subscription we never use","expected":"delegate","capabilities":["browser"],"acceptable":["ask_user"]}
+{"id":"renew-passport","task":"Renew passport","expected":"delegate","capabilities":["web"],"acceptable":["comment","ask_user"]}
+{"id":"email-landlord","task":"Email landlord about the leaky faucet","expected":"delegate","capabilities":["connectors"],"acceptable":["ask_user"]}
+{"id":"decline-recruiter","task":"Reply to the recruiter from Acme and decline politely","expected":"delegate","capabilities":["connectors"]}
+{"id":"schedule-one-on-one","task":"Schedule a 1:1 with Priya next week","expected":"delegate","capabilities":["connectors"],"acceptable":["ask_user"]}
+{"id":"send-party-address","task":"Send Sam the address for Saturday's party","notes":["address is in [[Party Planning]]"],"expected":"delegate","acceptable":["ask_user"]}
+{"id":"fix-flaky-test","task":"Fix the flaky login test in the example-app repo","expected":"delegate","capabilities":["shell"],"acceptable":["ask_user"]}
+{"id":"expenses-csv","task":"Clean up the expenses CSV and total it by category","notes":["file: ~/Downloads/expenses-sept.csv"],"expected":"delegate","capabilities":["files"]}
+{"id":"rename-photos-script","task":"Write a script to rename my photos by the date they were taken","expected":"delegate","capabilities":["shell"]}
+{"id":"draft-blog-post","task":"Draft a blog post about our Q3 launch","expected":"delegate","acceptable":["ask_user"]}
+{"id":"update-resume","task":"Update my resume with the new role","expected":"delegate","acceptable":["ask_user"]}
+{"id":"capital-australia","task":"What's the capital of Australia?","expected":"comment"}
+{"id":"cups-to-grams","task":"How many grams is 2 cups of flour?","expected":"comment"}
+{"id":"tip-calculation","task":"Calculate an 18% tip on $86.40","expected":"comment"}
+{"id":"define-sonder","task":"What does 'sonder' mean?","expected":"comment"}
+{"id":"timezone-conversion","task":"What time is 3pm Pacific in London?","expected":"comment"}
+{"id":"jammy-egg","task":"How long do I boil an egg for a jammy yolk?","expected":"comment"}
+{"id":"speed-of-light","task":"Speed of light in km/s","expected":"comment"}
+{"id":"costco-hours","task":"What time does Costco close today?","expected":"comment","acceptable":["delegate","ask_user"]}
+{"id":"figure-out-thing","task":"Figure out the thing","expected":"ask_user"}
+{"id":"handle-it","task":"Handle it","expected":"ask_user"}
+{"id":"follow-up-with-him","task":"Follow up with him","expected":"ask_user"}
+{"id":"fix-yesterday-issue","task":"Fix the issue from yesterday","expected":"ask_user"}
+{"id":"book-it","task":"Book it","expected":"ask_user"}
+{"id":"email-her-about-that","task":"Email her about that","expected":"ask_user"}
+{"id":"go-to-gym","task":"Go to the gym","expected":"ignore"}
+{"id":"call-mom","task":"Call mom","expected":"ignore"}
+{"id":"do-laundry","task":"Do laundry","expected":"ignore"}
+{"id":"walk-dog","task":"Walk the dog","expected":"ignore"}
+{"id":"pick-up-dry-cleaning","task":"Pick up dry cleaning","expected":"ignore"}
+{"id":"meditate","task":"Meditate for 10 minutes","expected":"ignore"}
+{"id":"water-plants","task":"Water the plants","expected":"ignore"}
+{"id":"dentist-in-person","task":"Dentist appointment at 3pm","expected":"ignore","acceptable":["comment"]}
+{"id":"gratitude","task":"Notice three good things today","expected":"ignore"}
+{"id":"deferred-to-next-week","task":"Call the bank about the card [[Daily/{{+7d}}]]","expected":"ignore"}

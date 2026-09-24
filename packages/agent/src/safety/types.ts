@@ -99,6 +99,19 @@ export interface ApprovalGrant {
   scope: Exclude<ApprovalScope, "once">;
   taskId: string | null;
   createdAt: number;
+  /**
+   * Categories of the approved action. When set, the grant only covers later calls whose
+   * categories are all in this list (approving "Submit" does not pre-approve "Place order").
+   */
+  categories?: ActionCategory[];
+  /** Risk of the approved action; the grant does not cover riskier calls. */
+  risk?: RiskLevel;
+}
+
+/** What `findGrant` matches on; `categories`/`risk` narrow the match to what the user approved. */
+export interface GrantQuery extends Pick<ActionContext, "toolName" | "taskId"> {
+  categories?: ActionCategory[];
+  risk?: RiskLevel;
 }
 
 export interface SafetyEvaluatorOptions {
@@ -147,7 +160,7 @@ export interface ApprovalBroker {
   get(id: string): ApprovalRequest | undefined;
   list(filter?: { status?: ApprovalStatus; threadId?: string; taskId?: string }): ApprovalRequest[];
   /** A standing grant that covers this action, if any. */
-  findGrant(ctx: Pick<ActionContext, "toolName" | "taskId">): ApprovalGrant | undefined;
+  findGrant(ctx: GrantQuery): ApprovalGrant | undefined;
   /** Cancels (denies) every pending approval for a task, e.g. when the user deletes the task. */
   cancelForTask(taskId: string, reason: string): void;
   onUpsert(listener: (approval: ApprovalRequest) => void): Unsubscribe;
