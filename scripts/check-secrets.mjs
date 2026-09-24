@@ -80,7 +80,7 @@ function listFiles() {
 function readContent(path) {
   if (mode === "staged") return git(["show", `:${path}`]);
   const st = statSync(path, { throwIfNoEntry: false });
-  if (!st || !st.isFile() || st.size > MAX_BYTES) return null;
+  if (!st?.isFile() || st.size > MAX_BYTES) return null;
   return readFileSync(path, "utf8");
 }
 
