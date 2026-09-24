@@ -29,8 +29,9 @@ file hygiene (`scripts/check-hygiene.mjs`: conflict markers, LF endings, final n
 whitespace, files over 1 MiB, paths that differ only in case, executable bits, relative Markdown
 links), Biome, shellcheck on shell scripts and git hooks, actionlint on the workflows, and
 `pnpm vectors:check`. In CI a missing tool fails the step; locally it's skipped with a warning. The
-job installs actionlint from its release, pinned by version and SHA-256 like gitleaks; the runner
-image ships shellcheck.
+job installs actionlint and shellcheck from their releases, pinned by version and SHA-256 like
+gitleaks, because versions disagree on rules (the runner image's shellcheck 0.9 rejects `test -nt`,
+which 0.11 accepts as POSIX). Keep the pins at the versions Homebrew installs.
 
 Unit tests run one package at a time (`pnpm test --concurrency=1 --continue`, also on macOS):
 every package's Vitest starts a worker per core, so running them together on a 3–4 vCPU runner makes
@@ -258,6 +259,8 @@ pnpm eval --suite safety && node .github/scripts/eval-summary.mjs
   their `run:` scripts) in `pnpm lint`, in the pre-commit hook when a workflow or local action
   changes, and in `check`. To upgrade it, update `ACTIONLINT_VERSION` and `ACTIONLINT_SHA256` in
   `ci.yml`, taking the SHA from the `linux_amd64` line of `actionlint_<version>_checksums.txt`.
+  shellcheck publishes no checksums: take `SHELLCHECK_SHA256` from
+  `shasum -a 256 shellcheck-v<version>.linux.x86_64.tar.xz` after downloading the release asset.
 
 ## Repository settings
 

@@ -27,6 +27,11 @@ jobs:
       ACTIONLINT_VERSION: 1.7.12
       # SHA-256 of actionlint_<version>_linux_amd64.tar.gz, from the release's checksums.txt.
       ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+      # The runner image's shellcheck is older than Homebrew's, and versions disagree on rules
+      # (0.11 accepts POSIX.1-2024's `test -nt`). SHA-256 of the release's
+      # shellcheck-v<version>.linux.x86_64.tar.xz (the project publishes no checksums file).
+      SHELLCHECK_VERSION: 0.11.0
+      SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -35,17 +40,20 @@ jobs:
 
       - name: Install actionlint and shellcheck
         run: |
-          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
-          bin_dir="$RUNNER_TEMP/actionlint"
+          bin_dir="$RUNNER_TEMP/lint-tools"
           mkdir -p "$bin_dir"
-          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$archive" \
-            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${archive}"
-          echo "${ACTIONLINT_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict
-          tar -xzf "$RUNNER_TEMP/$archive" -C "$bin_dir" actionlint
+          actionlint="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$actionlint" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${actionlint}"
+          echo "${ACTIONLINT_SHA256}  $RUNNER_TEMP/$actionlint" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$actionlint" -C "$bin_dir" actionlint
+          shellcheck="shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$shellcheck" \
+            "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/${shellcheck}"
+          echo "${SHELLCHECK_SHA256}  $RUNNER_TEMP/$shellcheck" | sha256sum --check --strict
+          tar -xJf "$RUNNER_TEMP/$shellcheck" -C "$bin_dir" --strip-components=1 \
+            "shellcheck-v${SHELLCHECK_VERSION}/shellcheck"
           echo "$bin_dir" >> "$GITHUB_PATH"
-          command -v shellcheck || {
-            sudo apt-get update -q && sudo apt-get install -y --no-install-recommends shellcheck
-          }
       - name: Lint (hygiene, Biome, shellcheck, actionlint, Swift vectors)
         run: pnpm lint
       - name: Typecheck
