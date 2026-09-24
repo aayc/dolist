@@ -75,13 +75,29 @@ clicks land next to the visible character clicked.
 plus `arrow.left.square`, `questionmark.square`, `exclamationmark.square`. Clicking toggles
 `[ ]` ↔ `[x]` (other statuses → `[x]`) as an undoable edit, never in a read-only editor.
 
-**Badges.** Drawn after the text on the last line fragment of their line: a pill with a status dot
-(triaging accent, queued gray, working blue, waiting orange, done green, failed red, cancelled gray),
-the label shortened to ~28 characters and an unread bubble (`99+` max); hover highlight, tooltip,
-click → `didClickBadge` (the caret doesn't move). They never overlap text: when the column has no
-room on its right (narrow window or no readable width), the text column narrows to reserve it, and
-a pill that still doesn't fit before the view's edge shortens its label (down to just the dot and
-unread count; the tooltip keeps the full label).
+**Badges.** Drawn after the text on the last line fragment of their line: a status dot (triaging
+accent, queued gray, working blue, needs-you amber, done green, failed red, cancelled gray), the
+label shortened to ~28 characters and, with unread messages, a 6 pt accent dot (the tooltip says
+"N unread", `99+` max). Only badges that need the user are loud (`BadgeStyle`):
+`waiting_approval`/`waiting_user` are warning-tinted pills (14 % fill, warning border, primary
+text); `failed` has danger text and dot on a faint danger fill, no border; `triaging`/`queued`/
+`working` are neutral pills (subtle fill, hairline border, secondary text); `done`/`cancelled` are
+bare tertiary text. Colors follow the app theme in light and dark. Hover highlights every kind;
+tooltip; click → `didClickBadge` (the caret doesn't move). They never overlap text: when the column
+has no room on its right (narrow window or no readable width), the text column narrows to reserve
+it, and a pill that still doesn't fit before the view's edge shortens its label (down to just the
+status and unread dots; the tooltip keeps the full label).
+
+**Motion** (paint only, nothing is laid out again; all of it off with Reduce Motion). A badge that
+appears after the note was drawn fades in while settling 2 pt upwards (160 ms, ease-out); the
+badges of a note being opened, badges set again with the same id and badges moved by typing don't.
+A change of status, label or unread dot crossfades from the old look (160 ms). A triaging badge's dot breathes
+1 → 0.35 → 1 (1.2 s, ease-in-out) while it's on screen. Checking a task (click, ⌘L, ⌘↩) pops its
+checkmark in over the open box: 0.8 → 1 scale with a fade (120 ms). The curves are CSS's
+`ease-out`/`ease-in-out`, solved like browsers solve them. Frames come from a display link
+(`NSView.displayLink`, up to 60 Hz) that runs only while a transition plays or a pulsing badge is
+visible in a visible window; each frame redraws just the moving badges, dots and checkboxes. An
+idle editor has no timer at all.
 Only badges in the visible rect are laid out and drawn. Remapping: lines inserted/deleted above
 shift a badge, edits in its line keep it, Enter at its line start moves it with the text, Enter at
 the end keeps it on the task, and an edit removing the line's whole content drops it (unless the
@@ -118,13 +134,14 @@ predictions are off. Typing coalesces into one undo step per burst; every comman
 | --- | --- |
 | `Tokenizer/` | `MarkdownTokenizer` (block rules per line from a tiny incoming state), `InlineTokenizer` (delimiter/bracket algorithm, linear scans), `LinePrefix` (quotes/lists/tasks, shared with commands), `LinkTargets`. |
 | `Styling/MarkdownHighlighter` | Incremental highlighter: owns the line index and each line's entry state (inside a fence or not). An edit re-tokenizes the edited lines, then continues forward only while the state entering the next line changed (toggling a fence restyles until the states re-synchronize); frontmatter is re-evaluated only for edits in its first 200 lines. |
-| `Styling/EditorTheme`, `EditorColors`, `StyleSegments` | Fonts, metrics, cached attribute dictionaries per style; flattening of nested spans. |
+| `Styling/EditorTheme`, `EditorColors`, `StyleSegments`, `BadgeStyle` | Fonts, metrics, cached attribute dictionaries per style; flattening of nested spans; how loud each badge status is. |
 | `Layout/GlyphLayoutDelegate` | Live preview and line metrics (below). |
 | `Layout/MarkdownLayoutManager`, `DecorationRenderer`, `LivePreviewState` | Backgrounds, bars, rules, checkboxes, bullets; what is revealed. |
 | `View/MarkdownTextView`, `BadgeRenderer`, `LineNumberRulerView` | Thin `NSTextView` subclass forwarding keys/mouse/drawing to the controller; badge layout/drawing/hit-testing; line numbers. |
 | `Commands/` | Pure commands returning `TextEdit`s (list editing, tasks, formatting). |
 | `Model/` | `LineIndex`, `BadgeStore` (anchors), `TextDiff` (minimal change). |
-| `Controller/` | `MarkdownEditorController` (composition, public API) and its hooks; `TextSystemBridge` (AppKit delegates). |
+| `Motion/` | `MotionTimeline`, `CubicBezier` (pure curves of elapsed time), `MotionState` (what moves, with explicit times), `EditorMotion` (clock, Reduce Motion, frames through a `FrameTicker`: the display link; all injectable via `MotionEnvironment`). |
+| `Controller/` | `MarkdownEditorController` (composition, public API) and its hooks (drawing, motion frames); `TextSystemBridge` (AppKit delegates). |
 
 TextKit 1 techniques worth knowing before changing things (each verified experimentally):
 
@@ -162,6 +179,7 @@ TextKit 1 techniques worth knowing before changing things (each verified experim
 | … plus relayout of the revealed lines, p95 | | 0.13 ms | 0.17 ms |
 | Pure tokenizer, whole note | | 2.4 ms | 15 ms |
 
+Motion adds nothing to these paths: typing and selection changes only check that nothing moves.
 Assertions use generous debug budgets scaled by `EDITOR_PERF_BUDGET_MULTIPLIER`. Release numbers:
 `apps/macos/scripts/test.sh DailyDoListEditor -- -c release -Xswiftc -enable-testing --filter PerformanceTests`.
 
@@ -172,15 +190,19 @@ apps/macos/scripts/test.sh DailyDoListEditor                        # everything
 apps/macos/scripts/test.sh DailyDoListEditor -- --filter HighlighterTests
 ```
 
-Swift Testing, 119 tests (197 parameterized cases): tokenizer tables (unicode offsets, nesting,
+Swift Testing, 157 tests (206 parameterized cases): tokenizer tables (unicode offsets, nesting,
 unterminated constructs, code spans, URLs with underscores, tags vs headings vs URLs), an
 incremental-vs-full equivalence property test (3 seeds × 500 random edits including fence and
 frontmatter toggles, comparing line states and every attribute run), command tables ported from
-the web editor, editor-level commands and undo, badge remapping, live preview glyph properties,
-minimal-diff `setText`, snapshots with separate undo histories, checkbox/badge/link hit testing,
-fuzzing (random and pathological lines, random edits with drawing), performance, and offscreen PNG
-renders of a sample note (light, dark, source mode with line numbers) written to
-`.build/editor-snapshots/` for manual review (ignored by git).
+the web editor, editor-level commands and undo, badge remapping, badge styles (and the hierarchy
+checked on rendered pixels), live preview glyph properties, minimal-diff `setText`, snapshots with
+separate undo histories, checkbox/badge/link hit testing, motion (curves against brute force, the
+timeline, and motion driven through the controller with a manual clock and ticker: what starts
+it, what each frame redraws, that frames stop, Reduce Motion, hidden windows), fuzzing (random and
+pathological lines, random edits with drawing), performance, and offscreen PNG renders written to
+`.build/editor-snapshots/` for manual review (ignored by git): the sample note (light, dark, source
+mode with line numbers), badges in every status (light, dark), narrow-window badges, and a frame
+in the middle of every kind of motion.
 
 ## Integration notes
 
@@ -196,8 +218,9 @@ renders of a sample note (light, dark, source mode with line numbers) written to
 ## Known limitations
 
 - Checkboxes and badges are drawn, not accessibility elements (the text itself is accessible).
-- No triaging pulse animation; no setext headings, indented code, tables or images (shown as
-  source); callouts render as plain quotes; fences inside blockquotes or list items aren't code.
+- No setext headings, indented code, tables or images (shown as source); callouts render as plain
+  quotes; fences inside blockquotes or list items aren't code.
+- Badges that go away disappear without a fade.
 - A revealed list line keeps the wrap indent of its rendered form (slightly off while editing it).
 - `[[#Heading]]` links (same note, no target) aren't reported; the delegate has no subpath.
 - Enter doesn't continue plain indented continuation lines of list items; loose lists continue tight.

@@ -15,9 +15,21 @@ enum EditorColors {
   static let quoteBar = dynamic(light: rgb(0x7F6DF2, alpha: 0.75), dark: rgb(0xA497F8, alpha: 0.7))
   static let rule = NSColor.separatorColor
   static let bullet = NSColor.secondaryLabelColor
+
+  // Status tones: the app's theme and the web app's `--ddl-warning`, `--ddl-danger`, ….
+  static let warning = tone(light: 0xB7791F, dark: 0xE0A526)
+  static let danger = tone(light: 0xD1383D, dark: 0xE5534B)
+  static let success = tone(light: 0x2F9E5A, dark: 0x4FB477)
+  static let info = tone(light: 0x1F6FEB, dark: 0x4EA1FF)
+
+  // Agent badges (see `BadgeStyle`).
   static let badgeBackground = dynamic(light: NSColor(white: 0, alpha: 0.04), dark: NSColor(white: 1, alpha: 0.07))
   static let badgeHoverBackground = dynamic(light: NSColor(white: 0, alpha: 0.09), dark: NSColor(white: 1, alpha: 0.14))
   static let badgeBorder = dynamic(light: NSColor(white: 0, alpha: 0.12), dark: NSColor(white: 1, alpha: 0.16))
+  static let badgeWarningFill = tone(light: 0xB7791F, dark: 0xE0A526, alpha: 0.14)
+  static let badgeWarningHoverFill = tone(light: 0xB7791F, dark: 0xE0A526, alpha: 0.22)
+  static let badgeDangerFill = tone(light: 0xD1383D, dark: 0xE5534B, alpha: 0.10)
+  static let badgeDangerHoverFill = tone(light: 0xD1383D, dark: 0xE5534B, alpha: 0.16)
 
   static func dynamic(light: NSColor, dark: NSColor) -> NSColor {
     NSColor(name: nil) { appearance in
@@ -31,24 +43,7 @@ enum EditorColors {
       blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
   }
 
-  /// Status dot color of an agent badge (`TaskAgentStatus` raw values).
-  static func badgeStatus(_ status: String) -> NSColor {
-    switch status {
-    case "triaging": accent
-    case "working": .systemBlue
-    case "waiting_approval", "waiting_user": .systemOrange
-    case "done": .systemGreen
-    case "failed": .systemRed
-    default: .systemGray
-    }
-  }
-
-  /// Border tint of badges that need attention.
-  static func badgeBorder(for status: String) -> NSColor {
-    switch status {
-    case "waiting_approval", "waiting_user": NSColor.systemOrange.withAlphaComponent(0.5)
-    case "failed": NSColor.systemRed.withAlphaComponent(0.5)
-    default: badgeBorder
-    }
+  private static func tone(light: UInt32, dark: UInt32, alpha: CGFloat = 1) -> NSColor {
+    dynamic(light: rgb(light, alpha: alpha), dark: rgb(dark, alpha: alpha))
   }
 }

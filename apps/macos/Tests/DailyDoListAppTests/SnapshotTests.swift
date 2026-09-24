@@ -137,12 +137,39 @@ struct SnapshotTests {
 
   @Test func statusBarAndBootScreen() async throws {
     let (model, workspace) = try await bootedModel()
-    type("- [ ] unsaved change", in: workspace)
     let failed = AppModel(environment: makeEnvironment(client: FakeDaemonClient()))
     failed.phase = .failed(.nodeMissing(detail: "Node.js 24.4 or newer is required to run the Daily Do List daemon, but no Node binary was found."))
+    let bar = StatusBar(model: model, workspace: workspace)
+    let size = CGSize(width: 1000, height: 26)
     for dark in [false, true] {
-      try await render(StatusBar(model: model, workspace: workspace), size: CGSize(width: 1000, height: 26), dark: dark, name: "status-bar")
+      try await render(bar, size: size, dark: dark, name: "status-bar-quiet")
       try await render(BootScreen(model: failed), size: CGSize(width: 900, height: 520), dark: dark, name: "boot-error")
+    }
+    type("- [ ] unsaved change", in: workspace)
+    model.connection.update(.reconnecting(attempt: 2, reason: nil))
+    for dark in [false, true] {
+      try await render(bar, size: size, dark: dark, name: "status-bar")
+    }
+    model.connection.setKind(.demo)
+    model.connection.update(.connected(serverVersion: "demo"))
+    for dark in [false, true] {
+      try await render(bar, size: size, dark: dark, name: "status-bar-demo")
+    }
+    await model.teardown()
+  }
+
+  @Test func noteHeaders() async throws {
+    let (model, workspace) = try await bootedModel()
+    let headers = [
+      ("note-header-today", "Daily/2026-09-23.md"), ("note-header-past-day", "Daily/2026-09-19.md"),
+      ("note-header-note", "Projects/Launch Plan.md"),
+    ]
+    for dark in [false, true] {
+      for (name, path) in headers {
+        try await render(
+          NoteHeaderView(workspace: workspace, path: path).frame(maxHeight: .infinity, alignment: .top).background(Theme.background),
+          size: CGSize(width: 760, height: 90), dark: dark, name: name)
+      }
     }
     await model.teardown()
   }

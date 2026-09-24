@@ -147,8 +147,63 @@ struct BadgeTests {
     #expect(shorter.width <= full - 30)
 
     let dotOnly = renderer.fitted(badge, maxWidth: 12)
-    #expect(dotOnly.label.isEmpty, "no room for even one character: status dot and unread count only")
+    #expect(dotOnly.label.isEmpty, "no room for even one character: status and unread dots only")
     #expect(dotOnly.width < shorter.width)
+  }
+
+  @Test func unreadMessagesAddADotNotACount() {
+    let renderer = EditorHarness(text: "").controller.badgeRenderer
+    let plain = EditorBadge(id: "x", line: 0, status: "done", label: "Done · 3 options")
+    var one = plain
+    one.unread = 1
+    var many = plain
+    many.unread = 150
+    #expect(renderer.width(of: one) == renderer.width(of: many), "the dot doesn't grow with the count")
+    #expect(renderer.width(of: one) > renderer.width(of: plain))
+    #expect(renderer.width(of: one) - renderer.width(of: plain) < BadgeRenderer.unreadDotDiameter * 2.5)
+    #expect(BadgeRenderer.toolTip(for: many) == "Done: Done · 3 options · 99+ unread", "the tooltip keeps the count")
+  }
+
+  @Test func onlyBadgesThatNeedYouAreLoud() {
+    #expect(BadgeTier(status: "waiting_approval") == .needsYou)
+    #expect(BadgeTier(status: "waiting_user") == .needsYou)
+    #expect(BadgeTier(status: "failed") == .failed)
+    for status in ["triaging", "queued", "working"] { #expect(BadgeTier(status: status) == .working) }
+    for status in ["done", "cancelled", "a_future_status"] { #expect(BadgeTier(status: status) == .quiet) }
+
+    let needsYou = BadgeStyle(status: "waiting_approval", isHovered: false)
+    #expect(needsYou.fill == EditorColors.badgeWarningFill)
+    #expect(needsYou.border == EditorColors.warning)
+    #expect(needsYou.text == EditorColors.text)
+    #expect(needsYou.dot == EditorColors.warning)
+
+    let failed = BadgeStyle(status: "failed", isHovered: false)
+    #expect(failed.fill == EditorColors.badgeDangerFill)
+    #expect(failed.border == nil)
+    #expect(failed.text == EditorColors.danger)
+    #expect(failed.dot == EditorColors.danger)
+
+    let working = BadgeStyle(status: "working", isHovered: false)
+    #expect(working.fill == EditorColors.badgeBackground)
+    #expect(working.border == EditorColors.badgeBorder)
+    #expect(working.text == EditorColors.secondaryText)
+
+    for status in ["done", "cancelled"] {
+      let quiet = BadgeStyle(status: status, isHovered: false)
+      #expect(quiet.fill == nil)
+      #expect(quiet.border == nil)
+      #expect(quiet.text == EditorColors.tertiaryText)
+    }
+    #expect(BadgeStyle(status: "done", isHovered: false).dot == EditorColors.success)
+    #expect(BadgeStyle(status: "cancelled", isHovered: false).dot == NSColor.systemGray)
+  }
+
+  @Test(arguments: ["waiting_user", "failed", "queued", "done", "cancelled"])
+  func hoverHighlightsEveryTier(status: String) {
+    let resting = BadgeStyle(status: status, isHovered: false)
+    let hovered = BadgeStyle(status: status, isHovered: true)
+    #expect(hovered.fill != nil)
+    #expect(hovered.fill != resting.fill)
   }
 
   @Test func badgesInANarrowEditorAreShortenedInsteadOfClipped() throws {

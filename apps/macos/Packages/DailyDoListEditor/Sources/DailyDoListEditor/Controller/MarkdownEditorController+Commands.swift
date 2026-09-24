@@ -2,15 +2,17 @@ import AppKit
 
 extension MarkdownEditorController {
   /// Toggles the checkbox of the task on a 0-based line (`[ ]` ↔ `[x]`, other statuses → done) as
-  /// an undoable edit. False for non-task lines or a read-only editor.
+  /// an undoable edit; a checkmark pops in. False for non-task lines or a read-only editor.
   @discardableResult
   public func toggleTask(atLine line: Int) -> Bool {
     let index = highlighter.lineIndex
     guard configuration.isEditable, line >= 0, line < index.count, !highlighter.isLiteralLine(line),
       let replacement = TaskCommands.toggleTask(in: storage.mutableString, lineContaining: index.start(ofLine: line))
     else { return false }
-    let selection = textView.selectedRanges.map(\.rangeValue)
-    return perform(TextEdit(replacements: [replacement], selection: selection), actionName: "Toggle Task", scroll: false)
+    let edit = TextEdit(replacements: [replacement], selection: textView.selectedRanges.map(\.rangeValue))
+    guard perform(edit, actionName: "Toggle Task", scroll: false) else { return false }
+    animateChecks(in: edit)
+    return true
   }
 
   /// ⌘L / ⌘↩: plain line → `- [ ] line`, list item → task, open task → done, done → open, on every
@@ -18,9 +20,11 @@ extension MarkdownEditorController {
   @discardableResult
   public func toggleChecklist() -> Bool {
     guard configuration.isEditable,
-      let edit = TaskCommands.toggleChecklist(in: storage.mutableString, selection: currentSelection)
+      let edit = TaskCommands.toggleChecklist(in: storage.mutableString, selection: currentSelection),
+      perform(edit, actionName: "Toggle Checkbox")
     else { return false }
-    return perform(edit, actionName: "Toggle Checkbox")
+    animateChecks(in: edit)
+    return true
   }
 
   /// ⌘B: `**bold**` around the selection or the word at the caret (removed when already bold).

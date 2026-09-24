@@ -65,14 +65,16 @@ struct IconButton: View {
   let help: String
   var isActive = false
   var isEnabled = true
+  /// Smaller glyph and hit area, for quiet rows (the daily note navigator).
+  var isCompact = false
   let action: () -> Void
   @State private var hovering = false
 
   var body: some View {
     Button(action: action) {
       Image(systemName: systemImage)
-        .font(.system(size: 12, weight: .medium))
-        .frame(width: 24, height: 22)
+        .font(.system(size: isCompact ? 10 : 12, weight: isCompact ? .semibold : .medium))
+        .frame(width: isCompact ? 20 : 24, height: isCompact ? 18 : 22)
         .foregroundStyle(isActive ? Theme.accent : (isEnabled ? Theme.mutedText : Theme.faintText))
         .background(
           RoundedRectangle(cornerRadius: 5)

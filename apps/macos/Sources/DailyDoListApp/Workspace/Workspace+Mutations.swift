@@ -63,6 +63,19 @@ extension Workspace {
 
   // MARK: - Rename
 
+  /// "Rename Note…": focuses the title field, or, for a daily note (whose title is its date and
+  /// not editable), the note's inline rename field in the file explorer.
+  func beginRename(_ path: String) {
+    guard DailyNotes.isDailyNote(path, settings: settings.settings.dailyNotes) else {
+      ui.titleFocusPath = path
+      return
+    }
+    ui.sidebarVisible = true
+    ui.sidebarMode = .files
+    ui.expand(VaultTree.ancestors(of: path))
+    ui.renamingPath = path
+  }
+
   /// Title rename: changes the note's file stem in place.
   @discardableResult
   func renameNoteTitle(_ path: String, to title: String) async -> Bool {

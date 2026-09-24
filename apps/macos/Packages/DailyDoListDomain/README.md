@@ -52,6 +52,9 @@ What "exactly" takes, beyond the algorithms:
   `weeklyPath`, `date(forPath:)` and `VaultPath.normalize` / `join` never fail: they agree on every
   valid input and drop an escaping `..` otherwise. `templatePath` returns nil for a template
   outside the vault.
+- `DailyNotes.friendlyTitle(_:today:)`: a daily note's header title, "Thursday, September 24",
+  with the year only when it isn't `today`'s ("Monday, December 29, 2025"). English, through
+  `MomentFormat` like the web app's `formatLocalDate`, so both show the same text.
 - `MomentFormat.parse(_:format:referenceYear:)`: a week without a year (`[W]ww`) resolves in
   `referenceYear` (default: the current year, like the core's `new Date().getFullYear()`).
 - `TaskTracker.track(previous:parsed:now:similarityThreshold:idFactory:)` takes a non-escaping

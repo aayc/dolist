@@ -64,6 +64,19 @@ future iPhone app too.
 | Package the app | `apps/macos/scripts/build-app.sh [--release] [--with-daemon] [--zip] [--output DIR] [--open]` |
 | Re-render the icon source | `swift apps/macos/scripts/make-icon.swift --png apps/macos/Resources/AppIcon-1024.png` |
 
+## Calm by default
+
+- **Daily notes** are titled by their date ("Thursday, September 24"; the year only when it isn't
+  this year's), with previous/next and "Today" (or "Go to today") in one quiet row below. The date
+  isn't editable: **Rename Note…** on a daily note renames it in the file explorer. Tabs and the
+  sidebar keep showing the file name.
+- **The status bar** only shows what needs attention: the save state while the note isn't saved,
+  the connection while it isn't connected (a small "Demo" marker in demo mode), and the agent's
+  mode when it isn't `live`. The agent toggle, running count, approvals and word count stay.
+- **Agent badges** are loud only when they need you, and move gently (fade-ins, crossfades, the
+  triaging pulse, checkmarks popping in) unless Reduce Motion is on. See the
+  [editor README](Packages/DailyDoListEditor/README.md#behavior).
+
 ## Demo mode
 
 `--demo` (or `DDL_DEMO=1`) runs the whole UI against `InMemoryDaemonClient`: sample notes and a

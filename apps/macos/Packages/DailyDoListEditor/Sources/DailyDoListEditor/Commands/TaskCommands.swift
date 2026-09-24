@@ -8,6 +8,14 @@ enum TaskCommands {
     status == UTF16Unit.lowerX || status == UTF16Unit.upperX ? UTF16Unit.space : UTF16Unit.lowerX
   }
 
+  /// Offsets, after `edit`, of the status characters of the tasks a toggle `edit` checks (`x`
+  /// replacing one status character).
+  static func checkedStatusOffsets(in edit: TextEdit) -> [Int] {
+    edit.replacements
+      .filter { $0.range.length == 1 && $0.text == "x" }
+      .map { edit.map($0.range.location, forward: false) }
+  }
+
   /// Toggles the task on the line containing `offset`, or nil if that line isn't a task.
   static func toggleTask(in text: NSString, lineContaining offset: Int) -> TextEdit.Replacement? {
     let lines = TextLines(text)

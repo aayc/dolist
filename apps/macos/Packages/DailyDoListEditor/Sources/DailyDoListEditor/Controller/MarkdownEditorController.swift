@@ -28,6 +28,8 @@ public final class MarkdownEditorController {
   let glyphDelegate: GlyphLayoutDelegate
   let decorations: DecorationRenderer
   let badgeRenderer: BadgeRenderer
+  /// Badges fading in and crossfading, the triaging pulse, checkmarks popping in.
+  let motion: EditorMotion
   private(set) var badgeStore = BadgeStore()
   private let bridge = TextSystemBridge()
   private var lineNumberRuler: LineNumberRulerView?
@@ -64,9 +66,12 @@ public final class MarkdownEditorController {
     glyphDelegate = GlyphLayoutDelegate(storage: storage, livePreview: livePreview, theme: theme)
     decorations = DecorationRenderer(theme: theme, livePreview: livePreview)
     badgeRenderer = BadgeRenderer(theme: theme)
+    motion = EditorMotion(environment: .live(for: markdownTextView))
 
     layoutManager.delegate = glyphDelegate
     layoutManager.renderer = decorations
+    decorations.motion = motion
+    motion.onFrame = { [weak self] in self?.motionFrame() }
     storage.delegate = bridge
     bridge.controller = self
     markdownTextView.delegate = bridge
@@ -148,6 +153,7 @@ public final class MarkdownEditorController {
     defer { applyingProgrammaticChange = false }
     markdownTextView.breakUndoCoalescing()
     badgeStore.removeAll()
+    motion.documentReplaced()
     replacingText = true
     storage.replaceCharacters(in: NSRange(location: 0, length: storage.length), with: text)
     replacingText = false
@@ -197,9 +203,12 @@ public final class MarkdownEditorController {
   // MARK: Badges
 
   /// Replaces the badges. Lines are 0-based and refer to the current text; badges on lines that
-  /// don't exist are ignored.
+  /// don't exist are ignored. Once the document has been drawn, a badge with a new id fades in and
+  /// one whose look changed (status, label, unread dot) crossfades; the same badges set again don't
+  /// move.
   public func setBadges(_ badges: [EditorBadge]) {
     badgeStore.set(badges, lineIndex: highlighter.lineIndex, text: storage.mutableString)
+    motion.setBadges(badgeStore.items.map(\.badge))
     let drawn = badgeStore.items.contains { $0.badge.isDrawn }
     let reserve = drawn ? badgeRenderer.widestRow(badgeStore.items) + badgeRenderer.gap : 0
     if reserve != badgeReserve {
@@ -333,6 +342,7 @@ public final class MarkdownEditorController {
     markdownTextView.breakUndoCoalescing()
     noteUndoManager = snapshot.undoManager ?? UndoManager()
     badgeStore.removeAll()
+    motion.documentReplaced()
     let next = TextDiff.normalizeLineEndings(snapshot.text)
     if next != storage.string {
       applyingProgrammaticChange = true
@@ -388,6 +398,7 @@ public final class MarkdownEditorController {
     badgeStore.applyEdit(
       location: editedRange.location, oldLength: oldLength, newLength: editedRange.length,
       lineIndex: highlighter.lineIndex, text: storage.mutableString)
+    motion.textDidEdit(location: editedRange.location, oldLength: oldLength, newLength: editedRange.length)
     livePreview.textDidChange(location: editedRange.location, oldLength: oldLength, newLength: editedRange.length)
     if let ruler = lineNumberRuler {
       if highlighter.lineIndex.count != linesBefore { ruler.updateThickness() }

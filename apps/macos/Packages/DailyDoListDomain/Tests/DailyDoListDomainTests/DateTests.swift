@@ -183,5 +183,16 @@ extension DomainTests {
       #expect(try JSONDecoder().decode(LocalDate.self, from: json) == d(2026, 9, 23))
       #expect(DailyNotes.friendlyTitle(d(2026, 9, 23)) == "Wednesday, September 23, 2026")
     }
+
+    @Test func headerTitlesShowTheYearOnlyWhenItIsNotThisYear() {
+      let today = d(2026, 9, 24)
+      #expect(DailyNotes.friendlyTitle(d(2026, 9, 24), today: today) == "Thursday, September 24")
+      #expect(DailyNotes.friendlyTitle(d(2026, 1, 1), today: today) == "Thursday, January 1")
+      #expect(DailyNotes.friendlyTitle(d(2026, 12, 31), today: today) == "Thursday, December 31")
+      #expect(DailyNotes.friendlyTitle(d(2025, 12, 29), today: today) == "Monday, December 29, 2025")
+      #expect(DailyNotes.friendlyTitle(d(2027, 1, 4), today: today) == "Monday, January 4, 2027")
+      // Only the year matters, not how far away the date is.
+      #expect(DailyNotes.friendlyTitle(d(2025, 12, 31), today: d(2026, 1, 1)) == "Wednesday, December 31, 2025")
+    }
   }
 }

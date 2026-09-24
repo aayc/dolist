@@ -3,26 +3,38 @@ import DailyDoListClient
 import DailyDoListModels
 import SwiftUI
 
-/// Bottom bar: agent on/off + mode, running count, approvals (→ inbox), daemon problem, save
-/// state, word count, connection.
+/// Bottom bar, quiet by default (``StatusBarVisibility``): agent on/off (+ mode unless live),
+/// running count, approvals (→ inbox), daemon problem, save state while not saved, word count,
+/// connection while not connected (or a "Demo" marker).
 struct StatusBar: View {
   let model: AppModel
   let workspace: Workspace
 
   var body: some View {
+    let visibility = StatusBarVisibility(
+      saveState: workspace.tabs.active.flatMap { workspace.notes.saveStates[$0] },
+      connection: model.connection.state, isDemo: model.connection.isDemo, agentMode: model.agent?.status?.mode)
     HStack(spacing: 14) {
       if let agent = model.agent {
-        AgentStatusItems(model: model, agent: agent)
+        AgentStatusItems(model: model, agent: agent, mode: visibility.agentMode)
       }
       Spacer(minLength: 8)
-      if let path = workspace.tabs.active, let state = workspace.notes.saveStates[path] {
+      if let state = visibility.saveState {
         SaveIndicator(state: state)
       }
       if workspace.tabs.active != nil, let words = workspace.editor.wordCount {
         Text(TextMetrics.pluralize(words, "word"))
           .foregroundStyle(Theme.mutedText)
       }
-      ConnectionIndicator(connection: model.connection)
+      switch visibility.connection {
+      case .demo:
+        Pill(text: "Demo", color: Theme.mutedText)
+          .help(model.connection.detail)
+      case .problem:
+        ConnectionIndicator(connection: model.connection)
+      case nil:
+        EmptyView()
+      }
     }
     .lineLimit(1)
     .font(.system(size: 11))
@@ -35,6 +47,8 @@ struct StatusBar: View {
 struct AgentStatusItems: View {
   let model: AppModel
   let agent: AgentStore
+  /// Shown next to "Agent on/off" (nil while the agent is live).
+  let mode: AgentMode?
 
   var body: some View {
     let status = agent.status
@@ -46,7 +60,7 @@ struct AgentStatusItems: View {
         Image(systemName: status?.enabled == false ? "pause.circle" : "sparkles")
           .foregroundStyle(status?.enabled == false ? Theme.faintText : Theme.accent)
         Text(status.map { $0.enabled ? "Agent on" : "Agent off" } ?? "Agent")
-        if let mode = status?.mode {
+        if let mode {
           Text(mode.rawValue).foregroundStyle(Theme.faintText)
         }
       }
@@ -89,13 +103,14 @@ struct AgentStatusItems: View {
   }
 }
 
+/// The active note's save state while it isn't saved.
 struct SaveIndicator: View {
   let state: SaveState
 
   var body: some View {
     HStack(spacing: 4) {
       switch state {
-      case .saved: Image(systemName: "checkmark").foregroundStyle(Theme.faintText)
+      case .saved: EmptyView()
       case .saving: ProgressView().controlSize(.mini)
       case .dirty: Circle().fill(Theme.mutedText).frame(width: 6, height: 6)
       case .conflict: Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
@@ -108,6 +123,7 @@ struct SaveIndicator: View {
   }
 }
 
+/// The daemon connection while it isn't connected: connecting, reconnecting, offline, incompatible.
 struct ConnectionIndicator: View {
   let connection: ConnectionStore
 

@@ -61,7 +61,7 @@ struct CommandCatalog {
         if let workspace = ws(), let path = workspace.tabs.active { workspace.notes.saveNow(path) }
       },
       AppCommand(.renameNote, "Rename Note…", palette: "Rename current note", enabled: hasNote) {
-        ui.titleFocusPath = ws()?.tabs.active
+        if let workspace = ws(), let path = workspace.tabs.active { workspace.beginRename(path) }
       },
       AppCommand(.deleteNote, "Delete Note…", palette: "Delete current note", enabled: hasNote) {
         if let workspace = ws(), let path = workspace.tabs.active { workspace.requestDelete(path) }

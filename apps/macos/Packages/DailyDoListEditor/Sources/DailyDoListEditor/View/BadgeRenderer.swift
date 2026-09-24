@@ -11,6 +11,7 @@ extension EditorBadge {
     label.count > 28 ? String(label.prefix(27)).trimmingCharacters(in: .whitespaces) + "…" : label
   }
 
+  /// The unread count for the tooltip (`99+` max); the pill itself shows a dot.
   var unreadText: String? {
     guard unread > 0 else { return nil }
     return unread > 99 ? "99+" : String(unread)
@@ -18,7 +19,8 @@ extension EditorBadge {
 }
 
 /// Lays out, draws and hit-tests agent badges: rounded pills drawn after the end of the last line
-/// fragment of their paragraph (in the reserved right margin when the line runs to the edge).
+/// fragment of their paragraph (in the reserved right margin when the line runs to the edge). How
+/// loud a pill is depends on its status (``BadgeStyle``); unread messages add an accent dot.
 @MainActor
 final class BadgeRenderer {
   struct Layout: Equatable {
@@ -30,31 +32,34 @@ final class BadgeRenderer {
     /// The label as drawn: `displayLabel`, shortened further (or empty) when the pill had to
     /// shrink to fit a narrow editor.
     var label: String
+    /// The room the pill was fitted in (a crossfade fits the badge's old look in the same room).
+    var available: CGFloat
 
-    init(badge: EditorBadge, anchor: Int, rect: NSRect, label: String? = nil) {
+    init(badge: EditorBadge, anchor: Int, rect: NSRect, label: String? = nil, available: CGFloat = .greatestFiniteMagnitude) {
       self.badge = badge
       self.anchor = anchor
       self.rect = rect
       self.label = label ?? badge.displayLabel
+      self.available = available
     }
   }
 
+  /// Diameter of the unread dot after the label.
+  static let unreadDotDiameter: CGFloat = 6
+
   private(set) var theme: EditorTheme
   private var labelFont: NSFont
-  private var unreadFont: NSFont
   private var widthCache: [String: CGFloat] = [:]
   private var fitCache: [String: (label: String, width: CGFloat)] = [:]
 
   init(theme: EditorTheme) {
     self.theme = theme
     labelFont = NSFont.systemFont(ofSize: Self.labelSize(theme), weight: .medium)
-    unreadFont = NSFont.systemFont(ofSize: (Self.labelSize(theme) * 0.85).rounded(), weight: .semibold)
   }
 
   func setTheme(_ theme: EditorTheme) {
     self.theme = theme
     labelFont = NSFont.systemFont(ofSize: Self.labelSize(theme), weight: .medium)
-    unreadFont = NSFont.systemFont(ofSize: (Self.labelSize(theme) * 0.85).rounded(), weight: .semibold)
     widthCache.removeAll()
     fitCache.removeAll()
   }
@@ -67,14 +72,14 @@ final class BadgeRenderer {
   var gap: CGFloat { (theme.fontSize * 0.6).rounded() }
   private var padding: CGFloat { (labelFont.pointSize * 0.7).rounded() }
   private var dotDiameter: CGFloat { (labelFont.pointSize * 0.6).rounded() }
-  private var unreadHeight: CGFloat { (labelFont.pointSize * 1.3).rounded() }
+  private var unreadGap: CGFloat { dotDiameter * 0.6 }
 
   /// Width of a badge's pill.
   func width(of badge: EditorBadge) -> CGFloat {
-    let key = "\(badge.displayLabel)\u{0}\(badge.unreadText ?? "")"
+    let key = "\(badge.displayLabel)\u{0}\(badge.unread > 0)"
     if let cached = widthCache[key] { return cached }
     var width = padding + dotDiameter + dotDiameter * 0.8 + labelWidth(badge.displayLabel) + padding
-    if let unread = badge.unreadText { width += unreadWidth(unread) + dotDiameter * 0.6 }
+    if badge.unread > 0 { width += unreadGap + Self.unreadDotDiameter }
     widthCache[key] = ceil(width)
     return ceil(width)
   }
@@ -123,20 +128,23 @@ final class BadgeRenderer {
       } else if result.last?.anchor != item.anchor {
         continue
       }
-      let (label, width) = fitted(item.badge, maxWidth: rightEdge - x)
+      let available = rightEdge - x
+      let (label, width) = fitted(item.badge, maxWidth: available)
       result.append(
-        Layout(badge: item.badge, anchor: item.anchor, rect: NSRect(x: x, y: y, width: width, height: height), label: label))
+        Layout(
+          badge: item.badge, anchor: item.anchor, rect: NSRect(x: x, y: y, width: width, height: height), label: label,
+          available: available))
       x += width + gap / 2
     }
     return result
   }
 
   /// The label and pill width for `badge` in at most `maxWidth`: the full display label when it
-  /// fits, else a shorter one ending in "…", else no label (just the status dot and unread count).
+  /// fits, else a shorter one ending in "…", else no label (just the status and unread dots).
   func fitted(_ badge: EditorBadge, maxWidth: CGFloat) -> (label: String, width: CGFloat) {
     let full = width(of: badge)
     if full <= maxWidth { return (badge.displayLabel, full) }
-    let key = "\(badge.displayLabel)\u{0}\(badge.unreadText ?? "")\u{0}\(Int(maxWidth.rounded(.down)))"
+    let key = "\(badge.displayLabel)\u{0}\(badge.unread > 0)\u{0}\(Int(maxWidth.rounded(.down)))"
     if let cached = fitCache[key] { return cached }
     let result = shortened(badge, fullWidth: full, maxWidth: maxWidth.rounded(.down))
     if fitCache.count > 512 { fitCache.removeAll() }
@@ -172,48 +180,98 @@ final class BadgeRenderer {
     return (used.maxX, used.midY)
   }
 
-  func draw(_ layouts: [Layout], hovered: String?, dirtyRect: NSRect) {
-    for layout in layouts where layout.rect.intersects(dirtyRect) {
-      draw(layout, isHovered: layout.badge.id == hovered)
+  // MARK: Geometry of motion
+
+  /// The status dot inside a pill.
+  func dotRect(in rect: NSRect) -> NSRect {
+    NSRect(x: rect.minX + padding, y: rect.midY - dotDiameter / 2, width: dotDiameter, height: dotDiameter)
+  }
+
+  /// Everything a badge may cover while it moves: its pill, the pill 2 pt lower (settling in) and
+  /// the pill of its old look (crossfading).
+  func motionRect(of layout: Layout, previous: EditorBadge?) -> NSRect {
+    var rect = layout.rect.union(layout.rect.offsetBy(dx: 0, dy: MotionTimeline.appearDistance))
+    if let previous {
+      let old = NSRect(origin: layout.rect.origin, size: NSSize(width: fitted(previous, maxWidth: layout.available).width, height: height))
+      rect = rect.union(old)
+    }
+    return rect.insetBy(dx: -1, dy: -1)
+  }
+
+  // MARK: Drawing
+
+  /// Draws the badges that intersect `dirtyRect`; `paint` gives each one's motion (default: at rest).
+  func draw(_ layouts: [Layout], hovered: String?, dirtyRect: NSRect, paint: (Layout) -> BadgePaint = { _ in .rest }) {
+    guard let context = NSGraphicsContext.current?.cgContext else { return }
+    for layout in layouts {
+      let frame = paint(layout)
+      let covered = frame == .rest ? layout.rect : motionRect(of: layout, previous: frame.previous)
+      guard covered.intersects(dirtyRect) else { continue }
+      draw(layout, paint: frame, isHovered: layout.badge.id == hovered, context: context)
     }
   }
 
-  private func draw(_ layout: Layout, isHovered: Bool) {
-    let badge = layout.badge
-    let rect = layout.rect
+  private func draw(_ layout: Layout, paint: BadgePaint, isHovered: Bool, context: CGContext) {
+    let origin = NSPoint(x: layout.rect.minX, y: layout.rect.minY + paint.offsetY)
+    if let previous = paint.previous, paint.previousOpacity > 0 {
+      let (label, width) = fitted(previous, maxWidth: layout.available)
+      drawPill(
+        previous, label: label, in: NSRect(origin: origin, size: NSSize(width: width, height: height)), isHovered: isHovered,
+        opacity: paint.opacity * paint.previousOpacity, dotOpacity: 1, context: context)
+    }
+    drawPill(
+      layout.badge, label: layout.label, in: NSRect(origin: origin, size: layout.rect.size), isHovered: isHovered,
+      opacity: paint.opacity * (1 - paint.previousOpacity), dotOpacity: paint.dotOpacity, context: context)
+  }
+
+  /// One pill; below full opacity it's composited as a whole (a transparency layer), so its fill,
+  /// border and text don't show through each other.
+  private func drawPill(
+    _ badge: EditorBadge, label: String, in rect: NSRect, isHovered: Bool, opacity: CGFloat, dotOpacity: CGFloat,
+    context: CGContext
+  ) {
+    guard opacity > 0.001 else { return }
+    let layered = opacity < 0.999
+    if layered {
+      context.saveGState()
+      context.setAlpha(opacity)
+      context.beginTransparencyLayer(in: rect.insetBy(dx: -1, dy: -1), auxiliaryInfo: nil)
+    }
+    let style = BadgeStyle(status: badge.status, isHovered: isHovered)
     let pill = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: rect.height / 2, yRadius: rect.height / 2)
-    (isHovered ? EditorColors.badgeHoverBackground : EditorColors.badgeBackground).setFill()
-    pill.fill()
-    EditorColors.badgeBorder(for: badge.status).setStroke()
-    pill.lineWidth = 1
-    pill.stroke()
-
-    let dot = NSRect(x: rect.minX + padding, y: rect.midY - dotDiameter / 2, width: dotDiameter, height: dotDiameter)
-    EditorColors.badgeStatus(badge.status).setFill()
-    NSBezierPath(ovalIn: dot).fill()
-
-    var x: CGFloat
-    if !layout.label.isEmpty {
-      x = dot.maxX + dotDiameter * 0.8
-      let labelColor = isHovered ? EditorColors.text : EditorColors.secondaryText
-      let label = layout.label as NSString
-      let labelAttributes: [NSAttributedString.Key: Any] = [.font: labelFont, .foregroundColor: labelColor]
-      let labelSize = label.size(withAttributes: labelAttributes)
-      label.draw(at: NSPoint(x: x, y: rect.midY - labelSize.height / 2), withAttributes: labelAttributes)
-      x += labelWidth(layout.label)
-    } else {
-      x = dot.maxX
+    if let fill = style.fill {
+      fill.setFill()
+      pill.fill()
+    }
+    if let border = style.border {
+      border.setStroke()
+      pill.lineWidth = 1
+      pill.stroke()
     }
 
-    if let unread = badge.unreadText {
-      x += dotDiameter * 0.6
-      let bubble = NSRect(x: x, y: rect.midY - unreadHeight / 2, width: unreadWidth(unread), height: unreadHeight)
+    let dot = dotRect(in: rect)
+    context.saveGState()
+    context.setAlpha(dotOpacity)
+    style.dot.setFill()
+    NSBezierPath(ovalIn: dot).fill()
+    context.restoreGState()
+
+    var x = dot.maxX
+    if !label.isEmpty {
+      x += dotDiameter * 0.8
+      let attributes: [NSAttributedString.Key: Any] = [.font: labelFont, .foregroundColor: style.text]
+      let size = (label as NSString).size(withAttributes: attributes)
+      (label as NSString).draw(at: NSPoint(x: x, y: rect.midY - size.height / 2), withAttributes: attributes)
+      x += labelWidth(label)
+    }
+    if badge.unread > 0 {
+      let diameter = Self.unreadDotDiameter
       EditorColors.accent.setFill()
-      NSBezierPath(roundedRect: bubble, xRadius: bubble.height / 2, yRadius: bubble.height / 2).fill()
-      let attributes: [NSAttributedString.Key: Any] = [.font: unreadFont, .foregroundColor: NSColor.white]
-      let size = (unread as NSString).size(withAttributes: attributes)
-      (unread as NSString).draw(
-        at: NSPoint(x: bubble.midX - size.width / 2, y: bubble.midY - size.height / 2), withAttributes: attributes)
+      NSBezierPath(ovalIn: NSRect(x: x + unreadGap, y: rect.midY - diameter / 2, width: diameter, height: diameter)).fill()
+    }
+    if layered {
+      context.endTransparencyLayer()
+      context.restoreGState()
     }
   }
 
@@ -221,12 +279,7 @@ final class BadgeRenderer {
     ceil((label as NSString).size(withAttributes: [.font: labelFont]).width)
   }
 
-  private func unreadWidth(_ text: String) -> CGFloat {
-    let textWidth = ceil((text as NSString).size(withAttributes: [.font: unreadFont]).width)
-    return max(unreadHeight, textWidth + unreadHeight * 0.6)
-  }
-
-  /// Tooltip for a badge: status and full label.
+  /// Tooltip for a badge: status, full label and unread count.
   static func toolTip(for badge: EditorBadge) -> String {
     let status = badge.status.replacingOccurrences(of: "_", with: " ").capitalized
     var text = "\(status): \(badge.label)"

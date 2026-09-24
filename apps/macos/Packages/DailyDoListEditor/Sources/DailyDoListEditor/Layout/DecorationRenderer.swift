@@ -6,6 +6,8 @@ import AppKit
 @MainActor
 final class DecorationRenderer {
   var theme: EditorTheme
+  /// Checkmarks popping in.
+  weak var motion: EditorMotion?
   private let livePreview: LivePreviewState
   private var symbolCache: [SymbolKey: NSImage] = [:]
 
@@ -130,7 +132,10 @@ final class DecorationRenderer {
       let rect = slot.rect.offsetBy(dx: origin.x, dy: origin.y)
       let baseline = slot.baseline + origin.y
       if kind == .task, full.length >= 3 {
-        self.drawCheckbox(status: text.character(at: full.end - 2), in: self.checkboxRect(inSlot: rect, baseline: baseline, font: slot.font))
+        let statusOffset = full.end - 2
+        self.drawCheckbox(
+          status: text.character(at: statusOffset), in: self.checkboxRect(inSlot: rect, baseline: baseline, font: slot.font),
+          check: self.motion?.checkPaint(statusOffset: statusOffset))
       } else if kind == .bullet {
         self.drawBullet(inSlot: rect, baseline: baseline, font: slot.font)
       }
@@ -180,6 +185,23 @@ final class DecorationRenderer {
     case UTF16Unit.bang: ("exclamationmark.square", NSColor.systemOrange)
     default: ("square.dashed", EditorColors.accent)
     }
+  }
+
+  /// A checkbox; while `check` pops a checkmark in, the checkmark grows and fades in over the open
+  /// box it replaces.
+  private func drawCheckbox(status: UInt16, in rect: NSRect, check: CheckPaint?) {
+    guard let check, let context = NSGraphicsContext.current?.cgContext else {
+      drawCheckbox(status: status, in: rect)
+      return
+    }
+    drawCheckbox(status: UTF16Unit.space, in: rect)
+    context.saveGState()
+    context.setAlpha(check.opacity)
+    context.translateBy(x: rect.midX, y: rect.midY)
+    context.scaleBy(x: check.scale, y: check.scale)
+    context.translateBy(x: -rect.midX, y: -rect.midY)
+    drawCheckbox(status: status, in: rect)
+    context.restoreGState()
   }
 
   private func drawCheckbox(status: UInt16, in rect: NSRect) {

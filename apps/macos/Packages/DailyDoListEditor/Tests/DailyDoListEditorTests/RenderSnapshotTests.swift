@@ -61,6 +61,85 @@ struct RenderSnapshotTests {
     #expect(colors.count > 2, "the part of badge \(crossing.badge.id) right of the text column is blank")
   }
 
+  /// Every drawn status, light and dark: only "needs you" and "failed" are tinted, working badges
+  /// are neutral pills, finished ones are bare text (checked on pixels right of the label).
+  @Test(arguments: [("light", NSAppearance.Name.aqua), ("dark", NSAppearance.Name.darkAqua)])
+  func rendersBadgesInEveryStatus(name: String, appearance: NSAppearance.Name) throws {
+    let statuses: [(status: String, label: String, unread: Int)] = [
+      ("waiting_approval", "Needs approval", 0), ("waiting_user", "Needs your input", 1), ("failed", "Failed · Site down", 0),
+      ("triaging", "Triaging…", 0), ("queued", "Queued", 0), ("working", "Comparing fares", 2), ("done", "Done · 3 options", 0),
+      ("done", "Done · Summary ready", 3), ("cancelled", "Stopped", 0),
+    ]
+    let text = statuses.map { "- [ ] Task \($0.status)" }.joined(separator: "\n")
+    let editor = EditorHarness(text: "Tasks\n" + text, size: NSSize(width: 720, height: 360))
+    editor.controller.scrollView.appearance = NSAppearance(named: appearance)
+    editor.controller.setBadges(
+      statuses.enumerated().map { index, item in
+        EditorBadge(id: "b\(index)", line: index + 1, status: item.status, label: item.label, unread: item.unread)
+      })
+    let png = try render(editor)
+    try FileManager.default.createDirectory(at: Self.outputDirectory, withIntermediateDirectories: true)
+    try png.write(to: Self.outputDirectory.appendingPathComponent("badges-\(name).png"))
+
+    let rep = try snapshot(editor.textView)
+    let scale = CGFloat(rep.pixelsWide) / editor.textView.bounds.width
+    func color(_ point: NSPoint) throws -> NSColor {
+      try #require(rep.colorAt(x: Int(point.x * scale), y: Int(point.y * scale))?.usingColorSpace(.sRGB))
+    }
+    func distance(_ a: NSColor, _ b: NSColor) -> CGFloat {
+      abs(a.redComponent - b.redComponent) + abs(a.greenComponent - b.greenComponent) + abs(a.blueComponent - b.blueComponent)
+    }
+    /// How far from gray a color is.
+    func saturation(_ c: NSColor) -> CGFloat {
+      max(c.redComponent, c.greenComponent, c.blueComponent) - min(c.redComponent, c.greenComponent, c.blueComponent)
+    }
+    let layouts = editor.controller.currentBadgeLayouts()
+    #expect(layouts.count == statuses.count)
+    for layout in layouts {
+      // Right of the pill, and inside it between the label (or unread dot) and the edge.
+      let background = try color(NSPoint(x: layout.rect.maxX + 6, y: layout.rect.midY))
+      let inside = try color(NSPoint(x: layout.rect.maxX - 4, y: layout.rect.midY))
+      let status = layout.badge.status
+      switch BadgeTier(status: status) {
+      case .needsYou, .failed:
+        #expect(saturation(inside) > 0.04, "\(status) is tinted")
+      case .working:
+        #expect(distance(inside, background) > 0.03, "\(status) is a pill")
+        #expect(saturation(inside) < 0.02, "\(status) is neutral")
+      case .quiet:
+        #expect(distance(inside, background) < 0.01, "\(status) has no fill")
+      }
+    }
+  }
+
+  /// A frame in the middle of every kind of motion (for review): a badge fading in, one
+  /// crossfading from working to done, a triaging dot at its faintest, a checkmark popping in.
+  @Test func rendersAFrameOfMotion() throws {
+    let text = "- [ ] Appearing\n- [ ] Crossfading\n- [ ] Triaging\n- [ ] Checked\nEnd"
+    let editor = EditorHarness(text: text, selection: NSRange(location: (text as NSString).length, length: 0), size: NSSize(width: 640, height: 220))
+    editor.controller.scrollView.appearance = NSAppearance(named: .aqua)
+    let motion = ManualMotion(editor)
+    editor.controller.setBadges([
+      EditorBadge(id: "b", line: 1, status: "working", label: "Working…"),
+      EditorBadge(id: "c", line: 2, status: "triaging", label: "Triaging…"),
+    ])
+    editor.layout()
+    editor.willDraw()
+    motion.now += 0.53
+    editor.controller.setBadges([
+      EditorBadge(id: "a", line: 0, status: "queued", label: "Queued"),
+      EditorBadge(id: "b", line: 1, status: "done", label: "Done · 3 options", unread: 1),
+      EditorBadge(id: "c", line: 2, status: "triaging", label: "Triaging…"),
+    ])
+    let checkbox = try #require(editor.controller.checkboxRects().first { $0.line == 3 })
+    #expect(editor.controller.handleClick(at: NSPoint(x: checkbox.rect.midX, y: checkbox.rect.midY), modifiers: []))
+    motion.frame(after: 0.07)
+    #expect(motion.isTicking)
+    let png = try render(editor)
+    try FileManager.default.createDirectory(at: Self.outputDirectory, withIntermediateDirectories: true)
+    try png.write(to: Self.outputDirectory.appendingPathComponent("motion-frame.png"))
+  }
+
   @Test func rendersSourceModeWithLineNumbers() throws {
     let configuration = EditorConfiguration(livePreview: false, readableLineLength: false, showLineNumbers: true)
     let editor = EditorHarness(text: SampleNote.text, configuration: configuration, size: NSSize(width: 900, height: 1200))

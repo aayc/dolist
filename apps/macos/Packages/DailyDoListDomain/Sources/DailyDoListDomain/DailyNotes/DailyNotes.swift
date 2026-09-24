@@ -166,6 +166,13 @@ public enum DailyNotes {
     return formatter.string(from: Date(jsMilliseconds: date.dayNumber * 86_400_000 + 43_200_000))
   }
 
+  /// A daily note's header title: "Thursday, September 24", with the year only when it isn't
+  /// `today`'s year ("Monday, December 29, 2025"). English, formatted like the core's
+  /// `formatLocalDate`, so the web app shows the same text.
+  public static func friendlyTitle(_ date: LocalDate, today: LocalDate) -> String {
+    MomentFormat.format(date, date.year == today.year ? "dddd, MMMM D" : "dddd, MMMM D, YYYY")
+  }
+
   // MARK: - Private
 
   private static func checkedNotePath(

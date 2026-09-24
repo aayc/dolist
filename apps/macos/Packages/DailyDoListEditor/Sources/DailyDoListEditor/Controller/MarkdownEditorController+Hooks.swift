@@ -130,9 +130,12 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
 
   // MARK: Drawing and geometry
 
-  /// Before each draw: redraw badges that moved and refresh their tooltip rects.
+  /// Before each draw: redraw badges that moved, refresh their tooltip rects, and keep the pulse
+  /// of a triaging badge in view going.
   func textViewWillDraw(_ textView: MarkdownTextView) {
-    let rects = currentBadgeLayouts().map(\.rect)
+    let layouts = currentBadgeLayouts()
+    motion.willDraw(pulseVisible: layouts.contains { self.motion.state.isPulsing($0.badge.id) })
+    let rects = layouts.map(\.rect)
     guard rects != drawnBadgeRects else { return }
     for rect in drawnBadgeRects + rects { textView.setNeedsDisplay(rect.insetBy(dx: -2, dy: -2)) }
     textView.removeAllToolTips()
@@ -142,7 +145,20 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
 
   func textView(_ textView: MarkdownTextView, drawOverlaysIn dirtyRect: NSRect) {
     guard !badgeStore.isEmpty else { return }
-    badgeRenderer.draw(currentBadgeLayouts(), hovered: hoveredBadgeID, dirtyRect: dirtyRect)
+    let layouts = currentBadgeLayouts()
+    guard !motion.state.isIdle else {
+      badgeRenderer.draw(layouts, hovered: hoveredBadgeID, dirtyRect: dirtyRect)
+      return
+    }
+    let motion = self.motion
+    let now = motion.now
+    badgeRenderer.draw(layouts, hovered: hoveredBadgeID, dirtyRect: dirtyRect) { motion.paint(for: $0.badge, now: now) }
+  }
+
+  /// Back on screen: redrawing the badges resumes a pulse (frames stop by themselves when hidden).
+  func textViewDidChangeOcclusion(_ textView: MarkdownTextView) {
+    guard motion.state.hasPulses, !motion.isTicking, motion.canAnimate else { return }
+    for rect in drawnBadgeRects { textView.setNeedsDisplay(rect.insetBy(dx: -2, dy: -2)) }
   }
 
   func textViewDidChangeWidth(_ textView: MarkdownTextView) {

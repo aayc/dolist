@@ -165,6 +165,21 @@ struct WorkspaceNavigationTests {
     #expect(client.note("Thoughts.md")?.content == "ideas")
   }
 
+  @Test func renamingADailyNoteUsesTheExplorerBecauseItsTitleIsTheDate() async {
+    workspace.ui.sidebarVisible = false
+    workspace.ui.sidebarMode = .search
+    workspace.beginRename("Daily/2026-09-21.md")
+    #expect(workspace.ui.titleFocusPath == nil)
+    #expect(workspace.ui.renamingPath == "Daily/2026-09-21.md")
+    #expect(workspace.ui.sidebarVisible && workspace.ui.sidebarMode == .files)
+    #expect(workspace.ui.expandedFolders.contains("Daily"))
+
+    workspace.ui.renamingPath = nil
+    workspace.beginRename("Projects/Launch/Plan.md")
+    #expect(workspace.ui.titleFocusPath == "Projects/Launch/Plan.md", "other notes rename in their title")
+    #expect(workspace.ui.renamingPath == nil)
+  }
+
   @Test func renameRefusesExistingTargets() async {
     #expect(await workspace.renamePath("Ideas.md", to: "Daily/2026-09-23.md") == false)
     #expect(workspace.vault.isFile("Ideas.md"))

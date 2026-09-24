@@ -17,6 +17,8 @@ protocol MarkdownTextViewHooks: AnyObject {
   func textView(_ textView: MarkdownTextView, drawOverlaysIn dirtyRect: NSRect)
   func textViewDidChangeWidth(_ textView: MarkdownTextView)
   func textViewDidChangeFocus(_ textView: MarkdownTextView)
+  /// The window was hidden (minimized, covered) or shown again.
+  func textViewDidChangeOcclusion(_ textView: MarkdownTextView)
 }
 
 /// The editor's `NSTextView` (TextKit 1). Deliberately thin: it forwards selection changes, key
@@ -159,6 +161,13 @@ final class MarkdownTextView: NSTextView, NSViewToolTipOwner {
     return resigned
   }
 
+  override func viewWillMove(toWindow newWindow: NSWindow?) {
+    super.viewWillMove(toWindow: newWindow)
+    if let window {
+      NotificationCenter.default.removeObserver(self, name: NSWindow.didChangeOcclusionStateNotification, object: window)
+    }
+  }
+
   override func viewDidMoveToWindow() {
     super.viewDidMoveToWindow()
     if focusWhenInWindow, let window {
@@ -167,5 +176,14 @@ final class MarkdownTextView: NSTextView, NSViewToolTipOwner {
     }
     hasFocus = window?.firstResponder === self
     hooks?.textViewDidChangeFocus(self)
+    if let window {
+      NotificationCenter.default.addObserver(
+        self, selector: #selector(windowDidChangeOcclusion(_:)), name: NSWindow.didChangeOcclusionStateNotification,
+        object: window)
+    }
+  }
+
+  @objc private func windowDidChangeOcclusion(_ notification: Notification) {
+    hooks?.textViewDidChangeOcclusion(self)
   }
 }
