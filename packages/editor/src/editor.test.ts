@@ -245,7 +245,8 @@ describe("widgets", () => {
     expect(badge?.getAttribute("aria-label")).toBe(
       "Agent is working: Researching…, 2 unread. Open agent thread",
     );
-    expect(badge?.title).toBe("Researching… (2 unread)");
+    expect(badge?.dataset.tooltip).toBe("Researching… · 2 unread");
+    expect(badge?.hasAttribute("title")).toBe(false);
     expect(badge?.querySelector<HTMLElement>(".cm-ddl-badge-unread")?.hidden).toBe(false);
     badge?.click();
     badge?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
@@ -261,11 +262,25 @@ describe("widgets", () => {
     editor.setAnnotations([{ ...annotation("a", 1), status: "done", label: "Done", unread: 0 }]);
     const updated = editor.view.dom.querySelector<HTMLElement>(".cm-ddl-badge");
     expect(updated).toBe(badge);
+    // The new status pops once.
+    expect(updated?.className).toBe(
+      "cm-ddl-badge cm-ddl-badge-done cm-ddl-badge-tone-quiet cm-ddl-badge-pop",
+    );
+    updated?.dispatchEvent(new Event("animationend", { bubbles: true }));
     expect(updated?.className).toBe("cm-ddl-badge cm-ddl-badge-done cm-ddl-badge-tone-quiet");
-    expect(updated?.title).toBe("Done");
+    expect(updated?.dataset.tooltip).toBe("Done");
     expect(updated?.querySelector<HTMLElement>(".cm-ddl-badge-unread")?.hidden).toBe(true);
     updated?.click();
     expect(onAnnotationClick).toHaveBeenCalledWith(expect.objectContaining({ status: "done" }));
+  });
+
+  it("doesn't pop a badge whose label or unread count changes without a new status", () => {
+    const editor = mount({ doc: DOC });
+    editor.setAnnotations([annotation("a", 1)]);
+    editor.setAnnotations([{ ...annotation("a", 1), label: "Comparing prices…", unread: 3 }]);
+    const badge = editor.view.dom.querySelector<HTMLElement>(".cm-ddl-badge");
+    expect(badge?.classList.contains("cm-ddl-badge-pop")).toBe(false);
+    expect(badge?.dataset.tooltip).toBe("Comparing prices… · 3 unread");
   });
 
   it("keeps a badge's DOM while typing on its line and when its unread count changes", () => {
@@ -283,7 +298,7 @@ describe("widgets", () => {
     editor.setAnnotations([{ ...annotation("a", 1), unread: 0 }]);
     editor.setAnnotations([{ ...annotation("a", 1), unread: 5 }]);
     expect(editor.view.dom.querySelector(".cm-ddl-badge")).toBe(badge);
-    expect(badge?.title).toBe("Researching… (5 unread)");
+    expect(badge?.dataset.tooltip).toBe("Researching… · 5 unread");
   });
 
   it("animates in only the badges that appear after the note's first set", () => {
@@ -349,13 +364,35 @@ describe("widgets", () => {
     const [linked, plain] = editor.view.dom.querySelectorAll<HTMLElement>(".cm-ddl-agent-sparkle");
     expect(linked?.textContent).toBe("✦");
     expect(linked?.getAttribute("role")).toBe("button");
-    expect(linked?.title).toBe("Written by the agent — open thread");
+    expect(linked?.dataset.tooltip).toBe("Written by the agent — open thread");
+    expect(linked?.hasAttribute("title")).toBe(false);
     linked?.click();
     expect(onAgentLineClick).toHaveBeenCalledWith("thr_ab12");
     expect(plain?.getAttribute("role")).toBe("img");
-    expect(plain?.title).toBe("Written by the agent");
+    expect(plain?.dataset.tooltip).toBe("Written by the agent");
     plain?.click();
     expect(onAgentLineClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("names fold markers and placeholders for the tooltip layer instead of with title", () => {
+    const editor = mount({
+      doc: "# Plans\nfirst\nsecond\n# Later",
+      config: { showLineNumbers: true },
+    });
+    // Not the gutter's hidden spacer.
+    const marker = () =>
+      editor.view.dom.querySelector<HTMLElement>(
+        ".cm-foldGutter .cm-gutterElement:not([style*='hidden']) [role=button]",
+      );
+    expect(marker()?.dataset.tooltip).toBe("Fold");
+    expect(marker()?.hasAttribute("title")).toBe(false);
+    marker()?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    marker()?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    const placeholder = editor.view.dom.querySelector<HTMLElement>(".cm-foldPlaceholder");
+    expect(placeholder?.getAttribute("role")).toBe("button");
+    expect(placeholder?.dataset.tooltip).toBe("Unfold");
+    expect(placeholder?.hasAttribute("title")).toBe(false);
+    expect(marker()?.dataset.tooltip).toBe("Unfold");
   });
 
   it("shows agent markers as faint text in source mode", () => {

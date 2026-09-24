@@ -71,6 +71,8 @@
   font-size: 12px;
 }
 
-.prompt-footer kbd {
-  margin-right: 4px;
+.prompt-footer > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }

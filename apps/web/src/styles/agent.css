@@ -72,6 +72,10 @@
   background: var(--ddl-bg-hover);
 }
 
+.inbox-item:active {
+  background: var(--ddl-bg-active);
+}
+
 .inbox-item-top {
   display: flex;
   align-items: center;
@@ -200,11 +204,16 @@
   font-size: 13px;
   transition:
     color var(--transition-fast),
-    border-color var(--transition-fast);
+    border-color var(--transition-fast),
+    background-color var(--transition-fast);
 }
 
 .thread-tab:hover {
   color: var(--ddl-text);
+}
+
+.thread-tab:active {
+  background: var(--ddl-bg-hover);
 }
 
 .thread-tab.is-active {
@@ -477,8 +486,18 @@
   min-height: 30px;
   padding: 4px 8px;
   border: 0;
+  border-radius: calc(var(--radius-m) - 1px);
   background: transparent;
   text-align: left;
+  transition: background-color var(--transition-fast);
+}
+
+.tool-call-header:hover {
+  background: var(--ddl-bg-hover);
+}
+
+.tool-call-header:active {
+  background: var(--ddl-bg-active);
 }
 
 .tool-call-icon {
@@ -704,6 +723,10 @@ svg.tone-warning {
 .artifact-card:hover {
   border-color: var(--ddl-accent);
   background: var(--ddl-accent-soft);
+}
+
+.artifact-card:active {
+  background: color-mix(in srgb, var(--ddl-accent) 24%, transparent);
 }
 
 .artifact-card-icon {

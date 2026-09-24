@@ -2,7 +2,7 @@
  * Runtime-configurable parts of the editor, one compartment per `EditorConfig` key. Compartments
  * are module-level so any state built by this package can be reconfigured by any editor instance.
  */
-import { foldGutter } from "@codemirror/language";
+import { codeFolding, foldGutter } from "@codemirror/language";
 import { Compartment, EditorState, type Extension, type StateEffect } from "@codemirror/state";
 import { EditorView, highlightActiveLineGutter, lineNumbers } from "@codemirror/view";
 import { editorCallbacks } from "./callbacks";
@@ -26,7 +26,32 @@ const compartments: Record<ConfigKey, Compartment> = {
 const callbacksCompartment = new Compartment();
 
 const readableLineLength = EditorView.editorAttributes.of({ class: "cm-ddl-readable" });
-const gutters: Extension = [lineNumbers(), highlightActiveLineGutter(), foldGutter()];
+
+/** A clickable fold affordance, named for the host's tooltip layer rather than with `title`. */
+function foldButton(doc: Document, text: string, tooltip: string): HTMLElement {
+  const button = doc.createElement("span");
+  button.textContent = text;
+  button.setAttribute("role", "button");
+  button.dataset.tooltip = tooltip;
+  return button;
+}
+
+const gutters: Extension = [
+  lineNumbers(),
+  highlightActiveLineGutter(),
+  foldGutter({
+    markerDOM: (open) => foldButton(document, open ? "⌄" : "›", open ? "Fold" : "Unfold"),
+  }),
+  codeFolding({
+    placeholderDOM: (view, onclick) => {
+      const placeholder = foldButton(view.dom.ownerDocument, "…", "Unfold");
+      placeholder.className = "cm-foldPlaceholder";
+      placeholder.setAttribute("aria-label", view.state.phrase("folded code"));
+      placeholder.onclick = onclick;
+      return placeholder;
+    },
+  }),
+];
 
 const builders: { [K in ConfigKey]: (config: EditorConfig) => Extension } = {
   vimMode: (c) => vimMode(c.vimMode),

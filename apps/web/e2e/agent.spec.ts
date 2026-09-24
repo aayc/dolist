@@ -13,7 +13,7 @@ test.describe("agent threads", () => {
     await expect(toast).toBeVisible({ timeout: 20_000 });
     await expect(badge(page)).toHaveClass(/cm-ddl-badge-waiting_approval/);
     await expect(page.getByTestId("status-approvals")).toContainText("1 to approve");
-    await expect(page.getByTestId("ribbon-inbox")).toHaveAccessibleName(/1 pending/);
+    await expect(page.getByTestId("ribbon-inbox")).toHaveAccessibleName(/1 to approve/);
     await toast.getByTestId("toast-body").click();
 
     const thread = page.getByTestId("thread-view");

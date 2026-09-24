@@ -46,22 +46,73 @@ select {
   color: inherit;
 }
 
-button {
+/* A pointing hand on everything clickable; disabled controls and chrome keep the arrow. */
+button,
+a[href],
+summary,
+select,
+label:has(> input:is([type="checkbox"], [type="radio"])),
+input:is([type="checkbox"], [type="radio"], [type="range"]),
+[role="button"],
+[role="tab"],
+[role="menuitem"],
+[role="option"],
+[role="switch"],
+[role="checkbox"],
+[role="treeitem"] {
   cursor: pointer;
 }
 
-button:disabled {
+:disabled,
+[aria-disabled="true"] {
   cursor: default;
+}
+
+/* The app is chrome; the text it shows (notes, messages, artifacts, values) stays selectable. */
+.app {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.cm-editor,
+.markdown,
+.message-body,
+.artifact-viewer-body,
+.approval-summary,
+.approval-reason,
+.approval-input,
+.approval-decided,
+.tool-call-preview,
+.tool-call-input,
+.action-log,
+.browser-url,
+.browser-title,
+.about-row dd,
+.settings-value,
+.settings-problem,
+.daily-preview,
+.connector-error,
+.search-error,
+.vimrc-problems,
+.connection-banner span {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 :focus {
   outline: none;
 }
 
+/* Keyboard focus only; text fields show focus with their border and caret instead. */
 :focus-visible {
   outline: 2px solid var(--ddl-accent);
-  outline-offset: -2px;
-  border-radius: var(--radius-s);
+  outline-offset: 2px;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+[contenteditable]:focus-visible {
+  outline: none;
 }
 
 ::selection {
@@ -70,6 +121,7 @@ button:disabled {
 
 a {
   color: var(--ddl-accent);
+  transition: color var(--transition-fast);
 }
 
 a:hover {
@@ -77,23 +129,37 @@ a:hover {
 }
 
 code,
-kbd,
 pre {
   font-family: var(--ddl-font-mono);
   font-size: 0.9em;
 }
 
+/* One keycap per key, the same everywhere a shortcut shows (tooltips, palette, hints). */
 kbd {
-  display: inline-block;
-  padding: 0 5px;
-  border: 1px solid var(--ddl-border);
-  border-bottom-width: 2px;
-  border-radius: var(--radius-s);
-  background: var(--ddl-bg-secondary);
-  color: var(--ddl-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 17px;
+  padding: 0 4px;
+  border: 1px solid var(--keycap-border);
+  border-radius: 4px;
+  background: var(--keycap-bg);
+  color: var(--keycap-text);
+  font-family: var(--ddl-font-ui);
   font-size: 11px;
-  line-height: 18px;
+  font-weight: 500;
+  /* ↩ would otherwise fall back to the color emoji. */
+  font-variant-emoji: text;
+  line-height: 1;
   white-space: nowrap;
+}
+
+.keycaps {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  vertical-align: middle;
 }
 
 mark {
@@ -146,10 +212,26 @@ mark {
   }
 }
 
+/* A count that changed (see `Count`). */
+.is-popping {
+  animation: ddl-pop 150ms ease-out;
+}
+
+@keyframes ddl-pop {
+  from {
+    transform: scale(0.75);
+  }
+  55% {
+    transform: scale(1.12);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --transition-fast: 0ms;
     --transition: 0ms;
+    --transition-press: 0ms;
+    --press-scale: 1;
   }
 
   .spin,
@@ -158,8 +240,106 @@ mark {
   .live-dot.is-live,
   .save-dot,
   .connection-dot,
-  .thread-loading {
+  .thread-loading,
+  .is-popping {
     animation: none;
+  }
+}
+
+/* A theme switch changes every color at once (see `applyTheme`). */
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  /* biome-ignore lint/complexity/noImportantStyles: it must beat every component's transition */
+  transition: none !important;
+}
+
+/* ── Tooltip (see src/lib/tooltips.ts): dark in both themes, like an overlay ─────── */
+
+.tooltip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 280px;
+  padding: 5px 8px;
+  border: 1px solid #283140;
+  border-radius: 6px;
+  background: #1a2029;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  color: #f2f5f9;
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  opacity: 0;
+  transform: translate(var(--tooltip-dx, 0), var(--tooltip-dy, 0)) scale(0.97);
+}
+
+.tooltip[hidden] {
+  display: none;
+}
+
+/* The entrance slides 3px away from the target. */
+.tooltip[data-side="bottom"] {
+  --tooltip-dy: -3px;
+  transform-origin: 50% 0;
+}
+
+.tooltip[data-side="top"] {
+  --tooltip-dy: 3px;
+  transform-origin: 50% 100%;
+}
+
+.tooltip[data-side="right"] {
+  --tooltip-dx: -3px;
+  transform-origin: 0 50%;
+}
+
+.tooltip[data-side="left"] {
+  --tooltip-dx: 3px;
+  transform-origin: 100% 50%;
+}
+
+.tooltip.is-visible {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 140ms ease-out,
+    transform 140ms ease-out;
+}
+
+.tooltip.is-gliding {
+  transition:
+    opacity 120ms ease-out,
+    translate 120ms ease-out;
+}
+
+.tooltip.is-hiding {
+  transform: none;
+  transition: opacity 90ms ease-in;
+}
+
+.tooltip-text {
+  min-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tooltip {
+    transform: none;
+  }
+
+  .tooltip.is-visible {
+    transition: opacity 80ms ease-out;
+  }
+
+  .tooltip.is-hiding {
+    transition: opacity 80ms ease-in;
   }
 }
 
@@ -180,7 +360,8 @@ mark {
   color: var(--ddl-text-muted);
   transition:
     background-color var(--transition-fast),
-    color var(--transition-fast);
+    color var(--transition-fast),
+    transform var(--transition-press);
 }
 
 .icon-button:hover:not(:disabled) {
@@ -188,12 +369,23 @@ mark {
   color: var(--ddl-text);
 }
 
+.icon-button:active:not(:disabled) {
+  background: var(--ddl-bg-active);
+  transform: scale(var(--press-scale));
+}
+
 .icon-button.is-active {
   color: var(--ddl-accent);
 }
 
-.icon-button:disabled {
-  opacity: 0.35;
+.icon-button.is-active:hover:not(:disabled) {
+  color: var(--ddl-accent-strong);
+}
+
+.icon-button:disabled,
+.button:disabled,
+.link-button:disabled {
+  opacity: 0.4;
 }
 
 .icon-badge {
@@ -235,6 +427,10 @@ mark {
   background: var(--ddl-bg-hover);
 }
 
+.button:active:not(:disabled) {
+  background: var(--ddl-bg-active);
+}
+
 .button.is-primary {
   border-color: transparent;
   background: var(--ddl-accent);
@@ -256,6 +452,10 @@ mark {
   filter: brightness(1.1);
 }
 
+.button:is(.is-primary, .is-danger):active:not(:disabled) {
+  filter: brightness(0.9);
+}
+
 .button.is-danger-ghost {
   color: var(--ddl-danger);
 }
@@ -266,11 +466,18 @@ mark {
   background: none;
   color: var(--ddl-accent);
   font-size: 13px;
+  transition:
+    color var(--transition-fast),
+    opacity var(--transition-press);
 }
 
-.link-button:hover {
+.link-button:hover:not(:disabled) {
   color: var(--ddl-accent-strong);
   text-decoration: underline;
+}
+
+.link-button:active:not(:disabled) {
+  opacity: 0.7;
 }
 
 .input,

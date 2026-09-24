@@ -102,9 +102,11 @@ export function ArtifactViewer({ threadId, artifactId }: { threadId: string; art
 
   return (
     <Modal label={title} className="artifact-viewer" testId="artifact-viewer">
-      <header className="artifact-viewer-header">
+      <header className="artifact-viewer-header" data-tooltip-placement="bottom">
         <Icon size={16} aria-hidden="true" />
-        <h2 className="artifact-viewer-title">{title}</h2>
+        <h2 className="artifact-viewer-title" data-tooltip={title} data-tooltip-overflow="">
+          {title}
+        </h2>
         <span className="chip">{meta ? artifactKindLabel(meta) : kind}</span>
         <span className="artifact-viewer-spacer" />
         <IconButton
@@ -118,7 +120,12 @@ export function ArtifactViewer({ threadId, artifactId }: { threadId: string; art
           }}
           data-testid="artifact-download"
         />
-        <IconButton icon={X} label="Close" onClick={() => ui.closeOverlay()} />
+        <IconButton
+          icon={X}
+          label="Close"
+          command="overlay:close"
+          onClick={() => ui.closeOverlay()}
+        />
       </header>
       <div
         ref={bodyRef}

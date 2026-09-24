@@ -5,6 +5,8 @@ import { Modal } from "./Modal";
 export interface PromptItem {
   key: string;
   render(): ReactNode;
+  /** The full text, shown when the item's title or meta is cut off. */
+  tooltip?: string;
 }
 
 interface PromptListProps {
@@ -91,6 +93,8 @@ export function PromptList({
             tabIndex={-1}
             aria-selected={index === clamped}
             data-index={index}
+            data-tooltip={item.tooltip}
+            data-tooltip-overflow=".prompt-item-title, .prompt-item-meta"
             data-testid={`${testId}-item`}
             className={cx("prompt-item", index === clamped && "is-selected")}
             onMouseMove={() => index !== clamped && setSelected(index)}

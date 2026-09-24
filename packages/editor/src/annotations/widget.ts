@@ -48,6 +48,7 @@ export function badgeClassName(status: TaskAgentStatus): string {
 }
 
 const ENTER_CLASS = "cm-ddl-badge-enter";
+const POP_CLASS = "cm-ddl-badge-pop";
 
 export function sameAnnotation(a: LineAnnotation, b: LineAnnotation): boolean {
   return (
@@ -76,18 +77,25 @@ interface BadgeDom {
   annotation: LineAnnotation;
   /** Until its appear animation ends; a badge moved in the DOM later must not replay it. */
   entering: boolean;
+  /** Until the pop that marks a status change ends. */
+  popping: boolean;
 }
 
 const badgeDom = new WeakMap<HTMLElement, BadgeDom>();
 
-function render(root: HTMLElement, parts: BadgeDom, a: LineAnnotation): void {
-  const className = badgeClassName(a.status);
-  root.className = parts.entering ? `${className} ${ENTER_CLASS}` : className;
+/** The badge's tooltip (the host's tooltip layer shows `data-tooltip`): full label and unread count. */
+function badgeTooltip(a: Pick<LineAnnotation, "label" | "unread">): string {
   const unread = unreadText(a.unread);
-  root.title = unread ? `${a.label} (${unread} unread)` : a.label;
+  return unread ? `${a.label} · ${unread} unread` : a.label;
+}
+
+function render(root: HTMLElement, parts: BadgeDom, a: LineAnnotation): void {
+  const motion = parts.entering ? ENTER_CLASS : parts.popping ? POP_CLASS : "";
+  root.className = `${badgeClassName(a.status)} ${motion}`.trim();
+  root.dataset.tooltip = badgeTooltip(a);
   root.setAttribute("aria-label", accessibleName(a));
   parts.label.textContent = a.label;
-  parts.unread.hidden = !unread;
+  parts.unread.hidden = !unreadText(a.unread);
   parts.annotation = a;
 }
 
@@ -127,6 +135,7 @@ export class BadgeWidget extends WidgetType {
       unread: part("unread", true),
       annotation: this.annotation,
       entering: this.enter,
+      popping: false,
     };
     this.enter = false;
     badgeDom.set(root, parts);
@@ -144,9 +153,9 @@ export class BadgeWidget extends WidgetType {
       if (event.key === "Enter" || event.key === " ") activate(event);
     });
     root.addEventListener("animationend", (event) => {
-      if (event.target !== root || !parts.entering) return;
-      parts.entering = false;
-      root.classList.remove(ENTER_CLASS);
+      if (event.target !== root) return;
+      parts.entering = parts.popping = false;
+      root.classList.remove(ENTER_CLASS, POP_CLASS);
     });
     return root;
   }
@@ -154,6 +163,9 @@ export class BadgeWidget extends WidgetType {
   override updateDOM(dom: HTMLElement): boolean {
     const parts = badgeDom.get(dom);
     if (!parts) return false;
+    if (!parts.entering && parts.annotation.status !== this.annotation.status) {
+      parts.popping = true;
+    }
     render(dom, parts, this.annotation);
     return true;
   }

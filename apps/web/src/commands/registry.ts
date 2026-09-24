@@ -8,7 +8,10 @@ export interface CommandContext {
 
 export interface Command {
   id: string;
+  /** The palette's wording ("Create new note"). */
   name: string;
+  /** A control's shorter name, for its accessible name and tooltip ("New note"); defaults to `name`. */
+  label?: string;
   hotkeys?: readonly Hotkey[];
   /** Hidden from the command palette (still reachable by hotkey). */
   hidden?: boolean;

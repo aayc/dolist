@@ -25,6 +25,8 @@ export const editorTheme = EditorView.theme({
   ".cm-content": {
     padding: "16px 24px 30vh",
     caretColor: "var(--ddl-accent)",
+    // An I-beam across the whole text column, not only over characters.
+    cursor: "text",
   },
   // Percent padding resolves against the scroller, so clicks beside the text column still land
   // inside the content (and place the caret) instead of in an unclickable margin.

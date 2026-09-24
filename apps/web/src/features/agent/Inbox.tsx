@@ -2,6 +2,7 @@ import { stem, type ThreadSummary } from "@ddl/core";
 import { Inbox as InboxIcon, X } from "lucide-react";
 import { memo, useMemo } from "react";
 import { useServices } from "../../app/services";
+import { Count } from "../../components/Count";
 import { IconButton } from "../../components/IconButton";
 import { formatTimestamp } from "../../lib/format";
 import { perfStart } from "../../perf/perf";
@@ -18,9 +19,14 @@ export function Inbox() {
 
   return (
     <div className="inbox" data-testid="inbox">
-      <header className="panel-header">
+      <header className="panel-header" data-tooltip-placement="bottom">
         <span className="panel-title">Agent inbox</span>
-        <IconButton icon={X} label="Close panel" onClick={() => ui.set({ rightOpen: false })} />
+        <IconButton
+          icon={X}
+          label="Close agent panel"
+          command="panel:right"
+          onClick={() => ui.set({ rightOpen: false })}
+        />
       </header>
       <div className="inbox-scroll">
         {total === 0 ? (
@@ -37,7 +43,7 @@ export function Inbox() {
             <section key={key} className="inbox-group" data-testid={`inbox-group-${key}`}>
               <h3 className="inbox-group-title">
                 {label}
-                <span className="inbox-count">{groups[key].length}</span>
+                <Count value={groups[key].length} className="inbox-count" />
               </h3>
               {groups[key].map((thread) => (
                 <InboxItem key={thread.id} thread={thread} />
@@ -61,6 +67,8 @@ const InboxItem = memo(function InboxItem({ thread }: { thread: ThreadSummary })
       className="inbox-item"
       data-testid="inbox-item"
       data-thread-id={thread.id}
+      data-tooltip={thread.title}
+      data-tooltip-overflow=".inbox-item-title"
       onClick={(event) => {
         perfStart("thread:open", event.timeStamp);
         agent.openThread(thread.id);
@@ -69,7 +77,7 @@ const InboxItem = memo(function InboxItem({ thread }: { thread: ThreadSummary })
       <span className="inbox-item-top">
         <span className="inbox-item-title">{thread.title}</span>
         {unread > 0 ? (
-          <span className="unread-dot" title={`${unread} unread`}>
+          <span className="unread-dot" data-tooltip={`${unread} unread`}>
             <span className="sr-only">{unread} unread</span>
           </span>
         ) : null}

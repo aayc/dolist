@@ -36,8 +36,6 @@
   border-radius: var(--radius-m) var(--radius-m) 0 0;
   color: var(--ddl-text-muted);
   font-size: 13px;
-  cursor: default;
-  user-select: none;
   transition:
     background-color var(--transition-fast),
     color var(--transition-fast);
@@ -46,6 +44,15 @@
 .tab:hover {
   background: var(--ddl-bg-hover);
   color: var(--ddl-text);
+}
+
+.tab:active:not(.is-active) {
+  background: var(--ddl-bg-active);
+}
+
+/* Inset: the tab list scrolls, which would clip an outer ring. */
+.tab:focus-visible {
+  outline-offset: -2px;
 }
 
 .tab.is-active {
@@ -82,6 +89,7 @@
 }
 
 .tab-close {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -96,7 +104,16 @@
   opacity: 0;
   transition:
     opacity var(--transition-fast),
-    background-color var(--transition-fast);
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-press);
+}
+
+/* A 24px hit target around the 20px button. */
+.tab-close::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
 }
 
 .tab:hover .tab-close,
@@ -108,6 +125,10 @@
 .tab-close:hover {
   background: var(--ddl-bg-active);
   color: var(--ddl-text);
+}
+
+.tab-close:active {
+  transform: scale(var(--press-scale));
 }
 
 .tab-new {

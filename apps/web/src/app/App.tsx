@@ -6,8 +6,10 @@ import { RightSidebar } from "../features/layout/RightSidebar";
 import { StatusBar } from "../features/layout/StatusBar";
 import { Overlays } from "../features/overlays/Overlays";
 import { Toaster } from "../features/toasts/Toaster";
+import { useTooltips } from "./tooltips";
 
 export function App() {
+  useTooltips();
   return (
     <div className="app" data-testid="app">
       <ConnectionBanner />

@@ -50,6 +50,7 @@ export function Composer({ threadId }: { threadId: string }) {
       <IconButton
         icon={Send}
         label="Send"
+        keys="enter"
         type="submit"
         disabled={!enabled || sending || !text.trim()}
         data-testid="composer-send"

@@ -21,7 +21,7 @@ export function ThreadHeader({ threadId }: { threadId: string }) {
   const canRetry = status === "failed" || status === "cancelled" || status === "done";
 
   return (
-    <header className="thread-header">
+    <header className="thread-header" data-tooltip-placement="bottom">
       <IconButton
         icon={ArrowLeft}
         label="Back to inbox"
@@ -29,7 +29,12 @@ export function ThreadHeader({ threadId }: { threadId: string }) {
         data-testid="thread-back"
       />
       <div className="thread-heading">
-        <h2 className="thread-title" title={title} data-testid="thread-title">
+        <h2
+          className="thread-title"
+          data-tooltip={title}
+          data-tooltip-overflow=""
+          data-testid="thread-title"
+        >
           {title}
         </h2>
         <div className="thread-meta">
@@ -64,7 +69,8 @@ export function ThreadHeader({ threadId }: { threadId: string }) {
         ) : null}
         <IconButton
           icon={X}
-          label="Close panel"
+          label="Close agent panel"
+          command="panel:right"
           onClick={() => ui.set({ rightOpen: false })}
           data-testid="thread-close"
         />

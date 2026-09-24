@@ -84,7 +84,7 @@ export function SearchView() {
   const q = query.trim();
   return (
     <div className="search-view" data-testid="search-view">
-      <div className="panel-header">
+      <div className="panel-header" data-tooltip-placement="bottom">
         <span className="panel-title">Search</span>
       </div>
       <label className="search-input-wrap">

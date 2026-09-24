@@ -35,6 +35,10 @@
   color: var(--ddl-text);
 }
 
+.settings-nav-item:active {
+  background: var(--ddl-bg-active);
+}
+
 .settings-nav-item.is-active {
   background: var(--ddl-accent-soft);
   color: var(--ddl-text);
@@ -151,11 +155,26 @@
   border: 0;
   border-radius: 10px;
   background: var(--ddl-bg-active);
-  transition: background-color var(--transition);
+  transition: background-color var(--transition-fast);
+}
+
+/* A 24px-tall hit target around the 20px track. */
+.toggle::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+}
+
+.toggle:hover {
+  background: color-mix(in srgb, var(--ddl-bg-active) 75%, var(--ddl-text-faint));
 }
 
 .toggle.is-on {
   background: var(--ddl-accent);
+}
+
+.toggle.is-on:hover {
+  background: var(--ddl-accent-strong);
 }
 
 .toggle-knob {
@@ -164,14 +183,25 @@
   left: 2px;
   width: 16px;
   height: 16px;
-  border-radius: 50%;
+  border-radius: 8px;
   background: #fff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  transition: transform var(--transition);
+  transition:
+    transform var(--transition),
+    width var(--transition);
 }
 
 .toggle.is-on .toggle-knob {
   transform: translateX(16px);
+}
+
+/* Pressing stretches the knob toward where it's going. */
+.toggle:active .toggle-knob {
+  width: 19px;
+}
+
+.toggle.is-on:active .toggle-knob {
+  transform: translateX(13px);
 }
 
 .segmented {
@@ -196,6 +226,14 @@
     color var(--transition-fast);
 }
 
+.segmented-item:hover {
+  color: var(--ddl-text);
+}
+
+.segmented-item:active:not(.is-active) {
+  background: color-mix(in srgb, var(--ddl-bg) 50%, transparent);
+}
+
 .segmented-item.is-active {
   background: var(--ddl-bg);
   color: var(--ddl-text);
@@ -208,7 +246,11 @@ label.segmented-item {
   display: inline-flex;
   align-items: center;
   white-space: nowrap;
-  cursor: pointer;
+}
+
+/* Inset: the segments sit edge to edge. */
+.segmented-item:focus-visible {
+  outline-offset: -2px;
 }
 
 label.segmented-item:has(:focus-visible) {

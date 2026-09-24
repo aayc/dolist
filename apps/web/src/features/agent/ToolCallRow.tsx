@@ -12,7 +12,11 @@ const STATUS_LABEL: Record<ToolCallMessage["status"], string> = {
 };
 
 function StatusIcon({ status }: { status: ToolCallMessage["status"] }) {
-  const props = { size: 14, "aria-label": STATUS_LABEL[status] };
+  const props = {
+    size: 14,
+    "aria-label": STATUS_LABEL[status],
+    "data-tooltip": STATUS_LABEL[status],
+  };
   switch (status) {
     case "running":
       return <LoaderCircle {...props} className="spin tone-info" />;

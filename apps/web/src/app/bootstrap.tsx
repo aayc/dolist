@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createDaemonClient, isMockMode } from "../api/select-client";
 import { installGlobalHotkeys } from "../commands/keyboard";
+import { armCounts } from "../components/Count";
 import {
   applyEditorCssVars,
   applyTheme,
@@ -18,6 +19,7 @@ import { installApprovalToastCleanup } from "./approval-toasts";
 import { prefetchLazyChunks } from "./lazy";
 import { handleServerEvent } from "./server-events";
 import { createServices, type Services, ServicesContext } from "./services";
+import { shortcutKeys } from "./tooltips";
 
 export interface DebugHooks {
   evictNote(path: string): void;
@@ -28,6 +30,8 @@ export interface DebugHooks {
   /** Holds every note write for `ms` before sending it (0 restores), to test saves in flight. */
   delayWrites(ms: number): void;
   runCommand(id: string): boolean;
+  /** The keycaps a command's tooltip shows (null without a shortcut). */
+  shortcutKeys(id: string): readonly string[] | null;
 }
 
 declare global {
@@ -108,6 +112,7 @@ function installDebugHooks(services: Services): void {
           : writeNote;
     },
     runCommand: (id) => services.commands.run(id),
+    shortcutKeys: (id) => shortcutKeys(services.commands, id),
   };
 }
 
@@ -128,6 +133,7 @@ export async function startApp(container: HTMLElement): Promise<void> {
     loading ??= loadInitialData(services)
       .then((ok) => {
         initialLoaded = ok;
+        armCounts();
         if (ok) {
           onIdle(() => {
             void prefetchLazyChunks().then(() => {

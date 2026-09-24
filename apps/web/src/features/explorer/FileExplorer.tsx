@@ -1,7 +1,6 @@
 import { ChevronsDownUp, ExternalLink, FilePlus, FolderPlus, Pencil, Trash } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useServices } from "../../app/services";
-import { hotkeyLabel } from "../../commands/labels";
 import { ContextMenu, type MenuItem } from "../../components/ContextMenu";
 import { IconButton } from "../../components/IconButton";
 import { ui } from "../../state/ui-store";
@@ -17,7 +16,7 @@ interface MenuState {
 }
 
 export function FileExplorer() {
-  const { workspace, commands } = useServices();
+  const { workspace } = useServices();
   const entries = useVaultStore((s) => s.entries);
   const vaultName = useVaultStore((s) => s.vaultName);
   const tree = useMemo(() => buildTree(entries.values()), [entries]);
@@ -70,20 +69,19 @@ export function FileExplorer() {
 
   return (
     <div className="explorer" data-testid="explorer">
-      <div className="panel-header">
-        <span className="panel-title" title={vaultName}>
+      <div className="panel-header" data-tooltip-placement="bottom">
+        <span className="panel-title" data-tooltip={vaultName} data-tooltip-overflow="">
           {vaultName || "Vault"}
         </span>
         <IconButton
           icon={FilePlus}
-          label="New note"
-          hotkey={hotkeyLabel(commands, "note:new")}
+          command="note:new"
           onClick={() => void workspace.createNote()}
           data-testid="explorer-new-note"
         />
         <IconButton
           icon={FolderPlus}
-          label="New folder"
+          command="folder:new"
           onClick={() => void workspace.createFolder()}
           data-testid="explorer-new-folder"
         />

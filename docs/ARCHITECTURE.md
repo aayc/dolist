@@ -82,6 +82,14 @@ through an `AttributedStorage` view. The WebSocket hub tags each `vault.changed`
   nothing while things are fine: no "Saved", no "Connected" (the in-browser demo gets a "Demo"
   marker). Only badges that need the user are loud, and motion is CSS-only, paint-only and off
   under `prefers-reduced-motion` (see `packages/editor/README.md`).
+- Tooltips: one delegated layer (`src/lib/tooltips.ts`, one element, document listeners) shows
+  what an element declares with `data-tooltip`, React components and editor widgets alike, with
+  the macOS app's timing (500 ms delay, a 300 ms warm window in which the next tooltip glides
+  over). Shortcuts are never written into text: `data-command` names the command, and the tooltip,
+  `aria-keyshortcuts` and the palette show its registry hotkey as one keycap per key (`hotkeyKeys`;
+  `KEYS` for Enter/Escape-style keys). In a regular browser tab, shortcuts the browser keeps (⌘N,
+  ⌘T, ⌘W) aren't offered. Everything clickable points, disabled controls don't, chrome text isn't
+  selectable, and `e2e/polish.spec.ts` audits both on every main screen.
 - Secondary UI (thread panel, artifact viewer, palette, settings, search) is code-split and
   prefetched on idle; vim mode is loaded on demand.
 - `DaemonClient` has two implementations: `HttpDaemonClient` (real) and `MockDaemonClient`

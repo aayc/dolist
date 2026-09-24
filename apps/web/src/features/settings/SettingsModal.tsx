@@ -50,8 +50,13 @@ export function SettingsModal({ section }: { section: SettingsSection }) {
         ))}
       </nav>
       <div className="settings-content">
-        <div className="settings-close">
-          <IconButton icon={X} label="Close settings" onClick={() => ui.closeOverlay()} />
+        <div className="settings-close" data-tooltip-placement="bottom">
+          <IconButton
+            icon={X}
+            label="Close settings"
+            command="overlay:close"
+            onClick={() => ui.closeOverlay()}
+          />
         </div>
         {active === "general" ? <AppearanceSection /> : null}
         {active === "editor" ? <EditorSection /> : null}

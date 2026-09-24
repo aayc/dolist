@@ -9,7 +9,7 @@ import {
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo } from "react";
 import { useServices } from "../../app/services";
-import { hotkeyLabel } from "../../commands/labels";
+import { commandTooltip } from "../../commands/labels";
 import { IconButton } from "../../components/IconButton";
 import { dailyNoteTitle } from "../../lib/format";
 import { useSettingsStore } from "../../state/settings-store";
@@ -43,8 +43,7 @@ export function DailyHeader({ date }: { date: LocalDate }) {
       <nav className="daily-nav" aria-label="Daily notes">
         <IconButton
           icon={ChevronLeft}
-          label="Previous daily note"
-          hotkey={hotkeyLabel(commands, "daily:previous")}
+          command="daily:previous"
           size={14}
           disabled={!hasPrevious}
           onClick={(event) => void workspace.openAdjacentDaily(-1, event.timeStamp)}
@@ -52,8 +51,7 @@ export function DailyHeader({ date }: { date: LocalDate }) {
         />
         <IconButton
           icon={ChevronRight}
-          label="Next daily note"
-          hotkey={hotkeyLabel(commands, "daily:next")}
+          command="daily:next"
           size={14}
           disabled={!hasNext}
           onClick={(event) => void workspace.openAdjacentDaily(1, event.timeStamp)}
@@ -66,6 +64,7 @@ export function DailyHeader({ date }: { date: LocalDate }) {
             type="button"
             className="daily-today-button"
             onClick={(event) => void workspace.openToday(event.timeStamp)}
+            {...commandTooltip(commands, "daily:today")}
             data-testid="daily-today"
           >
             Go to today

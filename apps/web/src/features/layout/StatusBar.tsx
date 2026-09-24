@@ -1,6 +1,8 @@
 import type { VimModeName } from "@ddl/editor";
 import { Bot, CircleAlert, LoaderCircle, ShieldAlert, TriangleAlert } from "lucide-react";
 import { useServices } from "../../app/services";
+import { commandTooltip } from "../../commands/labels";
+import { Count } from "../../components/Count";
 import { cx } from "../../lib/cx";
 import { pluralize } from "../../lib/format";
 import { useAgentStore, usePendingApprovalCount } from "../../state/agent-store";
@@ -10,7 +12,14 @@ import { useSettingsStore } from "../../state/settings-store";
 import { useTabsStore } from "../../state/tabs-store";
 import { ui } from "../../state/ui-store";
 import { useVimStore } from "../../state/vim-store";
-import { agentModeLabel, connectionItem, type SaveProblem, visibleSaveState } from "./status-items";
+import {
+  agentItem,
+  agentModeLabel,
+  connectionItem,
+  runningItem,
+  type SaveProblem,
+  visibleSaveState,
+} from "./status-items";
 
 export function StatusBar() {
   const active = useTabsStore((s) => s.active);
@@ -33,7 +42,7 @@ export function StatusBar() {
 }
 
 function AgentItems() {
-  const { agent } = useServices();
+  const { agent, commands } = useServices();
   const enabled = useAgentStore((s) => s.status?.enabled ?? null);
   const rawMode = useAgentStore((s) => s.status?.mode ?? null);
   const mode = agentModeLabel(rawMode);
@@ -42,6 +51,7 @@ function AgentItems() {
   const problem = useAgentStore((s) => s.status?.problem?.trim() || null);
   const pending = usePendingApprovalCount();
   const item = agentItem(enabled, rawMode === "off", problem);
+  const work = runningItem(running, queued);
   return (
     <>
       <button
@@ -52,7 +62,7 @@ function AgentItems() {
           else ui.openOverlay({ kind: "settings", section: "agent" });
         }}
         aria-pressed={enabled ?? false}
-        title={item.title}
+        data-tooltip={item.title}
         data-testid="status-agent"
         data-state={item.state}
       >
@@ -64,10 +74,10 @@ function AgentItems() {
         <span>{item.label}</span>
         {mode && rawMode !== "off" ? <span className="status-muted">{mode}</span> : null}
       </button>
-      {running + queued > 0 ? (
-        <span className="status-item" data-testid="status-running" title={`${queued} queued`}>
+      {work ? (
+        <span className="status-item" data-testid="status-running" data-tooltip={work.title}>
           <LoaderCircle size={12} className="spin" aria-hidden="true" />
-          {running} running
+          {work.label}
         </span>
       ) : null}
       {pending > 0 ? (
@@ -75,35 +85,15 @@ function AgentItems() {
           type="button"
           className="status-item status-approvals"
           onClick={() => ui.showInbox()}
+          {...commandTooltip(commands, "agent:inbox")}
           data-testid="status-approvals"
         >
           <ShieldAlert size={13} aria-hidden="true" />
-          {pending} to approve
+          <Count value={pending} className="status-count" /> to approve
         </button>
       ) : null}
     </>
   );
-}
-
-type AgentItemState = "unknown" | "on" | "paused" | "off" | "unavailable";
-
-/** One agent item that never says "on" while the agent can't act (same wording as the Mac app). */
-function agentItem(
-  enabled: boolean | null,
-  off: boolean,
-  problem: string | null,
-): { state: AgentItemState; label: string; title: string } {
-  if (enabled === null) return { state: "unknown", label: "Agent", title: "Agent status unknown" };
-  if (off)
-    return { state: "off", label: "Agent off", title: problem ?? "The agent is turned off." };
-  if (problem) return { state: "unavailable", label: "Agent unavailable", title: problem };
-  return enabled
-    ? {
-        state: "on",
-        label: "Agent on",
-        title: "The agent is watching your daily notes. Click to pause.",
-      }
-    : { state: "paused", label: "Agent paused", title: "The agent is paused. Click to resume." };
 }
 
 const SAVE_LABELS: Record<SaveProblem, string> = {
@@ -150,7 +140,7 @@ function VimIndicator() {
       className={cx("status-item status-vim", status && `is-${status.mode}`)}
       data-testid="status-vim"
       data-mode={status?.mode ?? ""}
-      title="Vim mode"
+      data-tooltip="Vim mode"
     >
       {status?.recording ? (
         <span className="status-vim-recording" data-testid="status-vim-recording">
@@ -188,7 +178,7 @@ function ConnectionIndicator() {
       className={cx("status-item status-connection", `is-${state}`, kind === "mock" && "is-mock")}
       data-testid="status-connection"
       data-state={state}
-      title={item.title}
+      data-tooltip={item.title}
     >
       <span className="connection-dot" aria-hidden="true" />
       {item.label}

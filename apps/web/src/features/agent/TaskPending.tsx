@@ -19,10 +19,12 @@ export function TaskPending({ taskId }: { taskId: string }) {
 
   return (
     <div className="thread-view" data-testid="task-pending">
-      <header className="thread-header">
+      <header className="thread-header" data-tooltip-placement="bottom">
         <IconButton icon={ArrowLeft} label="Back to inbox" onClick={() => ui.showInbox()} />
         <div className="thread-heading">
-          <h2 className="thread-title">{record?.text ?? "Task"}</h2>
+          <h2 className="thread-title" data-tooltip={record?.text} data-tooltip-overflow="">
+            {record?.text ?? "Task"}
+          </h2>
           <div className="thread-meta">
             <StatusChip status={record?.status ?? "triaging"} />
           </div>

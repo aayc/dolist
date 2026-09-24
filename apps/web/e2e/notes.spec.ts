@@ -33,7 +33,8 @@ test.describe("notes, palette and settings", () => {
     await page.getByTestId("palette-input").fill("today");
     const item = page.getByTestId("palette-item").first();
     await expect(item).toContainText("Open today's daily note");
-    await expect(item.locator("kbd")).toHaveText(/D/);
+    // One keycap per key: ⇧ ⌘ D, or Ctrl Shift D.
+    await expect(item.locator(".keycaps kbd")).toHaveText([/./, /./, "D"]);
 
     await page.getByTestId("palette-input").fill("agent panel");
     await page.keyboard.press("Enter");

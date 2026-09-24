@@ -26,7 +26,7 @@ test.describe("long unicode note names", () => {
     await page.keyboard.press("ControlOrMeta+Enter");
     const path = `${LONG_NAME}.md`;
     await expect(noteTitle(page)).toHaveValue(LONG_NAME);
-    await expect(tab(page, path)).toHaveAttribute("title", path);
+    await expect(tab(page, path)).toHaveAttribute("data-tooltip", path);
     await expect(explorerItem(page, path)).toBeVisible();
 
     await caretToEnd(page);

@@ -1,8 +1,7 @@
 import { Monitor } from "lucide-react";
-import { cx } from "../../lib/cx";
 import { formatTimestamp } from "../../lib/format";
 import { type SurfaceAction, surfaceKey, useSurfaceStore } from "../../state/surface-store";
-import { ActionMarker, frameSrc } from "./BrowserView";
+import { ActionMarker, frameSrc, LiveDot } from "./BrowserView";
 import { useIsLive, useSurfaceSubscription } from "./use-surface";
 
 const NO_ACTIONS: readonly SurfaceAction[] = [];
@@ -30,7 +29,7 @@ export function ComputerView({ threadId }: { threadId: string }) {
   return (
     <div className="surface-view" data-testid="computer-view">
       <div className="browser-bar">
-        <span className={cx("live-dot", live && "is-live")} title={live ? "Live" : "Idle"} />
+        <LiveDot live={live} />
         <Monitor size={13} aria-hidden="true" />
         <span className="browser-url">Computer use</span>
       </div>

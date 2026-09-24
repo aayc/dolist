@@ -82,27 +82,57 @@ export function matchHotkey(hotkey: Hotkey, event: KeyLike, isMac: boolean): boo
   return code !== null && event.code === code;
 }
 
-const KEY_LABELS: Record<string, string> = {
-  Escape: "Esc",
+const MAC_KEYS: Record<string, string> = { Escape: "⎋", Enter: "↩", Tab: "⇥", Backspace: "⌫" };
+const OTHER_KEYS: Record<string, string> = { Escape: "Esc" };
+const SHARED_KEYS: Record<string, string> = {
   ArrowLeft: "←",
   ArrowRight: "→",
   ArrowUp: "↑",
   ArrowDown: "↓",
-  Enter: "↵",
-  Backspace: "⌫",
   " ": "Space",
 };
 
-export function formatHotkey(hotkey: Hotkey, isMac: boolean): string {
-  const key =
-    KEY_LABELS[hotkey.key] ?? (hotkey.key.length === 1 ? hotkey.key.toUpperCase() : hotkey.key);
-  if (isMac) {
-    return `${hotkey.ctrl ? "⌃" : ""}${hotkey.alt ? "⌥" : ""}${hotkey.shift ? "⇧" : ""}${hotkey.mod ? "⌘" : ""}${key}`;
-  }
-  const parts: string[] = [];
-  if (hotkey.mod || hotkey.ctrl) parts.push("Ctrl");
-  if (hotkey.alt) parts.push("Alt");
-  if (hotkey.shift) parts.push("Shift");
-  parts.push(key);
-  return parts.join("+");
+/** One label per keycap, modifiers first: `⇧ ⌘ D` (Apple order ⌃⌥⇧⌘) or `Ctrl Shift D`. */
+export function hotkeyKeys(hotkey: Hotkey, isMac: boolean): string[] {
+  const { key } = hotkey;
+  const modifiers = isMac
+    ? [hotkey.ctrl && "⌃", hotkey.alt && "⌥", hotkey.shift && "⇧", hotkey.mod && "⌘"]
+    : [(hotkey.mod || hotkey.ctrl) && "Ctrl", hotkey.alt && "Alt", hotkey.shift && "Shift"];
+  const label =
+    (isMac ? MAC_KEYS : OTHER_KEYS)[key] ??
+    SHARED_KEYS[key] ??
+    (key.length === 1 ? key.toUpperCase() : key);
+  return [...modifiers.filter((m): m is string => Boolean(m)), label];
 }
+
+export function formatHotkey(hotkey: Hotkey, isMac: boolean): string {
+  return hotkeyKeys(hotkey, isMac).join(isMac ? "" : "+");
+}
+
+/** The `aria-keyshortcuts` value: "Meta+Shift+D" on Apple platforms, "Control+Shift+D" elsewhere. */
+export function ariaKeyShortcuts(hotkey: Hotkey, isMac: boolean): string {
+  const { key } = hotkey;
+  const parts = [
+    (hotkey.ctrl || (hotkey.mod && !isMac)) && "Control",
+    hotkey.mod && isMac && "Meta",
+    hotkey.alt && "Alt",
+    hotkey.shift && "Shift",
+    key === " " ? "Space" : key.length === 1 ? key.toUpperCase() : key,
+  ];
+  return parts.filter(Boolean).join("+");
+}
+
+/**
+ * Keys that are affordances without being commands (Enter sends, Escape closes). Tooltips and hints
+ * show them as keycaps by name, never as free text.
+ */
+export const KEYS = {
+  enter: parseHotkey("Enter"),
+  shiftEnter: parseHotkey("Shift+Enter"),
+  modEnter: parseHotkey("Mod+Enter"),
+  escape: parseHotkey("Escape"),
+  up: parseHotkey("ArrowUp"),
+  down: parseHotkey("ArrowDown"),
+} satisfies Record<string, Hotkey>;
+
+export type KeyName = keyof typeof KEYS;

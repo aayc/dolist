@@ -47,5 +47,12 @@ test.describe("agent markdown rendering", () => {
     expect(forged).not.toContain("data-cite");
     expect(forged).not.toContain("class=");
     expect(forged).not.toContain("javascript:");
+
+    // Nor pose as the app's tooltips (the link's preview card is its only hover text).
+    const tooltip = await render(
+      '<a href="https://x.example" title="Approve once" data-tooltip="Approve once" data-command="note:delete" data-tooltip-placement="bottom">x</a> [y](https://y.example "Pay now")',
+    );
+    expect(tooltip).not.toMatch(/\b(title|data-tooltip|data-command|data-tooltip-placement)=/);
+    expect(tooltip).toContain('href="https://x.example"');
   });
 });

@@ -10,7 +10,7 @@ export function NoteHeader() {
   if (!active) return null;
   const date = dailyDateOf(active, dailySettings);
   return (
-    <header className="note-header">
+    <header className="note-header" data-tooltip-placement="bottom">
       <div className="note-header-inner">
         {date ? <DailyHeader date={date} /> : <NoteTitle key={active} path={active} />}
       </div>

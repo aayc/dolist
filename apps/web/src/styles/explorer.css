@@ -20,8 +20,6 @@
   border-radius: var(--radius-m);
   color: var(--ddl-text-muted);
   font-size: 13px;
-  cursor: pointer;
-  user-select: none;
   transition:
     background-color var(--transition-fast),
     color var(--transition-fast);
@@ -30,6 +28,10 @@
 .tree-row:hover {
   background: var(--ddl-bg-hover);
   color: var(--ddl-text);
+}
+
+.tree-row:active {
+  background: var(--ddl-bg-active);
 }
 
 .tree-row.is-folder {
@@ -100,12 +102,17 @@
   background: transparent;
   font-size: 13px;
   text-align: left;
+  transition: background-color var(--transition-fast);
 }
 
 .context-menu-item:hover,
 .context-menu-item:focus-visible {
   background: var(--ddl-bg-hover);
   outline: none;
+}
+
+.context-menu-item:active {
+  background: var(--ddl-bg-active);
 }
 
 .context-menu-item.is-danger {

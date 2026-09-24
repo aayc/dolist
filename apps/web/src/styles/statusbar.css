@@ -30,9 +30,27 @@
   white-space: nowrap;
 }
 
+button.status-item {
+  position: relative;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+/* The bar is 24px tall: clicks anywhere across it hit the item. */
+button.status-item::before {
+  content: "";
+  position: absolute;
+  inset: -2px 0;
+}
+
 button.status-item:hover {
   background: var(--ddl-bg-hover);
   color: var(--ddl-text);
+}
+
+button.status-item:active {
+  background: var(--ddl-bg-active);
 }
 
 .status-muted {

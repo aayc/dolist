@@ -31,6 +31,8 @@ export function ArtifactCard({ threadId, artifactId }: { threadId: string; artif
       type="button"
       className="artifact-card"
       data-testid="artifact-card"
+      data-tooltip={meta?.title}
+      data-tooltip-overflow=".artifact-card-title"
       onClick={() => ui.openOverlay({ kind: "artifact", threadId, artifactId })}
     >
       <Icon size={18} className="artifact-card-icon" aria-hidden="true" />

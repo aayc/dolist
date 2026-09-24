@@ -80,9 +80,9 @@ budgets.
 
 | Bundle | Budget (gzip) | Current |
 | --- | --- | --- |
-| Initial JS (entry + static imports) | 320 kB | ~316 kB |
-| Initial CSS | 40 kB | ~5 kB |
-| Total JS | 1 200 kB | ~802 kB |
+| Initial JS (entry + static imports) | 320 kB | ~319 kB |
+| Initial CSS | 40 kB | ~7 kB |
+| Total JS | 1 200 kB | ~813 kB |
 
 The initial JS is dominated by CodeMirror core and `@codemirror/lang-markdown`, which statically
 embeds `@codemirror/lang-html` (and with it the JS/CSS parsers, ~60 kB gz). Vim is loaded on
@@ -91,6 +91,11 @@ in the main bundle, and `vim-integration.ts` (the engine plus ex commands, clipb
 vimrc and the status plugin) is one lazy chunk of ~42 kB gz. Don't import `vim-integration` or
 `@replit/codemirror-vim` statically. A future win: patch `lang-markdown` (via `pnpm patch`) to drop
 the HTML embedding.
+
+The app's own startup code is one chunk only while the entry reaches `app/services.ts` before the
+modules it shares with the lazy chunks: importing `commands/labels` from `bootstrap.tsx` or
+`commands/keyboard.ts` makes Rolldown split a `services` chunk out and costs ~1 kB gz. The tooltip
+layer (~1.3 kB gz) is installed from `App` for that reason; the size check catches a regression.
 
 ## Design rules that keep it fast
 

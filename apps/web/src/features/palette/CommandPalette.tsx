@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { useServices } from "../../app/services";
-import { formatHotkey } from "../../commands/hotkeys";
+import { KEYS } from "../../commands/hotkeys";
+import { shortcutOf } from "../../commands/labels";
 import type { Command } from "../../commands/registry";
 import { Highlight } from "../../components/Highlight";
+import { Keycaps } from "../../components/Keycaps";
 import { fuzzyFilter } from "../../lib/fuzzy";
-import { IS_MAC } from "../../lib/platform";
 import { ui } from "../../state/ui-store";
 import { PromptList } from "../overlays/PromptList";
 import "../../styles/prompt.css";
@@ -44,9 +45,7 @@ export function CommandPalette() {
             <span className="prompt-item-title">
               <Highlight text={item.name} indices={indices} />
             </span>
-            {item.hotkeys?.[0] ? (
-              <kbd className="prompt-item-hotkey">{formatHotkey(item.hotkeys[0], IS_MAC)}</kbd>
-            ) : null}
+            <Keycaps hotkey={shortcutOf(item)} />
           </>
         ),
       }))}
@@ -57,13 +56,13 @@ export function CommandPalette() {
       footer={
         <>
           <span>
-            <kbd>↑↓</kbd> navigate
+            <Keycaps hotkey={[KEYS.up, KEYS.down]} /> navigate
           </span>
           <span>
-            <kbd>↵</kbd> run
+            <Keycaps hotkey={KEYS.enter} /> run
           </span>
           <span>
-            <kbd>esc</kbd> close
+            <Keycaps hotkey={KEYS.escape} /> close
           </span>
         </>
       }

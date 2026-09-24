@@ -12,6 +12,10 @@ function detectMac(): boolean {
 /** Apple platforms use ⌘ as the primary modifier ("Mod"); everything else uses Ctrl. */
 export const IS_MAC: boolean = detectMac();
 
+/** A regular browser tab (not an installed app window), where the browser keeps some shortcuts. */
+export const IN_BROWSER_TAB: boolean =
+  typeof matchMedia === "function" && matchMedia("(display-mode: browser)").matches;
+
 export function searchParam(name: string): string | null {
   if (typeof location === "undefined") return null;
   return new URLSearchParams(location.search).get(name);

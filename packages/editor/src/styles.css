@@ -86,6 +86,9 @@
 .cm-ddl-wikilink {
   color: var(--ddl-accent);
   cursor: pointer;
+  transition:
+    color 120ms ease,
+    text-decoration-color 120ms ease;
 }
 .cm-ddl-link {
   text-decoration: underline;
@@ -126,6 +129,7 @@
 
 /* Task checkboxes */
 .cm-ddl-checkbox {
+  position: relative;
   display: inline-grid;
   place-content: center;
   box-sizing: border-box;
@@ -140,7 +144,21 @@
   cursor: pointer;
   transition:
     background-color 0.12s ease,
-    border-color 0.12s ease;
+    border-color 0.12s ease,
+    transform 60ms ease;
+}
+/*
+ * A hit target at least 24px tall, grown into the margin on the left but not over the task's text.
+ * Inline widgets (checkbox, badge, ✦) never extend sideways into text a click should put the
+ * caret in.
+ */
+.cm-ddl-checkbox::after {
+  content: "";
+  position: absolute;
+  inset: min(-2px, calc(50% - 12px)) -0.15em min(-2px, calc(50% - 12px)) min(-2px, calc(50% - 12px));
+}
+.cm-ddl-checkbox:active:not(.cm-ddl-checkbox-readonly) {
+  transform: scale(0.9);
 }
 .cm-ddl-checkbox::before {
   content: "";
@@ -243,12 +261,23 @@
   -webkit-user-select: none;
 }
 .cm-ddl-agent-sparkle-link {
+  position: relative;
   cursor: pointer;
   border-radius: 3px;
-  transition: color 120ms ease;
+  transition:
+    color 120ms ease,
+    transform 60ms ease;
+}
+.cm-ddl-agent-sparkle-link::after {
+  content: "";
+  position: absolute;
+  inset: min(-2px, calc(50% - 12px)) -2px;
 }
 .cm-ddl-agent-sparkle-link:hover {
   color: var(--ddl-accent-strong, var(--ddl-accent));
+}
+.cm-ddl-agent-sparkle-link:active {
+  transform: scale(0.85);
 }
 
 /* Agent annotations: faint marker left of the line, colored only when it needs attention */
@@ -369,6 +398,7 @@
  * quiet text (with the same hit target). Motion is paint-only: nothing may change text layout.
  */
 .cm-ddl-badge {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.4em;
@@ -393,16 +423,29 @@
   user-select: none;
   -webkit-user-select: none;
   transition:
-    background-color 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease;
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    transform 60ms ease;
+}
+.cm-ddl-badge::after {
+  content: "";
+  position: absolute;
+  inset: min(-1px, calc(50% - 12px)) -1px;
+}
+.cm-ddl-badge:active {
+  transform: scale(0.96);
 }
 .cm-ddl-badge:focus-visible {
   outline: 2px solid var(--ddl-accent);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 .cm-ddl-badge-enter {
   animation: cm-ddl-badge-enter 160ms ease-out;
+}
+/* A new status (not a new label or unread count). */
+.cm-ddl-badge-pop {
+  animation: cm-ddl-badge-pop 150ms ease-out;
 }
 .cm-ddl-badge-icon,
 .cm-ddl-badge-unread {
@@ -492,16 +535,32 @@
   }
 }
 
+@keyframes cm-ddl-badge-pop {
+  from {
+    transform: scale(0.85);
+  }
+  55% {
+    transform: scale(1.06);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cm-ddl-badge,
   .cm-ddl-badge .cm-ddl-badge-icon,
   .cm-ddl-agent-sparkle-link,
   .cm-ddl-link-popover,
+  .cm-ddl-link,
+  .cm-ddl-wikilink,
   .cm-ddl-checkbox,
   .cm-ddl-checkbox[aria-checked]::before,
   .cm-ddl-editor .cm-line.cm-ddl-annotated::before {
     animation: none;
     transition: none;
+  }
+  .cm-ddl-badge:active,
+  .cm-ddl-agent-sparkle-link:active,
+  .cm-ddl-checkbox:active:not(.cm-ddl-checkbox-readonly) {
+    transform: none;
   }
 }
 

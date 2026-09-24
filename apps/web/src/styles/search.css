@@ -67,6 +67,7 @@
   font-size: 13px;
   font-weight: 600;
   text-align: left;
+  transition: background-color var(--transition-fast);
 }
 
 .search-group-title:hover {
@@ -90,11 +91,19 @@
   color: var(--ddl-text-muted);
   font-size: 12px;
   text-align: left;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .search-hit:hover {
   background: var(--ddl-bg-hover);
   color: var(--ddl-text);
+}
+
+.search-group-title:active,
+.search-hit:active {
+  background: var(--ddl-bg-active);
 }
 
 .search-hit-line {

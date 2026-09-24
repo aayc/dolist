@@ -18,18 +18,29 @@ export function resolveTheme(preference: ThemePreference): ResolvedTheme {
   return typeof matchMedia === "function" && matchMedia(DARK_QUERY).matches ? "dark" : "light";
 }
 
+/**
+ * Switches colors at once: hover and state transitions must not animate a theme change. They stay
+ * off for the first frame in the new colors.
+ */
+function setTheme(root: HTMLElement, theme: ResolvedTheme): void {
+  if (root.dataset.theme === theme) return;
+  root.classList.add("theme-switching");
+  root.dataset.theme = theme;
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => root.classList.remove("theme-switching")),
+  );
+}
+
 /** Applies the theme to :root and remembers the preference for the flash-free boot script. */
 export function applyTheme(preference: ThemePreference): void {
   const root = document.documentElement;
-  root.dataset.theme = resolveTheme(preference);
+  setTheme(root, resolveTheme(preference));
   writeString(STORAGE_KEYS.theme, preference);
   removeSystemListener?.();
   removeSystemListener = null;
   if (preference === "system" && typeof matchMedia === "function") {
     const query = matchMedia(DARK_QUERY);
-    const onChange = () => {
-      root.dataset.theme = query.matches ? "dark" : "light";
-    };
+    const onChange = () => setTheme(root, query.matches ? "dark" : "light");
     query.addEventListener("change", onChange);
     removeSystemListener = () => query.removeEventListener("change", onChange);
   }

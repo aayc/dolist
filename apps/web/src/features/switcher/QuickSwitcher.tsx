@@ -1,9 +1,10 @@
 import { dirname } from "@ddl/core";
 import { useMemo, useState } from "react";
 import { useServices } from "../../app/services";
+import { KEYS } from "../../commands/hotkeys";
 import { Highlight } from "../../components/Highlight";
+import { Keycaps } from "../../components/Keycaps";
 import { fuzzyMatch } from "../../lib/fuzzy";
-import { IS_MAC } from "../../lib/platform";
 import { useTabsStore } from "../../state/tabs-store";
 import { ui } from "../../state/ui-store";
 import { useVaultStore } from "../../state/vault-store";
@@ -64,7 +65,6 @@ export function QuickSwitcher() {
     void workspace.createNote({ name });
   };
 
-  const mod = IS_MAC ? "⌘" : "Ctrl+";
   return (
     <PromptList
       label="Quick switcher"
@@ -75,7 +75,7 @@ export function QuickSwitcher() {
       empty={
         query.trim() ? (
           <>
-            No notes found. Press <kbd>{mod}↵</kbd> to create “{query.trim()}”.
+            No notes found. Press <Keycaps hotkey={KEYS.modEnter} /> to create “{query.trim()}”.
           </>
         ) : (
           "No notes yet"
@@ -83,6 +83,7 @@ export function QuickSwitcher() {
       }
       items={results.map((result) => ({
         key: result.path,
+        tooltip: result.path,
         render: () => (
           <>
             <span className="prompt-item-title">
@@ -104,16 +105,16 @@ export function QuickSwitcher() {
       footer={
         <>
           <span>
-            <kbd>↵</kbd> open
+            <Keycaps hotkey={KEYS.enter} /> open
           </span>
           <span>
-            <kbd>⇧↵</kbd> new tab
+            <Keycaps hotkey={KEYS.shiftEnter} /> new tab
           </span>
           <span>
-            <kbd>{mod}↵</kbd> create
+            <Keycaps hotkey={KEYS.modEnter} /> create
           </span>
           <span>
-            <kbd>esc</kbd> close
+            <Keycaps hotkey={KEYS.escape} /> close
           </span>
         </>
       }

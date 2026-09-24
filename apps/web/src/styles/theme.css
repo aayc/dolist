@@ -20,6 +20,8 @@
   --radius-l: 10px;
   --transition-fast: 120ms ease;
   --transition: 150ms ease;
+  --transition-press: 60ms ease;
+  --press-scale: 0.96;
 }
 
 /* The palette is shared with the macOS app: change both together. */
@@ -52,6 +54,14 @@
   --ddl-mark: rgba(251, 191, 36, 0.28);
 }
 
+/* Keycaps: the dark values also apply inside tooltips, which are dark in both themes. */
+:root[data-theme="dark"],
+.tooltip {
+  --keycap-bg: rgba(255, 255, 255, 0.08);
+  --keycap-border: rgba(255, 255, 255, 0.1);
+  --keycap-text: #b4bdc9;
+}
+
 :root[data-theme="light"] {
   color-scheme: light;
   --ddl-bg: #fff;
@@ -79,6 +89,9 @@
   --ddl-shadow-small: 0 2px 8px rgba(11, 18, 32, 0.1);
   --ddl-code-bg: var(--ddl-bg-elevated);
   --ddl-mark: rgba(183, 121, 31, 0.22);
+  --keycap-bg: rgba(0, 0, 0, 0.05);
+  --keycap-border: rgba(0, 0, 0, 0.1);
+  --keycap-text: var(--ddl-text-muted);
 }
 
 /* Status tones shared by chips, badges and dividers. */

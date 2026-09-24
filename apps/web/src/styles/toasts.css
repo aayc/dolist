@@ -65,10 +65,6 @@
   text-align: left;
 }
 
-.toast-content:disabled {
-  cursor: default;
-}
-
 .toast-title {
   font-weight: 600;
 }
@@ -79,6 +75,10 @@
   overflow-wrap: anywhere;
 }
 
+.toast-content:not(:disabled):hover .toast-title {
+  text-decoration: underline;
+}
+
 .toast-action {
   flex: none;
   padding: 2px 8px;
@@ -87,22 +87,41 @@
   background: transparent;
   font-size: 12px;
   font-weight: 600;
+  transition: background-color var(--transition-fast);
 }
 
 .toast-action:hover {
   background: var(--ddl-bg-hover);
 }
 
+.toast-action:active {
+  background: var(--ddl-bg-active);
+}
+
+/* 24px, with negative margins so the toast keeps its height. */
 .toast-close {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: none;
-  padding: 2px;
+  width: 24px;
+  height: 24px;
+  margin: -3px -2px -3px 0;
+  padding: 0;
   border: 0;
   border-radius: var(--radius-s);
   background: transparent;
   color: var(--ddl-text-faint);
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .toast-close:hover {
+  background: var(--ddl-bg-hover);
   color: var(--ddl-text);
+}
+
+.toast-close:active {
+  background: var(--ddl-bg-active);
 }

@@ -51,14 +51,15 @@ export class AgentSparkleWidget extends WidgetType {
     glyph.className = "cm-ddl-agent-sparkle";
     glyph.textContent = "✦";
     const { threadId } = this;
+    // `data-tooltip` is shown by the host's tooltip layer.
     if (threadId === null) {
-      glyph.title = AGENT_SPARKLE_TITLE_NO_THREAD;
+      glyph.dataset.tooltip = AGENT_SPARKLE_TITLE_NO_THREAD;
       glyph.setAttribute("aria-label", AGENT_SPARKLE_TITLE_NO_THREAD);
       glyph.setAttribute("role", "img");
       return glyph;
     }
     glyph.classList.add("cm-ddl-agent-sparkle-link");
-    glyph.title = AGENT_SPARKLE_TITLE;
+    glyph.dataset.tooltip = AGENT_SPARKLE_TITLE;
     glyph.setAttribute("aria-label", AGENT_SPARKLE_TITLE);
     glyph.setAttribute("role", "button");
     // Keep the caret where it is: the glyph is not part of the text.

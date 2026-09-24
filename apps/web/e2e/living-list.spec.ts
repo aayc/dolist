@@ -50,7 +50,7 @@ test.describe("the agent writing in notes", () => {
 
     const sparkle = written.locator(".cm-ddl-agent-sparkle");
     await expect(sparkle).toHaveText("✦");
-    await expect(sparkle).toHaveAttribute("title", "Written by the agent — open thread");
+    await expect(sparkle).toHaveAttribute("data-tooltip", "Written by the agent — open thread");
     await expect(sparkle).toHaveCSS("color", await tokenColor(page, "--ddl-accent"));
     await sparkle.click();
     await expect(page.getByTestId("thread-title")).toHaveText("Book a table for Friday dinner");

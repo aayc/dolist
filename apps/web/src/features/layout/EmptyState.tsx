@@ -1,5 +1,6 @@
 import { useServices } from "../../app/services";
-import { hotkeyLabel } from "../../commands/labels";
+import { shortcutOf } from "../../commands/labels";
+import { Keycaps } from "../../components/Keycaps";
 import { ui } from "../../state/ui-store";
 
 export function EmptyState() {
@@ -7,17 +8,17 @@ export function EmptyState() {
   const actions = [
     {
       label: "Open today's daily note",
-      hotkey: hotkeyLabel(commands, "daily:today"),
+      command: "daily:today",
       run: () => void workspace.openToday(),
     },
     {
       label: "Find a note",
-      hotkey: hotkeyLabel(commands, "switcher:open"),
+      command: "switcher:open",
       run: () => ui.openOverlay({ kind: "switcher" }),
     },
     {
       label: "Create a new note",
-      hotkey: hotkeyLabel(commands, "note:new"),
+      command: "note:new",
       run: () => void workspace.createNote(),
     },
   ];
@@ -30,7 +31,7 @@ export function EmptyState() {
             <button type="button" className="link-button" onClick={action.run}>
               {action.label}
             </button>
-            {action.hotkey ? <kbd>{action.hotkey}</kbd> : null}
+            <Keycaps hotkey={shortcutOf(commands.get(action.command))} />
           </li>
         ))}
       </ul>

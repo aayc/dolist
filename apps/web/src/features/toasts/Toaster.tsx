@@ -64,6 +64,7 @@ const ToastView = memo(function ToastView({ toast }: { toast: Toast }) {
         type="button"
         className="toast-close"
         aria-label="Dismiss"
+        data-tooltip="Dismiss"
         onClick={() => dismissToast(toast.id)}
       >
         <X size={14} aria-hidden="true" />

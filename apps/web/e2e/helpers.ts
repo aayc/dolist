@@ -31,6 +31,7 @@ declare global {
       renderMarkdown(source: string): Promise<string>;
       delayWrites(ms: number): void;
       runCommand(id: string): boolean;
+      shortcutKeys(id: string): readonly string[] | null;
     };
   }
 }

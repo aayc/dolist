@@ -2,6 +2,7 @@ import type { SurfaceKind } from "@ddl/core";
 import { useEffect, useLayoutEffect } from "react";
 import { useShallow } from "zustand/shallow";
 import { useServices } from "../../app/services";
+import { Count } from "../../components/Count";
 import { cx } from "../../lib/cx";
 import { perfEndAfterPaint, perfPending } from "../../perf/perf";
 import { findRecordIn } from "../../state/agent-reducer";
@@ -72,7 +73,9 @@ export function ThreadView({ threadId }: { threadId: string }) {
             data-testid={`thread-tab-${key}`}
           >
             {label}
-            {count ? <span className="thread-tab-count">{count}</span> : null}
+            {count === undefined ? null : (
+              <Count value={count} className="thread-tab-count" hidden={count === 0} />
+            )}
           </button>
         ))}
       </div>

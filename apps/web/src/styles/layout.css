@@ -81,6 +81,10 @@ body.is-resizing .resize-handle:active {
   background: var(--ddl-accent-soft);
 }
 
+.resize-handle:focus-visible {
+  outline-offset: -2px;
+}
+
 .panel-header {
   display: flex;
   align-items: center;
@@ -176,13 +180,12 @@ body.is-resizing .resize-handle:active {
   display: flex;
   align-items: center;
   gap: 2px;
-  margin: 2px 0 0 -7px;
+  margin: 2px 0 0 -8px;
 }
 
 .daily-nav .icon-button {
-  width: 22px;
-  height: 22px;
-  border-radius: var(--radius-s);
+  width: 24px;
+  height: 24px;
 }
 
 .daily-today-pill,
@@ -212,6 +215,10 @@ body.is-resizing .resize-handle:active {
 .daily-today-button:hover {
   background: var(--ddl-bg-hover);
   color: var(--ddl-text);
+}
+
+.daily-today-button:active {
+  background: var(--ddl-bg-active);
 }
 
 .editor-host {

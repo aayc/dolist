@@ -64,11 +64,20 @@ target. The line gets a faint marker, colored only when the task needs the user 
 Enter or Space calls `onAnnotationClick`. `idle` and `ignored` annotations are not rendered.
 
 Motion is CSS-only, paint-only (opacity, transform, color) and off under `prefers-reduced-motion`.
-A badge that appears after the note's first `setAnnotations()` fades in with a 2px rise (160 ms),
-status changes crossfade colors (160 ms), the `triaging` dot pulses (1.2 s), and checking a task
-scales its checkmark in (120 ms; unchecking doesn't animate). Badges update their DOM in place
-(`eq`/`updateDOM`), so typing and status changes never replay the entrance, and a note shown again
-doesn't animate the badges it already had.
+A badge that appears after the note's first `setAnnotations()` fades in with a 2px rise (160 ms), a
+new status pops it once (150 ms; a new label or unread count doesn't) and crossfades its colors
+(120 ms), the `triaging` dot pulses (1.2 s), and checking a task scales its checkmark in (120 ms;
+unchecking doesn't animate). Badges update their DOM in place (`eq`/`updateDOM`), so typing and
+status changes never replay the entrance, and a note shown again doesn't animate the badges it
+already had.
+
+**Hover and tooltips.** Clickable widgets (badges, the ✦, checkboxes, rendered links, fold markers)
+show a pointer, a hover and a pressed state, and a hit target at least 24px tall that never reaches
+into text a click should put the caret in. They name themselves with `data-tooltip` rather than
+`title`, for the host's tooltip layer (the web app's `src/lib/tooltips.ts`): a badge's tooltip is
+its full label and unread count ("Researching… · 2 unread"), the ✦'s "Written by the agent — open
+thread".
+Checkboxes have no tooltip: they are part of the list, and one per hover would get in the way.
 
 A thread can also be attached to a line that isn't a task (a question written as prose, a heading):
 an annotation with `lineAnchor: true` draws the same badge and highlights the line with a soft
@@ -88,8 +97,8 @@ an external reorder). `getAnnotations(state)` returns the annotations with their
 `%%agent:thr_1%%` (`%%agent%%` without one; see `markdown/agent-text.ts` in `@ddl/core`). Such lines
 are drawn in the agent text color (`--ddl-agent-text`, class `cm-ddl-agent-line`) in both modes;
 links, tags, checkboxes and bullets keep their own colors. The live preview hides the marker behind
-a ✦ in the accent color: clicking it calls `onAgentLineClick(threadId)` (title "Written by the agent
-— open thread"; a marker without a thread gives a ✦ that isn't clickable). Like block syntax, the
+a ✦ in the accent color: clicking it calls `onAgentLineClick(threadId)` (tooltip "Written by the
+agent — open thread"; a marker without a thread gives a ✦ that isn't clickable). Like block syntax, the
 marker is revealed (faint, `cm-ddl-agent-marker`) while the selection is on the line; source mode
 always shows it faint. Text typed at or after the marker (e.g. after clicking the end of the line,
 which puts the caret after the hidden marker) goes in front of it, so the marker stays last; the

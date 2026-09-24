@@ -33,18 +33,21 @@ export function createDefaultCommands(services: Services): Command[] {
     {
       id: "daily:today",
       name: "Open today's daily note",
+      label: "Open today's note",
       hotkeys: [hk("Mod+Shift+D")],
       run: (ctx) => workspace.openToday(eventStart(ctx)),
     },
     {
       id: "daily:previous",
       name: "Open previous daily note",
+      label: "Previous daily note",
       hotkeys: [hk("Mod+Shift+P")],
       run: (ctx) => void workspace.openAdjacentDaily(-1, eventStart(ctx)),
     },
     {
       id: "daily:next",
       name: "Open next daily note",
+      label: "Next daily note",
       hotkeys: [hk("Mod+Shift+N")],
       run: (ctx) => void workspace.openAdjacentDaily(1, eventStart(ctx)),
     },
@@ -68,12 +71,14 @@ export function createDefaultCommands(services: Services): Command[] {
     {
       id: "note:new",
       name: "Create new note",
+      label: "New note",
       hotkeys: [hk("Mod+N")],
       run: () => void workspace.createNote(),
     },
     {
       id: "folder:new",
       name: "Create new folder",
+      label: "New folder",
       run: () => void workspace.createFolder(),
     },
     {
@@ -113,6 +118,7 @@ export function createDefaultCommands(services: Services): Command[] {
     {
       id: "tab:close",
       name: "Close current tab",
+      label: "Close tab",
       hotkeys: [hk("Mod+W")],
       when: hasActiveNote,
       run: () => workspace.closeActiveTab(),
@@ -163,7 +169,7 @@ export function createDefaultCommands(services: Services): Command[] {
     },
     {
       id: "editor:vim",
-      name: "Toggle Vim mode",
+      name: "Toggle Vim key bindings",
       run: () =>
         void services.updateSettings({ editor: { vimMode: !getSettings().editor.vimMode } }),
     },

@@ -91,8 +91,19 @@ export function renderMarkdown(source: string): string {
     USE_PROFILES: { html: true },
     FORBID_TAGS: ["style", "form", "button", "textarea", "select", "template"],
     // Agent text can quote untrusted pages: no inline styles, app classes or ids, so it can't
-    // escape its message (a fixed full-window overlay over the approval buttons) or pose as app UI.
-    FORBID_ATTR: ["style", "class", "id"],
+    // escape its message (a fixed full-window overlay over the approval buttons) or pose as app UI,
+    // nor app tooltips (links already preview their page on hover).
+    FORBID_ATTR: [
+      "style",
+      "class",
+      "id",
+      "title",
+      "data-tooltip",
+      "data-command",
+      "data-tooltip-keys",
+      "data-tooltip-overflow",
+      "data-tooltip-placement",
+    ],
   });
   if (cache.size >= CACHE_MAX) {
     const oldest = cache.keys().next().value;

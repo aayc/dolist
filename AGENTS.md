@@ -250,6 +250,11 @@ and real-keyboard e2e tests in `apps/web/e2e/vim.spec.ts`.
   Claude Desktop/Cursor). See `packages/connectors/README.md`.
 - **Add a setting:** extend `AppSettings` + `DEFAULT_SETTINGS` in `packages/core/src/settings.ts`,
   surface it in the settings UI, and handle it in `AgentRuntime.updateSettings` if agent-related.
+- **Add a control (web):** give it a tooltip with `data-tooltip` (never `title`), and if it runs a
+  command, `data-command` (`IconButton command=…` or `commandTooltip()` do both): the keycaps and
+  `aria-keyshortcuts` come from the registry, so never write a shortcut into text. A shorter
+  button name goes in the command's `label`. It gets the pointer by its role; `e2e/polish.spec.ts`
+  audits cursors and tooltips on every main screen.
 
 ## macOS app (`apps/macos`)
 
