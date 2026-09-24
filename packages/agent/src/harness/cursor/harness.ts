@@ -27,8 +27,10 @@ import {
   cursorHome,
   prepareCursorHome,
   readUserMcpServers,
+  recordCliProcess,
   removeAcpSession,
   removeSessionDirs,
+  stopLeftoverClis,
   writeCliConfig,
 } from "./workspace";
 
@@ -134,15 +136,20 @@ export class CursorHarness implements Harness {
       workspace: dirs.workspace,
       workspaceRoots: [...new Set([dirs.workspace, resolved])],
       webAllowed,
-      spawn: (handlers) =>
-        AcpConnection.spawn({
+      spawn: (handlers) => {
+        const conn = AcpConnection.spawn({
           command: binary,
           args: [...(this.options.binaryArgs ?? []), "acp"],
           cwd: dirs.workspace,
           env: cliEnv,
           logger,
           ...handlers,
-        }),
+        });
+        recordCliProcess(dirs, conn.pid).catch((error: unknown) => {
+          logger.debug("couldn't record the CLI process", { error: describeError(error) });
+        });
+        return conn;
+      },
       idleTimeoutMs: this.options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS,
       detachAfterMs: this.options.detachAfterMs ?? DEFAULT_DETACH_AFTER_MS,
       requestTimeoutMs: this.options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
@@ -168,6 +175,14 @@ export class CursorHarness implements Harness {
     }
     logger.debug("session ready", { tools: tools.map((t) => t.name) });
     return session;
+  }
+
+  /**
+   * Stops CLI processes that sessions of an earlier daemon left running (see `stopLeftoverClis`).
+   * Also runs before the first session; call it at startup so they don't linger until then.
+   */
+  stopLeftovers(): Promise<number> {
+    return stopLeftoverClis(this.home, this.logger);
   }
 
   /** Stops accepting sessions; shared resources close once the open sessions are disposed. */

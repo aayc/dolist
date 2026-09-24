@@ -86,14 +86,18 @@ async function setupCursorHarness(ctx: HarnessSetupContext): Promise<HarnessSetu
   if (problem || status.state !== "ready")
     return { problem: problem ?? "The Cursor CLI isn't ready." };
   ctx.logger.info("Using the Cursor CLI harness", { binary: status.binary });
-  return {
-    harness: cursor.createCursorHarness({
-      home: ctx.home,
-      logger: ctx.logger.child({ component: "harness" }),
-      binary: status.binary,
-      env: ctx.env,
-    }),
-  };
+  const harness = cursor.createCursorHarness({
+    home: ctx.home,
+    logger: ctx.logger.child({ component: "harness" }),
+    binary: status.binary,
+    env: ctx.env,
+  });
+  harness.stopLeftovers().catch((error: unknown) => {
+    ctx.logger.warn("Couldn't check for leftover Cursor CLI processes", {
+      error: errorText(error),
+    });
+  });
+  return { harness };
 }
 
 function errorText(error: unknown): string {

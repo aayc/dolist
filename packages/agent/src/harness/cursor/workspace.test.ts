@@ -1,3 +1,4 @@
+import { type ChildProcess, spawn } from "node:child_process";
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -12,12 +13,16 @@ import {
   parseAuthenticated,
 } from "./cli";
 import {
+  type CursorHome,
   cliPermissions,
   createSessionDirs,
   cursorHome,
   prepareCursorHome,
   readUserMcpServers,
+  recordCliProcess,
   removeSessionDirs,
+  type SessionDirs,
+  stopLeftoverClis,
   writeCliConfig,
 } from "./workspace";
 
@@ -25,10 +30,35 @@ const FAKE_CLI = fileURLToPath(new URL("./testing/fake-cursor-cli.ts", import.me
 /** These tests start the fake CLI as a process; a loaded machine can take seconds to do that. */
 const SPAWN_TIMEOUT_MS = 30_000;
 const dirs: string[] = [];
+const processes: ChildProcess[] = [];
 
 afterEach(async () => {
+  for (const child of processes.splice(0)) {
+    if (child.pid !== undefined && isAlive(child.pid)) process.kill(-child.pid, "SIGKILL");
+  }
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A detached process that runs until killed, working in `cwd` (like a CLI left by a dead daemon). */
+function lingering(cwd: string): ChildProcess {
+  const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+    cwd,
+    detached: true,
+    stdio: "ignore",
+  });
+  child.unref();
+  processes.push(child);
+  return child;
+}
 
 async function tempDir(): Promise<string> {
   const dir = await mkdtemp(path.join(tmpdir(), "ddl-cursor-ws-"));
@@ -138,6 +168,58 @@ describe("Cursor harness files", () => {
     expect(await readdir(home.sessionsDir)).toEqual([path.basename(live.root)]);
     expect(await readdir(path.join(home.configDir, "acp-sessions"))).toEqual([]);
     await removeSessionDirs(live);
+  });
+});
+
+describe("CLI processes left by a daemon that died", { timeout: SPAWN_TIMEOUT_MS }, () => {
+  const permissions = cliPermissions("ddl", []);
+
+  /** A session folder another (now dead) daemon process created: no live session owns it. */
+  async function leftoverSession(home: CursorHome, name: string): Promise<SessionDirs> {
+    const root = path.join(home.sessionsDir, name);
+    const session = {
+      root,
+      workspace: path.join(root, "workspace"),
+      data: path.join(root, "data"),
+    };
+    await mkdir(session.workspace, { recursive: true });
+    await mkdir(session.data, { recursive: true });
+    return session;
+  }
+
+  it("are stopped when the next harness prepares, and their session folders removed", async () => {
+    const home = cursorHome(await tempDir());
+    await prepareCursorHome(home, permissions);
+    const session = await leftoverSession(home, "orchestrator-2026-09-24-0a1b2c3d");
+    const cli = lingering(session.workspace);
+    await recordCliProcess(session, cli.pid);
+
+    await prepareCursorHome(home, permissions);
+    await expect.poll(() => isAlive(cli.pid!), { timeout: 5_000 }).toBe(false);
+    expect(await readdir(home.sessionsDir)).toEqual([]);
+  });
+
+  it("leave a recorded pid alone when that process works elsewhere (a reused pid)", async () => {
+    const home = cursorHome(await tempDir());
+    await prepareCursorHome(home, permissions);
+    const session = await leftoverSession(home, "thr-x-0a1b2c3d");
+    const unrelated = lingering(await tempDir());
+    await recordCliProcess(session, unrelated.pid);
+
+    expect(await stopLeftoverClis(home)).toBe(0);
+    expect(isAlive(unrelated.pid!)).toBe(true);
+  });
+
+  it("of live sessions are left running", async () => {
+    const home = cursorHome(await tempDir());
+    await prepareCursorHome(home, permissions);
+    const session = await createSessionDirs(home, "thr_live", { agentsMd: "# x", permissions });
+    const cli = lingering(session.workspace);
+    await recordCliProcess(session, cli.pid);
+
+    expect(await stopLeftoverClis(home)).toBe(0);
+    expect(isAlive(cli.pid!)).toBe(true);
+    await removeSessionDirs(session);
   });
 });
 

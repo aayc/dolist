@@ -114,6 +114,11 @@ export class AcpConnection {
     return this.closedWith !== undefined;
   }
 
+  /** The CLI's process id, which is also its process group's (it's spawned detached). */
+  get pid(): number | undefined {
+    return this.child.pid;
+  }
+
   /** The last lines the CLI wrote to stderr (for error messages; never logged at info). */
   stderrTail(maxChars = 500): string {
     const lines = this.stderr.trim().split("\n").filter(Boolean);

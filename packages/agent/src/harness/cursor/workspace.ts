@@ -8,13 +8,29 @@
  *   caches, `acp-sessions/<id>` transcripts, which are deleted with their session).
  * - `sessions/<id>-<random>/`: one per session. `workspace/` is the agent's cwd with our
  *   `AGENTS.md` (the system prompt) and `.cursor/cli.json` (the deny list again, per project);
- *   `data/` is the CLI's data dir (`CURSOR_DATA_DIR`). Neither is the task workspace: our own
- *   file and shell tools work there.
+ *   `data/` is the CLI's data dir (`CURSOR_DATA_DIR`); `cli.pid` is the CLI process it runs.
+ *   Neither directory is the task workspace: our own file and shell tools work there.
  */
+import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { chmod, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  readdir,
+  readFile,
+  readlink,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 import type { Logger } from "@ddl/core";
+
+const execFileAsync = promisify(execFile);
+/** In a session's root: the pid of the CLI process it runs. */
+const CLI_PID_FILE = "cli.pid";
 
 /** Built-in tool categories the CLI must never run itself (deny wins over any allowlist). */
 export const DENIED_BUILTINS = [
@@ -177,7 +193,86 @@ export async function removeAcpSession(home: CursorHome, sessionId: string): Pro
   await rm(path.join(home.configDir, "acp-sessions", sessionId), { recursive: true, force: true });
 }
 
+/** Records the CLI process a session runs, so a later daemon can stop it if this one dies first. */
+export async function recordCliProcess(dirs: SessionDirs, pid: number | undefined): Promise<void> {
+  if (pid === undefined) return;
+  await writeFileAtomic(path.join(dirs.root, CLI_PID_FILE), `${pid}\n`);
+}
+
+/**
+ * Stops the CLI processes of sessions no live harness owns: left running by a daemon that was
+ * killed or crashed (the CLI doesn't always exit when its input closes). A recorded pid is only
+ * signalled while that process still works inside the session's folder, so a reused pid is safe.
+ */
+export async function stopLeftoverClis(home: CursorHome, logger?: Logger): Promise<number> {
+  let stopped = 0;
+  for (const name of await readdir(home.sessionsDir).catch(() => [])) {
+    const root = path.join(home.sessionsDir, name);
+    if (liveSessionRoots.has(root)) continue;
+    const pid = Number.parseInt(
+      await readFile(path.join(root, CLI_PID_FILE), "utf8").catch(() => ""),
+      10,
+    );
+    if (!Number.isInteger(pid) || pid <= 1 || !(await worksInside(pid, root))) continue;
+    signalGroup(pid, "SIGTERM");
+    if (!(await exitsWithin(pid, 2_000))) signalGroup(pid, "SIGKILL");
+    stopped++;
+    logger?.warn("Stopped a Cursor CLI process that a previous daemon left running", { pid });
+  }
+  return stopped;
+}
+
+async function worksInside(pid: number, root: string): Promise<boolean> {
+  const cwd = await processCwd(pid);
+  if (!cwd) return false;
+  const [resolvedCwd, resolvedRoot] = await Promise.all([
+    realpath(cwd).catch(() => cwd),
+    realpath(root).catch(() => root),
+  ]);
+  return resolvedCwd === resolvedRoot || resolvedCwd.startsWith(`${resolvedRoot}${path.sep}`);
+}
+
+/** A process's working directory (`/proc` on Linux, `lsof` elsewhere), or null. */
+async function processCwd(pid: number): Promise<string | null> {
+  if (process.platform === "linux") return readlink(`/proc/${pid}/cwd`).catch(() => null);
+  try {
+    const { stdout } = await execFileAsync("lsof", ["-a", "-p", String(pid), "-d", "cwd", "-Fn"], {
+      timeout: 2_000,
+    });
+    const line = stdout.split("\n").find((l) => l.startsWith("n"));
+    return line ? line.slice(1) : null;
+  } catch {
+    return null;
+  }
+}
+
+function signalGroup(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    try {
+      process.kill(pid, signal);
+    } catch {
+      // Already gone.
+    }
+  }
+}
+
+async function exitsWithin(pid: number, ms: number): Promise<boolean> {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return false;
+}
+
 async function removeStale(home: CursorHome, logger?: Logger): Promise<void> {
+  await stopLeftoverClis(home, logger);
   const stale: string[] = [];
   for (const name of await readdir(home.sessionsDir).catch(() => [])) {
     const dir = path.join(home.sessionsDir, name);

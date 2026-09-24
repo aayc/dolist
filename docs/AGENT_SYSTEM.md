@@ -144,8 +144,12 @@ CA bundles; never API keys) and runs in its own process group, so disposing ends
 processes. `prompt` queues follow-ups; `steer` is delivered at the next turn boundary as a
 follow-up within the same run (ACP can't inject into a running turn); `abort` sends
 `session/cancel` and stops the CLI if the turn doesn't end within 10 s. Idle sessions end their
-process after 5 minutes (each is ~500 MB) and resume with `session/load` on the next prompt, as
-does a session whose CLI crashed.
+process after 5 minutes (each is 100–500 MB) and resume with `session/load` on the next prompt, as
+does a session whose CLI crashed. Each session records its CLI's pid in its folder (`cli.pid`):
+a daemon that was killed can leave CLI processes running (the CLI doesn't always exit when its
+input closes), so the next daemon stops the process of every session folder no live session owns —
+only while that process still works inside the folder, so a reused pid is never signalled — and
+then removes the folder.
 
 **Long calls.** The CLI's MCP client gives up on a request after 60 s. A call still running after
 45 s — typically waiting for your approval — is answered "still running, end your turn" and

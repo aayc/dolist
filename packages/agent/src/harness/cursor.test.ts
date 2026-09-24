@@ -462,6 +462,19 @@ describe("CursorHarness (fake CLI)", { timeout: SPAWN_TIMEOUT_MS }, () => {
     expect(lastText(s.events)).toBe("model: composer-2.5[fast=true]");
   });
 
+  it("records the CLI process in the session folder, for a later daemon's cleanup", async () => {
+    const s = await setup();
+    await s.create();
+    const sessions = path.join(s.home, "cursor", "sessions");
+    const [name] = await readdir(sessions);
+    const pidFile = path.join(sessions, name!, "cli.pid");
+    await expect
+      .poll(() => readFile(pidFile, "utf8").catch(() => ""), { timeout: 5_000 })
+      .toMatch(/^\d+\n$/);
+    const pid = Number((await readFile(pidFile, "utf8")).trim());
+    expect(() => process.kill(pid, 0)).not.toThrow();
+  });
+
   it("runs the default model, and a variant agent mode can't select as its preset", async () => {
     const warnings: Array<Record<string, unknown> | undefined> = [];
     const logger: Logger = {

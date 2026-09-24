@@ -16,6 +16,11 @@ export {
 } from "./cursor/cli";
 export type { CursorHarnessOptions } from "./cursor/harness";
 
-export function createCursorHarness(options: CursorHarnessOptions): Harness {
+export interface CursorCliHarness extends Harness {
+  /** Stops CLI processes an earlier daemon's sessions left running. */
+  stopLeftovers(): Promise<number>;
+}
+
+export function createCursorHarness(options: CursorHarnessOptions): CursorCliHarness {
   return new CursorHarness(options);
 }
