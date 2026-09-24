@@ -5,6 +5,7 @@ import {
   type DailyNoteResponse,
   dirname,
   ensureMarkdownExtension,
+  isDailyNotePath,
   isHiddenPath,
   type LocalDate,
   normalizePath,
@@ -105,6 +106,8 @@ export class Workspace {
     this.editor = new EditorController(
       {
         contentOf: (path) => this.notes.serverContent(path),
+        // New tasks go at the end of a daily note.
+        caretAtEnd: (path) => isDailyNotePath(path, getSettings().dailyNotes),
         onLocalEdit: (path) => {
           this.notes.markDirty(path);
           this.annotations.onDocumentEdited();

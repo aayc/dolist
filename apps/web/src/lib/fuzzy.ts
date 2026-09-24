@@ -31,16 +31,21 @@ function scoreIndices(target: string, query: string, indices: readonly number[])
   let score = 0;
   let prev = -2;
   let streak = 0;
+  let runStartsWord = false;
   for (let k = 0; k < indices.length; k++) {
     const i = indices[k]!;
+    const boundary = isBoundary(target, i);
     score += 1;
     if (i === 0) score += 8;
-    else if (isBoundary(target, i)) score += 6;
+    else if (boundary) score += 6;
     if (i === prev + 1) {
       streak++;
       score += 3 + Math.min(streak, 4);
+      // A word prefix ("tod" in "today") beats the same letters scattered over word starts.
+      if (runStartsWord) score += 3;
     } else {
       streak = 0;
+      runStartsWord = boundary;
       if (k > 0) score -= Math.min(i - prev - 1, 6) * 0.4;
     }
     if (target[i] === query[k]) score += 0.25;

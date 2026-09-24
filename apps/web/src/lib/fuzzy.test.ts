@@ -31,6 +31,12 @@ describe("fuzzyMatch", () => {
     const scattered = fuzzyMatch("gro", "Garden Redesign Overview")!;
     expect(prefix.score).toBeGreaterThan(scattered.score);
   });
+
+  it("scores a word prefix above letters scattered over word starts", () => {
+    const wordPrefix = fuzzyMatch("tod", "Open today's daily note")!;
+    const scattered = fuzzyMatch("tod", "Toggle Light/Dark Theme")!;
+    expect(wordPrefix.score).toBeGreaterThan(scattered.score);
+  });
 });
 
 describe("fuzzyFilter", () => {

@@ -18,6 +18,8 @@ interface CachedState {
 export interface EditorControllerDeps {
   /** Initial content for a note without a cached state. */
   contentOf(path: string): string | null;
+  /** Whether a note shown without a cached state starts with the caret after its last line. */
+  caretAtEnd(path: string): boolean;
   /** A local edit happened in the active note (called synchronously per change; keep O(1)). */
   onLocalEdit(path: string): void;
   /** The active note's document was replaced programmatically (remote change). */
@@ -115,7 +117,7 @@ export class EditorController {
     if (path === null) return;
     const cached = this.states.get(path);
     this.states.delete(path);
-    const state = cached?.state ?? editor.createState(this.deps.contentOf(path) ?? "");
+    const state = cached?.state ?? this.freshState(editor, path);
     this.applying = true;
     try {
       editor.setState(state);
@@ -123,6 +125,12 @@ export class EditorController {
     } finally {
       this.applying = false;
     }
+  }
+
+  private freshState(editor: MarkdownEditor, path: string): EditorStateLike {
+    const state = editor.createState(this.deps.contentOf(path) ?? "");
+    if (!this.deps.caretAtEnd(path)) return state;
+    return state.update({ selection: { anchor: state.doc.length } }).state;
   }
 
   /** Content that changed elsewhere (no local edits pending). */
