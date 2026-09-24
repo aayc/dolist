@@ -67,13 +67,21 @@ future iPhone app too.
 
 ## Calm by default
 
+- **One grid.** The window has no title bar: the sidebar, the tabs and the agent panel each start
+  with a 40 pt header row (the traffic lights sit in the sidebar's, centered by an empty compact
+  toolbar), and their bottom lines meet. Every line is the same one-pixel separator; panes
+  resize by dragging the line between them (double-click restores the default width). Empty
+  header space drags the window like a title bar. Layout rules: `Views/Chrome/PaneLayout.swift`.
 - **Daily notes** are titled by their date ("Thursday, September 24"; the year only when it isn't
-  this year's), with previous/next and "Today" (or "Go to today") in one quiet row below. The date
-  isn't editable: **Rename Note…** on a daily note renames it in the file explorer. Tabs and the
-  sidebar keep showing the file name.
-- **The status bar** only shows what needs attention: the save state while the note isn't saved,
-  the connection while it isn't connected (a small "Demo" marker in demo mode), and the agent's
-  mode when it isn't `live`. The agent toggle, running count, approvals and word count stay.
+  this year's), with "‹ Today ›" at the end of the title row. The date isn't editable: **Rename
+  Note…** on a daily note renames it in the file explorer. Tabs and the sidebar keep showing the
+  file name.
+- **The status line** under the note has no bar or border and only shows what needs attention:
+  the save state while the note isn't saved, the connection while it isn't connected (a small
+  "Demo" marker in demo mode), and the agent's mode when it isn't `live`. The agent item says
+  what the agent can do right now: "Agent on" / "Agent paused" (click to toggle), "Agent off",
+  or "Agent unavailable" when the daemon reports a problem (click for the reason and a way to
+  Settings → Agent). It never shows "on" next to a problem.
 - **Agent badges** are loud only when they need you, and move gently (fade-ins, crossfades, the
   triaging pulse, checkmarks popping in) unless Reduce Motion is on. See the
   [editor README](Packages/DailyDoListEditor/README.md#behavior).

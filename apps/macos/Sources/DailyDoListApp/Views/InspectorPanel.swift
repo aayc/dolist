@@ -1,7 +1,7 @@
 import DailyDoListAgent
 import SwiftUI
 
-/// Right-hand inspector (⌘\): the agent panel — inbox, or the selected thread.
+/// Right-hand pane (⌘\): the agent panel — inbox, or the selected thread.
 struct InspectorPanel: View {
   let model: AppModel
   let workspace: Workspace
@@ -15,12 +15,18 @@ struct InspectorPanel: View {
           onShowInNote: { location in
             Task { await workspace.revealTask(notePath: location.notePath, record: location.record) }
           },
-          onClose: { ui.inspectorPresented = false })
+          headerHeight: Theme.headerHeight,
+          onHide: { ui.inspectorPresented = false })
       } else {
         ContentUnavailableView("Agent unavailable", systemImage: "sparkles", description: Text("Not connected to the daemon."))
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Theme.background)
+    .background(alignment: .top) {
+      ZStack(alignment: .top) {
+        Theme.background
+        WindowDragArea().frame(height: Theme.headerHeight)
+      }
+    }
   }
 }

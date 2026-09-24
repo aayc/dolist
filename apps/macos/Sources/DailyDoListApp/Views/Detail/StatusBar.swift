@@ -4,9 +4,10 @@ import DailyDoListEditor
 import DailyDoListModels
 import SwiftUI
 
-/// Bottom bar, quiet by default (``StatusBarVisibility``): agent on/off (+ mode unless live),
-/// running count, approvals (→ inbox), daemon problem, save state while not saved, word count,
-/// connection while not connected (or a "Demo" marker).
+/// Status line under the note, quiet by default (``StatusBarVisibility``) and drawn on the note's
+/// own background: the agent's state (``AgentStatusPresentation``, + mode unless live), running
+/// count, approvals (→ inbox), save state while not saved, word count, connection while not
+/// connected (or a "Demo" marker).
 struct StatusBar: View {
   let model: AppModel
   let workspace: Workspace
@@ -42,36 +43,50 @@ struct StatusBar: View {
     }
     .lineLimit(1)
     .font(.system(size: 11))
-    .padding(.horizontal, 10)
+    .foregroundStyle(Theme.mutedText)
+    .padding(.horizontal, 12)
     .frame(height: Theme.statusBarHeight)
-    .background(Theme.secondaryBackground)
   }
 }
 
 struct AgentStatusItems: View {
   let model: AppModel
   let agent: AgentStore
-  /// Shown next to "Agent on/off" (nil while the agent is live).
+  /// Shown next to the agent's state while it isn't live (mock).
   let mode: AgentMode?
+  @State private var explaining = false
+  @Environment(\.openSettings) private var openSettings
 
   var body: some View {
-    let status = agent.status
-    Button {
-      guard let status else { return }
-      Task { await model.setAgentEnabled(!status.enabled) }
-    } label: {
-      HStack(spacing: 5) {
-        Image(systemName: status?.enabled == false ? "pause.circle" : "sparkles")
-          .foregroundStyle(status?.enabled == false ? Theme.faintText : Theme.accent)
-        Text(status.map { $0.enabled ? "Agent on" : "Agent off" } ?? "Agent")
-        if let mode {
-          Text(mode.rawValue).foregroundStyle(Theme.faintText)
+    if let presentation = AgentStatusPresentation(status: agent.status) {
+      Button {
+        if presentation.toggles, let status = agent.status {
+          Task { await model.setAgentEnabled(!status.enabled) }
+        } else {
+          explaining = true
+        }
+      } label: {
+        HStack(spacing: 5) {
+          Image(systemName: presentation.systemImage).foregroundStyle(iconColor(presentation.state))
+          Text(presentation.label)
+            .foregroundStyle(presentation.state == .unavailable ? Theme.danger : Theme.mutedText)
+          if let mode, mode != .off {
+            Text(mode.rawValue).foregroundStyle(Theme.faintText)
+          }
+        }
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .help(presentation.detail)
+      .accessibilityLabel(accessibilityLabel(presentation))
+      .popover(isPresented: $explaining, arrowEdge: .top) {
+        AgentProblemPopover(presentation: presentation) {
+          explaining = false
+          model.ui.settingsPane = .agent
+          openSettings()
         }
       }
     }
-    .buttonStyle(.plain)
-    .help(agentHelp(status))
-    .accessibilityLabel(status.map { $0.enabled ? "Pause agent" : "Resume agent" } ?? "Agent")
 
     if agent.runningCount > 0 {
       HStack(spacing: 4) {
@@ -79,7 +94,7 @@ struct AgentStatusItems: View {
         Text("\(agent.runningCount) running")
       }
       .foregroundStyle(Theme.mutedText)
-      .help("\(status?.queued ?? 0) queued")
+      .help("\(agent.status?.queued ?? 0) queued")
     }
     if agent.pendingApprovalCount > 0 {
       Button {
@@ -91,19 +106,51 @@ struct AgentStatusItems: View {
       .buttonStyle(.plain)
       .help("Open the agent inbox (⇧⌘A)")
     }
-    if let problem = status?.problem {
-      Label("Agent problem", systemImage: "exclamationmark.triangle.fill")
-        .foregroundStyle(Theme.danger)
-        .help(problem + "\n\nCheck the daemon's OpenRouter key (DDL_HOME/.env) and Settings → Agent.")
+  }
+
+  private func iconColor(_ state: AgentStatusPresentation.State) -> Color {
+    switch state {
+    case .on: Theme.accent
+    case .paused, .off: Theme.faintText
+    case .unavailable: Theme.danger
     }
   }
 
-  private func agentHelp(_ status: AgentStatusResponse?) -> String {
-    guard let status else { return "Agent status unknown" }
-    if let problem = status.problem { return problem }
-    return status.enabled
-      ? "The agent is watching your daily notes — click to pause"
-      : "The agent is paused — click to resume"
+  private func accessibilityLabel(_ presentation: AgentStatusPresentation) -> String {
+    switch presentation.state {
+    case .on: "Agent on. Pause agent"
+    case .paused: "Agent paused. Resume agent"
+    case .off, .unavailable: "\(presentation.label). Show details"
+    }
+  }
+}
+
+/// Why the agent isn't running, and the way to Settings → Agent.
+private struct AgentProblemPopover: View {
+  let presentation: AgentStatusPresentation
+  let openAgentSettings: () -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      Label(
+        presentation.state == .off ? "The agent is off" : "The agent can't run right now",
+        systemImage: presentation.systemImage
+      )
+      .font(.system(size: 13, weight: .semibold))
+      .foregroundStyle(presentation.state == .off ? Theme.text : Theme.danger)
+      Text(presentation.detail)
+        .font(.system(size: 12))
+        .foregroundStyle(Theme.text)
+        .textSelection(.enabled)
+        .fixedSize(horizontal: false, vertical: true)
+      HStack {
+        Spacer()
+        Button("Agent Settings…", action: openAgentSettings)
+          .controlSize(.small)
+      }
+    }
+    .padding(14)
+    .frame(width: 320)
   }
 }
 

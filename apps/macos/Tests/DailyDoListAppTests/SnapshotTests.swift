@@ -195,8 +195,11 @@ struct SnapshotTests {
   ) async throws -> URL {
     _ = NSApplication.shared
     let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+    let content = SnapshotContent()
     let hosting = NSHostingView(
-      rootView: view.environment(\.colorScheme, dark ? .dark : .light).tint(Theme.accent).agentReferenceDate(referenceNow))
+      rootView: SnapshotHost(content: content) {
+        view.environment(\.colorScheme, dark ? .dark : .light).tint(Theme.accent).agentReferenceDate(referenceNow)
+      })
     let window = NSWindow(
       contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
       backing: .buffered, defer: false)
@@ -225,6 +228,10 @@ struct SnapshotTests {
       .compactMap { $0 }
     let rep = candidates.max { Self.distinctColors($0) < Self.distinctColors($1) } ?? drawn
     window.close()
+    // The host outlives this call; emptied, it stops laying out views it shares with the next
+    // snapshot (the one editor), which would otherwise get this window's geometry.
+    content.isShown = false
+    hosting.layoutSubtreeIfNeeded()
     let data = try #require(rep.representation(using: .png, properties: [:]))
     #expect(data.count > 2_000, "\(name) rendered something")
     #expect(Self.distinctColors(rep) > 4, "\(name) isn't a blank image")
@@ -286,5 +293,21 @@ struct SnapshotTests {
       }
     }
     return colors.count
+  }
+}
+
+/// Whether a snapshot's host still shows its content.
+@MainActor
+@Observable
+private final class SnapshotContent {
+  var isShown = true
+}
+
+private struct SnapshotHost<Content: View>: View {
+  let content: SnapshotContent
+  @ViewBuilder let view: () -> Content
+
+  var body: some View {
+    if content.isShown { view() }
   }
 }

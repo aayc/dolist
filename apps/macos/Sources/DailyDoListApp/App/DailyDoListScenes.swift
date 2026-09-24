@@ -14,7 +14,7 @@ public struct DailyDoListScenes: Scene {
       MainWindowView(model: model)
     }
     .defaultSize(width: 1180, height: 780)
-    .windowToolbarStyle(.unifiedCompact(showsTitle: false))
+    .windowStyle(.hiddenTitleBar)
     .commands { AppMenuCommands(model: model) }
 
     Settings {

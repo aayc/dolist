@@ -11,6 +11,7 @@ final class WindowHandles {
   weak var mainWindow: NSWindow?
   /// SwiftUI's `openWindow(id: "main")`, registered by a view.
   var openMainWindow: (@MainActor () -> Void)?
+  let fullScreen = FullScreenObserver()
 }
 
 extension AppModel {

@@ -31,11 +31,15 @@ public enum AgentTheme {
   public static let danger = Color(light: 0xD1383D, dark: 0xE5534B)
   public static let info = Color(light: 0x1F6FEB, dark: 0x4EA1FF)
   public static let faint = Color(light: 0x8E8E8E, dark: 0x7A7A7A)
+  static let mutedText = Color(light: 0x5C5C5C, dark: 0xA3A3A3)
   static let codeBackground = Color(light: 0xF3F3F3, dark: 0x171717)
   static let cardBackground = Color(light: 0xFFFFFF, dark: 0x262626)
   static let subtleFill = Color(light: 0xF6F6F6, dark: 0x2A2A2A)
   static let hoverFill = Color(light: 0xECECEC, dark: 0x2E2E2E)
-  static let border = Color(light: 0xE3E3E3, dark: 0x363636)
+  /// The chosen tab of a row of chips (the app's open-tab color).
+  static let selectedFill = Color(light: 0xEDEDED, dark: 0x2C2C2C)
+  /// Lines and outlines; the same color as the app's pane separators.
+  static let border = Color(light: 0xDEDEDE, dark: 0x363636)
   static let panelBackground = Color(light: 0xFFFFFF, dark: 0x1E1E1E)
 }
 

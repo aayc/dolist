@@ -80,6 +80,9 @@ struct FileExplorerView: View {
         Button("Reveal in Finder") { workspace.revealInFinder(path) }
       }
     }
+    Divider()
+    Button("Collapse All Folders") { ui.expandedFolders = [] }
+      .disabled(ui.expandedFolders.isEmpty)
   }
 }
 

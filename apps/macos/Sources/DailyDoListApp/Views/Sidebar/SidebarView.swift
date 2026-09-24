@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Left column: file explorer or vault search (⌘⇧F).
+/// Left column: file explorer or vault search (⌘⇧F). Its header holds the window's traffic lights.
 struct SidebarView: View {
   let workspace: Workspace
   @Bindable var ui: UIState
@@ -8,7 +8,6 @@ struct SidebarView: View {
   var body: some View {
     VStack(spacing: 0) {
       header
-      Divider()
       switch ui.sidebarMode {
       case .files: FileExplorerView(workspace: workspace, ui: ui)
       case .search: SearchPanel(workspace: workspace, search: workspace.search, ui: ui)
@@ -20,26 +19,24 @@ struct SidebarView: View {
 
   private var header: some View {
     HStack(spacing: 2) {
-      IconButton(systemImage: "folder", help: "Files", isActive: ui.sidebarMode == .files) {
-        ui.sidebarMode = .files
+      Spacer(minLength: 0)
+      IconButton(
+        systemImage: "magnifyingglass", help: ui.sidebarMode == .search ? "Show files" : "Search (⇧⌘F)",
+        isActive: ui.sidebarMode == .search
+      ) {
+        if ui.sidebarMode == .search { ui.sidebarMode = .files } else { ui.focusSearch() }
       }
-      IconButton(systemImage: "magnifyingglass", help: "Search (⇧⌘F)", isActive: ui.sidebarMode == .search) {
-        ui.focusSearch()
+      IconButton(systemImage: "square.and.pencil", help: "New note (⌘N)") {
+        Task { await workspace.createNote() }
       }
-      Spacer()
-      if ui.sidebarMode == .files {
-        IconButton(systemImage: "square.and.pencil", help: "New note (⌘N)") {
-          Task { await workspace.createNote() }
-        }
-        IconButton(systemImage: "folder.badge.plus", help: "New folder") {
-          Task { await workspace.createFolder() }
-        }
-        IconButton(systemImage: "arrow.down.right.and.arrow.up.left", help: "Collapse all") {
-          ui.expandedFolders = []
-        }
+      IconButton(systemImage: "sidebar.left", help: "Hide sidebar (⌃⌘S)") {
+        ui.sidebarVisible = false
       }
     }
-    .padding(.horizontal, 8)
-    .frame(height: 30)
+    .padding(.leading, ui.isFullScreen ? 8 : Theme.trafficLightsWidth)
+    .padding(.trailing, 6)
+    .frame(height: Theme.headerHeight)
+    .background(WindowDragArea())
+    .overlay(alignment: .bottom) { Hairline() }
   }
 }

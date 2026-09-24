@@ -19,6 +19,8 @@ struct MainWindowView: View {
     .background(WindowAccessor { window in
       WindowHandles.shared.mainWindow = window
       window.tabbingMode = .disallowed
+      WindowChrome.centerTrafficLights(in: window)
+      WindowHandles.shared.fullScreen.observe(window) { model.ui.isFullScreen = $0 }
     })
     .onAppear {
       WindowHandles.shared.openMainWindow = { openWindow(id: MainWindowID.value) }
@@ -27,24 +29,52 @@ struct MainWindowView: View {
   }
 }
 
-/// The connected window: sidebar | tabs + note + status bar | agent inspector.
+/// The connected window, edge to edge under the hidden title bar: sidebar | tabs + note + status
+/// | agent panel. Every pane starts with a ``Theme/headerHeight`` row, so their bottom lines meet.
 struct WorkspaceView: View {
   let model: AppModel
   let workspace: Workspace
   @Bindable var ui: UIState
+  /// The pane being resized and its width so far (committed to `ui` on mouse-up).
+  @State private var resizing: (pane: Pane, start: CGFloat, width: CGFloat)?
+
+  enum Pane { case sidebar, inspector }
 
   var body: some View {
-    NavigationSplitView(columnVisibility: sidebarVisibility) {
-      SidebarView(workspace: workspace, ui: ui)
-        .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 440)
-    } detail: {
-      DetailColumn(model: model, workspace: workspace)
-        .toolbar { WorkspaceToolbar(model: model, workspace: workspace, ui: ui) }
-        .inspector(isPresented: $ui.inspectorPresented) {
-          InspectorPanel(model: model, workspace: workspace, ui: ui)
-            .inspectorColumnWidth(min: 300, ideal: 340, max: 680)
+    GeometryReader { proxy in
+      let total = proxy.size.width
+      let widths = PaneLayout.fit(
+        total: total,
+        sidebar: ui.sidebarVisible ? width(of: .sidebar) : nil,
+        inspector: ui.inspectorPresented ? width(of: .inspector) : nil)
+      HStack(spacing: 0) {
+        if let sidebar = widths.sidebar {
+          SidebarView(workspace: workspace, ui: ui)
+            .frame(width: sidebar)
+            .transition(.move(edge: .leading))
+          Hairline(axis: .vertical)
         }
+        DetailColumn(model: model, workspace: workspace, ui: ui)
+          .frame(maxWidth: .infinity)
+        if let inspector = widths.inspector {
+          Hairline(axis: .vertical)
+          InspectorPanel(model: model, workspace: workspace, ui: ui)
+            .frame(width: inspector)
+            .transition(.move(edge: .trailing))
+        }
+      }
+      .overlay(alignment: .topLeading) {
+        if let sidebar = widths.sidebar {
+          resizeHandle(.sidebar, at: sidebar, total: total, otherPane: widths.inspector)
+        }
+        if let inspector = widths.inspector {
+          resizeHandle(.inspector, at: total - inspector, total: total, otherPane: widths.sidebar)
+        }
+      }
     }
+    .animation(.snappy(duration: 0.2), value: ui.sidebarVisible)
+    .animation(.snappy(duration: 0.2), value: ui.inspectorPresented)
+    .ignoresSafeArea(.container, edges: .top)
     .navigationTitle(windowTitle)
     .frame(minWidth: minimumWidth, maxWidth: .infinity, minHeight: 440, maxHeight: .infinity)
     .overlay {
@@ -79,35 +109,63 @@ struct WorkspaceView: View {
     return VaultPath.stem(path)
   }
 
-  /// Sidebar, note and agent panel side by side need more room than the split view reports.
   private var minimumWidth: CGFloat {
-    guard ui.inspectorPresented else { return 720 }
-    return ui.sidebarVisible ? 1060 : 820
-  }
-
-  private var sidebarVisibility: Binding<NavigationSplitViewVisibility> {
-    Binding(
-      get: { ui.sidebarVisible ? .all : .detailOnly },
-      set: { ui.sidebarVisible = $0 != .detailOnly })
+    max(720, PaneLayout.minimumWindowWidth(sidebar: ui.sidebarVisible, inspector: ui.inspectorPresented))
   }
 
   private var deletionBinding: Binding<Bool> {
     Binding(get: { ui.pendingDeletion != nil }, set: { if !$0 { ui.pendingDeletion = nil } })
   }
+
+  private func width(of pane: Pane) -> CGFloat {
+    if let resizing, resizing.pane == pane { return resizing.width }
+    return pane == .sidebar ? ui.sidebarWidth : ui.inspectorWidth
+  }
+
+  /// An invisible strip over the line at `x` that drags the pane's edge.
+  private func resizeHandle(_ pane: Pane, at x: CGFloat, total: CGFloat, otherPane: CGFloat?) -> some View {
+    let range = pane == .sidebar ? PaneLayout.sidebarRange : PaneLayout.inspectorRange
+    return PaneResizeHandle(
+      onBegin: {
+        let start = pane == .sidebar ? ui.sidebarWidth : ui.inspectorWidth
+        resizing = (pane, start, start)
+      },
+      onDrag: { delta in
+        guard let current = resizing, current.pane == pane else { return }
+        let proposed = pane == .sidebar ? current.start + delta : current.start - delta
+        resizing?.width = PaneLayout.dragged(proposed, range: range, total: total, otherPane: otherPane)
+      },
+      onEnd: {
+        guard let current = resizing, current.pane == pane else { return }
+        if pane == .sidebar { ui.sidebarWidth = current.width } else { ui.inspectorWidth = current.width }
+        resizing = nil
+      },
+      onReset: {
+        if pane == .sidebar {
+          ui.sidebarWidth = PaneLayout.sidebarDefault
+        } else {
+          ui.inspectorWidth = PaneLayout.inspectorDefault
+        }
+      }
+    )
+    .frame(width: 8)
+    .frame(maxHeight: .infinity)
+    .offset(x: x - 4)
+  }
 }
 
-/// Tabs, the note header + editor (or the empty state), and the status bar.
+/// Tabs, the note header + editor (or the empty state), and the status line.
 struct DetailColumn: View {
   let model: AppModel
   let workspace: Workspace
+  @Bindable var ui: UIState
 
   var body: some View {
     VStack(spacing: 0) {
+      EditorHeader(model: model, workspace: workspace, ui: ui)
       if model.connection.showsOfflineBanner {
         OfflineBanner(model: model)
       }
-      TabStrip(workspace: workspace)
-      Divider()
       ZStack {
         VStack(spacing: 0) {
           if let path = workspace.tabs.active {
@@ -121,44 +179,9 @@ struct DetailColumn: View {
           EmptyNoteView(workspace: workspace)
         }
       }
-      Divider()
       StatusBar(model: model, workspace: workspace)
     }
     .background(Theme.background)
-  }
-}
-
-/// Back/forward and the agent panel toggle.
-struct WorkspaceToolbar: ToolbarContent {
-  let model: AppModel
-  let workspace: Workspace
-  @Bindable var ui: UIState
-
-  var body: some ToolbarContent {
-    ToolbarItemGroup(placement: .navigation) {
-      Button {
-        Task { await workspace.goBack() }
-      } label: {
-        Label("Back", systemImage: "chevron.left")
-      }
-      .help("Back (⌘[)")
-      .disabled(!workspace.tabs.canGoBack)
-      Button {
-        Task { await workspace.goForward() }
-      } label: {
-        Label("Forward", systemImage: "chevron.right")
-      }
-      .help("Forward (⌘])")
-      .disabled(!workspace.tabs.canGoForward)
-    }
-    ToolbarItem(placement: .automatic) {
-      Button {
-        ui.toggleInspector()
-      } label: {
-        Label("Agent Panel", systemImage: "sidebar.right")
-      }
-      .help("Toggle Agent Panel (⌘\\)")
-    }
   }
 }
 

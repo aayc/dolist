@@ -64,7 +64,7 @@ private struct InboxSectionHeader: View {
     .padding(.top, 12)
     .padding(.bottom, 4)
     .frame(maxWidth: .infinity)
-    .background(Color(nsColor: .windowBackgroundColor))
+    .background(AgentTheme.panelBackground)
     .accessibilityAddTraits(.isHeader)
   }
 }

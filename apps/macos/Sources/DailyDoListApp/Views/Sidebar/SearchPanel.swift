@@ -17,6 +17,7 @@ struct SearchPanel: View {
           .textFieldStyle(.plain)
           .focused($fieldFocused)
           .onSubmit { Task { await search.runNow() } }
+          .onExitCommand { ui.sidebarMode = .files }
         if search.isLoading {
           ProgressView().controlSize(.mini)
         } else if !search.query.isEmpty {
@@ -30,8 +31,9 @@ struct SearchPanel: View {
         }
       }
       .padding(.horizontal, 8)
-      .padding(.vertical, 6)
-      .background(Theme.secondaryBackground, in: RoundedRectangle(cornerRadius: 6))
+      .frame(height: 28)
+      .background(Theme.background, in: RoundedRectangle(cornerRadius: 6))
+      .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.separator))
       .padding(8)
 
       if let error = search.error {

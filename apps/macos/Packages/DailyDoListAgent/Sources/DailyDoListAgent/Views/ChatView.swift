@@ -80,7 +80,7 @@ struct ChatView: View {
           proxy.scrollTo(Self.bottomId, anchor: .bottom)
         }
       }
-      Divider()
+      AgentHairline()
       Composer(store: store, threadId: thread.id)
     }
   }

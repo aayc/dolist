@@ -55,6 +55,8 @@ final class AppPreferences {
   var lastActiveTab: String? { didSet { defaults.set(lastActiveTab, forKey: Key.lastActiveTab) } }
   var sidebarVisible: Bool { didSet { defaults.set(sidebarVisible, forKey: Key.sidebarVisible) } }
   var inspectorVisible: Bool { didSet { defaults.set(inspectorVisible, forKey: Key.inspectorVisible) } }
+  var sidebarWidth: CGFloat { didSet { defaults.set(Double(sidebarWidth), forKey: Key.sidebarWidth) } }
+  var inspectorWidth: CGFloat { didSet { defaults.set(Double(inspectorWidth), forKey: Key.inspectorWidth) } }
   var sidebarMode: SidebarMode { didSet { defaults.set(sidebarMode.rawValue, forKey: Key.sidebarMode) } }
   var expandedFolders: Set<String> {
     didSet { defaults.set(expandedFolders.sorted(), forKey: Key.expandedFolders) }
@@ -78,6 +80,9 @@ final class AppPreferences {
     lastActiveTab = defaults.string(forKey: Key.lastActiveTab)
     sidebarVisible = defaults.object(forKey: Key.sidebarVisible) as? Bool ?? true
     inspectorVisible = defaults.bool(forKey: Key.inspectorVisible)
+    sidebarWidth = (defaults.object(forKey: Key.sidebarWidth) as? Double).map { CGFloat($0) } ?? PaneLayout.sidebarDefault
+    inspectorWidth =
+      (defaults.object(forKey: Key.inspectorWidth) as? Double).map { CGFloat($0) } ?? PaneLayout.inspectorDefault
     sidebarMode = defaults.string(forKey: Key.sidebarMode).flatMap(SidebarMode.init(rawValue:)) ?? .files
     expandedFolders = Set(defaults.stringArray(forKey: Key.expandedFolders) ?? ["Daily"])
   }
@@ -126,6 +131,8 @@ final class AppPreferences {
     static let lastActiveTab = "ddl.lastActiveTab"
     static let sidebarVisible = "ddl.sidebarVisible"
     static let inspectorVisible = "ddl.inspectorVisible"
+    static let sidebarWidth = "ddl.sidebarWidth"
+    static let inspectorWidth = "ddl.inspectorWidth"
     static let sidebarMode = "ddl.sidebarMode"
     static let expandedFolders = "ddl.expandedFolders"
   }

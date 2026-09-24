@@ -85,16 +85,10 @@ public struct ThreadView: View {
     let artifactCount = thread?.artifacts.count ?? summary?.artifactCount ?? 0
     VStack(spacing: 0) {
       header(thread: thread, summary: summary)
-      Picker("View", selection: $tab) {
-        ForEach(tabs) { tab in
-          Text(tab.title(artifactCount: artifactCount)).tag(tab)
-        }
-      }
-      .pickerStyle(.segmented)
-      .labelsHidden()
-      .padding(.horizontal, 12)
-      .padding(.bottom, 8)
-      Divider()
+      ThreadTabBar(tabs: tabs, selection: $tab, artifactCount: artifactCount)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
+      AgentHairline()
       content(thread: thread, tab: selected)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -210,6 +204,48 @@ struct ThreadHeader: View {
     .padding(.horizontal, 12)
     .padding(.top, 10)
     .padding(.bottom, 8)
+  }
+}
+
+/// Chat / Artifacts / Browser / Computer as quiet chips, like the editor's tabs.
+struct ThreadTabBar: View {
+  let tabs: [ThreadTab]
+  @Binding var selection: ThreadTab
+  let artifactCount: Int
+
+  var body: some View {
+    HStack(spacing: 2) {
+      ForEach(tabs) { tab in
+        ThreadTabChip(title: tab.title(artifactCount: artifactCount), isSelected: tab == selection) {
+          selection = tab
+        }
+      }
+      Spacer(minLength: 0)
+    }
+  }
+}
+
+private struct ThreadTabChip: View {
+  let title: String
+  let isSelected: Bool
+  let action: () -> Void
+  @State private var hovering = false
+
+  var body: some View {
+    Button(action: action) {
+      Text(verbatim: title)
+        .font(.system(size: 12, weight: isSelected ? .medium : .regular))
+        .foregroundStyle(isSelected ? Color.primary : AgentTheme.mutedText)
+        .padding(.horizontal, 10)
+        .frame(height: 26)
+        .background(
+          RoundedRectangle(cornerRadius: 6)
+            .fill(isSelected ? AgentTheme.selectedFill : hovering ? AgentTheme.hoverFill : .clear))
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .onHover { hovering = $0 }
+    .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
   }
 }
 

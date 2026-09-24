@@ -27,7 +27,13 @@ final class UIState {
   var sidebarVisible: Bool { didSet { preferences.sidebarVisible = sidebarVisible } }
   var sidebarMode: SidebarMode { didSet { preferences.sidebarMode = sidebarMode } }
   var inspectorPresented: Bool { didSet { preferences.inspectorVisible = inspectorPresented } }
+  var sidebarWidth: CGFloat { didSet { preferences.sidebarWidth = sidebarWidth } }
+  var inspectorWidth: CGFloat { didSet { preferences.inspectorWidth = inspectorWidth } }
   var expandedFolders: Set<String> { didSet { preferences.expandedFolders = expandedFolders } }
+  /// The main window is in full screen, where it has no traffic lights to make room for.
+  var isFullScreen = false
+  /// The Settings window's pane, so the app can open Settings where a problem gets fixed.
+  var settingsPane: SettingsPane = .general
 
   /// Thread shown in the agent panel; nil = the inbox.
   var selectedThreadId: String?
@@ -45,6 +51,8 @@ final class UIState {
     sidebarVisible = preferences.sidebarVisible
     sidebarMode = preferences.sidebarMode
     inspectorPresented = preferences.inspectorVisible
+    sidebarWidth = preferences.sidebarWidth
+    inspectorWidth = preferences.inspectorWidth
     expandedFolders = preferences.expandedFolders
   }
 

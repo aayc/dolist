@@ -1,36 +1,36 @@
 import SwiftUI
 
+/// A tab of the Settings window.
+enum SettingsPane: String, CaseIterable, Identifiable {
+  case general, appearance, daily, agent, connectors, about
+  var id: String { rawValue }
+}
+
 /// The native Settings window (⌘,).
 struct SettingsView: View {
   let model: AppModel
 
-  enum Pane: String, CaseIterable, Identifiable {
-    case general, appearance, daily, agent, connectors, about
-    var id: String { rawValue }
-  }
-
-  @State private var pane: Pane = .general
-
   var body: some View {
-    TabView(selection: $pane) {
+    @Bindable var ui = model.ui
+    TabView(selection: $ui.settingsPane) {
       GeneralSettingsPane(model: model, preferences: model.preferences)
         .tabItem { Label("General", systemImage: "gearshape") }
-        .tag(Pane.general)
+        .tag(SettingsPane.general)
       AppearanceSettingsPane(model: model, settings: model.settings)
         .tabItem { Label("Appearance", systemImage: "paintbrush") }
-        .tag(Pane.appearance)
+        .tag(SettingsPane.appearance)
       DailyNotesSettingsPane(model: model, settings: model.settings)
         .tabItem { Label("Daily Notes", systemImage: "calendar") }
-        .tag(Pane.daily)
+        .tag(SettingsPane.daily)
       AgentSettingsPane(model: model, settings: model.settings)
         .tabItem { Label("Agent", systemImage: "sparkles") }
-        .tag(Pane.agent)
+        .tag(SettingsPane.agent)
       ConnectorsSettingsPane(model: model)
         .tabItem { Label("Connectors", systemImage: "puzzlepiece.extension") }
-        .tag(Pane.connectors)
+        .tag(SettingsPane.connectors)
       AboutSettingsPane(model: model)
         .tabItem { Label("About", systemImage: "info.circle") }
-        .tag(Pane.about)
+        .tag(SettingsPane.about)
     }
     .frame(width: 600)
     .frame(minHeight: 420)

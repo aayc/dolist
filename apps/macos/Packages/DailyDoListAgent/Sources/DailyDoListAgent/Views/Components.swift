@@ -66,22 +66,40 @@ struct CountBadge: View {
   }
 }
 
-/// Borderless icon button with a tooltip (which doubles as its accessibility label).
+/// Plain icon button with a hover highlight and a tooltip (which doubles as its accessibility
+/// label); the same metrics as the app's pane-header buttons.
 struct IconButton: View {
   let systemImage: String
   let help: String
   var role: ButtonRole?
   let action: () -> Void
+  @State private var hovering = false
 
   var body: some View {
     Button(role: role, action: action) {
       Image(systemName: systemImage)
-        .frame(width: 24, height: 22)
+        .font(.system(size: 13))
+        .foregroundStyle(AgentTheme.mutedText)
+        .frame(width: 28, height: 28)
+        .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? AgentTheme.hoverFill : .clear))
         .contentShape(Rectangle())
     }
-    .buttonStyle(.borderless)
+    .buttonStyle(.plain)
+    .onHover { hovering = $0 }
     .help(help)
     .accessibilityLabel(help)
+  }
+}
+
+/// A one-pixel line in ``AgentTheme/border``.
+struct AgentHairline: View {
+  @Environment(\.displayScale) private var displayScale
+
+  var body: some View {
+    Rectangle()
+      .fill(AgentTheme.border)
+      .frame(height: 1 / max(displayScale, 1))
+      .accessibilityHidden(true)
   }
 }
 

@@ -25,8 +25,8 @@ struct NoteHeaderView: View {
     .frame(maxWidth: workspace.settings.settings.editor.readableLineLength ? Theme.readableWidth : .infinity, alignment: .leading)
     .frame(maxWidth: .infinity)
     .padding(.horizontal, 28)
-    .padding(.top, 16)
-    .padding(.bottom, 4)
+    .padding(.top, 22)
+    .padding(.bottom, 6)
   }
 }
 
@@ -94,8 +94,8 @@ struct NoteTitleField: View {
 }
 
 /// A daily note's title is its date ("Thursday, September 24", with the year only when it isn't
-/// this year's), not editable. Below it, one quiet row: ‹ › to the nearest EXISTING daily notes,
-/// then "Today" or "Go to today".
+/// this year's), not editable, with "‹ Today ›" at the end of the same row: ‹ › go to the nearest
+/// EXISTING daily notes.
 struct DailyHeaderView: View {
   let workspace: Workspace
   let path: String
@@ -104,19 +104,20 @@ struct DailyHeaderView: View {
   var body: some View {
     let today = workspace.today
     let title = DailyNotes.friendlyTitle(date, today: today)
-    VStack(alignment: .leading, spacing: 2) {
+    HStack(spacing: 12) {
       Text(title)
         .font(.noteTitle)
         .foregroundStyle(Theme.text)
         .accessibilityLabel("Note title")
         .accessibilityValue(title)
         .accessibilityAddTraits(.isHeader)
+      Spacer(minLength: 0)
       DailyNavigationRow(workspace: workspace, path: path, isToday: date == today)
     }
   }
 }
 
-/// "‹ ›  Today" under a daily note's title: small, muted controls.
+/// "‹ Today ›" beside a daily note's title: small, muted controls.
 struct DailyNavigationRow: View {
   let workspace: Workspace
   let path: String
@@ -129,40 +130,35 @@ struct DailyNavigationRow: View {
       IconButton(systemImage: "chevron.left", help: "Previous daily note (⇧⌘P)", isEnabled: hasPrevious, isCompact: true) {
         Task { await workspace.openAdjacentDaily(.previous) }
       }
+      TodayButton(isToday: isToday) { Task { await workspace.openToday() } }
       IconButton(systemImage: "chevron.right", help: "Next daily note (⇧⌘N)", isEnabled: hasNext, isCompact: true) {
         Task { await workspace.openAdjacentDaily(.next) }
       }
-      if isToday {
-        Pill(text: "Today", color: Theme.mutedText)
-          .padding(.leading, 4)
-      } else {
-        GoToTodayButton { Task { await workspace.openToday() } }
-          .padding(.leading, 4)
-      }
     }
-    .padding(.leading, -5)
   }
 }
 
-/// "Go to today" in the daily navigator: as small and muted as the "Today" pill it stands in for,
-/// outlined, and brought forward on hover.
-struct GoToTodayButton: View {
+/// "Today" between the daily arrows: opens today's note, and rests (dimmed) while it's open.
+struct TodayButton: View {
+  let isToday: Bool
   let action: () -> Void
   @State private var hovering = false
 
   var body: some View {
     Button(action: action) {
-      Text("Go to today")
-        .font(.system(size: 10, weight: .semibold))
-        .foregroundStyle(hovering ? Theme.text : Theme.mutedText)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 1.5)
-        .background(hovering ? Theme.hover : .clear, in: Capsule())
-        .overlay(Capsule().strokeBorder(Theme.border))
-        .contentShape(Capsule())
+      Text("Today")
+        .font(.system(size: 11, weight: .medium))
+        .foregroundStyle(isToday ? Theme.faintText : (hovering ? Theme.text : Theme.mutedText))
+        .padding(.horizontal, 8)
+        .frame(height: 22)
+        .background(RoundedRectangle(cornerRadius: 6).fill(hovering && !isToday ? Theme.hover : .clear))
+        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.separator))
+        .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+    .disabled(isToday)
     .onHover { hovering = $0 }
-    .help("Open today's note (⇧⌘D)")
+    .help(isToday ? "Today's note" : "Open today's note (⇧⌘D)")
+    .accessibilityLabel(isToday ? "Today" : "Go to today")
   }
 }

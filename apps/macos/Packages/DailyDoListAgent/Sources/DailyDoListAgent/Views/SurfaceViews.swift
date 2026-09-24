@@ -56,7 +56,7 @@ public struct ComputerSurfaceView: View {
         image: frame.flatMap { store.image(for: $0) }, frame: frame,
         markers: Self.markers(for: actions),
         emptyText: "No screenshots yet — they appear here while the agent uses the computer.")
-      Divider()
+      AgentHairline()
       actionLog(actions)
     }
     .surfaceSubscription(store: store, key: SurfaceKey(threadId: threadId, surface: .computer))

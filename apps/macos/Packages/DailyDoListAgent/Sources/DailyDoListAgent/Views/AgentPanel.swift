@@ -8,29 +8,36 @@ public struct AgentPanel: View {
   @Binding var selectedThreadId: String?
   let onShowInNote: ((TaskLocation) -> Void)?
   let onClose: (() -> Void)?
+  let headerHeight: CGFloat
+  let onHide: (() -> Void)?
 
   /// - Parameters:
   ///   - onShowInNote: opens the task's note at its line (the button is hidden when nil).
   ///   - onClose: hides the panel (the thread's Close button returns to the inbox when nil).
+  ///   - headerHeight: height of the header row, to line up with the host's other pane headers.
+  ///   - onHide: adds a "hide panel" button to the header. A thread then has no Close button of
+  ///     its own: the header already goes back to the inbox and hides the panel.
   public init(
     store: AgentStore, selectedThreadId: Binding<String?>,
-    onShowInNote: ((TaskLocation) -> Void)? = nil, onClose: (() -> Void)? = nil
+    onShowInNote: ((TaskLocation) -> Void)? = nil, onClose: (() -> Void)? = nil,
+    headerHeight: CGFloat = 40, onHide: (() -> Void)? = nil
   ) {
     self.store = store
     self._selectedThreadId = selectedThreadId
     self.onShowInNote = onShowInNote
     self.onClose = onClose
+    self.headerHeight = headerHeight
+    self.onHide = onHide
   }
 
   public var body: some View {
     VStack(spacing: 0) {
       header
-      Divider()
       Group {
         if let threadId = selectedThreadId {
           ThreadView(
             store: store, threadId: threadId, onShowInNote: onShowInNote,
-            onClose: onClose ?? { selectedThreadId = nil }
+            onClose: onHide == nil ? onClose ?? { selectedThreadId = nil } : nil
           )
           .id(threadId)
         } else {
@@ -64,11 +71,13 @@ public struct AgentPanel: View {
           selectedThreadId = nil
         } label: {
           Label("Inbox", systemImage: "chevron.left")
+            .font(.system(size: 13, weight: .medium))
         }
         .buttonStyle(.borderless)
         .help("Back to the inbox")
       } else {
-        Label("Inbox", systemImage: "tray").font(.headline)
+        Label("Inbox", systemImage: "tray")
+          .font(.system(size: 13, weight: .semibold))
       }
       if pending > 0 {
         CountBadge(count: pending, tone: .warning, systemImage: "exclamationmark.shield.fill")
@@ -76,8 +85,13 @@ public struct AgentPanel: View {
       }
       Spacer(minLength: 8)
       AgentStatusIndicator(store: store)
+      if let onHide {
+        IconButton(systemImage: "sidebar.right", help: "Hide agent panel (⌘\\)", action: onHide)
+      }
     }
-    .padding(.horizontal, 12)
-    .frame(height: 36)
+    .padding(.leading, 12)
+    .padding(.trailing, onHide == nil ? 12 : 6)
+    .frame(height: headerHeight)
+    .overlay(alignment: .bottom) { AgentHairline() }
   }
 }
