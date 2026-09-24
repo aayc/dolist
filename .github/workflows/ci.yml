@@ -36,6 +36,8 @@ jobs:
         run: pnpm test
       - name: Secret scan
         run: node scripts/check-secrets.mjs --all
+      - name: Swift test vectors match the TypeScript core
+        run: pnpm vectors:check
       - name: Build
         run: pnpm build
       - name: Bundle size budget

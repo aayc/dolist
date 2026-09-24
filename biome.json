@@ -46,6 +46,18 @@
       }
     }
   },
+  "overrides": [
+    {
+      "includes": ["apps/macos/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noUndeclaredEnvVars": "off"
+          }
+        }
+      }
+    }
+  ],
   "assist": {
     "enabled": true,
     "actions": {

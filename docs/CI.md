@@ -9,6 +9,7 @@ cache, then `pnpm install --frozen-lockfile`.
 | --- | --- | --- |
 | CI (`ci.yml`) | push to `main`, pull requests, merge queue | `check`, `test-macos`, `bench`, `e2e`, `evals-mock` |
 | Security (`security.yml`) | push to `main`, pull requests, merge queue, weekly (Mon 05:27 UTC), manual | `gitleaks`, `codeql` (JS/TS + Actions), `dependency-review` (PRs) |
+| macOS app (`macos.yml`) | push to `main` and pull requests touching the app, the daemon or what it bundles; manual | `app` |
 | Evals (live) (`evals.yml`) | weekly (Mon 06:43 UTC), manual | `gate`, `live` |
 | Dependabot (`dependabot.yml`) | weekly (Monday) | npm and GitHub Actions update PRs |
 
@@ -21,10 +22,16 @@ pull request cancels the PR's previous run; runs on `main` are never cancelled, 
 ### `check`: lint, typecheck, test, build (Ubuntu)
 
 Runs `pnpm lint` (Biome), `pnpm typecheck`, `pnpm test`, `node scripts/check-secrets.mjs --all`,
-`pnpm build`, then `node scripts/bundle-size-check.mjs`.
+`pnpm vectors:check`, `pnpm build`, then `node scripts/bundle-size-check.mjs`.
+
+`pnpm vectors:check` regenerates the macOS app's test vectors (`apps/macos/Packages/DailyDoListDomain`)
+from `@ddl/core` in memory and fails if the committed JSON differs, so a change to dates, paths,
+tasks or wiki links that would make the Swift port disagree is caught on Linux, before the macOS
+workflow runs. After an intended change, run `pnpm vectors` and commit the updated files.
 
 ```sh
 pnpm lint && pnpm typecheck && pnpm test && pnpm check:secrets
+pnpm vectors:check
 pnpm build && pnpm size:check
 ```
 
@@ -100,13 +107,32 @@ cases into the job summary. Results are uploaded as `eval-results-mock`.
 pnpm eval:mock && node .github/scripts/eval-summary.mjs
 ```
 
+## macOS app (`macos.yml`)
+
+One job, `app`, on `macos-latest`, only when `apps/macos`, the daemon or a package the daemon
+bundles changes (the two path lists in the workflow must stay in sync). It selects the newest
+non-beta Xcode, builds the daemon, runs every Swift package's tests, runs the integration tests
+against the real daemon with the mock agent, builds a release "Daily Do List.app" with the bundled
+daemon, and uploads the zipped app as the `daily-do-list-macos` artifact (kept 14 days; ad hoc
+signed, not notarized).
+
+```sh
+pnpm --filter @ddl/daemon build
+apps/macos/scripts/test.sh                 # every package, then the app shell
+apps/macos/scripts/test.sh integration     # real daemon, mock agent
+apps/macos/scripts/build-app.sh --release --with-daemon --zip
+```
+
+With only the Command Line Tools installed (no Xcode), `test.sh` adds the framework and rpath flags
+Swift Testing needs.
+
 ## Budgets
 
 | Budget | Defined in | Local | CI |
 | --- | --- | --- | --- |
 | Hot-path p99 latency | each `*.bench.ts` | ×1 | ×2 (`BENCH_BUDGET_MULTIPLIER`) |
 | UI perf: startup, daily-note open, tab switch, thread open, keystroke latency, long tasks | `apps/web/e2e/perf/`, see `docs/PERFORMANCE.md` | ×1 | ×2 (`PERF_BUDGET_MULTIPLIER`) |
-| Bundle size, gzip: initial JS ≤ 250 kB, initial CSS ≤ 40 kB, total JS ≤ 1200 kB | top of `scripts/bundle-size-check.mjs` | same | same |
+| Bundle size, gzip: initial JS ≤ 320 kB, initial CSS ≤ 40 kB, total JS ≤ 1200 kB | top of `scripts/bundle-size-check.mjs` | same | same |
 | Eval thresholds (accuracy, false-allow rate, …) | each eval suite | same | same |
 
 For the bundle budget, "initial" means the HTML entry chunk plus everything it statically imports,

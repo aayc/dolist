@@ -178,7 +178,7 @@ public enum BaseVersion: Hashable, Sendable {
   case match(String)
 }
 
-public struct WriteNoteRequest: Encodable, Hashable, Sendable {
+public struct WriteNoteRequest: Codable, Hashable, Sendable {
   public var content: String
   public var baseVersion: BaseVersion
 
@@ -188,6 +188,19 @@ public struct WriteNoteRequest: Encodable, Hashable, Sendable {
   }
 
   enum CodingKeys: String, CodingKey { case content, baseVersion }
+
+  /// Absent `baseVersion` → `.unconditional`, `null` → `.createOnly`, a string → `.match`.
+  public init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    content = try c.decode(String.self, forKey: .content)
+    if !c.contains(.baseVersion) {
+      baseVersion = .unconditional
+    } else if try c.decodeNil(forKey: .baseVersion) {
+      baseVersion = .createOnly
+    } else {
+      baseVersion = .match(try c.decode(String.self, forKey: .baseVersion))
+    }
+  }
 
   public func encode(to encoder: Encoder) throws {
     var c = encoder.container(keyedBy: CodingKeys.self)

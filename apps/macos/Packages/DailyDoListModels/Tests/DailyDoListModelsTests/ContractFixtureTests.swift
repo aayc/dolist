@@ -3,36 +3,17 @@ import Testing
 
 @testable import DailyDoListModels
 
-/// Decodes every valid golden fixture of `@ddl/contract` (packages/contract/fixtures/wire) into the
-/// matching Swift model and round-trips it, so the Swift client can't drift from the protocol.
+/// Decodes every valid golden fixture of `@ddl/contract` into the matching Swift model and
+/// round-trips it, so the Swift client can't drift from the protocol.
 struct ContractFixtureTests {
-  static let fixturesDirectory: URL = {
-    // .../apps/macos/Packages/DailyDoListModels/Tests/DailyDoListModelsTests/<this file>
-    URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent()
-      .appendingPathComponent("../../../../../../packages/contract/fixtures/wire")
-      .standardizedFileURL
-  }()
-
-  struct Case: Decodable {
-    let name: String
-    let value: JSONValue
-  }
-
-  static func cases(_ schema: String, _ suffix: String = "valid") throws -> [Case] {
-    let url = fixturesDirectory.appendingPathComponent("\(schema).\(suffix).json")
-    return try JSONDecoder().decode([Case].self, from: Data(contentsOf: url))
-  }
-
   /// Decode → encode → decode must be stable, and every fixture must decode.
   static func check<T: Codable & Equatable>(_ type: T.Type, schema: String) throws {
-    let cases = try cases(schema)
+    let cases = try Fixtures.cases(schema)
     #expect(!cases.isEmpty, "no fixtures for \(schema)")
     for fixture in cases {
-      let data = try JSONEncoder.daemon.encode(fixture.value)
       let decoded: T
       do {
-        decoded = try JSONDecoder.daemon.decode(T.self, from: data)
+        decoded = try Fixtures.decode(T.self, fixture.value)
       } catch {
         Issue.record("\(schema) — \(fixture.name): \(error)")
         continue
@@ -43,21 +24,48 @@ struct ContractFixtureTests {
     }
   }
 
-  @Test func serverEvents() throws { try Self.check(ServerEvent.self, schema: "ServerEvent") }
-  @Test func clientEvents() throws { try Self.check(ClientEvent.self, schema: "ClientEvent") }
-  @Test func threadResponses() throws { try Self.check(ThreadResponse.self, schema: "ThreadResponse") }
-  @Test func taskRecords() throws { try Self.check(TaskAgentRecord.self, schema: "TaskAgentRecord") }
-  @Test func settings() throws { try Self.check(AppSettings.self, schema: "AppSettings") }
-  @Test func settingsPatches() throws { try Self.check(SettingsPatch.self, schema: "UpdateSettingsRequest") }
-  @Test func health() throws { try Self.check(HealthResponse.self, schema: "HealthResponse") }
-  @Test func conflicts() throws { try Self.check(ConflictResponse.self, schema: "ConflictResponse") }
-  @Test func errors() throws { try Self.check(ApiErrorBody.self, schema: "ApiErrorBody") }
-  @Test func threadActions() throws { try Self.check(ThreadActionResponse.self, schema: "ThreadActionResponse") }
-  @Test func renames() throws { try Self.check(RenameRequest.self, schema: "RenameRequest") }
-  @Test func folders() throws { try Self.check(CreateFolderRequest.self, schema: "CreateFolderRequest") }
-  @Test func messages() throws { try Self.check(PostMessageRequest.self, schema: "PostMessageRequest") }
-  @Test func decisions() throws { try Self.check(ApprovalDecisionRequest.self, schema: "ApprovalDecisionRequest") }
-  @Test func agentEnabled() throws { try Self.check(SetAgentEnabledRequest.self, schema: "SetAgentEnabledRequest") }
+  static let validSchemas = ((try? Fixtures.schemas(.valid)) ?? []).sorted()
+
+  @Test(arguments: validSchemas)
+  func validFixturesDecodeAndRoundTrip(schema: String) throws {
+    let model = try #require(Fixtures.models[schema], "no Swift model for \(schema)")
+    try Self.check(model, schema: schema)
+  }
+
+  @Test func everyFixtureFileHasASwiftModel() throws {
+    let valid = try Fixtures.schemas(.valid)
+    let invalid = try Fixtures.schemas(.invalid)
+    #expect(valid.count >= 16, "fixtures not found at \(Fixtures.directory.path)")
+    let unmapped = valid.union(invalid).subtracting(Fixtures.models.keys)
+    #expect(unmapped.isEmpty, "fixture files without a Swift model: \(unmapped.sorted())")
+    let stale = Set(Fixtures.models.keys).subtracting(valid.union(invalid))
+    #expect(stale.isEmpty, "models mapped to missing fixture files: \(stale.sorted())")
+  }
+
+  /// Fixtures whose Swift re-encoding intentionally differs from the fixture JSON.
+  static let reencodingExceptions: [String: String] = [
+    "ClientEvent/hello (legacy, no version)": "Swift clients always send the apiVersion they speak",
+  ]
+
+  /// Fixtures are canonical: re-encoding a decoded value gives back the same JSON (no key is
+  /// dropped, renamed or null-encoded differently).
+  @Test(arguments: validSchemas)
+  func validFixturesReencodeToTheSameJSON(schema: String) throws {
+    let model = try #require(Fixtures.models[schema])
+    for fixture in try Fixtures.cases(schema) {
+      let reencoded = try Self.reencode(model, fixture.value)
+      if Self.reencodingExceptions["\(schema)/\(fixture.name)"] != nil {
+        #expect(reencoded != fixture.value, "\(schema) — \(fixture.name) is no longer an exception")
+      } else {
+        #expect(reencoded == fixture.value, "\(schema) — \(fixture.name) re-encodes differently")
+      }
+    }
+  }
+
+  static func reencode<T: Codable>(_ type: T.Type, _ value: JSONValue) throws -> JSONValue {
+    let decoded = try Fixtures.decode(T.self, value)
+    return try JSONDecoder.daemon.decode(JSONValue.self, from: JSONEncoder.daemon.encode(decoded))
+  }
 
   @Test func unknownServerEventsAreTolerated() throws {
     let json = #"{"type":"task.deleted","taskId":"tsk_1"}"#
@@ -76,6 +84,15 @@ struct ContractFixtureTests {
     #expect(try encoded(.unconditional) == #"{"content":"x"}"#)
     #expect(try encoded(.createOnly) == #"{"baseVersion":null,"content":"x"}"#)
     #expect(try encoded(.match("v1")) == #"{"baseVersion":"v1","content":"x"}"#)
+  }
+
+  @Test func writeNoteBaseVersionDecodings() throws {
+    func decoded(_ json: String) throws -> BaseVersion {
+      try JSONDecoder.daemon.decode(WriteNoteRequest.self, from: Data(json.utf8)).baseVersion
+    }
+    #expect(try decoded(#"{"content":"x"}"#) == .unconditional)
+    #expect(try decoded(#"{"content":"x","baseVersion":null}"#) == .createOnly)
+    #expect(try decoded(#"{"content":"x","baseVersion":"v1"}"#) == .match("v1"))
   }
 
   @Test func vaultPathEncodingMatchesEncodeURIComponent() {

@@ -27,6 +27,8 @@
     "eval": "pnpm --filter @ddl/evals eval",
     "eval:mock": "pnpm --filter @ddl/evals eval:mock",
     "check:secrets": "node scripts/check-secrets.mjs --all",
+    "vectors": "tsx apps/macos/scripts/generate-vectors.ts",
+    "vectors:check": "tsx apps/macos/scripts/generate-vectors.ts --check",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:secrets",
     "prepare": "node scripts/install-git-hooks.mjs"
   },

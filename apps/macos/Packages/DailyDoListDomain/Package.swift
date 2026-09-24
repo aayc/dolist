@@ -3,7 +3,7 @@ import PackageDescription
 
 // Pure domain logic ported from @ddl/core: dates & daily notes, task parsing/tracking/anchors,
 // wikilinks, vault paths, fuzzy matching. Foundation only; verified against vectors generated
-// from the TypeScript implementation.
+// from the TypeScript implementation (Tests/DailyDoListDomainTests/Vectors, see README.md).
 let package = Package(
   name: "DailyDoListDomain",
   platforms: [.macOS(.v14), .iOS(.v17)],
@@ -15,6 +15,7 @@ let package = Package(
   ],
   targets: [
     .target(name: "DailyDoListDomain", dependencies: ["DailyDoListModels"]),
-    .testTarget(name: "DailyDoListDomainTests", dependencies: ["DailyDoListDomain"]),
+    // The vectors are read from the source tree (#filePath), not bundled as resources.
+    .testTarget(name: "DailyDoListDomainTests", dependencies: ["DailyDoListDomain"], exclude: ["Vectors"]),
   ]
 )

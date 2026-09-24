@@ -12,7 +12,6 @@ let package = Package(
   dependencies: [
     .package(path: "../DailyDoListModels"),
     .package(path: "../DailyDoListClient"),
-    .package(path: "../DailyDoListDomain"),
   ],
   targets: [
     .target(
@@ -20,9 +19,15 @@ let package = Package(
       dependencies: [
         .product(name: "DailyDoListModels", package: "DailyDoListModels"),
         .product(name: "DailyDoListClient", package: "DailyDoListClient"),
-        .product(name: "DailyDoListDomain", package: "DailyDoListDomain"),
       ]
     ),
-    .testTarget(name: "DailyDoListAgentTests", dependencies: ["DailyDoListAgent"]),
+    .testTarget(
+      name: "DailyDoListAgentTests",
+      dependencies: [
+        "DailyDoListAgent",
+        .product(name: "DailyDoListModels", package: "DailyDoListModels"),
+        .product(name: "DailyDoListClient", package: "DailyDoListClient"),
+      ]
+    ),
   ]
 )

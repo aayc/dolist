@@ -10,8 +10,9 @@ It's a *do* list, not a *to-do* list: the point is that things get done.
 
 ![Daily note with agent badges and an approval request](docs/images/approval-thread-dark.png)
 
-> **Status:** early (v0.1). The web app + local daemon work end to end; native macOS and iPhone
-> apps are planned as thin shells around the same UI (see [Cross-platform](docs/CROSS_PLATFORM.md)).
+> **Status:** early (v0.1). The web app, the native macOS app ([`apps/macos`](apps/macos/README.md))
+> and the local daemon work end to end; an iPhone app is planned (see
+> [Cross-platform](docs/CROSS_PLATFORM.md)).
 
 ## Features
 
@@ -70,6 +71,19 @@ Other ways to run it:
 The model defaults to **DeepSeek V4.1 Flash** via OpenRouter (`deepseek/deepseek-v4.1-flash`);
 change it with `DDL_MODEL` or in Settings → Agent.
 
+## macOS app
+
+A native SwiftUI/AppKit app lives in [`apps/macos`](apps/macos/README.md). It starts and supervises
+the daemon itself (or attaches to a running `pnpm dev`), opens today's note from an optional global
+shortcut (⌃⌥⌘D), launches at login, and sends native notifications for approvals. It needs macOS 14+, and
+Node.js 24.4+ for the daemon it manages.
+
+```bash
+pnpm --filter @ddl/daemon build
+apps/macos/scripts/run-app.sh                                  # build and open (--demo: sample data, no daemon)
+apps/macos/scripts/build-app.sh --release --with-daemon --zip  # a self-contained "Daily Do List.app"
+```
+
 ## Keyboard shortcuts
 
 | Shortcut | Action |
@@ -91,7 +105,7 @@ On Windows/Linux use `Ctrl` instead of `⌘`.
 
 ```mermaid
 flowchart LR
-  subgraph UI["Web UI (same bundle in future macOS/iOS shells)"]
+  subgraph UI["Web UI · native macOS app"]
     E[Editor + badges] --- T[Thread panel]
   end
   UI <-- REST + WebSocket --> D[Daemon 127.0.0.1]
@@ -178,8 +192,8 @@ CI details: [docs/CI.md](docs/CI.md).
 
 ## Roadmap
 
-- macOS app (Tauri 2 shell + bundled daemon) and iPhone app (Tauri 2 iOS, talking to your Mac or a
-  cloud daemon) — [plan](docs/CROSS_PLATFORM.md)
+- iPhone app (native Swift, reusing the macOS app's packages; talking to your Mac or a cloud
+  daemon) — [plan](docs/CROSS_PLATFORM.md)
 - S3 storage + sync provider; cloud execution provider (remote sandbox for browser/computer use)
 - Watching more than daily notes (projects, weekly notes); scheduled check-ins
 - Memory / user profile so the assistant gets more personal over time

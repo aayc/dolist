@@ -10,6 +10,11 @@ let package = Package(
   ],
   targets: [
     .target(name: "DailyDoListDaemon"),
-    .testTarget(name: "DailyDoListDaemonTests", dependencies: ["DailyDoListDaemon"]),
+    .testTarget(
+      name: "DailyDoListDaemonTests",
+      dependencies: ["DailyDoListDaemon"],
+      // Scripts run by the real-process tests, located through #filePath.
+      exclude: ["Fixtures"]
+    ),
   ]
 )

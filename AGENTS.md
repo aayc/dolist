@@ -22,8 +22,9 @@ Product principles, in priority order:
    Agent state lives in the vault's hidden sidecar folder `.daily-do-list/`.
 4. **Providers everywhere.** Storage, sync, execution (local/cloud), agent harness and connectors
    sit behind interfaces with a registry, so backends can be swapped without touching callers.
-5. **Cross-platform by construction.** The web UI is the only UI codebase; the macOS and iOS apps
-   will wrap it (see `docs/CROSS_PLATFORM.md`).
+5. **Cross-platform by construction.** Every client talks to the daemon through one wire protocol:
+   the web UI, the native macOS app (`apps/macos`, Swift), and later iOS, which will reuse the
+   macOS app's Models/Client/Domain packages (see `docs/CROSS_PLATFORM.md`).
 
 ## ⚠️ This repository is PUBLIC
 
@@ -39,10 +40,10 @@ Product principles, in priority order:
 
 ```
 apps/
-  web/            React 19 + Vite UI (the one UI codebase; also wrapped by desktop/mobile later)
+  web/            React 19 + Vite UI (the browser client)
   daemon/         Node 24 local server: REST + WebSocket API, vault owner, runs the agent runtime
-  desktop/        (planned) Tauri 2 macOS shell — docs only for now
-  mobile/         (planned) Tauri 2 iOS shell — docs only for now
+  macos/          Native macOS app (SwiftUI/AppKit): app shell + Swift packages; supervises the daemon
+  mobile/         (planned) native iOS app reusing the Swift packages — docs only for now
 packages/
   core/           Pure, isomorphic domain logic + wire protocol types (no dependencies!)
   storage/        StorageProvider interface; local-fs, memory, s3 (stub); SyncEngine; search
@@ -104,7 +105,7 @@ Key flows are documented in `docs/ARCHITECTURE.md` and `docs/AGENT_SYSTEM.md`.
 Docs index: `README.md` (product + quick start), `docs/ARCHITECTURE.md`, `docs/AGENT_SYSTEM.md`,
 `docs/PERFORMANCE.md`, `docs/CROSS_PLATFORM.md`, `docs/CI.md`, `SECURITY.md`, `CONTRIBUTING.md`,
 and package READMEs (`packages/storage`, `packages/connectors`, `packages/editor`,
-`packages/agent/src/safety`, `packages/agent/src/execution`, `apps/daemon`).
+`packages/agent/src/safety`, `packages/agent/src/execution`, `apps/daemon`, `apps/macos`).
 
 ## Invariants (do not break these)
 
@@ -197,6 +198,40 @@ and package READMEs (`packages/storage`, `packages/connectors`, `packages/editor
   Claude Desktop/Cursor). See `packages/connectors/README.md`.
 - **Add a setting:** extend `AppSettings` + `DEFAULT_SETTINGS` in `packages/core/src/settings.ts`,
   surface it in the settings UI, and handle it in `AgentRuntime.updateSettings` if agent-related.
+
+## macOS app (`apps/macos`)
+
+A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
+
+- **Layout:** `Package.swift` is the app shell (`Sources/DailyDoListApp`, OS integration in
+  `System/`). Independent local packages live in `Packages/`: `DailyDoListModels` (wire models),
+  `DailyDoListClient` (`HTTPDaemonClient` + `InMemoryDaemonClient`), `DailyDoListDomain` (ported
+  `@ddl/core` logic), `DailyDoListEditor`, `DailyDoListAgent`, and `DailyDoListDaemon`
+  (`DaemonSupervisor`). `IntegrationTests/` is a separate package that runs against the real
+  daemon.
+- **Commands:** `apps/macos/scripts/test.sh [Package|app|integration] [-- swift test args]`,
+  `apps/macos/scripts/run-app.sh [--demo]`, and
+  `apps/macos/scripts/build-app.sh [--release] [--with-daemon] [--zip]` (writes to
+  `apps/macos/build/`, gitignored). Integration tests need `pnpm --filter @ddl/daemon build` first.
+- **Toolchain:** Swift 6 language mode with strict concurrency, macOS 14+. It builds with only the
+  Command Line Tools: there's no XCTest, so tests use Swift Testing, and plain `swift test` can't
+  find `Testing.framework`. Always go through `scripts/test.sh`, which adds the flags only when
+  `xcode-select` points at the CLT.
+- **Conventions:** every package builds and tests on its own. Models, Client and Domain stay
+  Foundation-only (they also build for iOS). Use small files with doc comments. Anything touching
+  processes, the network, files or time goes behind a protocol so tests use fakes (see
+  `DaemonSupervisorDependencies`). No third-party Swift dependencies so far.
+- **Protocol changes:** a wire change in `packages/core/src/protocol.ts` also updates
+  `DailyDoListModels` in the same change. Its tests decode the `@ddl/contract` fixtures.
+- **Daemon supervision:** the app attaches to a running daemon and never stops one it didn't
+  start. It reads the token from `$DDL_HOME/daemon-token` and never logs it. A managed daemon runs
+  on the system Node 24.4+ with a stdin watchdog, so it can't outlive the app.
+- **Packaging:** `build-app.sh` renders the icon (`scripts/make-icon.swift`), fills
+  `Resources/Info.plist.template` and signs ad hoc. `--with-daemon` bundles
+  `pnpm deploy --prod --legacy` output into `Contents/Resources/daemon`. Don't rely on SwiftPM's
+  `Bundle.module` in app code: it looks next to the `.app`.
+- **CI:** `.github/workflows/macos.yml` (package tests, integration tests, release build, zipped
+  app artifact).
 
 ## Commits & PRs
 
