@@ -73,6 +73,21 @@ test.describe("saves in flight", () => {
     }
   });
 
+  test("the status bar shows a pending save, and nothing once the note is saved", async ({
+    page,
+  }) => {
+    await openApp(page);
+    await delayWrites(page, 800);
+    await caretToEnd(page);
+    await page.keyboard.type("quiet");
+    const save = page.getByTestId("status-save");
+    await expect(save).toBeVisible();
+    await expect(save).toHaveAttribute("data-state", "saving");
+    await expect(save).toHaveText("Saving…");
+    await expectSaved(page);
+    await expect(save).toHaveCount(0);
+  });
+
   test("text typed while a save is in flight is saved when the window loses focus", async ({
     page,
   }) => {

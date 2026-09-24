@@ -1,4 +1,5 @@
 import type { Services } from "../app/services";
+import { dailyDateOf } from "../features/daily/daily-nav";
 import { resolveTheme } from "../features/settings/theme";
 import { useAgentStore } from "../state/agent-store";
 import { getSettings } from "../state/settings-store";
@@ -132,7 +133,9 @@ export function createDefaultCommands(services: Services): Command[] {
       when: hasActiveNote,
       run: () => {
         const path = activeNote();
-        if (path) ui.focusTitle(path);
+        if (!path) return;
+        if (dailyDateOf(path, getSettings().dailyNotes)) ui.renameInExplorer(path);
+        else ui.focusTitle(path);
       },
     },
     {

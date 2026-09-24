@@ -12,8 +12,7 @@ export function NoteHeader() {
   return (
     <header className="note-header">
       <div className="note-header-inner">
-        <NoteTitle key={active} path={active} />
-        {date ? <DailyHeader date={date} /> : null}
+        {date ? <DailyHeader date={date} /> : <NoteTitle key={active} path={active} />}
       </div>
     </header>
   );

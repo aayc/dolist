@@ -10,7 +10,7 @@ import {
   Transaction,
 } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { setAnnotationsEffect } from "./annotations/field";
+import { resetAnnotationsEffect, setAnnotationsEffect } from "./annotations/field";
 import {
   callbacksEffect,
   configEffects,
@@ -87,7 +87,7 @@ export function createMarkdownEditor(
         effects: [
           ...configEffects(null, config),
           callbacksEffect(callbacks),
-          setAnnotationsEffect.of([]),
+          resetAnnotationsEffect.of(null),
         ],
       });
     }

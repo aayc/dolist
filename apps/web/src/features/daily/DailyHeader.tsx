@@ -11,11 +11,14 @@ import { useMemo } from "react";
 import { useServices } from "../../app/services";
 import { hotkeyLabel } from "../../commands/labels";
 import { IconButton } from "../../components/IconButton";
-import { friendlyDate } from "../../lib/format";
+import { dailyNoteTitle } from "../../lib/format";
 import { useSettingsStore } from "../../state/settings-store";
 import { useVaultStore } from "../../state/vault-store";
 
-/** "‹ Wednesday, September 23, 2026 ›" — arrows go to the nearest existing daily note. */
+/**
+ * A daily note's title is its date ("Thursday, September 24"), not editable. Below it, one quiet
+ * row: arrows to the nearest existing daily note, and Today (or "Go to today").
+ */
 export function DailyHeader({ date }: { date: LocalDate }) {
   const { workspace, commands } = useServices();
   const files = useVaultStore((s) => s.files);
@@ -29,41 +32,46 @@ export function DailyHeader({ date }: { date: LocalDate }) {
       findAdjacentDailyNote(files, anchor, 1, settings) !== null,
     ];
   }, [files, settings, iso]);
-  const isToday = isSameLocalDate(date, today());
+  const now = today();
+  const isToday = isSameLocalDate(date, now);
 
   return (
     <div className="daily-header" data-testid="daily-header">
-      <IconButton
-        icon={ChevronLeft}
-        label="Previous daily note"
-        hotkey={hotkeyLabel(commands, "daily:previous")}
-        disabled={!hasPrevious}
-        onClick={(event) => void workspace.openAdjacentDaily(-1, event.timeStamp)}
-        data-testid="daily-prev"
-      />
-      <time className="daily-date" dateTime={iso}>
-        {friendlyDate(date)}
-      </time>
-      <IconButton
-        icon={ChevronRight}
-        label="Next daily note"
-        hotkey={hotkeyLabel(commands, "daily:next")}
-        disabled={!hasNext}
-        onClick={(event) => void workspace.openAdjacentDaily(1, event.timeStamp)}
-        data-testid="daily-next"
-      />
-      {isToday ? (
-        <span className="daily-today-pill">Today</span>
-      ) : (
-        <button
-          type="button"
-          className="daily-today-button"
-          onClick={(event) => void workspace.openToday(event.timeStamp)}
-          data-testid="daily-today"
-        >
-          Go to today
-        </button>
-      )}
+      <h1 className="note-title daily-title" data-testid="note-title">
+        <time dateTime={iso}>{dailyNoteTitle(date, now)}</time>
+      </h1>
+      <nav className="daily-nav" aria-label="Daily notes">
+        <IconButton
+          icon={ChevronLeft}
+          label="Previous daily note"
+          hotkey={hotkeyLabel(commands, "daily:previous")}
+          size={14}
+          disabled={!hasPrevious}
+          onClick={(event) => void workspace.openAdjacentDaily(-1, event.timeStamp)}
+          data-testid="daily-prev"
+        />
+        <IconButton
+          icon={ChevronRight}
+          label="Next daily note"
+          hotkey={hotkeyLabel(commands, "daily:next")}
+          size={14}
+          disabled={!hasNext}
+          onClick={(event) => void workspace.openAdjacentDaily(1, event.timeStamp)}
+          data-testid="daily-next"
+        />
+        {isToday ? (
+          <span className="daily-today-pill">Today</span>
+        ) : (
+          <button
+            type="button"
+            className="daily-today-button"
+            onClick={(event) => void workspace.openToday(event.timeStamp)}
+            data-testid="daily-today"
+          >
+            Go to today
+          </button>
+        )}
+      </nav>
     </div>
   );
 }

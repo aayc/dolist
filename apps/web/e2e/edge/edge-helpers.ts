@@ -52,9 +52,9 @@ export function tab(page: Page, path: string) {
   return page.locator(`[data-testid="tab"][data-path="${path}"]`);
 }
 
-/** Active note's save state as shown in the status bar. */
+/** Active note's save state, as carried by the status bar (which shows nothing when saved). */
 export async function expectSaved(page: Page): Promise<void> {
-  await expect(page.getByTestId("status-save")).toHaveAttribute("data-state", "saved");
+  await expect(page.getByTestId("status-bar")).toHaveAttribute("data-save-state", "saved");
 }
 
 /** Places the caret at the end of the editor's document. */

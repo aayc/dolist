@@ -33,15 +33,24 @@ export interface AnnotationState {
   /** Sorted by anchor. */
   readonly entries: readonly AnchoredAnnotation[];
   readonly decorations: DecorationSet;
+  /**
+   * Annotations were set since the state was created or last shown. The first set is what the note
+   * already had; only badges that appear after it animate in.
+   */
+  readonly primed: boolean;
 }
 
-const EMPTY: AnnotationState = { entries: [], decorations: Decoration.none };
+const EMPTY: AnnotationState = { entries: [], decorations: Decoration.none, primed: false };
+const EMPTY_PRIMED: AnnotationState = { ...EMPTY, primed: true };
 
 /** Statuses that never get a badge. */
 export const HIDDEN_BADGE_STATUSES: ReadonlySet<TaskAgentStatus> = new Set(["idle", "ignored"]);
 
 /** Replaces the whole annotation set. Lines are 0-based and refer to the state it is applied to. */
 export const setAnnotationsEffect = StateEffect.define<readonly LineAnnotation[]>();
+
+/** Clears the badges of a state being shown again; the host's next set counts as its first. */
+export const resetAnnotationsEffect = StateEffect.define<null>();
 
 interface SavedAnchor {
   readonly id: string;
@@ -91,7 +100,7 @@ function restoreAnchors(
   });
   if (!moved) return value;
   entries.sort((a, b) => a.anchor - b.anchor);
-  return { entries, decorations: buildDecorations(entries, doc) };
+  return { entries, decorations: buildDecorations(entries, doc), primed: value.primed };
 }
 
 const lineDecorationCache = new Map<TaskAgentStatus, Decoration>();
@@ -135,12 +144,15 @@ function placeAnnotations(
     const widget =
       old && sameAnnotation(old.annotation, annotation)
         ? old.widget
-        : Decoration.widget({ widget: new BadgeWidget(annotation), side: 1 });
+        : Decoration.widget({
+            widget: new BadgeWidget(annotation, !old && previous.primed),
+            side: 1,
+          });
     entries.push({ annotation, anchor: doc.line(line + 1).from, widget });
   }
-  if (entries.length === 0) return EMPTY;
+  if (entries.length === 0) return EMPTY_PRIMED;
   entries.sort((a, b) => a.anchor - b.anchor);
-  return { entries, decorations: buildDecorations(entries, doc) };
+  return { entries, decorations: buildDecorations(entries, doc), primed: true };
 }
 
 /**
@@ -214,9 +226,9 @@ function mapAnnotations(
     const anchor = replacedAt ?? changes.mapPos(entry.anchor, 1);
     entries.push(anchor === entry.anchor ? entry : { ...entry, anchor });
   }
-  if (entries.length === 0) return EMPTY;
+  if (entries.length === 0) return value.primed ? EMPTY_PRIMED : EMPTY;
   if (reordered) entries.sort((a, b) => a.anchor - b.anchor);
-  return { entries, decorations: buildDecorations(entries, newDoc) };
+  return { entries, decorations: buildDecorations(entries, newDoc), primed: value.primed };
 }
 
 export const annotationField = StateField.define<AnnotationState>({
@@ -233,6 +245,8 @@ export const annotationField = StateField.define<AnnotationState>({
     for (const effect of tr.effects) {
       if (effect.is(setAnnotationsEffect)) {
         next = placeAnnotations(effect.value, tr.state.doc, next);
+      } else if (effect.is(resetAnnotationsEffect)) {
+        next = EMPTY;
       } else if (effect.is(restoreAnchorsEffect) && next.entries.length > 0) {
         next = restoreAnchors(next, effect.value, tr.state.doc);
       }

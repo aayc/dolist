@@ -77,6 +77,11 @@ through an `AttributedStorage` view. The WebSocket hub tags each `vault.changed`
 - Agent badges: task records from the daemon are re-resolved against the local document with the
   same identity algorithm the daemon uses (`resolveTaskAnchors`), then mapped through CodeMirror
   transactions so they stay attached while you type.
+- Calm by default: a daily note's title is its date ("Thursday, September 24", with the year only
+  when it isn't the current one; tabs and the explorer keep the file name). The status bar shows
+  nothing while things are fine: no "Saved", no "Connected" (the in-browser demo gets a "Demo"
+  marker). Only badges that need the user are loud, and motion is CSS-only, paint-only and off
+  under `prefers-reduced-motion` (see `packages/editor/README.md`).
 - Secondary UI (thread panel, artifact viewer, palette, settings, search) is code-split and
   prefetched on idle; vim mode is loaded on demand.
 - `DaemonClient` has two implementations: `HttpDaemonClient` (real) and `MockDaemonClient`

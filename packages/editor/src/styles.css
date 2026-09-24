@@ -145,7 +145,8 @@
   content: "";
   width: 0.6em;
   height: 0.6em;
-  transform: scale(0);
+  opacity: 0;
+  transform: scale(0.8);
   background-color: var(--ddl-bg);
   clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
 }
@@ -156,8 +157,13 @@
   background-color: var(--ddl-accent);
   border-color: var(--ddl-accent);
 }
+/* The transition lives on the checked state only, so unchecking doesn't animate. */
 .cm-ddl-checkbox[aria-checked="true"]::before {
-  transform: scale(1);
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 120ms ease-out,
+    transform 120ms ease-out;
 }
 /* [/] in progress, [-] cancelled, [>] deferred */
 .cm-ddl-checkbox[aria-checked="mixed"],
@@ -171,10 +177,12 @@
 .cm-ddl-checkbox[aria-checked="mixed"]::before,
 .cm-ddl-checkbox[data-task="-"]::before,
 .cm-ddl-checkbox[data-task=">"]::before {
-  transform: scale(1);
+  opacity: 1;
+  transform: none;
   height: 0.14em;
   clip-path: none;
   border-radius: 1px;
+  transition: none;
 }
 .cm-ddl-checkbox[aria-checked="mixed"]::before {
   background-color: var(--ddl-accent);
@@ -208,7 +216,7 @@
   text-decoration-color: var(--ddl-text-faint);
 }
 
-/* Agent annotations: faint status-colored marker left of the line */
+/* Agent annotations: faint marker left of the line, colored only when it needs attention */
 .cm-ddl-editor .cm-line.cm-ddl-annotated {
   position: relative;
 }
@@ -224,25 +232,21 @@
   color: var(--ddl-text-faint);
   opacity: 0.6;
   pointer-events: none;
-}
-.cm-ddl-editor .cm-line.cm-ddl-annotated-triaging::before {
-  color: var(--ddl-info);
-}
-.cm-ddl-editor .cm-line.cm-ddl-annotated-working::before {
-  color: var(--ddl-accent);
+  transition: color 160ms ease;
 }
 .cm-ddl-editor .cm-line.cm-ddl-annotated-waiting_approval::before,
 .cm-ddl-editor .cm-line.cm-ddl-annotated-waiting_user::before {
   color: var(--ddl-warning);
 }
-.cm-ddl-editor .cm-line.cm-ddl-annotated-done::before {
-  color: var(--ddl-success);
-}
 .cm-ddl-editor .cm-line.cm-ddl-annotated-failed::before {
   color: var(--ddl-danger);
 }
 
-/* Agent badges */
+/*
+ * Agent badges: a status dot, the label and an unread dot. The tone sets the visual weight: only
+ * "needs you" is loud, failures are tinted, work in progress is a neutral pill and finished work is
+ * quiet text (with the same hit target). Motion is paint-only: nothing may change text layout.
+ */
 .cm-ddl-badge {
   display: inline-flex;
   align-items: center;
@@ -253,10 +257,10 @@
   margin-left: 0.6em;
   padding: 0 0.6em;
   vertical-align: 0.08em;
-  border: 1px solid var(--ddl-border);
+  border: 1px solid transparent;
   border-radius: 999px;
-  background-color: var(--ddl-bg-secondary);
-  color: var(--ddl-text-muted);
+  background-color: transparent;
+  color: var(--ddl-text-faint);
   font-family: var(--ddl-font-ui);
   font-size: 0.72em;
   font-style: normal;
@@ -268,64 +272,75 @@
   user-select: none;
   -webkit-user-select: none;
   transition:
-    background-color 0.12s ease,
-    color 0.12s ease,
-    border-color 0.12s ease;
-}
-.cm-ddl-badge:hover {
-  background-color: var(--ddl-bg-hover);
-  color: var(--ddl-text);
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
 }
 .cm-ddl-badge:focus-visible {
   outline: 2px solid var(--ddl-accent);
   outline-offset: 1px;
 }
-.cm-ddl-badge-icon {
-  flex: none;
-  font-size: 1.05em;
-  line-height: 1;
+.cm-ddl-badge-enter {
+  animation: cm-ddl-badge-enter 160ms ease-out;
 }
-.cm-ddl-badge-icon:empty {
-  width: 0.6em;
-  height: 0.6em;
+.cm-ddl-badge-icon,
+.cm-ddl-badge-unread {
+  flex: none;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background-color: currentColor;
+}
+.cm-ddl-badge .cm-ddl-badge-icon {
+  transition: color 160ms ease;
 }
 .cm-ddl-badge-label {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .cm-ddl-badge-unread {
-  flex: none;
-  min-width: 1.5em;
-  padding: 0 0.4em;
-  box-sizing: border-box;
-  border-radius: 999px;
-  background-color: var(--ddl-accent);
-  color: var(--ddl-bg);
-  font-size: 0.85em;
-  font-weight: 600;
-  line-height: 1.5em;
-  text-align: center;
+  color: var(--ddl-accent);
 }
 .cm-ddl-badge-unread[hidden] {
   display: none;
 }
-.cm-ddl-badge-triaging .cm-ddl-badge-icon {
-  color: var(--ddl-info);
-  animation: cm-ddl-pulse 1.4s ease-in-out infinite;
+
+.cm-ddl-badge-tone-needs-you {
+  border-color: var(--ddl-warning);
+  background-color: color-mix(in srgb, var(--ddl-warning) 14%, transparent);
+  color: var(--ddl-text);
 }
-.cm-ddl-badge-queued .cm-ddl-badge-icon {
+.cm-ddl-badge-tone-needs-you:hover {
+  background-color: color-mix(in srgb, var(--ddl-warning) 22%, transparent);
+}
+.cm-ddl-badge-tone-failed {
+  background-color: color-mix(in srgb, var(--ddl-danger) 10%, transparent);
+  color: var(--ddl-danger);
+}
+.cm-ddl-badge-tone-failed:hover {
+  background-color: color-mix(in srgb, var(--ddl-danger) 16%, transparent);
+}
+.cm-ddl-badge-tone-working {
+  border-color: var(--ddl-border);
+  background-color: var(--ddl-bg-secondary);
+  color: var(--ddl-text-muted);
+}
+.cm-ddl-badge-tone-working:hover,
+.cm-ddl-badge-tone-quiet:hover {
+  background-color: var(--ddl-bg-hover);
+  color: var(--ddl-text);
+}
+
+.cm-ddl-badge-triaging .cm-ddl-badge-icon {
+  color: var(--ddl-accent);
+  animation: cm-ddl-badge-pulse 1.2s ease-in-out infinite;
+}
+.cm-ddl-badge-queued .cm-ddl-badge-icon,
+.cm-ddl-badge-cancelled .cm-ddl-badge-icon {
   color: var(--ddl-text-faint);
 }
 .cm-ddl-badge-working .cm-ddl-badge-icon {
-  color: var(--ddl-accent);
-  animation: cm-ddl-pulse 1.4s ease-in-out infinite;
-}
-.cm-ddl-badge-waiting_approval,
-.cm-ddl-badge-waiting_user {
-  border-color: color-mix(in srgb, var(--ddl-warning) 45%, transparent);
-  color: var(--ddl-text);
+  color: var(--ddl-info);
 }
 .cm-ddl-badge-waiting_approval .cm-ddl-badge-icon,
 .cm-ddl-badge-waiting_user .cm-ddl-badge-icon {
@@ -334,32 +349,35 @@
 .cm-ddl-badge-done .cm-ddl-badge-icon {
   color: var(--ddl-success);
 }
-.cm-ddl-badge-failed {
-  border-color: color-mix(in srgb, var(--ddl-danger) 45%, transparent);
-}
-.cm-ddl-badge-failed .cm-ddl-badge-icon {
-  color: var(--ddl-danger);
-}
-.cm-ddl-badge-cancelled .cm-ddl-badge-icon {
-  color: var(--ddl-text-faint);
+
+@keyframes cm-ddl-badge-enter {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-@keyframes cm-ddl-pulse {
+@keyframes cm-ddl-badge-pulse {
   0%,
   100% {
     opacity: 1;
   }
   50% {
-    opacity: 0.3;
+    opacity: 0.35;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cm-ddl-badge .cm-ddl-badge-icon {
-    animation: none;
-  }
+  .cm-ddl-badge,
+  .cm-ddl-badge .cm-ddl-badge-icon,
   .cm-ddl-checkbox,
-  .cm-ddl-badge {
+  .cm-ddl-checkbox[aria-checked]::before,
+  .cm-ddl-editor .cm-line.cm-ddl-annotated::before {
+    animation: none;
     transition: none;
   }
 }

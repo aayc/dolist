@@ -1,11 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
-import { dailyPath, isoDate, noteTitle, openApp } from "../helpers";
+import { dailyPath, expectDailyNote, openApp } from "../helpers";
 import { collectErrors, type EdgeWindow } from "./edge-helpers";
 
 // The mock vault has daily notes for today, -1, -2 and -4 days.
 
 async function expectShowing(page: Page, days: number): Promise<void> {
-  await expect(noteTitle(page)).toHaveValue(isoDate(days));
+  await expectDailyNote(page, days);
   await expect(page.getByTestId("tab")).toHaveCount(1);
   await expect(page.getByTestId("tab")).toHaveAttribute("data-path", dailyPath(days));
   await expect

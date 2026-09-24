@@ -1,20 +1,28 @@
-import { Bot, Check, CircleAlert, LoaderCircle, ShieldAlert, TriangleAlert } from "lucide-react";
+import { Bot, CircleAlert, LoaderCircle, ShieldAlert, TriangleAlert } from "lucide-react";
 import { useServices } from "../../app/services";
 import { cx } from "../../lib/cx";
 import { pluralize } from "../../lib/format";
 import { useAgentStore, usePendingApprovalCount } from "../../state/agent-store";
 import { useConnectionStore } from "../../state/connection-store";
-import { type SaveState, useNotesStore } from "../../state/notes-store";
+import { useNotesStore } from "../../state/notes-store";
 import { useSettingsStore } from "../../state/settings-store";
 import { useTabsStore } from "../../state/tabs-store";
 import { ui } from "../../state/ui-store";
+import { agentModeLabel, connectionItem, type SaveProblem, visibleSaveState } from "./status-items";
 
 export function StatusBar() {
+  const active = useTabsStore((s) => s.active);
+  const saveState = useNotesStore((s) => (active ? (s.saveState[active] ?? null) : null));
+  const visibleSave = visibleSaveState(saveState);
   return (
-    <footer className="status-bar" data-testid="status-bar">
+    <footer
+      className="status-bar"
+      data-testid="status-bar"
+      data-save-state={saveState ?? undefined}
+    >
       <AgentItems />
       <div className="status-spacer" />
-      <SaveIndicator />
+      {visibleSave ? <SaveIndicator state={visibleSave} /> : null}
       <VimIndicator />
       <WordCount />
       <ConnectionIndicator />
@@ -25,7 +33,7 @@ export function StatusBar() {
 function AgentItems() {
   const { agent } = useServices();
   const enabled = useAgentStore((s) => s.status?.enabled ?? null);
-  const mode = useAgentStore((s) => s.status?.mode ?? null);
+  const mode = useAgentStore((s) => agentModeLabel(s.status?.mode ?? null));
   const running = useAgentStore((s) => s.status?.running ?? 0);
   const queued = useAgentStore((s) => s.status?.queued ?? 0);
   const problem = useAgentStore((s) => s.status?.problem ?? null);
@@ -76,26 +84,15 @@ function AgentItems() {
   );
 }
 
-const SAVE_LABELS: Record<SaveState, string> = {
-  saved: "Saved",
+const SAVE_LABELS: Record<SaveProblem, string> = {
   dirty: "Unsaved",
   saving: "Saving…",
   conflict: "Conflict",
   error: "Save failed",
 };
 
-function SaveIndicator() {
-  const active = useTabsStore((s) => s.active);
-  const state = useNotesStore((s) => (active ? (s.saveState[active] ?? null) : null));
-  if (!state) return null;
-  const Icon =
-    state === "saved"
-      ? Check
-      : state === "error"
-        ? CircleAlert
-        : state === "conflict"
-          ? TriangleAlert
-          : null;
+function SaveIndicator({ state }: { state: SaveProblem }) {
+  const Icon = state === "error" ? CircleAlert : state === "conflict" ? TriangleAlert : null;
   return (
     <span
       className={cx("status-item status-save", `is-${state}`)}
@@ -136,25 +133,17 @@ function WordCount() {
 function ConnectionIndicator() {
   const state = useConnectionStore((s) => s.state);
   const kind = useConnectionStore((s) => s.kind);
-  const label =
-    kind === "mock" && state === "online"
-      ? "Demo (mock)"
-      : state === "online"
-        ? "Connected"
-        : state === "connecting"
-          ? "Connecting…"
-          : state === "reconnecting"
-            ? "Reconnecting…"
-            : "Offline";
+  const item = connectionItem(state, kind);
+  if (!item) return null;
   return (
     <span
       className={cx("status-item status-connection", `is-${state}`, kind === "mock" && "is-mock")}
       data-testid="status-connection"
       data-state={state}
-      title={kind === "mock" ? "Running against the in-browser mock daemon" : `Daemon: ${state}`}
+      title={item.title}
     >
       <span className="connection-dot" aria-hidden="true" />
-      {label}
+      {item.label}
     </span>
   );
 }

@@ -207,7 +207,8 @@ describe("widgets", () => {
     expect(badge?.getAttribute("aria-label")).toBe(
       "Agent is working: Researching…, 2 unread. Open agent thread",
     );
-    expect(badge?.querySelector(".cm-ddl-badge-unread")?.textContent).toBe("2");
+    expect(badge?.title).toBe("Researching… (2 unread)");
+    expect(badge?.querySelector<HTMLElement>(".cm-ddl-badge-unread")?.hidden).toBe(false);
     badge?.click();
     badge?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     expect(onAnnotationClick).toHaveBeenCalledTimes(2);
@@ -222,11 +223,76 @@ describe("widgets", () => {
     editor.setAnnotations([{ ...annotation("a", 1), status: "done", label: "Done", unread: 0 }]);
     const updated = editor.view.dom.querySelector<HTMLElement>(".cm-ddl-badge");
     expect(updated).toBe(badge);
-    expect(updated?.classList).toContain("cm-ddl-badge-done");
-    expect(updated?.querySelector(".cm-ddl-badge-icon")?.textContent).toBe("✓");
+    expect(updated?.className).toBe("cm-ddl-badge cm-ddl-badge-done cm-ddl-badge-tone-quiet");
+    expect(updated?.title).toBe("Done");
     expect(updated?.querySelector<HTMLElement>(".cm-ddl-badge-unread")?.hidden).toBe(true);
     updated?.click();
     expect(onAnnotationClick).toHaveBeenCalledWith(expect.objectContaining({ status: "done" }));
+  });
+
+  it("keeps a badge's DOM while typing on its line and when its unread count changes", () => {
+    const editor = mount({ doc: DOC });
+    editor.setAnnotations([annotation("a", 1)]);
+    const badge = editor.view.dom.querySelector<HTMLElement>(".cm-ddl-badge");
+    const line = editor.view.state.doc.line(2);
+    for (const [i, ch] of [..." today"].entries()) {
+      editor.view.dispatch({ changes: { from: line.to + i, insert: ch }, userEvent: "input.type" });
+    }
+    editor.view.dispatch({ changes: { from: line.from + 6, insert: "cheap " } });
+    const end = editor.view.state.doc.line(2).to;
+    editor.view.dispatch({ changes: { from: end, insert: "\n- [ ] " }, userEvent: "input" });
+    expect(editor.view.state.doc.line(2).text).toBe("- [ ] cheap book flights today");
+    editor.setAnnotations([{ ...annotation("a", 1), unread: 0 }]);
+    editor.setAnnotations([{ ...annotation("a", 1), unread: 5 }]);
+    expect(editor.view.dom.querySelector(".cm-ddl-badge")).toBe(badge);
+    expect(badge?.title).toBe("Researching… (5 unread)");
+  });
+
+  it("animates in only the badges that appear after the note's first set", () => {
+    const editor = mount({ doc: DOC });
+    const badgeOf = (id: string) =>
+      [...editor.view.dom.querySelectorAll<HTMLElement>(".cm-ddl-badge")].find((b) =>
+        b.getAttribute("aria-label")?.includes(`label ${id}`),
+      );
+    const entering = () =>
+      [...editor.view.dom.querySelectorAll(".cm-ddl-badge-enter")].map(
+        (b) => b.getAttribute("aria-label")?.match(/label (\w)/)?.[1],
+      );
+    const labelled = (id: string, line: number): LineAnnotation => ({
+      ...annotation(id, line),
+      label: `label ${id}`,
+    });
+
+    // What the note already had when it was shown doesn't animate.
+    editor.setAnnotations([labelled("a", 1)]);
+    expect(entering()).toEqual([]);
+    editor.setAnnotations([labelled("a", 1), labelled("b", 2)]);
+    expect(entering()).toEqual(["b"]);
+
+    // A status change mid-animation keeps it; the class goes once the animation ends.
+    const b = badgeOf("b");
+    editor.setAnnotations([labelled("a", 1), { ...labelled("b", 2), status: "done" }]);
+    expect(badgeOf("b")).toBe(b);
+    expect(entering()).toEqual(["b"]);
+    b?.querySelector(".cm-ddl-badge-icon")?.dispatchEvent(
+      new Event("animationend", { bubbles: true }),
+    );
+    expect(entering()).toEqual(["b"]);
+    b?.dispatchEvent(new Event("animationend", { bubbles: true }));
+    expect(entering()).toEqual([]);
+
+    // Showing the note again: its badges were already there.
+    const cached = editor.getState();
+    editor.setState(editor.createState("other"));
+    editor.setState(cached);
+    editor.setAnnotations([labelled("a", 1), labelled("b", 2)]);
+    expect(entering()).toEqual([]);
+
+    // A note without badges yet: after its first (empty) set, the first badge animates in.
+    editor.setState(editor.createState("- [ ] new task"));
+    editor.setAnnotations([]);
+    editor.setAnnotations([labelled("c", 0)]);
+    expect(entering()).toEqual(["c"]);
   });
 
   it("follows rendered wikilinks on click, in a new pane with Mod or middle click", () => {

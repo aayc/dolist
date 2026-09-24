@@ -1,8 +1,8 @@
-import { formatLocalDate, type LocalDate, toLocalDate } from "@ddl/core";
+import { formatLocalDate, type LocalDate, today, toLocalDate } from "@ddl/core";
 
-/** "Wednesday, September 23, 2026" */
-export function friendlyDate(date: LocalDate): string {
-  return formatLocalDate(date, "dddd, MMMM D, YYYY");
+/** Daily note title: "Thursday, September 24", plus ", 2025" when it isn't the current year. */
+export function dailyNoteTitle(date: LocalDate, now: LocalDate = today()): string {
+  return formatLocalDate(date, date.year === now.year ? "dddd, MMMM D" : "dddd, MMMM D, YYYY");
 }
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });

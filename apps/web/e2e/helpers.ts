@@ -48,6 +48,19 @@ export function dailyPath(days = 0): string {
   return `Daily/${isoDate(days)}.md`;
 }
 
+/** A daily note's title: "Thursday, September 24", with the year only when it isn't this year. */
+export function dailyTitle(days = 0): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  const year = date.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" as const };
+  return date.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    ...year,
+  });
+}
+
 /** Opens the app against the in-browser mock and waits until today's note is interactive. */
 export async function openApp(page: Page, query = "mockSpeed=4"): Promise<void> {
   await page.goto(`/?mock=1${query ? `&${query}` : ""}`);
@@ -57,8 +70,22 @@ export async function openApp(page: Page, query = "mockSpeed=4"): Promise<void> 
   );
 }
 
+/**
+ * The editable title (file name) of a regular note. Matching the input only makes assertions wait
+ * while a daily note, whose title is a read-only heading, is still shown.
+ */
 export function noteTitle(page: Page) {
-  return page.getByTestId("note-title");
+  return page.locator("input[data-testid='note-title']");
+}
+
+/** A daily note's read-only title: its date. */
+export function dailyHeading(page: Page) {
+  return page.locator("h1[data-testid='note-title']");
+}
+
+/** The daily note `days` from today is the one shown. */
+export async function expectDailyNote(page: Page, days = 0): Promise<void> {
+  await expect(dailyHeading(page).locator("time")).toHaveAttribute("datetime", isoDate(days));
 }
 
 /** Clicks into the editor and moves the caret to the end of the document. */
@@ -73,8 +100,9 @@ export async function typeTask(page: Page, text: string): Promise<void> {
   await page.keyboard.type(text, { delay: 5 });
 }
 
+/** The status bar shows nothing for a saved note; its save state is on the bar itself. */
 export async function waitForSaved(page: Page): Promise<void> {
-  await expect(page.getByTestId("status-save")).toHaveAttribute("data-state", "saved");
+  await expect(page.getByTestId("status-bar")).toHaveAttribute("data-save-state", "saved");
 }
 
 export function badge(page: Page) {

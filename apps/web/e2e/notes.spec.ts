@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { focusEditorEnd, noteTitle, openApp } from "./helpers";
+import { expectDailyNote, focusEditorEnd, noteTitle, openApp, waitForSaved } from "./helpers";
 
 test.describe("notes, palette and settings", () => {
   test("quick switcher opens notes and Mod+Enter creates one", async ({ page }) => {
@@ -91,7 +91,7 @@ test.describe("notes, palette and settings", () => {
     await expect(page.getByTestId("tab")).toHaveCount(2);
     await expect(noteTitle(page)).toHaveValue("Ideas");
     await page.getByTestId("tab").first().click();
-    await expect(noteTitle(page)).not.toHaveValue("Ideas");
+    await expectDailyNote(page);
     await page.getByTestId("tab").filter({ hasText: "Ideas" }).getByTestId("tab-close").click();
     await expect(page.getByTestId("tab")).toHaveCount(1);
   });
@@ -126,6 +126,8 @@ test.describe("notes, palette and settings", () => {
     await expect(hit).toContainText("cedar");
     await hit.click();
     await expect(noteTitle(page)).toHaveValue("Garden Redesign");
+    // Regular notes keep their editable title and folder breadcrumb.
+    await expect(page.locator(".note-breadcrumb")).toHaveText("Projects");
   });
 
   test("a conflicting external edit keeps local text and saves the other version as a copy", async ({
@@ -149,7 +151,7 @@ test.describe("notes, palette and settings", () => {
       .poll(() => page.evaluate(() => window.__ddlMock?.readNote("Ideas.md")))
       .toContain("local change");
     await expect(page.locator(".cm-content")).toContainText("local change");
-    await expect(page.getByTestId("status-save")).toHaveAttribute("data-state", "saved");
+    await waitForSaved(page);
 
     await toast.getByTestId("toast-body").click();
     await expect(noteTitle(page)).toHaveValue("Ideas (conflict)");

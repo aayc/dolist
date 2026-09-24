@@ -51,10 +51,20 @@ Obsidian's alternate statuses (`[/]` in progress, `[-]` cancelled, `[>]` deferre
 tasks, like `parseTasks` in `@ddl/core`. Enter on a task line (any status) starts `- [ ] `; Enter on
 an empty item ends the list.
 
-**Agent badges.** `setAnnotations()` replaces the set of badges. Each badge shows a status dot or
-icon (pulsing for `triaging`/`working`), a truncated label and an unread count, and gives the line
-a faint status-colored marker. Click, Enter or Space calls `onAnnotationClick`. `idle` and `ignored`
-annotations are not rendered.
+**Agent badges.** `setAnnotations()` replaces the set of badges. Each badge shows a status dot, a
+truncated label and, when its thread has unread messages, a small accent dot (the count is in the
+tooltip and the accessible name). Its weight follows what the user has to do: `waiting_approval` and
+`waiting_user` are the only loud badges (warning tint and border), `failed` is tinted, `triaging`,
+`queued` and `working` are neutral pills, and `done`/`cancelled` are quiet text with the same hit
+target. The line gets a faint marker, colored only when the task needs the user or failed. Click,
+Enter or Space calls `onAnnotationClick`. `idle` and `ignored` annotations are not rendered.
+
+Motion is CSS-only, paint-only (opacity, transform, color) and off under `prefers-reduced-motion`.
+A badge that appears after the note's first `setAnnotations()` fades in with a 2px rise (160 ms),
+status changes crossfade colors (160 ms), the `triaging` dot pulses (1.2 s), and checking a task
+scales its checkmark in (120 ms; unchecking doesn't animate). Badges update their DOM in place
+(`eq`/`updateDOM`), so typing and status changes never replay the entrance, and a note shown again
+doesn't animate the badges it already had.
 
 Badges stay attached while the user edits. Each badge is anchored to the start of its line and drawn
 at the end of whichever line holds that anchor. That way, pressing Enter at the end of a task leaves
@@ -116,8 +126,8 @@ Mod-e is deliberately unbound so the host can use it (for example to toggle read
   history, no badges).
 - `createState` / `getState` / `setState` support caching one state per open note (instant switching
   with per-note undo). `setState` re-applies the current config and callbacks and clears badges (the
-  host re-sends them). States from other editor instances work too; a plain `EditorState` keeps only
-  its document and selection.
+  host re-sends them; that first set doesn't animate in). States from other editor instances work
+  too; a plain `EditorState` keeps only its document and selection.
 - `onDocChange` fires once per view update. `userEvent` is true for `input.*` (typing, paste,
   `input.toggle`, formatting), `delete.*`, `move.*`, `undo` and `redo`; vim edits count as input.
 - `onWikiLinkClick(target, { newPane, subpath })`: `target` never includes the `#subpath` or the
@@ -149,7 +159,9 @@ CodeMirror base-theme overrides are in [`src/theme.ts`](src/theme.ts); component
 [`src/styles.css`](src/styles.css). Every class is prefixed `cm-ddl-`: `cm-ddl-editor`,
 `cm-ddl-live-preview`, `cm-ddl-readable`, `cm-ddl-h1`…`h6`, `cm-ddl-quote`, `cm-ddl-codeblock`,
 `cm-ddl-task-done`, `cm-ddl-checkbox`, `cm-ddl-bullet`, `cm-ddl-hr`, `cm-ddl-link`,
-`cm-ddl-wikilink`, `cm-ddl-badge` (+ `cm-ddl-badge-<status>`), `cm-ddl-annotated-<status>`.
+`cm-ddl-wikilink`, `cm-ddl-badge` (+ `cm-ddl-badge-<status>`, `cm-ddl-badge-tone-<tone>` with tones
+`needs-you`, `failed`, `working` and `quiet`, and `cm-ddl-badge-enter` while it animates in),
+`cm-ddl-annotated-<status>`.
 
 ## Performance
 

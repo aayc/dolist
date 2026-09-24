@@ -1,20 +1,26 @@
 import { expect, test } from "@playwright/test";
-import { dailyPath, isoDate, noteTitle, openApp } from "./helpers";
+import { dailyHeading, dailyPath, dailyTitle, expectDailyNote, isoDate, openApp } from "./helpers";
 
 test.describe("startup and daily notes", () => {
   test("loads and opens today's daily note", async ({ page }) => {
     await openApp(page);
-    await expect(noteTitle(page)).toHaveValue(isoDate());
+    await expectDailyNote(page);
+    // The title is the date, not the file name, and there is no "Daily" breadcrumb.
+    await expect(dailyHeading(page)).toHaveText(dailyTitle());
+    await expect(page.locator(".note-breadcrumb")).toHaveCount(0);
+    await expect(page.getByTestId("daily-header").getByText("Today")).toBeVisible();
     await expect(page.getByTestId("tab")).toHaveCount(1);
     await expect(page.getByTestId("tab")).toHaveAttribute("data-path", dailyPath());
-    const weekday = new Date().toLocaleDateString("en-US", { weekday: "long" });
-    await expect(page.getByTestId("daily-header")).toContainText(weekday);
+    await expect(page.getByTestId("tab")).toContainText(isoDate());
     await expect(page.locator(".cm-content")).toBeVisible();
     await expect(
       page.locator(`[data-testid="explorer-item"][data-path="${dailyPath()}"]`),
     ).toHaveAttribute("aria-selected", "true");
+    // Quiet status bar: nothing for "connected" or "saved", a marker for the demo.
     await expect(page.getByTestId("status-connection")).toHaveAttribute("data-state", "online");
-    await expect(page.getByTestId("status-save")).toHaveAttribute("data-state", "saved");
+    await expect(page.getByTestId("status-connection")).toHaveText("Demo");
+    await expect(page.getByTestId("status-bar")).toHaveAttribute("data-save-state", "saved");
+    await expect(page.getByTestId("status-save")).toHaveCount(0);
   });
 
   test("Mod+Shift+P walks back through existing daily notes; Mod+Shift+D returns to today", async ({
@@ -22,16 +28,17 @@ test.describe("startup and daily notes", () => {
   }) => {
     await openApp(page);
     await page.keyboard.press("ControlOrMeta+Shift+P");
-    await expect(noteTitle(page)).toHaveValue(isoDate(-1));
+    await expectDailyNote(page, -1);
+    await expect(dailyHeading(page)).toHaveText(dailyTitle(-1));
     await page.keyboard.press("ControlOrMeta+Shift+P");
-    await expect(noteTitle(page)).toHaveValue(isoDate(-2));
+    await expectDailyNote(page, -2);
     // The day before doesn't exist: "previous" means the nearest existing daily note.
     await page.keyboard.press("ControlOrMeta+Shift+P");
-    await expect(noteTitle(page)).toHaveValue(isoDate(-4));
+    await expectDailyNote(page, -4);
     await expect(page.getByTestId("daily-today")).toBeVisible();
 
     await page.keyboard.press("ControlOrMeta+Shift+D");
-    await expect(noteTitle(page)).toHaveValue(isoDate());
+    await expectDailyNote(page);
     // Navigation replaces the active tab (Obsidian semantics).
     await expect(page.getByTestId("tab")).toHaveCount(1);
   });
@@ -40,9 +47,24 @@ test.describe("startup and daily notes", () => {
     await openApp(page);
     await expect(page.getByTestId("daily-next")).toBeDisabled();
     await page.getByTestId("daily-prev").click();
-    await expect(noteTitle(page)).toHaveValue(isoDate(-1));
+    await expectDailyNote(page, -1);
     await page.getByTestId("daily-next").click();
-    await expect(noteTitle(page)).toHaveValue(isoDate());
+    await expectDailyNote(page);
+  });
+
+  test("renaming a daily note (its title isn't editable) happens in the file explorer", async ({
+    page,
+  }) => {
+    await openApp(page);
+    await page.keyboard.press("ControlOrMeta+P");
+    await page.getByTestId("palette-input").fill("Rename current note");
+    await page.keyboard.press("Enter");
+    const rename = page.getByTestId("explorer-rename");
+    await expect(rename).toBeFocused();
+    await expect(rename).toHaveValue(isoDate());
+    await page.keyboard.press("Escape");
+    await expect(rename).toHaveCount(0);
+    await expectDailyNote(page);
   });
 
   test("Mod+Shift+D creates today's note from the template when it is missing", async ({
@@ -52,7 +74,7 @@ test.describe("startup and daily notes", () => {
     await page.evaluate((path) => window.__ddlMock?.deleteNote(path), dailyPath());
     await expect(page.getByTestId("empty-state")).toBeVisible();
     await page.keyboard.press("ControlOrMeta+Shift+D");
-    await expect(noteTitle(page)).toHaveValue(isoDate());
+    await expectDailyNote(page);
     await expect
       .poll(() => page.evaluate((path) => window.__ddlMock?.readNote(path), dailyPath()))
       .toBe("- [ ] ");
@@ -72,7 +94,7 @@ test.describe("startup and daily notes", () => {
     await page.reload({ waitUntil: "domcontentloaded" });
     // Set by the inline boot script, before the app bundle runs.
     expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe(target);
-    await expect(noteTitle(page)).toBeVisible();
+    await expect(dailyHeading(page)).toBeVisible();
     await expect(page.locator("html")).toHaveAttribute("data-theme", target);
   });
 });

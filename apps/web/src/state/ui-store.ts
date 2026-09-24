@@ -183,4 +183,11 @@ export const ui = {
   focusTitle(path: string): void {
     useUiStore.setState({ titleFocus: path });
   },
+
+  /** Inline rename in the file explorer, with the file revealed (daily notes have no title field). */
+  renameInExplorer(path: string): void {
+    const folders = path.split("/").slice(0, -1);
+    ui.expandAll(folders.map((_, i) => folders.slice(0, i + 1).join("/")));
+    useUiStore.setState({ leftOpen: true, leftView: "files", renaming: path });
+  },
 };

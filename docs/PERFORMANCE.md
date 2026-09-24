@@ -74,7 +74,7 @@ budgets.
 
 | Bundle | Budget (gzip) | Current |
 | --- | --- | --- |
-| Initial JS (entry + static imports) | 320 kB | ~307 kB |
+| Initial JS (entry + static imports) | 320 kB | ~311 kB |
 | Initial CSS | 40 kB | ~5 kB |
 | Total JS | 1 200 kB | ~790 kB |
 

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { noteTitle, openApp } from "../helpers";
+import { dailyHeading, noteTitle, openApp } from "../helpers";
 import {
   caretToEnd,
   collectErrors,
@@ -54,12 +54,14 @@ test.describe("long unicode note names", () => {
 
   test("names with reserved characters are refused without touching the note", async ({ page }) => {
     await openApp(page);
+    await page.evaluate(() => (window as unknown as EdgeWindow).__ddlDebug.openNote("Ideas.md"));
     const title = noteTitle(page);
-    const before = await title.inputValue();
+    await expect(title).toHaveValue("Ideas");
     await title.fill("a/b: c?");
     await title.press("Enter");
     await expect(page.getByTestId("toast").filter({ hasText: "Can't rename" })).toBeVisible();
-    await expect(title).toHaveValue(before);
+    await expect(title).toHaveValue("Ideas");
+    expect(await listPaths(page)).toContain("Ideas.md");
   });
 });
 
@@ -84,7 +86,7 @@ test.describe("theme", () => {
 
     await page.reload({ waitUntil: "domcontentloaded" });
     expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe(target);
-    await expect(noteTitle(page)).toBeVisible();
+    await expect(dailyHeading(page)).toBeVisible();
     await expect(page.locator("html")).toHaveAttribute("data-theme", target);
   });
 
