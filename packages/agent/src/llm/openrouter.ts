@@ -44,6 +44,39 @@ export function createOpenRouterClient(options: OpenRouterClientOptions): LlmCli
   return new OpenRouterClient(options);
 }
 
+export type OpenRouterKeyCheck =
+  | { status: "valid" }
+  /** The key was rejected (revoked, deleted account, typo). */
+  | { status: "invalid"; httpStatus: number; message: string }
+  /** Could not tell (offline, timeout, OpenRouter error) — don't block on it. */
+  | { status: "unknown"; message: string };
+
+/** Checks a key against OpenRouter's key-info endpoint (free, no model call). Never throws. */
+export async function checkOpenRouterKey(
+  apiKey: string,
+  options: { baseUrl?: string; fetch?: typeof fetch; timeoutMs?: number } = {},
+): Promise<OpenRouterKeyCheck> {
+  const doFetch = options.fetch ?? fetch;
+  try {
+    const response = await doFetch(`${options.baseUrl ?? OPENROUTER_BASE_URL}/key`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(options.timeoutMs ?? 3_000),
+    });
+    if (response.ok) return { status: "valid" };
+    if (response.status === 401 || response.status === 403) {
+      const body = (await response.json().catch(() => null)) as {
+        error?: { message?: unknown };
+      } | null;
+      const message =
+        typeof body?.error?.message === "string" ? body.error.message : response.statusText;
+      return { status: "invalid", httpStatus: response.status, message };
+    }
+    return { status: "unknown", message: `HTTP ${response.status}` };
+  } catch (error) {
+    return { status: "unknown", message: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 type AttemptOutcome =
   | { ok: true; payload: unknown }
   | { ok: false; error: LlmError; retryAfterMs?: number };

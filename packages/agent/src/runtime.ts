@@ -22,6 +22,7 @@ import { createExecutionTools } from "./execution";
 import type { Capability, ExecutionToolFactory, FrameListener } from "./execution/types";
 import { ScriptedHarness } from "./harness/scripted";
 import type { Harness, ToolCallDecision, ToolCallRequest } from "./harness/types";
+import { checkOpenRouterKey, type OpenRouterKeyCheck } from "./llm/openrouter";
 import type { LlmClient } from "./llm/types";
 import { createMockScript } from "./orchestrator/mock-script";
 import { Orchestrator } from "./orchestrator/orchestrator";
@@ -67,6 +68,8 @@ export interface AgentRuntimeOverrides {
   mockWordDelayMs?: number;
   /** See `TaskWatcherOptions.quickSettleMs`. */
   quickSettleMs?: number;
+  /** Live-mode API key verification (default: `checkOpenRouterKey`). */
+  checkApiKey?: (apiKey: string) => Promise<OpenRouterKeyCheck>;
 }
 
 /** The thread id passed to a runtime method does not exist. */
@@ -530,6 +533,16 @@ class Runtime implements AgentRuntime {
       this.problem ??=
         "OPENROUTER_API_KEY is not set. Add it to ~/.daily-do-list/.env (or the daemon's environment) and restart, or run with DDL_AGENT_MODE=mock.";
       return;
+    }
+    const check = await (this.overrides.checkApiKey ?? checkOpenRouterKey)(apiKey);
+    if (check.status === "invalid") {
+      this.problem ??= `OpenRouter rejected OPENROUTER_API_KEY (${check.httpStatus}: ${check.message}). Put a valid key in ~/.daily-do-list/.env and restart.`;
+      return;
+    }
+    if (check.status === "unknown") {
+      this.logger.warn("Could not verify the OpenRouter key; continuing", {
+        reason: check.message,
+      });
     }
     try {
       const { createPiHarness } = await import("./harness/pi");

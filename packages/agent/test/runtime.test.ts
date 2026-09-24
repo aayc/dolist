@@ -71,6 +71,21 @@ describe("AgentRuntime status", () => {
     );
   });
 
+  it("live mode with a rejected API key starts degraded with an actionable problem", async () => {
+    process.env.OPENROUTER_API_KEY = "not-a-real-key";
+    const checkApiKey = vi.fn(async () => ({
+      status: "invalid" as const,
+      httpStatus: 401,
+      message: "User not found.",
+    }));
+    const t = await runtime({ mode: "live", overrides: { checkApiKey } });
+    expect(checkApiKey).toHaveBeenCalledWith("not-a-real-key");
+    expect(t.runtime.status().problem).toMatch(/OpenRouter rejected OPENROUTER_API_KEY \(401/);
+    await t.storage.write(TODAY, "- [ ] Research standing desks\n");
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    expect(t.runtime.getTaskRecords(TODAY)).toEqual([]);
+  });
+
   it("live mode with an injected harness runs without a key", async () => {
     delete process.env.OPENROUTER_API_KEY;
     const t = await runtime({

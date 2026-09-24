@@ -5,7 +5,11 @@ export type { AgentScript, ScriptContext, ScriptedHarnessOptions } from "./harne
 export { ScriptedHarness } from "./harness/scripted";
 export type * from "./harness/types";
 export { MockLlmClient } from "./llm/mock";
-export { createOpenRouterClient } from "./llm/openrouter";
+export {
+  checkOpenRouterKey,
+  createOpenRouterClient,
+  type OpenRouterKeyCheck,
+} from "./llm/openrouter";
 export * from "./llm/types";
 export { createMockScript } from "./orchestrator/mock-script";
 export type { OrchestratorOptions } from "./orchestrator/orchestrator";
