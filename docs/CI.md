@@ -21,8 +21,16 @@ pull request cancels the PR's previous run; runs on `main` are never cancelled, 
 
 ### `check`: lint, typecheck, test, build (Ubuntu)
 
-Runs `pnpm lint` (Biome), `pnpm typecheck`, `pnpm test`, `node scripts/check-secrets.mjs --all`,
-`pnpm vectors:check`, `pnpm build`, then `node scripts/bundle-size-check.mjs`.
+Runs `pnpm lint`, `pnpm typecheck`, `pnpm test`, `node scripts/check-secrets.mjs --all`,
+`pnpm build`, then `node scripts/bundle-size-check.mjs`.
+
+`pnpm lint` is `scripts/lint.mjs --all`, the same checks the pre-commit hook runs on staged files:
+file hygiene (`scripts/check-hygiene.mjs`: conflict markers, LF endings, final newlines, trailing
+whitespace, files over 1 MiB, paths that differ only in case, executable bits, relative Markdown
+links), Biome, shellcheck on shell scripts and git hooks, actionlint on the workflows, and
+`pnpm vectors:check`. In CI a missing tool fails the step; locally it's skipped with a warning. The
+job installs actionlint from its release, pinned by version and SHA-256 like gitleaks; the runner
+image ships shellcheck.
 
 Unit tests run one package at a time (`pnpm test --concurrency=1 --continue`, also on macOS):
 every package's Vitest starts a worker per core, so running them together on a 3–4 vCPU runner makes
@@ -36,11 +44,11 @@ they guard against.
 `pnpm vectors:check` regenerates the macOS app's test vectors (`apps/macos/Packages/DailyDoListDomain`)
 from `@ddl/core` in memory and fails if the committed JSON differs, so a change to dates, paths,
 tasks or wiki links that would make the Swift port disagree is caught on Linux, before the macOS
-workflow runs. After an intended change, run `pnpm vectors` and commit the updated files.
+workflow runs. After an intended change, run `pnpm vectors` (or `pnpm lint:fix`) and commit the
+updated files.
 
 ```sh
 pnpm lint && pnpm typecheck && pnpm test && pnpm check:secrets
-pnpm vectors:check
 pnpm build && pnpm size:check
 ```
 
@@ -180,8 +188,8 @@ for organizations. The job scans the entire git history (`fetch-depth: 0`) using
 which extends the default ruleset. `--redact` keeps secrets out of the public log. This complements
 `scripts/check-secrets.mjs`, which runs in the pre-commit hook (staged files), the pre-push hook
 (`--range`: every commit being pushed) and in `check`, and covers repo-specific patterns plus
-forbidden files (`.env*`, `.daily-do-list/`, keys, shell history). Both hooks also run gitleaks when
-it is installed locally.
+forbidden files (`.env*`, `.daily-do-list/`, keys, shell history). The hooks run gitleaks too: the
+pre-commit hook when it's installed, the pre-push hook always (it refuses to push without it).
 
 - **False positive** (e.g. a synthetic token in a fixture): add `gitleaks:allow` to that line
   (and `secret-scan:ignore` for `check-secrets.mjs`), or add the finding's fingerprint to
@@ -246,8 +254,10 @@ pnpm eval --suite safety && node .github/scripts/eval-summary.mjs
   trigger.
 - pnpm 10 blocks dependency lifecycle scripts except those listed in `onlyBuiltDependencies`
   (`pnpm-workspace.yaml`).
-- Lint workflow changes with [actionlint](https://github.com/rhysd/actionlint) before pushing:
-  `actionlint .github/workflows/*.yml`.
+- [actionlint](https://github.com/rhysd/actionlint) checks the workflows (and, through shellcheck,
+  their `run:` scripts) in `pnpm lint`, in the pre-commit hook when a workflow or local action
+  changes, and in `check`. To upgrade it, update `ACTIONLINT_VERSION` and `ACTIONLINT_SHA256` in
+  `ci.yml`, taking the SHA from the `linux_amd64` line of `actionlint_<version>_checksums.txt`.
 
 ## Repository settings
 

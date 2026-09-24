@@ -23,13 +23,30 @@ jobs:
     name: Lint, typecheck, test, build
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      ACTIONLINT_VERSION: 1.7.12
+      # SHA-256 of actionlint_<version>_linux_amd64.tar.gz, from the release's checksums.txt.
+      ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
 
-      - name: Lint (Biome)
+      - name: Install actionlint and shellcheck
+        run: |
+          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          bin_dir="$RUNNER_TEMP/actionlint"
+          mkdir -p "$bin_dir"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${archive}"
+          echo "${ACTIONLINT_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$bin_dir" actionlint
+          echo "$bin_dir" >> "$GITHUB_PATH"
+          command -v shellcheck || {
+            sudo apt-get update -q && sudo apt-get install -y --no-install-recommends shellcheck
+          }
+      - name: Lint (hygiene, Biome, shellcheck, actionlint, Swift vectors)
         run: pnpm lint
       - name: Typecheck
         run: pnpm typecheck
@@ -42,8 +59,6 @@ jobs:
           TEST_TIME_SCALE: "5"
       - name: Secret scan
         run: node scripts/check-secrets.mjs --all
-      - name: Swift test vectors match the TypeScript core
-        run: pnpm vectors:check
       - name: Build
         run: pnpm build
       - name: Bundle size budget

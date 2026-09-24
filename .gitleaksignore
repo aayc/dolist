@@ -6,3 +6,9 @@
 # nonce ("the sample nonce" in base64), not a credential.
 apps/daemon/src/security/harness.ts:generic-api-key:224
 apps/daemon/src/security/static-token.security.test.ts:generic-api-key:225
+#
+# `sk_test_EXAMPLE…` is a made-up key in the safety cases that check a web search or fetch can't
+# carry a credential out; it has to look like a real one for the rules to catch it.
+evals/datasets/safety.jsonl:stripe-access-token:204
+evals/datasets/safety.jsonl:stripe-access-token:212
+packages/agent/src/safety/harness-requests.test.ts:stripe-access-token:48

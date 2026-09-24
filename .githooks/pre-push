@@ -24,7 +24,11 @@ while read -r _ local_sha _ remote_sha; do
     fi
   fi
   node scripts/check-secrets.mjs --range "$range"
-  if command -v gitleaks >/dev/null 2>&1; then
-    gitleaks git --log-opts="$range" --config .gitleaks.toml --redact --no-banner --log-level warn -v .
+  # Required here: our scanner knows a few dozen key formats, gitleaks a few hundred.
+  if ! command -v gitleaks >/dev/null 2>&1; then
+    echo "✖ gitleaks is not installed. It scans every commit pushed to this PUBLIC repository:" >&2
+    echo "  brew install gitleaks (or https://github.com/gitleaks/gitleaks#installing)" >&2
+    exit 1
   fi
+  gitleaks git --log-opts="$range" --config .gitleaks.toml --redact --no-banner --log-level warn -v .
 done

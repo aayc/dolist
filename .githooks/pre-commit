@@ -15,8 +15,11 @@ if [ -n "$required" ]; then
   done
 fi
 node scripts/check-secrets.mjs --staged
-# A second, independent scanner when it's installed (`brew install gitleaks`); CI always runs it.
+# A second, independent scanner (`brew install gitleaks`). The pre-push hook and CI require it.
 if command -v gitleaks >/dev/null 2>&1; then
   gitleaks git --pre-commit --staged --config .gitleaks.toml --redact --no-banner --log-level warn -v .
+else
+  echo "⚠ gitleaks is not installed (brew install gitleaks); the pre-push hook needs it." >&2
 fi
-pnpm exec biome check --staged --no-errors-on-unmatched --files-ignore-unknown=true
+# Hygiene, Biome, shellcheck, actionlint and the Swift vectors, for what's staged.
+node scripts/lint.mjs --staged

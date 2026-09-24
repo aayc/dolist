@@ -31,7 +31,8 @@ Product principles, in priority order:
 - Never commit secrets, tokens, `.env` files, personal notes, vault content, agent state, browser
   profiles, shell history, or absolute paths containing a username. `scripts/check-secrets.mjs`
   runs as a pre-commit hook (staged files), a pre-push hook (every commit being pushed) and in CI,
-  plus gitleaks (in CI, and in both hooks when installed). Do not bypass them.
+  plus gitleaks (in CI and both hooks; the pre-push hook refuses to run without it). Do not bypass
+  them.
 - API keys live in `~/.daily-do-list/.env` (outside the repo) or the process environment. Code must
   read them from `process.env` at runtime and must never log them.
 - Test fixtures and examples must be synthetic (no real names, emails, addresses or notes).
@@ -159,6 +160,8 @@ and package READMEs (`packages/storage`, `packages/connectors`, `packages/editor
 - File names are kebab-case; React components are PascalCase in `*.tsx`. Named exports only
   (default exports only where a tool requires them, e.g. eval suites, config files).
 - Formatting and linting: Biome (`pnpm lint:fix`). 2 spaces, double quotes, semicolons, width 100.
+  `pnpm lint` (`scripts/lint.mjs`, also the pre-commit hook on staged files) adds file hygiene,
+  shellcheck, actionlint and the Swift vectors check.
 - Avoid `any`; use `unknown` + narrowing. Validate all external input (HTTP bodies with zod in the
   daemon, LLM JSON output against schemas, MCP payloads).
 - Errors: throw typed errors (`ConflictError`, `LlmError`, …). Libraries never `console.log`; take a

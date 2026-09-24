@@ -1,0 +1,10 @@
+# LF everywhere; git detects binary files on its own. scripts/check-hygiene.mjs rejects CRLF.
+* text=auto eol=lf
+
+# Fixtures whose exact bytes are the test (CRLF, a BOM, truncated files): never normalized.
+packages/contract/fixtures/** -text
+
+# Generated (regenerate, never edit): collapsed in GitHub diffs, left out of language stats.
+packages/editor/test/vim/vectors.jsonl linguist-generated
+apps/macos/Packages/DailyDoListDomain/Tests/DailyDoListDomainTests/Vectors/*.json linguist-generated
+packages/contract/schema/*.json linguist-generated

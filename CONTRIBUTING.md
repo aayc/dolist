@@ -14,11 +14,11 @@ conventions. This guide covers the day-to-day workflow.
 - Test fixtures, examples, screenshots and demo notes must be synthetic: no real names, emails,
   addresses or notes.
 - The git hooks (installed by `pnpm install`) block secrets before they leave your machine: the
-  pre-commit hook runs `scripts/check-secrets.mjs` and Biome on staged files, and the pre-push hook
-  scans every commit being pushed (the whole history on a first push), which catches commits made
-  with `--no-verify`. Both also run gitleaks when it's installed (`brew install gitleaks`). CI
-  repeats the checks and scans the full history with gitleaks. Don't bypass the hooks with
-  `--no-verify`.
+  pre-commit hook scans staged files with `scripts/check-secrets.mjs` and gitleaks, and the pre-push
+  hook scans every commit being pushed (the whole history on a first push) with both, which catches
+  commits made with `--no-verify`. The pre-push hook requires gitleaks, so install it with the
+  linters: `brew install gitleaks shellcheck actionlint`. CI repeats the checks and scans the full
+  history with gitleaks. Don't bypass the hooks with `--no-verify`.
 - Committing under a different identity here than elsewhere (say, personal vs. work)? Set it for this
   clone only with `git config user.email <email>`, and add `git config ddl.requiredEmail <email>`:
   the hooks then refuse commits and pushes under any other address.
@@ -37,7 +37,12 @@ features are macOS-only, and browser tools use a local Chrome/Chromium.
 ```sh
 corepack enable
 pnpm install        # installs dependencies and points git at .githooks/
+brew install gitleaks shellcheck actionlint   # the hooks' scanners and linters
 ```
+
+The pre-commit hook also lints what you stage with `scripts/lint.mjs`, the same checks as
+`pnpm lint` and CI: file hygiene (conflict markers, line endings, whitespace, big files, broken
+relative links), Biome, shellcheck, actionlint, and the Swift test vectors when their inputs change.
 
 Live agent runs need an OpenRouter key. Put `OPENROUTER_API_KEY=...` in `~/.daily-do-list/.env`.
 
