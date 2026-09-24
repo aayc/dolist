@@ -77,6 +77,11 @@ jobs:
 
       - name: Swift package tests
         run: apps/macos/scripts/test.sh
+        env:
+          # Performance tests assert budgets calibrated on a dev machine, in the unoptimized test
+          # build; the hosted macOS runner is a few times slower.
+          PERF_BUDGET_MULTIPLIER: "4"
+          EDITOR_PERF_BUDGET_MULTIPLIER: "2"
 
       - name: Shared packages build for iOS
         # The Foundation-only packages the planned iPhone app reuses must not pick up AppKit.

@@ -158,6 +158,7 @@ Swift Testing needs.
 | --- | --- | --- | --- |
 | Hot-path p99 latency | each `*.bench.ts` | ×1 | ×2 (`BENCH_BUDGET_MULTIPLIER`) |
 | Unit-test timing guards ("stays fast" assertions) and default timeouts | those tests, `scripts/vitest/setup-fast-check.ts` | ×1 | ×5 (`TEST_TIME_SCALE`) |
+| Swift performance tests (debug build) | `*PerformanceTests.swift` in the Swift packages | ×1 | ×4 (`PERF_BUDGET_MULTIPLIER`), editor ×2 (`EDITOR_PERF_BUDGET_MULTIPLIER`) |
 | UI perf: startup, daily-note open, tab switch, thread open, keystroke latency, long tasks | `apps/web/e2e/perf/`, see `docs/PERFORMANCE.md` | ×1 | ×2 (`PERF_BUDGET_MULTIPLIER`) |
 | Bundle size, gzip: initial JS ≤ 320 kB, initial CSS ≤ 40 kB, total JS ≤ 1200 kB | top of `scripts/bundle-size-check.mjs` | same | same |
 | Eval thresholds (accuracy, false-allow rate, …) | each eval suite | same | same |
