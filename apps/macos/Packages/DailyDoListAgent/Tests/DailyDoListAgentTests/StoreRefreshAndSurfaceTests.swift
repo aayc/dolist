@@ -98,6 +98,42 @@ struct StoreRefreshTests {
     #expect(store.approvals["apr_2"]?.isPending == true)
   }
 
+  @Test func aStatusPushDuringARefreshIsNotOverwritten() async {
+    let gate = Gate()
+    client.script {
+      $0.agentStatus = { Fixture.status(problem: "OpenRouter rejected OPENROUTER_API_KEY") }
+      $0.approvals = { _ in
+        await gate.wait()
+        return []
+      }
+    }
+    let refresh = Task { await store.refresh() }
+    #expect(await waitForArrivals(gate))
+    // The problem cleared (e.g. the harness switched) after the daemon answered the status fetch.
+    store.apply(.agentStatus(Fixture.status(problem: nil)))
+    await gate.open()
+    await refresh.value
+    #expect(store.status?.problem == nil)
+    #expect(store.isAgentAvailable)
+  }
+
+  @Test func aStatusPushDuringPauseIsNotOverwritten() async {
+    let gate = Gate()
+    store.apply(.agentStatus(Fixture.status(enabled: true)))
+    client.script {
+      $0.setAgentEnabled = { enabled in
+        await gate.wait()
+        return Fixture.status(enabled: enabled)
+      }
+    }
+    let pause = Task { await store.setEnabled(false) }
+    #expect(await waitForArrivals(gate))
+    store.apply(.agentStatus(Fixture.status(enabled: false, problem: "The Cursor CLI isn't signed in")))
+    await gate.open()
+    await pause.value
+    #expect(store.status?.problem == "The Cursor CLI isn't signed in")
+  }
+
   @Test func onlyTheLatestOverlappingRefreshApplies() async {
     let gate = Gate()
     let calls = Locked(0)

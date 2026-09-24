@@ -29,7 +29,7 @@ extension AgentStore {
 
     var failure: Error?
     switch statusResult {
-    case .success(let value): mutate { $0.setStatus(value) }
+    case .success(let value): applyFetchedStatus(value, since: mark)
     case .failure(let error): failure = failure ?? error
     }
     switch pendingResult {
@@ -58,6 +58,12 @@ extension AgentStore {
         group.addTask { await self.loadThread(id, force: true) }
       }
     }
+  }
+
+  /// A fetched status, unless an `agent.status` push arrived after `mark`: that one is newer.
+  func applyFetchedStatus(_ status: AgentStatusResponse, since mark: UInt64) {
+    guard statusTouch <= mark else { return }
+    mutate { $0.setStatus(status) }
   }
 
   nonisolated static func capture<T: Sendable>(

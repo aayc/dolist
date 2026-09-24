@@ -175,6 +175,7 @@ extension AgentStore {
   /// Pauses or resumes the agent (optimistic; rolls back on failure).
   public func setEnabled(_ enabled: Bool) async {
     let previous = state.status
+    let mark = eventSeq
     var optimistic: AgentStatusResponse?
     if var next = previous {
       next.enabled = enabled
@@ -184,7 +185,7 @@ extension AgentStore {
     }
     do {
       let status = try await client.setAgentEnabled(enabled)
-      mutate { $0.setStatus(status) }
+      applyFetchedStatus(status, since: mark)
     } catch {
       if let previous, let optimistic, state.status == optimistic {
         mutate { $0.setStatus(previous) }

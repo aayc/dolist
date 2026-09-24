@@ -80,6 +80,7 @@ public final class AgentStore {
   /// Incremented for every applied event; REST snapshots compare against it to find the ids that
   /// live events touched while they were in flight.
   @ObservationIgnored var eventSeq: UInt64 = 0
+  @ObservationIgnored var statusTouch: UInt64 = 0
   @ObservationIgnored var recordTouches: [String: UInt64] = [:]
   @ObservationIgnored var noteTouches: [String: UInt64] = [:]
   @ObservationIgnored var threadTouches: [String: UInt64] = [:]
@@ -125,6 +126,8 @@ public final class AgentStore {
       threadTouches[summary.id] = eventSeq
     case .approvalUpsert(let approval):
       approvalTouches[approval.id] = eventSeq
+    case .agentStatus:
+      statusTouch = eventSeq
     case .threadMessage(let event):
       loadBuffers[event.threadId]?.append(event)
     default:
