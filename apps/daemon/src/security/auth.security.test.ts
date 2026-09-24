@@ -16,6 +16,9 @@ import {
   WS_UPGRADE_HEADERS,
 } from "./harness";
 
+// Stretched on slow CI runners (TEST_TIME_SCALE, see scripts/vitest/setup-fast-check.ts).
+const TIME_SCALE = Number(process.env.TEST_TIME_SCALE) || 1;
+
 const hexToken = fc
   .uint8Array({ minLength: 32, maxLength: 32 })
   .map((bytes) => Buffer.from(bytes).toString("hex"));
@@ -125,7 +128,7 @@ describe("parseBearer", () => {
       [`Bearer ${"x".repeat(16_000)} `, "x".repeat(16_000)],
     ];
     for (const [header, expected] of cases) expect(parseBearer(header)).toBe(expected);
-    expect(performance.now() - started).toBeLessThan(100);
+    expect(performance.now() - started).toBeLessThan(100 * TIME_SCALE);
   });
 });
 

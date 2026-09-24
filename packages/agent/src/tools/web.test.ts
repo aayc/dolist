@@ -15,6 +15,9 @@ import {
   type WebFetchDetails,
 } from "./web";
 
+// Stretched on slow CI runners (TEST_TIME_SCALE, see scripts/vitest/setup-fast-check.ts).
+const TIME_SCALE = Number(process.env.TEST_TIME_SCALE) || 1;
+
 const PUBLIC_IP = "93.184.216.34";
 const publicLookup: LookupAddresses = async () => [{ address: PUBLIC_IP, family: 4 }];
 
@@ -496,7 +499,7 @@ describe("htmlToText", () => {
     const hostile = `<body>${'<a href="'.repeat(20_000)}${"<div>".repeat(20_000)}</body>`;
     const started = performance.now();
     htmlToText(hostile, "https://e.com/");
-    expect(performance.now() - started).toBeLessThan(2_000);
+    expect(performance.now() - started).toBeLessThan(2_000 * TIME_SCALE);
   });
 });
 

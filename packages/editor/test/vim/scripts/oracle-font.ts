@@ -1,17 +1,18 @@
 /**
- * The oracle's font, generated: a monospace TrueType font covering printable ASCII whose metrics
- * are pinned to the ones the vectors were first recorded with (Courier New at 16px: 1229/2048em
- * advance, 1705/615 ascent/descent). vim's page motions and display-line commands measure glyph
- * boxes and character widths, so recording with the system `monospace` font would make the vectors
- * depend on the machine's font catalog (macOS and Linux resolve it to different fonts). Every glyph
- * but the space is a plain box, which keeps failure screenshots readable.
+ * The oracle's font, generated: a monospace TrueType font covering printable ASCII with pinned
+ * metrics. vim's page motions and display-line commands measure glyph boxes and character widths,
+ * so recording with the system `monospace` font would make the vectors depend on the machine's font
+ * catalog (macOS and Linux resolve it to different fonts). Ascent and descent are Courier New's
+ * (1705/615 of 2048: an 18px glyph box at 16px); the advance is a whole 10px because Chromium on
+ * Linux rounds glyph advances to whole pixels. Every glyph but the space is a plain box, which keeps
+ * failure screenshots readable.
  */
 
 export const ORACLE_FONT_FAMILY = "DDL Vim Oracle";
 export const ORACLE_FONT_SIZE = 16;
 
 const UNITS_PER_EM = 2048;
-const ADVANCE = 1229;
+const ADVANCE = 1280;
 const ASCENT = 1705;
 const DESCENT = 615;
 const FIRST_CHAR = 0x20;

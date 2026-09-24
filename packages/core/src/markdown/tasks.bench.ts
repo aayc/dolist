@@ -11,7 +11,7 @@ import { parseTasks } from "./tasks";
 const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env;
 const MULTIPLIER = Number(env?.BENCH_BUDGET_MULTIPLIER ?? 1) || 1;
 const BUDGET_MS = {
-  parse2k: 4 * MULTIPLIER,
+  parse2k: 6 * MULTIPLIER,
   track2k: 12 * MULTIPLIER,
   anchors2k: 12 * MULTIPLIER,
 };

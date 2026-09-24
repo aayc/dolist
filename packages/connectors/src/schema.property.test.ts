@@ -2,6 +2,9 @@ import { fc, test } from "@fast-check/vitest";
 import { describe, expect, it } from "vitest";
 import { normalizeInputSchema } from "./schema";
 
+// Stretched on slow CI runners (TEST_TIME_SCALE, see scripts/vitest/setup-fast-check.ts).
+const TIME_SCALE = Number(process.env.TEST_TIME_SCALE) || 1;
+
 const runs = (factor: number) =>
   Math.max(1, Math.round((fc.readConfigureGlobal().numRuns ?? 100) * factor));
 
@@ -160,7 +163,7 @@ describe("normalizeInputSchema", () => {
     for (const input of [deep, JSON.parse(JSON.stringify(wide)), fanOut]) {
       const started = performance.now();
       expectAcceptable(normalizeInputSchema(input) as Record<string, unknown>);
-      expect(performance.now() - started).toBeLessThan(1_500);
+      expect(performance.now() - started).toBeLessThan(1_500 * TIME_SCALE);
     }
   });
 

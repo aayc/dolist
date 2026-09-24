@@ -24,6 +24,15 @@ pull request cancels the PR's previous run; runs on `main` are never cancelled, 
 Runs `pnpm lint` (Biome), `pnpm typecheck`, `pnpm test`, `node scripts/check-secrets.mjs --all`,
 `pnpm vectors:check`, `pnpm build`, then `node scripts/bundle-size-check.mjs`.
 
+Unit tests run one package at a time (`pnpm test --concurrency=1 --continue`, also on macOS):
+every package's Vitest starts a worker per core, so running them together on a 3–4 vCPU runner makes
+timing-sensitive tests many times slower than on a dev machine. `--continue` reports every failing
+package instead of stopping at the first. `TEST_TIME_SCALE=5` stretches Vitest's default timeouts
+(`scripts/vitest/setup-fast-check.ts`) and the budgets of tests that assert an algorithm stays fast
+(each such test multiplies its budget by it). Tests that race a timeout against a delay (retry
+backoff, a killed process, a drained connection) keep fixed bounds: scaling them could hide the bug
+they guard against.
+
 `pnpm vectors:check` regenerates the macOS app's test vectors (`apps/macos/Packages/DailyDoListDomain`)
 from `@ddl/core` in memory and fails if the committed JSON differs, so a change to dates, paths,
 tasks or wiki links that would make the Swift port disagree is caught on Linux, before the macOS
@@ -148,6 +157,7 @@ Swift Testing needs.
 | Budget | Defined in | Local | CI |
 | --- | --- | --- | --- |
 | Hot-path p99 latency | each `*.bench.ts` | ×1 | ×2 (`BENCH_BUDGET_MULTIPLIER`) |
+| Unit-test timing guards ("stays fast" assertions) and default timeouts | those tests, `scripts/vitest/setup-fast-check.ts` | ×1 | ×5 (`TEST_TIME_SCALE`) |
 | UI perf: startup, daily-note open, tab switch, thread open, keystroke latency, long tasks | `apps/web/e2e/perf/`, see `docs/PERFORMANCE.md` | ×1 | ×2 (`PERF_BUDGET_MULTIPLIER`) |
 | Bundle size, gzip: initial JS ≤ 320 kB, initial CSS ≤ 40 kB, total JS ≤ 1200 kB | top of `scripts/bundle-size-check.mjs` | same | same |
 | Eval thresholds (accuracy, false-allow rate, …) | each eval suite | same | same |

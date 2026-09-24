@@ -33,7 +33,12 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
       - name: Unit tests
-        run: pnpm test
+        # One package at a time: a runner has 4 vCPUs, and every package's Vitest starts a worker per
+        # core, so running them together makes timing-sensitive tests many times slower than on a dev
+        # machine. TEST_TIME_SCALE stretches the timing budgets and default timeouts for the rest.
+        run: pnpm test --concurrency=1 --continue
+        env:
+          TEST_TIME_SCALE: "5"
       - name: Secret scan
         run: node scripts/check-secrets.mjs --all
       - name: Swift test vectors match the TypeScript core
@@ -55,7 +60,10 @@ jobs:
       - uses: ./.github/actions/setup
 
       - name: Unit tests
-        run: pnpm test
+        # See the Linux job: one package at a time, stretched timing budgets (3 vCPUs here).
+        run: pnpm test --concurrency=1 --continue
+        env:
+          TEST_TIME_SCALE: "5"
 
   bench:
     name: Benchmarks

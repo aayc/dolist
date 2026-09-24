@@ -5,6 +5,13 @@ import { resolveTaskAnchors } from "./anchors";
 import { isEmptyDiff, type TaskDiff, type TrackedTask, trackTasks } from "./task-tracker";
 import { isBlankTaskText, type ParsedTask, parseTasks } from "./tasks";
 
+// Stretched on slow CI runners (TEST_TIME_SCALE, see scripts/vitest/setup-fast-check.ts).
+const TIME_SCALE =
+  Number(
+    (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env
+      .TEST_TIME_SCALE,
+  ) || 1;
+
 // ── Model: a flat-ish to-do list rendered to markdown ────────────────────────────────────────
 
 interface Item {
@@ -518,7 +525,7 @@ describe("trackTasks performance guard", () => {
     const parsed = parseTasks(doc);
     const started = performance.now();
     const { tasks } = trackTasks(tracked, parsed, { now: 1 });
-    expect(performance.now() - started).toBeLessThan(300);
+    expect(performance.now() - started).toBeLessThan(300 * TIME_SCALE);
     expect(new Set(tasks.map((t) => t.id)).size).toBe(tasks.length);
   });
 
@@ -528,7 +535,7 @@ describe("trackTasks performance guard", () => {
     const parsed = parseTasks(`${note(10, () => "same text")}\n${same}`);
     const started = performance.now();
     const { diff } = trackTasks(state, parsed, { now: 1 });
-    expect(performance.now() - started).toBeLessThan(300);
+    expect(performance.now() - started).toBeLessThan(300 * TIME_SCALE);
     expect(diff.added).toHaveLength(10);
     expect(diff.removed).toEqual([]);
   });
@@ -547,7 +554,7 @@ describe("trackTasks performance guard", () => {
       const parsed = parseTasks(render(edits.reduce(applyEdit, items)));
       const started = performance.now();
       trackTasks(state, parsed, { idFactory: ids, now: 2 });
-      expect(performance.now() - started).toBeLessThan(100);
+      expect(performance.now() - started).toBeLessThan(100 * TIME_SCALE);
     },
   );
 });

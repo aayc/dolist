@@ -1,7 +1,8 @@
-# Verified gitleaks false positives in history (see .gitleaks.toml). One fingerprint per line:
-# <commit>:<file>:<rule>:<line>.
+# Verified gitleaks false positives (see .gitleaks.toml). `<file>:<rule>:<line>` matches the finding
+# in every commit, so the entries survive history rewrites; `<commit>:<file>:<rule>:<line>` would
+# pin a single commit.
 #
 # The `Sec-WebSocket-Key` handshake value in the daemon's security tests is RFC 6455's example
 # nonce ("the sample nonce" in base64), not a credential.
-92979c47193eee67b2a2fbabc4e4f39c9503a206:apps/daemon/src/security/harness.ts:generic-api-key:224
-92979c47193eee67b2a2fbabc4e4f39c9503a206:apps/daemon/src/security/static-token.security.test.ts:generic-api-key:225
+apps/daemon/src/security/harness.ts:generic-api-key:224
+apps/daemon/src/security/static-token.security.test.ts:generic-api-key:225

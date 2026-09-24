@@ -86,14 +86,14 @@ describe("oracle font", () => {
     expect(table("loca").length).toBe((glyphs + 1) * 2);
   });
 
-  it("has Courier New's metrics: a monospace 1229/2048em advance and 1705/615 ascent/descent", () => {
+  it("is monospace with a whole-pixel advance (1280/2048em) and Courier New's ascent/descent", () => {
     expect(font.getUint16(table("head").offset + 18)).toBe(2048);
     const hhea = table("hhea").offset;
     expect(font.getInt16(hhea + 4)).toBe(1705);
     expect(font.getInt16(hhea + 6)).toBe(-615);
     expect(font.getInt16(hhea + 8)).toBe(0);
     expect(font.getUint16(hhea + 34)).toBe(1);
-    expect(font.getUint16(table("hmtx").offset)).toBe(1229);
+    expect(font.getUint16(table("hmtx").offset)).toBe(1280);
   });
 
   it("maps printable ASCII and nothing else", () => {

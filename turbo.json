@@ -16,7 +16,7 @@
     },
     "test": {
       "dependsOn": ["transit"],
-      "env": ["FC_SEED", "FC_NUM_RUNS"],
+      "env": ["FC_SEED", "FC_NUM_RUNS", "TEST_TIME_SCALE"],
       "outputs": []
     },
     "bench": {

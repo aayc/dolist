@@ -5,6 +5,9 @@ import { MAX_BODY_BYTES } from "../app";
 import { createTestApp, makeApproval, makeThread } from "../test-helpers";
 import { httpRequest, type MemoryLiveApp, rawRequest, startLiveApp } from "./harness";
 
+// Stretched on slow CI runners (TEST_TIME_SCALE, see scripts/vitest/setup-fast-check.ts).
+const TIME_SCALE = Number(process.env.TEST_TIME_SCALE) || 1;
+
 /** Every JSON endpoint with a body that it accepts. */
 const JSON_ENDPOINTS: Array<{ method: string; path: string; valid: Record<string, unknown> }> = [
   { method: "PUT", path: API_ROUTES.note("a.md"), valid: { content: "x" } },
@@ -317,7 +320,7 @@ describe("content types and malformed JSON", () => {
         expect([400], `${method} ${path}`).toContain(res.status);
       }
     }
-    expect(performance.now() - started).toBeLessThan(1_500);
+    expect(performance.now() - started).toBeLessThan(1_500 * TIME_SCALE);
     expect((await request(API_ROUTES.health)).status).toBe(200);
   });
 });

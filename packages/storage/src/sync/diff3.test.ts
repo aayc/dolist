@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { type DiffHunk, diff3Regions, diffLines, mergeLines, mergeText } from "./diff3";
 
+// Stretched on slow CI runners (TEST_TIME_SCALE, see scripts/vitest/setup-fast-check.ts).
+const TIME_SCALE = Number(process.env.TEST_TIME_SCALE) || 1;
+
 /** Deterministic PRNG (mulberry32) so randomized tests are reproducible. */
 function rng(seed: number): () => number {
   let a = seed;
@@ -200,7 +203,7 @@ describe("mergeText", () => {
     const theirs = [...long.slice(0, -1), "- [x] last task done"];
     const started = performance.now();
     const result = mergeLines(long, ours, theirs);
-    expect(performance.now() - started).toBeLessThan(1_000);
+    expect(performance.now() - started).toBeLessThan(1_000 * TIME_SCALE);
     expect(result).toEqual({
       clean: true,
       lines: ["# edited title", ...long.slice(1, -1), "- [x] last task done"],

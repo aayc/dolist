@@ -14,7 +14,7 @@ export const VIEWPORT = {
   lineHeight: 20,
   wrap: false,
   textHeight: 18,
-  charWidth: 9.6015625,
+  charWidth: 10,
 } as const;
 export const DEFAULT_OPTIONS = { tabSize: 4, indentUnit: "\t" } as const;
 

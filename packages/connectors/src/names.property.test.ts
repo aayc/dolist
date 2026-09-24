@@ -3,6 +3,9 @@ import { fc, test } from "@fast-check/vitest";
 import { describe, expect, it } from "vitest";
 import { assignToolNames, type McpToolRef, mcpToolName, toolRefKey } from "./names";
 
+// Stretched on slow CI runners (TEST_TIME_SCALE, see scripts/vitest/setup-fast-check.ts).
+const TIME_SCALE = Number(process.env.TEST_TIME_SCALE) || 1;
+
 const runs = (factor: number) =>
   Math.max(1, Math.round((fc.readConfigureGlobal().numRuns ?? 100) * factor));
 
@@ -92,7 +95,7 @@ describe("assignToolNames", () => {
     }));
     const started = performance.now();
     const values = [...assignToolNames(refs).values()];
-    expect(performance.now() - started).toBeLessThan(1_000);
+    expect(performance.now() - started).toBeLessThan(1_000 * TIME_SCALE);
     expect(values).toHaveLength(3_000);
     expect(new Set(values.map((n) => n.toLowerCase())).size).toBe(3_000);
     for (const name of values) expect(name).toMatch(TOOL_NAME_RE);

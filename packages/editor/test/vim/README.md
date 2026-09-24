@@ -26,7 +26,7 @@ format must be additive (new optional fields) and documented here (see [Changes]
   "format": "ddl-vim-vectors",
   "version": 1,
   "engine": "@replit/codemirror-vim@6.4.0 (@replit/codemirror-vim-core@0.1.0)",
-  "viewport": { "rows": 20, "lineHeight": 20, "wrap": false, "textHeight": 18, "charWidth": 9.6015625 },
+  "viewport": { "rows": 20, "lineHeight": 20, "wrap": false, "textHeight": 18, "charWidth": 10 },
   "defaults": { "tabSize": 4, "indentUnit": "\t" }
 }
 ```
@@ -215,8 +215,9 @@ tokens). The theme gives 20px lines in the oracle font at 16px, no content paddi
 400px (20-row) tall scroller without scrollbars. `CodeMirror.isMac` is `false`.
 
 The oracle font (`scripts/oracle-font.ts`) is generated: a monospace TrueType font covering
-printable ASCII with Courier New's metrics (the font the vectors were first recorded with), which
-every harness page loads before it runs and whose measured metrics must equal `viewport`'s. The
+printable ASCII with Courier New's ascent and descent and a whole-pixel advance (Chromium on Linux
+rounds advances to whole pixels), which every harness page loads before it runs and whose measured
+metrics must equal `viewport`'s. The
 system `monospace` font would make page motions depend on the machine's font catalog (macOS and
 Linux resolve it to different fonts). Other characters fall back to the system's fonts, so
 `pnpm vim:vectors` rejects cases that run a pixel-measuring command (page motions, display-line
@@ -315,3 +316,6 @@ Additive clarifications made while building the oracle (format version 1 is unch
 - The header's `viewport` records the font geometry (`textHeight`, `charWidth`), and the oracle
   lays out in a generated font with those metrics instead of the system `monospace` font (every
   case is unchanged: they are the metrics the system font had where the vectors were recorded).
+- The oracle font's advance is a whole 10px (`charWidth: 10`), so Linux Chromium, which rounds glyph
+  advances to whole pixels, lays out like macOS. No case changed: with every character the same
+  width, vim's pixel measurements come out the same in columns.

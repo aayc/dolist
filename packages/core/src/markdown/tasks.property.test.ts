@@ -11,6 +11,13 @@ import {
 } from "./tasks";
 import { parseWikiLinks } from "./wikilinks";
 
+// Stretched on slow CI runners (TEST_TIME_SCALE, see scripts/vitest/setup-fast-check.ts).
+const TIME_SCALE =
+  Number(
+    (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env
+      .TEST_TIME_SCALE,
+  ) || 1;
+
 // ── Independent restatement of the grammar (no regex shared with the parser) ──────────────────
 
 interface OracleTask {
@@ -507,7 +514,7 @@ describe("parseTasks edge cases (decided behavior)", () => {
     ];
     const started = performance.now();
     for (const line of hostile) parseTasks(`${line}\n- [ ] after`);
-    expect(performance.now() - started).toBeLessThan(250);
+    expect(performance.now() - started).toBeLessThan(250 * TIME_SCALE);
   });
 });
 

@@ -11,6 +11,9 @@ import { ARTIFACTS_DIR, createThreadStore, threadPath } from "../../src/threads/
 import type { ThreadStoreEvent } from "../../src/threads/types";
 import { NOW, paths, readFixture, recordingLogger, STAMP, sidecar, vault } from "./helpers";
 
+// Stretched on slow CI runners (TEST_TIME_SCALE, see scripts/vitest/setup-fast-check.ts).
+const TIME_SCALE = Number(process.env.TEST_TIME_SCALE) || 1;
+
 const V1_ID = "thr_k3j9x0q2m1ab";
 const T = 1790154000000;
 
@@ -708,6 +711,6 @@ describe("thread writer", () => {
     const elapsed = performance.now() - started;
     expect(reloaded.get("thr_huge")!.messages).toHaveLength(10_001);
     expect(reloaded.get("thr_huge")!.messages[9_999]).toEqual(messages[9_999]);
-    expect(elapsed).toBeLessThan(1_500);
+    expect(elapsed).toBeLessThan(1_500 * TIME_SCALE);
   });
 });
