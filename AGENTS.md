@@ -299,7 +299,8 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
 
 ## Commits & PRs
 
-- Conventional commits (`feat(agent): …`, `fix(web): …`, `perf(editor): …`, `docs: …`).
+- Conventional commits (`feat(agent): …`, `fix(web): …`, `perf(editor): …`, `docs: …`), checked
+  by the commit-msg hook.
 - Small, focused PRs; CI (lint, typecheck, tests, bench budgets, bundle budget, e2e, mock evals,
   secret scan) must be green. Include perf numbers for UI-affecting changes.
 - If a PR resolves a Linear ticket, put `Resolves <ID>` in the PR body.

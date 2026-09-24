@@ -1,0 +1,13 @@
+#!/bin/sh
+# Versioned commit-msg hook (installed via `pnpm install` → scripts/install-git-hooks.mjs).
+# Subjects are Conventional Commits, `type(scope): summary` (see CONTRIBUTING.md).
+subject=$(sed -n '/^[^#]/{p;q;}' "$1")
+case "$subject" in
+  "Merge "* | "Revert "* | "fixup! "* | "squash! "* | "amend! "*) exit 0 ;;
+esac
+types="feat|fix|perf|refactor|test|docs|build|ci|chore|style|revert"
+if ! printf '%s\n' "$subject" | grep -Eq "^($types)(\([a-z0-9/,-]+\))?!?: [^ ]"; then
+  echo "✖ \"$subject\" isn't a Conventional Commit subject: use type(scope): summary," >&2
+  echo "  e.g. \"fix(web): …\", with a type from: $(echo "$types" | tr '|' ' ')" >&2
+  exit 1
+fi

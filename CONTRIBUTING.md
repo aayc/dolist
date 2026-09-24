@@ -97,8 +97,9 @@ Before opening a PR, run `pnpm check`, plus the bench, e2e and eval commands rel
 
 - Use [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary`, for
   example `feat(agent): …`, `fix(web): …`, `perf(editor): …`, `docs: …`. Types: `feat`, `fix`,
-  `perf`, `refactor`, `test`, `docs`, `build`, `ci`, `chore`. Scopes are package or app names
-  (`core`, `storage`, `editor`, `agent`, `connectors`, `web`, `daemon`, `evals`) or `ci` and `deps`.
+  `perf`, `refactor`, `test`, `docs`, `build`, `ci`, `chore`, `style` (formatting only), `revert`.
+  Scopes are package or app names (`core`, `storage`, `editor`, `agent`, `connectors`, `web`,
+  `daemon`, `evals`, `macos`) or `ci` and `deps`. The commit-msg hook checks the subject.
 - Keep PRs small and focused, and fill in the template, including the perf and safety impact
   sections. CI must be green.
 - If the PR resolves a Linear ticket, put `Resolves <ID>` in the PR body.
