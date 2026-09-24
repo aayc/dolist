@@ -269,5 +269,4 @@ pnpm eval --suite safety && node .github/scripts/eval-summary.mjs
 
 **Housekeeping**
 
-- Replace `OWNER/REPO` in `.github/ISSUE_TEMPLATE/config.yml` once the repository exists.
 - The issue templates use the default `bug` and `enhancement` labels.
