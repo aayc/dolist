@@ -8,10 +8,12 @@ import { parseTasks } from "./tasks";
  * track). Budgets are p99 latency in ms, deliberately loose enough for CI runners; the numbers are
  * written to bench-results.json and checked by scripts/bench-check.mjs.
  */
+const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env;
+const MULTIPLIER = Number(env?.BENCH_BUDGET_MULTIPLIER ?? 1) || 1;
 const BUDGET_MS = {
-  parse2k: 4,
-  track2k: 12,
-  anchors2k: 12,
+  parse2k: 4 * MULTIPLIER,
+  track2k: 12 * MULTIPLIER,
+  anchors2k: 12 * MULTIPLIER,
 };
 
 function makeNote(lines: number): string {

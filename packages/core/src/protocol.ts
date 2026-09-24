@@ -25,30 +25,53 @@ export const API_VERSION = 1;
 /** Header clients send so the daemon can tag the origin of a change and skip echoing it back. */
 export const CLIENT_ID_HEADER = "x-ddl-client-id";
 
+/** Route → methods (request body → response body). */
 export const API_ROUTES = {
+  /** GET → HealthResponse */
   health: "/api/health",
+  /** GET → VaultTreeResponse */
   tree: "/api/vault/tree",
-  /** GET/PUT/DELETE `/api/notes/<encoded vault path>` */
+  /**
+   * GET → NoteResponse · PUT WriteNoteRequest → WriteNoteResponse (201 created, 409
+   * ConflictResponse) · DELETE → TrashResponse (moved into `.trash/`)
+   */
   note: (path: string) => `/api/notes/${encodeVaultPath(path)}`,
+  /** POST RenameRequest → WriteNoteResponse (note) | FolderRenameResponse (folder); 409 on conflict */
   rename: "/api/notes-rename",
+  /** POST CreateFolderRequest → { path } · DELETE `?path=` → TrashResponse */
   folders: "/api/folders",
-  /** GET `/api/daily/<YYYY-MM-DD|today>?create=1` */
+  /** GET → DailyNoteResponse (creates from the template with `?create=1`) */
   daily: (date: string, create = true) => `/api/daily/${date}${create ? "?create=1" : ""}`,
+  /** GET → SearchResponse */
   search: (q: string) => `/api/search?q=${encodeURIComponent(q)}`,
+  /** GET → SettingsResponse · PUT UpdateSettingsRequest → SettingsResponse */
   settings: "/api/settings",
+  /** GET → AgentStatusResponse */
   agentStatus: "/api/agent/status",
+  /** PUT/POST SetAgentEnabledRequest → AgentStatusResponse */
   agentEnabled: "/api/agent/enabled",
+  /** GET → TaskRecordsResponse */
   tasks: (notePath: string) => `/api/tasks?notePath=${encodeURIComponent(notePath)}`,
+  /** GET (`?notePath=`, `?taskId=`) → ThreadListResponse */
   threads: "/api/threads",
+  /** GET → ThreadResponse */
   thread: (id: string) => `/api/threads/${encodeURIComponent(id)}`,
+  /** POST PostMessageRequest → OkResponse */
   threadMessages: (id: string) => `/api/threads/${encodeURIComponent(id)}/messages`,
+  /** POST → OkResponse */
   threadCancel: (id: string) => `/api/threads/${encodeURIComponent(id)}/cancel`,
+  /** POST → OkResponse */
   threadRetry: (id: string) => `/api/threads/${encodeURIComponent(id)}/retry`,
+  /** GET (`?status=`) → ApprovalListResponse */
   approvals: "/api/approvals",
+  /** GET → ApprovalResponse · POST ApprovalDecisionRequest → ApprovalResponse (409 if decided) */
   approval: (id: string) => `/api/approvals/${encodeURIComponent(id)}`,
+  /** GET → artifact bytes (Content-Type from the artifact) */
   artifact: (threadId: string, artifactId: string) =>
     `/api/artifacts/${encodeURIComponent(threadId)}/${encodeURIComponent(artifactId)}`,
+  /** GET → ConnectorsResponse */
   connectors: "/api/connectors",
+  /** WebSocket: ServerEvent ⇄ ClientEvent */
   ws: "/ws",
 } as const;
 
@@ -112,13 +135,30 @@ export interface ConflictResponse {
   current: NoteResponse | null;
 }
 
+/** Renames a note, or a folder (moving everything inside it) when `from` is a folder. */
 export interface RenameRequest {
   from: string;
   to: string;
 }
 
+export interface FolderRenameResponse {
+  path: string;
+  /** Number of files moved. */
+  moved: number;
+}
+
 export interface CreateFolderRequest {
   path: string;
+}
+
+/** Deletes are soft: the note/folder moves into the vault's `.trash/` folder. */
+export interface TrashResponse {
+  ok: true;
+  trashedTo: string;
+}
+
+export interface OkResponse {
+  ok: true;
 }
 
 export interface DailyNoteResponse extends NoteResponse {
@@ -128,6 +168,9 @@ export interface DailyNoteResponse extends NoteResponse {
 
 export interface SearchHit {
   path: string;
+  /** `name`: the note's name matched; `content`: a line matched. */
+  kind: "name" | "content";
+  /** 0-based line of a `content` hit (0 for `name` hits). */
   line: number;
   preview: string;
 }
@@ -191,6 +234,14 @@ export interface PostMessageRequest {
 
 export interface ApprovalListResponse {
   approvals: ApprovalRequest[];
+}
+
+export interface ApprovalResponse {
+  approval: ApprovalRequest;
+}
+
+export interface ConnectorsResponse {
+  connectors: ConnectorStatus[];
 }
 
 export interface ApprovalDecisionRequest {
