@@ -89,10 +89,8 @@ Inside HTML blocks and tags, what is typed is inserted literally: no auto-closed
 quotes (lang-markdown mounts lang-html, whose input rules would turn `<div>x</div>` into
 `<div>x</div></div>`).
 
-**Vim** (`vimMode`) via `@replit/codemirror-vim`, always the first extension so it sees keys before
-any keymap. `:w` calls `onSave`. The block cursor uses the accent color. The module loads lazily;
-toggling vim before it arrives settles on the latest setting, and a failed load is retried the next
-time vim is enabled (`preloadVim()` rejects so hosts can report it).
+**Vim** (`vimMode`): Obsidian-style vim keybindings with ex commands mapped to app actions, a mode
+indicator, clipboard registers and a vimrc. See [Vim mode](#vim-mode).
 
 **Links.** A plain click follows a rendered (not currently edited) link. Mod-click follows any link,
 also in source mode. Mod-click and middle-click open wikilinks in a new pane. External URLs are
@@ -114,6 +112,137 @@ links, as in Obsidian.
 | Mod-f | search panel (plus CodeMirror's default and history keymaps) |
 
 Mod-e is deliberately unbound so the host can use it (for example to toggle reading view).
+
+## Vim mode
+
+`config.vimMode` turns on vim keybindings: vim.js (`@replit/codemirror-vim`) plus the app
+integration in [`src/vim-integration.ts`](src/vim-integration.ts). They load together as one lazy
+chunk (~42 kB gz). `vimMode(true)` yields nothing until the chunk arrives, then every editor that
+asked for vim reconfigures. Toggling vim during the load settles on the latest setting. Hosts call
+`preloadVim()` at startup when the setting is on. It rejects if the chunk can't load, and enabling
+vim again retries. Vim is always the first extension, so it sees keys before any keymap.
+
+vim.js keeps mappings, registers, options and ex commands in module-level state shared by every
+editor. The integration is installed once and acts on the editor a command came from.
+
+**Ex commands and keys** call host callbacks. When the host doesn't provide a callback, the vim
+panel says "`:cmd` isn't available here".
+
+| Command | Callback | Web app |
+| --- | --- | --- |
+| `:w[rite]` | `onSave` | save the note now (like Mod-s) |
+| `:wa[ll]` | `onSaveAll` | save every open note |
+| `:q[uit]`, `:q!`, `:tabc[lose]`, `:bd[elete]` | `onClose({ all: false })` | close the note's tab |
+| `:qa[ll]` | `onClose({ all: true })` | close every tab |
+| `:wq`, `:x[it]` | `onSave`, then `onClose` | save and close the tab |
+| `:wqa[ll]`, `:xa[ll]` | `onSaveAll`, then `onClose({ all: true })` | save all and close every tab |
+| `:e[dit] name`, `:tabe[dit] name`, `:tabnew name` | `onOpenNote(target, { newTab })` | open like a wiki link (created if missing) |
+| `:e`, `:tabe`, `:tabnew` without a name | `onOpenNote(null, { newTab })` | open the quick switcher |
+| `:tabn[ext]`, `:bn[ext]` | `onSwitchTab({ delta: 1 })`; `:tabn 3` → `{ index: 2 }` | next tab (wraps) |
+| `:tabp[revious]`, `:tabN[ext]`, `:bp[revious]`, `:bN[ext]` | `onSwitchTab({ delta: -1 })`; `:tabp 2` → `{ delta: -2 }` | previous tab (wraps) |
+| `gt` / `gT` (normal mode) | `onSwitchTab`: `gt` next, `3gt` tab 3, `gT`/`2gT` back | |
+| `:obcommand id` | `onRunCommand(id)` (false: "No command id") | run a command-palette command, e.g. `daily:today` |
+
+Notes save continuously, so `:q!` doesn't discard edits and `:w` only skips the save debounce.
+vim.js's own ex commands keep working: `:s`, `:g`, `:v`, `:sort`, `:normal`, `:d`, `:y`, `:j`,
+`:marks`, `:registers`, `:noh`, `:set`, the `:map` family and so on. `:obcommand` uses Obsidian's
+name, so vimrc lines like `exmap today obcommand daily:today` carry over.
+
+**Status.** `onVimStatus({ mode, pending, recording })` reports:
+
+- `mode`: `normal`, `insert`, `replace`, `visual`, `visual-line` or `visual-block`;
+- `pending`: the keys of the command being typed (vim's showcmd, e.g. `2d` or `"a`);
+- `recording`: the register a macro is being recorded into.
+
+It fires at most once per keystroke and only when a field changed, so typing in insert mode
+triggers nothing. It reports `null` when vim turns off. The web app's status bar shows
+`recording @q`, the pending keys and `NORMAL` / `INSERT` / `REPLACE` / `VISUAL` / `V-LINE` /
+`V-BLOCK`.
+
+**Clipboard registers.** `"+` and `"*` are the system clipboard (one register, as in Vim on macOS
+and Windows). `:set clipboard=unnamed` (or `unnamedplus`) mirrors the unnamed register: yanks and
+deletes also go to the system clipboard, and `p` pastes text copied in another app. Browsers read
+the clipboard asynchronously and only with permission, but vim pastes synchronously, so the
+registers read from a cache. It refreshes:
+
+- in the background, when the editor gains focus or the window becomes visible, and only once
+  clipboard-read permission was granted;
+- from copy, cut and paste events, which need no permission;
+- explicitly, when the user types `"+`, `"*` or insert-mode `<C-r>`; this read may show the
+  browser's permission prompt.
+
+Writes always go through. Without read permission, the registers hold what the app last wrote
+or saw pasted. Like any Clipboard API, this needs a secure context (`https:` or `localhost`).
+
+**vimrc.** `config.vimrc` is a vimrc applied to every vim editor (`AppSettings.editor.vimrc`,
+edited in Settings → Editor when vim mode is on). It accepts:
+
+- one ex command per line, with an optional leading `:`;
+- `"` comments and blank lines;
+- `let mapleader = " "` (or `"\<Space>"`, `","`…), which applies to `<leader>` in later lines;
+- Obsidian's `exmap name command`, which defines `:name` as an alias.
+
+The mapping commands work (`map`, `nmap`, `imap`, `vmap`, `omap`, their `noremap` forms and
+`unmap`), and so do `set` for vim.js's options (`textwidth`, `pcre`, `insertModeEscKeysTimeout`,
+`langmap`) and `clipboard`. Each change first undoes the previous vimrc: every mapping is cleared
+(`gt`/`gT` come back), the previous vimrc's ex aliases are removed and the options it set are
+restored. Lines vim.js rejects are reported to `onVimrcApplied([{ line, message }])`, 0-based,
+and the web app lists them under the setting. `set ignorecase`/`smartcase` are reported as
+unknown options: `/` search in vim.js is always smart-case. On first run, the daemon imports
+`.obsidian.vimrc` from an Obsidian vault (the Vimrc Support plugin's default location).
+
+**Keys shared with the app.** `vimClaimsKey(event)` tells a host whether a keydown inside a vim
+editor belongs to vim. It returns true in normal, visual and operator-pending mode for the Ctrl
+keys vim binds: by default (`<C-o>`, `<C-d>`, `<C-u>`, `<C-r>`, `<C-v>`, `<C-a>`, …) or through
+a vimrc mapping. The web app's global hotkeys use it only where "Mod" is Ctrl (Windows and
+Linux), so there vim wins for its keys, and app shortcuts vim doesn't bind keep working. Insert
+mode and every ⌘ shortcut on macOS are unaffected. Escape goes to vim unless an overlay (palette,
+switcher, modal) is open. Mappings made interactively with `:map` aren't claimed; put them in
+the vimrc.
+
+**With the rest of the editor.** Insert-mode Enter continues lists and tasks and Tab indents list
+items. Live preview, clickable checkboxes and Alt-Enter (follow the link, or open the line's agent
+thread) work in every mode. Vim edits are ordinary transactions, so badges behave as for any other
+edit: they follow their task through edits, `dd` drops the task's badge like any line deletion,
+and a dropped badge never comes back by itself. After `u`, the host shows it again when it
+re-resolves the agent's tasks; the web app does that ~150 ms after an edit. `/` and `?` use
+vim.js's search, and its matches are highlighted like the search panel's until `:noh`. Mod-f
+still opens CodeMirror's search panel. The block cursor uses the accent color and turns into an
+outline when the editor loses focus. The vim panel (`:` prompt, messages) uses the app's colors
+in light and dark themes.
+
+### How vim is tested
+
+vim.js is the reference implementation, and the tests pin it from three sides (details in
+[`test/vim/README.md`](test/vim/README.md)):
+
+- **Vectors.** [`test/vim/vectors.jsonl`](test/vim/vectors.jsonl) holds ~11 500 cases: a
+  generated catalog of every default key binding and ex command over a set of documents, with
+  counts, plus vim.js's own tests recorded as steps. Each case is a document, a selection, keys and
+  the expected document, selections, mode and registers after every step. The file is produced by
+  running vim.js on a plain CodeMirror 6 "oracle" editor in Chromium, and it is the contract the
+  Swift port replays. The catalog must cover every entry of vim.js's `defaultKeymap` and
+  `defaultExCommandMap` (exclusions are listed with reasons).
+- **vim.js's test suite** runs in Chromium against plain CodeMirror 6 (upstream's setup, all must
+  pass) and against this editor (vim + live preview). Only the documented expected failures in
+  [`test/vim/upstream/expected-failures.ts`](test/vim/upstream/expected-failures.ts) may fail:
+  tests that depend on the JavaScript/XML language upstream loads.
+- **Replay.** Every vector is replayed against this editor. The skip list, with reasons, is in
+  the same file.
+
+Integration code has unit tests (`src/vim*.test.ts`), the web app has real-keyboard Playwright
+tests (`apps/web/e2e/vim.spec.ts`), and the perf suite budgets vim-mode typing like normal typing.
+
+```sh
+pnpm vim:vectors    # regenerate test/vim/vectors.jsonl (~10 s, Chromium)
+pnpm vim:check      # CI gate (~25 s): vectors up to date, coverage, both suites, replay
+pnpm --filter @ddl/editor vim:upstream -- --web     # just vim.js's suite (--plain / --web)
+pnpm --filter @ddl/editor vim:replay -- --filter 'motion/'   # replay a subset
+```
+
+After a vim.js upgrade or a catalog change, run `pnpm vim:vectors` and review the diff. The file
+is sorted by case name and byte-for-byte deterministic. `pnpm vim:check` prints a per-case diff
+when the committed file is stale.
 
 ## API notes
 
@@ -221,4 +350,9 @@ pnpm exec biome check --write packages/editor
 - Backspace right after the marker of a top-level item indented with a tab (`\t- |a`) deletes one
   character instead of the list markup.
 - With line numbers and readable line length on, the gutter stays at the left edge of the editor.
-- The `@codemirror/language-data` descriptions and vim are bundled eagerly; languages load lazily.
+- The `@codemirror/language-data` descriptions are bundled eagerly; languages load lazily.
+- Vim: no `ignorecase`/`smartcase` options (search is always smart-case), no `:m`/`:t`/`:copy`,
+  no splits and no `:abbreviate`. vim.js throws on a few rare sequences: `di<` outside angle
+  brackets, `<C-a>`/`<C-x>` counts that lengthen a binary number, and recursive macros (a
+  failing motion doesn't stop a macro, so it recurses until the stack overflows). CodeMirror
+  logs the error and the editor keeps working. The catalog pins them as "verified to throw".

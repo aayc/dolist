@@ -12,9 +12,13 @@
     "./styles.css": "./src/styles.css"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p test/vim/tsconfig.json",
     "test": "vitest run --passWithNoTests",
-    "bench": "vitest bench --run --reporter=default --reporter=json --outputFile.json=bench-results.json"
+    "bench": "vitest bench --run --reporter=default --reporter=json --outputFile.json=bench-results.json",
+    "vim:vectors": "tsx test/vim/scripts/vectors.ts",
+    "vim:check": "tsx test/vim/scripts/check.ts",
+    "vim:upstream": "tsx test/vim/scripts/upstream.ts",
+    "vim:replay": "tsx test/vim/scripts/replay.ts"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -31,6 +35,14 @@
     "@replit/codemirror-vim": "^6.4.0"
   },
   "devDependencies": {
-    "happy-dom": "^20.14.5"
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@codemirror/lang-xml": "^6.1.0",
+    "@replit/codemirror-vim-core": "0.1.0",
+    "@types/node": "^24.0.0",
+    "codemirror": "^6.0.2",
+    "esbuild": "^0.28.2",
+    "happy-dom": "^20.14.5",
+    "playwright-core": "catalog:",
+    "tsx": "^4.23.15"
   }
 }

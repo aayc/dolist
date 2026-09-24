@@ -117,7 +117,11 @@ jobs:
         # System dependencies aren't cached, so this also runs on a cache hit (downloads are skipped).
         run: pnpm --filter @ddl/web exec playwright install --with-deps chromium
 
+      - name: Vim mode (vectors up to date, vim.js's own suite, replay against the editor)
+        run: pnpm vim:check
+
       - name: Functional tests
+        if: ${{ !cancelled() && steps.browsers.outcome == 'success' }}
         run: pnpm e2e
       # Each Playwright run replaces playwright-report/ and test-results/, so upload in between.
       - name: Upload functional report
