@@ -2,6 +2,18 @@
 # Versioned pre-commit hook (installed via `pnpm install` → scripts/install-git-hooks.mjs).
 # This repository is PUBLIC: never bypass with --no-verify for anything touching config or secrets.
 set -e
+# Optional, per clone: `git config ddl.requiredEmail <email>` refuses commits under any other identity
+# (a work address from the global config or GIT_AUTHOR_EMAIL, say). Stored in .git/config only.
+required=$(git config --get ddl.requiredEmail || true)
+if [ -n "$required" ]; then
+  for ident in GIT_AUTHOR_IDENT GIT_COMMITTER_IDENT; do
+    email=$(git var "$ident" | sed -n 's/^.*<\(.*\)>.*$/\1/p')
+    if [ "$email" != "$required" ]; then
+      echo "✖ $ident is <$email>, but this clone commits only as <$required> (git config ddl.requiredEmail)." >&2
+      exit 1
+    fi
+  done
+fi
 node scripts/check-secrets.mjs --staged
 # A second, independent scanner when it's installed (`brew install gitleaks`); CI always runs it.
 if command -v gitleaks >/dev/null 2>&1; then

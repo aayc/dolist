@@ -3,6 +3,7 @@
 # Scans every commit about to be pushed (the whole history on a first push), so nothing committed
 # with --no-verify, or before the hooks were installed, reaches the PUBLIC remote.
 set -e
+required=$(git config --get ddl.requiredEmail || true)
 while read -r _ local_sha _ remote_sha; do
   # Deleting a remote branch publishes nothing.
   case "$local_sha" in *[!0]*) ;; *) continue ;; esac
@@ -11,6 +12,17 @@ while read -r _ local_sha _ remote_sha; do
   case "$remote_sha" in
     *[!0]*) git cat-file -e "$remote_sha^{commit}" 2>/dev/null && range="$remote_sha..$local_sha" ;;
   esac
+  # See pre-commit: with ddl.requiredEmail set, every pushed commit must carry that identity.
+  if [ -n "$required" ]; then
+    # shellcheck disable=SC2086 # $range is a list of revision arguments
+    others=$(git log --format='%ae%n%ce' $range | sort -u | grep -vxF "$required" || true)
+    if [ -n "$others" ]; then
+      echo "✖ commits to push are authored or committed as $(echo "$others" | tr '\n' ' ')but this clone" >&2
+      echo "  publishes only <$required> (git config ddl.requiredEmail). Amend them first, e.g." >&2
+      echo "  git rebase --exec 'git commit --amend --no-edit --reset-author' <base>" >&2
+      exit 1
+    fi
+  fi
   node scripts/check-secrets.mjs --range "$range"
   if command -v gitleaks >/dev/null 2>&1; then
     gitleaks git --log-opts="$range" --config .gitleaks.toml --redact --no-banner --log-level warn -v .

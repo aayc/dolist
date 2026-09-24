@@ -19,6 +19,9 @@ conventions. This guide covers the day-to-day workflow.
   with `--no-verify`. Both also run gitleaks when it's installed (`brew install gitleaks`). CI
   repeats the checks and scans the full history with gitleaks. Don't bypass the hooks with
   `--no-verify`.
+- Committing under a different identity here than elsewhere (say, personal vs. work)? Set it for this
+  clone only with `git config user.email <email>`, and add `git config ddl.requiredEmail <email>`:
+  the hooks then refuse commits and pushes under any other address.
 - Verified false positive? Add `secret-scan:ignore` (our scanner) and `gitleaks:allow` (gitleaks) to
   that line, and justify it in the PR.
 - Committed a real secret by accident? **Rotate it immediately.** Public history is copied within
