@@ -61,13 +61,16 @@ public struct TaskAgentRecord: Codable, Hashable, Sendable, Identifiable {
   public var updatedAt: EpochMillis
   /// Agent messages the user has not seen yet.
   public var unread: Int
+  /// `.line` when the thread is attached to a line that isn't a task (a heading, a question in
+  /// prose…): `taskId` is then the anchor's id and `text` the line. Clients highlight that line.
+  public var anchor: TaskAnchorKind?
 
   public var id: String { taskId }
 
   public init(
     taskId: String, notePath: String, date: String?, text: String, line: Int,
     status: TaskAgentStatus, summary: String? = nil, threadId: String?, updatedAt: EpochMillis,
-    unread: Int
+    unread: Int, anchor: TaskAnchorKind? = nil
   ) {
     self.taskId = taskId
     self.notePath = notePath
@@ -79,10 +82,11 @@ public struct TaskAgentRecord: Codable, Hashable, Sendable, Identifiable {
     self.threadId = threadId
     self.updatedAt = updatedAt
     self.unread = unread
+    self.anchor = anchor
   }
 
   enum CodingKeys: String, CodingKey {
-    case taskId, notePath, date, text, line, status, summary, threadId, updatedAt, unread
+    case taskId, notePath, date, text, line, status, summary, threadId, updatedAt, unread, anchor
   }
 
   // `date` and `threadId` are required-but-nullable on the wire: always encode them.
@@ -98,7 +102,16 @@ public struct TaskAgentRecord: Codable, Hashable, Sendable, Identifiable {
     try c.encode(threadId, forKey: .threadId)
     try c.encode(updatedAt, forKey: .updatedAt)
     try c.encode(unread, forKey: .unread)
+    try c.encodeIfPresent(anchor, forKey: .anchor)
   }
+}
+
+/// What a non-task agent record is attached to (``TaskAgentRecord/anchor``).
+public struct TaskAnchorKind: WireEnum {
+  public let rawValue: String
+  public init(rawValue: String) { self.rawValue = rawValue }
+  /// Any line of the note that isn't a task.
+  public static let line: Self = "line"
 }
 
 // MARK: - Safety & approvals
@@ -559,11 +572,14 @@ public struct AgentThread: Codable, Hashable, Sendable, Identifiable {
   public var messages: [ThreadMessage]
   public var artifacts: [ArtifactMeta]
   public var surfaces: [SurfaceKind]
+  /// Web pages this thread cites, with what the agent saw of them: citation previews come from
+  /// here, never from fetching the page.
+  public var sources: [CitedSource]?
 
   public init(
     id: String, taskId: String?, notePath: String?, title: String, status: TaskAgentStatus,
     createdAt: EpochMillis, updatedAt: EpochMillis, messages: [ThreadMessage] = [],
-    artifacts: [ArtifactMeta] = [], surfaces: [SurfaceKind] = []
+    artifacts: [ArtifactMeta] = [], surfaces: [SurfaceKind] = [], sources: [CitedSource]? = nil
   ) {
     self.id = id
     self.taskId = taskId
@@ -575,10 +591,11 @@ public struct AgentThread: Codable, Hashable, Sendable, Identifiable {
     self.messages = messages
     self.artifacts = artifacts
     self.surfaces = surfaces
+    self.sources = sources
   }
 
   enum CodingKeys: String, CodingKey {
-    case id, taskId, notePath, title, status, createdAt, updatedAt, messages, artifacts, surfaces
+    case id, taskId, notePath, title, status, createdAt, updatedAt, messages, artifacts, surfaces, sources
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -593,6 +610,21 @@ public struct AgentThread: Codable, Hashable, Sendable, Identifiable {
     try c.encode(messages, forKey: .messages)
     try c.encode(artifacts, forKey: .artifacts)
     try c.encode(surfaces, forKey: .surfaces)
+    try c.encodeIfPresent(sources, forKey: .sources)
+  }
+}
+
+/// A web page an agent found or read, as a citation preview.
+public struct CitedSource: Codable, Hashable, Sendable {
+  public var url: String
+  public var title: String?
+  /// A sentence or two from the search result or the page.
+  public var snippet: String?
+
+  public init(url: String, title: String? = nil, snippet: String? = nil) {
+    self.url = url
+    self.title = title
+    self.snippet = snippet
   }
 }
 

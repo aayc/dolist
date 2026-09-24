@@ -88,6 +88,13 @@ export const PersistedArtifactMetaSchema = z.object({
 });
 export type PersistedArtifactMeta = z.infer<typeof PersistedArtifactMetaSchema>;
 
+export const PersistedCitedSourceSchema = z.object({
+  url: z.string().min(1).max(2_000),
+  title: z.string().max(500).optional(),
+  snippet: z.string().max(1_000).optional(),
+});
+export type PersistedCitedSource = z.infer<typeof PersistedCitedSourceSchema>;
+
 const threadFields = {
   id: PersistedFileIdSchema,
   taskId: z.string().nullable(),
@@ -105,6 +112,8 @@ export const PersistedThreadFileSchema = z.object({
   messages: z.array(PersistedThreadMessageSchema),
   artifacts: z.array(PersistedArtifactMetaSchema),
   surfaces: z.array(PersistedSurfaceKindSchema),
+  /** Web pages the thread cites (citation previews). */
+  sources: z.array(PersistedCitedSourceSchema).optional(),
 });
 export type PersistedThreadFile = z.infer<typeof PersistedThreadFileSchema>;
 /** The in-memory thread (`Thread` in @ddl/core): the file without `version`. */
@@ -115,6 +124,7 @@ const ThreadEnvelopeSchema = z.object({
   messages: PersistedListSchema,
   artifacts: PersistedListSchema,
   surfaces: PersistedListSchema,
+  sources: PersistedListSchema.optional(),
 });
 
 const threadSpec: PersistedFormatSpec<PersistedThread> = {
@@ -148,6 +158,9 @@ const threadSpec: PersistedFormatSpec<PersistedThread> = {
     const surfaces = [
       ...new Set(salvageList(envelope.surfaces, PersistedSurfaceKindSchema, "surfaces", issues)),
     ];
+    const sources = envelope.sources
+      ? salvageList(envelope.sources, PersistedCitedSourceSchema, "sources", issues, (s) => s.url)
+      : [];
     return {
       id: envelope.id,
       taskId: envelope.taskId,
@@ -159,6 +172,7 @@ const threadSpec: PersistedFormatSpec<PersistedThread> = {
       messages,
       artifacts,
       surfaces,
+      ...(sources.length > 0 ? { sources } : {}),
     };
   },
 };
@@ -209,6 +223,7 @@ export function encodePersistedThread(thread: PersistedThread): string {
     messages: thread.messages,
     artifacts: thread.artifacts,
     surfaces: thread.surfaces,
+    ...(thread.sources?.length ? { sources: thread.sources } : {}),
   };
   return `${JSON.stringify(file)}\n`;
 }
@@ -236,7 +251,19 @@ export function mergePersistedThreads(
     messages: unionByCreatedAt(ours.messages, theirs.messages),
     artifacts: unionByCreatedAt(ours.artifacts, theirs.artifacts),
     surfaces: [...new Set([...ours.surfaces, ...theirs.surfaces])],
+    ...unionSources(ours.sources, theirs.sources),
   };
+}
+
+function unionSources(
+  ours: readonly PersistedCitedSource[] | undefined,
+  theirs: readonly PersistedCitedSource[] | undefined,
+): { sources?: PersistedCitedSource[] } {
+  const byUrl = new Map<string, PersistedCitedSource>();
+  for (const source of [...(ours ?? []), ...(theirs ?? [])]) {
+    if (!byUrl.has(source.url)) byUrl.set(source.url, source);
+  }
+  return byUrl.size > 0 ? { sources: [...byUrl.values()] } : {};
 }
 
 function unionByCreatedAt<T extends { id: string; createdAt: number }>(

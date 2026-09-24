@@ -101,6 +101,7 @@ const taskAgentRecord = (): Arb<core.TaskAgentRecord> =>
       threadId: maybe(p.runtimeId("thr")),
       updatedAt: p.epochMs(),
       unread: p.count(50),
+      anchor: fc.constant("line" as const),
     },
     {
       requiredKeys: [
@@ -253,13 +254,36 @@ const threadBase = () => ({
   surfaces: surfaces(),
 });
 
+const citedSource = (): Arb<core.CitedSource> =>
+  fc.record(
+    { url: fc.webUrl(), title: p.text(120), snippet: p.text(300) },
+    { requiredKeys: ["url"] },
+  );
+
 const thread = (): Arb<core.Thread> =>
   fc
-    .record({
-      ...threadBase(),
-      messages: fc.array(threadMessage(), { maxLength: 8 }),
-      artifacts: fc.array(artifactMeta(), { maxLength: 3 }),
-    })
+    .record(
+      {
+        ...threadBase(),
+        messages: fc.array(threadMessage(), { maxLength: 8 }),
+        artifacts: fc.array(artifactMeta(), { maxLength: 3 }),
+        sources: fc.array(citedSource(), { maxLength: 3 }),
+      },
+      {
+        requiredKeys: [
+          "id",
+          "taskId",
+          "notePath",
+          "title",
+          "status",
+          "createdAt",
+          "updatedAt",
+          "surfaces",
+          "messages",
+          "artifacts",
+        ],
+      },
+    )
     .map((t) => ({ ...t, artifacts: t.artifacts.map((a) => ({ ...a, threadId: t.id })) }));
 
 const threadSummary = (): Arb<core.ThreadSummary> =>
@@ -919,6 +943,7 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   ThreadMessage: threadMessage,
   SurfaceKind: surfaceKind,
   Thread: thread,
+  CitedSource: citedSource,
   ThreadSummary: threadSummary,
   SurfaceFrameAction: surfaceFrameAction,
   SurfaceFrame: surfaceFrame,

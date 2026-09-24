@@ -44,6 +44,12 @@ export const TaskAgentRecordSchema = named(
     threadId: RuntimeIdSchema.nullable(),
     updatedAt: EpochMsSchema,
     unread: CountSchema.describe("Agent messages the user has not seen yet."),
+    anchor: z
+      .literal("line")
+      .optional()
+      .describe(
+        "Present when the thread is attached to a non-task line (taskId is then the anchor id, text the line): clients highlight that line.",
+      ),
   }),
 );
 
@@ -248,6 +254,19 @@ const threadBase = {
   surfaces: z.array(SurfaceKindSchema),
 };
 
+export const CitedSourceSchema = named(
+  "CitedSource",
+  "A web page an agent found or read, as a citation preview.",
+  z.looseObject({
+    url: z.string(),
+    title: z.string().optional(),
+    snippet: z
+      .string()
+      .optional()
+      .describe("A sentence or two from the search result or the page."),
+  }),
+);
+
 export const ThreadSchema = named(
   "Thread",
   "A task's full conversation: messages, artifacts and live surfaces.",
@@ -255,6 +274,12 @@ export const ThreadSchema = named(
     ...threadBase,
     messages: z.array(ThreadMessageSchema),
     artifacts: z.array(ArtifactMetaSchema),
+    sources: z
+      .array(CitedSourceSchema)
+      .optional()
+      .describe(
+        "Web pages the thread cites, with what the agent saw of them: clients preview citations from here, never by fetching.",
+      ),
   }),
 );
 

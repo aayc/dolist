@@ -189,7 +189,7 @@ public struct AppSettings: Codable, Hashable, Sendable {
   }
 
   public static let defaults = AppSettings(
-    theme: .system, editor: .defaults, dailyNotes: .defaults, weeklyNotes: .defaults,
+    theme: .dark, editor: .defaults, dailyNotes: .defaults, weeklyNotes: .defaults,
     agent: .defaults)
 }
 

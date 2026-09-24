@@ -90,6 +90,11 @@
           "minimum": 0,
           "maximum": 9007199254740991,
           "description": "Agent messages the user has not seen yet."
+        },
+        "anchor": {
+          "description": "Present when the thread is attached to a non-task line (taskId is then the anchor id, text the line): clients highlight that line.",
+          "type": "string",
+          "const": "line"
         }
       },
       "required": [
@@ -563,6 +568,24 @@
       "enum": ["browser", "computer"],
       "description": "A live visual surface a thread can expose."
     },
+    "CitedSource": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "snippet": {
+          "description": "A sentence or two from the search result or the page.",
+          "type": "string"
+        }
+      },
+      "required": ["url"],
+      "additionalProperties": {},
+      "description": "A web page an agent found or read, as a citation preview."
+    },
     "Thread": {
       "type": "object",
       "properties": {
@@ -632,6 +655,13 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/ArtifactMeta"
+          }
+        },
+        "sources": {
+          "description": "Web pages the thread cites, with what the agent saw of them: clients preview citations from here, never by fetching.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CitedSource"
           }
         }
       },

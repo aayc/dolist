@@ -18,6 +18,8 @@ export interface TrackedTask {
   firstSeenAt: number;
   /** Epoch ms of the last text/notes/status change. */
   updatedAt: number;
+  /** The agent wrote this task (see `ParsedTask.agent`). */
+  agent?: boolean;
 }
 
 export type TaskChangeKind = "text" | "notes";
@@ -97,6 +99,7 @@ export function trackTasks(
       notes: [...p.notes],
       firstSeenAt: prev?.firstSeenAt ?? now,
       updatedAt: now,
+      ...(p.agent ? { agent: true } : {}),
     };
     if (!prev) {
       diff.added.push(task);

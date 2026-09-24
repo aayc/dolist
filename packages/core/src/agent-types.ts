@@ -45,6 +45,12 @@ export interface TaskAgentRecord {
   updatedAt: number;
   /** Agent messages the user has not seen yet. */
   unread: number;
+  /**
+   * Set when the orchestrator attached the thread to a line that isn't a task (a heading, a
+   * question written as prose…): `taskId` is then the anchor's id, `text` the line (without an
+   * agent marker) and `line` where it is. Clients draw the badge there and highlight the line.
+   */
+  anchor?: "line";
 }
 
 export type RiskLevel = "low" | "medium" | "high" | "critical";
@@ -188,6 +194,19 @@ export interface Thread {
   messages: ThreadMessage[];
   artifacts: ArtifactMeta[];
   surfaces: SurfaceKind[];
+  /**
+   * Web pages this thread cites (in its messages or the note lines it wrote), with what the agent
+   * saw of them: clients preview a citation from here, never by fetching the page.
+   */
+  sources?: CitedSource[];
+}
+
+/** A web page an agent found or read, as a citation preview. */
+export interface CitedSource {
+  url: string;
+  title?: string;
+  /** A sentence or two from the search result or the page. */
+  snippet?: string;
 }
 
 export interface ThreadSummary {

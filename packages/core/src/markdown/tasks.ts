@@ -1,3 +1,4 @@
+import { parseAgentLine, stripAgentMarker } from "./agent-text";
 import { parseWikiLinks } from "./wikilinks";
 
 /**
@@ -34,6 +35,8 @@ export interface ParsedTask {
   notes: string[];
   /** Wikilink targets mentioned in the task text (e.g. forwarded-to daily notes). */
   links: string[];
+  /** The agent wrote this task (its line ends with an agent marker; `text` excludes it). */
+  agent?: boolean;
 }
 
 // `[^\n]` rather than `.`: a stray `\r` or U+2028 inside a line must neither end the match (the
@@ -141,7 +144,8 @@ export function parseTasks(markdown: string): ParsedTask[] {
     const task = TASK_RE.exec(raw);
     if (task) {
       const [, ws = "", marker = "-", statusChar = " ", body] = task;
-      const text = (body ?? "").trim();
+      const agentLine = parseAgentLine(raw);
+      const text = stripAgentMarker(body ?? "").trim();
       const textStart = body === undefined ? raw.length : raw.length - body.length;
       const parsed: ParsedTask = {
         line: i,
@@ -158,6 +162,7 @@ export function parseTasks(markdown: string): ParsedTask[] {
         parentLine: owner === null ? null : tasks[owner]!.line,
         notes: [],
         links: parseWikiLinks(text).map((l) => l.target),
+        ...(agentLine ? { agent: true } : {}),
       };
       tasks.push(parsed);
       stack.push({ indent: parsed.indent, taskIndex: tasks.length - 1 });
@@ -166,7 +171,11 @@ export function parseTasks(markdown: string): ParsedTask[] {
 
     // Non-task line nested under a task (sub-bullet or continuation): keep it as agent context.
     if (owner !== null) {
-      tasks[owner]!.notes.push(raw.trim().replace(/^([-*+]|\d{1,9}[.)])\s+/, ""));
+      tasks[owner]!.notes.push(
+        stripAgentMarker(raw)
+          .trim()
+          .replace(/^([-*+]|\d{1,9}[.)])\s+/, ""),
+      );
     }
     if (LIST_ITEM_RE.test(raw)) stack.push({ indent: lineIndent, taskIndex: null });
   }

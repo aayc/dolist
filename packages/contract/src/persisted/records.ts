@@ -42,6 +42,8 @@ export const PersistedTaskAgentRecordSchema = z.object({
   threadId: z.string().nullable(),
   updatedAt: PersistedTimestampSchema,
   unread: PersistedCountSchema,
+  /** The record belongs to a non-task line the orchestrator anchored a thread to. */
+  anchor: z.literal("line").optional(),
 });
 export type PersistedTaskAgentRecord = z.infer<typeof PersistedTaskAgentRecordSchema>;
 

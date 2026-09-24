@@ -469,6 +469,7 @@ Everything a client needs to render the agent badge for one task line.
 | `threadId` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) \| `null` | yes |  |
 | `updatedAt` | integer (≥ 0) | yes | Epoch milliseconds. |
 | `unread` | integer (≥ 0) | yes | Agent messages the user has not seen yet. |
+| `anchor` | `"line"` | no | Present when the thread is attached to a non-task line (taskId is then the anchor id, text the line): clients highlight that line. |
 
 _Tolerant: clients must ignore keys they don't know._
 
@@ -654,6 +655,18 @@ A live visual surface a thread can expose.
 
 Type: `"browser"` | `"computer"`
 
+#### CitedSource
+
+A web page an agent found or read, as a citation preview.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `url` | string | yes |  |
+| `title` | string | no |  |
+| `snippet` | string | no | A sentence or two from the search result or the page. |
+
+_Tolerant: clients must ignore keys they don't know._
+
 #### Thread
 
 A task's full conversation: messages, artifacts and live surfaces.
@@ -670,6 +683,7 @@ A task's full conversation: messages, artifacts and live surfaces.
 | `surfaces` | [`SurfaceKind`](#surfacekind)[] | yes |  |
 | `messages` | [`ThreadMessage`](#threadmessage)[] | yes |  |
 | `artifacts` | [`ArtifactMeta`](#artifactmeta)[] | yes |  |
+| `sources` | [`CitedSource`](#citedsource)[] | no | Web pages the thread cites, with what the agent saw of them: clients preview citations from here, never by fetching. |
 
 _Tolerant: clients must ignore keys they don't know._
 

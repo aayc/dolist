@@ -27,6 +27,7 @@ export const WIRE_SCHEMAS = {
   ThreadMessage: domain.ThreadMessageSchema,
   SurfaceKind: domain.SurfaceKindSchema,
   Thread: domain.ThreadSchema,
+  CitedSource: domain.CitedSourceSchema,
   ThreadSummary: domain.ThreadSummarySchema,
   SurfaceFrameAction: domain.SurfaceFrameActionSchema,
   SurfaceFrame: domain.SurfaceFrameSchema,

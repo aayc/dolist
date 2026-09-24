@@ -79,7 +79,7 @@ export function agentModel(agent: AgentSettings): string {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  theme: "system",
+  theme: "dark",
   editor: {
     vimMode: false,
     vimrc: "",

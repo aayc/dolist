@@ -37,6 +37,7 @@ interface Lockstep {
   ThreadMessage: core.ThreadMessage;
   SurfaceKind: core.SurfaceKind;
   Thread: core.Thread;
+  CitedSource: core.CitedSource;
   ThreadSummary: core.ThreadSummary;
   SurfaceFrameAction: core.SurfaceFrameAction;
   SurfaceFrame: core.SurfaceFrame;

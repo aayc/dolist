@@ -141,8 +141,8 @@ struct SettingsStoreTests {
     store.client = client
     var errors: [String] = []
     store.onError = { errors.append(ToastStore.message(for: $0)) }
-    await store.update(SettingsPatch(theme: .dark))
-    #expect(store.settings.theme == .system)
+    await store.update(SettingsPatch(theme: .light))
+    #expect(store.settings.theme == .dark)
     #expect(errors == ["fontSize out of range"])
   }
 }
