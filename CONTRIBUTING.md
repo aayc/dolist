@@ -13,9 +13,12 @@ conventions. This guide covers the day-to-day workflow.
   and never logs them.
 - Test fixtures, examples, screenshots and demo notes must be synthetic: no real names, emails,
   addresses or notes.
-- The pre-commit hook (installed by `pnpm install`) runs `scripts/check-secrets.mjs` and Biome on
-  staged files. CI repeats both and also scans the full history with gitleaks. Don't bypass the hook
-  with `--no-verify`.
+- The git hooks (installed by `pnpm install`) block secrets before they leave your machine: the
+  pre-commit hook runs `scripts/check-secrets.mjs` and Biome on staged files, and the pre-push hook
+  scans every commit being pushed (the whole history on a first push), which catches commits made
+  with `--no-verify`. Both also run gitleaks when it's installed (`brew install gitleaks`). CI
+  repeats the checks and scans the full history with gitleaks. Don't bypass the hooks with
+  `--no-verify`.
 - Verified false positive? Add `secret-scan:ignore` (our scanner) and `gitleaks:allow` (gitleaks) to
   that line, and justify it in the PR.
 - Committed a real secret by accident? **Rotate it immediately.** Public history is copied within

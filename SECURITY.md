@@ -53,7 +53,7 @@ turning into risky actions without your consent.
 
 **Secrets.** API keys live outside the repository, in `~/.daily-do-list/.env` or the process
 environment. They are read at runtime and never logged. This public repository is scanned on every
-commit: a pre-commit hook, plus gitleaks and CodeQL in CI.
+commit and push: pre-commit and pre-push hooks, plus gitleaks and CodeQL in CI.
 
 **MCP servers and execution.** MCP servers you configure in `~/.daily-do-list/mcp.json` run with
 your user privileges; stdio servers are local processes. Their tools go through the safety gate, but

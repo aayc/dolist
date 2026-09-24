@@ -1,0 +1,18 @@
+#!/bin/sh
+# Versioned pre-push hook (installed via `pnpm install` → scripts/install-git-hooks.mjs).
+# Scans every commit about to be pushed (the whole history on a first push), so nothing committed
+# with --no-verify, or before the hooks were installed, reaches the PUBLIC remote.
+set -e
+while read -r _ local_sha _ remote_sha; do
+  # Deleting a remote branch publishes nothing.
+  case "$local_sha" in *[!0]*) ;; *) continue ;; esac
+  # A new branch, or a remote tip this clone doesn't have: everything no remote has yet.
+  range="$local_sha --not --remotes"
+  case "$remote_sha" in
+    *[!0]*) git cat-file -e "$remote_sha^{commit}" 2>/dev/null && range="$remote_sha..$local_sha" ;;
+  esac
+  node scripts/check-secrets.mjs --range "$range"
+  if command -v gitleaks >/dev/null 2>&1; then
+    gitleaks git --log-opts="$range" --config .gitleaks.toml --redact --no-banner --log-level warn -v .
+  fi
+done

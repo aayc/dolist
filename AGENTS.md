@@ -30,7 +30,8 @@ Product principles, in priority order:
 
 - Never commit secrets, tokens, `.env` files, personal notes, vault content, agent state, browser
   profiles, shell history, or absolute paths containing a username. `scripts/check-secrets.mjs`
-  runs as a pre-commit hook and in CI (plus gitleaks). Do not bypass it.
+  runs as a pre-commit hook (staged files), a pre-push hook (every commit being pushed) and in CI,
+  plus gitleaks (in CI, and in both hooks when installed). Do not bypass them.
 - API keys live in `~/.daily-do-list/.env` (outside the repo) or the process environment. Code must
   read them from `process.env` at runtime and must never log them.
 - Test fixtures and examples must be synthetic (no real names, emails, addresses or notes).

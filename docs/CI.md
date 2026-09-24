@@ -167,8 +167,10 @@ Downloads the official gitleaks release binary (MIT), pinned by version and veri
 pinned SHA-256 before use. The `gitleaks-action` wrapper isn't used because it requires a license
 for organizations. The job scans the entire git history (`fetch-depth: 0`) using `.gitleaks.toml`,
 which extends the default ruleset. `--redact` keeps secrets out of the public log. This complements
-`scripts/check-secrets.mjs`, which runs in the pre-commit hook and in `check` and covers
-repo-specific patterns plus forbidden files (`.env*`, `.daily-do-list/`, keys, shell history).
+`scripts/check-secrets.mjs`, which runs in the pre-commit hook (staged files), the pre-push hook
+(`--range`: every commit being pushed) and in `check`, and covers repo-specific patterns plus
+forbidden files (`.env*`, `.daily-do-list/`, keys, shell history). Both hooks also run gitleaks when
+it is installed locally.
 
 - **False positive** (e.g. a synthetic token in a fixture): add `gitleaks:allow` to that line
   (and `secret-scan:ignore` for `check-secrets.mjs`), or add the finding's fingerprint to

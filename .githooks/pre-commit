@@ -3,4 +3,8 @@
 # This repository is PUBLIC: never bypass with --no-verify for anything touching config or secrets.
 set -e
 node scripts/check-secrets.mjs --staged
+# A second, independent scanner when it's installed (`brew install gitleaks`); CI always runs it.
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --pre-commit --staged --config .gitleaks.toml --redact --no-banner --log-level warn -v .
+fi
 pnpm exec biome check --staged --no-errors-on-unmatched --files-ignore-unknown=true
