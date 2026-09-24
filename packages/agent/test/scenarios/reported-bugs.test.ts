@@ -79,11 +79,10 @@ describe("reported bugs", () => {
     expect(record.summary).not.toMatch(/^failed\b/i);
   });
 
-  // BUG (src/orchestrator/task-watcher.ts + orchestrator.ts): tasks written together settle on
-  // timers of `due - now()`; when scheduling straddles a millisecond, later tasks get shorter delays
-  // and settle first, and `buildDigest` keeps settle order. Under load a list is then triaged (and
-  // its subagents queued) out of order. A clock that ticks on every read reproduces it reliably.
-  it.fails("a note's tasks reach the orchestrator in list order", async () => {
+  // Tasks written together settle on timers of `due - now()`; when scheduling straddles a
+  // millisecond, later tasks get shorter delays and settle first. A clock that ticks on every read
+  // makes that happen; the digest must still list the tasks in note order.
+  it("a note's tasks reach the orchestrator in list order", async () => {
     let clock = Date.now();
     const t = await fakeRuntime({ now: () => clock++ });
     const tasks = [

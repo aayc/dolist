@@ -541,7 +541,13 @@ export class Orchestrator {
       changed.add(item.taskId);
     }
     for (const note of notes.values()) {
-      for (const task of lookup.getTasks(note.notePath)) {
+      const tasks = lookup.getTasks(note.notePath);
+      // Items arrive in settle order, which timer jitter can shuffle; the model works through the
+      // digest in order, so it lists a note's tasks the way the note does.
+      const position = new Map(tasks.map((task, index) => [task.id, index]));
+      const at = (taskId: string) => position.get(taskId) ?? Number.MAX_SAFE_INTEGER;
+      note.changed.sort((a, b) => at(a.taskId) - at(b.taskId));
+      for (const task of tasks) {
         if (changed.has(task.id) || isBlankTaskText(task.text)) continue;
         const record = records.get(task.id);
         note.others.push({
