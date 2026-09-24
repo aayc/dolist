@@ -94,8 +94,9 @@
 }
 .cm-ddl-wikilink:hover,
 .cm-ddl-link:hover {
+  color: var(--ddl-accent-strong, var(--ddl-accent));
   text-decoration: underline;
-  text-decoration-color: var(--ddl-accent);
+  text-decoration-color: currentColor;
 }
 
 /* Horizontal rule */
@@ -216,6 +217,40 @@
   text-decoration-color: var(--ddl-text-faint);
 }
 
+/*
+ * Text the agent wrote: its own color (links, tags, checkboxes and bullets keep theirs). The line's
+ * marker comment is faint where it shows, and a ✦ that opens the thread where the preview hides it.
+ */
+.cm-ddl-editor .cm-line.cm-ddl-agent-line {
+  color: var(--ddl-agent-text);
+}
+.cm-ddl-agent-marker {
+  color: var(--ddl-text-faint);
+  font-size: 0.85em;
+}
+.cm-ddl-agent-sparkle {
+  display: inline-block;
+  margin-left: 0.15em;
+  color: var(--ddl-accent);
+  font-family: var(--ddl-font-ui);
+  font-size: 0.8em;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1;
+  text-decoration: none;
+  vertical-align: 0.08em;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.cm-ddl-agent-sparkle-link {
+  cursor: pointer;
+  border-radius: 3px;
+  transition: color 120ms ease;
+}
+.cm-ddl-agent-sparkle-link:hover {
+  color: var(--ddl-accent-strong, var(--ddl-accent));
+}
+
 /* Agent annotations: faint marker left of the line, colored only when it needs attention */
 .cm-ddl-editor .cm-line.cm-ddl-annotated {
   position: relative;
@@ -234,12 +269,98 @@
   pointer-events: none;
   transition: color 160ms ease;
 }
+/*
+ * A thread attached to a line (not a task): a soft band behind the line and an accent bar. The
+ * extra `.cm-editor` keeps the band on the active line (whose highlight is a theme rule).
+ */
+.cm-editor.cm-ddl-editor .cm-line.cm-ddl-anchored {
+  border-radius: 0 4px 4px 0;
+  background-color: var(--ddl-anchor-bg);
+}
+.cm-ddl-editor .cm-line.cm-ddl-anchored::before {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 1px;
+  color: var(--ddl-accent);
+  opacity: 1;
+}
 .cm-ddl-editor .cm-line.cm-ddl-annotated-waiting_approval::before,
 .cm-ddl-editor .cm-line.cm-ddl-annotated-waiting_user::before {
   color: var(--ddl-warning);
 }
 .cm-ddl-editor .cm-line.cm-ddl-annotated-failed::before {
   color: var(--ddl-danger);
+}
+
+/*
+ * Link previews (`LinkPopover`), shared by the editor and the app's agent views. It lives in the
+ * document's body, so sizes are fixed rather than following the editor's font size.
+ */
+.cm-ddl-link-popover {
+  position: fixed;
+  z-index: 65;
+  border: 1px solid var(--ddl-border);
+  border-radius: 8px;
+  background: var(--ddl-bg-elevated, var(--ddl-bg-secondary));
+  box-shadow: var(--ddl-shadow-small, none);
+  pointer-events: none;
+  animation: cm-ddl-popover-in 120ms ease-out;
+}
+@keyframes cm-ddl-popover-in {
+  from {
+    opacity: 0;
+  }
+}
+.cm-ddl-link-preview {
+  box-sizing: border-box;
+  max-width: 22rem;
+  padding: 8px 10px 9px;
+  color: var(--ddl-text);
+  font-family: var(--ddl-font-ui);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: left;
+}
+.cm-ddl-link-preview-title {
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.cm-ddl-link-preview-host {
+  margin-top: 1px;
+  color: var(--ddl-text-muted);
+  font-size: 11px;
+}
+.cm-ddl-link-preview-snippet {
+  display: -webkit-box;
+  margin: 6px 0 0;
+  overflow: hidden;
+  color: var(--ddl-text-muted);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+.cm-ddl-link-preview-url {
+  margin-top: 6px;
+  color: var(--ddl-text-faint);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.cm-ddl-link-preview-lines {
+  margin-top: 6px;
+  color: var(--ddl-text-muted);
+}
+.cm-ddl-link-preview-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+.cm-ddl-link-preview-empty {
+  margin-top: 4px;
+  color: var(--ddl-text-faint);
+  font-style: italic;
 }
 
 /*
@@ -374,6 +495,8 @@
 @media (prefers-reduced-motion: reduce) {
   .cm-ddl-badge,
   .cm-ddl-badge .cm-ddl-badge-icon,
+  .cm-ddl-agent-sparkle-link,
+  .cm-ddl-link-popover,
   .cm-ddl-checkbox,
   .cm-ddl-checkbox[aria-checked]::before,
   .cm-ddl-editor .cm-line.cm-ddl-annotated::before {

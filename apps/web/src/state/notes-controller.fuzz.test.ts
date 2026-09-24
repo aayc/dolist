@@ -54,6 +54,15 @@ class World {
     for (const client of this.clients) void client.notes.handleRemoteChange(PATH, version);
   }
 
+  /** The agent adds a line of its own at the end of the note (the user types on the first). */
+  remoteAppendLine(token: string): void {
+    const current = this.notes.get(PATH);
+    if (!current) return;
+    const version = this.write(PATH, `${current.content}\n- ${token} %%agent%%`);
+    this.remoteChanges++;
+    for (const client of this.clients) void client.notes.handleRemoteChange(PATH, version);
+  }
+
   remoteDelete(): void {
     if (!this.notes.delete(PATH)) return;
     this.remoteChanges++;
@@ -72,6 +81,8 @@ class Client implements NotesClient {
   failNextWrite = false;
   /** Contents this client wrote, or had applied to its editor: overwriting those is informed. */
   readonly seen = new Set<string>();
+  /** The server text most recently delivered to this client (a read, or a 409's current text). */
+  private delivered: string | null = null;
   private readonly world: World;
 
   constructor(world: World, id: number) {
@@ -88,6 +99,18 @@ class Client implements NotesClient {
           this.seen.add(content);
           if (this.active) this.live = content;
           else this.cacheDropped = true;
+        },
+        applyMerge: (_path, content) => {
+          const shown = this.shown();
+          const kept = shown.split(/\s+/).every((word) => content.split(/\s+/).includes(word));
+          expect(
+            kept || this.world.history.includes(shown),
+            `client ${this.id} merged away ${JSON.stringify(shown)}`,
+          ).toBe(true);
+          // The merge was built from the server text just delivered: that text was seen.
+          if (this.delivered !== null) this.seen.add(this.delivered);
+          this.live = content;
+          this.cacheDropped = false;
         },
         onSaveState: () => {},
         onConflictCopy: () => {},
@@ -115,6 +138,7 @@ class Client implements NotesClient {
           if (this.world.offline) return reject(new NetworkError("offline"));
           const note = this.world.notes.get(path);
           if (!note) return reject(new HttpError(404, "not found"));
+          this.delivered = note.content;
           resolve({ path, content: note.content, version: note.version, mtime: 1 });
         },
       });
@@ -134,8 +158,11 @@ class Client implements NotesClient {
             return reject(new NetworkError("offline"));
           }
           const current = this.world.notes.get(path);
-          const response = (): NoteResponse | null =>
-            current ? { path, content: current.content, version: current.version, mtime: 1 } : null;
+          const response = (): NoteResponse | null => {
+            if (!current) return null;
+            if (path === PATH) this.delivered = current.content;
+            return { path, content: current.content, version: current.version, mtime: 1 };
+          };
           if (body.baseVersion === null && current) return reject(new ConflictError(response()));
           if (typeof body.baseVersion === "string" && current?.version !== body.baseVersion) {
             return reject(new ConflictError(response()));
@@ -166,10 +193,13 @@ class Client implements NotesClient {
     expect(saved, `client ${this.id} lost ${JSON.stringify(text)} when ${action}`).toBe(true);
   }
 
+  /** Types or deletes a word at the end of the first line. */
   edit(token: string, remove: boolean): void {
     if (!this.active || this.forgotten || !this.notes.has(PATH)) return;
-    const words = this.live.split(" ");
-    this.live = remove && words.length > 1 ? words.slice(0, -1).join(" ") : `${this.live} ${token}`;
+    const [first = "", ...rest] = this.live.split("\n");
+    const words = first.split(" ");
+    const line = remove && words.length > 1 ? words.slice(0, -1).join(" ") : `${first} ${token}`;
+    this.live = [line, ...rest].join("\n");
     this.notes.markDirty(PATH);
   }
 
@@ -204,6 +234,7 @@ type Op =
   | { kind: "offline"; on: boolean }
   | { kind: "resync"; client: number }
   | { kind: "remoteEdit" }
+  | { kind: "remoteAppendLine" }
   | { kind: "remoteDelete" };
 
 const client = fc.nat({ max: 1 });
@@ -225,8 +256,13 @@ const localOps: Array<fc.WeightedArbitrary<Op>> = [
 ];
 const remoteOps: Array<fc.WeightedArbitrary<Op>> = [
   { weight: 2, arbitrary: fc.constant({ kind: "remoteEdit" as const }) },
+  { weight: 1, arbitrary: fc.constant({ kind: "remoteAppendLine" as const }) },
   { weight: 1, arbitrary: fc.constant({ kind: "remoteDelete" as const }) },
 ];
+const agentLineOp: fc.WeightedArbitrary<Op> = {
+  weight: 3,
+  arbitrary: fc.constant({ kind: "remoteAppendLine" as const }),
+};
 
 async function flushPromises(): Promise<void> {
   await vi.advanceTimersByTimeAsync(0);
@@ -266,6 +302,9 @@ async function run(ops: readonly Op[], clients: number): Promise<World> {
         break;
       case "remoteEdit":
         world.remoteEdit(`r${tokens++}`);
+        break;
+      case "remoteAppendLine":
+        world.remoteAppendLine(`a${tokens++}`);
         break;
       case "remoteDelete":
         world.remoteDelete();
@@ -340,6 +379,22 @@ describe("NotesController under random races (model-based)", () => {
     "two tabs (or devices) on the same note: no text lost, both converge",
     async (ops) => {
       expectConverged(await run(ops, 2));
+    },
+  );
+
+  test.prop([fc.array(fc.oneof(...localOps, agentLineOp), { minLength: 1, maxLength: 40 })])(
+    "the agent adding lines while the user types on another merges every time: no copies",
+    async (ops) => {
+      const world = await run(ops, 1);
+      expectConverged(world);
+      expect(world.notes.size, "no conflict copies").toBe(1);
+      const lines = world.notes.get(PATH)!.content.split("\n");
+      const added = ops.filter((o) => o.kind === "remoteAppendLine").length;
+      expect(
+        lines.filter((line) => line.endsWith("%%agent%%")),
+        "every agent line",
+      ).toHaveLength(added);
+      expect(lines[0]).toBe(world.clients[0]!.live.split("\n")[0]);
     },
   );
 });

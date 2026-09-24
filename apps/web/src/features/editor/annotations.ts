@@ -1,4 +1,4 @@
-import { resolveTaskAnchors, type TaskAgentRecord } from "@ddl/core";
+import { resolveLineAnchors, resolveTaskAnchors, type TaskAgentRecord } from "@ddl/core";
 import type { LineAnnotation } from "@ddl/editor";
 
 /** Pill text for a task's agent badge; null = no badge. */
@@ -26,20 +26,37 @@ export function badgeLabel(record: Pick<TaskAgentRecord, "status" | "summary">):
   }
 }
 
-/** Resolves records against the (possibly locally edited) document and builds editor annotations. */
+/**
+ * Resolves records against the (possibly locally edited) document and builds editor annotations.
+ * Task records follow their task; line anchors (`anchor: "line"`) follow their line and highlight
+ * it. Records whose task or line is gone get no badge.
+ */
 export function buildAnnotations(
   doc: string,
   records: readonly TaskAgentRecord[],
 ): LineAnnotation[] {
   const visible = records.filter((r) => badgeLabel(r) !== null);
   if (visible.length === 0) return [];
-  const lines = resolveTaskAnchors(
-    doc,
-    visible.map((r) => ({ taskId: r.taskId, text: r.text, line: r.line })),
-  );
+  const tasks = visible.filter((r) => r.anchor !== "line");
+  const anchors = visible.filter((r) => r.anchor === "line");
+  const taskLines =
+    tasks.length > 0
+      ? resolveTaskAnchors(
+          doc,
+          tasks.map((r) => ({ taskId: r.taskId, text: r.text, line: r.line })),
+        )
+      : new Map<string, number>();
+  const anchorLines =
+    anchors.length > 0
+      ? resolveLineAnchors(
+          doc,
+          anchors.map((r) => ({ anchorId: r.taskId, text: r.text, line: r.line })),
+        )
+      : new Map<string, { line: number }>();
   const out: LineAnnotation[] = [];
   for (const record of visible) {
-    const line = lines.get(record.taskId);
+    const lineAnchor = record.anchor === "line";
+    const line = lineAnchor ? anchorLines.get(record.taskId)?.line : taskLines.get(record.taskId);
     if (line === undefined) continue;
     out.push({
       id: record.taskId,
@@ -48,6 +65,7 @@ export function buildAnnotations(
       label: badgeLabel(record)!,
       unread: record.unread,
       threadId: record.threadId,
+      ...(lineAnchor ? { lineAnchor: true } : {}),
     });
   }
   return out.sort((a, b) => a.line - b.line);

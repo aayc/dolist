@@ -30,7 +30,7 @@
 }
 
 .prompt-item.is-selected {
-  background: var(--ddl-bg-hover);
+  background: var(--ddl-bg-active);
 }
 
 .prompt-item-title {

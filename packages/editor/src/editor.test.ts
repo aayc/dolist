@@ -5,7 +5,7 @@ import { runScopeHandlers } from "@codemirror/view";
 import { getCM, Vim } from "@replit/codemirror-vim";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { getAnnotations } from "./annotations/field";
-import { createMarkdownEditor } from "./editor";
+import { createMarkdownEditor, withDocument } from "./editor";
 import type { CreateEditorOptions, EditorCallbacks, LineAnnotation, MarkdownEditor } from "./types";
 import { preloadVim } from "./vim";
 
@@ -114,6 +114,44 @@ describe("setDocument", () => {
     editor.setDocument("one\nnew\ntwo\n");
     const { from, to } = editor.view.state.selection.main;
     expect(editor.view.state.sliceDoc(from, to)).toBe("one\n");
+  });
+
+  it("applies separate remote hunks around the user's line without moving the caret", () => {
+    // The agent edits lines above and below while the user types on the line between them.
+    const doc = "- [ ] Book a table\n- [ ] Call mom\n- [ ] Renew passport";
+    const editor = mount({ doc });
+    const line = editor.view.state.doc.line(2);
+    editor.view.dispatch({
+      changes: { from: line.to, insert: " tonight" },
+      selection: { anchor: line.to + 8 },
+      userEvent: "input.type",
+    });
+    editor.setDocument(
+      [
+        "- [ ] Book a table",
+        "\t- Trattoria Sole at 7 %%agent:thr_1%%",
+        "- [ ] Call mom tonight",
+        "- [x] Renew passport",
+      ].join("\n"),
+    );
+    const { state } = editor.view;
+    expect(state.doc.line(3).text).toBe("- [ ] Call mom tonight");
+    expect(state.selection.main.head).toBe(state.doc.line(3).to);
+
+    // The user's own edit is still undoable; the remote hunks stay.
+    undo(editor.view);
+    expect(editor.getDocument()).toBe(
+      "- [ ] Book a table\n\t- Trattoria Sole at 7 %%agent:thr_1%%\n- [ ] Call mom\n- [x] Renew passport",
+    );
+  });
+
+  it("applies remote text to a cached state the same way (withDocument)", () => {
+    const editor = mount({ doc: "a\nb\nc" });
+    const cached = editor.view.state.update({ selection: { anchor: 3 } }).state;
+    const next = withDocument(cached, "a\nb\nc\nd");
+    expect(next.doc.toString()).toBe("a\nb\nc\nd");
+    expect(next.selection.main.head).toBe(3);
+    expect(withDocument(next, "a\nb\nc\nd")).toBe(next);
   });
 
   it("normalizes line endings and ignores no-op updates", () => {
@@ -293,6 +331,59 @@ describe("widgets", () => {
     editor.setAnnotations([]);
     editor.setAnnotations([labelled("c", 0)]);
     expect(entering()).toEqual(["c"]);
+  });
+
+  it("draws agent lines in the agent color and opens their thread from the sparkle", () => {
+    const onAgentLineClick = vi.fn();
+    const editor = mount({
+      doc: "- [ ] Book a table\n\t- Trattoria Sole at 7 %%agent:thr_ab12%%\n- noted %%agent%%",
+      callbacks: { onAgentLineClick },
+    });
+    const lines = editor.view.dom.querySelectorAll(".cm-line");
+    expect([...lines].map((l) => l.classList.contains("cm-ddl-agent-line"))).toEqual([
+      false,
+      true,
+      true,
+    ]);
+    expect(editor.view.dom.textContent).not.toContain("%%agent");
+    const [linked, plain] = editor.view.dom.querySelectorAll<HTMLElement>(".cm-ddl-agent-sparkle");
+    expect(linked?.textContent).toBe("✦");
+    expect(linked?.getAttribute("role")).toBe("button");
+    expect(linked?.title).toBe("Written by the agent — open thread");
+    linked?.click();
+    expect(onAgentLineClick).toHaveBeenCalledWith("thr_ab12");
+    expect(plain?.getAttribute("role")).toBe("img");
+    expect(plain?.title).toBe("Written by the agent");
+    plain?.click();
+    expect(onAgentLineClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows agent markers as faint text in source mode", () => {
+    const editor = mount({ doc: "- noted %%agent:thr_1%%", config: { livePreview: false } });
+    expect(editor.view.dom.querySelector(".cm-ddl-agent-sparkle")).toBeNull();
+    expect(editor.view.dom.querySelector(".cm-ddl-agent-marker")?.textContent).toBe(
+      "%%agent:thr_1%%",
+    );
+    expect(editor.view.dom.querySelector(".cm-line")?.classList).toContain("cm-ddl-agent-line");
+  });
+
+  it("highlights the line a thread is anchored to", () => {
+    const onAnnotationClick = vi.fn();
+    const editor = mount({
+      doc: "- [ ] task\nWhat's the tallest building in NYC?",
+      callbacks: { onAnnotationClick },
+    });
+    const anchored = { ...annotation("anc_q", 1), status: "done" as const, lineAnchor: true };
+    editor.setAnnotations([annotation("t", 0), anchored]);
+    const lines = [...editor.view.dom.querySelectorAll(".cm-line")];
+    expect(lines.map((l) => l.classList.contains("cm-ddl-anchored"))).toEqual([false, true]);
+    expect(lines[1]?.classList).toContain("cm-ddl-annotated-done");
+    lines[1]?.querySelector<HTMLElement>(".cm-ddl-badge")?.click();
+    expect(onAnnotationClick).toHaveBeenCalledWith(expect.objectContaining({ id: "anc_q" }));
+
+    // Turning the anchor off updates the line in place.
+    editor.setAnnotations([annotation("t", 0), { ...anchored, lineAnchor: false }]);
+    expect(editor.view.dom.querySelectorAll(".cm-ddl-anchored")).toHaveLength(0);
   });
 
   it("follows rendered wikilinks on click, in a new pane with Mod or middle click", () => {

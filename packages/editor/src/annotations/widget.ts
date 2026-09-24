@@ -55,7 +55,8 @@ export function sameAnnotation(a: LineAnnotation, b: LineAnnotation): boolean {
     a.status === b.status &&
     a.label === b.label &&
     a.unread === b.unread &&
-    a.threadId === b.threadId
+    a.threadId === b.threadId &&
+    Boolean(a.lineAnchor) === Boolean(b.lineAnchor)
   );
 }
 

@@ -6,8 +6,10 @@ import {
   type ChangeSet,
   EditorSelection,
   EditorState,
+  type SelectionRange,
   type Text,
   Transaction,
+  type TransactionSpec,
 } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { resetAnnotationsEffect, setAnnotationsEffect } from "./annotations/field";
@@ -18,39 +20,62 @@ import {
   resolveConfig,
   vimEffect,
 } from "./config";
-import { minimalChange, normalizeLineEndings, type TextChange } from "./diff";
+import { documentChanges, normalizeLineEndings, type TextChange } from "./diff";
 import { editorExtensions } from "./extensions";
 import { cursorLine } from "./listeners";
 import type { CreateEditorOptions, EditorConfig, MarkdownEditor } from "./types";
 import { isVimLoaded, onVimLoaded } from "./vim";
 
 /**
- * Whole lines inserted at the start of a line belong above it, so a caret or selection edge at
- * that line start moves down with its line instead of landing on the inserted text.
+ * Whole lines inserted at the start of a line belong above it, so a caret at that line start
+ * moves down with its line instead of landing on the inserted text. (Selection ranges already
+ * map that way: their start moves with the text after it, their end stays before it.)
  */
 function selectionAfterLinesInserted(
   state: EditorState,
-  change: TextChange,
-  changes: ChangeSet,
+  changes: readonly TextChange[],
+  changeSet: ChangeSet,
 ): EditorSelection | undefined {
-  const { from, to, insert } = change;
-  if (from !== to || !insert.endsWith("\n") || !isLineStart(state.doc, from)) return undefined;
+  const lineStarts = new Set<number>();
+  for (const { from, to, insert } of changes) {
+    if (from === to && insert.endsWith("\n") && isLineStart(state.doc, from)) lineStarts.add(from);
+  }
   const { selection } = state;
-  if (!selection.ranges.some((r) => r.from === from || r.to === from)) return undefined;
+  const moves = (r: SelectionRange) => r.empty && lineStarts.has(r.head);
+  if (!selection.ranges.some(moves)) return undefined;
   return EditorSelection.create(
-    selection.ranges.map((r) => {
-      const start = changes.mapPos(r.from, 1);
-      const end = r.empty ? start : changes.mapPos(r.to, -1);
-      return r.anchor === r.from
-        ? EditorSelection.range(start, end)
-        : EditorSelection.range(end, start);
-    }),
+    selection.ranges.map((r) =>
+      moves(r) ? EditorSelection.cursor(changeSet.mapPos(r.head, 1)) : r.map(changeSet),
+    ),
     selection.mainIndex,
   );
 }
 
 function isLineStart(doc: Text, pos: number): boolean {
   return pos === 0 || doc.sliceString(pos - 1, pos) === "\n";
+}
+
+/**
+ * `doc` replacing the state's document as an external edit: only the lines that differ change,
+ * so the selection, badges and the undo history of edits elsewhere survive. External edits are
+ * not undoable themselves. Null when nothing differs.
+ */
+export function externalChange(state: EditorState, doc: string): TransactionSpec | null {
+  const list = documentChanges(state.doc.toString(), normalizeLineEndings(doc));
+  if (list.length === 0) return null;
+  const changes = state.changes(list);
+  const selection = selectionAfterLinesInserted(state, list, changes);
+  return {
+    changes,
+    ...(selection ? { selection } : {}),
+    annotations: [Transaction.addToHistory.of(false), Transaction.remote.of(true)],
+  };
+}
+
+/** `state` with `doc` applied as an external edit (see `externalChange`), e.g. a cached state. */
+export function withDocument(state: EditorState, doc: string): EditorState {
+  const spec = externalChange(state, doc);
+  return spec ? state.update(spec).state : state;
 }
 
 export function createMarkdownEditor(
@@ -101,21 +126,12 @@ export function createMarkdownEditor(
     getDocument: () => view.state.doc.toString(),
 
     setDocument(doc, { resetHistory = false } = {}) {
-      const next = normalizeLineEndings(doc);
       if (resetHistory) {
-        swapState(createState(next), false);
+        swapState(createState(normalizeLineEndings(doc)), false);
         return;
       }
-      const change = minimalChange(view.state.doc.toString(), next);
-      if (!change) return;
-      const changes = view.state.changes(change);
-      const selection = selectionAfterLinesInserted(view.state, change, changes);
-      // External edits are not undoable; local history is mapped through them instead.
-      view.dispatch({
-        changes,
-        ...(selection ? { selection } : {}),
-        annotations: [Transaction.addToHistory.of(false), Transaction.remote.of(true)],
-      });
+      const spec = externalChange(view.state, doc);
+      if (spec) view.dispatch(spec);
     },
 
     createState,

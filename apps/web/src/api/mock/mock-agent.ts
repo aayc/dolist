@@ -14,6 +14,7 @@ import {
   type MessageAuthor,
   parseDailyNotePath,
   parseTasks,
+  resolveLineAnchors,
   type ServerEvent,
   type SurfaceKind,
   summarizeThread,
@@ -29,6 +30,13 @@ import {
   toISODate,
   trackTasks,
 } from "@ddl/core";
+import {
+  DEMO_DINNER_TASK,
+  DEMO_QUESTION,
+  type DemoThread,
+  dinnerThread,
+  questionThread,
+} from "./mock-demo";
 import {
   type BrowserPage,
   browserFocusPoint,
@@ -163,6 +171,7 @@ export class MockAgent {
       this.records.delete(task.id);
       changed = true;
     }
+    if (this.followLineAnchors(path, content)) changed = true;
     if (changed) this.emitRecords(path);
 
     if (options.initial || !this.enabled || !this.isWatched(path)) return;
@@ -171,6 +180,31 @@ export class MockAgent {
     for (const { task } of diff.statusChanged) {
       if (task.status !== "open") this.clearSettle(task.id);
     }
+  }
+
+  /** Moves line-anchor records with their line, like the daemon; a deleted line drops its anchor. */
+  private followLineAnchors(path: string, content: string): boolean {
+    const anchors = [...this.records.values()].filter(
+      (r) => r.notePath === path && r.anchor === "line",
+    );
+    if (anchors.length === 0) return false;
+    const found = resolveLineAnchors(
+      content,
+      anchors.map((r) => ({ anchorId: r.taskId, text: r.text, line: r.line })),
+    );
+    let changed = false;
+    for (const record of anchors) {
+      const at = found.get(record.taskId);
+      if (!at) {
+        this.stopJob(record.taskId);
+        this.records.delete(record.taskId);
+        changed = true;
+      } else if (at.line !== record.line || at.text !== record.text) {
+        this.records.set(record.taskId, { ...record, line: at.line, text: at.text });
+        changed = true;
+      }
+    }
+    return changed;
   }
 
   renameNote(from: string, to: string): void {
@@ -267,6 +301,7 @@ export class MockAgent {
       threadId: threadId ?? existing?.threadId ?? null,
       updatedAt: Date.now(),
       unread: existing?.unread ?? 0,
+      ...(existing?.anchor ? { anchor: existing.anchor } : {}),
     };
     if (this.jobs.size >= Math.max(1, settings.agent.maxConcurrentSubagents)) {
       this.records.set(task.id, {
@@ -320,6 +355,7 @@ export class MockAgent {
       await this.runRisky(job, thread, author, script.risky, signal);
       return;
     }
+    if (script.sources) thread.sources = script.sources;
     await this.say(thread, author, script.finalText, signal);
     this.finish(job, thread, "done", script.doneSummary);
   }
@@ -928,6 +964,7 @@ export class MockAgent {
       messages: [],
       artifacts: [],
       surfaces: [],
+      ...(script.sources ? { sources: script.sources } : {}),
     };
     const add = (message: ThreadMessage) => thread.messages.push(message);
     const text = (who: MessageAuthor, body: string) =>
@@ -1051,6 +1088,102 @@ export class MockAgent {
       threadId: thread.id,
       updatedAt: completedAt,
       unread: 0,
+    });
+  }
+
+  /**
+   * Instantly fabricates the demo of a note the agent works in (see mock-demo.ts): the dinner
+   * task's thread, which wrote lines into the note, and a thread anchored to a question.
+   */
+  seedLivingList(notePath: string, content: string, completedAt: number): void {
+    const dinner = this.tracked.get(notePath)?.find((t) => t.text === DEMO_DINNER_TASK);
+    if (dinner) this.seedDemoThread(notePath, dinnerThread(dinner.id), dinner.line, completedAt);
+    const question = content.split("\n").indexOf(DEMO_QUESTION);
+    if (question >= 0) this.seedDemoThread(notePath, questionThread(), question, completedAt, true);
+  }
+
+  private seedDemoThread(
+    notePath: string,
+    demo: DemoThread,
+    line: number,
+    completedAt: number,
+    lineAnchor = false,
+  ): void {
+    let clock = completedAt - 60_000;
+    const tick = () => {
+      clock += 5_000;
+      return clock;
+    };
+    const text = (body: string): TextMessage => ({
+      id: createId("msg"),
+      kind: "text",
+      role: "agent",
+      author: demo.author,
+      createdAt: tick(),
+      text: body,
+    });
+    const messages: ThreadMessage[] = [
+      {
+        id: createId("msg"),
+        kind: "status",
+        author: "system",
+        createdAt: tick(),
+        status: "working",
+        text: "Started a research subagent",
+      },
+      text(demo.intro),
+    ];
+    for (const step of demo.steps) {
+      const at = tick();
+      messages.push({
+        id: createId("msg"),
+        kind: "tool_call",
+        author: demo.author,
+        createdAt: at,
+        toolCallId: createId("call"),
+        toolName: step.toolName,
+        label: step.label,
+        input: step.input,
+        status: "ok",
+        resultPreview: step.resultPreview,
+        endedAt: at + 1_200,
+      });
+    }
+    messages.push(text(demo.answer), {
+      id: createId("msg"),
+      kind: "status",
+      author: "system",
+      createdAt: completedAt,
+      status: demo.status,
+      text: "Task complete",
+    });
+    this.threads.set(demo.id, {
+      id: demo.id,
+      taskId: demo.taskId,
+      notePath,
+      title: demo.title,
+      status: demo.status,
+      createdAt: completedAt - 60_000,
+      updatedAt: completedAt,
+      messages,
+      artifacts: [],
+      surfaces: [],
+      sources: demo.sources,
+    });
+    if (!demo.taskId) return;
+    const date = parseDailyNotePath(notePath, this.host.settings().dailyNotes);
+    this.records.set(demo.taskId, {
+      taskId: demo.taskId,
+      notePath,
+      date: date ? toISODate(date) : null,
+      text: demo.title,
+      line,
+      status: demo.status,
+      summary: demo.summary,
+      threadId: demo.id,
+      updatedAt: completedAt,
+      unread: demo.unread,
+      ...(lineAnchor ? { anchor: "line" as const } : {}),
     });
   }
 

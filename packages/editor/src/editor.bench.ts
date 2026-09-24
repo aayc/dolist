@@ -2,6 +2,7 @@ import { LanguageDescription } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import type { EditorState } from "@codemirror/state";
 import { expect, test } from "vitest";
+import { buildAgentLineDecorations } from "./agent-lines";
 import { getAnnotations, setAnnotationsEffect } from "./annotations/field";
 import { buildLivePreviewDecorations } from "./live-preview/decorations";
 import { makeNote, parsedState } from "./test-helpers";
@@ -17,6 +18,7 @@ const BUDGET_MS = {
   typing500: 500 * MULTIPLIER,
   preview60: 2 * MULTIPLIER,
   preview150: 4 * MULTIPLIER,
+  agentLines150: 1 * MULTIPLIER,
 };
 
 // Measure the steady state: until a fenced-code language has loaded, lezer skips those blocks and
@@ -77,6 +79,23 @@ test("live preview: decorations for a 60-line viewport of a 2k-line note", async
     buildLivePreviewDecorations(state, ranges, true);
   }).run();
   expect(result.latency.p99).toBeLessThan(BUDGET_MS.preview60);
+});
+
+test("agent lines: decorations for a 150-line viewport, every 4th line the agent's", async ({
+  bench,
+}) => {
+  const doc = NOTE.split("\n")
+    .map((line, i) => (i % 4 === 1 ? `${line} %%agent:thr_${i % 7}%%` : line))
+    .join("\n");
+  const state = parsedState(doc, { selection: { anchor: 0 } });
+  const ranges = viewport(state, 960, 150);
+  const options = { livePreview: true, focused: true };
+  expect(buildAgentLineDecorations(state, ranges, options).size).toBeGreaterThan(60);
+
+  const result = await bench("agent lines: 150-line viewport, 2k lines", () => {
+    buildAgentLineDecorations(state, ranges, options);
+  }).run();
+  expect(result.latency.p99).toBeLessThan(BUDGET_MS.agentLines150);
 });
 
 test("live preview: decorations for a 150-line rendered viewport", async ({ bench }) => {

@@ -91,7 +91,7 @@ export const editorTheme = EditorView.theme({
   },
   ".cm-specialChar": { color: "var(--ddl-danger)" },
   ".cm-tooltip": {
-    backgroundColor: "var(--ddl-bg-secondary)",
+    backgroundColor: "var(--ddl-bg-elevated, var(--ddl-bg-secondary))",
     color: "var(--ddl-text)",
     border: "1px solid var(--ddl-border)",
     borderRadius: "6px",
@@ -106,8 +106,9 @@ export const editorTheme = EditorView.theme({
   ".cm-vim-panel input": { color: "var(--ddl-text)", fontFamily: "var(--ddl-font-mono)" },
 });
 
+// Headings take their line's color (text, or the agent's color on lines the agent wrote).
 export const markdownHighlightStyle = HighlightStyle.define([
-  { tag: tags.heading, fontWeight: "700", color: "var(--ddl-text)" },
+  { tag: tags.heading, fontWeight: "700" },
   { tag: tags.strong, fontWeight: "700" },
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strikethrough, textDecoration: "line-through" },

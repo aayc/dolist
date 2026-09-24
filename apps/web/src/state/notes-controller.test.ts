@@ -53,11 +53,13 @@ function setup(initial = "- [ ] ") {
   const note = client.seed("Daily/2026-09-23.md", initial);
   const live = new Map<string, string>();
   const states: Array<[string, SaveState | null]> = [];
+  const show = (path: string, content: string) => {
+    if (live.has(path)) live.set(path, content);
+  };
   const hooks = {
     readLive: vi.fn((path: string) => live.get(path) ?? null),
-    applyRemote: vi.fn((path: string, content: string) => {
-      if (live.has(path)) live.set(path, content);
-    }),
+    applyRemote: vi.fn(show),
+    applyMerge: vi.fn(show),
     onSaveState: vi.fn((path: string, state: SaveState | null) => states.push([path, state])),
     onConflictCopy: vi.fn(),
     onRemoteDelete: vi.fn(),
@@ -223,6 +225,89 @@ describe("NotesController remote changes", () => {
     expect(lastState()).toBe("saved");
     expect(client.notes.get(path)?.content).toBe("- [ ] local");
     expect(hooks.onConflictCopy).toHaveBeenCalled();
+  });
+
+  it("merges an agent edit into unsaved typing and saves the merge on the new version", async () => {
+    const base = "- [ ] Book a table\n- [ ] Call mom";
+    const { client, notes, edit, hooks, live, lastState, path } = setup(base);
+    edit("- [ ] Book a table\n- [ ] Call mom tonight");
+    const agent = client.seed(
+      path,
+      "- [ ] Book a table\n\t- Trattoria Sole at 7 %%agent:thr_1%%\n- [ ] Call mom",
+    );
+    await notes.handleRemoteChange(path, agent.version);
+    const merged =
+      "- [ ] Book a table\n\t- Trattoria Sole at 7 %%agent:thr_1%%\n- [ ] Call mom tonight";
+    expect(hooks.applyMerge).toHaveBeenCalledWith(path, merged);
+    expect(hooks.applyRemote).not.toHaveBeenCalled();
+    expect(live.get(path)).toBe(merged);
+    expect(lastState()).toBe("dirty");
+    expect(notes.version(path)).toBe(agent.version);
+
+    await vi.advanceTimersByTimeAsync(300);
+    expect(client.writes.at(-1)?.body).toEqual({ content: merged, baseVersion: agent.version });
+    expect(client.notes.get(path)?.content).toBe(merged);
+    expect(hooks.onConflictCopy).not.toHaveBeenCalled();
+    expect(lastState()).toBe("saved");
+  });
+
+  it("merges when the save meets the agent's change (409)", async () => {
+    const { client, edit, hooks, live, path } = setup("- [ ] a\n- [ ] b");
+    edit("- [ ] a!\n- [ ] b");
+    const agent = client.seed(path, "- [ ] a\n- [ ] b\n- [ ] c %%agent%%");
+    await vi.advanceTimersByTimeAsync(300);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(client.writes.map((w) => w.body)).toEqual([
+      { content: "- [ ] a!\n- [ ] b", baseVersion: "v1" },
+      { content: "- [ ] a!\n- [ ] b\n- [ ] c %%agent%%", baseVersion: agent.version },
+    ]);
+    expect(live.get(path)).toBe("- [ ] a!\n- [ ] b\n- [ ] c %%agent%%");
+    expect(hooks.onConflictCopy).not.toHaveBeenCalled();
+  });
+
+  it("keeps typing that happens while the merge is being saved", async () => {
+    const { client, notes, edit, live, path } = setup("- [ ] a\n- [ ] b");
+    edit("- [ ] a1\n- [ ] b");
+    client.seed(path, "- [ ] a\n- [ ] b\n- note %%agent%%");
+    client.holdWrites = true;
+    await vi.advanceTimersByTimeAsync(300); // first write held
+    client.release();
+    await vi.advanceTimersByTimeAsync(0); // 409 → merge → merged write held
+    expect(live.get(path)).toBe("- [ ] a1\n- [ ] b\n- note %%agent%%");
+    edit("- [ ] a12\n- [ ] b\n- note %%agent%%");
+    client.holdWrites = false;
+    client.release();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(client.notes.get(path)?.content).toBe("- [ ] a12\n- [ ] b\n- note %%agent%%");
+    expect(notes.isDirty(path)).toBe(false);
+  });
+
+  it("takes the other version once when it already has the local edits", async () => {
+    const { client, notes, edit, hooks, lastState, path } = setup("- [ ] a");
+    edit("- [x] a");
+    const remote = client.seed(path, "- [x] a");
+    await notes.handleRemoteChange(path, remote.version);
+    expect(hooks.applyMerge).not.toHaveBeenCalled();
+    expect(lastState()).toBe("saved");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(client.writes).toHaveLength(0);
+  });
+
+  it("merges into a note that is no longer in the editor", async () => {
+    const { client, notes, edit, hooks, live, path } = setup("- [ ] a\n- [ ] b");
+    edit("- [ ] a, edited\n- [ ] b");
+    client.holdWrites = true;
+    const flushed = notes.flush(path); // the note leaves the editor with its edits in flight
+    live.delete(path);
+    const agent = client.seed(path, "- [ ] a\n- [ ] b\n- found it %%agent%%");
+    client.holdWrites = false;
+    client.release();
+    await flushed;
+    await vi.advanceTimersByTimeAsync(0);
+    const merged = "- [ ] a, edited\n- [ ] b\n- found it %%agent%%";
+    expect(hooks.applyMerge).toHaveBeenCalledWith(path, merged);
+    expect(client.writes.at(-1)?.body).toEqual({ content: merged, baseVersion: agent.version });
+    expect(client.notes.get(path)?.content).toBe(merged);
   });
 
   it("forgets a clean note deleted elsewhere", async () => {

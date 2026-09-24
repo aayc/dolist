@@ -1,7 +1,8 @@
 # @ddl/editor
 
 Framework-agnostic CodeMirror 6 markdown editor for Daily Do List: Obsidian-style live preview,
-task checkboxes, vim mode and agent status badges on task lines. The web app wraps it in a React
+task checkboxes, vim mode, agent status badges on task lines (and on lines a thread is anchored
+to), text the agent wrote drawn as agent text, and link previews. The web app wraps it in a React
 component; the desktop/mobile shells reuse the web app unchanged.
 
 ```ts
@@ -14,8 +15,10 @@ const editor = createMarkdownEditor(element, {
   callbacks: {
     onDocChange: (doc, { userEvent }) => userEvent && scheduleSave(doc),
     onAnnotationClick: (annotation) => openThread(annotation.threadId),
+    onAgentLineClick: (threadId) => openThread(threadId),
     onWikiLinkClick: (target, { newPane, subpath }) => openNote(target, { newPane, subpath }),
     onExternalLinkClick: (url) => window.open(url, "_blank", "noopener"),
+    onLinkPreview: ({ link, label, threadId }) => previewFor(link, label, threadId),
     onCursorLine: (line) => sendPresence(line), // throttle in the host
     onSave: () => saveNow(),
   },
@@ -23,6 +26,7 @@ const editor = createMarkdownEditor(element, {
 
 editor.setAnnotations([
   { id: "t1", line: 4, status: "working", label: "Researching…", unread: 0, threadId: "th1" },
+  { id: "anc_1", line: 7, status: "done", label: "Done", unread: 1, threadId: "th2", lineAnchor: true },
 ]);
 ```
 
@@ -66,6 +70,11 @@ scales its checkmark in (120 ms; unchecking doesn't animate). Badges update thei
 (`eq`/`updateDOM`), so typing and status changes never replay the entrance, and a note shown again
 doesn't animate the badges it already had.
 
+A thread can also be attached to a line that isn't a task (a question written as prose, a heading):
+an annotation with `lineAnchor: true` draws the same badge and highlights the line with a soft
+accent band (`--ddl-anchor-bg`) and a 2px accent bar at its left edge (`cm-ddl-anchored`; the bar
+takes the warning or danger color while the thread needs the user or failed).
+
 Badges stay attached while the user edits. Each badge is anchored to the start of its line and drawn
 at the end of whichever line holds that anchor. That way, pressing Enter at the end of a task leaves
 the badge on the task (not on the new empty task), Enter at its start moves the badge down with the
@@ -74,6 +83,26 @@ neighbour a moved line swaps with, and when a replacement at the line start inse
 badge is dropped when a single change removes its line's whole content (delete line, vim `dd`, cut,
 select + retype) unless that change inserts the exact same line again (moving lines, undoing a move,
 an external reorder). `getAnnotations(state)` returns the annotations with their lines mapped.
+
+**Agent text.** A line the agent wrote ends with an Obsidian comment naming its thread,
+`%%agent:thr_1%%` (`%%agent%%` without one; see `markdown/agent-text.ts` in `@ddl/core`). Such lines
+are drawn in the agent text color (`--ddl-agent-text`, class `cm-ddl-agent-line`) in both modes;
+links, tags, checkboxes and bullets keep their own colors. The live preview hides the marker behind
+a ✦ in the accent color: clicking it calls `onAgentLineClick(threadId)` (title "Written by the agent
+— open thread"; a marker without a thread gives a ✦ that isn't clickable). Like block syntax, the
+marker is revealed (faint, `cm-ddl-agent-marker`) while the selection is on the line; source mode
+always shows it faint. Text typed at or after the marker (e.g. after clicking the end of the line,
+which puts the caret after the hidden marker) goes in front of it, so the marker stays last; the
+user deletes the marker to make the line theirs. Alt-Enter on an agent line without a badge opens
+its thread too.
+
+**Link previews.** Resting the mouse on a link for 300 ms shows a card (`LinkPopover`, in the
+document's body) with what `onLinkPreview({ link, label, threadId })` returns. `threadId` is the
+thread named by the agent marker of the link's line, so a host can describe a URL with the sources
+that thread cites. Without a host answer, web links show their label (or host, for numbered
+citations and bare URLs), host and full URL, and note links show nothing. The editor never fetches
+a link. Editing, moving the caret, scrolling or pressing a key hides the card. `LinkPopover`,
+`renderLinkPreview` and `webLinkPreview` are exported so hosts can show the same card elsewhere.
 
 **Obsidian syntax** as `@lezer/markdown` extensions, so none of it is ever detected inside code:
 `[[target]]`, `[[target#heading|alias]]`, `![[embed]]`, `#tags` (not `#123`, not mid-word),
@@ -106,7 +135,7 @@ links, as in Obsidian.
 | Mod-k | `insertLink` |
 | Mod-l, Mod-Enter | `toggleChecklist`: text → `- [ ] text`, list item → task, `[ ]` ↔ `[x]` |
 | Mod-s (and vim `:w`) | `saveDocument` → `onSave` (always prevents the browser's save dialog) |
-| Alt-Enter | `followLinkAtCursor`, or open the agent thread of the caret's line |
+| Alt-Enter | `followLinkAtCursor`, or open the agent thread of the caret's line (its badge's, else the one that wrote it) |
 | Enter / Backspace | continue lists and tasks / delete list markup |
 | Tab / Shift-Tab | indent / outdent list items |
 | Mod-f | search panel (plus CodeMirror's default and history keymaps) |
@@ -246,11 +275,15 @@ when the committed file is stale.
 
 ## API notes
 
-- `setDocument(doc)` applies external changes as one minimal replacement (common prefix/suffix,
-  aligned to line starts for whole-line insertions/deletions), so the selection, scroll position and
-  badges survive; a caret at the start of a line that gets lines inserted above it stays on its
-  line. External changes are not added to the undo history (local history is mapped through them),
-  and `onDocChange` reports them with `userEvent: false`.
+- `setDocument(doc)` applies external changes as one change per run of changed lines
+  (`documentChanges`: a line diff, each run trimmed to its common prefix/suffix and aligned to line
+  starts for whole-line insertions/deletions), so the selection, scroll position, badges and the
+  undo history of edits on other lines survive. That is what lets the host put a three-way merge
+  of the agent's edits into a note the user is typing in. A caret at the start of a line that gets
+  lines inserted above it stays on its line. External changes are not added to the undo history
+  (local history is mapped through them), and `onDocChange` reports them with `userEvent: false`.
+  `withDocument(state, doc)` applies an external change the same way to a state that isn't shown
+  (e.g. a cached note).
   `setDocument(doc, { resetHistory: true })` starts a fresh state with the current config (no
   history, no badges).
 - `createState` / `getState` / `setState` support caching one state per open note (instant switching
@@ -263,26 +296,33 @@ when the committed file is stale.
   alias (same meaning as `WikiLink.target` in `@ddl/core`).
 - `scrollToLine(line)` moves the caret to the line and centers it.
 
-Additions to the contract: `EditorCallbacks.onWikiLinkClick` options gained an optional `subpath`.
-Additional exports:
+Additions to the contract: `EditorCallbacks.onWikiLinkClick` options gained an optional `subpath`;
+`LineAnnotation.lineAnchor`, `EditorCallbacks.onAgentLineClick` and `onLinkPreview` (with the
+`LinkPreview` and `LinkPreviewRequest` types) are new. Additional exports:
 
-- state and tests: `createHeadlessEditorState`, `editorExtensions`;
+- state and tests: `createHeadlessEditorState`, `editorExtensions`, `externalChange`,
+  `withDocument`;
 - annotations: `annotationField`, `setAnnotationsEffect`, `getAnnotations`,
   `HIDDEN_BADGE_STATUSES`;
+- agent lines: `agentLines`, `buildAgentLineDecorations`, `AGENT_SPARKLE_TITLE`;
 - commands: `toggleTaskAtLine`, `toggleChecklist`, the formatting and list commands (including
   `continueAlternateTask`), `saveDocument`, `followLinkAtCursor`;
-- links: `findLinkAt`;
-- live preview: `buildLivePreviewDecorations`, `livePreview`;
+- links: `findLinkAt`, `linkAt` (with the link's visible text);
+- link previews: `linkPreviews`, `linkPreviewAt`, `LinkPopover`, `renderLinkPreview`,
+  `webLinkPreview`, `hostnameOf`;
+- live preview: `buildLivePreviewDecorations`, `livePreview`, `livePreviewEnabled`;
 - building blocks: `markdownSupport`, `ddlTags`, `splitWikiLink`, `editorTheme`,
-  `markdownHighlightStyle`, `editorKeymap`, `minimalChange`.
+  `markdownHighlightStyle`, `editorKeymap`, `minimalChange`, `documentChanges`.
 
 ## Theming
 
 The editor uses only these app-defined variables: `--ddl-bg`, `--ddl-bg-secondary`,
-`--ddl-bg-hover`, `--ddl-border`, `--ddl-text`, `--ddl-text-muted`, `--ddl-text-faint`,
-`--ddl-accent`, `--ddl-accent-soft`, `--ddl-success`, `--ddl-warning`, `--ddl-danger`,
-`--ddl-info`, `--ddl-font-ui`, `--ddl-font-editor`, `--ddl-font-mono`, `--ddl-editor-font-size`
-(set per editor from `config.fontSize`) and `--ddl-line-width` (readable line length).
+`--ddl-bg-elevated`, `--ddl-bg-hover`, `--ddl-border`, `--ddl-text`, `--ddl-text-muted`,
+`--ddl-text-faint`, `--ddl-accent`, `--ddl-accent-strong`, `--ddl-accent-soft`,
+`--ddl-agent-text`, `--ddl-anchor-bg`, `--ddl-success`, `--ddl-warning`, `--ddl-danger`,
+`--ddl-info`, `--ddl-shadow-small`, `--ddl-font-ui`, `--ddl-font-editor`, `--ddl-font-mono`,
+`--ddl-editor-font-size` (set per editor from `config.fontSize`) and `--ddl-line-width` (readable
+line length). Headings take their line's color, so a heading the agent wrote is agent text.
 
 CodeMirror base-theme overrides are in [`src/theme.ts`](src/theme.ts); component styles are in
 [`src/styles.css`](src/styles.css). Every class is prefixed `cm-ddl-`: `cm-ddl-editor`,
@@ -290,7 +330,8 @@ CodeMirror base-theme overrides are in [`src/theme.ts`](src/theme.ts); component
 `cm-ddl-task-done`, `cm-ddl-checkbox`, `cm-ddl-bullet`, `cm-ddl-hr`, `cm-ddl-link`,
 `cm-ddl-wikilink`, `cm-ddl-badge` (+ `cm-ddl-badge-<status>`, `cm-ddl-badge-tone-<tone>` with tones
 `needs-you`, `failed`, `working` and `quiet`, and `cm-ddl-badge-enter` while it animates in),
-`cm-ddl-annotated-<status>`.
+`cm-ddl-annotated-<status>`, `cm-ddl-anchored`, `cm-ddl-agent-line`, `cm-ddl-agent-marker`,
+`cm-ddl-agent-sparkle`, `cm-ddl-link-popover` and `cm-ddl-link-preview-*`.
 
 ## Performance
 
@@ -299,6 +340,8 @@ The keystroke path is O(visible lines + badges):
 - Live preview decorations come from one syntax-tree pass over `view.visibleRanges`, using shared
   decoration instances and cached widgets. Widgets implement `eq`/`updateDOM`, so unchanged
   checkboxes and badges are never re-rendered.
+- Agent lines are found by scanning the visible lines for `%%agent` (a string check per line, the
+  regex only on hits); the input filter that keeps markers last looks at the edited line only.
 - Badges are an ordered array of anchors, mapped with `ChangeSet.mapPos` (O(badges) per change).
   Pure insertions (typing) skip the line-deletion check.
 - Obsidian syntax is parsed incrementally by lezer, not with regexes over lines.
@@ -312,9 +355,10 @@ with `BENCH_BUDGET_MULTIPLIER`):
 
 | Benchmark (2k-line note) | mean | p99 | budget |
 | --- | --- | --- | --- |
-| 500 single-character inserts with 30 badges (state level) | 124 ms (0.25 ms/key) | 163 ms | 500 ms |
-| live preview, 60-line viewport | 0.07 ms | 0.11 ms | 2 ms |
-| live preview, 150-line viewport | 0.16 ms | 0.27 ms | 4 ms |
+| 500 single-character inserts with 30 badges (state level) | 132 ms (0.26 ms/key) | 147 ms | 500 ms |
+| live preview, 60-line viewport | 0.07 ms | 0.16 ms | 2 ms |
+| live preview, 150-line viewport | 0.17 ms | 0.35 ms | 4 ms |
+| agent lines, 150-line viewport, every 4th line the agent's | 0.02 ms | 0.04 ms | 1 ms |
 
 In Chromium, on a 2k-line note with badges, a keystroke's synchronous work (transaction, live
 preview, DOM update) measured p50 1.7 ms / p95 1.9 ms, and keystroke to the next frame p95 9.3 ms,

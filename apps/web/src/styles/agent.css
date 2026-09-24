@@ -365,8 +365,10 @@
   color: var(--ddl-text-muted);
 }
 
+/* Code sits on the elevated color, the same as the panel in the light theme: hence the border. */
 .markdown code {
-  padding: 1px 4px;
+  padding: 0 4px;
+  border: 1px solid var(--ddl-border);
   border-radius: var(--radius-s);
   background: var(--ddl-code-bg);
 }
@@ -374,13 +376,49 @@
 .markdown pre {
   padding: 10px;
   overflow-x: auto;
+  border: 1px solid var(--ddl-border);
   border-radius: var(--radius-m);
   background: var(--ddl-code-bg);
 }
 
 .markdown pre code {
   padding: 0;
+  border: 0;
   background: none;
+}
+
+.markdown a[data-wikilink] {
+  text-decoration: none;
+}
+
+.markdown a[data-wikilink]:hover {
+  text-decoration: underline;
+}
+
+/* Numbered citations (`[1](url)`) are small superscript chips. */
+.markdown a[data-cite] {
+  display: inline-block;
+  min-width: 1.5em;
+  margin: 0 1px;
+  padding: 0 0.4em;
+  border-radius: 999px;
+  background: var(--ddl-accent-soft);
+  color: var(--ddl-accent);
+  font-size: 0.7em;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+  text-decoration: none;
+  vertical-align: super;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.markdown a[data-cite]:hover,
+.markdown a[data-cite]:focus-visible {
+  background: var(--ddl-accent);
+  color: var(--ddl-accent-contrast);
 }
 
 .markdown table {
@@ -753,6 +791,7 @@ svg.tone-warning {
 
 .code-block {
   position: relative;
+  border: 1px solid var(--ddl-border);
   border-radius: var(--radius-m);
   background: var(--ddl-code-bg);
 }
@@ -874,7 +913,7 @@ svg.tone-warning {
   border: 2px solid var(--ddl-accent);
   border-radius: 50%;
   background: var(--ddl-accent-soft);
-  box-shadow: 0 0 0 4px rgba(127, 109, 242, 0.2);
+  box-shadow: 0 0 0 4px var(--ddl-accent-soft);
   pointer-events: none;
   transition:
     left var(--transition),

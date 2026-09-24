@@ -10,10 +10,19 @@ import {
   today,
 } from "@ddl/core";
 import type { MockAgent } from "./mock-agent";
+import { LIVING_LIST_LINES, RESTAURANTS_NOTE } from "./mock-demo";
 import type { MockVault } from "./mock-vault";
 
-/** Synthetic demo content only — no real people, places or accounts. */
-const PAST_DAYS: Array<{ offset: number; lines: string[]; completed: string[] }> = [
+/**
+ * Synthetic demo content only — no real people, places or accounts. Yesterday's note shows the
+ * agent at work in a note (`living`); today's stays the empty template, ready for a task.
+ */
+const PAST_DAYS: Array<{
+  offset: number;
+  lines: readonly string[];
+  completed: string[];
+  living?: boolean;
+}> = [
   {
     offset: -1,
     lines: [
@@ -23,8 +32,10 @@ const PAST_DAYS: Array<{ offset: number; lines: string[]; completed: string[] }>
       "- [x] Draft agenda for Thursday's team sync",
       "  - Include the Q4 roadmap review",
       "- [x] Find a plumber with weekend availability",
+      ...LIVING_LIST_LINES,
     ],
     completed: ["Compare standing desks under $400", "Order a replacement phone charger"],
+    living: true,
   },
   {
     offset: -2,
@@ -95,6 +106,7 @@ const STATIC_NOTES: Record<string, string> = {
     "2. A history of maps",
     "3. A field guide to local birds",
   ].join("\n"),
+  "Restaurants.md": RESTAURANTS_NOTE,
 };
 
 export function renderDailyContent(
@@ -126,6 +138,7 @@ export function seedVault(vault: MockVault, agent: MockAgent, settings: AppSetti
     vault.write(path, content, mtime);
     agent.observeNote(path, content, { initial: true });
     for (const text of day.completed) agent.seedCompletedTask(path, text, mtime);
+    if (day.living) agent.seedLivingList(path, content, mtime);
   }
   const todayPath = dailyNotePath(current, settings.dailyNotes);
   const todayContent = renderDailyContent(vault, current, settings, now);

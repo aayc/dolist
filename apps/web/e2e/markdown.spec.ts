@@ -23,5 +23,29 @@ test.describe("agent markdown rendering", () => {
     const link = await render("[docs](https://example.com)");
     expect(link).toContain('target="_blank"');
     expect(link).toContain('rel="noopener noreferrer"');
+    expect(link).not.toContain("data-cite");
+  });
+
+  test("marks numbered links as citations and keeps wikilinks as note links", async ({ page }) => {
+    await openApp(page);
+    const render = (source: string) =>
+      page.evaluate((s) => window.__ddlDebug!.renderMarkdown(s), source);
+
+    const cited = await render("A table at 7 [1](https://tables.example/sole)");
+    expect(cited).toMatch(
+      /<a href="https:\/\/tables\.example\/sole"[^>]* data-cite=""[^>]*>1<\/a>/,
+    );
+    expect(cited).toContain('target="_blank"');
+    const wiki = await render("From your [[Restaurants|restaurant notes]]");
+    expect(wiki).toContain('<a href="#" data-wikilink="Restaurants">restaurant notes</a>');
+    expect(wiki).not.toContain("target=");
+
+    // Raw HTML can't make a long link look like a citation, nor escape as app styling.
+    const forged = await render(
+      '<a href="https://x.example" data-cite class="toast">long text</a> <a href="javascript:x()">1</a>',
+    );
+    expect(forged).not.toContain("data-cite");
+    expect(forged).not.toContain("class=");
+    expect(forged).not.toContain("javascript:");
   });
 });

@@ -85,4 +85,18 @@ describe("followLinkAtCursor (Alt-Enter)", () => {
     expect(cb.onAnnotationClick).toHaveBeenCalledWith(annotation);
     expect(run(parsedState("plain"), followLinkAtCursor)).toBeNull();
   });
+
+  it("opens the thread that wrote the line when it has no badge", () => {
+    const onAgentLineClick = vi.fn();
+    const doc = "\t- Trattoria Sole at 7 %%agent:thr_ab12%%\n- noted %%agent%%";
+    const at = (anchor: number) =>
+      followLinkAtCursor({
+        state: parsedState(doc, { callbacks: { onAgentLineClick }, selection: { anchor } }),
+        dispatch: vi.fn(),
+      });
+    expect(at(4)).toBe(true);
+    expect(onAgentLineClick).toHaveBeenCalledWith("thr_ab12");
+    expect(at(doc.length)).toBe(false);
+    expect(onAgentLineClick).toHaveBeenCalledTimes(1);
+  });
 });

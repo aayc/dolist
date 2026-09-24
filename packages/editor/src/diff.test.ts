@@ -1,9 +1,51 @@
 import { describe, expect, it } from "vitest";
-import { minimalChange, normalizeLineEndings, type TextChange } from "./diff";
+import { documentChanges, minimalChange, normalizeLineEndings, type TextChange } from "./diff";
 
 function applyChange(text: string, change: TextChange | null): string {
   return change ? text.slice(0, change.from) + change.insert + text.slice(change.to) : text;
 }
+
+function applyChanges(text: string, changes: readonly TextChange[]): string {
+  let out = text;
+  for (const change of [...changes].reverse()) out = applyChange(out, change);
+  return out;
+}
+
+describe("documentChanges", () => {
+  it("makes one trimmed change per run of changed lines", () => {
+    const current = "# Today\n- [ ] Book a table\n- [ ] Call mom\n- [ ] Renew passport";
+    const next =
+      "# Today\n- [ ] Book a table\n  - Sole, 7pm %%agent%%\n- [ ] Call mom\n- [x] Renew passport";
+    expect(documentChanges(current, next)).toEqual([
+      { from: 27, to: 27, insert: "  - Sole, 7pm %%agent%%\n" },
+      { from: 45, to: 46, insert: "x" },
+    ]);
+    expect(applyChanges(current, documentChanges(current, next))).toBe(next);
+  });
+
+  it("appends and removes lines at the end without touching the last kept line", () => {
+    expect(documentChanges("a\nb", "a\nb\nc")).toEqual([{ from: 3, to: 3, insert: "\nc" }]);
+    expect(documentChanges("a\nb\nc", "a")).toEqual([{ from: 1, to: 5, insert: "" }]);
+    expect(documentChanges("a\nb\nc", "b\nc")).toEqual([{ from: 0, to: 2, insert: "" }]);
+    expect(documentChanges("same", "same")).toEqual([]);
+  });
+
+  it("always produces the target document", () => {
+    const cases: Array<[string, string]> = [
+      ["", "x"],
+      ["x", ""],
+      ["a\n", "a\n\n"],
+      ["\n\n", "\n"],
+      ["a\nb\nc\nd", "d\nc\nb\na"],
+      ["😀\n😁", "😁\n😀"],
+    ];
+    for (const [current, next] of cases) {
+      expect(applyChanges(current, documentChanges(current, next)), `${current} → ${next}`).toBe(
+        next,
+      );
+    }
+  });
+});
 
 describe("minimalChange", () => {
   it("returns null for identical documents", () => {

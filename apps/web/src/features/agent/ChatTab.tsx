@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef } from "react";
 import { useAgentStore } from "../../state/agent-store";
 import { Composer } from "./Composer";
 import { MessageRow } from "./MessageRow";
+import { useMarkdownLinks } from "./markdown-links";
 
 const NO_MESSAGES: readonly ThreadMessage[] = [];
 /** Within this distance from the bottom the list stays pinned to new content. */
@@ -13,6 +14,7 @@ export function ChatTab({ threadId }: { threadId: string }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
+  useMarkdownLinks(scrollRef, threadId);
 
   // Streaming text grows the DOM without React renders; follow it while pinned to the bottom.
   useLayoutEffect(() => {

@@ -1,11 +1,53 @@
 import { fc, test } from "@fast-check/vitest";
 import { describe, expect } from "vitest";
-import { minimalChange, normalizeLineEndings, type TextChange } from "./diff";
+import { documentChanges, minimalChange, normalizeLineEndings, type TextChange } from "./diff";
 import { codePointBoundaries } from "./test-arbitraries";
 
 function applyChange(text: string, change: TextChange | null): string {
   return change ? text.slice(0, change.from) + change.insert + text.slice(change.to) : text;
 }
+
+describe("documentChanges (properties)", () => {
+  const line = fc.constantFrom("- [ ] a", "- [ ] b", "text", "", "  - note %%agent%%", "😀");
+  const lines = fc.array(line, { maxLength: 12 });
+
+  test.prop([lines, lines])(
+    "sorted, non-overlapping changes that turn the current text into the next one",
+    (a, b) => {
+      const current = a.join("\n");
+      const next = b.join("\n");
+      const changes = documentChanges(current, next);
+      let end = -1;
+      for (const change of changes) {
+        expect(change.from, "sorted and disjoint").toBeGreaterThan(end);
+        expect(change.to).toBeGreaterThanOrEqual(change.from);
+        end = change.to;
+      }
+      let out = current;
+      for (const change of [...changes].reverse()) out = applyChange(out, change);
+      expect(out).toBe(next);
+    },
+  );
+
+  test.prop([
+    fc.array(line, { minLength: 2, maxLength: 12 }),
+    fc.nat(),
+    fc.array(line, { maxLength: 3 }),
+    fc.array(line, { maxLength: 3 }),
+  ])("never cut into a line that neither edit touches", (ls, at, above, below) => {
+    // The user's line sits between two lines the remote side rewrites.
+    const kept = "KEPT";
+    const i = 1 + (at % (ls.length - 1));
+    const before = [...ls.slice(0, i), kept, ...ls.slice(i)];
+    const after = [...ls.slice(0, i - 1), ...above, kept, ...below, ...ls.slice(i + 1)];
+    const keptFrom = before.slice(0, i).join("\n").length + 1;
+    const keptTo = keptFrom + kept.length;
+    const inside = (pos: number) => pos > keptFrom && pos < keptTo;
+    for (const change of documentChanges(before.join("\n"), after.join("\n"))) {
+      expect(inside(change.from) || inside(change.to), "cuts into the kept line").toBe(false);
+    }
+  });
+});
 
 const isHigh = (code: number) => code >= 0xd800 && code <= 0xdbff;
 const isLow = (code: number) => code >= 0xdc00 && code <= 0xdfff;

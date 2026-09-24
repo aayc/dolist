@@ -2,8 +2,9 @@
  * Link resolution and following: wikilinks, inline/auto links and bare URLs, via the syntax tree.
  */
 import { syntaxTree } from "@codemirror/language";
-import type { EditorState, StateCommand } from "@codemirror/state";
+import type { EditorState, StateCommand, Text } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { parseAgentLine } from "@ddl/core";
 import { annotationAtLine } from "./annotations/field";
 import { editorCallbacks } from "./callbacks";
 import { splitWikiLink } from "./syntax/markdown-extensions";
@@ -26,33 +27,56 @@ const LINK_CONTAINERS = new Set(["Link", "Image", "Autolink"]);
 
 /** The link at `pos` (preferring the node after it), or null. */
 export function findLinkAt(state: EditorState, pos: number): LinkTarget | null {
-  const tree = syntaxTree(state);
-  return (
-    linkFromNode(state, tree.resolveInner(pos, 1)) ??
-    linkFromNode(state, tree.resolveInner(pos, -1))
-  );
+  return linkAt(state, pos, 1)?.link ?? linkAt(state, pos, -1)?.link ?? null;
 }
 
-function linkFromNode(state: EditorState, start: SyntaxNode): LinkTarget | null {
+/** The link on the given side of `pos` with its visible text (label, alias, target or URL). */
+export function linkAt(
+  state: EditorState,
+  pos: number,
+  side: -1 | 1,
+): { link: LinkTarget; label: string } | null {
+  const node = linkNode(syntaxTree(state).resolveInner(pos, side));
+  if (!node) return null;
+  const link = linkTarget(state, node);
+  return link ? { link, label: linkLabel(state, node) } : null;
+}
+
+/** The innermost link element containing `start` (a wikilink, link, autolink or bare URL). */
+function linkNode(start: SyntaxNode): SyntaxNode | null {
   for (let node: SyntaxNode | null = start; node; node = node.parent) {
     switch (node.name) {
       case "WikiLink":
-        return wikiLinkTarget(state, node);
       case "Link":
-      case "Autolink": {
-        const url = node.getChild("URL");
-        return url ? urlTarget(state.sliceDoc(url.from, url.to), node.from, node.to) : null;
-      }
+      case "Autolink":
+        return node;
       case "URL":
-        if (!node.parent || !LINK_CONTAINERS.has(node.parent.name)) {
-          return urlTarget(state.sliceDoc(node.from, node.to), node.from, node.to);
-        }
+        if (!node.parent || !LINK_CONTAINERS.has(node.parent.name)) return node;
         break;
       case "Image":
         return null;
     }
   }
   return null;
+}
+
+function linkTarget(state: EditorState, node: SyntaxNode): LinkTarget | null {
+  if (node.name === "WikiLink") return wikiLinkTarget(state, node);
+  const url = node.name === "URL" ? node : node.getChild("URL");
+  return url ? urlTarget(state.sliceDoc(url.from, url.to), node.from, node.to) : null;
+}
+
+function linkLabel(state: EditorState, node: SyntaxNode): string {
+  if (node.name === "WikiLink") {
+    const shown = node.getChild("WikiLinkAlias") ?? node.getChild("WikiLinkTarget");
+    return shown ? state.sliceDoc(shown.from, shown.to).trim() : "";
+  }
+  if (node.name === "Link") {
+    const [open, close] = node.getChildren("LinkMark");
+    if (open && close && close.from > open.to) return state.sliceDoc(open.to, close.from).trim();
+  }
+  const url = node.name === "URL" ? node : node.getChild("URL");
+  return url ? state.sliceDoc(url.from, url.to) : "";
 }
 
 function wikiLinkTarget(state: EditorState, node: SyntaxNode): LinkTarget | null {
@@ -104,7 +128,16 @@ export function openLink(state: EditorState, link: LinkTarget, newPane: boolean)
   }
 }
 
-/** Alt-Enter: follow the link at the cursor, or open the agent thread of the cursor's line. */
+/** The thread named by the agent marker of a 0-based line, if the agent wrote it. */
+export function agentThreadAtLine(doc: Text, line: number): string | null {
+  if (line < 0 || line >= doc.lines) return null;
+  return parseAgentLine(doc.line(line + 1).text)?.threadId ?? null;
+}
+
+/**
+ * Alt-Enter: follow the link at the cursor, or open the agent thread of the cursor's line (its
+ * badge's thread, else the thread that wrote the line).
+ */
 export const followLinkAtCursor: StateCommand = ({ state }) => {
   const head = state.selection.main.head;
   const link = findLinkAt(state, head);
@@ -112,9 +145,16 @@ export const followLinkAtCursor: StateCommand = ({ state }) => {
     openLink(state, link, false);
     return true;
   }
-  const annotation = annotationAtLine(state, state.doc.lineAt(head).number - 1);
-  if (!annotation) return false;
-  state.facet(editorCallbacks).onAnnotationClick?.(annotation);
+  const line = state.doc.lineAt(head).number - 1;
+  const callbacks = state.facet(editorCallbacks);
+  const annotation = annotationAtLine(state, line);
+  if (annotation) {
+    callbacks.onAnnotationClick?.(annotation);
+    return true;
+  }
+  const threadId = agentThreadAtLine(state.doc, line);
+  if (threadId === null || !callbacks.onAgentLineClick) return false;
+  callbacks.onAgentLineClick(threadId);
   return true;
 };
 

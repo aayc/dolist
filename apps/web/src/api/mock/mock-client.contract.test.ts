@@ -103,6 +103,13 @@ describe("MockDaemonClient ⇄ wire contract", () => {
     const daily = await call(client.getDailyNote("today"));
     expectWire("DailyNoteResponse", daily);
     expectWire("DailyNoteResponse", await call(client.getDailyNote(daily.date, false)));
+    // Yesterday's demo note has line-anchor records.
+    const before = new Date();
+    before.setDate(before.getDate() - 1);
+    const yesterday = await call(client.getDailyNote(toISODate(today(before)), false));
+    const demoRecords = await call(client.getTaskRecords(yesterday.path));
+    expect(demoRecords.records.some((r) => r.anchor === "line")).toBe(true);
+    expectWire("TaskRecordsResponse", demoRecords);
     expectWire("SearchResponse", await call(client.search("cedar")));
     const ideas = await call(client.readNote("Ideas.md"));
     expectWire("NoteResponse", ideas);

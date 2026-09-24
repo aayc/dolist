@@ -1,4 +1,10 @@
 export {
+  AGENT_SPARKLE_TITLE,
+  type AgentLineOptions,
+  agentLines,
+  buildAgentLineDecorations,
+} from "./agent-lines";
+export {
   type AnnotationState,
   annotationField,
   getAnnotations,
@@ -21,7 +27,7 @@ export {
   indentListItemOrInsertTab,
 } from "./commands/lists";
 export { type CommandTarget, toggleChecklist, toggleTaskAtLine } from "./commands/tasks";
-export { minimalChange, type TextChange } from "./diff";
+export { documentChanges, minimalChange, type TextChange } from "./diff";
 export * from "./editor";
 export {
   createHeadlessEditorState,
@@ -29,9 +35,18 @@ export {
   type HeadlessStateOptions,
 } from "./extensions";
 export { editorKeymap, markdownEditingKeymap, obsidianKeymap } from "./keymap";
-export { findLinkAt, followLinkAtCursor, type LinkTarget } from "./links";
+export {
+  hostnameOf,
+  LinkPopover,
+  linkPreviewAt,
+  linkPreviews,
+  type PopoverAnchor,
+  renderLinkPreview,
+  webLinkPreview,
+} from "./link-preview";
+export { findLinkAt, followLinkAtCursor, type LinkTarget, linkAt } from "./links";
 export { buildLivePreviewDecorations, type VisibleRange } from "./live-preview/decorations";
-export { livePreview } from "./live-preview/plugin";
+export { livePreview, livePreviewEnabled } from "./live-preview/plugin";
 export { markdownSupport } from "./syntax/language";
 export { ddlTags, splitWikiLink, type WikiLinkParts } from "./syntax/markdown-extensions";
 export { editorTheme, markdownHighlightStyle } from "./theme";

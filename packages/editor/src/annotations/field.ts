@@ -103,13 +103,16 @@ function restoreAnchors(
   return { entries, decorations: buildDecorations(entries, doc), primed: value.primed };
 }
 
-const lineDecorationCache = new Map<TaskAgentStatus, Decoration>();
+const lineDecorationCache = new Map<string, Decoration>();
 
-function lineDecoration(status: TaskAgentStatus): Decoration {
-  let deco = lineDecorationCache.get(status);
+/** Line anchors (threads attached to a line rather than a task) also highlight their line. */
+function lineDecoration({ status, lineAnchor }: LineAnnotation): Decoration {
+  const key = lineAnchor ? `${status} anchored` : status;
+  let deco = lineDecorationCache.get(key);
   if (!deco) {
-    deco = Decoration.line({ class: `cm-ddl-annotated cm-ddl-annotated-${status}` });
-    lineDecorationCache.set(status, deco);
+    const anchored = lineAnchor ? " cm-ddl-anchored" : "";
+    deco = Decoration.line({ class: `cm-ddl-annotated cm-ddl-annotated-${status}${anchored}` });
+    lineDecorationCache.set(key, deco);
   }
   return deco;
 }
@@ -121,7 +124,7 @@ function buildDecorations(entries: readonly AnchoredAnnotation[], doc: Text): De
   while (i < entries.length) {
     const first = entries[i]!;
     const line = doc.lineAt(first.anchor);
-    builder.add(line.from, line.from, lineDecoration(first.annotation.status));
+    builder.add(line.from, line.from, lineDecoration(first.annotation));
     for (let entry = entries[i]; entry && entry.anchor <= line.to; entry = entries[++i]) {
       builder.add(line.to, line.to, entry.widget);
     }

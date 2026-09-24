@@ -90,6 +90,82 @@ describe("MockDaemonClient vault", () => {
   });
 });
 
+describe("MockDaemonClient living-list demo", () => {
+  async function yesterday(client: MockDaemonClient) {
+    const date = new Date();
+    date.setDate(date.getDate() - 1);
+    return call(client.getDailyNote(toISODate(today(date)), false));
+  }
+
+  it("seeds yesterday's note with the agent's lines and threads anchored to them", async () => {
+    const { client } = create();
+    const note = await yesterday(client);
+    const lines = note.content.split("\n");
+    expect(lines).toContain(
+      "\t- Trattoria Sole has a table for 2 at 7:00 PM ([Tables](https://tables.example/r/trattoria-sole)) %%agent:thr_demo_dinner%%",
+    );
+    expect(lines).toContain("- [ ] Call the restaurant to confirm %%agent:thr_demo_dinner%%");
+
+    const { records } = await call(client.getTaskRecords(note.path));
+    const question = records.find((r) => r.anchor === "line");
+    expect(question).toMatchObject({
+      taskId: "anc_demo_tallest",
+      text: "What's the tallest building in NYC?",
+      line: lines.indexOf("What's the tallest building in NYC?"),
+      status: "done",
+      summary: "One World Trade Center",
+      threadId: "thr_demo_tallest",
+    });
+    expect(records.find((r) => r.text === "Book a table for Friday dinner")).toMatchObject({
+      status: "done",
+      threadId: "thr_demo_dinner",
+    });
+
+    const { thread } = await call(client.getThread("thr_demo_dinner"));
+    expect(thread.sources?.map((s) => s.url)).toEqual([
+      "https://tables.example/r/trattoria-sole",
+      "https://reviews.example/trattoria-sole",
+    ]);
+    const answer = thread.messages.filter((m) => m.kind === "text").at(-1);
+    expect(answer?.kind === "text" && answer.text).toMatch(
+      /\[1\]\(https:\/\/tables\.example\/r\/trattoria-sole\).*\[\[Restaurants\]\]/s,
+    );
+    expect((await call(client.readNote("Restaurants.md"))).content).toContain("Trattoria Sole");
+  });
+
+  it("moves an anchor with its line and drops it with the line", async () => {
+    const { client, events } = create();
+    const note = await yesterday(client);
+    const moved = `- [ ] New first task\n${note.content}`;
+    const written = await call(
+      client.writeNote(note.path, { content: moved, baseVersion: note.version }),
+    );
+    await vi.advanceTimersByTimeAsync(1);
+    const anchor = () =>
+      ofType(events, "task.records")
+        .at(-1)
+        ?.records.find((r) => r.anchor === "line");
+    expect(anchor()?.line).toBe(moved.split("\n").indexOf("What's the tallest building in NYC?"));
+
+    const without = moved.replace("\nWhat's the tallest building in NYC?", "");
+    await call(client.writeNote(note.path, { content: without, baseVersion: written.version }));
+    await vi.advanceTimersByTimeAsync(1);
+    expect(anchor()).toBeUndefined();
+  });
+
+  it("gives research threads the sources their answer cites", async () => {
+    const { client, events } = create();
+    await writeTodayTask(client, "Compare three robot vacuums");
+    await vi.advanceTimersByTimeAsync(4000);
+    const threadId = ofType(events, "thread.upsert").at(-1)!.thread.id;
+    const { thread } = await call(client.getThread(threadId));
+    const answer = thread.messages.filter((m) => m.kind === "text").at(-1);
+    const cited = answer?.kind === "text" ? [...answer.text.matchAll(/\]\((https:[^)]+)\)/g)] : [];
+    expect(cited.length).toBeGreaterThan(0);
+    for (const [, url] of cited) expect(thread.sources?.map((s) => s.url)).toContain(url);
+  });
+});
+
 describe("MockDaemonClient settings", () => {
   it("switches the harness, trims model ids and reports the harness's model", async () => {
     const { client, events } = create();

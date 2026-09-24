@@ -23,6 +23,7 @@ import { AnnotationSync } from "../features/editor/annotation-sync";
 import { EditorController } from "../features/editor/editor-controller";
 import { PresenceReporter } from "../features/editor/presence";
 import { WordCounter } from "../features/editor/word-counter";
+import { LinkPreviews } from "../features/links/link-previews";
 import { editorConfigFrom } from "../features/settings/theme";
 import { afterNextPaint } from "../lib/idle";
 import {
@@ -75,6 +76,8 @@ export class Workspace {
   readonly notes: NotesController;
   readonly editor: EditorController;
   readonly annotations: AnnotationSync;
+  /** Hover previews of links, in the editor and in threads. */
+  readonly previews: LinkPreviews;
   private readonly agent: AgentActions;
   private readonly presence: PresenceReporter;
   private readonly words: WordCounter;
@@ -96,6 +99,7 @@ export class Workspace {
       hooks: {
         readLive: (path) => this.editor.readLive(path),
         applyRemote: (path, content) => this.editor.applyRemote(path, content),
+        applyMerge: (path, content) => this.editor.applyRemote(path, content),
         onSaveState: (path, state) => {
           setSaveState(path, state);
           if (state === "saved") this.errorToasted.delete(path);
@@ -124,8 +128,10 @@ export class Workspace {
         onCursorLine: (path, line) => this.presence.onCursorLine(path, line),
         onAnnotationClick: (annotation) =>
           this.agent.openTaskThread(annotation.id, annotation.threadId),
+        onAgentLineClick: (threadId) => this.agent.openThread(threadId),
         onWikiLinkClick: (target, newPane) => void this.openWikiLink(target, newPane),
         onExternalLinkClick: openExternal,
+        linkPreview: (request) => this.previews.forEditor(request),
         onSaveRequested: (path) => void this.notes.flush(path),
         onSaveAllRequested: () => void this.notes.flushAll(),
         onCloseRequested: (path, all) => (all ? this.closeAllTabs() : this.closeTab(path)),
@@ -144,6 +150,12 @@ export class Workspace {
       editorConfigFrom(getSettings()),
     );
     this.annotations = new AnnotationSync(this.editor);
+    this.previews = new LinkPreviews({
+      files: () => vaultActions.files(),
+      openContent: (path) => this.editor.readLive(path) ?? this.notes.serverContent(path),
+      readNote: async (path) => (await client.readNote(path)).content,
+      sources: (threadId) => agent.sourcesOf(threadId),
+    });
     this.presence = new PresenceReporter((notePath, line) =>
       client.send({ type: "editor.activity", notePath, line }),
     );
@@ -581,6 +593,7 @@ export class Workspace {
     if (event.clientId !== undefined && event.clientId === this.client.clientId) return;
     for (const change of event.changes) {
       if (isHiddenPath(change.path)) continue;
+      this.previews.invalidate(change.path);
       if (change.kind === "deleted") {
         const nested = this.notes.paths().filter((p) => p.startsWith(`${change.path}/`));
         for (const p of [change.path, ...nested]) this.notes.handleRemoteDelete(p);

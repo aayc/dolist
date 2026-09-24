@@ -82,12 +82,12 @@ function roundRect(
 
 function drawCursor(ctx: CanvasRenderingContext2D, x: number, y: number, tick: number) {
   const pulse = 10 + (tick % 4) * 3;
-  ctx.strokeStyle = "rgba(127, 109, 242, 0.55)";
+  ctx.strokeStyle = "rgba(59, 139, 255, 0.55)";
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.arc(x, y, pulse, 0, Math.PI * 2);
   ctx.stroke();
-  ctx.fillStyle = "#7f6df2";
+  ctx.fillStyle = "#3b8bff";
   ctx.beginPath();
   ctx.arc(x, y, 5, 0, Math.PI * 2);
   ctx.fill();
@@ -126,7 +126,7 @@ export function renderBrowserFrame(page: BrowserPage, tick: number): FrameImage 
   roundRect(ctx, 48, 88, WIDTH - 96, 40, 20);
   ctx.fillStyle = "#fff";
   ctx.fill();
-  ctx.strokeStyle = page.focus === -1 ? "#7f6df2" : "#d4d4d8";
+  ctx.strokeStyle = page.focus === -1 ? "#3b8bff" : "#d4d4d8";
   ctx.lineWidth = page.focus === -1 ? 3 : 1;
   ctx.stroke();
   ctx.fillStyle = "#3f3f46";
@@ -138,7 +138,7 @@ export function renderBrowserFrame(page: BrowserPage, tick: number): FrameImage 
     roundRect(ctx, 48, y, WIDTH - 96, ITEM_HEIGHT, 12);
     ctx.fillStyle = "#fff";
     ctx.fill();
-    ctx.strokeStyle = page.focus === i ? "#7f6df2" : "#e4e4e7";
+    ctx.strokeStyle = page.focus === i ? "#3b8bff" : "#e4e4e7";
     ctx.lineWidth = page.focus === i ? 3 : 1;
     ctx.stroke();
     ctx.fillStyle = `hsl(${(h + i * 40) % 360} 45% 85%)`;
@@ -184,7 +184,7 @@ export function renderDesktopFrame(scene: DesktopScene, tick: number): FrameImag
   const ctx = context();
   if (!ctx) return encode(null);
   const gradient = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT);
-  gradient.addColorStop(0, "#3b3486");
+  gradient.addColorStop(0, "#1d3b8a");
   gradient.addColorStop(1, "#1f6f8b");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
@@ -223,7 +223,7 @@ export function renderDesktopFrame(scene: DesktopScene, tick: number): FrameImag
   scene.files.forEach((file, i) => {
     const y = ROW_TOP + i * ROW_HEIGHT;
     if (scene.selected === i) {
-      ctx.fillStyle = "#7f6df2";
+      ctx.fillStyle = "#3b8bff";
       ctx.fillRect(300, y, 510, ROW_HEIGHT);
     }
     ctx.fillStyle = scene.selected === i ? "#fff" : "#27272a";

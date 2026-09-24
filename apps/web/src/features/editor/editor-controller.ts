@@ -3,9 +3,12 @@ import {
   DEFAULT_EDITOR_CONFIG,
   type EditorConfig,
   type LineAnnotation,
+  type LinkPreview,
+  type LinkPreviewRequest,
   type MarkdownEditor,
   type VimrcProblem,
   type VimStatus,
+  withDocument,
 } from "@ddl/editor";
 import { LruMap } from "../../lib/lru";
 
@@ -28,8 +31,11 @@ export interface EditorControllerDeps {
   onDocumentReplaced(path: string): void;
   onCursorLine(path: string, line: number): void;
   onAnnotationClick(annotation: LineAnnotation): void;
+  /** The ✦ at the end of a line the agent wrote. */
+  onAgentLineClick(threadId: string): void;
   onWikiLinkClick(target: string, newPane: boolean): void;
   onExternalLinkClick(url: string): void;
+  linkPreview(request: LinkPreviewRequest): Promise<LinkPreview | null>;
   onSaveRequested(path: string): void;
   /** vim `:wa` */
   onSaveAllRequested(): void;
@@ -92,8 +98,10 @@ export class EditorController {
           if (this.activePath !== null) this.deps.onCursorLine(this.activePath, line);
         },
         onAnnotationClick: (annotation) => this.deps.onAnnotationClick(annotation),
+        onAgentLineClick: (threadId) => this.deps.onAgentLineClick(threadId),
         onWikiLinkClick: (target, options) => this.deps.onWikiLinkClick(target, options.newPane),
         onExternalLinkClick: (url) => this.deps.onExternalLinkClick(url),
+        onLinkPreview: (request) => this.deps.linkPreview(request),
         onSave: () => {
           if (this.activePath !== null) this.deps.onSaveRequested(this.activePath);
         },
@@ -156,10 +164,14 @@ export class EditorController {
     return state.update({ selection: { anchor: state.doc.length } }).state;
   }
 
-  /** Content that changed elsewhere (no local edits pending). */
+  /**
+   * Content that changed elsewhere, or remote changes merged into local edits. Only the lines that
+   * differ change, so the cursor and the undo history of the user's own edits survive.
+   */
   applyRemote(path: string, content: string): void {
     if (path !== this.activePath || !this.editor) {
-      this.states.delete(path);
+      const cached = this.states.peek(path);
+      if (cached) cached.state = withDocument(cached.state, content);
       return;
     }
     if (this.editor.getDocument() === content) return;

@@ -1,3 +1,5 @@
+import { diffLines } from "@ddl/core";
+
 export interface TextChange {
   from: number;
   to: number;
@@ -62,6 +64,50 @@ export function minimalChange(current: string, next: string): TextChange | null 
     insertTo -= shift;
   }
   return { from, to, insert: next.slice(from, insertTo) };
+}
+
+/**
+ * The changes turning `current` into `next`: one per run of changed lines (trimmed within the run
+ * like `minimalChange`), sorted and non-overlapping, so positions on lines that didn't change (the
+ * cursor, badges, the undo history of the user's own edits) are left alone.
+ */
+export function documentChanges(current: string, next: string): TextChange[] {
+  if (current === next) return [];
+  const oldLines = current.split("\n");
+  const starts: number[] = [];
+  let offset = 0;
+  for (const line of oldLines) {
+    starts.push(offset);
+    offset += line.length + 1;
+  }
+  const out: TextChange[] = [];
+  const add = (change: TextChange) => {
+    const last = out[out.length - 1];
+    // Hunks around an empty line can touch (e.g. lines added before and after it).
+    if (last && last.to === change.from) {
+      out[out.length - 1] = { from: last.from, to: change.to, insert: last.insert + change.insert };
+    } else {
+      out.push(change);
+    }
+  };
+  for (const { start, end, lines } of diffLines(oldLines, next.split("\n"))) {
+    if (start === end) {
+      add(
+        start < oldLines.length
+          ? { from: starts[start]!, to: starts[start]!, insert: `${lines.join("\n")}\n` }
+          : { from: current.length, to: current.length, insert: `\n${lines.join("\n")}` },
+      );
+    } else if (lines.length === 0) {
+      if (end < oldLines.length) add({ from: starts[start]!, to: starts[end]!, insert: "" });
+      else add({ from: Math.max(0, starts[start]! - 1), to: current.length, insert: "" });
+    } else {
+      const from = starts[start]!;
+      const to = starts[end - 1]! + oldLines[end - 1]!.length;
+      const change = minimalChange(current.slice(from, to), lines.join("\n"));
+      if (change) add({ from: from + change.from, to: from + change.to, insert: change.insert });
+    }
+  }
+  return out;
 }
 
 /** CodeMirror stores `\n`-separated lines; normalize before comparing with its content. */

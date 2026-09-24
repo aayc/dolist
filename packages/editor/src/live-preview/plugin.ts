@@ -1,10 +1,15 @@
 import { syntaxTree } from "@codemirror/language";
-import type { Extension } from "@codemirror/state";
+import { type Extension, Facet } from "@codemirror/state";
 import { type DecorationSet, EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import { buildLivePreviewDecorations } from "./decorations";
 
+/** Whether the live preview is on, for decorations that render differently in source mode. */
+export const livePreviewEnabled = Facet.define<boolean, boolean>({
+  combine: (values) => values.some(Boolean),
+});
+
 /** Focus anywhere in the editor (content, vim/search panels, a badge) keeps syntax revealed. */
-function hasFocusWithin(view: EditorView): boolean {
+export function hasFocusWithin(view: EditorView): boolean {
   if (view.hasFocus) return true;
   const active = view.root.activeElement;
   return active !== null && view.dom.contains(active);
@@ -41,5 +46,6 @@ const livePreviewPlugin = ViewPlugin.fromClass(
 /** Obsidian-style live preview (toggled through the `livePreview` config compartment). */
 export const livePreview: Extension = [
   livePreviewPlugin,
+  livePreviewEnabled.of(true),
   EditorView.editorAttributes.of({ class: "cm-ddl-live-preview" }),
 ];

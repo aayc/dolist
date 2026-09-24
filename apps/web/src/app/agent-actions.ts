@@ -1,4 +1,10 @@
-import { type ApprovalDecisionRequest, type ApprovalRequest, resolveTaskAnchors } from "@ddl/core";
+import {
+  type ApprovalDecisionRequest,
+  type ApprovalRequest,
+  type CitedSource,
+  resolveLineAnchors,
+  resolveTaskAnchors,
+} from "@ddl/core";
 import type { DaemonClient } from "../api/client";
 import { errorMessage } from "../api/errors";
 import { perfCancel, perfStart } from "../perf/perf";
@@ -69,7 +75,8 @@ export class AgentActions {
     this.recordNotes.delete(notePath);
   }
 
-  loadThread(threadId: string, force = false): Promise<void> {
+  /** `quiet`: a failure isn't reported (for background lookups such as link previews). */
+  loadThread(threadId: string, force = false, quiet = false): Promise<void> {
     if (!force && useAgentStore.getState().details[threadId]) return Promise.resolve();
     const pending = this.threadLoads.get(threadId);
     if (pending) return pending;
@@ -77,11 +84,18 @@ export class AgentActions {
       .getThread(threadId)
       .then((response) => updateAgentState((s) => applyThreadResponse(s, response)))
       .catch((error: unknown) => {
+        if (quiet) return;
         toast({ kind: "error", title: "Couldn't load the thread", body: errorMessage(error) });
       })
       .finally(() => this.threadLoads.delete(threadId));
     this.threadLoads.set(threadId, promise);
     return promise;
+  }
+
+  /** The web pages a thread cites, loading the thread if needed (empty if it can't be loaded). */
+  async sourcesOf(threadId: string): Promise<readonly CitedSource[]> {
+    await this.loadThread(threadId, false, true);
+    return useAgentStore.getState().details[threadId]?.sources ?? [];
   }
 
   /** Debounced full refetch (e.g. an artifact appeared whose metadata only the REST shape has). */
@@ -164,7 +178,7 @@ export class AgentActions {
     }
   }
 
-  /** Opens the thread's note and scrolls to the task line (resolved against local edits). */
+  /** Opens the thread's note and scrolls to its task or line (resolved against local edits). */
   async revealTask(threadId: string): Promise<void> {
     const state = useAgentStore.getState();
     const thread = state.details[threadId] ?? state.threads[threadId];
@@ -174,10 +188,13 @@ export class AgentActions {
     const record = thread.taskId ? findRecordByTask(thread.taskId) : undefined;
     if (!record) return;
     const doc = this.navigator.activeDocument();
-    const line = doc
-      ? (resolveTaskAnchors(doc, [record]).get(record.taskId) ?? record.line)
-      : record.line;
-    this.navigator.scrollToLine(line);
+    const { taskId, text, line } = record;
+    const resolved = !doc
+      ? undefined
+      : record.anchor === "line"
+        ? resolveLineAnchors(doc, [{ anchorId: taskId, text, line }]).get(taskId)?.line
+        : resolveTaskAnchors(doc, [record]).get(taskId);
+    this.navigator.scrollToLine(resolved ?? line);
   }
 
   async resync(): Promise<void> {

@@ -64,6 +64,51 @@ describe("buildAnnotations", () => {
     ]);
   });
 
+  it("places line anchors on their (moved or edited) line and highlights them", () => {
+    const doc = [
+      "- [ ] Book a table for Friday dinner",
+      "\t- Trattoria Sole has a table at 7 %%agent:thr_1%%",
+      "- [ ] Call the restaurant to confirm %%agent:thr_1%%",
+      "What's the tallest building in New York?",
+    ].join("\n");
+    const annotations = buildAnnotations(doc, [
+      record({ taskId: "book", text: "Book a table for Friday dinner", line: 0, status: "done" }),
+      record({
+        taskId: "anc_q",
+        text: "What's the tallest building in NYC?",
+        line: 1,
+        status: "done",
+        summary: "One World Trade Center",
+        threadId: "thr_q",
+        anchor: "line",
+      }),
+    ]);
+    expect(annotations).toEqual([
+      { id: "book", line: 0, status: "done", label: "Done", unread: 0, threadId: "thr_1" },
+      {
+        id: "anc_q",
+        line: 3,
+        status: "done",
+        label: "Done · One World Trade Center",
+        unread: 0,
+        threadId: "thr_q",
+        lineAnchor: true,
+      },
+    ]);
+    // A task and a line anchor never claim each other's lines.
+    expect(
+      buildAnnotations("What's the tallest building in NYC?", [
+        record({ taskId: "t", text: "What's the tallest building in NYC?", line: 0 }),
+      ]),
+    ).toEqual([]);
+  });
+
+  it("drops a line anchor whose line was deleted", () => {
+    const anchor = record({ taskId: "anc_q", text: "Where to eat?", line: 1, anchor: "line" });
+    expect(buildAnnotations("- [ ] a\nWhere to eat?", [anchor])).toHaveLength(1);
+    expect(buildAnnotations("- [ ] a\n", [anchor])).toEqual([]);
+  });
+
   it("drops hidden statuses and tasks that no longer exist", () => {
     const doc = "- [ ] Find a plumber";
     expect(

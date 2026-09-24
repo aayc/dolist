@@ -1,4 +1,4 @@
-import type { ActionCategory, ArtifactKind, RiskLevel, SurfaceKind } from "@ddl/core";
+import type { ActionCategory, ArtifactKind, CitedSource, RiskLevel, SurfaceKind } from "@ddl/core";
 import type { BrowserPage, DesktopScene } from "./mock-frames";
 
 /** Same trigger the spec gives the simulated safety gate: these verbs need approval. */
@@ -50,6 +50,8 @@ export interface TaskScript {
   artifact?: ScriptArtifact;
   risky?: RiskyAction;
   finalText: string;
+  /** The pages `finalText` cites, as the thread's `sources`. */
+  sources?: CitedSource[];
   doneSummary: string;
 }
 
@@ -99,6 +101,7 @@ function researchScript(topic: string): TaskScript {
     query: topic,
     items: results,
   };
+  const reviews = `https://reviews.example/${slug(topic)}`;
   return {
     kind: "research",
     subagent: "research",
@@ -152,7 +155,20 @@ function researchScript(topic: string): TaskScript {
         "_Sources: guide.example, reviews.example (synthetic demo data)._",
       ].join("\n"),
     },
-    finalText: `Done! I compared three options for **${topic}**:\n\n- **Option A** ($129) — best overall value\n- **Option B** ($189) — premium build\n- **Option C** ($79) — budget pick\n\nThe full comparison is in the artifact.`,
+    finalText: `Done! I compared three options for **${topic}**:\n\n- **Option A** ($129) — best overall value [1](${page.url})\n- **Option B** ($189) — premium build [2](${reviews})\n- **Option C** ($79) — budget pick [1](${page.url})\n\nThe full comparison is in the artifact.`,
+    sources: [
+      {
+        url: page.url,
+        title: page.title,
+        snippet:
+          "Three picks compared on price and ratings: Option A $129 (4.7 ★), Option B $189 (4.8 ★), Option C $79 (4.4 ★).",
+      },
+      {
+        url: reviews,
+        title: `${topic} — Reviews`,
+        snippet: "Owners rate Option B's build quality highest; Option A is the best value.",
+      },
+    ],
     doneSummary: "3 options",
   };
 }

@@ -68,6 +68,7 @@ Vitest 5 benchmarks (`*.bench.ts`) assert p99 budgets inside the test and write
 | `resolveTaskAnchors`, 50 anchors in 2 000 lines | 12 ms |
 | Editor: 500 single-char inserts, 2 000 lines, 30 badges | 500 ms |
 | Live preview decorations, 60 / 150-line viewport | 2 / 4 ms |
+| Agent-line decorations (agent text, markers), 150-line viewport | 1 ms |
 | Vault listing / search, 2 000 notes (warm) | see `packages/storage/src/storage.bench.ts` |
 | 3-way merge, 2 000-line note | see `packages/storage/src/storage.bench.ts` |
 
@@ -79,7 +80,7 @@ budgets.
 
 | Bundle | Budget (gzip) | Current |
 | --- | --- | --- |
-| Initial JS (entry + static imports) | 320 kB | ~312 kB |
+| Initial JS (entry + static imports) | 320 kB | ~316 kB |
 | Initial CSS | 40 kB | ~5 kB |
 | Total JS | 1 200 kB | ~802 kB |
 

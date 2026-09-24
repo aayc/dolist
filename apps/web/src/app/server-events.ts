@@ -1,4 +1,5 @@
 import type { ServerEvent } from "@ddl/core";
+import { uncitedLinks } from "../features/links/link-previews";
 import { dispatchAgentEvent, useAgentStore } from "../state/agent-store";
 import { applySettings } from "../state/settings-store";
 import { applySurfaceFrame } from "../state/surface-store";
@@ -24,11 +25,17 @@ export function handleServerEvent(event: ServerEvent, services: Services): void 
     case "thread.message": {
       dispatchAgentEvent(event);
       const { message, threadId } = event;
-      if (message.kind !== "artifact") return;
       const detail = useAgentStore.getState().details[threadId];
-      if (detail && !detail.artifacts.some((a) => a.id === message.artifactId)) {
-        services.agent.scheduleThreadRefetch(threadId);
-      }
+      if (!detail) return;
+      // Artifact metadata and cited sources only come with the full thread.
+      const stale =
+        message.kind === "artifact"
+          ? !detail.artifacts.some((a) => a.id === message.artifactId)
+          : message.kind === "text" &&
+            message.role === "agent" &&
+            !message.streaming &&
+            uncitedLinks(message.text, detail.sources).length > 0;
+      if (stale) services.agent.scheduleThreadRefetch(threadId);
       return;
     }
     case "hello":

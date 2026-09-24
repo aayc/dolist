@@ -58,11 +58,13 @@ function setup(initial = "- [ ] ") {
   const note = client.seed(PATH, initial);
   const live = new Map<string, string>([[PATH, initial]]);
   const states: Array<[string, SaveState | null]> = [];
+  const show = (path: string, content: string) => {
+    if (live.has(path)) live.set(path, content);
+  };
   const hooks = {
     readLive: vi.fn((path: string) => live.get(path) ?? null),
-    applyRemote: vi.fn((path: string, content: string) => {
-      if (live.has(path)) live.set(path, content);
-    }),
+    applyRemote: vi.fn(show),
+    applyMerge: vi.fn(show),
     onSaveState: vi.fn((path: string, state: SaveState | null) => states.push([path, state])),
     onConflictCopy: vi.fn(),
     onRemoteDelete: vi.fn(),

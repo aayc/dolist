@@ -29,6 +29,7 @@ declare global {
       activePath(): string | null;
       openNote(path: string, newTab?: boolean): Promise<boolean>;
       renderMarkdown(source: string): Promise<string>;
+      delayWrites(ms: number): void;
       runCommand(id: string): boolean;
     };
   }

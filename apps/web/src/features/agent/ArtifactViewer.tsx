@@ -1,6 +1,6 @@
 import type { ArtifactKind, ArtifactMeta } from "@ddl/core";
 import { Download, File, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ArtifactContent } from "../../api/client";
 import { errorMessage } from "../../api/errors";
 import { useServices } from "../../app/services";
@@ -10,6 +10,7 @@ import { ui } from "../../state/ui-store";
 import { Modal } from "../overlays/Modal";
 import { ARTIFACT_ICONS, artifactKindLabel } from "./ArtifactCard";
 import { Markdown } from "./Markdown";
+import { useMarkdownLinks } from "./markdown-links";
 import "../../styles/agent.css";
 
 type Loaded =
@@ -66,6 +67,8 @@ export function ArtifactViewer({ threadId, artifactId }: { threadId: string; art
     s.details[threadId]?.artifacts.find((a) => a.id === artifactId),
   );
   const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useMarkdownLinks(bodyRef, threadId, () => ui.closeOverlay());
 
   useEffect(() => {
     let cancelled = false;
@@ -117,7 +120,12 @@ export function ArtifactViewer({ threadId, artifactId }: { threadId: string; art
         />
         <IconButton icon={X} label="Close" onClick={() => ui.closeOverlay()} />
       </header>
-      <div className="artifact-viewer-body" data-testid="artifact-body" data-kind={kind}>
+      <div
+        ref={bodyRef}
+        className="artifact-viewer-body"
+        data-testid="artifact-body"
+        data-kind={kind}
+      >
         {loaded.status === "loading" ? <div className="thread-loading" aria-busy="true" /> : null}
         {loaded.status === "error" ? <div className="search-error">{loaded.message}</div> : null}
         {loaded.status === "ready" ? (

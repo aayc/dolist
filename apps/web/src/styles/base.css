@@ -72,6 +72,10 @@ a {
   color: var(--ddl-accent);
 }
 
+a:hover {
+  color: var(--ddl-accent-strong);
+}
+
 code,
 kbd,
 pre {
@@ -238,8 +242,7 @@ mark {
 }
 
 .button.is-primary:hover:not(:disabled) {
-  background: var(--ddl-accent);
-  filter: brightness(1.1);
+  background: var(--ddl-accent-strong);
 }
 
 .button.is-danger {
@@ -266,6 +269,7 @@ mark {
 }
 
 .link-button:hover {
+  color: var(--ddl-accent-strong);
   text-decoration: underline;
 }
 

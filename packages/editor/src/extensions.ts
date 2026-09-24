@@ -10,9 +10,11 @@ import {
   highlightActiveLine,
   highlightSpecialChars,
 } from "@codemirror/view";
+import { agentLines } from "./agent-lines";
 import { annotationField } from "./annotations/field";
 import { callbacksExtension, configCompartments, resolveConfig, vimCompartment } from "./config";
 import { editorKeymap } from "./keymap";
+import { linkPreviews } from "./link-preview";
 import { linkClickHandler } from "./links";
 import { callbackNotifier } from "./listeners";
 import { literalHtmlTyping, markdownLanguageData, markdownSupport } from "./syntax/language";
@@ -43,7 +45,9 @@ const baseExtensions: Extension = [
   editorTheme,
   editorKeymap,
   annotationField,
+  agentLines,
   linkClickHandler,
+  linkPreviews,
   callbackNotifier,
 ];
 

@@ -1,5 +1,6 @@
 import {
   dirname,
+  mergeText,
   type NoteResponse,
   stem,
   type WriteNoteRequest,
@@ -23,6 +24,11 @@ export interface NotesControllerHooks {
   readLive(path: string): string | null;
   /** A newer version arrived and there were no local edits: show it. */
   applyRemote(path: string, content: string): void;
+  /**
+   * A newer version was merged into unsaved local edits: show the merge (it still holds every
+   * local edit), changing only what the other side changed.
+   */
+  applyMerge(path: string, content: string): void;
   onSaveState(path: string, state: SaveState | null): void;
   /** Local edits won a conflict; the other version was preserved as `copyPath`. */
   onConflictCopy(path: string, copyPath: string): void;
@@ -65,7 +71,11 @@ interface NoteDoc {
 /**
  * Owns persistence of open notes: debounced autosave with optimistic concurrency (`baseVersion`),
  * single-flight writes per note, conflict resolution and external-change handling. The editor stays
- * uncontrolled: content is only read (via `readLive`) when a save actually happens.
+ * uncontrolled: content is only read (via `readLive`) when a save or a merge actually happens.
+ *
+ * Someone else's change (often the agent's) meeting unsaved local edits is merged three ways
+ * (`mergeText`: base = the server text the edits started from); only edits to the same lines
+ * fall back to keeping the local text and saving the other version as a conflict copy.
  */
 export class NotesController {
   private readonly client: NotesClient;
@@ -183,10 +193,37 @@ export class NotesController {
       this.hooks.applyRemote(path, fresh.content);
       return;
     }
-    // Local edits pending: the next save gets a 409 and resolves the conflict.
-    doc.conflict = true;
+    if (this.merge(doc, fresh) === null) {
+      // Both sides changed the same lines: the next save gets a 409 and resolves the conflict.
+      doc.conflict = true;
+      this.updateStatus(doc);
+    }
+    if (doc.localRev !== doc.savedRev) this.arm(doc, this.saveDelayMs);
+  }
+
+  /**
+   * Merges `remote` into the unsaved local edits and rebases the note on it, so the merge is
+   * saved with `remote`'s version. Returns the merged text, or null (nothing changed) when both
+   * sides changed the same lines.
+   */
+  private merge(doc: NoteDoc, remote: NoteResponse): string | null {
+    const live = this.hooks.readLive(doc.path);
+    const local = live ?? doc.pendingContent ?? doc.serverContent;
+    const { text, conflict } = mergeText(doc.serverContent, local, remote.content);
+    if (conflict) return null;
+    doc.serverContent = remote.content;
+    doc.version = remote.version;
+    doc.mtime = remote.mtime;
+    doc.conflict = false;
+    if (text !== local) this.hooks.applyMerge(doc.path, text);
+    if (text === remote.content) {
+      doc.savedRev = doc.localRev;
+      doc.pendingContent = null;
+    } else {
+      doc.pendingContent = text;
+    }
     this.updateStatus(doc);
-    this.arm(doc, this.saveDelayMs);
+    return text;
   }
 
   handleRemoteDelete(path: string): void {
@@ -356,6 +393,13 @@ export class NotesController {
       doc.pendingContent = null;
       doc.conflict = false;
       this.hooks.applyRemote(doc.path, current.content);
+      return;
+    }
+    const merged = this.merge(doc, current);
+    if (merged !== null) {
+      if (doc.localRev !== doc.savedRev) {
+        await this.write(doc, merged, doc.localRev, options, depth + 1);
+      }
       return;
     }
     const copyPath = await this.writeConflictCopy(doc.path, current.content);
