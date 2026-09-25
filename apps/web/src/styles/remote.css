@@ -407,3 +407,44 @@ a.button {
 .machine-actions {
   margin-top: 14px;
 }
+
+/* ── Read-only: this device shows the agent's synced work ── */
+
+.agent-banner {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 7px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--tone) 35%, transparent);
+  background: color-mix(in srgb, var(--tone) 12%, var(--ddl-bg-secondary));
+  font-size: 12px;
+  --tone: var(--ddl-warning);
+}
+
+.agent-banner.is-elsewhere {
+  --tone: var(--ddl-info);
+}
+
+.agent-banner > svg {
+  flex: none;
+  color: var(--tone);
+}
+
+.agent-banner-text {
+  flex: 1;
+  min-width: 0;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.agent-banner .link-button {
+  font-size: 12px;
+}
+
+.approval-readonly {
+  margin: 6px 0 0;
+  color: var(--ddl-text-muted);
+  font-size: 12px;
+}
