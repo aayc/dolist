@@ -33,6 +33,16 @@ the agent lease) and `SECURITY.md`.
 - `always_on_host`: this is the always-on machine; requests the lease with priority `host`.
 - Default: `this_device` (today's behavior). A daemon without sync is standalone and always runs
   its own agent regardless of placement (placement only matters with sync).
+- **Held here:** without an always-on machine set up (`AppSettings.remote.alwaysOnMachine` is
+  null), or without sync on this device, the effective placement is `this_device` whatever is
+  stored, and `placement.heldHere` says why (`"no_machine"`, `"no_sync"`). The stored choice is
+  kept and applies again once the machine and sync are set up.
+- **The toggle (user request):** "where the orchestrator runs" — *This device* or *Always-on
+  machine* — is one tap away, not buried in Settings: in the agent panel's header (web and Mac)
+  and in Settings → Agent location. While held here it is disabled, with a tooltip saying why and
+  a link to set up the always-on machine. Switching shows the handover as it happens
+  (`placement.note`), and "Run it on this device instead" is offered when the machine can't be
+  reached.
 
 Handover: an `interactive` request against a `host` holder records a pending takeover on the sync
 service; the holder's next renewal returns `yieldRequested: true`; it stops its runtime (flushing
@@ -59,7 +69,10 @@ export interface AgentRunsOn {
 export type RelayState = "off" | "connecting" | "connected" | "unreachable" | "not_paired";
 
 export interface AgentPlacementStatus {
+  /** The stored choice (see heldHere for when it can't apply). */
   placement: AgentPlacement;
+  /** Why the agent is held on this device despite the stored choice. */
+  heldHere?: "no_machine" | "no_sync";
   /** Who runs the agent now (null: nobody, or unknown without sync). */
   runsOn: AgentRunsOn | null;
   relay: RelayState;
@@ -253,6 +266,7 @@ older clients still decode.
   `config.json` sync + `sync-token` 0600 and applies live; if a restart is truly unavoidable,
   say so in the response and document it), lease priorities and takeover in `apps/sync` and the
   daemon's lease client, live placement changes (switching away releases the lease cleanly),
+  the effective placement and `heldHere` ("no_machine", "no_sync"),
   readiness, `placement`/`readiness` in agent status, `AppSettings.remote` handling, the machine
   link (`/api/machine*`, `$DDL_HOME/machine-token`, periodic status checks only while a client
   watches or on demand), docs in `docs/SYNC.md` (priorities) and `apps/daemon/README.md`.
@@ -267,14 +281,16 @@ older clients still decode.
   synced sidecar (mutations → 503 `agent_unavailable` with a clear problem). Code against small
   interfaces for placement and the machine credential (`{ url, token } | null`) if S2 isn't on
   your branch. Tests: two daemons and a sync server in process.
-- **S4 web** (apps/web): Settings sections per docs/ALWAYS_ON.md "Settings" (Agent location,
+- **S4 web** (apps/web): the orchestrator location toggle in the agent panel header (see "The
+  toggle" above); Settings sections per docs/ALWAYS_ON.md "Settings" (Agent location,
   Always-on machine, Sync, Devices with pairing code + QR code, Remote access), agent status UI for
   placement/relay/readiness (where it runs, handover notes, read-only banner), and the **pairing
   screen** for remote browsers (`<meta name="ddl-auth" content="pairing">` → enter a code →
   cookie → reload; `content="cookie"` → use cookie auth, no Authorization header). Follow the web
   control rules (data-tooltip, data-command, polish audit), unit tests, Playwright e2e with the
   real keyboard, bundle budget.
-- **S5 Mac** (apps/macos): the same Settings panes natively, agent status presentation for
+- **S5 Mac** (apps/macos): the orchestrator location toggle in the agent panel header, the same
+  Settings panes natively, agent status presentation for
   placement/relay/readiness, client methods (`HTTPDaemonClient` + `InMemoryDaemonClient`) for the
   new routes, WebSocket auth by header when the endpoint isn't loopback (keep `?token=` for
   loopback), tests with fakes, tooltip/command rules, docs.

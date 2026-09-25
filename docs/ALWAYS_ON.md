@@ -139,7 +139,12 @@ and the phone use the always-on machine.
   - `always_on_host`: this is the always-on machine; it runs the agent whenever no device set to
     `this_device` is running.
 
-  A device without sync is standalone and runs its own agent, as today.
+  A device without sync is standalone and runs its own agent, as today. Without an always-on
+  machine set up (or without sync), the agent is held on the device whatever it chose, and the
+  choice applies again once both are set up.
+- **One toggle:** "where the orchestrator runs" (this device or the always-on machine) sits in the
+  agent panel's header on the web and the Mac, not only in Settings, and can be flipped at any
+  time; the handover shows as it happens.
 - **Handover uses the agent lease with a priority.** A `this_device` request outranks the
   always-on machine's: the sync service marks a takeover, the holder sees it on its next renewal,
   stops its agent, runs a sync pass and releases, and the requester starts from the synced state

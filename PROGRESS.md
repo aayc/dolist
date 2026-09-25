@@ -71,6 +71,9 @@ Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md). Spec, with the exact wire contra
 | S4 web Settings and pairing screen | from `feat/always-on` | not started (waits for S0) |
 | S5 macOS Settings | from `feat/always-on` | not started (waits for S0) |
 
+Spec change after S0 started: `AgentPlacementStatus.heldHere` and the orchestrator toggle
+(below). When S0 reports, check it has `heldHere`; add it before S1–S5 fork if not.
+
 Next: when S0 lands, start S1–S5; merge S1, S2, S3, then S4 and S5 into `feat/always-on`; add the
 pairing step to S6's CI smoke test; merge the kit; full verification; `main`; push; CI. After
 that, set up the VM with the kit.
@@ -110,6 +113,10 @@ that, set up the VM with the kit.
   laptop uses the VM, a work laptop runs locally, the web app and the phone use the VM), and
   everything the agent needs syncs so it can move; the scope runs through the relay, with Settings
   on the web and the Mac for all of it.
+- **The orchestrator toggle** (2026-09-25): "where the orchestrator runs" (this device or the
+  always-on machine) is one easy toggle in the agent panel's header, flippable at any time (the
+  personal laptop may go local too); it's held on this device while no always-on machine is set
+  up.
 - **iPhone** (2026-09-25): deferred. When it resumes: native Swift, a free Apple ID (no push or
   TestFlight yet), Siri and Shortcuts as the one extra, network still to decide.
 
