@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Smoke-tests a Linux bundle without installing it: unpacks it into a temporary folder, starts the
-# sync service and the daemon (mock agent, sync on, a remote host configured) on free loopback
-# ports with a temporary home and vault, runs smoke-check.mjs against both, and shuts them down.
-# CI runs it on every bundle; it also runs on macOS. Nothing outside the temporary folder is used.
+# sync service and the daemon (mock agent, always-on placement, sync on, a remote host configured)
+# on free loopback ports with a temporary home and vault, runs smoke-check.mjs against both
+# (including pairing a device), and shuts them down. CI runs it on every bundle; it also runs on
+# macOS. Nothing outside the temporary folder is used.
 #
 #   deploy/linux/smoke-test.sh <ddl-linux-<arch>.tar.gz>
 set -euo pipefail
@@ -94,21 +95,24 @@ SYNC_PID=$!
 SYNC_URL="$(wait_for_url "$SYNC_PID" "$WORK/sync.log" "listening on")"
 echo "Sync service at $SYNC_URL"
 
+# The same config.json as setup.sh writes: always-on placement, the remote host, the local sync
+# service. Only the port comes from the environment (0: a free one).
 (isolated node "$HELPER" write-config --file "$DDL_HOME_DIR/config.json" --vault-path "$VAULT_DIR" \
+  --placement always_on_host --remote-host "$REMOTE_HOST" \
   --sync-url "$SYNC_URL" --sync-vault "$VAULT_ID")
-# Placement and the remote host go in through their environment overrides: a daemon without those
-# features ignores unknown variables but refuses unknown config.json keys. The remote host's
-# checks (pairing) are the follow-up at the end of smoke-check.mjs.
-(isolated DDL_HOME="$DDL_HOME_DIR" DDL_VAULT="$VAULT_DIR" DDL_PORT=0 DDL_AGENT_MODE=mock \
-  DDL_AGENT_PLACEMENT=always_on_host DDL_REMOTE_HOSTS="$REMOTE_HOST" \
+(isolated DDL_HOME="$DDL_HOME_DIR" DDL_PORT=0 DDL_AGENT_MODE=mock \
   node "$BUNDLE/daemon/dist/main.js") >"$WORK/daemon.log" 2>&1 &
 DAEMON_PID=$!
 DAEMON_URL="$(wait_for_url "$DAEMON_PID" "$WORK/daemon.log" "running at")"
 echo "Daemon at $DAEMON_URL"
+# As setup.sh does once the daemon runs: the vault's settings name it the always-on machine.
+(isolated node "$HELPER" set-machine --daemon-url "$DAEMON_URL" \
+  --token-file "$DDL_HOME_DIR/daemon-token" --host "$REMOTE_HOST") >/dev/null
 
-node "$SCRIPT_DIR/smoke-check.mjs" --daemon "$DAEMON_URL" \
+(isolated node "$SCRIPT_DIR/smoke-check.mjs" --daemon "$DAEMON_URL" \
   --token-file "$DDL_HOME_DIR/daemon-token" --sync "$SYNC_URL" --sync-vault "$VAULT_ID" \
-  --sync-token-file "$DDL_HOME_DIR/sync-token"
+  --sync-token-file "$DDL_HOME_DIR/sync-token" --bundle "$BUNDLE" --remote-host "$REMOTE_HOST" \
+  --cli-env DDL_HOME="$DDL_HOME_DIR" --cli-env DDL_PORT="${DAEMON_URL##*:}")
 
 stop daemon "$DAEMON_PID"
 DAEMON_PID=""

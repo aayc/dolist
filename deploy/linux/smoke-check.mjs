@@ -1,11 +1,20 @@
-// Checks a running bundle for smoke-test.sh: the sync service, the daemon's API and web app, the
-// daemon syncing through the sync service, and its agent running here (holding the agent lease).
-// Tokens are read from files, sent only to loopback, and never printed.
+// Checks a running bundle, for smoke-test.sh (unpacked, mock agent) and setup-test.sh (installed
+// under systemd): the sync service; the daemon's API, guards and web app; a note syncing through
+// the sync service; the agent running here as the always-on machine (placement, lease); and
+// remote access: the pairing screen on the remote Host, the `pair` / `devices` / `revoke` CLI,
+// POST /api/pair, the device token, and revocation. Tokens are read from files or responses, sent
+// only to loopback, and never printed.
 //
 //   node smoke-check.mjs --daemon <url> --token-file <daemon-token> --sync <url>
-//        --sync-vault <vault id> --sync-token-file <sync-token>
+//        --sync-vault <vault id> --sync-token-file <sync-token> --bundle <bundle dir>
+//        --remote-host <name> [--cli-env NAME=VALUE]...
+//
+// The CLI runs as `node <bundle>/daemon/dist/main.js`, from this process's working directory with
+// its environment plus --cli-env (e.g. DDL_HOME, and DDL_PORT when the daemon picked a free port).
+import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { request } from "node:http";
+import { join } from "node:path";
 import { parseArgs } from "node:util";
 
 const { values } = parseArgs({
@@ -15,20 +24,39 @@ const { values } = parseArgs({
     sync: { type: "string" },
     "sync-vault": { type: "string" },
     "sync-token-file": { type: "string" },
+    bundle: { type: "string" },
+    "remote-host": { type: "string" },
+    "cli-env": { type: "string", multiple: true, default: [] },
   },
   strict: true,
 });
-for (const flag of ["daemon", "token-file", "sync", "sync-vault", "sync-token-file"]) {
+const REQUIRED = [
+  "daemon",
+  "token-file",
+  "sync",
+  "sync-vault",
+  "sync-token-file",
+  "bundle",
+  "remote-host",
+];
+for (const flag of REQUIRED) {
   if (!values[flag]) throw new Error(`--${flag} is required`);
 }
 const daemon = values.daemon.replace(/\/$/, "");
 const sync = values.sync.replace(/\/$/, "");
-const auth = { authorization: `Bearer ${readFileSync(values["token-file"], "utf8").trim()}` };
-const syncAuth = {
-  authorization: `Bearer ${readFileSync(values["sync-token-file"], "utf8").trim()}`,
-};
+const remoteHost = values["remote-host"];
+const auth = bearer(readFileSync(values["token-file"], "utf8").trim());
+const syncAuth = bearer(readFileSync(values["sync-token-file"], "utf8").trim());
+const cliEnv = Object.fromEntries(
+  values["cli-env"].map((entry) => {
+    const at = entry.indexOf("=");
+    if (at < 1) throw new Error(`--cli-env takes NAME=VALUE (got "${entry}")`);
+    return [entry.slice(0, at), entry.slice(at + 1)];
+  }),
+);
 const WAIT_MS = 30_000;
 const NOTE = "smoke-test.md";
+const DEVICE_NAME = "smoke-check";
 
 let failures = 0;
 
@@ -52,6 +80,16 @@ await check("daemon: refuses a request without the token", async () => {
 await check("daemon: refuses a foreign Host", async () => {
   const res = await http(`${daemon}/`, { headers: { host: "evil.example" } });
   expect(res.status === 403, `HTTP ${res.status}`);
+});
+
+await check("daemon: refuses a loopback Host that a proxy forwarded", async () => {
+  // A proxy that rewrote the Host to loopback would otherwise get the page's master token.
+  const forwarded = { "x-forwarded-for": "192.0.2.10" };
+  const page = await http(`${daemon}/`, { headers: forwarded });
+  expect(page.status === 403, `GET /: HTTP ${page.status}`);
+  expect(!page.text.includes("ddl-token"), "the refusal carries the token");
+  const api = await http(`${daemon}/api/health`, { headers: { ...auth, ...forwarded } });
+  expect(api.status === 403, `GET /api/health: HTTP ${api.status}`);
 });
 
 await check("daemon: serves the built web app to the loopback Host", async () => {
@@ -83,28 +121,94 @@ await check("daemon: syncs with the sync service", async () => {
   });
 });
 
-await check("daemon: its agent runs here (holds the agent lease)", async () => {
+await check("daemon: runs the agent as the always-on machine (placement, lease)", async () => {
   let last;
-  await eventually("the agent running", async () => {
+  await eventually("the agent lease", async () => {
     last = (await http(`${daemon}/api/agent/status`, { headers: auth })).json();
-    return last?.mode === "mock" && last.problem === undefined;
+    const runsOn = last?.placement?.runsOn;
+    return (
+      last?.mode === "mock" &&
+      last.problem === undefined &&
+      last.placement.placement === "always_on_host" &&
+      runsOn?.thisDevice === true &&
+      runsOn.alwaysOnMachine === true
+    );
   }).catch((error) => {
-    throw new Error(`${error.message} (problem: ${last?.problem ?? "none"})`);
+    const { placement, heldHere, runsOn } = last?.placement ?? {};
+    const state = {
+      placement,
+      heldHere,
+      thisDevice: runsOn?.thisDevice,
+      host: runsOn?.alwaysOnMachine,
+    };
+    throw new Error(
+      `${error.message} (${JSON.stringify(state)}, problem: ${last?.problem ?? "none"})`,
+    );
   });
 });
 
-// ── FOLLOW-UP for the lead: pairing, once remote access (S1) is merged ──────────────────────────
-// smoke-test.sh already starts the daemon with DDL_REMOTE_HOSTS=vm-name.tailnet-name.ts.net. Pass
-// that name here (a --remote-host flag) and add these checks, all with `host: <remote host>`:
-//   1. GET /  → 200 with <meta name="ddl-auth" content="pairing"> and no ddl-token meta.
-//   2. A code from the headless CLI, as on the VM (same env as the daemon in smoke-test.sh):
-//        DDL_HOME=<ddl home> node <bundle>/daemon/dist/main.js pair
-//      → prints the code (XXXX-XXXX), its expiry and https://vm-name.tailnet-name.ts.net; or
-//      POST /api/pairing-codes { name: "smoke" } with the master token → 201 { code, expiresAt, url }.
-//   3. POST /api/pair { code, name: "smoke", kind: "app" }, no Authorization → 201 { device, token }.
-//      The same code again → 401.
-//   4. GET /api/health with `Authorization: Bearer <device token>` → 200; GET /api/devices (master
-//      token) lists "smoke"; DELETE /api/devices/<device id> → 204; the device token → 401.
+await check("remote Host: the page asks for pairing and carries no token", async () => {
+  const res = await http(`${daemon}/`, { headers: { host: remoteHost } });
+  expect(res.status === 200, `HTTP ${res.status} (403: ${remoteHost} isn't in remote.hosts)`);
+  expect(res.text.includes('<meta name="ddl-auth" content="pairing">'), "no pairing meta");
+  expect(!res.text.includes("ddl-token"), "the page carries a token");
+});
+
+let code;
+await check("pair CLI: prints a code, its expiry and the remote URL", async () => {
+  const result = await cli(["pair", "--name", DEVICE_NAME]);
+  expect(result.code === 0, `exit ${result.code}: ${result.stderr.trim()}`);
+  code = /^Pairing code: ([2-9A-Z]{4}-[2-9A-Z]{4})$/m.exec(result.stdout)?.[1];
+  expect(code, "no XXXX-XXXX code in the output");
+  expect(/^Valid once, until \d{2}:\d{2} /m.test(result.stdout), "no expiry in the output");
+  expect(result.stdout.includes(`https://${remoteHost}`), `no https://${remoteHost} in the output`);
+});
+
+let device;
+let deviceAuth;
+await check("POST /api/pair: the code gets a device token, once", async () => {
+  expect(code, "no pairing code");
+  const pair = () =>
+    http(`${daemon}/api/pair`, {
+      method: "POST",
+      headers: { host: remoteHost, "content-type": "application/json" },
+      body: JSON.stringify({ code, name: DEVICE_NAME, kind: "app" }),
+    });
+  const res = await pair();
+  const body = res.json();
+  expect(res.status === 201, `HTTP ${res.status} ${body?.error ?? ""}`);
+  expect(typeof body.token === "string" && body.token.length >= 32, "no device token");
+  expect(body.device?.name === DEVICE_NAME && body.device.kind === "app", "unexpected device");
+  device = body.device;
+  deviceAuth = bearer(body.token);
+  const again = await pair();
+  expect(again.status === 401, `the used code answered HTTP ${again.status}`);
+});
+
+await check("device token: works as a bearer token on the remote Host", async () => {
+  expect(deviceAuth, "no device token");
+  const res = await http(`${daemon}/api/health`, { headers: { ...deviceAuth, host: remoteHost } });
+  expect(res.status === 200 && res.json()?.ok === true, `HTTP ${res.status}`);
+});
+
+await check("devices CLI: lists the new device", async () => {
+  expect(device, "no device");
+  const result = await cli(["devices"]);
+  expect(result.code === 0, `exit ${result.code}: ${result.stderr.trim()}`);
+  expect(result.stdout.includes(device.id) && result.stdout.includes(DEVICE_NAME), "not listed");
+});
+
+await check("revoke CLI: cuts the device token off, and reports usage errors", async () => {
+  expect(device && deviceAuth, "no device");
+  const usage = await cli(["revoke"]);
+  expect(usage.code === 2, `revoke without an id: exit ${usage.code}`);
+  const unknown = await cli(["revoke", "dev_unknown"]);
+  expect(unknown.code === 1, `revoke of an unknown device: exit ${unknown.code}`);
+  const result = await cli(["revoke", device.id]);
+  expect(result.code === 0, `exit ${result.code}: ${result.stderr.trim()}`);
+  const res = await http(`${daemon}/api/health`, { headers: { ...deviceAuth, host: remoteHost } });
+  expect(res.status === 401, `the revoked token answered HTTP ${res.status}`);
+});
 
 if (failures > 0) {
   console.error(`${failures} check(s) failed`);
@@ -125,12 +229,32 @@ function expect(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function bearer(token) {
+  return { authorization: `Bearer ${token}` };
+}
+
 async function eventually(what, probe) {
   const deadline = Date.now() + WAIT_MS;
   while (!(await probe())) {
     if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
+}
+
+/** Runs the daemon's CLI; resolves with its exit code and output (which never holds a token). */
+function cli(args) {
+  const main = join(values.bundle, "daemon", "dist", "main.js");
+  return new Promise((resolve) => {
+    execFile(
+      process.execPath,
+      [main, ...args],
+      { env: { ...process.env, ...cliEnv }, timeout: 20_000 },
+      (error, stdout, stderr) => {
+        const code = error ? (typeof error.code === "number" ? error.code : -1) : 0;
+        resolve({ code, stdout, stderr });
+      },
+    );
+  });
 }
 
 function http(url, { method = "GET", headers = {}, body } = {}) {
