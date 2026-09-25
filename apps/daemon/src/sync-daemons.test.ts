@@ -171,6 +171,21 @@ describe("two daemons sharing a vault through the sync service", {
       );
     }
 
+    // Only the device running the agent changes the agent's files on the sync service.
+    const thread = ".daily-do-list/threads/thr_k3j9x0q2m1ab.json";
+    const sidecar = (device: Device, path: string) =>
+      join(dir.path, device.name, "vault", ...path.split("/"));
+    mkdirSync(join(sidecar(laptop, thread), ".."), { recursive: true });
+    writeFileSync(sidecar(laptop, thread), '{"by":"laptop"}');
+    await eventually(async () =>
+      expect(readFileSync(sidecar(desktop, thread), "utf8")).toBe('{"by":"laptop"}'),
+    );
+    writeFileSync(sidecar(desktop, thread), '{"by":"desktop, not running the agent"}');
+    await eventually(async () =>
+      expect(readFileSync(sidecar(desktop, thread), "utf8")).toBe('{"by":"laptop"}'),
+    );
+    expect(server.store.read(vault.id, thread)?.content).toBe('{"by":"laptop"}');
+
     await laptop.daemon.close();
     await eventually(async () => expect(await agentProblem(desktop)).toBeUndefined());
     expect(server.store.leaseHolder(vault.id, "agent")?.deviceName).toBe("Desktop");
