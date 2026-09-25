@@ -94,12 +94,43 @@ describe("policy precedence", () => {
       "list_tasks",
       "read_note",
       "search_notes",
+      "read_drawing",
     ]) {
       const verdict = await evaluateRules(tool, {
         text: "Found 3 flights under $400",
         query: "flights",
       });
       expect(verdict.decision, tool).toBe("allow");
+    }
+  });
+
+  it("lets note and drawing reads stay in the vault", async () => {
+    for (const tool of ["read_note", "read_drawing"]) {
+      for (const path of [
+        "Excalidraw/Flow.excalidraw.md",
+        "Flow.excalidraw",
+        "![[Flow.excalidraw|360|right-wrap]]",
+        "/Daily/2026-09-25.md",
+        "Library/Reading list.md",
+      ]) {
+        const verdict = await evaluateRules(tool, { path });
+        expect(verdict.decision, `${tool} ${path}`).toBe("allow");
+      }
+      for (const path of [
+        "../secrets.md",
+        "Projects/../../outside.excalidraw.md",
+        "~/.ssh/id_rsa",
+        "/Users/me/Documents/plan.excalidraw.md",
+        "/etc/passwd",
+        "C:\\Users\\me\\notes.md",
+        "file:///etc/hosts",
+        ".daily-do-list/settings.json",
+        "Notes/.obsidian/workspace.json",
+      ]) {
+        const verdict = await evaluateRules(tool, { path });
+        expect(verdict.decision, `${tool} ${path}`).toBe("deny");
+        expect(verdict.matchedRules, `${tool} ${path}`).toContain("notes.read.outside-vault");
+      }
     }
   });
 
@@ -238,6 +269,7 @@ describe("SAFETY_RULES", () => {
       ["grep", { pattern: "x" }],
       ["web_search", { query: "x" }],
       ["read_note", { path: "a.md" }],
+      ["read_drawing", { path: "../outside.excalidraw.md" }],
       ["mcp__gmail__send_email", { to: "a@example.com" }],
       ["mcp__gmail__create_draft", { to: "a@example.com" }],
       ["mcp__db__query", { sql: "DROP TABLE t" }],

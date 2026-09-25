@@ -62,6 +62,11 @@ export interface ToolExecutionContext {
   onUpdate?: (partial: ToolResult) => void;
   taskId?: string | null;
   threadId?: string | null;
+  /**
+   * Whether the model sees images in tool results. False: it can't (a tool can skip making them
+   * and say so); undefined when the harness doesn't know.
+   */
+  images?: boolean;
 }
 
 export interface ToolSpec<I = unknown, D = unknown> {

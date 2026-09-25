@@ -117,7 +117,11 @@ export const INTERNAL_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 /** Local, read-only knowledge tools. */
-export const KNOWLEDGE_TOOLS: ReadonlySet<string> = new Set([TOOL.readNote, TOOL.searchNotes]);
+export const KNOWLEDGE_TOOLS: ReadonlySet<string> = new Set([
+  TOOL.readNote,
+  TOOL.searchNotes,
+  TOOL.readDrawing,
+]);
 
 const BUILTIN_HINTS: ReadonlyMap<string, ToolSafetyHints> = new Map<string, ToolSafetyHints>([
   [TOOL.read, { readOnly: true, category: "read" }],

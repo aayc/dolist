@@ -228,6 +228,10 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
  statically elsewhere: `apps/daemon/build.mjs` fails the build if they would load before the
  daemon answers. The one static agent import is `@ddl/agent/routines` (routine files, editable
  while no agent runs here): keep that entry free of harness, execution and model code.
+- **Drawing renderer:** the daemon's `build` and `dev` scripts build the page agents render
+ drawings with (`packages/agent/scripts/build-drawing-renderer.mjs` → `apps/daemon/dist/drawing-renderer`).
+ `@excalidraw/excalidraw` is a build-time dependency of `@ddl/agent` for that page only: no Node
+ code imports it, and the daemon ships the built page, not the package.
 - **Pi harness:** sessions are hermetic (isolated `agentDir` under `$DDL_HOME/pi`, no discovered
   extensions/skills/context files) and refuse to start if the safety-gate extension didn't load.
 - **Cursor harness:** set `agent.harness` to `cursor` in Settings (the other settings keep working;

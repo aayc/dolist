@@ -1,3 +1,4 @@
+import { emptyDrawingScene, serializeDrawingFile, toolResultText } from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
 import { describe, expect, it } from "vitest";
 import { evaluateRules } from "../safety/test-helpers";
@@ -239,6 +240,27 @@ describe("edit_note tool", () => {
       "  - Trattoria Sole, 7 PM %%agent:thr_tsk_table%%",
     );
     expect(edited).toEqual([["  - Trattoria Sole, 7 PM %%agent:thr_tsk_table%%"]]);
+  });
+
+  it("never writes in a drawing, by its name or its frontmatter", async () => {
+    const { storage, tool } = await setup();
+    const drawing = serializeDrawingFile(emptyDrawingScene());
+    await storage.write("Excalidraw/Plan.excalidraw.md", drawing);
+    await storage.write("Notes/Sketch.md", drawing);
+    for (const notePath of [
+      "Plan.excalidraw",
+      "Excalidraw/Plan.excalidraw.md",
+      "Notes/Sketch.md",
+    ]) {
+      const result = await tool.execute(
+        { notePath, edits: [{ op: "append", lines: ["A note from the agent"] }] },
+        { toolCallId: "c9" },
+      );
+      expect(result.isError, notePath).toBe(true);
+      expect(toolResultText(result), notePath).toMatch(/is a drawing: edit_note writes in notes/);
+    }
+    expect((await storage.read("Excalidraw/Plan.excalidraw.md"))!.content).toBe(drawing);
+    expect((await storage.read("Notes/Sketch.md"))!.content).toBe(drawing);
   });
 
   it("replans on the new note when the user saved in between", async () => {

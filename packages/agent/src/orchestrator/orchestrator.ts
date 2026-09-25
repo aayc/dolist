@@ -7,6 +7,7 @@ import {
   isActiveTaskStatus,
   isBlankTaskText,
   isClosedStatus,
+  isDrawingMarkdown,
   type Logger,
   ORCHESTRATOR_THREAD_ID,
   parseAgentLine,
@@ -20,6 +21,7 @@ import {
   truncate,
   withTimeout,
 } from "@ddl/core";
+import { type DrawingDescriptions, drawingBudget } from "../drawings/descriptions";
 import type {
   Harness,
   HarnessEvent,
@@ -36,6 +38,7 @@ import {
   type DigestNote,
   type DigestRoutine,
   formatOrchestratorDigest,
+  MAX_VIEW_LINES,
   type OrchestratorDigest,
 } from "../prompts/orchestrator";
 import { formatTaskUpdate } from "../prompts/subagent";
@@ -63,7 +66,7 @@ export interface OrchestratorOptions {
   lookup: TaskLookup;
   /** The safety gate. */
   beforeToolCall: (call: ToolCallRequest) => Promise<ToolCallDecision>;
-  /** Tools besides the orchestrator's own: read_note, web_search, web_fetch. */
+  /** Tools besides the orchestrator's own: read_note, read_drawing, web_search, web_fetch… */
   tools: () => ToolSpec[];
   capabilities: () => DigestCapabilities;
   getSettings: () => AppSettings;
@@ -85,6 +88,8 @@ export interface OrchestratorOptions {
   chat?: OrchestratorChat;
   /** The user's routines, listed in every digest so it knows what already exists. */
   routines?: () => DigestRoutine[];
+  /** Describes the drawings the digest's notes embed (under their embed lines). */
+  drawings?: Pick<DrawingDescriptions, "blocks" | "blockFor">;
 }
 
 type QueueItem =
@@ -138,6 +143,8 @@ interface OrchestratorSession {
 
 /** Earlier messages of the orchestrator's chat a digest carries for context. */
 const CHAT_CONTEXT_MESSAGES = 8;
+/** The note view of a note that is itself a drawing. */
+const DRAWING_NOTE_TEXT = "(This note is an Excalidraw drawing: its scene data isn't shown.)";
 const TRIGGER_TASK_CHARS = 60;
 
 const CHANGE_PRIORITY: Record<DigestChange, number> = {
@@ -512,6 +519,7 @@ export class Orchestrator {
       chat?.setLabels(session.labels);
       if (!turn.cancelled) {
         const digest = this.buildDigest(items, session.turns === 0);
+        await this.describeDrawings(digest);
         const prompt = session.session.prompt(formatOrchestratorDigest(digest));
         try {
           await withTimeout(
@@ -930,6 +938,39 @@ export class Orchestrator {
       listTasks: async ({ notePath }) => this.describeTasks(notePath ?? this.todayPath()),
       anchorLine: async (input) => this.anchorLine(input),
     };
+  }
+
+  /**
+   * Each drawing embedded in a note of the digest gets its description under the embed line; one
+   * budget for the whole digest. Drawings that can't be described never fail the turn.
+   */
+  private async describeDrawings(digest: OrchestratorDigest): Promise<void> {
+    const drawings = this.options.drawings;
+    if (!drawings) return;
+    const budget = drawingBudget();
+    for (const note of digest.notes) {
+      const view = note.view?.slice(0, MAX_VIEW_LINES);
+      if (!view) continue;
+      try {
+        const text = view.map((line) => line.text).join("\n");
+        // A note the Excalidraw plugin turned into a drawing: its description, not its scene data.
+        if (isDrawingMarkdown(text)) {
+          const block = await drawings.blockFor(note.notePath, budget);
+          note.view = [{ n: 1, text: DRAWING_NOTE_TEXT, drawing: block }];
+          continue;
+        }
+        const blocks = await drawings.blocks(text, budget);
+        for (const block of blocks) {
+          const line = view[block.line];
+          if (line) line.drawing = [...(line.drawing ?? []), ...block.lines];
+        }
+      } catch (error) {
+        this.logger.warn("Could not describe the drawings of a note", {
+          notePath: note.notePath,
+          error: errorText(error),
+        });
+      }
+    }
   }
 
   /** The whole note, numbered, with what the agent knows about each line. */

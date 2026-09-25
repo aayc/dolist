@@ -30,6 +30,8 @@
     "typebox": "catalog:"
   },
   "devDependencies": {
+    "@excalidraw/excalidraw": "catalog:",
+    "esbuild": "^0.28.2",
     "tsx": "^4.23.15"
   }
 }

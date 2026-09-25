@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { type ComputerAccess, type ComputerHostApp, type Logger, silentLogger } from "@ddl/core";
+import type { DrawingRenderer } from "../../drawings/renderer";
 import type {
   AppController,
   BrowserController,
@@ -15,6 +16,7 @@ import { HelperAppController } from "./app-control/controller";
 import { LocalBrowserController } from "./browser";
 import { type ResolvedBrowser, resolveBrowserExecutable } from "./browser-executable";
 import { createComputerController } from "./computer-macos";
+import { ChromiumDrawingRenderer } from "./drawing-renderer";
 import { findHostApp } from "./host-app";
 import { type CommandRunner, execFileRunner } from "./jxa";
 import { LocalShellExecutor } from "./shell";
@@ -58,6 +60,7 @@ export class LocalExecutionProvider implements ExecutionProvider {
   private browserController: LocalBrowserController | undefined;
   private computerController: ComputerController | undefined;
   private appController: HelperAppController | undefined;
+  private drawingRenderer: ChromiumDrawingRenderer | undefined;
   private hostLookup: { promise: Promise<ComputerHostApp | undefined>; at: number } | undefined;
   private disposed = false;
 
@@ -115,6 +118,19 @@ export class LocalExecutionProvider implements ExecutionProvider {
     return this.computerController;
   }
 
+  /** Renders drawings with the agent browser's executable, in a headless instance of its own. */
+  get drawings(): DrawingRenderer | undefined {
+    const pageDir = this.config.drawingRenderer;
+    if (!this.resolvedBrowser || !pageDir || this.disposed) return undefined;
+    this.drawingRenderer ??= new ChromiumDrawingRenderer({
+      pageDir,
+      cacheDir: join(this.config.home, "cache", "drawings"),
+      executablePath: this.resolvedBrowser.executablePath,
+      logger: this.logger.child({ component: "drawings" }),
+    });
+    return this.drawingRenderer;
+  }
+
   get apps(): AppController | undefined {
     const helper = this.computerHelper;
     if (!helper || this.disposed) return undefined;
@@ -152,6 +168,7 @@ export class LocalExecutionProvider implements ExecutionProvider {
     await Promise.allSettled([
       this.browserController?.dispose(),
       this.appController?.dispose(),
+      this.drawingRenderer?.dispose(),
       this.shell.dispose(),
     ]);
   }

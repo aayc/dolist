@@ -1,7 +1,7 @@
 import { CONTENT_RULES } from "./content";
 import { FILES_READ, FILES_WORKSPACE_WRITE, NOTES_READ, SECRET_SEARCH } from "./files";
 import { MCP_RULES } from "./mcp";
-import { NOTE_EDIT_RULES } from "./notes";
+import { NOTE_EDIT_RULES, NOTE_READ_OUTSIDE } from "./notes";
 import { PATH_RULES } from "./path-rules";
 import { ROUTINE_RULES } from "./routines";
 import {
@@ -43,6 +43,7 @@ export const SAFETY_RULES: readonly SafetyRuleInfo[] = Object.freeze(
     ...MCP_RULES,
     FILES_READ,
     NOTES_READ,
+    NOTE_READ_OUTSIDE,
     ...NOTE_EDIT_RULES,
     ...ROUTINE_RULES,
     FILES_WORKSPACE_WRITE,

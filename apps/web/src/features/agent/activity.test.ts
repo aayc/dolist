@@ -88,6 +88,15 @@ const LABELS: ReadonlyArray<[ToolCallLike, string]> = [
   [{ toolName: "web_fetch", input: {} }, "Reading a page…"],
   [{ toolName: "read_note", input: { path: "Daily/2026-09-24.md" } }, "Reading your notes…"],
   [{ toolName: "search_notes", input: { query: "garden" } }, "Reading your notes…"],
+  [
+    { toolName: "read_drawing", input: { path: "Excalidraw/Flow.excalidraw.md" } },
+    "Looking at “Flow”…",
+  ],
+  [
+    { toolName: "read_drawing", input: { path: "![[Kitchen layout.excalidraw|360|right-wrap]]" } },
+    "Looking at “Kitchen layout”…",
+  ],
+  [{ toolName: "read_drawing", input: {} }, "Looking at a drawing…"],
   [{ toolName: "edit_note", input: { edits: [] } }, "Editing your note…"],
   [{ toolName: "bash", input: { command: "ls -la" } }, "Running a command…"],
   [{ toolName: "read", input: { path: "a.txt" } }, "Looking through files…"],

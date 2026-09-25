@@ -11,7 +11,7 @@ import { ACTION_CATEGORIES } from "./policy";
 import { searchQueryHits, sensitiveValueHits, sqlHits, writtenContentHits } from "./rules/content";
 import { fileReadAnalysis, fileWriteAnalysis, NOTES_READ } from "./rules/files";
 import { mcpAnalysis } from "./rules/mcp";
-import { noteEditHits } from "./rules/notes";
+import { noteEditHits, noteReadHits } from "./rules/notes";
 import { readPathHits, writePathHits } from "./rules/path-rules";
 import { routineToolHits } from "./rules/routines";
 import { analysisHits, commandHits, SHELL_BENIGN } from "./rules/shell";
@@ -183,10 +183,12 @@ function familyAnalysis(
     case "internal":
       fastPath = true;
       break;
-    case "knowledge":
+    case "knowledge": {
       fastPath = true;
-      result.hits = [{ rule: NOTES_READ, evidence: f.operation }];
+      const outside = noteReadHits(f.input);
+      result.hits = outside.length > 0 ? outside : [{ rule: NOTES_READ, evidence: f.operation }];
       break;
+    }
     case "web_search": {
       fastPath = true;
       const query = typeof f.input.query === "string" ? f.input.query : "";

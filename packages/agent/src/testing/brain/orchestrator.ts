@@ -11,6 +11,7 @@ import {
   isDigest,
   type ParsedChangedTask,
   type ParsedDigest,
+  type ParsedDrawing,
   type ParsedNote,
   type ParsedReply,
   parseDigest,
@@ -52,6 +53,8 @@ interface Work {
   ack: string;
   /** A non-task line the orchestrator anchored: answers also go into the note under it. */
   anchored?: boolean;
+  /** The drawings the task is about, as the digest describes them (for the instructions). */
+  drawings?: ParsedDrawing[];
 }
 
 const MAX_GOAL = 500;
@@ -77,7 +80,7 @@ export function orchestratorTurn(
   for (const note of ctx.digest.notes) {
     for (const task of note.changed) {
       changedIds.add(task.taskId);
-      calls.push(...planTask(task, ctx));
+      calls.push(...planTask(task, note, ctx));
     }
   }
   for (const reply of ctx.digest.replies) {
@@ -145,11 +148,34 @@ function planLine(
   return planOutcome(work, decision, ctx);
 }
 
+const REFERS_TO_DRAWING = /\b(diagram|drawing|sketch|flow ?chart|whiteboard|mock-?up|wireframe)\b/i;
+/** Lines after a task that still count as "with" it (sub-bullets, an embed below it). */
+const DRAWING_REACH = 3;
+
+/**
+ * The drawings a task is about: embedded on its line or just below it (before the next task),
+ * else, when the task mentions a diagram or sketch, the note's drawings.
+ */
+function drawingsFor(task: ParsedChangedTask, note: ParsedNote): ParsedDrawing[] {
+  const at = note.view.findIndex((line) => line.id === task.taskId);
+  const near: ParsedDrawing[] = [];
+  if (at >= 0) {
+    for (let i = at; i < Math.min(note.view.length, at + 1 + DRAWING_REACH); i++) {
+      const line = note.view[i]!;
+      if (i > at && line.id) break;
+      near.push(...(line.drawings ?? []));
+    }
+  }
+  if (near.length > 0 || !REFERS_TO_DRAWING.test(task.text)) return near;
+  return note.view.flatMap((line) => line.drawings ?? []).slice(0, 2);
+}
+
 function callsFor(taskId: string, ctx: Context): CallRecord[] {
   return ctx.calls.filter((call) => argString(call, "taskId") === taskId);
 }
 
-function planTask(task: ParsedChangedTask, ctx: Context): TurnToolCall[] {
+function planTask(task: ParsedChangedTask, note: ParsedNote, ctx: Context): TurnToolCall[] {
+  const drawings = drawingsFor(task, note);
   const work: Work = {
     taskId: task.taskId,
     text: task.text,
@@ -157,6 +183,7 @@ function planTask(task: ParsedChangedTask, ctx: Context): TurnToolCall[] {
     ...(task.parentText ? { parentText: task.parentText } : {}),
     ...(task.previousText !== undefined ? { previousText: task.previousText } : {}),
     ack: acknowledgment(task, ctx.options.seed),
+    ...(drawings.length > 0 ? { drawings } : {}),
   };
   const decision = triage({
     text: task.text,
@@ -487,6 +514,12 @@ function spawnCall(work: Work, capabilities: Capability[]): TurnToolCall {
     instructions.push(`The task used to read ${JSON.stringify(work.previousText)}.`);
   }
   if (work.reply) instructions.push(`The user replied: ${JSON.stringify(work.reply)}.`);
+  for (const drawing of work.drawings ?? []) {
+    if (drawing.description.length === 0) continue;
+    instructions.push(
+      `The drawing ${drawing.path} (read_drawing shows it): ${drawing.description.join(" ").slice(0, 1_500)}`,
+    );
+  }
   instructions.push(
     "Make sensible assumptions, hand back a short summary and put details in an artifact.",
   );

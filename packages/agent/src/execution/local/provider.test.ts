@@ -64,6 +64,27 @@ describe("LocalExecutionProvider", () => {
     await rm(home, { recursive: true, force: true });
   });
 
+  it("renders drawings only with a browser and the built render page", async () => {
+    const page = join(home, "drawing-renderer");
+    const without = [
+      new LocalExecutionProvider({ kind: "local", home }, { resolveBrowser: () => CHROME }),
+      new LocalExecutionProvider(
+        { kind: "local", home, drawingRenderer: page },
+        { resolveBrowser: () => undefined },
+      ),
+    ];
+    for (const provider of without) expect(provider.drawings).toBeUndefined();
+    const provider = new LocalExecutionProvider(
+      { kind: "local", home, drawingRenderer: page },
+      { resolveBrowser: () => CHROME },
+    );
+    const renderer = provider.drawings;
+    expect(renderer).toBeDefined();
+    expect(provider.drawings).toBe(renderer);
+    await provider.dispose();
+    expect(provider.drawings).toBeUndefined();
+  });
+
   it("prepares owner-only workspaces under <home>/workspaces", async () => {
     const provider = new LocalExecutionProvider(
       { kind: "local", home },

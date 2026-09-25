@@ -20,7 +20,8 @@
  *
  * Other text is acknowledged with `ok: <text>`. Options go before the command (the harness only
  * forwards a minimal environment): `--fake-auth=signed_out|garbage|hang`, `--fake-no-load`,
- * `--fake-no-http`, `--fake-protocol=<n>`, `--fake-new-error`, `--fake-ask-mcp` (ask permission
+ * `--fake-no-http`, `--fake-no-image` (the agent takes no images), `--fake-protocol=<n>`,
+ * `--fake-new-error`, `--fake-ask-mcp` (ask permission
  * for MCP calls, as the real CLI does in allowlist mode), `--fake-pids=<file>` (append pids) and
  * `--fake-helper` (start a helper process in the same group, like the CLI's worker server).
  */
@@ -404,7 +405,7 @@ async function handle(message: Json): Promise<Json | undefined> {
         agentCapabilities: {
           loadSession: !option("no-load"),
           mcpCapabilities: { http: !option("no-http"), sse: true },
-          promptCapabilities: { image: true, audio: false, embeddedContext: false },
+          promptCapabilities: { image: !option("no-image"), audio: false, embeddedContext: false },
         },
         authMethods: [{ id: "cursor_login", name: "Cursor Login" }],
       };

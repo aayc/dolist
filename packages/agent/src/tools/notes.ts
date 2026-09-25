@@ -1,6 +1,8 @@
 import {
   errorResult,
   isAgentLine,
+  isDrawingMarkdown,
+  isDrawingPath,
   isHiddenPath,
   isMarkdownPath,
   isTaskLine,
@@ -400,11 +402,13 @@ export function createNoteEditTool(
           throw new ToolInputError(`Unknown task id "${taskId}" (it may have been deleted).`);
         }
         const notePath = notePathOf(args.notePath ?? item?.notePath ?? host.defaultNotePath());
+        if (isDrawingPath(notePath)) throw new ToolInputError(drawingRefusal(notePath));
         await host.waitForPause(notePath);
         const threadId = host.threadFor(taskId ?? options.signAs ?? null);
         for (let attempt = 1; ; attempt++) {
           const file = await host.storage.read(notePath);
           if (!file) return errorResult(`Note not found: ${notePath}`);
+          if (isDrawingMarkdown(file.content)) return errorResult(drawingRefusal(notePath));
           const plan = planNoteEdits(file.content, args.edits, {
             threadId,
             locate: (id) => {
@@ -428,6 +432,11 @@ export function createNoteEditTool(
         }
       }),
   };
+}
+
+/** Drawings are the user's: agents look at them (read_drawing) but never write in them. */
+function drawingRefusal(notePath: string): string {
+  return `${notePath} is a drawing: edit_note writes in notes, never in drawings. Put your lines in the note that embeds it.`;
 }
 
 function notePathOf(requested: string): string {

@@ -45,6 +45,7 @@ export {
 } from "./brain/kickoff";
 export { classifyResult, detectRole } from "./brain/transcript";
 export type * from "./brain/types";
+export { type FlowchartSpec, flowchartDrawing, flowchartScene } from "./drawings";
 export {
   FAKE_OPENROUTER_KEY,
   type FakeEndpoint,

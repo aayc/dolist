@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import { buildDrawingRenderer } from "../../packages/agent/scripts/build-drawing-renderer.mjs";
 
 const daemonDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(daemonDir, "../..");
@@ -87,3 +88,8 @@ if (eager.length > 0) {
   );
   process.exit(1);
 }
+
+// The page the agent renders drawings with in headless Chromium (Excalidraw's export, bundled for
+// the browser: build-time only, so the daemon has no runtime dependency on Excalidraw).
+const renderer = await buildDrawingRenderer(resolve(daemonDir, "dist/drawing-renderer"));
+console.log(`dist/drawing-renderer: Excalidraw ${renderer.excalidraw}, build ${renderer.build}`);
