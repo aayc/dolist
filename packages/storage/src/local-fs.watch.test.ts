@@ -4,22 +4,30 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LocalFsStorageProvider } from "./local-fs";
 import { contentVersion } from "./memory";
+import { untilEventsFlow } from "./testing/fs-events";
 import type { StorageEvent } from "./types";
 
 // fs events are asynchronous and batched by the OS: poll generously, and give "nothing happened"
 // assertions enough time for a (suppressed) echo to have arrived.
-const EVENT_TIMEOUT = { timeout: 5_000, interval: 20 };
+const EVENT_TIMEOUT = { timeout: 10_000, interval: 20 };
 const QUIET_MS = 500;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+const { setTimeout: realSetTimeout } = globalThis;
+
+/** Waits `ms` of real time, letting the watcher's frozen timers (see `startWatching`) keep up. */
+async function letTimePass(ms: number): Promise<void> {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    await new Promise((resolve) => realSetTimeout(resolve, 20));
+    if (vi.isFakeTimers()) vi.advanceTimersByTime(20);
+  }
 }
 
 function describeEvent(e: StorageEvent): string {
   return `${e.kind} ${e.path}${e.self ? " (self)" : ""}`;
 }
 
-describe("LocalFsStorageProvider.watch", () => {
+describe("LocalFsStorageProvider.watch", { timeout: 60_000 }, () => {
   let dir: string;
   let root: string;
   let s: LocalFsStorageProvider;
@@ -35,16 +43,33 @@ describe("LocalFsStorageProvider.watch", () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     unsubscribe?.();
     await s.dispose();
     await rm(dir, { recursive: true, force: true });
   });
 
+  /**
+   * Subscribes, proves the OS event stream is live by waiting for a sentinel's event, then freezes
+   * the watcher's timers. Events still arrive, but the watcher looks at a path only when the test
+   * lets time pass (`vi.waitFor` does on every check, `letTimePass` too), so it sees each change
+   * the test makes complete: on a busy machine a `writeFile` can otherwise be caught between its
+   * truncate and its write, or a save between its steps, and outlast the quiet period.
+   */
   async function startWatching(): Promise<void> {
+    vi.useRealTimers();
     unsubscribe = s.watch((event) => events.push(event));
     await s.whenWatchReady();
-    // Let the OS event stream spin up before the test starts changing files.
-    await sleep(150);
+    let latest = "";
+    await untilEventsFlow(
+      async (attempt) => {
+        latest = `sentinel ${attempt}`;
+        await writeFile(join(root, ".sentinel"), latest);
+      },
+      () => events.some((e) => e.path === ".sentinel" && e.version === contentVersion(latest)),
+    );
+    events.length = 0;
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"], shouldClearNativeTimers: true });
   }
 
   function eventsFor(path: string): string[] {
@@ -93,7 +118,7 @@ describe("LocalFsStorageProvider.watch", () => {
     await s.rename("a.md", "Archive/a.md");
     await s.write(".daily-do-list/threads/t1.json", "{}");
     await s.delete("Archive/a.md");
-    await sleep(QUIET_MS);
+    await letTimePass(QUIET_MS);
     expect(events.map(describeEvent)).toEqual([
       "created a.md (self)",
       "modified a.md (self)",
@@ -110,7 +135,7 @@ describe("LocalFsStorageProvider.watch", () => {
     await startWatching();
     await utimes(file, new Date(), new Date(Date.now() + 2_000));
     await writeFile(file, "unchanged");
-    await sleep(QUIET_MS);
+    await letTimePass(QUIET_MS);
     expect(events).toEqual([]);
   });
 
@@ -135,7 +160,7 @@ describe("LocalFsStorageProvider.watch", () => {
       () => expect(eventsFor("note.md")).toEqual(["modified note.md", "modified note.md"]),
       EVENT_TIMEOUT,
     );
-    await sleep(QUIET_MS);
+    await letTimePass(QUIET_MS);
     expect(events.map(describeEvent)).toEqual(["modified note.md", "modified note.md"]);
     expect(events.at(-1)?.version).toBe(contentVersion("v3"));
   });
@@ -157,7 +182,7 @@ describe("LocalFsStorageProvider.watch", () => {
         ]),
       EVENT_TIMEOUT,
     );
-    await sleep(QUIET_MS);
+    await letTimePass(QUIET_MS);
     expect(events.map(describeEvent)).toEqual(["created .daily-do-list/threads/t.json"]);
   });
 
@@ -186,7 +211,7 @@ describe("LocalFsStorageProvider.watch", () => {
     unsubscribe?.();
     unsubscribe = undefined;
     await writeFile(join(root, "ignored-while-unwatched.md"), "x");
-    await sleep(QUIET_MS);
+    await letTimePass(QUIET_MS);
     expect(events).toEqual([]);
 
     await startWatching();

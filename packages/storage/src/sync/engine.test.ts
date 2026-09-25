@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appendToFile } from "../append";
 import { LocalFsStorageProvider } from "../local-fs";
 import { MemoryStorageProvider } from "../memory";
+import { untilEventsFlow } from "../testing/fs-events";
 import {
   ConflictError,
   StaleLeaseError,
@@ -55,7 +56,22 @@ const PAIRS: Array<[string, () => Promise<Pair>]> = [
           await mkdir(dirname(file), { recursive: true });
           await writeFile(file, content);
         },
-        targetWatchReady: () => target.whenWatchReady(),
+        targetWatchReady: async () => {
+          await target.whenWatchReady();
+          // The engine never syncs images, so it ignores the probe.
+          let probed = false;
+          const off = target.watch((event) => {
+            if (event.path === "probe.png") probed = true;
+          });
+          try {
+            await untilEventsFlow(
+              (attempt) => writeFile(join(dir, "mirror", "probe.png"), `probe ${attempt}`),
+              () => probed,
+            );
+          } finally {
+            off();
+          }
+        },
         cleanup: async () => {
           await primary.dispose();
           await target.dispose();
@@ -124,6 +140,7 @@ describe.each(PAIRS)("SyncEngine (%s)", (_name, makePair) => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     await engine.stop();
     await pair.cleanup();
   });
@@ -484,18 +501,29 @@ describe.each(PAIRS)("SyncEngine (%s)", (_name, makePair) => {
     expect(r2).toMatchObject(emptyReport());
   });
 
-  it("syncs vault changes automatically after start() and stops on stop()", async () => {
+  it("syncs vault changes automatically after start() and stops on stop()", {
+    timeout: 60_000,
+  }, async () => {
     let runs = 0;
     engine.onStatus((status) => {
       if (status.state === "syncing") runs++;
     });
+    // Real disk writes can take longer than any debounce on a busy machine; fake timers make the
+    // quiet period independent of how long the writes take.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
     engine.start({ debounceMs: 40, intervalMs: 60_000 });
-    await vi.waitFor(() => expect(engine.status().lastSyncedAt).not.toBeNull(), { timeout: 5_000 });
+    await vi.waitFor(() => expect(engine.status().lastSyncedAt).not.toBeNull(), {
+      timeout: 15_000,
+    });
     const runsAfterStart = runs;
 
     await primary.write("one.md", "1");
     await primary.write("two.md", "2");
     await primary.write("three.md", "3");
+    vi.advanceTimersByTime(39);
+    expect(runs).toBe(runsAfterStart);
+    vi.advanceTimersByTime(1);
+    expect(runs).toBe(runsAfterStart + 1);
     await vi.waitFor(
       async () =>
         expect(Object.keys(await contents(target)).sort()).toEqual([
@@ -503,19 +531,24 @@ describe.each(PAIRS)("SyncEngine (%s)", (_name, makePair) => {
           "three.md",
           "two.md",
         ]),
-      { timeout: 5_000, interval: 20 },
+      { timeout: 15_000, interval: 20 },
     );
-    expect(runs - runsAfterStart).toBeLessThanOrEqual(2);
+    expect(runs).toBe(runsAfterStart + 1);
 
     await engine.stop();
     await primary.write("after-stop.md", "x");
-    await sleep(200);
+    vi.advanceTimersByTime(60_000);
+    expect(runs).toBe(runsAfterStart + 1);
     expect(await target.read("after-stop.md")).toBeNull();
   });
 
-  it("syncs changes the target reports from elsewhere without waiting for the interval", async () => {
+  it("syncs changes the target reports from elsewhere without waiting for the interval", {
+    timeout: 60_000,
+  }, async () => {
     engine.start({ debounceMs: 60_000, intervalMs: 60_000, targetDebounceMs: 30 });
-    await vi.waitFor(() => expect(engine.status().lastSyncedAt).not.toBeNull(), { timeout: 5_000 });
+    await vi.waitFor(() => expect(engine.status().lastSyncedAt).not.toBeNull(), {
+      timeout: 15_000,
+    });
     await pair.targetWatchReady();
 
     await pair.externalTargetWrite("Daily/from-elsewhere.md", "- [ ] made on another device");
@@ -524,17 +557,21 @@ describe.each(PAIRS)("SyncEngine (%s)", (_name, makePair) => {
         expect((await primary.read("Daily/from-elsewhere.md"))?.content).toBe(
           "- [ ] made on another device",
         ),
-      { timeout: 5_000, interval: 20 },
+      { timeout: 15_000, interval: 20 },
     );
   });
 
-  it("does not run for the target's own writes or for changes it never syncs", async () => {
+  it("does not run for the target's own writes or for changes it never syncs", {
+    timeout: 60_000,
+  }, async () => {
     let runs = 0;
     engine.onStatus((status) => {
       if (status.state === "syncing") runs++;
     });
     engine.start({ debounceMs: 60_000, intervalMs: 60_000, targetDebounceMs: 20 });
-    await vi.waitFor(() => expect(engine.status().lastSyncedAt).not.toBeNull(), { timeout: 5_000 });
+    await vi.waitFor(() => expect(engine.status().lastSyncedAt).not.toBeNull(), {
+      timeout: 15_000,
+    });
     await pair.targetWatchReady();
     const runsAfterStart = runs;
 
