@@ -19,6 +19,17 @@ export class NotAFileError extends Error {
   }
 }
 
+/** The file to copy couldn't be opened (gone, unreadable, or not a regular file any more). */
+export class UnreadableSourceError extends Error {
+  readonly reason: "unreadable" | "special_file";
+
+  constructor(cause: unknown) {
+    super("The file can't be read", { cause });
+    this.name = "UnreadableSourceError";
+    this.reason = cause instanceof NotAFileError ? "special_file" : "unreadable";
+  }
+}
+
 export interface CopyOptions {
   signal?: AbortSignal;
   /** Called with each chunk's size as it is copied. */
@@ -38,7 +49,12 @@ export async function copyFileAtomic(
   to: string,
   options: CopyOptions = {},
 ): Promise<CopyResult> {
-  const source = await openRegularFile(from);
+  let source: FileHandle;
+  try {
+    source = await openRegularFile(from);
+  } catch (error) {
+    throw new UnreadableSourceError(error);
+  }
   try {
     const info = await source.stat();
     const hash = createHash("sha256");

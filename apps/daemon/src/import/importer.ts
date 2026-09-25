@@ -5,12 +5,25 @@
  */
 import { realpath } from "node:fs/promises";
 import { join } from "node:path";
-import type { AppSettings, Logger, ObsidianImportPreview } from "@ddl/core";
-import { silentLogger } from "@ddl/core";
+import {
+  type AppSettings,
+  createId,
+  type Logger,
+  type ObsidianImportJob,
+  type ObsidianImportPreview,
+  type ObsidianImportRequest,
+  type ObsidianImportResult,
+  silentLogger,
+  type Unsubscribe,
+} from "@ddl/core";
+import { errorMessage } from "../errors";
 import { type CarryOver, countWatchedOpenTasks, planCarryOver } from "./carry-over";
+import { copySource, createStaging, publish, removeStaging } from "./copy";
 import { readRegularFile } from "./files";
+import { type JobListener, type JobRun, JobRunner } from "./jobs";
+import { MANIFEST_PATH, writeManifest } from "./manifest";
 import { type ObsidianConfig, readObsidianConfig } from "./obsidian-config";
-import { defaultDestination, type ImportPlaces, resolveSource } from "./places";
+import { defaultDestination, type ImportPlaces, resolveDestination, resolveSource } from "./places";
 import { pathList, skippedList } from "./report-lists";
 import { carrySidecar } from "./sidecar";
 import { type SourceScan, scanSource } from "./source-scan";
@@ -40,14 +53,95 @@ interface Analysis {
 export class ObsidianImporter {
   readonly #options: ObsidianImporterOptions;
   readonly #logger: Logger;
+  readonly #jobs: JobRunner;
 
   constructor(options: ObsidianImporterOptions) {
     this.#options = options;
     this.#logger = options.logger ?? silentLogger;
+    this.#jobs = new JobRunner({
+      now: () => this.#now().getTime(),
+      newId: () => this.#newId("imp"),
+      describe: (error) => describeFailure(error),
+    });
   }
 
   get places(): ImportPlaces {
     return this.#options.places;
+  }
+
+  /** An import or update is running. */
+  get busy(): boolean {
+    return this.#jobs.busy;
+  }
+
+  /** The running job, or the last one since the daemon started. */
+  status(): ObsidianImportJob | null {
+    return this.#jobs.current();
+  }
+
+  onProgress(listener: JobListener): Unsubscribe {
+    return this.#jobs.onProgress(listener);
+  }
+
+  /** Stops the running import or update; answers once its partial work is removed. */
+  cancel(): Promise<ObsidianImportJob> {
+    return this.#jobs.cancel();
+  }
+
+  /** Waits for the running job to finish (tests). */
+  settled(): Promise<void> {
+    return this.#jobs.settled();
+  }
+
+  /** Cancels whatever runs (daemon shutdown). */
+  close(): Promise<void> {
+    return this.#jobs.close();
+  }
+
+  /**
+   * Starts importing into a new vault at `destination` and answers at once with the job; its
+   * progress and outcome arrive through `onProgress`.
+   */
+  async startImport(request: ObsidianImportRequest): Promise<ObsidianImportJob> {
+    this.#jobs.assertIdle();
+    const source = await resolveSource(request.source, this.#options.places);
+    const destination = await resolveDestination(request.destination, source, this.#options.places);
+    return this.#jobs.start("import", { source, destination }, async (run) => ({
+      result: await this.#runImport(run, source, destination),
+    }));
+  }
+
+  async #runImport(
+    run: JobRun,
+    source: string,
+    destination: string,
+  ): Promise<ObsidianImportResult> {
+    const analysis = await this.#analyze(source, run.signal);
+    const { scan, carry } = analysis;
+    run.totals(scan.files + carry.moves.length, scan.bytes + carry.bytes);
+    const staging = await createStaging(destination, run.job.id);
+    try {
+      run.phase("copying");
+      const copy = await copySource(source, staging, run);
+      run.phase("finishing");
+      await writeManifest(staging, {
+        source,
+        importedAt: run.job.startedAt,
+        files: copy.files,
+      });
+      run.signal.throwIfAborted();
+      await publish(staging, destination);
+      this.#logger.info("Imported an Obsidian vault", { files: copy.copied.files });
+      return {
+        copied: copy.copied,
+        skipped: skippedList(copy.skipped),
+        carryOver: carry.plan,
+        manifest: MANIFEST_PATH,
+      };
+    } catch (error) {
+      await removeStaging(staging);
+      throw error;
+    }
   }
 
   /** The report, without writing anything. */
@@ -169,6 +263,17 @@ export class ObsidianImporter {
   #now(): Date {
     return this.#options.now?.() ?? new Date();
   }
+
+  #newId(prefix: string): string {
+    return this.#options.idFactory?.(prefix) ?? createId(prefix);
+  }
+}
+
+function describeFailure(error: unknown): string {
+  const code = typeof error === "object" && error !== null && "code" in error ? error.code : null;
+  if (code === "ENOSPC") return "The disk is full";
+  if (code === "EACCES" || code === "EPERM") return `Permission denied: ${errorMessage(error)}`;
+  return errorMessage(error);
 }
 
 function plural(n: number, noun: string): string {
