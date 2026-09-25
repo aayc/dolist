@@ -6,6 +6,10 @@ to), text the agent wrote drawn as agent text, link previews, and `![[…]]` emb
 float with the text wrapping around them. The web app wraps it in a React component; the
 desktop/mobile shells reuse the web app unchanged.
 
+to), chips saying what the orchestrator is doing about a line, text the agent wrote drawn as agent
+text, and link previews. The web app wraps it in a React component; the desktop/mobile shells
+reuse the web app unchanged.
+
 ```ts
 import { createMarkdownEditor } from "@ddl/editor";
 import "@ddl/editor/styles.css";
@@ -31,8 +35,8 @@ editor.setAnnotations([
 ]);
 ```
 
-The contract (`MarkdownEditor`, `EditorConfig`, `EditorCallbacks`, `LineAnnotation`) lives in
-[`src/types.ts`](src/types.ts).
+The contract (`MarkdownEditor`, `EditorConfig`, `EditorCallbacks`, `LineAnnotation`,
+`ActivityChip`) lives in [`src/types.ts`](src/types.ts).
 
 ## Features
 
@@ -93,6 +97,21 @@ neighbour a moved line swaps with, and when a replacement at the line start inse
 badge is dropped when a single change removes its line's whole content (delete line, vim `dd`, cut,
 select + retype) unless that change inserts the exact same line again (moving lines, undoing a move,
 an external reorder). `getAnnotations(state)` returns the annotations with their lines mapped.
+
+**Activity chips.** `setActivityChips()` replaces the chips that say what the orchestrator is doing
+about a line (`ActivityChip`: `id`, `line`, `label`, `tooltip`, `tone`, and `pulse`, `fading`,
+`kind`). The host decides the wording and when a chip fades or goes (the web app's README has the
+shared table). A chip is drawn after the line's last character, after its badge when it has one
+(widget side 2), with the badge's look and tones: an empty label is a quiet dot, `pulse` pulses the
+dot, `fading` fades the chip out (600 ms), `kind` becomes `data-kind`. Click, Enter or Space calls
+`onActivityChipClick`; the tooltip is `data-tooltip` and the accessible name. Like badges, a chip is
+anchored to its line's start and mapped through every edit; unlike badges it remembers the line's
+text when it was set and is dropped as soon as an edit leaves the line unrecognizable
+(`isSameLineEdited` in `@ddl/core`: a prefix while typing, or Dice similarity ≥ 0.5), or when the
+line is deleted or joined away. A rewrite in place that still reads as the line keeps it. Updates
+reuse the chip's DOM, so a dot turning into a label doesn't replay its entrance; with
+`prefers-reduced-motion` nothing pulses or fades. `getActivityChips(state)` returns the chips with
+their lines mapped.
 
 **Agent text.** A line the agent wrote ends with an Obsidian comment naming its thread,
 `%%agent:thr_1%%` (`%%agent%%` without one; see `markdown/agent-text.ts` in `@ddl/core`). Such lines

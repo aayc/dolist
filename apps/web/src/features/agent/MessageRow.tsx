@@ -116,6 +116,7 @@ function StatusDivider({ message, className }: { message: StatusMessage; classNa
     <div
       className={cx("status-divider", `tone-${STATUS_META[message.status].tone}`, className)}
       data-testid="status-divider"
+      data-message-id={message.id}
     >
       <span>{message.text ?? STATUS_META[message.status].label}</span>
       <MessageTime at={message.createdAt} />

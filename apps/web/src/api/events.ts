@@ -120,6 +120,36 @@ const approval = shape({
   expiresAt: optional(num),
 });
 
+const orchestratorActivity = shape({
+  phase: oneOf("idle", "noticed", "reading", "thinking", "acting"),
+  turnId: optional(str),
+  trigger: optional(
+    shape({
+      kind: oneOf("note", "task", "message", "routine", "approval", "other"),
+      notePath: optional(str),
+      lines: optional(arrayOf(shape({ line: num, text: str }))),
+      summary: str,
+    }),
+  ),
+  startedAt: optional(num),
+  outcome: optional(
+    shape({
+      kind: oneOf(
+        "no_action",
+        "tasks_added",
+        "note_edited",
+        "replied",
+        "delegated",
+        "routine_created",
+        "asked_approval",
+      ),
+      count: optional(num),
+      threadId: optional(str),
+      text: optional(str),
+    }),
+  ),
+});
+
 const agentStatus = shape({
   mode: str,
   enabled: bool,
@@ -161,6 +191,7 @@ const agentStatus = shape({
       connectors: shape({ configured: num, connected: num }),
     }),
   ),
+  orchestrator: optional(orchestratorActivity),
 });
 
 const routineRun = shape({
@@ -236,6 +267,7 @@ const validators: Record<ServerEvent["type"], Check> = {
   "thread.delta": shape({ threadId: str, messageId: str, delta: str }),
   "approval.upsert": shape({ approval }),
   "agent.status": shape({ status: agentStatus }),
+  "orchestrator.activity": shape({ activity: orchestratorActivity }),
   "surface.frame": shape({
     threadId: str,
     surface: surfaceKind,

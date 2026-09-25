@@ -53,6 +53,7 @@ enum Fixtures {
     "HealthResponse": HealthResponse.self,
     "MachinePairRequest": MachinePairRequest.self,
     "MachineStatusResponse": MachineStatusResponse.self,
+    "OrchestratorActivity": OrchestratorActivity.self,
     "PairRequest": PairRequest.self,
     "PairResponse": PairResponse.self,
     "PairedDevicesResponse": PairedDevicesResponse.self,

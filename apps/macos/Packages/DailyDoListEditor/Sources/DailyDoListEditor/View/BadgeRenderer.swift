@@ -77,11 +77,14 @@ final class BadgeRenderer {
   private var dotDiameter: CGFloat { (labelFont.pointSize * 0.6).rounded() }
   private var unreadGap: CGFloat { dotDiameter * 0.6 }
 
-  /// Width of a badge's pill.
+  /// Width of a badge's pill (just the dot and its padding without a label).
   func width(of badge: EditorBadge) -> CGFloat {
     let key = "\(badge.displayLabel)\u{0}\(badge.unread > 0)"
     if let cached = widthCache[key] { return cached }
-    var width = padding + dotDiameter + dotDiameter * 0.8 + labelWidth(badge.displayLabel) + padding
+    var width = padding + dotDiameter + padding
+    if !badge.displayLabel.isEmpty {
+      width += dotDiameter * 0.8 + labelWidth(badge.displayLabel)
+    }
     if badge.unread > 0 { width += unreadGap + Self.unreadDotDiameter }
     widthCache[key] = ceil(width)
     return ceil(width)
@@ -154,7 +157,7 @@ final class BadgeRenderer {
   /// fits, else a shorter one ending in "…", else no label (just the status and unread dots).
   func fitted(_ badge: EditorBadge, maxWidth: CGFloat) -> (label: String, width: CGFloat) {
     let full = width(of: badge)
-    if full <= maxWidth { return (badge.displayLabel, full) }
+    if full <= maxWidth || badge.displayLabel.isEmpty { return (badge.displayLabel, full) }
     let key = "\(badge.displayLabel)\u{0}\(badge.unread > 0)\u{0}\(Int(maxWidth.rounded(.down)))"
     if let cached = fitCache[key] { return cached }
     let result = shortened(badge, fullWidth: full, maxWidth: maxWidth.rounded(.down))
@@ -315,10 +318,11 @@ final class BadgeRenderer {
     ceil((label as NSString).size(withAttributes: [.font: labelFont]).width)
   }
 
-  /// Tooltip for a badge: its full label (the pill may shorten it) and the unread count, worded
-  /// like the web app's badges.
+  /// Tooltip for a badge: its own tooltip or its full label (the pill may shorten it), and the
+  /// unread count, worded like the web app's badges.
   static func toolTip(for badge: EditorBadge) -> String {
-    guard let unread = badge.unreadText else { return badge.label }
-    return "\(badge.label) · \(unread) unread"
+    let text = badge.tooltip ?? badge.label
+    guard let unread = badge.unreadText else { return text }
+    return "\(text) · \(unread) unread"
   }
 }

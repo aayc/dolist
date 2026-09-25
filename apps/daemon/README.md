@@ -361,7 +361,8 @@ Server → client (`ServerEvent`):
 | `task.records` / `task.record` | Agent badges for a note / one task. |
 | `thread.upsert` / `thread.message` / `thread.delta` | Thread summaries, messages, streamed text (the orchestrator's chat, `thr_orchestrator`, included). |
 | `approval.upsert` | An approval was created or decided. |
-| `agent.status` | `AgentStatusResponse` changed. |
+| `agent.status` | `AgentStatusResponse` changed (its `orchestrator` is what the orchestrator is doing now, for a client joining mid-turn). |
+| `orchestrator.activity` | What the orchestrator is doing: lines it noticed before they settle, each turn's phase (`reading`, `thinking`, `acting`) and its end (`idle` with an outcome). Coalesced, never per keystroke; see docs/AGENT_SYSTEM.md. |
 | `surface.frame` | Live browser/computer frame, only to clients subscribed to that thread's surface. |
 | `settings.changed` | Settings were saved here, or a change synced from another device was reloaded. |
 | `routines.changed` | Every routine (as `GET /api/routines` lists them), whenever one changed: its file, its next run, its last run's status. Also sent when the agent lease moves to or from this device. |
@@ -420,11 +421,13 @@ other method or path. It is not an open proxy:
 **Events.** The relay holds one WebSocket to the machine's `/ws`, with the token in the
 `Authorization` header (never in the URL). The machine's agent events reach this device's clients
 in place of the local runtime's: `thread.*`, `approval.upsert`, `task.record(s)`,
-`routines.changed`, `routine.notification`, `surface.frame` and `agent.status` (merged as above).
+`routines.changed`, `routine.notification`, `orchestrator.activity`, `surface.frame` and
+`agent.status` (merged as above).
 Clients' `surface.subscribe`/`unsubscribe`, `thread.read` and `editor.activity` go to the machine.
 The link pings every 15 s, reconnects with backoff (0.5 s up to 30 s), subscribes to watched
 surfaces again, and after every (re)connection pushes the machine's status, routines, approvals and
-thread summaries to local clients.
+thread summaries to local clients, and the machine's current orchestrator activity. When it stops
+relaying, clients get this device's own activity (nothing in progress) in its place.
 
 **Relay state** (`agent.status` → `placement.relay`): `off` (not relaying), `connecting` (the
 first connection; requests are already forwarded), `connected`, `unreachable` (the link is down;

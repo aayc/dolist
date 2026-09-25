@@ -18,6 +18,7 @@ import {
   isWithinWindow,
   type LocalDate,
   type Logger,
+  mayBeRequest,
   normalizePath,
   type ParsedTask,
   parseDailyNotePath,
@@ -31,7 +32,6 @@ import {
   type Unsubscribe,
 } from "@ddl/core";
 import type { StorageEvent, StorageProvider } from "@ddl/storage";
-import { mayBeRequest } from "./prose";
 import type { NoteEvent, TaskEvent } from "./types";
 
 export const TASK_STATE_DIR = PERSISTED_PATHS.taskState;
@@ -62,6 +62,11 @@ export type TaskWatcherEvents = {
   task: TaskEvent;
   /** A settled change to the note's other lines (see `NoteEvent`). */
   note: NoteEvent;
+  /**
+   * The note's unsettled lines that may be requests (none: the ones noticed before are gone).
+   * Emitted before the settle delay, only when which lines they are changes, never per keystroke.
+   */
+  noticed: NoteEvent;
   /** Every re-parse of a watched note (unsettled): keeps lines/text of records current. */
   tasks: { notePath: string; date: string | null; tasks: readonly TrackedTask[] };
   /** A watched note changed on disk (not found by a scan), before anything settles. */
@@ -148,6 +153,8 @@ interface ProseState {
   settled: string[] | null;
   lastChangeAt: number;
   timer: ReturnType<typeof setTimeout> | undefined;
+  /** Which lines the last `noticed` event named (their numbers), "" for none. */
+  noticed: string;
 }
 
 interface PendingSettle {
@@ -427,6 +434,10 @@ export class TaskWatcher implements TaskLookup {
     };
     state.processing = run().finally(() => {
       state.processing = null;
+      // An event that arrived after the loop last looked, before this callback ran.
+      const missed = state.rerun;
+      state.rerun = null;
+      if (missed && this.running) void this.enqueue(notePath, missed);
     });
     return state.processing;
   }
@@ -478,9 +489,26 @@ export class TaskWatcher implements TaskLookup {
       }
       state.prose.settled = [];
     }
-    if (!newProse(prose, state.prose.settled).some((entry) => mayBeRequest(entry.text))) return;
+    const requests = newProse(prose, state.prose.settled).filter((entry) =>
+      mayBeRequest(entry.text),
+    );
+    this.notice(state, requests);
+    if (requests.length === 0) return;
     state.prose.lastChangeAt = at;
     this.scheduleProse(state);
+  }
+
+  /** Tells which unsettled lines may be requests, when that changed. */
+  private notice(state: NoteState, lines: Array<{ line: number; text: string }>): void {
+    const noticed = lines.map((entry) => entry.line).join(",");
+    if (noticed === state.prose.noticed) return;
+    state.prose.noticed = noticed;
+    this.emitter.emit("noticed", {
+      notePath: state.notePath,
+      date: state.date,
+      lines,
+      at: this.now(),
+    });
   }
 
   private scheduleProse(state: NoteState): void {
@@ -512,13 +540,19 @@ export class TaskWatcher implements TaskLookup {
       mayBeRequest(entry.text),
     );
     state.prose.settled = prose.map((entry) => entry.text);
-    if (lines.length === 0) return;
+    if (lines.length === 0) {
+      this.notice(state, []);
+      return;
+    }
+    // The orchestrator takes the noticed lines over with this event.
+    state.prose.noticed = "";
     this.emitter.emit("note", { notePath, date: state.date, lines, at: this.now() });
   }
 
   private cancelProse(state: NoteState): void {
     if (state.prose.timer) clearTimeout(state.prose.timer);
     state.prose.timer = undefined;
+    this.notice(state, []);
   }
 
   /**
@@ -785,7 +819,7 @@ export class TaskWatcher implements TaskLookup {
         rerun: null,
         saveTimer: undefined,
         content: null,
-        prose: { settled: null, lastChangeAt: 0, timer: undefined },
+        prose: { settled: null, lastChangeAt: 0, timer: undefined, noticed: "" },
       };
       this.notes.set(notePath, state);
     }

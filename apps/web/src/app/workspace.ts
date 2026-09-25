@@ -24,6 +24,7 @@ import { ConflictError, errorMessage } from "../api/errors";
 import { adjacentDailyTarget, dailyPathFor } from "../features/daily/daily-nav";
 import type { DrawingEditing } from "../features/drawings/drawing-editing";
 import { DrawingFeature } from "../features/drawings/drawing-feature";
+import { ActivitySync } from "../features/editor/activity-sync";
 import { AnnotationSync } from "../features/editor/annotation-sync";
 import { EditorController } from "../features/editor/editor-controller";
 import { PresenceReporter } from "../features/editor/presence";
@@ -81,6 +82,8 @@ export class Workspace {
   readonly notes: NotesController;
   readonly editor: EditorController;
   readonly annotations: AnnotationSync;
+  /** What the orchestrator is doing about the shown note's lines. */
+  readonly activity: ActivitySync;
   /** Hover previews of links, in the editor and in threads. */
   readonly previews: LinkPreviews;
   /** Drawings: embeds in notes, in-place editing, opened drawing files. */
@@ -146,6 +149,7 @@ export class Workspace {
         onCursorLine: (path, line) => this.presence.onCursorLine(path, line),
         onAnnotationClick: (annotation) =>
           this.agent.openTaskThread(annotation.id, annotation.threadId),
+        onActivityChipClick: (chip) => this.agent.openActivityChip(chip.id),
         onAgentLineClick: (threadId) => this.agent.openThread(threadId),
         onWikiLinkClick: (target, newPane) => void this.openWikiLink(target, newPane),
         onExternalLinkClick: openExternal,
@@ -169,6 +173,7 @@ export class Workspace {
       editorConfigFrom(getSettings()),
     );
     this.annotations = new AnnotationSync(this.editor);
+    this.activity = new ActivitySync(this.editor);
     this.previews = new LinkPreviews({
       files: () => vaultActions.files(),
       openContent: (path) => this.editor.readLive(path) ?? this.notes.content(path),
@@ -308,6 +313,7 @@ export class Workspace {
     if (options.line !== undefined) this.editor.scrollToLine(options.line);
     if (options.focus !== false) this.editor.focus();
     this.annotations.setActive(path);
+    this.activity.setActive(path);
     this.words.schedule(0);
     this.agent.refreshRecords(path);
     const ancestors = ancestorFolders(path);
@@ -318,6 +324,7 @@ export class Workspace {
 
   private onNoActiveNote(): void {
     this.annotations.setActive(null);
+    this.activity.setActive(null);
     this.presence.reset();
     setWordCount(null);
   }
@@ -594,6 +601,7 @@ export class Workspace {
     if (active) {
       this.agent.refreshRecords(active, true);
       this.annotations.setActive(active);
+      this.activity.setActive(active);
     }
     return true;
   }

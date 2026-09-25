@@ -274,10 +274,13 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
     if let previous { tooltipCenter.pointerExited(previous.region) }
   }
 
-  /// The document or its badges changed under a hovered badge: it follows (or goes away).
+  /// The document or its badges changed under a hovered badge: it follows (or goes away, also
+  /// when it starts fading).
   func badgesDidChangeUnderTooltip() {
     guard let hovered = hoveredTooltip, case .badge(let id) = hovered.key else { return }
-    if badgeStore.items.contains(where: { $0.badge.id == id && $0.badge.isDrawn }) {
+    if badgeStore.items.contains(where: {
+      $0.badge.id == id && $0.badge.isDrawn && !$0.badge.isFading
+    }) {
       tooltipCenter.targetChanged(hovered.region)
     } else {
       hoveredTooltip = nil
@@ -317,8 +320,9 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
     drawEmbedOverlays(in: dirtyRect)
     vimHost.drawOverlays(in: dirtyRect)
     guard !badgeStore.isEmpty else { return }
-    let layouts = currentBadgeLayouts()
-    guard !motion.state.isIdle else {
+    let state = motion.state
+    let layouts = currentBadgeLayouts().filter { state.isVisible($0.badge) }
+    guard !state.isIdle else {
       badgeRenderer.draw(layouts, hovered: hoveredBadgeID, dirtyRect: dirtyRect)
       return
     }
@@ -400,8 +404,11 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
       visibleRect: markdownTextView.visibleRect)
   }
 
+  /// The badge under `point` (fading badges take no clicks).
   func badgeLayout(at point: NSPoint) -> BadgeRenderer.Layout? {
-    currentBadgeLayouts().last { $0.rect.insetBy(dx: -2, dy: -2).contains(point) }
+    currentBadgeLayouts().last {
+      !$0.badge.isFading && $0.rect.insetBy(dx: -2, dy: -2).contains(point)
+    }
   }
 
   /// Rendered checkboxes intersecting `rect` (default: the visible rect): 0-based line and square,

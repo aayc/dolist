@@ -514,6 +514,30 @@
   color: var(--ddl-success);
 }
 
+/*
+ * Activity chips (what the orchestrator does about a line) reuse the badge's look and tones. The
+ * quiet dot is just the badge's dot with its hit target; work in progress pulses it in the accent
+ * color; an outcome's dot is green, "Nothing to do" stays faint. A chip on its way out fades.
+ */
+.cm-ddl-activity-chip-dot {
+  gap: 0;
+  padding: 0 0.45em;
+}
+.cm-ddl-activity-chip-pulse .cm-ddl-badge-icon {
+  color: var(--ddl-accent);
+  animation: cm-ddl-badge-pulse 1.2s ease-in-out infinite;
+}
+.cm-ddl-activity-chip[data-kind="outcome"] .cm-ddl-badge-icon {
+  color: var(--ddl-success);
+}
+.cm-ddl-activity-chip[data-kind="needs-you"] .cm-ddl-badge-icon {
+  color: var(--ddl-warning);
+}
+.cm-ddl-activity-chip-fading {
+  opacity: 0;
+  transition: opacity 600ms ease;
+}
+
 @keyframes cm-ddl-badge-enter {
   from {
     opacity: 0;

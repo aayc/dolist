@@ -519,3 +519,89 @@ describe("MockDaemonClient: drawings", () => {
     }
   });
 });
+
+describe("MockDaemonClient orchestrator activity", () => {
+  async function writeToday(client: MockDaemonClient, lines: string[]) {
+    const note = await call(client.getDailyNote(toISODate(today())));
+    await call(
+      client.writeNote(note.path, { content: lines.join("\n"), baseVersion: note.version }),
+    );
+    return note.path;
+  }
+  const activity = (events: ServerEvent[]) =>
+    ofType(events, "orchestrator.activity").map((e) => e.activity);
+
+  it("notices a request line at once, then settles it into a turn that starts a task", async () => {
+    const { client, events } = create();
+    const path = await writeToday(client, ["Groceries", "Find a plumber for Saturday"]);
+    expect(activity(events)).toEqual([
+      {
+        phase: "noticed",
+        trigger: {
+          kind: "note",
+          notePath: path,
+          lines: [{ line: 1, text: "Find a plumber for Saturday" }],
+          summary: "“Find a plumber for Saturday”",
+        },
+        startedAt: expect.any(Number),
+      },
+    ]);
+    await vi.advanceTimersByTimeAsync(2_000);
+    const turnId = activity(events).find((a) => a.phase === "reading")!.turnId;
+    const turn = activity(events).filter((a) => a.turnId === turnId);
+    expect(turn.map((a) => a.phase)).toEqual(["reading", "thinking", "acting", "idle"]);
+    const end = turn.at(-1)!;
+    const anchor = ofType(events, "task.record").find((e) => e.record.anchor === "line")!.record;
+    expect(end.outcome).toEqual({
+      kind: "delegated",
+      count: 1,
+      threadId: anchor.threadId,
+      text: "Find a plumber for Saturday",
+    });
+    const { thread } = await call(client.getThread(ORCHESTRATOR_THREAD_ID));
+    expect(thread.messages.find((m) => m.id === end.turnId)).toMatchObject({
+      kind: "status",
+      text: `${path} changed: 1 line`,
+    });
+  });
+
+  it("answers a question, does nothing for a note to self, and never notices plain prose", async () => {
+    const { client, events } = create();
+    await writeToday(client, [
+      "Slept well, long walk by the river.",
+      "Is the pharmacy open on Sunday?",
+    ]);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(activity(events).at(-1)?.outcome).toMatchObject({ kind: "replied", count: 1 });
+    expect(activity(events)[0]?.trigger?.lines).toEqual([
+      { line: 1, text: "Is the pharmacy open on Sunday?" },
+    ]);
+    events.length = 0;
+    const note = await call(client.getDailyNote(toISODate(today())));
+    await call(
+      client.writeNote(note.path, {
+        content: `${note.content}\nTODO: water the ferns`,
+        baseVersion: note.version,
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(activity(events).at(-1)).toMatchObject({
+      phase: "idle",
+      outcome: { kind: "no_action" },
+    });
+  });
+
+  it("withdraws a line deleted before it settles, and reports the activity in its status", async () => {
+    const { client, events } = create();
+    const path = await writeToday(client, ["Find a plumber for Saturday"]);
+    expect((await call(client.getAgentStatus())).orchestrator).toMatchObject({ phase: "noticed" });
+    await writeToday(client, [""]);
+    expect(activity(events).at(-1)).toEqual({
+      phase: "idle",
+      trigger: { kind: "note", notePath: path, lines: [], summary: "your note" },
+    });
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(activity(events).some((a) => a.phase === "reading")).toBe(false);
+    expect((await call(client.getAgentStatus())).orchestrator).toEqual({ phase: "idle" });
+  });
+});

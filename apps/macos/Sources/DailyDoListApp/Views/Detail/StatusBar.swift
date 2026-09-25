@@ -7,8 +7,9 @@ import SwiftUI
 
 /// Status line under the note, quiet by default (``StatusBarVisibility``) and drawn on the note's
 /// own background: the agent's state (``AgentStatusPresentation``, + mode unless live), running
-/// count, approvals (→ inbox), save state while not saved, word count, connection while not
-/// connected (or a "Demo" marker). Items that do something highlight under the pointer.
+/// count, approvals (→ inbox), what the orchestrator works on elsewhere, save state while not
+/// saved, word count, connection while not connected (or a "Demo" marker). Items that do
+/// something highlight under the pointer.
 struct StatusBar: View {
   let model: AppModel
   let workspace: Workspace
@@ -22,6 +23,7 @@ struct StatusBar: View {
       if let agent = model.agent {
         AgentStatusItems(model: model, agent: agent, mode: visibility.agentMode)
       }
+      OrchestratorStatusItem(workspace: workspace)
       Spacer(minLength: 8)
       if let state = visibility.saveState {
         SaveIndicator(state: state)

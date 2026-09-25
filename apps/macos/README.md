@@ -154,6 +154,42 @@ drawn and edited by the native engine (`DailyDoListDrawing`) and embedded with t
 - **Opening a `.excalidraw.md`** shows the drawing full size in the pane, edited in the canvas;
   the button at its top right shows the Markdown source (and back).
 
+## What the orchestrator is doing while you write
+
+The spec is `docs/specs/orchestrator-activity.md`: the daemon pushes `orchestrator.activity`
+(`noticed`, then `reading`, `thinking`, `acting`, then `idle` with an outcome), and `agent.status`
+carries the turn under way for a client that joins mid-turn. The wording and behavior are the web
+app's.
+
+- **Chips** end each line that woke it, styled like the task badges: a quiet pulsing dot when it
+  noticed the line, "Orchestrator is looking…" while it reads and thinks, "Working…" while it
+  acts, then the outcome ("Added a task ↗", "Added 3 tasks ↗", "Replied ↗", "Started a task ↗",
+  "Made a routine ↗", "Needs your approval ↗", "Nothing to do"). While a turn waits for your
+  approval its chips say "Needs your approval ↗" until it moves on. An outcome fades after 6 s,
+  "Nothing to do" after 2.5 s (the web's timings). Clicking a chip opens the thread its turn
+  started, or the orchestrator's chat window scrolled to the turn (its first message briefly
+  highlighted). The
+  tooltip says what it's doing or what it did. With Reduce Motion nothing pulses and outcomes just
+  go.
+- **Where chips go:** each is placed once per document by its line and text (the same line if
+  its text is still there, else the nearest line with that text, else the most similar line the
+  editor would still recognize within 20 lines: `ChipBuilder`), then the editor maps it through
+  edits like a badge and drops it when its line is edited beyond recognition
+  (`EditorLineMatch`); it doesn't come back. A line with a task's badge keeps only that badge
+  (the task's triage speaks for it). Chips update on events and editor edits only: nothing runs
+  per keystroke.
+- **The note header** says "Orchestrator: reading this note…", "thinking…" or "working…" beside
+  the title while a turn is about the open note; **the status bar** says "Orchestrator: working on
+  2026-09-24" while it's about another note (or what woke it: "working on your message"). Both open
+  the orchestrator's chat at the turn, and their tooltip says what woke it.
+- **Code:** `OrchestratorChipBoard` (events → chips per line, pure), `OrchestratorActivityStore`
+  (the timers, the turn under way, snapshots from `agent.status`), `ChipBuilder` (wording,
+  placement), `OrchestratorIndicators.swift` (header, status bar), `AgentStore.orchestratorFocus`
+  (the turn the chat scrolls to). `AppModel` routes the events and adopts the status's activity
+  after each refresh (unless an event came in meanwhile; nothing under way clears unfinished
+  chips). A pushed `agent.status` isn't adopted: it repeats the events and keeps a finished turn's
+  outcome for a while, and a turn's chips end only once.
+
 ## The agent chat
 
 A thread's Chat tab shows what the agent is doing as it does it. Everything comes from what the
@@ -207,8 +243,11 @@ That window is a single `Window` scene: choosing the command again brings it for
 `OrchestratorChatView` (in `DailyDoListAgent`) composes the thread's `MessageRow`s and `Composer`:
 each turn's status line, *Thought for N s*, the decisions as tool calls with a link to their task's
 thread under each (it opens in the main window's agent panel), the user's messages and the
-streamed replies. **Stop** in its header ends a turn in progress. The in-memory daemon of demo mode
-simulates it: a turn per delegated task and finished report, and a streamed reply when you write.
+streamed replies. **Stop** in its header ends a turn in progress. A chip or an orchestrator
+indicator opens it at a turn (`AgentStore.focusOrchestratorMessage`): it scrolls there once the
+message is loaded and highlights it for 2 s. The in-memory daemon of demo mode simulates it: a turn
+per delegated task and finished report, a turn for each request-like line you write (see below),
+and a streamed reply when you write to it.
 
 ## Routines
 
@@ -363,6 +402,12 @@ in real time. The demo syncs and has a paired always-on machine (`vm-name`), so 
 toggle and Settings → Always-On work, handovers included. There's no daemon, no Node and no
 network, which makes it good for trying the app, UI work and screenshots. Connection settings
 apply on the next normal launch.
+
+Writing a line that may be addressed to the agent in today's note (a port of the daemon's
+`mayBeRequest`: "find a quiet dishwasher", "remind me to…", a question) shows the orchestrator's
+activity: the line is noticed at once, and after the settle delay it reads, thinks and acts,
+adding "- [ ] Find a quiet dishwasher" under it as its own line ("Added a task ↗"), or answers a
+question in its chat ("Replied ↗"). Plain prose wakes nothing.
 
 ## Managed vs. external daemon
 
@@ -644,6 +689,13 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   their reasons, `thread-read-only`), and in the app `AlwaysOnCommandTests`,
   `RemoteSettingsTests` (every action and error message) and the `settings-always-on-*`
   snapshots.
+- **The orchestrator's activity**: the models' `OrchestratorActivityTests` (spec-shaped JSON,
+  lenient kinds), the client's `InMemoryActivityTests` (the fake's sequences, checked against the
+  contract schema once it declares them), the editor's `OrchestratorChipTests` (matching lines,
+  mapping and dropping, look, pulse and fade) and `chips-*` snapshots, and in the app
+  `OrchestratorChipTests` (the board, the store's timers, snapshots, placement and wording),
+  `OrchestratorActivityRoutingTests` (events and status through `AppModel`, chips in the editor,
+  clicks, a demo turn end to end), the tooltip checks and the `orchestrator-*` snapshots.
 - **Computer use access**: `ComputerAccessTests` run the permission flow against fakes (the
   prompt before the System Settings link, the links' fallbacks, the guide's steps, polling that
   stops, the relaunch's order, the banner's rules and its dismissal), and the snapshots draw the

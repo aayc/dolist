@@ -131,6 +131,69 @@ struct RenderSnapshotTests {
     }
   }
 
+  /// The orchestrator's chips in every state, light and dark, next to a task's triage badge: a
+  /// quiet dot, neutral pills while it looks and acts, quiet outcomes, a warning pill when it
+  /// needs the user (checked on pixels like the badges).
+  @Test(arguments: [("light", NSAppearance.Name.aqua), ("dark", NSAppearance.Name.darkAqua)])
+  func rendersOrchestratorChips(name: String, appearance: NSAppearance.Name) throws {
+    typealias Chip = EditorBadge.OrchestratorStatus
+    let chips: [(line: String, status: String, label: String)] = [
+      ("find a quiet dishwasher", Chip.noticed, ""),
+      ("What's a good desk height?", Chip.looking, "Orchestrator is looking…"),
+      ("plan the offsite for October", Chip.acting, "Working…"),
+      ("call mom tomorrow", Chip.done, "Added a task ↗"),
+      ("look up flights to Lisbon", Chip.done, "Added 3 tasks ↗"),
+      ("How tall is Ridge Tower?", Chip.done, "Replied ↗"),
+      ("book the dentist", Chip.needsYou, "Needs your approval ↗"),
+      ("Had a long walk by the river", Chip.nothing, "Nothing to do"),
+    ]
+    let text = (["Thursday"] + chips.map(\.line) + ["- [ ] Renew the passport"])
+      .joined(separator: "\n")
+    let editor = EditorHarness(
+      text: text, selection: NSRange(location: 0, length: 0), size: NSSize(width: 760, height: 360))
+    editor.controller.scrollView.appearance = NSAppearance(named: appearance)
+    editor.controller.setBadges(
+      chips.enumerated().map { index, chip in
+        EditorBadge(
+          id: "orchestrator:\(index)", line: index + 1, status: chip.status, label: chip.label,
+          anchorText: chip.line)
+      } + [
+        EditorBadge(id: "t", line: chips.count + 1, status: "triaging", label: "Triaging…")
+      ])
+    let png = try render(editor)
+    try FileManager.default.createDirectory(
+      at: Self.outputDirectory, withIntermediateDirectories: true)
+    try png.write(to: Self.outputDirectory.appendingPathComponent("chips-\(name).png"))
+
+    let rep = try snapshot(editor.textView)
+    let scale = CGFloat(rep.pixelsWide) / editor.textView.bounds.width
+    func color(_ point: NSPoint) throws -> NSColor {
+      try #require(
+        rep.colorAt(x: Int(point.x * scale), y: Int(point.y * scale))?.usingColorSpace(.sRGB))
+    }
+    func distance(_ a: NSColor, _ b: NSColor) -> CGFloat {
+      abs(a.redComponent - b.redComponent) + abs(a.greenComponent - b.greenComponent)
+        + abs(a.blueComponent - b.blueComponent)
+    }
+    let layouts = editor.controller.currentBadgeLayouts()
+    #expect(layouts.count == chips.count + 1)
+    for layout in layouts {
+      let background = try color(NSPoint(x: layout.rect.maxX + 6, y: layout.rect.midY))
+      let inside = try color(NSPoint(x: layout.rect.maxX - 3, y: layout.rect.midY))
+      switch BadgeTier(status: layout.badge.status) {
+      case .working, .needsYou:
+        #expect(distance(inside, background) > 0.03, "\(layout.badge.status) is a pill")
+      case .quiet, .failed:
+        #expect(distance(inside, background) < 0.01, "\(layout.badge.status) has no fill")
+      }
+    }
+    let dot = try #require(layouts.first { $0.badge.status == Chip.noticed })
+    let center = try color(
+      NSPoint(x: editor.controller.badgeRenderer.dotRect(in: dot.rect).midX, y: dot.rect.midY))
+    let beside = try color(NSPoint(x: dot.rect.maxX + 6, y: dot.rect.midY))
+    #expect(distance(center, beside) > 0.3, "the noticed dot is drawn")
+  }
+
   /// A frame in the middle of every kind of motion (for review): a badge fading in, one
   /// crossfading from working to done, a triaging dot at its faintest, a checkmark popping in.
   @Test func rendersAFrameOfMotion() throws {

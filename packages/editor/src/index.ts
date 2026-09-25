@@ -1,4 +1,11 @@
 export {
+  type ActivityChipState,
+  activityChipField,
+  getActivityChips,
+  setActivityChipsEffect,
+} from "./activity/field";
+export { chipClassName } from "./activity/widget";
+export {
   AGENT_SPARKLE_TITLE,
   type AgentLineOptions,
   agentLines,

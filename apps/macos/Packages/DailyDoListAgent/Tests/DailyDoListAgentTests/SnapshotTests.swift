@@ -171,6 +171,23 @@ struct SnapshotTests {
         view, name: "orchestrator-window", size: CGSize(width: 460, height: 720), dark: dark))
   }
 
+  /// A turn opened from the editor: the chat scrolls to its first message and highlights it, and
+  /// the request is done (a chat opened later starts at the bottom again).
+  @Test(arguments: [false, true])
+  func orchestratorChatAtATurn(dark: Bool) async throws {
+    let store = SampleData.makeStore(now: Self.now)
+    let thread = try #require(store.orchestratorThread)
+    let turn = try #require(
+      thread.messages.first { if case .status = $0 { true } else { false } })
+    store.focusOrchestratorMessage(turn.id)
+    let view = OrchestratorChatView(store: store, onOpenTask: { _ in })
+      .agentReferenceDate(Self.now)
+    check(
+      try await SnapshotRenderer.renderSettled(
+        view, name: "orchestrator-window-turn", size: CGSize(width: 460, height: 420), dark: dark))
+    #expect(store.orchestratorFocus == nil, "the chat showed it")
+  }
+
   /// A thread moving to another inbox section redraws its row (LazyVStack used to keep the old
   /// one: a Done thread still showed "Idle").
   @Test func inboxRowsFollowStatusChanges() throws {

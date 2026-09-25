@@ -33,6 +33,12 @@ struct Job: Sendable {
     case finish(TaskAgentStatus, summary: String)
     /// Starts a turn of the orchestrator's chat: what woke it, and its status `working`.
     case turn(String)
+    /// The turn moves on (`thinking`, `acting`).
+    case phase(OrchestratorPhase)
+    /// The orchestrator adds a task under each request-like line it woke for.
+    case addTasks(notePath: String, lines: [OrchestratorTriggerLine])
+    /// Ends the turn with what it did.
+    case outcome(OrchestratorOutcome)
     /// Ends a job that doesn't own a task (replies).
     case end
   }
@@ -59,6 +65,8 @@ struct Job: Sendable {
   var text: StreamingText?
   var tool: ToolCallMessage?
   var waitingApproval: String?
+  /// What an orchestrator turn reports while it runs (nil for jobs that don't report activity).
+  var activity: OrchestratorActivity?
 }
 
 /// Parses checkbox tasks (`- [ ] text`, `* [x] text`, `1. [ ] text`) line by line.
@@ -165,7 +173,7 @@ extension FakeDaemon {
           provider: "none",
           capabilities: ExecutionCapabilities(shell: false, browser: false, computer: false)),
       problem: enabled ? placementProblem : "The agent runtime is not running",
-      placement: placementStatus(), readiness: readiness())
+      placement: placementStatus(), readiness: readiness(), orchestrator: reportedActivity)
   }
 
   var runningTaskJobs: Int { jobs.values.filter { $0.taskId != nil }.count }
@@ -434,7 +442,9 @@ extension FakeDaemon {
     if followAnchors(path, content: content) { changed = true }
     if changed { emitRecords(path) }
 
-    guard !initial, settings.agent.enabled, watchedDate(of: path) != nil else { return }
+    let watching = !initial && settings.agent.enabled && watchedDate(of: path) != nil
+    trackProse(path, content: content, watching: watching)
+    guard watching else { return }
     for task in candidates {
       if task.isOpen && !FakeTaskParser.isBlank(task.text) && records[task.id] == nil {
         scheduleSettle(task.id)
@@ -759,7 +769,14 @@ extension FakeDaemon {
       drainQueue()
       return false
     case .turn(let trigger):
-      beginOrchestratorTurn(trigger)
+      startTurnActivity(turnId: beginOrchestratorTurn(trigger), in: jobId)
+    case .phase(let phase):
+      setTurnPhase(phase, in: jobId)
+    case .addTasks(let notePath, let lines):
+      addRequestTasks(notePath, lines: lines)
+    case .outcome(let outcome):
+      finishTurn(outcome, in: jobId)
+      return false
     case .end:
       jobs[jobId] = nil
       if job.threadId.map(OrchestratorThread.isOrchestrator) == true { endOrchestratorTurn() }

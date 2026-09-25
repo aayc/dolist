@@ -12,6 +12,7 @@ export * from "./ids";
 export * from "./logger";
 export * from "./markdown/agent-text";
 export * from "./markdown/anchors";
+export * from "./markdown/prose";
 export * from "./markdown/task-tracker";
 export * from "./markdown/tasks";
 export * from "./markdown/wikilinks";

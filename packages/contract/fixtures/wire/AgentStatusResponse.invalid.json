@@ -41,5 +41,24 @@
     },
     "path": ["placement", "relay"],
     "code": "invalid_value"
+  },
+  {
+    "name": "orchestrator activity without a phase",
+    "value": {
+      "mode": "live",
+      "enabled": true,
+      "model": "mock",
+      "running": 0,
+      "queued": 0,
+      "pendingApprovals": 0,
+      "connectors": [],
+      "execution": {
+        "provider": "local",
+        "capabilities": { "shell": true, "browser": true, "computer": false }
+      },
+      "orchestrator": { "turnId": "msg_k3j9x0q2m1ab" }
+    },
+    "path": ["orchestrator", "phase"],
+    "code": "invalid_value"
   }
 ]

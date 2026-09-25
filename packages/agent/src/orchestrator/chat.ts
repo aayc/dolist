@@ -104,14 +104,18 @@ export class OrchestratorChat {
     return this.threads.get(this.threadId) ?? thread;
   }
 
-  /** Starts recording a turn. `labels`: display labels of the session's tools by name. */
-  beginTurn(trigger: string, labels: ReadonlyMap<string, string>): void {
+  /**
+   * Starts recording a turn. `labels`: display labels of the session's tools by name. Returns the
+   * id of the status line that opens it (the turn's id in `orchestrator.activity`).
+   */
+  beginTurn(trigger: string, labels: ReadonlyMap<string, string>): string {
     this.thread();
     this.closeOpenRows("Interrupted");
     this.inTurn = true;
     this.labels = labels;
-    this.status("system", "working", trigger);
+    const id = this.status("system", "working", trigger);
     this.threads.setStatus(this.threadId, "working");
+    return id;
   }
 
   /** The session's tools changed (a new session was created during the turn). */
@@ -308,15 +312,17 @@ export class OrchestratorChat {
     };
   }
 
-  private status(author: "system" | "orchestrator", status: TaskAgentStatus, text: string): void {
+  private status(author: "system" | "orchestrator", status: TaskAgentStatus, text: string): string {
+    const id = createId("msg");
     this.threads.upsertMessage(this.threadId, {
-      id: createId("msg"),
+      id,
       kind: "status",
       author,
       status,
       text,
       createdAt: this.now(),
     });
+    return id;
   }
 
   /** Ends streaming bubbles, running tool rows and thinking left open by a turn. */

@@ -4,6 +4,7 @@ import { useServices } from "../../app/services";
 import { IconButton } from "../../components/IconButton";
 import { useSettingsStore } from "../../state/settings-store";
 import { useTabsStore } from "../../state/tabs-store";
+import { NoteOrchestratorIndicator } from "../agent/OrchestratorIndicators";
 import { DailyHeader } from "../daily/DailyHeader";
 import { dailyDateOf } from "../daily/daily-nav";
 import { NoteTitle } from "./NoteTitle";
@@ -19,6 +20,7 @@ export function NoteHeader() {
       <div className="note-header-inner">
         <div className="note-header-main">
           {date ? <DailyHeader date={date} /> : <NoteTitle key={active} path={active} />}
+          <NoteOrchestratorIndicator path={active} />
         </div>
         {isDrawingPath(active) ? null : (
           <div className="note-actions">

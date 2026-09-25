@@ -37,6 +37,12 @@ interface Lockstep {
   ThreadMessage: core.ThreadMessage;
   SurfaceKind: core.SurfaceKind;
   OrchestratorThreadId: core.OrchestratorThreadId;
+  OrchestratorPhase: core.OrchestratorPhase;
+  OrchestratorTriggerKind: core.OrchestratorTriggerKind;
+  OrchestratorTrigger: core.OrchestratorTrigger;
+  OrchestratorOutcomeKind: core.OrchestratorOutcomeKind;
+  OrchestratorOutcome: core.OrchestratorOutcome;
+  OrchestratorActivity: core.OrchestratorActivity;
   Thread: core.Thread;
   CitedSource: core.CitedSource;
   ThreadSummary: core.ThreadSummary;
@@ -137,6 +143,7 @@ interface Lockstep {
   ThreadDeltaEvent: core.ServerEventOf<"thread.delta">;
   ApprovalUpsertEvent: core.ServerEventOf<"approval.upsert">;
   AgentStatusEvent: core.ServerEventOf<"agent.status">;
+  OrchestratorActivityEvent: core.ServerEventOf<"orchestrator.activity">;
   SurfaceFrameEvent: core.ServerEventOf<"surface.frame">;
   SettingsChangedEvent: core.ServerEventOf<"settings.changed">;
   RoutinesChangedEvent: core.ServerEventOf<"routines.changed">;

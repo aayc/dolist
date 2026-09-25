@@ -396,6 +396,7 @@ class Runtime implements AgentRuntime {
         this.queueStatus();
       },
       chat: this.chat,
+      onActivity: (activity) => this.emitter.emit("orchestrator.activity", activity),
     });
     this.scheduler = new RoutineScheduler({
       library: this.routines,
@@ -515,6 +516,7 @@ class Runtime implements AgentRuntime {
       connectors: this.safely(() => connectors?.status() ?? [], []),
       execution: this.executionStatus(),
       ...(problem ? { problem } : {}),
+      ...(this.mode === "off" ? {} : { orchestrator: this.orchestrator.currentActivity() }),
     };
   }
 
@@ -1089,6 +1091,10 @@ class Runtime implements AgentRuntime {
         safe((event) => this.orchestrator.handleNoteEvent(event)),
       ),
       this.watcher.on(
+        "noticed",
+        safe((event) => this.orchestrator.handleNoticed(event)),
+      ),
+      this.watcher.on(
         "tasks",
         safe(({ notePath, tasks }) => {
           this.records.syncTasks(notePath, tasks);
@@ -1283,6 +1289,13 @@ class Runtime implements AgentRuntime {
   private onApproval(approval: ApprovalRequest): void {
     this.emitter.emit("approval.upsert", approval);
     const { threadId, taskId } = approval;
+    if (threadId && isOrchestratorThread(threadId)) {
+      this.orchestrator.handleApproval({
+        id: approval.id,
+        summary: approval.summary,
+        pending: approval.status === "pending",
+      });
+    }
     if (
       threadId &&
       approval.status === "pending" &&

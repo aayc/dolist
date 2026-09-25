@@ -8,6 +8,8 @@ import Foundation
 ///   end leaves it on the task.
 /// - An edit that removes the line's entire content (delete line, cut, select + retype) drops the
 ///   badge, unless the same edit inserts that exact line again (e.g. a whole-document replacement).
+/// - A badge with an `anchorText` (an orchestrator chip) is also dropped by an edit that leaves its
+///   line unrecognizable (``EditorLineMatch``): O(line), and only for the line an edit touches.
 struct BadgeStore: Sendable {
   struct Item: Equatable, Sendable {
     var badge: EditorBadge
@@ -84,6 +86,11 @@ struct BadgeStore: Sendable {
       item.anchor = content.location
       item.lineEnd = content.end
       item.lineText = text.substring(with: content)
+      if let original = item.badge.anchorText,
+        !EditorLineMatch.recognizes(original, item.lineText)
+      {
+        continue
+      }
       result.append(item)
     }
     items = result

@@ -105,6 +105,9 @@ through an `AttributedStorage` view. The WebSocket hub tags each `vault.changed`
   `MessageRow`s and `Composer` with a header of its own (status, Stop) and a link under each
   decision to its task's thread, and from the palette ("Open the orchestrator's chat",
   `agent:orchestrator`).
+- What the orchestrator is doing while you write (`orchestrator.activity`) shows as chips at the
+  end of the lines that woke it, a note-level indicator in the note header and a status bar item
+  for work elsewhere; clicking opens its chat at the turn (see `apps/web/README.md`).
 - `DaemonClient` has two implementations: `HttpDaemonClient` (real) and `MockDaemonClient`
   (in-browser vault + simulated agent, used by e2e/perf tests and demos via `?mock=1`).
 

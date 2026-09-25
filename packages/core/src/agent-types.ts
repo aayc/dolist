@@ -223,6 +223,77 @@ export function isOrchestratorThread(threadId: string): threadId is Orchestrator
   return threadId === ORCHESTRATOR_THREAD_ID;
 }
 
+// ── What the orchestrator is doing ───────────────────────────────────────────
+
+/**
+ * - `noticed`: the watcher saw lines that may be requests (before they settle, before any turn);
+ * - `reading`: a turn started and builds its digest;
+ * - `thinking`: the model is working on it;
+ * - `acting`: its tools run;
+ * - `idle`: nothing is going on (right after a turn, with its `outcome`).
+ */
+export type OrchestratorPhase = "idle" | "noticed" | "reading" | "thinking" | "acting";
+
+export type OrchestratorTriggerKind =
+  | "note"
+  | "task"
+  | "message"
+  | "routine"
+  | "approval"
+  | "other";
+
+export interface OrchestratorTrigger {
+  kind: OrchestratorTriggerKind;
+  notePath?: string;
+  /** The lines that woke it (0-based, as they were), for anchoring chips in the editor. */
+  lines?: Array<{ line: number; text: string }>;
+  /** Short and human: "your note", "“call mom tomorrow”". */
+  summary: string;
+}
+
+export type OrchestratorOutcomeKind =
+  | "no_action"
+  | "tasks_added"
+  | "note_edited"
+  | "replied"
+  | "delegated"
+  | "routine_created"
+  | "asked_approval";
+
+export interface OrchestratorOutcome {
+  kind: OrchestratorOutcomeKind;
+  count?: number;
+  /** The thread it created or acted in, when there is one. */
+  threadId?: string;
+  /** One short line for the chip's tooltip. */
+  text?: string;
+}
+
+export interface OrchestratorActivity {
+  phase: OrchestratorPhase;
+  /** The orchestrator chat message that starts this turn (to open it). */
+  turnId?: string;
+  trigger?: OrchestratorTrigger;
+  startedAt?: number;
+  /**
+   * Present right after a turn ends (phase "idle"), shown briefly; also while the turn waits for
+   * the user's approval (phase "acting", kind `asked_approval`).
+   */
+  outcome?: OrchestratorOutcome;
+}
+
+/** Bounds the daemon keeps activity within (clients may rely on them for layout). */
+export const ORCHESTRATOR_ACTIVITY_LIMITS = {
+  /** `trigger.summary`, in UTF-16 units. */
+  summaryChars: 80,
+  /** `trigger.lines`: the first lines, in note order. */
+  lines: 20,
+  /** Each `trigger.lines[].text`. */
+  lineChars: 300,
+  /** `outcome.text`. */
+  outcomeTextChars: 160,
+} as const;
+
 export interface ThreadSummary {
   id: string;
   taskId: string | null;

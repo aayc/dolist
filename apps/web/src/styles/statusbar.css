@@ -88,6 +88,17 @@ button.status-item:active {
   color: var(--ddl-warning);
 }
 
+.status-orchestrator {
+  min-width: 0;
+  color: var(--ddl-text-muted);
+}
+
+.status-orchestrator-text {
+  max-width: 28em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .status-approval-policy.is-warning {
   color: var(--ddl-warning);
 }

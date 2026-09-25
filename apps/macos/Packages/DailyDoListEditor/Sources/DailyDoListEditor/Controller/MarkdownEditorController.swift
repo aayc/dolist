@@ -322,7 +322,9 @@ public final class MarkdownEditorController {
       badgeReserve = reserve
       updateTextGeometry()
     }
-    if let hovered = hoveredBadgeID, !badgeStore.items.contains(where: { $0.badge.id == hovered }) {
+    if let hovered = hoveredBadgeID,
+      !badgeStore.items.contains(where: { $0.badge.id == hovered && !$0.badge.isFading })
+    {
       hoveredBadgeID = nil
     }
     badgesDidChangeUnderTooltip()
