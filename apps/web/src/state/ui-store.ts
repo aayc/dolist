@@ -16,7 +16,11 @@ export type RightView =
   | { kind: "inbox" }
   | { kind: "thread"; threadId: string }
   /** Badge clicked before the orchestrator created a thread; resolves once it exists. */
-  | { kind: "task"; taskId: string };
+  | { kind: "task"; taskId: string }
+  /** Every routine. */
+  | { kind: "routines" }
+  /** One routine and its own inbox of runs. */
+  | { kind: "routine"; routineId: string };
 
 export interface ConfirmRequest {
   title: string;
@@ -175,6 +179,24 @@ export const ui = {
       rightView: { kind: "task", taskId },
       threadTab: "chat",
     });
+  },
+
+  showRoutines(): void {
+    useUiStore.setState({ rightOpen: true, rightView: { kind: "routines" } });
+  },
+
+  /** The ribbon's Routines button: closes the panel when routines are already what it shows. */
+  toggleRoutines(): void {
+    const { rightOpen, rightView } = useUiStore.getState();
+    if (rightOpen && (rightView.kind === "routines" || rightView.kind === "routine")) {
+      useUiStore.setState({ rightOpen: false });
+    } else {
+      ui.showRoutines();
+    }
+  },
+
+  showRoutine(routineId: string): void {
+    useUiStore.setState({ rightOpen: true, rightView: { kind: "routine", routineId } });
   },
 
   setExpanded(path: string, expanded: boolean): void {
