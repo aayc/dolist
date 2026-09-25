@@ -3,7 +3,8 @@
  * playing the always-on machine, and a sync service, all started by
  * packages/agent/scripts/e2e-fullstack.ts, whose loopback helper (two ports above the served
  * daemon) hands out what a user would get elsewhere: the vault's sync credentials and a code
- * printed on the machine. Run with `pnpm --filter @ddl/web e2e:fullstack`.
+ * printed on the machine, and stopping and starting the machine. Run with
+ * `pnpm --filter @ddl/web e2e:fullstack`.
  */
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
@@ -179,26 +180,77 @@ test("the toggle hands the agent to the machine and takes it back", async ({ pag
   await expect(line(page)).toHaveText("Running on this device", { timeout: HANDOVER_MS });
 });
 
-// Waits for S3: without the relay the daemon reports relay `off` while the machine runs the agent,
-// so this device shows its work read-only. Remove the fixme once the relay is merged.
-test.fixme("relayed to the machine, this device acts on its agent (needs the relay, S3)", async ({
-  page,
-}) => {
+test("relayed to the machine, this device acts on its agent", async ({ page }) => {
   test.setTimeout(4 * HANDOVER_MS);
   await openApp(page);
   await openPanel(page);
+  await expect(line(page)).toHaveText("Running on this device", { timeout: HANDOVER_MS });
   await page.getByTestId("placement-toggle-always_on_machine").click();
   await expect(page.getByTestId("agent-location")).toHaveAttribute("data-relay", "connected", {
     timeout: HANDOVER_MS,
   });
-  await expect(line(page)).toHaveText(`Running on ${alwaysOn.machine.name}`);
+  await expect(line(page)).toHaveText(`Running on ${alwaysOn.machine.name}`, {
+    timeout: HANDOVER_MS,
+  });
   await expect(page.getByTestId("agent-banner")).toHaveCount(0);
-  await expect(page.getByTestId("status-agent")).toHaveText(`Agent on ${alwaysOn.machine.name}`);
+  // The merged status carries the machine's agent mode too ("mock" in this harness).
+  await expect(page.getByTestId("status-agent").locator("span").first()).toHaveText(
+    `Agent on ${alwaysOn.machine.name}`,
+  );
+
+  // A reply to the machine's orchestrator goes through the relay, and its answer comes back.
   await page.getByTestId("inbox-orchestrator").click();
-  await expect(page.getByTestId("composer-input")).toBeEnabled();
+  const chat = page.getByTestId("orchestrator-view");
+  const input = page.getByTestId("composer-input");
+  await expect(input).toBeEnabled();
+  const answers = chat.locator('.message.is-agent[data-testid="message-text"]');
+  const before = await answers.count();
+  await input.click();
+  await page.keyboard.type("What are you working on?", { delay: 5 });
+  await page.keyboard.press("Enter");
+  await expect(
+    chat.locator(".message.is-user").filter({ hasText: "What are you working on?" }),
+  ).toBeVisible({ timeout: 20_000 });
+  await expect(chat.locator(".message-failed")).toHaveCount(0);
+  await expect(answers).toHaveCount(before + 1, { timeout: 30_000 });
   await page.getByTestId("thread-back").click();
+});
+
+test("when the machine goes away, this device shows its work read-only until it's back", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  test.setTimeout(4 * HANDOVER_MS);
+  await openApp(page);
+  await openPanel(page);
+  const location = page.getByTestId("agent-location");
+  await expect(location).toHaveAttribute("data-relay", "connected", { timeout: HANDOVER_MS });
+
+  expect((await request.post(helperUrl(baseURL, "/always-on/machine/stop"))).status()).toBe(200);
+  await expect(location).toHaveAttribute("data-relay", "unreachable", { timeout: HANDOVER_MS });
+  await expect(page.getByTestId("agent-banner")).toContainText(
+    "The always-on machine can't be reached — showing the last synced state",
+  );
+  await expect(line(page)).toHaveText(`${alwaysOn.machine.name} can't be reached`);
+  await expect(page.getByTestId("status-agent").locator("span").first()).toHaveText(
+    "Agent unreachable",
+  );
+  await page.getByTestId("inbox-orchestrator").click();
+  await expect(page.getByTestId("composer-input")).toBeDisabled();
+  await expect(page.getByTestId("composer-input")).toHaveAttribute(
+    "placeholder",
+    "The always-on machine can't be reached",
+  );
+  await page.getByTestId("thread-back").click();
+
+  expect((await request.post(helperUrl(baseURL, "/always-on/machine/start"))).status()).toBe(200);
+  await expect(location).toHaveAttribute("data-relay", "connected", { timeout: HANDOVER_MS });
+  await expect(page.getByTestId("agent-banner")).toHaveCount(0);
+
+  // Back to this device for what follows.
   await page.getByTestId("placement-toggle-this_device").click();
-  await expect(line(page)).toHaveText("Running on this device", { timeout: HANDOVER_MS });
+  await expect(line(page)).toHaveText("Running on this device", { timeout: 2 * HANDOVER_MS });
 });
 
 test("Settings → Remote access and Devices: a code for a new device, and revoking it", async ({

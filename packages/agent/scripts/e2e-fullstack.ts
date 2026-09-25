@@ -91,7 +91,8 @@ async function main(): Promise<void> {
     DDL_SYNC_VAULT: syncSetup.vault,
   };
   const machineConfig = loadConfig({ env: machineEnv, cwd: machineRoot, homedir: machineRoot });
-  const machine = await startDaemon({ config: machineConfig, env: machineEnv });
+  const startMachine = () => startDaemon({ config: machineConfig, env: machineEnv });
+  let machine: Awaited<ReturnType<typeof startDaemon>> | null = await startMachine();
   const machineToken = readFileSync(machineConfig.tokenPath, "utf8").trim();
 
   Object.assign(process.env, {
@@ -106,13 +107,26 @@ async function main(): Promise<void> {
   });
   const daemon = await startDaemon();
   const daemonToken = readFileSync(daemon.config.tokenPath, "utf8").trim();
+  const machineUrl = machine.url;
   const helper = startHelper({
     sync: syncSetup,
-    machine: { name: MACHINE.name, url: machine.url, token: machineToken },
+    machine: {
+      name: MACHINE.name,
+      url: machineUrl,
+      token: machineToken,
+      async stop() {
+        const running = machine;
+        machine = null;
+        await running?.close();
+      },
+      async start() {
+        machine ??= await startMachine();
+      },
+    },
     daemon: { url: daemon.url, token: daemonToken },
   });
   process.stdout.write(
-    `fullstack e2e: daemon ${daemon.url}, always-on machine ${machine.url}, sync ${sync.url}, fake OpenRouter ${fake.baseUrl}\n`,
+    `fullstack e2e: daemon ${daemon.url}, always-on machine ${machineUrl}, sync ${sync.url}, fake OpenRouter ${fake.baseUrl}\n`,
   );
 
   let stopping = false;
@@ -122,7 +136,7 @@ async function main(): Promise<void> {
     void (async () => {
       helper.close();
       await daemon.close().catch(() => {});
-      await machine.close().catch(() => {});
+      await machine?.close().catch(() => {});
       await sync.close().catch(() => {});
       await fake.close();
       await rm(home, { recursive: true, force: true });
@@ -138,7 +152,15 @@ async function main(): Promise<void> {
 
 interface HelperContext {
   sync: { url: string; vault: string; token: string };
-  machine: { name: string; url: string; token: string };
+  machine: {
+    name: string;
+    url: string;
+    token: string;
+    /** The machine goes down (its port closes), as when the VM stops. */
+    stop(): Promise<void>;
+    /** It comes back, same home, port and device. */
+    start(): Promise<void>;
+  };
   daemon: { url: string; token: string };
 }
 
@@ -147,6 +169,8 @@ interface HelperContext {
  * - `GET /always-on`: the sync service's address, vault and token, and the machine's name and URL;
  * - `POST /always-on/machine-code`: a pairing code issued by the machine (what its `pair` command
  *   prints);
+ * - `POST /always-on/machine/stop` and `/always-on/machine/start`: the machine goes down, and comes
+ *   back;
  * - `POST /always-on/reset`: the served daemon standalone again (sync off, the machine forgotten,
  *   placement `this_device`, no remote hosts, no paired devices).
  */
@@ -168,7 +192,16 @@ function startHelper(context: HelperContext): Server {
         const issued = await api(machine.url, machine.token, "POST", "/api/pairing-codes", {});
         return reply(issued.status, issued.body);
       }
+      if (request.method === "POST" && request.url === "/always-on/machine/stop") {
+        await machine.stop();
+        return reply(200, { ok: true });
+      }
+      if (request.method === "POST" && request.url === "/always-on/machine/start") {
+        await machine.start();
+        return reply(200, { ok: true });
+      }
       if (request.method === "POST" && request.url === "/always-on/reset") {
+        await machine.start();
         const call = (method: string, route: string, body?: unknown) =>
           api(daemon.url, daemon.token, method, route, body);
         await call("PATCH", "/api/device", { placement: "this_device", remoteHosts: [] });
