@@ -116,6 +116,43 @@ struct RemoteSettingsTests {
     #expect(store.error(.remoteHosts) == "The remote hosts are set by DDL_REMOTE_HOSTS.")
   }
 
+  // MARK: - Devices
+
+  @Test func pairingANewDeviceAndRevokingIt() async throws {
+    let (store, client) = store(.alwaysOn)
+    await store.load()
+    #expect(await store.setRemoteHosts(["studio.tailnet-name.ts.net"]))
+    await store.createPairingCode(name: "Phone")
+    let code = try #require(store.pairingCode)
+    #expect(code.url == "https://studio.tailnet-name.ts.net")
+    #expect(code.expiresAt == referenceNow.epochMillis + 5 * 60 * 1000)
+    #expect(PairingCodeCard.countdown(299.2) == "5:00" && PairingCodeCard.countdown(61) == "1:01")
+
+    _ = try await client.pair(PairRequest(code: code.code, name: "Phone", kind: .app))
+    await store.loadDevices()
+    let phone = try #require(store.devices?.first)
+    #expect(phone.name == "Phone")
+    await store.revoke(phone)
+    #expect(store.devices == [] && store.error(.revoke) == nil)
+    await store.revoke(phone)
+    #expect(store.error(.revoke) == "That device isn't paired anymore.")
+
+    store.dismissPairingCode()
+    for _ in 0..<4 { await store.createPairingCode(name: nil) }
+    #expect(
+      store.error(.pairingCode)
+        == "Too many pairing codes are waiting. Use one, or wait a few minutes for them to expire.")
+  }
+
+  @Test func renamingThisDevice() async {
+    let (store, _) = store(.alwaysOn)
+    await store.load()
+    #expect(await store.rename("Studio Mac"))
+    #expect(store.device?.device.name == "Studio Mac")
+    #expect(await store.rename(String(repeating: "x", count: 65)) == false)
+    #expect(store.error(.rename) == "name: must be 1-64 characters without control characters")
+  }
+
   // MARK: - Messages
 
   @Test func everyErrorCodeHasAClearMessage() {

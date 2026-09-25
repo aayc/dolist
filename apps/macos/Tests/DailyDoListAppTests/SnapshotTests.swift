@@ -304,6 +304,17 @@ struct SnapshotTests {
     }
     var locked = InMemoryDaemonClient.Remote.host
     locked.lockedByEnv = [.placement, .remoteHosts, .sync]
+    let paired: Prepare = { client, model in
+      _ = try? await client.updateDeviceSettings(
+        DeviceSettingsPatch(remoteHosts: ["studio.tailnet-name.ts.net"]))
+      for (name, kind) in [("Phone", PairedDeviceKind.app), ("Browser on vm-name", .browser)] {
+        if let code = try? await client.createPairingCode(PairingCodeRequest()) {
+          _ = try? await client.pair(PairRequest(code: code.code, name: name, kind: kind))
+        }
+      }
+      await model.remote.createPairingCode(name: "Tablet")
+    }
+    let codeWithoutHosts: Prepare = { _, model in await model.remote.createPairingCode(name: nil) }
     let shots: [(String, InMemoryDaemonClient.Remote, AlwaysOnSection, Prepare)] = [
       ("settings-always-on-agent-location", .alwaysOn, .agentLocation, nothing),
       ("settings-always-on-agent-location-held", .standalone, .agentLocation, nothing),
@@ -314,6 +325,8 @@ struct SnapshotTests {
       ("settings-always-on-sync", .alwaysOn, .sync, nothing),
       ("settings-always-on-sync-off", .standalone, .sync, nothing),
       ("settings-always-on-sync-locked", locked, .sync, nothing),
+      ("settings-always-on-devices", .alwaysOn, .devices, paired),
+      ("settings-always-on-devices-code", .alwaysOn, .devices, codeWithoutHosts),
     ]
     for (name, remote, section, prepare) in shots {
       let model = try await model(remote, prepare)

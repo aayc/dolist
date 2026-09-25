@@ -4,15 +4,17 @@ import SwiftUI
 
 /// A section of Settings → Always-On.
 enum AlwaysOnSection: String, CaseIterable, Identifiable {
-  case agentLocation, alwaysOnMachine, sync
+  case agentLocation, alwaysOnMachine, sync, devices
 
   var id: String { rawValue }
 
+  /// Short: the segments are as wide as the widest (each section's header says the rest).
   var title: String {
     switch self {
-    case .agentLocation: "Agent Location"
-    case .alwaysOnMachine: "Always-On Machine"
+    case .agentLocation: "Location"
+    case .alwaysOnMachine: "Machine"
     case .sync: "Sync"
+    case .devices: "Devices"
     }
   }
 
@@ -49,6 +51,7 @@ struct AlwaysOnSettingsPane: View {
         case .agentLocation: AgentLocationSection(model: model, remote: remote)
         case .alwaysOnMachine: MachineSection(model: model, remote: remote)
         case .sync: SyncSection(model: model, remote: remote)
+        case .devices: DevicesSection(model: model, remote: remote)
         }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
