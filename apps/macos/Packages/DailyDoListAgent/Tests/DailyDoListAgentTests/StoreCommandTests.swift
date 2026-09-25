@@ -344,13 +344,102 @@ struct StoreCommandTests {
     #expect(store.sendingMessageIds.isEmpty)
   }
 
-  @Test func aFailedReplyIsRemovedAndReported() async {
+  @Test func aFailedReplyStaysInTheThreadWithWhyItWasntSent() async throws {
     await loadThread()
     client.script {
       $0.postMessage = { _, _ in throw DaemonClientError.http(status: 503, body: nil) }
     }
     #expect(await store.postMessage(threadId: "thr_1", text: "Hello") == false)
+    let local = try #require(store.thread("thr_1")?.messages.last)
+    guard case .text(let text) = local else {
+      Issue.record("expected the unsent message")
+      return
+    }
+    #expect(text.text == "Hello")
+    #expect(store.unsentMessages == [local.id: "The daemon answered HTTP 503."])
+    #expect(store.sendingMessageIds.isEmpty)
+    #expect(store.lastError == nil, "the message itself offers the retry")
+  }
+
+  @Test func retryingSendsTheSameMessageAgain() async throws {
+    await loadThread()
+    let posted = Locked<[String]>([])
+    client.script {
+      $0.postMessage = { _, text in
+        let attempt = posted.mutate { texts -> Int in
+          texts.append(text)
+          return texts.count
+        }
+        if attempt == 1 { throw DaemonClientError.unreachable("offline") }
+        return ThreadActionResponse(ok: true, pending: true)
+      }
+    }
+    #expect(await store.postMessage(threadId: "thr_1", text: "Patio please") == false)
+    let id = try #require(store.unsentMessages.keys.first)
+    #expect(await store.retryMessage(id, threadId: "thr_1"))
+    #expect(store.unsentMessages.isEmpty)
+    #expect(store.thread("thr_1")?.messages.map(\.id) == [id], "shown until the daemon's copy")
+    #expect(posted.current == ["Patio please", "Patio please"])
+    store.apply(
+      .threadMessage(
+        ThreadMessageEvent(
+          threadId: "thr_1",
+          message: Fixture.text("msg_srv", "Patio please", streaming: nil, role: .user))))
+    #expect(store.thread("thr_1")?.messages.map(\.id) == ["msg_srv"])
+    #expect(store.messageAliases["msg_srv"] == id, "the chat keeps the row")
+  }
+
+  @Test func aRetryThatFailsAgainStaysUnsent() async throws {
+    await loadThread()
+    client.script { $0.postMessage = { _, _ in throw DaemonClientError.unreachable("offline") } }
+    await store.postMessage(threadId: "thr_1", text: "Hello")
+    let id = try #require(store.unsentMessages.keys.first)
+    #expect(await store.retryMessage(id, threadId: "thr_1") == false)
+    #expect(store.unsentMessages[id] != nil)
+    #expect(store.thread("thr_1")?.messages.count == 1)
+  }
+
+  @Test func anUnsentMessageCanBeRemoved() async throws {
+    await loadThread()
+    client.script { $0.postMessage = { _, _ in throw DaemonClientError.unreachable("offline") } }
+    await store.postMessage(threadId: "thr_1", text: "Hello")
+    let id = try #require(store.unsentMessages.keys.first)
+    store.discardMessage(id, threadId: "thr_1")
+    #expect(store.unsentMessages.isEmpty)
     #expect(store.thread("thr_1")?.messages.isEmpty == true)
+    #expect(await store.retryMessage(id, threadId: "thr_1") == false)
+  }
+
+  @Test func unsentMessagesSurviveAReload() async throws {
+    await loadThread()
+    client.script { $0.postMessage = { _, _ in throw DaemonClientError.unreachable("offline") } }
+    await store.postMessage(threadId: "thr_1", text: "Hello")
+    let id = try #require(store.unsentMessages.keys.first)
+    await store.loadThread("thr_1", force: true)
+    #expect(store.thread("thr_1")?.messages.map(\.id) == [id])
+    #expect(store.unsentMessages[id] != nil)
+  }
+
+  @Test func theDaemonsCopyOfAnUnsentMessageClearsIt() async throws {
+    await loadThread()
+    client.script { $0.postMessage = { _, _ in throw DaemonClientError.unreachable("timed out") } }
+    await store.postMessage(threadId: "thr_1", text: "Hello")
+    #expect(store.unsentMessages.count == 1)
+    store.apply(
+      .threadMessage(
+        ThreadMessageEvent(
+          threadId: "thr_1", message: Fixture.text("msg_srv", "Hello", streaming: nil, role: .user)
+        )))
+    #expect(store.unsentMessages.isEmpty)
+    #expect(store.thread("thr_1")?.messages.map(\.id) == ["msg_srv"])
+  }
+
+  @Test func aReplyToAThreadThatIsntOpenReportsTheFailure() async {
+    client.script {
+      $0.postMessage = { _, _ in throw DaemonClientError.http(status: 503, body: nil) }
+    }
+    #expect(await store.postMessage(threadId: "thr_other", text: "Hello") == false)
+    #expect(store.unsentMessages.isEmpty)
     #expect(store.lastError?.title == "Couldn't send your message")
     #expect(store.lastError?.message == "The daemon answered HTTP 503.")
   }

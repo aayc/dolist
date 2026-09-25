@@ -23,6 +23,33 @@ enum SnapshotRenderer {
 
   static func render<V: View>(_ view: V, name: String, size: CGSize, dark: Bool) throws -> Rendered
   {
+    let (host, window) = host(view, size: size, dark: dark)
+    defer { window.close() }
+    for _ in 0..<3 {
+      host.layoutSubtreeIfNeeded()
+      host.displayIfNeeded()
+    }
+    return try capture(host, name: name, dark: dark)
+  }
+
+  /// Renders after letting work the views queued on the main actor run (state they update on
+  /// the next turn, like the composer's height).
+  static func renderSettled<V: View>(_ view: V, name: String, size: CGSize, dark: Bool)
+    async throws -> Rendered
+  {
+    let (host, window) = host(view, size: size, dark: dark)
+    defer { window.close() }
+    for _ in 0..<6 {
+      host.layoutSubtreeIfNeeded()
+      host.displayIfNeeded()
+      try await Task.sleep(for: .milliseconds(20))
+    }
+    return try capture(host, name: name, dark: dark)
+  }
+
+  private static func host<V: View>(_ view: V, size: CGSize, dark: Bool) -> (
+    NSHostingView<some View>, NSWindow
+  ) {
     let root =
       view
       .frame(width: size.width, height: size.height, alignment: .top)
@@ -35,11 +62,10 @@ enum SnapshotRenderer {
     window.isReleasedWhenClosed = false
     window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
     window.contentView = host
-    defer { window.close() }
-    for _ in 0..<3 {
-      host.layoutSubtreeIfNeeded()
-      host.displayIfNeeded()
-    }
+    return (host, window)
+  }
+
+  private static func capture(_ host: NSView, name: String, dark: Bool) throws -> Rendered {
     guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else {
       throw SnapshotError.noBitmap
     }

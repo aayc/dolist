@@ -22,6 +22,11 @@ final class CitationTextView: NSTextView, NSTextViewDelegate {
 
   private(set) var hoveredLink: (range: NSRange, url: URL)?
   private(set) var popover: NSPopover?
+  /// A caret after the last character while the text types out (nil: none).
+  var caret: CaretMode? {
+    didSet { if caret != oldValue { updateCaret(restartBlink: true) } }
+  }
+  private(set) var caretLayer: CALayer?
   private var hoverTask: Task<Void, Never>?
   private var hoverArea: NSTrackingArea?
   private var source: (text: AttributedString, style: RichTextStyle)?
@@ -68,6 +73,76 @@ final class CitationTextView: NSTextView, NSTextViewDelegate {
     measuring.storage.setAttributedString(attributed)
     measured = nil
     closePreview()
+    if caret != nil { updateCaret(restartBlink: true) }
+  }
+
+  // MARK: Caret
+
+  override func setFrameSize(_ newSize: NSSize) {
+    super.setFrameSize(newSize)
+    if caret != nil { updateCaret(restartBlink: false) }
+  }
+
+  override func viewDidChangeEffectiveAppearance() {
+    super.viewDidChangeEffectiveAppearance()
+    caretLayer?.backgroundColor = LayerMotion.cgColor(AgentPalette.accent, in: self)
+  }
+
+  /// Places the caret after the last glyph; a move restarts the blink's delay, so it rests solid
+  /// while text keeps arriving.
+  private func updateCaret(restartBlink: Bool) {
+    guard let caret else {
+      caretLayer?.removeFromSuperlayer()
+      caretLayer = nil
+      return
+    }
+    wantsLayer = true
+    guard let host = layer else { return }
+    let bar: CALayer
+    if let caretLayer {
+      bar = caretLayer
+    } else {
+      bar = LayerMotion.stillLayer()
+      bar.cornerRadius = 1
+      bar.zPosition = 1
+      host.addSublayer(bar)
+      caretLayer = bar
+    }
+    bar.backgroundColor = LayerMotion.cgColor(AgentPalette.accent, in: self)
+    bar.frame = caretRect()
+    guard restartBlink else { return }
+    bar.removeAnimation(forKey: LayerMotion.caretBlinkKey)
+    if caret == .blinking {
+      bar.add(LayerMotion.caretBlink(delay: 0.5, on: bar), forKey: LayerMotion.caretBlinkKey)
+    }
+  }
+
+  /// Where the caret goes: just after the last character, as tall as its font's line.
+  func caretRect() -> NSRect {
+    let origin = textContainerOrigin
+    let fallback = source?.style.baseFont ?? .systemFont(ofSize: 13)
+    guard let layoutManager, let textContainer, let storage = textStorage, storage.length > 0 else {
+      return NSRect(
+        x: origin.x, y: origin.y, width: 2, height: ceil(fallback.ascender - fallback.descender))
+    }
+    layoutManager.ensureLayout(for: textContainer)
+    let last = storage.length - 1
+    let font = storage.attribute(.font, at: last, effectiveRange: nil) as? NSFont ?? fallback
+    let height = ceil(font.ascender - font.descender)
+    if (storage.string as NSString).character(at: last) == 0x0A {
+      let extra = layoutManager.extraLineFragmentRect
+      if !extra.isEmpty {
+        return NSRect(x: origin.x + extra.minX, y: origin.y + extra.minY, width: 2, height: height)
+      }
+    }
+    let glyph = layoutManager.glyphIndexForCharacter(at: last)
+    let fragment = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+    let bounds = layoutManager.boundingRect(
+      forGlyphRange: NSRange(location: glyph, length: 1), in: textContainer)
+    let baseline = fragment.minY + layoutManager.location(forGlyphAt: glyph).y
+    return NSRect(
+      x: origin.x + bounds.maxX + 1.5, y: origin.y + baseline - font.ascender, width: 2,
+      height: height)
   }
 
   /// The height the text needs at `width`.

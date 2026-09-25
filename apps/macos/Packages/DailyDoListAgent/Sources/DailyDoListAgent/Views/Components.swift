@@ -2,20 +2,28 @@ import DailyDoListModels
 import DailyDoListUI
 import SwiftUI
 
-/// Colored status pill ("● Working"), same tones as the editor badges.
+/// Colored status pill ("● Working"), same tones as the editor badges. With `pulses`, its dot
+/// pulses gently (still with Reduce Motion).
 public struct StatusChip: View {
   let status: TaskAgentStatus
   let label: String?
+  let pulses: Bool
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-  public init(status: TaskAgentStatus, label: String? = nil) {
+  public init(status: TaskAgentStatus, label: String? = nil, pulses: Bool = false) {
     self.status = status
     self.label = label
+    self.pulses = pulses
   }
 
   public var body: some View {
     let tone = status.tone.color
     HStack(spacing: 4) {
-      Circle().fill(tone).frame(width: 6, height: 6)
+      if pulses {
+        PulseDot(color: status.tone.nsColor, animates: !reduceMotion).frame(width: 6, height: 6)
+      } else {
+        Circle().fill(tone).frame(width: 6, height: 6)
+      }
       Text(label ?? status.displayLabel)
     }
     .font(.caption.weight(.medium))
@@ -148,6 +156,32 @@ struct JSONBlock: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(RoundedRectangle(cornerRadius: 6).fill(AgentTheme.codeBackground))
     .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(AgentTheme.border))
+  }
+}
+
+/// Copies `text` (a message, a code block); a check confirms it for a moment.
+struct CopyButton: View {
+  let text: String
+  let label: String
+  @State private var copies = 0
+  @State private var copied = false
+  @Environment(\.agentClipboard) private var clipboard
+
+  var body: some View {
+    IconButton(
+      copied ? "checkmark" : "doc.on.doc", label: copied ? "Copied" : label, size: .compact
+    ) {
+      clipboard.copy(text)
+      copied = true
+      copies += 1
+    }
+    .contentTransition(.symbolEffect(.replace))
+    .task(id: copies) {
+      guard copies > 0 else { return }
+      try? await Task.sleep(for: .seconds(1.2))
+      guard !Task.isCancelled else { return }
+      copied = false
+    }
   }
 }
 

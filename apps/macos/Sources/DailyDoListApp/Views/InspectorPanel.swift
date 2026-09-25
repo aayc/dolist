@@ -21,7 +21,8 @@ struct InspectorPanel: View {
           onHide: { ui.inspectorPresented = false },
           noteLinks: workspace.agentNoteLinks,
           shortcuts: AgentPanelShortcuts(
-            hidePanel: CommandID.toggleAgentPanel.shortcut, inbox: CommandID.agentInbox.shortcut))
+            hidePanel: CommandID.toggleAgentPanel.shortcut, inbox: CommandID.agentInbox.shortcut,
+            stop: .init(id: CommandID.stopTask.rawValue, keys: CommandID.stopTask.shortcut)))
       } else {
         ContentUnavailableView(
           "Agent unavailable", systemImage: "sparkles",

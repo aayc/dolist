@@ -162,6 +162,9 @@ extension AgentState {
     if case .text(let text) = message, text.role == .user,
       let index = takeOptimisticMessage(matching: text.text, in: threadId)
     {
+      if let local = loadedThreads[threadId]?.messages[index].id {
+        optimisticReplacements[message.id] = local
+      }
       loadedThreads[threadId]?.messages[index] = message
       return .loadedThreads
     }

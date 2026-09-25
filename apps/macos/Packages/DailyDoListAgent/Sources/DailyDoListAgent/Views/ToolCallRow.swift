@@ -84,21 +84,29 @@ struct ToolCallRow: View {
   }
 }
 
-/// Spinner while running; check, cross or shield when finished.
+/// Spinner while running; when it finishes, a check, cross or shield pops in.
 struct ToolStatusIcon: View {
   let status: ToolCallStatus
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
-    Group {
+    ZStack {
       if status == .running {
         ProgressView()
           .controlSize(.small)
           .scaleEffect(0.7)
-          .frame(width: 14, height: 14)
+          .transition(.opacity)
       } else {
-        Image(systemName: status.systemImage).foregroundStyle(status.tone.color)
+        Image(systemName: status.systemImage)
+          .foregroundStyle(status.tone.color)
+          .transition(reduceMotion ? .opacity : .scale(scale: 0.3).combined(with: .opacity))
       }
     }
+    .frame(width: 14, height: 14)
+    .animation(
+      reduceMotion ? .easeOut(duration: 0.12) : .spring(duration: 0.35, bounce: 0.45),
+      value: status
+    )
     .tooltip(status.displayLabel)
   }
 }
