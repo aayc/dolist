@@ -32,6 +32,16 @@ public enum DrawingFonts {
     if let executable = Bundle.main.executableURL {
       roots.append(executable.deletingLastPathComponent())
     }
+    // The binary this code is in (a test bundle loaded by a runner, a plain executable): the
+    // resource bundle sits next to it or a few folders up.
+    var info = Dl_info()
+    if dladdr(#dsohandle, &info) != 0, let path = info.dli_fname {
+      var url = URL(fileURLWithPath: String(cString: path)).deletingLastPathComponent()
+      for _ in 0..<5 {
+        roots.append(url)
+        url.deleteLastPathComponent()
+      }
+    }
     let manager = FileManager.default
     for root in roots {
       let bundle = root.appendingPathComponent(resourceBundleName)

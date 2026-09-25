@@ -23,7 +23,8 @@ let package = Package(
       dependencies: [
         "DailyDoListDrawingModel",
         .product(name: "DailyDoListUI", package: "DailyDoListUI"),
-      ]),
+      ],
+      resources: [.copy("Resources/Fonts")]),
     .testTarget(
       name: "DailyDoListDrawingTests",
       dependencies: [
