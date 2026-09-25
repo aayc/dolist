@@ -54,6 +54,8 @@ public final class DrawingEditor {
   @ObservationIgnored public var onInvalidate: (() -> Void)?
   /// The host should show an inline editor for this text element.
   @ObservationIgnored public var onBeginTextEditing: ((String) -> Void)?
+  /// Inline text editing ended (committed, discarded, or ended by another action).
+  @ObservationIgnored public var onEndTextEditing: (() -> Void)?
 
   @ObservationIgnored let environment: DrawingEnvironment
   @ObservationIgnored var history = DrawingHistory()

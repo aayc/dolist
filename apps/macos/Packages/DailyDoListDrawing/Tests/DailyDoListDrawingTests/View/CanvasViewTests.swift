@@ -163,3 +163,22 @@ struct CanvasViewTests {
     #expect(DrawingCommand.redo.shortcut.caps == ["⇧", "⌘", "Z"])
   }
 }
+
+@MainActor
+@Suite("Canvas text editing")
+struct CanvasTextEditingTests {
+  @Test func undoFromTheToolBarWhileTypingClosesTheInlineEditor() throws {
+    let harness = CanvasHarness()
+    defer { harness.close() }
+    harness.press("r")
+    harness.drag(from: CGPoint(x: 100, y: 100), to: CGPoint(x: 200, y: 160))
+    harness.press("t")
+    harness.click(CGPoint(x: 400, y: 300))
+    let textView = try #require(harness.canvas.textEditor)
+    textView.insertText("Draft", replacementRange: NSRange(location: NSNotFound, length: 0))
+    harness.editor.undo()
+    #expect(harness.canvas.textEditor == nil)
+    #expect(textView.superview == nil)
+    #expect(harness.editor.editingTextId == nil)
+  }
+}

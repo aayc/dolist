@@ -72,6 +72,7 @@ extension DrawingEditor {
   public func endTextEditing() {
     guard let id = editingTextId else { return }
     editingTextId = nil
+    onEndTextEditing?()
     if let element = element(id),
       (element.text?.originalText ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     {

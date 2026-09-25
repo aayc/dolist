@@ -81,6 +81,7 @@ public final class DrawingCanvasView: NSView {
     editor.onInvalidate = { [weak self] in self?.editorDidChange() }
     editor.onChange = { [weak self] scene in self?.onChange?(scene) }
     editor.onBeginTextEditing = { [weak self] id in self?.beginInlineTextEditing(id) }
+    editor.onEndTextEditing = { [weak self] in self?.endInlineTextEditing(notify: false) }
     zoomToFit()
     updateToolbar()
   }
@@ -95,10 +96,11 @@ public final class DrawingCanvasView: NSView {
   /// The scene as it is now.
   public var scene: ExcalidrawScene { editor.scene }
 
-  /// Replaces the scene (the file changed on disk).
-  public func setScene(_ scene: ExcalidrawScene) {
+  /// Replaces the scene (the file changed on disk). Undo history survives only with
+  /// `keepHistory` (when the new scene extends what the canvas reported).
+  public func setScene(_ scene: ExcalidrawScene, keepHistory: Bool = false) {
     endInlineTextEditing()
-    editor.replaceScene(scene)
+    editor.replaceScene(scene, keepHistory: keepHistory)
     if mode == .display { zoomToFit() }
     needsDisplay = true
   }
