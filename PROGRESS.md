@@ -128,7 +128,7 @@ Spec: [docs/specs/obsidian-migration.md](docs/specs/obsidian-migration.md).
 
 | Stream | Branch | State |
 | --- | --- | --- |
-| M the editor merge race (data safety) | `fix/editor-merge-race` (from `main`) | in progress |
+| M the editor merge race (data safety) | `fix/editor-merge-race` | fixed (`4d3ef06`): root cause in the Mac `NotesStore.save()` (a clean save kept a stale "unsaved" copy, shown again later and saved with a valid version); also conflicts no longer restore deleted lines (web and Mac, `mergeText` and its Swift port), and remounted web editors keep unsaved typing; guarantee in invariant 7. CI and macOS dispatched on the branch; merge to `main` when green. Now investigating the fuzz seed below and making model-check failures fail the property instead of becoming unhandled rejections. Left as is: on the Mac a remote change is an undoable step (⌘Z right after an external delete restores the lines) |
 | I0 Import from Obsidian: engine, carry-over, vault switch, update | `feat/obsidian-import` (from `feat/always-on` at `394a6dd`) | in progress |
 | I1 Import from Obsidian: web and Mac flows | from I0 | waits for I0's routes |
 | B0 binary files, attachment sync, file serving | from `feat/always-on` or `main` | queued (after the always-on work lands; S2 changed the same sync code) |
@@ -177,9 +177,10 @@ state and client ids for idempotent mutations.
   `OrchestratorChatView`, as on the web.
 - **Flaky guard:** core's `trackTasks` performance guard fails under machine load and passes
   alone; make it robust to load without loosening it.
-- **Web fuzz failure (pre-existing on `main`):** `apps/web/src/state/notes-controller.fuzz.test.ts`
-  fails with `FC_SEED=213577334` (found by X0). Possibly related to the editor merge race; check
-  when the merge-race fix lands.
+- **Web fuzz failure (pre-existing on `main`, being investigated on `fix/editor-merge-race`):**
+  `apps/web/src/state/notes-controller.fuzz.test.ts` with `FC_SEED=213577334`: a merge drops shown
+  text (`"- [\n- a3 %%agent%%"`); the assertion throws inside an async handler, so it surfaces as
+  an unhandled rejection (tests "pass", Vitest exits 1, CI can fail at random).
 - **Flaky under load:** storage's file-watcher tests (`local-fs.watch.test.ts`,
   `internal/directory-tree-watcher.test.ts`) fail now and then when the machine is saturated and
   pass alone; make them robust without loosening them. Same for the agent's subprocess tests
