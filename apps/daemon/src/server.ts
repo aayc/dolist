@@ -26,6 +26,7 @@ import { errorMessage } from "./errors";
 import { displayPath } from "./home-paths";
 import { LeasedAgentRuntime } from "./leased-runtime";
 import { PlacementLease, RELAYED_PROBLEM } from "./placement-lease";
+import type { LinkTimings } from "./relay/link";
 import { AgentRelay } from "./relay/relay";
 import {
   type MachineCredentialSource,
@@ -71,6 +72,8 @@ export interface StartDaemonOptions {
   placement?: PlacementSource;
   /** This device's credential for the always-on machine. Default: none. */
   machine?: MachineCredentialSource;
+  /** The relay's link to the machine (tests shorten its backoff). */
+  relayLinkTimings?: Partial<LinkTimings>;
 }
 
 export interface RunningDaemon {
@@ -155,6 +158,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       placement,
       machine: options.machine ?? new SettableMachineCredential(),
       logger: logger.child({ component: "relay" }),
+      ...(options.relayLinkTimings ? { linkTimings: options.relayLinkTimings } : {}),
     });
     const runtime: AgentRuntime = relay;
     resources.runtime = runtime;

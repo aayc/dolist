@@ -45,8 +45,9 @@ type Listener = (payload: never) => void;
  * exists only while this device holds the agent lease. `activate()` creates and starts it from
  * the vault's current state (so it never overwrites what another device's agent wrote);
  * `deactivate()` stops it, which flushes its state for sync. In between, a NullAgentRuntime
- * answers: notes and routine files keep working, agent commands (running a routine included) fail
- * with the reason (`problem`), and nothing is written to the agent's sidecar files. Routines are
+ * answers: notes and routine files keep working, the agent's threads, approvals and records show
+ * read-only from the synced sidecar, agent commands (running a routine included) fail with the
+ * reason (`problem`), and nothing is written to the agent's sidecar files. Routines are
  * scheduled only by the real runtime, so only while this device holds the lease. Listeners follow
  * the current runtime across swaps, and every swap emits `status` and `routines.changed` (a
  * change of reason emits `status`).
@@ -97,6 +98,7 @@ export class LeasedAgentRuntime implements AgentRuntime {
       }
       this.#active = stack;
       this.#rebind();
+      await this.#idle.followSidecar(false);
       if (this.#started) {
         await stack.runtime.start().catch((error: unknown) => {
           this.#options.logger.error("The agent runtime failed to start", {
@@ -118,6 +120,7 @@ export class LeasedAgentRuntime implements AgentRuntime {
       if (stack) {
         this.#rebind();
         await this.#dispose(stack);
+        await this.#idle.followSidecar(true);
       }
       this.#emitStatus();
       if (stack) this.#emitRoutines();
