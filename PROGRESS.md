@@ -4,7 +4,7 @@ The running handoff log: what shipped, what's in flight, what's next, and the de
 them, so work can continue on any machine at any point. Read it before starting; keep it current
 (the rules are in `AGENTS.md`, "Handoff log").
 
-**Last updated:** 2026-09-25 · `main` at `a42bcf3` (routines) · in-flight branches pushed to
+**Last updated:** 2026-09-25 · `main` at `dffdfdd` (the agent journal) · in-flight branches pushed to
 `origin`.
 
 ## Picking this up on another machine
@@ -22,6 +22,12 @@ them, so work can continue on any machine at any point. Read it before starting;
    `gh workflow run ci.yml --ref <branch>` (also `macos.yml`, `security.yml`).
 
 ## Shipped on `main` (newest first)
+
+- `dffdfdd` The agent journal, phase 1: threads on an append-only journal
+  (`.daily-do-list/state/journal/threads/`, union-merged by sync), snapshots byte-identical to
+  before, write-ahead around tool calls (an unrecorded call is blocked; an interrupted side effect
+  is never re-run), resume after a restart (Pi natively, Cursor from a text transcript). CI and
+  Security green on the branch.
 
 - `0a041a6` The orchestrator can search the user's notes (`search_notes`, as subagents could), not
   only read the ones it's told the name of.
@@ -57,7 +63,7 @@ Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md). Spec, with the exact wire contra
 | Stream | Branch | State |
 | --- | --- | --- |
 | S0 wire contract | `feat/always-on` | done at `45a7cd1` (incl. `heldHere` and the fencing types); `main` (routines) merged in at `a0a924f` |
-| S6 VM setup kit (Linux bundle, systemd, Azure guide, CI smoke) | `feat/always-on-kit` | Azure guide done (`9494baa`: public IP with all inbound closed, `--nsg ""`, `Standard_D4ps_v6` on the Gen2 arm64 image with the NVMe controller; OpenSSH off at first boot); `feat/always-on` merged in; now adding the pairing smoke step, dropping the config override, an arm64 CI job, and rerunning the systemd test in OrbStack |
+| S6 VM setup kit (Linux bundle, systemd, Azure guide, CI smoke) | `feat/always-on-kit` | done (`bd333f7`), merged into `feat/always-on` at `24d750a`: pairing smoke step, no config override, `setup.sh` names the machine in the vault so `always_on_host` applies, x64 and arm64 CI jobs; 14/14 checks under real systemd in OrbStack |
 | S1 remote access and pairing | `feat/always-on-remote` | done (`48d4ec7`), merged into `feat/always-on` at `0501be1` |
 | S2 placement, lease priorities, fencing, machine link | `feat/always-on-placement` | done (`bb18e4b`), merged into `feat/always-on` at `394a6dd` (with S1: daemon 1061, sync 63, storage 303, contract 1123 tests green) |
 | S3 relay | `feat/always-on-relay` | built (`6f5aa68`); `feat/always-on` merged into it at `569d3a6` (relay wired to S2's supervisor and machine link, `placement-lease.ts` dropped); S3 is fixing 6 daemon tests whose assumptions changed with S2's lease gating, then it merges into `feat/always-on` |
@@ -101,10 +107,10 @@ Spec: [docs/specs/drawings.md](docs/specs/drawings.md).
 
 | Stream | Branch | State |
 | --- | --- | --- |
-| X0 format and description (core, shared fixtures) | `feat/drawings` (from `main`) | in progress |
+| X0 format and description (core, shared fixtures) | `feat/drawings` | done (`048dbed`): plugin-exact files (verified against plugin 2.27.3 source), embeds, `describeDrawing`, 11 shared fixtures, the watcher ignores drawings |
 | X2 Mac drawing engine (`DailyDoListDrawing`) | `feat/drawings-mac-engine` (from `main`) | in progress |
-| X1 web editor (floats, move/resize, in-place Excalidraw) | from `feat/drawings` | waits for X0 |
-| X4 the agent sees drawings (descriptions, `read_drawing`, renderer) | from `feat/drawings` | waits for X0 |
+| X1 web editor (generic embed layer, floats, move/resize, in-place Excalidraw) | `feat/drawings-web` (from `048dbed`) | in progress |
+| X4 the agent sees drawings (descriptions, `read_drawing`, renderer) | `feat/drawings-agent` (from `048dbed`) | in progress |
 | X3 Mac editor integration (exclusion paths, in-place canvas) | from X2 | waits for X2's canvas |
 
 ### Moving from Obsidian
@@ -119,15 +125,12 @@ Spec: [docs/specs/obsidian-migration.md](docs/specs/obsidian-migration.md).
 | B0 binary files, attachment sync, file serving | from `feat/always-on` or `main` | queued (after the always-on work lands; S2 changed the same sync code) |
 | P images, tables, callouts, backlinks (web and Mac) | after the drawings' embed layer | queued (images share the drawings' embed layer) |
 
-### Agent journal — phase 1 (threads)
+### Agent journal
 
-Spec: [docs/specs/agent-journal.md](docs/specs/agent-journal.md). Branch `feat/agent-journal`
-(from `main`): **built** (`5bdb2f1`, 9 commits; journal at
-`.daily-do-list/state/journal/threads/<id>.jsonl`, snapshots byte-identical to the old store,
-the gate's decisions unchanged, a call whose "about to run" can't be written is blocked; bench:
-flushed append p99 10.4 ms, 5k-event union merge 22.8 ms). CI (CI, Security) dispatched on the
-branch before merging to `main`; after the always-on merge, pass S2's lease epoch as
-`AgentRuntimeOptions.leaseEpoch`. Phase 1: the journal is the source of truth for threads
+Phase 1 shipped (`dffdfdd`). When the always-on work merges to `main`: pass S2's lease epoch as
+`AgentRuntimeOptions.leaseEpoch`. Phase 2 (approvals and routines state on the journal,
+client ids for idempotent relay mutations, compaction, resuming the orchestrator's turn) after
+that. Spec: [docs/specs/agent-journal.md](docs/specs/agent-journal.md). Phase 1: the journal is the source of truth for threads
 (append-only JSONL, union merge in the sync engine), today's thread JSON is still written as a
 derived snapshot (so the relay's read-only view, older daemons and the clients keep working),
 write-ahead around tool calls with "interrupted" instead of re-running, resume after a restart,
@@ -157,6 +160,9 @@ state and client ids for idempotent mutations.
   `OrchestratorChatView`, as on the web.
 - **Flaky guard:** core's `trackTasks` performance guard fails under machine load and passes
   alone; make it robust to load without loosening it.
+- **Web fuzz failure (pre-existing on `main`):** `apps/web/src/state/notes-controller.fuzz.test.ts`
+  fails with `FC_SEED=213577334` (found by X0). Possibly related to the editor merge race; check
+  when the merge-race fix lands.
 - **Flaky under load:** storage's file-watcher tests (`local-fs.watch.test.ts`,
   `internal/directory-tree-watcher.test.ts`) fail now and then when the machine is saturated and
   pass alone; make them robust without loosening them. Same for the agent's subprocess tests
