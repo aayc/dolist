@@ -46,7 +46,7 @@ future iPhone app too.
 | `Packages/DailyDoListDomain` (iOS) | Pure domain logic ported from `@ddl/core`: dates and daily notes, task parsing and tracking, line anchors, agent-line markers, three-way merges, wikilinks, paths, fuzzy matching. |
 | `Packages/DailyDoListEditor` | The TextKit markdown editor: live preview, clickable checkboxes, agent badges, and vim mode (it hosts `DailyDoListVim`). |
 | `Packages/DailyDoListVim` (iOS) | Vim mode: a port of the web editor's vim.js and its CodeMirror 6 adapter, checked against the web app's vim vectors; hosts implement `VimEditor` ([README](Packages/DailyDoListVim/README.md)). |
-| `Packages/DailyDoListAgent` | Agent state and UI: inbox, threads, approval cards, artifacts, notifications, menu bar, Dock badge. |
+| `Packages/DailyDoListAgent` | Agent state and UI: inbox, threads (the live chat: [The agent chat](#the-agent-chat)), approval cards, artifacts, notifications, menu bar, Dock badge. |
 | `Packages/DailyDoListUI` | What the shell, the agent UI and the editor share: the app's one tooltip (`TooltipCenter`, `.tooltip(…)`), keycaps (`KeyShortcut`, `Keycaps`), `.pointingHandCursor()`, `IconButton`, and the chrome and accent button styles. `DailyDoListUITestSupport` finds tooltips in tests and draws them into snapshots. |
 | `Packages/DailyDoListDaemon` | `DaemonSupervisor`: finds Node and the daemon, attaches or launches, health-checks, restarts, stops. |
 | `Packages/DailyDoListComputer` | `ddl-computer`, the helper the daemon spawns so agents can operate other apps through their accessibility tree ([The computer use helper](#the-computer-use-helper-ddl-computer)). Not linked into the app. |
@@ -118,6 +118,47 @@ future iPhone app too.
   merged line by line (`TextMerge`); the editor only receives their lines, your caret and undo
   stay, and the result is saved on top of their version. Changes to the same lines keep yours and
   save theirs as a conflict copy, as before.
+
+## The agent chat
+
+A thread's Chat tab shows what the agent is doing as it does it. Everything comes from what the
+daemon already sends (messages, tool calls and their status, approvals, the thread's status): no
+extra protocol. The web app's chat follows the same rules and wording.
+
+- **Typing:** agent text that arrives while the chat is open types out, whether it streams or
+  arrives whole (comments, summaries). Each frame reveals `max(1, round(speed × dt))`
+  characters, with `speed = clamp(backlog / 1 s, 45, 3000)` per second (`RevealPacing`), counted in
+  grapheme clusters, so text never trails what arrived by much more than a second. Messages that
+  were there when the chat opened, and your own, show at once. Markdown renders as it types: the
+  finished parts of a message are cached chunks (`MarkdownChunks`, which parse the same apart as
+  together), only the chunk being typed re-parses, and half-typed markup at the end (`**`, a
+  link's URL, a list marker) never flashes (`MarkdownTail`). A soft caret follows the last
+  character while text types or streams.
+- **What's happening now:** while the agent is queued or running, the last row says what it's
+  doing: "Waiting for your approval" (click it to scroll to the card), the running tool call in
+  words ("Opening Safari…", "Searching the web for “espresso grinders”…", from `ChatActivity`),
+  or "Thinking…", with the step's time once it passes 3 s. Text typing out needs no row: the caret
+  says it. The header's status pulses while the agent works; a new approval card glows twice.
+- **Tool calls** show a spinner, then pop to ✓, ✕ or a shield. Calls that succeeded in a row
+  collapse into "Used 6 tools"; a running call and failures stay visible.
+- **Scrolling:** the chat follows new text while you're at the bottom and never moves while you
+  read further up; a "Jump to latest" pill counts what arrived and scrolls down.
+- **The chat bar** grows from one line to eight, then scrolls. Return sends, Shift-Return adds a
+  line. A sent message shows at once (a quiet "Sending…"), the input clears and keeps the focus,
+  and a message that didn't go out stays with Retry and Remove. While the agent works, Stop sits
+  beside Send (**Stop Task**, ⌘., also in the Agent menu). The placeholder says what a reply does:
+  "Reply to the agent…", "Approve above, or reply to change course…", "Ask a follow-up…".
+- **Messages** fade and rise in; under the pointer they show their time and a copy button, and
+  code blocks get a copy button.
+- **Cost:** a frame only re-renders the text of the message that's typing; the looping animations
+  (caret, dots, pulses) run on Core Animation, and the display link runs only while text is
+  behind. An idle chat does no work. With Reduce Motion, text appears as it arrives and the
+  indicators hold still.
+
+Tests: `RevealTests` (the pacing table, grapheme cuts, the reveal with a manual frame clock and
+Reduce Motion), `ChatActivityTests` (labels, the live row, rows of tool calls, scrolling),
+`MarkdownChunkTests` (every prefix renders the same in chunks), `ComposerTests`, `ChatViewTests`,
+`MotionTests`, and the `chat-*` and `composer-states` snapshots.
 
 ## Vim mode
 

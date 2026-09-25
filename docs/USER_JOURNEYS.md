@@ -123,3 +123,21 @@ polling, polling that stops, Next, the relaunch's order and the setup resuming a
 banner's rules and its dismissal (`ComputerAccessBannerTests`), the command
 (`ComputerAccessAppTests`), and the snapshots `settings-computer-use-*`,
 `computer-access-guide-*` and `computer-access-banner-*`.
+
+## J10. Watching the agent work
+
+1. You open a task's thread while its agent works. What was already there shows at once; the last
+   row says what's happening now: *Opening Safari…*, *Searching the web for “espresso grinders”…*,
+   *Thinking… · 12s*, or *Waiting for your approval*, which scrolls to the card when clicked.
+2. The agent's reply types out behind a soft caret, even when it arrives in one piece, and catches
+   up within about a second of what arrived. Bold, links and lists render as they type.
+3. Finished tool calls fold into *Used 6 tools*; a failure stays visible.
+4. You scroll up to reread something: the chat stays put and a *Jump to latest* pill counts the
+   new messages.
+5. You reply. It shows at once, the input clears and keeps the focus. If it can't be sent, it stays
+   with *Retry*. While the agent works, *Stop* sits beside *Send*.
+
+With Reduce Motion, text appears as it arrives and the indicators hold still.
+
+Tests (Mac): `RevealTests`, `ChatActivityTests`, `MarkdownChunkTests`, `ChatViewTests`,
+`ComposerTests`, `MotionTests`, and the `chat-*` and `composer-states` snapshots.
