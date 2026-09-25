@@ -403,3 +403,7 @@ a.button {
 .remote-actions .settings-success {
   margin: 0;
 }
+
+.machine-actions {
+  margin-top: 14px;
+}

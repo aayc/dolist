@@ -1,9 +1,10 @@
 import { AgentLocationSection } from "./AgentLocationSection";
+import { MachineSection } from "./MachineSection";
 import type { GoToSection } from "./parts";
 import "../../../styles/remote.css";
 
 /** The Settings sections about where the agent runs, other devices and remote access. */
-export const REMOTE_SECTIONS = ["location"] as const;
+export const REMOTE_SECTIONS = ["location", "machine"] as const;
 export type RemoteSectionKey = (typeof REMOTE_SECTIONS)[number];
 
 /** Settings for this device's place among the vault's devices (a chunk of its own). */
@@ -11,5 +12,7 @@ export function RemoteSection({ section, go }: { section: RemoteSectionKey; go: 
   switch (section) {
     case "location":
       return <AgentLocationSection go={go} />;
+    case "machine":
+      return <MachineSection go={go} />;
   }
 }

@@ -33,6 +33,7 @@ const SECTIONS: ReadonlyArray<{ key: SettingsSection; label: string }> = [
   { key: "daily", label: "Daily notes" },
   { key: "agent", label: "Agent" },
   { key: "location", label: "Agent location" },
+  { key: "machine", label: "Always-on machine" },
   { key: "computer", label: "Computer use" },
   { key: "connectors", label: "Connectors" },
   { key: "about", label: "About" },
@@ -42,7 +43,10 @@ const SECTIONS: ReadonlyArray<{ key: SettingsSection; label: string }> = [
 const RemoteSection = preloadable(() =>
   import("../remote/settings/RemoteSection").then((m) => m.RemoteSection),
 );
-const REMOTE_SECTIONS: ReadonlySet<SettingsSection> = new Set<RemoteSectionKey>(["location"]);
+const REMOTE_SECTIONS: ReadonlySet<SettingsSection> = new Set<RemoteSectionKey>([
+  "location",
+  "machine",
+]);
 
 function isRemoteSection(section: SettingsSection): section is RemoteSectionKey {
   return REMOTE_SECTIONS.has(section);
