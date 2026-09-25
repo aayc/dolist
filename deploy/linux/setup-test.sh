@@ -39,6 +39,7 @@ if [ $# -ne 1 ] || [ ! -f "$1" ]; then fail "usage: $0 <ddl-linux-<arch>.tar.gz>
 BUNDLE_FILE="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 
 WORK="$(mktemp -d)"
+STARTED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
 on_exit() {
   status=$?
   if [ "$status" -ne 0 ]; then
@@ -169,6 +170,11 @@ settings_fingerprint | diff <(head -n 4 "$WORK/before") - ||
   fail "the upgrade changed the config or a token"
 expect_active
 pass "upgrade through --bundle: new release current and running, previous kept, settings unchanged"
+if journalctl -u ddl-daemon --since "$STARTED_AT" --no-pager -o cat |
+  grep -q "Could not release the agent lease"; then
+  fail "a restart stopped the sync service before the daemon could give the agent lease back"
+fi
+pass "restarts: the daemon gave the agent lease back every time"
 
 # 3. The sandbox is in effect, seen from inside each service's mount namespace as its user ---------
 # Containers can switch it off for every service (OrbStack's LXC machines do, with a drop-in).
