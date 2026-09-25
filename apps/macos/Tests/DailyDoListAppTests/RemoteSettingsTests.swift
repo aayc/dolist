@@ -54,9 +54,7 @@ struct RemoteSettingsTests {
 
     await client.simulateMachine(reachable: false)
     #expect(await store.pairMachine(url: Self.machineURL, code: "ABCD2345", name: nil) == false)
-    #expect(
-      store.error(.pairMachine)
-        == "vm-name didn't answer. Is it running, and on the same private network?")
+    #expect(store.error(.pairMachine) == "Couldn't reach vm-name: connect ECONNREFUSED")
 
     await client.simulateMachine(reachable: true, rejectsCodes: true)
     #expect(await store.pairMachine(url: Self.machineURL, code: "ABCD2345", name: nil) == false)
@@ -77,7 +75,8 @@ struct RemoteSettingsTests {
     await store.load()
     await client.simulateMachine(reachable: false)
     await store.checkMachine()
-    #expect(store.machine?.reachable == false && store.machine?.error == "vm-name didn't answer.")
+    #expect(store.machine?.reachable == false)
+    #expect(store.machine?.error == "Couldn't reach vm-name: connect ECONNREFUSED")
     await store.forgetMachine()
     #expect(store.machine?.paired == false && store.machine?.machine?.name == "vm-name")
   }
@@ -95,7 +94,7 @@ struct RemoteSettingsTests {
 
     #expect(
       await store.setUpSync(url: "https://sync.example.com", vault: "v1", token: nil) == false)
-    #expect(store.error(.sync) == "token: this device has no vault token yet")
+    #expect(store.error(.sync) == "No vault token is saved yet: include `token`")
     #expect(await store.setUpSync(url: "https://sync.example.com", vault: "v1", token: "t0k3n"))
     #expect(store.device?.sync.hasToken == true && store.error(.sync) == nil)
     #expect(store.syncStatus?.state == .idle && store.syncStatus?.remoteHost == "sync.example.com")
@@ -110,10 +109,13 @@ struct RemoteSettingsTests {
     await store.load()
     #expect(await store.turnOffSync() == false)
     #expect(
-      store.error(.turnOffSync) == "Sync is set by DDL_SYNC_URL, DDL_SYNC_VAULT and DDL_SYNC_TOKEN."
+      store.error(.turnOffSync)
+        == "DDL_SYNC_URL, DDL_SYNC_VAULT or DDL_SYNC_TOKEN set the sync setup of this device; change it there"
     )
     #expect(await store.setRemoteHosts([]) == false)
-    #expect(store.error(.remoteHosts) == "The remote hosts are set by DDL_REMOTE_HOSTS.")
+    #expect(
+      store.error(.remoteHosts)
+        == "DDL_REMOTE_HOSTS sets the names this daemon answers to; change it there")
   }
 
   // MARK: - Devices
@@ -150,7 +152,7 @@ struct RemoteSettingsTests {
     #expect(await store.rename("Studio Mac"))
     #expect(store.device?.device.name == "Studio Mac")
     #expect(await store.rename(String(repeating: "x", count: 65)) == false)
-    #expect(store.error(.rename) == "name: must be 1-64 characters without control characters")
+    #expect(store.error(.rename) == "name: Too big: expected string to have <=64 characters")
   }
 
   // MARK: - Remote access
@@ -193,10 +195,17 @@ struct RemoteSettingsTests {
     }
     #expect(message(409, .lockedByEnv) == "An environment variable sets this. Change it there.")
     #expect(message(409, .lockedByEnv, "Set by DDL_SYNC_URL.") == "Set by DDL_SYNC_URL.")
+    func limited(_ retryAfter: Int?, _ action: RemoteSettingsStore.Action) -> String {
+      RemoteSettingsMessages.message(
+        for: DaemonClientError.rateLimited(
+          retryAfter: retryAfter, body: ApiErrorBody(error: .rateLimited)),
+        action: action)
+    }
     #expect(
-      message(429, .rateLimited, nil, .pairingCode)
+      limited(nil, .pairingCode)
         == "Too many pairing codes are waiting. Use one, or wait a few minutes for them to expire.")
-    #expect(message(429, .rateLimited) == "Too many attempts. Wait a minute, then try again.")
+    #expect(limited(nil, .pairMachine) == "Too many attempts. Wait a minute, then try again.")
+    #expect(limited(42, .pairMachine) == "Too many attempts. Try again in 42 seconds.")
     #expect(
       message(502, .machineUnreachable)
         == "The always-on machine didn't answer. Is it running, and on the same private network?")
@@ -205,6 +214,18 @@ struct RemoteSettingsTests {
     #expect(
       message(400, .invalidRequest, "✖ must use https (plain http only to loopback)\n  → at url")
         == "url: must use https (plain http only to loopback)")
+    // Several problems at once, as the daemon reports them (checked against its real bodies in
+    // the integration tests).
+    #expect(
+      message(
+        400, .invalidRequest,
+        "✖ Too small: expected string to have >=1 characters\n  → at name\n✖ must not repeat a host\n  → at remoteHosts"
+      )
+        == "name: Too small: expected string to have >=1 characters; remoteHosts: must not repeat a host"
+    )
+    #expect(
+      message(400, .invalidRequest, "token must be one line without spaces")
+        == "token must be one line without spaces")
     #expect(message(400, .invalidRequest) == "The daemon didn't accept that.")
     #expect(message(503, .agentUnavailable, "Can't reach vm-name.") == "Can't reach vm-name.")
     #expect(

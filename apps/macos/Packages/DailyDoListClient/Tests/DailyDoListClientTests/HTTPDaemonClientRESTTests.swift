@@ -419,11 +419,26 @@ struct HTTPDaemonClientRESTTests {
     let stub = Stub { _ in .json(429, #"{"error":"rate_limited","message":"Try again soon."}"#) }
     let client = stub.client()
     await #expect(
-      throws: DaemonClientError.http(
-        status: 429, body: ApiErrorBody(error: .rateLimited, message: "Try again soon."))
+      throws: DaemonClientError.rateLimited(
+        retryAfter: nil, body: ApiErrorBody(error: .rateLimited, message: "Try again soon."))
     ) {
       try await client.createPairingCode(PairingCodeRequest())
     }
+    let limited = #"{"error":"rate_limited","message":"Too many pairing attempts"}"#
+    stub.setHandler { _ in
+      .respond(
+        status: 429, headers: ["Content-Type": "application/json", "Retry-After": "42"],
+        body: Data(limited.utf8))
+    }
+    await #expect(
+      throws: DaemonClientError.rateLimited(
+        retryAfter: 42,
+        body: ApiErrorBody(error: .rateLimited, message: "Too many pairing attempts"))
+    ) {
+      try await client.pair(PairRequest(code: "ABCD2345", name: "Phone", kind: .app))
+    }
+    let error = DaemonClientError.rateLimited(retryAfter: 42, body: nil)
+    #expect(error.httpStatus == 429 && error.apiErrorCode == .rateLimited)
     stub.setHandler { _ in
       .json(502, #"{"error":"machine_unreachable","message":"No answer from vm-name."}"#)
     }

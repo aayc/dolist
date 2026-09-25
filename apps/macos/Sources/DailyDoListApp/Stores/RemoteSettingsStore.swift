@@ -191,16 +191,21 @@ enum RemoteSettingsMessages {
       return "The daemon rejected this app's token."
     case .unreachable:
       return "Can't reach the daemon."
+    case .rateLimited(let retryAfter, _):
+      if action == .pairingCode {
+        return
+          "Too many pairing codes are waiting. Use one, or wait a few minutes for them to expire."
+      }
+      guard let retryAfter else { return "Too many attempts. Wait a minute, then try again." }
+      return retryAfter == 1
+        ? "Too many attempts. Try again in a second."
+        : "Too many attempts. Try again in \(retryAfter) seconds."
     default:
       break
     }
     switch error.apiErrorCode {
     case .lockedByEnv?:
       return said ?? "An environment variable sets this. Change it there."
-    case .rateLimited?:
-      return action == .pairingCode
-        ? "Too many pairing codes are waiting. Use one, or wait a few minutes for them to expire."
-        : "Too many attempts. Wait a minute, then try again."
     case .machineUnreachable?:
       return said
         ?? "The always-on machine didn't answer. Is it running, and on the same private network?"
@@ -214,18 +219,11 @@ enum RemoteSettingsMessages {
     }
   }
 
-  /// `✖ must use https…\n  → at url` → `url: must use https…`.
+  /// The daemon's validation report (`✖ must use https…\n  → at url`, one pair per problem) as
+  /// `url: must use https…`, problems separated by semicolons.
   static func cleanValidation(_ message: String) -> String {
-    var lines: [String] = []
-    for raw in message.split(separator: "\n") {
-      let line = raw.trimmingCharacters(in: .whitespaces)
-      if line.hasPrefix("→ at ") {
-        if let last = lines.popLast() { lines.append("\(line.dropFirst(5)): \(last)") }
-      } else {
-        lines.append(line.hasPrefix("✖ ") ? String(line.dropFirst(2)) : line)
-      }
-    }
-    return lines.joined(separator: " ")
+    ApiErrorBody(error: .invalidRequest, message: message).problems.map(\.description)
+      .joined(separator: "; ")
   }
 }
 
@@ -233,7 +231,8 @@ extension DaemonClientError {
   /// The daemon's own message, when it sent one.
   var daemonMessage: String? {
     switch self {
-    case .http(_, let body): body?.message.flatMap { $0.isEmpty ? nil : $0 }
+    case .http(_, let body), .rateLimited(_, let body):
+      body?.message.flatMap { $0.isEmpty ? nil : $0 }
     case .pairingRejected(let message): message
     default: nil
     }

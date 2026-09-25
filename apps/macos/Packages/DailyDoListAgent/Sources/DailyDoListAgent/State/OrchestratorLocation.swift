@@ -70,28 +70,29 @@ public struct OrchestratorLocation: Equatable, Sendable {
       setUp = .alwaysOnMachine
       heldTooltip = TooltipContent(
         "No always-on machine is set up",
-        detail: Self.heldDetail(
-          "The orchestrator runs on this device until one is.", stored: stored))
+        detail: Self.heldDetail("Set one up to run the orchestrator there.", stored: stored))
     case .noSync:
       setUp = .sync
       heldTooltip = TooltipContent(
         "This device doesn't sync",
         detail: Self.heldDetail(
-          "The always-on machine works from the synced vault, so the orchestrator runs here until sync is on.",
+          "The always-on machine works from the synced vault: set up sync to run the orchestrator there.",
           stored: stored))
     default:
       break
     }
 
+    // With sync on and no machine yet, another device asking with the same priority can hold the
+    // agent while this one is "held here": say who runs it before what this one waits for.
     let other = status.runsOn.flatMap { $0.thisDevice || $0.alwaysOnMachine ? nil : $0.name }
     if let note = status.note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
       line = Line(note, tone: .info, inProgress: true)
+    } else if let other {
+      line = Line("\(other) runs the agent now", tone: .faint)
     } else if heldHere == .noMachine {
       line = Line("Runs here until an always-on machine is set up", tone: .faint)
     } else if heldHere == .noSync {
       line = Line("Runs here until this device syncs", tone: .faint)
-    } else if let other {
-      line = Line("\(other) runs the agent now", tone: .faint)
     } else if isHost {
       if let runsOn = status.runsOn, !runsOn.thisDevice {
         line = Line("\(runsOn.name) runs the agent now", tone: .faint)
@@ -114,7 +115,7 @@ public struct OrchestratorLocation: Equatable, Sendable {
 
   private static func heldDetail(_ reason: String, stored: AgentPlacement) -> String {
     stored == .alwaysOnMachine
-      ? reason + " It moves to the always-on machine, as you chose, once that's done." : reason
+      ? reason + " It moves there, as you chose, once that's done." : reason
   }
 
   /// The segment's title.
