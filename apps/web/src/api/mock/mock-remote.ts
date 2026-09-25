@@ -345,8 +345,8 @@ export class MockRemote {
           ready: false,
           problem:
             harness === "cursor"
-              ? "The Cursor CLI isn't signed in"
-              : "The Pi harness couldn't start: OPENROUTER_API_KEY is missing",
+              ? "The Cursor CLI is not signed in. Run `agent login` in a terminal, then restart the daemon — or switch the agent harness back to Pi in Settings."
+              : "OPENROUTER_API_KEY is not set on this machine.",
         },
         modelCredential: false,
         browser: false,

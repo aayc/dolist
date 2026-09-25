@@ -15,6 +15,15 @@ export interface ReadinessRow {
 
 const HARNESS_NAMES = { pi: "Pi", cursor: "Cursor CLI" } as const;
 
+function harnessHint(readiness: AgentReadiness, harness: "pi" | "cursor", on: string): string {
+  const { problem } = readiness.harness;
+  if (problem) return problem;
+  if (harness === "cursor") return `Install the Cursor CLI ${on} and sign in with \`agent login\`.`;
+  return readiness.modelCredential
+    ? `The daemon's log ${on} says why Pi can't start.`
+    : "Pi needs a model credential (below).";
+}
+
 /**
  * What a daemon has for running the agent, row by row, with fix-it hints. `here`: this device
  * (hints can link to its Settings); `machine`: the always-on machine (hints say where to fix it).
@@ -32,24 +41,17 @@ export function readinessRows(
       key: "harness",
       label: "Agent",
       state: readiness.harness.ready ? "ok" : "warning",
-      value: readiness.harness.ready
-        ? `${name} is ready`
-        : (readiness.harness.problem ?? `${name} can't start`),
-      ...(readiness.harness.ready
-        ? {}
-        : {
-            hint:
-              harness === "cursor"
-                ? `Install the Cursor CLI ${on} and sign in with \`agent login\`.`
-                : `The daemon's log ${on} says why Pi didn't start.`,
-          }),
+      value: readiness.harness.ready ? `${name} is ready` : `${name} isn't ready`,
+      // The daemon's problem says what's wrong and, for the Cursor CLI, what to do.
+      ...(readiness.harness.ready ? {} : { hint: harnessHint(readiness, harness, on) }),
     },
     {
       key: "credential",
       label: "Model credential",
       state: readiness.modelCredential ? "ok" : "warning",
       value: readiness.modelCredential ? "Present" : "Missing",
-      ...(readiness.modelCredential
+      // The Cursor CLI's credential is its sign-in, which the Agent row already explains.
+      ...(readiness.modelCredential || (harness === "cursor" && !readiness.harness.ready)
         ? {}
         : {
             hint:

@@ -103,8 +103,10 @@ describe("readiness rows", () => {
   });
 
   it("say how to fix each problem, here and on the machine", () => {
+    const signedOut =
+      "The Cursor CLI is not signed in. Run `agent login` in a terminal, then restart the daemon — or switch the agent harness back to Pi in Settings.";
     const broken: AgentReadiness = {
-      harness: { kind: "cursor", ready: false, problem: "The Cursor CLI isn't signed in" },
+      harness: { kind: "cursor", ready: false, problem: signedOut },
       modelCredential: false,
       browser: false,
       computer: "needs_permissions",
@@ -118,18 +120,37 @@ describe("readiness rows", () => {
       "warning",
       "warning",
     ]);
-    expect(here[0]).toMatchObject({
-      value: "The Cursor CLI isn't signed in",
-      hint: "Install the Cursor CLI on this device and sign in with `agent login`.",
-    });
-    expect(here[1]?.hint).toBe("Sign the Cursor CLI in on this device with `agent login`.");
+    // The daemon's problem (a sentence with what to do) is the hint, not the chip.
+    expect(here[0]).toMatchObject({ value: "Cursor CLI isn't ready", hint: signedOut });
+    // Signing the CLI in is the credential too: said once, in the Agent row.
+    expect(here[1]).toMatchObject({ value: "Missing" });
+    expect(here[1]?.hint).toBeUndefined();
     expect(here[3]).toMatchObject({ value: "Needs permissions", section: "computer" });
     expect(here[4]).toMatchObject({ value: "1 of 3 connected", section: "connectors" });
     const machine = readinessRows(broken, "machine");
     expect(machine[2]?.hint).toBe("Install Google Chrome or Chromium on the machine.");
     expect(machine.some((r) => r.section)).toBe(false);
-    const pi = readinessRows({ ...ready, modelCredential: false }, "machine");
-    expect(pi[1]?.hint).toBe("Add OPENROUTER_API_KEY to ~/.daily-do-list/.env on the machine.");
+    expect(
+      readinessRows({ ...broken, harness: { kind: "cursor", ready: false } }, "here")[0]?.hint,
+    ).toBe("Install the Cursor CLI on this device and sign in with `agent login`.");
+
+    const noKey = readinessRows(
+      {
+        ...ready,
+        harness: {
+          kind: "pi",
+          ready: false,
+          problem: "OPENROUTER_API_KEY is not set on this machine.",
+        },
+        modelCredential: false,
+      },
+      "machine",
+    );
+    expect(noKey[0]).toMatchObject({
+      value: "Pi isn't ready",
+      hint: "OPENROUTER_API_KEY is not set on this machine.",
+    });
+    expect(noKey[1]?.hint).toBe("Add OPENROUTER_API_KEY to ~/.daily-do-list/.env on the machine.");
   });
 
   it("don't count what a machine simply lacks as a problem", () => {

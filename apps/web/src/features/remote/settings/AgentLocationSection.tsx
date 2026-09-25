@@ -79,7 +79,10 @@ export function AgentLocationSection({ go }: { go: GoToSection }) {
           {readiness ? (
             <Readiness readiness={readiness} where="here" go={go} testId="readiness-here" />
           ) : (
-            <p className="muted">This daemon doesn&apos;t report its readiness.</p>
+            // The daemon probes in the background right after it starts.
+            <p className="muted" data-testid="readiness-checking">
+              Checking…
+            </p>
           )}
         </>
       )}
