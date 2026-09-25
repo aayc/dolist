@@ -34,6 +34,21 @@ export async function writeFileAtomic(
   }
 }
 
+/**
+ * Appends `content` to `target` (creating it) and flushes it to disk before returning the file's
+ * stats. Not atomic: readers may see a partial append, and a crash can leave one.
+ */
+export async function appendFileDurably(target: string, content: string): Promise<Stats> {
+  const handle = await open(target, "a", 0o666);
+  try {
+    await handle.writeFile(content, "utf8");
+    await handle.datasync();
+    return await handle.stat();
+  } finally {
+    await handle.close();
+  }
+}
+
 export interface LoadedTextFile {
   content: string;
   stats: Stats;

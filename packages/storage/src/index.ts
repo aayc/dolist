@@ -1,4 +1,5 @@
-export { isBinaryPath, isMergeablePath } from "./file-types";
+export { appendToFile } from "./append";
+export { isBinaryPath, isJournalPath, isMergeablePath } from "./file-types";
 export {
   ALWAYS_IGNORED_NAMES,
   IgnoreRules,

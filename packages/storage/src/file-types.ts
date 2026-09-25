@@ -1,4 +1,4 @@
-import { extname } from "@ddl/core";
+import { extname, SIDECAR_DIR } from "@ddl/core";
 
 /**
  * Extensions of files that can't round-trip through the text-only StorageProvider API. Local-fs
@@ -90,6 +90,17 @@ export function isBinaryPath(path: string): boolean {
 
 export function isMergeablePath(path: string): boolean {
   return MERGEABLE_EXTENSIONS.has(extname(path).toLowerCase());
+}
+
+const JOURNAL_DIR = `${SIDECAR_DIR}/state/journal/`;
+
+/**
+ * The agent's append-only journals (`.daily-do-list/state/journal/**.jsonl`, one JSON event with
+ * a unique `id` per line). Local-fs versions them by stat, so an append never re-reads the file,
+ * and the SyncEngine merges them as a union of lines instead of making conflict copies.
+ */
+export function isJournalPath(path: string): boolean {
+  return path.startsWith(JOURNAL_DIR) && path.endsWith(".jsonl");
 }
 
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
