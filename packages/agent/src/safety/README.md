@@ -72,7 +72,10 @@ command, MCP server/tool words, every string in the input). Then per family:
 - **Browser / computer** (`rules/ui.ts`): element phrases (`vocab.ts`) decide what a click commits
   to; typed text is checked for card numbers (issuer prefix + Luhn), secrets (known token formats
   and high-entropy strings), SSNs, money-transfer wording, and terminal commands; keys, uploads and
-  page scripts have their own rules. Every non-screenshot `computer_*` action needs approval.
+  page scripts have their own rules. Every non-screenshot `computer_*` action needs approval, and
+  Return on the computer (a key press, or a line break in typed text, which typing turns into
+  Return) also counts as submitting, so a task grant for plain typing or keys never covers the
+  Return that sends a chat message.
   Element text is normalized so spelling tricks can't hide a phrase: invisible characters (soft
   hyphens, zero-width spaces, bidi controls) are removed, Latin accents dropped, Cyrillic/Greek
   lookalike letters folded inside Latin words, and camelCase matched both split (`placeOrder`) and
@@ -121,7 +124,7 @@ command, MCP server/tool words, every string in the input). Then per family:
 
 ## Rules
 
-Stable ids, grouped by decision (generated from `SAFETY_RULES`; 137 rules).
+Stable ids, grouped by decision (generated from `SAFETY_RULES`; 138 rules).
 
 | Rule id | Category | Decision | Risk | Matches |
 | --- | --- | --- | --- | --- |
@@ -190,6 +193,7 @@ Stable ids, grouped by decision (generated from `SAFETY_RULES`; 137 rules).
 | `notes.edit.user-text` | file_write | require_approval | medium | Changes text you wrote in a note |
 | `file_write.symlink-outside` | file_write | require_approval | medium | Creates a link that points outside the task workspace |
 | `forms.action-link` | form_submission | require_approval | medium | Opens a link that confirms, approves or answers something |
+| `forms.desktop-return` | form_submission | require_approval | medium | Presses Return on the computer, as a key or a line break in typed text (sends chat messages, submits forms, runs commands) |
 | `forms.enter-key` | form_submission | require_approval | medium | Presses Enter while working on a task that commits something (purchase, booking, message…) |
 | `forms.submit-control` | form_submission | require_approval | medium | Submits or confirms a form |
 | `forms.submit-typed` | form_submission | require_approval | medium | Types into a form field and submits it |

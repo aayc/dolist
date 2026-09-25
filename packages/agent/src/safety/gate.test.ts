@@ -133,6 +133,34 @@ describe("createSafetyGate", () => {
     await expect(deleteCall).resolves.toMatchObject({ allow: false });
   });
 
+  it("never lets a task grant for plain desktop typing send a message with a line break", async () => {
+    const { gate, approvals, verdicts } = setup({
+      resolveContext: () => ({
+        taskId: "task-1",
+        threadId: "thread-1",
+        taskText: "Send myself a Slack message: buy milk",
+        workspaceDir: WORKSPACE,
+      }),
+    });
+    const first = nextPending(approvals);
+    const typing = gate(call("computer_type", { text: "buy milk" }));
+    await approvals.decide((await first).id, { decision: "approve", scope: "task" });
+    await expect(typing).resolves.toEqual({ allow: true });
+    await expect(gate(call("computer_type", { text: "and eggs" }))).resolves.toEqual({
+      allow: true,
+    });
+    expect(verdicts.at(-1)).toMatchObject({ source: "grant" });
+
+    const next = nextPending(approvals);
+    const sending = gate(call("computer_type", { text: "buy milk\n" }));
+    const approval = await Promise.race([next, sending.then(() => undefined)]);
+    if (!approval) throw new Error("Typing that presses Return ran without asking");
+    expect(approval.categories).toContain("form_submission");
+    expect(approval.summary).toBe("Type “buy milk” on the computer (presses Return)");
+    await approvals.decide(approval.id, { decision: "deny" });
+    await expect(sending).resolves.toMatchObject({ allow: false });
+  });
+
   it("never lets a grant override a hard deny", async () => {
     const { gate, approvals } = setup();
     const pending = nextPending(approvals);

@@ -64,6 +64,16 @@ const moveCaretToEnd = (element: Element): void => {
   }
 };
 
+/** Runs in the page: whether the focused element (through shadow roots) takes line breaks. */
+const focusTakesLineBreaks = (element: Element): boolean => {
+  let focused = element.ownerDocument.activeElement;
+  while (focused?.shadowRoot?.activeElement) focused = focused.shadowRoot.activeElement;
+  return (
+    focused instanceof HTMLTextAreaElement ||
+    (focused instanceof HTMLElement && focused.isContentEditable)
+  );
+};
+
 /** Runs in the page: scrollable document size. */
 const documentSize = (): { width: number; height: number } => ({
   width: Math.max(document.documentElement.scrollWidth, document.body?.scrollWidth ?? 0),
@@ -215,7 +225,7 @@ export class LocalBrowserSession implements BrowserSession {
           if (options.clear === false) {
             await locator.focus({ timeout });
             await locator.evaluate(moveCaretToEnd).catch(() => {});
-            await page.keyboard.type(text);
+            await this.typeKeys(page, locator, text);
           } else {
             await this.fill(page, locator, text);
           }
@@ -418,7 +428,25 @@ export class LocalBrowserSession implements BrowserSession {
       }
       // Custom widgets that aren't fillable still take keyboard input once focused.
       await locator.click({ timeout: this.options.actionTimeoutMs });
-      await page.keyboard.type(text);
+      await this.typeKeys(page, locator, text);
+    }
+  }
+
+  /**
+   * Keyboard typing that never presses Enter, so only `submit` can submit: a line break becomes
+   * Shift+Enter (a new line without sending, in chat apps and editors) where the focused field
+   * takes line breaks, and is dropped elsewhere, the way `fill` drops it from single-line inputs.
+   */
+  private async typeKeys(page: Page, locator: Locator, text: string): Promise<void> {
+    const lines = text.split(/\r\n?|\n/);
+    if (lines.length === 1) return page.keyboard.type(text);
+    const multiline = await locator
+      .evaluate(focusTakesLineBreaks, undefined, { timeout: FIELD_CHECK_TIMEOUT_MS })
+      .catch(() => false);
+    if (!multiline) return page.keyboard.type(lines.join(""));
+    for (const [index, line] of lines.entries()) {
+      if (index > 0) await page.keyboard.press("Shift+Enter");
+      if (line) await page.keyboard.type(line);
     }
   }
 

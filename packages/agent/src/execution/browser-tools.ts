@@ -181,7 +181,7 @@ export function createBrowserTools(
     name: TOOL.browserType,
     label: "Type",
     description:
-      "Type text into an input, textarea or editable element. Target the field by `ref` from the latest snapshot (preferred) or a CSS `selector`. Replaces the current content unless `clear` is false; `submit` presses Enter afterwards. Returns the updated snapshot.",
+      "Type text into an input, textarea or editable element. Target the field by `ref` from the latest snapshot (preferred) or a CSS `selector`. Replaces the current content unless `clear` is false. Line breaks never press Enter (they become new lines in multi-line fields); only `submit` presses Enter, afterwards. Returns the updated snapshot.",
     parameters: objectSchema(
       {
         ...TARGET_PROPERTIES,

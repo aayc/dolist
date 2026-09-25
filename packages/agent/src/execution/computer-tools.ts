@@ -34,6 +34,21 @@ const COORDINATE: JsonSchema = {
   description: "Pixel coordinate in the most recent computer_screenshot.",
 };
 
+const LINE_BREAKS = /\r\n?|\n/g;
+
+/** Approval-card text for typing. Every line break presses Return, so the card must say so. */
+function describeTyping(text: string): string {
+  const returns = text.match(LINE_BREAKS)?.length ?? 0;
+  if (returns === 0)
+    return text.trim() ? `Type ${quote(text)} on the desktop` : "Type on the desktop";
+  const times = returns === 1 ? "" : ` ${returns} times`;
+  const body = text.replace(/(?:\r\n?|\n)+$/, "");
+  if (!body.trim()) return `Press Return${times} on the desktop`;
+  if (!/[\r\n]/.test(body)) return `Type ${quote(body)} and press Return${times} on the desktop`;
+  const count = returns === 1 ? "once" : `${returns} times`;
+  return `Type ${quote(text.replace(LINE_BREAKS, "⏎"))} on the desktop, pressing Return ${count}`;
+}
+
 /**
  * The desktop is shared by every thread, so computer tool calls are serialized per controller and
  * only the calling thread receives the frames its action produces.
@@ -198,8 +213,8 @@ export function createComputerTools(
       openWorld: true,
       category: "computer_control",
       describe: (input) => {
-        const text = fieldText(input, "text");
-        return text ? `Type ${quote(text)} on the desktop` : "Type on the desktop";
+        const text = field(input, "text");
+        return typeof text === "string" ? describeTyping(text) : "Type on the desktop";
       },
     },
     execute: (input, execCtx) =>

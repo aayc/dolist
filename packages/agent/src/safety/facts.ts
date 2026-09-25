@@ -60,6 +60,8 @@ export interface ActionFacts {
   /** Human-readable element description for evidence and summaries. */
   readonly elementLabel: string;
   readonly typedText?: string;
+  /** A typed value contains a line break, which keyboard typing turns into Return. */
+  readonly typedLineBreak: boolean;
   readonly submit: boolean;
   /** Normalized key combo, e.g. `cmd+enter`. */
   readonly key?: string;
@@ -228,13 +230,12 @@ function elementText(input: Record<string, unknown>, action: UiAction | undefine
   return parts.filter((p): p is string => !!p && p.trim().length > 0).join(" ");
 }
 
-function typedTextOf(input: Record<string, unknown>, ui: UiFacts | undefined): string | undefined {
-  if (ui?.action !== "type") return undefined;
+function typedValuesOf(input: Record<string, unknown>, ui: UiFacts | undefined): string[] {
+  if (ui?.action !== "type") return [];
   const parts = [str(input.text), str(input.value)];
   const fields = Array.isArray(input.fields) ? input.fields : [];
   for (const field of fields) if (isRecord(field)) parts.push(str(field.value), str(field.text));
-  const typed = parts.filter((p): p is string => p !== undefined);
-  return typed.length > 0 ? typed.join("\n") : undefined;
+  return parts.filter((p): p is string => p !== undefined);
 }
 
 export function buildFacts(ctx: ActionContext): ActionFacts {
@@ -260,7 +261,7 @@ export function buildFacts(ctx: ActionContext): ActionFacts {
         : undefined;
   const rawKey =
     ui?.action === "key" ? (str(input.key) ?? str(input.combo) ?? str(input.keys)) : undefined;
-  const typedText = typedTextOf(input, ui);
+  const typedValues = typedValuesOf(input, ui);
 
   return {
     ctx,
@@ -270,7 +271,8 @@ export function buildFacts(ctx: ActionContext): ActionFacts {
     ...(ui ? { ui } : {}),
     element: normalizePhrase(rawElement),
     elementLabel: rawElement.trim().slice(0, 120),
-    ...(typedText === undefined ? {} : { typedText }),
+    ...(typedValues.length > 0 ? { typedText: typedValues.join("\n") } : {}),
+    typedLineBreak: typedValues.some((value) => /[\r\n]/.test(value)),
     submit: input.submit === true,
     ...(rawKey ? { key: normalizeKey(rawKey) } : {}),
     urls,

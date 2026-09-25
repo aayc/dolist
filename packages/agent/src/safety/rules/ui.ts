@@ -320,6 +320,22 @@ export const UI_RULES: readonly ActionRule[] = [
         ? "Enter"
         : null,
   ),
+  // Not gated on intent, unlike `forms.enter-key`: a standing grant for plain desktop typing or
+  // key presses must never cover a Return, the key that sends chat messages.
+  uiRule(
+    info(
+      "forms.desktop-return",
+      "form_submission",
+      "require_approval",
+      "medium",
+      "Presses Return on the computer, as a key or a line break in typed text (sends chat messages, submits forms, runs commands)",
+    ),
+    (f) => {
+      if (f.ui?.surface !== "computer") return null;
+      if (f.ui.action === "type" && f.typedLineBreak) return "line break in typed text";
+      return f.ui.action === "key" && f.key && /^(?:shift\+)?enter$/.test(f.key) ? "Enter" : null;
+    },
+  ),
 
   uiRule(
     info(

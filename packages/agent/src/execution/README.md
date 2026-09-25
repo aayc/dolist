@@ -69,6 +69,11 @@ The shell is not a tool here: the harness's built-in `bash` tool runs commands t
   for what they triggered — the load event after a navigation, then a quiet network (bounded at 3 s)
   — and return a fresh snapshot. Targets: `ref`, else CSS `selector`, else visible `text` (visible
   matches first).
+- **Typing never submits by accident**: only `submit` presses Enter. A line break in the text
+  becomes Shift+Enter (a new line without sending, in chat apps and editors) in fields that take
+  line breaks and is dropped in single-line ones, so the safety verdict for typing without
+  `submit` stays true. On the desktop, by contrast, `computer_type` presses Return for each line
+  break, and the safety rules and approval card treat that as submitting.
 - **Tabs and dialogs**: tabs a page opens (clicks on `target=_blank`) become the active tab of the
   session and `back()` returns from them. JS dialogs are dismissed (`confirm` → Cancel), file
   pickers are intercepted (nothing is uploaded) and downloads are not kept; all of these are
@@ -106,7 +111,7 @@ below only inform it (they can never loosen a verdict).
 | `computer_screenshot` | ✓ | | read | `Take a screenshot of the desktop` |
 | `computer_click` | | ✓ | computer_control | `Click at (512, 300) on “Send button” on the desktop` |
 | `computer_move` | | | computer_control | `Move the mouse to (512, 300) on the desktop` |
-| `computer_type` | | ✓ | computer_control | `Type “hello” on the desktop` |
+| `computer_type` | | ✓ | computer_control | `Type “hello” on the desktop` / `Type “hi” and press Return on the desktop` |
 | `computer_key` | | ✓ | computer_control | `Press cmd+shift+4 on the desktop` |
 | `computer_scroll` | | | computer_control | `Scroll down 5 on the desktop` |
 

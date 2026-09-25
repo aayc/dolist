@@ -380,6 +380,37 @@ describe("computer use", () => {
     );
   });
 
+  it("treats Return on the desktop as submitting, typed or pressed, whatever the task", async () => {
+    const chat = "Tell Sam on Slack that I'm running late";
+    for (const [tool, input] of [
+      ["computer_type", { text: "running late\n" }],
+      ["computer_type", { text: "line one\r\nline two" }],
+      ["computer_type", { text: "\r" }],
+      ["computer_key", { combo: "return" }],
+      ["computer_key", { combo: "shift+enter" }],
+    ] as const) {
+      const verdict = await expectDecision(
+        tool,
+        input,
+        "require_approval",
+        "forms.desktop-return",
+        chat,
+      );
+      expect(verdict.categories).toEqual(
+        expect.arrayContaining(["computer_control", "form_submission"]),
+      );
+    }
+    for (const [tool, input] of [
+      ["computer_type", { text: "running late" }],
+      ["computer_key", { combo: "tab" }],
+      ["browser_type", { element: "Message", text: "line one\nline two" }],
+    ] as const) {
+      const verdict = await verdictFor(tool, input, chat);
+      expect(verdict.matchedRules).not.toContain("forms.desktop-return");
+      expect(verdict.categories).not.toContain("form_submission");
+    }
+  });
+
   it("denies catastrophic commands typed into a terminal", async () => {
     await expectDecision(
       "computer_type",

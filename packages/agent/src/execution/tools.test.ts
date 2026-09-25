@@ -453,6 +453,16 @@ describe("tool specs", () => {
       "Right-click at (5, 6) on “Icon” on the desktop",
     );
     expect(describe(TOOL.computerType, { text: "hello" })).toBe("Type “hello” on the desktop");
+    expect(describe(TOOL.computerType, { text: "buy milk\n" })).toBe(
+      "Type “buy milk” and press Return on the desktop",
+    );
+    expect(describe(TOOL.computerType, { text: "ok\r\n\n" })).toBe(
+      "Type “ok” and press Return 2 times on the desktop",
+    );
+    expect(describe(TOOL.computerType, { text: "\n" })).toBe("Press Return on the desktop");
+    expect(describe(TOOL.computerType, { text: "line one\rline two\n" })).toBe(
+      "Type “line one⏎line two⏎” on the desktop, pressing Return 2 times",
+    );
     expect(describe(TOOL.computerKey, { combo: "cmd+shift+4" })).toBe(
       "Press cmd+shift+4 on the desktop",
     );

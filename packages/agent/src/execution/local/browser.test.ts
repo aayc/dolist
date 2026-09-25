@@ -33,6 +33,35 @@ const PAGES: Record<string, string> = {
 <p id="status">Original</p>
 <iframe title="Inner frame" srcdoc="<button onclick=&quot;this.textContent='Inner clicked'&quot;>Inner button</button>"></iframe>`,
   "/next": `<!doctype html><title>Next page</title><h1>Second</h1><a href="/">Home</a>`,
+  "/compose": `<!doctype html><title>Compose</title>
+<form id="form" action="/search" method="get"><label for="subject">Subject</label><input id="subject" name="q"></form>
+<label for="body">Body</label><textarea id="body"></textarea>
+<div id="chat" contenteditable="true" role="textbox" aria-label="Message"></div>
+<p id="state"></p>
+<script>
+  const events = [];
+  const byId = (id) => document.getElementById(id);
+  const show = () => {
+    byId("state").textContent = JSON.stringify({
+      subject: byId("subject").value,
+      body: byId("body").value,
+      chat: byId("chat").innerText,
+      events,
+    });
+  };
+  byId("chat").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      events.push("sent");
+    }
+  });
+  byId("form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    events.push("submitted");
+  });
+  document.addEventListener("input", show);
+  document.addEventListener("keyup", show);
+</script>`,
   "/popup": `<!doctype html><title>Popup page</title><p>Popped up</p>`,
   "/article": `<!doctype html><title>Article</title><nav>Menu Links</nav>
 <main><h1>Big   story</h1><p>First    paragraph.</p>\n\n\n<p>${"Second paragraph. ".repeat(12).trim()}</p><p style="display:none">hidden</p></main>`,
@@ -160,6 +189,29 @@ describe.skipIf(!resolved)("LocalBrowserController (real Chrome)", () => {
       const results = await session.press("enter");
       expect(results.title).toBe("Results");
       expect(results.snapshot).toContain("You searched for red panda");
+    },
+    TIMEOUT,
+  );
+
+  it(
+    "never presses Enter for a line break, so only submit submits",
+    async () => {
+      await session.navigate(`${base}/compose`);
+      await session.type({ selector: "#subject" }, "Hi");
+      await session.type({ selector: "#subject" }, " there\nfriend", { clear: false });
+      await session.type({ selector: "#body" }, "Dear Sam,");
+      await session.type({ selector: "#body" }, "\nSee you soon", { clear: false });
+      await session.type({ selector: "#chat" }, "one\ntwo", { clear: false });
+      const state = async () =>
+        JSON.parse(/\{"subject".*\}/.exec(await session.extractText())?.[0] ?? "null");
+      expect(await state()).toEqual({
+        subject: "Hi therefriend",
+        body: "Dear Sam,\nSee you soon",
+        chat: "one\ntwo",
+        events: [],
+      });
+      await session.type({ selector: "#chat" }, "!", { clear: false, submit: true });
+      expect((await state()).events).toEqual(["sent"]);
     },
     TIMEOUT,
   );

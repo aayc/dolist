@@ -83,12 +83,13 @@ function describeUi(f: ActionFacts): string | undefined {
     }
     case "type": {
       const submit = f.submit ? " and submit" : "";
+      const returns = f.ui.surface === "computer" && f.typedLineBreak ? " (presses Return)" : "";
       if (hidesTypedValue(f))
-        return `Type into ${target ?? "a field"} (value hidden)${submit} ${where}`;
+        return `Type into ${target ?? "a field"} (value hidden)${submit} ${where}${returns}`;
       const text = f.typedText ?? "";
       return target
-        ? `Type ${q(text)} into ${target}${submit} ${where}`
-        : `Type ${q(text)} ${where}`;
+        ? `Type ${q(text)} into ${target}${submit} ${where}${returns}`
+        : `Type ${q(text)} ${where}${returns}`;
     }
     case "select": {
       const values = Array.isArray(input.values)
