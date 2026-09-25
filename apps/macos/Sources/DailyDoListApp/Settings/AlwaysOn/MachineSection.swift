@@ -5,12 +5,14 @@ import DailyDoListUI
 import SwiftUI
 
 /// Settings → Always-On → Always-On Machine: its address and pairing with a code, what it
-/// reports (reachable, version, where its agent runs, its readiness), checking it, forgetting
-/// this device's credential, and opening its web app.
+/// reports (reachable, version, where its agent runs, its readiness), checking it, pairing again
+/// (once the machine no longer accepts this device), forgetting this device's credential, and
+/// opening its web app.
 struct MachineSection: View {
   let model: AppModel
   let remote: RemoteSettingsStore
   @State private var confirmingForget = false
+  @State private var pairingAgain = false
 
   var body: some View {
     Form {
@@ -22,8 +24,9 @@ struct MachineSection: View {
               Text(machine.url).textSelection(.enabled).foregroundStyle(.secondary)
             }
             LabeledContent("This device") {
-              Text(status.paired ? "Paired" : "Not paired yet")
-                .foregroundStyle(status.paired ? Theme.success : Theme.warning)
+              let accepted = status.paired && model.agent?.readOnly?.kind != .rejected
+              Text(accepted ? "Paired" : status.paired ? "No longer accepted" : "Not paired yet")
+                .foregroundStyle(accepted ? Theme.success : Theme.warning)
             }
             HStack {
               if let url = URL(string: machine.url) {
@@ -33,6 +36,14 @@ struct MachineSection: View {
               }
               Spacer()
               if status.paired {
+                if !pairingAgain {
+                  Button("Pair Again…") { pairingAgain = true }
+                    .pointingHandCursor()
+                    .tooltip(
+                      "Pair with a new code, for when the machine no longer accepts this device"
+                    )
+                    .disabled(remote.isBusy(.forgetMachine))
+                }
                 Button("Forget This Machine…") { confirmingForget = true }
                   .pointingHandCursor()
                   .disabled(remote.isBusy(.forgetMachine))
@@ -44,6 +55,11 @@ struct MachineSection: View {
           }
           if status.paired {
             MachineStatusRows(model: model, remote: remote, status: status)
+            if pairingAgain {
+              PairMachineForm(remote: remote, initialURL: machine.url, again: true) {
+                pairingAgain = false
+              }
+            }
           } else {
             PairMachineForm(remote: remote, initialURL: machine.url)
           }
@@ -93,9 +109,7 @@ private struct MachineStatusRows: View {
         case nil: Text("Not checked yet").foregroundStyle(.secondary)
         }
       }
-      if let error = status.error, status.reachable == false {
-        SettingsNote(text: error, tone: Theme.danger)
-      }
+      if let error = status.error { SettingsNote(text: error, tone: Theme.danger) }
       if let version = status.version { LabeledContent("Version", value: version) }
       if let agent = status.agent {
         LabeledContent("Its agent runs on") {
@@ -146,6 +160,9 @@ private struct MachineStatusRows: View {
 struct PairMachineForm: View {
   let remote: RemoteSettingsStore
   let initialURL: String
+  /// This device is paired already: this replaces its credential.
+  var again = false
+  var onPaired: () -> Void = {}
   @State private var url = ""
   @State private var code = ""
   @State private var name = ""
@@ -175,7 +192,7 @@ struct PairMachineForm: View {
       }
       if let error = remote.error(.pairMachine) { SettingsNote(text: error, tone: Theme.danger) }
     } header: {
-      Text(initialURL.isEmpty ? "Pair with the always-on machine" : "Pair this device")
+      Text(title)
     } footer: {
       SettingsNote(
         text:
@@ -183,6 +200,11 @@ struct PairMachineForm: View {
         markdown: true)
     }
     .onAppear { if !edited { url = initialURL } }
+  }
+
+  private var title: String {
+    if again { return "Pair again" }
+    return initialURL.isEmpty ? "Pair with the always-on machine" : "Pair this device"
   }
 
   private var normalizedURL: String? { RemoteAccess.normalizeMachineURL(url) }
@@ -214,6 +236,7 @@ struct PairMachineForm: View {
     let trimmed = name.trimmingCharacters(in: .whitespaces)
     if await remote.pairMachine(url: url, code: code, name: trimmed.isEmpty ? nil : trimmed) {
       self.code = ""
+      onPaired()
     }
   }
 }

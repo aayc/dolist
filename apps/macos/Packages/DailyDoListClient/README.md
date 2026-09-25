@@ -218,15 +218,18 @@ credential only learns that the machine answers. The agent status carries `place
 `readiness`: the agent is held here without sync (`no_sync`, checked first) or without a machine
 (`no_machine`), and a standalone daemon runs its own agent, never as the always-on machine.
 Switching placement runs a simulated handover (2 s to the machine, during which nobody holds
-it; 3 s back) whose note shows in `agent.status` and as the status's `problem` until it's done.
-While the machine is unreachable or unpaired, another device holds the agent, or it's moving,
-agent actions answer 503 with the reason (reads still work) and the status's `problem` says
-where the agent runs. `simulateMachine(reachable:rejectsCodes:)` and `simulateAgentElsewhere(_:)`
-drive those states.
+it and the relay is `off`; 3 s back) whose note shows in `agent.status` and as the status's
+`problem` until it's done. Then the fake plays the relay: `connected` (actions work, no
+`problem`), `unreachable`, or `not_paired` without a credential or once the machine no longer
+accepts it (revoked there; pairing again fixes it, and its check says so), with the relay's
+words as the `problem` and as the 503 message of every agent action (reads still work).
+Another device holding the agent, or a handover under way, answer 503 with the daemon's words
+too. `simulateMachine(reachable:rejectsCodes:acceptsThisDevice:)` and
+`simulateAgentElsewhere(_:)` drive those states.
 
 Extras: `advance(by:)`, `runUntilIdle()`, `pendingActions`, `now`,
 `simulateExternalEdit(_:content:)` (origin `external`, `nil` deletes), `connectionState`,
-`simulateMachine(reachable:rejectsCodes:)`, `simulateAgentElsewhere(_:)`.
+`simulateMachine(reachable:rejectsCodes:acceptsThisDevice:)`, `simulateAgentElsewhere(_:)`.
 Connection semantics match `HTTPDaemonClient` (`connect` → `.connecting`, `.connected`, `hello`;
 `.resync` on reconnect; events only while connected; `disconnect` finishes streams).
 
@@ -235,9 +238,9 @@ empty subfolders of a moved folder are not kept (like the daemon), scripts are t
 real mock runtime may ask questions after a denial), routines never start on their own (their
 schedule only sets `nextRunAt`; runs come from `runRoutine`) and have no run-time limit, the
 always-on machine is simulated in process (relayed actions run on the fake's own agent, and the
-machine's status never checks itself), the fake plays the relay too (`connected`,
-`unreachable`; the daemon reports `off` until the relay lands), handovers take seconds instead of
-the lease's renewals (up to ~40 s), and nothing persists.
+machine's status never checks itself), the relay connects at once (the daemon's is `connecting`
+for a moment, and reconnects with backoff), handovers take seconds instead of the lease's
+renewals (up to ~40 s), and nothing persists.
 
 ## Tests
 

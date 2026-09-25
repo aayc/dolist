@@ -81,7 +81,8 @@ struct InMemoryRemoteTests {
     _ = try await client.updateDeviceSettings(DeviceSettingsPatch(placement: .alwaysOnMachine))
     placement = try await Self.placement(client)
     #expect(placement.note == "Handing the agent to vm-name…")
-    #expect(placement.relay == .connecting && placement.runsOn == nil, "let go, not picked up")
+    #expect(placement.runsOn == nil, "let go, not picked up")
+    #expect(placement.relay == .off, "the relay starts once the lease is let go")
     #expect(try await client.agentStatus().problem == "Handing the agent to vm-name…")
     await client.advance(by: .seconds(2))
     placement = try await Self.placement(client)
@@ -128,6 +129,7 @@ struct InMemoryRemoteTests {
     await client.simulateMachine(reachable: false)
     let placement = try await Self.placement(client)
     #expect(placement.relay == .unreachable && placement.runsOn?.name == "vm-name")
+    #expect(try await client.agentStatus().problem == "The always-on machine can't be reached.")
     await Self.http(503, .agentUnavailable) {
       _ = try await client.decideApproval(approval.id, ApprovalDecisionRequest(decision: .approve))
     }
@@ -138,13 +140,49 @@ struct InMemoryRemoteTests {
       _ = try await client.retryThread(threadId)
       Issue.record("expected a 503")
     } catch let error as DaemonClientError {
-      #expect(error.localizedDescription == "Can't reach vm-name. Its work shows here read-only.")
+      #expect(error.localizedDescription == "The always-on machine can't be reached.")
     }
     #expect(try await client.thread(threadId).thread.id == threadId, "reads work")
     #expect(try await client.machineStatus().reachable == false)
 
     await client.simulateMachine(reachable: true)
+    #expect(try await client.agentStatus().problem == nil)
     _ = try await client.decideApproval(approval.id, ApprovalDecisionRequest(decision: .deny))
+  }
+
+  /// The real relay: the machine revoked this device, so it's `not_paired` with the words to pair
+  /// again; pairing again fixes it, and forgetting the machine leaves it plainly not paired.
+  @Test func aRevokedDeviceIsToldToPairAgain() async throws {
+    var remote = InMemoryDaemonClient.Remote.alwaysOn
+    remote.placement = .alwaysOnMachine
+    let client = Self.client(remote, clock: .immediate())
+    let recorder = StreamRecorder(client.events())
+    await client.connect()
+
+    await client.simulateMachine(acceptsThisDevice: false)
+    var status = try await client.agentStatus()
+    #expect(status.placement?.relay == .notPaired)
+    #expect(status.problem == "The always-on machine no longer accepts this device. Pair it again.")
+    try await recorder.waitFor("the relay's news") { item in
+      guard case .event(.agentStatus(let status)) = item else { return false }
+      return status.placement?.relay == .notPaired
+    }
+    await Self.http(503, .agentUnavailable) {
+      _ = try await client.postMessage(threadId: OrchestratorThread.id, text: "Hi")
+    }
+    let check = try await client.checkMachine()
+    #expect(check.paired && check.reachable == true && check.version == nil)
+    #expect(check.error == "vm-name no longer accepts this device's credential: pair again.")
+
+    _ = try await client.pairMachine(MachinePairRequest(url: Self.machineURL, code: "ABCD2345"))
+    status = try await client.agentStatus()
+    #expect(status.placement?.relay == .connected && status.problem == nil)
+
+    _ = try await client.forgetMachine()
+    status = try await client.agentStatus()
+    #expect(status.placement?.relay == .notPaired)
+    #expect(status.problem == "This device isn't paired with the always-on machine.")
+    await client.disconnect()
   }
 
   @Test func anotherDeviceRunningTheAgentKeepsIt() async throws {

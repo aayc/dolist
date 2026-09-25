@@ -20,12 +20,14 @@ extension FakeDaemon {
 
   var effectivePlacement: AgentPlacement { heldHere == nil ? remote.placement : .thisDevice }
 
-  /// The daemon reports `off` while it relays with a credential and no relay has said more; this
-  /// fake plays the relay too, so it reports what the relay would.
+  /// What the relay reports: nothing (`off`) until the always-on machine applies and this device
+  /// has let go of the lease, then whether it can forward to the machine. The real relay is
+  /// `connecting` for a moment first; the fake connects at once.
   var relayState: RelayState {
-    guard effectivePlacement == .alwaysOnMachine else { return .off }
-    if !remote.machinePaired { return .notPaired }
-    if remote.handover != nil { return .connecting }
+    guard effectivePlacement == .alwaysOnMachine, remote.handover?.to != .machine else {
+      return .off
+    }
+    if !remote.machinePaired || !remote.machineAcceptsThisDevice { return .notPaired }
     return remote.machineReachable ? .connected : .unreachable
   }
 
@@ -38,13 +40,22 @@ extension FakeDaemon {
       note: remote.handover?.note)
   }
 
-  /// The agent status's `problem` while this device doesn't run the agent (the daemon's words).
+  /// The agent status's `problem` while this device can't act on the agent, and the 503 message
+  /// of its actions (the daemon's words): the relay's reason when it can't forward, else why the
+  /// agent that answers (this device's, or the machine's through the relay) isn't running.
   var placementProblem: String? {
     guard remote.syncs else { return nil }
-    if let handover = remote.handover { return handover.note }
+    switch relayState {
+    case .unreachable: return RelayProblem.unreachable
+    case .notPaired: return remote.machinePaired ? RelayProblem.rejected : RelayProblem.notPaired
+    default: break
+    }
+    if let handover = remote.handover {
+      if handover.to == .machine { return handover.note }
+      return "The agent is running on \(machine?.name ?? "the always-on machine")."
+    }
     if case .other(let name) = remote.holder { return "The agent is running on \(name)." }
-    guard effectivePlacement == .alwaysOnMachine, relayState != .connected else { return nil }
-    return "The agent is running on \(machine?.name ?? "the always-on machine")."
+    return nil
   }
 
   func runsOn(_ holder: FakeHolder) -> AgentRunsOn? {
@@ -86,29 +97,10 @@ extension FakeDaemon {
         connected: connectors.filter { $0.state == .connected }.count))
   }
 
-  /// Why agent actions can't run from this device right now (the relay will answer 503; until it
-  /// exists, the daemon's agent is simply off here, with `placementProblem` as its problem).
-  var readOnlyReason: String? {
-    guard remote.syncs else { return nil }
-    if case .other(let name) = remote.holder {
-      return "The agent is running on \(name). Its work shows here read-only."
-    }
-    let name = machine?.name ?? "the always-on machine"
-    if let handover = remote.handover, handover.to == .thisDevice {
-      return "The agent is moving to this device. Try again in a moment."
-    }
-    guard effectivePlacement == .alwaysOnMachine else { return nil }
-    switch relayState {
-    case .notPaired: return "This device isn't paired with \(name), so its work shows read-only."
-    case .unreachable: return "Can't reach \(name). Its work shows here read-only."
-    case .connecting: return "Connecting to \(name). Try again in a moment."
-    default: return nil
-    }
-  }
-
+  /// Agent actions answer 503 `agent_unavailable` with the placement's problem.
   func requireAgentReachable() throws(DaemonClientError) {
-    guard let reason = readOnlyReason else { return }
-    throw .http(status: 503, body: ApiErrorBody(error: .agentUnavailable, message: reason))
+    guard let problem = placementProblem else { return }
+    throw .http(status: 503, body: ApiErrorBody(error: .agentUnavailable, message: problem))
   }
 
   /// Moves the agent to where the placement wants it: at once while held here, else through a
@@ -384,6 +376,11 @@ extension FakeDaemon {
       return MachineStatusResponse(
         machine: machine, paired: false, reachable: true, checkedAt: checked)
     }
+    guard remote.machineAcceptsThisDevice else {
+      return MachineStatusResponse(
+        machine: machine, paired: true, reachable: true, checkedAt: checked,
+        error: "\(machine.name) no longer accepts this device's credential: pair again.")
+    }
     let holder = remote.handover == nil ? remote.holder : .machine
     var runsOn = self.runsOn(holder)
     // As the machine reports it: "this device" is the machine.
@@ -435,6 +432,7 @@ extension FakeDaemon {
       emit(.settingsChanged(next))
     }
     remote.machinePaired = true
+    remote.machineAcceptsThisDevice = true
     remote.machineCheckedAt = nowMillis
     placementInputsChanged()
     return machineStatus()
@@ -448,6 +446,7 @@ extension FakeDaemon {
   /// Drops the credential and what the last check found (the daemon checks again on demand).
   func forgetMachine() -> MachineStatusResponse {
     remote.machinePaired = false
+    remote.machineAcceptsThisDevice = true
     remote.machineCheckedAt = nil
     placementInputsChanged()
     return machineStatus()
@@ -455,10 +454,18 @@ extension FakeDaemon {
 
   // MARK: - Simulation
 
-  func simulateMachine(reachable: Bool?, rejectsCodes: Bool?) {
+  func simulateMachine(reachable: Bool?, rejectsCodes: Bool?, acceptsThisDevice: Bool?) {
     if let rejectsCodes { remote.machineRejectsCodes = rejectsCodes }
-    guard let reachable, reachable != remote.machineReachable else { return }
-    remote.machineReachable = reachable
+    var changed = false
+    if let reachable, reachable != remote.machineReachable {
+      remote.machineReachable = reachable
+      changed = true
+    }
+    if let acceptsThisDevice, acceptsThisDevice != remote.machineAcceptsThisDevice {
+      remote.machineAcceptsThisDevice = acceptsThisDevice
+      changed = true
+    }
+    guard changed else { return }
     if machine != nil, remote.machineCheckedAt != nil { remote.machineCheckedAt = nowMillis }
     emitStatus()
   }

@@ -52,6 +52,13 @@ extension InMemoryDaemonClient {
   }
 }
 
+/// The relay's reasons, word for word (the daemon's `RELAY_PROBLEMS`).
+enum RelayProblem {
+  static let notPaired = "This device isn't paired with the always-on machine."
+  static let rejected = "The always-on machine no longer accepts this device. Pair it again."
+  static let unreachable = "The always-on machine can't be reached."
+}
+
 /// Who holds the agent lease, as the fake simulates it.
 enum FakeHolder: Hashable, Sendable {
   case thisDevice
@@ -100,6 +107,8 @@ struct FakeRemote: Sendable {
   var machineReachable = true
   /// Simulation: whether the machine refuses every pairing code.
   var machineRejectsCodes = false
+  /// Simulation: whether the machine still accepts this device's credential (false: revoked).
+  var machineAcceptsThisDevice = true
 
   var holder: FakeHolder = .thisDevice
   var handover: Handover?

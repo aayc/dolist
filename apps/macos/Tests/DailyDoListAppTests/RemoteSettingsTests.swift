@@ -227,7 +227,9 @@ struct RemoteSettingsTests {
       message(400, .invalidRequest, "token must be one line without spaces")
         == "token must be one line without spaces")
     #expect(message(400, .invalidRequest) == "The daemon didn't accept that.")
-    #expect(message(503, .agentUnavailable, "Can't reach vm-name.") == "Can't reach vm-name.")
+    #expect(
+      message(503, .agentUnavailable, "The always-on machine can't be reached.")
+        == "The always-on machine can't be reached.")
     #expect(
       RemoteSettingsMessages.message(for: DaemonClientError.pairingRejected(nil), action: .load)
         == "That code is wrong, expired or already used.")

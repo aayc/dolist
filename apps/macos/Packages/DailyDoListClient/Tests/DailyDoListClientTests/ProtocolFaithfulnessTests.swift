@@ -184,7 +184,10 @@ struct ProtocolFaithfulnessTests {
     await client.simulateMachine(reachable: false)
     try session.record(try await client.checkMachine(), as: "MachineStatusResponse")
     try await session.recordError { _ = try await client.retryThread(threadId) }
-    await client.simulateMachine(reachable: true)
+    await client.simulateMachine(reachable: true, acceptsThisDevice: false)
+    try session.record(try await client.checkMachine(), as: "MachineStatusResponse")
+    try session.record(try await client.agentStatus(), as: "AgentStatusResponse")
+    await client.simulateMachine(acceptsThisDevice: true)
     let code = try await client.createPairingCode(PairingCodeRequest(name: "Phone"))
     try session.record(code, as: "PairingCodeResponse")
     try session.record(

@@ -228,28 +228,36 @@ this device's choice, who runs the agent now and the relay to the machine in the
   held on this device (no always-on machine set up, or no sync) the control is disabled: its
   tooltip says why, a line under it says what it's waiting for, and **Set Up…** opens the right
   section of Settings. When the machine can't be reached, **Run It on This Device Instead** takes
-  it back; when this device isn't paired, **Pair…** opens Settings. On the always-on machine
-  itself the row just says "This is the always-on machine".
+  it back; when this device isn't paired, **Pair…** opens Settings, and **Pair Again…** when the
+  machine no longer accepts it. "Connecting to vm-name…" shows while the relay connects. On the
+  always-on machine itself the row just says "This is the always-on machine".
 - **Commands:** **Agent → Run the Orchestrator on This Device** and **… on the Always-On
   Machine** (also in the palette, and `:obcommand agent.runHere` / `agent.runOnMachine`). They're
   checked items: the current place is checked and can't be chosen again, and both are off while
   the agent is held here. No shortcut: none fits the command table without clashing.
-- **Read-only:** when the machine can't be reached or this device isn't paired with it, another
-  device runs the agent, or the agent is moving between devices, the daemon serves the synced
-  copy and answers actions with 503. The panel then shows a banner saying what that means, and
-  every action that would fail stays visible but disabled, with the reason in its tooltip:
-  Approve and Deny, the chat bar ("Replies are off while this is read-only") and its Stop, a
-  thread's Stop and Retry, the orchestrator's Stop, Run Now and **Stop Task**. An action tried
-  anyway shows the daemon's message in the panel's toast.
+- **Read-only:** set to the always-on machine, this device relays the agent's reads and actions
+  to it. When the relay can't reach the machine, this device isn't paired with it (or the
+  machine no longer accepts it), another device runs the agent, or the machine isn't running it,
+  the daemon serves the synced copy and answers actions with 503. The panel then shows a banner
+  ("The always-on machine can't be reached — showing the last synced state"), and every action
+  that would fail stays visible but disabled, with the reason in its tooltip: Approve and Deny,
+  the chat bar ("Replies are off while this is read-only") and its Stop, a thread's Stop and
+  Retry, the orchestrator's Stop, Run Now and **Stop Task**. During a handover and while the
+  relay connects, the location line says what's happening and there's no banner; actions work
+  while it connects (the daemon forwards them already). An action tried anyway shows the
+  daemon's message in the panel's toast. These are the web app's rules and words
+  (`readOnlyReason`, `availabilityBanner`).
 - **Settings → Always-On** has five sections (a segmented control; the toggle's links open the
   right one):
   - **Location:** the same choice, who runs the agent now, and this device's readiness (agent,
     model credential, browser, desktop control, connectors) with a fix for each problem
     (Agent Settings…, Set Up… for computer use, Connectors…).
   - **Machine:** pair with the always-on machine (its address, a code it issued, an optional
-    name), then what it reports: reachable, version, where its agent runs and its readiness.
-    **Check Now**, **Forget This Machine…** (drops this device's credential only) and **Open Its
-    Web App**. Its status refreshes every 15 s while the section shows.
+    name), then what it reports: reachable, version, where its agent runs, its readiness and
+    what the last check found wrong. **Check Now**, **Pair Again…** (a new code, for when the
+    machine no longer accepts this device), **Forget This Machine…** (drops this device's
+    credential only) and **Open Its Web App**. Its status refreshes every 15 s while the section
+    shows.
   - **Sync:** the sync service's address, the vault and the vault token. The token is
     write-only: "Saved" with **Replace…**, never shown. The sync status, and **Turn Off Sync…**.
   - **Devices:** this device's name, the devices paired with this daemon with **Revoke…**, and
@@ -269,8 +277,14 @@ this device's choice, who runs the agent now and the relay to the machine in the
   control then names that device). A change shows in a re-fetch of the status at once, with the
   "Handing the agent to …" note; the machine takes the agent up to ~40 s later (the lease's
   renewals), and a device set to run it itself takes it back the same way ("Taking over from
-  …"). Until the relay lands, `relay` stays `off` while the agent runs on the machine, and the
-  status's `problem` says where it runs, so the panel shows the agent as unavailable here.
+  …"). The relay reports `off` while this device lets go of the lease, then `connecting` and
+  `connected`. While connected the status is the machine's agent under this device's placement,
+  so `problem` clears once the machine runs it; the machine's thread, approval and routine
+  events reach this device's clients, and this device's own routine events are muted. Stopping
+  the machine makes it `unreachable` at once, and it reconnects on its own when the machine is
+  back (with backoff, up to 30 s). Revoked on the machine, this device is `not_paired` with "The
+  always-on machine no longer accepts this device. Pair it again.", and the machine's check
+  says so too; after Forget it's "This device isn't paired with the always-on machine.".
 - **Code:** in `DailyDoListAgent`, `OrchestratorLocation` (what the control shows),
   `AgentReadOnly`, `AgentStore+Placement` (`moveOrchestrator(to:)`, `canMoveOrchestrator(to:)`,
   `readOnly`), `OrchestratorLocationBar` and `ReadOnlyBanner`. In the app, `RemoteSettingsStore`
@@ -565,9 +579,13 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   second daemon as the always-on machine, paired over loopback: pair, check, Forget,
   `settings.changed`, 429 with `Retry-After`), and placement across two daemons syncing through
   the real sync service (`no_sync`, then `no_machine`, the takeover note, handing the agent to the
-  machine; about 70 s). They're skipped with a message when Node 24.4+ or the built daemon is
-  missing (the placement suite also when the sync service isn't built). The relay's states and
-  its read-only 503s aren't covered until the relay lands.
+  machine; about 70 s). The relay suite pairs a laptop set to the always-on machine and acts
+  through it: the orchestrator's chat, an approval raised on the machine and decided from the
+  laptop, a routine written on the laptop and run on the machine, and their events on the
+  laptop's socket; then the machine stops (the synced copy answers reads, actions get 503) and
+  comes back, and a second test revokes, pairs again and forgets (about 35 s each). They're
+  skipped with a message when Node 24.4+ or the built daemon is missing (the two-daemon suites
+  also when the sync service isn't built).
 - **Vim**: `DailyDoListVim` replays the web app's vim vectors against its reference buffer, and
   `DailyDoListEditor` replays all of them again through the real editor, with live preview both
   off and on. Vim-mode tests drive the editor with real `NSEvent`s (typing, undo grouping, IME,
@@ -587,13 +605,14 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   `RoutineViewTests` (what each screen offers, and the `routines-*` snapshots), the client's
   `InMemoryRoutineTests` and REST cases, and in the app `RoutineCommandTests`, the tooltip checks
   and the `main-window-routine*` snapshots.
-- **Where the agent runs**: the client's `InMemoryRemoteTests` (placement, handovers, 503s while
-  read-only, device settings, sync, pairing, the machine) and REST cases (`pairing_rejected`, the
-  WebSocket's header auth), the agent package's `PlacementTests` (what the toggle shows in each
-  state, moving the orchestrator, its tooltips, the `orchestrator-*` snapshots) and
-  `ReadOnlyTests` (the banner, disabled actions and their reasons, `thread-read-only`), and in the
-  app `AlwaysOnCommandTests`, `RemoteSettingsTests` (every action and error message) and the
-  `settings-always-on-*` snapshots.
+- **Where the agent runs**: the client's `InMemoryRemoteTests` (placement, handovers, the relay's
+  states and 503s, a revoked device, device settings, sync, pairing, the machine) and REST cases
+  (`pairing_rejected`, the WebSocket's header auth), the agent package's `PlacementTests` (what
+  the toggle shows in each state, moving the orchestrator, its tooltips, the `orchestrator-*`
+  snapshots) and `ReadOnlyTests` (the web's rules: when there's a banner, disabled actions and
+  their reasons, `thread-read-only`), and in the app `AlwaysOnCommandTests`,
+  `RemoteSettingsTests` (every action and error message) and the `settings-always-on-*`
+  snapshots.
 - **Computer use access**: `ComputerAccessTests` run the permission flow against fakes (the
   prompt before the System Settings link, the links' fallbacks, the guide's steps, polling that
   stops, the relaunch's order, the banner's rules and its dismissal), and the snapshots draw the
