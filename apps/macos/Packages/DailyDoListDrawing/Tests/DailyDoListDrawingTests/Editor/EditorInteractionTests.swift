@@ -166,6 +166,35 @@ struct EditorInteractionTests {
     #expect(moved.endBinding?.elementId == "right")
   }
 
+  @Test(arguments: [0.0, -3.0, 3.0])
+  func anArrowReleasedOnAnOutlineStopsExcalidrawsGapShortOfIt(outside: Double) throws {
+    let diamond = TestScenes.element(.diamond, id: "d", x: 300, y: 0, width: 160, height: 120)
+    let (editor, _) = makeEditor([diamond])
+    editor.tool = .arrow
+    // Released on the middle of the diamond's top-left side, just inside it or just outside it.
+    let middle = P(340, 30)
+    let normal = P(-0.6, -0.8)
+    drag(editor, from: middle + normal * 200, to: middle + normal * outside)
+    let arrow = try #require(editor.scene.elements.last)
+    #expect(arrow.endBinding?.elementId == "d")
+    let tip = ArrowBinding.absolutePoint(arrow, arrow.points.count - 1)
+    let shape = try #require(editor.element("d"))
+    #expect(abs(ArrowBinding.distance(to: shape, tip) - ArrowBinding.fixedBindingDistance) < 0.75)
+    #expect(!HitTest.hits(shape, tip, threshold: 0), "the tip stays outside the shape")
+    #expect(abs((arrow.endBinding?.gap ?? 0) - ArrowBinding.fixedBindingDistance) < 0.75)
+  }
+
+  @Test func anArrowReleasedOnACornerDoesntTouchItEither() throws {
+    let diamond = TestScenes.element(.diamond, id: "d", x: 300, y: 0, width: 160, height: 120)
+    let (editor, _) = makeEditor([diamond])
+    editor.tool = .arrow
+    drag(editor, from: P(0, 60), to: P(300, 60))
+    let arrow = try #require(editor.scene.elements.last)
+    let tip = ArrowBinding.absolutePoint(arrow, arrow.points.count - 1)
+    #expect(ArrowBinding.distance(to: try #require(editor.element("d")), tip) >= 4)
+    #expect(tip.x < 300)
+  }
+
   @Test func arrowsDrawnClickByClick() throws {
     let (editor, _) = makeEditor()
     editor.tool = .line

@@ -58,6 +58,29 @@ public enum ArrowBinding {
     return nil
   }
 
+  /// `FIXED_BINDING_DISTANCE`: how far outside the outline an end released near it sits.
+  static let fixedBindingDistance: Double = 5
+
+  /// `bindPointToSnapToElementOutline`: an end released on or near the shape's outline (inside or
+  /// out, within the binding gap) goes `fixedBindingDistance` outside it, along the arrow's last
+  /// segment, which leaves Excalidraw's small gap before the tip. Nil for an end deep inside
+  /// (it points at the shape's focus instead).
+  static func snappedToOutline(
+    _ arrow: ExcalidrawElement, end: ArrowEnd, target: ExcalidrawElement, zoom: Double = 1
+  ) -> P? {
+    guard arrow.points.count >= 2, !arrow.elbowed else { return nil }
+    let edge = absolutePoint(arrow, end == .start ? 0 : arrow.points.count - 1)
+    let adjacent = absolutePoint(arrow, end == .start ? 1 : arrow.points.count - 2)
+    guard distance(to: target, edge) <= maxBindingGap(target, zoom: zoom) else { return nil }
+    let direction = edge - adjacent
+    let length = hypot(direction.x, direction.y)
+    guard length > 0 else { return nil }
+    let reach = length + max(target.width, target.height) * 2
+    let far = adjacent + direction * (reach / length)
+    return intersections(target, adjacent, far, offset: fixedBindingDistance)
+      .min { $0.distance(to: adjacent) < $1.distance(to: adjacent) }
+  }
+
   /// `calculateFocusAndGap` then `normalizePointBinding`.
   static func binding(
     for arrow: ExcalidrawElement, end: ArrowEnd, to target: ExcalidrawElement, zoom: Double = 1

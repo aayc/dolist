@@ -18,7 +18,16 @@ extension DrawingEditor {
         if end == .start { element.startBinding = nil } else { element.endBinding = nil }
       }
     }
-    guard let targetId, let target = element(targetId), let arrow = element(arrowId) else { return }
+    guard let targetId, let target = element(targetId), var arrow = element(arrowId) else { return }
+    if let snapped = ArrowBinding.snappedToOutline(arrow, end: end, target: target, zoom: zoom) {
+      let index = end == .start ? 0 : arrow.points.count - 1
+      let local = ElementGeometry.unrotate(snapped, in: arrow) - DrawingPoint(arrow.x, arrow.y)
+      update(arrowId) { element in
+        element.points[index] = local
+        normalizePoints(&element)
+      }
+      arrow = element(arrowId) ?? arrow
+    }
     let binding = ArrowBinding.binding(for: arrow, end: end, to: target, zoom: zoom)
     update(arrowId) { element in
       if end == .start { element.startBinding = binding } else { element.endBinding = binding }
