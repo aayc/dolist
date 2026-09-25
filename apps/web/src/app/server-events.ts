@@ -1,5 +1,6 @@
 import type { ServerEvent } from "@ddl/core";
 import { uncitedLinks } from "../features/links/link-previews";
+import { applyActivity } from "../state/activity-store";
 import { dispatchAgentEvent, useAgentStore } from "../state/agent-store";
 import { applyRoutinesChanged, updateRoutines } from "../state/routines-store";
 import { applySettings } from "../state/settings-store";
@@ -45,6 +46,9 @@ export function handleServerEvent(event: ServerEvent, services: Services): void 
       return;
     case "routine.notification":
       announceRoutineRun(event.notification, services.agent);
+      return;
+    case "orchestrator.activity":
+      applyActivity(event.activity);
       return;
     case "hello":
       return;

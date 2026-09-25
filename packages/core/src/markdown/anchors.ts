@@ -1,6 +1,44 @@
+import { diceSimilarity, isPrefixExtension } from "../text";
 import { stripAgentMarker } from "./agent-text";
 import { type TrackedTask, trackTasks } from "./task-tracker";
 import { isTaskLine, type ParsedTask, parseTasks } from "./tasks";
+
+/**
+ * Whether `after` is still recognizably the line `before` was: the same text, still being typed or
+ * trimmed, or similar (Dice ≥ 0.5) — the task tracker's rule for an edited task. Blank is never.
+ */
+export function isSameLineEdited(before: string, after: string): boolean {
+  const a = before.trim();
+  const b = after.trim();
+  if (a === "" || b === "") return false;
+  return a === b || isPrefixExtension(a, b) || diceSimilarity(a, b) >= 0.5;
+}
+
+/**
+ * The 0-based line of `lines` that is still `text` (see `isSameLineEdited`): `line` itself when it
+ * is, else the nearest line with that exact text, else the nearest similar one; null when none is.
+ */
+export function findEditedLine(
+  lines: readonly string[],
+  line: number,
+  text: string,
+): number | null {
+  if (line >= 0 && line < lines.length && isSameLineEdited(text, lines[line]!)) return line;
+  const wanted = text.trim();
+  let exact: number | null = null;
+  let similar: number | null = null;
+  const nearer = (i: number, best: number | null) =>
+    best === null || Math.abs(i - line) < Math.abs(best - line);
+  for (let i = 0; i < lines.length; i++) {
+    const candidate = lines[i]!;
+    if (candidate.trim() === wanted && wanted !== "") {
+      if (nearer(i, exact)) exact = i;
+    } else if (exact === null && nearer(i, similar) && isSameLineEdited(text, candidate)) {
+      similar = i;
+    }
+  }
+  return exact ?? similar;
+}
 
 /** Minimal reference to a server-tracked task, enough to re-find it in an edited document. */
 export interface TaskAnchor {

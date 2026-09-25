@@ -789,6 +789,27 @@ button.chat-activity.is-approval:hover {
   color: color-mix(in srgb, var(--tone) 80%, var(--ddl-text-faint));
 }
 
+/* The turn an activity chip opened the orchestrator's chat at. */
+.status-divider.is-flashing span {
+  border-radius: var(--radius-s);
+  animation: ddl-turn-flash 1.4s ease-out;
+}
+
+@keyframes ddl-turn-flash {
+  0%,
+  40% {
+    background: color-mix(in srgb, var(--ddl-accent) 18%, transparent);
+    color: var(--ddl-text);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-divider.is-flashing span {
+    animation: none;
+    background: color-mix(in srgb, var(--ddl-accent) 18%, transparent);
+  }
+}
+
 /* ── Tool calls ─────────────────────────────────────────── */
 
 .tool-call {

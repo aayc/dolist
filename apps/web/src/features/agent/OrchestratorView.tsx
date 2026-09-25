@@ -23,7 +23,7 @@ import {
   retryMessage,
   useOutboxStore,
 } from "../../state/outbox-store";
-import { ui } from "../../state/ui-store";
+import { ui, useUiStore } from "../../state/ui-store";
 import { ActivityRow } from "./ActivityRow";
 import { Composer } from "./Composer";
 import { installCodeCopy } from "./code-copy";
@@ -37,6 +37,8 @@ import "../../styles/orchestrator.css";
 
 const THREAD_ID = ORCHESTRATOR_THREAD_ID;
 const NO_MESSAGES: readonly ThreadMessage[] = [];
+/** A turn asked for that isn't in the chat (yet) stops being waited for after this. */
+const FOCUS_WAIT_MS = 5_000;
 
 /**
  * The orchestrator's own chat in the agent panel: every turn (what woke it, what it said, each
@@ -144,6 +146,17 @@ function OrchestratorChat() {
     const root = scrollRef.current;
     return root ? installCodeCopy(root) : undefined;
   }, []);
+
+  // Opened at a turn (an activity chip, the note's indicator): show where that turn starts.
+  const focus = useUiStore((s) => s.chatFocus);
+  const { showMessage } = scroll;
+  useEffect(() => {
+    if (!focus) return;
+    const arrived = messages.some((m) => m.id === focus.messageId);
+    if ((arrived && showMessage(focus.messageId)) || Date.now() - focus.at > FOCUS_WAIT_MS) {
+      ui.set({ chatFocus: null });
+    }
+  }, [focus, messages, showMessage]);
 
   const unconfirmed = useMemo(
     () => matchPending(pending, messages).unconfirmed,

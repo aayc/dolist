@@ -12,6 +12,7 @@ import {
   type TransactionSpec,
 } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { resetActivityChipsEffect, setActivityChipsEffect } from "./activity/field";
 import { resetAnnotationsEffect, setAnnotationsEffect } from "./annotations/field";
 import {
   callbacksEffect,
@@ -113,6 +114,7 @@ export function createMarkdownEditor(
           ...configEffects(null, config),
           callbacksEffect(callbacks),
           resetAnnotationsEffect.of(null),
+          resetActivityChipsEffect.of(null),
         ],
       });
     }
@@ -154,6 +156,10 @@ export function createMarkdownEditor(
 
     setAnnotations(annotations) {
       view.dispatch({ effects: setAnnotationsEffect.of(annotations) });
+    },
+
+    setActivityChips(chips) {
+      view.dispatch({ effects: setActivityChipsEffect.of(chips) });
     },
 
     configure(partial) {

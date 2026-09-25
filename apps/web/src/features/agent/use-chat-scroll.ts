@@ -29,6 +29,8 @@ export interface ChatScroll {
   jumpToLatest(): void;
   /** Scrolls a card into view and asks for attention again. */
   showApproval(approvalId: string): void;
+  /** Scrolls a message into view (no longer following new content) and flashes it; false if absent. */
+  showMessage(messageId: string): boolean;
 }
 
 /**
@@ -129,6 +131,27 @@ export function useChatScroll(
     [scrollRef],
   );
 
+  const showMessage = useCallback(
+    (messageId: string) => {
+      const row = scrollRef.current?.querySelector<HTMLElement>(
+        `[data-message-id="${CSS.escape(messageId)}"]`,
+      );
+      if (!row) return false;
+      if (jumping.current !== null) {
+        clearTimeout(jumping.current);
+        jumping.current = null;
+      }
+      setPinned(false);
+      row.scrollIntoView({ block: "center", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+      row.classList.remove("is-flashing");
+      void row.offsetWidth;
+      row.classList.add("is-flashing");
+      setTimeout(() => row.classList.remove("is-flashing"), FLASH_MS);
+      return true;
+    },
+    [scrollRef, setPinned],
+  );
+
   const newCount = useMemo(() => {
     if (pinned) return 0;
     const seen = seenWhenUnpinned.current;
@@ -137,5 +160,5 @@ export function useChatScroll(
     return count;
   }, [pinned, messages]);
 
-  return { pinned, newCount, onScroll, onWheel, jumpToLatest, showApproval };
+  return { pinned, newCount, onScroll, onWheel, jumpToLatest, showApproval, showMessage };
 }
