@@ -13,6 +13,7 @@ import {
   type ObsidianImportPreview,
   type ObsidianImportRequest,
   type ObsidianImportResult,
+  SIDECAR_DIR,
   silentLogger,
   type Unsubscribe,
 } from "@ddl/core";
@@ -24,7 +25,7 @@ import {
   writeCarriedFiles,
 } from "./carry-over";
 import { copySource, createStaging, publish, removeStaging } from "./copy";
-import { readRegularFile } from "./files";
+import { copyFileAtomic, readRegularFile, writeFileAtomic } from "./files";
 import { type JobListener, type JobRun, JobRunner } from "./jobs";
 import { MANIFEST_PATH, writeManifest } from "./manifest";
 import { type ObsidianConfig, readObsidianConfig } from "./obsidian-config";
@@ -49,6 +50,8 @@ const MAX_NOTE_BYTES = 16 * 1024 * 1024;
 
 interface Analysis {
   source: string;
+  /** The current vault's real path. */
+  vault: string | null;
   obsidian: ObsidianConfig;
   scan: SourceScan;
   carry: CarryOver;
@@ -129,7 +132,25 @@ export class ObsidianImporter {
       run.phase("copying");
       const copy = await copySource(source, staging, run);
       run.phase("carrying_over");
-      await writeCarriedFiles(carry, staging, run);
+      const originals = await writeCarriedFiles(carry, staging, run);
+      const sidecar = join(staging, SIDECAR_DIR);
+      carry.plan.agent = await carrySidecar(
+        {
+          vault: analysis.vault,
+          carry,
+          readObsidian: async (path) => originals.get(path) ?? this.#readNote(source, path),
+          actOnExistingTasks: this.#options.settings().agent.actOnExistingTasks,
+          now: this.#now().getTime(),
+          signal: run.signal,
+          ...(this.#options.idFactory ? { idFactory: this.#options.idFactory } : {}),
+        },
+        {
+          write: (path, text) => writeFileAtomic(join(sidecar, path), text),
+          copy: async (path, absolute) => {
+            await copyFileAtomic(absolute, join(sidecar, path), { signal: run.signal });
+          },
+        },
+      );
       run.phase("finishing");
       await writeManifest(staging, {
         source,
@@ -210,7 +231,14 @@ export class ObsidianImporter {
       settings,
       this.#now(),
     );
-    return { source, obsidian, scan, carry, warnings: this.#warnings(obsidian, scan, carry) };
+    return {
+      source,
+      vault,
+      obsidian,
+      scan,
+      carry,
+      warnings: this.#warnings(obsidian, scan, carry),
+    };
   }
 
   #warnings(obsidian: ObsidianConfig, scan: SourceScan, carry: CarryOver): string[] {
