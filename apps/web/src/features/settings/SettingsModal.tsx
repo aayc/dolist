@@ -5,11 +5,12 @@ import {
   type ThemePreference,
 } from "@ddl/core";
 import { X } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, Suspense, useEffect, useState } from "react";
 import { errorMessage } from "../../api/errors";
 import { useServices } from "../../app/services";
 import { IconButton } from "../../components/IconButton";
 import { cx } from "../../lib/cx";
+import { preloadable } from "../../lib/preloadable";
 import { useAgentStore } from "../../state/agent-store";
 import { useConnectionStore } from "../../state/connection-store";
 import { useSettingsStore } from "../../state/settings-store";
@@ -28,14 +29,25 @@ const SECTIONS: ReadonlyArray<{ key: SettingsSection; label: string }> = [
   { key: "general", label: "Appearance" },
   { key: "editor", label: "Editor" },
   { key: "daily", label: "Daily notes" },
+  { key: "vault", label: "Vault" },
   { key: "agent", label: "Agent" },
   { key: "computer", label: "Computer use" },
   { key: "connectors", label: "Connectors" },
   { key: "about", label: "About" },
 ];
 
+/** The vault and importing from Obsidian: a chunk loaded with Settings. */
+const VaultSection = preloadable(() =>
+  import("../obsidian-import/VaultSection").then((m) => m.VaultSection),
+);
+
 export function SettingsModal({ section }: { section: SettingsSection }) {
   const [active, setActive] = useState(section);
+  // Opening Settings at a section while it's open (a link inside it) switches to that section.
+  useEffect(() => setActive(section), [section]);
+  useEffect(() => {
+    void VaultSection.preload();
+  }, []);
   return (
     <Modal label="Settings" className="settings-modal" testId="settings-modal">
       <nav className="settings-nav" aria-label="Settings sections">
@@ -64,6 +76,11 @@ export function SettingsModal({ section }: { section: SettingsSection }) {
         {active === "general" ? <AppearanceSection /> : null}
         {active === "editor" ? <EditorSection /> : null}
         {active === "daily" ? <DailySection /> : null}
+        {active === "vault" ? (
+          <Suspense fallback={<div className="thread-loading" aria-busy="true" />}>
+            <VaultSection />
+          </Suspense>
+        ) : null}
         {active === "agent" ? <AgentSection /> : null}
         {active === "computer" ? <ComputerUseSection /> : null}
         {active === "connectors" ? <ConnectorsSection /> : null}

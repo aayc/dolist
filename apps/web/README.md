@@ -201,3 +201,64 @@ header, Repeat this), `NewRoutineDialog.test.tsx`, `commands/routine-commands.te
 mock's contract test. E2E: `e2e/fullstack/routines.spec.ts` against the real daemon (New routine
 from a template, a routine's runs, Run now, Pause, the notification, Repeat this), and the cursor
 audit of every routines screen in `e2e/polish.spec.ts`.
+
+## Settings → Vault and importing from Obsidian
+
+`src/features/obsidian-import/` (the folder isn't called `vault/`: the repo ignores folders by that
+name), a chunk Settings preloads. **Settings → Vault** shows the vault the daemon serves
+(`GET /api/device/vault`, with "set by DDL_VAULT"), and, once the vault was imported, where from and
+when (`imported` in `GET /api/import/obsidian`), **Update from Obsidian** with its progress and
+report, and the previous vault kept as the backup (the web app can't open Finder: a copy button).
+"Import from Obsidian…" (`vault:import-obsidian`) in the palette opens it too. The steps:
+
+1. **The Obsidian vault's path**, pasted (how to copy it from Finder is in the hint; Enter reads the
+   report). The daemon's 400 message shows under the field.
+2. **The report** (`ImportReport.tsx`): counts first (notes, folders, attachments, canvases,
+   drawings, files and bytes), the daemon's warnings, the settings found, each plugin with a chip
+   (Works here, Partly, Doesn't run) and its note, canvases and drawings, the carry-over plan (the
+   current vault stays as the backup, daily notes moved and merged, other files, names that collide,
+   agent history, detached threads), a callout for `watchedOpenTasks` that says what the agent does
+   with them (it depends on "Act on existing tasks"), and skipped files. Long lists are folded.
+3. **The destination**, the report's `defaultDestination` to start with.
+4. **Import**: `state/obsidian-import-store.ts` follows `import.progress` (a late "running" snapshot
+   of a finished job never brings it back) and `GET /api/import/obsidian` after a reconnect. The
+   phase, files and bytes, and **Cancel** ("nothing was left behind"). A job that ends while the
+   section isn't showing toasts, with Open.
+5. **The result**, then **Switch to the new vault** (`vault-switch.ts`): open notes are flushed,
+   `PUT /api/device/vault`, then an overlay nobody can close (Escape, the backdrop and other
+   overlays can't replace it) says the daemon is restarting (or, for `restart: "manual"`, how to
+   start it again), shows the connection state, and polls `GET /api/device/vault` until the daemon
+   answers with the new path; then the page reloads, so nothing of the old vault (open notes, the
+   agent's state) can be written into the new one. After the reload a toast says which vault this
+   is and where the old one is. The overlay's code is loaded before the switch, while the daemon
+   can still serve it.
+
+Errors say why in place: 409 while a job runs (the running job then shows), 404 for Cancel or
+Update (the daemon's words, e.g. the Obsidian vault moved), 400 for a path. **Sync on** blocks the
+switch with the reason and Check again (the web app has no Settings → Sync on this branch: the
+section takes an `onOpenSync` link for when it does). **DDL_VAULT** blocks it and says to point
+`DDL_VAULT` at the new vault. A **paired device** gets 403 `forbidden_device`: the section says only
+the Mac running Daily Do List can import, and every control is disabled with that reason in its
+tooltip (`components/DisabledReason.tsx`).
+
+With `?mock=1`, `api/mock/mock-import.ts` imports two synthetic folders under `/Users/me`
+(`~/Obsidian Notebook`, an Obsidian vault, and `~/Plain notes`) with jobs that progress on a timer,
+the daemon's error bodies, and a switch that "restarts" the mock (requests fail, the connection
+goes to reconnecting and back); the vault it serves and where imported vaults came from persist in
+localStorage, so the page reloads onto the new vault. Only its name changes: the notes stay the
+demo's. `window.__ddlMock.setPairedDevice`, `setVaultLockedByEnv` and `setSyncing` simulate the
+refusals.
+
+### Tests
+
+Unit: `obsidian-import-store.test.ts`, `import-text.test.ts`, `vault-switch.test.ts` (flush before
+the switch, waiting through the old daemon and the restart, the notice after the reload),
+`VaultSection.test.tsx` (against the mock: preview, import, switch, an imported vault's update, a
+paired device), `commands/vault-commands.test.ts`, `ui-store.test.ts` (the overlay can't be
+closed), the client's contract test and the mock's (`import.progress` is mocked now). E2E:
+`e2e/obsidian-import.spec.ts` with the real keyboard (preview, import with progress, cancel, import
+again, switch and reload, update; a wrong path, sync and DDL_VAULT; a paired device;
+`DDL_IMPORT_SHOTS=<dir>` saves screenshots), the cursor audit of the report and the result in
+`e2e/polish.spec.ts`, and `e2e/fullstack/obsidian-import.spec.ts` against the real daemon (the
+harness builds the daemon's synthetic Obsidian vault; preview, import into a new folder, the copy and
+the manifest on disk, DDL_VAULT keeping the switch manual).

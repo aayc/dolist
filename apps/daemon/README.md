@@ -297,7 +297,7 @@ device calling a route only this machine may call), `not_found` (404), `conflict
 | GET | `/api/device/vault` | → `DeviceVaultResponse` (`path`, `lockedByEnv`). This machine only. |
 | PUT | `/api/device/vault` | `DeviceVaultRequest` (`{ path }`) → `DeviceVaultResponse` with `restart`, then exits with 75 (see [Restarting](#restarting-to-apply-a-change-exit-code-75)); the same vault answers without `restart` (400 not an existing folder or in `$DDL_HOME`, 409 `locked_by_env`, or `conflict` while an import runs, the vault syncs or a restart is pending). This machine only. |
 | POST | `/api/import/obsidian/preview` | `ObsidianImportPreviewRequest` (`{ source }`) → `ObsidianImportPreview` (reads the folder, writes nothing; 400 a source that isn't allowed). This machine only. |
-| GET | `/api/import/obsidian` | → `ObsidianImportStatusResponse` (`{ job }`: the running import or update, or the last one; `null` before any). This machine only. |
+| GET | `/api/import/obsidian` | → `ObsidianImportStatusResponse` (`{ job, imported? }`: the running import or update, or the last one, `null` before any; `imported`, from the vault's manifest, when this vault was imported: the Obsidian vault, when, the last update and the previous vault). This machine only. |
 | POST | `/api/import/obsidian` | `ObsidianImportRequest` (`{ source, destination? }`) → 202 `ObsidianImportJobResponse` (400 source or destination not allowed, 409 a job runs); `import.progress` events follow it. This machine only. |
 | POST | `/api/import/obsidian/cancel` | → `ObsidianImportJobResponse` (the stopped job, once its staging folder is removed; 404 nothing runs). This machine only. |
 | POST | `/api/import/obsidian/update` | → 202 `ObsidianImportJobResponse` (404 this vault wasn't imported, or the Obsidian vault moved; 409 a job runs). This machine only. |
@@ -428,7 +428,9 @@ it stays as the backup. The product decisions are in the spec, `docs/specs/obsid
      saying it's detached. Approvals, artifacts and anything unknown are copied byte for byte; the
      sync engine's snapshots and an earlier import's manifest stay behind;
    - `settings.json`: this vault's, with the new daily-note settings and Obsidian's editor settings;
-   - the manifest, `.daily-do-list/import/obsidian.json` (see `docs/DATA_FORMATS.md`).
+   - the manifest, `.daily-do-list/import/obsidian.json` (see `docs/DATA_FORMATS.md`), which
+     also records the previous vault, so `GET /api/import/obsidian` can say where the backup is
+     after the switch.
    The finished staging folder is renamed to the destination. Cancelling, a failure or a daemon
    shutdown removes the staging folder: the destination never holds half an import.
 3. **Switch** (`PUT /api/device/vault`), which restarts the daemon on the new vault. Switching is

@@ -170,6 +170,7 @@ extension AppModel {
     self.client = client
     settings.client = client
     remote.client = client
+    imports.client = client
     let agent = AgentStore(client: client)
     agent.alwaysOnMachineName = settings.settings.remote.alwaysOnMachine?.name
     let workspace = Workspace(
@@ -186,6 +187,7 @@ extension AppModel {
     if preferences.daemonMode == .managed, !isDemo { watchSupervisor() }
     if environment.enablesSystemServices { startAgentServices(agent) }
     observeAgentErrors(agent)
+    Task { await imports.load() }
   }
 
   /// Settings, tree and today's note in parallel; then restored tabs and the agent's state.
@@ -242,6 +244,8 @@ extension AppModel {
     settings.client = nil
     remote.client = nil
     remote.reset()
+    imports.client = nil
+    imports.reset()
     connection.reset()
     todayNotePath = nil
     phase = .booting("Starting…")

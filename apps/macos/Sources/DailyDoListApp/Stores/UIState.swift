@@ -43,6 +43,8 @@ final class UIState {
   var settingsPane: SettingsPane = .general
   /// The section of Settings → Always-On.
   var alwaysOnSection: AlwaysOnSection = .agentLocation
+  /// Settings → General shows the Import from Obsidian sheet.
+  var obsidianImportPresented = false
 
   /// Thread shown in the agent panel; nil = the inbox (or the routines).
   var selectedThreadId: String?

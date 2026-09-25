@@ -21,6 +21,10 @@ struct AppMenuCommands: Commands {
       item(.weeklyNote)
       Divider()
       item(.quickOpen)
+      Divider()
+      item(.importFromObsidian)
+      item(.updateFromObsidian)
+      item(.revealPreviousVault)
     }
     CommandGroup(replacing: .saveItem) {
       item(.save)

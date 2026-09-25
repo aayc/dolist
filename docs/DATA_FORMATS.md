@@ -376,12 +376,15 @@ What an import from Obsidian copied into this vault (`apps/daemon/src/import/`),
 Obsidian" can tell which files changed there, here, or on both sides.
 
 ```text
-{ version: 1, source, importedAt, updatedAt?, files: { [vaultPath]: { sha256, size, mtimeMs, base? } } }
+{ version: 1, source, importedAt, updatedAt?, previousVault?, files: { [vaultPath]: { sha256, size, mtimeMs, base? } } }
 ```
 
 - `source`: the Obsidian vault's folder on this machine (absolute). The file is machine-local: the
   sync engine never syncs `.daily-do-list/import/`, and another device's update would look for a
   folder it doesn't have.
+- `previousVault`: the Daily Do List vault that was current at the import (absolute), left
+  untouched as the backup; clients show it after the switch ("Reveal the old vault"). Added within
+  v1: older files don't have it, and readers that don't know it ignore it.
 - `files` lists every file copied from the Obsidian vault (its `.obsidian/` included), sorted by
   path. `sha256`, `size` and `mtimeMs` describe the Obsidian file when it was last copied or seen:
   equal `size` and `mtimeMs` mean unchanged without reading it. `base` is the SHA-256 of what this

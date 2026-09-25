@@ -58,6 +58,9 @@ enum CommandID: String, CaseIterable, Sendable {
   case setUpComputerUse = "computerUse.setUp"
   case approvalPolicy = "settings.approvals"
   case restartDaemon = "daemon.restart"
+  case importFromObsidian = "vault.importObsidian"
+  case updateFromObsidian = "vault.updateObsidian"
+  case revealPreviousVault = "vault.revealPrevious"
 
   static let tabs: [CommandID] = [.tab1, .tab2, .tab3, .tab4, .tab5, .tab6, .tab7, .tab8, .tab9]
 
@@ -128,7 +131,8 @@ enum CommandID: String, CaseIterable, Sendable {
     case .newFolder, .tomorrowsNote, .renameNote, .deleteNote, .revealNote, .toggleLivePreview,
       .toggleReadableWidth, .toggleLineNumbers, .toggleVim, .toggleTheme, .toggleAgent, .openInbox,
       .orchestratorChat, .runOrchestratorHere, .runOrchestratorOnMachine, .setUpComputerUse,
-      .approvalPolicy, .restartDaemon:
+      .approvalPolicy, .restartDaemon, .importFromObsidian, .updateFromObsidian,
+      .revealPreviousVault:
       nil
     }
   }

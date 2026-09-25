@@ -10,6 +10,7 @@ import {
   createId,
   type Logger,
   type ObsidianImportJob,
+  type ObsidianImportOrigin,
   type ObsidianImportPreview,
   type ObsidianImportRequest,
   type ObsidianImportResult,
@@ -92,6 +93,21 @@ export class ObsidianImporter {
 
   onProgress(listener: JobListener): Unsubscribe {
     return this.#jobs.onProgress(listener);
+  }
+
+  /** Where the current vault was imported from, when it was (its manifest), else null. */
+  async origin(): Promise<ObsidianImportOrigin | null> {
+    const vault = await this.#vault();
+    if (!vault) return null;
+    const read = await readManifest(vault);
+    if (read.status !== "loaded") return null;
+    const { source, importedAt, updatedAt, previousVault } = read.manifest;
+    return {
+      source,
+      importedAt,
+      ...(updatedAt === undefined ? {} : { updatedAt }),
+      ...(previousVault === undefined ? {} : { previousVault }),
+    };
   }
 
   /** Stops the running import or update; answers once its partial work is removed. */
@@ -193,6 +209,7 @@ export class ObsidianImporter {
       await writeManifest(staging, {
         source,
         importedAt: run.job.startedAt,
+        ...(analysis.vault ? { previousVault: analysis.vault } : {}),
         files: copy.files,
       });
       run.signal.throwIfAborted();

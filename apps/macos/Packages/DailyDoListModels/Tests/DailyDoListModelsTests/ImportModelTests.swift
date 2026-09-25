@@ -74,8 +74,27 @@ struct ImportModelTests {
   @Test func noJobSinceStartIsNull() throws {
     let none = try Self.fixture(
       ObsidianImportStatusResponse.self, "ObsidianImportStatusResponse", named: "nothing")
-    #expect(none.job == nil)
+    #expect(none.job == nil && none.imported == nil)
     #expect(try Self.json(none) == ["job": nil])
+  }
+
+  @Test func anImportedVaultSaysWhereItCameFromAndWhereTheOldVaultIs() throws {
+    let switched = try Self.fixture(
+      ObsidianImportStatusResponse.self, "ObsidianImportStatusResponse", named: "after switching")
+    #expect(
+      switched.imported
+        == ObsidianImportOrigin(
+          source: "/Users/me/Obsidian/Notebook", importedAt: 1_790_362_800_000,
+          updatedAt: 1_790_449_200_000, previousVault: "/Users/me/DailyDoList"))
+    let older = try Self.fixture(
+      ObsidianImportStatusResponse.self, "ObsidianImportStatusResponse", named: "imported before")
+    #expect(older.imported?.previousVault == nil && older.imported?.updatedAt == nil)
+    #expect(
+      try Self.json(older)
+        == [
+          "job": nil,
+          "imported": ["source": "/Users/me/Obsidian/Notebook", "importedAt": 1_790_362_800_000],
+        ])
   }
 
   @Test func progressArrivesAsAnImportProgressEvent() throws {

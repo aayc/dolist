@@ -3,8 +3,8 @@ import DailyDoListModels
 import DailyDoListUI
 import SwiftUI
 
-/// Daemon connection (managed/external, URL/port, DDL_HOME, vault, agent mode), restart, live
-/// status and log, launch at login and the global hotkey.
+/// Daemon connection (managed/external, URL/port, DDL_HOME, vault, agent mode), restart, the
+/// vault and importing from Obsidian, live status and log, launch at login and the global hotkey.
 struct GeneralSettingsPane: View {
   let model: AppModel
   @Bindable var preferences: AppPreferences
@@ -13,6 +13,7 @@ struct GeneralSettingsPane: View {
   @State private var isApplying = false
 
   var body: some View {
+    @Bindable var ui = model.ui
     Form {
       Section("Daemon") {
         LabeledContent("Daemon") {
@@ -112,6 +113,8 @@ struct GeneralSettingsPane: View {
         .disabled(isApplying)
       }
 
+      VaultSettingsSection(model: model, imports: model.imports)
+
       Section("Status") {
         LabeledContent("Connection") {
           Text(model.connection.label).foregroundStyle(
@@ -179,6 +182,10 @@ struct GeneralSettingsPane: View {
     }
     .formStyle(.grouped)
     .onAppear { model.systemIntegration.refresh() }
+    .task(id: model.client.map(ObjectIdentifier.init)) { await model.imports.load() }
+    .sheet(isPresented: $ui.obsidianImportPresented) {
+      ObsidianImportSheet(model: model, imports: model.imports)
+    }
   }
 
   private var agentModeBinding: Binding<AgentMode?> {

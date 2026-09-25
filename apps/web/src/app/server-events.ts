@@ -1,10 +1,12 @@
 import type { ServerEvent } from "@ddl/core";
 import { uncitedLinks } from "../features/links/link-previews";
 import { dispatchAgentEvent, useAgentStore } from "../state/agent-store";
+import { applyImportJob } from "../state/obsidian-import-store";
 import { applyRoutinesChanged, updateRoutines } from "../state/routines-store";
 import { applySettings } from "../state/settings-store";
 import { applySurfaceFrame } from "../state/surface-store";
 import { announceApproval } from "./approval-toasts";
+import { announceImportEnd } from "./import-toasts";
 import { announceRoutineRun } from "./routine-toasts";
 import type { Services } from "./services";
 
@@ -45,6 +47,10 @@ export function handleServerEvent(event: ServerEvent, services: Services): void 
       return;
     case "routine.notification":
       announceRoutineRun(event.notification, services.agent);
+      return;
+    case "import.progress":
+      applyImportJob(event.job);
+      announceImportEnd(event.job);
       return;
     case "hello":
       return;

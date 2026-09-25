@@ -29,6 +29,14 @@ describe("closing overlays", () => {
     expect(ui.get().overlay).toBeNull();
   });
 
+  it("never closes the vault switch: the daemon is restarting underneath it", () => {
+    ui.openOverlay({ kind: "vault-switch", path: "/Users/me/Notebook", restart: "supervisor" });
+    ui.closeOverlay();
+    ui.openOverlay({ kind: "palette" });
+    ui.newRoutine();
+    expect(ui.get().overlay).toMatchObject({ kind: "vault-switch" });
+  });
+
   it("unregisters only the dialog it registered", () => {
     ui.openOverlay({ kind: "settings", section: "agent" });
     const close = vi.fn();

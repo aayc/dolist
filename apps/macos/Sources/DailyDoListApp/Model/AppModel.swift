@@ -36,6 +36,8 @@ public final class AppModel {
   let settings = SettingsStore()
   /// This device's side of the always-on setup (Settings → Always-On).
   let remote = RemoteSettingsStore()
+  /// The vault and importing from Obsidian (Settings → General → Vault).
+  let imports = ObsidianImportStore()
   let toasts: ToastStore
   let ui: UIState
   /// The macOS permissions computer use needs, and the setup that gets them.

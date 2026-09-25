@@ -282,6 +282,46 @@ public final class HTTPDaemonClient: DaemonClient {
     try await transport.json(.delete, APIRoute.machinePairing)
   }
 
+  // MARK: - This machine's vault and importing from Obsidian
+
+  public func deviceVault() async throws -> DeviceVaultResponse {
+    try await transport.json(.get, APIRoute.deviceVault)
+  }
+
+  public func switchVault(_ request: DeviceVaultRequest) async throws -> DeviceVaultResponse {
+    try await transport.json(.put, APIRoute.deviceVault, body: request)
+  }
+
+  public func previewObsidianImport(_ request: ObsidianImportPreviewRequest) async throws
+    -> ObsidianImportPreview
+  {
+    try await transport.json(.post, APIRoute.importObsidianPreview, body: request)
+  }
+
+  public func obsidianImportStatus() async throws -> ObsidianImportStatusResponse {
+    try await transport.json(.get, APIRoute.importObsidian)
+  }
+
+  public func startObsidianImport(_ request: ObsidianImportRequest) async throws
+    -> ObsidianImportJob
+  {
+    let response: ObsidianImportJobResponse = try await transport.json(
+      .post, APIRoute.importObsidian, body: request)
+    return response.job
+  }
+
+  public func cancelObsidianImport() async throws -> ObsidianImportJob {
+    let response: ObsidianImportJobResponse = try await transport.json(
+      .post, APIRoute.importObsidianCancel)
+    return response.job
+  }
+
+  public func updateFromObsidian() async throws -> ObsidianImportJob {
+    let response: ObsidianImportJobResponse = try await transport.json(
+      .post, APIRoute.importObsidianUpdate)
+    return response.job
+  }
+
   // MARK: - Events
 
   public func connect() async {

@@ -1337,8 +1337,17 @@ const obsidianImportJob = (): Arb<core.ObsidianImportJob> =>
 const obsidianImportJobResponse = (): Arb<core.ObsidianImportJobResponse> =>
   fc.record({ job: obsidianImportJob() });
 
+const obsidianImportOrigin = (): Arb<core.ObsidianImportOrigin> =>
+  fc.record(
+    { source: folder(), importedAt: p.epochMs(), updatedAt: p.epochMs(), previousVault: folder() },
+    { requiredKeys: ["source", "importedAt"] },
+  );
+
 const obsidianImportStatusResponse = (): Arb<core.ObsidianImportStatusResponse> =>
-  fc.record({ job: maybe(obsidianImportJob()) });
+  fc.record(
+    { job: maybe(obsidianImportJob()), imported: obsidianImportOrigin() },
+    { requiredKeys: ["job"] },
+  );
 
 const importProgressEvent = (): Arb<core.ServerEventOf<"import.progress">> =>
   fc.record({ type: fc.constant("import.progress" as const), job: obsidianImportJob() });
@@ -1680,6 +1689,7 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   ObsidianUpdateReport: obsidianUpdateReport,
   ObsidianImportJob: obsidianImportJob,
   ObsidianImportJobResponse: obsidianImportJobResponse,
+  ObsidianImportOrigin: obsidianImportOrigin,
   ObsidianImportStatusResponse: obsidianImportStatusResponse,
   ApiErrorCode: apiErrorCode,
   ApiErrorBody: apiErrorBody,
@@ -1837,7 +1847,10 @@ export const arb = plainFactories({
   routineNotificationEvent,
   deviceVaultRequest,
   deviceVaultResponse,
+  obsidianImportPreviewRequest,
   obsidianImportPreview,
+  obsidianImportRequest,
+  obsidianImportOrigin,
   obsidianImportJob,
   obsidianImportJobResponse,
   obsidianImportStatusResponse,

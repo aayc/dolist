@@ -139,6 +139,7 @@ export const WIRE_SCHEMAS = {
   ObsidianUpdateReport: imports.ObsidianUpdateReportSchema,
   ObsidianImportJob: imports.ObsidianImportJobSchema,
   ObsidianImportJobResponse: imports.ObsidianImportJobResponseSchema,
+  ObsidianImportOrigin: imports.ObsidianImportOriginSchema,
   ObsidianImportStatusResponse: imports.ObsidianImportStatusResponseSchema,
   // Errors
   ApiErrorCode: errors.ApiErrorCodeSchema,

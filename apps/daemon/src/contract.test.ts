@@ -1034,7 +1034,11 @@ const scenarios: Record<string, Scenario> = {
     });
     await withImports(
       observed,
-      async ({ api, imports }) => {
+      async ({ api, bed, imports }) => {
+        expect((await api.call("importObsidian", "GET")).body).toEqual({
+          job: null,
+          imported: { source: bed.source, importedAt: TODAY.getTime(), previousVault: bed.vault },
+        });
         const started = await api.call("importObsidianUpdate", "POST");
         expect(started.status).toBe(202);
         expect(started.body).toMatchObject({ job: { kind: "update", state: "running" } });
@@ -1047,6 +1051,12 @@ const scenarios: Record<string, Scenario> = {
             kind: "update",
             state: "done",
             update: { unchanged: Object.keys(OBSIDIAN_FILES).length },
+          },
+          imported: {
+            source: bed.source,
+            importedAt: TODAY.getTime(),
+            updatedAt: TODAY.getTime(),
+            previousVault: bed.vault,
           },
         });
       },

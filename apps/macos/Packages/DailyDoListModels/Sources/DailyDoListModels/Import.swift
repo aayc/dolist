@@ -582,18 +582,44 @@ public struct ObsidianImportJobResponse: Codable, Hashable, Sendable {
   public init(job: ObsidianImportJob) { self.job = job }
 }
 
-/// `GET /api/import/obsidian`: the running job, or the last one since the daemon started.
+/// Where the vault the daemon serves was imported from (its import manifest).
+public struct ObsidianImportOrigin: Codable, Hashable, Sendable {
+  /// The Obsidian vault it was copied from (absolute).
+  public var source: String
+  public var importedAt: Int
+  /// The last "Update from Obsidian".
+  public var updatedAt: Int?
+  /// The vault that was current at the import, left untouched: the backup.
+  public var previousVault: String?
+
+  public init(source: String, importedAt: Int, updatedAt: Int? = nil, previousVault: String? = nil)
+  {
+    self.source = source
+    self.importedAt = importedAt
+    self.updatedAt = updatedAt
+    self.previousVault = previousVault
+  }
+}
+
+/// `GET /api/import/obsidian`: the running job, or the last one since the daemon started, and
+/// where this vault was imported from.
 public struct ObsidianImportStatusResponse: Codable, Hashable, Sendable {
   /// nil: none since the daemon started.
   public var job: ObsidianImportJob?
+  /// Set when this vault was imported from Obsidian (so it can be updated from there).
+  public var imported: ObsidianImportOrigin?
 
-  public init(job: ObsidianImportJob?) { self.job = job }
+  public init(job: ObsidianImportJob?, imported: ObsidianImportOrigin? = nil) {
+    self.job = job
+    self.imported = imported
+  }
 
-  enum CodingKeys: String, CodingKey { case job }
+  enum CodingKeys: String, CodingKey { case job, imported }
 
   public func encode(to encoder: Encoder) throws {
     var c = encoder.container(keyedBy: CodingKeys.self)
     // Required on the wire: null when there was no job.
     try c.encode(job, forKey: .job)
+    try c.encodeIfPresent(imported, forKey: .imported)
   }
 }

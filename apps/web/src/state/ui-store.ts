@@ -1,4 +1,4 @@
-import type { RoutineNotify, RoutineUse } from "@ddl/core";
+import type { DaemonRestart, RoutineNotify, RoutineUse } from "@ddl/core";
 import { create } from "zustand";
 import { readJson, STORAGE_KEYS, writeJson } from "../lib/storage";
 
@@ -8,6 +8,7 @@ export type SettingsSection =
   | "general"
   | "editor"
   | "daily"
+  | "vault"
   | "agent"
   | "computer"
   | "connectors"
@@ -48,7 +49,9 @@ export type Overlay =
   | { kind: "settings"; section: SettingsSection }
   | { kind: "artifact"; threadId: string; artifactId: string }
   | { kind: "confirm"; request: ConfirmRequest }
-  | { kind: "new-routine"; draft?: RoutineDraft };
+  | { kind: "new-routine"; draft?: RoutineDraft }
+  /** The daemon restarts on another vault: nothing else can be done until it's back. */
+  | { kind: "vault-switch"; path: string; restart: DaemonRestart };
 
 export interface UiState {
   leftOpen: boolean;
@@ -126,19 +129,26 @@ useUiStore.subscribe((state, previous) => {
 /** Dialogs open on top of the overlay (a confirmation inside settings), innermost last. */
 const stackedDialogs: Array<() => void> = [];
 
+/** While the daemon restarts on another vault, no other overlay may replace the one saying so. */
+function switchingVaults(): boolean {
+  return useUiStore.getState().overlay?.kind === "vault-switch";
+}
+
 export const ui = {
   set: useUiStore.setState,
   get: useUiStore.getState,
 
   openOverlay(overlay: Overlay): void {
+    if (switchingVaults() && overlay.kind !== "vault-switch") return;
     useUiStore.setState({ overlay });
   },
 
   /** Closes the innermost dialog stacked on the overlay, else the overlay itself (Escape). */
   closeOverlay(): void {
     const stacked = stackedDialogs.at(-1);
+    const { overlay } = useUiStore.getState();
     if (stacked) stacked();
-    else if (useUiStore.getState().overlay) useUiStore.setState({ overlay: null });
+    else if (overlay && overlay.kind !== "vault-switch") useUiStore.setState({ overlay: null });
   },
 
   /** Registers a dialog shown on top of the overlay; returns its unregister. */
@@ -151,7 +161,7 @@ export const ui = {
   },
 
   confirm(request: ConfirmRequest): void {
-    useUiStore.setState({ overlay: { kind: "confirm", request } });
+    ui.openOverlay({ kind: "confirm", request });
   },
 
   toggleLeft(view?: LeftView): void {
@@ -213,7 +223,7 @@ export const ui = {
   },
 
   newRoutine(draft?: RoutineDraft): void {
-    useUiStore.setState({ overlay: { kind: "new-routine", ...(draft ? { draft } : {}) } });
+    ui.openOverlay({ kind: "new-routine", ...(draft ? { draft } : {}) });
   },
 
   setExpanded(path: string, expanded: boolean): void {

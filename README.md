@@ -113,26 +113,39 @@ Chrome and (on macOS) desktop control, not Cursor's. Details: [Agent system](doc
 
 ## Moving from Obsidian
 
-Keep your Obsidian vault as it is (it's only ever read, so Obsidian Sync can keep running) and make
-a copy of it the new Daily Do List vault, with everything you already have here carried over:
+Daily Do List makes a new vault from your Obsidian vault and carries over everything you already
+have here. Your Obsidian vault is only ever read, so Obsidian and Obsidian Sync keep working on it
+until you're ready to stop; your current Daily Do List vault is left untouched as the backup.
 
-1. **Preview.** Point Daily Do List at the Obsidian vault's folder. The report lists its notes,
-   attachments, settings, templates, plugins (and how each one fares here: Dataview queries show as
-   text, Excalidraw drawings work, …), canvases (copied, not viewable yet), and what happens to your
-   current Daily Do List notes: daily notes moved to Obsidian's daily-note folder and format, dates
-   both vaults have, name collisions, and your agent history.
-2. **Import.** The Obsidian vault is copied byte for byte (attachments and `.obsidian/` too, so it
-   still opens in Obsidian) into a new folder next to your current vault. Your daily notes join
-   Obsidian's; for a day both have, yours is appended to Obsidian's note under
-   `## From Daily Do List`. Other notes, routines and drawings keep their paths (a name Obsidian
-   already uses gets "(Daily Do List)" added), and every task keeps its agent thread. Settings keep
-   your agent setup and take Obsidian's daily-note and editor settings (vim mode, vimrc, …).
-3. **Switch** to the new vault. The daemon restarts on it; the old vault stays untouched as your
-   backup.
-4. **Update from Obsidian** whenever you've written more there: new and changed files come over,
-   a file changed in both places keeps both versions, and nothing is ever deleted.
+1. **Find your Obsidian vault on this Mac**: the folder with `.obsidian` inside (the local copy
+   Obsidian Sync keeps up to date). Leave it where it is: the import copies it. If it's in iCloud
+   Drive, make sure it's downloaded (Keep Downloaded). To import a frozen snapshot instead,
+   duplicate the folder in Finder and import the duplicate (Update from Obsidian then reads the
+   duplicate, not the vault Obsidian syncs).
+2. **Open Import from Obsidian**: in the Mac app, **File → Import from Obsidian…** (or Settings →
+   General → Vault); in the web app, **Settings → Vault** (or "Import from Obsidian…" in the command
+   palette). Choose the folder (Mac) or paste its path (web).
+3. **Read the report** before anything is copied: notes, folders, attachments, the settings found
+   (daily notes, vim mode, vimrc, theme), templates, your community plugins and how each fares here,
+   canvases and drawings, and what happens to your Daily Do List notes: daily notes move to
+   Obsidian's daily-note folder and format, a day both vaults have keeps Obsidian's note with yours
+   added under `## From Daily Do List`, a name Obsidian already uses gets "(Daily Do List)" added,
+   and your agent history (threads, task records, approvals, routines) comes along. If Obsidian's
+   recent daily notes have open tasks, the report says whether the agent will work on them after the
+   switch (only with "Act on existing tasks" on).
+4. **Import** into the suggested folder (next to your current vault) or one you pick. It's copied
+   byte for byte, `.obsidian/` included, so it still opens in Obsidian. You can cancel; nothing is
+   left behind.
+5. **Switch to the new vault.** Turn sync off first if this device syncs (Mac: Settings → Always-On →
+   Sync): the old notes would otherwise sync into the new vault. Daily Do List restarts on the new
+   vault and reconnects; the old one stays where it was (Mac: File → Reveal the Old Vault in Finder).
+6. **Update from Obsidian** later, while you still write there or on your phone: new and changed
+   files come over, a note changed in both places keeps both versions, and nothing is deleted.
+   Tasks it brings in are new to the agent, which picks them up as if you had just written them.
 
-The API behind it (for scripts and other clients) is described in the daemon's README:
+Not shown yet: canvases (copied, still open in Obsidian), Dataview and Tasks queries (shown as their
+text), Templater commands (templates insert as plain text), images, tables and callouts (shown as
+markdown), and a backlinks panel. The API behind it is in the daemon's README:
 [Importing from Obsidian](apps/daemon/README.md#importing-from-obsidian).
 
 ## macOS app

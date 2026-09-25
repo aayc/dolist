@@ -40,4 +40,6 @@ export const STORAGE_KEYS = {
   layout: "ddl-layout",
   perf: "ddl-perf",
   mockSettings: "ddl-mock-settings",
+  /** The mock daemon's vault: the one it serves, and the vaults imported from Obsidian. */
+  mockVault: "ddl-mock-vault",
 } as const;
