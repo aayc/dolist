@@ -3,7 +3,7 @@
  * the preview report, the import itself and "Update from Obsidian". The Obsidian vault is only
  * ever read, and the current vault is left untouched: it's the backup.
  */
-import { realpath } from "node:fs/promises";
+import { realpath, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
   type AppSettings,
@@ -17,7 +17,7 @@ import {
   silentLogger,
   type Unsubscribe,
 } from "@ddl/core";
-import { errorMessage } from "../errors";
+import { ApiError, errorMessage } from "../errors";
 import {
   type CarryOver,
   countWatchedOpenTasks,
@@ -27,13 +27,14 @@ import {
 import { copySource, createStaging, publish, removeStaging } from "./copy";
 import { copyFileAtomic, readRegularFile, writeFileAtomic } from "./files";
 import { type JobListener, type JobRun, JobRunner } from "./jobs";
-import { MANIFEST_PATH, writeManifest } from "./manifest";
+import { MANIFEST_PATH, readManifest, writeManifest } from "./manifest";
 import { type ObsidianConfig, readObsidianConfig } from "./obsidian-config";
 import { defaultDestination, type ImportPlaces, resolveDestination, resolveSource } from "./places";
 import { pathList, skippedList } from "./report-lists";
 import { type MergedSettings, mergeSettingsFile, SETTINGS_PATH } from "./settings-merge";
 import { carrySidecar } from "./sidecar";
 import { type SourceScan, scanSource } from "./source-scan";
+import { updateFromSource } from "./update";
 
 export interface ObsidianImporterOptions {
   places: ImportPlaces;
@@ -118,6 +119,35 @@ export class ObsidianImporter {
     const destination = await resolveDestination(request.destination, source, this.#options.places);
     return this.#jobs.start("import", { source, destination }, async (run) => ({
       result: await this.#runImport(run, source, destination),
+    }));
+  }
+
+  /**
+   * Starts copying what changed in the Obsidian vault since the import into the current vault
+   * (see `update.ts`); answers at once with the job.
+   */
+  async startUpdate(): Promise<ObsidianImportJob> {
+    this.#jobs.assertIdle();
+    const vault = await this.#vault();
+    if (!vault) throw new ApiError(404, "not_found", "This daemon has no vault to update");
+    const read = await readManifest(vault);
+    if (read.status === "missing") {
+      throw new ApiError(404, "not_found", "This vault wasn't imported from Obsidian");
+    }
+    if (read.status === "unusable") {
+      throw new ApiError(404, "not_found", `The import's manifest can't be used: ${read.reason}`);
+    }
+    const { manifest } = read;
+    if (!(await stat(manifest.source).catch(() => null))?.isDirectory()) {
+      throw new ApiError(
+        404,
+        "not_found",
+        `The Obsidian vault isn't at ${manifest.source} any more`,
+      );
+    }
+    const source = await resolveSource(manifest.source, this.#options.places);
+    return this.#jobs.start("update", { source, destination: vault }, async (run) => ({
+      update: await updateFromSource({ vault, manifest, source, run, now: this.#now().getTime() }),
     }));
   }
 
