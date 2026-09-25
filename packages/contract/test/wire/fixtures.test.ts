@@ -81,6 +81,7 @@ describe("fixture coverage", () => {
       "SetAgentEnabledRequest",
       "PostMessageRequest",
       "ApprovalDecisionRequest",
+      "CreateRoutineRequest",
       "UpdateSettingsRequest",
       "DeviceSettingsPatch",
       "DeviceSyncSetupRequest",

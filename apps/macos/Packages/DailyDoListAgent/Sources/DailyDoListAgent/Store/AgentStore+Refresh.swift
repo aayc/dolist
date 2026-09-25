@@ -5,8 +5,9 @@ import Foundation
 extension AgentStore {
   /// Refetches everything events would have kept current: the status, pending approvals, the
   /// thread list (`todayNotePath`'s threads, or every thread when it's nil), the records of every
-  /// note loaded with `loadRecords(for:)` (and today's), every loaded thread, and the
-  /// orchestrator's chat. (Surface subscriptions survive reconnects: the client re-sends them.)
+  /// note loaded with `loadRecords(for:)` (and today's), the routines and the runs of those loaded
+  /// with `loadRuns(ofRoutine:)`, every loaded thread, and the orchestrator's chat. (Surface
+  /// subscriptions survive reconnects: the client re-sends them.)
   ///
   /// Call it at launch and after every reconnect. Events that arrive while it runs are newer than
   /// its snapshots and are never overwritten; overlapping refreshes only apply the latest.
@@ -20,13 +21,17 @@ extension AgentStore {
     let client = self.client
     let listFilter = self.todayNotePath
     let notes = trackedNotes.sorted()
+    let routineIds = trackedRoutines.sorted()
     async let status = Self.capture { try await client.agentStatus() }
     async let pending = Self.capture { try await client.approvals(status: .pending) }
     async let list = Self.capture { try await client.threads(notePath: listFilter, taskId: nil) }
     async let records = Self.fetchRecords(client: client, notes: notes)
+    async let routineList = Self.capture { try await client.routines() }
+    async let runs = Self.fetchRuns(client: client, routineIds: routineIds)
     let (statusResult, pendingResult, listResult, recordResults) = await (
       status, pending, list, records
     )
+    let (routinesResult, runResults) = await (routineList, runs)
     guard generation == refreshGeneration else { return }
 
     var failure: Error?
@@ -50,6 +55,16 @@ extension AgentStore {
       switch result {
       case .success(let value): applyFetchedRecords(value, notePath: notePath, since: mark)
       case .failure(let error): failure = failure ?? error
+      }
+    }
+    // The Routines view shows its own error (a daemon without routines has none to list).
+    switch routinesResult {
+    case .success(let value): applyFetchedRoutines(value, since: mark)
+    case .failure(let error): routinesLoadError = AgentAlert.describe(error)
+    }
+    for (routineId, result) in runResults {
+      if case .success(let value) = result {
+        applyFetchedRuns(value, routineId: routineId, since: mark)
       }
     }
     if let failure { report(failure, title: "Couldn't refresh the agent's state") }
@@ -89,6 +104,19 @@ extension AgentStore {
         group.addTask { (note, await capture { try await client.taskRecords(notePath: note) }) }
       }
       var results: [(String, Result<[TaskAgentRecord], Error>)] = []
+      for await result in group { results.append(result) }
+      return results.sorted { $0.0 < $1.0 }
+    }
+  }
+
+  nonisolated static func fetchRuns(
+    client: DaemonClient, routineIds: [String]
+  ) async -> [(String, Result<[ThreadSummary], Error>)] {
+    await withTaskGroup(of: (String, Result<[ThreadSummary], Error>).self) { group in
+      for id in routineIds {
+        group.addTask { (id, await capture { try await client.threads(routineId: id) }) }
+      }
+      var results: [(String, Result<[ThreadSummary], Error>)] = []
       for await result in group { results.append(result) }
       return results.sorted { $0.0 < $1.0 }
     }

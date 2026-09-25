@@ -27,6 +27,8 @@ public enum APIRoute {
   public static let threads = "/api/threads"
   public static let approvals = "/api/approvals"
   public static let connectors = "/api/connectors"
+  /// GET `RoutineListResponse` · POST `CreateRoutineRequest` → 201 `RoutineResponse`.
+  public static let routines = "/api/routines"
   public static let syncStatus = "/api/sync/status"
   /// POST `ComputerPermissionsOpenRequest`: opens System Settings at that privacy pane.
   public static let computerPermissionsOpen = "/api/computer/permissions/open"
@@ -72,12 +74,23 @@ public enum APIRoute {
     "/api/tasks?notePath=\(encodeURIComponent(notePath))"
   }
 
-  public static func threads(notePath: String? = nil, taskId: String? = nil) -> String {
+  public static func threads(
+    notePath: String? = nil, taskId: String? = nil, routineId: String? = nil
+  ) -> String {
     var query: [String] = []
     if let notePath { query.append("notePath=\(encodeURIComponent(notePath))") }
     if let taskId { query.append("taskId=\(encodeURIComponent(taskId))") }
+    if let routineId { query.append("routineId=\(encodeURIComponent(routineId))") }
     return query.isEmpty ? threads : "\(threads)?\(query.joined(separator: "&"))"
   }
+
+  public static func routine(_ id: String) -> String { "\(routines)/\(encodeURIComponent(id))" }
+  /// POST → `RoutineRunResponse`.
+  public static func routineRun(_ id: String) -> String { "\(routine(id))/run" }
+  /// POST → `RoutineResponse` (sets `paused: true` in the file).
+  public static func routinePause(_ id: String) -> String { "\(routine(id))/pause" }
+  /// POST → `RoutineResponse` (sets `paused: false` in the file).
+  public static func routineResume(_ id: String) -> String { "\(routine(id))/resume" }
 
   public static func thread(_ id: String) -> String { "/api/threads/\(encodeURIComponent(id))" }
   public static func threadMessages(_ id: String) -> String { "\(thread(id))/messages" }

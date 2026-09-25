@@ -14,6 +14,7 @@ import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerComputerRoutes } from "./routes/computer";
 import { registerDailyRoutes } from "./routes/daily";
 import { registerNoteRoutes } from "./routes/notes";
+import { registerRoutineRoutes } from "./routes/routines";
 import { registerSettingsRoutes } from "./routes/settings";
 import { disabledSyncStatusResponse, registerSyncRoutes } from "./routes/sync";
 import { registerVaultRoutes } from "./routes/vault";
@@ -95,6 +96,7 @@ export function createApp(deps: AppDeps): Hono {
   registerDailyRoutes(app, ctx);
   registerSettingsRoutes(app, ctx);
   registerAgentRoutes(app, ctx);
+  registerRoutineRoutes(app, ctx);
   registerArtifactRoutes(app, ctx);
   registerSyncRoutes(app, ctx);
   registerComputerRoutes(app, ctx);

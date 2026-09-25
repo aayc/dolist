@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "routines": {
+    "rtn_0a1b2c3d4e5f60": {
+      "path": "Routines/Morning briefing.md",
+      "scheduleKey": "every weekday at 7:30",
+      "nextRunAt": 1790749800000,
+      "lastRun": {
+        "runId": "run_k3j9x0q2m1ab",
+        "threadId": "thr_k3j9x0q2m1ab",
+        "trigger": "schedule",
+        "status": "done",
+        "startedAt": 1790663400000,
+        "finishedAt": 1790663460000,
+        "summary": "3 meetings · 68°F sunny",
+        "result": "3 meetings today; 68°F and sunny. New: the offsite moved to Thursday.",
+        "notified": true
+      },
+      "runs": ["thr_k3j9x0q2m1ab", "thr_older0000001"],
+      "extraRuns": { "date": "2026-09-24", "count": 1 },
+      "updatedAt": 1790663460000
+    },
+    "rtn_1b2c3d4e5f6071": {
+      "path": "Routines/Price watch.md",
+      "scheduleKey": null,
+      "nextRunAt": null,
+      "runs": [],
+      "updatedAt": 1790660000000
+    }
+  }
+}

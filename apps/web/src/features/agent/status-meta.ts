@@ -1,4 +1,9 @@
-import type { ActionCategory, TaskAgentStatus, ThreadSummary } from "@ddl/core";
+import {
+  type ActionCategory,
+  isOrchestratorThread,
+  type TaskAgentStatus,
+  type ThreadSummary,
+} from "@ddl/core";
 import { isSameLocalDay } from "../../lib/format";
 
 export type Tone = "accent" | "faint" | "info" | "warning" | "success" | "danger";
@@ -63,6 +68,17 @@ export function inboxGroupOf(
     default:
       return "other";
   }
+}
+
+/**
+ * What the agent inbox lists: task threads (the orchestrator's chat is pinned above them). A
+ * routine's runs live in their routine's own inbox, except while one waits for you.
+ */
+export function isInboxThread(
+  thread: Pick<ThreadSummary, "id" | "routineId" | "status" | "pendingApprovals">,
+): boolean {
+  if (isOrchestratorThread(thread.id)) return false;
+  return thread.routineId === undefined || inboxGroupOf(thread) === "needs_you";
 }
 
 /** Today's threads (plus anything still waiting on the user), grouped and newest first. */

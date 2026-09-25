@@ -139,7 +139,12 @@ and the phone use the always-on machine.
   - `always_on_host`: this is the always-on machine; it runs the agent whenever no device set to
     `this_device` is running.
 
-  A device without sync is standalone and runs its own agent, as today.
+  A device without sync is standalone and runs its own agent, as today. Without an always-on
+  machine set up (or without sync), the agent is held on the device whatever it chose, and the
+  choice applies again once both are set up.
+- **One toggle:** "where the orchestrator runs" (this device or the always-on machine) sits in the
+  agent panel's header on the web and the Mac, not only in Settings, and can be flipped at any
+  time; the handover shows as it happens.
 - **Handover uses the agent lease with a priority.** A `this_device` request outranks the
   always-on machine's: the sync service marks a takeover, the holder sees it on its next renewal,
   stops its agent, runs a sync pass and releases, and the requester starts from the synced state
@@ -154,6 +159,16 @@ and the phone use the always-on machine.
   desktop available), so moving the agent never fails silently.
 - **The always-on machine's name and address are synced settings**, so every device knows it;
   each device still pairs once and keeps its own credential.
+- **Fencing:** every lease grant has an increasing epoch, and the sync service refuses writes to
+  the agent's sidecar files (threads, artifacts, `state/`) that don't carry the current one, so a
+  device that lost the agent while offline can't overwrite the new holder's state when it
+  reconnects.
+- **The journal (next):** agent state becomes append-only events that merge as a union, side
+  effects are journaled before and after they run (never re-run when uncertain), and a run
+  resumes on the new machine instead of stopping
+  ([docs/specs/agent-journal.md](./specs/agent-journal.md)). Temporal was considered and rejected:
+  a central server every device would depend on, histories outside the vault, and replay that
+  needs control of the agent loop, which lives inside the harness.
 
 ## Settings
 

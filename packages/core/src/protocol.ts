@@ -16,6 +16,11 @@ import type {
   ApprovalDecision,
   ApprovalRequest,
   ApprovalScope,
+  Routine,
+  RoutineNotification,
+  RoutineNotify,
+  RoutineTemplate,
+  RoutineUse,
   SurfaceFrame,
   SurfaceKind,
   TaskAgentRecord,
@@ -71,7 +76,7 @@ export const API_ROUTES = {
   agentEnabled: "/api/agent/enabled",
   /** GET → TaskRecordsResponse */
   tasks: (notePath: string) => `/api/tasks?notePath=${encodeURIComponent(notePath)}`,
-  /** GET (`?notePath=`, `?taskId=`) → ThreadListResponse */
+  /** GET (`?notePath=`, `?taskId=`, `?routineId=`) → ThreadListResponse */
   threads: "/api/threads",
   /** GET → ThreadResponse */
   thread: (id: string) => `/api/threads/${encodeURIComponent(id)}`,
@@ -91,6 +96,22 @@ export const API_ROUTES = {
   /** GET → artifact bytes (Content-Type from the artifact; `?download=1` forces an attachment) */
   artifact: (threadId: string, artifactId: string) =>
     `/api/artifacts/${encodeURIComponent(threadId)}/${encodeURIComponent(artifactId)}`,
+  /**
+   * GET → RoutineListResponse · POST CreateRoutineRequest → 201 RoutineResponse (writes
+   * `Routines/<name>.md`; 409 when it exists, 400 when the schedule can't be read)
+   */
+  routines: "/api/routines",
+  /** GET → RoutineResponse */
+  routine: (id: string) => `/api/routines/${encodeURIComponent(id)}`,
+  /**
+   * POST → RoutineRunResponse: runs it now (409 while a run is going or when today's extra runs
+   * are used up; 503 while the agent can't run)
+   */
+  routineRun: (id: string) => `/api/routines/${encodeURIComponent(id)}/run`,
+  /** POST → RoutineResponse (sets `paused: true` in the file) */
+  routinePause: (id: string) => `/api/routines/${encodeURIComponent(id)}/pause`,
+  /** POST → RoutineResponse (sets `paused: false` in the file) */
+  routineResume: (id: string) => `/api/routines/${encodeURIComponent(id)}/resume`,
   /** GET → ConnectorsResponse */
   connectors: "/api/connectors",
   /** GET → SyncStatusResponse */
@@ -342,6 +363,35 @@ export interface ApprovalResponse {
 
 export interface ConnectorsResponse {
   connectors: ConnectorStatus[];
+}
+
+export interface RoutineListResponse {
+  /** Sorted by name. */
+  routines: Routine[];
+  /** Starter routines for "New routine". */
+  templates: RoutineTemplate[];
+}
+
+export interface RoutineResponse {
+  routine: Routine;
+}
+
+/** A new routine file, `Routines/<name>.md`. */
+export interface CreateRoutineRequest {
+  /** The file name, without `.md`. */
+  name: string;
+  schedule: string;
+  instructions: string;
+  /** Default `always`. */
+  notify?: RoutineNotify;
+  uses?: RoutineUse[];
+  paused?: boolean;
+}
+
+export interface RoutineRunResponse {
+  routine: Routine;
+  /** The new run's thread. */
+  threadId: string;
 }
 
 export interface ApprovalDecisionRequest {
@@ -634,6 +684,10 @@ export type ServerEvent =
   | { type: "agent.status"; status: AgentStatusResponse }
   | ({ type: "surface.frame" } & SurfaceFrame)
   | { type: "settings.changed"; settings: AppSettings }
+  /** Every routine, whenever one changed (its file, its schedule, its last run). */
+  | { type: "routines.changed"; routines: Routine[] }
+  /** A run finished and its routine's `notify` says to tell the user. */
+  | { type: "routine.notification"; notification: RoutineNotification }
   | { type: "error"; message: string; code?: WsErrorCode };
 
 export type ClientEvent =

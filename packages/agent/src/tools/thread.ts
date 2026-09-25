@@ -44,7 +44,11 @@ export const THREAD_TOOL_NAMES: ReadonlySet<string> = new Set([
   TOOL.finishTask,
 ]);
 
-export function createThreadTools(host: ThreadToolHost): ToolSpec[] {
+/** `routineRun`: the thread is a routine's run, whose `finish_task` also says whether anything changed. */
+export function createThreadTools(
+  host: ThreadToolHost,
+  options: { routineRun?: boolean } = {},
+): ToolSpec[] {
   const postUpdate: ToolSpec = {
     name: TOOL.postUpdate,
     label: "Post update",
@@ -151,6 +155,15 @@ export function createThreadTools(host: ThreadToolHost): ToolSpec[] {
           description: "Markdown: result first, then key details, links, next steps.",
         },
         shortSummary: { type: "string", description: "Badge text, at most 6 words." },
+        ...(options.routineRun
+          ? {
+              changed: {
+                type: "boolean",
+                description:
+                  "Whether anything is new or different since the routine's previous run that the user should hear about.",
+              },
+            }
+          : {}),
       },
       required: ["status", "summary"],
       additionalProperties: false,
@@ -163,10 +176,15 @@ export function createThreadTools(host: ThreadToolHost): ToolSpec[] {
       guarded(async () => {
         const args = asInput(input);
         const shortSummary = optionalString(args, "shortSummary", { maxLength: 200 });
+        const changed = options.routineRun ? args.changed : undefined;
+        if (changed !== undefined && typeof changed !== "boolean") {
+          throw new ToolInputError('"changed" must be true or false.');
+        }
         host.finish({
           status: requireEnum(args, "status", FINISH_STATUSES),
           summary: requireString(args, "summary", { maxLength: 20_000 }),
           ...(shortSummary ? { shortSummary } : {}),
+          ...(changed !== undefined ? { changed } : {}),
         });
         return textResult("Recorded. Your work on this task is complete; end your turn.");
       }),

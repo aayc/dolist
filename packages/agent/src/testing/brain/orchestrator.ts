@@ -20,6 +20,8 @@ import {
   desiredCapabilities,
   grantableCapabilities,
   quickAnswer,
+  type RoutineRequest,
+  routineRequest,
   type TriageDecision,
   triage,
 } from "./intent";
@@ -84,10 +86,14 @@ export function orchestratorTurn(
   for (const note of ctx.digest.notes) {
     for (const line of note.changedLines) calls.push(...planLine(note, line, ctx));
   }
+  for (const run of ctx.digest.routineRuns) calls.push(...planRoutineRun(run, ctx));
   const replied = request.messages
     .slice(index + 1)
     .some((m) => m.role === "assistant" && m.content.trim() !== "");
-  const direct = planDirect(ctx.digest, ctx.calls, replied);
+  const direct = planDirect(ctx.digest, ctx.calls, replied, {
+    canCreateRoutines: ctx.tools.has("create_routine"),
+    uses: (routine) => routineUses(routine, ctx),
+  });
   calls.push(...direct.calls);
   return {
     ...(calls.length > 0 ? { toolCalls: calls } : {}),
@@ -102,7 +108,7 @@ function planLine(
   ctx: Context,
 ): TurnToolCall[] {
   const text = line.text.trim();
-  if (!ADDRESSED.test(text) || !ctx.tools.has("anchor_line")) return [];
+  if ((!ADDRESSED.test(text) && !routineRequest(text)) || !ctx.tools.has("anchor_line")) return [];
   const request = text.replace(/^@?agent\b[:,]?\s*/i, "");
   const decision = triage({
     text: request,
@@ -248,7 +254,112 @@ function planOutcome(work: Work, decision: TriageDecision, ctx: Context): TurnTo
       return planAnswer(work, decision, ctx);
     case "delegate":
       return planDelegate(work, decision.capabilities, ctx);
+    case "routine":
+      return planRoutine(work, decision.routine, ctx);
   }
+}
+
+/** Capabilities a routine's runs get: what it needs among what can be granted. */
+function routineUses(routine: RoutineRequest, ctx: Context): Capability[] {
+  return grantableCapabilities(
+    routine.capabilities,
+    ctx.digest.capabilities.available,
+    ctx.options.allowedCapabilities,
+  );
+}
+
+/** Something recurring: create the routine, then say so on the task (or step back if denied). */
+function planRoutine(work: Work, routine: RoutineRequest, ctx: Context): TurnToolCall[] {
+  const { taskId } = work;
+  if (!ctx.tools.has("create_routine")) {
+    return planDelegate(work, routine.capabilities, ctx);
+  }
+  const created = ctx.calls.find(
+    (call) => call.name === "create_routine" && argString(call, "name") === routine.name,
+  );
+  if (!created) {
+    return [
+      {
+        name: "create_routine",
+        arguments: {
+          name: routine.name,
+          schedule: routine.schedule,
+          instructions: routine.instructions,
+          notify: routine.notify,
+          uses: routineUses(routine, ctx),
+        },
+      },
+    ];
+  }
+  if (created.status === undefined) return [];
+  const mine = callsFor(taskId, ctx);
+  if (mine.some((call) => call.name === "post_comment" || call.name === "set_task_status")) {
+    return [];
+  }
+  if (created.status === "ok") {
+    const words = /: (.+?) · /.exec(created.result ?? "")?.[1] ?? routine.schedule;
+    const summary = "Routine created";
+    return [
+      {
+        name: "post_comment",
+        arguments: {
+          taskId,
+          text: `Routine “${routine.name}” — ${words}. Each run reports under Routines.`,
+          summary,
+        },
+      },
+      { name: "set_task_status", arguments: { taskId, status: "done", summary } },
+    ];
+  }
+  if (created.status === "blocked") {
+    return [
+      {
+        name: "post_comment",
+        arguments: { taskId, text: "Okay — I won't set up that routine.", summary: "No routine" },
+      },
+      { name: "set_task_status", arguments: { taskId, status: "ignored" } },
+    ];
+  }
+  return [
+    {
+      name: "post_comment",
+      arguments: {
+        taskId,
+        text: `I couldn't create the routine: ${excerpt(firstLine(created.result).replace(/^Error:\s*/i, ""), 200)}`,
+        summary: "Couldn't create routine",
+      },
+    },
+    {
+      name: "set_task_status",
+      arguments: { taskId, status: "failed", summary: "Couldn't create routine" },
+    },
+  ];
+}
+
+/** A routine run that's due: a subagent with what its instructions need (no comment: it's a run). */
+function planRoutineRun(
+  run: { taskId: string; name: string; instructions: string },
+  ctx: Context,
+): TurnToolCall[] {
+  const spawns = callsFor(run.taskId, ctx).filter((call) => call.name === "spawn_subagent");
+  if (spawns.length > 0) return [];
+  const capabilities = grantableCapabilities(
+    desiredCapabilities(run.instructions),
+    ctx.digest.capabilities.available,
+    ctx.options.allowedCapabilities,
+  );
+  return [
+    {
+      name: "spawn_subagent",
+      arguments: {
+        taskId: run.taskId,
+        goal: `Run the routine “${run.name}”`,
+        instructions:
+          "Follow the routine's instructions; report what's new since the previous run.",
+        capabilities,
+      },
+    },
+  ];
 }
 
 function planAnswer(

@@ -104,6 +104,35 @@ struct ProtocolFaithfulnessTests {
       ThreadListResponse(threads: try await client.threads(notePath: Self.today, taskId: nil)),
       as: "ThreadListResponse")
 
+    try session.record(try await client.routines(), as: "RoutineListResponse")
+    let routine = try await client.createRoutine(
+      CreateRoutineRequest(
+        name: "Tea time", schedule: "every day at 16:00", instructions: "Remind me to rest.",
+        notify: .always, uses: [.web]))
+    try session.record(RoutineResponse(routine: routine), as: "RoutineResponse")
+    try await session.recordError {
+      _ = try await client.createRoutine(
+        CreateRoutineRequest(name: "Tea time", schedule: "hourly", instructions: "x"))
+    }
+    try await session.recordError {
+      _ = try await client.createRoutine(
+        CreateRoutineRequest(name: "Later", schedule: "whenever", instructions: "x"))
+    }
+    let run = try await client.runRoutine(routine.id)
+    try session.record(run, as: "RoutineRunResponse")
+    try await session.recordError { _ = try await client.runRoutine(routine.id) }
+    await client.runUntilIdle()
+    try session.record(
+      RoutineResponse(routine: try await client.pauseRoutine(routine.id)), as: "RoutineResponse")
+    try session.record(
+      RoutineResponse(routine: try await client.resumeRoutine(routine.id)), as: "RoutineResponse")
+    try session.record(
+      RoutineResponse(routine: try await client.routine(routine.id)), as: "RoutineResponse")
+    try session.record(
+      ThreadListResponse(threads: try await client.threads(routineId: routine.id)),
+      as: "ThreadListResponse")
+    try session.record(try await client.thread(run.threadId), as: "ThreadResponse")
+
     try session.record(try await client.search("kettle", limit: nil), as: "SearchResponse")
     try session.record(
       try await client.rename(from: "Ideas.md", to: "Archive/Ideas.md"), as: "RenameResponse")
@@ -139,7 +168,8 @@ struct ProtocolFaithfulnessTests {
       types == [
         "hello", "vault.changed", "task.records", "task.record", "thread.upsert", "thread.message",
         "thread.delta",
-        "approval.upsert", "agent.status", "surface.frame", "settings.changed",
+        "approval.upsert", "agent.status", "surface.frame", "settings.changed", "routines.changed",
+        "routine.notification",
       ])
     for event in session.events {
       let issues = schema.validate(event, as: "ServerEvent")
@@ -208,6 +238,17 @@ struct ProtocolFaithfulnessTests {
       ("CreateFolderRequest", CreateFolderRequest(path: "Projects/New")),
       ("SetAgentEnabledRequest", SetAgentEnabledRequest(enabled: false)),
       ("PostMessageRequest", PostMessageRequest(text: "Prefer mornings")),
+      (
+        "CreateRoutineRequest",
+        CreateRoutineRequest(
+          name: "Morning briefing", schedule: "every weekday at 7:30", instructions: "Brief me.")
+      ),
+      (
+        "CreateRoutineRequest",
+        CreateRoutineRequest(
+          name: "Price watch", schedule: "every 2 hours", instructions: "Check the price.",
+          notify: .whenChanged, uses: [.web], paused: true)
+      ),
       ("ApprovalDecisionRequest", ApprovalDecisionRequest(decision: .approve)),
       (
         "ApprovalDecisionRequest",
@@ -272,6 +313,7 @@ struct ProtocolFaithfulnessTests {
     "UpdateSettingsRequest/blank Cursor model",
     "UpdateSettingsRequest/blank always-on machine name", "DeviceSettingsPatch/blank name",
     "DeviceSyncSetupRequest/blank token",
+    "CreateRoutineRequest/blank instructions (trimmed to empty)",
   ]
 
   /// The validator is strict enough to matter: it rejects every invalid fixture except the
@@ -311,6 +353,7 @@ struct ProtocolFaithfulnessTests {
     "thread.delta": "ThreadDeltaEvent", "approval.upsert": "ApprovalUpsertEvent",
     "agent.status": "AgentStatusEvent",
     "surface.frame": "SurfaceFrameEvent", "settings.changed": "SettingsChangedEvent",
+    "routines.changed": "RoutinesChangedEvent", "routine.notification": "RoutineNotificationEvent",
     "error": "ServerErrorEvent",
   ]
 

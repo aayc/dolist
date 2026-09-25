@@ -325,6 +325,56 @@ test.describe("cursor audit", () => {
     await audit(page, "thread/citations");
   });
 
+  test("routines: the list, a routine's runs, a run, the New routine dialog", async ({ page }) => {
+    test.setTimeout(60_000);
+    // Full speed: a run lasts long enough to see Run now refused while it goes.
+    await openApp(page, "mockSpeed=1");
+    await page.evaluate(() => {
+      window.__ddlMock!.createNote(
+        "Routines/Morning briefing.md",
+        "---\nschedule: every weekday at 7:30\n---\nBrief me for the day.\n",
+      );
+      window.__ddlMock!.createNote(
+        "Routines/Price watch.md",
+        "---\nschedule: every 2 hours\npaused: true\n---\nCheck the kettle's price.\n",
+      );
+      window.__ddlMock!.createNote("Routines/Broken.md", "---\nschedule: whenever\n---\nDo it.\n");
+    });
+    await page.keyboard.press("ControlOrMeta+Shift+A");
+    await expect(page.getByTestId("inbox-routines")).toContainText("Next: Morning briefing");
+    await page.getByTestId("ribbon-routines").click();
+    await expect(page.getByTestId("routine-item")).toHaveCount(3);
+    await audit(page, "routines");
+
+    await page.getByTestId("routine-item").filter({ hasText: "Morning briefing" }).click();
+    await page.getByTestId("routine-run").click();
+    await page.getByTestId("routine-run").click();
+    await expect(page.getByTestId("routine-run-problem")).toBeVisible();
+    await expect(page.getByTestId("routine-run-item")).toHaveCount(1);
+    await audit(page, "routine, run going");
+    await expect(page.getByTestId("routine-run-item")).toHaveAttribute("data-status", "done", {
+      timeout: 20_000,
+    });
+    await page.getByTestId("routine-run-item").click();
+    await expect(page.getByTestId("thread-view")).toBeVisible();
+    await expect(page.getByTestId("message-text").last()).toContainText("Nothing needs");
+    await audit(page, "routine run");
+
+    await page.getByTestId("thread-back").click();
+    await page.getByTestId("routine-back").click();
+    await page.getByTestId("routine-item").filter({ hasText: "Broken" }).click();
+    await expect(page.getByTestId("routine-view-problem")).toBeVisible();
+    await audit(page, "routine with a problem");
+
+    await page.getByTestId("routine-back").click();
+    await page.getByTestId("routines-new").click();
+    await expect(page.getByTestId("routine-template").first()).toBeVisible();
+    await audit(page, "new routine");
+    await page.getByTestId("routine-template").first().click();
+    await expect(page.getByTestId("routine-create")).toBeEnabled();
+    await audit(page, "new routine, from a template");
+  });
+
   test("settings, every section", async ({ page }) => {
     await openApp(page);
     await page.getByTestId("ribbon-settings").click();

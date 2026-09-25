@@ -5,7 +5,9 @@
  * in text, like the prompt asks. A pure function of the conversation: the intended calls are
  * derived from the digest again on every step and made once; the reply comes when they have run.
  */
+import type { Capability } from "../../execution/types";
 import type { ParsedDigest } from "./digest";
+import { type RoutineRequest, routineRequest } from "./intent";
 import { excerpt, upperFirst } from "./text";
 import { argString, type CallRecord, firstLine } from "./transcript";
 import type { TurnToolCall } from "./types";
@@ -18,6 +20,7 @@ interface KnownTask {
 
 type Intent =
   | { kind: "status" }
+  | { kind: "routine"; routine: RoutineRequest; uses: Capability[] }
   | { kind: "drop"; task: KnownTask | null }
   | { kind: "forward"; task: KnownTask | null; text: string }
   | { kind: "other" };
@@ -69,14 +72,27 @@ const STOPWORDS = new Set([
   "agent",
 ]);
 
+export interface DirectOptions {
+  /** The session has create_routine. */
+  canCreateRoutines: boolean;
+  /** What a routine's runs may use. */
+  uses: (routine: RoutineRequest) => Capability[];
+}
+
 export function planDirect(
   digest: ParsedDigest,
   calls: readonly CallRecord[],
   replied: boolean,
+  options: DirectOptions = { canCreateRoutines: false, uses: (r) => r.capabilities },
 ): DirectPlan {
   if (digest.direct.length === 0 || replied) return { calls: [] };
   const tasks = knownTasks(digest);
-  const intents = digest.direct.map((text) => readIntent(text, tasks));
+  const intents = digest.direct.map((text) => {
+    const routine = options.canCreateRoutines ? routineRequest(text) : undefined;
+    return routine
+      ? ({ kind: "routine", routine, uses: options.uses(routine) } as const)
+      : readIntent(text, tasks);
+  });
   const intended = intents.flatMap((intent) => callsFor(intent));
   const pending = intended.filter((call) => !made(call, calls));
   if (pending.length > 0) return { calls: pending };
@@ -145,6 +161,21 @@ function words(text: string): Set<string> {
 }
 
 function callsFor(intent: Intent): TurnToolCall[] {
+  if (intent.kind === "routine") {
+    const { routine } = intent;
+    return [
+      {
+        name: "create_routine",
+        arguments: {
+          name: routine.name,
+          schedule: routine.schedule,
+          instructions: routine.instructions,
+          notify: routine.notify,
+          uses: intent.uses,
+        },
+      },
+    ];
+  }
   if (intent.kind === "drop" && intent.task) {
     const { taskId } = intent.task;
     return WORKING.has(intent.task.agentStatus ?? "")
@@ -169,9 +200,8 @@ function callsFor(intent: Intent): TurnToolCall[] {
 
 function made(call: TurnToolCall, calls: readonly CallRecord[]): boolean {
   const args = call.arguments as Record<string, unknown>;
-  return calls.some(
-    (record) => record.name === call.name && argString(record, "taskId") === args.taskId,
-  );
+  const key = call.name === "create_routine" ? "name" : "taskId";
+  return calls.some((record) => record.name === call.name && argString(record, key) === args[key]);
 }
 
 function outcome(
@@ -191,6 +221,16 @@ function replyFor(
   switch (intent.kind) {
     case "status":
       return describeWork(digest, tasks);
+    case "routine": {
+      const { routine } = intent;
+      const call = calls.find(
+        (record) => record.name === "create_routine" && argString(record, "name") === routine.name,
+      );
+      if (call?.status === "blocked") return "Okay — I won't set up that routine.";
+      if (call?.status !== "ok") return `I couldn't create that routine: ${failure(call)}`;
+      const words = /: (.+?) · /.exec(call.result ?? "")?.[1] ?? routine.schedule;
+      return `Done — “${routine.name}” runs ${lowerWords(words)}. Each run reports under Routines.`;
+    }
     case "drop": {
       if (!intent.task) return "Which task should I drop? I couldn't tell from your message.";
       const name = `“${excerpt(intent.task.text, 60)}”`;
@@ -214,6 +254,10 @@ function replyFor(
     case "other":
       return "Noted. I can tell you what I'm working on, drop a task, or pass instructions to an agent that's working on one.";
   }
+}
+
+function lowerWords(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
 function failure(call: CallRecord | undefined): string {

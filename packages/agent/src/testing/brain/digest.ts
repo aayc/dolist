@@ -63,6 +63,20 @@ export interface ParsedReport {
   taskText: string;
 }
 
+/** A routine run due now (`- [routine] run_…: "name" (schedule)`). */
+export interface ParsedRoutineRun {
+  taskId: string;
+  name: string;
+  instructions: string;
+}
+
+/** One of the user's routines (`- "name": schedule · paused`). */
+export interface ParsedRoutine {
+  name: string;
+  schedule: string;
+  paused: boolean;
+}
+
 export interface ParsedSubagent {
   taskId: string;
   taskText: string;
@@ -106,6 +120,8 @@ export interface ParsedDigest {
   /** What the user wrote to the orchestrator in its chat. */
   direct: string[];
   chat: ParsedChatLine[];
+  routineRuns: ParsedRoutineRun[];
+  routines: ParsedRoutine[];
   subagents: ParsedSubagent[];
   capabilities: ParsedCapabilities;
 }
@@ -133,6 +149,8 @@ type Section =
   | "reports"
   | "direct"
   | "chat"
+  | "routineRuns"
+  | "routines"
   | "subagents"
   | "capabilities"
   | null;
@@ -153,6 +171,8 @@ export function parseDigest(text: string): ParsedDigest {
     reports: [],
     direct: [],
     chat: [],
+    routineRuns: [],
+    routines: [],
     subagents: [],
     capabilities: { available: [], unavailable: [], connectors: [], desktopApps: [] },
   };
@@ -174,6 +194,8 @@ export function parseDigest(text: string): ParsedDigest {
       else if (heading.startsWith("Messages to you")) section = "direct";
       else if (heading === "Your recent chat with the user") section = "chat";
       else if (heading === "Running subagents") section = "subagents";
+      else if (heading.startsWith("Routine runs")) section = "routineRuns";
+      else if (heading === "Routines") section = "routines";
       else if (heading === "Capabilities you can grant") section = "capabilities";
       else {
         section = "note";
@@ -257,6 +279,32 @@ export function parseDigest(text: string): ParsedDigest {
           author: head[1] as ParsedChatLine["author"],
           ago: head[2]!,
           text: text.value,
+        });
+      }
+      continue;
+    }
+    if (section === "routineRuns") {
+      const head = /^- \[routine\] (\S+): /.exec(line);
+      const name = head ? readJsonString(line, head[0].length) : null;
+      if (head && name) {
+        digest.routineRuns.push({ taskId: head[1]!, name: name.value, instructions: "" });
+        continue;
+      }
+      const instructions = "    - instructions: ";
+      const last = digest.routineRuns.at(-1);
+      if (last && line.startsWith(instructions)) {
+        last.instructions = readJsonString(line, instructions.length)?.value ?? "";
+      }
+      continue;
+    }
+    if (section === "routines" && line.startsWith('- "')) {
+      const name = readJsonString(line, 2);
+      if (name && line.startsWith(": ", name.end)) {
+        const rest = line.slice(name.end + 2);
+        digest.routines.push({
+          name: name.value,
+          schedule: rest.split(" · ")[0]!,
+          paused: rest.endsWith(" · paused"),
         });
       }
       continue;

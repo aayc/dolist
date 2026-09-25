@@ -259,6 +259,7 @@ const threadBase = () => ({
   createdAt: p.epochMs(),
   updatedAt: p.epochMs(),
   surfaces: surfaces(),
+  routineId: p.runtimeId("rtn"),
 });
 
 const citedSource = (): Arb<core.CitedSource> =>
@@ -788,6 +789,120 @@ const approvalDecisionRequest = (): Arb<core.ApprovalDecisionRequest> =>
 const connectorsResponse = (): Arb<core.ConnectorsResponse> =>
   fc.record({ connectors: fc.array(connectorStatus(), { maxLength: 4 }) });
 
+// ── Routines ──────────────────────────────────────────────────────────────
+
+const ROUTINE_USES: core.RoutineUse[] = [
+  "web",
+  "browser",
+  "computer",
+  "shell",
+  "files",
+  "connectors",
+];
+const routineNotify = () => enumOf<core.RoutineNotify>("always", "when_changed", "never");
+const routineUse = () => enumOf(...ROUTINE_USES);
+const routineRunTrigger = () => enumOf<core.RoutineRunTrigger>("schedule", "catch_up", "manual");
+const schedulePhrase = () =>
+  fc.oneof(
+    { weight: 4, arbitrary: enumOf("every weekday at 7:30", "every 2 hours", "hourly") },
+    { weight: 1, arbitrary: p.text(200) },
+  );
+const routineName = () =>
+  fc.oneof(
+    { weight: 4, arbitrary: enumOf("Morning briefing", "Price watch", "Café ☕ digest") },
+    { weight: 1, arbitrary: p.segment() },
+  );
+
+const routineRun = (): Arb<core.RoutineRun> =>
+  fc.record(
+    {
+      threadId: p.runtimeId("thr"),
+      trigger: routineRunTrigger(),
+      status: taskAgentStatus(),
+      startedAt: p.epochMs(),
+      finishedAt: p.epochMs(),
+      summary: p.text(200),
+      changed: fc.boolean(),
+    },
+    { requiredKeys: ["threadId", "trigger", "status", "startedAt"] },
+  );
+
+const routine = (): Arb<core.Routine> =>
+  fc
+    .record(
+      {
+        id: p.runtimeId("rtn"),
+        name: routineName(),
+        schedule: schedulePhrase(),
+        scheduleText: p.text(200),
+        notify: routineNotify(),
+        uses: fc.uniqueArray(routineUse(), { maxLength: 6 }),
+        paused: fc.boolean(),
+        instructions: p.text(),
+        error: p.text(300),
+        nextRunAt: p.epochMs(),
+        lastRun: routineRun(),
+        runCount: p.count(500),
+        extraRunsLeft: p.count(5),
+      },
+      {
+        requiredKeys: [
+          "id",
+          "name",
+          "schedule",
+          "notify",
+          "uses",
+          "paused",
+          "instructions",
+          "runCount",
+          "extraRunsLeft",
+        ],
+      },
+    )
+    .map((r) => ({ ...r, path: `Routines/${r.name}.md` }));
+
+const routineTemplate = (): Arb<core.RoutineTemplate> =>
+  fc.record({
+    id: p.id("tpl"),
+    name: routineName(),
+    description: p.text(200),
+    schedule: p.lengthWithin(schedulePhrase(), 1, 200),
+    notify: routineNotify(),
+    uses: fc.uniqueArray(routineUse(), { maxLength: 6 }),
+    instructions: p.lengthWithin(p.text(), 1, 10_000),
+  });
+
+const routineNotification = (): Arb<core.RoutineNotification> =>
+  fc.record({
+    routineId: p.runtimeId("rtn"),
+    title: routineName(),
+    body: p.text(300),
+    threadId: p.runtimeId("thr"),
+    status: taskAgentStatus(),
+    at: p.epochMs(),
+  });
+
+const routineListResponse = (): Arb<core.RoutineListResponse> =>
+  fc.record({
+    routines: fc.array(routine(), { maxLength: 4 }),
+    templates: fc.array(routineTemplate(), { maxLength: 3 }),
+  });
+const routineResponse = (): Arb<core.RoutineResponse> => fc.record({ routine: routine() });
+const createRoutineRequest = (): Arb<core.CreateRoutineRequest> =>
+  fc.record(
+    {
+      name: routineName(),
+      schedule: p.trimmedText(200),
+      instructions: p.trimmedText(8_000),
+      notify: routineNotify(),
+      uses: fc.uniqueArray(routineUse(), { maxLength: 6 }),
+      paused: fc.boolean(),
+    },
+    { requiredKeys: ["name", "schedule", "instructions"] },
+  );
+const routineRunResponse = (): Arb<core.RoutineRunResponse> =>
+  fc.record({ routine: routine(), threadId: p.runtimeId("thr") });
+
 // ── Sync ──────────────────────────────────────────────────────────────────
 
 const syncState = () => enumOf<core.SyncState>("idle", "syncing", "error", "disabled");
@@ -1092,6 +1207,16 @@ const surfaceFrameEvent = (): Arb<EventOf<"surface.frame">> =>
   );
 const settingsChangedEvent = (): Arb<EventOf<"settings.changed">> =>
   fc.record({ type: fc.constant("settings.changed" as const), settings: appSettings() });
+const routinesChangedEvent = (): Arb<EventOf<"routines.changed">> =>
+  fc.record({
+    type: fc.constant("routines.changed" as const),
+    routines: fc.array(routine(), { maxLength: 4 }),
+  });
+const routineNotificationEvent = (): Arb<EventOf<"routine.notification">> =>
+  fc.record({
+    type: fc.constant("routine.notification" as const),
+    notification: routineNotification(),
+  });
 const serverErrorEvent = (): Arb<EventOf<"error">> =>
   fc.record(
     { type: fc.constant("error" as const), message: p.text(300), code: wsErrorCode() },
@@ -1111,6 +1236,8 @@ const serverEvent = (): Arb<core.ServerEvent> =>
     agentStatusEvent(),
     surfaceFrameEvent(),
     settingsChangedEvent(),
+    routinesChangedEvent(),
+    routineNotificationEvent(),
     serverErrorEvent(),
   );
 
@@ -1214,6 +1341,13 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   Thread: thread,
   CitedSource: citedSource,
   ThreadSummary: threadSummary,
+  RoutineNotify: routineNotify,
+  RoutineUse: routineUse,
+  RoutineRunTrigger: routineRunTrigger,
+  RoutineRun: routineRun,
+  Routine: routine,
+  RoutineTemplate: routineTemplate,
+  RoutineNotification: routineNotification,
   SurfaceFrameAction: surfaceFrameAction,
   SurfaceFrame: surfaceFrame,
   ThemePreference: themePreference,
@@ -1261,6 +1395,10 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   ApprovalResponse: approvalResponse,
   ApprovalDecisionRequest: approvalDecisionRequest,
   ConnectorsResponse: connectorsResponse,
+  RoutineListResponse: routineListResponse,
+  RoutineResponse: routineResponse,
+  CreateRoutineRequest: createRoutineRequest,
+  RoutineRunResponse: routineRunResponse,
   SyncState: syncState,
   SyncTargetKind: syncTargetKind,
   SyncStatusResponse: syncStatusResponse,
@@ -1302,6 +1440,8 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   AgentStatusEvent: agentStatusEvent,
   SurfaceFrameEvent: surfaceFrameEvent,
   SettingsChangedEvent: settingsChangedEvent,
+  RoutinesChangedEvent: routinesChangedEvent,
+  RoutineNotificationEvent: routineNotificationEvent,
   ServerErrorEvent: serverErrorEvent,
   ServerEvent: serverEvent,
   ClientHelloEvent: clientHelloEvent,
@@ -1384,6 +1524,17 @@ export const arb = plainFactories({
   approvalResponse,
   approvalDecisionRequest,
   connectorsResponse,
+  routineNotify,
+  routineUse,
+  routineRunTrigger,
+  routineRun,
+  routine,
+  routineTemplate,
+  routineNotification,
+  routineListResponse,
+  routineResponse,
+  createRoutineRequest,
+  routineRunResponse,
   computerPermissionPane,
   computerPermissionsOpenRequest,
   agentPlacement,
@@ -1422,6 +1573,8 @@ export const arb = plainFactories({
   agentStatusEvent,
   surfaceFrameEvent,
   settingsChangedEvent,
+  routinesChangedEvent,
+  routineNotificationEvent,
   serverErrorEvent,
   serverEvent,
   clientHelloEvent,

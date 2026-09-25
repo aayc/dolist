@@ -96,6 +96,14 @@ struct InvalidFixtureTests {
       "path is null": .rejected,
       "extra key": .tolerated(unknownKey),
     ],
+    "CreateRoutineRequest": [
+      "missing schedule": .rejected,
+      "blank instructions (trimmed to empty)": .tolerated(constraint),
+      "unknown notify": .tolerated(openEnum),
+      "unknown capability": .tolerated(openEnum),
+      "empty name": .tolerated(constraint),
+      "extra key (state never goes in the file)": .tolerated(unknownKey),
+    ],
     "DeviceSettingsPatch": [
       "blank name": .tolerated(constraint),
       "name over 64 characters": .tolerated(constraint),

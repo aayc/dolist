@@ -1,0 +1,375 @@
+/* ── Routines (the inbox row, the list, a routine's runs) ── */
+
+.routines-row {
+  margin-bottom: 10px;
+  border-color: var(--ddl-border);
+  background: var(--ddl-bg-secondary);
+}
+
+.routines-row-icon {
+  flex: none;
+  color: var(--ddl-accent);
+}
+
+.routines-row-problem {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  color: var(--ddl-warning);
+  font-size: 11px;
+}
+
+.routines-view,
+.routine-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.routines-header {
+  padding-left: 8px;
+}
+
+.routines-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 8px 24px;
+}
+
+.routines-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 8px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--ddl-warning) 12%, transparent);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.routines-notice.is-alert {
+  background: color-mix(in srgb, var(--ddl-danger) 12%, transparent);
+  animation: ddl-routine-notice 180ms ease-out;
+}
+
+@keyframes ddl-routine-notice {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .routines-notice.is-alert {
+    animation: none;
+  }
+}
+
+.routines-notice p {
+  margin: 0;
+}
+
+.routines-notice-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.routines-notice-title {
+  font-weight: 600;
+}
+
+.routines-notice-title svg {
+  vertical-align: -2px;
+}
+
+.routine-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: none;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ddl-border);
+}
+
+.routine-toolbar .button {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.routine-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 2px 4px 10px;
+  font-size: 12px;
+}
+
+.routine-facts > div {
+  display: contents;
+}
+
+.routine-facts dt {
+  color: var(--ddl-text-faint);
+}
+
+.routine-facts dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--ddl-text-muted);
+}
+
+.routine-instructions {
+  display: -webkit-box;
+  margin: 0 4px 12px;
+  padding: 8px 10px;
+  overflow: hidden;
+  border-left: 2px solid var(--ddl-border);
+  color: var(--ddl-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.routine-runs-empty {
+  margin: 4px 6px;
+  color: var(--ddl-text-faint);
+  font-size: 12px;
+}
+
+/* ── New routine ── */
+
+.routine-dialog {
+  width: 640px;
+  overflow-y: auto;
+}
+
+.routine-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px 20px;
+}
+
+.routine-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: -8px;
+}
+
+.routine-dialog-header .modal-title {
+  margin: 0;
+}
+
+.routine-dialog-hint {
+  margin: 0;
+  color: var(--ddl-text-muted);
+  font-size: 13px;
+}
+
+.routine-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.routine-label {
+  padding: 0;
+  color: var(--ddl-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.routine-help,
+.routine-error {
+  color: var(--ddl-text-faint);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.routine-error {
+  margin: 0;
+  color: var(--ddl-danger);
+}
+
+.routine-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ddl-success);
+}
+
+.routine-instructions-input {
+  min-height: 84px;
+  line-height: 1.5;
+}
+
+.routine-templates {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.routine-templates-loading {
+  height: 112px;
+  border-radius: var(--radius-m);
+  background: var(--ddl-bg-secondary);
+}
+
+.routine-template {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--ddl-border);
+  border-radius: var(--radius-m);
+  background: var(--ddl-bg-secondary);
+  text-align: left;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.routine-template:hover {
+  background: var(--ddl-bg-hover);
+}
+
+.routine-template:active {
+  background: var(--ddl-bg-active);
+}
+
+.routine-template.is-active {
+  border-color: var(--ddl-accent);
+  background: var(--ddl-accent-soft);
+}
+
+.routine-template-name {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.routine-template-description {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ddl-text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.routine-segmented {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--ddl-border);
+  border-radius: var(--radius-m);
+  background: var(--ddl-bg-secondary);
+}
+
+.routine-segment {
+  position: relative;
+  padding: 3px 10px;
+  border-radius: var(--radius-s);
+  color: var(--ddl-text-muted);
+  font-size: 12px;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.routine-segment:hover {
+  background: var(--ddl-bg-hover);
+  color: var(--ddl-text);
+}
+
+.routine-segment.is-active {
+  background: var(--ddl-bg-elevated);
+  color: var(--ddl-text);
+  box-shadow: 0 0 0 1px var(--ddl-border);
+}
+
+.routine-segment > input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.routine-segment:has(:focus-visible) {
+  outline: 2px solid var(--ddl-accent);
+  outline-offset: 1px;
+}
+
+.routine-run-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  color: var(--ddl-warning);
+  font-size: 11px;
+}
+
+.routines-empty .button {
+  margin-top: 12px;
+}
+
+.routine-schedule,
+.routine-problem {
+  overflow: hidden;
+  color: var(--ddl-text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.routine-problem {
+  display: -webkit-box;
+  color: var(--ddl-warning);
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.routine-problem svg {
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+
+.routine-paused {
+  gap: 3px;
+  flex: none;
+}
+
+.routine-last {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.routine-next {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

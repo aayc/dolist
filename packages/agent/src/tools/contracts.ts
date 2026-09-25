@@ -15,6 +15,11 @@ export const TOOL = {
   cancelSubagent: "cancel_subagent",
   listTasks: "list_tasks",
   anchorLine: "anchor_line",
+  // Orchestrator-only: routines (standing jobs in the vault's Routines/ folder)
+  createRoutine: "create_routine",
+  updateRoutine: "update_routine",
+  runRoutine: "run_routine",
+  listRoutines: "list_routines",
   // Orchestrator and subagents: the agent's own text in the user's notes
   editNote: "edit_note",
   // Subagent ↔ thread
@@ -218,6 +223,8 @@ export interface FinishTaskInput {
   summary: string;
   /** One-line badge text, e.g. "Booked · Tue 9:30am". */
   shortSummary?: string;
+  /** Routine runs only: something is new or different since the previous run. */
+  changed?: boolean;
 }
 
 // ── Orchestrator tools ──────────────────────────────────────────────────────
@@ -266,6 +273,30 @@ export interface AnchorLineInput {
   line: number;
   /** The line's current text, to confirm it is the one meant. */
   text: string;
+}
+
+// ── Routines (orchestrator) ─────────────────────────────────────────────────
+
+export interface CreateRoutineInput {
+  /** The routine's file name (without `.md`), e.g. "Morning briefing". */
+  name: string;
+  /** A schedule phrase, e.g. "every weekday at 7:30". */
+  schedule: string;
+  /** What each run does, self-contained. */
+  instructions: string;
+  notify?: "always" | "when_changed" | "never";
+  uses?: Capability[];
+}
+export interface UpdateRoutineInput {
+  name: string;
+  schedule?: string;
+  instructions?: string;
+  notify?: "always" | "when_changed" | "never";
+  uses?: Capability[];
+  paused?: boolean;
+}
+export interface RunRoutineInput {
+  name: string;
 }
 
 // ── Editing notes (orchestrator and subagents) ──────────────────────────────

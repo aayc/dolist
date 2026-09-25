@@ -85,6 +85,31 @@ struct TooltipTests {
     await model.teardown()
   }
 
+  /// The agent panel's Routines tab, New Routine button and way back show the catalog's keys.
+  @Test func theRoutinesControlsShowTheCatalogsShortcuts() async throws {
+    let (model, workspace) = try await SnapshotTests().bootedModel()
+    func find(_ label: String) -> TooltipAnchorView? {
+      anchors(model, workspace).first { $0.tooltipContent()?.lines.first?.text == label }
+    }
+    model.ui.showInbox()
+    let tab = try #require(find("Routines"))
+    #expect(tab.command == CommandID.showRoutines.rawValue)
+    #expect(tab.tooltipContent()?.lines.first?.keys == CommandID.showRoutines.shortcut)
+    #expect(
+      find("Agent inbox")?.tooltipContent()?.lines.first?.keys == CommandID.agentInbox.shortcut)
+
+    model.ui.showRoutines()
+    let new = try #require(find("New routine"))
+    #expect(new.command == CommandID.newRoutine.rawValue)
+    #expect(new.tooltipContent()?.lines.first?.keys == CommandID.newRoutine.shortcut)
+
+    model.ui.showRoutine(try #require(model.agent?.routines.first?.id))
+    let back = try #require(find("Back to routines"))
+    #expect(back.tooltipContent()?.lines.first?.keys == CommandID.showRoutines.shortcut)
+    #expect(find("Pause routine") != nil && find("Edit routine file") != nil)
+    await model.teardown()
+  }
+
   /// The computer use banner's button runs the catalog's command; its dismiss button says that
   /// dismissing is for good.
   @Test func theComputerUseBannerRunsItsCommand() throws {

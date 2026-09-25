@@ -8,6 +8,7 @@ tests use.
 pnpm --filter @ddl/web test        # unit tests (Vitest; happy-dom where a test needs a DOM)
 pnpm --filter @ddl/web e2e         # Playwright, functional (real keyboard and mouse, mock daemon)
 pnpm --filter @ddl/web e2e:perf    # Playwright, performance budgets (docs/PERFORMANCE.md)
+pnpm --filter @ddl/web e2e:fullstack  # Playwright against the real daemon and the fake model
 ```
 
 Code map: `src/app` (startup, services, actions), `src/state` (zustand stores and pure reducers),
@@ -140,3 +141,63 @@ re-renders, reduced motion), `Composer.test.tsx`, `agent-commands.test.ts`,
 tool groups, chat bar, Stop and its shortcut, optimistic send and retry, jump to latest, copy,
 reduced motion, an idle chat asking for no frames). In mock mode, `__ddlDebug.holdReplies({ ms,
 fail })` delays or fails chat replies.
+
+## Routines
+
+`src/features/routines/`, in the agent panel: the ribbon's Routines button, the "Show routines"
+command, or the row pinned under the orchestrator's chat in the inbox (it previews the routine that
+runs next). A routine is a vault file, `Routines/<name>.md`; the daemon pushes every routine in
+`routines.changed` whenever one changes, and `state/routines-store.ts` replaces its list with it.
+`app/routine-actions.ts` loads the list and the starter templates the first time something shows
+them, fetches a routine's runs (`GET /api/threads?routineId=`), and runs, pauses, resumes, creates
+and opens routines. The wording below is meant to match the Mac app's.
+
+- **The list**, by name: the name (the file name), the schedule in words (as written when the
+  daemon can't read it), "Next run {when}", the last run's status and time (or "No runs yet"),
+  "Paused", and the file's problem in place of the schedule.
+- **A routine** is its own inbox: "Next run" (or why it won't run: "It can't run until its file is
+  fixed.", "Paused: it won't run until you resume it."), "Tells you" (After every run, When
+  something changed, Never), how many extra runs are left today, what it uses, its instructions,
+  then its runs, newest first, each named by when it started ("Today at 7:31 AM") and opening in
+  the usual thread view with its typing reveal and activity row.
+- **Run now** shows the daemon's reason in place when it can't start: 409 "It can't run right now"
+  (a run is going, the file has a problem, or today's extra runs are used up), 503 "The agent
+  can't run here" (the agent is paused or can't run on this device), 404 "This routine is gone".
+  The reason goes away once a run starts or ends.
+- **Pause/Resume** changes at once and puts it back with a toast if the daemon refuses. **Edit**
+  opens the file in the editor.
+- **A run's thread** goes back to its routine and has no Retry: running again is Run now, which
+  counts against the day's extra runs. Its note button opens the routine's file.
+- **The inbox** leaves a routine's runs under their routine, except while one needs you (an
+  approval or a question): then it's listed under "Needs you" as a "Routine run". An approval from a
+  run toasts like any other.
+- **New routine…** offers the daemon's starter templates, then a name ("Saved as
+  Routines/<name>.md"), a schedule in words (previewed as you type with `@ddl/core`'s parser),
+  instructions, and when to be told. The daemon has the last word: its 400 message shows under the
+  schedule (or the name or instructions, when those are what it rejected), and a 409 (the name is
+  taken) under the name. Enter in a field, or Mod+Enter in the instructions, creates it.
+- **Repeat this**, on a finished task's thread, opens the dialog with the task's text as the name
+  and the instructions, without templates, focused on the empty schedule: the user gives it.
+- **Notifications**: `routine.notification` (sent per the routine's `notify`) toasts the
+  routine's name and the run's result, unless that run or its routine is on screen; clicking it
+  opens the run. The web app has no desktop notifications.
+- **Commands**: "Show routines" (`routines:show`) and "New routine…" (`routine:new`), in the
+  palette and on their controls, without shortcuts: the free combinations clash with the
+  browser's.
+
+The screens are in the agent panel's chunk and the dialog (with the schedule parser) in its own,
+both prefetched when idle; startup only carries the store, the actions and the toast (~1.6 kB gz).
+With `?mock=1`, `api/mock/mock-routines.ts` keeps routines like the daemon (files in the mock
+vault, Run now with a short scripted run, the extra-runs budget, notify rules, the daemon's error
+bodies), but schedules don't fire.
+
+### Tests
+
+Unit: `state/routines-store.test.ts`, `app/routine-actions.test.ts` (against the mock daemon),
+`app/routine-toasts.test.ts` (notifications and event routing), `routine-errors.test.ts` and
+`create-problem.test.ts` (error mapping), `routine-format.test.ts`, `repeat.test.ts`,
+`RoutinesView.test.tsx`, `RoutineView.test.tsx` (runs, Run now's reasons, Pause, Edit, a run's
+header, Repeat this), `NewRoutineDialog.test.tsx`, `commands/routine-commands.test.ts`, and the
+mock's contract test. E2E: `e2e/fullstack/routines.spec.ts` against the real daemon (New routine
+from a template, a routine's runs, Run now, Pause, the notification, Repeat this), and the cursor
+audit of every routines screen in `e2e/polish.spec.ts`.

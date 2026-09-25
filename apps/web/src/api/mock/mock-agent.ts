@@ -130,6 +130,49 @@ interface StoredArtifact {
   content: string;
 }
 
+/** One run of a routine, as the daemon's scheduler starts it. */
+export interface MockRoutineRun {
+  routineId: string;
+  name: string;
+  path: string;
+  instructions: string;
+  /** Why it started: "Run now", "Scheduled run · Every day at 9:00 AM". */
+  note: string;
+  /** Whether it finds anything new since the previous run. */
+  changed: boolean;
+}
+
+export interface MockRoutineRunEnd {
+  status: TaskAgentStatus;
+  /** One line (the run's badge text). */
+  summary: string;
+  /** The run's last agent message. */
+  result: string;
+}
+
+const RUN_ENDS: readonly TaskAgentStatus[] = ["done", "failed", "cancelled"];
+
+function firstSentence(text: string, max: number): string {
+  const sentence = (/^[^.!?\n]+[.!?]?/.exec(text.trim())?.[0] ?? "").trim();
+  return sentence.length > max ? `${sentence.slice(0, max - 1).trimEnd()}…` : sentence;
+}
+
+function routineResult(run: MockRoutineRun): { text: string; summary: string } {
+  if (!run.changed) {
+    return { text: `Nothing new since the last run of **${run.name}**.`, summary: "Nothing new" };
+  }
+  return {
+    text: [
+      `Here's **${run.name}**:`,
+      "",
+      `- ${firstSentence(run.instructions, 120) || "Checked everything you asked for."}`,
+      "- 3 things changed since the last run; the details are above.",
+      "- Nothing needs your approval.",
+    ].join("\n"),
+    summary: "3 updates",
+  };
+}
+
 const FRAME_INTERVAL_MS = 350;
 
 /**
@@ -154,6 +197,8 @@ export class MockAgent {
   private readonly frameTimers = new Map<string, ReturnType<typeof setInterval>>();
   private activity: { notePath: string; line: number; at: number } | null = null;
   private readonly orchestrator: MockOrchestrator;
+  /** Routine runs in progress (by task id), told how they ended. */
+  private readonly routineRuns = new Map<string, (end: MockRoutineRunEnd) => void>();
 
   constructor(host: MockAgentHost, options: { speed?: number } = {}) {
     this.host = host;
@@ -526,6 +571,79 @@ export class MockAgent {
     return decision;
   }
 
+  // ── Routine runs ───────────────────────────────────────────────────────
+
+  /** Starts one run of a routine: a thread carrying the routine's id, like the daemon's scheduler. */
+  startRoutineRun(run: MockRoutineRun, onEnd: (end: MockRoutineRunEnd) => void): string {
+    const taskId = createId("run");
+    const now = Date.now();
+    const thread: Thread = {
+      id: createId("thr"),
+      taskId,
+      notePath: run.path,
+      title: run.name,
+      status: "triaging",
+      createdAt: now,
+      updatedAt: now,
+      messages: [],
+      artifacts: [],
+      surfaces: [],
+      routineId: run.routineId,
+    };
+    this.threads.set(thread.id, thread);
+    this.emitThread(thread);
+    const job: Job = {
+      taskId,
+      threadId: thread.id,
+      controller: new AbortController(),
+      approvalId: null,
+      decision: null,
+    };
+    this.jobs.set(taskId, job);
+    this.routineRuns.set(taskId, onEnd);
+    this.emitStatus();
+    this.runRoutine(job, thread, run).catch((error: unknown) => {
+      if (job.controller.signal.aborted) return;
+      this.jobs.delete(taskId);
+      this.setThreadStatus(
+        thread,
+        "failed",
+        error instanceof Error ? error.message : String(error),
+      );
+      this.emitStatus();
+    });
+    return thread.id;
+  }
+
+  /** The status of a thread, if it exists. */
+  threadStatus(threadId: string): TaskAgentStatus | undefined {
+    return this.threads.get(threadId)?.status;
+  }
+
+  private async runRoutine(job: Job, thread: Thread, run: MockRoutineRun): Promise<void> {
+    const { signal } = job.controller;
+    this.setThreadStatus(thread, "working", run.note);
+    await this.sleep(400, signal);
+    const author: MessageAuthor = "subagent:routine";
+    await this.runStep(
+      thread,
+      author,
+      {
+        toolName: "web_search",
+        label: "Search the web",
+        input: { query: firstSentence(run.instructions, 60) || run.name },
+        resultPreview: "5 results",
+        durationMs: 900,
+      },
+      signal,
+    );
+    const result = routineResult(run);
+    await this.say(thread, author, result.text, signal);
+    this.jobs.delete(job.taskId);
+    this.setThreadStatus(thread, "done", result.summary);
+    this.emitStatus();
+  }
+
   private finish(job: Job, thread: Thread, status: TaskAgentStatus, summary: string): void {
     this.patchRecord(job.taskId, { status, ...(summary ? { summary } : {}) });
     this.orchestrator.finished(this.records.get(job.taskId)?.text ?? thread.title, status);
@@ -619,6 +737,16 @@ export class MockAgent {
       status,
       ...(text ? { text } : {}),
     });
+    const onEnd = thread.taskId ? this.routineRuns.get(thread.taskId) : undefined;
+    if (onEnd && RUN_ENDS.includes(status)) {
+      this.routineRuns.delete(thread.taskId!);
+      const last = thread.messages.findLast((m) => m.kind === "text" && m.role === "agent");
+      onEnd({
+        status,
+        summary: text ?? "",
+        result: last?.kind === "text" ? last.text : "",
+      });
+    }
   }
 
   private async say(thread: Thread, author: MessageAuthor, text: string, signal: AbortSignal) {
@@ -753,8 +881,9 @@ export class MockAgent {
     return [...this.records.values()].filter((r) => r.notePath === notePath);
   }
 
-  listThreads(): ThreadSummary[] {
+  listThreads(filter: { routineId?: string } = {}): ThreadSummary[] {
     return [...this.threads.values()]
+      .filter((t) => filter.routineId === undefined || t.routineId === filter.routineId)
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .map((t) => summarizeThread(t, this.pendingFor(t.id)));
   }
@@ -855,7 +984,8 @@ export class MockAgent {
   retry(threadId: string): void {
     const thread = this.threads.get(threadId);
     if (!thread) throw new MockNotFoundError("Thread");
-    if (!thread.taskId || this.jobs.has(thread.taskId)) return;
+    // A routine runs again through its own Run now, which counts against its extra runs.
+    if (!thread.taskId || thread.routineId || this.jobs.has(thread.taskId)) return;
     const record = this.records.get(thread.taskId);
     const notePath = record?.notePath ?? thread.notePath;
     if (!notePath) return;

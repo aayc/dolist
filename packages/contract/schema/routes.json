@@ -525,7 +525,7 @@
       "auth": "bearer",
       "methods": {
         "GET": {
-          "summary": "Thread summaries, optionally filtered by note or task (empty = no filter).",
+          "summary": "Thread summaries, optionally filtered by note, task or routine (empty = no filter).",
           "query": {
             "$ref": "#/$defs/threads.GET.query"
           },
@@ -897,6 +897,222 @@
             "404": {
               "description": "Unknown artifact.",
               "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "routines": {
+      "path": "/api/routines",
+      "auth": "bearer",
+      "methods": {
+        "GET": {
+          "summary": "Every routine with its schedule, next and last run, plus the starter templates.",
+          "responses": {
+            "200": {
+              "description": "Routines and templates.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/RoutineListResponse"
+              }
+            }
+          }
+        },
+        "POST": {
+          "summary": "Create a routine: writes `Routines/<name>.md` (works while the agent is off).",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/CreateRoutineRequest"
+          },
+          "responses": {
+            "201": {
+              "description": "Created.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/RoutineResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request", "invalid_path"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "409": {
+              "description": "A routine with that name exists.",
+              "codes": ["conflict"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "routine": {
+      "path": "/api/routines/:id",
+      "auth": "bearer",
+      "params": {
+        "$ref": "#/$defs/routine.params"
+      },
+      "methods": {
+        "GET": {
+          "summary": "One routine.",
+          "responses": {
+            "200": {
+              "description": "The routine.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/RoutineResponse"
+              }
+            },
+            "400": {
+              "description": "Invalid routine id.",
+              "codes": ["invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "Unknown routine.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "routineRun": {
+      "path": "/api/routines/:id/run",
+      "auth": "bearer",
+      "params": {
+        "$ref": "#/$defs/routine.params"
+      },
+      "methods": {
+        "POST": {
+          "summary": "Run a routine now (counts against its extra runs for today).",
+          "responses": {
+            "200": {
+              "description": "The run started.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/RoutineRunResponse"
+              }
+            },
+            "400": {
+              "description": "Invalid routine id.",
+              "codes": ["invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "Unknown routine.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "409": {
+              "description": "It can't run now: a run is going, it has a problem, or today's extra runs are used up.",
+              "codes": ["conflict"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "503": {
+              "description": "The agent can't run here right now.",
+              "codes": ["agent_unavailable"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "routinePause": {
+      "path": "/api/routines/:id/pause",
+      "auth": "bearer",
+      "params": {
+        "$ref": "#/$defs/routine.params"
+      },
+      "methods": {
+        "POST": {
+          "summary": "Pause a routine: sets `paused: true` in its file (works while the agent is off).",
+          "responses": {
+            "200": {
+              "description": "The routine as its file now reads.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/RoutineResponse"
+              }
+            },
+            "400": {
+              "description": "Invalid routine id.",
+              "codes": ["invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "Unknown routine.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "409": {
+              "description": "The file changed while it was being written; try again.",
+              "codes": ["conflict"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "routineResume": {
+      "path": "/api/routines/:id/resume",
+      "auth": "bearer",
+      "params": {
+        "$ref": "#/$defs/routine.params"
+      },
+      "methods": {
+        "POST": {
+          "summary": "Resume a routine: sets `paused: false` in its file; it runs from its next slot.",
+          "responses": {
+            "200": {
+              "description": "The routine as its file now reads.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/RoutineResponse"
+              }
+            },
+            "400": {
+              "description": "Invalid routine id.",
+              "codes": ["invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "Unknown routine.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "409": {
+              "description": "The file changed while it was being written; try again.",
+              "codes": ["conflict"],
               "schema": {
                 "$ref": "wire.schema.json#/$defs/ApiErrorBody"
               }
@@ -1508,6 +1724,18 @@
         }
       ]
     },
+    "routine.params": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
     "search.GET.query": {
       "type": "object",
       "properties": {
@@ -1557,6 +1785,11 @@
           "maxLength": 1024
         },
         "taskId": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "routineId": {
+          "description": "Only this routine's runs.",
           "type": "string",
           "maxLength": 200
         }

@@ -77,6 +77,7 @@ const threadSummary = shape({
   artifactCount: num,
   surfaces: arrayOf(surfaceKind),
   pendingApprovals: num,
+  routineId: optional(str),
 });
 
 const messageBase = { id: str, author: str, createdAt: num };
@@ -162,6 +163,32 @@ const agentStatus = shape({
   ),
 });
 
+const routineRun = shape({
+  threadId: str,
+  trigger: str,
+  status: taskStatus,
+  startedAt: num,
+  finishedAt: optional(num),
+  summary: optional(str),
+  changed: optional(bool),
+});
+const routine = shape({
+  id: str,
+  path: str,
+  name: str,
+  schedule: str,
+  scheduleText: optional(str),
+  notify: str,
+  uses: arrayOf(str),
+  paused: bool,
+  instructions: str,
+  error: optional(str),
+  nextRunAt: optional(num),
+  lastRun: optional(routineRun),
+  runCount: num,
+  extraRunsLeft: num,
+});
+
 const periodicNotes = shape({ folder: str, format: str, template: str });
 const settings = shape({
   theme: str,
@@ -222,6 +249,17 @@ const validators: Record<ServerEvent["type"], Check> = {
     ts: num,
   }),
   "settings.changed": shape({ settings }),
+  "routines.changed": shape({ routines: arrayOf(routine) }),
+  "routine.notification": shape({
+    notification: shape({
+      routineId: str,
+      title: str,
+      body: str,
+      threadId: str,
+      status: taskStatus,
+      at: num,
+    }),
+  }),
 };
 
 /** Validates the shape of a daemon push event; unknown or malformed events are dropped. */

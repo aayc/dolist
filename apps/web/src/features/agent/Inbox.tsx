@@ -1,4 +1,4 @@
-import { isOrchestratorThread, stem, type ThreadSummary } from "@ddl/core";
+import { stem, type ThreadSummary } from "@ddl/core";
 import { Inbox as InboxIcon, X } from "lucide-react";
 import { memo, useMemo } from "react";
 import { useServices } from "../../app/services";
@@ -9,14 +9,15 @@ import { perfStart } from "../../perf/perf";
 import { findRecordIn } from "../../state/agent-reducer";
 import { useAgentStore } from "../../state/agent-store";
 import { ui } from "../../state/ui-store";
+import { RoutinesInboxRow } from "../routines/RoutinesInboxRow";
 import { OrchestratorInboxRow } from "./OrchestratorInboxRow";
 import { StatusChip } from "./StatusChip";
-import { groupThreads, INBOX_GROUPS } from "./status-meta";
+import { groupThreads, INBOX_GROUPS, isInboxThread } from "./status-meta";
 
 export function Inbox() {
   const threads = useAgentStore((s) => s.threads);
   const groups = useMemo(
-    () => groupThreads(Object.values(threads).filter((t) => !isOrchestratorThread(t.id))),
+    () => groupThreads(Object.values(threads).filter(isInboxThread)),
     [threads],
   );
   const total = INBOX_GROUPS.reduce((sum, g) => sum + groups[g.key].length, 0);
@@ -34,6 +35,7 @@ export function Inbox() {
       </header>
       <div className="inbox-scroll">
         <OrchestratorInboxRow />
+        <RoutinesInboxRow />
         {total === 0 ? (
           <div className="inbox-empty">
             <InboxIcon size={28} strokeWidth={1.5} aria-hidden="true" />
@@ -94,7 +96,11 @@ const InboxItem = memo(function InboxItem({ thread }: { thread: ThreadSummary })
       ) : null}
       <span className="inbox-item-meta">
         <StatusChip status={thread.status} />
-        {thread.notePath ? <span className="inbox-note">{stem(thread.notePath)}</span> : null}
+        {thread.routineId ? (
+          <span className="inbox-note">Routine run</span>
+        ) : thread.notePath ? (
+          <span className="inbox-note">{stem(thread.notePath)}</span>
+        ) : null}
         <time className="inbox-time">{formatTimestamp(thread.updatedAt)}</time>
       </span>
     </button>

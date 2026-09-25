@@ -40,6 +40,13 @@ interface Lockstep {
   Thread: core.Thread;
   CitedSource: core.CitedSource;
   ThreadSummary: core.ThreadSummary;
+  RoutineNotify: core.RoutineNotify;
+  RoutineUse: core.RoutineUse;
+  RoutineRunTrigger: core.RoutineRunTrigger;
+  RoutineRun: core.RoutineRun;
+  Routine: core.Routine;
+  RoutineTemplate: core.RoutineTemplate;
+  RoutineNotification: core.RoutineNotification;
   SurfaceFrameAction: core.SurfaceFrameAction;
   SurfaceFrame: core.SurfaceFrame;
   ThemePreference: core.ThemePreference;
@@ -87,6 +94,10 @@ interface Lockstep {
   ApprovalResponse: core.ApprovalResponse;
   ApprovalDecisionRequest: core.ApprovalDecisionRequest;
   ConnectorsResponse: core.ConnectorsResponse;
+  RoutineListResponse: core.RoutineListResponse;
+  RoutineResponse: core.RoutineResponse;
+  CreateRoutineRequest: core.CreateRoutineRequest;
+  RoutineRunResponse: core.RoutineRunResponse;
   SyncState: core.SyncState;
   SyncTargetKind: core.SyncTargetKind;
   SyncStatusResponse: core.SyncStatusResponse;
@@ -128,6 +139,8 @@ interface Lockstep {
   AgentStatusEvent: core.ServerEventOf<"agent.status">;
   SurfaceFrameEvent: core.ServerEventOf<"surface.frame">;
   SettingsChangedEvent: core.ServerEventOf<"settings.changed">;
+  RoutinesChangedEvent: core.ServerEventOf<"routines.changed">;
+  RoutineNotificationEvent: core.ServerEventOf<"routine.notification">;
   ServerErrorEvent: core.ServerEventOf<"error">;
   ServerEvent: core.ServerEvent;
   ClientHelloEvent: core.ClientEventOf<"hello">;

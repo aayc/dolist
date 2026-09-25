@@ -1,0 +1,43 @@
+[
+  {
+    "name": "missing schedule",
+    "value": { "name": "Briefing", "instructions": "Brief me." },
+    "path": ["schedule"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "blank instructions (trimmed to empty)",
+    "value": { "name": "Briefing", "schedule": "hourly", "instructions": "  \n " },
+    "path": ["instructions"],
+    "code": "too_small"
+  },
+  {
+    "name": "unknown notify",
+    "value": { "name": "Briefing", "schedule": "hourly", "instructions": "x", "notify": "loudly" },
+    "path": ["notify"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "unknown capability",
+    "value": {
+      "name": "Briefing",
+      "schedule": "hourly",
+      "instructions": "x",
+      "uses": ["teleport"]
+    },
+    "path": ["uses", 0],
+    "code": "invalid_value"
+  },
+  {
+    "name": "empty name",
+    "value": { "name": "", "schedule": "hourly", "instructions": "x" },
+    "path": ["name"],
+    "code": "too_small"
+  },
+  {
+    "name": "extra key (state never goes in the file)",
+    "value": { "name": "Briefing", "schedule": "hourly", "instructions": "x", "nextRunAt": 1 },
+    "path": [],
+    "code": "unrecognized_keys"
+  }
+]

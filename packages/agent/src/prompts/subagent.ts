@@ -1,5 +1,6 @@
 import type { TaskAgentStatus, Thread, ThreadMessage } from "@ddl/core";
 import type { Capability } from "../execution/types";
+import type { RoutineBrief } from "../routines/scheduler";
 import { describeNow, quote, relativeDay } from "./format";
 
 const CAPABILITY_TEXT: Record<Capability, string> = {
@@ -73,6 +74,8 @@ export interface KickoffContext {
   /** The session already worked on this task: this is a new assignment. */
   reassignment?: boolean;
   retry?: boolean;
+  /** The task is one run of a routine (replaces the note's task in the kickoff). */
+  routine?: RoutineBrief;
 }
 
 export function buildSubagentKickoff(context: KickoffContext): string {
@@ -84,12 +87,15 @@ export function buildSubagentKickoff(context: KickoffContext): string {
       "This is a retry of an earlier attempt. Review the history below, keep what was already done, and don't repeat actions the user denied.",
     );
   }
-  lines.push(`Task: ${quote(context.task.text, 1000)}`);
-  if (context.task.notes.length > 0) {
-    lines.push("Notes under the task:");
-    for (const note of context.task.notes.slice(0, 30)) lines.push(`- ${quote(note, 500)}`);
+  if (context.routine) lines.push(...describeRoutineRun(context.routine));
+  else {
+    lines.push(`Task: ${quote(context.task.text, 1000)}`);
+    if (context.task.notes.length > 0) {
+      lines.push("Notes under the task:");
+      for (const note of context.task.notes.slice(0, 30)) lines.push(`- ${quote(note, 500)}`);
+    }
+    lines.push(`From the note: ${context.task.notePath}${when ? ` (${when})` : ""}`);
   }
-  lines.push(`From the note: ${context.task.notePath}${when ? ` (${when})` : ""}`);
   lines.push(`Goal: ${context.goal}`);
   if (context.instructions) lines.push(`Instructions: ${context.instructions}`);
   if (context.history) lines.push("", context.history);
@@ -99,6 +105,49 @@ export function buildSubagentKickoff(context: KickoffContext): string {
   }
   lines.push("", "Start now.");
   return lines.join("\n");
+}
+
+const TRIGGER_TEXT: Record<RoutineBrief["trigger"], string> = {
+  schedule: "its schedule started it",
+  catch_up:
+    "a catch-up: the Mac was asleep or the agent wasn't running when it was due, so it runs once now",
+  manual: "the user asked to run it now",
+};
+
+/** The routine part of a run's kickoff: its instructions, the previous result, how to report. */
+function describeRoutineRun(routine: RoutineBrief): string[] {
+  const when = routine.scheduleText ? ` — ${routine.scheduleText}` : "";
+  const lines = [
+    `Routine run: ${quote(routine.name, 200)}${when}. This run: ${TRIGGER_TEXT[routine.trigger]} (${describeNow(routine.startedAt)}).`,
+    "A routine is a standing job the user set up in their Routines folder; each run reports in its own thread.",
+    `Instructions (the routine's file, written by the user): ${quote(routine.instructions, 8_000)}`,
+  ];
+  if (routine.previous) {
+    const result = routine.previous.result.trim();
+    lines.push(
+      `Previous run (${describeNow(routine.previous.startedAt)}, ${routine.previous.status}): ${result ? quote(result, 1_500) : "no report."}`,
+      "Lead with what's new since the previous run; don't repeat what it already reported unless the instructions ask for a full report every time.",
+    );
+  } else lines.push("This is the routine's first run.");
+  switch (routine.notify) {
+    case "when_changed":
+      lines.push(
+        "The user is notified only when something changed: in finish_task, set changed to true only if something is new or different that they should hear about; if nothing changed, say so in one line and set changed to false.",
+      );
+      break;
+    case "never":
+      lines.push("The user isn't notified about this routine: keep the summary short.");
+      break;
+    case "always":
+      lines.push(
+        "The user is notified with your summary: put the result in its first line. Set changed in finish_task to whether anything is new since the previous run.",
+      );
+      break;
+  }
+  lines.push(
+    "Write in the user's notes only when the instructions ask for it (edit_note on today's daily note, never the routine's file).",
+  );
+  return lines;
 }
 
 export type SteerSource = "user" | "orchestrator" | "task_update";

@@ -34,6 +34,8 @@ export { TASK_STATE_DIR, TaskWatcher, taskStatePath } from "./orchestrator/task-
 export type * from "./orchestrator/types";
 export * from "./prompts/orchestrator";
 export * from "./prompts/subagent";
+export * from "./routines";
+export { isRoutineRunId, MAX_ROUTINE_RUN_MS, shouldNotify } from "./routines/scheduler";
 export type { AgentRuntimeOverrides } from "./runtime";
 export { AgentUnavailableError, createAgentRuntime, UnknownThreadError } from "./runtime";
 export type * from "./runtime-types";
@@ -60,6 +62,8 @@ export {
   createOrchestratorTools,
   SETTABLE_TASK_STATUSES,
 } from "./tools/orchestrator";
+export type { RoutineToolHost } from "./tools/routines";
+export { createRoutineTools } from "./tools/routines";
 export type { ThreadToolHost } from "./tools/thread";
 export { createThreadTools, THREAD_TOOL_NAMES } from "./tools/thread";
 export { createWebTools } from "./tools/web";

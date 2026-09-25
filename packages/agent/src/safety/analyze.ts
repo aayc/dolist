@@ -4,6 +4,7 @@
  * It never decides; the evaluator combines this with policy, hints and the LLM judge.
  */
 import type { ActionCategory } from "@ddl/core";
+import { TOOL } from "../tools/contracts";
 import { type ActionFacts, buildFacts, COMPUTER_READ_RE, withSubject } from "./facts";
 import { type Cwd, inferHome, resolvePath } from "./paths";
 import { ACTION_CATEGORIES } from "./policy";
@@ -12,6 +13,7 @@ import { fileReadAnalysis, fileWriteAnalysis, NOTES_READ } from "./rules/files";
 import { mcpAnalysis } from "./rules/mcp";
 import { noteEditHits } from "./rules/notes";
 import { readPathHits, writePathHits } from "./rules/path-rules";
+import { routineToolHits } from "./rules/routines";
 import { analysisHits, commandHits, SHELL_BENIGN } from "./rules/shell";
 import { quote, type RuleHit, runRules, type ShellEnv } from "./rules/types";
 import { benignUiHit, typedTextHits, UI_RULES } from "./rules/ui";
@@ -223,6 +225,12 @@ function familyAnalysis(
       result.hits = noteEditHits(f.input);
       fastPath = result.hits.every((hit) => hit.rule.decision === "allow");
       break;
+    case "routine": {
+      const listing = ctx.toolName === TOOL.listRoutines;
+      fastPath = listing;
+      result.hits = [...routineToolHits(ctx.toolName, f.input), ...contentHits(f, !listing)];
+      break;
+    }
     case "mcp":
       result = connectorAnalysis(f);
       fastPath ||= result.hits.some(

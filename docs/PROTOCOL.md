@@ -113,6 +113,12 @@ API version: **1**. Machine-readable: `packages/contract/schema/wire.schema.json
 | `approval` | GET | `/api/approvals/:id` | `bearer` | — | 200 [`ApprovalResponse`](#approvalresponse) |
 | `approval` | POST | `/api/approvals/:id` | `bearer` | [`ApprovalDecisionRequest`](#approvaldecisionrequest) | 200 [`ApprovalResponse`](#approvalresponse) |
 | `artifact` | GET | `/api/artifacts/:threadId/:artifactId` | `bearer` | — | 200 bytes |
+| `routines` | GET | `/api/routines` | `bearer` | — | 200 [`RoutineListResponse`](#routinelistresponse) |
+| `routines` | POST | `/api/routines` | `bearer` | [`CreateRoutineRequest`](#createroutinerequest) | 201 [`RoutineResponse`](#routineresponse) |
+| `routine` | GET | `/api/routines/:id` | `bearer` | — | 200 [`RoutineResponse`](#routineresponse) |
+| `routineRun` | POST | `/api/routines/:id/run` | `bearer` | — | 200 [`RoutineRunResponse`](#routinerunresponse) |
+| `routinePause` | POST | `/api/routines/:id/pause` | `bearer` | — | 200 [`RoutineResponse`](#routineresponse) |
+| `routineResume` | POST | `/api/routines/:id/resume` | `bearer` | — | 200 [`RoutineResponse`](#routineresponse) |
 | `connectors` | GET | `/api/connectors` | `bearer` | — | 200 [`ConnectorsResponse`](#connectorsresponse) |
 | `syncStatus` | GET | `/api/sync/status` | `bearer` | — | 200 [`SyncStatusResponse`](#syncstatusresponse) |
 | `computerPermissionsOpen` | POST | `/api/computer/permissions/open` | `bearer` | [`ComputerPermissionsOpenRequest`](#computerpermissionsopenrequest) | 200 [`OkResponse`](#okresponse) |
@@ -291,10 +297,11 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
 
 #### `threads` — `/api/threads`
 
-**GET** — Thread summaries, optionally filtered by note or task (empty = no filter).
+**GET** — Thread summaries, optionally filtered by note, task or routine (empty = no filter).
 
 - Query `notePath`
 - Query `taskId`
+- Query `routineId`: Only this routine's runs.
 - Responses:
   - `200` [`ThreadListResponse`](#threadlistresponse) — Summaries.
   - `400` [`ApiErrorBody`](#apierrorbody) `invalid_request`, `invalid_path` — Invalid filter.
@@ -398,6 +405,70 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
   - `200` bytes — The bytes with the artifact's type; active content (HTML, SVG, PDF…) is always an attachment.
   - `400` [`ApiErrorBody`](#apierrorbody) `invalid_request` — Invalid id.
   - `404` [`ApiErrorBody`](#apierrorbody) `not_found` — Unknown artifact.
+
+#### `routines` — `/api/routines`
+
+**GET** — Every routine with its schedule, next and last run, plus the starter templates.
+
+- Responses:
+  - `200` [`RoutineListResponse`](#routinelistresponse) — Routines and templates.
+
+**POST** — Create a routine: writes `Routines/<name>.md` (works while the agent is off).
+
+- Body: [`CreateRoutineRequest`](#createroutinerequest)
+- Responses:
+  - `201` [`RoutineResponse`](#routineresponse) — Created.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_json`, `invalid_request`, `invalid_path` — Malformed JSON or failed validation.
+  - `409` [`ApiErrorBody`](#apierrorbody) `conflict` — A routine with that name exists.
+  - `413` [`ApiErrorBody`](#apierrorbody) `payload_too_large` — Body over 5 MB.
+
+#### `routine` — `/api/routines/:id`
+
+- Path parameter `id`: string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) — Runtime id, safe to use in URLs.
+
+**GET** — One routine.
+
+- Responses:
+  - `200` [`RoutineResponse`](#routineresponse) — The routine.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_request` — Invalid routine id.
+  - `404` [`ApiErrorBody`](#apierrorbody) `not_found` — Unknown routine.
+
+#### `routineRun` — `/api/routines/:id/run`
+
+- Path parameter `id`: any JSON
+
+**POST** — Run a routine now (counts against its extra runs for today).
+
+- Responses:
+  - `200` [`RoutineRunResponse`](#routinerunresponse) — The run started.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_request` — Invalid routine id.
+  - `404` [`ApiErrorBody`](#apierrorbody) `not_found` — Unknown routine.
+  - `409` [`ApiErrorBody`](#apierrorbody) `conflict` — It can't run now: a run is going, it has a problem, or today's extra runs are used up.
+  - `503` [`ApiErrorBody`](#apierrorbody) `agent_unavailable` — The agent can't run here right now.
+
+#### `routinePause` — `/api/routines/:id/pause`
+
+- Path parameter `id`: any JSON
+
+**POST** — Pause a routine: sets `paused: true` in its file (works while the agent is off).
+
+- Responses:
+  - `200` [`RoutineResponse`](#routineresponse) — The routine as its file now reads.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_request` — Invalid routine id.
+  - `404` [`ApiErrorBody`](#apierrorbody) `not_found` — Unknown routine.
+  - `409` [`ApiErrorBody`](#apierrorbody) `conflict` — The file changed while it was being written; try again.
+
+#### `routineResume` — `/api/routines/:id/resume`
+
+- Path parameter `id`: any JSON
+
+**POST** — Resume a routine: sets `paused: false` in its file; it runs from its next slot.
+
+- Responses:
+  - `200` [`RoutineResponse`](#routineresponse) — The routine as its file now reads.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_request` — Invalid routine id.
+  - `404` [`ApiErrorBody`](#apierrorbody) `not_found` — Unknown routine.
+  - `409` [`ApiErrorBody`](#apierrorbody) `conflict` — The file changed while it was being written; try again.
 
 #### `connectors` — `/api/connectors`
 
@@ -583,6 +654,8 @@ Server → client ([`ServerEvent`](#serverevent)); clients ignore types they don
 | `agent.status` | [`AgentStatusEvent`](#agentstatusevent) | The agent status changed. |
 | `surface.frame` | [`SurfaceFrameEvent`](#surfaceframeevent) | A live surface frame; only sent to clients subscribed to that thread's surface (droppable). |
 | `settings.changed` | [`SettingsChangedEvent`](#settingschangedevent) | The effective settings changed. |
+| `routines.changed` | [`RoutinesChangedEvent`](#routineschangedevent) | Every routine, whenever one changed (its file, its schedule, its last run). |
+| `routine.notification` | [`RoutineNotificationEvent`](#routinenotificationevent) | A routine's run finished and its `notify` says to tell the user (clients show a notification). |
 | `error` | [`ServerErrorEvent`](#servererrorevent) | Something the client sent was rejected (or the connection is about to close). |
 
 Client → server ([`ClientEvent`](#clientevent)); anything else is answered with an `error` event:
@@ -838,6 +911,7 @@ A task's full conversation: messages, artifacts and live surfaces. The orchestra
 | `createdAt` | integer (≥ 0) | yes | Epoch milliseconds. |
 | `updatedAt` | integer (≥ 0) | yes | Epoch milliseconds. |
 | `surfaces` | [`SurfaceKind`](#surfacekind)[] | yes |  |
+| `routineId` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | no | Set on a routine's runs: the routine (`Routine.id`) this thread is one run of. Clients list these under their routine, not in the task inbox. |
 | `messages` | [`ThreadMessage`](#threadmessage)[] | yes |  |
 | `artifacts` | [`ArtifactMeta`](#artifactmeta)[] | yes |  |
 | `sources` | [`CitedSource`](#citedsource)[] | no | Web pages the thread cites, with what the agent saw of them: clients preview citations from here, never by fetching. |
@@ -858,10 +932,99 @@ A thread without its messages, for lists and badges.
 | `createdAt` | integer (≥ 0) | yes | Epoch milliseconds. |
 | `updatedAt` | integer (≥ 0) | yes | Epoch milliseconds. |
 | `surfaces` | [`SurfaceKind`](#surfacekind)[] | yes |  |
+| `routineId` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | no | Set on a routine's runs: the routine (`Routine.id`) this thread is one run of. Clients list these under their routine, not in the task inbox. |
 | `messageCount` | integer (≥ 0) | yes |  |
 | `lastMessagePreview` | string | no |  |
 | `artifactCount` | integer (≥ 0) | yes |  |
 | `pendingApprovals` | integer (≥ 0) | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### RoutineNotify
+
+When a finished run notifies: `always`, `when_changed` (only when it found something new) or `never`. The file spells `when_changed` as `when changed`.
+
+Type: `"always"` | `"when_changed"` | `"never"`
+
+#### RoutineUse
+
+A capability a routine's runs get (its file's `uses`).
+
+Type: `"web"` | `"browser"` | `"computer"` | `"shell"` | `"files"` | `"connectors"`
+
+#### RoutineRunTrigger
+
+What started a run: its schedule, a slot missed while the Mac slept or the daemon was down (`catch_up`, once however many were missed), or the user (`manual`).
+
+Type: `"schedule"` | `"catch_up"` | `"manual"`
+
+#### RoutineRun
+
+One run of a routine; its thread holds the conversation.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `threadId` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | yes | Runtime id, safe to use in URLs. |
+| `trigger` | [`RoutineRunTrigger`](#routineruntrigger) | yes |  |
+| `status` | [`TaskAgentStatus`](#taskagentstatus) | yes |  |
+| `startedAt` | integer (≥ 0) | yes | Epoch milliseconds. |
+| `finishedAt` | integer (≥ 0) | no | Epoch milliseconds. |
+| `summary` | string | no | One line: the run's badge text. |
+| `changed` | boolean | no | Whether the run found something new since the previous one. |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### Routine
+
+A standing job the agent runs on a schedule: the file `Routines/<name>.md` (schedule, notify, uses and paused in its frontmatter, the instructions as its body) plus the scheduler's state.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | yes | Stable id derived from the file's path (`rtn_…`). |
+| `path` | string (1–4096 chars) | yes | Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments). |
+| `name` | string (≥ 1 chars) | yes | The file name without `.md`. |
+| `schedule` | string | yes | The schedule as written in the file. |
+| `scheduleText` | string | no | The schedule in words; absent when it can't be read. |
+| `notify` | [`RoutineNotify`](#routinenotify) | yes |  |
+| `uses` | [`RoutineUse`](#routineuse)[] | yes |  |
+| `paused` | boolean | yes |  |
+| `instructions` | string | yes |  |
+| `error` | string | no | Why the routine can't run. |
+| `nextRunAt` | integer (≥ 0) | no | Absent while paused, invalid or unscheduled. |
+| `lastRun` | [`RoutineRun`](#routinerun) | no |  |
+| `runCount` | integer (≥ 0) | yes | Runs kept (threads with this `routineId`). |
+| `extraRunsLeft` | integer (≥ 0) | yes | Runs that may still start today beyond the schedule. |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### RoutineTemplate
+
+A starter routine offered by “New routine”.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (1–200 chars) | yes | Identifier. |
+| `name` | string (≥ 1 chars) | yes |  |
+| `description` | string | yes |  |
+| `schedule` | string (≥ 1 chars) | yes |  |
+| `notify` | [`RoutineNotify`](#routinenotify) | yes |  |
+| `uses` | [`RoutineUse`](#routineuse)[] | yes |  |
+| `instructions` | string (≥ 1 chars) | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### RoutineNotification
+
+A finished run to tell the user about (sent according to the routine's `notify`).
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `routineId` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | yes | Runtime id, safe to use in URLs. |
+| `title` | string | yes | The routine's name. |
+| `body` | string | yes | The run's result in a line or two. |
+| `threadId` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | yes | Runtime id, safe to use in URLs. |
+| `status` | [`TaskAgentStatus`](#taskagentstatus) | yes |  |
+| `at` | integer (≥ 0) | yes | Epoch milliseconds. |
 
 _Tolerant: clients must ignore keys they don't know._
 
@@ -1618,6 +1781,53 @@ Every configured MCP connector.
 
 _Tolerant: clients must ignore keys they don't know._
 
+#### RoutineListResponse
+
+Every routine (sorted by name) and the starter templates for “New routine”.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `routines` | [`Routine`](#routine)[] | yes |  |
+| `templates` | [`RoutineTemplate`](#routinetemplate)[] | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### RoutineResponse
+
+One routine.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `routine` | [`Routine`](#routine) | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### CreateRoutineRequest
+
+Body of `POST /api/routines`: a new routine file `Routines/<name>.md`. The daemon checks the name (a file name) and the schedule (400 with the reason when it can't be read).
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | string (1–100 chars) | yes | The file name, without `.md`. |
+| `schedule` | string (1–200 chars) | yes | e.g. `every weekday at 7:30`. |
+| `instructions` | string (1–8000 chars) | yes | What each run does. |
+| `notify` | [`RoutineNotify`](#routinenotify) | no | Default `always`. |
+| `uses` | [`RoutineUse`](#routineuse)[] | no |  |
+| `paused` | boolean | no |  |
+
+_Strict: unknown keys are rejected._
+
+#### RoutineRunResponse
+
+A run started now: the routine and the run's thread.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `routine` | [`Routine`](#routine) | yes |  |
+| `threadId` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | yes | Runtime id, safe to use in URLs. |
+
+_Tolerant: clients must ignore keys they don't know._
+
 #### SyncState
 
 `idle`, `syncing`, `error` (see `lastError`) or `disabled` (no sync target).
@@ -1865,6 +2075,28 @@ The effective settings changed.
 
 _Tolerant: clients must ignore keys they don't know._
 
+#### RoutinesChangedEvent
+
+Every routine, whenever one changed (its file, its schedule, its last run).
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `type` | `"routines.changed"` | yes |  |
+| `routines` | [`Routine`](#routine)[] | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### RoutineNotificationEvent
+
+A routine's run finished and its `notify` says to tell the user (clients show a notification).
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `type` | `"routine.notification"` | yes |  |
+| `notification` | [`RoutineNotification`](#routinenotification) | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
 #### ServerErrorEvent
 
 Something the client sent was rejected (or the connection is about to close).
@@ -1881,7 +2113,7 @@ _Tolerant: clients must ignore keys they don't know._
 
 Every server → client WebSocket message, discriminated by `type`.
 
-Type: [`ServerHelloEvent`](#serverhelloevent) | [`VaultChangedEvent`](#vaultchangedevent) | [`TaskRecordsEvent`](#taskrecordsevent) | [`TaskRecordEvent`](#taskrecordevent) | [`ThreadUpsertEvent`](#threadupsertevent) | [`ThreadMessageEvent`](#threadmessageevent) | [`ThreadDeltaEvent`](#threaddeltaevent) | [`ApprovalUpsertEvent`](#approvalupsertevent) | [`AgentStatusEvent`](#agentstatusevent) | [`SurfaceFrameEvent`](#surfaceframeevent) | [`SettingsChangedEvent`](#settingschangedevent) | [`ServerErrorEvent`](#servererrorevent)
+Type: [`ServerHelloEvent`](#serverhelloevent) | [`VaultChangedEvent`](#vaultchangedevent) | [`TaskRecordsEvent`](#taskrecordsevent) | [`TaskRecordEvent`](#taskrecordevent) | [`ThreadUpsertEvent`](#threadupsertevent) | [`ThreadMessageEvent`](#threadmessageevent) | [`ThreadDeltaEvent`](#threaddeltaevent) | [`ApprovalUpsertEvent`](#approvalupsertevent) | [`AgentStatusEvent`](#agentstatusevent) | [`SurfaceFrameEvent`](#surfaceframeevent) | [`SettingsChangedEvent`](#settingschangedevent) | [`RoutinesChangedEvent`](#routineschangedevent) | [`RoutineNotificationEvent`](#routinenotificationevent) | [`ServerErrorEvent`](#servererrorevent)
 
 #### ClientHelloEvent
 

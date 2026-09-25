@@ -1,4 +1,4 @@
-import { CalendarDays, Files, Inbox, Search, Settings } from "lucide-react";
+import { CalendarDays, Files, Inbox, Repeat, Search, Settings } from "lucide-react";
 import { useServices } from "../../app/services";
 import { IconButton } from "../../components/IconButton";
 import { usePendingApprovalCount } from "../../state/agent-store";
@@ -9,6 +9,9 @@ export function Ribbon() {
   const filesOpen = useUiStore((s) => s.leftOpen && s.leftView === "files");
   const searchOpen = useUiStore((s) => s.leftOpen && s.leftView === "search");
   const inboxOpen = useUiStore((s) => s.rightOpen && s.rightView.kind === "inbox");
+  const routinesOpen = useUiStore(
+    (s) => s.rightOpen && (s.rightView.kind === "routines" || s.rightView.kind === "routine"),
+  );
   const pending = usePendingApprovalCount();
 
   return (
@@ -44,6 +47,14 @@ export function Ribbon() {
         badgeLabel="to approve"
         onClick={() => ui.toggleInbox()}
         data-testid="ribbon-inbox"
+        size={18}
+      />
+      <IconButton
+        icon={Repeat}
+        command="routines:show"
+        active={routinesOpen}
+        onClick={() => ui.toggleRoutines()}
+        data-testid="ribbon-routines"
         size={18}
       />
       <div className="ribbon-spacer" />

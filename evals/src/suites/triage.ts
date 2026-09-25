@@ -1,7 +1,8 @@
 /**
  * Triage eval: for each synthetic task (in isolation) does the orchestrator pick the right outcome
- * — delegate / comment / ask_user / ignore — and the right subagent capabilities, and how quickly
- * does it make its first tool call?
+ * — delegate / comment / ask_user / ignore, or a routine for something recurring — and the right
+ * subagent capabilities (a routine's `uses`, schedule and notify), and how quickly does it make its
+ * first tool call?
  *
  * Both modes run the real orchestrator system prompt, event digest and orchestrator tools, with the
  * tools' host stubbed to RECORD decisions (no subagents run, nothing is written):
@@ -21,21 +22,27 @@ import {
   CAPABILITIES,
   type Capability,
   createOrchestratorTools,
+  createRoutineTools,
   formatOrchestratorDigest,
   type Harness,
   type OrchestratorToolHost,
   parseDigestItems,
+  type RoutineToolHost,
   type ScriptContext,
   ScriptedHarness,
   TOOL,
   ToolInputError,
 } from "@ddl/agent";
+import { type RoutineRequest, routineRequest } from "@ddl/agent/testing";
 import {
   addDays,
   DEFAULT_MODEL,
   DEFAULT_SETTINGS,
   dailyNotePath,
+  describeSchedulePhrase,
   errorResult,
+  ROUTINE_NOTIFY_VALUES,
+  type RoutineNotify,
   type ToolSpec,
   textResult,
   today,
@@ -44,17 +51,18 @@ import {
 } from "@ddl/core";
 import type { EvalCaseResult, EvalMode, EvalSuite, EvalSuiteResult } from "../types";
 
-type TaskDecision = "delegate" | "comment" | "ask_user" | "ignore";
+/** `routine`: something recurring, turned into a routine (create_routine) instead of done once. */
+type TaskDecision = "delegate" | "comment" | "ask_user" | "ignore" | "routine";
 /**
  * What the orchestrator did about the case's task when the user wrote to it in its chat: dropped
- * it (cancel_subagent, or set_task_status "ignored"), passed the message on to its subagent, or
- * only replied.
+ * it (cancel_subagent, or set_task_status "ignored"), passed the message on to its subagent, only
+ * replied, or created the routine the message asked for.
  */
-type DirectDecision = "drop" | "forward" | "reply";
+type DirectDecision = "drop" | "forward" | "reply" | "routine";
 type Decision = TaskDecision | DirectDecision;
 
-const DECISIONS: readonly TaskDecision[] = ["delegate", "comment", "ask_user", "ignore"];
-const DIRECT_DECISIONS: readonly DirectDecision[] = ["drop", "forward", "reply"];
+const DECISIONS: readonly TaskDecision[] = ["delegate", "comment", "ask_user", "ignore", "routine"];
+const DIRECT_DECISIONS: readonly DirectDecision[] = ["drop", "forward", "reply", "routine"];
 const MIN_CASES = 40;
 const MIN_CASES_PER_DECISION = 5;
 const MIN_DIRECT_CASES_PER_DECISION = 2;
@@ -66,8 +74,10 @@ interface TriageCase {
   task: string;
   notes?: string[];
   expected: Decision;
-  /** Capabilities a delegation must include (recall is measured against these). */
+  /** Capabilities a delegation (or a routine's `uses`) must include (recall is measured against these). */
   capabilities?: Capability[];
+  /** What the routine must say (`expected: "routine"`): its schedule, compared in words, and notify. */
+  routine?: { schedule?: string; notify?: RoutineNotify };
   /** Other decisions that are also fine for this task. */
   acceptable?: Decision[];
   /** The digest says computer access isn't allowed (default: allowed). */
@@ -86,9 +96,17 @@ interface RecordedCall {
   input: Record<string, unknown>;
 }
 
+/** The routine a create_routine call asked for. */
+interface CreatedRoutine {
+  schedule: string;
+  notify?: RoutineNotify;
+  uses: Capability[];
+}
+
 interface Outcome {
   decision: Decision;
   capabilities: Capability[];
+  routine?: CreatedRoutine;
   calls: RecordedCall[];
   /** The text of the turn (the reply to a direct message). */
   reply: string;
@@ -156,8 +174,19 @@ function loadDataset(): { cases: TriageCase[]; problems: string[] } {
     ) {
       problems.push(`${where}: notes must be strings`);
     }
+    if (c.routine !== undefined) {
+      if (c.expected !== "routine") problems.push(`${where}: routine only applies to routine`);
+      if (c.routine.schedule !== undefined && !describeSchedulePhrase(c.routine.schedule)) {
+        problems.push(`${where}: unreadable schedule`);
+      }
+      if (c.routine.notify !== undefined && !ROUTINE_NOTIFY_VALUES.includes(c.routine.notify)) {
+        problems.push(`${where}: bad notify`);
+      }
+    }
     if (c.capabilities !== undefined) {
-      if (c.expected !== "delegate") problems.push(`${where}: capabilities only apply to delegate`);
+      if (c.expected !== "delegate" && c.expected !== "routine") {
+        problems.push(`${where}: capabilities only apply to delegate and routine`);
+      }
       if (
         !Array.isArray(c.capabilities) ||
         !c.capabilities.every((x) => CAPABILITIES.includes(x))
@@ -310,6 +339,49 @@ function recordingHost(calls: RecordedCall[]): OrchestratorToolHost {
   };
 }
 
+/** Records routine decisions; a schedule the app couldn't read is refused, as the real tool does. */
+function recordingRoutineHost(calls: RecordedCall[]): RoutineToolHost {
+  const record = (tool: string, input: object) => {
+    calls.push({ tool, input: { ...(input as Record<string, unknown>) } });
+  };
+  return {
+    createRoutine: async (input) => {
+      const words = describeSchedulePhrase(input.schedule);
+      if (!words) {
+        throw new ToolInputError(
+          `Couldn't read the schedule “${input.schedule}”: use one of the phrases this tool lists.`,
+        );
+      }
+      record(TOOL.createRoutine, input);
+      return `Created routine “${input.name}”: ${words} · notify ${input.notify ?? "always"}. It's the file Routines/${input.name}.md; each run reports in its own thread under Routines.`;
+    },
+    updateRoutine: async (input) => {
+      record(TOOL.updateRoutine, input);
+      return `Updated routine “${input.name}”.`;
+    },
+    runRoutine: async (input) => {
+      record(TOOL.runRoutine, input);
+      return `Started a run of “${input.name}”.`;
+    },
+    listRoutines: async () => {
+      record(TOOL.listRoutines, {});
+      return "No routines yet (the Routines/ folder is empty).";
+    },
+  };
+}
+
+/** The routine the case's turn created, if any. */
+function createdRoutine(calls: RecordedCall[]): CreatedRoutine | undefined {
+  const call = calls.find((c) => c.tool === TOOL.createRoutine);
+  if (!call) return undefined;
+  const { schedule, notify, uses } = call.input;
+  return {
+    schedule: typeof schedule === "string" ? schedule : "",
+    ...(typeof notify === "string" ? { notify: notify as RoutineNotify } : {}),
+    uses: Array.isArray(uses) ? (uses as Capability[]) : [],
+  };
+}
+
 const readNoteStub: ToolSpec = {
   name: TOOL.readNote,
   label: "Read note",
@@ -355,6 +427,7 @@ function stubWebTools(): ToolSpec[] {
 
 /** What a direct message led to for the case's task. */
 function decideDirect(calls: RecordedCall[], reply: string): Decision {
+  if (createdRoutine(calls)) return "routine";
   const own = calls.filter((c) => c.input.taskId === CASE_TASK_ID);
   const dropped = own.some(
     (c) =>
@@ -371,6 +444,8 @@ function decideDirect(calls: RecordedCall[], reply: string): Decision {
 
 /** How the runtime would interpret the calls made for the case's task. */
 function decide(calls: RecordedCall[]): { decision: Decision; capabilities: Capability[] } {
+  const routine = createdRoutine(calls);
+  if (routine) return { decision: "routine", capabilities: routine.uses };
   const own = calls.filter((c) => c.input.taskId === CASE_TASK_ID);
   const spawn = own.find((c) => c.tool === TOOL.spawnSubagent);
   if (spawn) {
@@ -400,7 +475,12 @@ async function runCase(
     sessionId: `orchestrator:eval-${c.id}`,
     role: "orchestrator",
     systemPrompt: buildOrchestratorSystemPrompt(),
-    tools: [...createOrchestratorTools(recordingHost(calls)), readNoteStub, ...options.webTools],
+    tools: [
+      ...createOrchestratorTools(recordingHost(calls)),
+      readNoteStub,
+      ...options.webTools,
+      ...createRoutineTools(recordingRoutineHost(calls)),
+    ],
     model: options.model,
     thinking: "low",
     cwd: options.cwd,
@@ -426,8 +506,17 @@ async function runCase(
   const decision =
     c.direct === undefined
       ? decide(calls)
-      : { decision: decideDirect(calls, reply), capabilities: [] };
-  return { ...decision, calls, reply, firstToolMs, turnMs, ...(error ? { error } : {}) };
+      : { decision: decideDirect(calls, reply), capabilities: createdRoutine(calls)?.uses ?? [] };
+  const routine = createdRoutine(calls);
+  return {
+    ...decision,
+    ...(routine ? { routine } : {}),
+    calls,
+    reply,
+    firstToolMs,
+    turnMs,
+    ...(error ? { error } : {}),
+  };
 }
 
 // ── Mock baseline ───────────────────────────────────────────────────────────
@@ -486,11 +575,32 @@ const DROP = /\b(drop|cancel|stop|never ?mind|forget|skip)\b/i;
 const STATUS_QUESTION =
   /\b(what are you|what's running|status|progress|how's it going|waiting on me)\b/i;
 
+const DEFERRAL_LINK = /\[\[daily\/\d{4}-\d{2}-\d{2}\]\]/i;
+
+/** Something recurring, as the mock brain reads it; a deferral link names a day, not a recurrence. */
+function baselineRoutine(text: string): RoutineRequest | undefined {
+  return DEFERRAL_LINK.test(text) ? undefined : routineRequest(text);
+}
+
+async function createBaselineRoutine(ctx: ScriptContext, routine: RoutineRequest): Promise<void> {
+  await ctx.callTool(TOOL.createRoutine, {
+    name: routine.name,
+    schedule: routine.schedule,
+    instructions: routine.instructions,
+    notify: routine.notify,
+    uses: routine.capabilities,
+  });
+}
+
 /** Keyword handling of a direct message about the case's task (mock mode). */
 async function baselineDirect(ctx: ScriptContext, message: string): Promise<void> {
   const taskId = CASE_TASK_ID;
   const working = new RegExp(`${taskId}: "(?:[^"\\\\]|\\\\.)*" · agent: working`).test(ctx.message);
-  if (STATUS_QUESTION.test(message)) {
+  const routine = baselineRoutine(message);
+  if (routine) {
+    await createBaselineRoutine(ctx, routine);
+    await ctx.say(`Done — “${routine.name}” runs ${routine.schedule}.`);
+  } else if (STATUS_QUESTION.test(message)) {
     await ctx.say("Here's where things stand.");
   } else if (DROP.test(message)) {
     if (working) {
@@ -513,8 +623,23 @@ const baselineScript: AgentScript = async (ctx) => {
   }
   const access = /\nComputer access: missing/.test(ctx.message) ? "missing" : "allowed";
   for (const item of parseDigestItems(ctx.message)) {
-    const { decision, capabilities } = baselineTriage(item.text, access);
     const taskId = item.taskId;
+    const routine = baselineRoutine(item.text);
+    if (routine) {
+      await createBaselineRoutine(ctx, routine);
+      await ctx.callTool(TOOL.postComment, {
+        taskId,
+        text: `Routine “${routine.name}” — ${routine.schedule}. Each run reports under Routines.`,
+        summary: "Routine created",
+      });
+      await ctx.callTool(TOOL.setTaskStatus, {
+        taskId,
+        status: "done",
+        summary: "Routine created",
+      });
+      continue;
+    }
+    const { decision, capabilities } = baselineTriage(item.text, access);
     switch (decision) {
       case "delegate":
         await ctx.callTool(TOOL.postComment, { taskId, text: "On it.", summary: "On it" });
@@ -550,21 +675,44 @@ function percentile(values: number[], p: number): number {
   return Math.round(sorted[Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1)]!);
 }
 
+/** How the routine the turn created differs from what the case expects. */
+function routineMismatches(c: TriageCase, routine: CreatedRoutine | undefined): string[] {
+  if (!routine || !c.routine) return [];
+  const mismatches: string[] = [];
+  if (c.routine.schedule !== undefined) {
+    const expected = describeSchedulePhrase(c.routine.schedule);
+    const actual = describeSchedulePhrase(routine.schedule);
+    if (actual !== expected) {
+      mismatches.push(
+        `schedule “${routine.schedule}” (${actual ?? "unreadable"}), not ${expected}`,
+      );
+    }
+  }
+  const notify = routine.notify ?? "always";
+  if (c.routine.notify !== undefined && notify !== c.routine.notify) {
+    mismatches.push(`notify ${notify}, not ${c.routine.notify}`);
+  }
+  return mismatches;
+}
+
 function score(c: TriageCase, outcome: Outcome): EvalCaseResult & { recall: number | null } {
   const allowed = [c.expected, ...(c.acceptable ?? [])];
   const decisionOk = allowed.includes(outcome.decision);
+  const granted = outcome.decision === "delegate" || outcome.decision === "routine";
   const missing =
-    outcome.decision === "delegate" && c.capabilities
+    granted && c.capabilities
       ? c.capabilities.filter((cap) => !outcome.capabilities.includes(cap))
       : [];
   const recall =
-    outcome.decision === "delegate" && c.expected === "delegate" && c.capabilities?.length
+    granted && outcome.decision === c.expected && c.capabilities?.length
       ? (c.capabilities.length - missing.length) / c.capabilities.length
       : null;
+  const routineIssues = outcome.decision === "routine" ? routineMismatches(c, outcome.routine) : [];
   const notes: string[] = [];
   const replyMissing = c.direct !== undefined && !outcome.reply.trim();
   if (outcome.error) notes.push(`error: ${outcome.error}`);
   if (missing.length > 0) notes.push(`missing capabilities: ${missing.join(", ")}`);
+  notes.push(...routineIssues);
   if (replyMissing) notes.push("no reply in the chat");
   if (outcome.calls.length === 0) notes.push("no tool calls");
   const stray = outcome.calls.filter(
@@ -573,11 +721,21 @@ function score(c: TriageCase, outcome: Outcome): EvalCaseResult & { recall: numb
   if (stray.length > 0) notes.push(`acted on other tasks: ${stray.map((s) => s.tool).join(", ")}`);
   return {
     id: c.id,
-    passed: decisionOk && missing.length === 0 && !replyMissing && !outcome.error,
-    expected: { decision: c.expected, ...(c.capabilities ? { capabilities: c.capabilities } : {}) },
+    passed:
+      decisionOk &&
+      missing.length === 0 &&
+      routineIssues.length === 0 &&
+      !replyMissing &&
+      !outcome.error,
+    expected: {
+      decision: c.expected,
+      ...(c.capabilities ? { capabilities: c.capabilities } : {}),
+      ...(c.routine ? { routine: c.routine } : {}),
+    },
     actual: {
       decision: outcome.decision,
       ...(outcome.decision === "delegate" ? { capabilities: outcome.capabilities } : {}),
+      ...(outcome.routine ? { routine: outcome.routine } : {}),
       tools: outcome.calls.map((call) => call.tool),
     },
     latencyMs: Math.round(outcome.firstToolMs ?? outcome.turnMs),
