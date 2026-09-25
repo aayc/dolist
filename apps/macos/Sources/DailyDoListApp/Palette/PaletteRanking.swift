@@ -12,8 +12,8 @@ struct PaletteItem: Identifiable, Equatable, Sendable {
   let title: String
   /// Folder (notes) — shown dimmed after the title.
   let subtitle: String?
-  /// Shortcut display (`⇧⌘D`) for commands.
-  let shortcut: String?
+  /// A command's shortcut (drawn as keycaps).
+  let shortcut: Shortcut?
   /// Matched characters of `title` as UTF-16 offsets (highlighted).
   let highlights: [Int]
 
@@ -40,7 +40,7 @@ enum PaletteRanking {
     func item(_ command: AppCommand, _ highlights: [Int]) -> PaletteItem {
       PaletteItem(
         kind: .command(command.id), title: command.paletteTitle, subtitle: nil,
-        shortcut: command.shortcut?.display, highlights: highlights)
+        shortcut: command.shortcut, highlights: highlights)
     }
     guard !q.isEmpty else {
       return

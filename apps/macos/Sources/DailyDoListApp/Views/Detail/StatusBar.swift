@@ -2,12 +2,13 @@ import DailyDoListAgent
 import DailyDoListClient
 import DailyDoListEditor
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// Status line under the note, quiet by default (``StatusBarVisibility``) and drawn on the note's
 /// own background: the agent's state (``AgentStatusPresentation``, + mode unless live), running
 /// count, approvals (→ inbox), save state while not saved, word count, connection while not
-/// connected (or a "Demo" marker).
+/// connected (or a "Demo" marker). Items that do something highlight under the pointer.
 struct StatusBar: View {
   let model: AppModel
   let workspace: Workspace
@@ -35,7 +36,7 @@ struct StatusBar: View {
       switch visibility.connection {
       case .demo:
         Pill(text: "Demo", color: Theme.mutedText)
-          .help(model.connection.detail)
+          .tooltip(TooltipContent.sentence(model.connection.detail))
       case .problem:
         ConnectionIndicator(connection: model.connection)
       case nil:
@@ -45,8 +46,17 @@ struct StatusBar: View {
     .lineLimit(1)
     .font(.system(size: 11))
     .foregroundStyle(Theme.mutedText)
-    .padding(.horizontal, 12)
+    // The agent items bring 6 pt of their own (their hover highlight).
+    .padding(.leading, 6)
+    .padding(.trailing, 12)
     .frame(height: Theme.statusBarHeight)
+  }
+}
+
+extension ButtonStyle where Self == ChromeButtonStyle {
+  /// A status bar item that does something: a rounded highlight under the pointer.
+  fileprivate static var statusItem: ChromeButtonStyle {
+    ChromeButtonStyle(cornerRadius: 5, horizontalPadding: 6, verticalPadding: 3)
   }
 }
 
@@ -57,6 +67,7 @@ struct AgentStatusItems: View {
   let mode: AgentMode?
   @State private var explaining = false
   @Environment(\.openSettings) private var openSettings
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     if let presentation = AgentStatusPresentation(status: agent.status) {
@@ -75,10 +86,9 @@ struct AgentStatusItems: View {
             Text(mode.rawValue).foregroundStyle(Theme.faintText)
           }
         }
-        .contentShape(Rectangle())
       }
-      .buttonStyle(.plain)
-      .help(presentation.detail)
+      .buttonStyle(.statusItem)
+      .tooltip(presentation.tooltip, accessibility: .none)
       .accessibilityLabel(accessibilityLabel(presentation))
       .popover(isPresented: $explaining, arrowEdge: .top) {
         AgentProblemPopover(presentation: presentation) {
@@ -95,18 +105,32 @@ struct AgentStatusItems: View {
         Text("\(agent.runningCount) running")
       }
       .foregroundStyle(Theme.mutedText)
-      .help("\(agent.status?.queued ?? 0) queued")
+      .tooltip(runningTooltip)
     }
-    if agent.pendingApprovalCount > 0 {
-      Button {
-        model.ui.showInbox()
-      } label: {
-        Label("\(agent.pendingApprovalCount) to approve", systemImage: "exclamationmark.shield")
-          .foregroundStyle(Theme.warning)
+    Group {
+      if agent.pendingApprovalCount > 0 {
+        Button {
+          model.ui.showInbox()
+        } label: {
+          Label("\(agent.pendingApprovalCount) to approve", systemImage: "exclamationmark.shield")
+            .foregroundStyle(Theme.warning)
+            .popOnChange(of: agent.pendingApprovalCount)
+        }
+        .buttonStyle(.statusItem)
+        .tooltip("Open agent inbox", command: .agentInbox)
+        .countTransition()
       }
-      .buttonStyle(.plain)
-      .help("Open the agent inbox (⇧⌘A)")
     }
+    .animation(
+      .countAppearance(reduceMotion: reduceMotion), value: agent.pendingApprovalCount > 0)
+  }
+
+  /// "2 agent tasks running · 1 queued" (the web app's wording).
+  private var runningTooltip: String {
+    let running = agent.runningCount
+    let queued = agent.status?.queued ?? 0
+    let tasks = running == 1 ? "1 agent task" : "\(running) agent tasks"
+    return "\(tasks) running" + (queued > 0 ? " · \(queued) queued" : "")
   }
 
   private func iconColor(_ state: AgentStatusPresentation.State) -> Color {
@@ -148,6 +172,7 @@ private struct AgentProblemPopover: View {
         Spacer()
         Button("Agent Settings…", action: openAgentSettings)
           .controlSize(.small)
+          .pointingHandCursor()
       }
     }
     .padding(14)
@@ -172,7 +197,7 @@ struct VimIndicator: View {
     }
     .font(.system(size: 11, weight: .semibold, design: .monospaced))
     .tracking(0.4)
-    .help("Vim mode")
+    .tooltip("Vim mode", accessibility: .none)
     .accessibilityElement(children: .combine)
     .accessibilityLabel("Vim \(status?.mode.label.lowercased() ?? "mode")")
   }
@@ -203,7 +228,17 @@ struct SaveIndicator: View {
       Text(state.label)
     }
     .foregroundStyle(state == .error ? Theme.danger : Theme.mutedText)
-    .help(state == .error ? "Retrying automatically" : state.label)
+    .tooltip(Self.tooltip(for: state))
+  }
+
+  /// What the label doesn't say (nothing while it saves).
+  static func tooltip(for state: SaveState) -> TooltipContent? {
+    switch state {
+    case .saved, .saving: nil
+    case .dirty: TooltipContent("Saves automatically")
+    case .conflict: TooltipContent("Changed elsewhere too: resolved on the next save")
+    case .error: TooltipContent("Retrying automatically")
+    }
   }
 }
 
@@ -217,7 +252,7 @@ struct ConnectionIndicator: View {
       Text(connection.label)
     }
     .foregroundStyle(Theme.mutedText)
-    .help(connection.detail)
+    .tooltip(TooltipContent.sentence(connection.detail))
   }
 
   private var color: Color {

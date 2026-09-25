@@ -1,5 +1,6 @@
 import AppKit
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// Content of the menu bar extra (use `.menuBarExtraStyle(.window)`): agent status, pending
@@ -7,22 +8,28 @@ import SwiftUI
 public struct AgentMenuBarContent: View {
   let store: AgentStore
   let openTodaysNote: () -> Void
+  let openTodaysNoteKeys: KeyShortcut?
   let openMainWindow: (() -> Void)?
   let openThread: ((String) -> Void)?
   let quit: () -> Void
 
   static let maxApprovals = 5
+  /// Quit is ⌘Q everywhere on the Mac.
+  static let quitKeys = KeyShortcut("q")
 
   /// - Parameters:
+  ///   - openTodaysNoteKeys: the host's global shortcut for it, while it's on (shown as keycaps).
   ///   - openMainWindow: shows the main window (the item is hidden when nil).
   ///   - openThread: opens a thread in the main window when an approval's text is clicked.
   public init(
     store: AgentStore, openTodaysNote: @escaping () -> Void,
-    openMainWindow: (() -> Void)? = nil, openThread: ((String) -> Void)? = nil,
+    openTodaysNoteKeys: KeyShortcut? = nil, openMainWindow: (() -> Void)? = nil,
+    openThread: ((String) -> Void)? = nil,
     quit: @escaping () -> Void = { NSApp?.terminate(nil) }
   ) {
     self.store = store
     self.openTodaysNote = openTodaysNote
+    self.openTodaysNoteKeys = openTodaysNoteKeys
     self.openMainWindow = openMainWindow
     self.openThread = openThread
     self.quit = quit
@@ -115,7 +122,9 @@ public struct AgentMenuBarContent: View {
   private var actionsSection: some View {
     let enabled = store.status?.enabled ?? false
     return VStack(alignment: .leading, spacing: 0) {
-      MenuRowButton(title: "Open Today's Note", systemImage: "calendar", action: openTodaysNote)
+      MenuRowButton(
+        title: "Open Today's Note", systemImage: "calendar", shortcut: openTodaysNoteKeys,
+        action: openTodaysNote)
       MenuRowButton(
         title: enabled ? "Pause Agent" : "Resume Agent",
         systemImage: enabled ? "pause.circle" : "play.circle"
@@ -127,7 +136,8 @@ public struct AgentMenuBarContent: View {
         MenuRowButton(title: "Open Daily Do List", systemImage: "macwindow", action: openMainWindow)
       }
       Divider().padding(.vertical, 4).padding(.horizontal, 6)
-      MenuRowButton(title: "Quit Daily Do List", systemImage: "power", shortcut: "⌘Q", action: quit)
+      MenuRowButton(
+        title: "Quit Daily Do List", systemImage: "power", shortcut: Self.quitKeys, action: quit)
     }
   }
 }
@@ -142,30 +152,13 @@ private struct MenuApprovalRow: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
-      Button {
-        onOpen?()
-      } label: {
-        HStack(alignment: .top, spacing: 8) {
-          Image(systemName: "exclamationmark.shield.fill").foregroundStyle(approval.risk.tone.color)
-          VStack(alignment: .leading, spacing: 2) {
-            Text(verbatim: approval.summary)
-              .font(.callout.weight(.medium))
-              .lineLimit(3)
-              .fixedSize(horizontal: false, vertical: true)
-            Text(
-              verbatim: [threadTitle, approval.risk.displayLabel].compactMap { $0 }.joined(
-                separator: " · ")
-            )
-            .font(.caption)
-            .foregroundStyle(AgentTheme.mutedText)
-            .lineLimit(1)
-          }
-          Spacer(minLength: 0)
-        }
-        .contentShape(Rectangle())
+      if let onOpen {
+        Button(action: onOpen) { summary }
+          .buttonStyle(RowButtonStyle(cornerRadius: 6))
+          .accessibilityHint("Opens the thread")
+      } else {
+        summary
       }
-      .buttonStyle(.plain)
-      .disabled(onOpen == nil)
       HStack(spacing: 6) {
         if isDeciding { ProgressView().controlSize(.small) }
         Spacer()
@@ -173,19 +166,44 @@ private struct MenuApprovalRow: View {
           Text("Deny").foregroundStyle(AgentTheme.danger)
         }
         .controlSize(.small)
+        .pointingHandCursor()
         Button("Approve", action: onApprove).buttonStyle(.borderedProminent).controlSize(.small)
+          .pointingHandCursor()
       }
       .disabled(isDeciding)
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 6)
   }
+
+  /// What's asked and for which task (clicking it opens the thread when the host can).
+  private var summary: some View {
+    HStack(alignment: .top, spacing: 8) {
+      Image(systemName: "exclamationmark.shield.fill").foregroundStyle(approval.risk.tone.color)
+      VStack(alignment: .leading, spacing: 2) {
+        Text(verbatim: approval.summary)
+          .font(.callout.weight(.medium))
+          .lineLimit(3)
+          .fixedSize(horizontal: false, vertical: true)
+        Text(
+          verbatim: [threadTitle, approval.risk.displayLabel].compactMap { $0 }.joined(
+            separator: " · ")
+        )
+        .font(.caption)
+        .foregroundStyle(AgentTheme.mutedText)
+        .lineLimit(1)
+      }
+      Spacer(minLength: 0)
+    }
+    .contentShape(Rectangle())
+  }
 }
 
+/// A menu row the window draws itself: icon, title and the shortcut's keycaps.
 private struct MenuRowButton: View {
   let title: String
   let systemImage: String
-  var shortcut: String?
+  var shortcut: KeyShortcut?
   let action: () -> Void
 
   var body: some View {
@@ -194,12 +212,12 @@ private struct MenuRowButton: View {
         Image(systemName: systemImage).frame(width: 18).foregroundStyle(AgentTheme.mutedText)
         Text(title)
         Spacer()
-        if let shortcut { Text(verbatim: shortcut).foregroundStyle(AgentTheme.faint) }
+        if let shortcut { Keycaps(shortcut) }
       }
       .padding(.horizontal, 8)
       .padding(.vertical, 5)
       .contentShape(Rectangle())
     }
-    .buttonStyle(RowButtonStyle(cornerRadius: 5))
+    .buttonStyle(RowButtonStyle(cornerRadius: 6))
   }
 }

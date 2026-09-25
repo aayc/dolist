@@ -1,4 +1,5 @@
 import DailyDoListModels
+import DailyDoListUI
 import Foundation
 
 /// The status bar's one agent item. It never says "on" while the agent can't act: a daemon
@@ -47,4 +48,13 @@ struct AgentStatusPresentation: Equatable {
 
   /// Clicking pauses or resumes; otherwise it explains what's wrong.
   var toggles: Bool { state == .on || state == .paused }
+
+  /// What the state means and what clicking does, or what's wrong (the web app's wording).
+  var tooltip: TooltipContent {
+    switch state {
+    case .on: TooltipContent("The agent is watching your daily notes — click to pause")
+    case .paused: TooltipContent("The agent is paused — click to resume")
+    case .off, .unavailable: TooltipContent(TooltipContent.sentence(detail))
+    }
+  }
 }

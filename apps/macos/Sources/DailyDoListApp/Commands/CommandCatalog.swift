@@ -39,38 +39,34 @@ struct CommandCatalog {
     var commands: [AppCommand] = [
       // File
       AppCommand(
-        .newNote, "New Note", palette: "Create new note", shortcut: Shortcut("n"), enabled: ready,
+        .newNote, "New Note", palette: "Create new note", enabled: ready,
         perform: later { await $0.createNote() }),
       AppCommand(
         .newFolder, "New Folder", palette: "Create new folder", enabled: ready,
         perform: later { await $0.createFolder() }),
       AppCommand(
         .todaysNote, "Today's Note", palette: "Open today's daily note",
-        shortcut: Shortcut("d", [.command, .shift]),
         enabled: ready, perform: later { await $0.openToday() }),
       AppCommand(
-        .previousDaily, "Previous Daily Note", palette: "Open previous daily note",
-        shortcut: Shortcut("p", [.command, .shift]), enabled: ready,
+        .previousDaily, "Previous Daily Note", palette: "Open previous daily note", enabled: ready,
         perform: later { await $0.openAdjacentDaily(.previous) }),
       AppCommand(
-        .nextDaily, "Next Daily Note", palette: "Open next daily note",
-        shortcut: Shortcut("n", [.command, .shift]), enabled: ready,
+        .nextDaily, "Next Daily Note", palette: "Open next daily note", enabled: ready,
         perform: later { await $0.openAdjacentDaily(.next) }),
       AppCommand(
         .tomorrowsNote, "Tomorrow's Note", palette: "Open tomorrow's daily note", enabled: ready,
         perform: later { await $0.openTomorrow() }),
       AppCommand(
-        .weeklyNote, "This Week's Note", palette: "Open this week's note",
-        shortcut: Shortcut("w", [.command, .shift]), enabled: ready,
+        .weeklyNote, "This Week's Note", palette: "Open this week's note", enabled: ready,
         perform: later { await $0.openWeekly() }),
       AppCommand(
-        .quickOpen, "Quick Open…", palette: "Open quick switcher", shortcut: Shortcut("o"),
+        .quickOpen, "Quick Open…", palette: "Open quick switcher",
         enabled: ready
       ) {
         ui.togglePalette(.switcher)
       },
       AppCommand(
-        .save, "Save", palette: "Save current note", shortcut: Shortcut("s"), enabled: hasNote
+        .save, "Save", palette: "Save current note", enabled: hasNote
       ) {
         if let workspace = ws(), let path = workspace.tabs.active { workspace.notes.saveNow(path) }
       },
@@ -88,52 +84,48 @@ struct CommandCatalog {
             workspace.revealInFinder(path)
           }
         }),
-      AppCommand(.closeTab, "Close Tab", palette: "Close current tab", shortcut: Shortcut("w")) {
+      AppCommand(.closeTab, "Close Tab", palette: "Close current tab") {
         Self.closeTabOrWindow(model: model)
       },
       AppCommand(
-        .reopenTab, "Reopen Closed Tab", shortcut: Shortcut("t", [.command, .shift]),
+        .reopenTab, "Reopen Closed Tab", palette: "Reopen closed tab",
         enabled: { ws()?.tabs.canReopenClosedTab ?? false },
         perform: later { await $0.reopenClosedTab() }),
 
       // Go
       AppCommand(
-        .back, "Back", palette: "Go back", shortcut: Shortcut("["),
+        .back, "Back", palette: "Go back",
         enabled: { ws()?.tabs.canGoBack ?? false }, perform: later { await $0.goBack() }),
       AppCommand(
-        .forward, "Forward", palette: "Go forward", shortcut: Shortcut("]"),
+        .forward, "Forward", palette: "Go forward",
         enabled: { ws()?.tabs.canGoForward ?? false }, perform: later { await $0.goForward() }),
       AppCommand(
-        .nextTab, "Next Tab", palette: "Go to next tab", shortcut: Shortcut("\t", [.control]),
+        .nextTab, "Next Tab", palette: "Go to next tab",
         enabled: { (ws()?.tabs.tabs.count ?? 0) > 1 }, perform: { ws()?.selectAdjacentTab(1) }),
       AppCommand(
         .previousTab, "Previous Tab", palette: "Go to previous tab",
-        shortcut: Shortcut("\t", [.control, .shift]),
         enabled: { (ws()?.tabs.tabs.count ?? 0) > 1 }, perform: { ws()?.selectAdjacentTab(-1) }),
 
       // View
       AppCommand(
         .toggleSidebar, "Toggle Sidebar", palette: "Toggle file explorer",
-        shortcut: Shortcut("s", [.command, .control]),
         enabled: ready
       ) { ui.sidebarVisible.toggle() },
-      AppCommand(.toggleAgentPanel, "Toggle Agent Panel", shortcut: Shortcut("\\"), enabled: ready)
-      {
+      AppCommand(
+        .toggleAgentPanel, "Toggle Agent Panel", palette: "Toggle agent panel", enabled: ready
+      ) {
         ui.toggleInspector()
       },
       AppCommand(
         .agentInbox, "Agent Inbox", palette: "Open agent inbox",
-        shortcut: Shortcut("a", [.command, .shift]),
         enabled: ready
       ) { ui.toggleInbox() },
       AppCommand(
         .search, "Search Vault", palette: "Search vault",
-        shortcut: Shortcut("f", [.command, .shift]),
         enabled: ready
       ) { ui.focusSearch() },
       AppCommand(
         .commandPalette, "Command Palette…", palette: "Open command palette",
-        shortcut: Shortcut("p"),
         inPalette: false, enabled: ready
       ) { ui.togglePalette(.commands) },
       AppCommand(
@@ -160,25 +152,31 @@ struct CommandCatalog {
           Task { await model.settings.update(SettingsPatch(editor: .init(showLineNumbers: value))) }
         }),
       AppCommand(
-        .toggleVim, "Vim Key Bindings", palette: "Toggle vim key bindings",
+        .toggleVim, "Vim Key Bindings", palette: "Toggle Vim key bindings",
         isOn: { model.settings.settings.editor.vimMode }, enabled: ready,
         perform: {
           let value = !model.settings.settings.editor.vimMode
           Task { await model.settings.update(SettingsPatch(editor: .init(vimMode: value))) }
         }),
-      AppCommand(.increaseFontSize, "Increase Font Size", shortcut: Shortcut("+"), enabled: ready) {
+      AppCommand(
+        .increaseFontSize, "Increase Font Size", palette: "Increase font size", enabled: ready
+      ) {
         Self.adjustFontSize(model: model, by: 1)
       },
-      AppCommand(.decreaseFontSize, "Decrease Font Size", shortcut: Shortcut("-"), enabled: ready) {
+      AppCommand(
+        .decreaseFontSize, "Decrease Font Size", palette: "Decrease font size", enabled: ready
+      ) {
         Self.adjustFontSize(model: model, by: -1)
       },
       AppCommand(
-        .resetFontSize, "Actual Size", palette: "Reset font size", shortcut: Shortcut("0"),
+        .resetFontSize, "Actual Size", palette: "Reset font size",
         enabled: ready
       ) {
         Self.adjustFontSize(model: model, to: EditorSettings.defaults.fontSize)
       },
-      AppCommand(.toggleTheme, "Toggle Light/Dark Theme", enabled: ready) {
+      AppCommand(
+        .toggleTheme, "Toggle Light/Dark Theme", palette: "Toggle light/dark theme", enabled: ready
+      ) {
         Self.toggleTheme(model: model)
       },
 
@@ -206,7 +204,6 @@ struct CommandCatalog {
       commands.append(
         AppCommand(
           id, number == 9 ? "Last Tab" : "Tab \(number)",
-          shortcut: Shortcut(Character("\(number)")),
           inPalette: false, enabled: { !(ws()?.tabs.tabs.isEmpty ?? true) }
         ) {
           ws()?.selectTab(number: number)

@@ -1,4 +1,5 @@
 import DailyDoListAgent
+import DailyDoListUI
 import SwiftUI
 
 /// The app's scenes, exposed so the executable stays a one-liner: the single main window, the
@@ -62,6 +63,7 @@ struct MenuBarContent: View {
         AgentMenuBarContent(
           store: agent,
           openTodaysNote: { model.openTodaysNote() },
+          openTodaysNoteKeys: model.globalHotkeyKeys,
           openMainWindow: { showWindow() },
           openThread: { model.openThread($0) })
       } else {
@@ -69,8 +71,8 @@ struct MenuBarContent: View {
           Text("Daily Do List").font(.headline)
           Text(statusText).font(.callout).foregroundStyle(.secondary)
           Divider()
-          Button("Open Daily Do List") { showWindow() }
-          Button("Quit") { NSApp.terminate(nil) }
+          Button("Open Daily Do List") { showWindow() }.pointingHandCursor()
+          Button("Quit") { NSApp.terminate(nil) }.pointingHandCursor()
         }
         .padding(14)
         .frame(width: 280, alignment: .leading)

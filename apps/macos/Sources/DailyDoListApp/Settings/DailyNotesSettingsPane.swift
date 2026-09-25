@@ -82,7 +82,7 @@ struct DailyNotesSettingsPane: View {
             "Moment.js tokens, e.g. YYYY-MM-DD or YYYY/MM/YYYY-MM-DD (nested folders). Same settings as Obsidian's daily notes."
         )
       }
-      Section("Weekly notes (⇧⌘W)") {
+      Section {
         CommitTextField(title: "Folder", value: weekly.folder, prompt: "Vault root") {
           update(SettingsPatch(weeklyNotes: .init(folder: $0)))
         }
@@ -100,6 +100,11 @@ struct DailyNotesSettingsPane: View {
               for: LocalDate.today(now: model.environment.now()), settings: weekly)
           )
           .font(.system(.body, design: .monospaced))
+        }
+      } header: {
+        HStack(spacing: 8) {
+          Text("Weekly notes")
+          CommandKeycaps(command: .weeklyNote)
         }
       }
       if !settings.isLoaded { NotConnectedNote() }

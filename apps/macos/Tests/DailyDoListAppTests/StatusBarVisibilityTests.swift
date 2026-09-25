@@ -1,5 +1,6 @@
 import DailyDoListClient
 import DailyDoListModels
+import DailyDoListUI
 import Testing
 
 @testable import DailyDoListApp
@@ -79,6 +80,9 @@ struct AgentStatusPresentationTests {
     #expect(item.state == .on)
     #expect(item.label == "Agent on")
     #expect(item.toggles)
+    #expect(
+      item.tooltip.plainText == "The agent is watching your daily notes — click to pause",
+      "the web app's words")
   }
 
   @Test func aPausedAgentSaysSoAndToggles() throws {
@@ -86,6 +90,7 @@ struct AgentStatusPresentationTests {
     #expect(item.state == .paused)
     #expect(item.label == "Agent paused")
     #expect(item.toggles)
+    #expect(item.tooltip.plainText == "The agent is paused — click to resume")
   }
 
   @Test func aProblemIsNeverShownAsOn() throws {
@@ -95,6 +100,9 @@ struct AgentStatusPresentationTests {
     #expect(item.label == "Agent unavailable")
     #expect(item.detail == problem, "the daemon's text says what to fix")
     #expect(!item.toggles, "pausing wouldn't fix it: clicking explains instead")
+    #expect(
+      item.tooltip.plainText == "OpenRouter rejected OPENROUTER_API_KEY (401: User not found.)",
+      "the problem, without its final period")
   }
 
   @Test func aBlankProblemIsNoProblem() throws {

@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListUI
 import DailyDoListVim
 
 /// Imperative handle on one editor instance: a TextKit 1 text system (`NSTextStorage` →
@@ -20,6 +21,9 @@ public final class MarkdownEditorController {
   public var vim: Vim? {
     didSet { if vim !== oldValue { updateVimAttachment() } }
   }
+  /// Where badges, sparkles and links report the pointer for their tooltips (the app's one
+  /// tooltip; tests use their own).
+  public var tooltipCenter: TooltipCenter = .shared
 
   /// Current badges, with their lines mapped through every edit since `setBadges`.
   public var badges: [EditorBadge] { badgeStore.currentBadges(lineIndex: highlighter.lineIndex) }
@@ -59,8 +63,8 @@ public final class MarkdownEditorController {
   var hoveredBadgeID: String?
   var drawnBadgeRects: [NSRect] = []
   var drawnSparkleRects: [NSRect] = []
-  /// Tooltip areas registered with the text view: badges, sparkles and links.
-  var registeredToolTipRects: [NSRect] = []
+  /// The badge, sparkle or link under the pointer, as the tooltip center knows it.
+  var hoveredTooltip: (key: TooltipAnchor.Key, region: TooltipRegion)?
   var hoveredLinkRange: NSRange?
   private var badgeReserve: CGFloat = 0
 
@@ -236,6 +240,7 @@ public final class MarkdownEditorController {
     applyingProgrammaticChange = true
     defer { applyingProgrammaticChange = false }
     markdownTextView.breakUndoCoalescing()
+    dropHoveredTooltip()
     badgeStore.removeAll()
     motion.documentReplaced()
     replacingDocument = true
@@ -313,6 +318,7 @@ public final class MarkdownEditorController {
     if let hovered = hoveredBadgeID, !badgeStore.items.contains(where: { $0.badge.id == hovered }) {
       hoveredBadgeID = nil
     }
+    badgesDidChangeUnderTooltip()
     markdownTextView.setNeedsDisplay(markdownTextView.visibleRect)
   }
 
@@ -471,6 +477,7 @@ public final class MarkdownEditorController {
   public func restore(_ snapshot: EditorSnapshot) {
     markdownTextView.breakUndoCoalescing()
     noteUndoManager = snapshot.undoManager ?? UndoManager()
+    dropHoveredTooltip()
     badgeStore.removeAll()
     motion.documentReplaced()
     replacingDocument = true

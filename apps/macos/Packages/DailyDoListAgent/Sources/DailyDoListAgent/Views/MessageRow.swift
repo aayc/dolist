@@ -1,4 +1,5 @@
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// What a message row needs besides the message (resolved by the chat, compared for updates).
@@ -182,6 +183,9 @@ struct ArtifactRow: View {
           Text(verbatim: meta?.title ?? "Artifact")
             .font(.system(size: 13, weight: .medium))
             .lineLimit(1)
+            .tooltip(
+              ifTruncated: meta?.title ?? "Artifact", font: .systemFont(ofSize: 13, weight: .medium)
+            )
           Text(
             verbatim: meta.map { "\($0.kindLabel) · \(AgentFormat.bytes($0.size))" } ?? "Loading…"
           )

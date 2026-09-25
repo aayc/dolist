@@ -264,8 +264,9 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
   `System/`). Independent local packages live in `Packages/`: `DailyDoListModels` (wire models),
   `DailyDoListClient` (`HTTPDaemonClient` + `InMemoryDaemonClient`), `DailyDoListDomain` (ported
   `@ddl/core` logic), `DailyDoListEditor`, `DailyDoListAgent`, `DailyDoListVim` (the port of the
-  web editor's vim mode), and `DailyDoListDaemon` (`DaemonSupervisor`). `IntegrationTests/` is a
-  separate package that runs against the real daemon.
+  web editor's vim mode), `DailyDoListDaemon` (`DaemonSupervisor`), and `DailyDoListUI` (what the
+  shell, the agent UI and the editor share: tooltips, keycaps, the pointing hand, `IconButton`).
+  `IntegrationTests/` is a separate package that runs against the real daemon.
 - **Commands:** `apps/macos/scripts/test.sh [Package|app|integration] [-- swift test args]`,
   `apps/macos/scripts/run-app.sh [--demo]`, and
   `apps/macos/scripts/build-app.sh [--release] [--with-daemon] [--zip]` (writes to
@@ -292,6 +293,14 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
   Vim-mode tests send real `NSEvent`s through `VimEditorHarness`. After a vim change, run
   `test.sh DailyDoListVim`, `test.sh DailyDoListEditor` and `test.sh app`. The design (key
   routing, undo grouping, switching notes) is in the editor's README.
+- **Controls:** tooltips are `.tooltip(…)` from `DailyDoListUI` (never `.help`: late, unanimated,
+  no keycaps), with the same rules, wording and timings as the web app's. A control that runs a
+  command passes the command (`.tooltip("New note", command: .newNote)`, `IconButton(…, command:)`),
+  so its keycaps come from `CommandID.shortcut`, the one table of shortcuts; never write a
+  shortcut into text (`TooltipTests` scans the sources). Clickable things that aren't text fields
+  get `.pointingHandCursor()` (the shared button styles include it), and custom controls a hover
+  tint. Tests that drive tooltips give views their own `TooltipCenter` (a `ManualTooltipClock`,
+  or `QuietTooltips`) through `\.tooltipCenter`.
 - **Protocol changes:** a wire change in `packages/core/src/protocol.ts` also updates
   `DailyDoListModels` in the same change. Its tests decode the `@ddl/contract` fixtures.
 - **Daemon supervision:** the app attaches to a running daemon and never stops one it didn't

@@ -1,3 +1,4 @@
+import DailyDoListUI
 import SwiftUI
 
 /// Left column: file explorer or vault search (⌘⇧F). Its header holds the window's traffic lights.
@@ -20,17 +21,19 @@ struct SidebarView: View {
   private var header: some View {
     HStack(spacing: 2) {
       Spacer(minLength: 0)
-      IconButton(
-        systemImage: "magnifyingglass",
-        help: ui.sidebarMode == .search ? "Show files" : "Search (⇧⌘F)",
-        isActive: ui.sidebarMode == .search
-      ) {
-        if ui.sidebarMode == .search { ui.sidebarMode = .files } else { ui.focusSearch() }
+      if ui.sidebarMode == .search {
+        IconButton("magnifyingglass", label: "Show files", isActive: true) {
+          ui.sidebarMode = .files
+        }
+      } else {
+        IconButton("magnifyingglass", label: "Search vault", command: .search) {
+          ui.focusSearch()
+        }
       }
-      IconButton(systemImage: "square.and.pencil", help: "New note (⌘N)") {
+      IconButton("square.and.pencil", label: "New note", command: .newNote) {
         Task { await workspace.createNote() }
       }
-      IconButton(systemImage: "sidebar.left", help: "Hide sidebar (⌃⌘S)") {
+      IconButton("sidebar.left", label: "Hide sidebar", command: .toggleSidebar) {
         ui.sidebarVisible = false
       }
     }

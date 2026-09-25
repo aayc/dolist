@@ -1,5 +1,6 @@
 import DailyDoListDomain
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// The vault tree: folders first, natural order, selection follows the active note. Click a
@@ -93,10 +94,12 @@ struct ExplorerRowView: View {
   let workspace: Workspace
   @Bindable var ui: UIState
   let row: VaultTreeRow
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   private var isFolder: Bool { row.kind == .folder }
 
   var body: some View {
+    let renaming = ui.renamingPath == row.path
     HStack(spacing: 4) {
       Color.clear.frame(width: CGFloat(row.depth) * 14, height: 1)
       if isFolder {
@@ -104,6 +107,7 @@ struct ExplorerRowView: View {
           .font(.system(size: 9, weight: .semibold))
           .foregroundStyle(Theme.faintText)
           .rotationEffect(.degrees(row.isExpanded ? 90 : 0))
+          .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: row.isExpanded)
           .frame(width: 12)
           .contentShape(Rectangle())
           .onTapGesture { ui.setExpanded(row.path, !row.isExpanded) }
@@ -114,7 +118,7 @@ struct ExplorerRowView: View {
         .font(.system(size: 12))
         .foregroundStyle(isFolder ? Theme.mutedText : Theme.faintText)
         .frame(width: 16)
-      if ui.renamingPath == row.path {
+      if renaming {
         InlineRenameField(initial: row.name) { name in
           ui.renamingPath = nil
           guard let name, name != row.name else { return }
@@ -124,10 +128,11 @@ struct ExplorerRowView: View {
         Text(row.name)
           .lineLimit(1)
           .truncationMode(.middle)
+          .tooltip(ifTruncated: row.name, font: .systemFont(ofSize: 13), showing: .path(row.path))
       }
     }
     .font(.system(size: 13))
-    .help(row.path)
+    .hoverRow(!renaming, isSelected: workspace.tabs.active == row.path)
   }
 
   private var icon: String {

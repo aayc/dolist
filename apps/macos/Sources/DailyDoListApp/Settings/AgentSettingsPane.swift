@@ -1,4 +1,5 @@
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// Agent behavior (stored by the daemon).
@@ -17,7 +18,7 @@ struct AgentSettingsPane: View {
         }
       }
       Section("Agent") {
-        Toggle(
+        SettingsToggle(
           "Agent enabled",
           isOn: Binding(
             get: { status?.enabled ?? agent.enabled },
@@ -46,17 +47,22 @@ struct AgentSettingsPane: View {
           step: 15, unit: "min"
         ) { update(.init(approvalTimeoutMs: $0 * 60_000)) }
         SettingsNote(text: "Risky actions waiting longer than this are denied automatically.")
-        Toggle(
+        SettingsToggle(
           "Act on tasks that already exist",
           isOn: Binding(
             get: { agent.actOnExistingTasks },
             set: { update(.init(actOnExistingTasks: $0)) }))
       }
       Section("Models") {
-        Picker(
-          "Agent", selection: Binding(get: { agent.harness }, set: { update(.init(harness: $0)) })
-        ) {
-          ForEach(AgentHarnessKind.allCases, id: \.self) { Text($0.settingsLabel).tag($0) }
+        LabeledContent("Agent") {
+          Picker(
+            "Agent", selection: Binding(get: { agent.harness }, set: { update(.init(harness: $0)) })
+          ) {
+            ForEach(AgentHarnessKind.allCases, id: \.self) { Text($0.settingsLabel).tag($0) }
+          }
+          .labelsHidden()
+          .fixedSize()
+          .pointingHandCursor()
         }
         SettingsNote(text: "What runs the orchestrator and its subagents.")
         let field = AgentModelField(agent)

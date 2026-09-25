@@ -19,7 +19,9 @@ struct InspectorPanel: View {
           },
           headerHeight: Theme.headerHeight,
           onHide: { ui.inspectorPresented = false },
-          noteLinks: workspace.agentNoteLinks)
+          noteLinks: workspace.agentNoteLinks,
+          shortcuts: AgentPanelShortcuts(
+            hidePanel: CommandID.toggleAgentPanel.shortcut, inbox: CommandID.agentInbox.shortcut))
       } else {
         ContentUnavailableView(
           "Agent unavailable", systemImage: "sparkles",

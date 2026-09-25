@@ -1,5 +1,6 @@
 import DailyDoListDaemon
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// Daemon connection (managed/external, URL/port, DDL_HOME, vault, agent mode), restart, live
@@ -14,10 +15,14 @@ struct GeneralSettingsPane: View {
   var body: some View {
     Form {
       Section("Daemon") {
-        Picker("Daemon", selection: $preferences.daemonMode) {
-          ForEach(DaemonMode.allCases) { Text($0.title).tag($0) }
+        LabeledContent("Daemon") {
+          Picker("Daemon", selection: $preferences.daemonMode) {
+            ForEach(DaemonMode.allCases) { Text($0.title).tag($0) }
+          }
+          .pickerStyle(.segmented)
+          .labelsHidden()
+          .pointingHandCursor()
         }
-        .pickerStyle(.segmented)
         if model.isDemo {
           SettingsNote(
             text:
@@ -46,11 +51,16 @@ struct GeneralSettingsPane: View {
             let port = Int(text.trimmingCharacters(in: .whitespaces))
             preferences.managedPortOverride = port.flatMap { (1...65_535).contains($0) ? $0 : nil }
           }
-          Picker("Agent mode", selection: agentModeBinding) {
-            Text("Default").tag(AgentMode?.none)
-            Text("Live").tag(AgentMode?.some(.live))
-            Text("Mock (no model)").tag(AgentMode?.some(.mock))
-            Text("Off").tag(AgentMode?.some(.off))
+          LabeledContent("Agent mode") {
+            Picker("Agent mode", selection: agentModeBinding) {
+              Text("Default").tag(AgentMode?.none)
+              Text("Live").tag(AgentMode?.some(.live))
+              Text("Mock (no model)").tag(AgentMode?.some(.mock))
+              Text("Off").tag(AgentMode?.some(.off))
+            }
+            .labelsHidden()
+            .fixedSize()
+            .pointingHandCursor()
           }
           LabeledContent("Vault") {
             HStack {
@@ -65,8 +75,9 @@ struct GeneralSettingsPane: View {
                   preferences.vaultPath = url.path
                 }
               }
+              .pointingHandCursor()
               if preferences.vaultPath != nil {
-                Button("Reset") { preferences.vaultPath = nil }
+                Button("Reset") { preferences.vaultPath = nil }.pointingHandCursor()
               }
             }
           }
@@ -83,8 +94,9 @@ struct GeneralSettingsPane: View {
                 preferences.homeOverride = url.path
               }
             }
+            .pointingHandCursor()
             if preferences.homeOverride != nil {
-              Button("Reset") { preferences.homeOverride = nil }
+              Button("Reset") { preferences.homeOverride = nil }.pointingHandCursor()
             }
           }
         }
@@ -92,8 +104,9 @@ struct GeneralSettingsPane: View {
           Button(isApplying ? "Reconnecting…" : "Apply & Reconnect") {
             run { await model.boot() }
           }
+          .pointingHandCursor()
           if preferences.daemonMode == .managed, !model.isDemo {
-            Button("Restart Daemon") { run { await model.restartDaemon() } }
+            Button("Restart Daemon") { run { await model.restartDaemon() } }.pointingHandCursor()
           }
         }
         .disabled(isApplying)
@@ -121,7 +134,7 @@ struct GeneralSettingsPane: View {
       }
 
       Section("Startup") {
-        Toggle(
+        SettingsToggle(
           "Open Daily Do List at login",
           isOn: Binding(
             get: { model.systemIntegration.isLaunchAtLoginEnabled },
@@ -134,9 +147,10 @@ struct GeneralSettingsPane: View {
             Button("Open Login Items Settings…") {
               model.systemIntegration.openLoginItemsSettings()
             }
+            .pointingHandCursor()
           }
         }
-        Toggle(
+        SettingsToggle(
           "Global shortcut opens today's note",
           isOn: Binding(
             get: { preferences.globalHotkeyEnabled },
@@ -153,6 +167,9 @@ struct GeneralSettingsPane: View {
             let trimmed = text.trimmingCharacters(in: .whitespaces)
             preferences.globalHotkey = trimmed.isEmpty ? nil : trimmed
             hotkeyError = model.applyGlobalHotkeyPreference()
+          }
+          if let keys = model.globalHotkeyKeys {
+            LabeledContent("Opens today's note from any app") { Keycaps(keys) }
           }
           if let message = hotkeyError ?? model.systemIntegration.globalHotkeyAvailability.message {
             SettingsNote(text: message, tone: hotkeyError == nil ? .secondary : Theme.danger)
@@ -205,7 +222,8 @@ struct DaemonLogView: View {
           NSPasteboard.general.setString(
             supervisor.logLines.joined(separator: "\n"), forType: .string)
         }
-        Button("Clear") { supervisor.clearLogs() }
+        .pointingHandCursor()
+        Button("Clear") { supervisor.clearLogs() }.pointingHandCursor()
       }
       .controlSize(.small)
     }

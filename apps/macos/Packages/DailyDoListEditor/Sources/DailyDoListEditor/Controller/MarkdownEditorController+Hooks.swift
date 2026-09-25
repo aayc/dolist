@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListUI
 
 extension MarkdownEditorController: MarkdownTextViewHooks {
   // MARK: Selection
@@ -163,10 +164,12 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
     }
     guard let point else {
       hoverLinkDidChange(nil)
+      hoverTooltip(nil)
       return
     }
     let hoveredLink = link(at: point)
     hoverLinkDidChange(hoveredLink)
+    hoverTooltip(tooltipAnchor(at: point, badge: layout, link: hoveredLink))
     var clickable = layout != nil || sparkle != nil
     if !clickable, configuration.isEditable { clickable = checkboxLine(at: point) != nil }
     if !clickable, let hoveredLink {
@@ -175,16 +178,91 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
     (clickable ? NSCursor.pointingHand : NSCursor.iBeam).set()
   }
 
+  /// The tooltip text of what's under `point`: a badge, a sparkle or a link.
   func textView(_ textView: MarkdownTextView, toolTipAt point: NSPoint) -> String? {
-    if let layout = badgeLayout(at: point) { return BadgeRenderer.toolTip(for: layout.badge) }
-    if let sparkle = agentSparkle(at: point) { return sparkle.toolTip }
-    return linkToolTip(at: point)
+    tooltipAnchor(at: point, badge: badgeLayout(at: point), link: link(at: point))?.text()
+  }
+
+  // MARK: Tooltips
+
+  /// A thing under the pointer with a tooltip, and where it is (text-view coordinates).
+  struct TooltipAnchor {
+    enum Key: Hashable {
+      case badge(String)
+      case sparkle(Int)
+      case link(NSRange)
+    }
+
+    var key: Key
+    var rect: NSRect
+    /// Read when the tooltip shows, so it's current (a link preview that finished loading).
+    var text: @MainActor () -> String?
+  }
+
+  func tooltipAnchor(
+    at point: NSPoint, badge: BadgeRenderer.Layout?, link: (target: LinkTarget, range: NSRange)?
+  ) -> TooltipAnchor? {
+    if let badge {
+      let id = badge.badge.id
+      return TooltipAnchor(key: .badge(id), rect: badge.rect) { [weak self] in
+        let current = self?.badgeStore.items.first { $0.badge.id == id }?.badge ?? badge.badge
+        return BadgeRenderer.toolTip(for: current)
+      }
+    }
+    if let sparkle = agentSparkle(at: point) {
+      return TooltipAnchor(key: .sparkle(sparkle.marker.location), rect: sparkle.rect) {
+        sparkle.toolTip
+      }
+    }
+    if let link, let rect = linkRect(of: link.range, containing: point) {
+      return TooltipAnchor(key: .link(link.range), rect: rect) { [weak self] in
+        self?.linkToolTip(for: link)
+      }
+    }
+    return nil
+  }
+
+  /// The pointer moved onto another thing with a tooltip (or off them): the shared tooltip follows,
+  /// gliding straight from one to the next.
+  func hoverTooltip(_ anchor: TooltipAnchor?) {
+    if let anchor, let hovered = hoveredTooltip, hovered.key == anchor.key {
+      hovered.region.rect = anchor.rect
+      return
+    }
+    let previous = hoveredTooltip
+    hoveredTooltip = nil
+    if let anchor {
+      let region = TooltipRegion(view: markdownTextView, rect: anchor.rect) {
+        anchor.text().flatMap(TooltipContent.init(multilineText:))
+      }
+      hoveredTooltip = (anchor.key, region)
+      tooltipCenter.pointerEntered(region)
+    }
+    if let previous { tooltipCenter.pointerExited(previous.region) }
+  }
+
+  /// The document or its badges changed under a hovered badge: it follows (or goes away).
+  func badgesDidChangeUnderTooltip() {
+    guard let hovered = hoveredTooltip, case .badge(let id) = hovered.key else { return }
+    if badgeStore.items.contains(where: { $0.badge.id == id && $0.badge.isDrawn }) {
+      tooltipCenter.targetChanged(hovered.region)
+    } else {
+      hoveredTooltip = nil
+      tooltipCenter.targetRemoved(hovered.region)
+    }
+  }
+
+  /// A new document: nothing that was hovered is there anymore.
+  func dropHoveredTooltip() {
+    guard let hovered = hoveredTooltip else { return }
+    hoveredTooltip = nil
+    tooltipCenter.targetRemoved(hovered.region)
   }
 
   // MARK: Drawing and geometry
 
-  /// Before each draw: redraw badges that moved, refresh the tooltip rects (badges, sparkles,
-  /// links), and keep the pulse of a triaging badge in view going.
+  /// Before each draw: redraw badges that moved, note where sparkles are (hover redraws), and keep
+  /// the pulse of a triaging badge in view going.
   func textViewWillDraw(_ textView: MarkdownTextView) {
     let layouts = currentBadgeLayouts()
     motion.willDraw(pulseVisible: layouts.contains { self.motion.state.isPulsing($0.badge.id) })
@@ -194,11 +272,6 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
       drawnBadgeRects = rects
     }
     drawnSparkleRects = agentSparkles().map(\.rect)
-    let toolTipRects = rects + drawnSparkleRects + visibleLinkRects()
-    guard toolTipRects != registeredToolTipRects else { return }
-    textView.removeAllToolTips()
-    for rect in toolTipRects { textView.addToolTip(rect, owner: textView, userData: nil) }
-    registeredToolTipRects = toolTipRects
   }
 
   func textView(_ textView: MarkdownTextView, drawBackgroundIn rect: NSRect) {

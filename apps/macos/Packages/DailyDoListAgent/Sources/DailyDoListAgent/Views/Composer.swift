@@ -1,4 +1,5 @@
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// Reply box at the bottom of the chat. Disabled, with the reason, while the agent can't act.
@@ -39,12 +40,11 @@ struct Composer: View {
         Button(action: send) {
           Image(systemName: "arrow.up.circle.fill")
             .font(.system(size: 22))
-            .foregroundStyle(canSend ? AgentTheme.accent : AgentTheme.faint)
         }
-        .buttonStyle(.plain)
-        .disabled(!canSend)
-        .help("Send (Return) · New line (Shift-Return)")
+        .buttonStyle(SendButtonStyle())
+        .tooltip(Self.sendTooltip, accessibility: .keysOnly)
         .accessibilityLabel("Send")
+        .disabled(!canSend)
         .padding(.bottom, 3)
       }
       if let unavailable {
@@ -58,6 +58,11 @@ struct Composer: View {
     .padding(.vertical, 10)
   }
 
+  /// Return sends; Shift-Return starts a new line.
+  static let sendTooltip = TooltipContent(lines: [
+    .init("Send", keys: .returnKey), .init("New line", keys: .shiftReturn),
+  ])
+
   private func send() {
     let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !message.isEmpty, !sending, store.isAgentAvailable else { return }
@@ -68,6 +73,32 @@ struct Composer: View {
       let ok = await store.postMessage(threadId: threadId, text: message)
       sending = false
       if !ok && text.isEmpty { text = draft }
+    }
+  }
+}
+
+/// The send arrow: the accent, a shade stronger under the pointer, a touch smaller while pressed,
+/// 40% while there's nothing to send.
+private struct SendButtonStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    Arrow(configuration: configuration)
+  }
+
+  private struct Arrow: View {
+    let configuration: Configuration
+    @State private var hovering = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+      configuration.label
+        .foregroundStyle(hovering && isEnabled ? AgentTheme.accentStrong : AgentTheme.accent)
+        .scaleEffect(configuration.isPressed && isEnabled ? 0.96 : 1)
+        .opacity(isEnabled ? 1 : 0.4)
+        .contentShape(Circle())
+        .onHover { hovering = $0 }
+        .pointingHandCursor()
+        .animation(.easeOut(duration: 0.11), value: hovering)
+        .animation(.easeOut(duration: 0.06), value: configuration.isPressed)
     }
   }
 }

@@ -1,4 +1,5 @@
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// Versions of the app, the protocol and the daemon, plus useful links.
@@ -33,10 +34,14 @@ struct AboutSettingsPane: View {
       }
       Section("Links") {
         Link("OpenRouter models", destination: URL(string: "https://openrouter.ai/models")!)
+          .pointingHandCursor()
         Link(
           "Model Context Protocol (connectors)",
-          destination: URL(string: "https://modelcontextprotocol.io")!)
+          destination: URL(string: "https://modelcontextprotocol.io")!
+        )
+        .pointingHandCursor()
         Link("Node.js downloads", destination: URL(string: "https://nodejs.org/en/download")!)
+          .pointingHandCursor()
       }
     }
     .formStyle(.grouped)

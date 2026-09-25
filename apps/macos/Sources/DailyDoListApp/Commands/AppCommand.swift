@@ -1,44 +1,9 @@
+import DailyDoListUI
 import SwiftUI
 
-/// A menu/palette keyboard shortcut.
-struct Shortcut: Hashable, Sendable {
-  struct Modifiers: OptionSet, Hashable, Sendable {
-    let rawValue: Int
-    static let command = Modifiers(rawValue: 1 << 0)
-    static let shift = Modifiers(rawValue: 1 << 1)
-    static let option = Modifiers(rawValue: 1 << 2)
-    static let control = Modifiers(rawValue: 1 << 3)
-  }
-
-  /// Printable key (lowercase letters) or `"\t"` for Tab.
-  let key: Character
-  let modifiers: Modifiers
-
-  init(_ key: Character, _ modifiers: Modifiers = .command) {
-    self.key = key
-    self.modifiers = modifiers
-  }
-
-  var keyboardShortcut: KeyboardShortcut {
-    var flags: EventModifiers = []
-    if modifiers.contains(.command) { flags.insert(.command) }
-    if modifiers.contains(.shift) { flags.insert(.shift) }
-    if modifiers.contains(.option) { flags.insert(.option) }
-    if modifiers.contains(.control) { flags.insert(.control) }
-    let equivalent: KeyEquivalent = key == "\t" ? .tab : KeyEquivalent(key)
-    return KeyboardShortcut(equivalent, modifiers: flags)
-  }
-
-  /// Apple order: ⌃⌥⇧⌘ then the key (`⇧⌘D`).
-  var display: String {
-    var text = ""
-    if modifiers.contains(.control) { text += "⌃" }
-    if modifiers.contains(.option) { text += "⌥" }
-    if modifiers.contains(.shift) { text += "⇧" }
-    if modifiers.contains(.command) { text += "⌘" }
-    return text + (key == "\t" ? "⇥" : String(key).uppercased())
-  }
-}
+/// A menu/palette keyboard shortcut (`Shortcut("n")` is ⌘N); drawn as keycaps, printed in Apple's
+/// order (`⇧⌘D`).
+typealias Shortcut = KeyShortcut
 
 /// Stable command identifiers (menus, palette, tests).
 enum CommandID: String, CaseIterable, Sendable {
@@ -114,6 +79,47 @@ enum CommandID: String, CaseIterable, Sendable {
     "panel:left": .toggleSidebar, "panel:right": .toggleAgentPanel, "tab:next": .nextTab,
     "tab:previous": .previousTab,
   ]
+
+  /// The command's keyboard shortcut. This is the only place shortcuts are defined: the menus,
+  /// the palette and the tooltips of the controls that run a command all read it here.
+  var shortcut: Shortcut? {
+    switch self {
+    case .newNote: Shortcut("n")
+    case .todaysNote: Shortcut("d", [.command, .shift])
+    case .previousDaily: Shortcut("p", [.command, .shift])
+    case .nextDaily: Shortcut("n", [.command, .shift])
+    case .weeklyNote: Shortcut("w", [.command, .shift])
+    case .quickOpen: Shortcut("o")
+    case .save: Shortcut("s")
+    case .closeTab: Shortcut("w")
+    case .reopenTab: Shortcut("t", [.command, .shift])
+    case .back: Shortcut("[")
+    case .forward: Shortcut("]")
+    case .nextTab: Shortcut("\t", [.control])
+    case .previousTab: Shortcut("\t", [.control, .shift])
+    case .toggleSidebar: Shortcut("s", [.command, .control])
+    case .toggleAgentPanel: Shortcut("\\")
+    case .agentInbox: Shortcut("a", [.command, .shift])
+    case .search: Shortcut("f", [.command, .shift])
+    case .commandPalette: Shortcut("p")
+    case .increaseFontSize: Shortcut("+")
+    case .decreaseFontSize: Shortcut("-")
+    case .resetFontSize: Shortcut("0")
+    case .tab1: Shortcut("1")
+    case .tab2: Shortcut("2")
+    case .tab3: Shortcut("3")
+    case .tab4: Shortcut("4")
+    case .tab5: Shortcut("5")
+    case .tab6: Shortcut("6")
+    case .tab7: Shortcut("7")
+    case .tab8: Shortcut("8")
+    case .tab9: Shortcut("9")
+    case .newFolder, .tomorrowsNote, .renameNote, .deleteNote, .revealNote, .toggleLivePreview,
+      .toggleReadableWidth, .toggleLineNumbers, .toggleVim, .toggleTheme, .toggleAgent, .openInbox,
+      .restartDaemon:
+      nil
+    }
+  }
 }
 
 /// One user command: what menus and the palette show, when it's available, and what it does.
@@ -123,7 +129,8 @@ struct AppCommand: Identifiable {
   let title: String
   /// Palette title (defaults to the menu title).
   let paletteTitle: String
-  let shortcut: Shortcut?
+  /// ``CommandID/shortcut``.
+  var shortcut: Shortcut? { id.shortcut }
   let showsInPalette: Bool
   /// Toggle state for checkmark menu items (nil = plain command).
   let isOn: (@MainActor () -> Bool)?
@@ -131,14 +138,13 @@ struct AppCommand: Identifiable {
   let perform: @MainActor () -> Void
 
   init(
-    _ id: CommandID, _ title: String, palette: String? = nil, shortcut: Shortcut? = nil,
-    inPalette: Bool = true, isOn: (@MainActor () -> Bool)? = nil,
-    enabled: @escaping @MainActor () -> Bool = { true }, perform: @escaping @MainActor () -> Void
+    _ id: CommandID, _ title: String, palette: String? = nil, inPalette: Bool = true,
+    isOn: (@MainActor () -> Bool)? = nil, enabled: @escaping @MainActor () -> Bool = { true },
+    perform: @escaping @MainActor () -> Void
   ) {
     self.id = id
     self.title = title
     paletteTitle = palette ?? title
-    self.shortcut = shortcut
     showsInPalette = inPalette
     self.isOn = isOn
     isEnabled = enabled

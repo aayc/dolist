@@ -14,9 +14,9 @@ protocol MarkdownTextViewHooks: AnyObject {
   func textView(
     _ textView: MarkdownTextView, mouseDownAt point: NSPoint, modifiers: NSEvent.ModifierFlags
   ) -> Bool
+  /// The pointer moved (nil: it left): tooltips, the hover highlights and the cursor follow it.
   func textView(
     _ textView: MarkdownTextView, mouseMovedTo point: NSPoint?, modifiers: NSEvent.ModifierFlags)
-  func textView(_ textView: MarkdownTextView, toolTipAt point: NSPoint) -> String?
   func textViewWillDraw(_ textView: MarkdownTextView)
   /// After the background, before the text and the selection.
   func textView(_ textView: MarkdownTextView, drawBackgroundIn rect: NSRect)
@@ -53,7 +53,7 @@ protocol MarkdownTextViewHooks: AnyObject {
 
 /// The editor's `NSTextView` (TextKit 1). Deliberately thin: it forwards selection changes, key
 /// commands, mouse events, overlay drawing, resizing and focus changes to `hooks`.
-final class MarkdownTextView: NSTextView, NSViewToolTipOwner {
+final class MarkdownTextView: NSTextView {
   weak var hooks: MarkdownTextViewHooks?
   /// Focus was requested before the view was in a window (the app's first note at launch).
   var focusWhenInWindow = false
@@ -269,15 +269,6 @@ final class MarkdownTextView: NSTextView, NSViewToolTipOwner {
       userInfo: nil)
     addTrackingArea(area)
     hoverArea = area
-  }
-
-  func view(
-    _ view: NSView, stringForToolTip tag: NSView.ToolTipTag, point: NSPoint,
-    userData data: UnsafeMutableRawPointer?
-  )
-    -> String
-  {
-    hooks?.textView(self, toolTipAt: point) ?? ""
   }
 
   // MARK: Drawing, geometry, focus

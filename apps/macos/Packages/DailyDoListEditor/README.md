@@ -81,6 +81,13 @@ external URL or a note target, the link's visible text, and the thread named by 
 of the link's line); without an answer the tooltip is the link text, hostname and URL, or the
 note's name.
 
+**Tooltips.** Badges, sparkles and links show the app's one tooltip (`DailyDoListUI`'s
+`TooltipCenter`, set as `tooltipCenter`): the controller reports the element under the pointer as
+a `TooltipRegion` from `mouseMoved`, so the tooltip opens after the shared delay, glides from one
+element to the next, and fades when the pointer leaves. Its text is read when it shows (a link's
+preview may have loaded by then), and a badge that changes or goes away under it updates or takes
+the tooltip with it. Nothing about tooltips runs on the draw or keystroke path.
+
 **Tokenizer** (pure, AppKit-free, UTF-16 offsets): ATX headings 1–6, fenced code (```` ``` ````
 / `~~~`, info string, unterminated fences run to the end), frontmatter (`---` on line 0, closed by
 `---`/`...` within 200 lines, like `@ddl/core`), nested blockquotes, lists (`-`, `*`, `+`, `1.`,
@@ -110,7 +117,7 @@ plus `arrow.left.square`, `questionmark.square`, `exclamationmark.square`. Click
 **Badges.** Drawn after the text on the last line fragment of their line: a status dot (triaging
 accent, queued faint, working info (cyan), needs-you amber, done green, failed red, cancelled faint), the
 label shortened to ~28 characters and, with unread messages, a 6 pt accent dot (the tooltip says
-"N unread", `99+` max). Only badges that need the user are loud (`BadgeStyle`):
+"label (N unread)", like the web app's, `99+` max). Only badges that need the user are loud (`BadgeStyle`):
 `waiting_approval`/`waiting_user` are warning-tinted pills (14 % fill, warning border, primary
 text); `failed` has danger text and dot on a faint danger fill, no border; `triaging`/`queued`/
 `working` are neutral pills (subtle fill, hairline border, secondary text); `done`/`cancelled` are
@@ -290,7 +297,7 @@ TextKit 1 techniques worth knowing before changing things (each verified experim
 | Selection change with live preview (reveal state + glyph invalidation) | < 2 ms | 0.024 ms avg | 0.038 ms avg |
 | … plus relayout of the revealed lines, p95 | | 0.13 ms | 0.17 ms |
 | Pure tokenizer, whole note | | 2.4 ms | 15 ms |
-| Before each draw: badge layouts, sparkles, link tooltip areas (every tenth line the agent's) | | | 0.05 ms avg |
+| Before each draw: badge layouts and sparkles (every tenth line the agent's) | | | 0.05 ms avg |
 
 Motion adds nothing to these paths: typing and selection changes only check that nothing moves.
 Assertions use generous debug budgets scaled by `EDITOR_PERF_BUDGET_MULTIPLIER`. Release numbers:
@@ -318,7 +325,7 @@ apps/macos/scripts/test.sh DailyDoListEditor -- --filter Vim         # vim mode,
 VIM_VECTORS_FILTER=viewport/ VIM_VECTORS_VERBOSE=1 apps/macos/scripts/test.sh DailyDoListEditor -- --filter VimVectorReplayTests
 ```
 
-Swift Testing, 239 tests (plus parameterized cases): tokenizer tables (unicode offsets, nesting,
+Swift Testing, 240 tests (plus parameterized cases): tokenizer tables (unicode offsets, nesting,
 unterminated constructs, code spans, URLs with underscores, tags vs headings vs URLs), an
 incremental-vs-full equivalence property test (3 seeds × 500 random edits including fence and
 frontmatter toggles, comparing line states and every attribute run), command tables ported from
@@ -329,11 +336,13 @@ timeline, and motion driven through the controller with a manual clock and ticke
 it, what each frame redraws, that frames stop, Reduce Motion, hidden windows), fuzzing (random and
 pathological lines, random edits with drawing), agent lines (marker grammar, colors, hidden
 markers and sparkle slots, sparkle clicks and tooltips, the caret and Enter around markers),
-anchored-line bands (also checked on pixels), link previews and tooltip areas, remote changes
-(caret, badges and undo), performance, and offscreen PNG renders written to
+anchored-line bands (also checked on pixels), link previews and the shared tooltip (on virtual
+time: the delay, gliding between badge, sparkle and link, fading out, a note switch), remote
+changes (caret, badges and undo), performance, and offscreen PNG renders written to
 `.build/editor-snapshots/` for manual review (ignored by git): the sample note (light, dark, source
 mode with line numbers), badges in every status (light, dark), narrow-window badges, agent lines
-with an anchored line (light, dark, source mode), and a frame in the middle of every kind of motion.
+with an anchored line (light, dark, source mode), tooltips over a badge and the sparkle (light,
+dark), and a frame in the middle of every kind of motion.
 
 Vim mode has 65 of these tests (`Tests/DailyDoListEditorTests/Vim/`), all driving the editor with
 real `NSEvent`s through `keyDown`:

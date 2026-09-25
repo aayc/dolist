@@ -78,6 +78,7 @@ final class RecordingDelegate: MarkdownEditorDelegate {
 final class EditorHarness {
   let controller: MarkdownEditorController
   let delegate = RecordingDelegate()
+  let tooltips = TooltipRecorder()
 
   /// An editor with marked text (`|` caret, `«…»` selection).
   convenience init(
@@ -95,6 +96,7 @@ final class EditorHarness {
     size: NSSize = NSSize(width: 900, height: 700)
   ) {
     controller = MarkdownEditorController(configuration: configuration)
+    controller.tooltipCenter = tooltips.center
     controller.scrollView.frame = NSRect(origin: .zero, size: size)
     controller.markdownTextView.frame.size.width = controller.scrollView.contentSize.width
     controller.delegate = delegate

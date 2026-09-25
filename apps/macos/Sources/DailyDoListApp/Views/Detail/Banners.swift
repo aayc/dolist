@@ -1,3 +1,4 @@
+import DailyDoListUI
 import SwiftUI
 
 /// Unobtrusive notice while the daemon connection is lost (after having been connected).
@@ -20,6 +21,7 @@ struct OfflineBanner: View {
         }
       }
       .controlSize(.small)
+      .pointingHandCursor()
       .disabled(retrying)
     }
     .font(.system(size: 12))
@@ -63,17 +65,13 @@ private struct ToastView: View {
           Button(label) { toasts.performAction(toast) }
             .buttonStyle(.link)
             .font(.system(size: 12, weight: .medium))
+            .pointingHandCursor()
         }
       }
       Spacer(minLength: 0)
-      Button {
-        toasts.dismiss(toast.id)
-      } label: {
-        Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(
-          Theme.faintText)
-      }
-      .buttonStyle(.plain)
-      .help("Dismiss")
+      IconButton("xmark", label: "Dismiss", size: .compact) { toasts.dismiss(toast.id) }
+        .padding(.top, -4)
+        .padding(.trailing, -4)
     }
     .padding(12)
     .frame(width: 320)

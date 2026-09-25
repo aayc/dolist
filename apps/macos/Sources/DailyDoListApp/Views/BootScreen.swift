@@ -1,3 +1,4 @@
+import DailyDoListUI
 import SwiftUI
 
 /// Startup progress, or a clear explanation of what's wrong with the daemon and how to fix it.
@@ -43,13 +44,16 @@ private struct BootFailureView: View {
       HStack(spacing: 10) {
         Button("Retry") { run { await model.boot() } }
           .keyboardShortcut(.defaultAction)
+          .pointingHandCursor()
+          .tooltip("Retry", keys: .returnKey, accessibility: .keysOnly)
         if failure.offersStartDaemon, model.preferences.daemonMode == .external {
           Button("Start Daemon") { run { await model.startManagedDaemon() } }
+            .pointingHandCursor()
         }
         if let url = failure.helpURL {
-          Link("Install Node.js…", destination: url)
+          Link("Install Node.js…", destination: url).pointingHandCursor()
         }
-        SettingsLink { Text("Open Settings…") }
+        SettingsLink { Text("Open Settings…") }.pointingHandCursor()
       }
       .disabled(isWorking)
       if model.preferences.daemonMode == .managed, !model.supervisor.logLines.isEmpty {
@@ -62,6 +66,7 @@ private struct BootFailureView: View {
           }
           .frame(height: 140)
         }
+        .disclosureGroupStyle(ChevronDisclosureStyle())
         .frame(maxWidth: 560)
       }
       Text(model.connection.endpointDescription == "—" ? "" : model.connection.endpointDescription)

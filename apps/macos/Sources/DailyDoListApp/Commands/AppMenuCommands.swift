@@ -85,9 +85,9 @@ private struct MenuItem: View {
           isOn: Binding(get: { command.isOn?() ?? false }, set: { _ in command.run() })
         )
         .disabled(!command.isEnabled())
-      } else if let shortcut = command.shortcut {
+      } else if let shortcut = command.shortcut?.keyboardShortcut {
         Button(command.title) { command.run() }
-          .keyboardShortcut(shortcut.keyboardShortcut)
+          .keyboardShortcut(shortcut)
       } else {
         Button(command.title) { command.run() }
           .disabled(!command.isEnabled())

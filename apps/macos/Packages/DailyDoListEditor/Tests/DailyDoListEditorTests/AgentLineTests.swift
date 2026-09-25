@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListUI
 import Testing
 
 @testable import DailyDoListEditor
@@ -242,15 +243,66 @@ struct AgentLineTests {
       EditorLinkPreview(target: .note(target: "A", subpath: nil), label: "A").fallbackText == "A")
   }
 
-  @Test func linksGetTooltipAreas() throws {
-    let text = "[[Note]] and [docs](https://docs.example/x)\nplain"
+  /// Badges, the sparkle and links show the app's shared tooltip (pointing at what's hovered),
+  /// gliding from one to the next and fading when the pointer leaves them.
+  @Test func badgesSparklesAndLinksShowTheSharedTooltip() throws {
+    let text = "- [ ] Call Sole %%agent:thr_1%%\n[[Note]] and [docs](https://docs.example/x)\nplain"
     let editor = EditorHarness(
       text: text, selection: NSRange(location: (text as NSString).length, length: 0))
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 900, height: 700), styleMask: [.borderless],
+      backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
+    window.contentView = editor.controller.view
+    defer { window.close() }
+    editor.controller.setBadges([
+      EditorBadge(id: "b", line: 0, status: "working", label: "Calling the restaurant", unread: 2)
+    ])
     editor.layout()
-    let rects = editor.controller.visibleLinkRects()
-    #expect(rects.count == 2)
-    #expect(rects.contains { $0.contains(editor.point(at: editor.range(of: "Note"))) })
-    #expect(rects.contains { $0.contains(editor.point(at: editor.range(of: "docs"))) })
+    let tooltips = editor.tooltips
+    func hover(_ point: NSPoint?) {
+      editor.controller.textView(editor.textView, mouseMovedTo: point, modifiers: [])
+    }
+
+    let badge = try #require(editor.controller.currentBadgeLayouts().first)
+    hover(NSPoint(x: badge.rect.midX, y: badge.rect.midY))
+    #expect(tooltips.presenter.shown == nil, "not before the delay")
+    tooltips.clock.advance(by: 0.5)
+    #expect(tooltips.presenter.shown?.content.plainText == "Calling the restaurant · 2 unread")
+    #expect(
+      tooltips.presenter.shown?.anchor
+        == window.convertToScreen(editor.textView.convert(badge.rect, to: nil)))
+
+    let sparkle = try #require(editor.controller.agentSparkles().first)
+    hover(NSPoint(x: sparkle.rect.midX, y: sparkle.rect.midY))
+    #expect(
+      tooltips.presenter.shown?.content.plainText == "Written by the agent — open thread",
+      "the next one shows at once")
+    #expect(tooltips.presenter.animations.last == .glide)
+
+    let note = editor.point(at: editor.range(of: "Note"))
+    hover(note)
+    #expect(tooltips.presenter.shown?.content.plainText == "Note")
+    let anchor = try #require(tooltips.presenter.shown?.anchor)
+    #expect(
+      anchor.contains(
+        window.convertToScreen(editor.textView.convert(NSRect(origin: note, size: .zero), to: nil))
+          .origin))
+    hover(NSPoint(x: note.x + 1, y: note.y))
+    #expect(tooltips.presenter.animations.count == 3, "moving within a link keeps its tooltip")
+
+    hover(editor.point(at: editor.range(of: "plain")))
+    #expect(tooltips.presenter.shown == nil)
+    #expect(tooltips.presenter.animations.last == .exit)
+
+    // A note switch takes a hovered badge's tooltip with it.
+    hover(NSPoint(x: badge.rect.midX, y: badge.rect.midY))
+    tooltips.clock.advance(by: 0.5)
+    #expect(tooltips.presenter.shown != nil)
+    editor.controller.setText("other note", resetUndo: true)
+    #expect(tooltips.presenter.shown == nil)
+    #expect(tooltips.presenter.animations.last == TooltipAnimation.Kind.none)
   }
 
   // MARK: Remote changes

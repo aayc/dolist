@@ -1,4 +1,5 @@
 import Carbon.HIToolbox
+import DailyDoListUI
 import Foundation
 
 /// A system-wide keyboard shortcut: one key plus modifiers, written the way macOS menus show it
@@ -166,6 +167,35 @@ public struct GlobalShortcut: Hashable, Sendable {
 
 extension GlobalShortcut: CustomStringConvertible {
   public var description: String { displayString }
+}
+
+extension GlobalShortcut {
+  /// The shortcut as keycaps.
+  var keyShortcut: KeyShortcut {
+    var caps: KeyShortcut.Modifiers = []
+    if modifiers.contains(.control) { caps.insert(.control) }
+    if modifiers.contains(.option) { caps.insert(.option) }
+    if modifiers.contains(.shift) { caps.insert(.shift) }
+    if modifiers.contains(.command) { caps.insert(.command) }
+    return KeyShortcut(Self.capKey(key), caps)
+  }
+
+  private static func capKey(_ key: Key) -> KeyShortcut.Key {
+    if key.isFunctionKey { return .function(Int(key.name.dropFirst()) ?? 0) }
+    switch key.keyCode {
+    case UInt32(kVK_Space): return .space
+    case UInt32(kVK_Return): return .return
+    case UInt32(kVK_Tab): return .tab
+    case UInt32(kVK_Escape): return .escape
+    case UInt32(kVK_Delete): return .delete
+    case UInt32(kVK_ForwardDelete): return .forwardDelete
+    case UInt32(kVK_LeftArrow): return .leftArrow
+    case UInt32(kVK_RightArrow): return .rightArrow
+    case UInt32(kVK_UpArrow): return .upArrow
+    case UInt32(kVK_DownArrow): return .downArrow
+    default: return .character(key.name.first ?? "?")
+    }
+  }
 }
 
 /// Stored as its display string (`"⌥⌘D"`).

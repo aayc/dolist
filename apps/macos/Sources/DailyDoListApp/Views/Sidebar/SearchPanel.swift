@@ -1,4 +1,5 @@
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// Vault search: results grouped by note; name hits vs content hits with 1-based line labels.
@@ -21,16 +22,14 @@ struct SearchPanel: View {
         if search.isLoading {
           ProgressView().controlSize(.mini)
         } else if !search.query.isEmpty {
-          Button {
+          ClearSearchButton {
             search.query = ""
-          } label: {
-            Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.faintText)
+            fieldFocused = true
           }
-          .buttonStyle(.plain)
-          .help("Clear")
         }
       }
-      .padding(.horizontal, 8)
+      .padding(.leading, 8)
+      .padding(.trailing, search.query.isEmpty || search.isLoading ? 8 : 2)
       .frame(height: 28)
       .background(Theme.background, in: RoundedRectangle(cornerRadius: 6))
       .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.separator))
@@ -53,7 +52,7 @@ struct SearchPanel: View {
           Section {
             ForEach(Array(group.hits.enumerated()), id: \.offset) { _, hit in
               SearchHitRow(hit: hit, query: search.trimmedQuery)
-                .contentShape(Rectangle())
+                .hoverRow()
                 .onTapGesture { open(hit) }
             }
           } header: {
@@ -63,16 +62,10 @@ struct SearchPanel: View {
                   group.path, OpenOptions(newTab: NSEvent.modifierFlags.contains(.command)))
               }
             } label: {
-              HStack(spacing: 6) {
-                Text(group.title).font(.system(size: 12, weight: .semibold)).foregroundStyle(
-                  Theme.text)
-                if !group.folder.isEmpty {
-                  Text(group.folder).font(.system(size: 11)).foregroundStyle(Theme.faintText)
-                    .lineLimit(1)
-                }
-              }
+              SearchGroupHeader(title: group.title, folder: group.folder)
             }
             .buttonStyle(.plain)
+            .pointingHandCursor()
           }
         }
       }
@@ -91,6 +84,49 @@ struct SearchPanel: View {
   }
 }
 
+/// A note's heading above its hits: the title turns accent under the pointer (it opens the note).
+private struct SearchGroupHeader: View {
+  let title: String
+  let folder: String
+  @State private var hovering = false
+
+  var body: some View {
+    HStack(spacing: 6) {
+      Text(title).font(.system(size: 12, weight: .semibold))
+        .foregroundStyle(hovering ? Theme.accent : Theme.text)
+      if !folder.isEmpty {
+        Text(folder).font(.system(size: 11)).foregroundStyle(Theme.faintText)
+          .lineLimit(1)
+          .tooltip(ifTruncated: folder, font: .systemFont(ofSize: 11))
+      }
+    }
+    .contentShape(Rectangle())
+    .onHover { hovering = $0 }
+    .animation(.easeOut(duration: 0.11), value: hovering)
+  }
+}
+
+/// The field's ×: brightens under the pointer, a 24 pt target.
+private struct ClearSearchButton: View {
+  let action: () -> Void
+  @State private var hovering = false
+
+  var body: some View {
+    Button(action: action) {
+      Image(systemName: "xmark.circle.fill")
+        .foregroundStyle(hovering ? Theme.mutedText : Theme.faintText)
+        .frame(width: 24, height: 24)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .onHover { hovering = $0 }
+    .pointingHandCursor()
+    .animation(.easeOut(duration: 0.11), value: hovering)
+    .tooltip("Clear search", accessibility: .none)
+    .accessibilityLabel("Clear search")
+  }
+}
+
 private struct SearchHitRow: View {
   let hit: SearchHit
   let query: String
@@ -101,11 +137,11 @@ private struct SearchHitRow: View {
         .font(.system(size: 10, design: .monospaced))
         .foregroundStyle(Theme.faintText)
         .frame(minWidth: 22, alignment: .trailing)
+        .tooltip(hit.kind == .name ? "Name match" : "Line \(hit.line + 1)")
       Text(highlighted)
         .font(.system(size: 12))
         .lineLimit(2)
     }
-    .help(hit.kind == .name ? "Name match" : "Line \(hit.line + 1)")
   }
 
   private var highlighted: AttributedString {

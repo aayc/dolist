@@ -1,6 +1,7 @@
 import AppKit
 import DailyDoListClient
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// Shows one artifact (present it as a sheet or in its own window): markdown and JSON rendered,
@@ -84,6 +85,7 @@ struct ArtifactViewerContent: View {
       } label: {
         Label("Copy", systemImage: "doc.on.doc")
       }
+      .pointingHandCursor()
       .disabled(payload == nil || !ArtifactFiles.canCopy(kind))
       Button {
         if let payload {
@@ -95,8 +97,11 @@ struct ArtifactViewerContent: View {
       } label: {
         Label("Save As…", systemImage: "square.and.arrow.down")
       }
+      .pointingHandCursor()
       .disabled(payload == nil)
       Button("Done", action: onClose).keyboardShortcut(.cancelAction)
+        .pointingHandCursor()
+        .tooltip("Close", keys: .escapeKey)
     }
     .padding(.horizontal, 14)
     .padding(.vertical, 10)
@@ -112,7 +117,7 @@ struct ArtifactViewerContent: View {
       } description: {
         Text(verbatim: message)
       } actions: {
-        Button("Try Again", action: onRetry)
+        Button("Try Again", action: onRetry).pointingHandCursor()
       }
     case .ready(let payload):
       ArtifactBody(kind: kind, payload: payload, language: meta?.language, title: meta?.title)

@@ -1,4 +1,5 @@
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// Today's threads grouped by what they need: Needs you, Working, Done, Other.
@@ -89,6 +90,9 @@ struct InboxRow: View {
               .font(.system(size: 13, weight: unread > 0 ? .semibold : .medium))
               .lineLimit(1)
               .truncationMode(.tail)
+              .tooltip(
+                ifTruncated: thread.title,
+                font: .systemFont(ofSize: 13, weight: unread > 0 ? .semibold : .medium))
             Spacer(minLength: 4)
             Text(verbatim: AgentFormat.relativeTime(Date(epochMillis: thread.updatedAt), now: now))
               .font(.caption)
@@ -115,10 +119,12 @@ struct InboxRow: View {
               CountBadge(
                 count: pendingApprovals, tone: .warning, systemImage: "exclamationmark.shield.fill"
               )
-              .help("\(pendingApprovals) waiting for your approval")
+              .tooltip(
+                pendingApprovals == 1
+                  ? "1 approval waiting" : "\(pendingApprovals) approvals waiting")
             }
             if unread > 0 {
-              CountBadge(count: unread, tone: .accent).help("\(unread) unread")
+              CountBadge(count: unread, tone: .accent).tooltip("\(unread) unread")
             }
           }
         }

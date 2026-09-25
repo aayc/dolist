@@ -11,18 +11,24 @@ let package = Package(
     .library(name: "DailyDoListEditor", targets: ["DailyDoListEditor"])
   ],
   dependencies: [
-    .package(path: "../DailyDoListVim")
+    .package(path: "../DailyDoListVim"),
+    .package(path: "../DailyDoListUI"),
   ],
   targets: [
     .target(
       name: "DailyDoListEditor",
-      dependencies: [.product(name: "DailyDoListVim", package: "DailyDoListVim")]),
+      dependencies: [
+        .product(name: "DailyDoListVim", package: "DailyDoListVim"),
+        .product(name: "DailyDoListUI", package: "DailyDoListUI"),
+      ]),
     .testTarget(
       name: "DailyDoListEditorTests",
       dependencies: [
         "DailyDoListEditor",
         .product(name: "DailyDoListVim", package: "DailyDoListVim"),
         .product(name: "DailyDoListVimTestSupport", package: "DailyDoListVim"),
+        .product(name: "DailyDoListUI", package: "DailyDoListUI"),
+        .product(name: "DailyDoListUITestSupport", package: "DailyDoListUI"),
       ]),
   ]
 )

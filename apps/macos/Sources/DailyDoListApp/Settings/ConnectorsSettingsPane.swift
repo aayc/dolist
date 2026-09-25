@@ -1,4 +1,5 @@
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// MCP connectors the daemon loaded from `$DDL_HOME/mcp.json`.
@@ -29,6 +30,7 @@ struct ConnectorsSettingsPane: View {
           Spacer()
           Button("Refresh") { Task { await load() } }
             .controlSize(.small)
+            .pointingHandCursor()
             .disabled(isLoading || model.client == nil)
         }
       } footer: {

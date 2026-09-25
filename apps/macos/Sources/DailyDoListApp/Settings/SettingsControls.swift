@@ -1,5 +1,27 @@
 import AppKit
+import DailyDoListUI
 import SwiftUI
+
+/// A switch row of a grouped form: the title on the left, the switch on the right. Only the switch
+/// is clickable, so only it shows the pointing hand.
+struct SettingsToggle: View {
+  let title: String
+  @Binding var isOn: Bool
+
+  init(_ title: String, isOn: Binding<Bool>) {
+    self.title = title
+    self._isOn = isOn
+  }
+
+  var body: some View {
+    LabeledContent(title) {
+      Toggle(title, isOn: $isOn)
+        .labelsHidden()
+        .toggleStyle(.switch)
+        .pointingHandCursor()
+    }
+  }
+}
 
 /// Text field with a local draft that commits on Return or focus loss (not per keystroke). A
 /// `required` value is committed trimmed and never blank: a blank draft reverts to the value.
@@ -78,6 +100,7 @@ struct ClampedNumberField: View {
           title, value: Binding(get: { value }, set: { onCommit(clamp($0)) }), in: range, step: step
         )
         .labelsHidden()
+        .pointingHandCursor()
         if let unit { Text(unit).foregroundStyle(.secondary) }
       }
     }

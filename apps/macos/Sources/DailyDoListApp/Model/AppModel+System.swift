@@ -1,5 +1,6 @@
 import AppKit
 import DailyDoListAgent
+import DailyDoListUI
 import Foundation
 import Observation
 
@@ -58,6 +59,13 @@ extension AppModel {
       return nil
     }
     applyGlobalHotkeyPreference()
+  }
+
+  /// The "open today's note" hotkey while it's on, as keycaps (the menu bar window shows it).
+  var globalHotkeyKeys: KeyShortcut? {
+    guard preferences.globalHotkeyEnabled else { return nil }
+    return GlobalShortcut(
+      parsing: preferences.globalHotkey ?? systemIntegration.defaultGlobalShortcut)?.keyShortcut
   }
 
   /// Registers (or removes) the "open today's note" hotkey from preferences; returns an error

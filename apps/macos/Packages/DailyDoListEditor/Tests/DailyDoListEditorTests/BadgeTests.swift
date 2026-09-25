@@ -207,7 +207,7 @@ struct BadgeTests {
     #expect(
       renderer.width(of: one) - renderer.width(of: plain) < BadgeRenderer.unreadDotDiameter * 2.5)
     #expect(
-      BadgeRenderer.toolTip(for: many) == "Done: Done · 3 options · 99+ unread",
+      BadgeRenderer.toolTip(for: many) == "Done · 3 options · 99+ unread",
       "the tooltip keeps the count")
   }
 

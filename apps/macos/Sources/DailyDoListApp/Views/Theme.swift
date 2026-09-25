@@ -96,34 +96,3 @@ struct Pill: View {
       .background(color.opacity(0.14), in: Capsule())
   }
 }
-
-/// Plain icon button with hover highlight: the one control style of every pane header.
-struct IconButton: View {
-  let systemImage: String
-  let help: String
-  var isActive = false
-  var isEnabled = true
-  /// Smaller glyph and hit area, for quiet rows (the daily note navigator).
-  var isCompact = false
-  let action: () -> Void
-  @State private var hovering = false
-
-  var body: some View {
-    Button(action: action) {
-      Image(systemName: systemImage)
-        .font(.system(size: isCompact ? 10 : 13, weight: isCompact ? .semibold : .regular))
-        .frame(width: isCompact ? 22 : 28, height: isCompact ? 22 : 28)
-        .foregroundStyle(isActive ? Theme.accent : (isEnabled ? Theme.mutedText : Theme.faintText))
-        .background(
-          RoundedRectangle(cornerRadius: 6)
-            .fill(hovering && isEnabled ? Theme.hover : .clear)
-        )
-        .contentShape(Rectangle())
-    }
-    .buttonStyle(.plain)
-    .disabled(!isEnabled)
-    .help(help)
-    .onHover { hovering = $0 }
-    .accessibilityLabel(help)
-  }
-}

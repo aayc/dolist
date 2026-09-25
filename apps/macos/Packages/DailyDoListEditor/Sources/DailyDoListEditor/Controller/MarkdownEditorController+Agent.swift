@@ -1,7 +1,7 @@
 import AppKit
 
 /// The agent's marks in a note: sparkles ending the lines it wrote, bands behind the lines its
-/// threads are anchored to, and hover previews of links.
+/// threads are anchored to, and hover previews of links (shown in the app's shared tooltip).
 extension MarkdownEditorController {
   /// A drawn sparkle (an agent marker hidden by live preview).
   struct AgentSparkle: Equatable {
@@ -165,9 +165,9 @@ extension MarkdownEditorController {
     return visible.trimmingCharacters(in: .whitespaces)
   }
 
-  /// The tooltip of the link under `point`: the host's preview, else the fallback.
-  func linkToolTip(at point: NSPoint) -> String? {
-    guard let link = link(at: point), let preview = linkPreview(for: link) else { return nil }
+  /// The tooltip of `link`: the host's preview, else the fallback.
+  func linkToolTip(for link: (target: LinkTarget, range: NSRange)) -> String? {
+    guard let preview = linkPreview(for: link) else { return nil }
     return delegate?.editor(self, previewFor: preview) ?? preview.fallbackText
   }
 
@@ -180,25 +180,23 @@ extension MarkdownEditorController {
     }
   }
 
-  /// The visible pieces of every link in the visible rect (text-view coordinates), for tooltips.
-  func visibleLinkRects() -> [NSRect] {
-    guard storage.length > 0 else { return [] }
+  /// The piece of `range` (a link, maybe wrapped over lines) under `point`, in text-view
+  /// coordinates: where its tooltip points.
+  func linkRect(of range: NSRange, containing point: NSPoint) -> NSRect? {
+    guard range.length > 0, range.end <= storage.length else { return nil }
     let origin = markdownTextView.textContainerOrigin
-    let visible = markdownTextView.visibleRect.offsetBy(dx: -origin.x, dy: -origin.y)
-    let chars = layoutManager.characterRange(
-      forGlyphRange: layoutManager.glyphRange(forBoundingRect: visible, in: textContainer),
-      actualGlyphRange: nil)
-    var rects: [NSRect] = []
-    storage.enumerateAttribute(.ddlLink, in: chars.clamped(to: storage.length)) { value, run, _ in
-      guard value != nil else { return }
-      let glyphs = layoutManager.glyphRange(forCharacterRange: run, actualCharacterRange: nil)
-      layoutManager.enumerateEnclosingRects(
-        forGlyphRange: glyphs, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0),
-        in: textContainer
-      ) { rect, _ in
-        if rect.width > 0.5 { rects.append(rect.offsetBy(dx: origin.x, dy: origin.y)) }
+    let glyphs = layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+    var found: NSRect?
+    layoutManager.enumerateEnclosingRects(
+      forGlyphRange: glyphs, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0),
+      in: textContainer
+    ) { rect, stop in
+      let piece = rect.offsetBy(dx: origin.x, dy: origin.y)
+      if piece.width > 0.5, piece.insetBy(dx: -1, dy: -1).contains(point) {
+        found = piece
+        stop.pointee = true
       }
     }
-    return rects
+    return found
   }
 }

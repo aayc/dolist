@@ -1,4 +1,5 @@
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// A risky action waiting for the user (or the record of their decision): summary, tool, risk and
@@ -60,8 +61,9 @@ public struct ApprovalCard: View {
       DisclosureGroup(isExpanded: $showsDetails) {
         JSONBlock(text: approval.input.prettyJSONString).padding(.top, 4)
       } label: {
-        Text("Details").font(.caption).foregroundStyle(AgentTheme.mutedText)
+        Text("Details").font(.caption)
       }
+      .disclosureGroupStyle(ChevronDisclosureStyle())
       if approval.isPending {
         pendingActions(now: now)
       } else {
@@ -140,11 +142,13 @@ public struct ApprovalCard: View {
   private var approveOnce: some View {
     Button("Approve once") { onDecide(.approve, .once, nil) }
       .buttonStyle(.borderedProminent)
+      .pointingHandCursor()
   }
 
   private var approveForTask: some View {
     Button("Approve for this task") { onDecide(.approve, .task, nil) }
       .buttonStyle(.bordered)
+      .pointingHandCursor()
   }
 
   private var deny: some View {
@@ -154,6 +158,7 @@ public struct ApprovalCard: View {
       Text("Deny…").foregroundStyle(AgentTheme.danger)
     }
     .buttonStyle(.bordered)
+    .pointingHandCursor()
   }
 
   private func decision(now: Date) -> some View {
@@ -197,7 +202,11 @@ private struct DenyPopover: View {
       HStack {
         Spacer()
         Button("Cancel", action: onCancel).keyboardShortcut(.cancelAction)
+          .pointingHandCursor()
+          .tooltip("Cancel", keys: .escapeKey, accessibility: .keysOnly)
         Button("Deny", role: .destructive, action: onDeny).keyboardShortcut(.defaultAction)
+          .pointingHandCursor()
+          .tooltip("Deny", keys: .returnKey, accessibility: .keysOnly)
       }
     }
     .padding(14)

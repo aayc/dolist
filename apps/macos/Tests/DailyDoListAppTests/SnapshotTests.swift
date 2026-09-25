@@ -2,6 +2,8 @@ import AppKit
 import DailyDoListAgent
 import DailyDoListClient
 import DailyDoListModels
+import DailyDoListUI
+import DailyDoListUITestSupport
 import SwiftUI
 import Testing
 
@@ -15,6 +17,9 @@ struct SnapshotTests {
   static let outputDirectory = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     .appendingPathComponent(".build/app-snapshots", isDirectory: true)
+
+  /// Snapshot windows report to a center that never shows anything.
+  static let quietTooltips = QuietTooltips.makeCenter()
 
   static let sampleNotes: [String: String] = [
     "Daily/2026-09-23.md": """
@@ -68,7 +73,8 @@ struct SnapshotTests {
     await model.teardown()
   }
 
-  private func bootedModel() async throws -> (AppModel, Workspace) {
+  /// The sample workspace: notes, records and the sample agent store, today's note active.
+  func bootedModel() async throws -> (AppModel, Workspace) {
     let client = FakeDaemonClient(notes: Self.sampleNotes)
     let daily = "Daily/2026-09-23.md"
     var question = TaskAgentRecord.sample(
@@ -167,6 +173,47 @@ struct SnapshotTests {
       try await render(
         MainWindowView(model: model), size: CGSize(width: 1440, height: 800), dark: dark,
         name: "main-window-demo", afterDisplay: repaint)
+    }
+    await model.teardown()
+  }
+
+  /// Tooltips where the app shows them (the real bubble, placed by the app's rules): a header
+  /// button's, below it with its keycaps; a status bar item's; the agent panel's; and the empty
+  /// state's rows with their keycaps.
+  @Test func tooltips() async throws {
+    let (model, workspace) = try await bootedModel()
+    let controller = workspace.editor.controller
+    let repaintBadges = { controller.setBadges(controller.badges) }
+    model.ui.inspectorPresented = true
+    model.ui.selectedThreadId = SampleData.bookingThreadId
+    let size = CGSize(width: 1440, height: 800)
+    let shots: [(name: String, label: String, index: Int)] = [
+      ("tooltip-header", "New note", 1), ("tooltip-status-bar", "Open agent inbox", 0),
+      ("tooltip-agent-panel", "Back to inbox", 0),
+    ]
+    for dark in [false, true] {
+      for shot in shots {
+        var found = false
+        try await render(
+          MainWindowView(model: model), size: size, dark: dark, name: shot.name,
+          afterDisplay: repaintBadges
+        ) { hosting in
+          let snapshot = TooltipSnapshot.of(shot.label, in: hosting, index: shot.index)
+          found = snapshot != nil
+          return snapshot
+        }
+        #expect(found, "\(shot.label) has a tooltip")
+      }
+    }
+    await model.teardown()
+  }
+
+  @Test func emptyState() async throws {
+    let (model, workspace) = try await bootedModel()
+    for dark in [false, true] {
+      try await render(
+        EmptyNoteView(workspace: workspace), size: CGSize(width: 700, height: 420), dark: dark,
+        name: "empty-state")
     }
     await model.teardown()
   }
@@ -282,7 +329,8 @@ struct SnapshotTests {
 
   @discardableResult
   private func render<V: View>(
-    _ view: V, size: CGSize, dark: Bool, name: String, afterDisplay: (() -> Void)? = nil
+    _ view: V, size: CGSize, dark: Bool, name: String, afterDisplay: (() -> Void)? = nil,
+    tooltip: (@MainActor (NSView) -> TooltipSnapshot?)? = nil
   ) async throws -> URL {
     _ = NSApplication.shared
     let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
@@ -291,6 +339,7 @@ struct SnapshotTests {
       rootView: SnapshotHost(content: content) {
         view.environment(\.colorScheme, dark ? .dark : .light).tint(Theme.accent)
           .agentReferenceDate(referenceNow)
+          .environment(\.tooltipCenter, Self.quietTooltips)
       })
     let window = NSWindow(
       contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
@@ -322,6 +371,9 @@ struct SnapshotTests {
     ]
     .compactMap { $0 }
     let rep = candidates.max { Self.distinctColors($0) < Self.distinctColors($1) } ?? drawn
+    if let snapshot = tooltip?(hosting) {
+      try snapshot.draw(into: rep, windowSize: bounds.size)
+    }
     window.close()
     // The host outlives this call; emptied, it stops laying out views it shares with the next
     // snapshot (the one editor), which would otherwise get this window's geometry.

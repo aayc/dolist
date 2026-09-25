@@ -1,4 +1,5 @@
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// Colored status pill ("● Working"), same tones as the editor badges.
@@ -46,7 +47,7 @@ struct Chip: View {
   }
 }
 
-/// Filled count capsule (unread, pending approvals).
+/// Filled count capsule (unread, pending approvals). A new count pops.
 struct CountBadge: View {
   let count: Int
   var tone: Tone = .accent
@@ -63,33 +64,7 @@ struct CountBadge: View {
     .padding(.horizontal, 5)
     .padding(.vertical, 1.5)
     .background(Capsule().fill(tone.color))
-  }
-}
-
-/// Plain icon button with a hover highlight and a tooltip (which doubles as its accessibility
-/// label); the same metrics as the app's pane-header buttons.
-struct IconButton: View {
-  let systemImage: String
-  let help: String
-  var role: ButtonRole?
-  let action: () -> Void
-  @State private var hovering = false
-
-  var body: some View {
-    Button(role: role, action: action) {
-      Image(systemName: systemImage)
-        .font(.system(size: 13))
-        .foregroundStyle(AgentTheme.mutedText)
-        .frame(width: 28, height: 28)
-        .background(
-          RoundedRectangle(cornerRadius: 6).fill(hovering ? AgentTheme.hoverFill : .clear)
-        )
-        .contentShape(Rectangle())
-    }
-    .buttonStyle(.plain)
-    .onHover { hovering = $0 }
-    .help(help)
-    .accessibilityLabel(help)
+    .popOnChange(of: count)
   }
 }
 
@@ -105,7 +80,8 @@ struct AgentHairline: View {
   }
 }
 
-/// Row-like button: a subtle highlight on hover and press (inbox rows, menu items).
+/// Row-like button: a subtle highlight under the pointer that deepens while pressed, the pointing
+/// hand, and 40% when disabled (inbox rows, artifacts, menu items).
 struct RowButtonStyle: ButtonStyle {
   var cornerRadius: CGFloat = 8
 
@@ -121,14 +97,19 @@ struct RowButtonStyle: ButtonStyle {
 
     var body: some View {
       configuration.label
-        .opacity(isEnabled ? 1 : 0.45)
+        .opacity(isEnabled ? 1 : 0.4)
         .background(
           RoundedRectangle(cornerRadius: cornerRadius)
             .fill(
-              configuration.isPressed
-                ? AgentTheme.hoverFill : hovering ? AgentTheme.subtleFill : Color.clear)
+              !isEnabled
+                ? Color.clear
+                : configuration.isPressed
+                  ? AgentTheme.hoverFill : hovering ? AgentTheme.subtleFill : Color.clear)
         )
         .onHover { hovering = $0 }
+        .pointingHandCursor()
+        .animation(.easeOut(duration: 0.11), value: hovering)
+        .animation(.easeOut(duration: 0.06), value: configuration.isPressed)
     }
   }
 }
@@ -183,7 +164,7 @@ struct AgentErrorBanner: View {
         Text(alert.message).font(.caption).foregroundStyle(AgentTheme.mutedText).lineLimit(3)
       }
       Spacer(minLength: 4)
-      IconButton(systemImage: "xmark", help: "Dismiss", action: onDismiss)
+      IconButton("xmark", label: "Dismiss", size: .compact, action: onDismiss)
     }
     .padding(10)
     .background(RoundedRectangle(cornerRadius: 10).fill(AgentTheme.cardBackground))
@@ -203,9 +184,23 @@ struct AgentStatusIndicator: View {
       Circle().fill(tone.color).frame(width: 7, height: 7)
       Text(text).font(.caption).foregroundStyle(AgentTheme.mutedText).lineLimit(1)
     }
-    .help(store.unavailableReason ?? text)
+    .tooltip(tooltip, accessibility: .none)
     .accessibilityElement(children: .combine)
     .accessibilityLabel("Agent: \(text)")
+  }
+
+  /// What the dot and the word mean.
+  private var tooltip: TooltipContent {
+    if let reason = store.unavailableReason {
+      return TooltipContent("The agent can't act", detail: TooltipContent.sentence(reason))
+    }
+    guard let status = store.status else { return TooltipContent("Connecting to the agent") }
+    if status.mode == .off { return TooltipContent("The agent is off") }
+    if !status.enabled { return TooltipContent("The agent is paused") }
+    let queued = status.queued > 0 ? ", \(status.queued) queued" : ""
+    if status.running > 0 { return TooltipContent("\(status.running) running\(queued)") }
+    return TooltipContent(
+      status.mode == .mock ? "The mock agent is idle" : "The agent is idle\(queued)")
   }
 
   private var summary: (String, Tone) {

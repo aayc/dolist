@@ -1,4 +1,5 @@
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// Theme and editor appearance (stored by the daemon, applied live).
@@ -11,17 +12,21 @@ struct AppearanceSettingsPane: View {
     let editor = settings.settings.editor
     Form {
       Section("Theme") {
-        Picker(
-          "Appearance",
-          selection: Binding(
-            get: { settings.settings.theme },
-            set: { theme in update(SettingsPatch(theme: theme)) })
-        ) {
-          Text("System").tag(ThemePreference.system)
-          Text("Light").tag(ThemePreference.light)
-          Text("Dark").tag(ThemePreference.dark)
+        LabeledContent("Appearance") {
+          Picker(
+            "Appearance",
+            selection: Binding(
+              get: { settings.settings.theme },
+              set: { theme in update(SettingsPatch(theme: theme)) })
+          ) {
+            Text("System").tag(ThemePreference.system)
+            Text("Light").tag(ThemePreference.light)
+            Text("Dark").tag(ThemePreference.dark)
+          }
+          .pickerStyle(.segmented)
+          .labelsHidden()
+          .pointingHandCursor()
         }
-        .pickerStyle(.segmented)
       }
       Section("Editor") {
         LabeledContent("Font size") {
@@ -33,16 +38,19 @@ struct AppearanceSettingsPane: View {
             Text("\(Int(fontSize)) pt").monospacedDigit().frame(width: 44, alignment: .trailing)
           }
         }
-        Toggle("Live preview", isOn: editorBinding(editor.livePreview) { .init(livePreview: $0) })
+        SettingsToggle(
+          "Live preview", isOn: editorBinding(editor.livePreview) { .init(livePreview: $0) })
         SettingsNote(text: "Hide markdown syntax away from the cursor, like Obsidian.")
-        Toggle(
+        SettingsToggle(
           "Readable line length",
           isOn: editorBinding(editor.readableLineLength) { .init(readableLineLength: $0) })
-        Toggle("Spellcheck", isOn: editorBinding(editor.spellcheck) { .init(spellcheck: $0) })
-        Toggle(
+        SettingsToggle(
+          "Spellcheck", isOn: editorBinding(editor.spellcheck) { .init(spellcheck: $0) })
+        SettingsToggle(
           "Line numbers", isOn: editorBinding(editor.showLineNumbers) { .init(showLineNumbers: $0) }
         )
-        Toggle("Vim key bindings", isOn: editorBinding(editor.vimMode) { .init(vimMode: $0) })
+        SettingsToggle(
+          "Vim key bindings", isOn: editorBinding(editor.vimMode) { .init(vimMode: $0) })
         SettingsNote(text: "Edit with vim's modes and commands, like Obsidian's vim key bindings.")
         if editor.vimMode {
           VimrcEditor(model: model, settings: settings)

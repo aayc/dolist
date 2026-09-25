@@ -1,4 +1,5 @@
 import DailyDoListDomain
+import DailyDoListUI
 import SwiftUI
 
 /// Above the editor. A daily note shows its date as the title with the date navigator below it;
@@ -132,15 +133,15 @@ struct DailyNavigationRow: View {
     let hasNext = workspace.adjacentDailyPath(.next, from: path) != nil
     HStack(spacing: 2) {
       IconButton(
-        systemImage: "chevron.left", help: "Previous daily note (⇧⌘P)", isEnabled: hasPrevious,
-        isCompact: true
+        "chevron.left", label: "Previous daily note", command: .previousDaily,
+        isEnabled: hasPrevious, size: .compact
       ) {
         Task { await workspace.openAdjacentDaily(.previous) }
       }
       TodayButton(isToday: isToday) { Task { await workspace.openToday() } }
       IconButton(
-        systemImage: "chevron.right", help: "Next daily note (⇧⌘N)", isEnabled: hasNext,
-        isCompact: true
+        "chevron.right", label: "Next daily note", command: .nextDaily, isEnabled: hasNext,
+        size: .compact
       ) {
         Task { await workspace.openAdjacentDaily(.next) }
       }
@@ -148,29 +149,24 @@ struct DailyNavigationRow: View {
   }
 }
 
-/// "Today" between the daily arrows: opens today's note, and rests (dimmed) while it's open.
+/// "Today" between the daily arrows: opens today's note, and rests (dimmed, saying why) while it's
+/// open.
 struct TodayButton: View {
   let isToday: Bool
   let action: () -> Void
-  @State private var hovering = false
 
   var body: some View {
     Button(action: action) {
       Text("Today")
         .font(.system(size: 11, weight: .medium))
-        .foregroundStyle(isToday ? Theme.faintText : (hovering ? Theme.text : Theme.mutedText))
-        .padding(.horizontal, 8)
-        .frame(height: 22)
-        .background(
-          RoundedRectangle(cornerRadius: 6).fill(hovering && !isToday ? Theme.hover : .clear)
-        )
-        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.separator))
-        .contentShape(Rectangle())
+        .frame(height: 20)
     }
-    .buttonStyle(.plain)
+    .buttonStyle(
+      ChromeButtonStyle(
+        horizontalPadding: 8, verticalPadding: 1, showsBorder: true, brightensLabel: true)
+    )
+    .tooltip("Open today's note", command: .todaysNote, whenDisabled: "Today's note is open")
     .disabled(isToday)
-    .onHover { hovering = $0 }
-    .help(isToday ? "Today's note" : "Open today's note (⇧⌘D)")
     .accessibilityLabel(isToday ? "Today" : "Go to today")
   }
 }

@@ -1,4 +1,5 @@
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// The agent's headless browser: latest frame scaled to fit, URL and title, a "Live" indicator
@@ -150,6 +151,11 @@ private struct SurfaceBar: View {
             .lineLimit(1)
             .truncationMode(.middle)
             .textSelection(.enabled)
+            .tooltip(
+              ifTruncated: title,
+              font: monospacedTitle
+                ? .monospacedSystemFont(ofSize: 11.5, weight: .regular)
+                : .preferredFont(forTextStyle: .callout))
           if let subtitle, !subtitle.isEmpty {
             Text(verbatim: subtitle).font(.caption).foregroundStyle(AgentTheme.mutedText).lineLimit(
               1)

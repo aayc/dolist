@@ -1,10 +1,13 @@
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// One tool call: icon by family, label, duration, status; expands to the input JSON.
 struct ToolCallRow: View {
   let call: ToolCallMessage
   @State private var expanded: Bool
+  @State private var hovering = false
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   init(call: ToolCallMessage, expanded: Bool = false) {
     self.call = call
@@ -14,7 +17,7 @@ struct ToolCallRow: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       Button {
-        withAnimation(.snappy(duration: 0.18)) { expanded.toggle() }
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.18)) { expanded.toggle() }
       } label: {
         HStack(spacing: 7) {
           Image(systemName: ToolIcon.systemName(for: call.toolName))
@@ -23,6 +26,7 @@ struct ToolCallRow: View {
           Text(verbatim: call.label ?? call.toolName)
             .lineLimit(1)
             .truncationMode(.tail)
+            .tooltip(ifTruncated: call.label ?? call.toolName, font: .systemFont(ofSize: 12.5))
           if call.label != nil {
             Text(verbatim: call.toolName)
               .font(.system(size: 11, design: .monospaced))
@@ -40,12 +44,14 @@ struct ToolCallRow: View {
           ToolStatusIcon(status: call.status)
           Image(systemName: "chevron.right")
             .font(.caption2.weight(.semibold))
-            .foregroundStyle(AgentTheme.faint)
+            .foregroundStyle(hovering ? AgentTheme.mutedText : AgentTheme.faint)
             .rotationEffect(.degrees(expanded ? 90 : 0))
         }
         .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
+      .onHover { hovering = $0 }
+      .pointingHandCursor()
       .accessibilityLabel("\(call.label ?? call.toolName), \(call.status.displayLabel)")
       .accessibilityHint(expanded ? "Hides the details" : "Shows the details")
 
@@ -65,12 +71,16 @@ struct ToolCallRow: View {
     .font(.system(size: 12.5))
     .padding(.horizontal, 10)
     .padding(.vertical, 7)
-    .background(RoundedRectangle(cornerRadius: 8).fill(AgentTheme.subtleFill))
+    .background(
+      RoundedRectangle(cornerRadius: 8).fill(
+        hovering ? AgentTheme.hoverFill : AgentTheme.subtleFill)
+    )
     .overlay(
       RoundedRectangle(cornerRadius: 8)
         .strokeBorder(
           call.status == .blocked ? AgentTheme.warning.opacity(0.55) : AgentTheme.border)
     )
+    .animation(.easeOut(duration: 0.11), value: hovering)
   }
 }
 
@@ -89,6 +99,6 @@ struct ToolStatusIcon: View {
         Image(systemName: status.systemImage).foregroundStyle(status.tone.color)
       }
     }
-    .help(status.displayLabel)
+    .tooltip(status.displayLabel)
   }
 }

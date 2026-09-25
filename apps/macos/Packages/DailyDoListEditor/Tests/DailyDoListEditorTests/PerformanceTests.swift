@@ -138,8 +138,8 @@ struct PerformanceTests {
     #expect(total.p95 < 20 * Self.multiplier)
   }
 
-  /// Before each draw: badge layouts, sparkles and link tooltip areas of the visible lines (every
-  /// tenth line is the agent's).
+  /// Before each draw: badge layouts and sparkles of the visible lines (every tenth line is the
+  /// agent's).
   @Test func preDrawBookkeeping() {
     let editor = makeEditor()
     let note = Self.note.components(separatedBy: "\n").enumerated().map { index, line in
@@ -156,7 +156,7 @@ struct PerformanceTests {
       samples.append(Self.milliseconds(elapsed))
     }
     let stats = Stats(samples: Array(samples.dropFirst(2)))
-    print("PERF pre-draw (badge layouts, sparkles, link tooltip areas): \(stats)")
+    print("PERF pre-draw (badge layouts, sparkles): \(stats)")
     #expect(!editor.controller.agentSparkles().isEmpty)
     #expect(stats.average < 4 * Self.multiplier)
   }

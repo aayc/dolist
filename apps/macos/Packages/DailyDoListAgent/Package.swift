@@ -12,6 +12,7 @@ let package = Package(
   dependencies: [
     .package(path: "../DailyDoListModels"),
     .package(path: "../DailyDoListClient"),
+    .package(path: "../DailyDoListUI"),
   ],
   targets: [
     .target(
@@ -19,6 +20,7 @@ let package = Package(
       dependencies: [
         .product(name: "DailyDoListModels", package: "DailyDoListModels"),
         .product(name: "DailyDoListClient", package: "DailyDoListClient"),
+        .product(name: "DailyDoListUI", package: "DailyDoListUI"),
       ]
     ),
     .testTarget(
@@ -27,6 +29,8 @@ let package = Package(
         "DailyDoListAgent",
         .product(name: "DailyDoListModels", package: "DailyDoListModels"),
         .product(name: "DailyDoListClient", package: "DailyDoListClient"),
+        .product(name: "DailyDoListUI", package: "DailyDoListUI"),
+        .product(name: "DailyDoListUITestSupport", package: "DailyDoListUI"),
       ]
     ),
   ]

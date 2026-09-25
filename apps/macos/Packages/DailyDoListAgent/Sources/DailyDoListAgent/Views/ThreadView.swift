@@ -1,4 +1,5 @@
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// Where a thread's task lives, for "Show in Note".
@@ -159,6 +160,7 @@ public struct ThreadView: View {
         Text("Check that Daily Do List's background service is running.")
       } actions: {
         Button("Try Again") { Task { await store.loadThread(threadId, force: true) } }
+          .pointingHandCursor()
       }
     } else {
       ProgressView().controlSize(.small)
@@ -182,30 +184,33 @@ struct ThreadHeader: View {
           .font(.system(size: 15, weight: .semibold))
           .lineLimit(2)
           .fixedSize(horizontal: false, vertical: true)
-          .help(title)
+          .tooltip(
+            ifTruncated: title, font: .systemFont(ofSize: 15, weight: .semibold), lineLimit: 2)
         HStack(spacing: 8) {
           StatusChip(status: status)
           if let notePath {
-            Label(AgentFormat.noteName(notePath), systemImage: "doc.text")
-              .font(.caption)
-              .foregroundStyle(AgentTheme.mutedText)
-              .lineLimit(1)
+            HStack(spacing: 4) {
+              Image(systemName: "doc.text")
+              Text(verbatim: AgentFormat.noteName(notePath))
+                .lineLimit(1)
+                .tooltip(
+                  ifTruncated: AgentFormat.noteName(notePath),
+                  font: .preferredFont(forTextStyle: .caption1), showing: .path(notePath))
+            }
+            .font(.caption)
+            .foregroundStyle(AgentTheme.mutedText)
           }
         }
       }
       Spacer(minLength: 8)
       HStack(spacing: 0) {
-        if let onStop { IconButton(systemImage: "stop.circle", help: "Stop", action: onStop) }
-        if let onRetry {
-          IconButton(systemImage: "arrow.clockwise", help: "Retry", action: onRetry)
-        }
+        if let onStop { IconButton("stop.circle", label: "Stop", action: onStop) }
+        if let onRetry { IconButton("arrow.clockwise", label: "Retry", action: onRetry) }
         if let onShowInNote {
-          IconButton(
-            systemImage: "arrow.up.forward.square", help: "Show in Note", action: onShowInNote)
+          IconButton("arrow.up.forward.square", label: "Show task in note", action: onShowInNote)
         }
-        if let onClose { IconButton(systemImage: "xmark", help: "Close", action: onClose) }
+        if let onClose { IconButton("xmark", label: "Close", action: onClose) }
       }
-      .foregroundStyle(AgentTheme.mutedText)
     }
     .padding(.horizontal, 12)
     .padding(.top, 10)
@@ -236,23 +241,17 @@ private struct ThreadTabChip: View {
   let title: String
   let isSelected: Bool
   let action: () -> Void
-  @State private var hovering = false
 
   var body: some View {
     Button(action: action) {
       Text(verbatim: title)
         .font(.system(size: 12, weight: isSelected ? .medium : .regular))
         .foregroundStyle(isSelected ? AgentTheme.text : AgentTheme.mutedText)
-        .padding(.horizontal, 10)
-        .frame(height: 26)
-        .background(
-          RoundedRectangle(cornerRadius: 6)
-            .fill(isSelected ? AgentTheme.selectedFill : hovering ? AgentTheme.hoverFill : .clear)
-        )
-        .contentShape(Rectangle())
+        .frame(height: 22)
     }
-    .buttonStyle(.plain)
-    .onHover { hovering = $0 }
+    .buttonStyle(
+      ChromeButtonStyle(horizontalPadding: 10, verticalPadding: 2, isSelected: isSelected)
+    )
     .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
   }
 }

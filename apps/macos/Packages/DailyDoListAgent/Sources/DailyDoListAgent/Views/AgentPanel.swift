@@ -1,5 +1,19 @@
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
+
+/// The host's keyboard shortcuts for what the agent panel's buttons do (their tooltips show them).
+public struct AgentPanelShortcuts: Hashable, Sendable {
+  /// Hides the panel (the header's hide button).
+  public var hidePanel: KeyShortcut?
+  /// Shows the inbox (a thread's back button).
+  public var inbox: KeyShortcut?
+
+  public init(hidePanel: KeyShortcut? = nil, inbox: KeyShortcut? = nil) {
+    self.hidePanel = hidePanel
+    self.inbox = inbox
+  }
+}
 
 /// Right-hand agent panel: the inbox, or one thread when `selectedThreadId` is set. Failed
 /// actions show as a dismissible toast at the bottom.
@@ -11,6 +25,8 @@ public struct AgentPanel: View {
   let headerHeight: CGFloat
   let onHide: (() -> Void)?
   let noteLinks: AgentNoteLinks
+  let shortcuts: AgentPanelShortcuts
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   /// - Parameters:
   ///   - onShowInNote: opens the task's note at its line (the button is hidden when nil).
@@ -19,10 +35,12 @@ public struct AgentPanel: View {
   ///   - onHide: adds a "hide panel" button to the header. A thread then has no Close button of
   ///     its own: the header already goes back to the inbox and hides the panel.
   ///   - noteLinks: how `[[wikilinks]]` in agent text open and preview notes.
+  ///   - shortcuts: the host's shortcuts for hiding the panel and showing the inbox.
   public init(
     store: AgentStore, selectedThreadId: Binding<String?>,
     onShowInNote: ((TaskLocation) -> Void)? = nil, onClose: (() -> Void)? = nil,
-    headerHeight: CGFloat = 40, onHide: (() -> Void)? = nil, noteLinks: AgentNoteLinks = .none
+    headerHeight: CGFloat = 40, onHide: (() -> Void)? = nil, noteLinks: AgentNoteLinks = .none,
+    shortcuts: AgentPanelShortcuts = AgentPanelShortcuts()
   ) {
     self.store = store
     self._selectedThreadId = selectedThreadId
@@ -31,6 +49,7 @@ public struct AgentPanel: View {
     self.headerHeight = headerHeight
     self.onHide = onHide
     self.noteLinks = noteLinks
+    self.shortcuts = shortcuts
   }
 
   public var body: some View {
@@ -77,23 +96,28 @@ public struct AgentPanel: View {
         } label: {
           Label("Inbox", systemImage: "chevron.left")
             .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(AgentTheme.accent)
         }
-        .buttonStyle(.borderless)
-        .help("Back to the inbox")
+        .buttonStyle(ChromeButtonStyle(horizontalPadding: 6, verticalPadding: 3))
+        .padding(.leading, -6)
+        .tooltip("Back to inbox", keys: shortcuts.inbox, accessibility: .keysOnly)
       } else {
         Label("Inbox", systemImage: "tray")
           .font(.system(size: 13, weight: .semibold))
       }
       if pending > 0 {
         CountBadge(count: pending, tone: .warning, systemImage: "exclamationmark.shield.fill")
-          .help(pending == 1 ? "1 approval waiting" : "\(pending) approvals waiting")
+          .tooltip(pending == 1 ? "1 approval waiting" : "\(pending) approvals waiting")
+          .countTransition()
       }
       Spacer(minLength: 8)
       AgentStatusIndicator(store: store)
       if let onHide {
-        IconButton(systemImage: "sidebar.right", help: "Hide agent panel (⌘\\)", action: onHide)
+        IconButton(
+          "sidebar.right", label: "Hide agent panel", keys: shortcuts.hidePanel, action: onHide)
       }
     }
+    .animation(.countAppearance(reduceMotion: reduceMotion), value: pending > 0)
     .padding(.leading, 12)
     .padding(.trailing, onHide == nil ? 12 : 6)
     .frame(height: headerHeight)

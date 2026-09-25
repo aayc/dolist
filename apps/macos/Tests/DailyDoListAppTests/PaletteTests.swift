@@ -7,24 +7,24 @@ import Testing
 @MainActor
 @Suite("Command palette & quick switcher")
 struct PaletteTests {
-  private func command(_ id: CommandID, _ title: String, shortcut: Shortcut? = nil) -> AppCommand {
-    AppCommand(id, title, shortcut: shortcut) {}
+  /// A command with its catalog shortcut (``CommandID/shortcut``).
+  private func command(_ id: CommandID, _ title: String) -> AppCommand {
+    AppCommand(id, title) {}
   }
 
   @Test func emptyQueryListsCommandsAlphabeticallyWithShortcuts() {
     let palette = PaletteModel(
       mode: .commands,
       commands: [
-        command(
-          .todaysNote, "Open today's daily note", shortcut: Shortcut("d", [.command, .shift])),
-        command(.newNote, "Create new note", shortcut: Shortcut("n")),
+        command(.todaysNote, "Open today's daily note"),
+        command(.newNote, "Create new note"),
         command(.toggleTheme, "Toggle light/dark theme"),
       ])
     #expect(
       palette.items.map(\.title) == [
         "Create new note", "Open today's daily note", "Toggle light/dark theme",
       ])
-    #expect(palette.items.map(\.shortcut) == ["⌘N", "⇧⌘D", nil])
+    #expect(palette.items.map { $0.shortcut?.display } == ["⌘N", "⇧⌘D", nil])
   }
 
   @Test func queryRanksMatchesAndHighlightsCharacters() throws {

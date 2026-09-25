@@ -1,4 +1,6 @@
 import AppKit
+import DailyDoListUI
+import DailyDoListUITestSupport
 import Testing
 
 @testable import DailyDoListEditor
@@ -217,6 +219,40 @@ struct RenderSnapshotTests {
       "the band is tinted")
     // A sparkle is drawn in each hidden marker's slot.
     #expect(editor.controller.agentSparkles().count == 3)
+  }
+
+  /// The shared tooltip over a badge and over the agent's sparkle, where the app shows them: the
+  /// real bubble, placed by the app's rules (the panel itself can't be captured offscreen).
+  @Test(arguments: [("light", NSAppearance.Name.aqua), ("dark", NSAppearance.Name.darkAqua)])
+  func rendersTooltipsOverABadgeAndTheSparkle(name: String, appearance: NSAppearance.Name) throws {
+    let text = Self.agentNote
+    let editor = EditorHarness(
+      text: text, selection: NSRange(location: (text as NSString).length, length: 0),
+      size: NSSize(width: 900, height: 360))
+    editor.controller.scrollView.appearance = NSAppearance(named: appearance)
+    editor.textView.appearance = NSAppearance(named: appearance)
+    editor.controller.setBadges(Self.agentBadges(text))
+    editor.controller.scrollView.layoutSubtreeIfNeeded()
+    editor.layout()
+    let badge = try #require(editor.controller.currentBadgeLayouts().first)
+    let sparkle = try #require(editor.controller.agentSparkles().first)
+    let bounds = editor.textView.bounds
+    try FileManager.default.createDirectory(
+      at: Self.outputDirectory, withIntermediateDirectories: true)
+    for (shot, rect) in [("tooltip-badge", badge.rect), ("tooltip-sparkle", sparkle.rect)] {
+      let rep = try snapshot(editor.textView)
+      let said = try #require(
+        editor.controller.textView(editor.textView, toolTipAt: NSPoint(x: rect.midX, y: rect.midY))
+      )
+      let content = try #require(TooltipContent(multilineText: said))
+      // The text view is flipped; the capture is drawn into bottom-up.
+      let anchor = NSRect(
+        x: rect.minX, y: bounds.height - rect.maxY, width: rect.width, height: rect.height)
+      try TooltipSnapshot(content: content, anchor: anchor, prefersBelow: false).draw(
+        into: rep, windowSize: bounds.size)
+      let png = try #require(rep.representation(using: .png, properties: [:]))
+      try png.write(to: Self.outputDirectory.appendingPathComponent("\(shot)-\(name).png"))
+    }
   }
 
   @Test func rendersAgentLinesInSourceMode() throws {

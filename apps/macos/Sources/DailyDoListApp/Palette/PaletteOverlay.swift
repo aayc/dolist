@@ -1,3 +1,4 @@
+import DailyDoListUI
 import SwiftUI
 
 /// Floating prompt over the window: ⌘P command palette or ⌘O quick switcher (Obsidian-style).
@@ -92,7 +93,7 @@ struct PalettePanel: View {
       ScrollView {
         LazyVStack(spacing: 0) {
           if palette.items.isEmpty {
-            Text(emptyText)
+            emptyState
               .font(.system(size: 13))
               .foregroundStyle(Theme.faintText)
               .frame(maxWidth: .infinity, alignment: .leading)
@@ -104,6 +105,7 @@ struct PalettePanel: View {
               .contentShape(Rectangle())
               .onTapGesture { onChoose(item, NSEvent.modifierFlags.contains(.command)) }
               .onHover { if $0 { palette.select(index) } }
+              .pointingHandCursor()
           }
         }
         .padding(.vertical, 6)
@@ -116,22 +118,27 @@ struct PalettePanel: View {
     }
   }
 
-  private var emptyText: String {
+  @ViewBuilder private var emptyState: some View {
     if palette.mode == .switcher, let name = palette.creatableName {
-      return "No notes found. Press ⌘↩ to create “\(name)”."
+      HStack(spacing: 5) {
+        Text("No notes found. Press")
+        Keycaps(.commandReturn)
+        Text("to create “\(name)”.").lineLimit(1).truncationMode(.middle)
+      }
+    } else {
+      Text(palette.mode == .commands ? "No matching commands" : "No notes yet")
     }
-    return palette.mode == .commands ? "No matching commands" : "No notes yet"
   }
 
   private var footer: some View {
     HStack(spacing: 14) {
-      hint("↑↓", "navigate")
-      hint("↩", palette.mode == .commands ? "run" : "open")
+      hint([.upArrow, .downArrow], "navigate")
+      hint([.returnKey], palette.mode == .commands ? "run" : "open")
       if palette.mode == .switcher {
-        hint("⇧↩", "new tab")
-        hint("⌘↩", "create")
+        hint([.shiftReturn], "new tab")
+        hint([.commandReturn], "create")
       }
-      hint("esc", "close")
+      hint([.escapeKey], "close")
       Spacer()
     }
     .font(.system(size: 11))
@@ -140,11 +147,9 @@ struct PalettePanel: View {
     .padding(.vertical, 8)
   }
 
-  private func hint(_ key: String, _ label: String) -> some View {
-    HStack(spacing: 4) {
-      Text(key).font(.system(size: 10, weight: .semibold, design: .rounded))
-        .padding(.horizontal, 4).padding(.vertical, 1)
-        .background(Theme.hover, in: RoundedRectangle(cornerRadius: 3))
+  private func hint(_ keys: [KeyShortcut], _ label: String) -> some View {
+    HStack(spacing: 6) {
+      Keycaps(keys)
       Text(label)
     }
   }
@@ -172,11 +177,7 @@ private struct PaletteRow: View {
       }
       Spacer(minLength: 8)
       if let shortcut = item.shortcut {
-        Text(shortcut)
-          .font(.system(size: 11, weight: .medium, design: .rounded))
-          .foregroundStyle(Theme.mutedText)
-          .padding(.horizontal, 6).padding(.vertical, 2)
-          .background(Theme.hover, in: RoundedRectangle(cornerRadius: 4))
+        Keycaps(shortcut)
       }
     }
     .padding(.horizontal, 12)
@@ -184,7 +185,8 @@ private struct PaletteRow: View {
     .background(
       RoundedRectangle(cornerRadius: 6)
         .fill(isSelected ? Theme.accentSoft : .clear)
-        .padding(.horizontal, 6))
+        .padding(.horizontal, 6)
+        .animation(.easeOut(duration: 0.08), value: isSelected))
   }
 
   private var icon: String {

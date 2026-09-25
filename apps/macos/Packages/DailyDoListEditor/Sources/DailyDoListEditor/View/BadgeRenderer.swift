@@ -315,11 +315,10 @@ final class BadgeRenderer {
     ceil((label as NSString).size(withAttributes: [.font: labelFont]).width)
   }
 
-  /// Tooltip for a badge: status, full label and unread count.
+  /// Tooltip for a badge: its full label (the pill may shorten it) and the unread count, worded
+  /// like the web app's badges.
   static func toolTip(for badge: EditorBadge) -> String {
-    let status = badge.status.replacingOccurrences(of: "_", with: " ").capitalized
-    var text = "\(status): \(badge.label)"
-    if let unread = badge.unreadText { text += " · \(unread) unread" }
-    return text
+    guard let unread = badge.unreadText else { return badge.label }
+    return "\(badge.label) · \(unread) unread"
   }
 }
