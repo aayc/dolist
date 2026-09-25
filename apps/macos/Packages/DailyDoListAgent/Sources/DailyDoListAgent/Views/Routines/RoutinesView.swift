@@ -111,6 +111,7 @@ struct RoutinesView: View {
       onSelect(routine.id)
       Task { await store.runRoutine(routine.id) }
     }
+    .disabled(store.readOnly != nil)
     Button(routine.paused ? "Resume" : "Pause") {
       Task { await store.setRoutinePaused(routine.id, !routine.paused) }
     }

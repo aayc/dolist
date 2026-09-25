@@ -10,6 +10,8 @@ public struct ApprovalCard: View {
   let approval: ApprovalRequest
   let isDeciding: Bool
   let announces: Bool
+  /// Decisions can't reach the agent from this device: the buttons stay, disabled, and say why.
+  let readOnlyReason: String?
   let onAnnounced: () -> Void
   let onDecide: (ApprovalDecision, ApprovalScope?, String?) -> Void
   @State private var showsDetails = false
@@ -23,21 +25,23 @@ public struct ApprovalCard: View {
   ///   - announces: it just arrived: draw attention once it appears (then `onAnnounced`).
   ///   - onDecide: decision, scope (approvals), note (denials).
   public init(
-    approval: ApprovalRequest, isDeciding: Bool = false,
+    approval: ApprovalRequest, isDeciding: Bool = false, readOnlyReason: String? = nil,
     onDecide: @escaping (ApprovalDecision, ApprovalScope?, String?) -> Void
   ) {
     self.init(
-      approval: approval, isDeciding: isDeciding, announces: false, onAnnounced: {},
-      onDecide: onDecide)
+      approval: approval, isDeciding: isDeciding, announces: false,
+      readOnlyReason: readOnlyReason, onAnnounced: {}, onDecide: onDecide)
   }
 
   init(
-    approval: ApprovalRequest, isDeciding: Bool, announces: Bool, onAnnounced: @escaping () -> Void,
+    approval: ApprovalRequest, isDeciding: Bool, announces: Bool, readOnlyReason: String? = nil,
+    onAnnounced: @escaping () -> Void,
     onDecide: @escaping (ApprovalDecision, ApprovalScope?, String?) -> Void
   ) {
     self.approval = approval
     self.isDeciding = isDeciding
     self.announces = announces
+    self.readOnlyReason = readOnlyReason
     self.onAnnounced = onAnnounced
     self.onDecide = onDecide
   }
@@ -45,7 +49,8 @@ public struct ApprovalCard: View {
   /// An approval from the store, decided through it.
   public init(store: AgentStore, approval: ApprovalRequest) {
     self.init(
-      approval: approval, isDeciding: store.decidingApprovalIds.contains(approval.id)
+      approval: approval, isDeciding: store.decidingApprovalIds.contains(approval.id),
+      readOnlyReason: store.readOnly?.reason
     ) { decision, scope, note in
       Task { await store.decide(approval.id, decision, scope: scope, note: note) }
     }
@@ -149,7 +154,7 @@ public struct ApprovalCard: View {
           deny
         }
       }
-      .disabled(isDeciding)
+      .disabled(isDeciding || readOnlyReason != nil)
       .popover(isPresented: $denying, arrowEdge: .bottom) {
         DenyPopover(
           note: $denyNote, onCancel: { denying = false },
@@ -165,6 +170,10 @@ public struct ApprovalCard: View {
         }
         .font(.caption)
         .foregroundStyle(AgentTheme.mutedText)
+      } else if let readOnlyReason {
+        Label("Read-only: \(readOnlyReason)", systemImage: "eye")
+          .font(.caption)
+          .foregroundStyle(AgentTheme.mutedText)
       } else if let expiresAt = approval.expiresAt {
         Label(AgentFormat.expiry(expiresAt, now: now), systemImage: "clock")
           .font(.caption)
@@ -176,13 +185,15 @@ public struct ApprovalCard: View {
   private var approveOnce: some View {
     Button("Approve once") { onDecide(.approve, .once, nil) }
       .buttonStyle(.borderedProminent)
-      .pointingHandCursor()
+      .pointingHandCursor(readOnlyReason == nil)
+      .tooltip(nil, whenDisabled: readOnlyTooltip("Approve once"))
   }
 
   private var approveForTask: some View {
     Button("Approve for this task") { onDecide(.approve, .task, nil) }
       .buttonStyle(.bordered)
-      .pointingHandCursor()
+      .pointingHandCursor(readOnlyReason == nil)
+      .tooltip(nil, whenDisabled: readOnlyTooltip("Approve for this task"))
   }
 
   private var deny: some View {
@@ -192,7 +203,12 @@ public struct ApprovalCard: View {
       Text("Deny…").foregroundStyle(AgentTheme.danger)
     }
     .buttonStyle(.bordered)
-    .pointingHandCursor()
+    .pointingHandCursor(readOnlyReason == nil)
+    .tooltip(nil, whenDisabled: readOnlyTooltip("Deny"))
+  }
+
+  private func readOnlyTooltip(_ action: String) -> TooltipContent? {
+    readOnlyReason.map { TooltipContent("\(action) is off here", detail: $0) }
   }
 
   private func decision(now: Date) -> some View {

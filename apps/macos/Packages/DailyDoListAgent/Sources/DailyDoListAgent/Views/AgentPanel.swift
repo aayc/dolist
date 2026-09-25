@@ -117,6 +117,10 @@ public struct AgentPanel: View {
         OrchestratorLocationBar(
           store: store, location: location, runHere: shortcuts.runHere, actions: placementActions)
       }
+      if let readOnly = store.readOnly {
+        ReadOnlyBanner(readOnly: readOnly)
+          .transition(.opacity)
+      }
       Group {
         if let threadId = selectedThreadId, OrchestratorThread.isOrchestrator(threadId) {
           OrchestratorChatView(
@@ -158,6 +162,7 @@ public struct AgentPanel: View {
       }
     }
     .animation(.snappy(duration: 0.2), value: store.lastError?.id)
+    .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: store.readOnly)
     .frame(minWidth: 300)
     .foregroundStyle(AgentTheme.text)
     .tint(AgentTheme.accent)

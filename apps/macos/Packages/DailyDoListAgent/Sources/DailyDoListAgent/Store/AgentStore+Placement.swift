@@ -14,6 +14,11 @@ extension AgentStore {
       status: placement, machineName: alwaysOnMachineName, pending: pendingPlacement)
   }
 
+  /// Agent actions can't be taken from this device right now, and why; nil when they can.
+  public var readOnly: AgentReadOnly? {
+    AgentReadOnly(placement: placement, machineName: alwaysOnMachineName)
+  }
+
   /// Whether the orchestrator can be moved to `target` now (the command's availability).
   public func canMoveOrchestrator(to target: AgentPlacement) -> Bool {
     guard let location = orchestratorLocation else { return false }

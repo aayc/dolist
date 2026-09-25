@@ -113,6 +113,30 @@ struct OrchestratorLocationBar: View {
   }
 }
 
+/// Over the agent panel while its work is read-only here: what that means, and where to act.
+struct ReadOnlyBanner: View {
+  let readOnly: AgentReadOnly
+
+  var body: some View {
+    HStack(alignment: .firstTextBaseline, spacing: 8) {
+      Image(systemName: "eye")
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundStyle(AgentTheme.info)
+      Text(readOnly.banner)
+        .font(.caption)
+        .foregroundStyle(AgentTheme.text)
+        .fixedSize(horizontal: false, vertical: true)
+      Spacer(minLength: 0)
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 7)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(AgentTheme.info.opacity(0.10))
+    .overlay(alignment: .bottom) { AgentHairline() }
+    .accessibilityElement(children: .combine)
+  }
+}
+
 /// The handover's note, the relay's trouble, or who else runs the agent.
 private struct LocationLine: View {
   let line: OrchestratorLocation.Line

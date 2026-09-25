@@ -263,11 +263,11 @@ struct CommandCatalog {
       })
   }
 
-  /// The thread open in the agent panel, while its agent is at work.
+  /// The thread open in the agent panel, while its agent is at work (and reachable from here).
   static func stoppableThread(model: AppModel) -> String? {
     guard model.phase == .ready, model.ui.inspectorPresented,
       let threadId = model.ui.selectedThreadId,
-      model.agent?.threadStatus(threadId)?.isActive == true
+      model.agent?.threadStatus(threadId)?.isActive == true, model.agent?.readOnly == nil
     else { return nil }
     return threadId
   }

@@ -14,6 +14,8 @@ struct MessageContext: Equatable {
   var reveal: ChatReveal.Presentation = .whole
   /// A pending approval that just arrived (it draws attention once).
   var announces = false
+  /// Decisions can't reach the agent from this device.
+  var readOnlyReason: String?
   var now: Date
 }
 
@@ -49,7 +51,7 @@ struct MessageRow: View, Equatable {
       if let approval = context.approval {
         ApprovalCard(
           approval: approval, isDeciding: context.isDeciding, announces: context.announces,
-          onAnnounced: { actions.announced(item.id) },
+          readOnlyReason: context.readOnlyReason, onAnnounced: { actions.announced(item.id) },
           onDecide: { decision, scope, note in
             actions.decide(item.approvalId, decision, scope, note)
           })
