@@ -1,14 +1,17 @@
 import { isActiveTaskStatus, isOrchestratorThread, stem } from "@ddl/core";
 import { ArrowLeft, NotebookPen, Repeat, RotateCcw, Square, X } from "lucide-react";
 import { useServices } from "../../app/services";
+import { DisabledReason } from "../../components/DisabledReason";
 import { IconButton } from "../../components/IconButton";
 import { useAgentStore } from "../../state/agent-store";
 import { ui } from "../../state/ui-store";
+import { useReadOnlyReason } from "../remote/read-only";
 import { repeatDraft } from "../routines/repeat";
 import { StatusChip } from "./StatusChip";
 
 export function ThreadHeader({ threadId }: { threadId: string }) {
   const { agent } = useServices();
+  const readOnly = useReadOnlyReason();
   const title = useAgentStore(
     (s) => s.details[threadId]?.title ?? s.threads[threadId]?.title ?? "",
   );
@@ -64,12 +67,15 @@ export function ThreadHeader({ threadId }: { threadId: string }) {
       </div>
       <div className="thread-actions">
         {active ? (
-          <IconButton
-            icon={Square}
-            command="agent:stop"
-            onClick={() => void agent.cancel(threadId)}
-            data-testid="thread-stop"
-          />
+          <DisabledReason reason={readOnly}>
+            <IconButton
+              icon={Square}
+              command="agent:stop"
+              disabled={readOnly !== null}
+              onClick={() => void agent.cancel(threadId)}
+              data-testid="thread-stop"
+            />
+          </DisabledReason>
         ) : null}
         {canRepeat ? (
           <IconButton
@@ -80,12 +86,15 @@ export function ThreadHeader({ threadId }: { threadId: string }) {
           />
         ) : null}
         {canRetry ? (
-          <IconButton
-            icon={RotateCcw}
-            label="Retry"
-            onClick={() => void agent.retry(threadId)}
-            data-testid="thread-retry"
-          />
+          <DisabledReason reason={readOnly}>
+            <IconButton
+              icon={RotateCcw}
+              label="Retry"
+              disabled={readOnly !== null}
+              onClick={() => void agent.retry(threadId)}
+              data-testid="thread-retry"
+            />
+          </DisabledReason>
         ) : null}
         {notePath ? (
           <IconButton

@@ -2,8 +2,10 @@ import type { ApprovalRequest, ApprovalScope } from "@ddl/core";
 import { ShieldAlert, ShieldCheck, ShieldX } from "lucide-react";
 import { useState } from "react";
 import { useServices } from "../../app/services";
+import { DisabledReason } from "../../components/DisabledReason";
 import { cx } from "../../lib/cx";
 import { formatTimestamp } from "../../lib/format";
+import { useReadOnlyReason } from "../remote/read-only";
 import { CATEGORY_LABELS } from "./status-meta";
 
 const SCOPE_LABEL: Record<ApprovalScope, string> = {
@@ -37,6 +39,7 @@ export function ApprovalCard({
   arriving?: boolean;
 }) {
   const { agent } = useServices();
+  const readOnly = useReadOnlyReason();
   const [showInput, setShowInput] = useState(false);
   const [denying, setDenying] = useState(false);
   const [note, setNote] = useState("");
@@ -119,32 +122,48 @@ export function ApprovalCard({
           </div>
         </div>
       ) : (
-        <div className="approval-actions">
-          <button
-            type="button"
-            className="button is-primary"
-            onClick={() => approve("once")}
-            data-testid="approve-once"
-          >
-            Approve once
-          </button>
-          <button
-            type="button"
-            className="button"
-            onClick={() => approve("task")}
-            data-testid="approve-task"
-          >
-            Approve for this task
-          </button>
-          <button
-            type="button"
-            className="button is-danger-ghost"
-            onClick={() => setDenying(true)}
-            data-testid="deny"
-          >
-            Deny…
-          </button>
-        </div>
+        <>
+          <div className="approval-actions">
+            <DisabledReason reason={readOnly}>
+              <button
+                type="button"
+                className="button is-primary"
+                disabled={readOnly !== null}
+                onClick={() => approve("once")}
+                data-testid="approve-once"
+              >
+                Approve once
+              </button>
+            </DisabledReason>
+            <DisabledReason reason={readOnly}>
+              <button
+                type="button"
+                className="button"
+                disabled={readOnly !== null}
+                onClick={() => approve("task")}
+                data-testid="approve-task"
+              >
+                Approve for this task
+              </button>
+            </DisabledReason>
+            <DisabledReason reason={readOnly}>
+              <button
+                type="button"
+                className="button is-danger-ghost"
+                disabled={readOnly !== null}
+                onClick={() => setDenying(true)}
+                data-testid="deny"
+              >
+                Deny…
+              </button>
+            </DisabledReason>
+          </div>
+          {readOnly ? (
+            <p className="approval-readonly" data-testid="approval-readonly">
+              {readOnly}: answer it where the agent runs, or once this device can reach it.
+            </p>
+          ) : null}
+        </>
       )}
       {pending && approval.expiresAt ? (
         <p className="approval-expiry">

@@ -115,7 +115,7 @@ export class Workspace {
     });
     this.editor = new EditorController(
       {
-        contentOf: (path) => this.notes.serverContent(path),
+        contentOf: (path) => this.notes.content(path),
         // New tasks go at the end of a daily note.
         caretAtEnd: (path) => isDailyNotePath(path, getSettings().dailyNotes),
         onLocalEdit: (path) => {
@@ -157,7 +157,7 @@ export class Workspace {
     this.activity = new ActivitySync(this.editor);
     this.previews = new LinkPreviews({
       files: () => vaultActions.files(),
-      openContent: (path) => this.editor.readLive(path) ?? this.notes.serverContent(path),
+      openContent: (path) => this.editor.readLive(path) ?? this.notes.content(path),
       readNote: async (path) => (await client.readNote(path)).content,
       sources: (threadId) => agent.sourcesOf(threadId),
     });

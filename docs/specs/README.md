@@ -12,5 +12,7 @@ one, each stream's scope, and the environment rules for agents working next to a
   around them; the real Excalidraw on the web, a native engine on the Mac; the agent sees them.
 - [obsidian-migration.md](./obsidian-migration.md): moving from Obsidian — the editor merge-race
   fix, Import from Obsidian (copy, report first, carry-over, update), attachments, display gaps.
+- [orchestrator-activity.md](./orchestrator-activity.md): what the orchestrator is doing while
+  you write — chips on the lines that woke it, a note-level indicator.
 - [agent-journal.md](./agent-journal.md) (draft): append-only agent state, write-ahead for side
   effects, resuming runs after a handover.

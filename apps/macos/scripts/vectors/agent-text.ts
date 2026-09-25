@@ -220,6 +220,24 @@ const CURATED_MERGES: Array<[string, string, string]> = [
   ["", "x", "y"],
   ["a\n", "a\nb\n", "a\n\nc"],
   ["x\ny", "x\ny", "x\ny"],
+  // Lines deleted elsewhere stay deleted: around a line the user added, and next to a conflict.
+  [
+    "# Thursday\n- [ ] Rehearsal\n\t- Done: 11 bots %%agent:thr_1%%\nNotes",
+    "# Thursday\n- [ ] Rehearsal\n\t- ask about it\n\t- Done: 11 bots %%agent:thr_1%%\nNotes",
+    "# Thursday\nNotes",
+  ],
+  ["a\nb\nc\nd", "a!\nb\nc\nd", "a?\nb"],
+  ["a\nb\nc", "A\nB\nc", "a\nx\nb\nc"],
+  // A line edited and a line added under it are one replaced block to a diff: split before merging.
+  ["- [ ] start", "- [ ]", "- [ ]\n- a3 %%agent%%"],
+  ["- [ ] start", "- [ ] start c1e1", "- [ ] start c0e0\n- a3 %%agent%%"],
+  [
+    "# Thursday\n- [ ] Book a table\n- [ ] Renew passport\nNotes",
+    "# Thursday\n- [x] Book a table\n- [x] Renew passport\nNotes",
+    "# Thursday\n- [ ] Book a table\n  - Sole at 7 %%agent:thr_1%%\n- [ ] Renew passport\nNotes",
+  ],
+  ["- [ ] base 0\nx", "- [ ] base 0 mine\nx", "theirs+\n- [ ] base 0 theirs theirs theirs\nx"],
+  ["a\n\nb", "a\nmine\nb", "a\ntheirs\nb"],
 ];
 
 export function buildMergeVectors(core: CoreModule) {

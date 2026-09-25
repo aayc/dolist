@@ -88,7 +88,8 @@ export class DeviceSettings {
 
   constructor(options: DeviceSettingsOptions) {
     this.#options = options;
-    this.device = { ...options.device };
+    // Shared with sync, the lease and the machine link, so a rename reaches them at once.
+    this.device = options.device;
     this.#placement = options.placement;
     this.#sync = options.sync;
     this.#hasToken = options.hasToken;

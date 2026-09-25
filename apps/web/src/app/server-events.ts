@@ -1,4 +1,4 @@
-import type { ServerEvent } from "@ddl/core";
+import type { AgentStatusResponse, ServerEvent } from "@ddl/core";
 import { uncitedLinks } from "../features/links/link-previews";
 import { applyActivity } from "../state/activity-store";
 import { dispatchAgentEvent, useAgentStore } from "../state/agent-store";
@@ -9,9 +9,38 @@ import { announceApproval } from "./approval-toasts";
 import { announceRoutineRun } from "./routine-toasts";
 import type { Services } from "./services";
 
+/** Coalesces a flapping relay (connecting, then connected) into one refetch. */
+const REFETCH_DELAY_MS = 200;
+
+/**
+ * Where the agent's threads come from: the relay's state and the device that runs the agent. When
+ * it changes (relayed, or no longer), the daemon pushes the machine's status, approvals, thread
+ * summaries and routines, but not thread details or task records, so the panel fetches again.
+ */
+function agentSource(status: AgentStatusResponse): string | undefined {
+  const placement = status.placement;
+  return placement ? `${placement.relay}\u0000${placement.runsOn?.deviceId ?? ""}` : undefined;
+}
+
+let lastAgentSource: string | undefined;
+let refetchTimer: ReturnType<typeof setTimeout> | undefined;
+
+function followAgentSource(status: AgentStatusResponse, services: Services): void {
+  const source = agentSource(status);
+  const moved = lastAgentSource !== undefined && source !== lastAgentSource;
+  lastAgentSource = source;
+  if (!moved) return;
+  clearTimeout(refetchTimer);
+  refetchTimer = setTimeout(() => void services.agent.resync(), REFETCH_DELAY_MS);
+}
+
 /** Routes daemon push events into the stores/controllers. */
 export function handleServerEvent(event: ServerEvent, services: Services): void {
   switch (event.type) {
+    case "agent.status":
+      followAgentSource(event.status, services);
+      dispatchAgentEvent(event);
+      return;
     case "vault.changed":
       services.workspace.handleVaultChanged(event);
       return;

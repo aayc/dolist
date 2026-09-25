@@ -276,3 +276,86 @@ header, Repeat this), `NewRoutineDialog.test.tsx`, `commands/routine-commands.te
 mock's contract test. E2E: `e2e/fullstack/routines.spec.ts` against the real daemon (New routine
 from a template, a routine's runs, Run now, Pause, the notification, Repeat this), and the cursor
 audit of every routines screen in `e2e/polish.spec.ts`.
+
+## Where the agent runs, other devices, pairing
+
+`src/features/remote/`, per [docs/ALWAYS_ON.md](../../docs/ALWAYS_ON.md) ("Where the agent runs",
+"Settings"). The wording is meant to match the Mac app's.
+
+- **The orchestrator toggle**, under the inbox's header: "where the orchestrator runs", This
+  device or Always-on machine (`PATCH /api/device { placement }`). The line under it says what's
+  happening from the agent status's `placement`: the handover note (`note`) while the agent moves,
+  where it runs (`runsOn`), "Run it on this device instead" when the relay is `unreachable`,
+  "Pair it" when it's `not_paired`, and a warning when this device runs the agent but its
+  `readiness` says it can't. While `heldHere` is set the toggle is disabled, its tooltip says why
+  ("Set up an always-on machine in Settings", "This device doesn't sync") and the line links to
+  that Settings section; `lockedByEnv` disables it too. On the always-on machine
+  (`always_on_host`) it says "This is the always-on machine". A daemon that doesn't report
+  placement shows no toggle.
+- **Read-only**: while this device can't act on the agent (`readOnlyReason`: the machine can't be
+  reached, this device isn't paired with it, or another device runs the agent), a banner above the
+  agent panel says so ("The always-on machine can't be reached — showing the last synced state",
+  "The agent is running on Work laptop — …"), and agent actions (reply, Stop, Retry, approve and
+  deny, Run now, Pause, New routine) are disabled with the reason as their tooltip. The tooltip
+  layer skips disabled controls, so `components/DisabledReason` wraps them and carries it. A 503
+  `agent_unavailable` that still gets through is toasted with the daemon's reason. The status bar
+  names where the agent runs ("Agent on vm-1", "Agent unreachable"). Requests go through while the
+  relay is `connecting`, so that isn't read-only. When the relay state or the device running the
+  agent changes (`app/server-events.ts`), the panel fetches threads, approvals, task records and
+  open threads again: the daemon pushes the machine's status, approvals, thread summaries and
+  routines, but not thread details or records. When the machine no longer accepts this device,
+  Settings → Always-on machine offers "Pair again…".
+- **Settings** (a chunk of its own, `features/remote/settings`, prefetched with Settings): Agent
+  location (the toggle, where it runs, this device's name, its readiness with fix-it hints),
+  Always-on machine (pair with an address and a code, then its status, readiness, Check now,
+  Forget, and a link to its web app), Sync (address, vault, a write-only token shown as "Saved",
+  the sync status, turning it off), Devices (paired devices, revoke, "Pair a new device" with the
+  code, its countdown and the URL to open; no QR code yet) and Remote access (the names this
+  daemon answers to). Fields set by environment variables are read-only with why. Inputs use
+  `@ddl/core`'s validators (`inputs.ts`), and `remote-errors.ts` words every daemon error code
+  (`pairing_rejected`, `locked_by_env`, `rate_limited`, `machine_unreachable`, …) per action.
+- **Page auth** (`api/auth.ts`, `api/select-client.ts`): a loopback page carries
+  `<meta name="ddl-token">` and works as before. On a remote host the daemon serves
+  `<meta name="ddl-auth" content="cookie">` (the browser holds a paired device's HttpOnly cookie:
+  requests go without an Authorization header, the WebSocket without a token) or
+  `content="pairing"`. Then the page first checks whether its cookie works anyway (a page reached
+  from another site comes without it under `SameSite=Strict`), else shows the **pairing screen**
+  (`features/pairing`, its own chunk): the code, formatted as XXXX-XXXX while typing, and this
+  browser's name ("Chrome on macOS" by default), posted to `/api/pair` as a browser with
+  `credentials: "same-origin"`; the page then reloads. In cookie mode a 401 (the device was
+  revoked; a dropped socket is followed by a probe request, since a refused upgrade has no
+  status) replaces the app with the pairing screen.
+
+With `?mock=1`, `api/mock/mock-remote.ts` keeps the daemon's device side: placement with
+handovers that take a moment, the relay state, readiness, sync, the machine link, pairing codes and
+devices (in localStorage, so a code issued on one page pairs another), and the daemon's error
+codes. `?mockRemote=` picks a starting point: `none` (default: no sync, held here), `no_machine`,
+`ready`, `relayed`, `unreachable`, `not_paired`, `rejected`, `elsewhere`, `host`, `locked`,
+`unready`. The
+mock machine refuses code `XXXX-XXXX` (401) and `YYYY-YYYY` (429), and a host starting with
+`offline.` never answers (502). `?mockAuth=pairing` serves the remote page states: the pairing
+screen until this browser pairs, then the app with cookie auth; revoking it goes back to pairing.
+In mock mode, `window.__ddlMock.setMachineReachable(false)` makes the machine stop answering and
+`setMachineRejects(true)` makes it refuse this device. The relay's states and reasons are the
+daemon's: requests go through while it's `connecting`; "The always-on machine can't be reached.",
+"This device isn't paired with the always-on machine." and "The always-on machine no longer
+accepts this device. Pair it again." otherwise.
+
+### Tests
+
+Unit: `placement.test.ts` (the toggle's states, the status line, the read-only reason),
+`remote-errors.test.ts` (every error code's message), `inputs.test.ts` (validation, readiness
+hints), `pairing-code.test.ts` (formatting and the caret, times), `AgentLocation.test.tsx`,
+`read-only.test.tsx` (the banner, disabled actions), `PairingScreen.test.tsx` (the form, the
+default name, refusals), `api/select-client.test.ts` and `api/http-client.test.ts` (page auth,
+cookie mode: no Authorization header, no token in the WebSocket URL, a 401 reported once, the
+probe), `api/pairing.test.ts`, the client's contract test (every new route) and the mock's.
+E2E: `e2e/agent-anywhere.spec.ts` (the toggle and its handover, held here, the machine going
+away, env locks, read-only, every Settings flow, and pairing a browser then revoking it), and the
+cursor audit of every new screen and state in `e2e/polish.spec.ts`. `e2e/fullstack/
+agent-anywhere.spec.ts` runs them against the real daemons (the served one, a second one as the
+always-on machine, a sync service): held here, sync setup, pairing the machine, a handover and
+back, replying to the machine's orchestrator through the relay (and getting its answer), the
+machine going down (read-only, "can't be reached") and coming back, a device paired through
+`/api/pair` and revoked, and a remote host's pairing screen. Pairing a browser over https (the
+cookie is `Secure`; the harness has no TLS proxy yet) is `test.fixme`.

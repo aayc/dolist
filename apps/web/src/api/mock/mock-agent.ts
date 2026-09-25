@@ -1,4 +1,6 @@
 import {
+  type AgentPlacementStatus,
+  type AgentReadiness,
   type AgentStatusResponse,
   APPROVAL_POLICIES,
   type ApprovalDecisionRequest,
@@ -68,6 +70,12 @@ export interface MockAgentHost {
   settings(): AppSettings;
   /** The simulated Mac's computer access (absent: no computer use). */
   computerAccess?(): ComputerAccess | undefined;
+  /**
+   * Where the agent runs for this device, this device's readiness, and why it can't act on the
+   * agent (another device runs it, or the always-on machine can't be used): then it picks up no
+   * tasks.
+   */
+  location?(): { placement: AgentPlacementStatus; readiness: AgentReadiness; problem?: string };
 }
 
 /** The daemon's gate for the simulated risky steps, which the safety check always wants approved. */
@@ -301,7 +309,8 @@ export class MockAgent {
     if (this.followLineAnchors(path, content)) changed = true;
     if (changed) this.emitRecords(path);
 
-    const quiet = Boolean(options.initial) || !this.enabled || !this.isWatched(path);
+    const quiet =
+      Boolean(options.initial) || !this.enabled || !this.runsHere() || !this.isWatched(path);
     this.trackProse(path, content, quiet);
     if (quiet) return;
     for (const task of diff.added) this.considerTask(path, task);
@@ -542,8 +551,13 @@ export class MockAgent {
     this.settleTimers.delete(taskId);
   }
 
+  /** False while another device runs the agent, or the always-on machine can't be used. */
+  private runsHere(): boolean {
+    return !this.host.location?.().problem;
+  }
+
   private onSettled(path: string, taskId: string): void {
-    if (!this.enabled) return;
+    if (!this.enabled || !this.runsHere()) return;
     const task = this.tracked.get(path)?.find((t) => t.id === taskId);
     if (task?.status !== "open" || isBlankTaskText(task.text) || this.records.has(taskId)) return;
     const activity = this.activity;
@@ -1058,6 +1072,7 @@ export class MockAgent {
     for (const approval of this.approvals.values())
       if (approval.status === "pending") pendingApprovals++;
     const computerAccess = this.host.computerAccess?.();
+    const location = this.host.location?.();
     return {
       mode: "mock",
       enabled: this.enabled,
@@ -1072,6 +1087,8 @@ export class MockAgent {
         ...(computerAccess ? { computerAccess } : {}),
       },
       orchestrator: this.orchestrator.activity,
+      ...(location?.problem ? { problem: location.problem } : {}),
+      ...(location ? { placement: location.placement, readiness: location.readiness } : {}),
     };
   }
 

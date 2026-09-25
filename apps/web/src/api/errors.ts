@@ -3,12 +3,15 @@ import type { NoteResponse } from "@ddl/core";
 export class HttpError extends Error {
   readonly status: number;
   readonly body: unknown;
+  /** A 429's `Retry-After`, in seconds, when the daemon sent one. */
+  readonly retryAfterSeconds: number | undefined;
 
-  constructor(status: number, message: string, body?: unknown) {
+  constructor(status: number, message: string, body?: unknown, retryAfterSeconds?: number) {
     super(message);
     this.name = "HttpError";
     this.status = status;
     this.body = body;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 

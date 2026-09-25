@@ -8,51 +8,95 @@ import Testing
 
 @testable import DailyDoListAgent
 
-/// The agent's work shows read-only when the always-on machine can't be reached (or this device
-/// isn't paired with it), another device runs the agent, or it's moving: a banner, actions
-/// disabled with the reason, and the daemon's 503 message when one is tried anyway.
+/// The agent's work shows read-only when the relay can't reach the always-on machine, this device
+/// isn't paired with it (or no longer accepted), another device runs the agent, or the machine
+/// isn't running it: a banner (unless the location line says enough), actions disabled with the
+/// reason, and the daemon's 503 message when one is tried anyway. The same rules and words as the
+/// web app's `readOnlyReason` and `availabilityBanner`.
 @MainActor
 @Suite("Read-only agent", .serialized)
 struct ReadOnlyTests {
+  static let synced = " — showing the last synced state"
+
   // MARK: - When
 
-  @Test func actionsWorkWhereTheAgentRunsOrIsRelayed() {
+  @Test func actionsWorkWhereTheAgentRunsOrThroughTheRelay() {
     #expect(AgentReadOnly(placement: nil) == nil)
     #expect(AgentReadOnly(placement: Fixture.placement()) == nil)
     #expect(AgentReadOnly(placement: Fixture.placement(heldHere: .noMachine)) == nil)
-    #expect(
-      AgentReadOnly(
-        placement: Fixture.placement(.alwaysOnMachine, runsOn: Fixture.machine, relay: .connected))
-        == nil)
+    // The daemon forwards actions while the relay connects too.
+    for relay in [RelayState.connected, .connecting] {
+      #expect(
+        AgentReadOnly(
+          placement: Fixture.placement(.alwaysOnMachine, runsOn: Fixture.machine, relay: relay))
+          == nil, "\(relay)")
+      #expect(
+        AgentReadOnly(placement: Fixture.placement(.alwaysOnMachine, runsOn: nil, relay: relay))
+          == nil, "the machine answers for itself: \(relay)")
+    }
   }
 
   @Test func eachReadOnlyStateSaysWhy() throws {
-    let unreachable = try #require(
+    let unreachable = AgentReadOnly(
+      placement: Fixture.placement(.alwaysOnMachine, runsOn: Fixture.machine, relay: .unreachable),
+      problem: "The always-on machine can't be reached.")
+    #expect(
+      unreachable
+        == AgentReadOnly(
+          kind: .unreachable, reason: "The always-on machine can't be reached",
+          banner: "The always-on machine can't be reached" + Self.synced))
+
+    let unpaired = Fixture.placement(.alwaysOnMachine, runsOn: nil, relay: .notPaired)
+    #expect(
       AgentReadOnly(
-        placement: Fixture.placement(.alwaysOnMachine, runsOn: Fixture.machine, relay: .unreachable)
-      ))
-    #expect(unreachable.reason == "Can't reach vm-name")
-    #expect(unreachable.banner.hasPrefix("Read-only: this is the last synced copy."))
-
-    let unpaired = try #require(
+        placement: unpaired, problem: "This device isn't paired with the always-on machine.")
+        == AgentReadOnly(
+          kind: .notPaired, reason: "This device isn't paired with the always-on machine",
+          banner: "This device isn't paired with the always-on machine" + Self.synced))
+    #expect(
       AgentReadOnly(
-        placement: Fixture.placement(.alwaysOnMachine, runsOn: nil, relay: .notPaired),
-        machineName: "vm-name"))
-    #expect(unpaired.reason == "Not paired with vm-name")
+        placement: unpaired,
+        problem: "The always-on machine no longer accepts this device. Pair it again.")
+        == AgentReadOnly(
+          kind: .rejected, reason: "The always-on machine no longer accepts this device",
+          banner: "The always-on machine no longer accepts this device" + Self.synced))
 
-    let elsewhere = try #require(
-      AgentReadOnly(placement: Fixture.placement(runsOn: Fixture.workLaptop)))
-    #expect(elsewhere.reason == "Work laptop runs the agent")
-    #expect(elsewhere.banner == "Read-only: Work laptop runs the agent. Approve and reply there.")
+    #expect(
+      AgentReadOnly(placement: Fixture.placement(runsOn: Fixture.workLaptop))
+        == AgentReadOnly(
+          kind: .elsewhere, reason: "The agent is running on Work laptop",
+          banner: "The agent is running on Work laptop" + Self.synced))
+    let relayedElsewhere = Fixture.placement(
+      .alwaysOnMachine, runsOn: Fixture.workLaptop, relay: .connected)
+    #expect(
+      AgentReadOnly(placement: relayedElsewhere)?.kind == .elsewhere,
+      "relayed, but another device runs it")
 
-    let moving = try #require(
-      AgentReadOnly(placement: Fixture.placement(note: "Taking over from vm-name…")))
-    #expect(moving.reason == "The agent is moving")
+    #expect(
+      AgentReadOnly(placement: Fixture.placement(.alwaysOnMachine, runsOn: nil))
+        == AgentReadOnly(
+          kind: .idle, reason: "The always-on machine isn't running the agent right now",
+          banner: "The always-on machine isn't running the agent right now" + Self.synced))
+  }
+
+  @Test func whileTheLocationLineSaysWhyThereIsNoBanner() throws {
+    let takingOver = try #require(
+      AgentReadOnly(
+        placement: Fixture.placement(runsOn: Fixture.machine, note: "Taking over from vm-name…")))
+    #expect(takingOver.reason == "The agent is running on vm-name" && takingOver.banner == nil)
+
+    let handingOver = try #require(
+      AgentReadOnly(
+        placement: Fixture.placement(
+          .alwaysOnMachine, runsOn: nil, note: "Handing the agent to vm-name…")))
+    #expect(handingOver.kind == .idle && handingOver.banner == nil)
 
     let connecting = try #require(
-      AgentReadOnly(placement: Fixture.placement(.alwaysOnMachine, runsOn: nil, relay: .connecting))
-    )
-    #expect(connecting.reason == "Connecting to the always-on machine")
+      AgentReadOnly(
+        placement: Fixture.placement(
+          .alwaysOnMachine, runsOn: Fixture.workLaptop, relay: .connecting)))
+    #expect(connecting.reason == "The agent is running on Work laptop")
+    #expect(connecting.banner == nil)
   }
 
   // MARK: - The store and the composer
@@ -72,16 +116,22 @@ struct ReadOnlyTests {
 
     await client.simulateMachine(reachable: false)
     await store.refresh()
-    #expect(store.readOnly?.reason == "Can't reach vm-name")
+    let reason = "The always-on machine can't be reached"
+    #expect(store.readOnly?.reason == reason)
     #expect(await store.decide(approval.id, .approve) == false)
-    #expect(store.lastError?.message == "Can't reach vm-name. Its work shows here read-only.")
+    #expect(store.lastError?.message == "The always-on machine can't be reached.")
     #expect(store.approvals[approval.id]?.isPending == true, "the optimistic decision rolled back")
 
     let composer = ComposerModel(store: store, threadId: try #require(approval.threadId))
     composer.text = "Try the patio"
-    #expect(!composer.canSend && composer.unavailableReason == "Can't reach vm-name")
+    #expect(!composer.canSend && composer.unavailableReason == reason)
     #expect(composer.placeholder == "Replies are off while this is read-only")
-    #expect(composer.stopUnavailableReason == "Can't reach vm-name")
+    #expect(composer.stopUnavailableReason == reason)
+
+    await client.simulateMachine(reachable: true, acceptsThisDevice: false)
+    await store.refresh()
+    #expect(store.readOnly?.kind == .rejected)
+    #expect(store.orchestratorLocation?.pairsAgain == true)
   }
 
   // MARK: - The views
@@ -127,7 +177,7 @@ struct ReadOnlyTests {
       size: CGSize(width: 440, height: 1_400))
     let texts = found.compactMap { $0.tooltipContent() }
     let approve = try #require(texts.first { $0.lines.first?.text == "Approve once is off here" })
-    #expect(approve.detail == "Can't reach vm-name")
+    #expect(approve.detail == "The always-on machine can't be reached")
     #expect(texts.contains { $0.lines.first?.text == "Deny is off here" })
     #expect(!texts.contains { $0.lines.first?.text == "Approve once" })
   }
@@ -139,7 +189,7 @@ struct ReadOnlyTests {
         .agentReferenceDate(SnapshotTests.now),
       size: CGSize(width: 440, height: 600))
     let retry = try #require(found.first { $0.tooltipContent()?.lines.first?.text == "Retry" })
-    #expect(retry.tooltipContent()?.detail == "Can't reach vm-name")
+    #expect(retry.tooltipContent()?.detail == "The always-on machine can't be reached")
   }
 
   @Test(arguments: [false, true])

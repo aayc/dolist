@@ -62,9 +62,10 @@ function AgentItems() {
   const running = useAgentStore((s) => s.status?.running ?? 0);
   const queued = useAgentStore((s) => s.status?.queued ?? 0);
   const problem = useAgentStore((s) => s.status?.problem?.trim() || null);
+  const placement = useAgentStore((s) => s.status?.placement);
   const access = useAgentStore((s) => s.status?.execution.computerAccess);
   const pending = usePendingApprovalCount();
-  const item = agentItem(enabled, rawMode === "off", problem);
+  const item = agentItem(enabled, rawMode === "off", problem, placement);
   const work = runningItem(running, queued);
   const computer = computerItem(access, item.state === "on");
   return (
@@ -74,7 +75,7 @@ function AgentItems() {
         className={cx("status-item status-agent", `is-${item.state}`)}
         onClick={() => {
           if (item.state === "on" || item.state === "paused") void agent.setEnabled(!enabled);
-          else ui.openOverlay({ kind: "settings", section: "agent" });
+          else ui.openOverlay({ kind: "settings", section: item.location ? "location" : "agent" });
         }}
         aria-pressed={enabled ?? false}
         data-tooltip={item.title}

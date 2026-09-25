@@ -9,6 +9,11 @@ export type SettingsSection =
   | "editor"
   | "daily"
   | "agent"
+  | "location"
+  | "machine"
+  | "sync"
+  | "devices"
+  | "remote"
   | "computer"
   | "connectors"
   | "about";

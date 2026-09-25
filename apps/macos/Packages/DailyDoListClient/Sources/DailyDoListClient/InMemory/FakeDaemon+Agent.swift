@@ -172,7 +172,7 @@ extension FakeDaemon {
         : ExecutionStatus(
           provider: "none",
           capabilities: ExecutionCapabilities(shell: false, browser: false, computer: false)),
-      problem: enabled ? nil : "The agent runtime is not running",
+      problem: enabled ? placementProblem : "The agent runtime is not running",
       placement: placementStatus(), readiness: readiness(), orchestrator: reportedActivity)
   }
 

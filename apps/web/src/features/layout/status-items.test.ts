@@ -54,6 +54,42 @@ describe("status bar items", () => {
     expect(agentItem(null, false, null).state).toBe("unknown");
   });
 
+  it("says where the agent runs when it isn't here", () => {
+    const vm = { deviceId: "dev_vm", name: "vm-1", thisDevice: false, alwaysOnMachine: true };
+    const work = {
+      deviceId: "dev_w",
+      name: "Work laptop",
+      thisDevice: false,
+      alwaysOnMachine: false,
+    };
+    const here = { deviceId: "dev_l", name: "Laptop", thisDevice: true, alwaysOnMachine: false };
+    const relayed = { placement: "always_on_machine" as const, runsOn: vm };
+    expect(agentItem(true, false, null, { ...relayed, relay: "connected" })).toEqual({
+      state: "on",
+      label: "Agent on vm-1",
+      title: "The agent runs on vm-1, the always-on machine — click to pause",
+    });
+    expect(agentItem(false, false, null, { ...relayed, relay: "connected" }).state).toBe("paused");
+    expect(agentItem(true, false, "x", { ...relayed, relay: "unreachable" })).toMatchObject({
+      state: "unavailable",
+      label: "Agent unreachable",
+      location: true,
+    });
+    expect(agentItem(true, false, "x", { ...relayed, relay: "not_paired" })).toMatchObject({
+      label: "Agent not paired",
+    });
+    expect(
+      agentItem(true, false, "The agent is running on Work laptop.", {
+        placement: "this_device",
+        runsOn: work,
+        relay: "off",
+      }),
+    ).toMatchObject({ state: "elsewhere", label: "Agent on Work laptop", location: true });
+    expect(
+      agentItem(true, false, null, { placement: "this_device", runsOn: here, relay: "off" }),
+    ).toMatchObject({ state: "on", label: "Agent on" });
+  });
+
   it("counts running work, and names what's queued when nothing runs yet", () => {
     expect(runningItem(0, 0)).toBeNull();
     expect(runningItem(2, 0)).toEqual({ label: "2 running", title: "2 agent tasks running" });

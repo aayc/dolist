@@ -1,4 +1,4 @@
-import type { AgentMode, ComputerAccess } from "@ddl/core";
+import type { AgentMode, AgentPlacementStatus, ComputerAccess } from "@ddl/core";
 import type { ClientKind, ConnectionState } from "../../api/client";
 import type { SaveState } from "../../state/notes-store";
 
@@ -46,15 +46,29 @@ export function agentModeLabel(mode: AgentMode | null): string | null {
   return mode === null || mode === "live" ? null : mode;
 }
 
-export type AgentItemState = "unknown" | "on" | "paused" | "off" | "unavailable";
+export type AgentItemState = "unknown" | "on" | "paused" | "off" | "unavailable" | "elsewhere";
 
-/** One agent item that never says "on" while the agent can't act (same wording as the Mac app). */
+export interface AgentItem {
+  state: AgentItemState;
+  label: string;
+  title: string;
+  /** Opens Settings → Agent location rather than Settings → Agent. */
+  location?: true;
+}
+
+/**
+ * One agent item that never says "on" while the agent can't act (same wording as the Mac app).
+ * With placement it says where the agent runs when that isn't here: "Agent on vm-1".
+ */
 export function agentItem(
   enabled: boolean | null,
   off: boolean,
   problem: string | null,
-): { state: AgentItemState; label: string; title: string } {
+  placement?: AgentPlacementStatus,
+): AgentItem {
   if (enabled === null) return { state: "unknown", label: "Agent", title: "Agent status unknown" };
+  const elsewhere = placement ? locationItem(placement, enabled, problem) : null;
+  if (elsewhere) return elsewhere;
   if (off) {
     return {
       state: "off",
@@ -70,6 +84,47 @@ export function agentItem(
         title: "The agent is watching your daily notes — click to pause",
       }
     : { state: "paused", label: "Agent paused", title: "The agent is paused — click to resume" };
+}
+
+function locationItem(
+  placement: AgentPlacementStatus,
+  enabled: boolean,
+  problem: string | null,
+): AgentItem | null {
+  const { runsOn, relay } = placement;
+  if (runsOn?.thisDevice) return null;
+  if (relay === "unreachable") {
+    return {
+      state: "unavailable",
+      label: "Agent unreachable",
+      title: "The always-on machine can't be reached: this device shows the last synced state",
+      location: true,
+    };
+  }
+  if (relay === "not_paired") {
+    return {
+      state: "unavailable",
+      label: "Agent not paired",
+      title: problem ?? "This device isn't paired with the always-on machine",
+      location: true,
+    };
+  }
+  if (!runsOn) return null;
+  if ((relay === "connected" || relay === "connecting") && runsOn.alwaysOnMachine) {
+    return enabled
+      ? {
+          state: "on",
+          label: `Agent on ${runsOn.name}`,
+          title: `The agent runs on ${runsOn.name}, the always-on machine — click to pause`,
+        }
+      : { state: "paused", label: "Agent paused", title: "The agent is paused — click to resume" };
+  }
+  return {
+    state: "elsewhere",
+    label: `Agent on ${runsOn.name}`,
+    title: `The agent is running on ${runsOn.name}: this device shows its work as it syncs`,
+    location: true,
+  };
 }
 
 /**
