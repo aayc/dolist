@@ -1,0 +1,14 @@
+[
+  {
+    "name": "the Mac app",
+    "value": { "code": "K7PX4MQ9", "name": "MacBook Pro", "kind": "app" }
+  },
+  {
+    "name": "a browser, code typed as shown",
+    "value": { "code": "K7PX-4MQ9", "name": "Browser on iPad", "kind": "browser" }
+  },
+  {
+    "name": "another daemon, code in lowercase",
+    "value": { "code": "k7px4mq9", "name": "Work laptop", "kind": "daemon" }
+  }
+]

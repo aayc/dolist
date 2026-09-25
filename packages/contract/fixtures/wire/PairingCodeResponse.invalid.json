@@ -1,0 +1,30 @@
+[
+  {
+    "name": "code shown with its dash",
+    "value": { "code": "K7PX-4MQ9", "expiresAt": 1790000300000, "url": null },
+    "path": ["code"],
+    "code": "too_big"
+  },
+  {
+    "name": "code with an ambiguous character",
+    "value": { "code": "K7PX4MQ0", "expiresAt": 1790000300000, "url": null },
+    "path": ["code"],
+    "code": "custom"
+  },
+  {
+    "name": "plain http QR code URL",
+    "value": {
+      "code": "K7PX4MQ9",
+      "expiresAt": 1790000300000,
+      "url": "http://vm-name.tailnet-name.ts.net"
+    },
+    "path": ["url"],
+    "code": "custom"
+  },
+  {
+    "name": "missing url (null is required without remote hosts)",
+    "value": { "code": "K7PX4MQ9", "expiresAt": 1790000300000 },
+    "path": ["url"],
+    "code": "invalid_type"
+  }
+]

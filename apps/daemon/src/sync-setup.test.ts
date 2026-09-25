@@ -75,14 +75,15 @@ describe("sync token", () => {
 });
 
 describe("prepareSync", () => {
-  const paths = () => ({
-    syncTokenPath: join(dir.path, "sync-token"),
-    devicePath: join(dir.path, "device.json"),
-  });
+  const device = { id: "dev_laptop", name: "Laptop" };
+  const syncTokenPath = () => join(dir.path, "sync-token");
+  const remote = { kind: "remote", url: "https://sync.example.com", vault: "v_1" } as const;
 
   it("passes other targets through", async () => {
     const prepared = await prepareSync({
-      config: { sync: { kind: "local", root: "/somewhere" }, ...paths() },
+      sync: { kind: "local", root: "/somewhere" },
+      syncTokenPath: syncTokenPath(),
+      device,
       env: {},
       logger,
     });
@@ -90,22 +91,20 @@ describe("prepareSync", () => {
   });
 
   it("builds the remote target from the config, the token and the device", async () => {
-    writeFileSync(paths().syncTokenPath, "the-token", { mode: 0o600 });
+    writeFileSync(syncTokenPath(), "the-token", { mode: 0o600 });
     const prepared = await prepareSync({
-      config: {
-        sync: { kind: "remote", url: "https://sync.example.com", vault: "v_1" },
-        ...paths(),
-      },
+      sync: remote,
+      syncTokenPath: syncTokenPath(),
+      device,
       env: {},
       logger,
-      hostname: "Laptop.local",
     });
     expect(prepared.target).toEqual({
       kind: "remote",
       url: "https://sync.example.com",
       vault: "v_1",
       token: "the-token",
-      deviceId: expect.stringMatching(/^dev_/),
+      deviceId: "dev_laptop",
       deviceName: "Laptop",
     });
     expect(prepared.remote).toMatchObject({ host: "sync.example.com", device: { name: "Laptop" } });
@@ -115,10 +114,9 @@ describe("prepareSync", () => {
 
   it("turns sync off with a reason when there is no token", async () => {
     const prepared = await prepareSync({
-      config: {
-        sync: { kind: "remote", url: "https://sync.example.com", vault: "v_1" },
-        ...paths(),
-      },
+      sync: remote,
+      syncTokenPath: syncTokenPath(),
+      device,
       env: {},
       logger,
     });

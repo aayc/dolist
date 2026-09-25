@@ -211,6 +211,13 @@ struct CommandCatalog {
       ) {
         model.showOrchestratorWindow()
       },
+      Self.moveOrchestrator(
+        .runOrchestratorHere, to: .thisDevice, "Run the Orchestrator on This Device",
+        palette: "Run the orchestrator on this device", model: model),
+      Self.moveOrchestrator(
+        .runOrchestratorOnMachine, to: .alwaysOnMachine,
+        "Run the Orchestrator on the Always-On Machine",
+        palette: "Run the orchestrator on the always-on machine", model: model),
       AppCommand(.showRoutines, "Show Routines", palette: "Show routines", enabled: ready) {
         model.showRoutines()
       },
@@ -244,11 +251,27 @@ struct CommandCatalog {
 
   // MARK: - Helpers
 
-  /// The thread open in the agent panel, while its agent is at work.
+  /// Where the orchestrator runs, as a pair of checked menu items: the current place is checked
+  /// (and can't be chosen again); both are unavailable while the agent is held on this device, and
+  /// on the always-on machine itself.
+  static func moveOrchestrator(
+    _ id: CommandID, to target: AgentPlacement, _ title: String, palette: String, model: AppModel
+  ) -> AppCommand {
+    AppCommand(
+      id, title, palette: palette,
+      isOn: { model.agent?.orchestratorLocation?.selection == target },
+      enabled: { model.agent?.canMoveOrchestrator(to: target) ?? false },
+      perform: {
+        guard let agent = model.agent else { return }
+        Task { await agent.moveOrchestrator(to: target) }
+      })
+  }
+
+  /// The thread open in the agent panel, while its agent is at work (and reachable from here).
   static func stoppableThread(model: AppModel) -> String? {
     guard model.phase == .ready, model.ui.inspectorPresented,
       let threadId = model.ui.selectedThreadId,
-      model.agent?.threadStatus(threadId)?.isActive == true
+      model.agent?.threadStatus(threadId)?.isActive == true, model.agent?.readOnly == nil
     else { return nil }
     return threadId
   }

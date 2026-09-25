@@ -55,9 +55,9 @@ export function declaredResponse(
     >
   )[method];
   const common =
-    API_CONTRACT[name].auth === "bearer"
-      ? (COMMON_API_ERRORS as Record<number, ResponseSpec>)[status]
-      : undefined;
+    API_CONTRACT[name].auth === "upgrade"
+      ? undefined
+      : (COMMON_API_ERRORS as Record<number, ResponseSpec>)[status];
   return operation?.responses[status] ?? common;
 }
 
@@ -71,7 +71,8 @@ export function expectConforms(
   const label = `${method} ${API_CONTRACT[name].path} → ${status}`;
   const spec = declaredResponse(name, method, status);
   expect(spec, `${label} is not a declared status`).toBeDefined();
-  if (!spec || spec.kind === "binary") return;
+  if (spec?.kind === "empty") expect(body, `${label} has no body`).toBeUndefined();
+  if (!spec || spec.kind === "binary" || spec.kind === "empty") return;
   const parsed = exact(spec.schema).safeParse(body);
   expect(parsed.error?.issues ?? [], `${label} body: ${JSON.stringify(body)}`).toEqual([]);
   if (spec.kind === "error") {

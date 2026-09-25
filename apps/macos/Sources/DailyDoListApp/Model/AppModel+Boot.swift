@@ -169,7 +169,9 @@ extension AppModel {
   private func install(_ client: DaemonClient) {
     self.client = client
     settings.client = client
+    remote.client = client
     let agent = AgentStore(client: client)
+    agent.alwaysOnMachineName = settings.settings.remote.alwaysOnMachine?.name
     let workspace = Workspace(
       client: client, settings: settings, ui: ui, toasts: toasts, scheduler: environment.scheduler,
       vim: vim, now: environment.now)
@@ -239,6 +241,8 @@ extension AppModel {
     agent = nil
     workspace = nil
     settings.client = nil
+    remote.client = nil
+    remote.reset()
     connection.reset()
     todayNotePath = nil
     phase = .booting("Starting…")

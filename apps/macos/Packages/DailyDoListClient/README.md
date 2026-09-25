@@ -2,7 +2,8 @@
 
 Swift client of the local Daily Do List daemon (`apps/daemon`): REST under `/api/*` and the `/ws`
 event stream. Foundation only (macOS 14+, iOS 17+), Swift 6 strict concurrency. Wire types come from
-`DailyDoListModels`; the protocol itself is documented in `docs/PROTOCOL.md`.
+`DailyDoListModels`, and the fake checks input with `DailyDoListDomain`'s port of the core's
+validators; the protocol itself is documented in `docs/PROTOCOL.md`.
 
 | Type | What |
 | --- | --- |
@@ -46,7 +47,7 @@ port resolves like the daemon's: `$DDL_PORT`, then `port` in `<home>/config.json
 
 ## REST
 
-Every request carries `Authorization: Bearer <token>`. Writes (`PUT`/`POST`/`DELETE`, and
+Every request but `pair` carries `Authorization: Bearer <token>`. Writes (`PUT`/`PATCH`/`POST`/`DELETE`, and
 `GET /api/daily/…?create=1`, which writes the note) also carry `x-ddl-client-id`, so the daemon tags
 the resulting `vault.changed` with this client's id. URLSession sends `Host: 127.0.0.1:<port>` and no
 `Origin`, which is what the daemon's DNS-rebinding/CSRF guard accepts from native clients (verified
@@ -64,18 +65,39 @@ in the error body: 400 for a name or schedule it can't use, 409 for a taken name
 can't start now (a run going, a problem, no extra runs left today), 503 when the agent can't run
 on this device.
 
+This device, pairing and the always-on machine: `syncStatus()`, `deviceSettings()` /
+`updateDeviceSettings(_:)` (`PATCH /api/device`: name, placement, remote hosts; 409
+`locked_by_env` for a field an environment variable sets), `setUpSync(_:)` / `turnOffSync()`
+(`PUT`/`DELETE /api/device/sync`; a nil token keeps the saved one, which is never returned),
+`createPairingCode(_:)` (201; 429 `rate_limited` with too many outstanding), `pair(_:)`,
+`pairedDevices()`, `revokeDevice(_:)` (204), and `machineStatus()`, `pairMachine(_:)`,
+`checkMachine()`, `forgetMachine()` (`/api/machine*`; 502 `machine_unreachable`). `pair` is sent
+**without** the bearer token: the code in the body is the credential. `DaemonClient`'s default
+implementations of these answer like a daemon that predates them (404), so fakes that don't
+need them don't implement them.
+
 ### Errors
 
 All methods throw `DaemonClientError`:
 
 - `.unreachable(reason)` — connection refused, timeout, connection lost (any `URLError` but cancel).
 - `.unauthorized` — 401.
+- `.pairingRejected(message)` — 401 `pairing_rejected` from `pair` or `pairMachine`: the pairing
+  code was wrong, expired or already used (here, or on the always-on machine). Only those two
+  routes read it: every other 401 is `.unauthorized`, and so is `pairMachine`'s 401 `unauthorized`
+  (its bearer token was rejected).
 - `.conflict(ConflictResponse)` — 409 on `writeNote` or a note `rename`; `current` is the note on
   disk now (nil when gone). A folder rename onto an existing folder is `.http(409, …)` instead (no
   `current` in the body).
 - `.approvalConflict(ApprovalConflictResponse)` — 409 on `decideApproval`: already decided.
+- `.rateLimited(retryAfter:body:)` — 429 (too many pairing attempts, pairing codes waiting, or
+  the machine refusing more): `retryAfter` is the daemon's `Retry-After` in seconds when it sent
+  one (`pair` does: when the next attempt can go).
 - `.http(status:body:)` — any other non-2xx; `body` is the `ApiErrorBody` when there is one.
-  `error.httpStatus` and `error.apiErrorCode` read them off any case.
+  `error.httpStatus` and `error.apiErrorCode` read them off any case. For a 400
+  `invalid_request`, `body.problems` splits the daemon's validation report (one
+  `✖ <message>\n  → at <path>` per problem) into `ValidationProblem`s (`path`, `message`); a
+  message in another form is one problem without a path.
 - `.decoding("<Type> at <codingPath>: <reason>")` — a 2xx body that doesn't match the protocol.
 - `.cancelled` — the calling task was cancelled.
 
@@ -93,7 +115,10 @@ never holds the caller past the deadline.
   unbounded buffer). It yields the current state first and **finishes at the next `disconnect()`**
   (after `.state(.disconnected)`); call it again after reconnecting. Dropped streams unregister.
 - `connect()` (idempotent) opens `ws://127.0.0.1:<port>/ws?token=…` and sends
-  `hello(clientId, apiVersion, clientVersion)`. States: `.idle` → `.connecting` →
+  `hello(clientId, apiVersion, clientVersion)`. The token rides in the URL only for a loopback
+  daemon (`localhost`, `127.0.0.0/8`, `::1`: `DaemonEndpoint.isLoopback`), which every daemon
+  accepts; any other host gets `wss://<host>/ws` with `Authorization: Bearer <token>`, since remote
+  hosts refuse `?token=` (`DaemonEndpoint.webSocketRequest`). States: `.idle` → `.connecting` →
   `.connected(serverVersion:)` when the daemon's `hello` arrives with a compatible `apiVersion`; the
   `hello` itself is also delivered as `.event(.hello)`.
 - Incompatible `hello.apiVersion`, or close code 4426, → `.incompatible(serverApiVersion:)` and no
@@ -122,7 +147,7 @@ let approval = try await client.approvals(status: .pending).first!   // the agen
 _ = try await client.decideApproval(approval.id, .init(decision: .deny, note: "Not now"))
 ```
 
-`init(seed:clock:agent:clientId:)`:
+`init(seed:clock:agent:clientId:remote:)`:
 
 - **`Seed`** — `.demo`: today's daily note from the `- [ ] ` template with two tasks the agent already
   finished, the lines it wrote under them (each citing a page its thread lists in `sources`), a
@@ -139,6 +164,10 @@ _ = try await client.decideApproval(approval.id, .init(decision: .deny, note: "N
   timestamps.
 - **`AgentSimulation`** — `.enabled`, or `.disabled` (agent mode `off`: no records or threads; thread
   actions answer 503 `agent_unavailable`).
+- **`Remote`** — sync, the always-on machine and placement at start: `.standalone` (default: no
+  sync, no machine, so the agent is held here), `.alwaysOn` (demo mode: syncing, with a paired and
+  reachable `vm-name`; the agent runs here), `.host` (the always-on machine itself, placement and
+  remote hosts locked by the environment), or any `Remote(…)`.
 
 It follows the daemon's semantics: canonical/hidden path rules, content-hash versions identical to
 the daemon's, `baseVersion` (unconditional / create-only / match → `.conflict` with the current
@@ -176,16 +205,42 @@ ends, the routine's last run is updated and `routine.notification` follows the r
 (odd-numbered runs "found something new"). Stop, Retry and replies work on runs. The demo seed
 has four routines, two with past runs, one paused and one with a schedule it can't read.
 
+This device, pairing and the always-on machine follow the daemon's rules too, with its messages
+(checked against the real daemon by the integration tests). Device settings check names, remote
+hosts (normalized, at most 8, no repeats) and `lockedByEnv` (409, after the 400s); the sync
+setup checks the address and vault, needs a token the first time and never returns it; pairing
+codes are single use, last five minutes, at most three wait at once, a device paired with a
+code gets the name the code was issued for (else the one it sent), and `pair` allows five
+attempts a minute (`.rateLimited` with `Retry-After`; after ten failures every waiting code is
+dropped); pairing the machine checks the address and code, then makes it the vault's machine
+(`settings.changed`); Forget drops the credential and the last check, and a check without a
+credential only learns that the machine answers. The agent status carries `placement` and
+`readiness`: the agent is held here without sync (`no_sync`, checked first) or without a machine
+(`no_machine`), and a standalone daemon runs its own agent, never as the always-on machine.
+Switching placement runs a simulated handover (2 s to the machine, during which nobody holds
+it and the relay is `off`; 3 s back) whose note shows in `agent.status` and as the status's
+`problem` until it's done. Then the fake plays the relay: `connected` (actions work, no
+`problem`), `unreachable`, or `not_paired` without a credential or once the machine no longer
+accepts it (revoked there; pairing again fixes it, and its check says so), with the relay's
+words as the `problem` and as the 503 message of every agent action (reads still work).
+Another device holding the agent, or a handover under way, answer 503 with the daemon's words
+too. `simulateMachine(reachable:rejectsCodes:acceptsThisDevice:)` and
+`simulateAgentElsewhere(_:)` drive those states.
+
 Extras: `advance(by:)`, `runUntilIdle()`, `pendingActions`, `now`,
-`simulateExternalEdit(_:content:)` (origin `external`, `nil` deletes), `connectionState`.
+`simulateExternalEdit(_:content:)` (origin `external`, `nil` deletes), `connectionState`,
+`simulateMachine(reachable:rejectsCodes:acceptsThisDevice:)`, `simulateAgentElsewhere(_:)`.
 Connection semantics match `HTTPDaemonClient` (`connect` → `.connecting`, `.connected`, `hello`;
 `.resync` on reconnect; events only while connected; `disconnect` finishes streams).
 
 Differences from the real daemon: no approval expiry, no `vault.changed` coalescing window,
 empty subfolders of a moved folder are not kept (like the daemon), scripts are the web mock's (the
 real mock runtime may ask questions after a denial), routines never start on their own (their
-schedule only sets `nextRunAt`; runs come from `runRoutine`) and have no run-time limit, and
-nothing persists.
+schedule only sets `nextRunAt`; runs come from `runRoutine`) and have no run-time limit, the
+always-on machine is simulated in process (relayed actions run on the fake's own agent, and the
+machine's status never checks itself), the relay connects at once (the daemon's is `connecting`
+for a moment, and reconnects with backoff), handovers take seconds instead of the lease's
+renewals (up to ~40 s), and nothing persists.
 
 ## Tests
 

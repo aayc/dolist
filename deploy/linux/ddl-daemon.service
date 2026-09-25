@@ -1,0 +1,48 @@
+# The Daily Do List daemon of the always-on machine (installed by setup.sh; see
+# deploy/linux/README.md). It binds 127.0.0.1 only; `tailscale serve` forwards HTTPS from the
+# tailnet to it. Its agent runs the shell, the browser (Chromium) and MCP connectors as this user.
+[Unit]
+Description=Daily Do List daemon
+Documentation=file:/opt/ddl/current/deploy/README.md
+Wants=network-online.target ddl-sync.service
+After=network-online.target ddl-sync.service
+
+[Service]
+Type=simple
+User=ddl
+Group=ddl
+WorkingDirectory=/var/lib/ddl
+Environment=DDL_HOME=/var/lib/ddl/.daily-do-list
+# API keys (OPENROUTER_API_KEY, …): owned by ddl, mode 0600, never in the bundle or the vault.
+EnvironmentFile=-/etc/ddl/ddl.env
+ExecStart=/usr/bin/env node /opt/ddl/current/daemon/dist/main.js
+Restart=on-failure
+RestartSec=5
+# The daemon flushes the agent's threads and records within 10 s of SIGTERM.
+TimeoutStopSec=20
+UMask=0077
+
+# Hardening: writable are the service user's home (config, tokens, vault, browser profile, the
+# Cursor CLI) and a private /tmp. Node's JIT needs writable executable memory (no
+# MemoryDenyWriteExecute), and the agent's shell runs arbitrary programs, so system calls,
+# namespaces and devices aren't filtered further.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/ddl
+CapabilityBoundingSet=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

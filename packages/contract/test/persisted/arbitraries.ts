@@ -365,6 +365,22 @@ export const settingsOverridesArb: fc.Arbitrary<PersistedSettingsOverrides> = fc
       },
       { requiredKeys: [] },
     ),
+    remote: fc.record(
+      {
+        alwaysOnMachine: fc.option(
+          fc.record({
+            name: fc.stringMatching(/^[a-z0-9][a-z0-9 -]{0,20}[a-z0-9]$/),
+            url: fc.constantFrom(
+              "https://vm-name.tailnet-name.ts.net",
+              "https://vm-name.tailnet-name.ts.net:8443",
+              "http://127.0.0.1:7400",
+            ),
+          }),
+          { nil: null },
+        ),
+      },
+      { requiredKeys: [] },
+    ),
   },
   { requiredKeys: [] },
 );

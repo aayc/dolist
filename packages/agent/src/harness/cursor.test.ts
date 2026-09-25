@@ -171,6 +171,35 @@ describe("CursorHarness (fake CLI)", { timeout: SPAWN_TIMEOUT_MS }, () => {
     expect(session.isRunning).toBe(false);
   });
 
+  it("restores a conversation by putting it in front of the first prompt (ACP can't seed one)", async () => {
+    const s = await setup();
+    const session = await s.create({
+      transcript: [
+        { role: "user", text: "Task: research desks" },
+        {
+          role: "assistant",
+          text: "",
+          toolCalls: [{ id: "c1", name: "web_search", input: { q: "desks" } }],
+        },
+        {
+          role: "tool",
+          toolCallId: "c1",
+          toolName: "web_search",
+          output: "3 results",
+          isError: false,
+        },
+      ],
+    });
+    await session.prompt("Continue where you left off.");
+    // The fake CLI echoes the first 200 characters of what it received.
+    const echoed = lastText(s.events);
+    expect(echoed).toMatch(/^ok: Your conversation so far on this task, restored after the agent/);
+    expect(echoed).toContain("[user]\nTask: research desks\n\n[you]\n");
+    expect(echoed).toContain('→ called web_search {"q":"desks"}\n\n← web_search: 3 results');
+    await session.prompt("And again.");
+    expect(lastText(s.events)).toBe("ok: And again.");
+  });
+
   it("writes the system prompt, tool guidance and a deny-everything CLI config", async () => {
     const s = await setup({
       userMcp: { mcpServers: { "notes-app": { url: "https://example.com/mcp" } } },

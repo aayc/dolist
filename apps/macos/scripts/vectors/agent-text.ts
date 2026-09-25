@@ -220,6 +220,14 @@ const CURATED_MERGES: Array<[string, string, string]> = [
   ["", "x", "y"],
   ["a\n", "a\nb\n", "a\n\nc"],
   ["x\ny", "x\ny", "x\ny"],
+  // Lines deleted elsewhere stay deleted: around a line the user added, and next to a conflict.
+  [
+    "# Thursday\n- [ ] Rehearsal\n\t- Done: 11 bots %%agent:thr_1%%\nNotes",
+    "# Thursday\n- [ ] Rehearsal\n\t- ask about it\n\t- Done: 11 bots %%agent:thr_1%%\nNotes",
+    "# Thursday\nNotes",
+  ],
+  ["a\nb\nc\nd", "a!\nb\nc\nd", "a?\nb"],
+  ["a\nb\nc", "A\nB\nc", "a\nx\nb\nc"],
 ];
 
 export function buildMergeVectors(core: CoreModule) {

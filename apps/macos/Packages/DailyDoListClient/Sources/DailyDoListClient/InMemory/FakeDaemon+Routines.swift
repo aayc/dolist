@@ -177,6 +177,7 @@ extension FakeDaemon {
       throw .notFound("Routine not found")
     }
     guard simulation == .enabled else { throw Self.agentUnavailable() }
+    try requireAgentReachable()
     guard settings.agent.enabled else {
       throw .http(
         status: 503,

@@ -68,9 +68,11 @@ field together with a major bump.
    `WIRE_SCHEMAS` (`src/wire/catalog.ts`; add request schemas to `REQUEST_SCHEMA_NAMES`).
 3. **Lockstep**: map the name to the core type in `test/wire/lockstep.test.ts`. `tsc` fails until
    `z.input`/`z.output` and the core type are mutually assignable.
-4. **Route table**: add the route to `API_CONTRACT` (`src/wire/routes.ts`) with its params, query,
-   body and the response of every status it can answer. `satisfies Record<ApiRouteName, …>` fails
-   until every `API_ROUTES` entry has one.
+4. **Route table**: add the route to `API_CONTRACT` (`src/wire/routes.ts`) with its `auth`
+   (`bearer`; `pairing_code` for `/api/pair`, where the code in the body is the credential;
+   `upgrade` for `/ws`), params, query, body and the response of every status it can answer
+   (`{ kind: "empty" }` for a 204). `satisfies Record<ApiRouteName, …>` fails until every
+   `API_ROUTES` entry has one.
 5. **Arbitrary**: add a generator to `wireArbitraries` (`src/testing/arbitraries.ts`); the typed
    map fails to compile without one. Mix realistic values with edge cases.
 6. **Fixtures**: add canonical `fixtures/wire/<Name>.valid.json` cases and tricky

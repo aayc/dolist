@@ -81,7 +81,21 @@ export interface KickoffContext {
   retry?: boolean;
   /** The task is one run of a routine (replaces the note's task in the kickoff). */
   routine?: RoutineBrief;
+  /** Steps an earlier run was doing when it stopped: they may or may not have happened. */
+  uncertain?: readonly string[];
+  /** The agent restarted in the middle of this task and picks it back up from the history. */
+  resumed?: boolean;
 }
+
+/**
+ * The prompt that continues a session restored from the journal after a restart or a handover:
+ * the conversation above is real, and calls the restart cut off say so in their results.
+ */
+export const RESUME_NOTE =
+  "The agent restarted while you were working on this task, and your session was restored from its record: everything above happened. Continue from where you left off, without redoing steps that finished. A tool call the restart cut off says so in its result: a read can simply be done again, and an action that was waiting for the user's approval can be called again (they'll be asked again).";
+
+const RESUMED_LINE =
+  "The agent restarted in the middle of this task. Review the history below and continue from where it stopped, without redoing steps that finished.";
 
 export function buildSubagentKickoff(context: KickoffContext): string {
   const when = relativeDay(context.task.date, context.now);
@@ -91,6 +105,10 @@ export function buildSubagentKickoff(context: KickoffContext): string {
     lines.push(
       "This is a retry of an earlier attempt. Review the history below, keep what was already done, and don't repeat actions the user denied.",
     );
+  }
+  if (context.resumed) lines.push(RESUMED_LINE);
+  if (context.uncertain && context.uncertain.length > 0) {
+    lines.push(...describeUncertain(context.uncertain));
   }
   if (context.routine) lines.push(...describeRoutineRun(context.routine));
   else {
@@ -113,6 +131,14 @@ export function buildSubagentKickoff(context: KickoffContext): string {
   }
   lines.push("", "Start now.");
   return lines.join("\n");
+}
+
+function describeUncertain(steps: readonly string[]): string[] {
+  return [
+    "The agent stopped while these steps were running, so they may or may not have happened:",
+    ...steps.map((step) => `- ${quote(step, 300)}`),
+    "Before doing any of them again, check whether it happened (look at the page, the app or the result); never repeat one without checking, and if you can't tell, ask the user.",
+  ];
 }
 
 const TRIGGER_TEXT: Record<RoutineBrief["trigger"], string> = {

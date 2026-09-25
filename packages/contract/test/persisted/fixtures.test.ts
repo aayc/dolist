@@ -21,6 +21,7 @@ import {
   type FixtureFormat,
   type FixtureKind,
   fixtureKind,
+  type JsonlFixtureFormat,
   listFixtures,
   readFixture,
 } from "./fixtures";
@@ -80,8 +81,9 @@ describe.each(FIXTURE_FORMATS)("%s fixtures", (format) => {
 
 describe("fixture coverage", () => {
   it("has fixtures for every versioned format in the registry", () => {
-    const covered: Record<string, FixtureFormat> = {
+    const covered: Record<string, FixtureFormat | JsonlFixtureFormat> = {
       thread: "threads",
+      "thread-journal": "thread-journal",
       records: "records",
       approvals: "approvals",
       "task-state": "task-state",

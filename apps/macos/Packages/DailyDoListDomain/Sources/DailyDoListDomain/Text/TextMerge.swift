@@ -13,7 +13,8 @@ public struct LineHunk: Hashable, Sendable {
 
 public struct MergeResult: Hashable, Sendable {
   public var text: String
-  /// Both sides changed the same lines; `text` then keeps the local version of those lines.
+  /// Both sides changed the same lines. `text` then has the user's version of the lines the user
+  /// changed there, and none of the other lines of that block (the remote text has them).
   public var conflict: Bool
 
   public init(text: String, conflict: Bool) {
@@ -25,7 +26,10 @@ public struct MergeResult: Hashable, Sendable {
 /// Line-based three-way merge (port of @ddl/core `merge.ts`), for a note changed by the user
 /// (local) and by someone else (remote, e.g. the agent) since the version both started from
 /// (base). Edits to different lines merge; both sides inserting at the same place keep both (local
-/// first); only changes to the same lines are a conflict.
+/// first); lines one side adds inside a block the other side changed go after that block. Only
+/// changes to the same lines are a conflict, and even then a line only the other side changed or
+/// removed never comes back: the merge never reintroduces text deleted elsewhere unless the user
+/// typed it.
 ///
 /// Lines split on `\n` only and compare by UTF-16 code units, like JavaScript's `===` (Swift's
 /// `==` would equate NFC and NFD spellings).
@@ -97,9 +101,15 @@ public enum TextMerge {
           out += remoteVersion
         } else if start == end {
           out += localVersion + remoteVersion
+        } else if mine.allSatisfy(\.isInsertion) {
+          out += remoteVersion + mine.flatMap { $0.lines[$0.hunk.lines] }
+        } else if theirs.allSatisfy(\.isInsertion) {
+          out += localVersion + theirs.flatMap { $0.lines[$0.hunk.lines] }
         } else {
+          // Every base line of the block is covered by a hunk, so the lines no local hunk covers
+          // were changed or removed by the other side: keep only what the user wrote.
           conflict = true
-          out += localVersion
+          out += mine.flatMap { $0.lines[$0.hunk.lines] }
         }
       }
       position = end
@@ -141,6 +151,7 @@ public enum TextMerge {
     /// The side's lines (`hunk.lines` indexes them).
     var lines: [Int]
     var isLocal: Bool
+    var isInsertion: Bool { hunk.start == hunk.end }
   }
 
   /// Lines as small integers, equal exactly when the lines are equal code unit for code unit.

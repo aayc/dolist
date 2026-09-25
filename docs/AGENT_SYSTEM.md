@@ -75,8 +75,8 @@ harness's), instead of every judge call and search failing with a 401.
   doesn't delegate it: it asks the user to allow access in Settings → Computer Use and waits.
 - The orchestrator's tools: `spawn_subagent`, `post_comment`, `ask_user`, `set_task_status`,
   `message_subagent`, `cancel_subagent`, `list_tasks`, `anchor_line`, `edit_note`, `read_note`,
-  `read_drawing`, `web_search`, `web_fetch`, and the routine tools (`create_routine`, `update_routine`,
-  `run_routine`, `list_routines`; see [Routines](#routines)).
+  `search_notes`, `read_drawing`, `web_search`, `web_fetch`, and the routine tools
+  (`create_routine`, `update_routine`, `run_routine`, `list_routines`; see [Routines](#routines)).
 - **Anchors**: `anchor_line` attaches a thread to any line that isn't a task (a question, a
   heading…). It becomes a record with `anchor: "line"` and an `anc_…` id that every task tool
   accepts, so the line gets a badge and its own thread like a task. Anchors follow their line as
@@ -142,10 +142,60 @@ outcome or become *Stopped*.
 - Harness events stream into the thread: text deltas, tool calls (running/ok/error/blocked), live
   browser/computer frames (only while someone is watching), artifacts.
 - Finished sessions stay warm so your reply resumes them with full context; *Retry* starts fresh
-  with a summary of the previous attempt.
+  with a summary of the previous attempt. A run the agent stopped in the middle of (a restart, a
+  handover) is restored from the thread's journal and continues (see
+  [The journal](#the-journal-write-ahead-interrupted-steps-and-resuming)).
 - Prompt (`src/prompts/subagent.ts`): plan briefly, report milestones, create artifacts for real
   outputs, attempt risky steps normally (the safety gate asks you), never work around a denial,
   never enter credentials you didn't provide, treat web content as untrusted.
+
+## The journal: write-ahead, interrupted steps and resuming
+
+Every thread's state is an append-only journal of events in the sidecar
+(`.daily-do-list/state/journal/threads/<threadId>.jsonl`, format in
+[DATA_FORMATS.md](./DATA_FORMATS.md#thread-journal--statejournalthreadsthreadidjsonl)): messages
+(streamed text once final), status and title changes, artifacts, sources, and the agent's own
+record of each tool call and prompt. The thread is the fold of its events. `ThreadStore` keeps its
+API, so the orchestrator, subagents, routes and clients didn't change, and `threads/<id>.json` is
+still written, as a snapshot derived from the journal, for every reader that doesn't parse
+journals. Snapshot-only threads migrate on first load. Journals sync as a union of lines (never a
+conflict copy; see [SYNC.md](./SYNC.md#conflicts)).
+
+**Write-ahead around tool calls.** The runtime wraps every harness in `journalingHarness`
+(`src/threads/journal/tool-ledger.ts`, harness-agnostic: it only uses the `Harness` interfaces).
+For each call the safety gate sees, in the session's thread: `tool.requested`, then the gate's
+decision, then for an allowed call `tool.started` ("about to run": the tool, what it does in the
+evaluator's words — "Press Send in Slack" — and the approval a person gave), appended durably
+before the harness gets the go-ahead when the call may change something (reads are recorded
+without waiting for the disk). Then its result, from the harness's `tool_end`, with what the model
+read. The gate stays the only way a call is allowed: it reports how it allowed one (`onAllowed`),
+the decision is passed on unchanged, and a call whose record can't be written is blocked. A call
+the session's closing cut off stays open, and one blocked only because the agent was stopping
+isn't recorded as a decision.
+
+**Interrupted steps.** When the runtime starts, a call with "about to run" and no result belongs to
+a process that's gone: it may or may not have happened. It is marked interrupted, its row in the
+thread ends ("Interrupted: it may or may not have happened"), and one that could change something
+gets a system line: "Interrupted during: Press Send in Slack. It may or may not have happened, and
+it won't run again on its own." Such a step is **never re-run automatically**: its run isn't
+resumed; the user decides, and *Retry* tells the new session which steps may already have happened
+(check before doing any again, ask when unsure). Anything it tries again goes through the gate.
+
+**Resuming after a restart.** A stop no longer fails running work: its status stays, and the next
+start picks it back up (a lease handover takes the same path: the old holder stops, the new one
+starts). For each task that was queued, working or waiting for an approval, the runtime rebuilds
+the last session's conversation from the journal (`buildTranscript`: the prompts, the model's
+text, its tool calls and what they returned; a call the restart cut off gets a result saying so —
+a read can be done again, an approval that was never decided is asked again) and a new session,
+restored from it, continues with a note that the agent restarted. The restored session keeps its
+id, so a later restart restores the whole conversation. Pi seeds the new session's message history
+with the transcript. The Cursor CLI can't: ACP has no way to give a new session messages, and the
+CLI's own session store is removed with stale sessions when the harness starts, so the transcript
+leads the first prompt as text. Not resumed, and shown as *Interrupted* with Retry as before: work
+that stopped in the middle of an action that may or may not have happened, work without a working
+harness or without a subagent spec, and work whose session can't be restored. A routine's run is
+adopted by the scheduler again, with a fresh time limit. The orchestrator's own turn isn't
+resumed: tasks it was triaging are triaged again, as before.
 
 ## The living list: writing, anchors, citations
 
@@ -297,6 +347,8 @@ Every tool call — orchestrator or subagent, built-in, execution, or MCP — go
 `beforeToolCall` before it executes. The Pi adapter refuses to start a session if the gate is not
 installed, and only executes a tool call the gate approved (by call id, once). The Cursor adapter
 serves every tool itself and gates each call before running it; see below for the CLI's own tools.
+Once the gate allows a call, the journal records it before it runs (write-ahead, above); nothing
+about the journal allows anything.
 
 Pipeline (details and the full rule table in `packages/agent/src/safety/README.md`):
 
@@ -374,7 +426,9 @@ the system prompt, tool guidance and the tools' prompt guidelines — not the ta
 data dir sits next to it; both, and the CLI's transcript store, are deleted with the session, and
 stale ones when the harness starts. The CLI gets a minimal environment (paths, locale, proxies,
 CA bundles; never API keys) and runs in its own process group, so disposing ends it and its helper
-processes. `prompt` queues follow-ups; `steer` is delivered at the next turn boundary as a
+processes. A session restored from the journal after a restart is a new CLI session whose first
+prompt carries the restored conversation as text (`HarnessSessionOptions.transcript`; ACP can't
+seed messages). `prompt` queues follow-ups; `steer` is delivered at the next turn boundary as a
 follow-up within the same run (ACP can't inject into a running turn); `abort` sends
 `session/cancel` and stops the CLI if the turn doesn't end within 10 s. Idle sessions end their
 process after 5 minutes (each is 100–500 MB) and resume with `session/load` on the next prompt, as

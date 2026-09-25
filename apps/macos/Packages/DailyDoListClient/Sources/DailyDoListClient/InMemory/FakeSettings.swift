@@ -1,8 +1,10 @@
+import DailyDoListDomain
 import DailyDoListModels
 import Foundation
 
 /// Validates and applies `SettingsPatch`es like the daemon (`UpdateSettingsRequest` schema ranges,
-/// trimmed model ids, and note paths that must stay visible and inside the vault).
+/// trimmed model ids, the always-on machine's name and address, and note paths that must stay
+/// visible and inside the vault).
 enum FakeSettings {
   /// The patch with model ids trimmed, or the daemon's 400 `invalid_request`.
   static func validate(_ patch: SettingsPatch) throws(DaemonClientError) -> SettingsPatch {
@@ -44,6 +46,17 @@ enum FakeSettings {
       patch.agent?.model = trimmedModel(agent.model, "agent.model", &problems)
       patch.agent?.cursorModel = trimmedModel(agent.cursorModel, "agent.cursorModel", &problems)
       patch.agent?.judgeModel = trimmedModel(agent.judgeModel, "agent.judgeModel", &problems)
+    }
+    if case .set(let machine) = patch.remote?.alwaysOnMachine {
+      let name = RemoteAccess.normalizeDeviceName(machine.name)
+      let url = RemoteAccess.normalizeMachineURL(machine.url)
+      if name == nil { problems.append("remote.alwaysOnMachine.name must be 1-64 characters") }
+      if url == nil {
+        problems.append("remote.alwaysOnMachine.url must be https://<host>[:port]")
+      }
+      if let name, let url {
+        patch.remote?.alwaysOnMachine = .set(AlwaysOnMachine(name: name, url: url))
+      }
     }
     if !problems.isEmpty {
       throw .invalidRequest("Invalid settings: " + problems.joined(separator: "; "))

@@ -6,6 +6,7 @@ export * from "./events";
 export * from "./exact";
 export * from "./primitives";
 export { namedWireSchemas, type WireSchemaMeta, wireRegistry } from "./registry";
+export * from "./remote";
 export * from "./rest";
 export * from "./routes";
 export * from "./settings";

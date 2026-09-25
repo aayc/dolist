@@ -72,6 +72,7 @@ the package you're changing, e.g. `pnpm --filter @ddl/core test` or
 - Respect the invariants: every tool call passes the safety gate, Pi imports stay inside
   `packages/agent/src/harness/`, backends are selected only in provider registries, `@ddl/core`
   stays pure, the wire protocol lives in `packages/core/src/protocol.ts`, the daemon is local-only
+  (unless remote hosts are configured, then only through a private network with device credentials)
   and authenticated, agents don't silently edit notes, the keystroke path stays O(line), and dates
   are local.
 - Libraries take a `Logger` instead of calling `console.log`, and never log secrets or note

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "remote": {
+    "alwaysOnMachine": {
+      "name": "vm-name",
+      "url": "https://vm-name.tailnet-name.ts.net"
+    }
+  }
+}

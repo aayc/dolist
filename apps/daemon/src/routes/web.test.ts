@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createRemoteHosts } from "../remote-hosts";
 import { createTestApp, tempDir } from "../test-helpers";
 
 const THEME_SCRIPT = "document.documentElement.dataset.theme = localStorage.theme || 'dark';";
@@ -105,6 +106,43 @@ describe("web app", () => {
     await request("/", { token: null });
     writeFileSync(join(dist.path, "index.html"), "<html><head></head><body>v2 build</body></html>");
     expect(await (await request("/", { token: null })).text()).toContain("v2 build");
+  });
+
+  it("tells a remote page whether its device cookie works, and never gives it the token", async () => {
+    const remote = "vm-name.tailnet-name.ts.net";
+    const app = await createTestApp({
+      webDist: dist.path,
+      remoteHosts: createRemoteHosts([remote]),
+    });
+    const browser = await app.devices.add("Browser", "browser");
+    const phone = await app.devices.add("Phone", "app");
+    const page = async (host: string, cookie?: string, path = "/") => {
+      const res = await app.request(path, {
+        host,
+        token: null,
+        ...(cookie ? { headers: { cookie: `__Host-ddl-device=${cookie}` } } : {}),
+      });
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      return res.text();
+    };
+    const pairing = '<head lang="en"><meta name="ddl-auth" content="pairing">';
+    const cookie = '<head lang="en"><meta name="ddl-auth" content="cookie">';
+    expect(await page(remote)).toContain(pairing);
+    expect(await page(remote, browser.token)).toContain(cookie);
+    expect(await page(remote, browser.token, "/notes/Daily/2026-09-23.md")).toContain(cookie);
+    expect(await page(remote, phone.token)).toContain(pairing);
+    expect(await page(remote, "not-a-token")).toContain(pairing);
+    for (const html of [await page(remote), await page(remote, browser.token)]) {
+      expect(html).not.toContain(app.token);
+      expect(html).not.toContain(browser.token);
+      expect(html).not.toContain("ddl-token");
+    }
+    await app.devices.revoke(browser.device.id);
+    expect(await page(remote, browser.token)).toContain(pairing);
+    // Loopback pages keep the token, cookie or not.
+    const local = await page("127.0.0.1:7331", phone.token);
+    expect(local).toContain(`<meta name="ddl-token" content="${app.token}">`);
+    expect(local).not.toContain("ddl-auth");
   });
 
   it("explains how to build the UI when dist is missing, without leaking the token", async () => {

@@ -55,7 +55,10 @@ interface NoteDoc {
   /** Incremented per local edit; `savedRev` is the last revision the server acknowledged. */
   localRev: number;
   savedRev: number;
-  /** Local content captured when the note left the editor with unsaved edits. */
+  /**
+   * Unsaved local text, captured from the editor when a save starts or merged into; null whenever
+   * the note has no unsaved edits, so it never outlives the edits it holds.
+   */
   pendingContent: string | null;
   lastEdit: number;
   timer: ReturnType<typeof setTimeout> | undefined;
@@ -74,8 +77,9 @@ interface NoteDoc {
  * uncontrolled: content is only read (via `readLive`) when a save or a merge actually happens.
  *
  * Someone else's change (often the agent's) meeting unsaved local edits is merged three ways
- * (`mergeText`: base = the server text the edits started from); only edits to the same lines
- * fall back to keeping the local text and saving the other version as a conflict copy.
+ * (`mergeText`: base = the server text the edits started from); when both changed the same lines,
+ * the local version of those lines wins and the other version is saved as a conflict copy. A note
+ * without unsaved edits never writes, and a merge never brings back lines deleted elsewhere.
  */
 export class NotesController {
   private readonly client: NotesClient;
@@ -102,6 +106,12 @@ export class NotesController {
 
   serverContent(path: string): string | null {
     return this.docs.get(path)?.serverContent ?? null;
+  }
+
+  /** What a note without an editor state shows: its unsaved local text, else the server's. */
+  content(path: string): string | null {
+    const doc = this.docs.get(path);
+    return doc ? (doc.pendingContent ?? doc.serverContent) : null;
   }
 
   version(path: string): string | null {
@@ -193,24 +203,34 @@ export class NotesController {
       this.hooks.applyRemote(path, fresh.content);
       return;
     }
-    if (this.merge(doc, fresh) === null) {
-      // Both sides changed the same lines: the next save gets a 409 and resolves the conflict.
+    if (this.conflicts(doc, fresh)) {
+      // Both sides changed the same lines: the next save gets a 409, keeps a copy of theirs and
+      // merges.
       doc.conflict = true;
       this.updateStatus(doc);
+    } else {
+      this.merge(doc, fresh);
     }
     if (doc.localRev !== doc.savedRev) this.arm(doc, this.saveDelayMs);
   }
 
+  /** The note's local text: the editor's, else the unsaved text captured from it. */
+  private localText(doc: NoteDoc): string {
+    return this.hooks.readLive(doc.path) ?? doc.pendingContent ?? doc.serverContent;
+  }
+
+  private conflicts(doc: NoteDoc, remote: NoteResponse): boolean {
+    return mergeText(doc.serverContent, this.localText(doc), remote.content).conflict;
+  }
+
   /**
    * Merges `remote` into the unsaved local edits and rebases the note on it, so the merge is
-   * saved with `remote`'s version. Returns the merged text, or null (nothing changed) when both
-   * sides changed the same lines.
+   * saved with `remote`'s version. Where both sides changed the same lines the local version wins;
+   * lines only `remote` changed or removed never come back. Returns the merged text.
    */
-  private merge(doc: NoteDoc, remote: NoteResponse): string | null {
-    const live = this.hooks.readLive(doc.path);
-    const local = live ?? doc.pendingContent ?? doc.serverContent;
-    const { text, conflict } = mergeText(doc.serverContent, local, remote.content);
-    if (conflict) return null;
+  private merge(doc: NoteDoc, remote: NoteResponse): string {
+    const local = this.localText(doc);
+    const { text } = mergeText(doc.serverContent, local, remote.content);
     doc.serverContent = remote.content;
     doc.version = remote.version;
     doc.mtime = remote.mtime;
@@ -304,7 +324,7 @@ export class NotesController {
       doc.timer = undefined;
     }
     const live = this.hooks.readLive(doc.path);
-    if (live !== null) doc.pendingContent = live;
+    if (live !== null && doc.localRev !== doc.savedRev) doc.pendingContent = live;
     if (doc.inflight) {
       if (doc.localRev === doc.savedRev) return doc.inflight;
       doc.resave = true;
@@ -395,18 +415,15 @@ export class NotesController {
       this.hooks.applyRemote(doc.path, current.content);
       return;
     }
-    const merged = this.merge(doc, current);
-    if (merged !== null) {
-      if (doc.localRev !== doc.savedRev) {
-        await this.write(doc, merged, doc.localRev, options, depth + 1);
-      }
-      return;
+    if (this.conflicts(doc, current)) {
+      const copyPath = await this.writeConflictCopy(doc.path, current.content);
+      this.hooks.onConflictCopy(doc.path, copyPath);
+      if (!this.tracks(doc)) return;
     }
-    const copyPath = await this.writeConflictCopy(doc.path, current.content);
-    this.hooks.onConflictCopy(doc.path, copyPath);
-    if (!this.tracks(doc)) return;
-    doc.version = current.version;
-    await this.write(doc, content, rev, options, depth + 1);
+    const merged = this.merge(doc, current);
+    if (doc.localRev !== doc.savedRev) {
+      await this.write(doc, merged, doc.localRev, options, depth + 1);
+    }
   }
 
   private async writeConflictCopy(path: string, content: string): Promise<string> {

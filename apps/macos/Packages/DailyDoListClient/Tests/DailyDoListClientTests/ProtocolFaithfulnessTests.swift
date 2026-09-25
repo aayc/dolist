@@ -27,6 +27,9 @@ struct ProtocolFaithfulnessTests {
         case .conflict(let conflict): try record(conflict, as: "ConflictResponse")
         case .approvalConflict(let conflict): try record(conflict, as: "ApprovalConflictResponse")
         case .http(_, let body?): try record(body, as: "ApiErrorBody")
+        case .pairingRejected(let message):
+          try record(ApiErrorBody(error: .pairingRejected, message: message), as: "ApiErrorBody")
+        case .rateLimited(_, let body?): try record(body, as: "ApiErrorBody")
         default: Issue.record("unexpected error \(error)")
         }
       }
@@ -153,6 +156,53 @@ struct ProtocolFaithfulnessTests {
       ConnectorsResponse(connectors: try await client.connectors()), as: "ConnectorsResponse")
     try session.record(try await client.agentStatus(), as: "AgentStatusResponse")
 
+    // This device, pairing and the always-on machine.
+    try session.record(try await client.syncStatus(), as: "SyncStatusResponse")
+    try session.record(try await client.deviceSettings(), as: "DeviceSettingsResponse")
+    try session.record(
+      try await client.updateDeviceSettings(
+        DeviceSettingsPatch(name: "Studio Mac", remoteHosts: ["studio.tailnet-name.ts.net"])),
+      as: "DeviceSettingsResponse")
+    try await session.recordError {
+      _ = try await client.updateDeviceSettings(DeviceSettingsPatch(remoteHosts: ["10.0.0.1"]))
+    }
+    try session.record(
+      try await client.setUpSync(
+        DeviceSyncSetupRequest(url: "https://sync.example.com", vault: "vault_1", token: "t0k3n")),
+      as: "DeviceSettingsResponse")
+    try session.record(try await client.syncStatus(), as: "SyncStatusResponse")
+    try session.record(try await client.machineStatus(), as: "MachineStatusResponse")
+    try session.record(
+      try await client.pairMachine(
+        MachinePairRequest(url: "https://vm-name.tailnet-name.ts.net", code: "ABCD2345")),
+      as: "MachineStatusResponse")
+    try session.record(try await client.checkMachine(), as: "MachineStatusResponse")
+    _ = try await client.updateDeviceSettings(DeviceSettingsPatch(placement: .alwaysOnMachine))
+    try session.record(try await client.agentStatus(), as: "AgentStatusResponse")
+    await client.advance(by: .seconds(3))
+    try session.record(try await client.agentStatus(), as: "AgentStatusResponse")
+    await client.simulateMachine(reachable: false)
+    try session.record(try await client.checkMachine(), as: "MachineStatusResponse")
+    try await session.recordError { _ = try await client.retryThread(threadId) }
+    await client.simulateMachine(reachable: true, acceptsThisDevice: false)
+    try session.record(try await client.checkMachine(), as: "MachineStatusResponse")
+    try session.record(try await client.agentStatus(), as: "AgentStatusResponse")
+    await client.simulateMachine(acceptsThisDevice: true)
+    let code = try await client.createPairingCode(PairingCodeRequest(name: "Phone"))
+    try session.record(code, as: "PairingCodeResponse")
+    try session.record(
+      try await client.pair(PairRequest(code: code.code, name: "Phone", kind: .app)),
+      as: "PairResponse")
+    try await session.recordError {
+      _ = try await client.pair(PairRequest(code: code.code, name: "Phone", kind: .app))
+    }
+    try session.record(
+      PairedDevicesResponse(devices: try await client.pairedDevices()), as: "PairedDevicesResponse"
+    )
+    try await session.recordError { try await client.revokeDevice("pdv_missing") }
+    try session.record(try await client.forgetMachine(), as: "MachineStatusResponse")
+    try session.record(try await client.turnOffSync(), as: "DeviceSettingsResponse")
+
     await client.disconnect()
     try await recorder.waitForFinish()
     session.events = recorder.events
@@ -264,6 +314,28 @@ struct ProtocolFaithfulnessTests {
         "UpdateSettingsRequest",
         SettingsPatch(agent: .init(harness: .cursor, cursorModel: "gpt-5.5[reasoning=high]"))
       ),
+      ("DeviceSettingsPatch", DeviceSettingsPatch()),
+      ("DeviceSettingsPatch", DeviceSettingsPatch(placement: .alwaysOnMachine)),
+      (
+        "DeviceSettingsPatch",
+        DeviceSettingsPatch(name: "Work laptop", remoteHosts: ["laptop.tailnet-name.ts.net"])
+      ),
+      (
+        "DeviceSyncSetupRequest",
+        DeviceSyncSetupRequest(url: "https://sync.example.com", vault: "vault_1", token: "t0k3n")
+      ),
+      ("DeviceSyncSetupRequest", DeviceSyncSetupRequest(url: "http://127.0.0.1:7332", vault: "v")),
+      ("PairingCodeRequest", PairingCodeRequest()),
+      ("PairingCodeRequest", PairingCodeRequest(name: "Phone")),
+      ("PairRequest", PairRequest(code: "abcd-2345", name: "Studio Mac", kind: .app)),
+      (
+        "MachinePairRequest",
+        MachinePairRequest(url: "https://vm-name.tailnet-name.ts.net/", code: "ABCD 2345")
+      ),
+      (
+        "MachinePairRequest",
+        MachinePairRequest(url: "https://vm-name.tailnet-name.ts.net", code: "ABCD2345", name: "VM")
+      ),
       (
         "ClientEvent",
         ClientEvent.hello(
@@ -311,6 +383,8 @@ struct ProtocolFaithfulnessTests {
   static let trimmedCases: Set<String> = [
     "PostMessageRequest/whitespace only (trimmed to empty)", "UpdateSettingsRequest/blank model",
     "UpdateSettingsRequest/blank Cursor model",
+    "UpdateSettingsRequest/blank always-on machine name", "DeviceSettingsPatch/blank name",
+    "DeviceSyncSetupRequest/blank token",
     "CreateRoutineRequest/blank instructions (trimmed to empty)",
   ]
 

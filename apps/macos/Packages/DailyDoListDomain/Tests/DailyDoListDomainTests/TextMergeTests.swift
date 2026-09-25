@@ -94,6 +94,51 @@ extension DomainTests {
           == MergeResult(text: local, conflict: true))
     }
 
+    @Test func keepsLinesDeletedElsewhereDeletedWhenTheUserAddedALineBetweenThem() {
+      let day = note("# Thursday", "- [ ] Rehearsal", "\t- Done: 11 bots %%agent:thr_1%%", "Notes")
+      let local = note(
+        "# Thursday", "- [ ] Rehearsal", "\t- ask about the 3 missing ones",
+        "\t- Done: 11 bots %%agent:thr_1%%", "Notes")
+      let remote = note("# Thursday", "Notes")
+      #expect(
+        TextMerge.merge(base: day, local: local, remote: remote)
+          == MergeResult(
+            text: note("# Thursday", "\t- ask about the 3 missing ones", "Notes"), conflict: false))
+    }
+
+    @Test func keepsTheOtherSidesLinesAddedInsideABlockTheUserRewroteAfterIt() {
+      let local = note("# Thursday", "- [x] Book a table", "- [x] Renew passport", "Notes")
+      let remote = note(
+        "# Thursday", "- [ ] Book a table", "  - Sole at 7 %%agent:thr_1%%", "- [ ] Renew passport",
+        "Notes")
+      #expect(
+        TextMerge.merge(base: base, local: local, remote: remote)
+          == MergeResult(
+            text: note(
+              "# Thursday", "- [x] Book a table", "- [x] Renew passport",
+              "  - Sole at 7 %%agent:thr_1%%", "Notes"),
+            conflict: false))
+    }
+
+    @Test func doesntBringBackLinesDeletedElsewhereWhenTheSameLineConflicts() {
+      let local = note("# Thursday", "- [ ] Book a table for 4", "- [ ] Renew passport", "Notes")
+      let remote = note("# Thursday", "- [x] Book a table", "Notes")
+      #expect(
+        TextMerge.merge(base: base, local: local, remote: remote)
+          == MergeResult(
+            text: note("# Thursday", "- [ ] Book a table for 4", "Notes"), conflict: true)
+      )
+    }
+
+    @Test func keepsOnlyTheUsersOwnLinesOfABlockBothSidesChanged() {
+      let local = note("# Thursday", "- [ ] Book a table", "- [ ] Renew passport by May", "Notes")
+      let remote = note("# Thursday", "Notes")
+      #expect(
+        TextMerge.merge(base: base, local: local, remote: remote)
+          == MergeResult(
+            text: note("# Thursday", "- [ ] Renew passport by May", "Notes"), conflict: true))
+    }
+
     @Test func appliesADeletionNextToAnEdit() {
       let local = note("# Thursday", "- [ ] Book a table", "- [ ] Renew passport", "Notes!")
       let remote = note("# Thursday", "- [ ] Renew passport", "Notes")
@@ -180,6 +225,92 @@ extension DomainTests {
       #expect(
         TextMerge.merge(base: base, local: local, remote: remote).text
           == (["top"] + a + ["bottom"]).joined(separator: "\n"))
+    }
+
+    // MARK: Properties (mirrors @ddl/core `merge.property.test.ts`)
+
+    /// A note whose lines are unique (blank lines aside), edited on both sides with new lines that
+    /// are unique too, so where each merged line came from is unambiguous.
+    private struct Triple {
+      var base: [String]
+      var local: [String]
+      var remote: [String]
+      var merged: MergeResult {
+        TextMerge.merge(
+          base: base.joined(separator: "\n"), local: local.joined(separator: "\n"),
+          remote: remote.joined(separator: "\n"))
+      }
+      var typed: Set<String> { Self.content(local.filter { !base.contains($0) }) }
+      static func content(_ lines: [String]) -> Set<String> { Set(lines.filter { !$0.isEmpty }) }
+    }
+
+    private func randomTriples(seed: UInt64, count: Int = 500) -> [Triple] {
+      var generator = SeededGenerator(seed: seed)
+      return (0..<count).map { _ in
+        let base = (0..<Int.random(in: 0...14, using: &generator)).map { i in
+          Bool.random(using: &generator) ? "" : "- [ ] base \(i)"
+        }
+        return Triple(
+          base: base, local: randomlyEdited(base, side: "mine", using: &generator),
+          remote: randomlyEdited(base, side: "theirs", using: &generator))
+      }
+    }
+
+    private func randomlyEdited(
+      _ base: [String], side: String, using generator: inout SeededGenerator
+    ) -> [String] {
+      var lines = base
+      var n = 0
+      for _ in 0..<Int.random(in: 0...4, using: &generator) {
+        let at = Int.random(in: 0...lines.count, using: &generator)
+        let count = Int.random(in: 1...3, using: &generator)
+        let added = (0..<count).map { _ in
+          defer { n += 1 }
+          return "\(side) \(n)"
+        }
+        let removed = at..<min(lines.count, at + count)
+        switch Int.random(in: 0..<3, using: &generator) {
+        case 0: lines.insert(contentsOf: added, at: at)
+        case 1: lines.removeSubrange(removed)
+        default: lines.replaceSubrange(removed, with: added)
+        }
+      }
+      return lines
+    }
+
+    @Test func neverBringsBackALineTheOtherSideDeletedUnlessTheUserTypedIt() {
+      for triple in randomTriples(seed: 21) {
+        let theirs = Triple.content(triple.remote)
+        for line in Triple.content(TextMerge.lines(triple.merged.text)) {
+          #expect(
+            theirs.contains(line) || triple.typed.contains(line),
+            "resurrected \(line): \(triple.base) / \(triple.local) / \(triple.remote)")
+        }
+      }
+    }
+
+    @Test func neverLosesWhatTheUserTyped() {
+      for triple in randomTriples(seed: 22) {
+        let out = Triple.content(TextMerge.lines(triple.merged.text))
+        for line in triple.typed {
+          #expect(out.contains(line), "lost \(line): \(triple.base) / \(triple.local)")
+        }
+      }
+    }
+
+    @Test func keepsALineTheUserDeletedDeletedAndWithoutAConflictEverythingTheOtherSideAdded() {
+      for triple in randomTriples(seed: 23) {
+        let merged = triple.merged
+        let out = Triple.content(TextMerge.lines(merged.text))
+        for line in Triple.content(triple.base)
+        where !triple.local.contains(line) && triple.remote.contains(line) {
+          #expect(!out.contains(line), "undeleted \(line)")
+        }
+        guard !merged.conflict else { continue }
+        for line in Triple.content(triple.remote.filter { !triple.base.contains($0) }) {
+          #expect(out.contains(line), "dropped \(line)")
+        }
+      }
     }
 
     private func randomLines(

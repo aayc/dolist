@@ -93,6 +93,10 @@ public final class AgentStore {
   /// Finished runs to tell the user about (`routine.notification`), oldest first; the notifier
   /// posts the ones it hasn't seen. Only the latest `routineNotificationLimit` are kept.
   public internal(set) var routineNotifications: [RoutineNotification] = []
+  /// Where the orchestrator is being moved to, while the change is on its way to the daemon.
+  public internal(set) var pendingPlacement: AgentPlacement?
+  /// The always-on machine's name, from the host's settings (`remote.alwaysOnMachine`).
+  public var alwaysOnMachineName: String?
 
   // MARK: Bookkeeping
 

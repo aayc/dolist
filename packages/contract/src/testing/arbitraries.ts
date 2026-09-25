@@ -465,6 +465,12 @@ const agentSettings = (): Arb<core.AgentSettings> =>
     approvalPolicy: approvalPolicy(),
   });
 
+const alwaysOnMachine = (): Arb<core.AlwaysOnMachine> =>
+  fc.record({ name: p.deviceName(), url: p.machineUrl() });
+
+const remoteSettings = (): Arb<core.RemoteSettings> =>
+  fc.record({ alwaysOnMachine: maybe(alwaysOnMachine()) });
+
 const appSettings = (): Arb<core.AppSettings> =>
   fc.record({
     theme: themePreference(),
@@ -472,6 +478,7 @@ const appSettings = (): Arb<core.AppSettings> =>
     dailyNotes: dailyNoteSettings(),
     weeklyNotes: weeklyNoteSettings(),
     agent: agentSettings(),
+    remote: remoteSettings(),
   });
 
 /** Every key optional, recursively (absent keys, never `undefined` values). */
@@ -524,6 +531,7 @@ const updateSettingsRequest = (): Arb<core.UpdateSettingsRequest> =>
         },
         { requiredKeys: [] },
       ),
+      remote: partialOf<core.RemoteSettings>({ alwaysOnMachine: maybe(alwaysOnMachine()) }),
     },
     { requiredKeys: [] },
   );
@@ -738,6 +746,8 @@ const agentStatusResponse = (): Arb<core.AgentStatusResponse> =>
       connectors: fc.array(connectorStatus(), { maxLength: 4 }),
       execution: executionStatus(),
       problem: p.text(500),
+      placement: agentPlacementStatus(),
+      readiness: agentReadiness(),
     },
     {
       requiredKeys: [
@@ -913,6 +923,189 @@ const syncStatusResponse = (): Arb<core.SyncStatusResponse> =>
       deviceName: p.lengthWithin(p.label(), 1, 100),
     },
     { requiredKeys: ["state", "target", "lastSyncedAt", "pendingChanges", "conflicts"] },
+  );
+
+// ── Placement, device settings, pairing, the always-on machine ────────────
+
+const agentPlacement = () =>
+  enumOf<core.AgentPlacement>("this_device", "always_on_machine", "always_on_host");
+const relayState = () =>
+  enumOf<core.RelayState>("off", "connecting", "connected", "unreachable", "not_paired");
+
+const agentRunsOn = (): Arb<core.AgentRunsOn> =>
+  fc.record({
+    deviceId: p.syncDeviceId(),
+    name: p.syncDeviceName(),
+    thisDevice: fc.boolean(),
+    alwaysOnMachine: fc.boolean(),
+  });
+
+const PLACEMENT_NOTES = ["Taking over from vm-1…", "Handing the agent to vm-1…", ""];
+
+function agentPlacementStatus(): Arb<core.AgentPlacementStatus> {
+  return fc.record(
+    {
+      placement: agentPlacement(),
+      heldHere: enumOf<NonNullable<core.AgentPlacementStatus["heldHere"]>>("no_machine", "no_sync"),
+      runsOn: maybe(agentRunsOn()),
+      relay: relayState(),
+      note: fc.oneof(fc.constantFrom(...PLACEMENT_NOTES), p.text(200)),
+    },
+    { requiredKeys: ["placement", "runsOn", "relay"] },
+  );
+}
+
+function agentReadiness(): Arb<core.AgentReadiness> {
+  return fc.record({
+    harness: fc.record(
+      {
+        kind: agentHarnessKind(),
+        ready: fc.boolean(),
+        problem: fc.oneof(
+          fc.constantFrom("The Cursor CLI isn't signed in", "OPENROUTER_API_KEY is not set"),
+          p.text(300),
+        ),
+      },
+      { requiredKeys: ["kind", "ready"] },
+    ),
+    modelCredential: fc.boolean(),
+    browser: fc.boolean(),
+    computer: enumOf<core.AgentReadiness["computer"]>(
+      "available",
+      "needs_permissions",
+      "unsupported",
+    ),
+    connectors: fc.record({ configured: p.count(20), connected: p.count(20) }),
+  });
+}
+
+const syncUrl = () =>
+  enumOf(
+    "https://sync.example.com",
+    "https://vm-name.tailnet-name.ts.net:8443",
+    "https://sync.example.com/ddl",
+    "http://127.0.0.1:7332",
+  );
+
+const deviceSyncSetup = (): Arb<core.DeviceSyncSetup> =>
+  fc.oneof(
+    fc.record({ url: syncUrl(), vault: p.syncDeviceId(), hasToken: fc.boolean() }),
+    fc.record({ url: fc.constant(null), vault: fc.constant(null), hasToken: fc.boolean() }),
+  );
+
+const LOCKABLE: Array<core.DeviceSettingsResponse["lockedByEnv"][number]> = [
+  "placement",
+  "remoteHosts",
+  "sync",
+];
+
+const remoteHosts = () =>
+  fc.oneof(
+    { weight: 6, arbitrary: fc.uniqueArray(p.remoteHost(), { maxLength: 3 }) },
+    {
+      weight: 1,
+      arbitrary: fc.constant(Array.from({ length: 8 }, (_, i) => `vm-${i}.tailnet-name.ts.net`)),
+    },
+  );
+
+const deviceSettingsResponse = (): Arb<core.DeviceSettingsResponse> =>
+  fc.record({
+    device: fc.record({ id: p.syncDeviceId(), name: p.syncDeviceName() }),
+    placement: agentPlacement(),
+    remoteHosts: remoteHosts(),
+    sync: deviceSyncSetup(),
+    lockedByEnv: fc.subarray(LOCKABLE),
+  });
+
+const deviceSettingsPatch = (): Arb<core.DeviceSettingsPatch> =>
+  fc.record(
+    { name: p.deviceName(), placement: agentPlacement(), remoteHosts: remoteHosts() },
+    { requiredKeys: [] },
+  );
+
+const deviceSyncSetupRequest = (): Arb<core.DeviceSyncSetupRequest> =>
+  fc.record(
+    {
+      url: syncUrl(),
+      vault: p.syncDeviceId(),
+      token: fc.oneof(
+        fc.string({ unit: fc.constantFrom(..."abcXYZ0189_-"), minLength: 43, maxLength: 43 }),
+        fc.constantFrom("t", "k".repeat(1024)),
+      ),
+    },
+    { requiredKeys: ["url", "vault"] },
+  );
+
+const pairedDeviceKind = () => enumOf<core.PairedDeviceKind>("browser", "app", "daemon");
+
+const pairedDevice = (): Arb<core.PairedDevice> =>
+  fc.record(
+    {
+      id: p.runtimeId("pdv"),
+      name: p.deviceName(),
+      kind: pairedDeviceKind(),
+      createdAt: p.epochMs(),
+      lastSeenAt: maybe(p.epochMs()),
+      current: fc.boolean(),
+    },
+    { requiredKeys: ["id", "name", "kind", "createdAt", "lastSeenAt"] },
+  );
+
+const pairingCodeRequest = (): Arb<core.PairingCodeRequest> =>
+  fc.record({ name: p.deviceName() }, { requiredKeys: [] });
+
+const pairingCodeResponse = (): Arb<core.PairingCodeResponse> =>
+  fc.record({
+    code: p.pairingCode(),
+    expiresAt: p.epochMs(),
+    url: maybe(p.machineUrl().filter((url) => url.startsWith("https://"))),
+  });
+
+const pairRequest = (): Arb<core.PairRequest> =>
+  fc.record({ code: p.pairingCodeInput(), name: p.deviceName(), kind: pairedDeviceKind() });
+
+const deviceToken = () =>
+  fc.oneof(
+    fc.string({ unit: fc.constantFrom(..."abcXYZ0189_-"), minLength: 43, maxLength: 43 }),
+    fc.constantFrom("t".repeat(16), "T".repeat(512)),
+  );
+
+const pairResponse = (): Arb<core.PairResponse> =>
+  fc.record({ device: pairedDevice(), token: deviceToken() }, { requiredKeys: ["device"] });
+
+const pairedDevicesResponse = (): Arb<core.PairedDevicesResponse> =>
+  fc.record({ devices: fc.array(pairedDevice(), { maxLength: 5 }) });
+
+const machineStatusResponse = (): Arb<core.MachineStatusResponse> =>
+  fc.record(
+    {
+      machine: maybe(alwaysOnMachine()),
+      paired: fc.boolean(),
+      reachable: maybe(fc.boolean()),
+      checkedAt: maybe(p.epochMs()),
+      version: fc.constantFrom("0.1.0", "1.2.3-beta.1", "v".repeat(100)),
+      agent: fc.record(
+        { runsOn: maybe(agentRunsOn()), problem: p.text(300) },
+        { requiredKeys: ["runsOn"] },
+      ),
+      readiness: agentReadiness(),
+      error: fc.oneof(fc.constantFrom("The machine didn't answer in 5 s"), p.text(300)),
+    },
+    { requiredKeys: ["machine", "paired", "reachable", "checkedAt"] },
+  );
+
+const machinePairRequest = (): Arb<core.MachinePairRequest> =>
+  fc.record(
+    {
+      url: fc.oneof(
+        p.machineUrl(),
+        p.machineUrl().map((url) => `${url}/`),
+        p.machineUrl().map((url) => url.toUpperCase()),
+      ),
+      code: p.pairingCodeInput(),
+      name: p.deviceName(),
+    },
+    { requiredKeys: ["url", "code"] },
   );
 
 // ── Errors ────────────────────────────────────────────────────────────────
@@ -1165,6 +1358,8 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   AgentHarnessKind: agentHarnessKind,
   ApprovalPolicy: approvalPolicy,
   AgentSettings: agentSettings,
+  AlwaysOnMachine: alwaysOnMachine,
+  RemoteSettings: remoteSettings,
   AppSettings: appSettings,
   UpdateSettingsRequest: updateSettingsRequest,
   AgentMode: agentMode,
@@ -1209,6 +1404,24 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   SyncStatusResponse: syncStatusResponse,
   ComputerPermissionPane: computerPermissionPane,
   ComputerPermissionsOpenRequest: computerPermissionsOpenRequest,
+  AgentPlacement: agentPlacement,
+  AgentRunsOn: agentRunsOn,
+  RelayState: relayState,
+  AgentPlacementStatus: agentPlacementStatus,
+  AgentReadiness: agentReadiness,
+  DeviceSyncSetup: deviceSyncSetup,
+  DeviceSettingsResponse: deviceSettingsResponse,
+  DeviceSettingsPatch: deviceSettingsPatch,
+  DeviceSyncSetupRequest: deviceSyncSetupRequest,
+  PairedDeviceKind: pairedDeviceKind,
+  PairedDevice: pairedDevice,
+  PairingCodeRequest: pairingCodeRequest,
+  PairingCodeResponse: pairingCodeResponse,
+  PairRequest: pairRequest,
+  PairResponse: pairResponse,
+  PairedDevicesResponse: pairedDevicesResponse,
+  MachineStatusResponse: machineStatusResponse,
+  MachinePairRequest: machinePairRequest,
   ApiErrorCode: apiErrorCode,
   ApiErrorBody: apiErrorBody,
   ConflictResponse: conflictResponse,
@@ -1274,6 +1487,8 @@ export const arb = plainFactories({
   agentHarnessKind,
   approvalPolicy,
   agentSettings,
+  alwaysOnMachine,
+  remoteSettings,
   appSettings,
   updateSettingsRequest,
   agentMode,
@@ -1322,6 +1537,24 @@ export const arb = plainFactories({
   routineRunResponse,
   computerPermissionPane,
   computerPermissionsOpenRequest,
+  agentPlacement,
+  agentRunsOn,
+  relayState,
+  agentPlacementStatus,
+  agentReadiness,
+  deviceSyncSetup,
+  deviceSettingsResponse,
+  deviceSettingsPatch,
+  deviceSyncSetupRequest,
+  pairedDeviceKind,
+  pairedDevice,
+  pairingCodeRequest,
+  pairingCodeResponse,
+  pairRequest,
+  pairResponse,
+  pairedDevicesResponse,
+  machineStatusResponse,
+  machinePairRequest,
   apiErrorCode,
   apiErrorBody,
   conflictResponse,
@@ -1369,4 +1602,8 @@ export const arb = plainFactories({
   base64: p.base64,
   modelId: p.modelId,
   cursorModelId: p.cursorModelId,
+  deviceName: p.deviceName,
+  remoteHost: p.remoteHost,
+  machineUrl: p.machineUrl,
+  pairingCode: p.pairingCode,
 });

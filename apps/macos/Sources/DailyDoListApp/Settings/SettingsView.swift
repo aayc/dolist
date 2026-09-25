@@ -2,7 +2,7 @@ import SwiftUI
 
 /// A tab of the Settings window.
 enum SettingsPane: String, CaseIterable, Identifiable {
-  case general, appearance, daily, agent, computerUse, connectors, about
+  case general, appearance, daily, agent, alwaysOn, computerUse, connectors, about
   var id: String { rawValue }
 }
 
@@ -25,6 +25,9 @@ struct SettingsView: View {
       AgentSettingsPane(model: model, settings: model.settings)
         .tabItem { Label("Agent", systemImage: "sparkles") }
         .tag(SettingsPane.agent)
+      AlwaysOnSettingsPane(model: model, remote: model.remote)
+        .tabItem { Label("Always-On", systemImage: "server.rack") }
+        .tag(SettingsPane.alwaysOn)
       ComputerUseSettingsPane(model: model, access: model.computerAccess)
         .tabItem { Label("Computer Use", systemImage: "cursorarrow.click.2") }
         .tag(SettingsPane.computerUse)

@@ -148,6 +148,18 @@ export function toHomeRelative(path: string): string {
   return path.replace(HOME_PREFIX_RE, "~");
 }
 
+/**
+ * Every spelling of a home directory: the macOS disk ignores case, and `/System/Volumes/Data` or
+ * `/Volumes/<disk>` lead to the same folders.
+ */
+const ANY_HOME_PREFIX_RE =
+  /^(?:\/system\/volumes\/data|\/volumes\/[^/]+)?(?:\/users\/[^/]+|\/home\/[^/]+|(?:\/private)?\/var\/root|\/root)(?=\/|$)/i;
+
+/** Lowercased, with any spelling of a home directory as `~`: what the path patterns match. */
+function homeRelativeKey(path: string): string {
+  return path.replace(ANY_HOME_PREFIX_RE, "~").toLowerCase();
+}
+
 export type SensitiveKind =
   | "ssh-private-key"
   | "credential-store"
@@ -168,13 +180,20 @@ const SENSITIVE_PATTERNS: ReadonlyArray<readonly [SensitiveKind, RegExp]> = [
     "ssh-private-key",
     /(?:^|\/)\.ssh(?:\/?$|\/(?:id_[^/]*|identity|[^/]*_(?:rsa|dsa|ecdsa|ed25519)(?:_sk)?|[^/]*\.pem|[^/]*[*?][^/]*)$)/,
   ],
+  // Folders that exist to hold logins (cloud, cluster, GPG, passwords, GitHub, Cursor's CLI) and
+  // browser profiles: the folder and everything in it.
   [
     "credential-store",
-    /^~\/(?:\.aws|\.gnupg|\.password-store|\.config\/gh|\.config\/gcloud|\.config\/op|\.azure)\/?$/,
+    /^~\/(?:\.aws|\.azure|\.gnupg|\.password-store|\.kube|\.config\/(?:gh|gcloud|op|google-chrome|chromium|bravesoftware|microsoft-edge)|\.local\/share\/cursor-agent|\.mozilla|library\/cookies|library\/application support\/(?:google\/chrome|chromium|bravesoftware|microsoft edge|firefox|arc|vivaldi|com\.operasoftware\.opera[^/]*))(?:\/|$)/,
+  ],
+  // Folders with logins among other files: the folder, a glob right inside it, and the login files.
+  [
+    "credential-store",
+    /^~\/(?:\.docker|\.cursor)(?:\/?$|\/[^/]*[*?][^/]*$)|^~\/(?:\.docker\/config\.json|\.cursor\/(?:mcp\.json|[^/]*(?:token|secret|credential|auth)[^/]*))$/,
   ],
   [
     "credential-store",
-    /^~\/(?:\.aws\/credentials$|\.aws\/sso\/cache\/|\.git-credentials$|_?\.?netrc$|\.gnupg\/(?:private-keys-v1\.d|secring\.gpg)|\.password-store\/|\.config\/(?:gh\/hosts\.yml$|op\/|gcloud\/(?:credentials\.db|access_tokens\.db|application_default_credentials\.json|legacy_credentials\/))|\.azure\/(?:accesstokens\.json|msal_token_cache)|\.terraform\.d\/credentials\.tfrc\.json$|library\/application support\/(?:1password|bitwarden|lastpass|dashlane|keepassxc))/,
+    /^~\/(?:\.git-credentials$|_?\.?netrc$|\.terraform\.d\/credentials\.tfrc\.json$|library\/application support\/(?:1password|bitwarden|lastpass|dashlane|keepassxc))/,
   ],
   ["credential-store", /(?:^|\/)library\/keychains(?:\/|$)|\.keychain(?:-db)?$|\.kdbx$/],
   [
@@ -185,10 +204,15 @@ const SENSITIVE_PATTERNS: ReadonlyArray<readonly [SensitiveKind, RegExp]> = [
     "credential-store",
     /^\/(?:private\/)?(?:etc\/(?:shadow|gshadow|master\.passwd)$|var\/db\/dslocal\/nodes\/default\/users\/)/,
   ],
+  // `$DDL_HOME`'s credentials: API keys, `daemon-token`, `sync-token`, `machine-token` and the
+  // paired devices' token hashes (`devices.json`).
   [
     "app-secret",
-    /(?:^|\/)\.daily-do-list\/(?:\.env(?:\.[^/]*)?$|[^/]*(?:token|secret|credential)[^/]*$)/,
+    /(?:^|\/)\.daily-do-list\/(?:\.env(?:\.[^/]*)?$|devices\.json$|[^/]*(?:token|secret|credential)[^/]*$)/,
   ],
+  // `$DDL_HOME` itself and globs right inside it: recursive, archiving and wildcard readers pick up
+  // every credential there. (Anchored at the home directory: a vault's sidecar is not `$DDL_HOME`.)
+  ["app-secret", /^~\/\.daily-do-list(?:\/?$|\/[^/]*[*?][^/]*$)/],
   ["app-state", /(?:^|\/)\.daily-do-list(?:\/|$)/],
   [
     "env-file",
@@ -208,7 +232,7 @@ const SENSITIVE_PATTERNS: ReadonlyArray<readonly [SensitiveKind, RegExp]> = [
   ],
   [
     "personal-data",
-    /^~\/(?:library\/(?:messages|mail|safari|calendars|photos|application support\/(?:addressbook|calltaskhistory|google\/chrome|bravesoftware|microsoft edge|firefox)|containers\/com\.apple\.(?:mail|notes|messages)|group containers\/group\.com\.apple\.notes)(?:\/|$)|[^/]+\.photoslibrary(?:\/|$))/,
+    /^~\/(?:library\/(?:messages|mail|safari|calendars|photos|application support\/(?:addressbook|calltaskhistory)|containers\/com\.apple\.(?:mail|notes|messages)|group containers\/group\.com\.apple\.notes)(?:\/|$)|[^/]+\.photoslibrary(?:\/|$))/,
   ],
   [
     "shell-startup",
@@ -227,7 +251,7 @@ const SENSITIVE_PATTERNS: ReadonlyArray<readonly [SensitiveKind, RegExp]> = [
 
 /** Every sensitive kind a path belongs to (a file can be both `credential-config` and `persistence`). */
 export function sensitiveKinds(path: string): Set<SensitiveKind> {
-  const p = toHomeRelative(path).toLowerCase();
+  const p = homeRelativeKey(path);
   const kinds = new Set<SensitiveKind>();
   for (const [kind, re] of SENSITIVE_PATTERNS) {
     if (kind === "ssh-private-key" && p.endsWith(".pub")) continue;
@@ -242,6 +266,65 @@ const USER_DATA_RE =
 /** Folders whose loss would hurt the user most (used to raise risk, e.g. `rm -rf ~/Documents`). */
 export function isUserDataPath(path: string): boolean {
   return USER_DATA_RE.test(toHomeRelative(path).toLowerCase());
+}
+
+/** Folders that contain every home directory (lowercased, trailing slash removed; `""` is `/`). */
+const HOME_ANCESTOR_RE =
+  /^(?:\/[*?]*|\/users|\/home|\/system(?:\/volumes(?:\/data(?:\/users)?)?)?|\/volumes(?:\/[^/]+(?:\/users)?)?|)$/;
+
+/** Top-level folders full of personal files; project and code folders are deliberately absent. */
+const PERSONAL_HOME_DIRS: ReadonlySet<string> = new Set([
+  "documents",
+  "desktop",
+  "downloads",
+  "pictures",
+  "movies",
+  "music",
+  "dropbox",
+  "google drive",
+  "onedrive",
+  "icloud drive",
+]);
+
+/**
+ * Folders that hold credential and personal-data folders among ordinary ones: reading the whole
+ * folder, or a glob that spans its children, sweeps up the secrets inside (a specific ordinary
+ * subpath does not). Written home-relative and lowercased.
+ */
+const SECRET_PARENT_DIRS: readonly string[] = [
+  "~/library",
+  "~/library/application support",
+  "~/library/containers",
+  "~/library/group containers",
+  "~/.config",
+  "~/.local",
+  "~/.local/share",
+];
+
+/**
+ * How much of the home directory reading `path` takes in, for reads that aren't of one file.
+ * `home`: the home directory itself, a folder above it, or a glob at its top that reaches its dot
+ * folders (`~/.*`, `~/*`). `secrets`: a folder that holds credentials and personal data among
+ * other things (`~/Library`, `~/.config`, …), whole or spanned by a glob. `personal`: a whole
+ * top-level folder of personal files such as `~/Documents`. A specific file or subfolder is none.
+ */
+export function homeReadRisk(path: string): "home" | "secrets" | "personal" | null {
+  const p = homeRelativeKey(path).replace(/\/+$/, "");
+  if (p === "~" || p === "~/.." || HOME_ANCESTOR_RE.test(p)) return "home";
+  const m = /^~\/([^/]*)(\/.*)?$/.exec(p);
+  if (!m) return null;
+  const first = m[1]!;
+  const rest = m[2] ?? "";
+  if (/[*?[]/.test(first))
+    return first.startsWith(".") || /^\*+$/.test(first) ? "home" : "personal";
+  for (const dir of SECRET_PARENT_DIRS) {
+    if (p === dir) return "secrets";
+    if (p.startsWith(`${dir}/`) && /[*?[]/.test(p.slice(dir.length + 1).split("/")[0]!))
+      return "secrets";
+  }
+  const wholeFolder = rest === "" || /^(?:\/[^/]*[*?][^/]*)+$/.test(rest);
+  if (PERSONAL_HOME_DIRS.has(first) && wholeFolder) return "personal";
+  return null;
 }
 
 const SYSTEM_DIRS: ReadonlySet<string> = new Set([

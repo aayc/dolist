@@ -5,7 +5,12 @@
 import { API_VERSION } from "@ddl/core";
 import { z } from "zod";
 import { namedWireSchemas } from "../wire/registry";
-import { COMMON_API_ERRORS, listOperations, type ResponseSpec } from "../wire/routes";
+import {
+  COMMON_API_ERRORS,
+  listOperations,
+  type ResponseSpec,
+  ROUTE_AUTH_DESCRIPTIONS,
+} from "../wire/routes";
 
 type JsonObject = Record<string, unknown>;
 
@@ -43,6 +48,9 @@ function responseDoc(spec: ResponseSpec, ref: (schema: z.ZodType) => unknown): J
   if (spec.kind === "binary") {
     return { description: spec.description, content: "binary" };
   }
+  if (spec.kind === "empty") {
+    return { description: spec.description, content: "none" };
+  }
   return {
     description: spec.description,
     ...(spec.kind === "error" ? { codes: [...spec.codes] } : {}),
@@ -70,7 +78,9 @@ export function buildRoutesDocument(): JsonObject {
     if (operation.query) register(operation.query, `${name}.${method}.query`);
     if (operation.body) register(operation.body, `${name}.${method}.body`);
     for (const [status, response] of Object.entries(operation.responses)) {
-      if (response.kind !== "binary") register(response.schema, `${name}.${method}.${status}`);
+      if (response.kind === "json" || response.kind === "error") {
+        register(response.schema, `${name}.${method}.${status}`);
+      }
     }
   }
   for (const [status, response] of Object.entries(COMMON_API_ERRORS)) {
@@ -121,8 +131,9 @@ export function buildRoutesDocument(): JsonObject {
     $id: `urn:daily-do-list:routes:v${API_VERSION}`,
     title: "Daily Do List REST routes",
     description:
-      "Path patterns use `:name` for one segment and `*` for the rest (a percent-encoded vault path). Every bearer route may also answer the `common` errors.",
+      "Path patterns use `:name` for one segment and `*` for the rest (a percent-encoded vault path). Every `/api/*` route (auth `bearer` or `pairing_code`) may also answer the `common` errors unless it declares that status itself.",
     "x-api-version": API_VERSION,
+    auth: ROUTE_AUTH_DESCRIPTIONS,
     common: Object.fromEntries(
       Object.entries(COMMON_API_ERRORS).map(([status, response]) => [
         status,

@@ -313,17 +313,20 @@ describe("WebSocket authentication", () => {
     ).toBe("open");
   });
 
-  it("lets a present ?token= win over the header, even when it is empty", async () => {
+  it("requires every credential presented to be valid, and at most one ?token=", async () => {
     const app = await live();
     const header = { headers: { authorization: `Bearer ${app.token}` } };
     expect(await upgradeOutcome(app.wsUrl("token="), header)).toBe("HTTP 401");
     expect(await upgradeOutcome(app.wsUrl(`token=${testToken()}`), header)).toBe("HTTP 401");
     expect(
       await upgradeOutcome(app.wsUrl(), { headers: { authorization: `Bearer ${testToken()}` } }),
-    ).toBe("open");
-    // URLSearchParams reads the first occurrence.
-    expect(await upgradeOutcome(app.wsUrl(`token=${app.token}&token=nope`))).toBe("open");
+    ).toBe("HTTP 401");
+    expect(await upgradeOutcome(app.wsUrl(), header)).toBe("open");
+    expect(await upgradeOutcome(app.wsUrl(`token=${app.token}&token=nope`))).toBe("HTTP 401");
     expect(await upgradeOutcome(app.wsUrl(`token=nope&token=${app.token}`))).toBe("HTTP 401");
+    expect(await upgradeOutcome(app.wsUrl(`token=${app.token}&token=${app.token}`))).toBe(
+      "HTTP 401",
+    );
   });
 
   it("rejects wrong, shortened, padded and differently named tokens", async () => {

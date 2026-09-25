@@ -1,5 +1,6 @@
 import { InvalidPathError } from "@ddl/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { appendToFile } from "./append";
 import { utf8ByteLength } from "./file-types";
 import { ConflictError, NotFoundError, type StorageEvent, type StorageProvider } from "./types";
 
@@ -128,6 +129,38 @@ export function describeStorageContract(name: string, factory: StorageContractFa
       await expect(s.write("absent.md", "x", { ifMatch: "some-version" })).rejects.toMatchObject({
         currentVersion: null,
       });
+      expect(await s.stat("absent.md")).toBeNull();
+    });
+
+    it("appends (natively or through appendToFile), honoring preconditions", async () => {
+      const journal = ".daily-do-list/state/journal/threads/thr_a.jsonl";
+      for (const path of ["log.md", journal]) {
+        const first = await appendToFile(s, path, '{"id":"1"}\n', { ifMatch: null });
+        expect(first).toMatchObject({ path, created: true });
+        const second = await appendToFile(s, path, '{"id":"2"} ✓\n', { ifMatch: first.version });
+        expect(second).toMatchObject({ created: false });
+        expect(second.version).not.toBe(first.version);
+        expect(second.size).toBe(utf8ByteLength('{"id":"1"}\n{"id":"2"} ✓\n'));
+        const read = await s.read(path);
+        expect(read).toMatchObject({
+          content: '{"id":"1"}\n{"id":"2"} ✓\n',
+          version: second.version,
+        });
+        expect((await s.stat(path))?.version).toBe(second.version);
+        await expect(
+          appendToFile(s, path, "x\n", { ifMatch: first.version }),
+        ).rejects.toMatchObject({
+          currentVersion: second.version,
+        });
+        await expect(appendToFile(s, path, "x\n", { ifMatch: null })).rejects.toBeInstanceOf(
+          ConflictError,
+        );
+        expect((await s.read(path))?.content).toBe('{"id":"1"}\n{"id":"2"} ✓\n');
+        await expect(appendToFile(s, path, "3\n")).resolves.toMatchObject({ created: false });
+      }
+      await expect(
+        appendToFile(s, "absent.md", "x", { ifMatch: "some-version" }),
+      ).rejects.toMatchObject({ currentVersion: null });
       expect(await s.stat("absent.md")).toBeNull();
     });
 

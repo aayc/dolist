@@ -83,6 +83,12 @@ export interface StorageProvider {
   stat(path: string): Promise<FileEntry | null>;
   read(path: string): Promise<FileContent | null>;
   write(path: string, content: string, options?: WriteOptions): Promise<WriteResult>;
+  /**
+   * Adds `content` at the end of a file, creating it if missing, without rewriting what is there
+   * (append-only journals). `ifMatch` as for `write`. Optional: callers fall back to read + write
+   * (`appendToFile`). Not atomic: a crash can cut the appended text short.
+   */
+  append?(path: string, content: string, options?: WriteOptions): Promise<WriteResult>;
   delete(path: string, options?: WriteOptions): Promise<void>;
   /** Renames a file. Fails with `ConflictError` if `to` exists. */
   rename(from: string, to: string): Promise<WriteResult>;
@@ -119,6 +125,32 @@ export class NotFoundError extends StorageError {
     super(`Not found: "${path}"`, path);
     this.name = "NotFoundError";
   }
+}
+
+/**
+ * The sync service refused a change to one of the agent's files: it wasn't made under the current
+ * agent lease grant from this device (`stale_lease`).
+ */
+export class StaleLeaseError extends StorageError {
+  /** The current grant's epoch, or null when nobody holds the agent lease. */
+  readonly currentEpoch: number | null;
+
+  constructor(path: string, message: string, currentEpoch: number | null) {
+    super(message, path);
+    this.name = "StaleLeaseError";
+    this.currentEpoch = currentEpoch;
+  }
+}
+
+/**
+ * Fencing of the agent's files on the sync service: only the device holding the agent lease may
+ * change them, and it proves that with the grant's epoch (`LEASE_EPOCH_HEADER` in `@ddl/core`).
+ */
+export interface LeaseFence {
+  /** Paths only the lease holder may change on the target. */
+  covers(path: string): boolean;
+  /** The epoch of the agent lease grant this device holds now, or null when it holds none. */
+  epoch(): number | null;
 }
 
 export class NotImplementedError extends StorageError {

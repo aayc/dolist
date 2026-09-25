@@ -413,6 +413,40 @@ Additions to the contract: `EditorCallbacks.onWikiLinkClick` options gained an o
 - building blocks: `markdownSupport`, `ddlTags`, `splitWikiLink`, `editorTheme`,
   `markdownHighlightStyle`, `editorKeymap`, `minimalChange`, `documentChanges`.
 
+## Saving and merging
+
+The editor never saves: the host does. The web app's `NotesController`
+(`apps/web/src/state/notes-controller.ts`) is the model, and the Mac app's `NotesStore` follows the
+same algorithm.
+
+- **What it knows per note:** the server text and version it last saw, and whether there are
+  unsaved edits (a counter bumped by every edit `onDocChange` reports with a user event, against
+  the last one the server acknowledged). The editor's text is read only when a save or a merge
+  happens, never per keystroke.
+- **Saving:** 300 ms after the last edit (sooner on Mod-s, `:w`, switching notes or the window
+  losing focus) it writes the editor's text with `baseVersion` = the version it last saw, one write
+  in flight per note. A note without unsaved edits never writes, however often it's flushed.
+- **Someone else's change** (`vault.changed` from another editor, the agent, another app): without
+  unsaved edits the editor takes the new text (`setDocument`). With unsaved edits, `mergeText`
+  from `@ddl/core` merges them three ways (base = the server text the edits started from, local =
+  the editor's text, remote = the new text), the editor gets only the other side's changes, and
+  the result is saved on top of the new version. A save that meets a newer version (409) merges
+  the same way.
+- **Conflicts** (both sides changed the same lines): the user's version of those lines wins, and
+  the other version is saved next to the note as `<name> (conflict).md`.
+- **Unsaved text** captured from the editor (when a save starts, or merged into a note that isn't
+  shown) exists only while there are unsaved edits. A note shown without a cached editor state
+  shows that text, else the server's.
+
+**The guarantee:** an editor without unsaved typing never writes text the vault didn't have, and a
+merge never brings back a line deleted elsewhere unless the user typed it. A line the user added
+between lines deleted elsewhere is kept, and the deleted ones stay deleted; so are lines only the
+other side removed from a block both changed. Property tests pin it:
+`packages/core/src/merge.property.test.ts` and
+`apps/web/src/state/notes-controller.deletes.property.test.ts` (two editors, the agent and an API
+client deleting lines, with requests and events in any order), and on the Mac `TextMergeTests` and
+`RemoteDeleteModelTests`.
+
 ## Theming
 
 The editor uses only these app-defined variables: `--ddl-bg`, `--ddl-bg-secondary`,

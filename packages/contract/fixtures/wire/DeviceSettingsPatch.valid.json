@@ -1,0 +1,16 @@
+[
+  { "name": "empty patch", "value": {} },
+  { "name": "rename this device", "value": { "name": "Work laptop" } },
+  {
+    "name": "hand the agent to the always-on machine",
+    "value": { "placement": "always_on_machine" }
+  },
+  {
+    "name": "this is the always-on machine, reachable by its tailnet name",
+    "value": {
+      "placement": "always_on_host",
+      "remoteHosts": ["vm-name.tailnet-name.ts.net", "vm-name.tailnet-name.ts.net:8443"]
+    }
+  },
+  { "name": "no remote access", "value": { "remoteHosts": [] } }
+]

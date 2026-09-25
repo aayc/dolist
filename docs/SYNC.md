@@ -77,6 +77,9 @@ future native clients (additive changes only within `SYNC_API_VERSION`).
 | `GET …/stream` (WebSocket) | frames `ready { seq, heartbeatMs }`, `change { seq, path, rev, deleted, created, device, at }`, `heartbeat { seq, at }` |
 | `GET / POST / DELETE …/leases/agent` | see [the agent lease](#the-agent-lease) |
 
+Writes, deletes and renames of the agent's files also need the lease epoch (see
+[fencing](#fencing)).
+
 `…` is `/v1/vaults/<vault id>`. Folders behave like folders on a disk: writing a file creates its
 folders, they outlive their files until deleted, and a file and a folder can't share a path (409
 `not_a_file`, `not_a_folder` or `path_blocked`). Errors are `{ error, message }` with the codes of
@@ -94,6 +97,14 @@ happens on the devices, in the engine, exactly as for a local mirror folder
 - Edits to the same line: the device that syncs second keeps its own text and saves the other
   device's as `<name> (conflict YYYY-MM-DD HHmm).md`; the copy then syncs to every device, and
   every device lists it under `conflicts` in its sync status until someone deletes it.
+- The agent's journals (`.daily-do-list/state/journal/**.jsonl`: append-only, one event with a
+  unique id per line) merge as the union of both copies' lines, ordered by `(epoch, seq, id)`.
+  The result depends only on the set of lines, so every device ends with the same bytes, and there
+  is never a conflict copy. Through the sync service they are fenced like every agent file (see
+  [the agent lease](#the-agent-lease)): only the lease holder's appends travel, and when the
+  holder finds the service's copy changed too it pushes the union, so it never drops an event.
+  A device without the lease, or a former holder that appended offline, gives way. Without a
+  lease (a mirrored folder), two devices appending at once keep every event.
 - Other formats (JSON such as the agent's thread files, canvases) keep the newest by modification
   time and save the other as the conflict copy. The server stamps `mtime` with its own clock when
   it accepts a write, so compare notes across devices with that in mind.
@@ -104,7 +115,7 @@ happens on the devices, in the engine, exactly as for a local mirror folder
   `SyncAbortedError` instead of deleting every note.
 
 What syncs: every text file in the vault, including the agent's sidecar (`.daily-do-list/threads`,
-`artifacts`, `state/records.json`, `approvals.json`, `settings.json`). What doesn't: each device's
+`artifacts`, `state/journal`, `state/records.json`, `approvals.json`, `settings.json`). What doesn't: each device's
 own sync snapshot (`.daily-do-list/sync/`), the agent's machine-local scratch data
 (`.daily-do-list/state/tasks`), junk and temp files, and binary files (images, PDFs, …).
 
@@ -193,10 +204,14 @@ and in `~/.daily-do-list/config.json`:
 { "sync": { "kind": "remote", "url": "https://sync.example.com", "vault": "<vault id>" } }
 ```
 
-(or `DDL_SYNC_URL` and `DDL_SYNC_VAULT`, plus `DDL_SYNC_TOKEN`, in the environment). On first use
-the daemon creates `~/.daily-do-list/device.json` with a random device id and a name taken from the
-host name; edit `name` to change how other devices refer to this one. Don't copy `device.json` to
-another machine (see below).
+(or `DDL_SYNC_URL` and `DDL_SYNC_VAULT`, plus `DDL_SYNC_TOKEN`, in the environment). Clients can
+do the same through the daemon: `PUT /api/device/sync` with `{ url, vault, token }` writes both files
+(the token `0600`, never returned) and applies at once, without a restart; `DELETE /api/device/sync`
+turns sync off and deletes the token. While any of the environment variables is set, the sync setup
+belongs to them and the API answers 409 `locked_by_env`. On first use the daemon creates
+`~/.daily-do-list/device.json` with a random device id and a name taken from the host name; rename
+the device with `PATCH /api/device` (or edit `name`) to change how other devices refer to it.
+Don't copy `device.json` to another machine (see below).
 
 `GET /api/sync/status` on the daemon reports `state`, `target`, `lastSyncedAt`, `pendingChanges`,
 `conflicts`, `lastError`, and with the sync service `remoteHost` and `deviceName`.
@@ -214,8 +229,9 @@ with `DDL_AGENT_MODE` `live` or `mock`) starts its agent only while it holds the
   device holds it, it asks again every 15 s and takes over as soon as that device releases it
   (it does when its daemon stops) or stops renewing (it crashed or went offline: at most 60 s).
 - Until then this daemon serves notes and syncs as usual, but its agent is off: its agent status
-  says `problem: "The agent is running on <device name>."`, it lists no threads or approvals of
-  its own, and it writes nothing into the agent's sidecar files.
+  says `problem: "The agent is running on <device name>."`, it shows the other device's threads,
+  approvals and task records read-only as sync brings them in (agent actions answer 503 with that
+  problem), and it writes nothing into the agent's sidecar files.
 - On takeover it first runs a sync pass, then creates the agent runtime from the vault as it is now
   (threads, records and approvals written by the previous device's agent included). On release it
   stops the runtime (which flushes its state) and runs a sync pass before letting go.
@@ -224,6 +240,74 @@ with `DDL_AGENT_MODE` `live` or `mock`) starts its agent only while it holds the
 - Renewal needs the same device id **and** the same random per-process session, so a copied
   `device.json` (a cloned home folder, a migrated Mac) can't run a second agent. A daemon that
   crashed and restarted waits for its old grant to run out (up to a minute).
+
+### Priorities and takeover
+
+Each device chooses where its agent runs (its placement, a device-local setting, see
+[ALWAYS_ON.md](./ALWAYS_ON.md#where-the-agent-runs-a-choice-per-device)), and that decides how it
+asks for the lease:
+
+| Placement | Asks for the lease |
+| --- | --- |
+| `this_device` (the default) | with priority `interactive` |
+| `always_on_host` (the always-on machine) | with priority `host` |
+| `always_on_machine` | never; it only asks the server who holds it (every 15 s) |
+
+Without an always-on machine in the vault's settings (`remote.alwaysOnMachine`), or without sync,
+a device runs the agent as `this_device` whatever it chose, and its agent status says why
+(`placement.heldHere`: `no_machine` or `no_sync`). A daemon without sync runs its own agent.
+
+- `interactive` outranks `host`; between equal priorities the first device keeps the lease, as
+  before.
+- A request that outranks the holder records a **pending takeover** on the server and gets
+  `lease_held` with `takeoverPending: true`. The holder's renewals (and `GET …/leases/agent`) then
+  carry `yieldRequested: true`.
+- The holder yields on its next renewal (within 20 s): it stops its agent (which flushes its state),
+  runs a sync pass and releases. The requester asks every 3 s while its takeover is pending, gets the
+  lease, runs a sync pass and starts its agent from the synced state. A handover takes about half a
+  minute; a run in progress on the old holder stops, and its thread can be retried.
+- For 30 s after the holder lets go (or its grant runs out), only the pending requester, or a request
+  of equal or higher priority, may take the lease, so the always-on machine can't grab it back
+  first. A pending takeover lapses when its requester hasn't asked for 60 s, and the requester
+  withdraws it with `DELETE …/leases/agent` (its device and session) when it stops wanting the agent.
+- A holder may change its priority when it renews (the always-on machine asks as `interactive` until
+  the vault has an always-on machine, then as `host`), without letting go of the lease.
+- Changing the placement applies at once: a device that switches away from running the agent stops
+  it, syncs and releases the lease, and the always-on machine picks it up on its next attempt.
+
+The agent status (`GET /api/agent/status` and the `agent.status` event) reports `placement`: the
+stored choice, `heldHere`, who runs the agent (`runsOn`, with `alwaysOnMachine` when the holder asked
+as `host`), the relay state, and a short `note` during a handover ("Taking over from vm-1…").
+
+### Fencing
+
+Every grant of the lease carries an **epoch**: +1 on each new grant in the vault, unchanged on
+renewal. The agent's files (`.daily-do-list/threads/`, `artifacts/` and `state/`) may only change
+under the current grant:
+
+- The sync service refuses a write, delete or rename touching an agent-owned path, or deleting a
+  folder that holds them, unless it carries `X-DDL-Lease-Epoch` equal to the current grant's epoch
+  and comes from the device holding it (`X-DDL-Device`). The answer is 409 `stale_lease` with
+  `currentEpoch` and `holder`. Settings (`.daily-do-list/settings.json`), notes and creating folders
+  stay open to every device.
+- The daemon sends the header for agent-owned paths while it holds the lease and its agent runs
+  under that grant (and while the agent winds down before a release, so its last state goes out).
+- A device that doesn't hold the lease never pushes agent files: for those paths the server's
+  version wins, and its local changes are dropped with a warning, never saved as a conflict copy.
+  The same happens when the server answers `stale_lease`. The pass that pulls the previous holder's
+  state before a new holder starts its agent runs without the epoch too, so changes made under an
+  earlier grant can't go out under the new one.
+- A local agent file the server never had (say, a thread created offline) stays on that device,
+  unsent, until the device runs the agent again.
+
+So a device that lost the agent while offline can't overwrite the new holder's state when it
+reconnects. The price: agent changes a device made but couldn't sync before it lost the lease are
+dropped.
+
+**Upgrade note:** every device of a vault needs a daemon with fencing. An older daemon sends no
+epoch, so the upgraded sync service refuses its agent file changes (its notes and settings still
+sync), and it doesn't understand the refusal: it keeps retrying those files and reports them as
+sync failures. Upgrade the sync service and every daemon together.
 
 ## Limitations and what's next
 
@@ -234,17 +318,18 @@ Phase 1 limitations:
 - The change log is never compacted, and the quota is server-wide (one value for every vault).
 - File names that differ only in case or Unicode normalization across file systems aren't
   reconciled (as with any sync target).
-- Devices notice a released lease by asking every 15 s, not by push.
-- Only the device that runs the agent shows agent threads and records; the others show notes
-  (including the agent's lines in them) and say where the agent runs.
-- No UI yet: the data is in `GET /api/sync/status` and the agent status.
+- Devices notice a released lease by asking every 15 s (3 s while taking over), not by push.
+- Only the device that runs the agent acts on agent threads and approvals; the others show them
+  read-only and say where the agent runs (a device relaying to the always-on machine acts through
+  it, see [ALWAYS_ON.md](./ALWAYS_ON.md#the-agent-relay)).
+- Settings UI is being built (docs/ALWAYS_ON.md); the data is in `GET /api/sync/status`,
+  `GET /api/device` and the agent status.
 
 Phase 2:
 
 - Attachments in S3/R2 (content-addressed, referenced from the change log).
 - A Cloudflare Durable Object host (one object per vault with its own SQLite, same protocol).
 - End-to-end encryption of content and paths.
-- Lease changes pushed on the stream; a "run the agent here" handover in the UI; read-only agent
-  threads on the other devices.
+- Lease changes pushed on the stream.
 - Change-log compaction, per-vault quotas, and the sync status in the web and Mac apps; the iOS
   client (the Swift models already decode the sync status).

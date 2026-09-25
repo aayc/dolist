@@ -19,6 +19,7 @@ import {
   textResult,
   toolResultText,
 } from "@ddl/core";
+import { renderTranscript } from "../transcript";
 import type { HarnessEvent, HarnessSession, HarnessSessionOptions } from "../types";
 import {
   AcpClosedError,
@@ -169,11 +170,14 @@ export class CursorHarnessSession implements HarnessSession {
   private suspendTimer: ReturnType<typeof setTimeout> | undefined;
   private cancelTimer: ReturnType<typeof setTimeout> | undefined;
   private disposing: Promise<void> | undefined;
+  /** The transcript this session was created with, as text, until the first prompt carries it. */
+  private restored: string | undefined;
 
   constructor(init: CursorSessionInit) {
     this.init = init;
     this.id = init.options.sessionId;
     this.logger = init.logger;
+    if (init.options.transcript?.length) this.restored = renderTranscript(init.options.transcript);
     this.tools = new ToolRunner({
       sessionId: init.options.sessionId,
       role: init.options.role,
@@ -254,7 +258,10 @@ export class CursorHarnessSession implements HarnessSession {
   prompt(text: string): Promise<void> {
     if (this.closed) return Promise.resolve();
     const done = deferred<void>();
-    this.pending.push({ text, done });
+    // ACP can't seed a new session with messages, so a restored conversation leads the first prompt.
+    const restored = this.restored;
+    this.restored = undefined;
+    this.pending.push({ text: restored ? `${restored}\n\n${text}` : text, done });
     this.kick();
     return done.promise;
   }

@@ -9,6 +9,7 @@ import { perfStart } from "../../perf/perf";
 import { findRecordIn } from "../../state/agent-reducer";
 import { useAgentStore } from "../../state/agent-store";
 import { ui } from "../../state/ui-store";
+import { AgentLocation } from "../remote/AgentLocation";
 import { RoutinesInboxRow } from "../routines/RoutinesInboxRow";
 import { OrchestratorInboxRow } from "./OrchestratorInboxRow";
 import { StatusChip } from "./StatusChip";
@@ -33,6 +34,7 @@ export function Inbox() {
           onClick={() => ui.set({ rightOpen: false })}
         />
       </header>
+      <AgentLocation />
       <div className="inbox-scroll">
         <OrchestratorInboxRow />
         <RoutinesInboxRow />

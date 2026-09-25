@@ -10,6 +10,7 @@ import {
   listOperations,
   matchRoute,
   REQUEST_SCHEMA_NAMES,
+  type RouteAuth,
   WIRE_SCHEMAS,
   wireRegistry,
 } from "../../src/wire";
@@ -54,6 +55,7 @@ describe("API_CONTRACT coverage", () => {
       ["threadCancel", API_ROUTES.threadCancel(id)],
       ["threadRetry", API_ROUTES.threadRetry(id)],
       ["approval", API_ROUTES.approval(id)],
+      ["pairedDevice", API_ROUTES.pairedDevice(id)],
     ];
     for (const [name, url] of cases) {
       expect(matchRoute(pathnameOf(url)), name).toMatchObject({ name, params: { id } });
@@ -111,6 +113,7 @@ describe("operations", () => {
         } else {
           expect(code, `${status} is a success status`).toBeLessThan(300);
         }
+        if (response.kind === "empty") expect(code).toBe(204);
         if (response.kind === "json") {
           expect(wireRegistry.has(response.schema), "response schemas are named").toBe(true);
           expect(requestSchemas.has(response.schema), "responses use tolerant schemas").toBe(false);
@@ -126,12 +129,28 @@ describe("operations", () => {
     },
   );
 
-  it("declares the common errors once, for every bearer route", () => {
+  it("declares the common errors once, for every /api route", () => {
     expect(Object.keys(COMMON_API_ERRORS)).toEqual(["401", "403", "500"]);
-    const bearer = Object.entries(API_CONTRACT).filter(([, route]) => route.auth === "bearer");
-    expect(bearer.map(([name]) => name).sort()).toEqual(
-      routeNames.filter((n) => n !== "ws").sort(),
-    );
+    const byAuth = (auth: RouteAuth) =>
+      Object.entries(API_CONTRACT)
+        .filter(([, route]) => route.auth === auth)
+        .map(([name]) => name)
+        .sort();
+    expect(byAuth("upgrade")).toEqual(["ws"]);
+    expect(byAuth("pairing_code")).toEqual(["pair"]);
+    expect(byAuth("bearer")).toEqual(routeNames.filter((n) => n !== "ws" && n !== "pair").sort());
+    for (const [name, route] of Object.entries(API_CONTRACT)) {
+      expect(route.path.startsWith("/api/"), name).toBe(route.auth !== "upgrade");
+    }
+  });
+
+  it("keeps `unauthorized` in the 401 of every bearer route that declares its own", () => {
+    for (const { name, route, operation } of operations) {
+      const own = operation.responses[401];
+      if (!own || route.auth !== "bearer") continue;
+      expect(own.kind === "error" && own.codes, name).toContain("unauthorized");
+    }
+    expect(API_CONTRACT.pair.methods.POST.responses[401].codes).toEqual(["pairing_rejected"]);
   });
 
   it("uses each error code only with its documented status", () => {
@@ -177,11 +196,26 @@ describe("operations", () => {
         "invalid_settings": [
           400,
         ],
+        "locked_by_env": [
+          409,
+        ],
+        "machine_unreachable": [
+          502,
+        ],
         "not_found": [
           404,
         ],
+        "pairing_rejected": [
+          401,
+        ],
         "payload_too_large": [
           413,
+        ],
+        "rate_limited": [
+          429,
+        ],
+        "unauthorized": [
+          401,
         ],
         "upgrade_required": [
           426,

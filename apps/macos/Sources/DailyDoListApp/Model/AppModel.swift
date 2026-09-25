@@ -34,6 +34,8 @@ public final class AppModel {
   let preferences: AppPreferences
   let connection = ConnectionStore()
   let settings = SettingsStore()
+  /// This device's side of the always-on setup (Settings → Always-On).
+  let remote = RemoteSettingsStore()
   let toasts: ToastStore
   let ui: UIState
   /// The macOS permissions computer use needs, and the setup that gets them.
@@ -109,6 +111,7 @@ public final class AppModel {
     if new.editor.vimMode { vimrcProblems = vimIntegration.applyVimrc(new.editor.vimrc) }
     workspace?.editor.configure(new.editor)
     if old.theme != new.theme || !settings.isLoaded { applyTheme(new.theme) }
+    agent?.alwaysOnMachineName = new.remote.alwaysOnMachine?.name
   }
 
   /// `:obcommand <id>`: runs an app command by its `CommandID` (the web app's ids work too:

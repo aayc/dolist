@@ -96,7 +96,7 @@ function responses(name: ApiRouteName, method: HttpMethod): Record<number, Respo
 
 /** An arbitrary valid body for a response spec. */
 function bodyFor(spec: ResponseSpec): fc.Arbitrary<unknown> {
-  if (spec.kind === "binary") return fc.constant(undefined);
+  if (spec.kind === "binary" || spec.kind === "empty") return fc.constant(undefined);
   const id = wireRegistry.get(spec.schema)?.id as WireSchemaName | undefined;
   if (id) return wireArbitraries[id]() as fc.Arbitrary<unknown>;
   // Anonymous union (rename 409): any member.
@@ -367,6 +367,95 @@ const CASES: Array<Case<unknown>> = [
     expectSent: (id, sent) => expect(sent.params.id).toBe(id),
     result: self,
   }),
+  withCase({
+    name: "syncStatus",
+    method: "GET",
+    input: fc.constant(null),
+    invoke: (c) => c.getSyncStatus(),
+    result: self,
+  }),
+  withCase({
+    name: "device",
+    method: "GET",
+    input: fc.constant(null),
+    invoke: (c) => c.getDevice(),
+    result: self,
+  }),
+  withCase({
+    name: "device",
+    method: "PATCH",
+    input: arb.deviceSettingsPatch(),
+    invoke: (c, patch) => c.updateDevice(patch),
+    expectSent: (patch, sent) => expect(sent.body).toStrictEqual(patch),
+    result: self,
+  }),
+  withCase({
+    name: "deviceSync",
+    method: "PUT",
+    input: arb.deviceSyncSetupRequest(),
+    invoke: (c, request) => c.setupSync(request),
+    expectSent: (request, sent) => expect(sent.body).toStrictEqual(request),
+    result: self,
+  }),
+  withCase({
+    name: "deviceSync",
+    method: "DELETE",
+    input: fc.constant(null),
+    invoke: (c) => c.removeSync(),
+    result: self,
+  }),
+  withCase({
+    name: "pairingCodes",
+    method: "POST",
+    input: fc.option(arb.pairingCodeRequest(), { nil: undefined }),
+    invoke: (c, request) => c.createPairingCode(request),
+    expectSent: (request, sent) => expect(sent.body).toStrictEqual(request ?? {}),
+    result: self,
+  }),
+  withCase({
+    name: "devices",
+    method: "GET",
+    input: fc.constant(null),
+    invoke: (c) => c.listDevices(),
+    result: self,
+  }),
+  withCase({
+    name: "pairedDevice",
+    method: "DELETE",
+    input: arb.runtimeId("pdv"),
+    invoke: (c, id) => c.revokeDevice(id),
+    expectSent: (id, sent) => expect(sent.params.id).toBe(id),
+    result: nothing,
+  }),
+  withCase({
+    name: "machine",
+    method: "GET",
+    input: fc.constant(null),
+    invoke: (c) => c.getMachine(),
+    result: self,
+  }),
+  withCase({
+    name: "machinePair",
+    method: "POST",
+    input: arb.machinePairRequest(),
+    invoke: (c, request) => c.pairMachine(request),
+    expectSent: (request, sent) => expect(sent.body).toStrictEqual(request),
+    result: self,
+  }),
+  withCase({
+    name: "machineCheck",
+    method: "POST",
+    input: fc.constant(null),
+    invoke: (c) => c.checkMachine(),
+    result: self,
+  }),
+  withCase({
+    name: "machinePairing",
+    method: "DELETE",
+    input: fc.constant(null),
+    invoke: (c) => c.forgetMachine(),
+    result: self,
+  }),
 ];
 
 describe("HttpDaemonClient ⇄ contract", () => {
@@ -387,6 +476,8 @@ describe("HttpDaemonClient ⇄ contract", () => {
           "send",
           "socketUrl",
           "connectionState",
+          "probeAuth",
+          "unauthorized",
         ].includes(m) &&
         !m.startsWith("handle") &&
         !m.endsWith("_") &&

@@ -4,6 +4,7 @@ import {
   type TextMessage,
   type ToolCallMessage,
   textResult,
+  toolResultText,
 } from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -390,6 +391,56 @@ describe("orchestrator control plane", () => {
     expect(digests.join("\n")).toContain('"Book flights" (subtask of "Plan Kyoto trip")');
   });
 
+  it("searches and reads the user's other notes, beyond the daily note", async () => {
+    const storage = new MemoryStorageProvider();
+    await storage.write("Projects/Kyoto trip.md", "# Kyoto trip\n\nStay at a ryokan near Gion.\n");
+    const turns: Array<{ tools: string[]; search: string; read: string }> = [];
+    const t = await runtime({
+      storage,
+      scriptFor: scripts(
+        async (ctx) => {
+          const search = await ctx.callTool("search_notes", { query: "ryokan" });
+          const read = await ctx.callTool("read_note", { path: "[[Kyoto trip]]" });
+          turns.push({
+            tools: ctx.tools.map((tool) => tool.name).sort(),
+            search: toolResultText(search.result),
+            read: toolResultText(read.result),
+          });
+          for (const item of parseDigestItems(ctx.message)) {
+            await ctx.callTool("set_task_status", { taskId: item.taskId, status: "ignored" });
+          }
+        },
+        async () => {},
+      ),
+    });
+    await t.storage.write(TODAY, "- [ ] Plan the Kyoto trip\n");
+    await t.waitForStatus("Plan the Kyoto trip", "ignored");
+
+    const [turn] = turns;
+    // web_search and web_fetch join these in live mode.
+    expect(turn?.tools).toEqual([
+      "anchor_line",
+      "ask_user",
+      "cancel_subagent",
+      "create_routine",
+      "edit_note",
+      "list_routines",
+      "list_tasks",
+      "message_subagent",
+      "post_comment",
+      "read_drawing",
+      "read_note",
+      "run_routine",
+      "search_notes",
+      "set_task_status",
+      "spawn_subagent",
+      "update_routine",
+    ]);
+    expect(turn?.search).toContain("Projects/Kyoto trip.md:3: Stay at a ryokan near Gion.");
+    expect(turn?.read).toContain("# Projects/Kyoto trip.md");
+    expect(turn?.read).toContain("Stay at a ryokan near Gion.");
+  });
+
   it("retries a failed subagent in a fresh session primed with the thread history", async () => {
     const runs: Array<{ sessionId: string; message: string }> = [];
     const t = await runtime({
@@ -489,7 +540,7 @@ describe("restarts", () => {
     await second.waitForStatus(task, "done");
   });
 
-  it("marks interrupted work as failed and lets the user retry it", async () => {
+  it("leaves work a stop interrupted as it was, and the next start picks it back up", async () => {
     const storage = new MemoryStorageProvider();
     const first = await createTestRuntime({
       storage,
@@ -499,16 +550,14 @@ describe("restarts", () => {
     await first.storage.write(TODAY, `- [ ] ${task}\n`);
     await first.waitForStatus(task, "working");
     await first.runtime.stop();
-    expect(first.record(task)).toMatchObject({ status: "failed", summary: "Interrupted" });
+    expect(first.record(task)).toMatchObject({ status: "working" });
 
     const second = await runtime({ storage });
-    const record = second.record(task);
-    expect(record).toMatchObject({ status: "failed", summary: "Interrupted" });
-    await second.runtime.retryThread(record!.threadId!);
     await second.waitForStatus(task, "done");
+    expect(second.texts(task)).not.toContain("Interrupted because the agent restarted.");
   });
 
-  it("recovers records left active by a crash", async () => {
+  it("picks records left active by a crash back up", async () => {
     const storage = new MemoryStorageProvider();
     const first = await createTestRuntime({
       storage,
@@ -537,6 +586,6 @@ describe("restarts", () => {
     });
     await first.runtime.stop();
     const second = await runtime({ storage: crashed });
-    expect(second.record(task)).toMatchObject({ status: "failed", summary: "Interrupted" });
+    await second.waitForStatus(task, "done");
   });
 });

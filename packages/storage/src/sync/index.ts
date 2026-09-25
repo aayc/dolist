@@ -19,4 +19,5 @@ export {
   type SyncEngineOptions,
   type SyncStartOptions,
 } from "./engine";
+export { mergeJournals } from "./journal-merge";
 export { SYNC_STATE_DIR, snapshotPath } from "./snapshot";

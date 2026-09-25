@@ -10,6 +10,7 @@ import type {
   HarnessEvent,
   HarnessSession,
   HarnessSessionOptions,
+  TranscriptEntry,
 } from "./types";
 
 export interface ScriptContext {
@@ -21,6 +22,8 @@ export interface ScriptContext {
   message: string;
   /** 0 for the first prompt of the session, then 1, 2, … */
   turn: number;
+  /** The conversation the session was restored with (after a restart), oldest first; else empty. */
+  transcript: readonly TranscriptEntry[];
   signal: AbortSignal;
   /** Streams text as deltas followed by `message_end`. */
   say(text: string): Promise<void>;
@@ -146,6 +149,7 @@ class ScriptedSession implements HarnessSession {
       tools: this.options.tools,
       message,
       turn,
+      transcript: this.options.transcript ?? [],
       signal,
       say: (text) => this.say(text, signal),
       think: (text) => this.think(text, signal),

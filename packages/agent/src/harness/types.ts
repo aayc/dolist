@@ -24,7 +24,19 @@ export interface ToolCallRequest {
   spec?: ToolSpec;
 }
 
-export type ToolCallDecision = { allow: true } | { allow: false; reason: string };
+export type ToolCallDecision =
+  | {
+      allow: true;
+      /** What the call does, in words (the safety evaluator's summary). */
+      summary?: string;
+      /** How the gate let it through. */
+      via?: "evaluator" | "policy" | "grant" | "approval";
+      /** The approval request a person approved. */
+      approvalId?: string;
+      /** False for calls that change nothing (reads, searches, thread tools); absent counts as true. */
+      effectful?: boolean;
+    }
+  | { allow: false; reason: string };
 
 export type HarnessEvent =
   | { type: "turn_start" }
@@ -47,6 +59,21 @@ export type HarnessEvent =
   | { type: "error"; message: string }
   /** The agent has settled: no more automatic continuation until the next prompt. */
   | { type: "idle" };
+
+/**
+ * An earlier conversation to restore (a session rebuilt from the thread's journal after a restart
+ * or a handover): the prompts, the model's text and tool calls, and what each call returned.
+ */
+export type TranscriptEntry =
+  | { role: "user"; text: string }
+  | { role: "assistant"; text: string; toolCalls: TranscriptToolCall[] }
+  | { role: "tool"; toolCallId: string; toolName: string; output: string; isError: boolean };
+
+export interface TranscriptToolCall {
+  id: string;
+  name: string;
+  input: unknown;
+}
 
 export interface BuiltinToolsOptions {
   /** Expose the harness's file tools (read/write/edit, plus grep/find/ls when readOnly). */
@@ -77,6 +104,11 @@ export interface HarnessSessionOptions {
   beforeToolCall: (call: ToolCallRequest) => Promise<ToolCallDecision>;
   onEvent?: (event: HarnessEvent) => void;
   signal?: AbortSignal;
+  /**
+   * The conversation so far, restored before the first prompt. A harness that can seed its
+   * session's messages does (Pi); one that can't puts it in the first prompt as text (Cursor).
+   */
+  transcript?: readonly TranscriptEntry[];
 }
 
 export interface HarnessSession {

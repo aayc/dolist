@@ -56,6 +56,12 @@ extension AppModel {
     windows.openSettings?()
   }
 
+  /// Opens Settings → Always-On on `section`.
+  func showAlwaysOnSettings(_ section: AlwaysOnSection) {
+    ui.alwaysOnSection = section
+    showSettings(.alwaysOn)
+  }
+
   /// Connects the model's callbacks (once, from `init`).
   func connectComputerAccess() {
     computerAccess.onRequest = { [weak self] permission in

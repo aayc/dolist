@@ -18,6 +18,7 @@ export * from "./markdown/wikilinks";
 export * from "./merge";
 export * from "./paths";
 export * from "./protocol";
+export * from "./remote";
 export * from "./routine-schedule";
 export * from "./routines";
 export * from "./settings";

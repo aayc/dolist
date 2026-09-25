@@ -39,7 +39,7 @@ public struct OrchestratorChatView: View {
       OrchestratorHeader(
         status: status,
         onStop: status == .working ? { Task { await store.cancelThread(id) } } : nil,
-        onOpenWindow: onOpenWindow, onClose: onClose)
+        onOpenWindow: onOpenWindow, onClose: onClose, readOnlyReason: store.readOnly?.reason)
       AgentHairline()
       content
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -99,6 +99,7 @@ struct OrchestratorHeader: View {
   let onStop: (() -> Void)?
   let onOpenWindow: (() -> Void)?
   let onClose: (() -> Void)?
+  var readOnlyReason: String?
 
   var body: some View {
     HStack(alignment: .top, spacing: 8) {
@@ -115,7 +116,11 @@ struct OrchestratorHeader: View {
       }
       Spacer(minLength: 8)
       HStack(spacing: 0) {
-        if let onStop { IconButton("stop.circle", label: "Stop this run", action: onStop) }
+        if let onStop {
+          IconButton(
+            "stop.circle", label: "Stop this run", isEnabled: readOnlyReason == nil,
+            disabledReason: readOnlyReason, action: onStop)
+        }
         if let onOpenWindow {
           IconButton("macwindow", label: "Open in a separate window", action: onOpenWindow)
         }
@@ -245,6 +250,7 @@ struct OrchestratorMessages: View {
     case .approval(let item):
       context.approval = store.approvals[item.approvalId]
       context.isDeciding = store.decidingApprovalIds.contains(item.approvalId)
+      context.readOnlyReason = store.readOnly?.reason
     case .text(let text) where text.role == .user:
       context.isSending = store.sendingMessageIds.contains(text.id)
       context.unsent = store.unsentMessages[text.id]

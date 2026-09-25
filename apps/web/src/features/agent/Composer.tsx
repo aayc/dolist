@@ -3,11 +3,13 @@ import { ArrowUp, LoaderCircle, Square } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useServices } from "../../app/services";
 import { KEYS } from "../../commands/hotkeys";
+import { DisabledReason } from "../../components/DisabledReason";
 import { IconButton } from "../../components/IconButton";
 import { Keycaps } from "../../components/Keycaps";
 import { cx } from "../../lib/cx";
 import { useAgentStore } from "../../state/agent-store";
 import { type PostMessage, sendMessage } from "../../state/outbox-store";
+import { useReadOnlyReason } from "../remote/read-only";
 import { pendingApprovalOf } from "./activity";
 
 const FINISHED: ReadonlySet<TaskAgentStatus> = new Set(["done", "failed", "cancelled", "ignored"]);
@@ -18,7 +20,9 @@ export function composerPlaceholder(
   enabled: boolean,
   status: TaskAgentStatus,
   waitingApproval: boolean,
+  readOnly: string | null = null,
 ): string {
+  if (readOnly) return readOnly;
   if (!enabled) return "The agent is off";
   if (waitingApproval) return "Approve above, or reply to change course…";
   if (FINISHED.has(status)) return "Ask a follow-up…";
@@ -48,7 +52,8 @@ export function Composer({
   onSend?: () => void;
 }) {
   const { agent } = useServices();
-  const enabled = useAgentStore((s) => s.status?.enabled ?? true);
+  const readOnly = useReadOnlyReason();
+  const enabled = useAgentStore((s) => s.status?.enabled ?? true) && readOnly === null;
   const status = useAgentStore(
     (s) => s.details[threadId]?.status ?? s.threads[threadId]?.status ?? "idle",
   );
@@ -60,7 +65,7 @@ export function Composer({
   const input = useRef<HTMLTextAreaElement>(null);
   const sizer = useRef<HTMLDivElement>(null);
   const hintId = useId();
-  const placeholder = composerPlaceholder(enabled, status, waitingApproval);
+  const placeholder = composerPlaceholder(enabled, status, waitingApproval, readOnly);
   const working = isActiveTaskStatus(status);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the sizer shows the text or placeholder
@@ -140,24 +145,28 @@ export function Composer({
             <Keycaps hotkey={KEYS.shiftEnter} /> new line
           </span>
           {working ? (
-            <IconButton
-              icon={stopping ? LoaderCircle : Square}
-              command="agent:stop"
-              className={cx("composer-stop", stopping && "is-stopping")}
-              disabled={stopping}
-              onClick={stop}
-              data-testid="composer-stop"
-            />
+            <DisabledReason reason={readOnly}>
+              <IconButton
+                icon={stopping ? LoaderCircle : Square}
+                command="agent:stop"
+                className={cx("composer-stop", stopping && "is-stopping")}
+                disabled={stopping || readOnly !== null}
+                onClick={stop}
+                data-testid="composer-stop"
+              />
+            </DisabledReason>
           ) : null}
-          <IconButton
-            icon={ArrowUp}
-            label="Send"
-            keys="enter"
-            type="submit"
-            disabled={!enabled || !text.trim()}
-            className="composer-send"
-            data-testid="composer-send"
-          />
+          <DisabledReason reason={readOnly}>
+            <IconButton
+              icon={ArrowUp}
+              label="Send"
+              keys="enter"
+              type="submit"
+              disabled={!enabled || !text.trim()}
+              className="composer-send"
+              data-testid="composer-send"
+            />
+          </DisabledReason>
         </div>
       </div>
     </form>
