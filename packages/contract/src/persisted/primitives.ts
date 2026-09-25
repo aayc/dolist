@@ -15,6 +15,7 @@ export const PERSISTED_PATHS = {
   taskState: `${SIDECAR_DIR}/state/tasks`,
   records: `${SIDECAR_DIR}/state/records.json`,
   approvals: `${SIDECAR_DIR}/state/approvals.json`,
+  routines: `${SIDECAR_DIR}/state/routines.json`,
   settings: `${SIDECAR_DIR}/settings.json`,
   /** Unreadable files are moved here, and originals of repaired files are copied here. */
   corrupt: `${SIDECAR_DIR}/corrupt`,

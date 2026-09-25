@@ -114,6 +114,8 @@ export const PersistedThreadFileSchema = z.object({
   surfaces: z.array(PersistedSurfaceKindSchema),
   /** Web pages the thread cites (citation previews). */
   sources: z.array(PersistedCitedSourceSchema).optional(),
+  /** A routine's run: the routine it belongs to (`rtn_…`). */
+  routineId: PersistedIdSchema.optional(),
 });
 export type PersistedThreadFile = z.infer<typeof PersistedThreadFileSchema>;
 /** The in-memory thread (`Thread` in @ddl/core): the file without `version`. */
@@ -125,6 +127,8 @@ const ThreadEnvelopeSchema = z.object({
   artifacts: PersistedListSchema,
   surfaces: PersistedListSchema,
   sources: PersistedListSchema.optional(),
+  // A malformed routine id only loses the grouping, never the thread.
+  routineId: z.unknown().optional(),
 });
 
 const threadSpec: PersistedFormatSpec<PersistedThread> = {
@@ -161,6 +165,10 @@ const threadSpec: PersistedFormatSpec<PersistedThread> = {
     const sources = envelope.sources
       ? salvageList(envelope.sources, PersistedCitedSourceSchema, "sources", issues, (s) => s.url)
       : [];
+    const routineId = PersistedIdSchema.safeParse(envelope.routineId);
+    if (envelope.routineId !== undefined && !routineId.success) {
+      issues.push({ path: "routineId", message: "not a routine id" });
+    }
     return {
       id: envelope.id,
       taskId: envelope.taskId,
@@ -173,6 +181,7 @@ const threadSpec: PersistedFormatSpec<PersistedThread> = {
       artifacts,
       surfaces,
       ...(sources.length > 0 ? { sources } : {}),
+      ...(routineId.success ? { routineId: routineId.data } : {}),
     };
   },
 };
@@ -224,6 +233,7 @@ export function encodePersistedThread(thread: PersistedThread): string {
     artifacts: thread.artifacts,
     surfaces: thread.surfaces,
     ...(thread.sources?.length ? { sources: thread.sources } : {}),
+    ...(thread.routineId ? { routineId: thread.routineId } : {}),
   };
   return `${JSON.stringify(file)}\n`;
 }
@@ -252,6 +262,9 @@ export function mergePersistedThreads(
     artifacts: unionByCreatedAt(ours.artifacts, theirs.artifacts),
     surfaces: [...new Set([...ours.surfaces, ...theirs.surfaces])],
     ...unionSources(ours.sources, theirs.sources),
+    ...((ours.routineId ?? theirs.routineId)
+      ? { routineId: (ours.routineId ?? theirs.routineId) as string }
+      : {}),
   };
 }
 

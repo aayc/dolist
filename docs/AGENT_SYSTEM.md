@@ -74,7 +74,8 @@ harness's), instead of every judge call and search failing with a 401.
   doesn't delegate it: it asks the user to allow access in Settings → Computer Use and waits.
 - The orchestrator's tools: `spawn_subagent`, `post_comment`, `ask_user`, `set_task_status`,
   `message_subagent`, `cancel_subagent`, `list_tasks`, `anchor_line`, `edit_note`, `read_note`,
-  `web_search`, `web_fetch`.
+  `web_search`, `web_fetch`, and the routine tools (`create_routine`, `update_routine`,
+  `run_routine`, `list_routines`; see [Routines](#routines)).
 - **Anchors**: `anchor_line` attaches a thread to any line that isn't a task (a question, a
   heading…). It becomes a record with `anchor: "line"` and an `anc_…` id that every task tool
   accepts, so the line gets a badge and its own thread like a task. Anchors follow their line as
@@ -162,6 +163,75 @@ outcome or become *Stopped*.
   never fetch a page to build a preview.
 - **Badges** stay the short status next to the line ("Booked · Tue 9:30am"); note lines are for
   results worth keeping, with their sources.
+
+## Routines
+
+Standing jobs the agent runs on a schedule: a morning briefing, a price watch, a weekly review
+(`src/routines/`).
+
+- **Files.** One markdown file per routine in the vault's top-level `Routines/` folder; its name is
+  the file name. The frontmatter holds `schedule` (natural language, local time), `notify`
+  (`always` by default, `when changed`, `never`), `uses` (the capabilities its runs get; without
+  it, runs are triaged like a task) and `paused`; the body is the instructions. `@ddl/core` reads
+  the file (`routines.ts`, which never throws: problems are listed on the routine) and parses the
+  schedule into a recurrence (`routine-schedule.ts`: every day, weekdays, given weekdays, every N
+  hours or minutes (at least 15), monthly on a day, at listed times) with the next run computed
+  in local time across DST changes. A phrase it can't read is an error on the routine, never a
+  guess.
+- **Catalog and library.** `RoutineCatalog` reads `Routines/*.md` and follows edits made anywhere
+  (the app, Obsidian, sync) through storage events; invalid or unreadable files are listed with
+  their problems. `RoutineLibrary` joins each file with the scheduler's state into the wire
+  `Routine` (schedule in words, next run, last run, run count, extra runs left today), and writes
+  the files for create, pause and resume (`files.ts`: checks the name, schedule and instructions,
+  never overwrites a routine, and changes only the frontmatter lines it sets).
+- **State.** `.daily-do-list/state/routines.json` (`RoutineStateStore`, format in `@ddl/contract`):
+  per routine the planned next run and the schedule it was planned from, the last run (status,
+  compact result, `changed`, whether it notified), recent run threads and today's extra runs.
+  Nothing of it goes in the routine file. A corrupt file is moved to `.daily-do-list/corrupt/`, a
+  newer app's file is left alone, and concurrent saves (another device) merge per routine.
+- **Scheduler.** `RoutineScheduler` runs in the agent runtime and is active exactly while the agent
+  can run here and is enabled. It looks at least once a minute, and at the next due slot. A slot
+  found more than 2 minutes late (the Mac slept, the daemon was down) runs once, as a `catch_up`
+  run, however many slots went by; switching the agent back on isn't missing anything, so routines
+  start again from their next slot. A slot that comes while the previous run is still going is
+  skipped. Paused and invalid routines aren't planned; a resumed one starts from its next slot.
+- **Runs.** A run is a task-like record `run_…` (never listed with a note's tasks) with a thread
+  that has `routineId`, titled with the routine's name: it streams, asks, waits for approvals and
+  takes replies like a task's thread, and clients list it under its routine, not in the inbox.
+  With `uses`, a subagent starts with those capabilities (those available here; if none is, the run
+  fails "Can't run here"); without, the orchestrator triages it from "## Routine runs" in its
+  digest. The run's kickoff (`RoutineBrief`) has the instructions, what started it, and the
+  previous run's status and result, so it can say what's new.
+- **Notify.** When a run's first turn ends, its result is saved and `routine.notification` goes out
+  at most once per run: failures and questions unless `notify` is `never`; results with `always`,
+  and with `when changed` only when the run's `finish_task` said `changed: true` (a run that
+  doesn't say counts as changed). A run waiting on approval surfaces like any approval.
+- **Budget.** Run now (`POST /api/routines/:id/run`, or the orchestrator's `run_routine`) may start
+  `EXTRA_RUNS_PER_DAY` (5) runs of a routine per local day, beyond its schedule; scheduled and
+  catch-up runs don't count, and a routine never has two runs at once. A run stops after 15
+  minutes of working time (`MAX_ROUTINE_RUN_MS`; waiting for approval doesn't count) and fails
+  "Took too long".
+- **Lease.** With the sync service only the device holding the agent lease has a real runtime, so
+  only it schedules. The other devices list, create, pause and resume routines through the files
+  (a read-only library that follows the synced state file) and answer Run now with 503. The
+  handover saves the state before the next device loads it, so a slot runs on one device only, and
+  one missed while no device held the lease catches up once on the next holder.
+- **Creation by saying it.** The digest lists the user's routines under "## Routines", and the
+  prompt turns "every morning, brief me on…" (a task, a line or a chat message) into
+  `create_routine`: a short name, a schedule the parser reads (a vague "every morning" becomes a
+  time, which it says), instructions a future run can follow alone, `notify: when_changed` for
+  watches, and the fewest `uses`. An existing routine for the same thing is changed with
+  `update_routine`, which also pauses and resumes.
+- **Safety.** Nothing about routines bypasses the gate: every tool call of every run is gated like
+  any agent's. The routine tools have their own rules (`safety/rules/routines.ts`): creating a
+  routine, changing what or when it runs, and resuming it are `require_approval` at medium risk,
+  so the approval policy decides as for any action; pausing, running now (its actions are gated
+  one by one) and listing are allowed. A run editing a file in `Routines/` asks too. The
+  scheduler's state is sidecar state: writing, moving or deleting it is a hard deny under every
+  policy (`src/routines/state-protection.test.ts`).
+- **Wire.** `GET`/`POST /api/routines`, `GET /api/routines/:id`, `POST …/run`, `…/pause`,
+  `…/resume`, `?routineId=` on `/api/threads`, and the `routines.changed` and
+  `routine.notification` events (status codes in `apps/daemon/README.md`).
 
 ## 4. Staying safe (SafetyGate)
 
@@ -279,14 +349,15 @@ and calls the bridge like the real one.
 
 `evals/` holds datasets and suites:
 
-- **safety** (250+ cases, 150 marked critical): mock mode runs the rules-only evaluator and requires
-  **zero false allows**; live mode adds the LLM judge. Cases can carry a `subject` (what the tool
-  knows about the real target).
-- **triage** (60+ synthetic tasks, including desktop-app tasks with and without computer access,
-  and messages written to the orchestrator in its chat — drop, pass on, or just reply): live mode
-  runs the real orchestrator prompt on Pi with recorded (stubbed) tools and scores decision
-  accuracy, capability recall and time-to-first-action; mock mode validates the dataset with a
-  deterministic baseline.
+- **safety** (280 cases, 160+ marked critical, the routine tools and the scheduler's state
+  included): mock mode runs the rules-only evaluator and requires **zero false allows**; live mode
+  adds the LLM judge. Cases can carry a `subject` (what the tool knows about the real target).
+- **triage** (75+ synthetic tasks, including desktop-app tasks with and without computer access,
+  recurring requests that should become routines, and messages written to the orchestrator in its
+  chat — drop, pass on, just reply, or create a routine): live mode runs the real orchestrator
+  prompt on Pi with recorded (stubbed) tools and scores decision accuracy, capability recall (a
+  routine's `uses`), a routine's schedule and `notify`, and time-to-first-action; mock mode
+  validates the dataset with a deterministic baseline.
 
 ```bash
 pnpm eval:mock                         # deterministic, runs in CI

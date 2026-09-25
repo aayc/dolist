@@ -39,6 +39,9 @@ It's a *do* list, not a *to-do* list: the point is that things get done.
   messages, tool activity, artifacts (drafts, comparisons, research summaries), a live browser view
   and a computer-use view. Sources are clickable citations with hover previews. Reply to steer
   the agent.
+- **Routines.** Say "every morning at 7:30, brief me on the weather" and the agent sets up a
+  routine — a plain markdown file in `Routines/` that it runs on schedule, each run in its own
+  thread, notifying you when it's done (or, for a watch, only when something changed).
 - **A separate safety evaluator.** Every tool call from every agent passes a policy → rules → LLM
   judge pipeline before it runs. Payments, bookings, outgoing messages, account changes,
   destructive commands and desktop control require your explicit approval; catastrophic actions are

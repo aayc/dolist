@@ -586,11 +586,14 @@ public struct AgentThread: Codable, Hashable, Sendable, Identifiable {
   /// Web pages this thread cites, with what the agent saw of them: citation previews come from
   /// here, never from fetching the page.
   public var sources: [CitedSource]?
+  /// Set on a routine's runs: the routine (``Routine/id``) this thread is one run of.
+  public var routineId: String?
 
   public init(
     id: String, taskId: String?, notePath: String?, title: String, status: TaskAgentStatus,
     createdAt: EpochMillis, updatedAt: EpochMillis, messages: [ThreadMessage] = [],
-    artifacts: [ArtifactMeta] = [], surfaces: [SurfaceKind] = [], sources: [CitedSource]? = nil
+    artifacts: [ArtifactMeta] = [], surfaces: [SurfaceKind] = [], sources: [CitedSource]? = nil,
+    routineId: String? = nil
   ) {
     self.id = id
     self.taskId = taskId
@@ -603,11 +606,12 @@ public struct AgentThread: Codable, Hashable, Sendable, Identifiable {
     self.artifacts = artifacts
     self.surfaces = surfaces
     self.sources = sources
+    self.routineId = routineId
   }
 
   enum CodingKeys: String, CodingKey {
     case id, taskId, notePath, title, status, createdAt, updatedAt, messages, artifacts, surfaces,
-      sources
+      sources, routineId
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -623,6 +627,7 @@ public struct AgentThread: Codable, Hashable, Sendable, Identifiable {
     try c.encode(artifacts, forKey: .artifacts)
     try c.encode(surfaces, forKey: .surfaces)
     try c.encodeIfPresent(sources, forKey: .sources)
+    try c.encodeIfPresent(routineId, forKey: .routineId)
   }
 
   /// The orchestrator's own chat (``OrchestratorThread``).
@@ -656,12 +661,14 @@ public struct ThreadSummary: Codable, Hashable, Sendable, Identifiable {
   public var artifactCount: Int
   public var surfaces: [SurfaceKind]
   public var pendingApprovals: Int
+  /// Set on a routine's runs (see ``AgentThread/routineId``).
+  public var routineId: String?
 
   public init(
     id: String, taskId: String?, notePath: String?, title: String, status: TaskAgentStatus,
     createdAt: EpochMillis, updatedAt: EpochMillis, messageCount: Int,
     lastMessagePreview: String? = nil, artifactCount: Int, surfaces: [SurfaceKind],
-    pendingApprovals: Int
+    pendingApprovals: Int, routineId: String? = nil
   ) {
     self.id = id
     self.taskId = taskId
@@ -675,11 +682,12 @@ public struct ThreadSummary: Codable, Hashable, Sendable, Identifiable {
     self.artifactCount = artifactCount
     self.surfaces = surfaces
     self.pendingApprovals = pendingApprovals
+    self.routineId = routineId
   }
 
   enum CodingKeys: String, CodingKey {
     case id, taskId, notePath, title, status, createdAt, updatedAt, messageCount
-    case lastMessagePreview, artifactCount, surfaces, pendingApprovals
+    case lastMessagePreview, artifactCount, surfaces, pendingApprovals, routineId
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -696,6 +704,7 @@ public struct ThreadSummary: Codable, Hashable, Sendable, Identifiable {
     try c.encode(artifactCount, forKey: .artifactCount)
     try c.encode(surfaces, forKey: .surfaces)
     try c.encode(pendingApprovals, forKey: .pendingApprovals)
+    try c.encodeIfPresent(routineId, forKey: .routineId)
   }
 
   /// The orchestrator's own chat (``OrchestratorThread``).

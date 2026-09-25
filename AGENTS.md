@@ -226,7 +226,8 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
  use (the Pi harness from `@ddl/agent/pi`, the Cursor harness from `@ddl/agent/cursor`, Playwright
  via `import()` where Chrome launches). Don't re-export them from a package index or import them
  statically elsewhere: `apps/daemon/build.mjs` fails the build if they would load before the
- daemon answers.
+ daemon answers. The one static agent import is `@ddl/agent/routines` (routine files, editable
+ while no agent runs here): keep that entry free of harness, execution and model code.
 - **Pi harness:** sessions are hermetic (isolated `agentDir` under `$DDL_HOME/pi`, no discovered
   extensions/skills/context files) and refuse to start if the safety-gate extension didn't load.
 - **Cursor harness:** set `agent.harness` to `cursor` in Settings (the other settings keep working;

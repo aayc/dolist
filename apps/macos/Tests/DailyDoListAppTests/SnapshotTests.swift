@@ -395,6 +395,28 @@ struct SnapshotTests {
     await model.teardown()
   }
 
+  /// Agent → Show Routines: the list, a routine's own inbox of runs, and one of its runs.
+  @Test func routines() async throws {
+    let (model, _) = try await bootedModel()
+    let routine = try #require(model.agent?.routines.first)
+    let run = try #require(routine.lastRun?.threadId)
+    for dark in [false, true] {
+      model.ui.showRoutines()
+      _ = try await render(
+        MainWindowView(model: model), size: CGSize(width: 1440, height: 800), dark: dark,
+        name: "main-window-routines")
+      model.ui.showRoutine(routine.id)
+      _ = try await render(
+        MainWindowView(model: model), size: CGSize(width: 1440, height: 800), dark: dark,
+        name: "main-window-routine")
+      model.ui.showRoutineRun(routineId: routine.id, threadId: run)
+      _ = try await render(
+        MainWindowView(model: model), size: CGSize(width: 1440, height: 800), dark: dark,
+        name: "main-window-routine-run")
+    }
+    await model.teardown()
+  }
+
   /// Agent → Orchestrator Chat: the chat in its own window, and the window without an agent.
   @Test func orchestratorWindow() async throws {
     let (model, _) = try await bootedModel()

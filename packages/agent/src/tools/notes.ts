@@ -319,11 +319,12 @@ export function describeNoteEdit(input: unknown): string {
 
 /**
  * The note tool of the orchestrator and every subagent. `ownTask`: the subagent's task, which
- * edits are about unless they name another.
+ * edits are about unless they name another. `signAs`: a caller that isn't a line of a note (a
+ * routine's run): its edits go to today's note unless they name one, signed with its thread.
  */
 export function createNoteEditTool(
   host: NoteEditHost,
-  options: { ownTask?: string } = {},
+  options: { ownTask?: string; signAs?: string } = {},
 ): ToolSpec {
   return {
     name: TOOL.editNote,
@@ -391,7 +392,7 @@ export function createNoteEditTool(
     ],
     execute: (input, ctx) =>
       guarded(async () => {
-        const ownTask = options.ownTask ?? ctx.taskId ?? undefined;
+        const ownTask = options.signAs ? undefined : (options.ownTask ?? ctx.taskId ?? undefined);
         const args = parseEditNoteInput(input, ownTask);
         const taskId = args.taskId ?? ownTask ?? null;
         const item = taskId ? host.locate(taskId) : null;
@@ -400,7 +401,7 @@ export function createNoteEditTool(
         }
         const notePath = notePathOf(args.notePath ?? item?.notePath ?? host.defaultNotePath());
         await host.waitForPause(notePath);
-        const threadId = host.threadFor(taskId);
+        const threadId = host.threadFor(taskId ?? options.signAs ?? null);
         for (let attempt = 1; ; attempt++) {
           const file = await host.storage.read(notePath);
           if (!file) return errorResult(`Note not found: ${notePath}`);

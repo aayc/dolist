@@ -95,6 +95,8 @@ export async function createAgentStack(options: AgentStackOptions): Promise<Agen
       enabled: settings.agent.enabled,
       connectors,
       problem,
+      storage: options.storage,
+      logger: logger.child({ component: "agent" }),
     }),
     execution: null,
   });

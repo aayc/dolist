@@ -13,6 +13,7 @@ Each user message is an event digest written by the system (not typed by the use
 - the whole note, numbered (\`<n>| <line>\`), with ⟪…⟫ after lines you know: the task or anchor id, its agent status and badge, and "yours" for lines you wrote;
 - user replies in task threads and reports from subagents that finished;
 - messages the user wrote to you directly in your chat, with your recent chat for context;
+- routine runs that are due, and the user's routines;
 - the running subagents and the capabilities you can grant, with the Mac's desktop apps and whether computer access is allowed.
 Always refer to tasks by their exact taskId in tool calls.
 
@@ -64,6 +65,13 @@ Cite every fact that came from the web with a markdown link right after it, e.g.
 - reply: the user answered in a task's thread. Continue: spawn a subagent with the new information, answer with post_comment, or set a status.
 - subagent report: usually no action. React only when it matters — it unblocks or changes another task, or it failed and a retry with different instructions or capabilities would likely succeed.
 - Don't comment on a task again unless you have news.
+
+# Routines
+A routine is a standing job that runs on its own on a schedule, each run reporting in its own thread under Routines: a morning briefing, a price or availability watch, a news digest, a weekly review. They are files in the user's Routines/ folder, listed under "## Routines" in the digest.
+- When a task, a line or a message asks for something recurring ("every morning, brief me on…", "check the price of X every hour and tell me when it drops", "each Sunday review my week"), don't do it once: call create_routine. Give it a short name (its file name, e.g. "Morning briefing"), the schedule in the phrases the tool lists (a vague time like "every morning" becomes a sensible one, e.g. "every day at 8:00" — say which), instructions a future run can follow alone (what to check and where, what to report, how short), notify "when_changed" for watches and monitors or "always" for briefings and digests, and uses with the fewest capabilities a run needs. The user's approval policy may ask them first: the card shows the name, the schedule and what it will do.
+- Then tell the user in one line, schedule in words: on the task, post_comment ("Routine “Morning briefing” — every weekday at 7:30 AM") and set_task_status "done" with summary "Routine created"; in your chat, reply. If it was denied, say you won't set it up and set the task "ignored".
+- If a routine for the same thing exists, change it with update_routine instead of creating another. update_routine also pauses (paused: true) and resumes (paused: false); run_routine runs one right away; list_routines shows them with their last results.
+- A routine run that's due arrives under "## Routine runs" as \`- [routine] <taskId>: "<name>"\` with its instructions: triage it like a task with that taskId — usually spawn_subagent with the capabilities the instructions need (the subagent gets the instructions and the previous result on its own). Never create a routine for a routine run.
 
 # Your chat with the user
 The user can open your chat and write to you directly. Their messages arrive under "## Messages to you", with your recent chat for context. The text of your turn is your reply: it streams into your chat, so this is the one event you answer in words.
@@ -154,6 +162,23 @@ export interface DigestChatLine {
   createdAt: number;
 }
 
+/** A routine run to triage like a task (its record is `taskId`). */
+export interface DigestRoutineRun {
+  taskId: string;
+  name: string;
+  scheduleText?: string;
+  instructions: string;
+}
+
+/** One of the user's routines, as the orchestrator sees it. */
+export interface DigestRoutine {
+  name: string;
+  /** The schedule in words, or as written when it can't be read. */
+  schedule: string;
+  paused: boolean;
+  error?: string;
+}
+
 export interface DigestSubagent {
   taskId: string;
   taskText: string;
@@ -194,6 +219,10 @@ export interface OrchestratorDigest {
   direct?: string[];
   /** Earlier messages of that chat (their messages and its replies), oldest first. */
   chat?: DigestChatLine[];
+  /** Routine runs due now, to triage like tasks. */
+  routineRuns?: DigestRoutineRun[];
+  /** The user's routines (so it changes one instead of creating a duplicate). */
+  routines?: DigestRoutine[];
   subagents: DigestSubagent[];
   capabilities: DigestCapabilities;
 }
@@ -203,6 +232,7 @@ const MAX_DIRECT_CHARS = 4_000;
 const MAX_CHAT_LINE_CHARS = 600;
 const MAX_VIEW_LINES = 250;
 const MAX_VIEW_LINE_CHARS = 400;
+const MAX_ROUTINES = 30;
 
 /** The user message for one orchestrator turn. */
 export function formatOrchestratorDigest(digest: OrchestratorDigest): string {
@@ -270,6 +300,31 @@ export function formatOrchestratorDigest(digest: OrchestratorDigest): string {
       "## Messages to you (the user wrote in your chat; your turn's text is your reply)",
     );
     for (const text of digest.direct) lines.push(`- [direct] ${quote(text, MAX_DIRECT_CHARS)}`);
+  }
+
+  if (digest.routineRuns && digest.routineRuns.length > 0) {
+    lines.push("", "## Routine runs (due now: triage each like a task, by its taskId)");
+    for (const run of digest.routineRuns) {
+      const when = run.scheduleText ? ` (${run.scheduleText})` : "";
+      lines.push(`- [routine] ${run.taskId}: ${quote(run.name, 200)}${when}`);
+      lines.push(`    - instructions: ${quote(run.instructions, 2_000)}`);
+    }
+  }
+
+  if (digest.routines && digest.routines.length > 0) {
+    lines.push("", "## Routines");
+    const shown = digest.routines.slice(0, MAX_ROUTINES);
+    for (const routine of shown) {
+      const state = routine.error
+        ? ` · can't run: ${quote(routine.error, 160)}`
+        : routine.paused
+          ? " · paused"
+          : "";
+      lines.push(`- ${quote(routine.name, 120)}: ${routine.schedule}${state}`);
+    }
+    if (digest.routines.length > shown.length) {
+      lines.push(`- … ${digest.routines.length - shown.length} more (use list_routines)`);
+    }
   }
 
   lines.push("", "## Running subagents");
@@ -373,12 +428,13 @@ function describeTask(task: DigestTask): string {
 }
 
 export interface ParsedDigestItem {
-  kind: DigestChange | "reply";
+  kind: DigestChange | "reply" | "routine";
   taskId: string;
   text: string;
 }
 
-const DIGEST_ITEM_RE = /^- \[(added|updated|reopened|retry|reply)\] (\S+): ("(?:[^"\\]|\\.)*")/gm;
+const DIGEST_ITEM_RE =
+  /^- \[(added|updated|reopened|retry|reply|routine)\] (\S+): ("(?:[^"\\]|\\.)*")/gm;
 
 /** Extracts changed tasks and replies from a digest (used by the deterministic mock script). */
 export function parseDigestItems(message: string): ParsedDigestItem[] {

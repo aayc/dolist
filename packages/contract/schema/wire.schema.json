@@ -650,6 +650,11 @@
             "$ref": "#/$defs/SurfaceKind"
           }
         },
+        "routineId": {
+          "description": "Set on a routine's runs: the routine (`Routine.id`) this thread is one run of. Clients list these under their routine, not in the task inbox.",
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$"
+        },
         "messages": {
           "type": "array",
           "items": {
@@ -744,6 +749,11 @@
             "$ref": "#/$defs/SurfaceKind"
           }
         },
+        "routineId": {
+          "description": "Set on a routine's runs: the routine (`Routine.id`) this thread is one run of. Clients list these under their routine, not in the task inbox.",
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$"
+        },
         "messageCount": {
           "type": "integer",
           "minimum": 0,
@@ -778,6 +788,216 @@
       ],
       "additionalProperties": {},
       "description": "A thread without its messages, for lists and badges."
+    },
+    "RoutineNotify": {
+      "type": "string",
+      "enum": ["always", "when_changed", "never"],
+      "description": "When a finished run notifies: `always`, `when_changed` (only when it found something new) or `never`. The file spells `when_changed` as `when changed`."
+    },
+    "RoutineUse": {
+      "type": "string",
+      "enum": ["web", "browser", "computer", "shell", "files", "connectors"],
+      "description": "A capability a routine's runs get (its file's `uses`)."
+    },
+    "RoutineRunTrigger": {
+      "type": "string",
+      "enum": ["schedule", "catch_up", "manual"],
+      "description": "What started a run: its schedule, a slot missed while the Mac slept or the daemon was down (`catch_up`, once however many were missed), or the user (`manual`)."
+    },
+    "RoutineRun": {
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        },
+        "trigger": {
+          "$ref": "#/$defs/RoutineRunTrigger"
+        },
+        "status": {
+          "$ref": "#/$defs/TaskAgentStatus"
+        },
+        "startedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "finishedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "summary": {
+          "description": "One line: the run's badge text.",
+          "type": "string"
+        },
+        "changed": {
+          "description": "Whether the run found something new since the previous one.",
+          "type": "boolean"
+        }
+      },
+      "required": ["threadId", "trigger", "status", "startedAt"],
+      "additionalProperties": {},
+      "description": "One run of a routine; its thread holds the conversation."
+    },
+    "Routine": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Stable id derived from the file's path (`rtn_…`)."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments)."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The file name without `.md`."
+        },
+        "schedule": {
+          "type": "string",
+          "description": "The schedule as written in the file."
+        },
+        "scheduleText": {
+          "description": "The schedule in words; absent when it can't be read.",
+          "type": "string"
+        },
+        "notify": {
+          "$ref": "#/$defs/RoutineNotify"
+        },
+        "uses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RoutineUse"
+          }
+        },
+        "paused": {
+          "type": "boolean"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "error": {
+          "description": "Why the routine can't run.",
+          "type": "string"
+        },
+        "nextRunAt": {
+          "description": "Absent while paused, invalid or unscheduled.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "lastRun": {
+          "$ref": "#/$defs/RoutineRun"
+        },
+        "runCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Runs kept (threads with this `routineId`)."
+        },
+        "extraRunsLeft": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Runs that may still start today beyond the schedule."
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "name",
+        "schedule",
+        "notify",
+        "uses",
+        "paused",
+        "instructions",
+        "runCount",
+        "extraRunsLeft"
+      ],
+      "additionalProperties": {},
+      "description": "A standing job the agent runs on a schedule: the file `Routines/<name>.md` (schedule, notify, uses and paused in its frontmatter, the instructions as its body) plus the scheduler's state."
+    },
+    "RoutineTemplate": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Identifier."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "schedule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "notify": {
+          "$ref": "#/$defs/RoutineNotify"
+        },
+        "uses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RoutineUse"
+          }
+        },
+        "instructions": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["id", "name", "description", "schedule", "notify", "uses", "instructions"],
+      "additionalProperties": {},
+      "description": "A starter routine offered by “New routine”."
+    },
+    "RoutineNotification": {
+      "type": "object",
+      "properties": {
+        "routineId": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        },
+        "title": {
+          "type": "string",
+          "description": "The routine's name."
+        },
+        "body": {
+          "type": "string",
+          "description": "The run's result in a line or two."
+        },
+        "threadId": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        },
+        "status": {
+          "$ref": "#/$defs/TaskAgentStatus"
+        },
+        "at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        }
+      },
+      "required": ["routineId", "title", "body", "threadId", "status", "at"],
+      "additionalProperties": {},
+      "description": "A finished run to tell the user about (sent according to the routine's `notify`)."
     },
     "SurfaceFrameAction": {
       "type": "object",
@@ -1902,6 +2122,93 @@
       "additionalProperties": {},
       "description": "Every configured MCP connector."
     },
+    "RoutineListResponse": {
+      "type": "object",
+      "properties": {
+        "routines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Routine"
+          }
+        },
+        "templates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RoutineTemplate"
+          }
+        }
+      },
+      "required": ["routines", "templates"],
+      "additionalProperties": {},
+      "description": "Every routine (sorted by name) and the starter templates for “New routine”."
+    },
+    "RoutineResponse": {
+      "type": "object",
+      "properties": {
+        "routine": {
+          "$ref": "#/$defs/Routine"
+        }
+      },
+      "required": ["routine"],
+      "additionalProperties": {},
+      "description": "One routine."
+    },
+    "CreateRoutineRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "The file name, without `.md`."
+        },
+        "schedule": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "e.g. `every weekday at 7:30`."
+        },
+        "instructions": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000,
+          "description": "What each run does."
+        },
+        "notify": {
+          "description": "Default `always`.",
+          "$ref": "#/$defs/RoutineNotify"
+        },
+        "uses": {
+          "maxItems": 6,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RoutineUse"
+          }
+        },
+        "paused": {
+          "type": "boolean"
+        }
+      },
+      "required": ["name", "schedule", "instructions"],
+      "additionalProperties": false,
+      "description": "Body of `POST /api/routines`: a new routine file `Routines/<name>.md`. The daemon checks the name (a file name) and the schedule (400 with the reason when it can't be read)."
+    },
+    "RoutineRunResponse": {
+      "type": "object",
+      "properties": {
+        "routine": {
+          "$ref": "#/$defs/Routine"
+        },
+        "threadId": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        }
+      },
+      "required": ["routine", "threadId"],
+      "additionalProperties": {},
+      "description": "A run started now: the routine and the run's thread."
+    },
     "SyncState": {
       "type": "string",
       "enum": ["idle", "syncing", "error", "disabled"],
@@ -2359,6 +2666,39 @@
       "additionalProperties": {},
       "description": "The effective settings changed."
     },
+    "RoutinesChangedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "routines.changed"
+        },
+        "routines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Routine"
+          }
+        }
+      },
+      "required": ["type", "routines"],
+      "additionalProperties": {},
+      "description": "Every routine, whenever one changed (its file, its schedule, its last run)."
+    },
+    "RoutineNotificationEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "routine.notification"
+        },
+        "notification": {
+          "$ref": "#/$defs/RoutineNotification"
+        }
+      },
+      "required": ["type", "notification"],
+      "additionalProperties": {},
+      "description": "A routine's run finished and its `notify` says to tell the user (clients show a notification)."
+    },
     "ServerErrorEvent": {
       "type": "object",
       "properties": {
@@ -2411,6 +2751,12 @@
         },
         {
           "$ref": "#/$defs/SettingsChangedEvent"
+        },
+        {
+          "$ref": "#/$defs/RoutinesChangedEvent"
+        },
+        {
+          "$ref": "#/$defs/RoutineNotificationEvent"
         },
         {
           "$ref": "#/$defs/ServerErrorEvent"

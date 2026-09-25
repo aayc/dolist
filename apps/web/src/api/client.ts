@@ -6,9 +6,13 @@ import type {
   ClientEvent,
   ComputerPermissionPane,
   ConnectorStatus,
+  CreateRoutineRequest,
   DailyNoteResponse,
   HealthResponse,
   NoteResponse,
+  RoutineListResponse,
+  RoutineResponse,
+  RoutineRunResponse,
   SearchResponse,
   ServerEvent,
   SettingsResponse,
@@ -44,6 +48,11 @@ export interface WriteOptions {
 export interface ArtifactContent {
   mimeType: string;
   blob: Blob;
+}
+
+export interface ThreadFilter {
+  /** Only this routine's runs. */
+  routineId?: string;
 }
 
 /**
@@ -91,7 +100,7 @@ export interface DaemonClient {
   setAgentEnabled(enabled: boolean): Promise<AgentStatusResponse | null>;
   getConnectors(): Promise<ConnectorStatus[]>;
   getTaskRecords(notePath: string): Promise<TaskRecordsResponse>;
-  listThreads(): Promise<ThreadListResponse>;
+  listThreads(filter?: ThreadFilter): Promise<ThreadListResponse>;
   getThread(id: string): Promise<ThreadResponse>;
   postMessage(threadId: string, text: string): Promise<void>;
   cancelThread(threadId: string): Promise<void>;
@@ -102,4 +111,16 @@ export interface DaemonClient {
   getArtifact(threadId: string, artifactId: string): Promise<ArtifactContent>;
   /** Opens System Settings (on the daemon's Mac) at a privacy pane computer use needs. */
   openComputerPermissions(pane: ComputerPermissionPane): Promise<void>;
+
+  listRoutines(): Promise<RoutineListResponse>;
+  getRoutine(id: string): Promise<RoutineResponse>;
+  /** Writes `Routines/<name>.md`. 400: the name or schedule can't be used (with why); 409: it exists. */
+  createRoutine(request: CreateRoutineRequest): Promise<RoutineResponse>;
+  /**
+   * 409: a run is going, the routine has a problem, or today's extra runs are used up; 503: the
+   * agent can't run on this device. Both carry a message to show.
+   */
+  runRoutine(id: string): Promise<RoutineRunResponse>;
+  pauseRoutine(id: string): Promise<RoutineResponse>;
+  resumeRoutine(id: string): Promise<RoutineResponse>;
 }

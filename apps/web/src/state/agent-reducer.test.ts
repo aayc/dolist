@@ -9,11 +9,14 @@ import { describe, expect, it } from "vitest";
 import {
   type AgentState,
   applyRecordsSnapshot,
+  applyThreadList,
   applyThreadResponse,
   countPendingApprovals,
   findRecordIn,
   initialAgentState,
+  mergeThreadSummaries,
   reduceAgentEvent,
+  routineRuns,
 } from "./agent-reducer";
 
 function record(patch: Partial<TaskAgentRecord> = {}): TaskAgentRecord {
@@ -308,3 +311,51 @@ describe("approvals and status", () => {
     );
   });
 });
+
+describe("routine runs", () => {
+  const run = (id: string, createdAt: number, patch: Partial<ThreadSummary> = {}) =>
+    summary({
+      id,
+      taskId: `run_${id}`,
+      notePath: "Routines/Morning briefing.md",
+      title: "Morning briefing",
+      routineId: "rtn_1",
+      createdAt,
+      updatedAt: createdAt,
+      ...patch,
+    });
+
+  it("keeps a run's routine id when its thread loads before its summary", () => {
+    const state = applyThreadResponse(initialAgentState, {
+      thread: thread({ id: "thr_run", routineId: "rtn_1" }),
+      approvals: [],
+    });
+    expect(state.threads.thr_run?.routineId).toBe("rtn_1");
+    expect(
+      applyThreadResponse(initialAgentState, loadedResponse()).threads.thr_1,
+    ).not.toHaveProperty("routineId");
+  });
+
+  it("merges a routine's runs into what's known, newer copies winning", () => {
+    const base = applyThreadList(initialAgentState, [summary(), run("a", 5, { updatedAt: 9 })]);
+    const merged = mergeThreadSummaries(base, [run("a", 5, { updatedAt: 7 }), run("b", 6)]);
+    expect(Object.keys(merged.threads).sort()).toEqual(["a", "b", "thr_1"]);
+    expect(merged.threads.a?.updatedAt).toBe(9);
+    expect(mergeThreadSummaries(base, [run("a", 5, { updatedAt: 8 })])).toBe(base);
+  });
+
+  it("lists a routine's runs newest first, and only its own", () => {
+    const state = applyThreadList(initialAgentState, [
+      run("old", 1),
+      summary(),
+      run("new", 3),
+      run("other", 2, { routineId: "rtn_2" }),
+    ]);
+    expect(routineRuns(state.threads, "rtn_1").map((t) => t.id)).toEqual(["new", "old"]);
+    expect(routineRuns(state.threads, "rtn_3")).toEqual([]);
+  });
+});
+
+function loadedResponse() {
+  return { thread: thread(), approvals: [] };
+}

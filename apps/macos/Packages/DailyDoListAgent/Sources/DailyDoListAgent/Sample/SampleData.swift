@@ -77,6 +77,8 @@ public enum SampleData {
     /// Artifact bodies by artifact id.
     public var artifacts: [String: ArtifactPayload]
     public var frames: [SurfaceFrame]
+    public var routines: [Routine] = []
+    public var routineTemplates: [RoutineTemplate] = []
 
     /// The response of `GET /api/threads/:id`.
     public func threadResponse(_ id: String) -> ThreadResponse? {
@@ -95,7 +97,9 @@ public enum SampleData {
   }
 
   public static func snapshot(now: Date = Date()) -> Snapshot {
-    Builder(now: now).build()
+    var snapshot = Builder(now: now).build()
+    SampleRoutines.add(to: &snapshot)
+    return snapshot
   }
 }
 
@@ -119,8 +123,11 @@ extension AgentStore {
       for approval in snapshot.approvals {
         changes.formUnion(state.upsertApproval(approval, force: true))
       }
+      changes.formUnion(state.setRoutines(snapshot.routines))
       return changes
     }
+    routineTemplates = snapshot.routineTemplates
+    routinesLoaded = true
     for frame in snapshot.frames { apply(.surfaceFrame(frame)) }
   }
 }

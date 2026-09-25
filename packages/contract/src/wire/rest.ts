@@ -4,6 +4,10 @@ import {
   ApprovalDecisionSchema,
   ApprovalRequestSchema,
   ApprovalScopeSchema,
+  RoutineNotifySchema,
+  RoutineSchema,
+  RoutineTemplateSchema,
+  RoutineUseSchema,
   TaskAgentRecordSchema,
   ThreadSchema,
   ThreadSummarySchema,
@@ -16,6 +20,7 @@ import {
   ModelIdSchema,
   NameSchema,
   RequestPathSchema,
+  RuntimeIdSchema,
   VaultPathSchema,
   WIRE_LIMITS,
 } from "./primitives";
@@ -324,6 +329,42 @@ export const ConnectorsResponseSchema = named(
   "ConnectorsResponse",
   "Every configured MCP connector.",
   z.looseObject({ connectors: z.array(ConnectorStatusSchema) }),
+);
+
+// ── Routines ──────────────────────────────────────────────────────────────
+
+export const RoutineListResponseSchema = named(
+  "RoutineListResponse",
+  "Every routine (sorted by name) and the starter templates for “New routine”.",
+  z.looseObject({
+    routines: z.array(RoutineSchema),
+    templates: z.array(RoutineTemplateSchema),
+  }),
+);
+
+export const RoutineResponseSchema = named(
+  "RoutineResponse",
+  "One routine.",
+  z.looseObject({ routine: RoutineSchema }),
+);
+
+export const CreateRoutineRequestSchema = named(
+  "CreateRoutineRequest",
+  "Body of `POST /api/routines`: a new routine file `Routines/<name>.md`. The daemon checks the name (a file name) and the schedule (400 with the reason when it can't be read).",
+  z.strictObject({
+    name: z.string().min(1).max(100).describe("The file name, without `.md`."),
+    schedule: z.string().trim().min(1).max(200).describe("e.g. `every weekday at 7:30`."),
+    instructions: z.string().trim().min(1).max(8_000).describe("What each run does."),
+    notify: RoutineNotifySchema.optional().describe("Default `always`."),
+    uses: z.array(RoutineUseSchema).max(6).optional(),
+    paused: z.boolean().optional(),
+  }),
+);
+
+export const RoutineRunResponseSchema = named(
+  "RoutineRunResponse",
+  "A run started now: the routine and the run's thread.",
+  z.looseObject({ routine: RoutineSchema, threadId: RuntimeIdSchema }),
 );
 
 // ── Sync ──────────────────────────────────────────────────────────────────

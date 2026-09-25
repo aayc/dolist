@@ -62,6 +62,10 @@ actor FakeDaemon {
   var surfaceSubscriptions: Set<SurfaceKey> = []
   var editorActivity: (notePath: String, line: Int, at: EpochMillis)?
 
+  // Routines (by routine id; runs' "changed" by thread id)
+  var routineStates: [String: FakeRoutineState] = [:]
+  var runChanges: [String: Bool] = [:]
+
   init(
     seed: InMemoryDaemonClient.Seed, clock: SimulationClock, simulation: AgentSimulation,
     clientId: String
@@ -248,6 +252,7 @@ actor FakeDaemon {
       .vaultChanged(
         VaultChangedEvent(
           changes: visible, origin: origin, clientId: origin == .client ? clientId : nil)))
+    if visible.contains(where: { FakeRoutineFile.isRoutinePath($0.path) }) { emitRoutines() }
   }
 }
 

@@ -10,6 +10,7 @@ import {
   type ClientEvent,
   type ComputerPermissionPane,
   type ConnectorStatus,
+  type CreateRoutineRequest,
   createId,
   type DailyNoteResponse,
   DEFAULT_SETTINGS,
@@ -20,6 +21,9 @@ import {
   type NoteResponse,
   normalizePath,
   parseISODate,
+  type RoutineListResponse,
+  type RoutineResponse,
+  type RoutineRunResponse,
   type SearchResponse,
   type ServerEvent,
   type SettingsResponse,
@@ -36,10 +40,17 @@ import {
   type WriteNoteResponse,
 } from "@ddl/core";
 import { readJson, STORAGE_KEYS, writeJson } from "../../lib/storage";
-import type { ArtifactContent, ConnectionChange, ConnectionState, DaemonClient } from "../client";
+import type {
+  ArtifactContent,
+  ConnectionChange,
+  ConnectionState,
+  DaemonClient,
+  ThreadFilter,
+} from "../client";
 import { ConflictError, HttpError } from "../errors";
 import { MOCK_CONNECTORS, MockAgent, MockNotFoundError } from "./mock-agent";
 import { MockComputer, type MockComputerMode } from "./mock-computer";
+import { MockRoutines } from "./mock-routines";
 import { MockVault } from "./mock-vault";
 import { renderDailyContent, seedVault } from "./seed";
 
@@ -139,6 +150,7 @@ export class MockDaemonClient implements DaemonClient {
   readonly endpoint = "in-browser mock";
   readonly vault = new MockVault();
   readonly agent: MockAgent;
+  private readonly routines: MockRoutines;
   private readonly computer: MockComputer;
   private settings: AppSettings;
   private readonly latencyMs: number;
@@ -161,6 +173,13 @@ export class MockDaemonClient implements DaemonClient {
       },
       { speed: options.speed ?? 1 },
     );
+    this.routines = new MockRoutines({
+      vault: this.vault,
+      agent: this.agent,
+      emit: (event) => this.emit(event),
+      vaultChanged: (changes) => this.vaultChanged(changes, "agent"),
+      agentEnabled: () => this.agent.status().enabled,
+    });
     seedVault(this.vault, this.agent, this.settings);
     if ((options.installHooks ?? true) && typeof window !== "undefined") {
       window.__ddlMock = this.testHooks();
@@ -245,7 +264,7 @@ export class MockDaemonClient implements DaemonClient {
     });
   }
 
-  private vaultChanged(changes: VaultChange[], origin: "client" | "external"): void {
+  private vaultChanged(changes: VaultChange[], origin: "client" | "external" | "agent"): void {
     this.emit({
       type: "vault.changed",
       changes,
@@ -292,6 +311,7 @@ export class MockDaemonClient implements DaemonClient {
         "client",
       );
       this.agent.observeNote(target, body.content);
+      this.routines.observe([target]);
       return { path: target, version: note.version, mtime: note.mtime };
     });
   }
@@ -302,6 +322,7 @@ export class MockDaemonClient implements DaemonClient {
       if (!this.vault.delete(path)) throw notFound("Note");
       this.vaultChanged([{ path, kind: "deleted" }], "client");
       this.agent.observeNote(path, null);
+      this.routines.observe([path]);
     });
   }
 
@@ -322,6 +343,7 @@ export class MockDaemonClient implements DaemonClient {
         this.agent.renameNote(move.from, move.to);
       }
       this.vaultChanged(changes, "client");
+      this.routines.observe(moves.flatMap((move) => [move.from, move.to]));
     });
   }
 
@@ -341,6 +363,7 @@ export class MockDaemonClient implements DaemonClient {
         removed.map((p) => ({ path: p, kind: "deleted" as const })),
         "client",
       );
+      this.routines.observe(removed);
     });
   }
 
@@ -411,8 +434,8 @@ export class MockDaemonClient implements DaemonClient {
     return this.respond(() => ({ records: this.agent.recordsFor(notePath) }));
   }
 
-  listThreads(): Promise<ThreadListResponse> {
-    return this.respond(() => ({ threads: this.agent.listThreads() }));
+  listThreads(filter: ThreadFilter = {}): Promise<ThreadListResponse> {
+    return this.respond(() => ({ threads: this.agent.listThreads(filter) }));
   }
 
   getThread(id: string): Promise<ThreadResponse> {
@@ -463,6 +486,30 @@ export class MockDaemonClient implements DaemonClient {
     };
   }
 
+  listRoutines(): Promise<RoutineListResponse> {
+    return this.respond(() => this.routines.listResponse());
+  }
+
+  getRoutine(id: string): Promise<RoutineResponse> {
+    return this.respond(() => ({ routine: this.routines.get(id) }));
+  }
+
+  createRoutine(request: CreateRoutineRequest): Promise<RoutineResponse> {
+    return this.respond(() => ({ routine: this.routines.create(request) }));
+  }
+
+  runRoutine(id: string): Promise<RoutineRunResponse> {
+    return this.respond(() => this.routines.run(id));
+  }
+
+  pauseRoutine(id: string): Promise<RoutineResponse> {
+    return this.respond(() => ({ routine: this.routines.setPaused(id, true) }));
+  }
+
+  resumeRoutine(id: string): Promise<RoutineResponse> {
+    return this.respond(() => ({ routine: this.routines.setPaused(id, false) }));
+  }
+
   // ── Test hooks ─────────────────────────────────────────────────────────
 
   private testHooks(): MockTestHooks {
@@ -475,6 +522,7 @@ export class MockDaemonClient implements DaemonClient {
         "external",
       );
       this.agent.observeNote(target, content);
+      this.routines.observe([target]);
     };
     return {
       createNote: externalWrite,
@@ -483,6 +531,7 @@ export class MockDaemonClient implements DaemonClient {
         if (!this.vault.delete(path)) return;
         this.vaultChanged([{ path, kind: "deleted" }], "external");
         this.agent.observeNote(path, null);
+        this.routines.observe([path]);
       },
       readNote: (path) => this.vault.get(path)?.content ?? null,
       listPaths: () => this.vault.paths(),

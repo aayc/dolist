@@ -1,3 +1,4 @@
+import type { RoutineNotify, RoutineUse } from "@ddl/core";
 import { create } from "zustand";
 import { readJson, STORAGE_KEYS, writeJson } from "../lib/storage";
 
@@ -16,7 +17,22 @@ export type RightView =
   | { kind: "inbox" }
   | { kind: "thread"; threadId: string }
   /** Badge clicked before the orchestrator created a thread; resolves once it exists. */
-  | { kind: "task"; taskId: string };
+  | { kind: "task"; taskId: string }
+  /** Every routine. */
+  | { kind: "routines" }
+  /** One routine and its own inbox of runs. */
+  | { kind: "routine"; routineId: string };
+
+/** What the "New routine" dialog starts from (a finished task, for "Repeat this"). */
+export interface RoutineDraft {
+  name?: string;
+  schedule?: string;
+  instructions?: string;
+  notify?: RoutineNotify;
+  uses?: RoutineUse[];
+  /** From "Repeat this": the task's thread. The user still gives the schedule. */
+  fromThreadId?: string;
+}
 
 export interface ConfirmRequest {
   title: string;
@@ -31,7 +47,8 @@ export type Overlay =
   | { kind: "switcher" }
   | { kind: "settings"; section: SettingsSection }
   | { kind: "artifact"; threadId: string; artifactId: string }
-  | { kind: "confirm"; request: ConfirmRequest };
+  | { kind: "confirm"; request: ConfirmRequest }
+  | { kind: "new-routine"; draft?: RoutineDraft };
 
 export interface UiState {
   leftOpen: boolean;
@@ -175,6 +192,28 @@ export const ui = {
       rightView: { kind: "task", taskId },
       threadTab: "chat",
     });
+  },
+
+  showRoutines(): void {
+    useUiStore.setState({ rightOpen: true, rightView: { kind: "routines" } });
+  },
+
+  /** The ribbon's Routines button: closes the panel when routines are already what it shows. */
+  toggleRoutines(): void {
+    const { rightOpen, rightView } = useUiStore.getState();
+    if (rightOpen && (rightView.kind === "routines" || rightView.kind === "routine")) {
+      useUiStore.setState({ rightOpen: false });
+    } else {
+      ui.showRoutines();
+    }
+  },
+
+  showRoutine(routineId: string): void {
+    useUiStore.setState({ rightOpen: true, rightView: { kind: "routine", routineId } });
+  },
+
+  newRoutine(draft?: RoutineDraft): void {
+    useUiStore.setState({ overlay: { kind: "new-routine", ...(draft ? { draft } : {}) } });
   },
 
   setExpanded(path: string, expanded: boolean): void {

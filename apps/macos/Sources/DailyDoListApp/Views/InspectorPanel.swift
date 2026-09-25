@@ -22,8 +22,16 @@ struct InspectorPanel: View {
           noteLinks: workspace.agentNoteLinks,
           shortcuts: AgentPanelShortcuts(
             hidePanel: CommandID.toggleAgentPanel.shortcut, inbox: CommandID.agentInbox.shortcut,
-            stop: .init(id: CommandID.stopTask.rawValue, keys: CommandID.stopTask.shortcut)),
-          onOpenOrchestratorWindow: { model.showOrchestratorWindow() })
+            stop: .init(id: CommandID.stopTask.rawValue, keys: CommandID.stopTask.shortcut),
+            routines: .init(
+              id: CommandID.showRoutines.rawValue, keys: CommandID.showRoutines.shortcut),
+            newRoutine: .init(
+              id: CommandID.newRoutine.rawValue, keys: CommandID.newRoutine.shortcut)),
+          onOpenOrchestratorWindow: { model.showOrchestratorWindow() },
+          section: $ui.agentSection, selectedRoutineId: $ui.selectedRoutineId,
+          routineActions: AgentRoutineActions(
+            newRoutine: { ui.newRoutine($0) },
+            edit: { routine in Task { await workspace.openNote(routine.path) } }))
       } else {
         ContentUnavailableView(
           "Agent unavailable", systemImage: "sparkles",

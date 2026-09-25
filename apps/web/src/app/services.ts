@@ -5,28 +5,33 @@ import { createDefaultCommands } from "../commands/default-commands";
 import { CommandRegistry } from "../commands/registry";
 import { updateSettings } from "../features/settings/settings-actions";
 import { AgentActions } from "./agent-actions";
+import { RoutineActions } from "./routine-actions";
 import { Workspace } from "./workspace";
 
 export interface Services {
   client: DaemonClient;
   workspace: Workspace;
   agent: AgentActions;
+  routines: RoutineActions;
   commands: CommandRegistry;
   updateSettings(patch: DeepPartial<AppSettings>): Promise<void>;
 }
 
 export function createServices(client: DaemonClient): Services {
   const agent = new AgentActions(client);
+  const routines = new RoutineActions(client);
   const workspace = new Workspace(client, agent);
   agent.attach({
     openNote: (path, options) => workspace.openNote(path, options),
     activeDocument: () => workspace.editor.getDocument(),
     scrollToLine: (line) => workspace.editor.scrollToLine(line),
   });
+  routines.attach({ openNote: (path, options) => workspace.openNote(path, options) });
   const services: Services = {
     client,
     workspace,
     agent,
+    routines,
     commands: new CommandRegistry(),
     updateSettings: (patch) => updateSettings(client, patch),
   };

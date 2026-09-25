@@ -44,6 +44,10 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
     var calls: [String] = []
     var writes: [(path: String, content: String, base: BaseVersion)] = []
     var sent: [ClientEvent] = []
+    var routines: [Routine] = []
+    var routineTemplates: [RoutineTemplate] = []
+    var routineRuns: [String: [ThreadSummary]] = [:]
+    var createdRoutines: [CreateRoutineRequest] = []
   }
 
   init(notes: [String: String] = [:], folders: Set<String> = []) {
@@ -356,6 +360,71 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
   func artifact(threadId: String, artifactId: String) async throws -> ArtifactPayload {
     try begin("artifact")
     return ArtifactPayload(data: Data("# Artifact".utf8), mimeType: "text/markdown")
+  }
+
+  // MARK: - Routines
+
+  func routines() async throws -> RoutineListResponse {
+    try begin("routines")
+    return lock.withLock {
+      RoutineListResponse(routines: state.routines, templates: state.routineTemplates)
+    }
+  }
+
+  func routine(_ id: String) async throws -> Routine {
+    try begin("routine", detail: id)
+    return try lock.withLock {
+      guard let routine = state.routines.first(where: { $0.id == id }) else {
+        throw Self.notFound(id)
+      }
+      return routine
+    }
+  }
+
+  func createRoutine(_ request: CreateRoutineRequest) async throws -> Routine {
+    try begin("createRoutine", detail: request.name)
+    return lock.withLock {
+      state.createdRoutines.append(request)
+      let routine = Routine(
+        id: "rtn_\(state.routines.count + 1)", path: "Routines/\(request.name).md",
+        name: request.name, schedule: request.schedule, notify: request.notify ?? .always,
+        uses: request.uses ?? [], instructions: request.instructions)
+      state.routines.append(routine)
+      return routine
+    }
+  }
+
+  func runRoutine(_ id: String) async throws -> RoutineRunResponse {
+    try begin("runRoutine", detail: id)
+    return try lock.withLock {
+      guard let index = state.routines.firstIndex(where: { $0.id == id }) else {
+        throw Self.notFound(id)
+      }
+      let threadId = "thr_run_\(state.routines[index].runCount + 1)"
+      state.routines[index].runCount += 1
+      state.routines[index].lastRun = RoutineRun(
+        threadId: threadId, trigger: .manual, status: .working, startedAt: 1_000)
+      return RoutineRunResponse(routine: state.routines[index], threadId: threadId)
+    }
+  }
+
+  func pauseRoutine(_ id: String) async throws -> Routine { try setPaused(id, true) }
+  func resumeRoutine(_ id: String) async throws -> Routine { try setPaused(id, false) }
+
+  private func setPaused(_ id: String, _ paused: Bool) throws -> Routine {
+    try begin(paused ? "pauseRoutine" : "resumeRoutine", detail: id)
+    return try lock.withLock {
+      guard let index = state.routines.firstIndex(where: { $0.id == id }) else {
+        throw Self.notFound(id)
+      }
+      state.routines[index].paused = paused
+      return state.routines[index]
+    }
+  }
+
+  func threads(routineId: String) async throws -> [ThreadSummary] {
+    try begin("threads", detail: "routine:\(routineId)")
+    return lock.withLock { state.routineRuns[routineId] ?? [] }
   }
 
   // MARK: - Events

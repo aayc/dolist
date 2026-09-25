@@ -1,6 +1,7 @@
 import { PERSISTED_APPROVALS_VERSION } from "./approvals";
 import { PERSISTED_PATHS } from "./primitives";
 import { PERSISTED_RECORDS_VERSION } from "./records";
+import { PERSISTED_ROUTINES_VERSION } from "./routines";
 import { PERSISTED_SETTINGS_VERSION } from "./settings";
 import { PERSISTED_TASK_STATE_VERSION } from "./task-state";
 import { PERSISTED_THREAD_VERSION } from "./thread";
@@ -11,6 +12,7 @@ export type PersistedFormatName =
   | "task-state"
   | "records"
   | "approvals"
+  | "routines"
   | "settings";
 
 export interface PersistedFormatInfo {
@@ -60,6 +62,13 @@ export const PERSISTED_FORMATS: readonly PersistedFormatInfo[] = [
     path: PERSISTED_PATHS.approvals,
     version: PERSISTED_APPROVALS_VERSION,
     owner: "packages/agent/src/safety/approval-store.ts",
+    syncs: true,
+  },
+  {
+    name: "routines",
+    path: PERSISTED_PATHS.routines,
+    version: PERSISTED_ROUTINES_VERSION,
+    owner: "packages/agent/src/routines/state.ts",
     syncs: true,
   },
   {

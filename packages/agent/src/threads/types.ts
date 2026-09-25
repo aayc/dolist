@@ -29,6 +29,12 @@ export type ThreadStoreEvent =
   | { type: "thread.message"; threadId: string; message: ThreadMessage }
   | { type: "thread.delta"; threadId: string; messageId: string; delta: string };
 
+export interface ThreadFilter {
+  notePath?: string;
+  taskId?: string;
+  routineId?: string;
+}
+
 export interface ThreadStore {
   /** Loads persisted threads from storage. Call once at startup. */
   load(): Promise<void>;
@@ -38,10 +44,12 @@ export interface ThreadStore {
     taskId: string | null;
     notePath: string | null;
     title: string;
+    /** A routine's run. */
+    routineId?: string;
   }): Thread;
   get(id: string): Thread | undefined;
   findByTask(taskId: string): Thread | undefined;
-  list(filter?: { notePath?: string; taskId?: string }): ThreadSummary[];
+  list(filter?: ThreadFilter): ThreadSummary[];
   /** Appends (or replaces, when a message with the same id exists) a message. */
   upsertMessage(threadId: string, message: ThreadMessage): void;
   /** Appends streamed text to a `text` message and emits `thread.delta`. */

@@ -41,4 +41,23 @@ enum SampleWire {
 
   static let health = HealthResponse(
     version: "0.1.0", apiVersion: 1, vaultName: "Test Vault", agentMode: .live)
+
+  static let routine = Routine(
+    id: "rtn_0a1b2c3d4e5f60", path: "Routines/Morning briefing.md", name: "Morning briefing",
+    schedule: "every weekday at 7:30", scheduleText: "Every weekday at 7:30 AM", notify: .always,
+    uses: [.web], instructions: "Brief me for the day.", nextRunAt: 1_790_749_800_000,
+    lastRun: RoutineRun(
+      threadId: "thr_r1", trigger: .schedule, status: .done, startedAt: 1_790_663_400_000,
+      finishedAt: 1_790_663_460_000, summary: "3 meetings"),
+    runCount: 12, extraRunsLeft: 5)
+
+  static let template = RoutineTemplate(
+    id: "morning-briefing", name: "Morning briefing", description: "Your day at a glance.",
+    schedule: "every weekday at 7:30", uses: [.web], instructions: "Brief me for the day.")
+
+  static let runSummary = ThreadSummary(
+    id: "thr_r1", taskId: "run_1", notePath: "Routines/Morning briefing.md",
+    title: "Morning briefing", status: .done, createdAt: 1_790_663_400_000,
+    updatedAt: 1_790_663_460_000, messageCount: 3, artifactCount: 0, surfaces: [],
+    pendingApprovals: 0, routineId: "rtn_0a1b2c3d4e5f60")
 }

@@ -159,7 +159,7 @@ All paths come from `API_ROUTES` in `@ddl/core` (`packages/core/src/protocol.ts`
 | GET | `/api/agent/status` | → `AgentStatusResponse` |
 | PUT (or POST) | `/api/agent/enabled` | `SetAgentEnabledRequest` → `AgentStatusResponse` (persisted as `agent.enabled`) |
 | GET | `/api/tasks?notePath=<path>` | → `TaskRecordsResponse` |
-| GET | `/api/threads[?notePath=&taskId=]` | → `ThreadListResponse` |
+| GET | `/api/threads[?notePath=&taskId=&routineId=]` | → `ThreadListResponse` (`routineId`: that routine's runs) |
 | GET | `/api/threads/<id>` | → `ThreadResponse` |
 | POST | `/api/threads/<id>/messages` | `PostMessageRequest` → `{ ok: true }` |
 | POST | `/api/threads/<id>/cancel` | → `{ ok: true }` |
@@ -168,6 +168,12 @@ All paths come from `API_ROUTES` in `@ddl/core` (`packages/core/src/protocol.ts`
 | GET | `/api/approvals/<id>` | → `{ approval }` |
 | POST | `/api/approvals/<id>` | `ApprovalDecisionRequest` → `{ approval }` (404 unknown, 409 already decided with `approval`) |
 | GET | `/api/artifacts/<threadId>/<artifactId>[?download=1]` | → artifact bytes |
+| GET | `/api/routines` | → `RoutineListResponse` (every routine, sorted by name, and the starter `templates`) |
+| POST | `/api/routines` | `CreateRoutineRequest` → 201 `RoutineResponse` (writes `Routines/<name>.md`; 400 bad name, schedule or instructions; 409 the routine exists) |
+| GET | `/api/routines/<id>` | → `RoutineResponse` (404 unknown) |
+| POST | `/api/routines/<id>/run` | → `RoutineRunResponse` (`{ routine, threadId }`; 404 unknown, 409 can't start now, 503 no agent here) |
+| POST | `/api/routines/<id>/pause` | → `RoutineResponse` (sets `paused: true` in the file; 404 unknown, 409 the file kept changing) |
+| POST | `/api/routines/<id>/resume` | → `RoutineResponse` (sets `paused: false`; same codes as pause) |
 | GET | `/api/connectors` | → `{ connectors: ConnectorStatus[] }` |
 | GET | `/api/sync/status` | → `SyncStatusResponse` (state, target, last sync, pending, conflicts; with the sync service also `remoteHost`, `deviceName`) |
 | POST | `/api/computer/permissions/open` | `ComputerPermissionsOpenRequest` (`{ pane: "accessibility" \| "screenRecording" }`) → `{ ok: true }` (404 off macOS, 500 if it didn't open) |
@@ -190,6 +196,18 @@ Notes:
   `agent_unavailable`. While the agent can't run (`DDL_AGENT_MODE=off`, no harness) it stays idle
   and a message gets a note saying why; only when the agent runtime couldn't load at all (the null
   runtime) is there no such thread.
+- Routines are files in the vault's `Routines/` folder (see "Routines" in
+  [docs/AGENT_SYSTEM.md](../../docs/AGENT_SYSTEM.md#routines)). Listing, creating, pausing and
+  resuming only touch those files, so they work whatever the agent's state: with
+  `DDL_AGENT_MODE=off`, when the agent runtime failed to load, and on a device that doesn't hold
+  the agent lease (the null runtime reads them, and follows the synced scheduler state for next
+  and last runs). Running one needs the agent: `run` checks the routine exists (404), then answers
+  503 `agent_unavailable` with the reason when the agent can't run here (off, not configured,
+  switched off, or running on another device), and 409 `conflict` when the routine can't start
+  now (a run of it is going, its file has a problem, or today's extra runs are used up). A run's
+  thread has `routineId`; list a routine's runs with `/api/threads?routineId=<id>`. Create and
+  pause errors: 400 `invalid_request` (the name, schedule or instructions, with the reason in
+  `message`), 404 `not_found`, 409 `conflict`.
 - `computer/permissions/open` runs `open` on a fixed System Settings deep link for the pane (the
   pane, then Privacy & Security); nothing from the request reaches the command. `AgentStatusResponse`
   reports `execution.computerAccess`: both permissions, whether app control is available, and the
@@ -214,6 +232,8 @@ Server → client (`ServerEvent`):
 | `agent.status` | `AgentStatusResponse` changed. |
 | `surface.frame` | Live browser/computer frame, only to clients subscribed to that thread's surface. |
 | `settings.changed` | Settings were saved. |
+| `routines.changed` | Every routine (as `GET /api/routines` lists them), whenever one changed: its file, its next run, its last run's status. Also sent when the agent lease moves to or from this device. |
+| `routine.notification` | A routine's run finished and its `notify` says to tell the user (`RoutineNotification`: routine, title, one or two lines, thread, status). |
 | `error` | A client message was rejected. |
 
 Client → server (`ClientEvent`): `hello { clientId }`, `ping`, `surface.subscribe` /
@@ -238,7 +258,7 @@ must reconnect and resync.
 | `src/routes/*` | REST routes and the static web app. |
 | `src/ws.ts`, `vault-events.ts`, `write-tracker.ts` | WebSocket hub and change attribution. |
 | `src/settings-store.ts`, `settings-schema.ts`, `obsidian-import.ts` | Vault-backed settings. |
-| `src/null-runtime.ts`, `null-execution.ts` | Fallbacks when agents are unavailable. |
+| `src/null-runtime.ts`, `null-execution.ts` | Fallbacks when agents are unavailable (routine files stay editable through `@ddl/agent/routines`). |
 | `src/sync-setup.ts` | Sync service target: device identity, token, lease client. |
 | `src/agent-lease.ts`, `leased-runtime.ts` | The agent lease, and the runtime that exists only while holding it. |
 | `build.mjs` | esbuild bundle (workspace packages inlined, third-party dependencies external). |

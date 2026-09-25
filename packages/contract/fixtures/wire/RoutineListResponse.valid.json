@@ -1,0 +1,84 @@
+[
+  {
+    "name": "a scheduled routine, a paused watch and a broken file",
+    "value": {
+      "routines": [
+        {
+          "id": "rtn_0a1b2c3d4e5f60",
+          "path": "Routines/Morning briefing.md",
+          "name": "Morning briefing",
+          "schedule": "every weekday at 7:30",
+          "scheduleText": "Every weekday at 7:30 AM",
+          "notify": "always",
+          "uses": ["web", "connectors"],
+          "paused": false,
+          "instructions": "Brief me for the day: my calendar, the weather and what I didn't finish yesterday. Under 10 lines.",
+          "nextRunAt": 1790749800000,
+          "lastRun": {
+            "threadId": "thr_k3j9x0q2m1ab",
+            "trigger": "schedule",
+            "status": "done",
+            "startedAt": 1790663400000,
+            "finishedAt": 1790663460000,
+            "summary": "3 meetings · 68°F sunny"
+          },
+          "runCount": 12,
+          "extraRunsLeft": 5
+        },
+        {
+          "id": "rtn_1b2c3d4e5f6071",
+          "path": "Routines/Price watch.md",
+          "name": "Price watch",
+          "schedule": "every 2 hours",
+          "scheduleText": "Every 2 hours",
+          "notify": "when_changed",
+          "uses": ["web"],
+          "paused": true,
+          "instructions": "Check the price of the example kettle at https://shop.example.com/kettle.",
+          "lastRun": {
+            "threadId": "thr_p9q8r7s6t5u4",
+            "trigger": "manual",
+            "status": "done",
+            "startedAt": 1790660000000,
+            "finishedAt": 1790660030000,
+            "summary": "Still $89",
+            "changed": false
+          },
+          "runCount": 3,
+          "extraRunsLeft": 4
+        },
+        {
+          "id": "rtn_2c3d4e5f607182",
+          "path": "Routines/Someday.md",
+          "name": "Someday",
+          "schedule": "whenever",
+          "notify": "always",
+          "uses": [],
+          "paused": false,
+          "instructions": "Do the thing.",
+          "error": "Couldn't read “whenever” in “whenever”. Try “every weekday at 7:30”, “every 2 hours” or “every month on the 1st at 9:00”.",
+          "runCount": 0,
+          "extraRunsLeft": 5
+        }
+      ],
+      "templates": [
+        {
+          "id": "morning-briefing",
+          "name": "Morning briefing",
+          "description": "Your day at a glance: calendar, weather, leftovers and news.",
+          "schedule": "every weekday at 7:30",
+          "notify": "always",
+          "uses": ["web", "connectors"],
+          "instructions": "Brief me for the day."
+        }
+      ]
+    }
+  },
+  {
+    "name": "nothing yet",
+    "value": {
+      "routines": [],
+      "templates": []
+    }
+  }
+]

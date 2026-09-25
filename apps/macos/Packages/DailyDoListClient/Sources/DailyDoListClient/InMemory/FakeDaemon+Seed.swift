@@ -134,6 +134,7 @@ extension FakeDaemon {
     for (path, content) in Self.demoNotes {
       vault.store(path, content, mtime: start - 7 * Self.dayMillis)
     }
+    seedDemoRoutines(mtime: start - 7 * Self.dayMillis)
     let today = today
     for day in Self.demoHistory {
       let date = today.adding(days: day.offset)

@@ -6,6 +6,7 @@
 import {
   PersistedApprovalsFileSchema,
   PersistedRecordsFileSchema,
+  PersistedRoutinesFileSchema,
   PersistedTaskStateFileSchema,
   PersistedThreadFileSchema,
   ServerEventSchema,
@@ -35,6 +36,10 @@ function toServerEvent(event: RuntimeEvent): ServerEvent {
       return { type: "agent.status", status: event.payload };
     case "surface.frame":
       return { type: "surface.frame", ...event.payload };
+    case "routines.changed":
+      return { type: "routines.changed", routines: event.payload };
+    case "routine.notification":
+      return { type: "routine.notification", notification: event.payload };
   }
 }
 
@@ -61,9 +66,11 @@ async function invalidFiles(t: FakeAgentRuntime): Promise<string[]> {
           ? PersistedRecordsFileSchema
           : entry.path === ".daily-do-list/state/approvals.json"
             ? PersistedApprovalsFileSchema
-            : entry.path.startsWith(".daily-do-list/state/tasks/")
-              ? PersistedTaskStateFileSchema
-              : undefined;
+            : entry.path === ".daily-do-list/state/routines.json"
+              ? PersistedRoutinesFileSchema
+              : entry.path.startsWith(".daily-do-list/state/tasks/")
+                ? PersistedTaskStateFileSchema
+                : undefined;
     if (!schema) continue;
     const file = await t.storage.read(entry.path);
     const parsed = schema.safeParse(JSON.parse(file!.content));

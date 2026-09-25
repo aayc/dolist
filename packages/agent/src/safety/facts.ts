@@ -7,6 +7,7 @@
 import type { ToolSubject } from "@ddl/core";
 import { MCP_TOOL_PREFIX, TOOL } from "../tools/contracts";
 import { INTERNAL_TOOLS, KNOWLEDGE_TOOLS } from "./policy";
+import { ROUTINE_TOOLS } from "./rules/routines";
 import { parseShell, type ShellAnalysis } from "./shell";
 import type { ActionContext } from "./types";
 import { normalizePhrase, READINGS_SEPARATOR } from "./vocab";
@@ -22,6 +23,7 @@ export type ToolFamily =
   | "file_read"
   | "file_write"
   | "note_edit"
+  | "routine"
   | "mcp"
   | "custom";
 
@@ -135,6 +137,7 @@ function familyOf(toolName: string, isMcp: boolean): ToolFamily {
   if (INTERNAL_TOOLS.has(toolName)) return "internal";
   if (KNOWLEDGE_TOOLS.has(toolName)) return "knowledge";
   if (toolName === TOOL.editNote) return "note_edit";
+  if (ROUTINE_TOOLS.has(toolName)) return "routine";
   if (toolName === TOOL.webSearch) return "web_search";
   if (toolName === TOOL.webFetch) return "web_fetch";
   if (toolName === TOOL.bash) return "shell";
