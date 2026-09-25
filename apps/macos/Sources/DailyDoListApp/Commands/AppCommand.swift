@@ -49,6 +49,7 @@ enum CommandID: String, CaseIterable, Sendable {
   case toggleTheme = "theme.toggle"
   case toggleAgent = "agent.toggle"
   case openInbox = "agent.openInbox"
+  case orchestratorChat = "agent.orchestrator"
   case setUpComputerUse = "computerUse.setUp"
   case restartDaemon = "daemon.restart"
 
@@ -117,7 +118,7 @@ enum CommandID: String, CaseIterable, Sendable {
     case .tab9: Shortcut("9")
     case .newFolder, .tomorrowsNote, .renameNote, .deleteNote, .revealNote, .toggleLivePreview,
       .toggleReadableWidth, .toggleLineNumbers, .toggleVim, .toggleTheme, .toggleAgent, .openInbox,
-      .setUpComputerUse, .restartDaemon:
+      .orchestratorChat, .setUpComputerUse, .restartDaemon:
       nil
     }
   }

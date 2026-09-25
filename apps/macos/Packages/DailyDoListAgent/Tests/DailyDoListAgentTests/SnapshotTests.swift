@@ -116,6 +116,35 @@ struct SnapshotTests {
         view, name: "thread-booking", size: CGSize(width: 440, height: 2_300), dark: dark))
   }
 
+  /// The orchestrator's chat in the panel: trigger lines, thoughts, decisions linked to their
+  /// tasks, the user's messages and its replies.
+  @Test(arguments: [false, true])
+  func orchestratorChatInThePanel(dark: Bool) throws {
+    let view = AgentPanel(
+      store: store, selectedThreadId: .constant(OrchestratorThread.id),
+      onOpenOrchestratorWindow: {}
+    ).agentReferenceDate(Self.now)
+    check(
+      try SnapshotRenderer.render(
+        view, name: "orchestrator-chat", size: CGSize(width: 440, height: 1_300), dark: dark))
+  }
+
+  /// The chat in its own window, working (Stop shows), with a failed action's banner.
+  @Test(arguments: [false, true])
+  func orchestratorChatWindow(dark: Bool) throws {
+    let store = SampleData.makeStore(now: Self.now)
+    var summary = try #require(store.orchestratorSummary)
+    summary.status = .working
+    summary.updatedAt = Self.now.epochMillis
+    store.apply(.threadUpsert(summary))
+    store.report(DaemonClientError.unreachable("connection refused"), title: "Couldn't send")
+    let view = OrchestratorChatView(store: store, onOpenTask: { _ in }, showsErrors: true)
+      .agentReferenceDate(Self.now)
+    check(
+      try SnapshotRenderer.render(
+        view, name: "orchestrator-window", size: CGSize(width: 460, height: 720), dark: dark))
+  }
+
   /// A thread moving to another inbox section redraws its row (LazyVStack used to keep the old
   /// one: a Done thread still showed "Idle").
   @Test func inboxRowsFollowStatusChanges() throws {
@@ -145,11 +174,12 @@ struct SnapshotTests {
       host.cacheDisplay(in: host.bounds, to: rep)
       return rep
     }
-    /// Green pixels in the status-icon column (the Done checkmark; the Idle circle is gray).
+    /// Green pixels in the status-icon column (the Done checkmark; the Idle circle is gray), from
+    /// the top through the first section (below the pinned orchestrator row, which has none).
     func greenIconPixels(_ rep: NSBitmapImageRep) -> Int {
       let scale = CGFloat(rep.pixelsWide) / size.width
       var count = 0
-      for y in stride(from: 0, to: Int(120 * scale), by: 1) {
+      for y in stride(from: 0, to: Int(220 * scale), by: 1) {
         for x in stride(from: 0, to: Int(40 * scale), by: 1) {
           guard let c = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
           if c.greenComponent - max(c.redComponent, c.blueComponent) > 0.15 { count += 1 }

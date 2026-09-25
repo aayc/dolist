@@ -63,6 +63,7 @@ struct AppMenuCommands: Commands {
     CommandMenu("Agent") {
       item(.toggleAgent)
       item(.openInbox)
+      item(.orchestratorChat)
       Divider()
       item(.setUpComputerUse)
       item(.restartDaemon)

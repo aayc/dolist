@@ -55,12 +55,14 @@ struct StoreRefreshTests {
 
     #expect(store.status?.running == 0)
     #expect(store.pendingApprovals.map(\.id) == ["apr_new"])
-    #expect(store.threads.keys.sorted() == ["thr_1", "thr_2"])
+    // The orchestrator's chat is loaded too (it's pinned in the inbox whatever the filter).
+    #expect(store.threads.keys.sorted() == ["thr_1", "thr_2", OrchestratorThread.id])
     #expect(store.records(for: Fixture.note).map(\.taskId) == ["tsk_1"])
     #expect(store.thread("thr_1")?.messages.map(\.id) == ["m", "m2"])
     #expect(client.callLog.contains("approvals:pending"))
     #expect(client.callLog.contains("threads:*"))
     #expect(client.count("thread:thr_1") == 2)
+    #expect(client.count("thread:\(OrchestratorThread.id)") == 1)
     #expect(store.lastError == nil)
   }
 

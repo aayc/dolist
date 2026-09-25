@@ -14,6 +14,7 @@ extension FakeDaemon {
     case .demo:
       seedDemo()
     }
+    seedOrchestratorChat()
   }
 
   private static let dayMillis: Double = 86_400_000

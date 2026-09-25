@@ -193,6 +193,11 @@ struct CommandCatalog {
       ) {
         ui.showInbox()
       },
+      AppCommand(
+        .orchestratorChat, "Orchestrator Chat", palette: "Open the orchestrator's chat"
+      ) {
+        model.showOrchestratorWindow()
+      },
       AppCommand(.setUpComputerUse, "Set Up Computer Use…", palette: "Set up computer use") {
         model.showSettings(.computerUse)
       },

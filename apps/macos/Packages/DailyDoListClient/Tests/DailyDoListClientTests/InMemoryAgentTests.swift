@@ -255,7 +255,8 @@ struct InMemoryAgentTests {
     #expect(try await client.taskRecords(notePath: Self.today).isEmpty, "still settling")
     await client.advance(by: .milliseconds(1))
     #expect(try await client.taskRecords(notePath: Self.today).first?.status == .triaging)
-    #expect(try await client.threads(notePath: nil, taskId: nil).isEmpty)
+    #expect(
+      try await client.threads(notePath: nil, taskId: nil).map(\.id) == [OrchestratorThread.id])
     await client.advance(by: .milliseconds(700))
     let record = try #require(try await client.taskRecords(notePath: Self.today).first)
     #expect(record.status == .working && record.threadId != nil)
@@ -399,7 +400,8 @@ struct InMemoryAgentTests {
       "Daily/2026-09-22.md", content: "- [ ] Research tents\n", baseVersion: .createOnly)
     _ = try await client.writeNote(
       Self.today, content: "- [x] Research tents\n- [ ] \n- [ ] x\n", baseVersion: .createOnly)
-    #expect(try await client.threads(notePath: nil, taskId: nil).isEmpty)
+    #expect(
+      try await client.threads(notePath: nil, taskId: nil).map(\.id) == [OrchestratorThread.id])
     _ = try await client.writeNote(
       "Daily/2026-09-30.md", content: "- [ ] Research tents\n", baseVersion: .createOnly)
     #expect(

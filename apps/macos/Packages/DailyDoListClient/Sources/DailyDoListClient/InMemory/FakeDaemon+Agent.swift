@@ -31,6 +31,8 @@ struct Job: Sendable {
     case requestApproval(AgentScript.RiskyAction)
     case resume(approved: Bool)
     case finish(TaskAgentStatus, summary: String)
+    /// Starts a turn of the orchestrator's chat: what woke it, and its status `working`.
+    case turn(String)
     /// Ends a job that doesn't own a task (replies).
     case end
   }
@@ -251,6 +253,10 @@ extension FakeDaemon {
       .text(
         TextMessage(
           id: nextID("msg"), author: "you", createdAt: nowMillis, role: .user, text: trimmed)))
+    if OrchestratorThread.isOrchestrator(threadId) {
+      startOrchestratorReply(to: trimmed)
+      return ThreadActionResponse()
+    }
     let working = jobs.values.contains { $0.threadId == threadId && $0.taskId != nil }
     let reply =
       working
@@ -270,6 +276,10 @@ extension FakeDaemon {
     let threadId = try RequestGuards.runtimeID(threadId, "id")
     guard let thread = threads[threadId] else { throw .notFound("Thread not found") }
     guard simulation == .enabled else { throw Self.agentUnavailable() }
+    if OrchestratorThread.isOrchestrator(threadId) {
+      stopOrchestratorTurn()
+      return ThreadActionResponse()
+    }
     var stoppedTask = false
     for job in jobs.values.filter({ $0.threadId == threadId }).sorted(by: { $0.id < $1.id }) {
       abort(job)
@@ -586,13 +596,13 @@ extension FakeDaemon {
   }
 
   /// A streamed message: an empty streaming text, one delta per word (26 ms apart), the final text.
-  private func say(_ author: MessageAuthor, _ text: String, after delay: Double = 0) -> [Job.Beat] {
+  func say(_ author: MessageAuthor, _ text: String, after delay: Double = 0) -> [Job.Beat] {
     [Job.Beat(delay: delay, step: .textStart(author: author))]
       + text.streamingChunks.map { Job.Beat(delay: 26, step: .textDelta($0)) }
       + [Job.Beat(delay: 0, step: .textFinish(text))]
   }
 
-  private func scheduleNextBeat(_ jobId: String) {
+  func scheduleNextBeat(_ jobId: String) {
     guard let job = jobs[jobId], job.index < job.beats.count else { return }
     schedule(.beat(jobId: jobId, generation: job.generation), after: job.beats[job.index].delay)
   }
@@ -628,6 +638,8 @@ extension FakeDaemon {
         $0.threadId = threadId
       }
       setThreadStatus(threadId, .working, "Started a \(script.subagent) subagent")
+      recordDelegation(
+        taskId: taskId, notePath: record.notePath, text: record.text, subagent: script.subagent)
     case .textStart(let author):
       guard let threadId = job.threadId else { return false }
       let text = Job.StreamingText(
@@ -720,6 +732,7 @@ extension FakeDaemon {
           $0.status = status
           if !summary.isEmpty { $0.summary = summary }
         }
+        if let text = records[taskId]?.text { recordReport(taskText: text, status: status) }
       }
       if let threadId = job.threadId {
         setThreadStatus(threadId, status, status == .done ? "Task complete" : nil)
@@ -732,8 +745,11 @@ extension FakeDaemon {
       emitStatus()
       drainQueue()
       return false
+    case .turn(let trigger):
+      beginOrchestratorTurn(trigger)
     case .end:
       jobs[jobId] = nil
+      if job.threadId.map(OrchestratorThread.isOrchestrator) == true { endOrchestratorTurn() }
       return false
     }
     return true
@@ -741,7 +757,7 @@ extension FakeDaemon {
 
   /// Stops a job the user cancelled: running tool calls fail, streaming text is closed, a pending
   /// approval is cancelled.
-  private func abort(_ job: Job) {
+  func abort(_ job: Job) {
     jobs[job.id] = nil
     guard let threadId = job.threadId else { return }
     cancelApproval(of: job)

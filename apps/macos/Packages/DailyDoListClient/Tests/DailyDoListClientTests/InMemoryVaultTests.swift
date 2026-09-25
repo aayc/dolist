@@ -409,7 +409,9 @@ struct InMemoryVaultTests {
         && records.allSatisfy {
           $0.status == .done && $0.threadId != nil && $0.date == "2026-09-23"
         })
-    let threads = try await client.threads(notePath: nil, taskId: nil)
+    let all = try await client.threads(notePath: nil, taskId: nil)
+    #expect(all.filter(\.isOrchestrator).map(\.status) == [.idle])
+    let threads = all.filter { !$0.isOrchestrator }
     #expect(threads.count == 6 && threads.allSatisfy { $0.status == .done })
 
     // Today's note shows the agent at work: its lines under the tasks (citing pages its threads
