@@ -121,11 +121,12 @@ Scope commands to the package you are working in while iterating. Before you fin
                                         │ tools: thread / web / notes / browser / computer / bash / MCP
                                         ▼ every tool call
                                      SafetyGate → SafetyEvaluator (policy → rules → LLM judge)
-                                        │ require_approval
-                                        ▼
-                                     ApprovalBroker ──WS──▶ approval card in the UI
+                                        │ require_approval                 │ allowed
+                                        ▼                                  ▼
+                                     ApprovalBroker ──WS──▶ UI card     journal: "about to run", then the result
                                      ExecutionProvider (local │ cloud): shell, browser, computer
-                                     ThreadStore (.daily-do-list/threads, artifacts)
+                                     ThreadStore: journal (state/journal/threads/*.jsonl, the source of truth)
+                                                  + snapshots (threads/*.json), artifacts
 ```
 
 Key flows are documented in `docs/ARCHITECTURE.md` and `docs/AGENT_SYSTEM.md`.

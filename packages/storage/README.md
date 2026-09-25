@@ -107,9 +107,17 @@ Per path, compared with that snapshot:
 (`diff3`) against the stored base. Edits to different lines merge cleanly, including adjacent
 lines. When both sides add lines at the same spot, both additions are kept (vault first). If the
 merge still conflicts, the vault's version wins everywhere and the target's version is saved as
-`<name> (conflict YYYY-MM-DD HHmm).<ext>` on both sides. Other formats (JSON, `.canvas`, …) keep
-the version with the newest mtime, and the other becomes the conflict copy. Nothing is ever
-silently dropped.
+`<name> (conflict YYYY-MM-DD HHmm).<ext>` on both sides. The agent's append-only journals
+(`.daily-do-list/state/journal/**.jsonl`, `isJournalPath`) are merged as the union of both copies'
+lines by event id, ordered by `(epoch, seq, id)` (`mergeJournals`): the result depends only on the
+set of lines, so every device ends with the same bytes, and there is never a conflict copy. Other
+formats (JSON, `.canvas`, …) keep the version with the newest mtime, and the other becomes the
+conflict copy. Nothing is ever silently dropped.
+
+**Appends.** `StorageProvider.append` (optional; local-fs and memory have it, `appendToFile` falls
+back to a conditional read and write) adds text at the end of a file without rewriting it; it is
+not atomic, so a crash can cut the appended text short. Local-fs versions journals by stat, so an
+append never re-reads or re-hashes the file it grows.
 
 **Safety.** All writes are conditional on the versions seen during the run. A concurrent edit makes
 a write fail with `ConflictError`, and that path is retried on the next run. Without a snapshot

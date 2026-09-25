@@ -27,7 +27,8 @@ corruption.
 
 | Path | Owner | Format | Version | Synced by the SyncEngine |
 | --- | --- | --- | --- | --- |
-| `threads/<threadId>.json` | `packages/agent/src/threads/store.ts` | JSON, compact | 1 | yes |
+| `threads/<threadId>.json` | `packages/agent/src/threads/store.ts` | JSON, compact (a snapshot of the journal) | 1 | yes |
+| `state/journal/threads/<threadId>.jsonl` | `packages/agent/src/threads/store.ts` | JSON Lines, append-only | 1 (per line) | yes (merged as a union of lines) |
 | `artifacts/<threadId>/<artifactId>.<ext>` | `packages/agent/src/threads/store.ts` | raw UTF-8 text | — | yes |
 | `artifacts/<threadId>/<artifactId>.<ext>.b64` | `packages/agent/src/threads/store.ts` | base64 of the bytes | — | yes |
 | `state/tasks/<hash(notePath)>.json` | `packages/agent/src/orchestrator/task-watcher.ts` | JSON, compact | 1 | **no** (excluded in `apps/daemon/src/wiring.ts`) |
@@ -58,7 +59,10 @@ Owned by other slices; listed so the inventory is complete.
 ## Compatibility rules
 
 These apply to every JSON file in the sidecar. `PersistedFile` implements them; owners only
-decide what to do with the data.
+decide what to do with the data. Journals (`*.jsonl`) follow them line by line instead (see
+[Thread journal](#thread-journal--statejournalthreadsthreadidjsonl)): every line carries its own
+version, a line that can't be read is skipped and reported (never quarantined), and a journal is
+never rewritten, only appended to.
 
 1. **Every file carries `version`**, a positive integer. The current version is what this build
    writes (`PERSISTED_THREAD_VERSION`, …).
@@ -134,6 +138,11 @@ One agent thread: the conversation attached to a to-do item.
 
 Behavior of the thread store:
 
+- Since the [thread journal](#thread-journal--statejournalthreadsthreadidjsonl), this file is a
+  snapshot derived from the thread's journal: the store rewrites it from the journal's fold after
+  every change (debounced as below), byte for byte what the store wrote before journals existed.
+  Readers that don't parse journals (the relay's read-only view, older daemons, every client) keep
+  reading it unchanged. When both exist, the journal is the source of truth.
 - Only direct children of `threads/` ending in `.json` are read. A file named like an id
   (`thr_a.json`) must contain that thread, or it is quarantined. Other names, such as a sync
   conflict copy `thr_a (conflict 2026-09-23 1830).json`, are merged into the thread they contain;
@@ -146,7 +155,8 @@ Behavior of the thread store:
   file changed underneath (another device), the store merges it, emits `thread.message` for the
   messages it gained, and writes the union.
 - A thread whose file is from a newer app is not loaded and never written; a copy of it with an
-  older version is loaded but its own file is still never written.
+  older version is loaded but its own file is still never written (and, without a journal, the
+  thread is never journaled either: it runs in memory only, as before).
 - External changes are not watched: the in-memory copy stays authoritative until its next write
   (merge) or a restart. An externally deleted file is recreated at the thread's next change.
 - Threads whose task no longer exists are kept; replying in one gets a system note instead of
@@ -155,6 +165,68 @@ Behavior of the thread store:
 Version history: unversioned (before the contract) → **1**: same shape plus `version`. The legacy
 reader defaulted missing `taskId`/`notePath` to `null` and `artifacts`/`surfaces` to `[]`; the
 migration does the same.
+
+### Thread journal — `state/journal/threads/<threadId>.jsonl`
+
+The source of truth for one thread: an append-only log of events, one compact JSON object per
+line, `\n`-terminated. The thread is the fold of its events; `threads/<threadId>.json` is a
+snapshot derived from it. It lives under the agent-owned `state/` folder, so the agent lease's
+fencing covers it, and outside `threads/`, so readers of snapshots never see it. Schema:
+`packages/contract/src/persisted/thread-journal.ts`.
+
+```text
+{ v: 1, id: "evt_…", epoch, seq, at, type, …payload }
+```
+
+- **Envelope.** `v` is the event's format version. `id` is unique (the union merge keys on it).
+  `epoch` is the agent lease's grant (0 until leases carry one; the store takes it from an
+  `epoch()` provider), `seq` grows with every append to the journal. `at` is epoch ms.
+- **Order.** Readers sort by `(epoch, seq, id)` (a no-op for a journal one device wrote), so two
+  copies merged as a union fold the same way everywhere. A duplicated id counts once (its first
+  line).
+- **Thread events** (the fold): `thread.created` (`thread`: id, taskId, notePath, title, status,
+  createdAt, optional routineId — ignored if the thread already exists), `thread.imported`
+  (`thread`: a whole thread in the snapshot's shape, merged in with `mergePersistedThreads`;
+  messages the journal trimmed stay trimmed), `message` (added, or replacing the one with its id),
+  `status`, `title`, `trim` (`keep` the newest messages), `surface`, `sources` (merged by URL,
+  newest kept, capped at 50), `artifact` (metadata; the body is a file as before). `message`,
+  `status` and `artifact` move `updatedAt` forward (never back).
+- **Agent-state events** (not part of the thread's visible state): `tool.requested` (`call`,
+  `tool`, `session`, display-safe `input`), `tool.decided` (`allowed`, `reason`, `via`:
+  `evaluator|policy|grant|approval`, `approvalId`), `tool.started` (the write-ahead record: `tool`,
+  `target` in words, `approvalId`, `effectful: false` for calls that change nothing),
+  `tool.finished` (`outcome`: `ok|error|blocked`, `output`: what the model read, redacted and
+  capped at 8 000 characters, kept for subagents only), `tool.interrupted`, `run.prompted`
+  (`session`, `text`: a prompt the thread's agent session got, capped at 32 000 characters) and
+  `run.text` (the model's final text of one message).
+- **Reading.** A line that isn't JSON, isn't an object, has an invalid `v`, an unknown `type` or
+  an invalid payload is skipped and reported (`line 7`, never its content); list entries that fail
+  (a source) are dropped one by one. A cut-off last line (a crash mid-append) is skipped, and the
+  next append starts on a new line. A line with a greater `v` than this build knows means a newer
+  app writes this journal: the thread is not loaded and nothing about it is written. A journal
+  without a thread event is folded from what follows (a placeholder header) and merged with the
+  snapshot.
+- **Writing.** Events are appended in batches with the thread's debounced snapshot writes, with
+  `StorageProvider.append` (conditional on the version last seen; local-fs versions journals by
+  stat, so an append never re-reads the file). Streaming text is journaled once final (a flush
+  journals it as it is). Right away: a prompt, and a finished effectful tool call's result. And
+  durably, before the call runs: an effectful call's `tool.started`. A journal that changed
+  underneath is re-read at the next append, its new events folded in order (the thread emits
+  `thread.message` for what it gained), and what wasn't written yet is renumbered after them. One
+  that disappeared starts again with a `thread.imported` of the thread in memory.
+- **Loading.** The journal wins; each snapshot of the thread (its own file and sync conflict
+  copies) is merged in with a `thread.imported` event only if it holds something the journal lacks
+  (an older app's changes, text streamed before a crash), and a snapshot that is missing or behind
+  the journal is rewritten.
+- **Migration.** A thread with only a snapshot is migrated on first load: in memory at once, and
+  its journal file is written with the thread's first change, starting with a `thread.imported`
+  event holding the thread exactly as loaded. So nothing is written for threads that are only read
+  (and no vault-wide burst of writes at the first start), and the migration is lossless: that
+  journal alone folds to the same thread.
+- **Sync.** The SyncEngine merges a journal that changed on both sides as the union of both
+  copies' lines (never a conflict copy); see [SYNC.md](./SYNC.md#conflicts).
+
+Version history: **1** only.
 
 ### Artifact bodies — `artifacts/<threadId>/<artifactId>.<ext>[.b64]`
 
@@ -322,6 +394,10 @@ this contract and uses `format` rather than `version`.
 | `corrupt*.json` | must be quarantined byte for byte, never loaded | quarantine path and content |
 | `future-version*.json` | written by a newer app: never read or overwritten | file unchanged after running |
 
+`thread-journal/*.jsonl` follows the same naming (`v1*`, `corrupt*`, `future-version*`; journals
+have no legacy form): every event type, a migrated thread, two writers out of order, invalid lines
+and a cut-off last line, a newer app's line, garbage and an empty file.
+
 `artifacts/` holds the bodies `threads/v1.json` points at (one deliberately missing, one orphan).
 Every fixture is decoded by `packages/contract/test/persisted/fixtures.test.ts` and loaded through
 the real owner in `packages/agent/test/persistence/*.test.ts` (thread store, task records,
@@ -346,3 +422,8 @@ keep the old ones loading.
 - Sync conflict copies of single-file state (`records (conflict …).json`, `approvals`, `settings`)
   are left for the user; only thread conflict copies are merged.
 - The approval broker does not use `createApprovalStateFile` yet (see Approvals).
+- Journals are never compacted: a thread's journal grows with the thread (the orchestrator's chat
+  trims its messages, not its journal). Compaction needs a marker every device honors, or a union
+  would bring compacted events back; it is planned with the agent journal's later phases.
+- A sync conflict copy of a journal made by a third-party sync (iCloud Drive, Dropbox) is not
+  merged; the snapshot's conflict copy, which is, carries the same messages.
