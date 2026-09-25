@@ -249,21 +249,30 @@ export class DrawingDescriptions {
     budget: DrawingBudget,
   ): Promise<string[]> {
     const where = placementText(embed);
-    const head = (name: string) => `${DRAWING_MARKER} ${name}${where ? ` · ${where}` : ""}`;
-    if (!path) return [`${head(formatDrawingEmbed(embed))} · no drawing by that name in the vault`];
+    if (!path) {
+      return [`${head(formatDrawingEmbed(embed), where)} · no drawing by that name in the vault`];
+    }
     const first = seen.get(path);
-    if (first !== undefined) return [`${head(path)} · the same drawing as line ${first + 1}`];
+    if (first !== undefined)
+      return [`${head(path, where)} · the same drawing as line ${first + 1}`];
     seen.set(path, line);
+    return this.blockFor(path, budget, where);
+  }
+
+  /** The block for the drawing at `path` (an embed's file, or a note that is itself a drawing). */
+  async blockFor(path: string, budget: DrawingBudget, where = ""): Promise<string[]> {
     if (budget.drawings <= 0 || budget.chars < MIN_DESCRIPTION_CHARS) {
-      return [`${head(path)} · not described here (too many drawings): read_drawing shows it`];
+      return [
+        `${head(path, where)} · not described here (too many drawings): read_drawing shows it`,
+      ];
     }
     const described = await this.describe(path, Math.min(EMBED_DESCRIPTION_CHARS, budget.chars));
-    if (!described) return [`${head(path)} · no drawing by that name in the vault`];
+    if (!described) return [`${head(path, where)} · no drawing by that name in the vault`];
     budget.drawings--;
     budget.chars -= described.text.length;
-    if (!described.readable) return [`${head(path)} · ${described.text}`];
+    if (!described.readable) return [`${head(path, where)} · ${described.text}`];
     return [
-      `${head(path)} · ${DESCRIBED_HEADER}`,
+      `${head(path, where)} · ${DESCRIBED_HEADER}`,
       ...described.text.split("\n").map((l) => `  ${l}`),
     ];
   }
@@ -354,6 +363,10 @@ export function placementText(embed: DrawingEmbedSpec): string {
           : "";
   const where = embed.placement === "full" && size ? "" : PLACEMENT_TEXT[embed.placement];
   return [where, size].filter(Boolean).join(", ");
+}
+
+function head(name: string, where: string): string {
+  return `${DRAWING_MARKER} ${name}${where ? ` · ${where}` : ""}`;
 }
 
 function strip(loaded: LoadedDrawing): DescribedDrawing {

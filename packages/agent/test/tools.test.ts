@@ -194,9 +194,11 @@ describe("knowledge tools", () => {
         "  Arrows: “Login” → “Home”",
       ].join("\n"),
     );
-    const [plain] = createKnowledgeTools({ storage: vault, drawings });
-    const note = toolResultText(await run(plain!, { path: "Excalidraw/Flow.excalidraw.md" }));
-    expect(note).not.toContain("Drawings embedded in this note");
+    // A drawing read as a note: its description, not its scene data.
+    const drawing = toolResultText(await run(readNote!, { path: "Excalidraw/Flow.excalidraw.md" }));
+    expect(drawing).toContain("This note is an Excalidraw drawing");
+    expect(drawing).toContain("  Arrows: “Login” → “Home”");
+    expect(drawing).not.toContain('"elements"');
   });
 
   it("searches notes through the storage search", async () => {

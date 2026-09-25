@@ -218,6 +218,37 @@ describe("TaskWatcher scope", () => {
     expect(kinds(events)).toEqual(["added:Book the plumber"]);
   });
 
+  it("treats a change to a drawing a watched note embeds as nobody's edit of the note", async () => {
+    const drawing = (label: string) =>
+      serializeDrawingFile({
+        ...emptyDrawingScene(),
+        elements: [{ id: "k3JwQm9a", type: "text", text: `- [ ] ${label}` }],
+      });
+    const { storage, watcher, events } = setup();
+    const notes: NoteEvent[] = [];
+    const changed: string[] = [];
+    watcher.on("note", (event) => notes.push(event));
+    watcher.on("changed", (event) => changed.push(event.notePath));
+    await storage.write("Excalidraw/Plan.excalidraw.md", drawing("Draft the plan"));
+    await storage.write(TODAY, "- [ ] Build the plan\n![[Plan.excalidraw|right-wrap]]\n");
+    await watcher.start();
+    await vi.advanceTimersByTimeAsync(SETTLE * 2);
+    const tasks = watcher.getTasks(TODAY).map((task) => task.text);
+    events.length = 0;
+    notes.length = 0;
+    changed.length = 0;
+
+    await storage.write("Excalidraw/Plan.excalidraw.md", drawing("Book the venue?"));
+    await vi.advanceTimersByTimeAsync(SETTLE * 2);
+    expect(changed).toEqual([]);
+    expect(events).toEqual([]);
+    expect(notes).toEqual([]);
+    expect(watcher.getTasks(TODAY).map((task) => task.text)).toEqual(tasks);
+    expect(watcher.getContent(TODAY)).toBe(
+      "- [ ] Build the plan\n![[Plan.excalidraw|right-wrap]]\n",
+    );
+  });
+
   it("dedupes storage events for an already processed version", async () => {
     const { storage, watcher } = setup();
     await watcher.start();

@@ -7,6 +7,7 @@ import {
   isActiveTaskStatus,
   isBlankTaskText,
   isClosedStatus,
+  isDrawingMarkdown,
   type Logger,
   ORCHESTRATOR_THREAD_ID,
   parseAgentLine,
@@ -88,7 +89,7 @@ export interface OrchestratorOptions {
   /** The user's routines, listed in every digest so it knows what already exists. */
   routines?: () => DigestRoutine[];
   /** Describes the drawings the digest's notes embed (under their embed lines). */
-  drawings?: Pick<DrawingDescriptions, "blocks">;
+  drawings?: Pick<DrawingDescriptions, "blocks" | "blockFor">;
 }
 
 type QueueItem =
@@ -142,6 +143,8 @@ interface OrchestratorSession {
 
 /** Earlier messages of the orchestrator's chat a digest carries for context. */
 const CHAT_CONTEXT_MESSAGES = 8;
+/** The note view of a note that is itself a drawing. */
+const DRAWING_NOTE_TEXT = "(This note is an Excalidraw drawing: its scene data isn't shown.)";
 const TRIGGER_TASK_CHARS = 60;
 
 const CHANGE_PRIORITY: Record<DigestChange, number> = {
@@ -949,7 +952,14 @@ export class Orchestrator {
       const view = note.view?.slice(0, MAX_VIEW_LINES);
       if (!view) continue;
       try {
-        const blocks = await drawings.blocks(view.map((line) => line.text).join("\n"), budget);
+        const text = view.map((line) => line.text).join("\n");
+        // A note the Excalidraw plugin turned into a drawing: its description, not its scene data.
+        if (isDrawingMarkdown(text)) {
+          const block = await drawings.blockFor(note.notePath, budget);
+          note.view = [{ n: 1, text: DRAWING_NOTE_TEXT, drawing: block }];
+          continue;
+        }
+        const blocks = await drawings.blocks(text, budget);
         for (const block of blocks) {
           const line = view[block.line];
           if (line) line.drawing = [...(line.drawing ?? []), ...block.lines];

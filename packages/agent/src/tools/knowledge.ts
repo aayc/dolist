@@ -1,5 +1,7 @@
 import {
   errorResult,
+  isDrawingMarkdown,
+  isDrawingPath,
   isHiddenPath,
   isMarkdownPath,
   normalizePath,
@@ -19,7 +21,7 @@ export interface KnowledgeToolsOptions {
   storage: StorageProvider;
   maxNoteChars?: number;
   /** Describes the drawings a note embeds (after its text), and adds `read_drawing`. */
-  drawings?: Pick<DrawingDescriptions, "blocks" | "resolve" | "load">;
+  drawings?: Pick<DrawingDescriptions, "blocks" | "blockFor" | "resolve" | "load">;
   /** Renders drawings for `read_drawing`; none where no browser can. */
   renderer?: () => DrawingRenderer | undefined;
 }
@@ -54,6 +56,13 @@ export function createKnowledgeTools(options: KnowledgeToolsOptions): ToolSpec[]
         if (!path) return errorResult(`Note not found: ${requested}`);
         const file = await storage.read(path);
         if (!file) return errorResult(`Note not found: ${requested}`);
+        if (drawings && (isDrawingPath(path) || isDrawingMarkdown(file.content))) {
+          const block = await drawings.blockFor(path, drawingBudget());
+          return textResult(
+            `# ${path}\n\nThis note is an Excalidraw drawing: its scene data isn't shown, and read_drawing looks at it.\n\n${block.join("\n")}`,
+            { path, version: file.version },
+          );
+        }
         const body =
           file.content.length > maxChars
             ? `${file.content.slice(0, maxChars)}\n\n[… truncated: ${file.content.length - maxChars} more characters]`
