@@ -134,6 +134,14 @@ Spec: [docs/specs/obsidian-migration.md](docs/specs/obsidian-migration.md).
 | B0 binary files, attachment sync, file serving | from `feat/always-on` or `main` | queued (after the always-on work lands; S2 changed the same sync code) |
 | P images, tables, callouts, backlinks (web and Mac) | after the drawings' embed layer | queued (images share the drawings' embed layer) |
 
+### What the orchestrator is doing while you write
+
+Spec: [docs/specs/orchestrator-activity.md](docs/specs/orchestrator-activity.md) (user request:
+see it notice, work and conclude on any line, not only checkbox tasks). Branches from
+`feat/always-on` (so the relay forwards the new event): `feat/orchestrator-activity` (wire,
+agent, daemon, web) and `feat/orchestrator-activity-mac` (Swift models and the Mac editor, against
+the spec's exact wire): in progress.
+
 ### Agent journal
 
 Phase 1 shipped (`dffdfdd`). When the always-on work merges to `main`: pass S2's lease epoch as
