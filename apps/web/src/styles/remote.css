@@ -1,0 +1,124 @@
+/* ── Where the agent runs (the agent panel's header, Settings) ── */
+
+.agent-location {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ddl-border);
+}
+
+/* The segmented control, as in Settings (whose stylesheet the agent panel doesn't load). */
+.placement-toggle .segmented {
+  display: flex;
+  margin: 0;
+  padding: 2px;
+  border: 0;
+  border-radius: var(--radius-m);
+  background: var(--ddl-bg-hover);
+}
+
+.placement-toggle .segmented-item {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 12px;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--ddl-text-muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.placement-toggle .segmented-item:hover:not(:disabled) {
+  color: var(--ddl-text);
+}
+
+.placement-toggle .segmented-item:active:not(.is-active, :disabled) {
+  background: color-mix(in srgb, var(--ddl-bg) 50%, transparent);
+}
+
+.placement-toggle .segmented-item.is-active {
+  background: var(--ddl-bg);
+  color: var(--ddl-text);
+  box-shadow: var(--ddl-shadow-small);
+}
+
+.placement-toggle .segmented-item:focus-visible {
+  outline-offset: -2px;
+}
+
+.agent-location .segmented-item {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+/* Disabled with a reason: the wrapper takes the pointer so its tooltip shows. */
+.placement-toggle.is-held .segmented-item {
+  pointer-events: none;
+}
+
+.placement-toggle .segmented-item:disabled:not(.is-active) {
+  color: var(--ddl-text-faint);
+}
+
+.placement-toggle .segmented-item.is-active:disabled {
+  color: var(--ddl-text-muted);
+}
+
+.placement-host {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ddl-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.placement-host svg {
+  color: var(--ddl-info);
+}
+
+.agent-location-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  min-height: 18px;
+  color: var(--ddl-text-muted);
+  font-size: 12px;
+}
+
+.agent-location-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tone);
+}
+
+.agent-location-spinner {
+  flex: none;
+  color: var(--tone);
+}
+
+.agent-location-text {
+  min-width: 0;
+}
+
+.agent-location-line.tone-danger .agent-location-text,
+.agent-location-line.tone-warning .agent-location-text {
+  color: var(--tone);
+}
+
+.agent-location-action.link-button {
+  font-size: 12px;
+}
