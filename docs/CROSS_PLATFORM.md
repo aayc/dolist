@@ -9,7 +9,7 @@ app's platform-neutral Swift packages.
 | --- | --- | --- | --- |
 | Web | Browser → daemon on `127.0.0.1` | Local daemon | ✅ working |
 | macOS | Native SwiftUI/AppKit app that supervises its own daemon (or attaches to a running one) | Local daemon (full capabilities: shell, browser, desktop) | in progress — `apps/macos` |
-| iPhone | Native SwiftUI app reusing `DailyDoListModels`, `DailyDoListClient`, `DailyDoListDomain` and `DailyDoListVim` | Your Mac's daemon over an authenticated tunnel, or a cloud daemon (`cloud` execution provider) | planned — `apps/mobile` |
+| iPhone | Native SwiftUI app reusing `DailyDoListModels`, `DailyDoListClient`, `DailyDoListDomain` and `DailyDoListVim` | The always-on daemon over a private network ([ALWAYS_ON.md](./ALWAYS_ON.md)), or your Mac's | planned — `apps/mobile` |
 
 ## Why every client can share one backend
 
@@ -64,6 +64,8 @@ A native SwiftUI/AppKit app built from independent Swift packages (see
    the subway and merges later.
 
 ## Checklist before the iPhone app
+
+The first two items are phase 1 of [ALWAYS_ON.md](./ALWAYS_ON.md).
 
 - [ ] Device-scoped tokens and pairing endpoint in the daemon (today there is one local token).
 - [ ] Remote access story (Tailscale/relay) with TLS; keep `127.0.0.1` binding the default.

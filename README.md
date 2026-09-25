@@ -235,11 +235,14 @@ CI details: [docs/CI.md](docs/CI.md).
 
 ## Roadmap
 
+- An always-on agent: the daemon on a Linux VM you control, reachable only over a private network,
+  with your laptop's app relaying to it and optionally lending its hands —
+  [design](docs/ALWAYS_ON.md)
 - iPhone app (native Swift, reusing the macOS app's packages; talking to your Mac or a cloud
   daemon) — [plan](docs/CROSS_PLATFORM.md)
 - Sync, phase 2: attachments in S3/R2, end-to-end encryption, a Cloudflare Durable Object host,
   sync status in the apps ([docs/SYNC.md](docs/SYNC.md))
-- S3 storage provider; cloud execution provider (remote sandbox for browser/computer use)
+- S3 storage provider
 - Watching more than daily notes (projects, weekly notes); scheduled check-ins
 - Memory / user profile so the assistant gets more personal over time
 

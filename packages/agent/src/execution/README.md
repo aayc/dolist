@@ -221,7 +221,10 @@ calls fail with `ComputerPermissionError` instead.
 
 ## Implementing the cloud provider
 
-`cloud/provider.ts` documents the planned design. In short:
+This provider gives a daemon remote hands; it is not how the agent becomes always-on. For that,
+the whole daemon runs on an always-on machine and other devices relay to it (see
+[docs/ALWAYS_ON.md](../../../../docs/ALWAYS_ON.md)). `cloud/provider.ts` documents the planned
+design. In short:
 
 1. Provision one sandbox VM/container per workspace through `endpoint`; authenticate with the key
    read at runtime from `process.env[config.apiKeyEnv]` (never stored in config, never logged).
