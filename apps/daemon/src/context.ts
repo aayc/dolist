@@ -3,6 +3,7 @@ import type { ConnectorToolSource } from "@ddl/connectors";
 import type { Logger, SyncStatusResponse } from "@ddl/core";
 import type { StorageProvider } from "@ddl/storage";
 import type { DeviceSettings } from "./device-settings";
+import type { MachineLink } from "./machine-link";
 import type { VaultSearch } from "./search";
 import type { SecurityPolicy } from "./security";
 import type { SettingsStore } from "./settings-store";
@@ -25,6 +26,8 @@ export interface AppContext {
   syncStatus: () => SyncStatusResponse;
   /** This device's name, placement, remote hosts and sync setup. */
   device: DeviceSettings;
+  /** The always-on machine: pairing, checks, this device's credential. */
+  machine: MachineLink;
   systemSettings: SystemSettingsOpener;
   now: () => Date;
   version: string;

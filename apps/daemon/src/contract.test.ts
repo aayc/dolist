@@ -21,8 +21,11 @@ import {
   routePath,
 } from "./contract-test-helpers";
 import { memoryDeviceSettings } from "./device-settings";
+import { type FakeMachine, startFakeMachine } from "./fake-machine";
+import { memorySecretFile } from "./home-files";
+import { MachineLink } from "./machine-link";
 import { createRemoteHosts } from "./remote-hosts";
-import type { SettingsStore } from "./settings-store";
+import { createSettingsStore, type SettingsStore } from "./settings-store";
 import {
   createTestApp,
   FakeAgentRuntime,
@@ -96,6 +99,29 @@ async function threadAction(
     expect((await call("thr_1", { json: undefined, body: "{" })).status).toBe(400);
     expect((await call("thr_1", { json: undefined, body: TOO_BIG })).status).toBe(413);
   }
+}
+
+async function withFakeMachine(run: (machine: FakeMachine) => Promise<void>): Promise<void> {
+  const machine = await startFakeMachine();
+  try {
+    await run(machine);
+  } finally {
+    await machine.close();
+  }
+}
+
+/** An app whose machine link keeps its credential in memory and shares the app's settings. */
+async function machineSetup(observed: Observed) {
+  const storage = new MemoryStorageProvider();
+  const settings = await createSettingsStore({ storage });
+  const link = new MachineLink({
+    settings,
+    credentialFile: memorySecretFile(),
+    deviceName: () => "Laptop",
+    logger: silentLogger,
+  });
+  const env = await setup(observed, { storage, settings, machine: link });
+  return { ...env, link };
 }
 
 function hiddenDailyFolderSettings(): SettingsStore {
@@ -599,6 +625,87 @@ const scenarios: Record<string, Scenario> = {
     });
   },
 
+  "GET machine": async (observed) => {
+    await withFakeMachine(async (fake) => {
+      const { api, link } = await machineSetup(observed);
+      expect((await api.call("machine", "GET")).body).toEqual({
+        machine: null,
+        paired: false,
+        reachable: null,
+        checkedAt: null,
+      });
+      await link.pair({ url: fake.url, code: fake.code, name: "vm-1" });
+      expect((await api.call("machine", "GET")).body).toMatchObject({
+        machine: { name: "vm-1", url: fake.url },
+        paired: true,
+        reachable: true,
+        version: "0.2.0",
+        agent: { runsOn: { name: "vm-1" } },
+        readiness: { harness: { kind: "cursor" } },
+      });
+    });
+  },
+
+  "POST machinePair": async (observed) => {
+    await withFakeMachine(async (fake) => {
+      const { api } = await machineSetup(observed);
+      const pair = (json: unknown, init = {}) => api.call("machinePair", "POST", { json, ...init });
+      for (const bad of [
+        { url: "http://vm-1.tailnet-name.ts.net", code: fake.code },
+        { url: "https://vm-1.tailnet-name.ts.net/app", code: fake.code },
+        { url: fake.url, code: "ILLO-0000" },
+        { url: fake.url, code: fake.code, token: "x" },
+      ]) {
+        expect((await pair(bad)).body).toMatchObject({ error: "invalid_request" });
+      }
+      expect((await pair(undefined, { body: "{" })).body).toMatchObject({ error: "invalid_json" });
+      expect((await pair(undefined, { body: TOO_BIG })).status).toBe(413);
+      expect((await pair({ url: fake.url, code: "ZZZZ-ZZZZ" })).body).toMatchObject({
+        error: "pairing_rejected",
+      });
+      fake.pairAnswer = { status: 429, body: { error: "rate_limited" } };
+      expect((await pair({ url: fake.url, code: fake.code })).body).toMatchObject({
+        error: "rate_limited",
+      });
+      const closed = await startFakeMachine();
+      await closed.close();
+      expect((await pair({ url: closed.url, code: fake.code })).body).toMatchObject({
+        error: "machine_unreachable",
+      });
+      const paired = await pair({ url: `${fake.url}/`, code: fake.code.toLowerCase() });
+      expect(paired.body).toMatchObject({ machine: { url: fake.url }, paired: true });
+      expect(JSON.stringify(paired.body)).not.toMatch(/token/i);
+    });
+  },
+
+  "POST machineCheck": async (observed) => {
+    await withFakeMachine(async (fake) => {
+      const { api, link } = await machineSetup(observed);
+      expect((await api.call("machineCheck", "POST")).body).toMatchObject({ machine: null });
+      await link.pair({ url: fake.url, code: fake.code, name: "vm-1" });
+      fake.revokeAll();
+      expect((await api.call("machineCheck", "POST")).body).toMatchObject({
+        paired: true,
+        reachable: true,
+        error: expect.stringMatching(/pair again/),
+      });
+    });
+  },
+
+  "DELETE machinePairing": async (observed) => {
+    await withFakeMachine(async (fake) => {
+      const { api, link } = await machineSetup(observed);
+      await link.pair({ url: fake.url, code: fake.code, name: "vm-1" });
+      expect((await api.call("machinePairing", "DELETE")).body).toEqual({
+        machine: { name: "vm-1", url: fake.url },
+        paired: false,
+        reachable: null,
+        checkedAt: null,
+      });
+      expect(fake.revoked).toHaveLength(1);
+    });
+  },
+
   "GET ws": async (observed) => {
     const { api } = await setup(observed);
     expect((await api.call("ws", "GET")).status).toBe(426);
@@ -692,18 +799,13 @@ async function agentEnabled(observed: Observed, method: "PUT" | "POST") {
 
 /**
  * Operations the contract declares that the daemon doesn't serve yet: they answer 404 like any
- * unknown route. Remote access and pairing (S1) and device settings with the machine link (S2)
- * replace each entry with a scenario.
+ * unknown route. Remote access and pairing (S1) replaces each entry with a scenario.
  */
 const NOT_SERVED_YET = new Set([
   "POST pairingCodes",
   "POST pair",
   "GET devices",
   "DELETE pairedDevice",
-  "GET machine",
-  "POST machinePair",
-  "POST machineCheck",
-  "DELETE machinePairing",
 ]);
 
 const operations = listOperations();

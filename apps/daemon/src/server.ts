@@ -1,6 +1,7 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { homedir } from "node:os";
+import { join } from "node:path";
 import type { ConnectorToolSource } from "@ddl/connectors";
 import {
   type AppSettings,
@@ -21,6 +22,7 @@ import { errorMessage } from "./errors";
 import { secretFile } from "./home-files";
 import { displayPath } from "./home-paths";
 import { LeasedAgentRuntime } from "./leased-runtime";
+import { MACHINE_TOKEN_FILE, MachineLink } from "./machine-link";
 import { ReadinessMonitor, systemReadinessProbes } from "./readiness";
 import { createRemoteHosts } from "./remote-hosts";
 import { createSecurityPolicy } from "./security";
@@ -68,6 +70,7 @@ interface Resources {
   connectors?: ConnectorToolSource;
   runtime?: LeasedAgentRuntime;
   readiness?: ReadinessMonitor;
+  machine?: MachineLink;
   supervisor?: AgentSupervisor;
   sync?: SyncController;
   server?: Server;
@@ -157,6 +160,13 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       applySync: (next) => supervisor?.applySync(next) ?? Promise.resolve(),
       logger: logger.child({ component: "device" }),
     });
+    const machine = await MachineLink.load({
+      settings,
+      credentialFile: secretFile(join(config.home, MACHINE_TOKEN_FILE)),
+      deviceName: () => device.name,
+      logger: logger.child({ component: "machine" }),
+    });
+    resources.machine = machine;
     supervisor = new AgentSupervisor({
       runtime,
       sync,
@@ -164,6 +174,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       agentMode: config.agentMode,
       placement: deviceSettings,
       settings,
+      credential: machine,
       ...(options.leaseTimings ? { leaseTimings: options.leaseTimings } : {}),
       logger,
     });
@@ -189,6 +200,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       search: resolveVaultSearch(storage),
       syncStatus: () => sync.status(),
       device: deviceSettings,
+      machine,
       systemSettings: createSystemSettingsOpener(),
     });
     handler = app.fetch;
@@ -261,6 +273,7 @@ async function shutdown(resources: Resources, logger: Logger): Promise<void> {
   };
   for (const unsubscribe of resources.unsubscribes) unsubscribe();
   resources.readiness?.stop();
+  resources.machine?.dispose();
   const { supervisor, runtime, sync, hub, server, connectors, storage } = resources;
   if (supervisor) await step("agent lease", () => supervisor.stop());
   if (runtime) await step("agent runtime", () => runtime.stop());
