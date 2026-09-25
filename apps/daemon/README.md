@@ -22,6 +22,18 @@ From this package: `pnpm dev`, `pnpm build`, `pnpm start`, `pnpm test`, `pnpm ty
 The banner prints the URL, never the token. `SIGINT`/`SIGTERM`/`SIGHUP` shut down gracefully (the
 agent runtime flushes threads and records first); a second signal exits immediately.
 
+### Restarting to apply a change (exit code 75)
+
+Some changes need the daemon to start again: switching to another vault (`PUT /api/device/vault`).
+The daemon answers the request, shuts down gracefully and exits with **75** (`RESTART_EXIT_CODE`,
+`EX_TEMPFAIL` from sysexits(3)); `vaultPath` in `config.json` already names the new vault.
+
+- **Under the Mac app** (it sets `DDL_SUPERVISED=1`): the app's supervisor starts the daemon again
+  at once, and a restart request never counts as a crash. Clients see `restart: "supervisor"`.
+- **Started by hand** (`pnpm start`, `node dist/main.js`, `pnpm dev`): nothing starts it again. It
+  prints which vault it opens from now on; run the same command again. Clients see
+  `restart: "manual"`. A process manager can treat exit code 75 as "restart now".
+
 ## Configuration
 
 Precedence: environment variable → `$DDL_HOME/config.json` → default.
@@ -29,7 +41,7 @@ Precedence: environment variable → `$DDL_HOME/config.json` → default.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `DDL_HOME` | `~/.daily-do-list` | Machine-local state (created with mode `0700`). |
-| `DDL_VAULT` | `~/DailyDoList` | Vault folder. Point it at an existing Obsidian vault to reuse it. |
+| `DDL_VAULT` | `~/DailyDoList` | Vault folder. Point it at an existing Obsidian vault to reuse it. Set, it fixes the vault: `PUT /api/device/vault` answers 409 `locked_by_env`. |
 | `DDL_PORT` | `7331` | Port on `127.0.0.1`. `0` picks a free port. |
 | `DDL_AGENT_MODE` | `live` | `live`, `mock` (scripted agent, no model calls) or `off`. |
 | `DDL_MODEL` | `deepseek/deepseek-v4.1-flash` | Default OpenRouter model (used until the vault's settings pick one). |
@@ -41,6 +53,7 @@ Precedence: environment variable → `$DDL_HOME/config.json` → default.
 | `DDL_SYNC_TOKEN` | — | The sync service's vault token (else `$DDL_HOME/sync-token`). Never logged. |
 | `DDL_AGENT_PLACEMENT` | `this_device` | Where this device's agent runs: `this_device`, `always_on_machine` or `always_on_host` (overrides `agent.placement`). |
 | `DDL_REMOTE_HOSTS` | — | Comma-separated remote hosts (overrides `remote.hosts` in `config.json`; clients show them read-only). |
+| `DDL_SUPERVISED` | — | `1`: a supervisor starts the daemon again after it exits with 75 (the Mac app sets it). |
 
 A device setting set by an environment variable (the placement, the remote hosts, or the sync setup
 through any of the three sync variables) is listed in `lockedByEnv` by `GET /api/device`, and the API
@@ -236,7 +249,8 @@ arguments. The token is never printed.
 All paths come from `API_ROUTES` in `@ddl/core` (`packages/core/src/protocol.ts`). Errors are
 `{ "error": "<code>", "message": "…" }` (`ApiErrorBody`). Common codes: `invalid_request` and
 `invalid_json` (400), `invalid_path` (400), `unauthorized` (401), `pairing_rejected` (401, a bad
-pairing code), `forbidden_host` and `forbidden_origin` (403), `not_found` (404), `conflict` (409),
+pairing code), `forbidden_host` and `forbidden_origin` (403), `forbidden_device` (403, a paired
+device calling a route only this machine may call), `not_found` (404), `conflict` (409),
 `payload_too_large` (413), `rate_limited` (429), `agent_unavailable` (503), `agent_error` (500).
 
 | Method | Path | Body → Response |
@@ -276,6 +290,13 @@ pairing code), `forbidden_host` and `forbidden_origin` (403), `not_found` (404),
 | PATCH | `/api/device` | `DeviceSettingsPatch` (`name`, `placement`, `remoteHosts`) → `DeviceSettingsResponse` (400 invalid, 409 `locked_by_env`) |
 | PUT | `/api/device/sync` | `DeviceSyncSetupRequest` (`url`, `vault`, optional `token`) → `DeviceSettingsResponse` (400 invalid or no token saved yet, 409 `locked_by_env`) |
 | DELETE | `/api/device/sync` | → `DeviceSettingsResponse` (sync off, token deleted; 409 `locked_by_env`) |
+| GET | `/api/device/vault` | → `DeviceVaultResponse` (`path`, `lockedByEnv`). This machine only. |
+| PUT | `/api/device/vault` | `DeviceVaultRequest` (`{ path }`) → `DeviceVaultResponse` with `restart`, then exits with 75 (see [Restarting](#restarting-to-apply-a-change-exit-code-75)); the same vault answers without `restart` (400 not an existing folder or in `$DDL_HOME`, 409 `locked_by_env`, or `conflict` while an import runs, the vault syncs or a restart is pending). This machine only. |
+| POST | `/api/import/obsidian/preview` | `ObsidianImportPreviewRequest` (`{ source }`) → `ObsidianImportPreview` (reads the folder, writes nothing; 400 a source that isn't allowed). This machine only. |
+| GET | `/api/import/obsidian` | → `ObsidianImportStatusResponse` (`{ job }`: the running import or update, or the last one; `null` before any). This machine only. |
+| POST | `/api/import/obsidian` | `ObsidianImportRequest` (`{ source, destination? }`) → 202 `ObsidianImportJobResponse` (400 source or destination not allowed, 409 a job runs); `import.progress` events follow it. This machine only. |
+| POST | `/api/import/obsidian/cancel` | → `ObsidianImportJobResponse` (the stopped job, once its staging folder is removed; 404 nothing runs). This machine only. |
+| POST | `/api/import/obsidian/update` | → 202 `ObsidianImportJobResponse` (404 this vault wasn't imported, or the Obsidian vault moved; 409 a job runs). This machine only. |
 | GET | `/api/machine` | → `MachineStatusResponse` (the always-on machine, this device's pairing, the last check) |
 | POST | `/api/machine/pair` | `MachinePairRequest` (`url`, `code`, optional `name`) → `MachineStatusResponse` (400, 401 `pairing_rejected`, 429 `rate_limited`, 502 `machine_unreachable`) |
 | POST | `/api/machine/check` | → `MachineStatusResponse` (checked now) |
@@ -334,6 +355,7 @@ Notes:
   machine's `POST /api/pair` as kind `daemon` with this device's name, and sets
   `remote.alwaysOnMachine` in the (synced) app settings. `GET /api/machine` checks again in the
   background when the last check is older than 30 s; nothing polls while nobody asks.
+- `import/obsidian*` and `device/vault`: see [Importing from Obsidian](#importing-from-obsidian).
 - Everything outside `/api/*` and `/ws` serves the built UI with SPA fallback. Hashed files under
   `/assets/` are cached immutably. If there is no build, a short page explains how to create one.
 
@@ -360,6 +382,7 @@ Server → client (`ServerEvent`):
 | `settings.changed` | Settings were saved here, or a change synced from another device was reloaded. |
 | `routines.changed` | Every routine (as `GET /api/routines` lists them), whenever one changed: its file, its next run, its last run's status. Also sent when the agent lease moves to or from this device. |
 | `routine.notification` | A routine's run finished and its `notify` says to tell the user (`RoutineNotification`: routine, title, one or two lines, thread, status). |
+| `import.progress` | An import or update from Obsidian changed phase or state, or copied more (at most every 200 ms): the whole `ObsidianImportJob`, with `result` or `update` once `done`. |
 | `error` | A client message was rejected. |
 
 Client → server (`ClientEvent`): `hello { clientId }`, `ping`, `surface.subscribe` /
@@ -371,6 +394,64 @@ The server pings every 30 s and drops clients that do not answer. Under backpres
 1 MB buffered) `surface.frame` and `thread.delta` are skipped for that client; the final
 `thread.message` carries the full text. A client with more than 16 MB buffered is disconnected and
 must reconnect and resync.
+
+## Importing from Obsidian
+
+The user copies their Obsidian vault; Daily Do List makes a **new vault** from it and carries the
+current vault over. The Obsidian vault is only ever read, and the current vault is never written:
+it stays as the backup. The product decisions are in the spec, `docs/specs/obsidian-migration.md`.
+
+1. **Preview** (`POST /api/import/obsidian/preview`): notes, folders, attachments by type and size,
+   the settings found, the templates folder, enabled community plugins and how each fares here
+   (`src/import/plugins.ts`, a table to extend), canvases, drawings, links that aren't followed, and
+   the carry-over plan with the same counts the import will produce. Lists hold at most 200 entries
+   with a full `count`. It reads no note except the few in the agent's watch window and the ones
+   that will be merged, so a 10 000-note vault previews in a fraction of a second.
+2. **Import** (`POST /api/import/obsidian`): a job, one at a time. It copies the Obsidian vault
+   byte for byte (`.obsidian/` and attachments included, times kept, never executable) into a hidden
+   staging folder next to the destination, then carries the current vault over:
+   - daily notes move to Obsidian's daily-note folder and format (or keep this vault's when Obsidian
+     keeps none, or uses a format this app can't read back); for a date both have, the Obsidian note
+     is kept and this vault's note appended under `## From Daily Do List` (a code block left open
+     is closed first);
+   - every other file (routines, drawings, attachments, `.trash/`) keeps its path; one that
+     collides with an Obsidian file, compared case- and normalization-insensitively, becomes
+     `Name (Daily Do List).md`, and files that don't collide keep their names first;
+   - the agent sidecar: tracker state of moved or merged daily notes is rebuilt at the new path so
+     every task keeps its id (Obsidian's tasks in a merged note count as existing tasks, acted on
+     only with `actOnExistingTasks`), records get the new path and line, threads the new path and
+     routine id, and a thread whose task isn't in its note any more is kept with a system note
+     saying it's detached. Approvals, artifacts and anything unknown are copied byte for byte; the
+     sync engine's snapshots and an earlier import's manifest stay behind;
+   - `settings.json`: this vault's, with the new daily-note settings and Obsidian's editor settings;
+   - the manifest, `.daily-do-list/import/obsidian.json` (see `docs/DATA_FORMATS.md`).
+   The finished staging folder is renamed to the destination. Cancelling, a failure or a daemon
+   shutdown removes the staging folder: the destination never holds half an import.
+3. **Switch** (`PUT /api/device/vault`), which restarts the daemon on the new vault. Switching is
+   refused while the vault syncs: turn sync off first (or point this device at a new sync vault),
+   or the old notes would sync into the new one.
+4. **Update from Obsidian** (`POST /api/import/obsidian/update`), for a while the user still writes
+   in Obsidian: copies what changed there since the manifest. Changed there and not here: replaced.
+   Changed on both sides (a merged daily note always counts as changed here): kept, and the Obsidian
+   version saved as `Name (Obsidian).md`. New there: copied (as a conflict copy if this vault has
+   another file at that path). Deleted here and changed there: written back. It never deletes, and
+   its writes are atomic and synced.
+
+Rules that hold throughout:
+
+- The source must be an existing, readable folder that is not, holds nor sits inside `$DDL_HOME` or
+  the current vault; the destination must be new or empty (Finder's `.DS_Store` aside), in a
+  writable folder, and not inside the source, `$DDL_HOME` or the current vault. Both are compared
+  by real path.
+- Links are followed only to files inside the vault being read; links elsewhere, links to folders
+  and special files are skipped and reported. Files are opened without following links and
+  without blocking. Nothing from the source is ever executed.
+- Only this machine may call these routes: a paired device gets 403 `forbidden_device`. They aren't
+  agent tools, and the safety rules deny agents any call to the daemon's API
+  (`network.app-self-access`) and any write under `.daily-do-list/`.
+- Agent journal files (`.daily-do-list/journal/`) are copied unchanged: the thread snapshots readers
+  use are what the import remaps. `remapJournalFile` in `src/import/sidecar.ts` is where journal
+  events will be remapped once readers fold the journal.
 
 ## Code map
 
@@ -394,6 +475,8 @@ must reconnect and resync.
 | `src/device-settings.ts`, `home-files.ts`, `remote-hosts.ts` | Device-local settings, atomic writes in `$DDL_HOME`, the remote hosts registry. |
 | `src/machine-link.ts` | Pairing with and checking the always-on machine. |
 | `src/readiness.ts` | This daemon's readiness to run the agent. |
+| `src/import/*`, `routes/import.ts` | Importing an Obsidian vault: `importer.ts` (preview, jobs, update), `places.ts` (where it may read and write), `walk.ts` and `files.ts` (no link escapes, atomic byte-exact copies), `carry-over.ts`, `sidecar.ts`, `settings-merge.ts`, `update.ts`, `manifest.ts`; `test-vaults.ts` builds the synthetic vaults the tests use. |
+| `src/vault-switch.ts` | Which vault this daemon opens, and restarting on another (`RESTART_EXIT_CODE`). |
 | `build.mjs` | esbuild bundle (workspace packages inlined, third-party dependencies external). |
 
 Tests are colocated (`*.test.ts`). They use in-memory vaults and temp directories and never touch the

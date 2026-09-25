@@ -364,7 +364,9 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
   `DailyDoListModels` in the same change. Its tests decode the `@ddl/contract` fixtures.
 - **Daemon supervision:** the app attaches to a running daemon and never stops one it didn't
   start. It reads the token from `$DDL_HOME/daemon-token` and never logs it. A managed daemon runs
-  on the system Node 24.4+ with a stdin watchdog, so it can't outlive the app.
+  on the system Node 24.4+ with a stdin watchdog, so it can't outlive the app. A daemon that exits
+  with 75 (`RESTART_EXIT_CODE`, e.g. after `PUT /api/device/vault`) is relaunched at once, not
+  counted as a crash; the two constants must stay equal.
 - **Computer use helper:** `DailyDoListComputer` builds `ddl-computer`; `ddl-computer serve`
   speaks JSON lines on stdin and stdout (the protocol and its limits are in `apps/macos/README.md`)
   and exits when stdin closes. The daemon spawns it, so macOS checks its permissions against the

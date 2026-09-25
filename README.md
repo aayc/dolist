@@ -111,6 +111,30 @@ app's tools, served to the CLI over a local MCP endpoint and checked by the same
 Browser and computer use therefore work the same with both harnesses — they're this app's local
 Chrome and (on macOS) desktop control, not Cursor's. Details: [Agent system](docs/AGENT_SYSTEM.md#5-the-cursor-cli-harness).
 
+## Moving from Obsidian
+
+Keep your Obsidian vault as it is (it's only ever read, so Obsidian Sync can keep running) and make
+a copy of it the new Daily Do List vault, with everything you already have here carried over:
+
+1. **Preview.** Point Daily Do List at the Obsidian vault's folder. The report lists its notes,
+   attachments, settings, templates, plugins (and how each one fares here: Dataview queries show as
+   text, Excalidraw drawings work, …), canvases (copied, not viewable yet), and what happens to your
+   current Daily Do List notes: daily notes moved to Obsidian's daily-note folder and format, dates
+   both vaults have, name collisions, and your agent history.
+2. **Import.** The Obsidian vault is copied byte for byte (attachments and `.obsidian/` too, so it
+   still opens in Obsidian) into a new folder next to your current vault. Your daily notes join
+   Obsidian's; for a day both have, yours is appended to Obsidian's note under
+   `## From Daily Do List`. Other notes, routines and drawings keep their paths (a name Obsidian
+   already uses gets "(Daily Do List)" added), and every task keeps its agent thread. Settings keep
+   your agent setup and take Obsidian's daily-note and editor settings (vim mode, vimrc, …).
+3. **Switch** to the new vault. The daemon restarts on it; the old vault stays untouched as your
+   backup.
+4. **Update from Obsidian** whenever you've written more there: new and changed files come over,
+   a file changed in both places keeps both versions, and nothing is ever deleted.
+
+The API behind it (for scripts and other clients) is described in the daemon's README:
+[Importing from Obsidian](apps/daemon/README.md#importing-from-obsidian).
+
 ## macOS app
 
 A native SwiftUI/AppKit app lives in [`apps/macos`](apps/macos/README.md). It starts and supervises

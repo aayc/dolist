@@ -689,7 +689,7 @@ export interface CarryOverAgent {
   routines: number;
   /** Daily notes whose task identities carry over. */
   trackedNotes: number;
-  /** Journal files, copied as they are (see the import README). */
+  /** Agent journal files, copied as they are (their note paths aren't remapped yet). */
   journal: number;
 }
 

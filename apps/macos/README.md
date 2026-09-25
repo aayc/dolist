@@ -279,12 +279,14 @@ How a managed daemon is found and run:
    (`Contents/Resources/daemon/dist/main.js`), then a repository checkout (`DDL_REPO_ROOT`, or
    walking up from the app and from the current directory).
 3. **Launch:** `node <entry>` in the daemon's package directory, with your environment plus the
-   daemon settings. Its PATH starts with Node's folder and includes your login shell's PATH, so
+   daemon settings (and `DDL_SUPERVISED=1`, so it knows it will be started again). Its PATH starts with Node's folder and includes your login shell's PATH, so
    connectors started with `npx` or `uvx` work when the app was opened from Finder. The supervisor
    waits up to 20 s for the token file and a healthy `GET /api/health`.
 4. **Supervision:** an unexpected exit restarts the daemon after 1, 2, 4, 8… s (capped at 30 s).
-   After 5 failures within 2 minutes it gives up and shows the daemon's last output. An attached
-   daemon is health-checked every 5 s; if it goes away, the app starts its own.
+   After 5 failures within 2 minutes it gives up and shows the daemon's last output. A daemon that
+   exits with 75 (`DaemonSupervisor.restartExitStatus`, e.g. after switching vaults) asked to be
+   started again: it's relaunched at once, and that isn't a failure. An attached daemon is
+   health-checked every 5 s; if it goes away, the app starts its own.
 5. **Stop:** SIGTERM to the daemon's process group, then SIGKILL after 5 s. Quitting the app stops
    the managed daemon. If the app crashes, the daemon notices its stdin closing and shuts itself
    down (a small `--import` preload), so no orphan lingers.
