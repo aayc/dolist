@@ -26,12 +26,18 @@ struct InspectorPanel: View {
             routines: .init(
               id: CommandID.showRoutines.rawValue, keys: CommandID.showRoutines.shortcut),
             newRoutine: .init(
-              id: CommandID.newRoutine.rawValue, keys: CommandID.newRoutine.shortcut)),
+              id: CommandID.newRoutine.rawValue, keys: CommandID.newRoutine.shortcut),
+            runHere: .init(
+              id: CommandID.runOrchestratorHere.rawValue,
+              keys: CommandID.runOrchestratorHere.shortcut)),
           onOpenOrchestratorWindow: { model.showOrchestratorWindow() },
           section: $ui.agentSection, selectedRoutineId: $ui.selectedRoutineId,
           routineActions: AgentRoutineActions(
             newRoutine: { ui.newRoutine($0) },
-            edit: { routine in Task { await workspace.openNote(routine.path) } }))
+            edit: { routine in Task { await workspace.openNote(routine.path) } }),
+          placementActions: AgentPlacementActions(openSetUp: { setUp in
+            model.showAlwaysOnSettings(AlwaysOnSection(setUp))
+          }))
       } else {
         ContentUnavailableView(
           "Agent unavailable", systemImage: "sparkles",

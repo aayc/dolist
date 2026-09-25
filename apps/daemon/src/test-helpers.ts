@@ -6,6 +6,8 @@ import type { AgentRuntime, AgentRuntimeEvents } from "@ddl/agent";
 import { RoutineLibrary, UnknownRoutineError } from "@ddl/agent/routines";
 import {
   type AgentMode,
+  type AgentPlacement,
+  type AgentPlacementStatus,
   type AgentStatusResponse,
   type ApprovalDecisionRequest,
   type ApprovalRequest,
@@ -17,6 +19,7 @@ import {
   type CreateRoutineRequest,
   Emitter,
   type Logger,
+  type RelayState,
   type Routine,
   type RoutineRunResponse,
   type SurfaceKind,
@@ -29,7 +32,13 @@ import {
   type Unsubscribe,
 } from "@ddl/core";
 import { MemoryStorageProvider, type StorageProvider } from "@ddl/storage";
-import type { Hono } from "hono";
+import type { Hono, MiddlewareHandler } from "hono";
+import type {
+  MachineCredential,
+  MachineCredentialSource,
+  PlacementSnapshot,
+  PlacementSource,
+} from "./agent-location";
 import { createApp } from "./app";
 import type { DeviceSettings } from "./device-settings";
 import type { ObsidianImporter } from "./import/importer";
@@ -44,6 +53,73 @@ import { WriteTracker } from "./write-tracker";
 
 export const TEST_PORT = 7331;
 export const TEST_HOST = `127.0.0.1:${TEST_PORT}`;
+
+/** A placement source (like the agent supervisor) that changes only when told to. */
+export class SettablePlacement implements PlacementSource {
+  #effective: AgentPlacement;
+  #relay: RelayState | null = null;
+  readonly #listeners = new Set<(snapshot: PlacementSnapshot) => void>();
+
+  constructor(effective: AgentPlacement = "this_device") {
+    this.#effective = effective;
+  }
+
+  /** The last state the relay reported. */
+  get relay(): RelayState | null {
+    return this.#relay;
+  }
+
+  current(): PlacementSnapshot {
+    return { placement: this.#effective, effective: this.#effective, runsOn: null };
+  }
+
+  status(): AgentPlacementStatus {
+    return { placement: this.#effective, runsOn: null, relay: this.#relay ?? "off" };
+  }
+
+  set(effective: AgentPlacement): void {
+    if (effective === this.#effective) return;
+    this.#effective = effective;
+    for (const listener of [...this.#listeners]) listener(this.current());
+  }
+
+  onChange(listener: (snapshot: PlacementSnapshot) => void): Unsubscribe {
+    this.#listeners.add(listener);
+    return () => {
+      this.#listeners.delete(listener);
+    };
+  }
+
+  setRelay(state: RelayState | null): void {
+    this.#relay = state;
+  }
+}
+
+/** A machine credential source (like the machine link) that changes only when told to. */
+export class SettableMachineCredential implements MachineCredentialSource {
+  #credential: MachineCredential | null;
+  readonly #listeners = new Set<(credential: MachineCredential | null) => void>();
+
+  constructor(credential: MachineCredential | null = null) {
+    this.#credential = credential;
+  }
+
+  current(): MachineCredential | null {
+    return this.#credential;
+  }
+
+  set(credential: MachineCredential | null): void {
+    this.#credential = credential;
+    for (const listener of [...this.#listeners]) listener(credential);
+  }
+
+  onChange(listener: (credential: MachineCredential | null) => void): Unsubscribe {
+    this.#listeners.add(listener);
+    return () => {
+      this.#listeners.delete(listener);
+    };
+  }
+}
 
 export function testToken(): string {
   return randomBytes(32).toString("hex");
@@ -346,6 +422,7 @@ export interface TestAppOptions<S extends StorageProvider = MemoryStorageProvide
   machine?: MachineLink;
   vault?: VaultSwitch;
   imports?: ObsidianImporter;
+  relay?: { middleware(): MiddlewareHandler };
 }
 
 export interface TestApp<S extends StorageProvider = MemoryStorageProvider> {
@@ -397,6 +474,7 @@ export async function createTestApp<S extends StorageProvider = MemoryStoragePro
     ...(options.imports ? { imports: options.imports } : {}),
     systemSettings,
     ...(options.now ? { now: options.now } : {}),
+    ...(options.relay ? { relay: options.relay } : {}),
   });
 
   const request = (path: string, init: TestRequestInit = {}): Promise<Response> => {

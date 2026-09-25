@@ -117,6 +117,12 @@ describe("orchestrator digest", () => {
     expect(prompt).toContain("unless the user wrote to you directly: then end with your reply");
   });
 
+  it("points the orchestrator at the user's other notes", () => {
+    const prompt = buildOrchestratorSystemPrompt();
+    expect(prompt).toContain("read_note a [[linked note]]");
+    expect(prompt).toContain("search_notes when");
+  });
+
   it("has a system prompt covering the four triage outcomes and safety", () => {
     const prompt = buildOrchestratorSystemPrompt();
     for (const phrase of [

@@ -32,7 +32,7 @@ export const SECRET_SEARCH = info(
   "Searches files outside the workspace for passwords, keys or tokens",
 );
 
-const SECRET_WORDS_RE =
+export const SECRET_WORDS_RE =
   /pass(?:word|wd|phrase)|secret|token|api[ _-]?key|private[ _-]?key|BEGIN [A-Z ]*PRIVATE|credential|aws_access|bearer/i;
 
 export function resolveToolPath(facts: ActionFacts, raw: string): ResolvedPath {

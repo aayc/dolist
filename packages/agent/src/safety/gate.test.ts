@@ -7,7 +7,13 @@ import { createSafetyEvaluator } from "./evaluator";
 import { createSafetyGate } from "./gate";
 import { HIDDEN_VALUE } from "./sensitive";
 import { WORKSPACE } from "./test-helpers";
-import type { ActionContext, SafetyEvaluator, SafetyGateOptions, SafetyVerdict } from "./types";
+import type {
+  ActionContext,
+  AllowedCall,
+  SafetyEvaluator,
+  SafetyGateOptions,
+  SafetyVerdict,
+} from "./types";
 
 function setup(overrides: Partial<SafetyGateOptions> = {}) {
   const approvals = createApprovalBroker();
@@ -244,5 +250,66 @@ describe("createSafetyGate", () => {
       },
     });
     await expect(noisy.gate(call("read", { path: "a" }))).resolves.toEqual({ allow: true });
+  });
+});
+
+describe("onAllowed (the journal's write-ahead record)", () => {
+  function recording(overrides: Partial<SafetyGateOptions> = {}) {
+    const allowed: Array<{ call: string; allowed: AllowedCall }> = [];
+    const s = setup({
+      onAllowed: (c, a) => allowed.push({ call: c.toolCallId, allowed: a }),
+      ...overrides,
+    });
+    return { ...s, allowed };
+  }
+
+  it("says how each call was let through and what it does, and never for a blocked one", async () => {
+    const s = recording();
+    await s.gate(call("read", { path: "notes.md" }, { toolCallId: "c-read" }));
+    await s.gate(call("bash", { command: "rm -rf ~" }, { toolCallId: "c-deny" }));
+    const pending = nextPending(s.approvals);
+    const approved = s.gate(
+      call("browser_click", { element: "Place order", ref: "e7" }, { toolCallId: "c-buy" }),
+    );
+    const approval = await pending;
+    await s.approvals.decide(approval.id, { decision: "approve", scope: "task" });
+    await approved;
+    await s.gate(
+      call("browser_click", { element: "Place order", ref: "e7" }, { toolCallId: "c-again" }),
+    );
+    expect(s.allowed).toEqual([
+      {
+        call: "c-read",
+        allowed: expect.objectContaining({ via: "evaluator", effectful: false }),
+      },
+      {
+        call: "c-buy",
+        allowed: {
+          summary: "Click “Place order” in the browser",
+          via: "approval",
+          approvalId: approval.id,
+          effectful: true,
+        },
+      },
+      {
+        call: "c-again",
+        allowed: expect.objectContaining({ via: "grant", effectful: true }),
+      },
+    ]);
+  });
+
+  it("reports calls the approval policy lets through, and survives a broken listener", async () => {
+    const s = recording({ approvalPolicy: () => "run_everything" });
+    await expect(
+      s.gate(call("browser_click", { element: "Place order" }, { toolCallId: "c-1" })),
+    ).resolves.toEqual({ allow: true });
+    expect(s.allowed[0]?.allowed).toMatchObject({ via: "policy", effectful: true });
+
+    const broken = setup({
+      onAllowed: () => {
+        throw new Error("listener bug");
+      },
+    });
+    await expect(broken.gate(call("read", { path: "a" }))).resolves.toEqual({ allow: true });
   });
 });

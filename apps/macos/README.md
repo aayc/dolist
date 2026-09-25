@@ -43,7 +43,7 @@ future iPhone app too.
 | `Sources/DailyDoListApp/System` | OS integration: launch at login (`SMAppService`), the global hotkey (Carbon), shortcut parsing, conflicts with macOS shortcuts, and the computer-use permissions with their guide panel. |
 | `Packages/DailyDoListModels` (iOS) | Swift mirror of the wire protocol (`packages/core/src/protocol.ts`), checked against the `@ddl/contract` fixtures. |
 | `Packages/DailyDoListClient` (iOS) | `DaemonClient`: `HTTPDaemonClient` (REST + WebSocket, reconnects and resyncs) and `InMemoryDaemonClient` (the demo and test fake). |
-| `Packages/DailyDoListDomain` (iOS) | Pure domain logic ported from `@ddl/core`: dates and daily notes, task parsing and tracking, line anchors, agent-line markers, three-way merges, wikilinks, paths, fuzzy matching. |
+| `Packages/DailyDoListDomain` (iOS) | Pure domain logic ported from `@ddl/core`: dates and daily notes, task parsing and tracking, line anchors, agent-line markers, three-way merges, wikilinks, paths, fuzzy matching, and the remote access validators. |
 | `Packages/DailyDoListEditor` | The TextKit markdown editor: live preview, clickable checkboxes, agent badges, and vim mode (it hosts `DailyDoListVim`). |
 | `Packages/DailyDoListVim` (iOS) | Vim mode: a port of the web editor's vim.js and its CodeMirror 6 adapter, checked against the web app's vim vectors; hosts implement `VimEditor` ([README](Packages/DailyDoListVim/README.md)). |
 | `Packages/DailyDoListAgent` | Agent state and UI: inbox, threads (the live chat: [The agent chat](#the-agent-chat)), the orchestrator's chat ([The orchestrator's chat](#the-orchestrators-chat)), routines ([Routines](#routines)), approval cards, artifacts, notifications, menu bar, Dock badge. |
@@ -215,6 +215,60 @@ a thread, so a routine has its own inbox of runs, and a finished run can notify 
   `MainWindowView`. Demo mode has four routines (one paused, one with a schedule it can't read)
   with past runs, and runs Run Now like the daemon.
 
+## Where the agent runs
+
+Each device chooses where its orchestrator runs: here, or on the always-on machine that keeps
+working while the Mac sleeps ([docs/ALWAYS_ON.md](../../docs/ALWAYS_ON.md)). The daemon reports
+this device's choice, who runs the agent now and the relay to the machine in the agent status
+(`placement`), and applies a change live (`PATCH /api/device`).
+
+- **The toggle:** under the agent panel's header, "Orchestrator [This device | Always-on
+  machine]" (a native segmented control) is one click away. Switching shows the handover's note
+  as it happens ("Handing the agent to vm-name…", "Taking over from vm-name…"). While the agent is
+  held on this device (no always-on machine set up, or no sync) the control is disabled: its
+  tooltip says why, a line under it says what it's waiting for, and **Set Up…** opens the right
+  section of Settings. When the machine can't be reached, **Run It on This Device Instead** takes
+  it back; when this device isn't paired, **Pair…** opens Settings. On the always-on machine
+  itself the row just says "This is the always-on machine".
+- **Commands:** **Agent → Run the Orchestrator on This Device** and **… on the Always-On
+  Machine** (also in the palette, and `:obcommand agent.runHere` / `agent.runOnMachine`). They're
+  checked items: the current place is checked and can't be chosen again, and both are off while
+  the agent is held here. No shortcut: none fits the command table without clashing.
+- **Read-only:** when the machine can't be reached or this device isn't paired with it, another
+  device runs the agent, or the agent is moving between devices, the daemon serves the synced
+  copy and answers actions with 503. The panel then shows a banner saying what that means, and
+  every action that would fail stays visible but disabled, with the reason in its tooltip:
+  Approve and Deny, the chat bar ("Replies are off while this is read-only") and its Stop, a
+  thread's Stop and Retry, the orchestrator's Stop, Run Now and **Stop Task**. An action tried
+  anyway shows the daemon's message in the panel's toast.
+- **Settings → Always-On** has five sections (a segmented control; the toggle's links open the
+  right one):
+  - **Location:** the same choice, who runs the agent now, and this device's readiness (agent,
+    model credential, browser, desktop control, connectors) with a fix for each problem
+    (Agent Settings…, Set Up… for computer use, Connectors…).
+  - **Machine:** pair with the always-on machine (its address, a code it issued, an optional
+    name), then what it reports: reachable, version, where its agent runs and its readiness.
+    **Check Now**, **Forget This Machine…** (drops this device's credential only) and **Open Its
+    Web App**. Its status refreshes every 15 s while the section shows.
+  - **Sync:** the sync service's address, the vault and the vault token. The token is
+    write-only: "Saved" with **Replace…**, never shown. The sync status, and **Turn Off Sync…**.
+  - **Devices:** this device's name, the devices paired with this daemon with **Revoke…**, and
+    **Get a Pairing Code**: `XXXX-XXXX` with a copy button, a countdown to its expiry and the
+    address to open on the new device. No QR code yet.
+  - **Remote Access:** the names this daemon answers to besides this Mac (checked like the
+    daemon checks them: a DNS name with an optional port, no scheme, path or IP, at most 8).
+
+  A field an environment variable sets (`DDL_AGENT_PLACEMENT`, `DDL_REMOTE_HOSTS`,
+  `DDL_SYNC_*`: the daemon's `lockedByEnv`) shows read-only and names the variable to change.
+  Inputs are checked as you type with `DailyDoListDomain`'s port of the core's validators, and
+  every error the daemon can answer has its own inline message (a code the machine refused is
+  not a rejected token; an unreachable machine, a limit reached, a locked field each say so).
+- **Code:** in `DailyDoListAgent`, `OrchestratorLocation` (what the control shows),
+  `AgentReadOnly`, `AgentStore+Placement` (`moveOrchestrator(to:)`, `canMoveOrchestrator(to:)`,
+  `readOnly`), `OrchestratorLocationBar` and `ReadOnlyBanner`. In the app, `RemoteSettingsStore`
+  (device settings, sync, the machine, paired devices, pairing codes, and the messages for each
+  error code) and `Settings/AlwaysOn/`.
+
 ## Vim mode
 
 Turn it on with **Vim key bindings** in Settings → Appearance, View → Vim Key Bindings, or "Toggle
@@ -252,9 +306,10 @@ which is Obsidian's: `DailyDoListVim` is a port of the same engine (vim.js), and
 
 `--demo` (or `DDL_DEMO=1`) runs the whole UI against `InMemoryDaemonClient`: sample notes, routines
 with past runs, and a simulated agent that streams, asks for approvals and finishes tasks and runs
-in real time. There's no
-daemon, no Node and no network, which makes it good for trying the app, UI work and screenshots.
-Connection settings apply on the next normal launch.
+in real time. The demo syncs and has a paired always-on machine (`vm-name`), so the orchestrator
+toggle and Settings → Always-On work, handovers included. There's no daemon, no Node and no
+network, which makes it good for trying the app, UI work and screenshots. Connection settings
+apply on the next normal launch.
 
 ## Managed vs. external daemon
 
@@ -517,6 +572,13 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   `RoutineViewTests` (what each screen offers, and the `routines-*` snapshots), the client's
   `InMemoryRoutineTests` and REST cases, and in the app `RoutineCommandTests`, the tooltip checks
   and the `main-window-routine*` snapshots.
+- **Where the agent runs**: the client's `InMemoryRemoteTests` (placement, handovers, 503s while
+  read-only, device settings, sync, pairing, the machine) and REST cases (`pairing_rejected`, the
+  WebSocket's header auth), the agent package's `PlacementTests` (what the toggle shows in each
+  state, moving the orchestrator, its tooltips, the `orchestrator-*` snapshots) and
+  `ReadOnlyTests` (the banner, disabled actions and their reasons, `thread-read-only`), and in the
+  app `AlwaysOnCommandTests`, `RemoteSettingsTests` (every action and error message) and the
+  `settings-always-on-*` snapshots.
 - **Computer use access**: `ComputerAccessTests` run the permission flow against fakes (the
   prompt before the System Settings link, the links' fallbacks, the guide's steps, polling that
   stops, the relaunch's order, the banner's rules and its dismissal), and the snapshots draw the

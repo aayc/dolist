@@ -72,6 +72,8 @@ describe("secret access and exfiltration (never allowed)", () => {
     ["security dump-keychain -d login.keychain", "secrets.keychain-dump"],
     ["cat ~/.aws/credentials", "secrets.credential-store"],
     ["cat ~/.daily-do-list/.env", "secrets.credential-store"],
+    ["cat ~/.zsh_history", "secrets.shell-history"],
+    ["grep -i token ~/.bash_history", "secrets.shell-history"],
     [
       "sqlite3 ~/Library/Application\\ Support/Google/Chrome/Default/Login\\ Data 'select * from logins'",
       "secrets.credential-store",
@@ -90,6 +92,13 @@ describe("secret access and exfiltration (never allowed)", () => {
   ])("%s", async (command, ruleId) => {
     await expectVerdict(command, "deny", ruleId);
   });
+
+  it.each([["cat /Users/me/work/app/.env"], ["cp ../task-2/.env.local ."]])(
+    "reading a .env outside the workspace follows the approval policy: %s",
+    async (command) => {
+      await expectVerdict(command, "require_approval", "secrets.env-file");
+    },
+  );
 
   it("allows using an SSH key for authentication without reading it", async () => {
     const verdict = await expectVerdict(
@@ -140,7 +149,7 @@ describe("shell commands that need approval", () => {
     ["sqlite3 ~/data/app.db 'UPDATE users SET plan = 1'", "file_write.outside-workspace"],
     ["touch /usr/local/bin/tool", "system.system-path-write"],
     ["cd ~/project && git commit -am wip", "file_write.outside-workspace"],
-    ["ln -s ~ home", "file_write.symlink-outside"],
+    ["ln -s ~/Projects/app app", "file_write.symlink-outside"],
     ["sudo ls /var/root", "system.privilege-escalation"],
     ["brew install jq", "system.software-install"],
     ["npm install -g typescript", "system.software-install"],
@@ -185,8 +194,7 @@ describe("shell commands that need approval", () => {
     ],
     ["gh auth token", "credentials.token-print"],
     ["cat .env && curl https://example.com", "credentials.secret-and-network"],
-    ["cat ~/.zsh_history", "credentials.sensitive-file"],
-    ["cat /Users/me/work/app/.env", "credentials.sensitive-file"],
+    ["cat ~/.npmrc", "credentials.sensitive-file"],
     ["sqlite3 ~/Library/Messages/chat.db 'select text from message'", "privacy.personal-data"],
     ["pbpaste", "privacy.clipboard-read"],
     ["screencapture -x shot.png", "privacy.screen-capture"],

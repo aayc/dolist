@@ -153,7 +153,7 @@ public struct ThreadView: View {
             }
           }
         },
-      onClose: onClose)
+      onClose: onClose, readOnlyReason: store.readOnly?.reason)
   }
 
   @ViewBuilder
@@ -199,6 +199,8 @@ struct ThreadHeader: View {
   var onRepeat: (() -> Void)?
   let onShowInNote: (() -> Void)?
   let onClose: (() -> Void)?
+  /// Stop and Retry can't reach the agent (they stay, disabled, and say why).
+  var readOnlyReason: String?
 
   var body: some View {
     HStack(alignment: .top, spacing: 8) {
@@ -229,9 +231,14 @@ struct ThreadHeader: View {
       HStack(spacing: 0) {
         if let onStop {
           IconButton(
-            "stop.circle", label: "Stop", keys: stop.keys, command: stop.id, action: onStop)
+            "stop.circle", label: "Stop", keys: stop.keys, command: stop.id,
+            isEnabled: readOnlyReason == nil, disabledReason: readOnlyReason, action: onStop)
         }
-        if let onRetry { IconButton("arrow.clockwise", label: "Retry", action: onRetry) }
+        if let onRetry {
+          IconButton(
+            "arrow.clockwise", label: "Retry", isEnabled: readOnlyReason == nil,
+            disabledReason: readOnlyReason, action: onRetry)
+        }
         if let onRepeat {
           IconButton(
             "clock.arrow.circlepath", label: "Repeat this", detail: "Make it a routine",

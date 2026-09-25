@@ -77,6 +77,8 @@ export interface AgentStackOptions {
   settings: AppSettings;
   connectors: ConnectorToolSource;
   logger: Logger;
+  /** The agent lease's current grant, stamped on journal events (null: no lease held). */
+  leaseEpoch?: () => number | null;
 }
 
 export interface AgentStack {
@@ -131,6 +133,7 @@ export async function createAgentStack(options: AgentStackOptions): Promise<Agen
       connectors,
       logger: logger.child({ component: "agent" }),
       ...(llm ? { llm } : {}),
+      ...(options.leaseEpoch ? { leaseEpoch: () => options.leaseEpoch?.() ?? 0 } : {}),
     });
     return { runtime, execution };
   } catch (error) {

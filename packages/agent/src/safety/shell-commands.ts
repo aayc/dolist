@@ -242,6 +242,26 @@ function inPlaceEdit(cmd: ShellCommand): boolean {
   return false;
 }
 
+/** `grep -r` and the searchers that recurse by default; given no folder they search the current one. */
+export function searchesRecursively(cmd: ShellCommand): boolean {
+  if (/^(?:rg|ag|ack)$/.test(cmd.name)) return true;
+  if (!/^(?:grep|egrep|fgrep)$/.test(cmd.name)) return false;
+  return (
+    hasFlag(cmd, "rR", ["--recursive", "--dereference-recursive"]) ||
+    optionValues(cmd, "d", ["--directories"]).includes("recurse")
+  );
+}
+
+/** Input arrives on stdin (a pipe, a redirect, a heredoc or `xargs`), which searchers read first. */
+function readsStdin(cmd: ShellCommand): boolean {
+  return (
+    cmd.position > 0 ||
+    cmd.argsFromStdin ||
+    cmd.stdinText !== undefined ||
+    cmd.redirects.some((r) => r.op === "<")
+  );
+}
+
 /** Paths a command touches and how. Unknown commands report path-like operands as reads. */
 export function pathTargets(cmd: ShellCommand): PathTarget[] {
   const out: PathTarget[] = [];
@@ -303,8 +323,11 @@ export function pathTargets(cmd: ShellCommand): PathTarget[] {
     const skipFirst =
       /^(?:grep|egrep|fgrep|rg|ag|ack|sed|gsed|awk|gawk|mawk|nawk|jq|yq)$/.test(name) &&
       !hasFlag(cmd, name.startsWith("a") ? "f" : "ef", ["--regexp", "--file", "--expression"]);
-    for (const o of skipFirst ? ops.slice(1) : ops)
-      if (looksLikePath(o.value)) add(o.value, o.dynamic, "read");
+    const rest = skipFirst ? ops.slice(1) : ops;
+    // A recursive search's operands are all folders to search, whatever they look like.
+    const recursive = searchesRecursively(cmd);
+    for (const o of rest) if (recursive || looksLikePath(o.value)) add(o.value, o.dynamic, "read");
+    if (recursive && rest.length === 0 && !readsStdin(cmd)) add(".", false, "read");
   }
   if (name === "sort") for (const p of optionValues(cmd, "o", ["--output"])) add(p, false, "write");
   if (name === "git" && cmd.argv[1] === "clone") {
@@ -318,26 +341,58 @@ export function pathTargets(cmd: ShellCommand): PathTarget[] {
   return out;
 }
 
+function tarMode(cmd: ShellCommand): (letter: string, long: string) => boolean {
+  const first = cmd.argv[1] ?? "";
+  const bundled = /^[a-zA-Z]+$/.test(first) ? first : "";
+  return (letter, long) => bundled.includes(letter) || hasFlag(cmd, letter, [long]);
+}
+
+/** The command reads whole folders it is given: recursive searches, archives, recursive copies. */
+export function readsFolderTrees(cmd: ShellCommand): boolean {
+  switch (cmd.name) {
+    case "tar":
+    case "bsdtar":
+    case "gtar": {
+      const mode = tarMode(cmd);
+      return mode("c", "--create") || mode("r", "--append") || mode("u", "--update");
+    }
+    case "ditto":
+      return true;
+    case "cp":
+      return hasFlag(cmd, "rRa", ["--recursive", "--archive"]);
+    case "rsync":
+      return hasFlag(cmd, "ra", ["--recursive", "--archive"]);
+    case "scp":
+      return hasFlag(cmd, "r");
+    case "zip":
+      return hasFlag(cmd, "rR", ["--recurse-paths"]);
+    default:
+      return searchesRecursively(cmd);
+  }
+}
+
 function tarTargets(
   cmd: ShellCommand,
   add: (path: string, dynamic: boolean, role: PathRole) => void,
 ): void {
   const first = cmd.argv[1] ?? "";
   const bundled = /^[a-zA-Z]+$/.test(first) ? first : "";
-  const mode = (letter: string, long: string) =>
-    bundled.includes(letter) || hasFlag(cmd, letter, [long]);
+  const mode = tarMode(cmd);
   const archive =
     optionValues(cmd, "f", ["--file"])[0] ?? (bundled.includes("f") ? cmd.argv[2] : undefined);
   const dir = optionValues(cmd, "C", ["--directory"])[0];
   const files = operands(cmd).filter(
     (o) => o.value !== archive && o.value !== dir && o.value !== bundled,
   );
+  // Files are taken from the `-C` folder.
+  const underDir = (file: string) =>
+    dir === undefined || /^[/~]/.test(file) ? file : `${dir.replace(/\/+$/, "")}/${file}`;
   if (mode("x", "--extract") || mode("x", "--get")) {
     add(dir ?? ".", false, "write");
     if (archive) add(archive, false, "read");
   } else if (mode("c", "--create") || mode("r", "--append") || mode("u", "--update")) {
     if (archive && archive !== "-") add(archive, false, "write");
-    for (const o of files) add(o.value, o.dynamic, "read");
+    for (const o of files) add(underDir(o.value), o.dynamic, "read");
   } else if (archive) {
     add(archive, false, "read");
   }

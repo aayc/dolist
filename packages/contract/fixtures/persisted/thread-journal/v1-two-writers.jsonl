@@ -1,0 +1,6 @@
+{"v":1,"id":"evt_w01","epoch":0,"seq":1,"at":1790154000000,"type":"thread.created","thread":{"id":"thr_journal00003","taskId":null,"notePath":null,"title":"Handover","status":"working","createdAt":1790154000000}}
+{"v":1,"id":"evt_w02","epoch":0,"seq":2,"at":1790154002000,"type":"message","message":{"id":"msg_w02","author":"subagent:researcher","createdAt":1790154002000,"kind":"text","role":"agent","text":"first holder, before the handover"}}
+{"v":1,"id":"evt_w04","epoch":1,"seq":1,"at":1790154001000,"type":"message","message":{"id":"msg_w04","author":"subagent:researcher","createdAt":1790154001000,"kind":"text","role":"agent","text":"second holder, after the handover"}}
+{"v":1,"id":"evt_w03","epoch":0,"seq":3,"at":1790154003000,"type":"message","message":{"id":"msg_w03","author":"subagent:researcher","createdAt":1790154003000,"kind":"text","role":"agent","text":"first holder, offline, never fenced"}}
+{"v":1,"id":"evt_w05","epoch":1,"seq":2,"at":1790154002000,"type":"message","message":{"id":"msg_w05","author":"subagent:researcher","createdAt":1790154002000,"kind":"text","role":"agent","text":"second holder again"}}
+{"v":1,"id":"evt_w02","epoch":0,"seq":2,"at":1790154002000,"type":"message","message":{"id":"msg_w02","author":"subagent:researcher","createdAt":1790154002000,"kind":"text","role":"agent","text":"first holder, before the handover"}}

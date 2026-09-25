@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { isAgentOwnedPath } from "@ddl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { appendToFile } from "../append";
 import { LocalFsStorageProvider } from "../local-fs";
 import { MemoryStorageProvider } from "../memory";
 import {
@@ -164,6 +165,30 @@ describe.each(PAIRS)("SyncEngine (%s)", (_name, makePair) => {
     expect((await primary.read("Daily/2026-09-23.md"))?.content).toBe(merged);
     expect((await target.read("Daily/2026-09-23.md"))?.content).toBe(merged);
     expect(await engine.syncOnce()).toMatchObject(emptyReport());
+  });
+
+  it("merges an agent journal changed on both sides as the union of its lines, never a copy", async () => {
+    const path = ".daily-do-list/state/journal/threads/thr_a.jsonl";
+    const event = (id: string, seq: number, epoch = 0) =>
+      `${JSON.stringify({ v: 1, id, epoch, seq, at: seq, type: "status", status: "working" })}\n`;
+    await seed(primary, { [path]: event("evt_1", 1) });
+    await engine.syncOnce();
+    await appendToFile(primary, path, event("evt_laptop", 2));
+    await appendToFile(target, path, event("evt_phone", 2) + event("evt_phone2", 3));
+
+    const report = await engine.syncOnce();
+    expect(report).toMatchObject({ merged: [path], conflicts: [] });
+    const union =
+      event("evt_1", 1) + event("evt_laptop", 2) + event("evt_phone", 2) + event("evt_phone2", 3);
+    expect((await primary.read(path))?.content).toBe(union);
+    expect((await target.read(path))?.content).toBe(union);
+    expect(engine.status().conflicts).toEqual([]);
+    expect(await engine.syncOnce()).toMatchObject(emptyReport());
+
+    // A later append on one side travels as a plain copy.
+    await appendToFile(target, path, event("evt_later", 1, 1));
+    expect(await engine.syncOnce()).toMatchObject({ pulled: [path] });
+    expect((await primary.read(path))?.content).toBe(union + event("evt_later", 1, 1));
   });
 
   it("keeps both sides' new tasks when both appended to the same note", async () => {
@@ -567,6 +592,23 @@ describe("SyncEngine with fenced agent files", () => {
     expect((await primary.list({ includeHidden: true })).map((f) => f.path)).not.toContain(
       expect.stringContaining("conflict"),
     );
+  });
+
+  it("gives the holder the union of a journal both sides changed, never dropping the target's events", async () => {
+    const path = ".daily-do-list/state/journal/threads/thr_a.jsonl";
+    const event = (id: string, seq: number, eventEpoch = 1) =>
+      `${JSON.stringify({ v: 1, id, epoch: eventEpoch, seq, at: seq, type: "status", status: "working" })}\n`;
+    await seed(primary, { [path]: event("evt_1", 1) });
+    await engine.syncOnce();
+    await appendToFile(primary, path, event("evt_ours", 2, 2));
+    await appendToFile(target, path, event("evt_previous_holder", 2));
+
+    const report = await engine.syncOnce();
+    expect(report).toMatchObject({ pushed: [path], conflicts: [] });
+    const union = event("evt_1", 1) + event("evt_previous_holder", 2) + event("evt_ours", 2, 2);
+    expect(await read(primary, path)).toBe(union);
+    expect(await read(target, path)).toBe(union);
+    expect(await engine.syncOnce()).toMatchObject(emptyReport());
   });
 
   it("takes the holder's version when this device doesn't hold the lease", async () => {

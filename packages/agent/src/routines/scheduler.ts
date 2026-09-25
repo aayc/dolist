@@ -158,6 +158,27 @@ export class RoutineScheduler {
   }
 
   /**
+   * A run the agent stopped in the middle of, being picked back up (after a restart or a
+   * handover): it counts as running again, and its time limit starts over (the downtime wasn't
+   * working time). False when it isn't its routine's latest unfinished run.
+   */
+  adoptRun(runId: string): boolean {
+    const routineId = this.routineOf(runId);
+    const lastRun = routineId ? this.library.state.get(routineId)?.lastRun : undefined;
+    if (!routineId || lastRun?.runId !== runId || lastRun.finishedAt !== undefined) return false;
+    this.runs.set(runId, {
+      routineId,
+      name: this.library.definition(routineId)?.name ?? this.options.records.get(runId)?.text ?? "",
+      trigger: lastRun.trigger,
+      startedAt: this.now(),
+      pausedMs: 0,
+      finished: false,
+      timedOut: false,
+    });
+    return true;
+  }
+
+  /**
    * Starts scheduling. `catchUp`: slots missed while inactive run once now (after a restart or a
    * sleep); otherwise every routine starts again from its next slot (the user switched it on).
    */

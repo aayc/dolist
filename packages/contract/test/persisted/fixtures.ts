@@ -19,6 +19,8 @@ export type FixtureFormat =
   | "routines"
   | "settings"
   | "import-manifest";
+/** Formats whose fixtures are JSON Lines (`*.jsonl`); journals have no legacy files. */
+export type JsonlFixtureFormat = "thread-journal";
 export type FixtureKind = "v1" | "legacy" | "corrupt" | "future";
 
 export const FIXTURE_FORMATS: readonly FixtureFormat[] = [
@@ -42,13 +44,17 @@ export function fixtureKind(name: string): FixtureKind | null {
   return null;
 }
 
-export function listFixtures(format: FixtureFormat): string[] {
+export function listFixtures(format: FixtureFormat | JsonlFixtureFormat): string[] {
+  const extension = format === "thread-journal" ? ".jsonl" : ".json";
   return readdirSync(`${FIXTURES_DIR}${format}`)
-    .filter((name) => name.endsWith(".json"))
+    .filter((name) => name.endsWith(extension))
     .sort();
 }
 
 /** Decoded as UTF-8 text, exactly like the storage providers do (a BOM stays in the string). */
-export function readFixture(format: FixtureFormat | "artifacts", name: string): string {
+export function readFixture(
+  format: FixtureFormat | JsonlFixtureFormat | "artifacts",
+  name: string,
+): string {
   return readFileSync(`${FIXTURES_DIR}${format}/${name}`, "utf8");
 }

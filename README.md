@@ -264,7 +264,8 @@ CI details: [docs/CI.md](docs/CI.md).
 
 - An always-on agent: the daemon on a Linux VM you control, reachable only over a private network,
   with your laptop's app relaying to it and optionally lending its hands —
-  [design](docs/ALWAYS_ON.md)
+  [design](docs/ALWAYS_ON.md), [Linux setup kit](deploy/linux/README.md) and
+  [Azure VM guide](deploy/azure/README.md)
 - iPhone app (native Swift, reusing the macOS app's packages; talking to your Mac or a cloud
   daemon) — [plan](docs/CROSS_PLATFORM.md)
 - Sync, phase 2: attachments in S3/R2, end-to-end encryption, a Cloudflare Durable Object host,

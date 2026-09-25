@@ -1,0 +1,12 @@
+{"v":1,"id":"evt_b01","epoch":0,"seq":1,"at":1790154000000,"type":"thread.created","thread":{"id":"thr_journal00004","taskId":"tsk_bad00001","notePath":"Daily/2026-09-23.md","title":"Renew passport","status":"idle","createdAt":1790154000000}}
+{"v":1,"id":"evt_b02","epoch":0,"seq":2,"at":1790154001000,"type":"message","message":{"id":"msg_b1","author":"orchestrator","createdAt":1790154001000,"kind":"text","role":"agent","text":"On it."}}
+{"v":1,"id":"evt_b03","epoch":0,"seq":3,"at":1790154003000,"type":"status","sta
+[1,2,3]
+{"v":0,"id":"evt_b05","epoch":0,"seq":5,"at":1790154005000,"type":"status","status":"working"}
+{"v":1,"id":"evt_b06","epoch":0,"seq":6,"at":1790154006000,"type":"launch"}
+{"v":1,"id":"evt_b07","epoch":0,"seq":7,"at":1790154007000,"type":"message","message":{"id":"m7","kind":"nope"}}
+{"v":1,"id":"evt_b08","epoch":0,"seq":8,"at":1790154008000,"type":"thread.created","thread":{"id":"thr_other000001","taskId":null,"notePath":null,"title":"Not mine","status":"idle","createdAt":1790154000000}}
+{"v":1,"id":"evt_b02","epoch":0,"seq":2,"at":1790154001000,"type":"message","message":{"id":"msg_b1","author":"orchestrator","createdAt":1790154001000,"kind":"text","role":"agent","text":"On it."}}
+{"v":1,"id":"evt_b10","epoch":0,"seq":10,"at":1790154010000,"type":"sources","sources":[{"url":"https://example.org/passport"},{"url":""}]}
+{"v":1,"id":"evt_b11","epoch":0,"seq":11,"at":1790154011000,"type":"status","status":"working"}
+{"v":1,"id":"evt_b12","epoch":0,"seq":12,"at":1790154012000,"type":"title","title":"Renew pass

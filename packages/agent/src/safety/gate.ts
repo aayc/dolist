@@ -16,6 +16,7 @@ import { redactActionInput } from "./describe";
 import { builtinToolHints } from "./policy";
 import type {
   ActionContext,
+  AllowedCall,
   ApprovalOutcome,
   SafetyGate,
   SafetyGateOptions,
@@ -71,6 +72,21 @@ export function createSafetyGate(options: SafetyGateOptions): SafetyGate {
         observe(call, evaluated);
         return { allow: false, reason: evaluated.reason };
       }
+      const allowed = (via: AllowedCall["via"], approvalId?: string): ToolCallDecision => {
+        try {
+          options.onAllowed?.(call, {
+            summary: evaluated.summary,
+            via,
+            ...(approvalId ? { approvalId } : {}),
+            effectful: evaluated.effectful !== false,
+          });
+        } catch (error) {
+          logger.warn("onAllowed listener failed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        return { allow: true };
+      };
       const policy = effectivePolicy(options.approvalPolicy?.());
       if (!policyAsks(policy, { ...evaluated, decision: evaluated.decision })) {
         observe(
@@ -84,7 +100,7 @@ export function createSafetyGate(options: SafetyGateOptions): SafetyGate {
                 reason: POLICY_ALLOW_REASONS[policy] ?? evaluated.reason,
               },
         );
-        return { allow: true };
+        return allowed(evaluated.decision === "allow" ? "evaluator" : "policy");
       }
       const verdict: SafetyVerdict =
         evaluated.decision === "allow"
@@ -117,7 +133,7 @@ export function createSafetyGate(options: SafetyGateOptions): SafetyGate {
                 ? "You approved actions like this in this app for this task."
                 : `You approved this kind of ${ctx.toolName} action for this task.`,
         });
-        return { allow: true };
+        return allowed("grant");
       }
 
       observe(call, verdict);
@@ -137,7 +153,9 @@ export function createSafetyGate(options: SafetyGateOptions): SafetyGate {
         ...(verdict.target ? { target: verdict.target } : {}),
         verdict: evaluated.decision,
       });
-      return outcome.approved ? { allow: true } : { allow: false, reason: denialReason(outcome) };
+      return outcome.approved
+        ? allowed("approval", outcome.request.id)
+        : { allow: false, reason: denialReason(outcome) };
     } catch (error) {
       logger.error("safety gate failed", {
         tool: call.toolName,

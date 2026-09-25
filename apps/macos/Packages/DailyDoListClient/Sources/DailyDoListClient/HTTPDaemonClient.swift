@@ -223,6 +223,65 @@ public final class HTTPDaemonClient: DaemonClient {
     ).threads
   }
 
+  // MARK: - This device, pairing and the always-on machine
+
+  public func syncStatus() async throws -> SyncStatusResponse {
+    try await transport.json(.get, APIRoute.syncStatus)
+  }
+
+  public func deviceSettings() async throws -> DeviceSettingsResponse {
+    try await transport.json(.get, APIRoute.device)
+  }
+
+  public func updateDeviceSettings(_ patch: DeviceSettingsPatch) async throws
+    -> DeviceSettingsResponse
+  {
+    try await transport.json(.patch, APIRoute.device, body: patch)
+  }
+
+  public func setUpSync(_ request: DeviceSyncSetupRequest) async throws -> DeviceSettingsResponse {
+    try await transport.json(.put, APIRoute.deviceSync, body: request)
+  }
+
+  public func turnOffSync() async throws -> DeviceSettingsResponse {
+    try await transport.json(.delete, APIRoute.deviceSync)
+  }
+
+  public func createPairingCode(_ request: PairingCodeRequest) async throws -> PairingCodeResponse {
+    try await transport.json(.post, APIRoute.pairingCodes, body: request)
+  }
+
+  /// Sent without the bearer token: the pairing code is the credential.
+  public func pair(_ request: PairRequest) async throws -> PairResponse {
+    try await transport.json(.post, APIRoute.pair, body: request, credential: .pairingCode)
+  }
+
+  public func pairedDevices() async throws -> [PairedDevice] {
+    try await transport.json(.get, APIRoute.devices, as: PairedDevicesResponse.self).devices
+  }
+
+  public func revokeDevice(_ id: String) async throws {
+    try await transport.empty(
+      .delete, APIRoute.pairedDevice(try RequestGuards.runtimeID(id, "device id")))
+  }
+
+  public func machineStatus() async throws -> MachineStatusResponse {
+    try await transport.json(.get, APIRoute.machine)
+  }
+
+  public func pairMachine(_ request: MachinePairRequest) async throws -> MachineStatusResponse {
+    try await transport.json(
+      .post, APIRoute.machinePair, body: request, credential: .bearerAndPairingCode)
+  }
+
+  public func checkMachine() async throws -> MachineStatusResponse {
+    try await transport.json(.post, APIRoute.machineCheck)
+  }
+
+  public func forgetMachine() async throws -> MachineStatusResponse {
+    try await transport.json(.delete, APIRoute.machinePairing)
+  }
+
   // MARK: - Events
 
   public func connect() async {

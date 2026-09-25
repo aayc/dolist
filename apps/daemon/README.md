@@ -106,7 +106,9 @@ of this repository. Values are never logged.
   service ([docs/SYNC.md](../../docs/SYNC.md)); `url` must be `https` unless it is this machine.
   The token goes in `sync-token`, never here. With `remote` sync and an agent mode other than `off`,
   the agent runs only while this device holds the vault's agent lease (`src/agent-supervisor.ts`,
-  `src/agent-lease.ts`); otherwise its status says which device runs it. `PUT`/`DELETE
+  `src/agent-lease.ts`); otherwise its status says which device runs it, and its threads,
+  approvals and task records show read-only from the synced sidecar (`src/sidecar-view.ts`), or
+  go through the relay (`src/relay/`) while it relays to the always-on machine. `PUT`/`DELETE
   /api/device/sync` edit this key and apply without a restart.
 - `agent.placement`: where this device's agent runs (docs/ALWAYS_ON.md): `this_device` (default;
   asks for the agent lease with priority `interactive`), `always_on_host` (this is the always-on
@@ -137,6 +139,8 @@ overrides, merged over the defaults (with `DDL_MODEL` as the default model). On 
 daemon imports what it can from an existing Obsidian vault: `.obsidian/daily-notes.json` (folder,
 format, template; Obsidian's own defaults fill missing keys), `.obsidian/app.json` (vim mode, live
 preview, readable line length, line numbers, spellcheck) and `.obsidian/appearance.json` (theme).
+With nothing to import it writes no file, so a new device joining a synced vault takes the vault's
+settings instead of resetting them with its own empty file.
 
 `agent.harness` picks what runs the agent: `pi` on the OpenRouter model `agent.model`, or `cursor`
 (the Cursor CLI, signed in with your Cursor account) on `agent.cursorModel`. The safety judge's
@@ -452,6 +456,75 @@ Rules that hold throughout:
 - Agent journal files (`.daily-do-list/journal/`) are copied unchanged: the thread snapshots readers
   use are what the import remaps. `remapJournalFile` in `src/import/sidecar.ts` is where journal
   events will be remapped once readers fold the journal.
+## The agent relay
+
+When this device's effective placement is `always_on_machine` and it holds a credential for the
+machine, the daemon forwards the agent to the always-on machine's daemon, so this device's clients
+show and act on the machine's agent with the same API ([docs/ALWAYS_ON.md](../../docs/ALWAYS_ON.md#the-agent-relay)).
+Otherwise everything stays local, as without a relay. The code is in `src/relay/`; it reads the
+effective placement from the agent supervisor (and reports the relay state back to it, for the
+status's `placement` block) and the credential from the machine link (`machine-token`, only while
+its URL is the vault's always-on machine), through the interfaces in `src/agent-location.ts`, and
+follows their changes live. A relaying device never asks for the agent lease.
+
+**Forwarded** (the allowlist in `src/relay/routes.ts`, derived from the contract):
+
+| Routes | Methods |
+| --- | --- |
+| `/api/threads`, `/api/threads/<id>` (the orchestrator's `thr_orchestrator` included) | GET |
+| `/api/threads/<id>/messages`, `…/cancel`, `…/retry` | POST |
+| `/api/approvals`, `/api/approvals/<id>` | GET; POST (decide) on `<id>` |
+| `/api/artifacts/<threadId>/<artifactId>` | GET |
+| `/api/tasks?notePath=` | GET |
+| `/api/routines`, `/api/routines/<id>` | GET; POST (create) on `/api/routines` |
+| `/api/routines/<id>/run`, `…/pause`, `…/resume` | POST |
+| `/api/agent/status` | GET (the machine's agent, with this device's `placement` block and `readiness`) |
+
+Everything else stays local: notes, folders, daily notes, search, settings (`/api/agent/enabled`
+included: it's a synced setting), sync, connectors, computer permissions, device routes, and any
+other method or path. It is not an open proxy:
+
+- requests go only to the configured machine URL (`https`, or `http` to loopback in tests), with
+  the target rebuilt from the contract's path, validated ids and the query parameters the
+  operation declares;
+- nothing from the client's request is passed on (its `Authorization`, cookies, `Host`, `Origin`
+  and other headers); the relay sends `Authorization: Bearer <machine token>` and, for bodies,
+  `Content-Type: application/json`;
+- bodies are validated with the contract's schemas first and held to the same 5 MB limit;
+  redirects aren't followed; each call times out after 5 s; answers are capped at 32 MB and must
+  be the daemon's JSON (or artifact bytes, served with the local artifact headers);
+- the token and bodies are never logged.
+
+**Events.** The relay holds one WebSocket to the machine's `/ws`, with the token in the
+`Authorization` header (never in the URL). The machine's agent events reach this device's clients
+in place of the local runtime's: `thread.*`, `approval.upsert`, `task.record(s)`,
+`routines.changed`, `routine.notification`, `surface.frame` and `agent.status` (merged as above).
+Clients' `surface.subscribe`/`unsubscribe`, `thread.read` and `editor.activity` go to the machine.
+The link pings every 15 s, reconnects with backoff (0.5 s up to 30 s), subscribes to watched
+surfaces again, and after every (re)connection pushes the machine's status, routines, approvals and
+thread summaries to local clients.
+
+**Relay state** (`agent.status` → `placement.relay`): `off` (not relaying), `connecting` (the
+first connection; requests are already forwarded), `connected`, `unreachable` (the link is down;
+retrying) or `not_paired` (no credential, or the machine refused it). While `unreachable` or
+`not_paired`, `problem` says why this device can't act on the agent (the messages below) and
+`placement.runsOn` still says where it runs.
+
+**Fallback.** While `unreachable` or `not_paired`, and on any device that doesn't hold the agent
+(another device runs it), the daemon serves the agent read-only from the synced sidecar: threads
+(conflict copies merged), approvals, task records and artifacts, parsed with the contract's
+persisted formats; it never writes them. Routine files stay listable, creatable and pausable (they
+sync). Agent actions (messages, cancel, retry, deciding an approval, running a routine) answer 503
+`agent_unavailable` with one of:
+
+- "The always-on machine can't be reached."
+- "This device isn't paired with the always-on machine."
+- "The always-on machine no longer accepts this device. Pair it again." (it refused the credential)
+- "The agent is running on <device>." (another device holds the agent)
+
+A request forwarded while the machine stops answering falls back the same way (reads served here,
+actions 503). When the relay state changes, clients should fetch threads, approvals and task
+records again.
 
 ## Code map
 
@@ -477,6 +550,8 @@ Rules that hold throughout:
 | `src/readiness.ts` | This daemon's readiness to run the agent. |
 | `src/import/*`, `routes/import.ts` | Importing an Obsidian vault: `importer.ts` (preview, jobs, update), `places.ts` (where it may read and write), `walk.ts` and `files.ts` (no link escapes, atomic byte-exact copies), `carry-over.ts`, `sidecar.ts`, `settings-merge.ts`, `update.ts`, `manifest.ts`; `test-vaults.ts` builds the synthetic vaults the tests use. |
 | `src/vault-switch.ts` | Which vault this daemon opens, and restarting on another (`RESTART_EXIT_CODE`). |
+| `src/sidecar-view.ts` | The agent's work read-only from the synced sidecar, for a device that doesn't run it. |
+| `src/relay/*` | The agent relay: allowlist, calls to the machine, its WebSocket link, the relaying runtime. |
 | `build.mjs` | esbuild bundle (workspace packages inlined, third-party dependencies external). |
 
 Tests are colocated (`*.test.ts`). They use in-memory vaults and temp directories and never touch the

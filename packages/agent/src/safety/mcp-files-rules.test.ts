@@ -153,8 +153,9 @@ describe("file tools", () => {
     ["read", { path: "/Users/me/.aws/credentials" }, "deny", "secrets.credential-store"],
     ["read", { path: "@~/.daily-do-list/.env" }, "deny", "secrets.credential-store"],
     ["grep", { pattern: "BEGIN", path: "~/.ssh" }, "deny", "secrets.ssh-private-key"],
-    ["read", { path: "/Users/me/work/app/.env" }, "require_approval", "credentials.sensitive-file"],
-    ["read", { path: "~/.bash_history" }, "require_approval", "credentials.sensitive-file"],
+    ["read", { path: "/Users/me/work/app/.env" }, "require_approval", "secrets.env-file"],
+    ["read", { path: "~/.bash_history" }, "deny", "secrets.shell-history"],
+    ["read", { path: "~/.npmrc" }, "require_approval", "credentials.sensitive-file"],
     ["read", { path: "~/Library/Messages/chat.db" }, "require_approval", "privacy.personal-data"],
     [
       "grep",

@@ -67,6 +67,43 @@ public protocol DaemonClient: AnyObject, Sendable {
   /// A routine's runs (their threads), newest first.
   func threads(routineId: String) async throws -> [ThreadSummary]
 
+  // This device, pairing and the always-on machine (a daemon without these routes answers 404,
+  // which is what the default implementations throw)
+  /// The vault's sync state (and, with the sync service, this device's name there).
+  func syncStatus() async throws -> SyncStatusResponse
+  /// This daemon's device-local settings: its name, placement, remote hosts and sync setup.
+  func deviceSettings() async throws -> DeviceSettingsResponse
+  /// Changes device settings live. Throws `.http(status: 400, …)` for a value the daemon refuses
+  /// and `.http(status: 409, …)` (`locked_by_env`) for a field an environment variable sets.
+  func updateDeviceSettings(_ patch: DeviceSettingsPatch) async throws -> DeviceSettingsResponse
+  /// Points this device at the sync service; a nil `token` keeps the saved one. 400 for an
+  /// address, vault or token it refuses, 409 `locked_by_env`.
+  func setUpSync(_ request: DeviceSyncSetupRequest) async throws -> DeviceSettingsResponse
+  /// Stops syncing with the sync service and removes the saved token. 409 `locked_by_env`.
+  func turnOffSync() async throws -> DeviceSettingsResponse
+  /// A single-use pairing code for a new device. 429 `rate_limited` with too many outstanding.
+  func createPairingCode(_ request: PairingCodeRequest) async throws -> PairingCodeResponse
+  /// Exchanges a pairing code for a device credential, without sending the token (the code is
+  /// the credential). Throws `.pairingRejected` for a wrong, expired or used code, and
+  /// `.http(status: 429, …)` after too many attempts.
+  func pair(_ request: PairRequest) async throws -> PairResponse
+  /// The devices paired with this daemon.
+  func pairedDevices() async throws -> [PairedDevice]
+  /// Revokes a paired device: its credential stops working and its sockets close. 404 for an
+  /// unknown device.
+  func revokeDevice(_ id: String) async throws
+  /// The always-on machine from this device's side: its address, this device's pairing, and
+  /// what the machine last reported.
+  func machineStatus() async throws -> MachineStatusResponse
+  /// Pairs this device with the always-on machine using a code the machine issued, and makes it
+  /// the vault's always-on machine. Throws `.pairingRejected` when the machine refuses the code,
+  /// 429 `rate_limited`, 502 `machine_unreachable`.
+  func pairMachine(_ request: MachinePairRequest) async throws -> MachineStatusResponse
+  /// Checks the always-on machine now (reachability, version, agent, readiness).
+  func checkMachine() async throws -> MachineStatusResponse
+  /// Forgets this device's credential for the always-on machine (revoked there when it answers).
+  func forgetMachine() async throws -> MachineStatusResponse
+
   // Events (WebSocket)
   /// Opens the event connection (idempotent); reconnects automatically until `disconnect()`.
   func connect() async
@@ -79,6 +116,62 @@ public protocol DaemonClient: AnyObject, Sendable {
   /// Sends a client signal; dropped silently while disconnected (signals are best-effort).
   /// Surface subscriptions are remembered and re-sent after every (re)connect.
   func send(_ event: ClientEvent) async
+}
+
+extension DaemonClient {
+  public func syncStatus() async throws -> SyncStatusResponse {
+    throw notServed(APIRoute.syncStatus)
+  }
+
+  public func deviceSettings() async throws -> DeviceSettingsResponse {
+    throw notServed(APIRoute.device)
+  }
+
+  public func updateDeviceSettings(_ patch: DeviceSettingsPatch) async throws
+    -> DeviceSettingsResponse
+  {
+    throw notServed(APIRoute.device)
+  }
+
+  public func setUpSync(_ request: DeviceSyncSetupRequest) async throws -> DeviceSettingsResponse {
+    throw notServed(APIRoute.deviceSync)
+  }
+
+  public func turnOffSync() async throws -> DeviceSettingsResponse {
+    throw notServed(APIRoute.deviceSync)
+  }
+
+  public func createPairingCode(_ request: PairingCodeRequest) async throws -> PairingCodeResponse {
+    throw notServed(APIRoute.pairingCodes)
+  }
+
+  public func pair(_ request: PairRequest) async throws -> PairResponse {
+    throw notServed(APIRoute.pair)
+  }
+
+  public func pairedDevices() async throws -> [PairedDevice] { throw notServed(APIRoute.devices) }
+
+  public func revokeDevice(_ id: String) async throws { throw notServed(APIRoute.devices) }
+
+  public func machineStatus() async throws -> MachineStatusResponse {
+    throw notServed(APIRoute.machine)
+  }
+
+  public func pairMachine(_ request: MachinePairRequest) async throws -> MachineStatusResponse {
+    throw notServed(APIRoute.machinePair)
+  }
+
+  public func checkMachine() async throws -> MachineStatusResponse {
+    throw notServed(APIRoute.machineCheck)
+  }
+
+  public func forgetMachine() async throws -> MachineStatusResponse {
+    throw notServed(APIRoute.machinePairing)
+  }
+
+  private func notServed(_ route: String) -> DaemonClientError {
+    .notFound("This daemon doesn't serve \(route).")
+  }
 }
 
 /// Bytes of an artifact as served by `GET /api/artifacts/:threadId/:artifactId`.

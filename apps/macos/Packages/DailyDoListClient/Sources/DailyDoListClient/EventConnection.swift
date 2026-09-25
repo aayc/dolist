@@ -120,7 +120,7 @@ actor EventConnection {
 
   /// One connection, from the upgrade until the socket closes.
   private func connectOnce(generation: Int) async -> Outcome {
-    let task = session.webSocketTask(with: URLRequest(url: endpoint.webSocketURL))
+    let task = session.webSocketTask(with: endpoint.webSocketRequest)
     task.maximumMessageSize = configuration.maximumMessageSize
     socket = task
     isOpen = false

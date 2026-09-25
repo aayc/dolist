@@ -164,7 +164,8 @@ extension FakeDaemon {
         : ExecutionStatus(
           provider: "none",
           capabilities: ExecutionCapabilities(shell: false, browser: false, computer: false)),
-      problem: enabled ? nil : "The agent runtime is not running")
+      problem: enabled ? nil : "The agent runtime is not running",
+      placement: placementStatus(), readiness: readiness())
   }
 
   var runningTaskJobs: Int { jobs.values.filter { $0.taskId != nil }.count }
@@ -249,6 +250,7 @@ extension FakeDaemon {
     }
     guard threads[threadId] != nil else { throw .notFound("Thread not found") }
     guard simulation == .enabled else { throw Self.agentUnavailable() }
+    try requireAgentReachable()
     pushMessage(
       threadId,
       .text(
@@ -277,6 +279,7 @@ extension FakeDaemon {
     let threadId = try RequestGuards.runtimeID(threadId, "id")
     guard let thread = threads[threadId] else { throw .notFound("Thread not found") }
     guard simulation == .enabled else { throw Self.agentUnavailable() }
+    try requireAgentReachable()
     if OrchestratorThread.isOrchestrator(threadId) {
       stopOrchestratorTurn()
       return ThreadActionResponse()
@@ -308,6 +311,7 @@ extension FakeDaemon {
     let threadId = try RequestGuards.runtimeID(threadId, "id")
     guard let thread = threads[threadId] else { throw .notFound("Thread not found") }
     guard simulation == .enabled else { throw Self.agentUnavailable() }
+    try requireAgentReachable()
     if thread.routineId != nil {
       retryRun(threadId)
       return ThreadActionResponse()
@@ -332,6 +336,7 @@ extension FakeDaemon {
       throw .invalidRequest("✖ Too big: expected string to have <=2000 characters\n  → at note")
     }
     guard var approval = approvals[id] else { throw .notFound("Approval not found") }
+    try requireAgentReachable()
     guard approval.isPending else {
       throw .approvalConflict(
         ApprovalConflictResponse(
