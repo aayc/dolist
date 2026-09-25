@@ -46,7 +46,13 @@ export function errorBody(code: ApiErrorCode, message?: string): ApiErrorBody {
 export function createErrorHandler(logger: Logger): ErrorHandler {
   return (error, c) => {
     const apiError = toApiError(error);
-    if (apiError.status >= 500) {
+    if (apiError.code === "agent_unavailable") {
+      // A state (the agent is off or runs on another device), not a failure.
+      logger.debug("Agent unavailable for request", {
+        method: c.req.method,
+        path: c.req.path,
+      });
+    } else if (apiError.status >= 500) {
       logger.error("Request failed", {
         method: c.req.method,
         path: c.req.path,
