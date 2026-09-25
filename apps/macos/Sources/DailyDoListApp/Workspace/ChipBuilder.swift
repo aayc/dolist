@@ -49,7 +49,10 @@ enum ChipBuilder {
         text ?? (count > 1 ? "Added \(count) tasks" : "Added a task"))
     case .noteEdited: return make(Status.done, "Edited the note ↗", text ?? "Edited the note")
     case .replied: return make(Status.done, "Replied ↗", text ?? "Replied in the orchestrator chat")
-    case .delegated: return make(Status.done, "Started a task ↗", text ?? "Started a task")
+    case .delegated:
+      return make(
+        Status.done, count > 1 ? "Started \(count) tasks ↗" : "Started a task ↗",
+        text ?? (count > 1 ? "Started \(count) tasks" : "Started a task"))
     case .routineCreated: return make(Status.done, "Made a routine ↗", text ?? "Made a routine")
     case .askedApproval:
       return make(Status.needsYou, "Needs your approval ↗", text ?? "Needs your approval")

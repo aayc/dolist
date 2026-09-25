@@ -16,11 +16,12 @@ struct OrchestratorChip: Equatable, Identifiable, Sendable {
   var turnId: String?
   /// What woke it (for the tooltip).
   var summary: String
-  /// Set when its turn ended; the chip shows it, then fades.
+  /// What the turn did (its chip shows it, then fades), or the approval it waits for while acting.
   var outcome: OrchestratorOutcome?
   var isFading = false
 
-  var isEnded: Bool { outcome != nil }
+  /// Its turn is over (idle with an outcome).
+  var isEnded: Bool { phase == .idle && outcome != nil }
 
   /// The thread a click opens instead of the orchestrator's chat at the turn: the outcome's,
   /// unless that's the orchestrator's own chat.
@@ -45,14 +46,21 @@ struct OrchestratorChip: Equatable, Identifiable, Sendable {
 /// moments interleave (a line can be noticed while another turn runs), so chips are matched to
 /// events by line and turn:
 ///
-/// - `noticed` updates the note's not-yet-started chips on the same lines (so a line being typed
-///   keeps one chip) and adds chips for new lines;
+/// - `noticed` carries every line of its note still waiting: chips on the same lines are updated
+///   (a line being typed keeps one chip), new lines get one, and the note's other noticed chips go;
 /// - a turn's phase moves its chips (or the noticed chips of its lines) along, adding any missing;
+///   while it waits for an approval, its outcome says so;
 /// - `idle` with an outcome ends the turn's chips (creating them for a client that only saw the
 ///   end); `idle` without one removes them (the turn stopped, or the noticed lines went away).
+///   A turn ends once: its end seen again (a snapshot) changes nothing.
 struct OrchestratorChipBoard: Equatable, Sendable {
+  /// How many ended turns are remembered.
+  static let endedTurnMemory = 64
+
   private(set) var chips: [OrchestratorChip] = []
   private var nextId = 0
+  /// The latest turns that ended, oldest first.
+  private var endedTurns: [String] = []
 
   /// What an event changed.
   struct Changes: Equatable, Sendable {
@@ -84,9 +92,19 @@ struct OrchestratorChipBoard: Equatable, Sendable {
           matching: { $0.phase == .noticed && $0.isSameLine(as: line) })
         changes.noticed.append(id)
       }
-      if !lines.isEmpty { changes.notes.insert(notePath) }
+      let waiting = Set(changes.noticed)
+      let before = chips.count
+      chips.removeAll {
+        $0.notePath == notePath && $0.phase == .noticed && !waiting.contains($0.id)
+      }
+      if !lines.isEmpty || chips.count != before { changes.notes.insert(notePath) }
     case .idle:
+      if let turnId = activity.turnId, endedTurns.contains(turnId) { return changes }
       let theirs = indices(of: activity, lines: lines)
+      if let turnId = activity.turnId {
+        endedTurns.append(turnId)
+        if endedTurns.count > Self.endedTurnMemory { endedTurns.removeFirst() }
+      }
       if let outcome = activity.outcome {
         var ended = theirs
         if ended.isEmpty, let notePath {
@@ -123,6 +141,7 @@ struct OrchestratorChipBoard: Equatable, Sendable {
       if let turnId {
         for index in chips.indices where chips[index].turnId == turnId && !chips[index].isEnded {
           chips[index].phase = activity.phase
+          chips[index].outcome = activity.outcome
           changes.notes.insert(chips[index].notePath)
         }
       }
@@ -181,6 +200,7 @@ struct OrchestratorChipBoard: Equatable, Sendable {
     chips[index].line = line.line
     chips[index].text = line.text
     chips[index].phase = activity.phase
+    chips[index].outcome = activity.outcome
     chips[index].summary = activity.trigger?.summary ?? chips[index].summary
     if let turnId = activity.turnId { chips[index].turnId = turnId }
     return chips[index].id

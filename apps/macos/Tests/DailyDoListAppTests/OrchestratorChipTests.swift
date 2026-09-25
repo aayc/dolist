@@ -79,6 +79,44 @@ struct OrchestratorChipTests {
     #expect(board.chips.map(\.text) == ["call Sam?"], "the line went away before it woke")
   }
 
+  @Test func aNoticedEventCarriesEveryLineStillWaiting() {
+    var board = OrchestratorChipBoard()
+    _ = board.apply(.note(.noticed, today, [(2, "find a lamp"), (4, "call Sam?")]))
+    _ = board.apply(.note(.noticed, other, [(0, "book the dentist")]))
+    let changes = board.apply(.note(.noticed, today, [(4, "call Sam?")]))
+    #expect(changes.notes == [today])
+    #expect(
+      board.chips(for: today).map(\.text) == ["call Sam?"], "the first no longer reads as one")
+    #expect(board.chips(for: other).count == 1)
+  }
+
+  @Test func aTurnEndsOnce() {
+    var board = OrchestratorChipBoard()
+    let end = OrchestratorActivity.note(
+      .idle, today, [(1, "find a lamp")], turn: "msg_1",
+      outcome: OrchestratorOutcome(kind: .tasksAdded))
+    _ = board.apply(.note(.thinking, today, [(1, "find a lamp")], turn: "msg_1"))
+    #expect(board.apply(end).ended.count == 1)
+    let id = board.chips.first?.id
+    #expect(board.apply(end) == OrchestratorChipBoard.Changes(), "seen again: nothing changes")
+    _ = board.remove(id ?? "")
+    #expect(board.apply(end) == OrchestratorChipBoard.Changes(), "not even after its chip went")
+    #expect(board.chips.isEmpty)
+  }
+
+  @Test func aTurnWaitingForApprovalShowsItUntilItMovesOn() {
+    var board = OrchestratorChipBoard()
+    let line = [(3, "book the dentist")]
+    let waiting = OrchestratorOutcome(kind: .askedApproval, threadId: OrchestratorThread.id)
+    _ = board.apply(.note(.acting, today, line, turn: "msg_5", outcome: waiting))
+    #expect(board.chips.first?.outcome == waiting && board.chips.first?.isEnded == false)
+    _ = board.apply(.note(.thinking, today, line, turn: "msg_5"))
+    #expect(board.chips.first?.outcome == nil)
+    let changes = board.apply(
+      .note(.idle, today, line, turn: "msg_5", outcome: OrchestratorOutcome(kind: .delegated)))
+    #expect(changes.ended.count == 1 && board.chips.count == 1)
+  }
+
   @Test func anOutcomeForATurnNeverSeenStillShows() {
     var board = OrchestratorChipBoard()
     let changes = board.apply(
@@ -183,6 +221,7 @@ struct OrchestratorChipTests {
       (OrchestratorOutcome(kind: .tasksAdded, count: 3), "Added 3 tasks ↗", Status.done),
       (OrchestratorOutcome(kind: .replied), "Replied ↗", Status.done),
       (OrchestratorOutcome(kind: .delegated, threadId: "thr_1"), "Started a task ↗", Status.done),
+      (OrchestratorOutcome(kind: .delegated, count: 2), "Started 2 tasks ↗", Status.done),
       (OrchestratorOutcome(kind: .routineCreated), "Made a routine ↗", Status.done),
       (OrchestratorOutcome(kind: .askedApproval), "Needs your approval ↗", Status.needsYou),
       (OrchestratorOutcome(kind: .noAction), "Nothing to do", Status.nothing),

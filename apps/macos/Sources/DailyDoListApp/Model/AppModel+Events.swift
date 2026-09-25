@@ -54,11 +54,10 @@ extension AppModel {
       workspace?.editor.recordsDidChange(for: nil)
     case .orchestratorActivity(let activity):
       workspace?.orchestrator.apply(activity)
-    case .agentStatus(let status):
-      agent?.apply(event)
-      if let activity = status.orchestrator { workspace?.orchestrator.apply(activity) }
-    case .threadUpsert, .threadMessage, .threadDelta, .approvalUpsert, .surfaceFrame,
+    case .threadUpsert, .threadMessage, .threadDelta, .approvalUpsert, .agentStatus, .surfaceFrame,
       .routinesChanged, .routineNotification:
+      // A pushed status's `orchestrator` repeats what `orchestrator.activity` said (and keeps a
+      // finished turn's outcome a while): only a fetched status is adopted (`refreshAgent`).
       agent?.apply(event)
     case .error(let error):
       Self.log.warning("daemon error event: \(error.message, privacy: .public)")

@@ -118,15 +118,59 @@ struct OrchestratorActivityRoutingTests {
     #expect(model.ui.selectedThreadId == "thr_dentist")
   }
 
-  @Test func aStatusPushCarryingTheActivityIsApplied() async throws {
+  /// The daemon keeps a finished turn's outcome in its status for a while: a pushed status
+  /// (running counts changing as the turn's subagent starts) must not bring a faded chip back.
+  @Test func aPushedStatusDoesNotReplayTheActivity() async throws {
+    type("find a lamp", in: workspace)
+    let ended = OrchestratorActivity.note(
+      .idle, daily, [(0, "find a lamp")], turn: "msg_3",
+      outcome: OrchestratorOutcome(kind: .delegated, count: 1, threadId: "thr_lamp"))
+    try await emit(ended)
+    scheduler.advance(by: OrchestratorActivityStore.outcomeHold + 1)
+    #expect(controller.badges.isEmpty)
     var status = try await client.agentStatus()
-    status.orchestrator = .note(
-      .thinking, "Daily/2026-09-22.md", [(2, "plan the offsite")], turn: "msg_3")
+    status.running = 1
+    status.orchestrator = ended
     client.emit(.agentStatus(status))
-    try await eventually { workspace.orchestrator.working?.turnId == "msg_3" }
+    try await eventually { model.agent?.status?.running == 1 }
+    scheduler.advance(by: 0)
+    #expect(controller.badges.isEmpty)
+    #expect(workspace.orchestrator.chips.isEmpty)
+  }
+
+  @Test func aTurnWaitingForApprovalSaysSo() async throws {
+    type("book the dentist", in: workspace)
+    let line = [(0, "book the dentist")]
+    try await emit(.note(.acting, daily, line, turn: "msg_4"))
+    #expect(controller.badges.map(\.label) == ["Working…"])
+    try await emit(
+      .note(
+        .acting, daily, line, turn: "msg_4",
+        outcome: OrchestratorOutcome(
+          kind: .askedApproval, threadId: OrchestratorThread.id, text: "Book Dr. Example at 9")))
+    #expect(controller.badges.map(\.label) == ["Needs your approval ↗"])
+    #expect(controller.badges.first?.status == Status.needsYou)
     #expect(
-      OrchestratorActivityPresentation(activity: try #require(workspace.orchestrator.working))
-        .statusText == "Orchestrator: working on 2026-09-22")
+      controller.badges.first?.tooltip == "Book Dr. Example at 9 — open the orchestrator chat")
+    scheduler.advance(by: OrchestratorActivityStore.outcomeHold + 1)
+    #expect(controller.badges.first?.isFading == false, "it waits as long as the turn does")
+    try await emit(.note(.acting, daily, line, turn: "msg_4"))
+    #expect(controller.badges.map(\.label) == ["Working…"], "approved: back to work")
+  }
+
+  /// A snapshot fetched after a reconnect may still carry the outcome of a turn already shown.
+  @Test func aSnapshotOfATurnAlreadyShownChangesNothing() async throws {
+    type("find a lamp", in: workspace)
+    let ended = OrchestratorActivity.note(
+      .idle, daily, [(0, "find a lamp")], turn: "msg_6",
+      outcome: OrchestratorOutcome(kind: .tasksAdded, count: 1))
+    try await emit(ended)
+    scheduler.advance(by: OrchestratorActivityStore.outcomeHold + 1)
+    client.withState { $0.agentStatus.orchestrator = ended }
+    await model.refreshAgent()
+    scheduler.advance(by: 0)
+    #expect(workspace.orchestrator.chips.isEmpty)
+    #expect(controller.badges.isEmpty)
   }
 
   @Test func aClientJoiningMidTurnSeesItAndAReconnectClearsWhatItMissed() async throws {
