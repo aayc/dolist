@@ -36,6 +36,8 @@ function toServerEvent(event: RuntimeEvent): ServerEvent {
       return { type: "approval.upsert", approval: event.payload };
     case "status":
       return { type: "agent.status", status: event.payload };
+    case "orchestrator.activity":
+      return { type: "orchestrator.activity", activity: event.payload };
     case "surface.frame":
       return { type: "surface.frame", ...event.payload };
     case "routines.changed":
@@ -112,6 +114,8 @@ describe("wire and persistence contract under real traffic", () => {
       "- [ ] Email landlord about the leaky faucet",
       "- [ ] Research 🌱 café options in Zürich — “naïve” \\ test",
       `- [ ] Research ${"very long task text ".repeat(120)}`,
+      "What's the tallest building in NYC?",
+      `Could you look into ${"a very long request ".repeat(40)}?`,
     ]);
     await t.waitForStatus("Figure out the thing", "waiting_user");
     await t.replyInThread("Figure out the thing", "The quarterly tax estimate");
@@ -134,6 +138,7 @@ describe("wire and persistence contract under real traffic", () => {
         "thread.delta",
         "approval.upsert",
         "status",
+        "orchestrator.activity",
       ]),
     );
     expect(invalidEvents(t)).toEqual([]);

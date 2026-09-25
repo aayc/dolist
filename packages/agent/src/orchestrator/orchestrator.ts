@@ -9,6 +9,9 @@ import {
   isClosedStatus,
   type Logger,
   ORCHESTRATOR_THREAD_ID,
+  type OrchestratorActivity,
+  type OrchestratorOutcome,
+  type OrchestratorTrigger,
   parseAgentLine,
   parseDailyNotePath,
   silentLogger,
@@ -45,6 +48,15 @@ import type { AnchorLineInput } from "../tools/contracts";
 import { ToolInputError } from "../tools/input";
 import { findQuotedLine } from "../tools/notes";
 import { createOrchestratorTools, type OrchestratorToolHost } from "../tools/orchestrator";
+import {
+  boundedSummary,
+  deriveOutcome,
+  noteTrigger,
+  OrchestratorActivityPublisher,
+  quoted,
+  type TriggerLine,
+  type TurnEffect,
+} from "./activity";
 import type { OrchestratorChat } from "./chat";
 import type { TaskRecords } from "./records";
 import { badgeFrom, type SubagentManager, type SubagentReport } from "./subagents";
@@ -85,6 +97,10 @@ export interface OrchestratorOptions {
   chat?: OrchestratorChat;
   /** The user's routines, listed in every digest so it knows what already exists. */
   routines?: () => DigestRoutine[];
+  /** What it is doing (`orchestrator.activity`), whenever that changes. */
+  onActivity?: (activity: OrchestratorActivity) => void;
+  /** See `ACTING_LINGER_MS`. */
+  actingLingerMs?: number;
 }
 
 type QueueItem =
@@ -123,6 +139,12 @@ interface Turn {
   cancelled?: boolean;
   startedAt: number;
   firstToolAt?: number;
+  /** Tool calls in flight, by id. */
+  calls: Map<string, TurnEffect>;
+  /** Tool calls that finished without an error and weren't blocked. */
+  effects: TurnEffect[];
+  /** The last non-empty text the model wrote this turn. */
+  finalText?: string;
 }
 
 interface OrchestratorSession {
@@ -175,6 +197,7 @@ export class Orchestrator {
   private lastText = "";
   private stopped = false;
   private readonly host: OrchestratorToolHost;
+  private readonly activity: OrchestratorActivityPublisher;
 
   constructor(options: OrchestratorOptions) {
     this.options = options;
@@ -185,6 +208,22 @@ export class Orchestrator {
     this.maxTurnsPerSession = options.maxTurnsPerSession ?? 30;
     this.turnTimeoutMs = options.turnTimeoutMs ?? 180_000;
     this.host = this.createHost();
+    this.activity = new OrchestratorActivityPublisher({
+      emit: (activity) => {
+        try {
+          options.onActivity?.(activity);
+        } catch (error) {
+          this.logger.error("Orchestrator activity listener failed", { error: errorText(error) });
+        }
+      },
+      now: this.now,
+      ...(options.actingLingerMs !== undefined ? { lingerMs: options.actingLingerMs } : {}),
+    });
+  }
+
+  /** What it is doing now (`AgentStatusResponse.orchestrator`). */
+  currentActivity(): OrchestratorActivity {
+    return this.activity.current();
   }
 
   /** True when nothing is queued or running (test helper). */
@@ -279,6 +318,20 @@ export class Orchestrator {
       dueAt: existing?.dueAt ?? this.now() + this.batchWindowMs,
     });
     this.scheduleDrain();
+  }
+
+  /**
+   * Lines of a note that may be requests, seen before they settle (none: they're gone). Only
+   * shown to the user; the settled `note` event is what gets a turn.
+   */
+  handleNoticed(event: NoteEvent): void {
+    if (this.stopped) return;
+    this.activity.notice(event.notePath, event.lines);
+  }
+
+  /** An approval requested in the orchestrator's chat was created or decided. */
+  handleApproval(approval: { id: string; summary: string; pending: boolean }): void {
+    this.activity.approval(approval.id, approval.summary, approval.pending);
   }
 
   /** The line an anchor was attached to is gone: like deleting a task, its work stops. */
@@ -407,6 +460,7 @@ export class Orchestrator {
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
     this.queue.clear();
+    this.activity.withdrawAll();
     const current = this.session;
     this.session = null;
     if (current) {
@@ -414,6 +468,7 @@ export class Orchestrator {
       await current.session.dispose().catch(() => {});
     }
     await this.draining?.catch(() => {});
+    this.activity.dispose();
   }
 
   // ── Queue ─────────────────────────────────────────────────────────────────
@@ -503,15 +558,21 @@ export class Orchestrator {
       commented: new Set(),
       anchored: new Set(),
       startedAt: this.now(),
+      calls: new Map(),
+      effects: [],
     };
     this.turn = turn;
     const { chat } = this.options;
-    chat?.beginTurn(this.describeTrigger(items), this.session?.labels ?? new Map());
+    const turnId =
+      chat?.beginTurn(this.describeTrigger(items), this.session?.labels ?? new Map()) ??
+      createId("msg");
+    this.activity.beginTurn(turnId, this.activityTrigger(items));
     try {
       const session = await this.ensureSession();
       chat?.setLabels(session.labels);
       if (!turn.cancelled) {
         const digest = this.buildDigest(items, session.turns === 0);
+        this.activity.thinking();
         const prompt = session.session.prompt(formatOrchestratorDigest(digest));
         try {
           await withTimeout(
@@ -533,9 +594,11 @@ export class Orchestrator {
     // Stopping aborts the turn; its tasks stay "triaging" and are re-triaged on the next start.
     if (this.stopped) {
       chat?.endTurn({ interrupted: true });
+      this.activity.endTurn(undefined);
       return;
     }
     chat?.endTurn(turn.cancelled ? { cancelled: true } : turn.error ? { error: turn.error } : {});
+    this.activity.endTurn(turn.cancelled || turn.error ? undefined : this.outcomeOf(turn));
     if (turn.cancelled) {
       this.logger.info("Orchestrator turn stopped by the user");
       await this.resetSession();
@@ -646,13 +709,30 @@ export class Orchestrator {
 
   private onEvent(event: HarnessEvent): void {
     this.options.chat?.onEvent(event);
+    const turn = this.turn;
     switch (event.type) {
       case "message_end":
-        if (event.text.trim()) this.lastText = event.text.trim();
+        if (event.text.trim()) {
+          this.lastText = event.text.trim();
+          if (turn) turn.finalText = this.lastText;
+        }
         return;
       case "tool_start":
-        if (this.turn && this.turn.firstToolAt === undefined) this.turn.firstToolAt = this.now();
+        if (!turn) return;
+        turn.firstToolAt ??= this.now();
+        turn.calls.set(event.toolCallId, { toolName: event.toolName, input: event.input });
+        this.activity.toolStarted();
         return;
+      case "tool_end": {
+        if (!turn) return;
+        const call = turn.calls.get(event.toolCallId);
+        turn.calls.delete(event.toolCallId);
+        if (!event.isError && !event.blocked) {
+          turn.effects.push(call ?? { toolName: event.toolName, input: undefined });
+        }
+        this.activity.toolEnded();
+        return;
+      }
       case "error":
         if (this.turn && !this.turn.cancelled) this.turn.error = event.message;
         return;
@@ -712,6 +792,96 @@ export class Orchestrator {
     parts.push(...events);
     if (direct > 0) parts.push(direct === 1 ? "You wrote to me" : `You wrote to me (${direct})`);
     return parts.join(" · ") || "Checking in";
+  }
+
+  /**
+   * What woke it, for `orchestrator.activity`: the most telling kind among the items (lines of a
+   * note, then tasks, messages, routine runs, anything else), with the note and the lines that
+   * woke it when it's a note.
+   */
+  private activityTrigger(items: readonly QueueItem[]): OrchestratorTrigger {
+    const byNote = new Map<string, { lines: TriggerLine[]; tasks: TriggerLine[] }>();
+    const noteOf = (notePath: string) => {
+      let entry = byNote.get(notePath);
+      if (!entry) {
+        entry = { lines: [], tasks: [] };
+        byNote.set(notePath, entry);
+      }
+      return entry;
+    };
+    const messages: string[] = [];
+    const routines: string[] = [];
+    const others: string[] = [];
+    for (const item of items) {
+      switch (item.kind) {
+        case "note":
+          noteOf(item.notePath).lines.push(...item.lines);
+          break;
+        case "task": {
+          const found = this.options.lookup.findTask(item.taskId);
+          const task = found?.task ?? item.event.task;
+          noteOf(found?.notePath ?? item.event.notePath).tasks.push({
+            line: task.line,
+            text: task.text,
+          });
+          break;
+        }
+        case "direct":
+          messages.push("your message");
+          break;
+        case "reply":
+          messages.push(item.taskId ? `your reply on ${this.taskName(item.taskId)}` : "your reply");
+          break;
+        case "routine":
+          routines.push(`routine ${quoted(item.run.name)}`);
+          break;
+        case "report":
+          others.push(describeReport(this.taskName(item.report.taskId), item.report.status));
+          break;
+      }
+    }
+    const more = (count: number) => (count > 1 ? ` and ${count - 1} more` : "");
+    const notes = [...byNote];
+    const withLines = notes.find(([, entry]) => entry.lines.length > 0);
+    if (withLines) {
+      const [notePath, entry] = withLines;
+      return noteTrigger("note", notePath, [...entry.lines, ...entry.tasks]);
+    }
+    const withTasks = notes.find(([, entry]) => entry.tasks.length > 0);
+    if (withTasks) return noteTrigger("task", withTasks[0], withTasks[1].tasks);
+    if (messages.length > 0) {
+      const reply = items.find((item) => item.kind === "reply" && item.taskId);
+      const notePath =
+        reply?.kind === "reply" && reply.taskId
+          ? this.options.records.get(reply.taskId)?.notePath
+          : undefined;
+      return {
+        kind: "message",
+        ...(notePath ? { notePath } : {}),
+        summary: boundedSummary(`${messages[0]}${more(messages.length)}`),
+      };
+    }
+    if (routines.length > 0) {
+      return { kind: "routine", summary: boundedSummary(`${routines[0]}${more(routines.length)}`) };
+    }
+    return {
+      kind: "other",
+      summary: boundedSummary(
+        others.length > 0 ? `${others[0]}${more(others.length)}` : "Checking in",
+      ),
+    };
+  }
+
+  private outcomeOf(turn: Turn): OrchestratorOutcome {
+    const answered = turn.items.some((item) => item.kind === "direct");
+    const pendingApproval = this.activity.pendingApproval();
+    return deriveOutcome({
+      effects: turn.effects,
+      threadOf: (taskId) => this.options.records.get(taskId)?.threadId ?? null,
+      ...(answered && turn.finalText ? { chatReply: turn.finalText } : {}),
+      ...(pendingApproval !== undefined ? { pendingApproval } : {}),
+      ...(turn.finalText ? { finalText: turn.finalText } : {}),
+    });
   }
 
   private taskName(taskId: string, fallback?: string): string {

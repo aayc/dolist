@@ -334,6 +334,70 @@ describe("TaskWatcher: the rest of the note", () => {
     expect(kinds(events)).toEqual(["added:Call the restaurant to confirm"]);
   });
 
+  it("tells which lines may be requests before they settle, once per line, not per save", async () => {
+    const { storage, watcher, notes } = withNotes();
+    const noticed: NoteEvent[] = [];
+    watcher.on("noticed", (event) => noticed.push(event));
+    await watcher.start();
+    await storage.write(TODAY, "# Thursday\nSlept badly.");
+    await vi.advanceTimersByTimeAsync(SETTLE * 2);
+    expect(noticed).toEqual([]);
+    for (const typed of ["find a plu", "find a plumber", "find a plumber for Saturday"]) {
+      await storage.write(TODAY, `# Thursday\nSlept badly.\n${typed}`);
+      await vi.advanceTimersByTimeAsync(100);
+    }
+    expect(noticed.map((n) => n.lines)).toEqual([[{ line: 2, text: "find a plu" }]]);
+    await storage.write(TODAY, "# Thursday\nSlept badly.\nfind a plumber for Saturday\nCall mom?");
+    await vi.advanceTimersByTimeAsync(100);
+    expect(noticed.at(-1)?.lines).toEqual([
+      { line: 2, text: "find a plumber for Saturday" },
+      { line: 3, text: "Call mom?" },
+    ]);
+    expect(notes).toEqual([]);
+    await vi.advanceTimersByTimeAsync(SETTLE);
+    // Handed over with the settled `note` event: nothing is withdrawn.
+    expect(notes.map((n) => n.lines)).toEqual([noticed.at(-1)?.lines]);
+    expect(noticed).toHaveLength(2);
+  });
+
+  it("withdraws noticed lines that go away before they settle", async () => {
+    const { storage, watcher, notes } = withNotes();
+    const noticed: NoteEvent[] = [];
+    watcher.on("noticed", (event) => noticed.push(event));
+    await watcher.start();
+    await storage.write(TODAY, "Groceries\nfind a plumber for Saturday");
+    await vi.advanceTimersByTimeAsync(100);
+    await storage.write(TODAY, "Groceries\nfine weather for Saturday");
+    await vi.advanceTimersByTimeAsync(SETTLE * 2);
+    expect(noticed.map((n) => n.lines.map((l) => l.line))).toEqual([[1], []]);
+    expect(notes).toEqual([]);
+    await storage.write(TODAY, "Groceries\nfine weather for Saturday\nbook a table?");
+    await vi.advanceTimersByTimeAsync(100);
+    await watcher.stop();
+    expect(noticed.map((n) => n.lines.map((l) => l.line))).toEqual([[1], [], [2], []]);
+  });
+
+  it("never loses an edit made just as the previous one finishes processing", async () => {
+    // A write from a microtask continuation can land after the processing loop last checked for
+    // more work but before it let go of the note; that edit used to be dropped until the next one.
+    for (let depth = 0; depth < 6; depth++) {
+      const { storage, watcher } = setup();
+      await watcher.start();
+      let second = false;
+      watcher.on("tasks", () => {
+        if (second) return;
+        second = true;
+        let chain = Promise.resolve();
+        for (let i = 0; i < depth; i++) chain = chain.then(() => undefined);
+        void chain.then(() => storage.write(TODAY, "- [ ] Second version"));
+      });
+      await storage.write(TODAY, "- [ ] First version");
+      await vi.advanceTimersByTimeAsync(10);
+      expect(watcher.getContent(TODAY), `depth ${depth}`).toBe("- [ ] Second version");
+      await watcher.stop();
+    }
+  });
+
   it("lets the agent's edits wait for a pause in the user's typing", async () => {
     const { watcher } = setup();
     await watcher.start();
