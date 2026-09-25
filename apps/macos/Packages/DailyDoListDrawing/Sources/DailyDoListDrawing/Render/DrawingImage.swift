@@ -76,7 +76,7 @@ public enum DrawingImage {
     let visible = scene.visibleElements
     renderer.draw(
       visible, index: SceneRenderer.Index(visible), in: context, theme: theme,
-      canvasBackground: scene.viewBackgroundColor, zoom: scale)
+      canvasBackground: scene.viewBackgroundColor)
     return context.makeImage()
   }
 
