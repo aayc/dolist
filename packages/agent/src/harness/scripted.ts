@@ -55,6 +55,8 @@ export interface ScriptedHarnessOptions {
   scriptFor?: (options: HarnessSessionOptions) => AgentScript;
   /** Delay between streamed words, to make streaming visible in the UI. Default 0. */
   wordDelayMs?: number;
+  /** Whether the "model" sees images in tool results (`ToolExecutionContext.images`). */
+  images?: boolean;
 }
 
 export class ScriptedHarness implements Harness {
@@ -67,7 +69,7 @@ export class ScriptedHarness implements Harness {
 
   async createSession(options: HarnessSessionOptions): Promise<HarnessSession> {
     const script = this.options.scriptFor?.(options) ?? this.options.script ?? (async () => {});
-    return new ScriptedSession(options, script, this.options.wordDelayMs ?? 0);
+    return new ScriptedSession(options, script, this.options.wordDelayMs ?? 0, this.options.images);
   }
 }
 
@@ -76,6 +78,7 @@ class ScriptedSession implements HarnessSession {
   private readonly options: HarnessSessionOptions;
   private readonly script: AgentScript;
   private readonly wordDelayMs: number;
+  private readonly images: boolean | undefined;
   private running = false;
   private turn = 0;
   private controller = new AbortController();
@@ -83,11 +86,17 @@ class ScriptedSession implements HarnessSession {
   private readonly steering: string[] = [];
   private disposed = false;
 
-  constructor(options: HarnessSessionOptions, script: AgentScript, wordDelayMs: number) {
+  constructor(
+    options: HarnessSessionOptions,
+    script: AgentScript,
+    wordDelayMs: number,
+    images: boolean | undefined,
+  ) {
     this.id = options.sessionId;
     this.options = options;
     this.script = script;
     this.wordDelayMs = wordDelayMs;
+    this.images = images;
   }
 
   get isRunning(): boolean {
@@ -215,6 +224,7 @@ class ScriptedSession implements HarnessSession {
         toolCallId,
         signal,
         onUpdate: (partial) => this.emit({ type: "tool_update", toolCallId, partial }),
+        ...(this.images !== undefined ? { images: this.images } : {}),
       });
       this.emit({
         type: "tool_end",

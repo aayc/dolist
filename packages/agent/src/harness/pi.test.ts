@@ -49,7 +49,7 @@ interface Setup {
 
 async function setup(
   responses: FauxResponseStep[],
-  options: { tokensPerSecond?: number } = {},
+  options: { tokensPerSecond?: number; textOnly?: boolean } = {},
 ): Promise<Setup> {
   const home = await tempDir("ddl-pi-home-");
   const cwd = await tempDir("ddl-pi-cwd-");
@@ -80,7 +80,8 @@ async function setup(
         runtime.registerNativeProvider(faux.provider);
         return runtime;
       },
-      resolveModel: () => faux.getModel(),
+      resolveModel: () =>
+        options.textOnly ? { ...faux.getModel(), input: ["text"] } : faux.getModel(),
       ripgrepAvailable: () => false,
     },
   );
@@ -187,6 +188,32 @@ describe("PiHarness (faux provider)", () => {
     expect(s.events.some((e) => e.type === "usage")).toBe(true);
     expect(userTexts(s.contexts[0]!)).toEqual(["Say hello"]);
     expect(session.isRunning).toBe(false);
+  });
+
+  it("tells tools whether the model sees images, and passes their images to it", async () => {
+    for (const textOnly of [false, true]) {
+      const seen: Array<boolean | undefined> = [];
+      const look = tool("look", async (_input, ctx) => {
+        seen.push(ctx.images);
+        return {
+          content: [
+            { type: "text", text: "a drawing" },
+            ...(ctx.images
+              ? [{ type: "image" as const, data: "iVBORw0KGgo=", mimeType: "image/png" }]
+              : []),
+          ],
+        };
+      });
+      const s = await setup(
+        [toolTurn(fauxToolCall("look", {}, { id: "call_1" })), fauxAssistantMessage("done")],
+        { textOnly },
+      );
+      const session = await s.create({ tools: [look] });
+      await session.prompt("Look");
+      expect(seen, `textOnly: ${textOnly}`).toEqual([!textOnly]);
+      const [result] = toolResults(s.contexts[1]!);
+      expect(result!.content.map((c) => c.type)).toEqual(textOnly ? ["text"] : ["text", "image"]);
+    }
   });
 
   it("runs approved custom tools and reports the ToolSpec's own result", async () => {

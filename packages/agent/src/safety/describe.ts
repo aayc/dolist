@@ -3,6 +3,7 @@
  * e.g. `Click “Place order” in the browser` or `Type into “Card number” (value hidden)`.
  * Values typed into sensitive fields and anything secret-looking are always masked.
  */
+import { drawingTitleFromPath } from "@ddl/core";
 import { TOOL } from "../tools/contracts";
 import { type ActionFacts, buildFacts } from "./facts";
 import { isSensitiveField } from "./rules/ui";
@@ -196,6 +197,11 @@ function describeInternal(f: ActionFacts): string {
       return `Read note ${str(input.path) ?? ""}`.trim();
     case TOOL.searchNotes:
       return `Search notes for ${q(str(input.query) ?? "")}`;
+    case TOOL.readDrawing: {
+      const target = (str(input.path) ?? "").replace(/^!?\[\[|\]\]$/g, "").split(/[|#]/)[0]!;
+      const title = drawingTitleFromPath(target.trim());
+      return title ? `Look at drawing ${q(title, 100)}` : "Look at a drawing";
+    }
     default:
       return humanize(f.operation);
   }

@@ -85,6 +85,7 @@ Activity labels (`activityLabel`):
 | `web_search` | Searching the web for “{query}”… (no query: "Searching the web…") |
 | `web_fetch` | Reading {host}… (no host: "Reading a page…") |
 | `read_note`, `search_notes` | Reading your notes… |
+| `read_drawing` | Looking at “{drawing}”… (the name from `path`, without folder or `.excalidraw.md`; no path: "Looking at a drawing…") |
 | `edit_note` | Editing your note… |
 | `bash` | Running a command… |
 | `read`, `grep`, `find`, `ls` | Looking through files… |

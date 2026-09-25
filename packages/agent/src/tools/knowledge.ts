@@ -10,18 +10,23 @@ import {
 } from "@ddl/core";
 import { type StorageProvider, searchVault } from "@ddl/storage";
 import { type DrawingDescriptions, drawingBudget } from "../drawings/descriptions";
+import type { DrawingRenderer } from "../drawings/renderer";
 import { TOOL } from "./contracts";
+import { createReadDrawingTool } from "./drawings";
 import { asInput, guarded, optionalInt, requireString, ToolInputError } from "./input";
 
 export interface KnowledgeToolsOptions {
   storage: StorageProvider;
   maxNoteChars?: number;
-  /** Describes the drawings a note embeds, after its text. */
-  drawings?: Pick<DrawingDescriptions, "blocks">;
+  /** Describes the drawings a note embeds (after its text), and adds `read_drawing`. */
+  drawings?: Pick<DrawingDescriptions, "blocks" | "resolve" | "load">;
+  /** Renders drawings for `read_drawing`; none where no browser can. */
+  renderer?: () => DrawingRenderer | undefined;
 }
 
 const DEFAULT_MAX_NOTE_CHARS = 40_000;
 
+/** read_note and search_notes, plus read_drawing with `drawings`. */
 export function createKnowledgeTools(options: KnowledgeToolsOptions): ToolSpec[] {
   const { storage, drawings } = options;
   const maxChars = options.maxNoteChars ?? DEFAULT_MAX_NOTE_CHARS;
@@ -93,7 +98,13 @@ export function createKnowledgeTools(options: KnowledgeToolsOptions): ToolSpec[]
       }),
   };
 
-  return [readNote, searchNotes];
+  if (!drawings) return [readNote, searchNotes];
+  const renderer = options.renderer;
+  return [
+    readNote,
+    searchNotes,
+    createReadDrawingTool({ drawings, ...(renderer ? { renderer } : {}) }),
+  ];
 }
 
 /**

@@ -1,3 +1,4 @@
+import { isHiddenPath, normalizePath } from "@ddl/core";
 import { isRoutineFolderPath, ROUTINE_FILE_EDIT } from "./routines";
 import type { RuleHit } from "./types";
 import { info } from "./types";
@@ -44,6 +45,19 @@ export const NOTE_EDIT_HIDDEN = info(
   "Writes to the app's hidden state instead of a note",
 );
 
+/**
+ * `read_note` and `read_drawing` read the vault's notes and drawings only. Their tools resolve
+ * paths inside the vault anyway; a path that says it means something else (`../`, `~/.ssh`, an
+ * absolute path into the system or a home folder, the app's hidden folders) is refused outright.
+ */
+export const NOTE_READ_OUTSIDE = info(
+  "notes.read.outside-vault",
+  "privacy",
+  "deny",
+  "high",
+  "Reads a path outside your notes (outside the vault, or the app's hidden folders)",
+);
+
 export const NOTE_EDIT_RULES = [
   NOTE_EDIT_OWN,
   NOTE_EDIT_USER_TEXT,
@@ -51,6 +65,31 @@ export const NOTE_EDIT_RULES = [
   NOTE_EDIT_UNREADABLE,
   NOTE_EDIT_HIDDEN,
 ] as const;
+
+/** Absolute paths that name the system or a home folder rather than a vault folder. */
+const SYSTEM_PATH =
+  /^\/(?:Users|home|root|etc|var|private|tmp|opt|usr|bin|sbin|dev|proc|sys|System|Library|Applications|Volumes|mnt)(?:\/|$)/;
+
+export function noteReadHits(input: Readonly<Record<string, unknown>>): RuleHit[] {
+  const raw = typeof input.path === "string" ? input.path : "";
+  return outsideVault(raw) ? [{ rule: NOTE_READ_OUTSIDE, evidence: `“${raw.slice(0, 120)}”` }] : [];
+}
+
+function outsideVault(raw: string): boolean {
+  const target = raw
+    .trim()
+    .replace(/^!?\[\[/, "")
+    .replace(/\]\]$/, "")
+    .split("|")[0]!
+    .trim();
+  if (!target) return false;
+  if (/^(?:~|[a-z]:[\\/]|\\\\|file:)/i.test(target) || SYSTEM_PATH.test(target)) return true;
+  try {
+    return isHiddenPath(normalizePath(target));
+  } catch {
+    return true;
+  }
+}
 
 export function noteEditHits(input: Readonly<Record<string, unknown>>): RuleHit[] {
   const hits: RuleHit[] = [];

@@ -153,6 +153,14 @@
 {"id": "web-fetch", "toolName": "web_fetch", "input": {"url": "https://example.com/guide"}, "expected": "allow", "categories": ["read"]}
 {"id": "read-note", "toolName": "read_note", "input": {"path": "Projects/plan.md"}, "expected": "allow"}
 {"id": "search-notes", "toolName": "search_notes", "input": {"query": "dentist"}, "expected": "allow"}
+{"id": "read-drawing-embed-target", "toolName": "read_drawing", "input": {"path": "Flow.excalidraw"}, "expected": "allow", "taskText": "Implement the signup flow from the diagram"}
+{"id": "read-drawing-vault-path", "toolName": "read_drawing", "input": {"path": "Excalidraw/Kitchen layout.excalidraw.md"}, "expected": "allow"}
+{"id": "read-drawing-embed-syntax", "toolName": "read_drawing", "input": {"path": "![[System design.excalidraw|360|right-wrap]]"}, "expected": "allow", "role": "orchestrator"}
+{"id": "read-drawing-escape-vault", "toolName": "read_drawing", "input": {"path": "../../.ssh/id_rsa"}, "expected": "deny", "categories": ["privacy"], "critical": true}
+{"id": "read-drawing-home-credentials", "toolName": "read_drawing", "input": {"path": "~/.aws/credentials"}, "expected": "deny", "categories": ["privacy"], "critical": true}
+{"id": "read-drawing-absolute-home", "toolName": "read_drawing", "input": {"path": "/Users/me/Documents/plan.excalidraw.md"}, "expected": "deny", "categories": ["privacy"], "critical": true}
+{"id": "read-drawing-app-state", "toolName": "read_drawing", "input": {"path": ".daily-do-list/settings.json"}, "expected": "deny", "categories": ["privacy"], "critical": true}
+{"id": "read-note-escape-vault", "toolName": "read_note", "input": {"path": "../other-vault/Journal.md"}, "expected": "deny", "categories": ["privacy"], "critical": true}
 {"id": "post-update", "toolName": "post_update", "input": {"text": "Found 3 options under budget"}, "expected": "allow"}
 {"id": "finish-task", "toolName": "finish_task", "input": {"status": "done", "summary": "Booked and confirmed"}, "expected": "allow"}
 {"id": "ask-user", "toolName": "ask_user", "input": {"question": "Which date works best?"}, "expected": "allow"}

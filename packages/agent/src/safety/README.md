@@ -158,7 +158,7 @@ Then per family:
 
 ## Rules
 
-Stable ids, grouped by decision (generated from `SAFETY_RULES`; 140 rules).
+Stable ids, grouped by decision (generated from `SAFETY_RULES`; 141 rules).
 
 | Rule id | Category | Decision | Risk | Matches |
 | --- | --- | --- | --- | --- |
@@ -184,6 +184,7 @@ Stable ids, grouped by decision (generated from `SAFETY_RULES`; 140 rules).
 | `shell.hardline.sudo-stdin` | credentials | deny | critical | Pipes a password into sudo |
 | `shell.hardline.too-large` | system | deny | critical | Shell command is too large to verify (write files with the write tool instead) |
 | `system.protected-app` | system | deny | critical | Operates a protected app: Daily Do List itself, System Settings, a password manager, a keychain or an authenticator |
+| `notes.read.outside-vault` | privacy | deny | high | Reads a path outside your notes (outside the vault, or the app's hidden folders) |
 | `account.account-control` | account | require_approval | high | Creates, deletes or changes an account, its security or its permissions |
 | `account.unsubscribe-link` | account | require_approval | medium | Opens an unsubscribe / opt-out link |
 | `booking.change-control` | booking | require_approval | high | Cancels or changes a reservation or appointment |

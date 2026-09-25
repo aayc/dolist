@@ -71,6 +71,8 @@ export interface DescribedDrawing {
 export interface LoadedDrawing extends DescribedDrawing {
   file: FileContent;
   scene: ReturnType<typeof parseDrawingFile>["scene"];
+  /** The file is a drawing (by its name or its frontmatter), readable or not. */
+  drawing: boolean;
 }
 
 export interface DrawingBlock {
@@ -198,7 +200,16 @@ export class DrawingDescriptions {
         : { version: file.version, title, readable, texts: new Map() };
     entry.texts.set(maxLength, text);
     this.touch(path, entry);
-    return { path, title, version: file.version, readable, text, file, scene: parsed.scene };
+    return {
+      path,
+      title,
+      version: file.version,
+      readable,
+      text,
+      file,
+      scene: parsed.scene,
+      drawing,
+    };
   }
 
   /**

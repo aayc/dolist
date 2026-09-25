@@ -38,6 +38,8 @@ export class ToolResultError extends Error {
 export interface SpecAdapterOptions {
   ledger: ToolCallLedger;
   logger?: Logger;
+  /** The session's model takes image input (Pi's catalog: `model.input`). */
+  images?: boolean;
 }
 
 export function toolSpecToDefinition(
@@ -61,6 +63,7 @@ export function toolSpecToDefinition(
         toolCallId,
         ...(signal ? { signal } : {}),
         ...(onUpdate ? { onUpdate: (partial) => onUpdate(toAgentToolResult(partial)) } : {}),
+        ...(options.images !== undefined ? { images: options.images } : {}),
       });
       ledger.recordResult(toolCallId, result);
       if (result.isError) throw new ToolResultError(result);

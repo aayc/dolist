@@ -12,6 +12,7 @@ public enum ToolIcon {
     case "grep", "find": return "doc.text.magnifyingglass"
     case "ls": return "folder"
     case "read_note", "search_notes": return "note.text"
+    case "read_drawing": return "scribble.variable"
     case "post_update", "post_comment": return "text.bubble"
     case "ask_user": return "questionmark.bubble"
     case "create_artifact": return "doc.richtext"

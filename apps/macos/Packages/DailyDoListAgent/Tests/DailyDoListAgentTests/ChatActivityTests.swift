@@ -64,6 +64,12 @@ struct ChatActivityTests {
     ("web_fetch", [:], nil, "Reading a page…"),
     ("read_note", ["path": "Daily/2026-09-24.md"], nil, "Reading your notes…"),
     ("search_notes", ["query": "passport"], nil, "Reading your notes…"),
+    ("read_drawing", ["path": "Excalidraw/Flow.excalidraw.md"], nil, "Looking at “Flow”…"),
+    (
+      "read_drawing", ["path": "![[Kitchen layout.excalidraw|360|right-wrap]]"], "Look at drawing",
+      "Looking at “Kitchen layout”…"
+    ),
+    ("read_drawing", [:], nil, "Looking at a drawing…"),
     ("edit_note", ["path": "Daily/2026-09-24.md"], nil, "Editing your note…"),
     ("bash", ["command": "ls -la"], nil, "Running a command…"),
     ("read", ["path": "a.txt"], nil, "Looking through files…"),

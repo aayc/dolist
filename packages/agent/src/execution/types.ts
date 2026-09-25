@@ -4,6 +4,7 @@
  * machine; `cloud` (not implemented yet) will proxy the same interfaces to a remote sandbox/VM.
  */
 import type { ComputerAccess, SurfaceFrame, SurfaceKind, ToolSpec, Unsubscribe } from "@ddl/core";
+import type { DrawingRenderer } from "../drawings/renderer";
 
 export interface ShellExecOptions {
   cwd: string;
@@ -275,6 +276,8 @@ export interface ExecutionProvider {
   readonly computer?: ComputerController;
   /** App control; absent without the helper (computer use is then screen-level only). */
   readonly apps?: AppController;
+  /** Renders drawings to images; absent without a browser (agents then get descriptions only). */
+  readonly drawings?: DrawingRenderer;
   /** Computer use permissions and app control; undefined where computer use doesn't exist. */
   computerAccess?(): Promise<ComputerAccess | undefined>;
   prepareWorkspace(key: string): Promise<Workspace>;

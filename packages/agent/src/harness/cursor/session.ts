@@ -63,13 +63,14 @@ type ConnectionHandlers = Pick<AcpConnectionOptions, "onNotification" | "onReque
 export interface WarmCli {
   conn: AcpConnection;
   canResume: boolean;
+  images: boolean;
 }
 
 /** The ACP handshake, and the checks that this CLI can run our sessions. */
 export async function initializeCli(
   conn: AcpConnection,
   timeoutMs: number,
-): Promise<{ canResume: boolean }> {
+): Promise<{ canResume: boolean; images: boolean }> {
   const init = parseInitializeResult(
     await conn.request(
       "initialize",
@@ -94,7 +95,7 @@ export async function initializeCli(
       "This Cursor CLI can't connect to HTTP MCP servers; update it with `agent update`",
     );
   }
-  return { canResume: init.loadSession };
+  return { canResume: init.loadSession, images: init.images };
 }
 
 type PromptBlock =
@@ -154,6 +155,8 @@ export class CursorHarnessSession implements HarnessSession {
   private acpSessionId: string | undefined;
   private modelId = "";
   private canResume = false;
+  /** The CLI's agent takes images (from the ACP handshake). */
+  private images = true;
   private loading = false;
   private draining = false;
   private drained: Promise<void> = Promise.resolve();
@@ -178,6 +181,7 @@ export class CursorHarnessSession implements HarnessSession {
       builtinNames: init.builtinNames,
       beforeToolCall: init.options.beforeToolCall,
       detachAfterMs: init.detachAfterMs,
+      images: () => this.images,
       logger: init.logger,
       emit: (event) => {
         if (event.type === "tool_start") this.emitAll(this.mapper.flush());
@@ -210,7 +214,7 @@ export class CursorHarnessSession implements HarnessSession {
       conn = this.spawn();
     }
     try {
-      if (warm) this.canResume = warm.canResume;
+      if (warm) ({ canResume: this.canResume, images: this.images } = warm);
       else await this.initialize(conn);
       const created = parseSessionResult(
         await conn.request(
@@ -429,7 +433,10 @@ export class CursorHarnessSession implements HarnessSession {
   }
 
   private async initialize(conn: AcpConnection): Promise<void> {
-    ({ canResume: this.canResume } = await initializeCli(conn, this.init.requestTimeoutMs));
+    ({ canResume: this.canResume, images: this.images } = await initializeCli(
+      conn,
+      this.init.requestTimeoutMs,
+    ));
   }
 
   private handlers(conn: () => AcpConnection): ConnectionHandlers {

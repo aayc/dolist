@@ -279,11 +279,12 @@ export class CursorHarness implements Harness {
     this.checkSpare(spare);
     await recordCliProcess(dirs, conn.pid);
     const timeoutMs = this.options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
-    const { canResume } = await initializeCli(conn, timeoutMs);
+    const { canResume, images } = await initializeCli(conn, timeoutMs);
     this.checkSpare(spare);
     return {
       conn,
       canResume,
+      images,
       dirs,
       serverName,
       userServers,

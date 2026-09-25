@@ -265,7 +265,11 @@ class Runtime implements AgentRuntime {
       now,
       logger: this.logger.child({ component: "drawings" }),
     });
-    this.knowledgeTools = createKnowledgeTools({ storage, drawings: this.drawings });
+    this.knowledgeTools = createKnowledgeTools({
+      storage,
+      drawings: this.drawings,
+      renderer: () => options.execution.drawings,
+    });
     const noteEditHost: NoteEditHost = {
       storage,
       locate: (taskId) => {
@@ -350,7 +354,9 @@ class Runtime implements AgentRuntime {
       lookup: this.watcher,
       beforeToolCall: this.beforeToolCall,
       tools: () => [
-        ...this.knowledgeTools.filter((tool) => tool.name === TOOL.readNote),
+        ...this.knowledgeTools.filter(
+          (tool) => tool.name === TOOL.readNote || tool.name === TOOL.readDrawing,
+        ),
         this.noteEditTool,
         ...this.webTools,
         ...this.routineTools,
