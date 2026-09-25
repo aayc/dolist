@@ -235,14 +235,16 @@ mark {
   }
 
   .spin,
-  .status-chip.is-pulsing .status-chip-dot,
-  .streaming-caret,
   .live-dot.is-live,
   .save-dot,
   .connection-dot,
   .thread-loading,
   .is-popping {
     animation: none;
+  }
+
+  .status-chip.is-pulsing .status-chip-dot::after {
+    display: none;
   }
 }
 
@@ -527,12 +529,30 @@ mark {
 }
 
 .status-chip-dot {
+  position: relative;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: currentColor;
 }
 
-.status-chip.is-pulsing .status-chip-dot {
-  animation: ddl-pulse 1.2s ease-in-out infinite;
+/* While the agent works, a soft ring ripples out of the dot. */
+.status-chip.is-pulsing .status-chip-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: currentColor;
+  animation: ddl-ripple 1.8s ease-out infinite;
+}
+
+@keyframes ddl-ripple {
+  from {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.8);
+  }
 }

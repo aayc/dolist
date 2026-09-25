@@ -29,6 +29,8 @@ export interface DebugHooks {
   renderMarkdown(source: string): Promise<string>;
   /** Holds every note write for `ms` before sending it (0 restores), to test saves in flight. */
   delayWrites(ms: number): void;
+  /** Holds every chat reply for `ms` before sending it, and fails the next `fail` of them. */
+  holdReplies(options: { ms?: number; fail?: number }): void;
   runCommand(id: string): boolean;
   /** The keycaps a command's tooltip shows (null without a shortcut). */
   shortcutKeys(id: string): readonly string[] | null;
@@ -99,6 +101,17 @@ function installDebugHooks(services: Services): void {
   if (!isMockMode() && !perfDetailed) return;
   const { client } = services;
   const writeNote = client.writeNote.bind(client);
+  const postMessage = client.postMessage.bind(client);
+  let replyDelay = 0;
+  let failReplies = 0;
+  client.postMessage = async (threadId, text) => {
+    if (replyDelay > 0) await new Promise((resolve) => setTimeout(resolve, replyDelay));
+    if (failReplies > 0) {
+      failReplies--;
+      throw new Error("The daemon didn't answer");
+    }
+    return postMessage(threadId, text);
+  };
   window.__ddlDebug = {
     evictNote: (path) => services.workspace.evict(path),
     activePath: () => services.workspace.activePath,
@@ -110,6 +123,10 @@ function installDebugHooks(services: Services): void {
           ? (...args) =>
               new Promise((resolve) => setTimeout(resolve, ms)).then(() => writeNote(...args))
           : writeNote;
+    },
+    holdReplies: ({ ms = 0, fail = 0 }) => {
+      replyDelay = ms;
+      failReplies = fail;
     },
     runCommand: (id) => services.commands.run(id),
     shortcutKeys: (id) => shortcutKeys(services.commands, id),

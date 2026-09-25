@@ -126,18 +126,27 @@ banner's rules and its dismissal (`ComputerAccessBannerTests`), the command
 
 ## J10. Watching the agent work
 
-1. You open a task's thread while its agent works. What was already there shows at once; the last
-   row says what's happening now: *Opening Safari…*, *Searching the web for “espresso grinders”…*,
-   *Thinking… · 12s*, or *Waiting for your approval*, which scrolls to the card when clicked.
-2. The agent's reply types out behind a soft caret, even when it arrives in one piece, and catches
-   up within about a second of what arrived. Bold, links and lists render as they type.
-3. Finished tool calls fold into *Used 6 tools*; a failure stays visible.
-4. You scroll up to reread something: the chat stays put and a *Jump to latest* pill counts the
-   new messages.
-5. You reply. It shows at once, the input clears and keeps the focus. If it can't be sent, it stays
-   with *Retry*. While the agent works, *Stop* sits beside *Send*.
+1. You open a task's thread while its agent works. What was already there shows at once; new
+   replies type out behind a soft caret, even when they arrive in one piece, with bold, links and
+   lists forming as they go.
+2. At the end of the chat a row says what's happening now: *Opening Safari…*, *Searching the web
+   for “espresso grinders”…*, *Thinking…*, with the step's time after a few seconds (*· 12s*).
+   Finished tool calls fold into *Used 4 tools*, which opens to show each one; a failure stays
+   visible.
+3. When the agent needs you, the row reads *Waiting for your approval*; clicking it brings the
+   approval card into view, and the reply box suggests *Approve above, or reply to change
+   course…*.
+4. You reply from the chat bar: Enter sends (Shift+Enter adds a line), your message shows at once
+   and the input keeps the focus, and a failed send offers *Retry*. **Stop** beside Send stops the
+   agent (⌘. too).
+5. Scrolled up to reread something, nothing pulls you down; a *Jump to latest* pill counts what
+   arrived and brings you back. With Reduce Motion on, text appears as it arrives and nothing
+   bounces, blinks or pulses.
 
-With Reduce Motion, text appears as it arrives and the indicators hold still.
+The pace of the typing and the wording of the activity row are the same on the web and the Mac
+(`apps/web/README.md`, "The agent chat").
 
-Tests (Mac): `RevealTests`, `ChatActivityTests`, `MarkdownChunkTests`, `ChatViewTests`,
-`ComposerTests`, `MotionTests`, and the `chat-*` and `composer-states` snapshots.
+Tests: web `apps/web/e2e/chat.spec.ts`, the table tests `reveal.test.ts` and `activity.test.ts`,
+`Composer.test.tsx`, `agent-text-view.test.ts`; Mac `RevealTests`, `ChatActivityTests`,
+`MarkdownChunkTests`, `ChatViewTests`, `ComposerTests`, `MotionTests`, and the `chat-*` and
+`composer-states` snapshots.

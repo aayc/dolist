@@ -1,5 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { badge, openApp, sawStreaming, typeTask, watchForStreaming } from "./helpers";
+import {
+  badge,
+  expandToolGroups,
+  openApp,
+  sawStreaming,
+  typeTask,
+  watchForStreaming,
+} from "./helpers";
 
 test.describe("agent threads", () => {
   test("new task → badge → thread with streamed messages → approval → done", async ({ page }) => {
@@ -94,6 +101,9 @@ test.describe("agent threads", () => {
     await expect(page.getByTestId("browser-url")).toContainText("guide.example");
 
     await page.getByTestId("thread-tab-chat").click();
+    // Finished tool calls fold into one row; opening it shows each call.
+    await expect(page.getByTestId("tool-group")).toContainText("Used 3 tools");
+    await expandToolGroups(page);
     await expect(page.locator('[data-testid="tool-call"][data-tool="web_search"]')).toBeVisible();
   });
 

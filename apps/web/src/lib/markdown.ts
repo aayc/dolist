@@ -1,5 +1,11 @@
 import DOMPurify from "dompurify";
-import { Marked, type TokenizerAndRendererExtension, type Tokens } from "marked";
+import {
+  Marked,
+  type Token,
+  type TokenizerAndRendererExtension,
+  type Tokens,
+  type TokensList,
+} from "marked";
 
 const WIKILINK_RE = /^!?\[\[([^[\]\n|]+)(?:\|([^[\]\n]*))?\]\]/;
 /** A link whose text is only a number (`[1](https://…)`) is a citation. */
@@ -86,8 +92,28 @@ function installHooks(): void {
 export function renderMarkdown(source: string): string {
   const hit = cache.get(source);
   if (hit !== undefined) return hit;
+  const html = sanitize(marked.parse(source, { async: false }));
+  if (cache.size >= CACHE_MAX) {
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined) cache.delete(oldest);
+  }
+  cache.set(source, html);
+  return html;
+}
+
+/** Top-level blocks of `source`: a message that is typing out renders block by block. */
+export function lexMarkdown(source: string): TokensList {
+  return marked.lexer(source);
+}
+
+/** One block from `lexMarkdown` → sanitized HTML, as `renderMarkdown` renders it in place. */
+export function renderMarkdownBlock(token: Token): string {
+  return sanitize(marked.parser([token]));
+}
+
+function sanitize(html: string): string {
   installHooks();
-  const html = DOMPurify.sanitize(marked.parse(source, { async: false }), {
+  return DOMPurify.sanitize(html, {
     USE_PROFILES: { html: true },
     FORBID_TAGS: ["style", "form", "button", "textarea", "select", "template"],
     // Agent text can quote untrusted pages: no inline styles, app classes or ids, so it can't
@@ -105,10 +131,4 @@ export function renderMarkdown(source: string): string {
       "data-tooltip-placement",
     ],
   });
-  if (cache.size >= CACHE_MAX) {
-    const oldest = cache.keys().next().value;
-    if (oldest !== undefined) cache.delete(oldest);
-  }
-  cache.set(source, html);
-  return html;
 }

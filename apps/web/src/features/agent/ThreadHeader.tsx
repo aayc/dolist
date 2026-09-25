@@ -46,7 +46,7 @@ export function ThreadHeader({ threadId }: { threadId: string }) {
         {active ? (
           <IconButton
             icon={Square}
-            label="Stop"
+            command="agent:stop"
             onClick={() => void agent.cancel(threadId)}
             data-testid="thread-stop"
           />

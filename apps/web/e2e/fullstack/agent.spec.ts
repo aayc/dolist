@@ -4,7 +4,13 @@
  * Run with `pnpm --filter @ddl/web e2e:fullstack`.
  */
 import { expect, type Page, test } from "@playwright/test";
-import { badge, focusEditorEnd, sawStreaming, watchForStreaming } from "../helpers";
+import {
+  badge,
+  expandToolGroups,
+  focusEditorEnd,
+  sawStreaming,
+  watchForStreaming,
+} from "../helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -51,9 +57,10 @@ test("type a task → badge → streamed thread → approval → approve → don
   await expect(
     thread.getByTestId("message-text").filter({ hasText: "gathering a few options first" }),
   ).toBeVisible();
-  await expect(page.locator('[data-testid="tool-call"][data-tool="web_search"]')).toBeVisible();
   const card = page.getByTestId("approval-card");
   await expect(card).toHaveAttribute("data-status", "pending");
+  await expandToolGroups(page);
+  await expect(page.locator('[data-testid="tool-call"][data-tool="web_search"]')).toBeVisible();
   await expect(page.getByTestId("approval-summary")).toContainText("Mock order");
 
   await page.getByTestId("approve-once").click();

@@ -8,7 +8,7 @@ export const STATUS_META: Record<TaskAgentStatus, { label: string; tone: Tone; p
     idle: { label: "Idle", tone: "faint" },
     triaging: { label: "Triaging", tone: "accent", pulse: true },
     queued: { label: "Queued", tone: "faint" },
-    working: { label: "Working", tone: "info" },
+    working: { label: "Working", tone: "info", pulse: true },
     waiting_approval: { label: "Needs approval", tone: "warning" },
     waiting_user: { label: "Needs you", tone: "warning" },
     done: { label: "Done", tone: "success" },

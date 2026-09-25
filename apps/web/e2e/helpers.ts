@@ -30,6 +30,7 @@ declare global {
       openNote(path: string, newTab?: boolean): Promise<boolean>;
       renderMarkdown(source: string): Promise<string>;
       delayWrites(ms: number): void;
+      holdReplies(options: { ms?: number; fail?: number }): void;
       runCommand(id: string): boolean;
       shortcutKeys(id: string): readonly string[] | null;
     };
@@ -110,6 +111,12 @@ export async function waitForSaved(page: Page): Promise<void> {
 
 export function badge(page: Page) {
   return page.locator(".cm-ddl-badge");
+}
+
+/** Opens every folded group of finished tool calls ("Used 3 tools") in the chat. */
+export async function expandToolGroups(page: Page): Promise<void> {
+  const closed = page.locator('[data-testid="tool-group-toggle"][aria-expanded="false"]');
+  while ((await closed.count()) > 0) await closed.first().click();
 }
 
 /** Records whether a streaming message was ever rendered (streams can finish between polls). */
