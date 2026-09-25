@@ -74,7 +74,8 @@ Kit follow-ups at merge time (marked `FOLLOW-UP` in the code): the pairing step 
 once the daemon accepts `agent.placement` and `remote.hosts`; confirm the names S1/S2 ship match
 the kit (those keys, `DDL_AGENT_PLACEMENT`, `DDL_REMOTE_HOSTS`, the `pair` CLI command). The Azure
 guide adds a NAT gateway (outbound internet without a public IP), which bills even while the VM is
-deallocated.
+deallocated; per the user's decision, switch the guide's default to a public IP with every
+inbound port closed (keep the NAT gateway as an option) and recommend `Standard_D4ps_v6` (arm64).
 
 Next: merge S1, S2, S3, then S4 and S5 into `feat/always-on` (resume S4 for its fullstack e2e
 after S1/S2 are in); add the pairing step to S6's CI smoke test; merge the kit; full
@@ -132,6 +133,15 @@ state and client ids for idempotent mutations.
   always-on machine) is one easy toggle in the agent panel's header, flippable at any time (the
   personal laptop may go local too); it's held on this device while no always-on machine is set
   up.
+- **The Azure VM** (2026-09-25): set it up only after pairing, placement and the relay are
+  merged, then all in one go. A public IP with every inbound port closed (not a NAT gateway).
+  Budget under $120 a month all in: `Standard_D4ps_v6` (Azure Cobalt 100 ARM, 4 vCPU, 16 GB,
+  about $102 pay-as-you-go in West US 2/3 and East US) plus a 64 GB premium SSD (about $10) and
+  a static IP (about $4) is about $116; check regional availability at setup. Everything it runs
+  supports Linux arm64 (Node 24, the kit's arm64 bundle, Playwright's Chromium, the Cursor CLI).
+  x86 alternatives: `Standard_B4as_v2` (about $110 plus disk and IP, just over) or
+  `Standard_D2as_v5` (2 vCPU, 8 GB, about $63). The user runs `az login` and creates the Tailscale
+  auth key file themselves; credentials never go in the chat or the repo.
 - **Journaling** (2026-09-25): not Temporal. Fencing now, in the always-on lease work; the agent
   journal as its own stream right after routines lands.
 - **iPhone** (2026-09-25): deferred. When it resumes: native Swift, a free Apple ID (no push or
