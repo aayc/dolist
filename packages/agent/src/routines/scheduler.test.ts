@@ -146,6 +146,32 @@ describe("scheduling", () => {
     ]);
   });
 
+  it("adopts the latest unfinished run a restart picks back up, with a fresh time limit", async () => {
+    const storage = new MemoryStorageProvider();
+    const before = await harness({ storage });
+    const { id } = await before.write("Digest", routineFile({ schedule: "every day at 18:00" }));
+    before.scheduler.activate({ catchUp: true });
+    const { threadId } = before.scheduler.runNow(id);
+    const runId = before.runOf(threadId);
+    await Promise.all([
+      before.library.state.flush(),
+      before.records.flush(),
+      before.threads.flush(),
+    ]);
+    before.stop();
+
+    const after = await harness({ storage, now: sept(23, 12) });
+    expect(after.scheduler.isRunning(id)).toBe(false);
+    expect(after.scheduler.adoptRun(runId)).toBe(true);
+    expect(after.scheduler.isRunning(id)).toBe(true);
+    // A second run can't start while the adopted one is going.
+    expect(() => after.scheduler.runNow(id)).toThrow(/is running right now/);
+    expect(after.scheduler.adoptRun("run_unknown")).toBe(false);
+    after.finish(runId);
+    expect(after.scheduler.isRunning(id)).toBe(false);
+    expect(after.scheduler.adoptRun(runId)).toBe(false);
+  });
+
   it("starts from the next slot, without catching up, when the agent is switched back on", async () => {
     const h = await harness();
     await h.write("Kettle", WATCH);

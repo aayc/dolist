@@ -76,6 +76,15 @@ Vitest 5 benchmarks (`*.bench.ts`) assert p99 budgets inside the test and write
 | Agent-line decorations (agent text, markers), 150-line viewport | 1 ms |
 | Vault listing / search, 2 000 notes (warm) | see `packages/storage/src/storage.bench.ts` |
 | 3-way merge, 2 000-line note | see `packages/storage/src/storage.bench.ts` |
+| Agent journal: one flushed append to a 5 000-event journal | 50 ms |
+| Agent journal: union merge, 5 000 shared events + 50 per side | 80 ms |
+
+The journal append is constant in the journal's length (it writes and flushes only the new
+lines; local-fs versions journals by stat, so nothing is re-read or re-hashed): the cost is the
+flush, paid before an effectful tool call runs (the write-ahead record) and otherwise batched with
+the thread's debounced writes. Streaming text never touches the journal. Loading a 10 000-event
+journal through the thread store is asserted under 1.5 s in
+`packages/agent/test/persistence/thread-journal.test.ts`.
 
 Note: Vitest warns that module export getters add overhead inside benchmarks (Vite's module
 transform). That makes the numbers slightly pessimistic relative to production, which is fine for

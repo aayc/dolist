@@ -1,6 +1,7 @@
 /**
- * Restarts on the same vault: interrupted work becomes retryable, stale approvals are closed,
- * threads and artifacts survive, interrupted triage resumes, and a crash (no clean stop) recovers.
+ * Restarts on the same vault: interrupted work resumes from the journal, stale approvals are
+ * closed (and asked again), threads and artifacts survive, interrupted triage resumes, and a crash
+ * (no clean stop) recovers.
  */
 import type { ArtifactMessage } from "@ddl/core";
 import { describe, expect, it } from "vitest";
@@ -20,39 +21,42 @@ function approvalIdIn(
 }
 
 describe("restarts", () => {
-  it("a clean restart mid-approval marks the work interrupted; retry completes it", async () => {
+  it("a clean restart mid-approval resumes the work from the journal and asks again", async () => {
     const t = await fakeRuntime();
     const task = "Book a table for two on Friday";
     await t.writeDailyNote([`- [ ] ${task}`]);
     const waiting = await t.waitForStatus(task, "waiting_approval");
+    const firstApproval = approvalIdIn(t, task);
     const messagesBefore = t.messages(task).length;
 
     await t.restart();
-    const record = t.record(task)!;
-    expect(record).toMatchObject({
-      status: "failed",
-      summary: "Interrupted",
-      threadId: waiting.threadId,
-    });
-    expect(t.runtime.listApprovals({ status: "pending" })).toEqual([]);
     // Regression: stop() used to skip flushing the approval broker, losing this approval.
-    expect(t.runtime.listApprovals()[0]).toMatchObject({
+    expect(t.runtime.listApprovals().find((a) => a.id === firstApproval)).toMatchObject({
       status: "cancelled",
       decisionNote: "The agent stopped.",
     });
-    expect(t.runtime.getThread(record.threadId!)?.approvals.map((a) => a.id)).toEqual([
-      approvalIdIn(t, task),
-    ]);
+    const again = await t.waitForApproval();
+    expect(again.id).not.toBe(firstApproval);
+    expect(t.record(task)).toMatchObject({
+      status: "waiting_approval",
+      threadId: waiting.threadId,
+    });
     const thread = t.thread(task);
-    expect(thread.messages.length).toBeGreaterThanOrEqual(messagesBefore);
-    expect(thread.messages.some((m) => m.kind === "status" && m.text?.includes("Use Retry"))).toBe(
-      true,
-    );
+    expect(thread.messages.length).toBeGreaterThan(messagesBefore);
+    expect(
+      thread.messages.some(
+        (m) => m.kind === "status" && m.text === "Picking this back up after the agent restarted.",
+      ),
+    ).toBe(true);
+    expect(t.runtime.getThread(waiting.threadId!)?.approvals.map((a) => a.id)).toEqual([
+      firstApproval,
+      again.id,
+    ]);
 
-    await t.runtime.retryThread(record.threadId!);
     await t.approveNext();
     await t.waitForStatus(task, "done");
-    expect(t.kickoffs().at(-1)).toContain("This is a retry of an earlier attempt.");
+    // The session was restored, not started over: no second kickoff.
+    expect(t.kickoffs()).toHaveLength(1);
     expectAllGated(t);
   });
 
@@ -88,7 +92,7 @@ describe("restarts", () => {
     await t.waitForStatus(task, "done");
   });
 
-  it("recovers from a crash: active work fails as interrupted and the pending approval expires", async () => {
+  it("recovers from a crash: the pending approval expires and the work resumes, asking again", async () => {
     const t = await fakeRuntime();
     const task = "Order new running shoes";
     await t.writeDailyNote([`- [ ] ${task}`]);
@@ -105,12 +109,17 @@ describe("restarts", () => {
       if (i > 200) throw new Error("the sidecar state was never persisted");
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
+    const expiredId = approvalIdIn(t, task);
     await t.restart({ crash: true });
-    expect(t.record(task)).toMatchObject({ status: "failed", summary: "Interrupted" });
-    expect(t.runtime.listApprovals()[0]).toMatchObject({
+    expect(t.runtime.listApprovals().find((a) => a.id === expiredId)).toMatchObject({
       status: "expired",
       decisionNote: "The app restarted before a decision was made.",
     });
-    expect(t.runtime.listApprovals({ status: "pending" })).toEqual([]);
+    const again = await t.waitForApproval();
+    expect(again.id).not.toBe(expiredId);
+    await t.approveNext();
+    await t.waitForStatus(task, "done");
+    expect(t.kickoffs()).toHaveLength(1);
+    expectAllGated(t);
   });
 });

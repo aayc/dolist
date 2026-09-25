@@ -146,6 +146,69 @@ describe("two devices syncing through the sync service", { timeout: 30_000 * TIM
     expect(await settled(a, b)).toEqual({ "keep.md": "keep" });
   });
 
+  describe("an agent journal", () => {
+    const path = ".daily-do-list/state/journal/threads/thr_k3j9x0q2m1ab.jsonl";
+    const event = (id: string, seq: number, epoch = 0) =>
+      `${JSON.stringify({ v: 1, id, epoch, seq, at: NOW + seq, type: "title", title: id })}\n`;
+    const idsIn = (journal: string | undefined) =>
+      (journal ?? "")
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => (JSON.parse(line) as { id: string }).id);
+
+    it("appended on two devices at once ends as the same union on both, never a conflict copy", async () => {
+      const a = await device("a");
+      const b = await device("b");
+      await a.vault.append(path, event("evt_base", 1));
+      await settled(a, b);
+
+      await Promise.all([
+        (async () => {
+          for (let i = 0; i < 5; i++) await a.vault.append(path, event(`evt_a${i}`, 2 + i));
+        })(),
+        (async () => {
+          for (let i = 0; i < 5; i++) await b.vault.append(path, event(`evt_b${i}`, 2 + i, 1));
+        })(),
+      ]);
+
+      const files = await settled(a, b);
+      expect(Object.keys(files)).toEqual([path]);
+      expect(idsIn(files[path])).toEqual([
+        "evt_base",
+        ...[0, 1, 2, 3, 4].map((i) => `evt_a${i}`),
+        ...[0, 1, 2, 3, 4].map((i) => `evt_b${i}`),
+      ]);
+      for (const d of [a, b]) expect(d.engine.status().conflicts).toEqual([]);
+    });
+
+    it("from an old device reconnecting after appending offline keeps both devices' events", async () => {
+      const a = await device("a");
+      const b = await device("b");
+      await a.vault.append(path, event("evt_base", 1));
+      await settled(a, b);
+
+      // b goes offline and keeps appending under the old grant; a takes over with a new one.
+      await b.engine.stop();
+      await b.vault.append(path, event("evt_old1", 2) + event("evt_old2", 3));
+      await a.vault.append(path, event("evt_new1", 1, 1));
+      await a.vault.append(path, event("evt_new2", 2, 1));
+      await eventually(async () =>
+        expect(a.engine.status()).toMatchObject({ state: "idle", pendingChanges: 0 }),
+      );
+
+      b.engine.start(FAST);
+      const files = await settled(a, b);
+      expect(idsIn(files[path])).toEqual([
+        "evt_base",
+        "evt_old1",
+        "evt_old2",
+        "evt_new1",
+        "evt_new2",
+      ]);
+      expect(Object.keys(files)).toEqual([path]);
+    });
+  });
+
   it("syncs the agent's sidecar files but never the per-device sync snapshots", async () => {
     const a = await device("a");
     const b = await device("b");

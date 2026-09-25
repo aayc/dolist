@@ -20,6 +20,7 @@ import { ToolCallLedger } from "./ledger";
 import { OPENROUTER_PROVIDER, resolveOpenRouterModel, toPiThinkingLevel } from "./model";
 import { PiHarnessSession, type SessionLifecycle } from "./session";
 import { type AnyToolDefinition, guardDefinition, toolSpecToDefinition } from "./tools";
+import { seedTranscript } from "./transcript";
 
 export interface PiHarnessOptions {
   /** OpenRouter API key. Held in memory only. */
@@ -121,6 +122,10 @@ export class PiHarness implements Harness {
     });
     await resourceLoader.reload();
 
+    const sessionManager = SessionManager.inMemory(options.cwd);
+    if (options.transcript?.length) {
+      seedTranscript(sessionManager, options.transcript, model, Date.now());
+    }
     const { session, extensionsResult } = await createAgentSession({
       cwd: options.cwd,
       agentDir: this.agentDir,
@@ -130,7 +135,7 @@ export class PiHarness implements Harness {
       tools: toolNames,
       customTools: definitions,
       resourceLoader,
-      sessionManager: SessionManager.inMemory(options.cwd),
+      sessionManager,
       settingsManager,
     });
 

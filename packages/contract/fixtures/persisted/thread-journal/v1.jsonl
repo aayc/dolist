@@ -1,0 +1,25 @@
+{"v":1,"id":"evt_a01","epoch":0,"seq":1,"at":1790154000000,"type":"thread.created","thread":{"id":"thr_journal00001","taskId":"tsk_7fq2m9x0ab","notePath":"Daily/2026-09-23.md","title":"Send the venue a thank-you note in Slack","status":"idle","createdAt":1790154000000}}
+{"v":1,"id":"evt_a02","epoch":0,"seq":2,"at":1790154001000,"type":"status","status":"working"}
+{"v":1,"id":"evt_a03","epoch":0,"seq":3,"at":1790154001000,"type":"run.prompted","session":"thr_journal00001","text":"Task: \"Send the venue a thank-you note in Slack\"\nGoal: Send the note\n\nStart now."}
+{"v":1,"id":"evt_a04","epoch":0,"seq":4,"at":1790154002000,"type":"message","message":{"id":"msg_0001","author":"subagent:operator","createdAt":1790154002000,"kind":"text","role":"agent","text":"Drafting the note in Slack — merci! 午前中"}}
+{"v":1,"id":"evt_a05","epoch":0,"seq":5,"at":1790154003000,"type":"message","message":{"id":"msg_0002","author":"subagent:operator","createdAt":1790154003000,"kind":"tool_call","toolCallId":"call_01","toolName":"computer_press","label":"Press a control","input":{"app":"Slack","element":"e12"},"status":"running"}}
+{"v":1,"id":"evt_a06","epoch":0,"seq":6,"at":1790154003000,"type":"tool.requested","call":"call_01","tool":"computer_press","session":"thr_journal00001","input":{"app":"Slack","element":"e12"}}
+{"v":1,"id":"evt_a07","epoch":0,"seq":7,"at":1790154004000,"type":"tool.decided","call":"call_01","allowed":true,"via":"approval","approvalId":"apr_send01"}
+{"v":1,"id":"evt_a08","epoch":0,"seq":8,"at":1790154004000,"type":"tool.started","call":"call_01","tool":"computer_press","target":"Press Send in Slack","approvalId":"apr_send01"}
+{"v":1,"id":"evt_a09","epoch":0,"seq":9,"at":1790154005000,"type":"tool.finished","call":"call_01","outcome":"ok","output":"Pressed \"Send\"."}
+{"v":1,"id":"evt_a10","epoch":0,"seq":10,"at":1790154005000,"type":"message","message":{"id":"msg_0002","author":"subagent:operator","createdAt":1790154003000,"kind":"tool_call","toolCallId":"call_01","toolName":"computer_press","label":"Press a control","input":{"app":"Slack","element":"e12"},"status":"ok","resultPreview":"Pressed \"Send\".","endedAt":1790154005000}}
+{"v":1,"id":"evt_a11","epoch":0,"seq":11,"at":1790154005500,"type":"surface","surface":"computer"}
+{"v":1,"id":"evt_a12","epoch":0,"seq":12,"at":1790154006000,"type":"artifact","artifact":{"id":"art_note01","threadId":"thr_journal00001","title":"Thank-you note","kind":"markdown","mimeType":"text/markdown","path":".daily-do-list/artifacts/thr_journal00001/art_note01.md","size":64,"createdAt":1790154006000}}
+{"v":1,"id":"evt_a13","epoch":0,"seq":13,"at":1790154006000,"type":"message","message":{"id":"msg_0003","author":"subagent:operator","createdAt":1790154006000,"kind":"artifact","artifactId":"art_note01"}}
+{"v":1,"id":"evt_a14","epoch":0,"seq":14,"at":1790154006500,"type":"sources","sources":[{"url":"https://example.com/venue","title":"Example Venue"}]}
+{"v":1,"id":"evt_a15","epoch":0,"seq":15,"at":1790154007000,"type":"title","title":"Thank the venue in Slack"}
+{"v":1,"id":"evt_a16","epoch":0,"seq":16,"at":1790154008000,"type":"tool.requested","call":"call_02","tool":"computer_press","session":"thr_journal00001","input":{"app":"Slack","element":"e40"}}
+{"v":1,"id":"evt_a17","epoch":0,"seq":17,"at":1790154008000,"type":"tool.decided","call":"call_02","allowed":false,"reason":"User denied"}
+{"v":1,"id":"evt_a18","epoch":0,"seq":18,"at":1790154008000,"type":"tool.finished","call":"call_02","outcome":"blocked","output":"Blocked by safety policy: User denied"}
+{"v":1,"id":"evt_a19","epoch":0,"seq":19,"at":1790154009000,"type":"tool.requested","call":"call_03","tool":"computer_open_app","session":"thr_journal00001","input":{"app":"Slack"}}
+{"v":1,"id":"evt_a20","epoch":0,"seq":20,"at":1790154009000,"type":"tool.decided","call":"call_03","allowed":true,"via":"evaluator"}
+{"v":1,"id":"evt_a21","epoch":0,"seq":21,"at":1790154009000,"type":"tool.started","call":"call_03","tool":"computer_open_app","target":"Open Slack"}
+{"v":1,"id":"evt_a22","epoch":0,"seq":22,"at":1790154060000,"type":"tool.interrupted","call":"call_03"}
+{"v":1,"id":"evt_a23","epoch":0,"seq":23,"at":1790154060000,"type":"message","message":{"id":"msg_0004","author":"system","createdAt":1790154060000,"kind":"status","status":"done","text":"Sent"}}
+{"v":1,"id":"evt_a24","epoch":0,"seq":24,"at":1790154060000,"type":"status","status":"done"}
+{"v":1,"id":"evt_a25","epoch":0,"seq":25,"at":1790154061000,"type":"trim","keep":3}

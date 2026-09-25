@@ -4,11 +4,13 @@
  * parse with its persisted-format schema.
  */
 import {
+  decodePersistedThreadJournal,
   PersistedApprovalsFileSchema,
   PersistedRecordsFileSchema,
   PersistedRoutinesFileSchema,
   PersistedTaskStateFileSchema,
   PersistedThreadFileSchema,
+  persistedThreadIdFromJournalPath,
   ServerEventSchema,
 } from "@ddl/contract";
 import type { ServerEvent } from "@ddl/core";
@@ -59,6 +61,20 @@ function invalidEvents(t: FakeAgentRuntime): string[] {
 async function invalidFiles(t: FakeAgentRuntime): Promise<string[]> {
   const problems: string[] = [];
   for (const entry of await t.storage.list({ includeHidden: true, prefix: ".daily-do-list" })) {
+    const journalOf = persistedThreadIdFromJournalPath(entry.path);
+    if (journalOf) {
+      const read = decodePersistedThreadJournal(
+        (await t.storage.read(entry.path))!.content,
+        journalOf,
+      );
+      if (read.issues.length > 0 || read.newer !== null || !read.endsWithNewline) {
+        problems.push(`${entry.path}: ${JSON.stringify(read.issues)} newer=${read.newer}`);
+      }
+      if (!read.events.some((e) => e.type === "thread.created" || e.type === "thread.imported")) {
+        problems.push(`${entry.path}: no thread.created or thread.imported event`);
+      }
+      continue;
+    }
     const schema =
       entry.path.startsWith(".daily-do-list/threads/") && entry.path.endsWith(".json")
         ? PersistedThreadFileSchema
@@ -122,6 +138,11 @@ describe("wire and persistence contract under real traffic", () => {
     );
     expect(invalidEvents(t)).toEqual([]);
     expect(await invalidFiles(t)).toEqual([]);
+    const journals = await t.storage.list({
+      includeHidden: true,
+      prefix: ".daily-do-list/state/journal/threads",
+    });
+    expect(journals.length).toBeGreaterThan(0);
   });
 
   it("live-mode events with browser frames, blocks and failures are valid too", async () => {

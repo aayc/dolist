@@ -3,7 +3,7 @@
  * and the steering / follow-up messages (user replies, orchestrator messages, task edits, the
  * finish nudge). Round-trip tests keep this in sync with the prompt builders.
  */
-import { FINISH_NUDGE } from "../../prompts/subagent";
+import { FINISH_NUDGE, RESUME_NOTE } from "../../prompts/subagent";
 import { readJsonString } from "./text";
 
 export interface ParsedKickoff {
@@ -19,6 +19,8 @@ export interface ParsedKickoff {
   followUps: SteerMessage[];
   reassignment: boolean;
   retry: boolean;
+  /** Steps an earlier run was doing when the agent stopped (they may or may not have happened). */
+  uncertain: string[];
 }
 
 export type SteerMessage =
@@ -29,6 +31,7 @@ export type SteerMessage =
   | { kind: "other"; text: string };
 
 const RETRY_LINE = "This is a retry of an earlier attempt.";
+const UNCERTAIN_LINE = "The agent stopped while these steps were running";
 const REASSIGNMENT_LINE = "New assignment for the same task.";
 
 export function isKickoff(text: string): boolean {
@@ -47,10 +50,15 @@ export function parseKickoff(text: string): ParsedKickoff | null {
     followUps: [],
     reassignment: lines.includes(REASSIGNMENT_LINE),
     retry: lines.some((line) => line.startsWith(RETRY_LINE)),
+    uncertain: [],
   };
-  let block: "notes" | "history" | "followUps" | "instructions" | null = null;
+  let block: "notes" | "history" | "followUps" | "instructions" | "uncertain" | null = null;
   for (const line of lines) {
-    if (line.startsWith("Task: ")) {
+    if (line.startsWith(UNCERTAIN_LINE)) {
+      block = "uncertain";
+    } else if (block === "uncertain" && line.startsWith("- ")) {
+      kickoff.uncertain.push(readJsonString(line, 2)?.value ?? line.slice(2));
+    } else if (line.startsWith("Task: ")) {
       kickoff.task = readJsonString(line, 6)?.value ?? line.slice(6);
       block = null;
     } else if (line === "Notes under the task:") {
@@ -106,6 +114,8 @@ export function parseSteer(text: string): SteerMessage[] {
 function parseOne(part: string): SteerMessage | null {
   if (!part) return null;
   if (part === FINISH_NUDGE) return { kind: "nudge" };
+  // A session restored after a restart: nothing to adjust, the plan simply continues.
+  if (part === RESUME_NOTE) return null;
   const reply = "The user replied in the thread: ";
   if (part.startsWith(reply)) {
     return { kind: "user_reply", text: readJsonString(part, reply.length)?.value ?? part };

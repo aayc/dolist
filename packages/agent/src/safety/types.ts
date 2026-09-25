@@ -189,8 +189,21 @@ export interface SafetyGateOptions {
   approvalPolicy?(): ApprovalPolicy;
   /** Observe every verdict (logging, annotating the thread's tool-call message). */
   onVerdict?(call: ToolCallRequest, verdict: SafetyVerdict): void;
+  /** A call is about to be allowed: how, and what it does (the journal's write-ahead record). */
+  onAllowed?(call: ToolCallRequest, allowed: AllowedCall): void;
   approvalTimeoutMs?: number;
   logger?: Logger;
+}
+
+/** How the gate let a call through. */
+export interface AllowedCall {
+  /** The evaluator's description of the action. */
+  summary: string;
+  via: "evaluator" | "policy" | "grant" | "approval";
+  /** The approval request a person approved. */
+  approvalId?: string;
+  /** False for calls that change nothing (reads, searches, the agent's thread tools). */
+  effectful: boolean;
 }
 
 /** Plug directly into `HarnessSessionOptions.beforeToolCall`. Never throws; fails closed. */

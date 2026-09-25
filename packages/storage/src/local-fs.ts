@@ -10,9 +10,9 @@ import {
   silentLogger,
   type Unsubscribe,
 } from "@ddl/core";
-import { isBinaryPath, toStorableText } from "./file-types";
+import { isBinaryPath, isJournalPath, toStorableText } from "./file-types";
 import { IgnoreRules } from "./ignore-rules";
-import { readTextFile, writeFileAtomic } from "./internal/atomic-write";
+import { appendFileDurably, readTextFile, writeFileAtomic } from "./internal/atomic-write";
 import { ChangeTracker, type ChangeTrackerHost, type PathProbe } from "./internal/change-tracker";
 import { errorCode, errorMessage, isAccessError, isMissingError } from "./internal/fs-errors";
 import { KeyedMutex } from "./internal/keyed-mutex";
@@ -81,7 +81,10 @@ type Scope =
  * - Versions are content hashes (`contentVersion`), memoized by (path, mtime, size) so listing an
  *   unchanged vault doesn't re-read files. Binary formats and files over 16 MiB get a stat-based
  *   version instead: they can't round-trip through this text API, and hashing them would make the
- *   first listing of an attachment-heavy vault crawl.
+ *   first listing of an attachment-heavy vault crawl. So do the agent's journals, so that `append`
+ *   never re-reads (or re-hashes) the file it grows.
+ * - `append` writes at the end of the file and flushes it; it is not atomic (a crash can cut the
+ *   appended text short), which journal readers tolerate.
  * - `watch` starts a recursive fs watcher on first subscription. Own writes emit `self: true`
  *   events immediately; external changes emit `self: false` after a short per-path debounce.
  * - `.git`, `node_modules`, `.trash`, `.DS_Store`, editor temp files and our own temp files are
@@ -209,6 +212,45 @@ export class LocalFsStorageProvider implements StorageProvider {
       // A new file may have landed in an existing folder spelled differently (`notes/` → `Notes/`).
       const written = before ? p : await spelledOnDisk(root, requested, abs);
       const version = this.remember(written, stats, text);
+      this.tracking?.tracker.recordSelf(written, version);
+      this.emit({ kind: before ? "modified" : "created", path: written, version, self: true });
+      return {
+        path: written,
+        version,
+        mtime: toEpochMs(stats),
+        size: stats.size,
+        created: !before,
+      };
+    });
+  }
+
+  async append(path: string, content: string, options: WriteOptions = {}): Promise<WriteResult> {
+    const requested = toVaultPath(path);
+    const text = toStorableText(content);
+    const root = await this.rootPath();
+    return this.locks.run(lockKey(requested), async () => {
+      const { abs, real } = await this.locate(root, requested);
+      const p = real ? onDiskSpelling(root, requested, real) : requested;
+      const target = real ?? abs;
+      const before = real ? await statOrNull(real) : null;
+      if (before && !before.isFile()) throw new StorageError(`Not a file: "${p}"`, p);
+      if (options.ifMatch !== undefined) {
+        const current = before ? await this.currentVersion(p, target) : null;
+        const ok = options.ifMatch === null ? current === null : current === options.ifMatch;
+        if (!ok) throw new ConflictError(p, current);
+      }
+      await this.ensureFolder(dirname(target), p);
+      const stats = await appendFileDurably(target, text).catch((error: unknown) =>
+        Promise.reject(asInvalidIfTooLong(p, error)),
+      );
+      const written = before ? p : await spelledOnDisk(root, requested, abs);
+      let version: string;
+      if (usesStatVersion(written, stats.size)) version = this.rememberStat(written, stats);
+      else {
+        const loaded = await readTextFile(target);
+        if (!loaded) throw new NotFoundError(written);
+        version = this.remember(written, loaded.stats, loaded.content);
+      }
       this.tracking?.tracker.recordSelf(written, version);
       this.emit({ kind: before ? "modified" : "created", path: written, version, self: true });
       return {
@@ -664,7 +706,7 @@ function isInside(root: string, real: string): boolean {
 }
 
 function usesStatVersion(p: string, size: number): boolean {
-  return size > MAX_CONTENT_HASH_BYTES || isBinaryPath(p);
+  return size > MAX_CONTENT_HASH_BYTES || isBinaryPath(p) || isJournalPath(p);
 }
 
 /** `Note.md` → `note.md` on a case-insensitive disk: same file, so not a conflict. */
