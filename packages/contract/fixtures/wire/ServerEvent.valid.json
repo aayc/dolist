@@ -204,6 +204,98 @@
     }
   },
   {
+    "name": "orchestrator.activity: noticed a line, before it settles",
+    "value": {
+      "type": "orchestrator.activity",
+      "activity": {
+        "phase": "noticed",
+        "trigger": {
+          "kind": "note",
+          "notePath": "Daily/2026-09-25.md",
+          "lines": [{ "line": 4, "text": "find a plumber for Saturday" }],
+          "summary": "“find a plumber for Saturday”"
+        },
+        "startedAt": 1790000000000
+      }
+    }
+  },
+  {
+    "name": "orchestrator.activity: thinking about two tasks",
+    "value": {
+      "type": "orchestrator.activity",
+      "activity": {
+        "phase": "thinking",
+        "turnId": "msg_k3j9x0q2m1ab",
+        "trigger": {
+          "kind": "task",
+          "notePath": "Daily/2026-09-25.md",
+          "lines": [
+            { "line": 2, "text": "Book dentist appointment next week" },
+            { "line": 3, "text": "Renew passport" }
+          ],
+          "summary": "2 tasks"
+        },
+        "startedAt": 1790000001200
+      }
+    }
+  },
+  {
+    "name": "orchestrator.activity: done, added three tasks",
+    "value": {
+      "type": "orchestrator.activity",
+      "activity": {
+        "phase": "idle",
+        "turnId": "msg_k3j9x0q2m1ab",
+        "trigger": {
+          "kind": "note",
+          "notePath": "Daily/2026-09-25.md",
+          "lines": [{ "line": 6, "text": "plan the garden party" }],
+          "summary": "“plan the garden party”"
+        },
+        "startedAt": 1790000001200,
+        "outcome": { "kind": "tasks_added", "count": 3, "text": "Send the invitations" }
+      }
+    }
+  },
+  {
+    "name": "orchestrator.activity: replied in its chat",
+    "value": {
+      "type": "orchestrator.activity",
+      "activity": {
+        "phase": "idle",
+        "turnId": "msg_f6g7h8i9j0kl",
+        "trigger": { "kind": "message", "summary": "your message" },
+        "startedAt": 1790000009000,
+        "outcome": {
+          "kind": "replied",
+          "threadId": "thr_orchestrator",
+          "text": "A researcher is finding dentist appointments for next week."
+        }
+      }
+    }
+  },
+  {
+    "name": "orchestrator.activity: waiting for an approval",
+    "value": {
+      "type": "orchestrator.activity",
+      "activity": {
+        "phase": "acting",
+        "turnId": "msg_f6g7h8i9j0kl",
+        "trigger": { "kind": "routine", "summary": "routine “Morning briefing”" },
+        "startedAt": 1790000009000,
+        "outcome": {
+          "kind": "asked_approval",
+          "threadId": "thr_orchestrator",
+          "text": "Create routine “Morning briefing”"
+        }
+      }
+    }
+  },
+  {
+    "name": "orchestrator.activity: idle",
+    "value": { "type": "orchestrator.activity", "activity": { "phase": "idle" } }
+  },
+  {
     "name": "surface.frame with a click action",
     "value": {
       "type": "surface.frame",

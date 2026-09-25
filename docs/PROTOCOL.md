@@ -660,6 +660,7 @@ Server → client ([`ServerEvent`](#serverevent)); clients ignore types they don
 | `thread.delta` | [`ThreadDeltaEvent`](#threaddeltaevent) | Streaming text appended to a `streaming` text message (droppable; the final message repairs gaps). |
 | `approval.upsert` | [`ApprovalUpsertEvent`](#approvalupsertevent) | An approval request was created or decided. |
 | `agent.status` | [`AgentStatusEvent`](#agentstatusevent) | The agent status changed. |
+| `orchestrator.activity` | [`OrchestratorActivityEvent`](#orchestratoractivityevent) | What the orchestrator is doing changed (coalesced; never per keystroke). `noticed` events name lines before any turn; a turn goes `reading` → `thinking` ⇄ `acting` → `idle` with its outcome, all with the same `turnId`. |
 | `surface.frame` | [`SurfaceFrameEvent`](#surfaceframeevent) | A live surface frame; only sent to clients subscribed to that thread's surface (droppable). |
 | `settings.changed` | [`SettingsChangedEvent`](#settingschangedevent) | The effective settings changed. |
 | `routines.changed` | [`RoutinesChangedEvent`](#routineschangedevent) | Every routine, whenever one changed (its file, its schedule, its last run). |
@@ -904,6 +905,64 @@ _Tolerant: clients must ignore keys they don't know._
 The id of the orchestrator's own chat: a thread with `taskId` and `notePath` null that records each orchestrator turn (a `status` line saying what woke it, its streamed text, its tool calls, whose inputs carry the `taskId` they act on) and takes the user's direct messages (`POST /api/threads/:id/messages`). Its status is `working` during a turn, `idle` otherwise.
 
 Type: `"thr_orchestrator"`
+
+#### OrchestratorPhase
+
+`noticed`: the watcher saw lines that may be requests (before they settle, before any turn); `reading`: a turn builds its digest; `thinking`: the model works on it; `acting`: its tools run; `idle`: nothing going on (right after a turn, with its outcome).
+
+Type: `"idle"` | `"noticed"` | `"reading"` | `"thinking"` | `"acting"`
+
+#### OrchestratorTriggerKind
+
+What woke the orchestrator: lines of a note, tasks, a message (in its chat or a task's thread), a routine run, an approval, or something else (a subagent's report).
+
+Type: `"note"` | `"task"` | `"message"` | `"routine"` | `"approval"` | `"other"`
+
+#### OrchestratorTrigger
+
+What woke the orchestrator.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `kind` | [`OrchestratorTriggerKind`](#orchestratortriggerkind) | yes |  |
+| `notePath` | string (1–4096 chars) | no | Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments). |
+| `lines` | object[] | no | The lines that woke it (0-based, as they were: trimmed text), for anchoring chips in the editor. At most 20, each at most 300 characters. |
+| `summary` | string | yes | Short and human (at most 80 characters), e.g. `your note` or `“call mom tomorrow”`. |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### OrchestratorOutcomeKind
+
+What a turn did: nothing, added tasks, edited the note, replied, started subagents, made a routine, or asked for approval.
+
+Type: `"no_action"` | `"tasks_added"` | `"note_edited"` | `"replied"` | `"delegated"` | `"routine_created"` | `"asked_approval"`
+
+#### OrchestratorOutcome
+
+The result of a turn, for the chip shown briefly after it.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `kind` | [`OrchestratorOutcomeKind`](#orchestratoroutcomekind) | yes |  |
+| `count` | integer (≥ 0) | no |  |
+| `threadId` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | no | The thread it created or acted in, when there is one. |
+| `text` | string | no | One short line for the chip's tooltip (at most 160 characters). |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### OrchestratorActivity
+
+What the orchestrator is doing: noticed lines, a turn's phase, or idle with the outcome of the turn that just ended.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `phase` | [`OrchestratorPhase`](#orchestratorphase) | yes |  |
+| `turnId` | string (1–200 chars) | no | The orchestrator chat message that starts this turn (to open it). |
+| `trigger` | [`OrchestratorTrigger`](#orchestratortrigger) | no |  |
+| `startedAt` | integer (≥ 0) | no | Epoch milliseconds. |
+| `outcome` | [`OrchestratorOutcome`](#orchestratoroutcome) | no | Present right after a turn ends (phase `idle`), shown briefly; also while the turn waits for the user's approval (phase `acting`, kind `asked_approval`). |
+
+_Tolerant: clients must ignore keys they don't know._
 
 #### Thread
 
@@ -1693,6 +1752,7 @@ The agent runtime's state (also pushed as `agent.status`).
 | `problem` | string | no | Why the agent cannot run, when it can't. |
 | `placement` | [`AgentPlacementStatus`](#agentplacementstatus) | no | Where the agent runs for this device, and who runs it now. |
 | `readiness` | [`AgentReadiness`](#agentreadiness) | no | This daemon's own readiness to run the agent. |
+| `orchestrator` | [`OrchestratorActivity`](#orchestratoractivity) | no | What the orchestrator is doing now, for a client joining mid-turn (then `orchestrator.activity` events). |
 
 _Tolerant: clients must ignore keys they don't know._
 
@@ -2052,6 +2112,17 @@ The agent status changed.
 
 _Tolerant: clients must ignore keys they don't know._
 
+#### OrchestratorActivityEvent
+
+What the orchestrator is doing changed (coalesced; never per keystroke). `noticed` events name lines before any turn; a turn goes `reading` → `thinking` ⇄ `acting` → `idle` with its outcome, all with the same `turnId`.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `type` | `"orchestrator.activity"` | yes |  |
+| `activity` | [`OrchestratorActivity`](#orchestratoractivity) | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
 #### SurfaceFrameEvent
 
 A live surface frame; only sent to clients subscribed to that thread's surface (droppable).
@@ -2121,7 +2192,7 @@ _Tolerant: clients must ignore keys they don't know._
 
 Every server → client WebSocket message, discriminated by `type`.
 
-Type: [`ServerHelloEvent`](#serverhelloevent) | [`VaultChangedEvent`](#vaultchangedevent) | [`TaskRecordsEvent`](#taskrecordsevent) | [`TaskRecordEvent`](#taskrecordevent) | [`ThreadUpsertEvent`](#threadupsertevent) | [`ThreadMessageEvent`](#threadmessageevent) | [`ThreadDeltaEvent`](#threaddeltaevent) | [`ApprovalUpsertEvent`](#approvalupsertevent) | [`AgentStatusEvent`](#agentstatusevent) | [`SurfaceFrameEvent`](#surfaceframeevent) | [`SettingsChangedEvent`](#settingschangedevent) | [`RoutinesChangedEvent`](#routineschangedevent) | [`RoutineNotificationEvent`](#routinenotificationevent) | [`ServerErrorEvent`](#servererrorevent)
+Type: [`ServerHelloEvent`](#serverhelloevent) | [`VaultChangedEvent`](#vaultchangedevent) | [`TaskRecordsEvent`](#taskrecordsevent) | [`TaskRecordEvent`](#taskrecordevent) | [`ThreadUpsertEvent`](#threadupsertevent) | [`ThreadMessageEvent`](#threadmessageevent) | [`ThreadDeltaEvent`](#threaddeltaevent) | [`ApprovalUpsertEvent`](#approvalupsertevent) | [`AgentStatusEvent`](#agentstatusevent) | [`OrchestratorActivityEvent`](#orchestratoractivityevent) | [`SurfaceFrameEvent`](#surfaceframeevent) | [`SettingsChangedEvent`](#settingschangedevent) | [`RoutinesChangedEvent`](#routineschangedevent) | [`RoutineNotificationEvent`](#routinenotificationevent) | [`ServerErrorEvent`](#servererrorevent)
 
 #### ClientHelloEvent
 

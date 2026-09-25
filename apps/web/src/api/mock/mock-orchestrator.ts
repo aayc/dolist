@@ -2,6 +2,9 @@ import {
   createId,
   ORCHESTRATOR_THREAD_ID,
   ORCHESTRATOR_THREAD_TITLE,
+  type OrchestratorActivity,
+  type OrchestratorOutcome,
+  type OrchestratorTrigger,
   type ServerEvent,
   summarizeThread,
   type TaskAgentStatus,
@@ -20,25 +23,30 @@ export interface MockOrchestratorHost {
 }
 
 interface Turn {
-  trigger: string;
+  /** The status line that opens it in the chat. */
+  label: string;
+  trigger: OrchestratorTrigger;
   /** How long the model "thinks" before acting. */
   delayMs: number;
-  run: (signal: AbortSignal) => Promise<void>;
+  run: (signal: AbortSignal) => Promise<OrchestratorOutcome>;
 }
 
+const READING_MS = 120;
 const DECISION_DELAY_MS = 250;
 const REPLY_DELAY_MS = 1_500;
 
 /**
  * The orchestrator's own chat for the mock daemon: each simulated decision is a turn (a status
  * line saying what woke it, its tool calls with the task they act on), and the user can write to
- * it and get a streamed reply. Turns run one at a time, like the real orchestrator's.
+ * it and get a streamed reply. Turns run one at a time, like the real orchestrator's, and report
+ * their phases as `orchestrator.activity`.
  */
 export class MockOrchestrator {
   readonly thread: Thread;
   private readonly host: MockOrchestratorHost;
   private readonly turns: Turn[] = [];
   private current: AbortController | null = null;
+  private activityNow: OrchestratorActivity = { phase: "idle" };
 
   constructor(host: MockOrchestratorHost) {
     this.host = host;
@@ -57,15 +65,28 @@ export class MockOrchestrator {
     };
   }
 
+  /** What it is doing now (`AgentStatusResponse.orchestrator`). */
+  get activity(): OrchestratorActivity {
+    return this.activityNow;
+  }
+
   /** A new task was handed to a subagent. */
   delegated(input: {
     notePath: string;
     taskId: string;
+    threadId: string;
+    line: number;
     text: string;
     subagent: string;
     comment: string;
   }): void {
-    this.enqueue(`${input.notePath} changed: 1 task`, async (signal) => {
+    const trigger: OrchestratorTrigger = {
+      kind: "task",
+      notePath: input.notePath,
+      lines: [{ line: input.line, text: input.text }],
+      summary: quoted(input.text),
+    };
+    this.enqueue(`${input.notePath} changed: 1 task`, trigger, async (signal) => {
       await this.tool(
         "post_comment",
         "Comment on task",
@@ -80,13 +101,15 @@ export class MockOrchestrator {
         `Subagent started for ${input.taskId}.`,
         signal,
       );
+      return { kind: "delegated", count: 1, threadId: input.threadId, text: input.text };
     });
   }
 
   /** A subagent's work ended; the orchestrator looks at the report and leaves it be. */
   finished(text: string, status: TaskAgentStatus): void {
     const outcome = status === "done" ? "finished" : status === "failed" ? "failed" : "stopped";
-    this.enqueue(`“${excerpt(text)}” ${outcome}`, async () => {});
+    const label = `“${excerpt(text)}” ${outcome}`;
+    this.enqueue(label, { kind: "other", summary: label }, async () => ({ kind: "no_action" }));
   }
 
   /** The user wrote in the chat. */
@@ -101,7 +124,12 @@ export class MockOrchestrator {
     });
     this.enqueue(
       "You wrote to me",
-      (signal) => this.say(this.replyTo(text), signal),
+      { kind: "message", summary: "your message" },
+      async (signal) => {
+        const reply = this.replyTo(text);
+        await this.say(reply, signal);
+        return { kind: "replied", threadId: this.thread.id, text: excerpt(reply) };
+      },
       REPLY_DELAY_MS,
     );
   }
@@ -123,8 +151,13 @@ export class MockOrchestrator {
     return "Got it — I'll keep that in mind for your tasks.";
   }
 
-  private enqueue(trigger: string, run: Turn["run"], delayMs = DECISION_DELAY_MS): void {
-    this.turns.push({ trigger, delayMs, run });
+  private enqueue(
+    label: string,
+    trigger: OrchestratorTrigger,
+    run: Turn["run"],
+    delayMs = DECISION_DELAY_MS,
+  ): void {
+    this.turns.push({ label, trigger, delayMs, run });
     if (!this.current) void this.drain();
   }
 
@@ -134,16 +167,31 @@ export class MockOrchestrator {
       const controller = new AbortController();
       this.current = controller;
       this.setStatus("working");
-      this.push(this.statusLine("working", turn.trigger));
+      const opening = this.statusLine("working", turn.label);
+      this.push(opening);
+      const base = { turnId: opening.id, trigger: turn.trigger, startedAt: Date.now() };
+      this.setActivity({ phase: "reading", ...base });
+      let outcome: OrchestratorOutcome | undefined;
       try {
+        await this.host.sleep(READING_MS, controller.signal);
+        this.setActivity({ phase: "thinking", ...base });
         await this.host.sleep(turn.delayMs, controller.signal);
-        await turn.run(controller.signal);
+        outcome = await turn.run(controller.signal);
       } catch {
         if (controller.signal.aborted) this.stopped();
       }
       this.current = null;
       this.setStatus("idle");
+      this.setActivity({ phase: "idle", ...base, ...(outcome ? { outcome } : {}) });
     }
+  }
+
+  private setActivity(activity: OrchestratorActivity): void {
+    if (activity.phase === this.activityNow.phase && activity.turnId === this.activityNow.turnId) {
+      return;
+    }
+    this.activityNow = activity;
+    this.host.emit({ type: "orchestrator.activity", activity });
   }
 
   private stopped(): void {
@@ -169,6 +217,13 @@ export class MockOrchestrator {
     resultPreview: string,
     signal: AbortSignal,
   ): Promise<void> {
+    const { turnId, trigger, startedAt } = this.activityNow;
+    this.setActivity({
+      phase: "acting",
+      ...(turnId ? { turnId } : {}),
+      ...(trigger ? { trigger } : {}),
+      ...(startedAt !== undefined ? { startedAt } : {}),
+    });
     const message: ToolCallMessage = {
       id: createId("msg"),
       kind: "tool_call",
@@ -254,4 +309,8 @@ function capabilityOf(subagent: string): string {
 
 function excerpt(text: string): string {
   return text.length > 60 ? `${text.slice(0, 59)}…` : text;
+}
+
+function quoted(text: string): string {
+  return `“${excerpt(text)}”`;
 }

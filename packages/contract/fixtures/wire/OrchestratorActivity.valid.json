@@ -1,0 +1,92 @@
+[
+  { "name": "idle, nothing going on", "value": { "phase": "idle" } },
+  {
+    "name": "noticed two lines of a note",
+    "value": {
+      "phase": "noticed",
+      "trigger": {
+        "kind": "note",
+        "notePath": "Daily/2026-09-25.md",
+        "lines": [
+          { "line": 4, "text": "find a plumber for Saturday" },
+          { "line": 7, "text": "What's the tallest building in NYC?" }
+        ],
+        "summary": "2 lines in your note"
+      },
+      "startedAt": 1790000000000
+    }
+  },
+  {
+    "name": "reading, woken by a line",
+    "value": {
+      "phase": "reading",
+      "turnId": "msg_k3j9x0q2m1ab",
+      "trigger": {
+        "kind": "note",
+        "notePath": "Daily/2026-09-25.md",
+        "lines": [{ "line": 4, "text": "find a plumber for Saturday" }],
+        "summary": "“find a plumber for Saturday”"
+      },
+      "startedAt": 1790000001200
+    }
+  },
+  {
+    "name": "acting on a subagent's report",
+    "value": {
+      "phase": "acting",
+      "turnId": "msg_q1w2e3r4t5y6",
+      "trigger": { "kind": "other", "summary": "“Book dentist” finished" },
+      "startedAt": 1790000009000
+    }
+  },
+  {
+    "name": "done: started a task",
+    "value": {
+      "phase": "idle",
+      "turnId": "msg_k3j9x0q2m1ab",
+      "trigger": {
+        "kind": "note",
+        "notePath": "Daily/2026-09-25.md",
+        "lines": [{ "line": 4, "text": "find a plumber for Saturday" }],
+        "summary": "“find a plumber for Saturday”"
+      },
+      "startedAt": 1790000001200,
+      "outcome": {
+        "kind": "delegated",
+        "count": 1,
+        "threadId": "thr_k3j9x0q2m1ab",
+        "text": "Find a plumber available on Saturday"
+      }
+    }
+  },
+  {
+    "name": "done: nothing to do",
+    "value": {
+      "phase": "idle",
+      "turnId": "msg_k3j9x0q2m1ab",
+      "trigger": {
+        "kind": "note",
+        "notePath": "Daily/2026-09-25.md",
+        "lines": [{ "line": 9, "text": "Reminder: the café opens at 8 ☕" }],
+        "summary": "“Reminder: the café opens at 8 ☕”"
+      },
+      "startedAt": 1790000001200,
+      "outcome": { "kind": "no_action" }
+    }
+  },
+  {
+    "name": "done: made a routine",
+    "value": {
+      "phase": "idle",
+      "turnId": "msg_k3j9x0q2m1ab",
+      "trigger": {
+        "kind": "note",
+        "notePath": "Daily/2026-09-25.md",
+        "lines": [{ "line": 2, "text": "every morning, brief me on the news" }],
+        "summary": "“every morning, brief me on the news”"
+      },
+      "startedAt": 1790000001200,
+      "outcome": { "kind": "routine_created", "text": "Routine “Morning briefing”" }
+    }
+  }
+]

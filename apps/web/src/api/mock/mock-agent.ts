@@ -422,6 +422,8 @@ export class MockAgent {
       this.orchestrator.delegated({
         notePath: record.notePath,
         taskId: job.taskId,
+        threadId: thread.id,
+        line: record.line,
         text: record.text,
         subagent: script.subagent,
         comment,
@@ -867,6 +869,7 @@ export class MockAgent {
         capabilities: { shell: false, browser: true, computer: true },
         ...(computerAccess ? { computerAccess } : {}),
       },
+      orchestrator: this.orchestrator.activity,
     };
   }
 
