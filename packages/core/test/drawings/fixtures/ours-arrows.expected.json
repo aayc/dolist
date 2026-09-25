@@ -1,0 +1,135 @@
+{
+  "about": "Arrows bound at both ends, reversed, double-headed and headless; unbound arrows near shapes or nothing; an elbow arrow; a line.",
+  "title": "ours-arrows",
+  "parse": {
+    "readable": true,
+    "compressed": false,
+    "problems": [],
+    "frontmatter": {
+      "excalidraw-plugin": "parsed",
+      "tags": "[excalidraw]"
+    },
+    "sections": ["", "# Excalidraw Data", "## Text Elements", "## Drawing"],
+    "textElements": [
+      {
+        "id": "aText",
+        "text": "Start"
+      },
+      {
+        "id": "bText",
+        "text": "Decide?"
+      },
+      {
+        "id": "cText",
+        "text": "Done"
+      },
+      {
+        "id": "side",
+        "text": "Side note"
+      },
+      {
+        "id": "bcText",
+        "text": "yes"
+      }
+    ],
+    "elements": [
+      {
+        "id": "a",
+        "type": "rectangle"
+      },
+      {
+        "id": "aText",
+        "type": "text"
+      },
+      {
+        "id": "b",
+        "type": "diamond"
+      },
+      {
+        "id": "bText",
+        "type": "text"
+      },
+      {
+        "id": "c",
+        "type": "rectangle"
+      },
+      {
+        "id": "cText",
+        "type": "text"
+      },
+      {
+        "id": "side",
+        "type": "text"
+      },
+      {
+        "id": "ab",
+        "type": "arrow"
+      },
+      {
+        "id": "bc",
+        "type": "arrow"
+      },
+      {
+        "id": "bcText",
+        "type": "text"
+      },
+      {
+        "id": "back",
+        "type": "arrow"
+      },
+      {
+        "id": "both",
+        "type": "arrow"
+      },
+      {
+        "id": "plain",
+        "type": "arrow"
+      },
+      {
+        "id": "loose",
+        "type": "arrow"
+      },
+      {
+        "id": "halfway",
+        "type": "arrow"
+      },
+      {
+        "id": "stray",
+        "type": "arrow"
+      },
+      {
+        "id": "elbow",
+        "type": "arrow"
+      },
+      {
+        "id": "divider",
+        "type": "line"
+      }
+    ],
+    "texts": [
+      {
+        "id": "aText",
+        "text": "Start"
+      },
+      {
+        "id": "bText",
+        "text": "Decide?"
+      },
+      {
+        "id": "cText",
+        "text": "Done"
+      },
+      {
+        "id": "side",
+        "text": "Side note"
+      },
+      {
+        "id": "bcText",
+        "text": "yes"
+      }
+    ],
+    "files": []
+  },
+  "description": "Drawing “ours-arrows” (899×700 px, 18 elements)\nText: “Side note”\nShapes: rectangle “Start”, diamond “Decide?”, rectangle “Done”\nArrows: “Start” → “Decide?”, “Decide?” → “Done” labeled “yes”, “Start” → “Done”, “Decide?” ↔ “Side note”, “Start” — “Decide?”, arrow from near “Start” to near “Done”, arrow from near “Done”, arrow, “Done” → “Side note”\nLines: 1 line, bottom left",
+  "roundTrip": "ours-arrows.excalidraw.md"
+}

@@ -168,6 +168,24 @@ export function uniqueDrawingPath(
   }
 }
 
+const ELEMENT_ID_ALPHABET = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+/**
+ * A new element id as the plugin makes them: 8 characters from [0-9a-zA-Z]. The plugin reads
+ * `## Text Elements` references as exactly 8 characters and gives longer ids (Excalidraw's) new
+ * ones when it opens the file; Obsidian block references allow no `_`.
+ */
+export function newDrawingElementId(): string {
+  const bytes = new Uint8Array(8);
+  const crypto = (globalThis as { crypto?: { getRandomValues(array: Uint8Array): Uint8Array } })
+    .crypto;
+  if (crypto?.getRandomValues) crypto.getRandomValues(bytes);
+  else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  let id = "";
+  for (const byte of bytes) id += ELEMENT_ID_ALPHABET[byte % ELEMENT_ID_ALPHABET.length];
+  return id;
+}
+
 /** The drawing's name, for titles: `Excalidraw/Plan.excalidraw.md` → `Plan`. */
 export function drawingTitleFromPath(path: string): string {
   return basename(path).replace(/(\.excalidraw)?(\.md)?$/i, "");

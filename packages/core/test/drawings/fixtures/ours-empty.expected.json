@@ -1,0 +1,20 @@
+{
+  "about": "An empty drawing as serializeDrawingFile writes a new one.",
+  "title": "ours-empty",
+  "parse": {
+    "readable": true,
+    "compressed": false,
+    "problems": [],
+    "frontmatter": {
+      "excalidraw-plugin": "parsed",
+      "tags": "[excalidraw]"
+    },
+    "sections": ["", "# Excalidraw Data", "## Text Elements", "## Drawing"],
+    "textElements": [],
+    "elements": [],
+    "texts": [],
+    "files": []
+  },
+  "description": "Drawing “ours-empty” (empty)",
+  "roundTrip": "ours-empty.excalidraw.md"
+}

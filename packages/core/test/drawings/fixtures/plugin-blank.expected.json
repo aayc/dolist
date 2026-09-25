@@ -1,0 +1,20 @@
+{
+  "about": "A new drawing as the plugin creates it: no data sections, compressed, no files key, no final newline.",
+  "title": "plugin-blank",
+  "parse": {
+    "readable": true,
+    "compressed": true,
+    "problems": [],
+    "frontmatter": {
+      "excalidraw-plugin": "parsed",
+      "tags": "[excalidraw]"
+    },
+    "sections": ["", "## Drawing"],
+    "textElements": [],
+    "elements": [],
+    "texts": [],
+    "files": []
+  },
+  "description": "Drawing “plugin-blank” (empty)",
+  "roundTrip": "plugin-blank.roundtrip.excalidraw.md"
+}

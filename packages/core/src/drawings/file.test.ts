@@ -7,6 +7,7 @@ import {
   drawingTitleFromPath,
   isDrawingMarkdown,
   isDrawingPath,
+  newDrawingElementId,
   newDrawingName,
   parseDrawingFile,
   serializeDrawingFile,
@@ -513,6 +514,12 @@ describe("drawing paths and names", () => {
     const taken = new Set(["Excalidraw/A.excalidraw.md", "Excalidraw/A_0.excalidraw.md"]);
     expect(uniqueDrawingPath("A", (p) => taken.has(p))).toBe("Excalidraw/A_1.excalidraw.md");
     expect(uniqueDrawingPath("B", (p) => taken.has(p))).toBe("Excalidraw/B.excalidraw.md");
+  });
+
+  it("makes element ids like the plugin: 8 letters and digits", () => {
+    const ids = new Set(Array.from({ length: 200 }, () => newDrawingElementId()));
+    expect(ids.size).toBe(200);
+    for (const id of ids) expect(id).toMatch(/^[0-9A-Za-z]{8}$/);
   });
 
   it("titles a drawing by its file name", () => {
