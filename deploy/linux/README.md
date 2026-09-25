@@ -47,10 +47,12 @@ target platform, and lays them out as the daemon expects: it serves `web/dist` f
 
 Check a bundle without installing it: `deploy/linux/smoke-test.sh
 deploy/linux/build/ddl-linux-x64.tar.gz` unpacks it into a temporary folder, starts the sync
-service and the daemon (mock agent) on free loopback ports with a temporary home, checks health,
-the web app, a note syncing through the sync service and the agent lease, and stops both. CI runs
-it and then installs the bundle with `setup.sh` on a fresh runner (`setup-test.sh`); see
-[docs/CI.md](../../docs/CI.md).
+service and the daemon (mock agent, the `config.json` that `setup.sh` writes) on free loopback
+ports with a temporary home, checks health, the guards, the web app, a note syncing through the
+sync service, the agent running as the always-on machine, and pairing a device end to end
+(`pair`, `POST /api/pair`, `devices`, `revoke`), and stops both. CI runs it for x64 and arm64 and
+then installs each bundle with `setup.sh` on a fresh runner of its architecture
+(`setup-test.sh`); see [docs/CI.md](../../docs/CI.md).
 
 ## Install
 

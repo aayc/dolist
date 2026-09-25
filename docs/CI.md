@@ -168,26 +168,39 @@ Swift Testing needs.
 
 ## Linux bundle (`linux-bundle.yml`)
 
-The always-on machine's kit (`deploy/linux`, see [ALWAYS_ON.md](./ALWAYS_ON.md)), on
-`ubuntu-latest`, only when the kit, the daemon, the sync service, the web app or a package they
-bundle change (the two path lists in the workflow must stay in sync).
+The always-on machine's kit (`deploy/linux`, see [ALWAYS_ON.md](./ALWAYS_ON.md)), only when the
+kit, the daemon, the sync service, the web app or a package they bundle change (the two path
+lists in the workflow must stay in sync). Both jobs run for x64 on `ubuntu-latest` and for arm64
+on `ubuntu-24.04-arm` (GitHub's arm64 runners; the recommended Azure size is Arm64), each on its
+own architecture, so there are four checks:
 
-- `bundle` ("Linux bundle (smoke test)") builds `ddl-linux-x64.tar.gz` with
-  `deploy/linux/build-bundle.sh`, then `deploy/linux/smoke-test.sh` unpacks it into a temporary
-  folder and starts the sync service and the daemon (`DDL_AGENT_MODE=mock`, a temporary
-  `DDL_HOME` and vault, free loopback ports, sync on, a remote host configured).
-  `smoke-check.mjs` checks both health endpoints, the token and Host guards, the built web app
-  served to the loopback Host, a note reaching the sync service, and the agent holding the lease;
-  both processes must then stop cleanly on SIGTERM. The bundle is uploaded as the `ddl-linux-x64`
-  artifact (kept 7 days).
-- `setup` ("Linux setup kit (systemd)") installs that bundle on a fresh runner (a disposable VM
-  with systemd) with `deploy/linux/setup-test.sh`: it runs `setup.sh` twice (the second run must
-  change nothing), checks the service user, the `0700` folders and `0600` secrets, `config.json`,
-  the root-owned release, `systemd-analyze verify` on the units, starts both services, checks
-  their sandbox from inside (no new privileges, read-only system, no `/home`, private `/tmp`, only
-  their own folders writable), and checks that no token reached `setup.sh`'s output or the
-  journal. It runs only with `CI=true` or `DDL_SETUP_TEST_DISPOSABLE=1`; the kit's README shows how
-  to run it in an OrbStack machine.
+| Check | Runner |
+| --- | --- |
+| `Linux bundle (x64, smoke test)`, `Linux setup kit (x64, systemd)` | `ubuntu-latest` |
+| `Linux bundle (arm64, smoke test)`, `Linux setup kit (arm64, systemd)` | `ubuntu-24.04-arm` |
+
+- `bundle` builds `ddl-linux-<arch>.tar.gz` with `deploy/linux/build-bundle.sh`, then
+  `deploy/linux/smoke-test.sh` unpacks it into a temporary folder and starts the sync service and
+  the daemon (`DDL_AGENT_MODE=mock`, a temporary `DDL_HOME` and vault, free loopback ports, and
+  the `config.json` that `setup.sh` writes: always-on placement, a remote host, the local sync
+  service). `smoke-check.mjs` checks both health endpoints; the token, Host and proxy-header
+  guards; the built web app on the loopback Host; a note reaching the sync service; the agent
+  running as the always-on machine (placement `always_on_host`, lease held with priority
+  `host`); and pairing: the pairing page on the remote Host (no token), a code from the `pair`
+  CLI, `POST /api/pair` (single use), the device token on the remote Host, `devices`, and
+  `revoke` (the token then gets 401). Tokens are never printed. Both processes must then stop
+  cleanly on SIGTERM. The bundle is uploaded as the `ddl-linux-<arch>` artifact (kept 7 days).
+- `setup` installs that bundle on a fresh runner (a disposable VM with systemd) with
+  `deploy/linux/setup-test.sh`: `setup.sh` installs and starts the services (the agent in mock
+  mode through the env file, which `setup.sh` must keep) and names the machine in the vault's
+  settings; a second run, the installed copy and an upgrade through `--bundle` must leave the
+  settings unchanged. It checks the service user, the `0700` folders and `0600` secrets,
+  `config.json`, the root-owned release, `systemd-analyze verify` on the units, the services'
+  sandbox from inside (no new privileges, read-only system, no `/home`, private `/tmp`, only
+  their own folders writable), runs `smoke-check.mjs` as the service user against the running
+  services (its CLI calls are the documented `sudo -u ddl -H node … pair`), stops both, and checks
+  that no token reached any output or the journal. It runs only with `CI=true` or
+  `DDL_SETUP_TEST_DISPOSABLE=1`; the kit's README shows how to run it in an OrbStack machine.
 
 ```sh
 deploy/linux/build-bundle.sh                                   # this machine's CPU; --arch x64|arm64
