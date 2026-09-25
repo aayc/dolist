@@ -158,7 +158,7 @@ Then per family:
 
 ## Rules
 
-Stable ids, grouped by decision (generated from `SAFETY_RULES`; 141 rules).
+Stable ids, grouped by decision (generated from `SAFETY_RULES`; 147 rules).
 
 | Rule id | Category | Decision | Risk | Matches |
 | --- | --- | --- | --- | --- |

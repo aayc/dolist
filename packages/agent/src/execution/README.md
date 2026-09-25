@@ -55,6 +55,31 @@ The shell is not a tool here: the harness's built-in `bash` tool runs commands t
   CoreGraphics mouse/keyboard events posted from JXA (`osascript -l JavaScript`).
 - **App control (macOS)** — the `ddl-computer` helper operates one app at a time in the background
   through its accessibility tree (see below).
+- **Drawings** — `provider.drawings` renders drawings to PNG for `read_drawing` (see below), when a
+  browser is found and the daemon found its render page (`drawingRenderer`).
+
+### Drawing renderer
+
+`local/drawing-renderer.ts` renders a drawing's scene with Excalidraw's own export on a small page
+(`src/drawings/render-page`, built into the daemon's `dist/drawing-renderer` by
+`scripts/build-drawing-renderer.mjs`: `@excalidraw/excalidraw` bundled for the browser, its Latin
+fonts, no CDN), so the model sees what the editor draws.
+
+- **Its own browser**: the agent browser is a persistent profile with the agent's logins, may run
+  headed and lives until shutdown, so rendering doesn't borrow it. The renderer launches the same
+  executable headless through playwright-core on the first render (never at daemon start; about
+  1–1.5 s), in a fresh context with no profile, and closes it after 60 s without renders.
+- **No network**: the page's origin (`https://drawings.invalid`) is answered from the page
+  directory by request interception, with a strict CSP; every other request is aborted, so images
+  a drawing points at on the web are never fetched.
+- **Output**: PNG on a white background (the light theme, whatever the drawing's), at most 1,280 px
+  on its longer side; small drawings are scaled up to 2×. A warm render takes about 10 ms.
+- **Cache**: `<DDL_HOME>/cache/drawings/<sha256>.png`, keyed by the page's build and the scene's
+  elements and images. At most 64 MB; the least recently used renders go first (a file's mtime is
+  its last use, so the order survives restarts).
+- **Failures**: a render has 30 s (launch included); one that times out or finds its page crashed
+  closes the browser, and the next render starts a new one. `read_drawing` then returns the
+  description with the reason there is no image.
 
 ### Browser details
 
@@ -164,6 +189,10 @@ The last five exist only with app control. Then the screen-level tools also take
 without `app` they behave exactly as without app control. Actions need an app the thread already
 opened or read, so their approval card names the real app, and every tool with an `app` target
 provides `ToolSafetyHints.subject` (the app's real name and the element's real label).
+
+One tool from elsewhere uses the provider: `read_drawing` (`src/tools/drawings.ts`; readOnly,
+category read, `Look at drawing “Flow”`), which the orchestrator and every subagent have like
+`read_note`, renders with `provider.drawings` when the model sees images.
 
 Element-targeting tools require `element`, a human description of the target that the safety
 evaluator and approval cards rely on. Browser actions return the page snapshot; screenshots return
