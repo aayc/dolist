@@ -326,7 +326,11 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
 - **Drawings:** `@ddl/core`'s drawing format and description are the reference, as vim.js is
   for vim: `DailyDoListDrawing` replays `packages/core/test/drawings/fixtures` byte for byte, so
   a format change updates both sides and adds a fixture. Its Rough.js port is checked against
-  samples from Rough.js itself (`fixtures/rough-parity.jsonl`); see its README.
+  samples from Rough.js itself (`fixtures/rough-parity.jsonl`); see its README. In notes,
+  `DailyDoListEditor` draws embeds with it (floats are text-container exclusion paths, recomputed
+  only when something moved them) and hosts its canvas to edit in place; the web's embed layer
+  (`packages/editor/src/embeds`) is the behavioral reference, and its edit tests are ported. The
+  app's `DrawingStore` saves drawings with `baseVersion` and merges a 409 element by element.
 - **Commands:** `apps/macos/scripts/test.sh [Package|app|integration] [-- swift test args]`,
   `apps/macos/scripts/run-app.sh [--demo]`, and
   `apps/macos/scripts/build-app.sh [--release] [--with-daemon] [--zip]` (writes to

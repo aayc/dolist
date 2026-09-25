@@ -79,7 +79,9 @@ same files ([spec](../../../../docs/specs/drawings.md)).
   nudge 1 (shift 5), delete, duplicate (⌘D, 10 down and right).
 - **Arrows bind** to rectangles, diamonds, ellipses, text, images and frames when an end is drawn
   on or near them (the shape is highlighted), and follow when the shape moves or resizes; moving
-  an arrow away alone detaches it.
+  an arrow away alone detaches it. An end released on or near the outline sits 5 outside it
+  (`FIXED_BINDING_DISTANCE`, as `bindPointToSnapToElementOutline` places it), leaving
+  Excalidraw's small gap before the tip.
 - **Properties** (the popover; also applied to the selection): stroke and background colors from
   Excalidraw's palette (quick picks and a row of shades), fill (hachure, cross-hatch, solid),
   stroke width (thin, bold, extra bold), stroke style (solid, dashed, dotted), sloppiness
@@ -127,6 +129,11 @@ canvas.mode = .editing                                  // edit in place (tool b
 canvas.preferredHeight(forWidth: 360)                   // or canvas.preferredSize at zoom 1
 canvas.setScene(newScene)                               // the file changed on disk
 canvas.background = .transparent                        // or .scene (default), .color("#fff")
+canvas.showsToolbar = false                             // place the tool bar yourself:
+host.addSubview(canvas.makeToolbarView())               // it follows the canvas's editor
+
+// A save that found the file changed elsewhere: both sides' work, element by element.
+let merged = SceneMerge.merge(base: sceneAsRead, local: canvas.scene, remote: theirs.scene)
 
 // Inline previews, cached by content hash:
 let previews = DrawingPreviewCache()
@@ -187,7 +194,9 @@ rejoin it); tiling it would remove that hitch.
 
 - **Model and codec**: JSON parsing and writing (JavaScript number formatting and escaping),
   byte-for-byte round trips with unknown types and fields, absent and unreadable fields,
-  version bumps, ids, fractional indices (checked against the JavaScript library).
+  version bumps, ids, fractional indices (checked against the JavaScript library), and merging
+  two versions of a scene (`SceneMergeTests`: newer versions, nonce ties, tombstones and
+  removals, order, files).
 - **File format**: this package's plugin-style fixtures (`fixtures/`: both plugin layouts,
   compressed and not, the blank template, unknown sections, frontmatter and fields), problems,
   embeds and file names; LZ-String against samples the JavaScript library compressed.
