@@ -282,6 +282,35 @@ struct SnapshotTests {
     await model.teardown()
   }
 
+  /// Settings → Always-On against the in-memory daemon: each section in its usual states.
+  @Test func alwaysOnSettings() async throws {
+    func model(_ remote: InMemoryDaemonClient.Remote) async throws -> AppModel {
+      let client = InMemoryDaemonClient(
+        seed: .empty, clock: .immediate(), agent: .enabled, clientId: "macos_test", remote: remote)
+      let model = AppModel(environment: makeEnvironment(client: client))
+      await model.boot()
+      try await eventually("placement") { model.agent?.placement != nil }
+      await model.remote.load()
+      return model
+    }
+    let size = CGSize(width: 600, height: 720)
+    let shots: [(String, InMemoryDaemonClient.Remote, AlwaysOnSection)] = [
+      ("settings-always-on-agent-location", .alwaysOn, .agentLocation),
+      ("settings-always-on-agent-location-held", .standalone, .agentLocation),
+      ("settings-always-on-agent-location-host", .host, .agentLocation),
+    ]
+    for (name, remote, section) in shots {
+      let model = try await model(remote)
+      model.ui.alwaysOnSection = section
+      for dark in [false, true] {
+        try await render(
+          AlwaysOnSettingsPane(model: model, remote: model.remote).frame(
+            width: size.width, height: size.height), size: size, dark: dark, name: name)
+      }
+      await model.teardown()
+    }
+  }
+
   @Test func statusBarWithAnApprovalPolicy() async throws {
     let (model, workspace) = try await bootedModel()
     let bar = StatusBar(model: model, workspace: workspace)
