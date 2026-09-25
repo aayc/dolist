@@ -214,15 +214,29 @@ restarts a managed daemon in place, and connected clients reconnect and resync.
   `Contents/Resources/daemon/`. Workspace packages (already inlined into `dist/`), bin
   shims, pnpm metadata and dangling links are removed. The bundled daemon still needs the
   system's Node 24.4+.
-- Ad-hoc signature (`codesign --force --deep --sign -`), verified with
-  `codesign --verify --deep --strict`. `--zip` writes `Daily Do List.zip` with `ditto`.
+- Signature: the local identity "Daily Do List Local Signing" when
+  `scripts/signing-identity.sh --create` has made it (or `--sign ID`, or `DDL_SIGN_IDENTITY`), else
+  ad hoc (`--adhoc` forces it). Verified with `codesign --verify --deep --strict`. `--zip` writes
+  `Daily Do List.zip` with `ditto`.
 
 SwiftPM resource bundles are copied into `Contents/Resources`. The generated `Bundle.module`
 accessor looks next to the `.app` instead, where codesign forbids files, so packages should load
 resources through `Bundle.main.resourceURL`.
 
-An ad-hoc signed app isn't notarized. A downloaded copy (for example the CI artifact) is
-quarantined: right-click → Open, or `xattr -dr com.apple.quarantine "Daily Do List.app"`.
+### Keeping permissions across builds
+
+macOS ties the permissions you grant an app (Accessibility, Screen Recording) to its signature. An
+ad-hoc signature changes with every build, so each build looks like a new app and the old grants
+stop applying: the toggle in System Settings stays on but does nothing until you remove and re-add
+the app. Run `apps/macos/scripts/signing-identity.sh --create` once to fix that. It makes a
+self-signed certificate in your login keychain, trusted for code signing only (macOS asks for your
+password once), and `build-app.sh` signs with it from then on. Anything signed with it gets the
+permissions granted to Daily Do List, so the key stays in your login keychain, where only
+`codesign` may use it. Delete the certificate in Keychain Access to revoke it. CI has no identity
+and signs ad hoc.
+
+Neither signature is notarized. A downloaded copy (for example the CI artifact) is quarantined:
+right-click → Open, or `xattr -dr com.apple.quarantine "Daily Do List.app"`.
 
 ## Permissions
 
@@ -231,7 +245,7 @@ quarantined: right-click → Open, or `xattr -dr com.apple.quarantine "Daily Do 
 | Notifications (approval requests, finished tasks) | The standard notification prompt on first use; manage it in System Settings → Notifications. |
 | Launch at login | Only works from a signed `.app` (`build-app.sh`; a `swift run` build explains why it's unavailable). When macOS says it needs approval, the toggle offers **Open Login Items Settings…**. |
 | Global shortcut (off by default; default ⌃⌥⌘D: open today's note) | No permission (Carbon hotkeys). ⌃⌥⌘D is free on a stock Mac; ⌥⌘D would clash with macOS's own "Turn Dock hiding on/off". The app detects clashes with common system shortcuts and says which setting to turn off, or pick another shortcut in Settings → General. |
-| Computer use and browser automation by agents | The daemon is the app's child process, so Accessibility and Screen Recording prompts name **Daily Do List**. Ad-hoc signatures change with every build, so macOS may ask again after rebuilding. |
+| Computer use and browser automation by agents | The daemon is the app's child process, so Accessibility and Screen Recording prompts name **Daily Do List**. Grants survive rebuilds only when builds are signed with the local identity ([Keeping permissions across builds](#keeping-permissions-across-builds)); after an ad-hoc build, grant them again. |
 
 ## Troubleshooting
 

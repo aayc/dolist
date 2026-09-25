@@ -307,7 +307,9 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
   start. It reads the token from `$DDL_HOME/daemon-token` and never logs it. A managed daemon runs
   on the system Node 24.4+ with a stdin watchdog, so it can't outlive the app.
 - **Packaging:** `build-app.sh` renders the icon (`scripts/make-icon.swift`), fills
-  `Resources/Info.plist.template` and signs ad hoc. `--with-daemon` bundles
+  `Resources/Info.plist.template` and signs with the local identity from
+  `scripts/signing-identity.sh` when it exists (so macOS keeps granted permissions across builds),
+  else ad hoc. `--with-daemon` bundles
   `pnpm deploy --prod --legacy` output into `Contents/Resources/daemon`. Don't rely on SwiftPM's
   `Bundle.module` in app code: it looks next to the `.app`.
 - **CI:** `.github/workflows/macos.yml` (package tests, an iOS build of the Foundation-only

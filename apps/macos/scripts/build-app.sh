@@ -2,6 +2,7 @@
 # Builds "Daily Do List.app" from the Swift package. The Command Line Tools are enough (no Xcode).
 #
 #   apps/macos/scripts/build-app.sh [--release] [--with-daemon] [--output DIR] [--zip] [--open]
+#                                   [--sign IDENTITY | --adhoc]
 #
 #   --release       optimized build (default: debug)
 #   --with-daemon   bundle a self-contained daemon (dist/ + production node_modules) in
@@ -9,6 +10,9 @@
 #   --output DIR    where to write the app (default: apps/macos/build, which is gitignored)
 #   --zip           also write "Daily Do List.zip" next to the app (ditto keeps the signature)
 #   --open          launch the app when done
+#   --sign ID       code-signing identity (default: $DDL_SIGN_IDENTITY, else the local identity
+#                   from scripts/signing-identity.sh when it exists, else ad hoc)
+#   --adhoc         sign ad hoc even when the local identity exists
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -22,13 +26,17 @@ WITH_DAEMON=0
 OUTPUT="$MACOS_DIR/build"
 ZIP=0
 OPEN=0
+SIGN_IDENTITY="${DDL_SIGN_IDENTITY:-}"
+LOCAL_IDENTITY="Daily Do List Local Signing"
 
-usage() { sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; }
 step() { printf '\n==> %s\n' "$*"; }
 fail() {
   echo "build-app: $*" >&2
   exit 1
 }
+# Only identities codesign accepts (trusted for code signing) are listed with -v.
+has_identity() { security find-identity -v -p codesigning 2>/dev/null | grep -F "\"$1\"" >/dev/null; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -42,6 +50,12 @@ while [ $# -gt 0 ]; do
       ;;
     --zip) ZIP=1 ;;
     --open) OPEN=1 ;;
+    --sign)
+      [ $# -ge 2 ] || fail "--sign needs an identity"
+      SIGN_IDENTITY="$2"
+      shift
+      ;;
+    --adhoc) SIGN_IDENTITY=- ;;
     -h | --help)
       usage
       exit 0
@@ -138,9 +152,22 @@ if [ "$WITH_DAEMON" = 1 ]; then
   echo "Bundled daemon: $(du -sh "$DAEMON" | cut -f1) (runs on the system Node.js 24.4+)"
 fi
 
-# 6. Ad-hoc signature ------------------------------------------------------------------------------
-step "Signing (ad hoc)"
-codesign --force --deep --sign - "$APP"
+# 6. Signature -------------------------------------------------------------------------------------
+if [ -z "$SIGN_IDENTITY" ]; then
+  SIGN_IDENTITY=-
+  if has_identity "$LOCAL_IDENTITY"; then SIGN_IDENTITY="$LOCAL_IDENTITY"; fi
+fi
+if [ "$SIGN_IDENTITY" = - ]; then
+  step "Signing (ad hoc)"
+  if [ -z "${CI:-}" ]; then
+    echo "macOS treats each ad-hoc build as a new app and forgets the permissions granted to the"
+    echo "last one. Run apps/macos/scripts/signing-identity.sh --create once to keep them."
+  fi
+  codesign --force --deep --sign - "$APP"
+else
+  step "Signing ($SIGN_IDENTITY)"
+  codesign --force --deep --timestamp=none --sign "$SIGN_IDENTITY" "$APP"
+fi
 codesign --verify --deep --strict "$APP"
 echo "Signature OK"
 
