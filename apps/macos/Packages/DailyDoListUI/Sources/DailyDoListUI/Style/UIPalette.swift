@@ -5,6 +5,8 @@ import SwiftUI
 /// dark and light. The shell's `Theme` and the agent UI's `AgentTheme` use the same values.
 public enum UIPalette {
   public static let accent = Color(nsColor: NSColor(light: 0x1D6FE8, dark: 0x3B8BFF))
+  /// Hovered and pressed accent.
+  public static let accentStrong = Color(nsColor: NSColor(light: 0x1557C0, dark: 0x5CA0FF))
   public static let text = Color(nsColor: NSColor(light: 0x0B1220, dark: 0xF2F5F9))
   public static let mutedText = Color(nsColor: NSColor(light: 0x475467, dark: 0xB4BDC9))
   public static let faintText = Color(nsColor: NSColor(light: 0x8492A6, dark: 0x7A8594))
