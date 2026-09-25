@@ -85,6 +85,7 @@ Activity labels (`activityLabel`):
 | `web_search` | Searching the web for “{query}”… (no query: "Searching the web…") |
 | `web_fetch` | Reading {host}… (no host: "Reading a page…") |
 | `read_note`, `search_notes` | Reading your notes… |
+| `read_drawing` | Looking at “{drawing}”… (the name from `path`, without folder or `.excalidraw.md`; no path: "Looking at a drawing…") |
 | `edit_note` | Editing your note… |
 | `bash` | Running a command… |
 | `read`, `grep`, `find`, `ls` | Looking through files… |
@@ -141,6 +142,140 @@ re-renders, reduced motion), `Composer.test.tsx`, `agent-commands.test.ts`,
 tool groups, chat bar, Stop and its shortcut, optimistic send and retry, jump to latest, copy,
 reduced motion, an idle chat asking for no frames). In mock mode, `__ddlDebug.holdReplies({ ms,
 fail })` delays or fails chat replies.
+
+## Drawings
+
+`src/features/drawings/`: Excalidraw drawings on notes, as files the Obsidian Excalidraw plugin
+opens too (`Excalidraw/<name>.excalidraw.md`; the format is `@ddl/core`'s, see
+`docs/DATA_FORMATS.md`). What follows is also what the Mac editor mirrors (`apps/macos`, with its
+own drawing engine).
+
+- **In a note**, `![[Name.excalidraw|360|right-wrap]]` alone on its line is drawn by the editor's
+  embed layer (`packages/editor`, "Embeds"): floated left or right with the text wrapping around
+  it, or on a row of its own; click to select, drag to move (to another line or side), drag a
+  corner to resize, Delete to remove the line, double-click or Enter to edit. The box shows a
+  static SVG (`drawing-embed.ts`), rendered with Excalidraw's `exportToSvg` and cached by the
+  file's content hash (`render-cache.ts`), so it renders again only when the file changes. The
+  dark theme inverts it with a CSS filter, as Excalidraw's dark mode does (images excepted).
+- **Insert drawing** (`drawing:insert`, ⌘⇧X / Ctrl+Shift+X; the palette, the note header's
+  button and the editor's context menu) creates `Excalidraw/Drawing <date>.excalidraw.md` (a blank
+  scene, `uniqueDrawingPath`), embeds it on the caret's line floated right at 360 px, and starts
+  editing it. Following a link to a drawing that doesn't exist creates it too.
+- **Editing in place** (`drawing-overlay.ts`): the real Excalidraw in a card over the note, at
+  least 760 × 520 px when the pane allows (below that Excalidraw switches to its phone layout),
+  its canvas zoomed and scrolled so the drawing sits exactly where its preview was, the tool bar
+  above it. The card grows as the drawing nears its bottom. Escape (unless Excalidraw is using it:
+  a text being typed, a shape being drawn, a menu open), a click outside or Done ends it, after
+  saving and once the preview shows the new version; Escape selects the drawing again. Excalidraw
+  gets the keyboard; the app's own shortcuts keep working. Excalidraw's theme follows the app's.
+- **Opening the file** (from the explorer, a link, or "Open drawing" in the context menu) shows
+  Excalidraw over the pane (`DrawingPane.tsx`, a lazy chunk), not the markdown.
+- **Saving** (`drawing-session.ts`): edits save debounced (500 ms, and when editing ends, the
+  window loses focus or ⌘S) through the notes API with `baseVersion`, written with
+  `serializeDrawingFile(scene, previous)` so everything Excalidraw doesn't know survives. Only real
+  edits save: opening a file never rewrites it. On a 409, or a change pushed while editing
+  (Obsidian, another device, sync), the other version is merged into the editor element by element
+  (`mergeDrawingElements` in `@ddl/core`: the newer `version` wins, the previous file tells a
+  deletion from an addition, an element being typed in keeps its local copy), so neither side's
+  work is lost. Excalidraw's 21-character element ids become the plugin's 8-character ones in the
+  file (`element-ids.ts`). A file that can't be read is shown as such and never written over.
+- **Loading** (`excalidraw-loader.ts`): Excalidraw is its own chunk (~325 kB gz), imported the
+  first time something shows a drawing. `window.EXCALIDRAW_ASSET_PATH` points at the fonts our
+  build serves under `assets/excalidraw-<version>/` with their license notices
+  (`excalidraw-assets.ts`, `excalidraw-notice.txt`); nothing loads from a CDN, and the daemon's CSP
+  (`font-src 'self'`) would block it anyway. The build also replaces parts of Excalidraw we don't
+  ship (font subsetting in WebAssembly, the Mermaid importer, pica, pako, browser-fs-access,
+  translations; see `docs/PERFORMANCE.md`): exports from Excalidraw's menus embed whole fonts,
+  images are picked with a file input, and Mermaid import isn't available.
+
+With `?mock=1`, the mock daemon keeps drawings like any note, never reads one as a task list, and
+seeds `Sketches.md` with a drawing; `&mockPersist=1` keeps the vault in the tab's sessionStorage
+so a reload finds it.
+
+### Tests
+
+Unit: `features/drawings/drawings.test.ts` (ids, the scene written, the render cache, the store,
+saving, 409 merges, changes from elsewhere, unreadable and deleted files), `@ddl/core`'s
+`drawings/merge.test.ts`, the editor's `embeds/*.test.ts`, and the mock's. E2E:
+`e2e/drawings.spec.ts` (insert, draw a rectangle and an arrow, wrapping and typing beside it,
+move, resize, delete and undo, reload, open the file, a change from elsewhere, the palette and the
+context menu, no request leaving the app), the drawing screens of the cursor audit in
+`e2e/polish.spec.ts`, and typing beside six drawings in the perf suite.
+
+## What the orchestrator is doing while you write
+
+`orchestrator.activity` events (see `docs/AGENT_SYSTEM.md`) become three things in the note view.
+This section is the contract for the macOS editor too: the wording, the timings and the rules below
+must stay the same on both platforms. The pure logic is `src/features/editor/activity-chips.ts`,
+with its tables in `activity-chips.test.ts`; `state/activity-store.ts` holds the chips and
+`features/editor/activity-sync.ts` hands them to the editor (`setActivityChips`).
+
+### Chips on lines
+
+A chip at the end of each line that woke the orchestrator, after the line's badge when it has one,
+styled like the task triage badge (`cm-ddl-badge` tones, `data-kind` for styling and tests):
+
+| Activity | Label | Tone | Fades |
+| --- | --- | --- | --- |
+| `noticed` | (a quiet dot) | quiet, pulsing | after 60 s without its turn |
+| `reading`, `thinking` | Orchestrator is looking… | working, pulsing | — |
+| `acting` | Working… | working, pulsing | — |
+| `acting` with outcome `asked_approval` | Needs your approval ↗ | needs you | — |
+| `idle`, `tasks_added` | Added a task ↗ / Added 3 tasks ↗ | quiet | after 6 s |
+| `idle`, `replied` | Replied ↗ | quiet | after 6 s |
+| `idle`, `delegated` | Started a task ↗ / Started 2 tasks ↗ | quiet | after 6 s |
+| `idle`, `routine_created` | Made a routine ↗ | quiet | after 6 s |
+| `idle`, `note_edited` | Edited the note ↗ | quiet | after 6 s |
+| `idle`, `asked_approval` | Needs your approval ↗ | needs you | after 6 s |
+| `idle`, `no_action` | Nothing to do | quiet | after 2.5 s |
+
+Fading takes 600 ms. The tooltip (and accessible name) is the outcome's line when it has one
+("Started a task: Find a plumber available on Saturday"), else a sentence ("The orchestrator
+noticed this line", "The orchestrator is looking at this line", "The orchestrator is working on
+this line", "Nothing for the orchestrator to do here"…). Clicking (or Enter/Space) opens the
+outcome's thread when it acted in one (not the orchestrator's own), else the orchestrator's chat
+scrolled to the turn (`turnId`, whose opening line flashes); a noticed dot opens the chat.
+
+Rules, applied per event, keyed by the trigger's `notePath` and `lines`:
+
+- `noticed` replaces the note's earlier dots with its lines (a dot whose line is still being typed
+  keeps its chip).
+- A turn's `reading`/`thinking`/`acting` puts its phase on the chips of its lines, taking over a
+  dot or an earlier outcome on the same line; its `idle` gives them its outcome, or removes them
+  when it has none (the turn failed or was stopped).
+- An `idle` without a `turnId` withdraws the note's dots (all of them when `lines` is empty); a
+  bare `{ phase: "idle" }` clears everything in progress (outcomes finish fading).
+- A chip is matched to a line by line number and text: the reported line while it still reads as
+  that text, else the nearest line with that exact text, else the nearest similar one
+  (`findEditedLine`: a prefix while typing, or Dice similarity ≥ 0.5, the task tracker's rule).
+  Task lines get no chip: their badge already shows triage.
+- In the editor, chips are anchored at their line's start and mapped through every edit (typing,
+  Enter, lines added above, undo); a chip is dropped once its line is edited beyond recognition
+  (`isSameLineEdited` against the line as it was when the chip was set) or deleted. Nothing runs
+  on the keystroke path: chips are recomputed on the next frame after an event or a fade, never
+  after an edit.
+- A client joining mid-turn seeds from `AgentStatusResponse.orchestrator` (at startup and after a
+  reconnect), unless an event arrived meanwhile.
+
+### The note header and the status bar
+
+While a turn's trigger is about the open note, the note header shows "Orchestrator: reading this
+note…", "Orchestrator: thinking…" or "Orchestrator: working…" ("Orchestrator: needs your approval"
+while it waits for one), floating at the header's bottom right so it never moves the text. While it
+works on anything else, the status bar says "Orchestrator: working on 2026-09-24" (the note's name)
+or "Orchestrator: working on your message" (the trigger's summary). Both open the orchestrator's
+chat at the turn.
+
+With `prefers-reduced-motion` nothing pulses or fades: chips and indicators change in place.
+
+### Tests
+
+Unit: `features/editor/activity-chips.test.ts` (rules, wording table, fading, anchoring,
+indicators), `packages/editor/src/activity/field.test.ts` (mapping through edits, dropping).
+E2E: `e2e/orchestrator-activity.spec.ts` (real keyboard: a request line's dot before it settles,
+then its outcome and thread; plain prose; "Nothing to do" fading; editing beyond recognition; the
+status bar; reduced motion) and the chips in `e2e/polish.spec.ts`'s cursor audit. The mock daemon
+simulates the daemon's activity for prose lines (`api/mock/mock-agent.ts`).
 
 ## Routines
 

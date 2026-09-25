@@ -281,6 +281,20 @@ describe("CursorHarness (fake CLI)", { timeout: SPAWN_TIMEOUT_MS }, () => {
     expect(lastText(s.events)).toBe("result(echo): echo: hi");
   });
 
+  it("tells tools whether the CLI's agent takes images", async () => {
+    for (const flags of [[], ["--fake-no-image"]]) {
+      const seen: Array<boolean | undefined> = [];
+      const look = tool("look", async (_input, ctx) => {
+        seen.push(ctx.images);
+        return textResult("a drawing");
+      });
+      const s = await setup({ flags });
+      const session = await s.create({ tools: [look] });
+      await session.prompt("!call look {}");
+      expect(seen, flags.join(" ")).toEqual([flags.length === 0]);
+    }
+  });
+
   it("never executes calls the gate denies, and tells the model why", async () => {
     const execute = vi.fn(async () => textResult("deleted"));
     const s = await setup();

@@ -60,6 +60,7 @@ enum Fixtures {
     "ObsidianImportPreviewRequest": ObsidianImportPreviewRequest.self,
     "ObsidianImportRequest": ObsidianImportRequest.self,
     "ObsidianImportStatusResponse": ObsidianImportStatusResponse.self,
+    "OrchestratorActivity": OrchestratorActivity.self,
     "PairRequest": PairRequest.self,
     "PairResponse": PairResponse.self,
     "PairedDevicesResponse": PairedDevicesResponse.self,

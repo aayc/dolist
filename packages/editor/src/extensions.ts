@@ -10,6 +10,7 @@ import {
   highlightActiveLine,
   highlightSpecialChars,
 } from "@codemirror/view";
+import { activityChipField } from "./activity/field";
 import { agentLines } from "./agent-lines";
 import { annotationField } from "./annotations/field";
 import { callbacksExtension, configCompartments, resolveConfig, vimCompartment } from "./config";
@@ -44,6 +45,7 @@ const baseExtensions: Extension = [
   editorTheme,
   editorKeymap,
   annotationField,
+  activityChipField,
   agentLines,
   linkClickHandler,
   linkPreviews,

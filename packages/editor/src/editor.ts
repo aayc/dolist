@@ -12,6 +12,7 @@ import {
   type TransactionSpec,
 } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { resetActivityChipsEffect, setActivityChipsEffect } from "./activity/field";
 import { resetAnnotationsEffect, setAnnotationsEffect } from "./annotations/field";
 import {
   callbacksEffect,
@@ -21,6 +22,7 @@ import {
   vimEffect,
 } from "./config";
 import { documentChanges, normalizeLineEndings, type TextChange } from "./diff";
+import { activateEmbed, insertEmbedAtCursor } from "./embeds/layer";
 import { editorExtensions } from "./extensions";
 import { cursorLine } from "./listeners";
 import type { CreateEditorOptions, EditorConfig, MarkdownEditor } from "./types";
@@ -113,6 +115,7 @@ export function createMarkdownEditor(
           ...configEffects(null, config),
           callbacksEffect(callbacks),
           resetAnnotationsEffect.of(null),
+          resetActivityChipsEffect.of(null),
         ],
       });
     }
@@ -154,6 +157,14 @@ export function createMarkdownEditor(
 
     setAnnotations(annotations) {
       view.dispatch({ effects: setAnnotationsEffect.of(annotations) });
+    },
+
+    insertEmbed: (text) => insertEmbedAtCursor(view, text),
+
+    activateEmbed: (from) => activateEmbed(view, from),
+
+    setActivityChips(chips) {
+      view.dispatch({ effects: setActivityChipsEffect.of(chips) });
     },
 
     configure(partial) {

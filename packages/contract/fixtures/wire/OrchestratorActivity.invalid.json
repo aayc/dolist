@@ -1,0 +1,55 @@
+[
+  {
+    "name": "unknown phase",
+    "value": { "phase": "sleeping" },
+    "path": ["phase"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "trigger of an unknown kind",
+    "value": { "phase": "reading", "trigger": { "kind": "email", "summary": "your mail" } },
+    "path": ["trigger", "kind"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "trigger without a summary",
+    "value": { "phase": "reading", "trigger": { "kind": "note" } },
+    "path": ["trigger", "summary"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "negative line",
+    "value": {
+      "phase": "noticed",
+      "trigger": {
+        "kind": "note",
+        "notePath": "Daily/2026-09-25.md",
+        "lines": [{ "line": -1, "text": "find a plumber" }],
+        "summary": "“find a plumber”"
+      }
+    },
+    "path": ["trigger", "lines", 0, "line"],
+    "code": "too_small"
+  },
+  {
+    "name": "non-canonical note path",
+    "value": {
+      "phase": "noticed",
+      "trigger": { "kind": "note", "notePath": "/Daily//x.md", "summary": "your note" }
+    },
+    "path": ["trigger", "notePath"],
+    "code": "custom"
+  },
+  {
+    "name": "outcome of an unknown kind",
+    "value": { "phase": "idle", "outcome": { "kind": "celebrated" } },
+    "path": ["outcome", "kind"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "outcome thread id unsafe in a URL",
+    "value": { "phase": "idle", "outcome": { "kind": "replied", "threadId": "../thr" } },
+    "path": ["outcome", "threadId"],
+    "code": "invalid_format"
+  }
+]

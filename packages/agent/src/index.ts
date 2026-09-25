@@ -1,3 +1,18 @@
+export {
+  DRAWING_MARKER,
+  type DrawingBlock,
+  type DrawingBudget,
+  DrawingDescriptions,
+  type DrawingDescriptionsOptions,
+  drawingBudget,
+} from "./drawings/descriptions";
+export {
+  DRAWING_IMAGE_MAX_SIZE,
+  DrawingRenderError,
+  type DrawingRenderer,
+  type RenderDrawingOptions,
+  type RenderedDrawing,
+} from "./drawings/renderer";
 export * from "./execution";
 export type * from "./execution/types";
 export type { PiHarnessOptions } from "./harness/pi";
@@ -52,6 +67,11 @@ export {
 export type * from "./threads/types";
 export type * from "./tools/contracts";
 export { MCP_TOOL_PREFIX, TOOL } from "./tools/contracts";
+export {
+  createReadDrawingTool,
+  type ReadDrawingDetails,
+  type ReadDrawingToolOptions,
+} from "./tools/drawings";
 export { ToolInputError } from "./tools/input";
 export type { KnowledgeToolsOptions } from "./tools/knowledge";
 export { createKnowledgeTools } from "./tools/knowledge";

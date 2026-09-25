@@ -43,6 +43,7 @@ enum CommandID: String, CaseIterable, Sendable {
   case toggleReadableWidth = "editor.readable"
   case toggleLineNumbers = "editor.lineNumbers"
   case toggleVim = "editor.vim"
+  case insertDrawing = "editor.insertDrawing"
   case increaseFontSize = "font.increase"
   case decreaseFontSize = "font.decrease"
   case resetFontSize = "font.reset"
@@ -115,6 +116,7 @@ enum CommandID: String, CaseIterable, Sendable {
     case .newRoutine: Shortcut("n", [.command, .option])
     case .stopTask: Shortcut(".")
     case .search: Shortcut("f", [.command, .shift])
+    case .insertDrawing: Shortcut("x", [.command, .shift])
     case .commandPalette: Shortcut("p")
     case .increaseFontSize: Shortcut("+")
     case .decreaseFontSize: Shortcut("-")

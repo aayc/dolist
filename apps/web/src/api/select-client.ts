@@ -72,6 +72,7 @@ async function mockStartup(): Promise<Startup> {
         speed: Number.isFinite(speed) && speed > 0 ? speed : 1,
         computer: parseMockComputerMode(searchParam("mockComputer")),
         remote: parseMockRemoteScenario(searchParam("mockRemote")),
+        persistVault: searchParam("mockPersist") === "1",
         deviceId,
         onUnauthorized,
       }),

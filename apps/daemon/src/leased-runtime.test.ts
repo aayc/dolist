@@ -5,6 +5,7 @@ import {
   type AppSettings,
   DEFAULT_SETTINGS,
   mergeSettings,
+  type OrchestratorActivity,
   type Routine,
   type RoutineNotification,
   silentLogger,
@@ -117,6 +118,33 @@ describe("LeasedAgentRuntime", () => {
       id: "from-the-new-one",
     });
     expect(upserts).toEqual(["from-the-new-one"]);
+  });
+
+  it("ends a turn the stopped runtime was in, and shows the new runtime's activity", async () => {
+    const { leased, created } = setup();
+    await leased.start();
+    const activity: OrchestratorActivity[] = [];
+    leased.on("orchestrator.activity", (a) => activity.push(a));
+    await leased.activate();
+    const first = created[0]!.runtime;
+    expect(activity).toEqual([{ phase: "idle" }]);
+    const thinking = {
+      phase: "thinking",
+      turnId: "msg_1",
+      trigger: { kind: "task", summary: "“Renew passport”" },
+    } as const;
+    first.orchestrator = thinking;
+    first.emit("orchestrator.activity", thinking);
+    expect(leased.status().orchestrator).toEqual(thinking);
+    await leased.deactivate("The agent is running on Desktop.");
+    expect(activity).toEqual([{ phase: "idle" }, thinking, { phase: "idle" }]);
+
+    await leased.activate();
+    created[1]!.runtime.orchestrator = thinking;
+    created[1]!.runtime.emit("orchestrator.activity", thinking);
+    expect(activity.at(-1)).toEqual(thinking);
+    leased.refreshStatus();
+    expect(activity).toHaveLength(5);
   });
 
   it("creates each runtime with the latest settings and keeps both sides informed", async () => {

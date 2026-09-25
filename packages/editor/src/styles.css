@@ -514,6 +514,30 @@
   color: var(--ddl-success);
 }
 
+/*
+ * Activity chips (what the orchestrator does about a line) reuse the badge's look and tones. The
+ * quiet dot is just the badge's dot with its hit target; work in progress pulses it in the accent
+ * color; an outcome's dot is green, "Nothing to do" stays faint. A chip on its way out fades.
+ */
+.cm-ddl-activity-chip-dot {
+  gap: 0;
+  padding: 0 0.45em;
+}
+.cm-ddl-activity-chip-pulse .cm-ddl-badge-icon {
+  color: var(--ddl-accent);
+  animation: cm-ddl-badge-pulse 1.2s ease-in-out infinite;
+}
+.cm-ddl-activity-chip[data-kind="outcome"] .cm-ddl-badge-icon {
+  color: var(--ddl-success);
+}
+.cm-ddl-activity-chip[data-kind="needs-you"] .cm-ddl-badge-icon {
+  color: var(--ddl-warning);
+}
+.cm-ddl-activity-chip-fading {
+  opacity: 0;
+  transition: opacity 600ms ease;
+}
+
 @keyframes cm-ddl-badge-enter {
   from {
     opacity: 0;
@@ -594,4 +618,168 @@
 .cm-ddl-editor div.cm-vim-message {
   /* biome-ignore lint/complexity/noImportantStyles: only !important beats an inline style */
   color: var(--ddl-danger) !important;
+}
+
+/*
+ * Embeds (`![[…]]` alone on a line, drawn by a host renderer). A wrapped embed floats inside its
+ * line, and the lines after it wrap around it, as in Obsidian's live preview; the others sit on
+ * their line as an inline block. The content keeps the box's height from its aspect ratio.
+ */
+.cm-ddl-live-preview .cm-content {
+  display: flow-root;
+}
+.cm-ddl-embed {
+  position: relative;
+  box-sizing: border-box;
+  max-width: 100%;
+  border-radius: 6px;
+  outline: none;
+  cursor: default;
+  text-align: left;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: box-shadow 120ms ease;
+}
+.cm-ddl-embed-left-wrap {
+  float: left;
+  margin: 3px 20px 10px 0;
+}
+.cm-ddl-embed-right-wrap {
+  float: right;
+  margin: 3px 0 10px 20px;
+}
+.cm-ddl-embed-full,
+.cm-ddl-embed-left,
+.cm-ddl-embed-right,
+.cm-ddl-embed-center {
+  display: inline-block;
+  vertical-align: top;
+  margin: 4px 0;
+}
+/* A floated embed's line takes no room, so the text beside it starts level with its top. */
+.cm-ddl-editor .cm-line.cm-ddl-embed-line-left-wrap,
+.cm-ddl-editor .cm-line.cm-ddl-embed-line-right-wrap {
+  height: 0;
+}
+.cm-ddl-editor .cm-line.cm-ddl-embed-line-center {
+  text-align: center;
+}
+.cm-ddl-editor .cm-line.cm-ddl-embed-line-right {
+  text-align: right;
+}
+.cm-ddl-embed-content {
+  box-sizing: border-box;
+  width: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.cm-ddl-embed:hover {
+  box-shadow: 0 0 0 1px var(--ddl-border);
+}
+.cm-ddl-embed.is-selected {
+  box-shadow: 0 0 0 2px var(--ddl-accent);
+}
+.cm-ddl-embed.is-selected:not(.is-readonly) {
+  cursor: grab;
+}
+.cm-ddl-embed.is-dragging {
+  z-index: 3;
+  opacity: 0.75;
+  cursor: grabbing;
+  box-shadow:
+    0 0 0 2px var(--ddl-accent),
+    var(--ddl-shadow-small, 0 8px 24px rgb(0 0 0 / 0.2));
+  transition: none;
+}
+.cm-ddl-embed-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ddl-text-muted);
+  font-family: var(--ddl-font-ui);
+  font-size: 13px;
+  background: var(--ddl-bg-secondary);
+}
+
+/* Handles, shown on the selected embed: a grip to move it, corners to resize it. */
+.cm-ddl-embed-grip,
+.cm-ddl-embed-resize {
+  position: absolute;
+  z-index: 1;
+  display: none;
+  box-sizing: border-box;
+}
+.cm-ddl-embed-grip {
+  top: 6px;
+  left: 6px;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--ddl-border);
+  border-radius: 5px;
+  background:
+    radial-gradient(circle, var(--ddl-text-muted) 1.2px, transparent 1.6px) 3px 3px / 6px 6px
+    var(--ddl-bg-elevated, var(--ddl-bg));
+  cursor: grab;
+}
+.cm-ddl-embed-grip:hover {
+  background-color: var(--ddl-bg-hover);
+}
+.cm-ddl-embed-resize {
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--ddl-bg);
+  border-radius: 50%;
+  background: var(--ddl-accent);
+}
+/* A bigger hit target than the dot. */
+.cm-ddl-embed-resize::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+.cm-ddl-embed-resize-start {
+  left: -6px;
+  cursor: nesw-resize;
+}
+.cm-ddl-embed-resize-end {
+  right: -6px;
+  cursor: nwse-resize;
+}
+.cm-ddl-embed.is-selected:not(.is-readonly) .cm-ddl-embed-grip,
+.cm-ddl-embed.is-selected:not(.is-readonly) .cm-ddl-embed-resize {
+  display: block;
+}
+/* Only the corner that moves: a right float grows to the left, a left one to the right. */
+.cm-ddl-embed-right-wrap .cm-ddl-embed-resize-end,
+.cm-ddl-embed-right .cm-ddl-embed-resize-end,
+.cm-ddl-embed-left-wrap .cm-ddl-embed-resize-start,
+.cm-ddl-embed-left .cm-ddl-embed-resize-start,
+.cm-ddl-embed-full .cm-ddl-embed-resize-start {
+  /* biome-ignore lint/complexity/noImportantStyles: beats the selected state's display */
+  display: none !important;
+}
+
+/* Where a dragged embed will land: a line between two lines, and its box on that side. */
+.cm-ddl-embed-drop {
+  position: absolute;
+  z-index: 2;
+  height: 0;
+  border-top: 2px solid var(--ddl-accent);
+  pointer-events: none;
+}
+.cm-ddl-embed-drop > div {
+  position: absolute;
+  top: 4px;
+  box-sizing: border-box;
+  border: 1px dashed var(--ddl-accent);
+  border-radius: 6px;
+  background: var(--ddl-accent-soft);
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cm-ddl-embed {
+    transition: none;
+  }
 }

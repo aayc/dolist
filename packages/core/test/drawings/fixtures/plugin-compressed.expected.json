@@ -1,0 +1,73 @@
+{
+  "about": "plugin-json saved with compression on (the plugin's default): compressed-json in 256-character lines.",
+  "title": "plugin-compressed",
+  "sameSceneAs": "plugin-json.excalidraw.md",
+  "parse": {
+    "readable": true,
+    "compressed": true,
+    "problems": [],
+    "frontmatter": {
+      "excalidraw-export-dark": "false",
+      "excalidraw-plugin": "parsed",
+      "tags": "[excalidraw]",
+      "cssclasses": "wide"
+    },
+    "sections": [
+      "",
+      "# Excalidraw Data",
+      "## Text Elements",
+      "## Element Links",
+      "## Embedded Files",
+      "## Drawing"
+    ],
+    "textElements": [
+      {
+        "id": "Kp3xY7aQ",
+        "text": "Beds"
+      },
+      {
+        "id": "Tn4wE2rL",
+        "text": "[[Garden plan]]"
+      }
+    ],
+    "elements": [
+      {
+        "id": "Rb5mWq2X",
+        "type": "rectangle"
+      },
+      {
+        "id": "Kp3xY7aQ",
+        "type": "text"
+      },
+      {
+        "id": "Tn4wE2rL",
+        "type": "text"
+      },
+      {
+        "id": "Q8dLr2pWs0Xz4yBn6mVtC",
+        "type": "image"
+      },
+      {
+        "id": "Hc7Nq1ZsYk3Uw9Pf5RaLd",
+        "type": "embeddable"
+      },
+      {
+        "id": "Zp2Kd8Wq1Nf6Lm3Rt9YbE",
+        "type": "arrow"
+      }
+    ],
+    "texts": [
+      {
+        "id": "Kp3xY7aQ",
+        "text": "Beds"
+      },
+      {
+        "id": "Tn4wE2rL",
+        "text": "Garden plan"
+      }
+    ],
+    "files": []
+  },
+  "description": "Drawing “plugin-compressed” (600×175 px, 6 elements)\nText: “Garden plan”\nShapes: rectangle “Beds”\nArrows: “Beds” → “Garden plan”\nImages: 1 image\nOther: 1 embeddable",
+  "roundTrip": "plugin-compressed.roundtrip.excalidraw.md"
+}

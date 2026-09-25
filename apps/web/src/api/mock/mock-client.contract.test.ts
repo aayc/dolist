@@ -167,7 +167,11 @@ describe("MockDaemonClient ⇄ wire contract", () => {
       "- [ ] Email the landlord about the heater",
       "- [ ] Clean up the screenshots in my Downloads folder",
       "- [ ] Reserve a table for Friday",
+      "Find a plumber for Saturday",
+      "Is the pharmacy open on Sunday?",
+      "TODO: water the ferns",
     ]);
+    await checkQueries(client, path);
     client.send({ type: "editor.activity", notePath: path, line: 0 });
     await vi.advanceTimersByTimeAsync(3_000);
 

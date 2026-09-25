@@ -80,7 +80,7 @@ struct VimInterfaceTests {
         pressure: 1))
     _ = editor.controller.textView(
       editor.textView, mouseDownAt: editor.textView.convert(click.locationInWindow, from: nil),
-      modifiers: [])
+      modifiers: [], clickCount: 1)
     #expect(editor.session?.activePrompt == nil)
     #expect(editor.host.panelView == nil)
     #expect(editor.text == "some text")

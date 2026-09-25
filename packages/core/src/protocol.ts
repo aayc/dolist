@@ -19,6 +19,7 @@ import type {
   ApprovalDecision,
   ApprovalRequest,
   ApprovalScope,
+  OrchestratorActivity,
   Routine,
   RoutineNotification,
   RoutineNotify,
@@ -354,6 +355,8 @@ export interface AgentStatusResponse {
   placement?: AgentPlacementStatus;
   /** This daemon's own readiness to run the agent. */
   readiness?: AgentReadiness;
+  /** What the orchestrator is doing now, for a client joining mid-turn (then `orchestrator.activity`). */
+  orchestrator?: OrchestratorActivity;
 }
 
 export interface SetAgentEnabledRequest {
@@ -993,6 +996,8 @@ export type ServerEvent =
   | { type: "thread.delta"; threadId: string; messageId: string; delta: string }
   | { type: "approval.upsert"; approval: ApprovalRequest }
   | { type: "agent.status"; status: AgentStatusResponse }
+  /** What the orchestrator is doing, whenever that changes (coalesced; never per keystroke). */
+  | { type: "orchestrator.activity"; activity: OrchestratorActivity }
   | ({ type: "surface.frame" } & SurfaceFrame)
   | { type: "settings.changed"; settings: AppSettings }
   /** Every routine, whenever one changed (its file, its schedule, its last run). */

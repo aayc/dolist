@@ -12,6 +12,8 @@ actor FakeDaemon {
 
   enum TimedAction: Sendable {
     case settle(taskId: String, token: Int)
+    /// A note's noticed request-like lines settled: the orchestrator wakes.
+    case proseSettle(path: String, token: Int)
     case beat(jobId: String, generation: Int)
     case handover(generation: Int)
     case importStep(generation: Int, step: Int)
@@ -64,6 +66,7 @@ actor FakeDaemon {
   var surfaces: [SurfaceKey: AgentScript.BrowserPage] = [:]
   var surfaceSubscriptions: Set<SurfaceKey> = []
   var editorActivity: (notePath: String, line: Int, at: EpochMillis)?
+  var orchestrator = FakeOrchestrator()
 
   // Routines (by routine id; runs' "changed" by thread id)
   var routineStates: [String: FakeRoutineState] = [:]
@@ -203,6 +206,7 @@ actor FakeDaemon {
   private func perform(_ action: TimedAction) {
     switch action {
     case .settle(let taskId, let token): settled(taskId, token: token)
+    case .proseSettle(let path, let token): proseSettled(path, token: token)
     case .beat(let jobId, let generation): runBeat(jobId, generation: generation)
     case .handover(let generation): finishHandover(generation: generation)
     case .importStep(let generation, let step): runImportStep(generation: generation, step: step)

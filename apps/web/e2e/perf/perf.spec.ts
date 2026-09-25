@@ -265,6 +265,52 @@ test("vim mode: keystroke latency and long tasks in a 2000-line note", async ({ 
   expect(tasks.passed, `long tasks: ${JSON.stringify(longTasks)}`).toBe(true);
 });
 
+test("keystroke latency and long tasks while typing beside drawings", async ({ page }) => {
+  await boot(page);
+  await waitForPrefetch(page);
+  const placements = ["right-wrap", "left-wrap", "center", "right-wrap", "full", "left-wrap"];
+  const paragraph = "Notes beside a drawing wrap around it while the text is typed and edited. ";
+  const lines: string[] = ["# Drawings"];
+  placements.forEach((placement, i) => {
+    lines.push(`![[Garden plan.excalidraw|${260 + i * 20}|${placement}]]`);
+    for (let j = 0; j < 4; j++) lines.push(paragraph.repeat(3).trim(), "");
+  });
+  await page.evaluate(
+    ([path, content]) => window.__ddlMock!.createNote(path!, content!),
+    ["Perf/Drawings.md", lines.join("\n")],
+  );
+  await page.evaluate((path) => window.__ddlDebug!.openNote(path), "Perf/Drawings.md");
+  await expect(noteTitle(page)).toHaveValue("Drawings");
+  await expect(page.locator(".cm-ddl-embed-drawing svg").first()).toBeVisible({ timeout: 20_000 });
+  // Beside the first drawing, then let its renders and the autosave settle.
+  await page.locator(".cm-line", { hasText: "Notes beside" }).first().click();
+  await page.keyboard.press("End");
+  await page.waitForTimeout(800);
+  await page.evaluate(() => window.__ddlPerf!.clear());
+
+  const text = "Ask whether the south fence needs new posts before the beds are built ";
+  for (let round = 0; round < 3; round++) {
+    await page.keyboard.type(text, { delay: 25 });
+    await page.keyboard.press("Enter");
+  }
+  await page.waitForTimeout(800);
+
+  const { keystrokes, longTasks, drawings } = await page.evaluate(() => ({
+    keystrokes: window
+      .__ddlPerf!.measures.filter((m) => m.name === "keystroke")
+      .map((m) => m.duration),
+    longTasks: window.__ddlPerf!.longTasks.map((t) => t.duration),
+    drawings: document.querySelectorAll(".cm-ddl-embed-drawing svg").length,
+  }));
+  expect(drawings).toBeGreaterThan(2);
+  expect(keystrokes.length).toBeGreaterThan(200);
+  const latency = record("keystroke (beside drawings)", keystrokes, BUDGET_MS.keystrokeP95, "p95");
+  const over = longTasks.filter((d) => d > BUDGET_MS.longTaskMs);
+  const tasks = record("long tasks > 50ms while typing (beside drawings)", over, 0, "count");
+  expect(latency.passed).toBe(true);
+  expect(tasks.passed, `long tasks: ${JSON.stringify(longTasks)}`).toBe(true);
+});
+
 test("keystroke latency and long tasks while typing in a 2000-line note", async ({ page }) => {
   await boot(page);
   await waitForPrefetch(page);

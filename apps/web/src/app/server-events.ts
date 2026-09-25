@@ -1,5 +1,6 @@
 import type { AgentStatusResponse, ServerEvent } from "@ddl/core";
 import { uncitedLinks } from "../features/links/link-previews";
+import { applyActivity } from "../state/activity-store";
 import { dispatchAgentEvent, useAgentStore } from "../state/agent-store";
 import { applyImportJob } from "../state/obsidian-import-store";
 import { applyRoutinesChanged, updateRoutines } from "../state/routines-store";
@@ -80,6 +81,9 @@ export function handleServerEvent(event: ServerEvent, services: Services): void 
     case "import.progress":
       applyImportJob(event.job);
       announceImportEnd(event.job);
+      return;
+    case "orchestrator.activity":
+      applyActivity(event.activity);
       return;
     case "hello":
       return;

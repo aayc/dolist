@@ -78,7 +78,8 @@ export class PiHarness implements Harness {
     const model = (this.deps.resolveModel ?? this.resolveModel)(options.model, runtime);
     const ledger = new ToolCallLedger();
     const lifecycle: SessionLifecycle = { closed: false };
-    const definitions = this.buildTools(options, ledger, logger);
+    // Pi replaces images in tool results with a placeholder for models without image input.
+    const definitions = this.buildTools(options, ledger, logger, model.input.includes("image"));
     const toolNames = definitions.map((d) => d.name);
 
     let gateInstalled = false;
@@ -175,6 +176,7 @@ export class PiHarness implements Harness {
     options: HarnessSessionOptions,
     ledger: ToolCallLedger,
     logger: Logger,
+    images: boolean,
   ): AnyToolDefinition[] {
     const builtins = createBuiltinTools({
       cwd: options.cwd,
@@ -185,7 +187,9 @@ export class PiHarness implements Harness {
     const builtinNames = new Set(builtins.map((d) => d.name));
     const clash = options.tools.find((spec) => builtinNames.has(spec.name));
     if (clash) throw new Error(`Tool "${clash.name}" conflicts with an enabled built-in tool`);
-    const custom = options.tools.map((spec) => toolSpecToDefinition(spec, { ledger, logger }));
+    const custom = options.tools.map((spec) =>
+      toolSpecToDefinition(spec, { ledger, logger, images }),
+    );
     return [...builtins, ...custom].map((definition) => guardDefinition(definition, ledger));
   }
 

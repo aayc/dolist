@@ -9,8 +9,9 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p test/tsconfig.json",
     "test": "vitest run --passWithNoTests",
+    "drawings:fixtures": "tsx test/drawings/generate.ts",
     "bench": "vitest bench --run --reporter=default --reporter=json --outputFile.json=bench-results.json"
   }
 }

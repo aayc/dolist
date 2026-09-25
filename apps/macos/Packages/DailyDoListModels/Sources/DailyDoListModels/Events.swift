@@ -110,6 +110,8 @@ public enum ServerEvent: Hashable, Sendable {
   case threadDelta(ThreadDeltaEvent)
   case approvalUpsert(ApprovalRequest)
   case agentStatus(AgentStatusResponse)
+  /// What the orchestrator is doing (noticed lines, reading, thinking, acting, the outcome).
+  case orchestratorActivity(OrchestratorActivity)
   case surfaceFrame(SurfaceFrame)
   case settingsChanged(AppSettings)
   /// Every routine, whenever one changed.
@@ -133,6 +135,7 @@ public enum ServerEvent: Hashable, Sendable {
     case .threadDelta: "thread.delta"
     case .approvalUpsert: "approval.upsert"
     case .agentStatus: "agent.status"
+    case .orchestratorActivity: "orchestrator.activity"
     case .surfaceFrame: "surface.frame"
     case .settingsChanged: "settings.changed"
     case .routinesChanged: "routines.changed"
@@ -146,7 +149,7 @@ public enum ServerEvent: Hashable, Sendable {
 
 extension ServerEvent: Codable {
   private enum Keys: String, CodingKey {
-    case type, record, thread, approval, status, settings, routines, notification, job
+    case type, record, thread, approval, status, activity, settings, routines, notification, job
   }
 
   public init(from decoder: Decoder) throws {
@@ -164,6 +167,8 @@ extension ServerEvent: Codable {
       self = .approvalUpsert(try c.decode(ApprovalRequest.self, forKey: .approval))
     case "agent.status":
       self = .agentStatus(try c.decode(AgentStatusResponse.self, forKey: .status))
+    case "orchestrator.activity":
+      self = .orchestratorActivity(try c.decode(OrchestratorActivity.self, forKey: .activity))
     case "surface.frame": self = .surfaceFrame(try SurfaceFrame(from: decoder))
     case "settings.changed":
       self = .settingsChanged(try c.decode(AppSettings.self, forKey: .settings))
@@ -195,6 +200,8 @@ extension ServerEvent: Codable {
       try encodeWrapped(approval, key: .approval, type: "approval.upsert", to: encoder)
     case .agentStatus(let status):
       try encodeWrapped(status, key: .status, type: "agent.status", to: encoder)
+    case .orchestratorActivity(let activity):
+      try encodeWrapped(activity, key: .activity, type: "orchestrator.activity", to: encoder)
     case .surfaceFrame(let frame):
       try encodeTagged(frame, kind: "surface.frame", key: "type", to: encoder)
     case .settingsChanged(let settings):

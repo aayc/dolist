@@ -169,6 +169,34 @@ struct TooltipTests {
     await model.teardown()
   }
 
+  /// The orchestrator's indicators (the note header while it works on the open note, the status
+  /// bar while it works elsewhere) say what woke it and open its chat.
+  @Test func theOrchestratorIndicatorsOpenItsChat() async throws {
+    let (model, workspace) = try await SnapshotTests().bootedModel()
+    let daily = "Daily/2026-09-23.md"
+    func indicators() -> [TooltipAnchorView] {
+      anchors(model, workspace).filter { $0.command == CommandID.orchestratorChat.rawValue }
+    }
+    #expect(indicators().isEmpty, "nothing while it's idle")
+
+    workspace.orchestrator.apply(
+      .note(.thinking, daily, [(10, "Notes from standup")], turn: "msg_1"))
+    let header = try #require(indicators().first)
+    #expect(
+      header.tooltipContent()?.plainText
+        == "Woken by “Notes from standup” — open the orchestrator chat")
+    #expect(header.tooltipContent()?.lines.first?.keys == CommandID.orchestratorChat.shortcut)
+
+    workspace.orchestrator.apply(
+      .note(.acting, "Projects/Launch Plan.md", [(1, "- [ ] Draft announcement")], turn: "msg_2"))
+    let item = try #require(indicators().first)
+    #expect(
+      item.tooltipContent()?.plainText
+        == "Woken by “- [ ] Draft announcement” — open the orchestrator chat")
+    #expect(indicators().count == 1, "the header's indicator is only for the open note")
+    await model.teardown()
+  }
+
   @Test func thePaletteShowsTheCatalogsShortcuts() async throws {
     let model = AppModel(environment: makeEnvironment(client: FakeDaemonClient()))
     await model.boot()

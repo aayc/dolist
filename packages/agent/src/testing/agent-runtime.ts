@@ -231,6 +231,7 @@ const RUNTIME_EVENTS: Record<keyof AgentRuntimeEvents, true> = {
   "thread.delta": true,
   "approval.upsert": true,
   status: true,
+  "orchestrator.activity": true,
   "surface.frame": true,
   "routines.changed": true,
   "routine.notification": true,

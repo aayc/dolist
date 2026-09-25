@@ -418,6 +418,53 @@ primary/target versions, `b`: merge base for text up to 256 KiB). It is never sy
 snapshot that is unreadable or belongs to another target is ignored (a full re-sync). It predates
 this contract and uses `format` rather than `version`.
 
+## Drawings — `Excalidraw/<Name>.excalidraw.md` (vault content, owned by @ddl/core)
+
+Drawings are user notes, not sidecar state: plain files in the Obsidian Excalidraw plugin's format,
+so the plugin opens ours and we open its. `packages/core/src/drawings/` reads and writes them
+(pure; the web app, the daemon and the agent share it) and the Swift engine follows the same rules.
+Clients read and write them through the notes API like any note (`readNote`, `writeNote` with
+`baseVersion`); there is no drawing route.
+
+- **Names:** new drawings go in `Excalidraw/`, named like the plugin names them in local time
+  (`newDrawingName`: `Drawing 2026-09-25 11.52.33`; `drawingPathForName`; `uniqueDrawingPath`
+  adds `_0`, `_1`, … like the plugin). `isDrawingPath` checks the name; `isDrawingMarkdown`
+  checks the frontmatter, since the plugin can turn any note into a drawing.
+- **Layout:** frontmatter with `excalidraw-plugin: parsed` and `tags: [excalidraw]`, the plugin's
+  notice line, `# Excalidraw Data`, `## Text Elements` (each text element's text, then
+  ` ^<element id>`), optional `## Element Links` and `## Embedded Files`, `%%`, `## Drawing` with
+  the scene in a fenced block, `%%`. We write `json` (tab-indented, like the plugin); we read `json`
+  and `compressed-json` (LZ-String base64 in 256-character lines, the plugin's default; the
+  vendored LZ-String keeps its MIT notice).
+- **Scene:** Excalidraw's exported scene (`type: "excalidraw"`, `version: 2`, `source`,
+  `elements`, `appState`, `files`). The types model the elements we understand and pass everything
+  else through.
+- **Round trips:** `serializeDrawingFile(scene, previous)` keeps what it doesn't regenerate:
+  frontmatter keys, the text above the drawing data, other sections, and scene, `appState`, file and
+  element fields the new scene lacks (an editor that drops fields it doesn't know loses nothing).
+  `## Text Elements` is regenerated from the scene.
+- **Plugin rules we follow:** `## Text Elements` wins over the scene when they differ (the plugin
+  treats it as the truth); `rawText` follows the text once it changes; `source` names the plugin
+  version whose format we write (any other value makes the plugin flag every text container as
+  legacy-wrapped); new element ids should be 8 characters from `[0-9a-zA-Z]`
+  (`newDrawingElementId`), since the plugin re-keys longer text element ids.
+- **Unreadable files:** `parseDrawingFile` never throws; a scene it can't read comes back empty with
+  `readable: false` and `problems`, and `serializeDrawingFile` refuses to write over it.
+- **Embeds:** `![[Name.excalidraw|360|right-wrap]]` — alias, size (`360`, `360x240`, `x240`,
+  `50%`) and style (`left`, `right`, `center`, `left-wrap`, `right-wrap`; none is full width), split
+  the way the plugin does (`parseDrawingEmbed`, `formatDrawingEmbed`, `findDrawingEmbeds`).
+- **Concurrent edits:** `mergeDrawingElements(base, local, remote)` merges two edits of a drawing
+  by element id: the newer edit wins (higher `version`, then lower `versionNonce`, Excalidraw's
+  rule), and `base` (the file both started from) tells a deletion from an addition, so an element
+  one side dropped and the other didn't change is gone while one the other side changed survives.
+  Local additions go after the element before them locally; with fractional `index`es on every
+  element, the result is sorted by them. Clients save the merge over the newer version.
+- **Description:** `describeDrawing(scene, { title })` is the bounded (2 000 code points),
+  deterministic text the agent sees for a drawing.
+- **Fixtures:** `packages/core/test/drawings/` holds drawings in both forms with their expected
+  parse, description and round trip; TypeScript and Swift replay the same files (the contract is
+  in its README).
+
 ## Golden fixtures
 
 `packages/contract/fixtures/persisted/<format>/`, byte-exact (Biome ignores the folder):

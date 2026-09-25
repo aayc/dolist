@@ -552,12 +552,14 @@ public struct AgentStatusResponse: Codable, Hashable, Sendable {
   public var placement: AgentPlacementStatus?
   /// This daemon's own readiness to run the agent (absent from older daemons).
   public var readiness: AgentReadiness?
+  /// What the orchestrator is doing, for a client joining mid-turn (absent from older daemons).
+  public var orchestrator: OrchestratorActivity?
 
   public init(
     mode: AgentMode, enabled: Bool, model: String, running: Int, queued: Int,
     pendingApprovals: Int, connectors: [ConnectorStatus], execution: ExecutionStatus,
     problem: String? = nil, placement: AgentPlacementStatus? = nil,
-    readiness: AgentReadiness? = nil
+    readiness: AgentReadiness? = nil, orchestrator: OrchestratorActivity? = nil
   ) {
     self.mode = mode
     self.enabled = enabled
@@ -570,6 +572,7 @@ public struct AgentStatusResponse: Codable, Hashable, Sendable {
     self.problem = problem
     self.placement = placement
     self.readiness = readiness
+    self.orchestrator = orchestrator
   }
 }
 

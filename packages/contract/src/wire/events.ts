@@ -5,6 +5,7 @@
 import { z } from "zod";
 import {
   ApprovalRequestSchema,
+  OrchestratorActivitySchema,
   RoutineNotificationSchema,
   RoutineSchema,
   SurfaceKindSchema,
@@ -134,6 +135,15 @@ export const AgentStatusEventSchema = named(
   z.looseObject({ type: z.literal("agent.status"), status: AgentStatusResponseSchema }),
 );
 
+export const OrchestratorActivityEventSchema = named(
+  "OrchestratorActivityEvent",
+  "What the orchestrator is doing changed (coalesced; never per keystroke). `noticed` events name lines before any turn; a turn goes `reading` → `thinking` ⇄ `acting` → `idle` with its outcome, all with the same `turnId`.",
+  z.looseObject({
+    type: z.literal("orchestrator.activity"),
+    activity: OrchestratorActivitySchema,
+  }),
+);
+
 export const SurfaceFrameEventSchema = named(
   "SurfaceFrameEvent",
   "A live surface frame; only sent to clients subscribed to that thread's surface (droppable).",
@@ -190,6 +200,7 @@ export const ServerEventSchema = named(
     ThreadDeltaEventSchema,
     ApprovalUpsertEventSchema,
     AgentStatusEventSchema,
+    OrchestratorActivityEventSchema,
     SurfaceFrameEventSchema,
     SettingsChangedEventSchema,
     RoutinesChangedEventSchema,

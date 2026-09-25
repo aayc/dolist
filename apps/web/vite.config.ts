@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type ProxyOptions } from "vite";
+import { EXCALIDRAW_ASSET_DIR, excalidrawAssets } from "./excalidraw-assets.ts";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as {
   version: string;
@@ -51,9 +52,10 @@ const withDaemonAuth: ProxyOptions["configure"] = (proxy) => {
 };
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), excalidrawAssets()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    __EXCALIDRAW_ASSET_DIR__: JSON.stringify(EXCALIDRAW_ASSET_DIR),
   },
   server: {
     host: "127.0.0.1",

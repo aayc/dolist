@@ -170,6 +170,10 @@ struct CommandCatalog {
           Task { await model.settings.update(SettingsPatch(editor: .init(vimMode: value))) }
         }),
       AppCommand(
+        .insertDrawing, "Insert Drawing", palette: "Insert drawing",
+        enabled: { ws()?.canInsertDrawing ?? false },
+        perform: later { await $0.insertDrawing() }),
+      AppCommand(
         .increaseFontSize, "Increase Font Size", palette: "Increase font size", enabled: ready
       ) {
         Self.adjustFontSize(model: model, by: 1)

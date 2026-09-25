@@ -25,6 +25,7 @@ struct InvalidFixtureTests {
     "AgentStatusResponse": [
       "unknown reason for holding the agent here": .tolerated(openEnum),
       "placement without its relay state": .rejected,
+      "orchestrator activity without a phase": .rejected,
     ],
     "ApiErrorBody": [
       "unknown code": .tolerated("ApiErrorCode is open: unknown codes are handled by HTTP status"),
@@ -213,6 +214,18 @@ struct InvalidFixtureTests {
       "approval.upsert with an unsafe integer timestamp": .tolerated(
         "EpochMillis is a Double, like a JavaScript number"),
       "error with an unknown code": .tolerated(openEnum),
+      "orchestrator.activity with an unknown phase": .tolerated(openEnum),
+      "orchestrator.activity without its activity": .rejected,
+    ],
+    "OrchestratorActivity": [
+      "unknown phase": .tolerated(openEnum),
+      "trigger of an unknown kind": .tolerated(openEnum),
+      "trigger without a summary": .rejected,
+      "negative line": .tolerated(constraint),
+      "non-canonical note path": .tolerated(constraint),
+      "outcome of an unknown kind": .tolerated(openEnum),
+      "outcome thread id unsafe in a URL": .tolerated(
+        "ids are opaque; the HTTP client refuses unsafe ids before a request"),
     ],
     "SetAgentEnabledRequest": [
       "string boolean": .rejected,

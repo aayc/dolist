@@ -145,5 +145,17 @@
     "value": { "type": "error", "message": "Nope", "code": "teapot" },
     "path": ["code"],
     "code": "invalid_value"
+  },
+  {
+    "name": "orchestrator.activity with an unknown phase",
+    "value": { "type": "orchestrator.activity", "activity": { "phase": "dreaming" } },
+    "path": ["activity", "phase"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "orchestrator.activity without its activity",
+    "value": { "type": "orchestrator.activity", "phase": "idle" },
+    "path": ["activity"],
+    "code": "invalid_type"
   }
 ]

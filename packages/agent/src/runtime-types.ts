@@ -43,6 +43,7 @@ export interface AgentRuntimeEvents {
   "thread.delta": ServerEventPayload<"thread.delta">;
   "approval.upsert": ServerEventOf<"approval.upsert">["approval"];
   status: ServerEventOf<"agent.status">["status"];
+  "orchestrator.activity": ServerEventOf<"orchestrator.activity">["activity"];
   "surface.frame": ServerEventPayload<"surface.frame">;
   "routines.changed": Routine[];
   "routine.notification": RoutineNotification;

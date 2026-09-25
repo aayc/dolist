@@ -203,9 +203,10 @@ public final class AppModel {
     await agent?.setEnabled(enabled)
   }
 
-  /// Saves every open note (window resign, quit).
+  /// Saves every open note and drawing (window resign, quit).
   func flushAll() async {
     await workspace?.notes.flushAll()
+    await workspace?.drawings.flushAll()
   }
 
   /// Quit: flush pending saves (bounded), then stop a daemon we launched.

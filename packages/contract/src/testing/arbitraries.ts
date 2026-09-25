@@ -262,6 +262,79 @@ const threadBase = () => ({
   routineId: p.runtimeId("rtn"),
 });
 
+const orchestratorPhase = () =>
+  enumOf<core.OrchestratorPhase>("idle", "noticed", "reading", "thinking", "acting");
+const orchestratorTriggerKind = () =>
+  enumOf<core.OrchestratorTriggerKind>("note", "task", "message", "routine", "approval", "other");
+const TRIGGER_SUMMARIES = [
+  "your note",
+  "“call mom tomorrow”",
+  "3 lines in your note",
+  "your message",
+  "routine “Morning briefing”",
+  "“Book dentist” finished",
+];
+const orchestratorTrigger = (): Arb<core.OrchestratorTrigger> =>
+  fc.record(
+    {
+      kind: orchestratorTriggerKind(),
+      notePath: p.notePath(),
+      lines: fc.array(
+        fc.record({
+          line: p.count(),
+          text: fc.oneof(
+            {
+              weight: 4,
+              arbitrary: enumOf(
+                "find a plumber for Saturday",
+                "What's the tallest building in NYC?",
+                "Café ☕ with Zoë — remind me",
+              ),
+            },
+            { weight: 1, arbitrary: p.text(300) },
+          ),
+        }),
+        { maxLength: 4 },
+      ),
+      summary: fc.oneof(
+        { weight: 4, arbitrary: enumOf(...TRIGGER_SUMMARIES) },
+        { weight: 1, arbitrary: p.text(80) },
+      ),
+    },
+    { requiredKeys: ["kind", "summary"] },
+  );
+const orchestratorOutcomeKind = () =>
+  enumOf<core.OrchestratorOutcomeKind>(
+    "no_action",
+    "tasks_added",
+    "note_edited",
+    "replied",
+    "delegated",
+    "routine_created",
+    "asked_approval",
+  );
+const orchestratorOutcome = (): Arb<core.OrchestratorOutcome> =>
+  fc.record(
+    {
+      kind: orchestratorOutcomeKind(),
+      count: p.count(20),
+      threadId: fc.oneof(p.runtimeId("thr"), p.runtimeId("anc"), orchestratorThreadId()),
+      text: p.text(160),
+    },
+    { requiredKeys: ["kind"] },
+  );
+const orchestratorActivity = (): Arb<core.OrchestratorActivity> =>
+  fc.record(
+    {
+      phase: orchestratorPhase(),
+      turnId: p.id("msg"),
+      trigger: orchestratorTrigger(),
+      startedAt: p.epochMs(),
+      outcome: orchestratorOutcome(),
+    },
+    { requiredKeys: ["phase"] },
+  );
+
 const citedSource = (): Arb<core.CitedSource> =>
   fc.record(
     { url: fc.webUrl(), title: p.text(120), snippet: p.text(300) },
@@ -748,6 +821,7 @@ const agentStatusResponse = (): Arb<core.AgentStatusResponse> =>
       problem: p.text(500),
       placement: agentPlacementStatus(),
       readiness: agentReadiness(),
+      orchestrator: orchestratorActivity(),
     },
     {
       requiredKeys: [
@@ -1444,6 +1518,11 @@ const approvalUpsertEvent = (): Arb<EventOf<"approval.upsert">> =>
   fc.record({ type: fc.constant("approval.upsert" as const), approval: approvalRequest() });
 const agentStatusEvent = (): Arb<EventOf<"agent.status">> =>
   fc.record({ type: fc.constant("agent.status" as const), status: agentStatusResponse() });
+const orchestratorActivityEvent = (): Arb<EventOf<"orchestrator.activity">> =>
+  fc.record({
+    type: fc.constant("orchestrator.activity" as const),
+    activity: orchestratorActivity(),
+  });
 const surfaceFrameEvent = (): Arb<EventOf<"surface.frame">> =>
   fc.record(
     { type: fc.constant("surface.frame" as const), ...surfaceFrameFields() },
@@ -1478,6 +1557,7 @@ const serverEvent = (): Arb<core.ServerEvent> =>
     threadDeltaEvent(),
     approvalUpsertEvent(),
     agentStatusEvent(),
+    orchestratorActivityEvent(),
     surfaceFrameEvent(),
     settingsChangedEvent(),
     routinesChangedEvent(),
@@ -1583,6 +1663,12 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   ThreadMessage: threadMessage,
   SurfaceKind: surfaceKind,
   OrchestratorThreadId: orchestratorThreadId,
+  OrchestratorPhase: orchestratorPhase,
+  OrchestratorTriggerKind: orchestratorTriggerKind,
+  OrchestratorTrigger: orchestratorTrigger,
+  OrchestratorOutcomeKind: orchestratorOutcomeKind,
+  OrchestratorOutcome: orchestratorOutcome,
+  OrchestratorActivity: orchestratorActivity,
   Thread: thread,
   CitedSource: citedSource,
   ThreadSummary: threadSummary,
@@ -1707,6 +1793,7 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   ThreadDeltaEvent: threadDeltaEvent,
   ApprovalUpsertEvent: approvalUpsertEvent,
   AgentStatusEvent: agentStatusEvent,
+  OrchestratorActivityEvent: orchestratorActivityEvent,
   SurfaceFrameEvent: surfaceFrameEvent,
   SettingsChangedEvent: settingsChangedEvent,
   RoutinesChangedEvent: routinesChangedEvent,
@@ -1745,6 +1832,12 @@ export const arb = plainFactories({
   threadMessage,
   surfaceKind,
   orchestratorThreadId,
+  orchestratorPhase,
+  orchestratorTriggerKind,
+  orchestratorTrigger,
+  orchestratorOutcomeKind,
+  orchestratorOutcome,
+  orchestratorActivity,
   thread,
   threadSummary,
   surfaceFrameAction,
@@ -1841,6 +1934,7 @@ export const arb = plainFactories({
   threadDeltaEvent,
   approvalUpsertEvent,
   agentStatusEvent,
+  orchestratorActivityEvent,
   surfaceFrameEvent,
   settingsChangedEvent,
   routinesChangedEvent,

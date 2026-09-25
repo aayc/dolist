@@ -37,9 +37,14 @@ Tests: `packages/agent/test/journeys/living-list.test.ts` (J1), `test/scenarios/
 Only lines that read as addressed to the agent wake it: a question, `@agent …`, `TODO …`, or a line
 starting with a request verb ("Find…", "Book…", "Remind me…").
 
-Tests: agent journeys J2 (three tests), `packages/agent/src/orchestrator/prose.test.ts`,
-`test/task-watcher.test.ts` ("the rest of the note"), web e2e and Mac `LivingListTests` (anchored
-line band and badge).
+While you write, the orchestrator shows what it's doing about such a line: a quiet dot at its end
+as soon as it notices it, "Orchestrator is looking…", "Working…", then what it did ("Replied ↗",
+"Started a task ↗") or "Nothing to do", which fades; the note's header says when it works on the
+note (see `apps/web/README.md`).
+
+Tests: agent journeys J2 (three tests), `packages/core/src/markdown/prose.test.ts`,
+`test/task-watcher.test.ts` ("the rest of the note"), web e2e (`orchestrator-activity.spec.ts`
+for the chips) and Mac `LivingListTests` (anchored line band and badge).
 
 ## J3. Your own words stay yours
 

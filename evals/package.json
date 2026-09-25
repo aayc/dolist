@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@ddl/agent": "workspace:*",
-    "@ddl/core": "workspace:*"
+    "@ddl/core": "workspace:*",
+    "@ddl/storage": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.23.15"

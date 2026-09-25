@@ -44,8 +44,9 @@ future iPhone app too.
 | `Packages/DailyDoListModels` (iOS) | Swift mirror of the wire protocol (`packages/core/src/protocol.ts`), checked against the `@ddl/contract` fixtures. |
 | `Packages/DailyDoListClient` (iOS) | `DaemonClient`: `HTTPDaemonClient` (REST + WebSocket, reconnects and resyncs) and `InMemoryDaemonClient` (the demo and test fake). |
 | `Packages/DailyDoListDomain` (iOS) | Pure domain logic ported from `@ddl/core`: dates and daily notes, task parsing and tracking, line anchors, agent-line markers, three-way merges, wikilinks, paths, fuzzy matching, and the remote access validators. |
-| `Packages/DailyDoListEditor` | The TextKit markdown editor: live preview, clickable checkboxes, agent badges, and vim mode (it hosts `DailyDoListVim`). |
+| `Packages/DailyDoListEditor` | The TextKit markdown editor: live preview, clickable checkboxes, agent badges, drawings embedded in notes (floats the text wraps around, edited in place with `DailyDoListDrawing`'s canvas), and vim mode (it hosts `DailyDoListVim`). |
 | `Packages/DailyDoListVim` (iOS) | Vim mode: a port of the web editor's vim.js and its CodeMirror 6 adapter, checked against the web app's vim vectors; hosts implement `VimEditor` ([README](Packages/DailyDoListVim/README.md)). |
+| `Packages/DailyDoListDrawing` (model: iOS) | The native drawing engine: Excalidraw scenes in Obsidian's `.excalidraw.md` files (`DailyDoListDrawingModel`, Foundation only, checked against `@ddl/core`'s shared fixtures), a Rough.js port, the CoreGraphics renderer, Excalidraw's tools and shortcuts, and `DrawingCanvasView`, the canvas the editor embeds ([README](Packages/DailyDoListDrawing/README.md)). |
 | `Packages/DailyDoListAgent` | Agent state and UI: inbox, threads (the live chat: [The agent chat](#the-agent-chat)), the orchestrator's chat ([The orchestrator's chat](#the-orchestrators-chat)), routines ([Routines](#routines)), approval cards, artifacts, notifications, menu bar, Dock badge. |
 | `Packages/DailyDoListUI` | What the shell, the agent UI and the editor share: the app's one tooltip (`TooltipCenter`, `.tooltip(…)`), keycaps (`KeyShortcut`, `Keycaps`), `.pointingHandCursor()`, `IconButton`, and the chrome and accent button styles. `DailyDoListUITestSupport` finds tooltips in tests and draws them into snapshots. |
 | `Packages/DailyDoListDaemon` | `DaemonSupervisor`: finds Node and the daemon, attaches or launches, health-checks, restarts, stops. |
@@ -125,6 +126,70 @@ future iPhone app too.
   typing never writes, and a merge never brings a deleted line back unless you typed it (see
   "Saving and merging" in the editor's README).
 
+## Drawings in notes
+
+Excalidraw drawings, in the Obsidian Excalidraw plugin's files (`Excalidraw/<Name>.excalidraw.md`),
+drawn and edited by the native engine (`DailyDoListDrawing`) and embedded with the plugin's syntax
+([spec](../../docs/specs/drawings.md)); the web app does the same with the real Excalidraw.
+
+- **In a note**, a line that is one `![[Plan.excalidraw|360|right-wrap]]` (also `left-wrap`,
+  `left`, `right`, `center`, `WxH`, `50%`; none is full width) shows the drawing, unless the
+  caret is on it (then its syntax shows, as in source mode). A float's text wraps around it. See
+  the [editor README](Packages/DailyDoListEditor/README.md#drawings).
+- **Select, move, resize**: click a drawing to select it; drag it to another line (the left or
+  right third of the column floats it there, the middle makes it full width), drag its corner to
+  resize it, press Delete to remove the embed (the file stays). Each is one undoable edit.
+- **Edit in place**: double-click, or Return while selected. The drawing's box becomes the canvas,
+  with its tool bar next to it (Excalidraw's tools and shortcuts), and grows while you draw.
+  Escape or a click outside ends editing. Vim and the note's shortcuts don't see its keys.
+- **Insert Drawing** (⇧⌘X; the palette, the Edit menu, the editor's context menu, vim's
+  `:obcommand editor:insert-drawing`) creates `Excalidraw/Drawing <date time>.excalidraw.md`
+  through the daemon, embeds it at the caret's line floating right, 360 wide, and starts editing.
+- **Saving** (`Stores/DrawingStore.swift`): edits save debounced through the daemon with the
+  version they were read at. When the file changed elsewhere (a 409, or a change announced while
+  edits are unsaved), the two scenes are merged element by element (newer versions win, both
+  sides' new elements stay) and the merge is saved on top of theirs. Changes from the web app,
+  Obsidian or sync update the drawing on screen, in place too. A file that can't be read is
+  never written over.
+- **Opening a `.excalidraw.md`** shows the drawing full size in the pane, edited in the canvas;
+  the button at its top right shows the Markdown source (and back).
+
+## What the orchestrator is doing while you write
+
+The spec is `docs/specs/orchestrator-activity.md`: the daemon pushes `orchestrator.activity`
+(`noticed`, then `reading`, `thinking`, `acting`, then `idle` with an outcome), and `agent.status`
+carries the turn under way for a client that joins mid-turn. The wording and behavior are the web
+app's.
+
+- **Chips** end each line that woke it, styled like the task badges: a quiet pulsing dot when it
+  noticed the line, "Orchestrator is looking…" while it reads and thinks, "Working…" while it
+  acts, then the outcome ("Added a task ↗", "Added 3 tasks ↗", "Replied ↗", "Started a task ↗",
+  "Made a routine ↗", "Needs your approval ↗", "Nothing to do"). While a turn waits for your
+  approval its chips say "Needs your approval ↗" until it moves on. An outcome fades after 6 s,
+  "Nothing to do" after 2.5 s (the web's timings). Clicking a chip opens the thread its turn
+  started, or the orchestrator's chat window scrolled to the turn (its first message briefly
+  highlighted). The
+  tooltip says what it's doing or what it did. With Reduce Motion nothing pulses and outcomes just
+  go.
+- **Where chips go:** each is placed once per document by its line and text (the same line if
+  its text is still there, else the nearest line with that text, else the most similar line the
+  editor would still recognize within 20 lines: `ChipBuilder`), then the editor maps it through
+  edits like a badge and drops it when its line is edited beyond recognition
+  (`EditorLineMatch`); it doesn't come back. A line with a task's badge keeps only that badge
+  (the task's triage speaks for it). Chips update on events and editor edits only: nothing runs
+  per keystroke.
+- **The note header** says "Orchestrator: reading this note…", "thinking…" or "working…" beside
+  the title while a turn is about the open note; **the status bar** says "Orchestrator: working on
+  2026-09-24" while it's about another note (or what woke it: "working on your message"). Both open
+  the orchestrator's chat at the turn, and their tooltip says what woke it.
+- **Code:** `OrchestratorChipBoard` (events → chips per line, pure), `OrchestratorActivityStore`
+  (the timers, the turn under way, snapshots from `agent.status`), `ChipBuilder` (wording,
+  placement), `OrchestratorIndicators.swift` (header, status bar), `AgentStore.orchestratorFocus`
+  (the turn the chat scrolls to). `AppModel` routes the events and adopts the status's activity
+  after each refresh (unless an event came in meanwhile; nothing under way clears unfinished
+  chips). A pushed `agent.status` isn't adopted: it repeats the events and keeps a finished turn's
+  outcome for a while, and a turn's chips end only once.
+
 ## The agent chat
 
 A thread's Chat tab shows what the agent is doing as it does it. Everything comes from what the
@@ -178,8 +243,11 @@ That window is a single `Window` scene: choosing the command again brings it for
 `OrchestratorChatView` (in `DailyDoListAgent`) composes the thread's `MessageRow`s and `Composer`:
 each turn's status line, *Thought for N s*, the decisions as tool calls with a link to their task's
 thread under each (it opens in the main window's agent panel), the user's messages and the
-streamed replies. **Stop** in its header ends a turn in progress. The in-memory daemon of demo mode
-simulates it: a turn per delegated task and finished report, and a streamed reply when you write.
+streamed replies. **Stop** in its header ends a turn in progress. A chip or an orchestrator
+indicator opens it at a turn (`AgentStore.focusOrchestratorMessage`): it scrolls there once the
+message is loaded and highlights it for 2 s. The in-memory daemon of demo mode simulates it: a turn
+per delegated task and finished report, a turn for each request-like line you write (see below),
+and a streamed reply when you write to it.
 
 ## Routines
 
@@ -375,6 +443,12 @@ in real time. The demo syncs and has a paired always-on machine (`vm-name`), so 
 toggle and Settings → Always-On work, handovers included. There's no daemon, no Node and no
 network, which makes it good for trying the app, UI work and screenshots. Connection settings
 apply on the next normal launch.
+
+Writing a line that may be addressed to the agent in today's note (a port of the daemon's
+`mayBeRequest`: "find a quiet dishwasher", "remind me to…", a question) shows the orchestrator's
+activity: the line is noticed at once, and after the settle delay it reads, thinks and acts,
+adding "- [ ] Find a quiet dishwasher" under it as its own line ("Added a task ↗"), or answers a
+question in its chat ("Replied ↗"). Plain prose wakes nothing.
 
 ## Managed vs. external daemon
 
@@ -667,12 +741,28 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   Finder), the Vault section's tooltips, and the switch (the preference and a restart, the daemon's
   own switch under the app's supervisor and from an external daemon, sync, DDL_VAULT and the demo
   blocking it). Snapshots: `app-snapshots/obsidian-import-*` and `settings-general-vault*`.
+- **The orchestrator's activity**: the models' `OrchestratorActivityTests` (spec-shaped JSON,
+  lenient kinds), the client's `InMemoryActivityTests` (the fake's sequences, checked against the
+  contract schema once it declares them), the editor's `OrchestratorChipTests` (matching lines,
+  mapping and dropping, look, pulse and fade) and `chips-*` snapshots, and in the app
+  `OrchestratorChipTests` (the board, the store's timers, snapshots, placement and wording),
+  `OrchestratorActivityRoutingTests` (events and status through `AppModel`, chips in the editor,
+  clicks, a demo turn end to end), the tooltip checks and the `orchestrator-*` snapshots.
 - **Computer use access**: `ComputerAccessTests` run the permission flow against fakes (the
   prompt before the System Settings link, the links' fallbacks, the guide's steps, polling that
   stops, the relaunch's order, the banner's rules and its dismissal), and the snapshots draw the
   Computer Use tab, the guide and the banner (`app-snapshots/settings-computer-use-*`,
   `computer-access-guide-*`, `computer-access-banner-*`). Nothing in the tests prompts, opens
   System Settings or relaunches.
+- **Drawings**: `DailyDoListDrawing` replays `@ddl/core`'s shared drawing fixtures (when they're
+  in the checkout), checks its Rough.js port against samples from Rough.js itself, drives its
+  editor and canvas with pointer sequences and real `NSEvent`s, renders snapshots of every element
+  type in both themes (`.build/drawing-snapshots/`), and holds 2,000-element drawings to 60 fps
+  budgets ([README](Packages/DailyDoListDrawing/README.md#testing)). `DailyDoListEditor` drives
+  embeds with real `NSEvent`s in an offscreen window (wrapping, select, move, resize, insert,
+  editing in place, vim), renders them light and dark (`editor-snapshots/drawings-*`) and times
+  typing in a note with six drawings; the app's `DrawingTests` cover saving, the 409 merge,
+  changes from elsewhere and Insert Drawing against the fake daemon.
 - **Computer use helper**: `DailyDoListComputer`'s tests run the helper against fakes for
   accessibility (a fake tree that records every read and action), apps, windows, input, capture,
   permissions, parent processes and time: the codec and every error code, strict params, the tree

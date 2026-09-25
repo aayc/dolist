@@ -3,8 +3,9 @@ import DailyDoListUI
 import SwiftUI
 
 /// Above the editor. A daily note shows its date as the title with the date navigator below it;
-/// any other note shows its folder breadcrumb and the inline-renamable title. Keyed by path by its
-/// parent so edits reset on note switch.
+/// any other note shows its folder breadcrumb and the inline-renamable title. While the
+/// orchestrator works on the note, the title's row says so. Keyed by path by its parent so edits
+/// reset on note switch.
 struct NoteHeaderView: View {
   let workspace: Workspace
   let path: String
@@ -20,7 +21,10 @@ struct NoteHeaderView: View {
             .font(.system(size: 11))
             .foregroundStyle(Theme.faintText)
         }
-        NoteTitleField(workspace: workspace, path: path)
+        HStack(spacing: 12) {
+          NoteTitleField(workspace: workspace, path: path)
+          OrchestratorNoteIndicator(workspace: workspace, path: path)
+        }
       }
     }
     .lineLimit(1)
@@ -117,6 +121,7 @@ struct DailyHeaderView: View {
         .accessibilityValue(title)
         .accessibilityAddTraits(.isHeader)
       Spacer(minLength: 0)
+      OrchestratorNoteIndicator(workspace: workspace, path: path)
       DailyNavigationRow(workspace: workspace, path: path, isToday: date == today)
     }
   }

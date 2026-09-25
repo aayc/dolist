@@ -48,6 +48,7 @@ Precedence: environment variable → `$DDL_HOME/config.json` → default.
 | `DDL_WEB_DIST` | `apps/web/dist` | Built web UI to serve. |
 | `DDL_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. |
 | `DDL_COMPUTER_HELPER` | found automatically | The `ddl-computer` helper for app control (macOS), or `off`. Otherwise: `<entry script dir>/../bin/ddl-computer` (the app bundle's copy), then a dev build in `apps/macos/Packages/DailyDoListComputer/.build/{release,debug}/`. Without one, computer use stays screen-level. |
+| `DDL_DRAWING_RENDERER` | found automatically | The page agents render drawings with (for `read_drawing`'s images), or `off`. Otherwise: `<entry script dir>/drawing-renderer`, then `apps/daemon/dist/drawing-renderer`; `build` and `dev` build it. Without it, or without a browser, agents get drawings as text descriptions only (the startup summary's `drawingRenderer` says which). |
 | `OPENROUTER_API_KEY` | — | Required for `live` agents. Without it the agent reports a problem; notes keep working. |
 | `DDL_SYNC_URL`, `DDL_SYNC_VAULT` | — | Sync with the sync service (both, or neither; they override `sync` in `config.json`). |
 | `DDL_SYNC_TOKEN` | — | The sync service's vault token (else `$DDL_HOME/sync-token`). Never logged. |
@@ -76,6 +77,7 @@ of this repository. Values are never logged.
 | `devices.json` | Devices paired with this daemon: name, kind, pairing time, last use and the SHA-256 of each token (never the token). Mode `0600`, created on the first pairing. An unreadable file is moved aside to `devices.json.invalid` and every device pairs again. |
 | `machine-token` | This device's credential for the always-on machine, `{ "url", "deviceId", "token" }`, mode `0600`, written by `POST /api/machine/pair`. Used only while `url` is the vault's always-on machine. |
 | `workspaces/`, browser profile | Agent scratch space, managed by the execution provider. |
+| `cache/drawings/` | Drawings rendered for agents (PNG by content hash, at most 64 MB, least recently used removed first). Safe to delete. |
 
 `config.json` (all keys optional; relative paths resolve against `$DDL_HOME`, `~` is expanded):
 
@@ -381,7 +383,8 @@ Server → client (`ServerEvent`):
 | `task.records` / `task.record` | Agent badges for a note / one task. |
 | `thread.upsert` / `thread.message` / `thread.delta` | Thread summaries, messages, streamed text (the orchestrator's chat, `thr_orchestrator`, included). |
 | `approval.upsert` | An approval was created or decided. |
-| `agent.status` | `AgentStatusResponse` changed. |
+| `agent.status` | `AgentStatusResponse` changed (its `orchestrator` is what the orchestrator is doing now, for a client joining mid-turn). |
+| `orchestrator.activity` | What the orchestrator is doing: lines it noticed before they settle, each turn's phase (`reading`, `thinking`, `acting`) and its end (`idle` with an outcome). Coalesced, never per keystroke; see docs/AGENT_SYSTEM.md. |
 | `surface.frame` | Live browser/computer frame, only to clients subscribed to that thread's surface. |
 | `settings.changed` | Settings were saved here, or a change synced from another device was reloaded. |
 | `routines.changed` | Every routine (as `GET /api/routines` lists them), whenever one changed: its file, its next run, its last run's status. Also sent when the agent lease moves to or from this device. |
@@ -500,11 +503,13 @@ other method or path. It is not an open proxy:
 **Events.** The relay holds one WebSocket to the machine's `/ws`, with the token in the
 `Authorization` header (never in the URL). The machine's agent events reach this device's clients
 in place of the local runtime's: `thread.*`, `approval.upsert`, `task.record(s)`,
-`routines.changed`, `routine.notification`, `surface.frame` and `agent.status` (merged as above).
+`routines.changed`, `routine.notification`, `orchestrator.activity`, `surface.frame` and
+`agent.status` (merged as above).
 Clients' `surface.subscribe`/`unsubscribe`, `thread.read` and `editor.activity` go to the machine.
 The link pings every 15 s, reconnects with backoff (0.5 s up to 30 s), subscribes to watched
 surfaces again, and after every (re)connection pushes the machine's status, routines, approvals and
-thread summaries to local clients.
+thread summaries to local clients, and the machine's current orchestrator activity. When it stops
+relaying, clients get this device's own activity (nothing in progress) in its place.
 
 **Relay state** (`agent.status` → `placement.relay`): `off` (not relaying), `connecting` (the
 first connection; requests are already forwarded), `connected`, `unreachable` (the link is down;
@@ -554,7 +559,8 @@ records again.
 | `src/vault-switch.ts` | Which vault this daemon opens, and restarting on another (`RESTART_EXIT_CODE`). |
 | `src/sidecar-view.ts` | The agent's work read-only from the synced sidecar, for a device that doesn't run it. |
 | `src/relay/*` | The agent relay: allowlist, calls to the machine, its WebSocket link, the relaying runtime. |
-| `build.mjs` | esbuild bundle (workspace packages inlined, third-party dependencies external). |
+| `src/computer-helper.ts`, `drawing-renderer.ts` | Finding the `ddl-computer` helper and the drawing render page. |
+| `build.mjs` | esbuild bundle (workspace packages inlined, third-party dependencies external), then the drawing render page in `dist/drawing-renderer` (`packages/agent/scripts/build-drawing-renderer.mjs`: Excalidraw's export bundled for the browser at build time, so the daemon has no runtime dependency on it). |
 
 Tests are colocated (`*.test.ts`). They use in-memory vaults and temp directories and never touch the
 real home directory or the network.

@@ -428,6 +428,7 @@ describe("orchestrator control plane", () => {
       "list_tasks",
       "message_subagent",
       "post_comment",
+      "read_drawing",
       "read_note",
       "run_routine",
       "search_notes",

@@ -5,6 +5,7 @@
 import type { EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import type { TaskAgentStatus } from "@ddl/core";
+import type { EmbedRenderer } from "./embeds/types";
 import type { LinkTarget } from "./links";
 
 /** An agent badge rendered at the end of a task line (or of a line a thread is anchored to). */
@@ -20,6 +21,32 @@ export interface LineAnnotation {
   threadId: string | null;
   /** The thread is attached to the line itself rather than to a task: the line is highlighted. */
   lineAnchor?: boolean;
+}
+
+/**
+ * A chip at the end of a line saying what the orchestrator is doing about it (the host decides
+ * the wording and when it goes; see the web app's README).
+ */
+export interface ActivityChip {
+  /** Stable while the chip lives, so updates keep its DOM (and don't replay its entrance). */
+  id: string;
+  /**
+   * 0-based line. The editor maps it through later edits until chips are set again, and drops the
+   * chip once its line is edited beyond recognition.
+   */
+  line: number;
+  /** Pill text; empty for a quiet dot. */
+  label: string;
+  /** What it means: its tooltip and accessible name. */
+  tooltip: string;
+  /** Weight, as for badges: `needs-you` is loud, `working` a neutral pill, `quiet` plain text. */
+  tone: "needs-you" | "working" | "quiet";
+  /** Its dot pulses (never under reduced motion). */
+  pulse?: boolean;
+  /** On its way out: it fades (and is simply gone under reduced motion). */
+  fading?: boolean;
+  /** For styling and tests (`data-kind`), e.g. `noticed`, `looking`, `outcome`. */
+  kind?: string;
 }
 
 /** What hovering a link shows. Built from data the host already has; never by fetching the link. */
@@ -65,6 +92,8 @@ export interface EditorCallbacks {
   /** Every document change. Keep it cheap; the host debounces persistence. */
   onDocChange?(doc: string, meta: { userEvent: boolean }): void;
   onAnnotationClick?(annotation: LineAnnotation): void;
+  /** An activity chip (click, Enter or Space). */
+  onActivityChipClick?(chip: ActivityChip): void;
   /** The agent glyph ✦ at the end of a line the agent wrote (only lines naming their thread). */
   onAgentLineClick?(threadId: string): void;
   /**
@@ -98,6 +127,11 @@ export interface EditorCallbacks {
   onVimStatus?(status: VimStatus | null): void;
   /** The vimrc was (re)applied; lines vim rejected, with its message. */
   onVimrcApplied?(problems: readonly VimrcProblem[]): void;
+  /**
+   * Draw `![[…]]` embeds alone on their line in the live preview (drawings; images next). The
+   * first renderer whose `matches` accepts the target draws it; others stay as syntax.
+   */
+  embedRenderers?: readonly EmbedRenderer[];
 }
 
 export type VimModeName =
@@ -133,6 +167,12 @@ export interface MarkdownEditor {
   /** Swap the whole state (instant note switching with per-note undo history). */
   setState(state: EditorState): void;
   setAnnotations(annotations: readonly LineAnnotation[]): void;
+  /** Inserts an embed (`![[…]]`) on its own line at the caret's line; returns where it starts. */
+  insertEmbed(text: string): number;
+  /** Activates the embed at `from` (as a double-click would) if it's drawn; false otherwise. */
+  activateEmbed(from: number): boolean;
+  /** Replaces the activity chips (lines refer to the current document). */
+  setActivityChips(chips: readonly ActivityChip[]): void;
   configure(config: Partial<EditorConfig>): void;
   focus(): void;
   scrollToLine(line: number): void;

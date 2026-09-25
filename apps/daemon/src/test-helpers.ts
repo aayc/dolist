@@ -19,6 +19,7 @@ import {
   type CreateRoutineRequest,
   Emitter,
   type Logger,
+  type OrchestratorActivity,
   type RelayState,
   type Routine,
   type RoutineRunResponse,
@@ -150,6 +151,8 @@ export class FakeAgentRuntime implements AgentRuntime {
   readonly routineLibrary: RoutineLibrary;
   /** Makes creating, pausing, resuming and running routines fail with this. */
   routineError: Error | undefined;
+  /** What `status()` says the orchestrator is doing (absent when unset). */
+  orchestrator: OrchestratorActivity | undefined;
   private readonly events = new Emitter<RuntimeEventMap>();
   private runs = 0;
 
@@ -182,6 +185,7 @@ export class FakeAgentRuntime implements AgentRuntime {
         provider: "fake",
         capabilities: { shell: false, browser: true, computer: false },
       },
+      ...(this.orchestrator ? { orchestrator: this.orchestrator } : {}),
     };
   }
 

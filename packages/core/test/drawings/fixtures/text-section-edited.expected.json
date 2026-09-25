@@ -1,0 +1,51 @@
+{
+  "about": "A Text Elements entry edited by hand (in Obsidian's markdown view): the entry wins over the scene, as in the plugin.",
+  "title": "text-section-edited",
+  "parse": {
+    "readable": true,
+    "compressed": false,
+    "problems": [],
+    "frontmatter": {
+      "excalidraw-plugin": "parsed",
+      "tags": "[excalidraw]"
+    },
+    "sections": ["", "# Excalidraw Data", "## Text Elements", "## Drawing"],
+    "textElements": [
+      {
+        "id": "shedText",
+        "text": "Shed"
+      },
+      {
+        "id": "todo",
+        "text": "Buy seeds and soil"
+      }
+    ],
+    "elements": [
+      {
+        "id": "shed",
+        "type": "rectangle"
+      },
+      {
+        "id": "shedText",
+        "type": "text"
+      },
+      {
+        "id": "todo",
+        "type": "text"
+      }
+    ],
+    "texts": [
+      {
+        "id": "shedText",
+        "text": "Shed"
+      },
+      {
+        "id": "todo",
+        "text": "Buy seeds and soil"
+      }
+    ],
+    "files": []
+  },
+  "description": "Drawing “text-section-edited” (160×145 px, 3 elements)\nText: “Buy seeds and soil”\nShapes: rectangle “Shed”",
+  "roundTrip": "text-section-edited.roundtrip.excalidraw.md"
+}

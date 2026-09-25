@@ -34,6 +34,7 @@ function load(
     platform,
     entryScript: join(root.path, "daemon", "dist", "main.js"),
     isExecutable: (path) => executables.includes(path),
+    drawingRendererBuilds: [],
   });
 }
 
@@ -94,6 +95,16 @@ describe("loadConfig", () => {
   it("knows when a supervisor restarts it (DDL_SUPERVISED=1, as the Mac app sets it)", () => {
     expect(load({ DDL_SUPERVISED: "1" }).supervised).toBe(true);
     expect(load({ DDL_SUPERVISED: "yes" }).supervised).toBe(false);
+  });
+
+  it("gives the agent the drawing render page built next to the daemon", () => {
+    expect(load().execution).not.toHaveProperty("drawingRenderer");
+    expect(summarizeConfig(load(), homedir).drawingRenderer).toMatch(/not built/);
+    const page = join(root.path, "daemon", "dist", "drawing-renderer");
+    mkdirSync(page, { recursive: true });
+    writeFileSync(join(page, "index.html"), "<!doctype html>");
+    expect(load().execution).toMatchObject({ drawingRenderer: page });
+    expect(summarizeConfig(load(), homedir).drawingRenderer).toBe(page);
   });
 
   it("defaults DDL_HOME to ~/.daily-do-list and disables computer use off macOS", () => {

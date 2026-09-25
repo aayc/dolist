@@ -20,6 +20,8 @@ export interface AcpInitializeResult {
   protocolVersion: number;
   loadSession: boolean;
   mcpHttp: boolean;
+  /** The agent takes images (`promptCapabilities.image`); assumed unless the CLI says it doesn't. */
+  images: boolean;
 }
 
 export interface AcpSessionResult {
@@ -85,10 +87,12 @@ export function parseInitializeResult(value: unknown): AcpInitializeResult {
   const record = asRecord(value, "initialize result");
   const capabilities = isRecord(record.agentCapabilities) ? record.agentCapabilities : {};
   const mcp = isRecord(capabilities.mcpCapabilities) ? capabilities.mcpCapabilities : {};
+  const prompt = isRecord(capabilities.promptCapabilities) ? capabilities.promptCapabilities : {};
   return {
     protocolVersion: typeof record.protocolVersion === "number" ? record.protocolVersion : 0,
     loadSession: capabilities.loadSession === true,
     mcpHttp: mcp.http === true,
+    images: prompt.image !== false,
   };
 }
 

@@ -6,7 +6,7 @@ import Foundation
 extension AgentState {
   /// Applies one server event and reports what changed (empty when it was a no-op).
   /// Events the agent state doesn't use (`hello`, `vault.changed`, frames, settings, import
-  /// progress, errors, unknown types) are ignored.
+  /// progress, errors, the orchestrator's activity, unknown types) are ignored.
   mutating func apply(_ event: ServerEvent, now: EpochMillis) -> Changes {
     switch event {
     case .taskRecords(let event):
@@ -27,7 +27,7 @@ extension AgentState {
     case .routinesChanged(let routines):
       return setRoutines(routines)
     case .hello, .vaultChanged, .surfaceFrame, .settingsChanged, .routineNotification,
-      .importProgress, .error, .unknown:
+      .importProgress, .orchestratorActivity, .error, .unknown:
       return []
     }
   }

@@ -29,6 +29,10 @@ export const NewRoutineDialog = preloadable(() =>
 export const VaultSwitchOverlay = preloadable(() =>
   import("../features/obsidian-import/VaultSwitchOverlay").then((m) => m.VaultSwitchOverlay),
 );
+/** An opened drawing file (Excalidraw itself loads with it). Not prefetched. */
+export const DrawingPane = preloadable(() =>
+  import("../features/drawings/DrawingPane").then((m) => m.DrawingPane),
+);
 
 export async function prefetchLazyChunks(): Promise<void> {
   await Promise.allSettled([

@@ -1,7 +1,10 @@
 import {
+  type ActivityChip,
   createMarkdownEditor,
   DEFAULT_EDITOR_CONFIG,
   type EditorConfig,
+  type EmbedRenderer,
+  getActivityChips,
   type LineAnnotation,
   type LinkPreview,
   type LinkPreviewRequest,
@@ -31,6 +34,7 @@ export interface EditorControllerDeps {
   onDocumentReplaced(path: string): void;
   onCursorLine(path: string, line: number): void;
   onAnnotationClick(annotation: LineAnnotation): void;
+  onActivityChipClick(chip: ActivityChip): void;
   /** The ✦ at the end of a line the agent wrote. */
   onAgentLineClick(threadId: string): void;
   onWikiLinkClick(target: string, newPane: boolean): void;
@@ -52,6 +56,8 @@ export interface EditorControllerDeps {
   /** Called synchronously before the active note is swapped out (flush unsaved edits). */
   beforeDeactivate(path: string): void;
   canEvict(path: string): boolean;
+  /** Draw `![[…]]` embeds (drawings). */
+  embedRenderers?: readonly EmbedRenderer[];
 }
 
 /**
@@ -68,6 +74,8 @@ export class EditorController {
   private generation = 0;
   /** Annotations last sent for the shown state; null = unknown (must be re-sent). */
   private annotations: readonly LineAnnotation[] | null = null;
+  /** Activity chips last sent for the shown state; null = unknown. */
+  private chips: readonly ActivityChip[] | null = null;
 
   constructor(deps: EditorControllerDeps, config: Partial<EditorConfig> = {}) {
     this.deps = deps;
@@ -98,6 +106,7 @@ export class EditorController {
           if (this.activePath !== null) this.deps.onCursorLine(this.activePath, line);
         },
         onAnnotationClick: (annotation) => this.deps.onAnnotationClick(annotation),
+        onActivityChipClick: (chip) => this.deps.onActivityChipClick(chip),
         onAgentLineClick: (threadId) => this.deps.onAgentLineClick(threadId),
         onWikiLinkClick: (target, options) => this.deps.onWikiLinkClick(target, options.newPane),
         onExternalLinkClick: (url) => this.deps.onExternalLinkClick(url),
@@ -114,6 +123,7 @@ export class EditorController {
         onRunCommand: (id) => this.deps.runCommand(id),
         onVimStatus: (status) => this.deps.onVimStatus(status),
         onVimrcApplied: (problems) => this.deps.onVimrcApplied(problems),
+        ...(this.deps.embedRenderers ? { embedRenderers: this.deps.embedRenderers } : {}),
       },
     });
     this.activePath = null;
@@ -145,6 +155,7 @@ export class EditorController {
     this.activePath = path;
     // A cached state may carry badges from when it was last shown; the next sync re-sends them.
     this.annotations = null;
+    this.chips = null;
     if (path === null) return;
     const cached = this.states.get(path);
     this.states.delete(path);
@@ -226,8 +237,45 @@ export class EditorController {
     this.editor?.setAnnotations(annotations);
   }
 
+  setActivityChips(chips: readonly ActivityChip[]): void {
+    if (chips.length === 0 && this.chips?.length === 0) return;
+    this.chips = chips;
+    this.editor?.setActivityChips(chips);
+  }
+
+  /** The shown note's activity chips, on the lines the editor has moved them to. */
+  activityChips(): ActivityChip[] {
+    return this.editor && this.activePath !== null ? getActivityChips(this.editor.getState()) : [];
+  }
+
   focus(): void {
     this.editor?.focus();
+  }
+
+  /** Inserts an embed on its own line at the caret's line; null without an active note. */
+  insertEmbed(text: string): number | null {
+    if (!this.editor || this.activePath === null) return null;
+    return this.editor.insertEmbed(text);
+  }
+
+  activateEmbed(from: number): boolean {
+    return this.editor?.activateEmbed(from) ?? false;
+  }
+
+  /** The main selection's text, for the context menu's Cut and Copy. */
+  selectedText(): string {
+    const state = this.editor?.view.state;
+    if (!state) return "";
+    const { from, to } = state.selection.main;
+    return state.sliceDoc(from, to);
+  }
+
+  /** Replaces the main selection as the user would (Cut, Paste). */
+  replaceSelection(text: string, userEvent: "input.paste" | "delete.cut"): void {
+    const view = this.editor?.view;
+    if (!view || this.activePath === null) return;
+    view.dispatch(view.state.replaceSelection(text), { userEvent, scrollIntoView: true });
+    view.focus();
   }
 
   scrollToLine(line: number): void {

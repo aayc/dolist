@@ -1,4 +1,9 @@
-import type { AppSettings, DeepPartial } from "@ddl/core";
+import {
+  type AppSettings,
+  type DeepPartial,
+  emptyDrawingScene,
+  serializeDrawingFile,
+} from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TaskWatcher } from "../src/orchestrator/task-watcher";
@@ -180,6 +185,70 @@ describe("TaskWatcher scope", () => {
     expect(kinds(events).sort()).toEqual(["added:Today task", "added:Tomorrow task"]);
   });
 
+  it("never reads a drawing as a task list, even one at a daily note's path", async () => {
+    // The Excalidraw plugin can convert a note, today's included, into a drawing; its text
+    // elements are listed as lines under `## Text Elements`.
+    const drawing = serializeDrawingFile({
+      ...emptyDrawingScene(),
+      elements: [
+        { id: "k3JwQm9a", type: "text", text: "- [ ] Book the plumber" },
+        { id: "p2XnRt7c", type: "text", text: "Can you find a cheaper flight?" },
+      ],
+    });
+    expect(drawing).toContain("- [ ] Book the plumber ^k3JwQm9a");
+    const { storage, watcher, events } = setup({
+      settings: { dailyNotes: { format: "YYYY-MM-DD[.excalidraw]" } },
+    });
+    const notes: NoteEvent[] = [];
+    watcher.on("note", (event) => notes.push(event));
+    await watcher.start();
+    expect(watcher.watches("Daily/2026-09-23.excalidraw.md")).toBe(false);
+    await storage.write("Daily/2026-09-23.excalidraw.md", drawing);
+    await vi.advanceTimersByTimeAsync(SETTLE * 2);
+
+    watcher.updateSettings(testSettings({ agent: { settleMs: SETTLE } }));
+    await storage.write(TODAY, drawing);
+    await vi.advanceTimersByTimeAsync(SETTLE * 2);
+    expect(events).toEqual([]);
+    expect(notes).toEqual([]);
+    expect(watcher.getTasks(TODAY)).toEqual([]);
+
+    await storage.write(TODAY, "- [ ] Book the plumber");
+    await vi.advanceTimersByTimeAsync(SETTLE);
+    expect(kinds(events)).toEqual(["added:Book the plumber"]);
+  });
+
+  it("treats a change to a drawing a watched note embeds as nobody's edit of the note", async () => {
+    const drawing = (label: string) =>
+      serializeDrawingFile({
+        ...emptyDrawingScene(),
+        elements: [{ id: "k3JwQm9a", type: "text", text: `- [ ] ${label}` }],
+      });
+    const { storage, watcher, events } = setup();
+    const notes: NoteEvent[] = [];
+    const changed: string[] = [];
+    watcher.on("note", (event) => notes.push(event));
+    watcher.on("changed", (event) => changed.push(event.notePath));
+    await storage.write("Excalidraw/Plan.excalidraw.md", drawing("Draft the plan"));
+    await storage.write(TODAY, "- [ ] Build the plan\n![[Plan.excalidraw|right-wrap]]\n");
+    await watcher.start();
+    await vi.advanceTimersByTimeAsync(SETTLE * 2);
+    const tasks = watcher.getTasks(TODAY).map((task) => task.text);
+    events.length = 0;
+    notes.length = 0;
+    changed.length = 0;
+
+    await storage.write("Excalidraw/Plan.excalidraw.md", drawing("Book the venue?"));
+    await vi.advanceTimersByTimeAsync(SETTLE * 2);
+    expect(changed).toEqual([]);
+    expect(events).toEqual([]);
+    expect(notes).toEqual([]);
+    expect(watcher.getTasks(TODAY).map((task) => task.text)).toEqual(tasks);
+    expect(watcher.getContent(TODAY)).toBe(
+      "- [ ] Build the plan\n![[Plan.excalidraw|right-wrap]]\n",
+    );
+  });
+
   it("dedupes storage events for an already processed version", async () => {
     const { storage, watcher } = setup();
     await watcher.start();
@@ -332,6 +401,70 @@ describe("TaskWatcher: the rest of the note", () => {
     await storage.write(TODAY, "- [ ] Call the restaurant to confirm");
     await vi.advanceTimersByTimeAsync(SETTLE);
     expect(kinds(events)).toEqual(["added:Call the restaurant to confirm"]);
+  });
+
+  it("tells which lines may be requests before they settle, once per line, not per save", async () => {
+    const { storage, watcher, notes } = withNotes();
+    const noticed: NoteEvent[] = [];
+    watcher.on("noticed", (event) => noticed.push(event));
+    await watcher.start();
+    await storage.write(TODAY, "# Thursday\nSlept badly.");
+    await vi.advanceTimersByTimeAsync(SETTLE * 2);
+    expect(noticed).toEqual([]);
+    for (const typed of ["find a plu", "find a plumber", "find a plumber for Saturday"]) {
+      await storage.write(TODAY, `# Thursday\nSlept badly.\n${typed}`);
+      await vi.advanceTimersByTimeAsync(100);
+    }
+    expect(noticed.map((n) => n.lines)).toEqual([[{ line: 2, text: "find a plu" }]]);
+    await storage.write(TODAY, "# Thursday\nSlept badly.\nfind a plumber for Saturday\nCall mom?");
+    await vi.advanceTimersByTimeAsync(100);
+    expect(noticed.at(-1)?.lines).toEqual([
+      { line: 2, text: "find a plumber for Saturday" },
+      { line: 3, text: "Call mom?" },
+    ]);
+    expect(notes).toEqual([]);
+    await vi.advanceTimersByTimeAsync(SETTLE);
+    // Handed over with the settled `note` event: nothing is withdrawn.
+    expect(notes.map((n) => n.lines)).toEqual([noticed.at(-1)?.lines]);
+    expect(noticed).toHaveLength(2);
+  });
+
+  it("withdraws noticed lines that go away before they settle", async () => {
+    const { storage, watcher, notes } = withNotes();
+    const noticed: NoteEvent[] = [];
+    watcher.on("noticed", (event) => noticed.push(event));
+    await watcher.start();
+    await storage.write(TODAY, "Groceries\nfind a plumber for Saturday");
+    await vi.advanceTimersByTimeAsync(100);
+    await storage.write(TODAY, "Groceries\nfine weather for Saturday");
+    await vi.advanceTimersByTimeAsync(SETTLE * 2);
+    expect(noticed.map((n) => n.lines.map((l) => l.line))).toEqual([[1], []]);
+    expect(notes).toEqual([]);
+    await storage.write(TODAY, "Groceries\nfine weather for Saturday\nbook a table?");
+    await vi.advanceTimersByTimeAsync(100);
+    await watcher.stop();
+    expect(noticed.map((n) => n.lines.map((l) => l.line))).toEqual([[1], [], [2], []]);
+  });
+
+  it("never loses an edit made just as the previous one finishes processing", async () => {
+    // A write from a microtask continuation can land after the processing loop last checked for
+    // more work but before it let go of the note; that edit used to be dropped until the next one.
+    for (let depth = 0; depth < 6; depth++) {
+      const { storage, watcher } = setup();
+      await watcher.start();
+      let second = false;
+      watcher.on("tasks", () => {
+        if (second) return;
+        second = true;
+        let chain = Promise.resolve();
+        for (let i = 0; i < depth; i++) chain = chain.then(() => undefined);
+        void chain.then(() => storage.write(TODAY, "- [ ] Second version"));
+      });
+      await storage.write(TODAY, "- [ ] First version");
+      await vi.advanceTimersByTimeAsync(10);
+      expect(watcher.getContent(TODAY), `depth ${depth}`).toBe("- [ ] Second version");
+      await watcher.stop();
+    }
   });
 
   it("lets the agent's edits wait for a pause in the user's typing", async () => {

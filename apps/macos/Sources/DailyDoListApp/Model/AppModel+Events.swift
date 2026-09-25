@@ -56,8 +56,12 @@ extension AppModel {
       // A record can move between notes: refresh whatever is shown.
       agent?.apply(event)
       workspace?.editor.recordsDidChange(for: nil)
+    case .orchestratorActivity(let activity):
+      workspace?.orchestrator.apply(activity)
     case .threadUpsert, .threadMessage, .threadDelta, .approvalUpsert, .agentStatus, .surfaceFrame,
       .routinesChanged, .routineNotification:
+      // A pushed status's `orchestrator` repeats what `orchestrator.activity` said (and keeps a
+      // finished turn's outcome a while): only a fetched status is adopted (`refreshAgent`).
       agent?.apply(event)
     case .error(let error):
       Self.log.warning("daemon error event: \(error.message, privacy: .public)")
@@ -70,9 +74,16 @@ extension AppModel {
   func resync() async {
     await settings.reload()
     await workspace?.resync()
-    if let agent {
-      await agent.refresh(todayNotePath: todayNotePath)
-      workspace?.editor.recordsDidChange(for: nil)
-    }
+    await refreshAgent()
+  }
+
+  /// Refetches the agent's state, then adopts the orchestrator's activity from its status (unless
+  /// an event came in meanwhile) and refreshes the editor's badges.
+  func refreshAgent() async {
+    guard let agent else { return }
+    let mark = workspace?.orchestrator.eventCount
+    await agent.refresh(todayNotePath: todayNotePath)
+    if let mark { workspace?.orchestrator.adopt(agent.status?.orchestrator, since: mark) }
+    workspace?.editor.recordsDidChange(for: nil)
   }
 }

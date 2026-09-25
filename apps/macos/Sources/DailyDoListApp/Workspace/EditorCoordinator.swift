@@ -9,6 +9,9 @@ import Observation
 protocol EditorCoordinatorHost: AnyObject {
   func editorDidEdit(_ path: String)
   func editorRecords(for path: String) -> [TaskAgentRecord]
+  /// The orchestrator's chips on the note's lines.
+  func editorChips(for path: String) -> [OrchestratorChip]
+  /// A task's badge or one of the orchestrator's chips was clicked.
   func editorDidClickBadge(_ badge: EditorBadge)
   /// The sparkle of a line the agent wrote was clicked.
   func editorDidClickAgentThread(_ threadId: String)
@@ -19,12 +22,21 @@ protocol EditorCoordinatorHost: AnyObject {
   func editorDidRequestSave(_ path: String)
   /// An app command from vim (`:q`, `:e note`, `gt`, `:obcommand id`).
   func editorPerform(_ request: EditorVimRequest) -> EditorVimRequestResult
+  /// The drawing an embed names (nil: drawings aren't shown).
+  func editorDrawing(for target: String) -> EditorDrawingState?
+  /// A drawing edited in place changed (save it, debounced).
+  func editorDidEditDrawing(_ drawing: EditorDrawing)
+  func editorDidEndEditingDrawing(_ path: String)
+  /// The editor's context menu is about to open.
+  func editorWillShowContextMenu(_ menu: NSMenu)
 }
 
 /// Owns the window's single ``MarkdownEditorController``: switches documents with per-note
 /// snapshots (text, selection, scroll, undo) for instant tab switches, keeps agent badges in sync
-/// (immediately when records change, debounced ~150 ms while typing) and publishes a debounced word
-/// count. Nothing here runs O(document) work per keystroke.
+/// (immediately when records change, debounced ~150 ms while typing) along with the
+/// orchestrator's chips (placed once per document by line and text, then mapped through edits by
+/// the editor), and publishes a debounced word count. Nothing here runs O(document) work per
+/// keystroke.
 @MainActor
 @Observable
 final class EditorCoordinator {
@@ -43,6 +55,8 @@ final class EditorCoordinator {
   @ObservationIgnored private var wordTimer: IdleTimer!
   @ObservationIgnored private let scheduler: AppScheduler
   @ObservationIgnored private var badgeRefreshScheduled = false
+  /// Chips placed in the current document (one the editor dropped since stays gone).
+  @ObservationIgnored private var placedChips: Set<String> = []
 
   init(
     controller: MarkdownEditorController? = nil, scheduler: AppScheduler,
@@ -70,6 +84,7 @@ final class EditorCoordinator {
     if let current = activePath { snapshots[current] = controller.snapshot() }
     activePath = path
     cursorLine = nil
+    placedChips = []
     if let path, let snapshot = snapshots[path] {
       controller.restore(snapshot)
     } else {
@@ -151,15 +166,28 @@ final class EditorCoordinator {
 
   // MARK: - Badges & word count
 
-  /// Rebuilds badges from the host's records against the current text (cheap when none).
+  /// Rebuilds badges from the host's records against the current text, and the orchestrator's
+  /// chips (cheap when there are none).
   func recomputeBadges() {
     badgeTimer.cancel()
     guard let path = activePath, let host else {
       if !controller.badges.isEmpty { controller.setBadges([]) }
       return
     }
-    let badges = BadgeBuilder.badges(for: host.editorRecords(for: path), in: controller.text)
+    let text = controller.text
+    let tasks = BadgeBuilder.badges(for: host.editorRecords(for: path), in: text)
+    let chips = ChipBuilder.badges(
+      for: host.editorChips(for: path), in: text, current: controller.badges,
+      placed: &placedChips, taken: Set(tasks.map(\.line)))
+    let badges =
+      chips.isEmpty ? tasks : (tasks + chips).sorted { ($0.line, $0.id) < ($1.line, $1.id) }
     if badges != controller.badges { controller.setBadges(badges) }
+  }
+
+  /// The orchestrator's chips changed on `notes`: refresh like for records.
+  func chipsDidChange(for notes: Set<String>) {
+    guard let activePath, notes.contains(activePath) else { return }
+    recordsDidChange(for: activePath)
   }
 
   /// Agent records changed for `notePath` (nil = unknown note): refresh on the next main-actor
@@ -227,5 +255,23 @@ extension EditorCoordinator: MarkdownEditorDelegate {
     -> EditorVimRequestResult
   {
     host?.editorPerform(request) ?? .unavailable
+  }
+
+  func editor(_ editor: MarkdownEditorController, drawingFor target: String)
+    -> EditorDrawingState?
+  {
+    host?.editorDrawing(for: target)
+  }
+
+  func editor(_ editor: MarkdownEditorController, didEditDrawing drawing: EditorDrawing) {
+    host?.editorDidEditDrawing(drawing)
+  }
+
+  func editor(_ editor: MarkdownEditorController, didEndEditingDrawing path: String) {
+    host?.editorDidEndEditingDrawing(path)
+  }
+
+  func editor(_ editor: MarkdownEditorController, willShowContextMenu menu: NSMenu) {
+    host?.editorWillShowContextMenu(menu)
   }
 }

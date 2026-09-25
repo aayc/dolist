@@ -239,9 +239,13 @@ test.describe("tooltips", () => {
  * ones the arrow, editor text the I-beam; nothing else points; icon-only buttons have tooltips; and
  * no tooltip or name spells out a shortcut. It reads the DOM, so new controls are covered too.
  */
-async function audit(page: Page, screen: string, minControls = 5): Promise<void> {
+async function audit(
+  page: Page,
+  screen: string,
+  { ignore = "", minControls = 5 }: { ignore?: string; minControls?: number } = {},
+): Promise<void> {
   const problems = await page.evaluate(
-    ([where, least]) => {
+    ([where, ignored, least]) => {
       const CONTROLS = [
         "button",
         "a[href]",
@@ -259,7 +263,8 @@ async function audit(page: Page, screen: string, minControls = 5): Promise<void>
       const shown = (el: Element) =>
         el.checkVisibility({ visibilityProperty: true }) &&
         el.getBoundingClientRect().width > 0 &&
-        !el.closest("[aria-hidden=true]:not(.cm-gutters)");
+        !el.closest("[aria-hidden=true]:not(.cm-gutters)") &&
+        !(ignored && el.closest(ignored));
       const name = (el: Element) =>
         `<${el.tagName.toLowerCase()}${el.getAttribute("data-testid") ? ` ${el.getAttribute("data-testid")}` : ""} "${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 40)}">`;
       const found: string[] = [];
@@ -293,7 +298,7 @@ async function audit(page: Page, screen: string, minControls = 5): Promise<void>
       if (controls.length < least) found.push(`${where}: only ${controls.length} controls found`);
       return found;
     },
-    [screen, minControls] as const,
+    [screen, ignore, minControls] as const,
   );
   expect(problems).toEqual([]);
 }
@@ -309,6 +314,22 @@ test.describe("cursor audit", () => {
     await page.getByTestId("search-input").fill("Trattoria");
     await expect(page.getByTestId("search-hit").first()).toBeVisible();
     await audit(page, "search");
+  });
+
+  test("orchestrator activity: chips on lines, the note's indicator", async ({ page }) => {
+    test.setTimeout(60_000);
+    // Slow enough that the dot and the indicator stay long enough to audit.
+    await openApp(page, "mockSpeed=0.5");
+    await page.locator(".cm-content").click();
+    await page.keyboard.press("ControlOrMeta+A");
+    await page.keyboard.type("Find a plumber for Saturday", { delay: 5 });
+    const chip = page.locator(".cm-ddl-activity-chip");
+    await expect(chip).toHaveAttribute("data-kind", "noticed");
+    await audit(page, "activity: noticed");
+    await expect(page.getByTestId("note-orchestrator")).toBeVisible({ timeout: 15_000 });
+    await audit(page, "activity: the note's indicator");
+    await expect(chip).toHaveText("Started a task ↗", { timeout: 15_000 });
+    await audit(page, "activity: outcome");
   });
 
   test("agent panel: a task waiting for approval, its inbox, toast and thread", async ({
@@ -431,6 +452,48 @@ test.describe("cursor audit", () => {
     await audit(page, "settings/vault, imported");
   });
 
+  test("drawings: selected, edited in place, and opened", async ({ page }) => {
+    await openApp(page);
+    await page.evaluate(() => window.__ddlDebug!.openNote("Sketches.md"));
+    const drawing = page.locator(".cm-ddl-embed-drawing");
+    await expect(drawing.locator("svg")).toBeVisible();
+    await expect(page.getByTestId("insert-drawing")).toBeVisible();
+    await audit(page, "drawing");
+    await drawing.click();
+    await expect(drawing).toHaveClass(/is-selected/);
+    await expect(drawing.locator(".cm-ddl-embed-resize-start")).toBeVisible();
+    await audit(page, "drawing selected");
+    // The handles are drag affordances, not buttons: named by tooltips, never the pointing hand.
+    const cursors = await drawing.evaluate((frame) =>
+      [frame, ...frame.querySelectorAll(".cm-ddl-embed-grip, .cm-ddl-embed-resize")].map(
+        (el) => `${el.className.split(" ")[0]}:${getComputedStyle(el).cursor}`,
+      ),
+    );
+    expect(cursors).toEqual([
+      "cm-ddl-embed:grab",
+      "cm-ddl-embed-grip:grab",
+      "cm-ddl-embed-resize:nesw-resize",
+      "cm-ddl-embed-resize:nwse-resize",
+    ]);
+
+    // Excalidraw's own tool bar follows its conventions; the controls around it follow ours.
+    await drawing.dblclick();
+    const editor = page.getByTestId("drawing-editor");
+    await expect(editor.locator(".excalidraw canvas").first()).toBeVisible({ timeout: 20_000 });
+    await audit(page, "drawing editor", { ignore: ".excalidraw" });
+    await watchTooltip(page);
+    await hover(page, page.getByTestId("drawing-done"));
+    const tip = await shownTooltip(page, "Done");
+    expect(await keycaps(tip)).toEqual((await isMac(page)) ? ["⎋"] : ["Esc"]);
+    await page.getByTestId("drawing-done").click();
+    await expect(editor).toBeHidden();
+
+    await page.evaluate(() => window.__ddlDebug!.openNote("Excalidraw/Garden plan.excalidraw.md"));
+    const pane = page.getByTestId("drawing-pane");
+    await expect(pane.locator(".excalidraw canvas").first()).toBeVisible({ timeout: 20_000 });
+    await audit(page, "opened drawing", { ignore: ".excalidraw" });
+  });
+
   test("where the agent runs: the toggle, held here, read-only, and their settings", async ({
     page,
   }) => {
@@ -500,7 +563,7 @@ test.describe("cursor audit", () => {
 
     await page.goto("/?mock=1&mockAuth=pairing");
     await expect(page.getByTestId("pairing-screen")).toBeVisible();
-    await audit(page, "pairing screen", 1);
+    await audit(page, "pairing screen", { minControls: 1 });
   });
 
   test("palette and quick switcher", async ({ page }) => {

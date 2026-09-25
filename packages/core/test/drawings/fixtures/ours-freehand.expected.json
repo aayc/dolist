@@ -1,0 +1,51 @@
+{
+  "about": "Freehand strokes in two corners, a line, an image with its file, and deleted elements (ignored).",
+  "title": "ours-freehand",
+  "parse": {
+    "readable": true,
+    "compressed": false,
+    "problems": [],
+    "frontmatter": {
+      "excalidraw-plugin": "parsed",
+      "tags": "[excalidraw]"
+    },
+    "sections": ["", "# Excalidraw Data", "## Text Elements", "## Drawing"],
+    "textElements": [],
+    "elements": [
+      {
+        "id": "s1",
+        "type": "freedraw"
+      },
+      {
+        "id": "s2",
+        "type": "freedraw"
+      },
+      {
+        "id": "s3",
+        "type": "freedraw"
+      },
+      {
+        "id": "ground",
+        "type": "line"
+      },
+      {
+        "id": "photo",
+        "type": "image"
+      },
+      {
+        "id": "old",
+        "type": "rectangle",
+        "isDeleted": true
+      },
+      {
+        "id": "oldNote",
+        "type": "text",
+        "isDeleted": true
+      }
+    ],
+    "texts": [],
+    "files": ["4f1c0e9a7b2d"]
+  },
+  "description": "Drawing “ours-freehand” (800×590 px, 5 elements)\nLines: 1 line, bottom\nFreehand: 3 freehand strokes: 2 top left, 1 bottom right\nImages: 1 image",
+  "roundTrip": "ours-freehand.excalidraw.md"
+}

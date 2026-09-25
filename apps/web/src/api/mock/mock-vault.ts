@@ -21,10 +21,29 @@ function isUnder(path: string, folder: string): boolean {
   return path.startsWith(`${folder}/`);
 }
 
+/** What `MockVault.snapshot` saves: every note and folder. */
+export interface MockVaultSnapshot {
+  notes: Array<[string, MockNote]>;
+  folders: string[];
+}
+
 /** In-memory vault with the daemon's semantics (content-hash versions, implicit parent folders). */
 export class MockVault {
   private readonly notes = new Map<string, MockNote>();
   private readonly folders = new Set<string>();
+  /** Called after every change (the mock's optional persistence). */
+  onChange: (() => void) | null = null;
+
+  snapshot(): MockVaultSnapshot {
+    return { notes: [...this.notes], folders: [...this.folders] };
+  }
+
+  restore(snapshot: MockVaultSnapshot): void {
+    this.notes.clear();
+    this.folders.clear();
+    for (const [path, note] of snapshot.notes) this.notes.set(path, note);
+    for (const folder of snapshot.folders) this.folders.add(folder);
+  }
 
   has(path: string): boolean {
     return this.notes.has(path);
@@ -47,16 +66,20 @@ export class MockVault {
     const note: MockNote = { content, version: hashString(content), mtime: now };
     this.notes.set(path, note);
     for (const folder of ancestorFolders(path)) this.folders.add(folder);
+    this.onChange?.();
     return note;
   }
 
   delete(path: string): boolean {
-    return this.notes.delete(path);
+    const deleted = this.notes.delete(path);
+    if (deleted) this.onChange?.();
+    return deleted;
   }
 
   createFolder(path: string): void {
     for (const folder of ancestorFolders(path)) this.folders.add(folder);
     this.folders.add(path);
+    this.onChange?.();
   }
 
   /** Removes a folder and everything under it; returns the deleted note paths. */
@@ -71,6 +94,7 @@ export class MockVault {
     for (const folder of [...this.folders]) {
       if (folder === path || isUnder(folder, path)) this.folders.delete(folder);
     }
+    this.onChange?.();
     return removed;
   }
 

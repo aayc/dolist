@@ -84,6 +84,7 @@ const RUNTIME_EVENTS = [
   "thread.delta",
   "approval.upsert",
   "status",
+  "orchestrator.activity",
   "surface.frame",
   "routines.changed",
   "routine.notification",
@@ -347,7 +348,8 @@ export class AgentRelay implements AgentRuntime {
 
   /**
    * Moves to `state` with `link` (the current one when undefined). When requests and events stop
-   * going to the machine, this device's routines are pushed to clients again (they're files); the
+   * going to the machine, this device's routines are pushed to clients again (they're files), and
+   * this device's orchestrator activity replaces the machine's (a turn there no longer shows); the
    * `relay` change in `agent.status` tells clients to fetch the rest again.
    */
   #transition(
@@ -360,6 +362,10 @@ export class AgentRelay implements AgentRuntime {
     this.#setState(state, problem);
     if (wasForwarding && !this.#forwarding) {
       this.#events.emit("routines.changed", this.#local.listRoutines());
+      this.#events.emit(
+        "orchestrator.activity",
+        this.#local.status().orchestrator ?? { phase: "idle" },
+      );
     }
   }
 
@@ -428,6 +434,9 @@ export class AgentRelay implements AgentRuntime {
       case "agent.status":
         this.#remote = event.status;
         emit.emit("status", this.status());
+        return;
+      case "orchestrator.activity":
+        emit.emit("orchestrator.activity", event.activity);
         return;
       case "thread.upsert":
         this.#pushed.add(event.thread.id);
@@ -507,6 +516,9 @@ export class AgentRelay implements AgentRuntime {
     ];
     if (status) this.#remote = status;
     this.#events.emit("status", this.status());
+    if (status) {
+      this.#events.emit("orchestrator.activity", status.orchestrator ?? { phase: "idle" });
+    }
     if (routines) this.#events.emit("routines.changed", routines.routines);
     for (const approval of approvals?.approvals ?? []) {
       if (!this.#pushed.has(approval.id)) this.#events.emit("approval.upsert", approval);

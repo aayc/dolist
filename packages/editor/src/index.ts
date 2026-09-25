@@ -1,4 +1,11 @@
 export {
+  type ActivityChipState,
+  activityChipField,
+  getActivityChips,
+  setActivityChipsEffect,
+} from "./activity/field";
+export { chipClassName } from "./activity/widget";
+export {
   AGENT_SPARKLE_TITLE,
   type AgentLineOptions,
   agentLines,
@@ -29,6 +36,36 @@ export {
 export { type CommandTarget, toggleChecklist, toggleTaskAtLine } from "./commands/tasks";
 export { documentChanges, minimalChange, type TextChange } from "./diff";
 export * from "./editor";
+export { type DropGeometry, type DropTarget, dropTarget, type LineBox } from "./embeds/drop";
+export {
+  type EmbedEdit,
+  type EmbedMove,
+  formatEmbed,
+  insertEmbed,
+  MIN_EMBED_WIDTH,
+  moveEmbed,
+  removeEmbed,
+  resizeEmbed,
+} from "./embeds/edits";
+export {
+  activateEmbed,
+  embedSelection,
+  insertEmbedAtCursor,
+  type MountedEmbed,
+  selectEmbed,
+  selectEmbedEffect,
+  selectedEmbed,
+} from "./embeds/layer";
+export { embedAt, embedOfLine } from "./embeds/parse";
+export type {
+  BlockEmbed,
+  EmbedContent,
+  EmbedHost,
+  EmbedPlacement,
+  EmbedRenderer,
+  EmbedSpec,
+} from "./embeds/types";
+export { EmbedWidget } from "./embeds/widget";
 export {
   createHeadlessEditorState,
   editorExtensions,
