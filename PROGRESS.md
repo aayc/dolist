@@ -47,12 +47,11 @@ Spec: [docs/specs/routines.md](docs/specs/routines.md).
 
 | Branch | What | State |
 | --- | --- | --- |
-| `feat/routines` | core, agent, daemon routes and events, tests, evals, docs | committed through docs; final checks and report pending |
-| `feat/routines-web` | web: Routines section, a routine's runs, New routine, Repeat this | committed through docs; the e2e run needs `feat/routines` merged in |
-| `feat/routines-mac` | macOS: Routines section, commands, notifications, Swift client | committed through docs; report pending |
+| `feat/routines` | core, agent, daemon routes and events, tests, evals, docs; the Mac UI merged in (`1677aba`) | done; Swift packages, app and integration tests green (vim passed alone after a load flake) |
+| `feat/routines-web` | web: Routines section, a routine's runs, New routine, Repeat this | `feat/routines` merged in (`f1ebc4c`); fullstack e2e run and fixes in progress |
+| `feat/routines-mac` | macOS: Routines section, commands (⇧⌘R, ⌥⌘N), notifications, Swift client | done, merged into `feat/routines` |
 
-Next: review; merge `feat/routines` into `feat/routines-web` and run its e2e; merge web and Mac
-into `feat/routines`; full verification (`pnpm check`, `pnpm build && pnpm size:check`, bench,
+Next: when the web e2e is green, merge `feat/routines-web` into `feat/routines`; full verification (`pnpm check`, `pnpm build && pnpm size:check`, bench,
 `pnpm e2e`, `pnpm e2e:perf`, `pnpm eval:mock`, `pnpm vim:check`, `apps/macos/scripts/test.sh`,
 `test.sh app`, `test.sh integration`); merge to `main`; push; dispatch CI; install the Mac app.
 
