@@ -1,9 +1,9 @@
 // Checks a running bundle, for smoke-test.sh (unpacked, mock agent) and setup-test.sh (installed
 // under systemd): the sync service; the daemon's API, guards and web app; a note syncing through
 // the sync service; the agent running here as the always-on machine (placement, lease); and
-// remote access: the pairing screen on the remote Host, the `pair` / `devices` / `revoke` CLI,
-// POST /api/pair, the device token, and revocation. Tokens are read from files or responses, sent
-// only to loopback, and never printed.
+// remote access, with requests shaped like `tailscale serve`'s: the pairing screen on the remote
+// Host, the `pair` / `devices` / `revoke` CLI, POST /api/pair, the device token, and revocation.
+// Tokens are read from files or responses, sent only to loopback, and never printed.
 //
 //   node smoke-check.mjs --daemon <url> --token-file <daemon-token> --sync <url>
 //        --sync-vault <vault id> --sync-token-file <sync-token> --bundle <bundle dir>
@@ -57,6 +57,14 @@ const cliEnv = Object.fromEntries(
 const WAIT_MS = 30_000;
 const NOTE = "smoke-test.md";
 const DEVICE_NAME = "smoke-check";
+// Remote requests arrive the way `tailscale serve` forwards them: the remote Host kept, plus
+// forwarding headers (which the daemon refuses only with a loopback Host).
+const viaServe = {
+  host: remoteHost,
+  "x-forwarded-for": "192.0.2.10",
+  "x-forwarded-host": remoteHost,
+  "x-forwarded-proto": "https",
+};
 
 let failures = 0;
 
@@ -148,7 +156,7 @@ await check("daemon: runs the agent as the always-on machine (placement, lease)"
 });
 
 await check("remote Host: the page asks for pairing and carries no token", async () => {
-  const res = await http(`${daemon}/`, { headers: { host: remoteHost } });
+  const res = await http(`${daemon}/`, { headers: viaServe });
   expect(res.status === 200, `HTTP ${res.status} (403: ${remoteHost} isn't in remote.hosts)`);
   expect(res.text.includes('<meta name="ddl-auth" content="pairing">'), "no pairing meta");
   expect(!res.text.includes("ddl-token"), "the page carries a token");
@@ -171,7 +179,7 @@ await check("POST /api/pair: the code gets a device token, once", async () => {
   const pair = () =>
     http(`${daemon}/api/pair`, {
       method: "POST",
-      headers: { host: remoteHost, "content-type": "application/json" },
+      headers: { ...viaServe, "content-type": "application/json" },
       body: JSON.stringify({ code, name: DEVICE_NAME, kind: "app" }),
     });
   const res = await pair();
@@ -187,7 +195,7 @@ await check("POST /api/pair: the code gets a device token, once", async () => {
 
 await check("device token: works as a bearer token on the remote Host", async () => {
   expect(deviceAuth, "no device token");
-  const res = await http(`${daemon}/api/health`, { headers: { ...deviceAuth, host: remoteHost } });
+  const res = await http(`${daemon}/api/health`, { headers: { ...deviceAuth, ...viaServe } });
   expect(res.status === 200 && res.json()?.ok === true, `HTTP ${res.status}`);
 });
 
@@ -206,7 +214,7 @@ await check("revoke CLI: cuts the device token off, and reports usage errors", a
   expect(unknown.code === 1, `revoke of an unknown device: exit ${unknown.code}`);
   const result = await cli(["revoke", device.id]);
   expect(result.code === 0, `exit ${result.code}: ${result.stderr.trim()}`);
-  const res = await http(`${daemon}/api/health`, { headers: { ...deviceAuth, host: remoteHost } });
+  const res = await http(`${daemon}/api/health`, { headers: { ...deviceAuth, ...viaServe } });
   expect(res.status === 401, `the revoked token answered HTTP ${res.status}`);
 });
 
