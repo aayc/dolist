@@ -74,9 +74,9 @@ The spec's "As built by S0" section records S0's names and extra error codes; S1
 Also on `feat/always-on` (`087d15c`): the home-folder safety fix (`fix/home-folder-reads`):
 bulk reads of home, credential folders, login files, shell histories and `.env` files outside the
 workspace are denied (also through the harness's tools and connectors); whole personal folders
-ask; listing and single named files stay allowed. Safety evals 319/321, zero false allows. Note:
-`.env` outside the workspace is a hard deny (no approval can unlock it), and `ln -s ~ …` and
-`git -C ~ …` now deny.
+ask; listing and single named files stay allowed. Safety evals 319/321, zero false allows.
+`ln -s ~ …` and `git -C ~ …` now deny. Per the user (`304b0ba`), reading a `.env` outside the
+workspace follows the approval policy instead of a hard deny.
 
 To verify on the real VM (S1): `tailscale serve` must keep the original `Host`; the daemon
 refuses loopback-Host requests that carry proxy forwarding headers (so a Host-rewriting proxy
@@ -202,6 +202,11 @@ state and client ids for idempotent mutations.
   (report first, a new vault from a copy, carry-over of Daily Do List notes, routines and agent
   history with daily-note paths remapped, then switch; plus Update from Obsidian), images, tables,
   callouts, backlinks, and attachment sync.
+- **Secrets and the approval policy** (2026-09-25): the user's strictness is about secrets never
+  being committed to this public repo (the hooks). Agents reading a `.env` to run a project
+  follows the approval policy. Still hard denies: sending secrets off the machine, the daemon's
+  own token files, credential stores (SSH private keys, cloud credentials, keychains), shell
+  histories and sweeping the whole home folder.
 - **Journaling** (2026-09-25): not Temporal. Fencing now, in the always-on lease work; the agent
   journal as its own stream right after routines lands.
 - **iPhone** (2026-09-25): deferred. When it resumes: native Swift, a free Apple ID (no push or
