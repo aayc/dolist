@@ -247,6 +247,121 @@ describe("FakeBrain: orchestrator", () => {
     },
   );
 
+  describe("messages the user wrote to it directly", () => {
+    function directRequest(direct: string[]): BrainRequest {
+      const digest: OrchestratorDigest = {
+        now: NOW,
+        notes: [
+          {
+            notePath: "Daily/2026-09-23.md",
+            date: "2026-09-23",
+            changed: [],
+            others: [
+              {
+                taskId: "tsk_desk",
+                text: "Research standing desks",
+                notes: [],
+                agentStatus: "working",
+              },
+              { taskId: "tsk_gym", text: "Go to the gym", notes: [], agentStatus: "ignored" },
+              { taskId: "tsk_rent", text: "Pay the rent", notes: [], agentStatus: "waiting_user" },
+              { taskId: "tsk_tea", text: "Order green tea", notes: [], agentStatus: "done" },
+            ],
+          },
+        ],
+        replies: [],
+        reports: [],
+        direct,
+        subagents: [
+          {
+            taskId: "tsk_desk",
+            taskText: "Research standing desks",
+            status: "working",
+            runningForMs: 120_000,
+          },
+        ],
+        capabilities: { available: ["web"], unavailable: [], connectors: [] },
+      };
+      return {
+        model: "fake",
+        system: "orchestrator",
+        messages: [{ role: "user", content: formatOrchestratorDigest(digest) }],
+        tools: orchestratorTools,
+      };
+    }
+
+    /** Runs the turn to its end, answering every call with `result`; returns calls and text. */
+    function converse(direct: string[], result = "Done.") {
+      const brain = createFakeBrain();
+      const request = directRequest(direct);
+      const messages = [...request.messages];
+      const calls: Array<{ name: string; arguments: unknown }> = [];
+      const texts: string[] = [];
+      for (let step = 0; step < 6; step++) {
+        const turn = brain.decide({ ...request, messages: [...messages] });
+        expectValidCalls(request, turn);
+        if (turn.text) texts.push(turn.text);
+        const toolCalls = (turn.toolCalls ?? []).map((c, i) => ({
+          id: `d${step}_${i}`,
+          name: c.name,
+          arguments: JSON.stringify(c.arguments),
+        }));
+        messages.push({ role: "assistant", content: turn.text ?? "", toolCalls });
+        if (toolCalls.length === 0 && !turn.text) return { calls, texts };
+        for (const [i, call] of toolCalls.entries()) {
+          calls.push({ name: call.name, arguments: turn.toolCalls![i]!.arguments });
+          messages.push({ role: "tool", toolCallId: call.id, name: call.name, content: result });
+        }
+      }
+      throw new Error("the orchestrator never ended its turn");
+    }
+
+    it("answers what it's working on from the digest, without tools", () => {
+      expect(converse(["What are you working on?"])).toEqual({
+        calls: [],
+        texts: [
+          "Working on “Research standing desks” (2m). Waiting on you: “Pay the rent”. Done today: 1.",
+        ],
+      });
+    });
+
+    it("drops a task: cancels its subagent, or ignores it when nothing works on it", () => {
+      expect(converse(["Drop the desk research"], "Subagent cancelled.")).toEqual({
+        calls: [
+          {
+            name: "cancel_subagent",
+            arguments: { taskId: "tsk_desk", reason: "The user asked to drop it." },
+          },
+        ],
+        texts: ["Dropped “Research standing desks” — I stopped its agent."],
+      });
+      expect(converse(["never mind the gym"], "Status set to ignored.").calls).toEqual([
+        {
+          name: "set_task_status",
+          arguments: { taskId: "tsk_gym", status: "ignored", summary: "Dropped" },
+        },
+      ]);
+      expect(converse(["Cancel it"]).texts).toEqual([
+        "Which task should I drop? I couldn't tell from your message.",
+      ]);
+    });
+
+    it("passes instructions to the subagent at work and reports failures", () => {
+      expect(converse(["Also check prices at IKEA"], "Message delivered.")).toEqual({
+        calls: [
+          {
+            name: "message_subagent",
+            arguments: { taskId: "tsk_desk", text: "The user adds: Also check prices at IKEA" },
+          },
+        ],
+        texts: ["Passed that on to the agent working on “Research standing desks”."],
+      });
+      expect(converse(["Also check prices at IKEA"], "Error: No subagent.").texts).toEqual([
+        "I couldn't pass that on to “Research standing desks”: No subagent.",
+      ]);
+    });
+  });
+
   it("retries a spawn with the capabilities an error lists, then stops", () => {
     const brain = createFakeBrain();
     const request = orchestratorRequest(["Order printer ink (HP 63XL)"], ["browser"]);

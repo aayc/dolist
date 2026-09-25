@@ -81,6 +81,42 @@ describe("orchestrator digest", () => {
     );
   });
 
+  it("carries direct messages after the recent chat, and leaves both out when empty", () => {
+    const message = formatOrchestratorDigest(
+      digest({
+        direct: ['Drop the "dentist" task'],
+        chat: [
+          { author: "you", text: "What are you working on?", createdAt: NOW - 20 * 60_000 },
+          { author: "orchestrator", text: "Booking the dentist.", createdAt: NOW - 19 * 60_000 },
+        ],
+      }),
+    );
+    expect(message).toContain(
+      [
+        "## Your recent chat with the user",
+        '- [you, 20m ago] "What are you working on?"',
+        '- [orchestrator, 19m ago] "Booking the dentist."',
+        "",
+        "## Messages to you (the user wrote in your chat; your turn's text is your reply)",
+        '- [direct] "Drop the \\"dentist\\" task"',
+        "",
+        "## Running subagents",
+      ].join("\n"),
+    );
+    const plain = formatOrchestratorDigest(digest({ direct: [], chat: [] }));
+    expect(plain).not.toContain("## Messages to you");
+    expect(plain).not.toContain("## Your recent chat");
+  });
+
+  it("tells the orchestrator how to handle the user writing to it", () => {
+    const prompt = buildOrchestratorSystemPrompt();
+    expect(prompt).toContain("# Your chat with the user");
+    expect(prompt).toContain("The text of your turn is your reply");
+    expect(prompt).toContain('"drop the dentist task": cancel_subagent');
+    expect(prompt).toContain("message_subagent");
+    expect(prompt).toContain("unless the user wrote to you directly: then end with your reply");
+  });
+
   it("has a system prompt covering the four triage outcomes and safety", () => {
     const prompt = buildOrchestratorSystemPrompt();
     for (const phrase of [

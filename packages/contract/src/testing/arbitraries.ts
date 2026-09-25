@@ -4,6 +4,7 @@
  * valid for its schema and survives a JSON round trip unchanged.
  */
 import type * as core from "@ddl/core";
+import { ORCHESTRATOR_THREAD_ID } from "@ddl/core";
 import fc from "fast-check";
 import type { WireSchemaName } from "../wire/catalog";
 import { API_ERROR_CODES } from "../wire/errors";
@@ -243,8 +244,14 @@ const threadMessage = (): Arb<core.ThreadMessage> =>
 
 const surfaces = () => fc.subarray<core.SurfaceKind>(["browser", "computer"]);
 
+const orchestratorThreadId = (): Arb<core.OrchestratorThreadId> =>
+  fc.constant(ORCHESTRATOR_THREAD_ID);
+
 const threadBase = () => ({
-  id: p.runtimeId("thr"),
+  id: fc.oneof(
+    { weight: 9, arbitrary: p.runtimeId("thr") },
+    { weight: 1, arbitrary: orchestratorThreadId() },
+  ),
   taskId: maybe(p.id("tsk")),
   notePath: maybe(p.notePath()),
   title: p.text(300),
@@ -1005,6 +1012,7 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   StatusMessage: statusMessage,
   ThreadMessage: threadMessage,
   SurfaceKind: surfaceKind,
+  OrchestratorThreadId: orchestratorThreadId,
   Thread: thread,
   CitedSource: citedSource,
   ThreadSummary: threadSummary,
@@ -1107,6 +1115,7 @@ export const arb = plainFactories({
   statusMessage,
   threadMessage,
   surfaceKind,
+  orchestratorThreadId,
   thread,
   threadSummary,
   surfaceFrameAction,

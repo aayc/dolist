@@ -118,10 +118,15 @@ class SidecarThreadStore implements ThreadStore {
     this.adopt(loaded);
   }
 
-  create(input: { taskId: string | null; notePath: string | null; title: string }): Thread {
+  create(input: {
+    id?: string;
+    taskId: string | null;
+    notePath: string | null;
+    title: string;
+  }): Thread {
     const at = this.now();
     const thread: Thread = {
-      id: createId("thr"),
+      id: input.id ?? createId("thr"),
       taskId: input.taskId,
       notePath: input.notePath,
       title: input.title,
@@ -204,6 +209,13 @@ class SidecarThreadStore implements ThreadStore {
     const thread = this.threads.get(threadId);
     if (!thread || thread.title === title) return;
     thread.title = title;
+    this.changed(thread, true);
+  }
+
+  trimMessages(threadId: string, keep: number): void {
+    const thread = this.threads.get(threadId);
+    if (!thread || thread.messages.length <= keep) return;
+    thread.messages = thread.messages.slice(thread.messages.length - Math.max(0, keep));
     this.changed(thread, true);
   }
 

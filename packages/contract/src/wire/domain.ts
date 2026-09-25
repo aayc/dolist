@@ -1,4 +1,5 @@
 /** Agent domain objects: task records, threads and their messages, approvals, artifacts, frames. */
+import { ORCHESTRATOR_THREAD_ID } from "@ddl/core";
 import { z } from "zod";
 import {
   Base64Schema,
@@ -267,9 +268,15 @@ export const CitedSourceSchema = named(
   }),
 );
 
+export const OrchestratorThreadIdSchema = named(
+  "OrchestratorThreadId",
+  "The id of the orchestrator's own chat: a thread with `taskId` and `notePath` null that records each orchestrator turn (a `status` line saying what woke it, its streamed text, its tool calls, whose inputs carry the `taskId` they act on) and takes the user's direct messages (`POST /api/threads/:id/messages`). Its status is `working` during a turn, `idle` otherwise.",
+  z.literal(ORCHESTRATOR_THREAD_ID),
+);
+
 export const ThreadSchema = named(
   "Thread",
-  "A task's full conversation: messages, artifacts and live surfaces.",
+  "A task's full conversation: messages, artifacts and live surfaces. The orchestrator's own chat is a thread too (see `OrchestratorThreadId`).",
   z.looseObject({
     ...threadBase,
     messages: z.array(ThreadMessageSchema),

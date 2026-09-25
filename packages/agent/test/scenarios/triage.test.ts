@@ -2,7 +2,7 @@
  * Triage outcomes end to end (fake brain in-process, real runtime and safety stack): delegate,
  * answer, ask, ignore, deferral, harmful tasks, batching, odd task text and follow-up edits.
  */
-import { type ArtifactMessage, addDays, today, toISODate } from "@ddl/core";
+import { type ArtifactMessage, addDays, ORCHESTRATOR_THREAD_ID, today, toISODate } from "@ddl/core";
 import { describe, expect, it } from "vitest";
 import {
   expectAllGated,
@@ -151,7 +151,7 @@ describe("triage: answer, ask, ignore", () => {
     ];
     await t.writeDailyNote(tasks.map((task) => `- [ ] ${task}`));
     for (const task of tasks) await t.waitForStatus(task, "ignored");
-    expect(t.runtime.listThreads()).toEqual([]);
+    expect(t.runtime.listThreads().map((s) => s.id)).toEqual([ORCHESTRATOR_THREAD_ID]);
     expect(t.records().every((r) => r.threadId === null && r.summary === undefined)).toBe(true);
     expect(t.audit.gate.map((g) => g.toolName)).toEqual(
       Array(tasks.length).fill("set_task_status"),

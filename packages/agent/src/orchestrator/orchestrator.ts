@@ -8,6 +8,7 @@ import {
   isBlankTaskText,
   isClosedStatus,
   type Logger,
+  ORCHESTRATOR_THREAD_ID,
   parseAgentLine,
   parseDailyNotePath,
   silentLogger,
@@ -42,6 +43,7 @@ import type { AnchorLineInput } from "../tools/contracts";
 import { ToolInputError } from "../tools/input";
 import { findQuotedLine } from "../tools/notes";
 import { createOrchestratorTools, type OrchestratorToolHost } from "../tools/orchestrator";
+import type { OrchestratorChat } from "./chat";
 import type { TaskRecords } from "./records";
 import { badgeFrom, type SubagentManager, type SubagentReport } from "./subagents";
 import type { TaskBoard } from "./task-board";
@@ -77,6 +79,8 @@ export interface OrchestratorOptions {
   turnTimeoutMs?: number;
   /** After each turn: the error, or null when it succeeded. */
   onTurnResult?: (error: string | null) => void;
+  /** Records every turn in the orchestrator's own chat, where the user can write to it. */
+  chat?: OrchestratorChat;
 }
 
 type QueueItem =
@@ -90,6 +94,8 @@ type QueueItem =
     }
   | { kind: "reply"; taskId: string | null; threadId: string; text: string; dueAt: number }
   | { kind: "report"; report: SubagentReport; dueAt: number }
+  /** The user wrote to the orchestrator in its chat; `messageId` is that chat message. */
+  | { kind: "direct"; text: string; messageId: string; dueAt: number }
   | {
       kind: "note";
       notePath: string;
@@ -107,6 +113,8 @@ interface Turn {
   /** Anchors `anchor_line` created during this turn. */
   anchored: Set<string>;
   error?: string;
+  /** The user stopped the turn. */
+  cancelled?: boolean;
   startedAt: number;
   firstToolAt?: number;
 }
@@ -118,7 +126,13 @@ interface OrchestratorSession {
   /** The harness that created the session; a new harness gets a new session. */
   harness: Harness;
   turns: number;
+  /** Display labels of the session's tools, by name. */
+  labels: ReadonlyMap<string, string>;
 }
+
+/** Earlier messages of the orchestrator's chat a digest carries for context. */
+const CHAT_CONTEXT_MESSAGES = 8;
+const TRIGGER_TASK_CHARS = 60;
 
 const CHANGE_PRIORITY: Record<DigestChange, number> = {
   updated: 0,
@@ -176,12 +190,18 @@ export class Orchestrator {
     return sessionId.startsWith(ORCHESTRATOR_SESSION_PREFIX);
   }
 
+  /** An approval the orchestrator's own calls need shows up in its chat. */
   contextFor(_sessionId: string): GateContext {
     return {
       taskId: null,
-      threadId: null,
+      threadId: this.options.chat ? ORCHESTRATOR_THREAD_ID : null,
       ...(this.lastText ? { rationale: truncate(this.lastText, 1_000) } : {}),
     };
+  }
+
+  /** A turn is running (its chat shows it as working). */
+  get turnRunning(): boolean {
+    return this.turn !== null;
   }
 
   // ── Inputs ────────────────────────────────────────────────────────────────
@@ -274,6 +294,33 @@ export class Orchestrator {
       dueAt: this.now() + this.batchWindowMs,
     });
     this.scheduleDrain();
+  }
+
+  /**
+   * The user wrote to the orchestrator in its chat (the message is already there): it answers in
+   * its next turn, after the one running now.
+   */
+  handleDirectMessage(input: { text: string; messageId: string }): void {
+    if (this.stopped) return;
+    this.queue.set(`direct:${input.messageId}`, {
+      kind: "direct",
+      text: input.text,
+      messageId: input.messageId,
+      dueAt: this.now() + this.batchWindowMs,
+    });
+    this.scheduleDrain();
+  }
+
+  /**
+   * Stops the turn in progress (the user pressed Stop in the chat). Its session is dropped, so the
+   * next turn starts fresh; subagents it started keep working. False when no turn is running.
+   */
+  async cancelTurn(): Promise<boolean> {
+    const turn = this.turn;
+    if (!turn || turn.cancelled) return false;
+    turn.cancelled = true;
+    await this.session?.session.abort().catch(() => {});
+    return true;
   }
 
   notifySubagentFinished(report: SubagentReport): void {
@@ -438,24 +485,41 @@ export class Orchestrator {
       startedAt: this.now(),
     };
     this.turn = turn;
+    const { chat } = this.options;
+    chat?.beginTurn(this.describeTrigger(items), this.session?.labels ?? new Map());
     try {
       const session = await this.ensureSession();
-      const prompt = session.session.prompt(formatOrchestratorDigest(this.buildDigest(items)));
-      try {
-        await withTimeout(prompt, this.turnTimeoutMs, "The orchestrator took too long to respond.");
-      } catch (error) {
-        await session.session.abort().catch(() => {});
-        throw error;
+      chat?.setLabels(session.labels);
+      if (!turn.cancelled) {
+        const digest = this.buildDigest(items, session.turns === 0);
+        const prompt = session.session.prompt(formatOrchestratorDigest(digest));
+        try {
+          await withTimeout(
+            prompt,
+            this.turnTimeoutMs,
+            "The orchestrator took too long to respond.",
+          );
+        } catch (error) {
+          await session.session.abort().catch(() => {});
+          throw error;
+        }
+        session.turns++;
       }
-      session.turns++;
     } catch (error) {
-      turn.error ??= errorText(error);
+      if (!turn.cancelled) turn.error ??= errorText(error);
     } finally {
       this.turn = null;
     }
     // Stopping aborts the turn; its tasks stay "triaging" and are re-triaged on the next start.
-    if (this.stopped) return;
-    if (turn.error) {
+    if (this.stopped) {
+      chat?.endTurn({ interrupted: true });
+      return;
+    }
+    chat?.endTurn(turn.cancelled ? { cancelled: true } : turn.error ? { error: turn.error } : {});
+    if (turn.cancelled) {
+      this.logger.info("Orchestrator turn stopped by the user");
+      await this.resetSession();
+    } else if (turn.error) {
       this.logger.warn("Orchestrator turn failed", { error: turn.error });
       await this.resetSession();
     } else {
@@ -493,6 +557,15 @@ export class Orchestrator {
           summary: "Couldn't triage",
           note: `The orchestrator couldn't process this task: ${truncate(turn.error, 500)}. Use Retry to try again.`,
         });
+      } else if (turn.cancelled) {
+        if (previous && RESTORABLE.includes(previous))
+          this.options.board.setStatus(taskId, previous);
+        else {
+          this.options.board.setStatus(taskId, "cancelled", {
+            summary: "Stopped",
+            note: "You stopped the orchestrator before it decided. Use Retry to triage this again.",
+          });
+        }
       } else if (turn.commented.has(taskId)) {
         this.options.board.setStatus(taskId, "done");
       } else {
@@ -523,18 +596,20 @@ export class Orchestrator {
     const sequence = this.lastSequence.date === date ? this.lastSequence.value + 1 : 1;
     this.lastSequence = { date, value: sequence };
     const id = `${ORCHESTRATOR_SESSION_PREFIX}${date}${sequence > 1 ? `~${sequence}` : ""}`;
+    const tools = [...createOrchestratorTools(this.host), ...this.options.tools()];
     const session = await harness.createSession({
       sessionId: id,
       role: "orchestrator",
       systemPrompt: buildOrchestratorSystemPrompt(),
-      tools: [...createOrchestratorTools(this.host), ...this.options.tools()],
+      tools,
       model: agentModel(this.options.getSettings().agent),
       thinking: "low",
       cwd: this.options.cwd,
       beforeToolCall: this.options.beforeToolCall,
       onEvent: (event) => this.onEvent(event),
     });
-    this.session = { id, date, session, harness, turns: 0 };
+    const labels = new Map(tools.map((tool) => [tool.name, tool.label]));
+    this.session = { id, date, session, harness, turns: 0, labels };
     return this.session;
   }
 
@@ -547,6 +622,7 @@ export class Orchestrator {
   }
 
   private onEvent(event: HarnessEvent): void {
+    this.options.chat?.onEvent(event);
     switch (event.type) {
       case "message_end":
         if (event.text.trim()) this.lastText = event.text.trim();
@@ -555,14 +631,69 @@ export class Orchestrator {
         if (this.turn && this.turn.firstToolAt === undefined) this.turn.firstToolAt = this.now();
         return;
       case "error":
-        if (this.turn) this.turn.error = event.message;
+        if (this.turn && !this.turn.cancelled) this.turn.error = event.message;
         return;
       default:
         return;
     }
   }
 
-  private buildDigest(items: QueueItem[]): OrchestratorDigest {
+  /** What woke the orchestrator, in one line for its chat. */
+  private describeTrigger(items: readonly QueueItem[]): string {
+    const notes = new Map<string, { tasks: number; lines: number }>();
+    const noteCount = (notePath: string) => {
+      let count = notes.get(notePath);
+      if (!count) {
+        count = { tasks: 0, lines: 0 };
+        notes.set(notePath, count);
+      }
+      return count;
+    };
+    const events: string[] = [];
+    let direct = 0;
+    for (const item of items) {
+      switch (item.kind) {
+        case "task":
+          if (item.change === "retry") {
+            events.push(`You asked to retry ${this.taskName(item.taskId, item.event.task.text)}`);
+          } else noteCount(item.event.notePath).tasks++;
+          break;
+        case "note":
+          noteCount(item.notePath).lines += item.lines.length;
+          break;
+        case "reply":
+          events.push(
+            item.taskId
+              ? `You replied in ${this.taskName(item.taskId)}`
+              : "You replied in a thread",
+          );
+          break;
+        case "report":
+          events.push(describeReport(this.taskName(item.report.taskId), item.report.status));
+          break;
+        case "direct":
+          direct++;
+          break;
+      }
+    }
+    const parts = [...notes].map(([notePath, { tasks, lines }]) => {
+      const counts = [
+        ...(tasks > 0 ? [plural(tasks, "task")] : []),
+        ...(lines > 0 ? [plural(lines, "line")] : []),
+      ];
+      return `${notePath} changed: ${counts.join(", ")}`;
+    });
+    parts.push(...events);
+    if (direct > 0) parts.push(direct === 1 ? "You wrote to me" : `You wrote to me (${direct})`);
+    return parts.join(" · ") || "Checking in";
+  }
+
+  private taskName(taskId: string, fallback?: string): string {
+    const text = this.options.records.get(taskId)?.text ?? fallback ?? taskId;
+    return `“${truncate(text, TRIGGER_TASK_CHARS)}”`;
+  }
+
+  private buildDigest(items: QueueItem[], freshSession: boolean): OrchestratorDigest {
     const { lookup, records, subagents } = this.options;
     const now = this.now();
     const notes = new Map<string, DigestNote>();
@@ -614,6 +745,9 @@ export class Orchestrator {
       const notePath = found?.notePath ?? record?.notePath;
       if (notePath) noteFor(notePath, found?.date ?? record?.date ?? null);
     }
+    // Talking about "the dentist task" needs today's list in view.
+    const direct = items.filter((item) => item.kind === "direct");
+    if (direct.length > 0) noteFor(this.todayPath(), toISODate(today(new Date(now))));
     for (const note of notes.values()) {
       const view = this.noteView(note.notePath);
       if (view) note.view = view;
@@ -651,11 +785,21 @@ export class Orchestrator {
         });
       }
     }
+    // The recent chat comes along when the user writes, and to a fresh session so it still knows.
+    const chat =
+      direct.length > 0 || freshSession
+        ? (this.options.chat?.recentExchanges(
+            CHAT_CONTEXT_MESSAGES,
+            new Set(direct.map((item) => item.messageId)),
+          ) ?? [])
+        : [];
     return {
       now,
       notes: [...notes.values()],
       replies,
       reports,
+      ...(direct.length > 0 ? { direct: direct.map((item) => item.text) } : {}),
+      ...(chat.length > 0 ? { chat } : {}),
       subagents: subagents.list().map((agent) => ({
         taskId: agent.taskId,
         taskText: agent.taskText,
@@ -859,4 +1003,24 @@ export class Orchestrator {
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+function describeReport(task: string, status: TaskAgentStatus): string {
+  switch (status) {
+    case "done":
+      return `${task} finished`;
+    case "failed":
+      return `${task} failed`;
+    case "waiting_user":
+    case "waiting_approval":
+      return `${task} needs you`;
+    case "cancelled":
+      return `${task} stopped`;
+    default:
+      return `${task}: ${status}`;
+  }
 }

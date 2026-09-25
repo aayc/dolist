@@ -11,6 +11,7 @@ import {
   type Deferred,
   deferred,
   isBlankTaskText,
+  isOrchestratorThread,
   isWithinWindow,
   type MessageAuthor,
   parseDailyNotePath,
@@ -46,6 +47,7 @@ import {
   renderBrowserFrame,
   renderDesktopFrame,
 } from "./mock-frames";
+import { MockOrchestrator } from "./mock-orchestrator";
 import {
   buildScript,
   type RiskyAction,
@@ -141,10 +143,24 @@ export class MockAgent {
   private readonly subscribers = new Map<string, number>();
   private readonly frameTimers = new Map<string, ReturnType<typeof setInterval>>();
   private activity: { notePath: string; line: number; at: number } | null = null;
+  private readonly orchestrator: MockOrchestrator;
 
   constructor(host: MockAgentHost, options: { speed?: number } = {}) {
     this.host = host;
     this.speed = options.speed ?? 1;
+    this.orchestrator = new MockOrchestrator({
+      emit: (event) => this.host.emit(event),
+      sleep: (ms, signal) => this.sleep(ms, signal),
+      work: () => {
+        const day = toISODate(today());
+        return {
+          working: [...this.jobs.keys()].flatMap((id) => this.records.get(id)?.text ?? []),
+          done: [...this.records.values()].filter((r) => r.status === "done" && r.date === day)
+            .length,
+        };
+      },
+    });
+    this.threads.set(this.orchestrator.thread.id, this.orchestrator.thread);
   }
 
   // ── Note watching ──────────────────────────────────────────────────────
@@ -345,12 +361,18 @@ export class MockAgent {
     });
     this.setThreadStatus(thread, "working", `Started a ${script.subagent} subagent`);
     const author: MessageAuthor = `subagent:${script.subagent}`;
-    await this.say(
-      thread,
-      "orchestrator",
-      `Picked this up — handing it to a **${script.subagent}** subagent.`,
-      signal,
-    );
+    const comment = `Picked this up — handing it to a **${script.subagent}** subagent.`;
+    const record = this.records.get(job.taskId);
+    if (record) {
+      this.orchestrator.delegated({
+        notePath: record.notePath,
+        taskId: job.taskId,
+        text: record.text,
+        subagent: script.subagent,
+        comment,
+      });
+    }
+    await this.say(thread, "orchestrator", comment, signal);
     await this.say(thread, author, script.intro, signal);
     for (const step of script.steps) await this.runStep(thread, author, step, signal);
     if (script.artifact) this.addArtifact(thread, author, script.artifact);
@@ -484,6 +506,7 @@ export class MockAgent {
 
   private finish(job: Job, thread: Thread, status: TaskAgentStatus, summary: string): void {
     this.patchRecord(job.taskId, { status, ...(summary ? { summary } : {}) });
+    this.orchestrator.finished(this.records.get(job.taskId)?.text ?? thread.title, status);
     this.setThreadStatus(thread, status, status === "done" ? "Task complete" : undefined);
     this.jobs.delete(job.taskId);
     for (const surface of thread.surfaces) this.setSurfaceLive(thread.id, surface, false);
@@ -756,6 +779,10 @@ export class MockAgent {
   }
 
   cancel(threadId: string): void {
+    if (isOrchestratorThread(threadId)) {
+      this.orchestrator.cancel();
+      return;
+    }
     const thread = this.threads.get(threadId);
     if (!thread) throw new MockNotFoundError("Thread");
     const job = [...this.jobs.values()].find((j) => j.threadId === threadId);
@@ -810,6 +837,10 @@ export class MockAgent {
   }
 
   postUserMessage(threadId: string, text: string): void {
+    if (isOrchestratorThread(threadId)) {
+      this.orchestrator.write(text);
+      return;
+    }
     const thread = this.threads.get(threadId);
     if (!thread) throw new MockNotFoundError("Thread");
     this.pushMessage(thread, {

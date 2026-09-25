@@ -688,9 +688,15 @@ A web page an agent found or read, as a citation preview.
 
 _Tolerant: clients must ignore keys they don't know._
 
+#### OrchestratorThreadId
+
+The id of the orchestrator's own chat: a thread with `taskId` and `notePath` null that records each orchestrator turn (a `status` line saying what woke it, its streamed text, its tool calls, whose inputs carry the `taskId` they act on) and takes the user's direct messages (`POST /api/threads/:id/messages`). Its status is `working` during a turn, `idle` otherwise.
+
+Type: `"thr_orchestrator"`
+
 #### Thread
 
-A task's full conversation: messages, artifacts and live surfaces.
+A task's full conversation: messages, artifacts and live surfaces. The orchestrator's own chat is a thread too (see `OrchestratorThreadId`).
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |

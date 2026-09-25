@@ -1,0 +1,100 @@
+/* ── The orchestrator's chat (pinned inbox row and its view) ── */
+
+.orchestrator-row {
+  margin-bottom: 10px;
+  border-color: var(--ddl-border);
+  background: var(--ddl-bg-secondary);
+}
+
+.orchestrator-row-icon {
+  flex: none;
+  color: var(--ddl-accent);
+}
+
+.orchestrator-row[data-status="working"] .orchestrator-row-icon {
+  animation: ddl-orchestrator-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes ddl-orchestrator-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orchestrator-row[data-status="working"] .orchestrator-row-icon {
+    animation: none;
+  }
+}
+
+.orchestrator-row-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  color: var(--ddl-warning);
+  font-size: 11px;
+}
+
+.orchestrator-scope {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orchestrator-empty {
+  margin: 8px 4px;
+  color: var(--ddl-text-faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.orchestrator-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.orchestrator-task {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  max-width: 100%;
+  margin-left: 10px;
+  padding: 1px 6px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--ddl-accent);
+  font-size: 11px;
+  transition: background-color var(--transition-fast);
+}
+
+.orchestrator-task:not(.is-plain):hover {
+  background: var(--ddl-accent-soft);
+}
+
+.orchestrator-task.is-plain {
+  color: var(--ddl-text-faint);
+}
+
+.orchestrator-task-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orchestrator-thought {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ddl-text-faint);
+  font-size: 11px;
+}
+
+.orchestrator-thought time {
+  margin-left: auto;
+}

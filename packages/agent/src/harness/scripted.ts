@@ -24,6 +24,8 @@ export interface ScriptContext {
   signal: AbortSignal;
   /** Streams text as deltas followed by `message_end`. */
   say(text: string): Promise<void>;
+  /** Streams reasoning as `thinking_delta`s (what a model's thinking looks like to the host). */
+  think(text: string): Promise<void>;
   /**
    * Calls a tool through `beforeToolCall` (the safety gate) and executes it if allowed.
    * Blocked calls resolve with `blocked: true` and an error result, like a real model would see.
@@ -137,6 +139,7 @@ class ScriptedSession implements HarnessSession {
       turn,
       signal,
       say: (text) => this.say(text, signal),
+      think: (text) => this.think(text, signal),
       callTool: (name, input) => this.callTool(name, input, signal),
       takeSteering: () => this.drainSteering(),
     };
@@ -162,6 +165,15 @@ class ScriptedSession implements HarnessSession {
       if (this.wordDelayMs > 0) await new Promise((r) => setTimeout(r, this.wordDelayMs));
     }
     this.emit({ type: "message_end", messageId, text });
+  }
+
+  private async think(text: string, signal: AbortSignal): Promise<void> {
+    const messageId = createId("msg");
+    for (const word of text.split(/(?<=\s)/)) {
+      if (signal.aborted) throw signal.reason;
+      this.emit({ type: "thinking_delta", messageId, delta: word });
+      if (this.wordDelayMs > 0) await new Promise((r) => setTimeout(r, this.wordDelayMs));
+    }
   }
 
   private async callTool(

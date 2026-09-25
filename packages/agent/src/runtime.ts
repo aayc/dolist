@@ -10,6 +10,7 @@ import {
   createId,
   dailyNotePath,
   Emitter,
+  isOrchestratorThread,
   type Logger,
   resolveLineAnchors,
   type SurfaceKind,
@@ -31,6 +32,7 @@ import { ScriptedHarness } from "./harness/scripted";
 import type { Harness, ToolCallDecision, ToolCallRequest } from "./harness/types";
 import { checkOpenRouterKey, type OpenRouterKeyCheck } from "./llm/openrouter";
 import type { LlmClient } from "./llm/types";
+import { OrchestratorChat } from "./orchestrator/chat";
 import { createMockScript } from "./orchestrator/mock-script";
 import { Orchestrator } from "./orchestrator/orchestrator";
 import { TaskRecords } from "./orchestrator/records";
@@ -147,6 +149,8 @@ class Runtime implements AgentRuntime {
   private readonly board: TaskBoard;
   private readonly subagents: SubagentManager;
   private readonly orchestrator: Orchestrator;
+  /** The orchestrator's own chat (`ORCHESTRATOR_THREAD_ID`). */
+  private readonly chat: OrchestratorChat;
   private readonly knowledgeTools: ToolSpec[];
   /** `edit_note`, shared by the orchestrator and every subagent. */
   private readonly noteEditTool: ToolSpec;
@@ -280,6 +284,11 @@ class Runtime implements AgentRuntime {
       now,
       logger: this.logger.child({ component: "subagents" }),
     });
+    this.chat = new OrchestratorChat({
+      threads: this.threads,
+      now,
+      logger: this.logger.child({ component: "orchestrator-chat" }),
+    });
     this.orchestrator = new Orchestrator({
       harness: () => this.harness,
       board: this.board,
@@ -306,6 +315,7 @@ class Runtime implements AgentRuntime {
           : undefined;
         this.queueStatus();
       },
+      chat: this.chat,
     });
     this.wireEvents();
   }
@@ -320,6 +330,7 @@ class Runtime implements AgentRuntime {
       }),
     ]);
     this.reconcileAfterRestart();
+    this.safely(() => this.chat.ensure(), undefined);
     if (this.mode === "off") {
       this.problem = OFF_PROBLEM;
       return;
@@ -489,8 +500,9 @@ class Runtime implements AgentRuntime {
     if (!thread) throw new UnknownThreadError(threadId);
     const body = text.trim();
     if (!body) return;
+    const messageId = createId("msg");
     this.threads.upsertMessage(threadId, {
-      id: createId("msg"),
+      id: messageId,
       kind: "text",
       role: "user",
       author: "you",
@@ -504,6 +516,10 @@ class Runtime implements AgentRuntime {
         threadId,
         `The agent isn't running${problem ? ` (${problem})` : ""}. Your message is saved.`,
       );
+      return;
+    }
+    if (isOrchestratorThread(threadId)) {
+      this.orchestrator.handleDirectMessage({ text: body, messageId });
       return;
     }
     const taskId = thread.taskId;
@@ -527,14 +543,43 @@ class Runtime implements AgentRuntime {
   async cancelThread(threadId: string): Promise<void> {
     const thread = this.threads.get(threadId);
     if (!thread) throw new UnknownThreadError(threadId);
+    if (isOrchestratorThread(threadId)) {
+      await this.stopOrchestratorTurn();
+      return;
+    }
     if (!thread.taskId) return;
     this.orchestrator.dropQueued(thread.taskId);
     await this.subagents.cancel(thread.taskId, "Cancelled by you.");
   }
 
+  /**
+   * Stop in the orchestrator's chat: its approvals still waiting are denied (nothing waits for
+   * them any more) and the turn is aborted. Idle, it's a no-op.
+   */
+  private async stopOrchestratorTurn(): Promise<void> {
+    if (!this.orchestrator.turnRunning) return;
+    const pending = this.safely(
+      () => this.broker.list({ threadId: this.chat.threadId, status: "pending" }),
+      [],
+    );
+    await Promise.all(
+      pending.map((approval) =>
+        this.broker
+          .decide(approval.id, { decision: "deny", note: "You stopped the orchestrator." })
+          .catch((error: unknown) => this.logError("stopOrchestratorTurn", error)),
+      ),
+    );
+    await this.orchestrator.cancelTurn();
+  }
+
   async retryThread(threadId: string): Promise<void> {
     const thread = this.threads.get(threadId);
     if (!thread) throw new UnknownThreadError(threadId);
+    if (isOrchestratorThread(threadId)) {
+      throw new AgentUnavailableError(
+        "The orchestrator's chat has nothing to retry: write to it instead.",
+      );
+    }
     if (!thread.taskId) throw new AgentUnavailableError("This thread isn't attached to a task.");
     if (!this.canRun() || this.stopped) {
       throw new AgentUnavailableError(

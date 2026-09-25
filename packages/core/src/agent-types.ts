@@ -209,6 +209,18 @@ export interface CitedSource {
   snippet?: string;
 }
 
+/**
+ * The orchestrator's own chat: one thread with this id (`taskId` and `notePath` null) records each
+ * of its turns (what woke it, its text, its tool calls) and takes the user's direct messages.
+ */
+export const ORCHESTRATOR_THREAD_ID = "thr_orchestrator";
+export type OrchestratorThreadId = typeof ORCHESTRATOR_THREAD_ID;
+export const ORCHESTRATOR_THREAD_TITLE = "Orchestrator";
+
+export function isOrchestratorThread(threadId: string): threadId is OrchestratorThreadId {
+  return threadId === ORCHESTRATOR_THREAD_ID;
+}
+
 export interface ThreadSummary {
   id: string;
   taskId: string | null;

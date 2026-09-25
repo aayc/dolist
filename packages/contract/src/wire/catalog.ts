@@ -26,6 +26,7 @@ export const WIRE_SCHEMAS = {
   StatusMessage: domain.StatusMessageSchema,
   ThreadMessage: domain.ThreadMessageSchema,
   SurfaceKind: domain.SurfaceKindSchema,
+  OrchestratorThreadId: domain.OrchestratorThreadIdSchema,
   Thread: domain.ThreadSchema,
   CitedSource: domain.CitedSourceSchema,
   ThreadSummary: domain.ThreadSummarySchema,

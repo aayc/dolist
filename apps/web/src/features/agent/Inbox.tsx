@@ -1,4 +1,4 @@
-import { stem, type ThreadSummary } from "@ddl/core";
+import { isOrchestratorThread, stem, type ThreadSummary } from "@ddl/core";
 import { Inbox as InboxIcon, X } from "lucide-react";
 import { memo, useMemo } from "react";
 import { useServices } from "../../app/services";
@@ -9,12 +9,16 @@ import { perfStart } from "../../perf/perf";
 import { findRecordIn } from "../../state/agent-reducer";
 import { useAgentStore } from "../../state/agent-store";
 import { ui } from "../../state/ui-store";
+import { OrchestratorInboxRow } from "./OrchestratorInboxRow";
 import { StatusChip } from "./StatusChip";
 import { groupThreads, INBOX_GROUPS } from "./status-meta";
 
 export function Inbox() {
   const threads = useAgentStore((s) => s.threads);
-  const groups = useMemo(() => groupThreads(Object.values(threads)), [threads]);
+  const groups = useMemo(
+    () => groupThreads(Object.values(threads).filter((t) => !isOrchestratorThread(t.id))),
+    [threads],
+  );
   const total = INBOX_GROUPS.reduce((sum, g) => sum + groups[g.key].length, 0);
 
   return (
@@ -29,6 +33,7 @@ export function Inbox() {
         />
       </header>
       <div className="inbox-scroll">
+        <OrchestratorInboxRow />
         {total === 0 ? (
           <div className="inbox-empty">
             <InboxIcon size={28} strokeWidth={1.5} aria-hidden="true" />

@@ -74,6 +74,26 @@
     }
   },
   {
+    "name": "thread.upsert (the orchestrator's chat)",
+    "value": {
+      "type": "thread.upsert",
+      "thread": {
+        "id": "thr_orchestrator",
+        "taskId": null,
+        "notePath": null,
+        "title": "Orchestrator",
+        "status": "idle",
+        "createdAt": 1790000000000,
+        "updatedAt": 1790000012000,
+        "messageCount": 7,
+        "lastMessagePreview": "A researcher is finding dentist appointments for next week.",
+        "artifactCount": 0,
+        "surfaces": [],
+        "pendingApprovals": 0
+      }
+    }
+  },
+  {
     "name": "thread.message (streaming text)",
     "value": {
       "type": "thread.message",

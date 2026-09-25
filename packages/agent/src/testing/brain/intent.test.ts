@@ -3,16 +3,21 @@ import { addDays, today, toISODate } from "@ddl/core";
 import { fc, test } from "@fast-check/vitest";
 import { describe, expect, it } from "vitest";
 import type { Capability } from "../../execution/types";
+import { formatOrchestratorDigest } from "../../prompts/orchestrator";
+import { parseDigest } from "./digest";
+import { planDirect } from "./direct";
 import { evaluateArithmetic, grantableCapabilities, quickAnswer, triage } from "./intent";
 
 interface TriageCase {
   id: string;
   task: string;
   notes?: string[];
-  expected: "delegate" | "comment" | "ask_user" | "ignore";
+  expected: "delegate" | "comment" | "ask_user" | "ignore" | "drop" | "forward" | "reply";
   acceptable?: string[];
   capabilities?: Capability[];
   computerAccess?: "missing";
+  direct?: string;
+  agentStatus?: "working" | "done" | "waiting_user";
 }
 
 const DATASET = new URL("../../../../../evals/datasets/triage.jsonl", import.meta.url);
@@ -39,7 +44,7 @@ describe("triage against the eval dataset", () => {
 
   it("matches the expected (or an acceptable) decision and capabilities for every case", () => {
     const misses: string[] = [];
-    for (const c of cases) {
+    for (const c of cases.filter((c) => c.direct === undefined)) {
       const text = c.task.replace(/\{\{\+(\d+)d\}\}/g, (_, days: string) =>
         toISODate(addDays(today(), Number(days))),
       );
@@ -66,6 +71,51 @@ describe("triage against the eval dataset", () => {
     }
     expect(cases.length).toBeGreaterThan(50);
     expect(misses).toEqual([]);
+  });
+
+  it("handles every direct message to the orchestrator the way the case expects", () => {
+    const direct = cases.filter((c) => c.direct !== undefined);
+    const outcomes = direct.map((c) => {
+      const status = c.agentStatus ?? "working";
+      const digest = formatOrchestratorDigest({
+        now: Date.now(),
+        notes: [
+          {
+            notePath: "Daily/2026-09-23.md",
+            date: todayIso,
+            changed: [],
+            others: [
+              { taskId: "tsk_case", text: c.task, notes: [], agentStatus: status },
+              { taskId: "tsk_filler", text: "Reply to Alex about the offsite", notes: [] },
+            ],
+          },
+        ],
+        replies: [],
+        reports: [],
+        direct: [c.direct!],
+        subagents: [
+          ...(status === "working"
+            ? [{ taskId: "tsk_case", taskText: c.task, status: "working" as const }]
+            : []),
+          { taskId: "tsk_filler", taskText: "Reply to Alex about the offsite", status: "working" },
+        ],
+        capabilities: { available: ["web"], unavailable: [], connectors: [] },
+      });
+      const plan = planDirect(parseDigest(digest), [], false);
+      const own = plan.calls.filter(
+        (call) => (call.arguments as { taskId?: string }).taskId === "tsk_case",
+      );
+      const outcome = own.some((call) => call.name === "message_subagent")
+        ? "forward"
+        : own.length > 0
+          ? "drop"
+          : plan.reply
+            ? "reply"
+            : "nothing";
+      return `${c.id}: ${outcome}`;
+    });
+    expect(direct.length).toBeGreaterThanOrEqual(6);
+    expect(outcomes).toEqual(direct.map((c) => `${c.id}: ${c.expected}`));
   });
 });
 
