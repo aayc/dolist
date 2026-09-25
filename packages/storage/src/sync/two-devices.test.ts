@@ -157,6 +157,82 @@ describe("two devices syncing through the sync service", { timeout: 30_000 * TIM
     expect(await settled(a, b)).toEqual({ "keep.md": "keep" });
   });
 
+  describe("an agent journal", () => {
+    const path = ".daily-do-list/state/journal/threads/thr_k3j9x0q2m1ab.jsonl";
+    const event = (id: string, seq: number, epoch = 0) =>
+      `${JSON.stringify({ v: 1, id, epoch, seq, at: NOW + seq, type: "title", title: id })}\n`;
+    const idsIn = (journal: string | undefined) =>
+      (journal ?? "")
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => (JSON.parse(line) as { id: string }).id);
+
+    // Through the sync service a journal is fenced like every agent file: only the lease holder's
+    // appends travel. (Without a lease, e.g. a mirrored folder, journals merge as a union: see
+    // the engine's tests.)
+    it("travels from the lease holder; a device without the lease gives way, never a conflict copy", async () => {
+      const grant = sync.holdAgentLease("dev_a");
+      epochs.set("a", grant.epoch);
+      const a = await device("a");
+      const b = await device("b");
+      await a.vault.append(path, event("evt_base", 1, grant.epoch));
+      await settled(a, b);
+
+      await Promise.all([
+        (async () => {
+          for (let i = 0; i < 5; i++) {
+            await a.vault.append(path, event(`evt_a${i}`, 2 + i, grant.epoch));
+          }
+        })(),
+        (async () => {
+          for (let i = 0; i < 5; i++) await b.vault.append(path, event(`evt_b${i}`, 2 + i));
+        })(),
+      ]);
+
+      const files = await settled(a, b);
+      expect(Object.keys(files)).toEqual([path]);
+      expect(idsIn(files[path])).toEqual(["evt_base", ...[0, 1, 2, 3, 4].map((i) => `evt_a${i}`)]);
+      for (const d of [a, b]) expect(d.engine.status().conflicts).toEqual([]);
+    });
+
+    it.each([
+      ["still believes it holds the lease", true],
+      ["knows it lost the lease", false],
+    ])(
+      "from a former holder that %s and appended offline gives way to the new holder's",
+      async (_label, believesItHolds) => {
+        const grantA = sync.holdAgentLease("dev_a");
+        epochs.set("a", grantA.epoch);
+        const a = await device("a");
+        const b = await device("b");
+        await a.vault.append(path, event("evt_base", 1, grantA.epoch));
+        await settled(a, b);
+
+        // a goes offline and keeps appending under its grant; b takes over with a new one.
+        await a.engine.stop();
+        await a.vault.append(
+          path,
+          event("evt_old1", 2, grantA.epoch) + event("evt_old2", 3, grantA.epoch),
+        );
+        grantA.release();
+        if (!believesItHolds) epochs.delete("a");
+        const grantB = sync.holdAgentLease("dev_b");
+        epochs.set("b", grantB.epoch);
+        await b.vault.append(path, event("evt_new1", 1, grantB.epoch));
+        await b.vault.append(path, event("evt_new2", 2, grantB.epoch));
+        await eventually(async () =>
+          expect(b.engine.status()).toMatchObject({ state: "idle", pendingChanges: 0 }),
+        );
+
+        a.engine.start(FAST);
+        const files = await settled(a, b);
+        expect(idsIn(files[path])).toEqual(["evt_base", "evt_new1", "evt_new2"]);
+        expect(Object.keys(files)).toEqual([path]);
+        for (const d of [a, b]) expect(d.engine.status().conflicts).toEqual([]);
+      },
+    );
+  });
+
   it("syncs the agent's sidecar files but never the per-device sync snapshots", async () => {
     epochs.set("a", sync.holdAgentLease("dev_a").epoch);
     const a = await device("a");

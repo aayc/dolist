@@ -83,6 +83,12 @@ export interface StorageProvider {
   stat(path: string): Promise<FileEntry | null>;
   read(path: string): Promise<FileContent | null>;
   write(path: string, content: string, options?: WriteOptions): Promise<WriteResult>;
+  /**
+   * Adds `content` at the end of a file, creating it if missing, without rewriting what is there
+   * (append-only journals). `ifMatch` as for `write`. Optional: callers fall back to read + write
+   * (`appendToFile`). Not atomic: a crash can cut the appended text short.
+   */
+  append?(path: string, content: string, options?: WriteOptions): Promise<WriteResult>;
   delete(path: string, options?: WriteOptions): Promise<void>;
   /** Renames a file. Fails with `ConflictError` if `to` exists. */
   rename(from: string, to: string): Promise<WriteResult>;

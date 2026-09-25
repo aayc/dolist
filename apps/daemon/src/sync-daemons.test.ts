@@ -17,6 +17,7 @@ import { createSyncServer, type RunningSyncServer } from "@ddl/sync";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LeaseTimings } from "./agent-lease";
 import { loadConfig } from "./config";
+import { RELAY_PROBLEMS } from "./relay/relay";
 import { RecordingLogger } from "./security/harness";
 import { type RunningDaemon, startDaemon } from "./server";
 import { tempDir } from "./test-helpers";
@@ -268,9 +269,10 @@ describe("two daemons sharing a vault through the sync service", {
         priority: "host",
       }),
     );
+    // The problem is why this device can't act on the agent; `runsOn` says where it runs.
     await eventually(async () =>
       expect(await agentStatus(laptop)).toMatchObject({
-        problem: "The agent is running on vm-1.",
+        problem: RELAY_PROBLEMS.notPaired,
         placement: {
           placement: "always_on_machine",
           runsOn: { name: "vm-1", thisDevice: false, alwaysOnMachine: true },

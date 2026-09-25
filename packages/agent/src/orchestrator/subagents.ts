@@ -28,6 +28,7 @@ import type {
   HarnessSession,
   ToolCallDecision,
   ToolCallRequest,
+  TranscriptEntry,
 } from "../harness/types";
 import {
   buildSubagentKickoff,
@@ -35,12 +36,13 @@ import {
   buildThreadHistory,
   FINISH_NUDGE,
   formatSteerMessage,
+  RESUME_NOTE,
   type SteerSource,
 } from "../prompts/subagent";
 import type { RoutineBrief } from "../routines/scheduler";
 import type { ApprovalBroker, GateContext } from "../safety/types";
 import { defaultMimeType } from "../threads/artifacts";
-import type { ThreadStore } from "../threads/types";
+import type { ThreadJournal, ThreadStore } from "../threads/types";
 import { ToolInputError } from "../tools/input";
 import { createThreadTools, THREAD_TOOL_NAMES, type ThreadToolHost } from "../tools/thread";
 import type { TaskRecords } from "./records";
@@ -80,6 +82,8 @@ export interface SubagentManagerOptions {
   harness: () => Harness | null;
   board: TaskBoard;
   threads: ThreadStore;
+  /** The threads' journal: prompts are recorded to rebuild a session; interrupted steps are read. */
+  journal?: ThreadJournal;
   records: TaskRecords;
   approvals: () => ApprovalBroker;
   /** The safety gate; every subagent tool call goes through it. */
@@ -115,7 +119,9 @@ type RunState = "queued" | "starting" | "running" | "idle";
 
 type PendingPrompt =
   | { kind: "kickoff"; reassignment: boolean; retry: boolean }
-  | { kind: "message"; text: string };
+  | { kind: "message"; text: string }
+  /** Picking up a run the agent stopped in the middle of, from the journal's transcript. */
+  | { kind: "resume"; transcript: readonly TranscriptEntry[]; sessionId?: string };
 
 interface TurnState {
   finishStatus?: TaskAgentStatus;
@@ -123,6 +129,8 @@ interface TurnState {
   changed?: boolean;
   askedUser: boolean;
   error?: string;
+  /** The session to pick a run back up couldn't start. */
+  resumeFailed?: boolean;
   /** Text of the turn's final assistant message ("" when it ended with tool calls only). */
   finalText: string;
   nudged: boolean;
@@ -280,6 +288,7 @@ export class SubagentManager {
     if (run.state === "running" && run.session?.isRunning) {
       try {
         await run.session.steer(wrapped);
+        if (run.sessionId) this.options.journal?.recordPrompt(run.threadId, run.sessionId, wrapped);
         return true;
       } catch (error) {
         this.logger.warn("Steering failed; delivering with the next turn", {
@@ -336,6 +345,32 @@ export class SubagentManager {
     return this.request(run, false);
   }
 
+  /**
+   * Picks up a task whose run the agent stopped in the middle of (a restart, a handover): a new
+   * session restored from `transcript` (the journal's record of the last session) continues it.
+   * Without a transcript it's primed with the thread's history instead. Null when there's no
+   * spec to run, or the task already has a subagent.
+   */
+  resume(
+    taskId: string,
+    restored: { transcript: readonly TranscriptEntry[]; sessionId?: string } = { transcript: [] },
+  ): SpawnResult | null {
+    if (this.stopped || this.runs.has(taskId)) return null;
+    const spec = this.options.records.getSpec(taskId);
+    if (!spec) return null;
+    const thread = this.options.board.ensureThread(taskId);
+    const run = this.createRun(spec, thread.id);
+    const { transcript } = restored;
+    run.needsHistory = transcript.length === 0 && hasHistory(thread);
+    run.pending = {
+      kind: "resume",
+      transcript,
+      ...(transcript.length > 0 && restored.sessionId ? { sessionId: restored.sessionId } : {}),
+    };
+    this.runs.set(taskId, run);
+    return this.request(run, true);
+  }
+
   /** Starts queued work when slots are free (call after the concurrency limit changes). */
   pump(): void {
     while (this.queue.length > 0 && this.runningCount() < this.maxConcurrent()) {
@@ -345,19 +380,18 @@ export class SubagentManager {
     }
   }
 
-  /** Aborts everything. Interrupted work is marked failed so the user can retry it. */
+  /**
+   * Aborts everything. Work in progress keeps its status, so the next start (here, or on the
+   * device taking the agent over) picks it back up from the journal; its pending approvals are
+   * cancelled (the resumed run asks again).
+   */
   async stop(): Promise<void> {
     this.stopped = true;
     await Promise.all(
       [...this.runs.values()].map(async (run) => {
         const interrupted = run.state !== "idle";
-        await this.close(run);
-        if (!interrupted) return;
-        this.cancelApprovals(run.taskId, "The agent stopped.");
-        this.options.board.setStatus(run.taskId, "failed", {
-          summary: "Interrupted",
-          note: "Interrupted because the agent stopped. Use Retry to continue.",
-        });
+        await this.close(run, "Interrupted");
+        if (interrupted) this.cancelApprovals(run.taskId, "The agent stopped.");
       }),
     );
   }
@@ -425,17 +459,22 @@ export class SubagentManager {
             ? buildThreadHistory(thread, this.options.records.get(run.taskId)?.status)
             : undefined;
         }
-        await this.openSession(run);
+        try {
+          await this.openSession(run);
+        } catch (error) {
+          if (run.pending?.kind === "resume") run.turn.resumeFailed = true;
+          throw error;
+        }
         run.needsHistory = false;
       }
       if (run.closed || !run.session) return;
       const prompt = this.buildPrompt(run, fresh, history || undefined);
       run.state = "running";
       this.options.onChange();
-      await run.session.prompt(prompt);
+      await this.prompt(run, run.session, prompt);
       if (!run.closed && needsNudge(run.turn)) {
         run.turn.nudged = true;
-        await run.session.prompt(FINISH_NUDGE);
+        await this.prompt(run, run.session, FINISH_NUDGE);
       }
     } catch (error) {
       if (!run.closed) run.turn.error = errorText(error);
@@ -443,11 +482,23 @@ export class SubagentManager {
     if (!run.closed) this.complete(run);
   }
 
+  /** Prompts the session, journaling the prompt first (a restart rebuilds the session from it). */
+  private prompt(run: Run, session: HarnessSession, text: string): Promise<void> {
+    if (run.sessionId) this.options.journal?.recordPrompt(run.threadId, run.sessionId, text);
+    return session.prompt(text);
+  }
+
   private complete(run: Run): void {
     const { turn } = run;
     const board = this.options.board;
     let status: TaskAgentStatus;
-    if (turn.error) {
+    if (turn.error && turn.resumeFailed) {
+      status = "failed";
+      board.setStatus(run.taskId, "failed", {
+        summary: "Interrupted",
+        note: `Couldn't pick this back up after the agent restarted (${truncate(turn.error, 300)}). Use Retry to continue.`,
+      });
+    } else if (turn.error) {
       status = "failed";
       board.setStatus(run.taskId, "failed", {
         summary: `Failed: ${truncate(turn.error, 50)}`,
@@ -487,13 +538,13 @@ export class SubagentManager {
     }
   }
 
-  private async close(run: Run): Promise<void> {
+  private async close(run: Run, reason = "Cancelled"): Promise<void> {
     if (run.closed) return;
     run.closed = true;
     if (this.runs.get(run.taskId) === run) this.runs.delete(run.taskId);
     this.queue = this.queue.filter((r) => r !== run);
     run.controller.abort();
-    this.finalizeStreams(run, "Cancelled");
+    this.finalizeStreams(run, reason);
     await this.disposeSession(run);
     this.options.onChange();
   }
@@ -504,7 +555,10 @@ export class SubagentManager {
     run.workspace ??= await this.options.execution.prepareWorkspace(run.threadId);
     const task = this.options.board.describe(run.taskId);
     const tools = await this.buildTools(run, task);
-    const sessionId = this.nextSessionId(run);
+    const resume = run.pending?.kind === "resume" ? run.pending : undefined;
+    // A restored session keeps its id: its journal is one conversation across restarts.
+    const sessionId = resume?.sessionId ?? this.nextSessionId(run);
+    if (resume?.sessionId) this.usedSessionIds.add(run.threadId);
     const capabilities = run.spec.capabilities;
     this.bySession.set(sessionId, run);
     let session: HarnessSession;
@@ -524,6 +578,7 @@ export class SubagentManager {
         beforeToolCall: this.options.beforeToolCall,
         onEvent: (event) => this.onEvent(run, event),
         signal: run.controller.signal,
+        ...(resume?.transcript.length ? { transcript: resume.transcript } : {}),
       });
     } catch (error) {
       this.bySession.delete(sessionId);
@@ -588,11 +643,18 @@ export class SubagentManager {
     const pending = run.pending;
     run.pending = undefined;
     const inbox = run.inbox.splice(0);
-    if (fresh || pending?.kind === "kickoff") {
+    if (pending?.kind === "resume" && pending.transcript.length > 0) {
+      return [RESUME_NOTE, ...inbox].join("\n\n");
+    }
+    if (fresh || pending?.kind === "kickoff" || pending?.kind === "resume") {
       const task = this.options.board.describe(run.taskId);
       const record = this.options.records.get(run.taskId);
       const routine = this.options.routineBrief?.(run.taskId);
+      const uncertain = (this.options.journal?.interruptedCalls(run.threadId) ?? [])
+        .filter((call) => call.effectful)
+        .map((call) => call.target);
       return buildSubagentKickoff({
+        ...(uncertain.length > 0 ? { uncertain } : {}),
         now: this.now(),
         ...(routine ? { routine } : {}),
         task: {
@@ -607,6 +669,7 @@ export class SubagentManager {
         followUps: pending?.kind === "message" ? [pending.text, ...inbox] : inbox,
         reassignment: !fresh && pending?.kind === "kickoff" && pending.reassignment,
         retry: pending?.kind === "kickoff" && pending.retry,
+        ...(pending?.kind === "resume" ? { resumed: true } : {}),
       });
     }
     return [pending?.kind === "message" ? pending.text : "", ...inbox]

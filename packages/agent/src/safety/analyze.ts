@@ -10,7 +10,7 @@ import { type Cwd, inferHome, resolvePath } from "./paths";
 import { ACTION_CATEGORIES } from "./policy";
 import { searchQueryHits, sensitiveValueHits, sqlHits, writtenContentHits } from "./rules/content";
 import { fileReadAnalysis, fileWriteAnalysis, NOTES_READ } from "./rules/files";
-import { mcpAnalysis } from "./rules/mcp";
+import { mcpAnalysis, mcpListsOnly } from "./rules/mcp";
 import { noteEditHits } from "./rules/notes";
 import { readPathHits, writePathHits } from "./rules/path-rules";
 import { routineToolHits } from "./rules/routines";
@@ -118,15 +118,30 @@ function contentHits(f: ActionFacts, effectful: boolean): RuleHit[] {
   return hits;
 }
 
+const SOURCE_KEYS_RE = /^(?:source|src|sources|source_?paths?)$/i;
+
 function connectorAnalysis(f: ActionFacts): FamilyResult {
   if (f.ui) return uiAnalysis(f);
   const mcp = mcpAnalysis(f);
   const hits: RuleHit[] = [...mcp.hits];
   for (const url of f.urls) hits.push(...urlHits(url));
   // Connector servers resolve relative paths against their own roots, which we cannot see.
+  const resolve = (raw: string) =>
+    resolvePath(raw, { kind: "unknown" }, f.ctx.workspaceDir, f.ctx.appHome);
+  const listing = mcpListsOnly(f.mcp?.words ?? []);
   for (const raw of f.paths) {
-    const target = resolvePath(raw, { kind: "unknown" }, f.ctx.workspaceDir, f.ctx.appHome);
-    hits.push(...(mcp.readOnly ? readPathHits(target, raw) : writePathHits(target, raw)));
+    const target = resolve(raw);
+    hits.push(
+      ...(mcp.readOnly ? readPathHits(target, raw, { listing }) : writePathHits(target, raw)),
+    );
+  }
+  // What a tool copies, moves or archives is read even when the tool writes.
+  if (!mcp.readOnly) {
+    for (const [key, value] of Object.entries(f.input)) {
+      if (!SOURCE_KEYS_RE.test(key)) continue;
+      for (const raw of [value].flat())
+        if (typeof raw === "string") hits.push(...readPathHits(resolve(raw), raw));
+    }
   }
   if (f.shell) hits.push(...shellAnalysis(f).hits.filter((h) => h.rule.decision !== "allow"));
   hits.push(...contentHits(f, mcp.effectful));

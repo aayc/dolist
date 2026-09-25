@@ -97,6 +97,14 @@ happens on the devices, in the engine, exactly as for a local mirror folder
 - Edits to the same line: the device that syncs second keeps its own text and saves the other
   device's as `<name> (conflict YYYY-MM-DD HHmm).md`; the copy then syncs to every device, and
   every device lists it under `conflicts` in its sync status until someone deletes it.
+- The agent's journals (`.daily-do-list/state/journal/**.jsonl`: append-only, one event with a
+  unique id per line) merge as the union of both copies' lines, ordered by `(epoch, seq, id)`.
+  The result depends only on the set of lines, so every device ends with the same bytes, and there
+  is never a conflict copy. Through the sync service they are fenced like every agent file (see
+  [the agent lease](#the-agent-lease)): only the lease holder's appends travel, and when the
+  holder finds the service's copy changed too it pushes the union, so it never drops an event.
+  A device without the lease, or a former holder that appended offline, gives way. Without a
+  lease (a mirrored folder), two devices appending at once keep every event.
 - Other formats (JSON such as the agent's thread files, canvases) keep the newest by modification
   time and save the other as the conflict copy. The server stamps `mtime` with its own clock when
   it accepts a write, so compare notes across devices with that in mind.
@@ -107,7 +115,7 @@ happens on the devices, in the engine, exactly as for a local mirror folder
   `SyncAbortedError` instead of deleting every note.
 
 What syncs: every text file in the vault, including the agent's sidecar (`.daily-do-list/threads`,
-`artifacts`, `state/records.json`, `approvals.json`, `settings.json`). What doesn't: each device's
+`artifacts`, `state/journal`, `state/records.json`, `approvals.json`, `settings.json`). What doesn't: each device's
 own sync snapshot (`.daily-do-list/sync/`), the agent's machine-local scratch data
 (`.daily-do-list/state/tasks`), junk and temp files, and binary files (images, PDFs, …).
 
@@ -221,8 +229,9 @@ with `DDL_AGENT_MODE` `live` or `mock`) starts its agent only while it holds the
   device holds it, it asks again every 15 s and takes over as soon as that device releases it
   (it does when its daemon stops) or stops renewing (it crashed or went offline: at most 60 s).
 - Until then this daemon serves notes and syncs as usual, but its agent is off: its agent status
-  says `problem: "The agent is running on <device name>."`, it lists no threads or approvals of
-  its own, and it writes nothing into the agent's sidecar files.
+  says `problem: "The agent is running on <device name>."`, it shows the other device's threads,
+  approvals and task records read-only as sync brings them in (agent actions answer 503 with that
+  problem), and it writes nothing into the agent's sidecar files.
 - On takeover it first runs a sync pass, then creates the agent runtime from the vault as it is now
   (threads, records and approvals written by the previous device's agent included). On release it
   stops the runtime (which flushes its state) and runs a sync pass before letting go.
@@ -310,8 +319,9 @@ Phase 1 limitations:
 - File names that differ only in case or Unicode normalization across file systems aren't
   reconciled (as with any sync target).
 - Devices notice a released lease by asking every 15 s (3 s while taking over), not by push.
-- Only the device that runs the agent shows agent threads and records; the others show notes
-  (including the agent's lines in them) and say where the agent runs.
+- Only the device that runs the agent acts on agent threads and approvals; the others show them
+  read-only and say where the agent runs (a device relaying to the always-on machine acts through
+  it, see [ALWAYS_ON.md](./ALWAYS_ON.md#the-agent-relay)).
 - Settings UI is being built (docs/ALWAYS_ON.md); the data is in `GET /api/sync/status`,
   `GET /api/device` and the agent status.
 
@@ -320,6 +330,6 @@ Phase 2:
 - Attachments in S3/R2 (content-addressed, referenced from the change log).
 - A Cloudflare Durable Object host (one object per vault with its own SQLite, same protocol).
 - End-to-end encryption of content and paths.
-- Lease changes pushed on the stream; read-only agent threads on the other devices.
+- Lease changes pushed on the stream.
 - Change-log compaction, per-vault quotas, and the sync status in the web and Mac apps; the iOS
   client (the Swift models already decode the sync status).

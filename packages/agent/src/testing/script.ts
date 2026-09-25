@@ -8,7 +8,7 @@
  */
 import { type ToolSpec, toolResultText } from "@ddl/core";
 import type { AgentScript, ScriptContext, ScriptToolOutcome } from "../harness/scripted";
-import type { HarnessSessionOptions } from "../harness/types";
+import type { HarnessSessionOptions, TranscriptEntry } from "../harness/types";
 import type { FakeBrain } from "./brain/brain";
 import type { BrainMessage, BrainRequest, BrainTool } from "./brain/types";
 import { validateJson } from "./json-schema";
@@ -41,7 +41,8 @@ export function createFakeAgentScript(
   options: FakeAgentScriptOptions = {},
 ): (session: HarnessSessionOptions) => AgentScript {
   return (session) => {
-    const transcript: BrainMessage[] = [];
+    // A session rebuilt after a restart continues the conversation it was restored with.
+    const transcript: BrainMessage[] = (session.transcript ?? []).map(toBrainMessage);
     let callSeq = 0;
     return async (ctx) => {
       transcript.push({ role: "user", content: ctx.message });
@@ -135,6 +136,30 @@ function requestFor(
       ? { reasoning: session.thinking }
       : { reasoning: "none" }),
   };
+}
+
+function toBrainMessage(entry: TranscriptEntry): BrainMessage {
+  switch (entry.role) {
+    case "user":
+      return { role: "user", content: entry.text };
+    case "assistant":
+      return {
+        role: "assistant",
+        content: entry.text,
+        toolCalls: entry.toolCalls.map((call) => ({
+          id: call.id,
+          name: call.name,
+          arguments: JSON.stringify(call.input ?? {}),
+        })),
+      };
+    case "tool":
+      return {
+        role: "tool",
+        toolCallId: entry.toolCallId,
+        name: entry.toolName,
+        content: entry.output,
+      };
+  }
 }
 
 function toBrainTool(tool: ToolSpec): BrainTool {

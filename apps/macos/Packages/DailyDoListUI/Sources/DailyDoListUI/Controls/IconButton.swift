@@ -2,8 +2,9 @@ import SwiftUI
 
 /// The icon button of every pane: an SF Symbol on a square that tints under the pointer, deepens
 /// and shrinks a little while pressed, shows the pointing hand and a tooltip (its name and
-/// shortcut), and fades to 40% when disabled (no hover, no hand, no tooltip). Its name is its
-/// accessibility label; the shortcut is spoken as the hint.
+/// shortcut), and fades to 40% when disabled (no hover, no hand, and no tooltip unless
+/// `disabledReason` says why). Its name is its accessibility label; the shortcut is spoken as the
+/// hint.
 public struct IconButton: View {
   public enum Size: Hashable, Sendable {
     /// 28 × 28, a 13 pt glyph: pane headers.
@@ -21,6 +22,7 @@ public struct IconButton: View {
   let command: String?
   let isActive: Bool
   let isEnabled: Bool
+  let disabledTooltip: TooltipContent?
   let size: Size
   let role: ButtonRole?
   let action: () -> Void
@@ -31,16 +33,19 @@ public struct IconButton: View {
   ///   - command: that command's id (tests match the keys against the catalog).
   ///   - detail: a second, muted line in the tooltip ("2 waiting for approval").
   ///   - isActive: draws the glyph in the accent color (a mode that's on).
+  ///   - disabledReason: why it's disabled, under its name in the tooltip it then shows.
   public init(
     _ systemImage: String, label: String, keys: KeyShortcut? = nil, command: String? = nil,
     detail: String? = nil, isActive: Bool = false, isEnabled: Bool = true,
-    size: Size = .regular, role: ButtonRole? = nil, action: @escaping () -> Void
+    disabledReason: String? = nil, size: Size = .regular, role: ButtonRole? = nil,
+    action: @escaping () -> Void
   ) {
     self.systemImage = systemImage
     self.tooltip = TooltipContent(label, keys: keys, detail: detail)
     self.command = command
     self.isActive = isActive
     self.isEnabled = isEnabled
+    self.disabledTooltip = disabledReason.map { TooltipContent(label, detail: $0) }
     self.size = size
     self.role = role
     self.action = action
@@ -52,7 +57,7 @@ public struct IconButton: View {
         .font(.system(size: size.glyph, weight: size.weight))
     }
     .buttonStyle(IconButtonStyle(size: size, isActive: isActive))
-    .tooltip(tooltip, command: command, accessibility: .keysOnly)
+    .tooltip(tooltip, whenDisabled: disabledTooltip, command: command, accessibility: .keysOnly)
     .accessibilityLabel(tooltip.lines.first?.text ?? "")
     .disabled(!isEnabled)
   }

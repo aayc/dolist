@@ -41,6 +41,8 @@ final class UIState {
   var isFullScreen = false
   /// The Settings window's pane, so the app can open Settings where a problem gets fixed.
   var settingsPane: SettingsPane = .general
+  /// The section of Settings → Always-On.
+  var alwaysOnSection: AlwaysOnSection = .agentLocation
 
   /// Thread shown in the agent panel; nil = the inbox (or the routines).
   var selectedThreadId: String?

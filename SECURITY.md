@@ -96,6 +96,18 @@ are size-limited, each vault is rate-limited, and logs never contain tokens, con
 Vaults are administered with its CLI only. There is no end-to-end encryption yet, so whoever runs
 the server can read the notes. Details: [docs/SYNC.md](docs/SYNC.md#security).
 
+**Agent relay.** A device whose agent runs on the always-on machine forwards its agent routes and
+events to that machine's daemon, using the device credential the machine issued it. The relay is
+not an open proxy: it forwards only an allowlist of agent routes (threads, approvals, artifacts,
+task records, routines, agent status; never notes, settings, sync or device routes), only to the
+configured machine URL (`https`, plain `http` only to loopback), with the target rebuilt from
+validated ids and declared query parameters. Nothing from the client's request is passed on (its
+`Authorization`, cookies, `Host`, `Origin` or other headers): the relay sends only its own bearer
+token, in a header, never in a URL. Bodies are validated and size-limited, redirects aren't
+followed, calls time out, answers are size-limited, and the events the machine sends are validated
+before local clients see them. The token and bodies are never logged. When the machine can't be
+reached, the device shows the synced agent state read-only and refuses agent actions.
+
 **Agent safety gate.** Every tool call from every agent passes the safety gate before it executes.
 That includes built-in tools, the harness's shell and file tools, browser and computer control,
 MCP connector tools, and the Cursor CLI's web search and fetch. The gate evaluates each call with policy, then rules, then an independent LLM
@@ -162,6 +174,8 @@ Examples:
   a browser's device cookie from anywhere but its own page;
 - reading or changing a vault on the sync service without its token, telling whether a vault id
   exists, or getting two devices to run the agent at once;
+- getting the agent relay to forward anything but its allowlisted agent routes, to send a request
+  anywhere but the configured always-on machine, or to leak its credential;
 - getting the Cursor CLI to run one of its own tools (files, shell, fetch) under the Cursor harness;
 - secrets leaking into logs, threads, artifacts or the repository;
 - path traversal outside the vault or agent workspaces;

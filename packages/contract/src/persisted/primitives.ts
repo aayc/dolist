@@ -16,6 +16,9 @@ export const PERSISTED_PATHS = {
   records: `${SIDECAR_DIR}/state/records.json`,
   approvals: `${SIDECAR_DIR}/state/approvals.json`,
   routines: `${SIDECAR_DIR}/state/routines.json`,
+  /** Append-only journals (`*.jsonl`): the SyncEngine merges them as a union of lines. */
+  journal: `${SIDECAR_DIR}/state/journal`,
+  threadJournals: `${SIDECAR_DIR}/state/journal/threads`,
   settings: `${SIDECAR_DIR}/settings.json`,
   /** Unreadable files are moved here, and originals of repaired files are copied here. */
   corrupt: `${SIDECAR_DIR}/corrupt`,

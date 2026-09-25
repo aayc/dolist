@@ -25,6 +25,8 @@ export function classifyResult(text: string): ResultStatus {
   ) {
     return "invalid";
   }
+  // A restart cut the call off before it did anything (a read, an undecided approval): call again.
+  if (/^Error: (?:interrupted|not run) — the agent restarted before\b/.test(t)) return "invalid";
   if (/^(Error\b|Operation aborted)/i.test(t)) return "error";
   return "ok";
 }

@@ -202,11 +202,16 @@ extension FakeDaemon {
       next, touched: validated, today: today, calendar: calendar)
     if !problems.isEmpty { throw .invalidRequest(problems.joined(separator: "; ")) }
     let agentChanged = next.agent != settings.agent
+    let machineChanged = next.remote != settings.remote
     let disabled = settings.agent.enabled && !next.agent.enabled
     settings = next
     if disabled { settleTokens = settleTokens.mapValues { $0 + 1 } }
     emit(.settingsChanged(next))
-    if agentChanged { emitStatus() }
+    if machineChanged {
+      placementInputsChanged()
+    } else if agentChanged {
+      emitStatus()
+    }
     return next
   }
 

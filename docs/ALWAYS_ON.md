@@ -77,6 +77,13 @@ Setup principles:
 - **Separate accounts.** The agent's browser on the VM is signed in only to what the user gives
   it. A mistake lands on the agent's machine, not on the user's.
 
+Setting one up: the [Linux setup kit](../deploy/linux/README.md) builds a bundle (daemon, web app,
+sync service) and installs it with `setup.sh` as two hardened systemd services under their own
+user, with the always-on placement and the tailnet name as remote host, and the
+[Azure guide](../deploy/azure/README.md) creates an Arm64 VM (`Standard_D4ps_v6`) whose security
+group closes every inbound port (it has a public IP for outbound traffic only, or none behind a
+NAT gateway), with encryption at host, joined to the tailnet at first boot.
+
 ## Remote access
 
 The daemon keeps binding `127.0.0.1`. A private overlay network (Tailscale, or any equivalent such
@@ -127,20 +134,28 @@ and [SECURITY.md](../SECURITY.md).
 
 ## The agent relay
 
-Today a daemon that doesn't hold the agent lease shows no threads or approvals ("The agent is
-running on <device>"). With the relay, it forwards agent routes and events to the lease holder, so
-the laptop's app shows the always-on agent's threads, approvals, orchestrator chat and routines,
-and the user approves from any device.
+A daemon that doesn't hold the agent lease shows the holder's threads, approvals and task records
+read-only from the synced sidecar ("The agent is running on <device>"). With the relay, a device
+set to `always_on_machine` forwards agent routes and events to the always-on machine, so the
+laptop's app shows the always-on agent's threads, approvals, orchestrator chat and routines, and
+the user approves from any device. Details: [apps/daemon/README.md](../apps/daemon/README.md#the-agent-relay).
 
-- **Which routes relay:** the agent's (threads, messages, approvals, orchestrator, routines,
-  artifacts, execution status and frames). Notes, search and settings stay local.
-- **How it finds the holder:** the lease records the holder's agent endpoint (its remote host).
-  The two daemons pair once, like any device, and the relay uses that device token.
-- **Offline:** when the holder can't be reached, the relay answers `agent_unavailable` and the UI
-  shows the synced threads read-only (the sidecar already syncs, see [SYNC.md](./SYNC.md)).
-- **Only to the always-on machine.** A device relays to the holder only when the holder is the
-  always-on machine it paired with. When another laptop holds the agent, the rest show its work
-  read-only from the synced sidecar.
+- **Which routes relay:** threads (the orchestrator's chat included) with their messages, cancel
+  and retry; approvals and deciding them; artifacts; task records; routines (list, create, run,
+  pause, resume); and the agent status, which keeps this device's placement and readiness. The
+  machine's agent events come over one WebSocket (surface frames as they are; a client that can't
+  keep up skips frames, as locally), and surface watches, thread reads and typing go the other
+  way. Notes, search, settings, sync and device routes stay local.
+- **Where it goes:** to the always-on machine named in the vault's settings
+  (`remote.alwaysOnMachine`), with the credential this device got when it paired with it, like any
+  device; the relay doesn't look the holder up in the lease. When the machine doesn't hold the
+  agent itself (a device set to `this_device` took it over), the machine answers with its own
+  read-only view, so the relaying device shows that work read-only and actions say where the agent
+  runs.
+- **Offline:** when the machine can't be reached, or this device isn't paired, the daemon itself
+  serves the synced threads, approvals and records read-only (the sidecar already syncs, see
+  [SYNC.md](./SYNC.md)), routine files stay editable, and agent actions answer
+  `agent_unavailable` saying why. The relay reconnects by itself and resyncs its clients.
 
 ## Where the agent runs: a choice per device
 
@@ -167,7 +182,8 @@ and the phone use the always-on machine.
   stops its agent, runs a sync pass and releases, and the requester starts from the synced state
   (about half a minute). When that device quits or sleeps, the always-on machine takes the lease
   back as today. Equal priorities keep first come, first served. A run in progress at handover
-  stops; its thread can be retried.
+  stops on the old holder and resumes on the new one from its thread's journal (unless it stopped
+  in the middle of an action that may or may not have happened: that one waits for the user).
 - **Everything the agent needs to move syncs already**: notes, routine files, threads, artifacts,
   task records, approvals, routines state and settings (the sidecar, see [SYNC.md](./SYNC.md)).
   What stays with each machine is what belongs to it: connectors (`mcp.json`), API keys, the
@@ -180,10 +196,12 @@ and the phone use the always-on machine.
   the agent's sidecar files (threads, artifacts, `state/`) that don't carry the current one, so a
   device that lost the agent while offline can't overwrite the new holder's state when it
   reconnects.
-- **The journal (next):** agent state becomes append-only events that merge as a union, side
-  effects are journaled before and after they run (never re-run when uncertain), and a run
-  resumes on the new machine instead of stopping
-  ([docs/specs/agent-journal.md](./specs/agent-journal.md)). Temporal was considered and rejected:
+- **The journal (phase 1 built, for threads):** thread state is append-only events that merge as
+  a union (`state/journal/threads/`, under the fenced `state/`), side effects are journaled before
+  and after they run (never re-run when uncertain), and a run resumes on the new machine instead of
+  stopping ([docs/specs/agent-journal.md](./specs/agent-journal.md),
+  [AGENT_SYSTEM.md](./AGENT_SYSTEM.md#the-journal-write-ahead-interrupted-steps-and-resuming)).
+  Approvals and routines state follow in phase 2. Temporal was considered and rejected:
   a central server every device would depend on, histories outside the vault, and replay that
   needs control of the agent loop, which lives inside the harness.
 
@@ -264,7 +282,5 @@ Each phase ships on its own, with tests, docs and CI green.
 ## Open questions
 
 - Model credentials on the VM: the Cursor CLI signed in there, an OpenRouter key, or both.
-- Lease handover mid-run: the new holder restores threads from the sidecar, but a run in flight on
-  the old holder stops. Is resuming it worth building?
-- Frames through the relay (up to 10 per second): forward as-is, or lower the rate for remote
-  viewers.
+- Frames through the relay (up to 10 per second) are forwarded as they are; lowering the rate for
+  remote viewers remains possible if links turn out slow.

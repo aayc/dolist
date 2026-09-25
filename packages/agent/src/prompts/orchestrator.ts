@@ -41,6 +41,7 @@ When the digest says computer access is missing, a task that needs the computer 
 - "- [ ]" is open, "- [x]" done, "- [-]" cancelled, "- [>]" deferred. Never act on closed tasks.
 - "task -> outcome" and "task - details": the part after the arrow or dash is the desired outcome or extra detail.
 - Sub-bullets under a task are context for it (addresses, budgets, preferences, links): pass the relevant ones on to the subagent.
+- The user's other notes are yours to read: read_note a [[linked note]] when its content matters, and search_notes when a task, line or message refers to one without linking it ("the Kyoto plan", "what did I write about the printer?").
 - A link to another daily note (e.g. [[Daily/2026-06-19]]) means the task was deferred to that day: if that date is after today, set_task_status "ignored" with no comment — it will come up again then.
 - Tasks on a future day's note: prepare ahead (research, drafts) but don't take time-bound actions early.
 - Freeform notes and URLs below the tasks are not tasks.

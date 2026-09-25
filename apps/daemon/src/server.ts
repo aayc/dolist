@@ -25,6 +25,8 @@ import { LeasedAgentRuntime } from "./leased-runtime";
 import { MACHINE_TOKEN_FILE, MachineLink } from "./machine-link";
 import { PairedDeviceStore } from "./paired-devices";
 import { ReadinessMonitor, systemReadinessProbes } from "./readiness";
+import type { LinkTimings } from "./relay/link";
+import { AgentRelay } from "./relay/relay";
 import { createRemoteHosts } from "./remote-hosts";
 import { createSecurityPolicy } from "./security";
 import { createSettingsStore, SETTINGS_PATH, type SettingsStore } from "./settings-store";
@@ -60,6 +62,8 @@ export interface StartDaemonOptions {
   logger?: Logger;
   /** Agent lease timings (tests shorten them). */
   leaseTimings?: Partial<LeaseTimings>;
+  /** The relay's link to the machine (tests shorten its backoff). */
+  relayLinkTimings?: Partial<LinkTimings>;
 }
 
 export interface RunningDaemon {
@@ -76,6 +80,7 @@ interface Resources {
   readiness?: ReadinessMonitor;
   machine?: MachineLink;
   supervisor?: AgentSupervisor;
+  relay?: AgentRelay;
   sync?: SyncController;
   server?: Server;
   hub?: WebSocketHub;
@@ -126,6 +131,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
           settings: current,
           connectors,
           logger,
+          leaseEpoch: () => supervisor?.heldEpoch ?? null,
         }),
       storage: agentStorage,
       problem: LEASE_CHECKING_PROBLEM,
@@ -193,6 +199,15 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     resources.supervisor = supervisor;
     resources.unsubscribes.push(followSyncedSettings(storage, settings, runtime, logger));
     await supervisor.start();
+    // Clients talk to the relay; the supervisor drives the leased runtime underneath it.
+    const relay = new AgentRelay({
+      local: runtime,
+      placement: supervisor,
+      machine,
+      logger: logger.child({ component: "relay" }),
+      ...(options.relayLinkTimings ? { linkTimings: options.relayLinkTimings } : {}),
+    });
+    resources.relay = relay;
 
     // The app is built after listen() because the bound port is part of the Host/Origin allowlist.
     let handler: FetchCallback = () => new Response("Starting", { status: 503 });
@@ -201,7 +216,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     const port = await listen(server, config.port);
     const app = createApp({
       storage,
-      runtime,
+      runtime: relay,
       settings,
       config: { port, allowedOrigins: config.allowedOrigins },
       token,
@@ -216,6 +231,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       device: deviceSettings,
       machine,
       systemSettings: createSystemSettingsOpener(),
+      relay,
     });
     handler = app.fetch;
 
@@ -230,14 +246,14 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       }),
       devices,
       storage,
-      runtime,
+      runtime: relay,
       settings,
       writes,
       logger: logger.child({ component: "ws" }),
     });
 
     try {
-      await runtime.start();
+      await relay.start();
     } catch (error) {
       logger.error("The agent runtime failed to start; notes remain available", {
         error: errorMessage(error),
@@ -295,9 +311,11 @@ async function shutdown(resources: Resources, logger: Logger): Promise<void> {
   for (const unsubscribe of resources.unsubscribes) unsubscribe();
   resources.readiness?.stop();
   resources.machine?.dispose();
-  const { supervisor, runtime, sync, hub, server, devices, connectors, storage } = resources;
+  const { supervisor, relay, runtime, sync, hub, server, devices, connectors, storage } = resources;
   if (supervisor) await step("agent lease", () => supervisor.stop());
-  if (runtime) await step("agent runtime", () => runtime.stop());
+  // The relay stops the leased runtime under it.
+  if (relay) await step("agent relay", () => relay.stop());
+  else if (runtime) await step("agent runtime", () => runtime.stop());
   if (sync) await step("sync", () => sync.stop());
   if (hub) await step("websockets", () => hub.close());
   if (server) await step("http", () => closeServer(server));

@@ -78,7 +78,7 @@ enum Fixture {
 
   static func status(
     enabled: Bool = true, running: Int = 1, queued: Int = 0, mode: AgentMode = .mock,
-    problem: String? = nil
+    problem: String? = nil, placement: AgentPlacementStatus? = nil
   ) -> AgentStatusResponse {
     AgentStatusResponse(
       mode: mode, enabled: enabled, model: "m", running: running, queued: queued,
@@ -86,7 +86,22 @@ enum Fixture {
       execution: ExecutionStatus(
         provider: "mock",
         capabilities: ExecutionCapabilities(shell: false, browser: true, computer: true)),
-      problem: problem)
+      problem: problem, placement: placement)
+  }
+
+  static let thisMac = AgentRunsOn(
+    deviceId: "dev_mac", name: "Studio Mac", thisDevice: true, alwaysOnMachine: false)
+  static let machine = AgentRunsOn(
+    deviceId: "dev_vm", name: "vm-name", thisDevice: false, alwaysOnMachine: true)
+  static let workLaptop = AgentRunsOn(
+    deviceId: "dev_work", name: "Work laptop", thisDevice: false, alwaysOnMachine: false)
+
+  static func placement(
+    _ placement: AgentPlacement = .thisDevice, heldHere: HeldHereReason? = nil,
+    runsOn: AgentRunsOn? = thisMac, relay: RelayState = .off, note: String? = nil
+  ) -> AgentPlacementStatus {
+    AgentPlacementStatus(
+      placement: placement, heldHere: heldHere, runsOn: runsOn, relay: relay, note: note)
   }
 
   static func frame(
