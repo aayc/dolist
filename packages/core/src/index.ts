@@ -5,6 +5,7 @@ export * from "./dates";
 export * from "./drawings/describe";
 export * from "./drawings/embed";
 export * from "./drawings/file";
+export * from "./drawings/merge";
 export * from "./drawings/types";
 export * from "./events";
 export * from "./ids";
