@@ -116,6 +116,7 @@ export async function startLiveApp<S extends StorageProvider = MemoryStorageProv
       remoteHosts,
       devices,
     }),
+    devices,
     storage,
     runtime,
     settings,

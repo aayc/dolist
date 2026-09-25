@@ -5,9 +5,9 @@
   "description": "Path patterns use `:name` for one segment and `*` for the rest (a percent-encoded vault path). Every `/api/*` route (auth `bearer` or `pairing_code`) may also answer the `common` errors unless it declares that status itself.",
   "x-api-version": 1,
   "auth": {
-    "bearer": "`Authorization: Bearer <token>`, plus the Host and Origin checks.",
+    "bearer": "`Authorization: Bearer <token>` (the daemon's own token or a paired app's or daemon's), or on a remote host a paired browser's cookie sent by its own page; plus the Host and Origin checks.",
     "pairing_code": "No bearer token: the pairing code in the body is the credential (Host and Origin are still checked).",
-    "upgrade": "WebSocket upgrade with the bearer token (`?token=`) and the Host check."
+    "upgrade": "WebSocket upgrade with a bearer token in the `Authorization` header (`?token=` only on loopback Hosts), or on a remote host a paired browser's cookie with its page's Origin; plus the Host and Origin checks."
   },
   "common": {
     "401": {
@@ -1347,7 +1347,7 @@
       "auth": "upgrade",
       "methods": {
         "GET": {
-          "summary": "WebSocket upgrade (`?token=`). Rejected upgrades answer 401/403/404 with an empty body.",
+          "summary": "WebSocket upgrade (`Authorization` header, `?token=` on loopback Hosts, or a remote browser's cookie). Rejected upgrades answer 401/403/404 with an empty body; a revoked device's sockets close with 1008.",
           "query": {
             "$ref": "#/$defs/ws.GET.query"
           },
@@ -1567,7 +1567,7 @@
       "type": "object",
       "properties": {
         "token": {
-          "description": "The bearer token.",
+          "description": "The bearer token, on loopback Hosts only (refused on remote hosts).",
           "type": "string"
         }
       },

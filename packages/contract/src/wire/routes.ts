@@ -90,17 +90,20 @@ export type ResponseSpec =
   | ErrorResponseSpec;
 
 /**
- * How a route authenticates. `bearer`: `/api/*` auth (token + Host + Origin). `pairing_code`: no
- * bearer token; the pairing code in the body is the credential (Host and Origin still checked).
- * `upgrade`: `/ws` (token in `?token=`).
+ * How a route authenticates. `bearer`: `/api/*` auth (a token, or a remote browser's cookie, +
+ * Host + Origin). `pairing_code`: no bearer token; the pairing code in the body is the credential
+ * (Host and Origin still checked). `upgrade`: `/ws` (the same credentials; `?token=` on loopback
+ * Hosts only).
  */
 export type RouteAuth = "bearer" | "pairing_code" | "upgrade";
 
 export const ROUTE_AUTH_DESCRIPTIONS: Record<RouteAuth, string> = {
-  bearer: "`Authorization: Bearer <token>`, plus the Host and Origin checks.",
+  bearer:
+    "`Authorization: Bearer <token>` (the daemon's own token or a paired app's or daemon's), or on a remote host a paired browser's cookie sent by its own page; plus the Host and Origin checks.",
   pairing_code:
     "No bearer token: the pairing code in the body is the credential (Host and Origin are still checked).",
-  upgrade: "WebSocket upgrade with the bearer token (`?token=`) and the Host check.",
+  upgrade:
+    "WebSocket upgrade with a bearer token in the `Authorization` header (`?token=` only on loopback Hosts), or on a remote host a paired browser's cookie with its page's Origin; plus the Host and Origin checks.",
 };
 
 export interface OperationSpec {
@@ -713,8 +716,13 @@ export const API_CONTRACT = {
     methods: {
       GET: {
         summary:
-          "WebSocket upgrade (`?token=`). Rejected upgrades answer 401/403/404 with an empty body.",
-        query: z.looseObject({ token: z.string().optional().describe("The bearer token.") }),
+          "WebSocket upgrade (`Authorization` header, `?token=` on loopback Hosts, or a remote browser's cookie). Rejected upgrades answer 401/403/404 with an empty body; a revoked device's sockets close with 1008.",
+        query: z.looseObject({
+          token: z
+            .string()
+            .optional()
+            .describe("The bearer token, on loopback Hosts only (refused on remote hosts)."),
+        }),
         responses: {
           403: error(["forbidden_host"], "Foreign Host header."),
           426: error(["upgrade_required"], "Plain HTTP request without a WebSocket upgrade."),

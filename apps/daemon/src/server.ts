@@ -197,6 +197,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
         remoteHosts,
         devices,
       }),
+      devices,
       storage,
       runtime,
       settings,
