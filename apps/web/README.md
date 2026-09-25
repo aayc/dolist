@@ -224,7 +224,12 @@ audit of every routines screen in `e2e/polish.spec.ts`.
   deny, Run now, Pause, New routine) are disabled with the reason as their tooltip. The tooltip
   layer skips disabled controls, so `components/DisabledReason` wraps them and carries it. A 503
   `agent_unavailable` that still gets through is toasted with the daemon's reason. The status bar
-  names where the agent runs ("Agent on vm-1", "Agent unreachable").
+  names where the agent runs ("Agent on vm-1", "Agent unreachable"). Requests go through while the
+  relay is `connecting`, so that isn't read-only. When the relay state or the device running the
+  agent changes (`app/server-events.ts`), the panel fetches threads, approvals, task records and
+  open threads again: the daemon pushes the machine's status, approvals, thread summaries and
+  routines, but not thread details or records. When the machine no longer accepts this device,
+  Settings → Always-on machine offers "Pair again…".
 - **Settings** (a chunk of its own, `features/remote/settings`, prefetched with Settings): Agent
   location (the toggle, where it runs, this device's name, its readiness with fix-it hints),
   Always-on machine (pair with an address and a code, then its status, readiness, Check now,
@@ -250,11 +255,16 @@ With `?mock=1`, `api/mock/mock-remote.ts` keeps the daemon's device side: placem
 handovers that take a moment, the relay state, readiness, sync, the machine link, pairing codes and
 devices (in localStorage, so a code issued on one page pairs another), and the daemon's error
 codes. `?mockRemote=` picks a starting point: `none` (default: no sync, held here), `no_machine`,
-`ready`, `relayed`, `unreachable`, `not_paired`, `elsewhere`, `host`, `locked`, `unready`. The
+`ready`, `relayed`, `unreachable`, `not_paired`, `rejected`, `elsewhere`, `host`, `locked`,
+`unready`. The
 mock machine refuses code `XXXX-XXXX` (401) and `YYYY-YYYY` (429), and a host starting with
 `offline.` never answers (502). `?mockAuth=pairing` serves the remote page states: the pairing
 screen until this browser pairs, then the app with cookie auth; revoking it goes back to pairing.
-In mock mode, `window.__ddlMock.setMachineReachable(false)` makes the machine stop answering.
+In mock mode, `window.__ddlMock.setMachineReachable(false)` makes the machine stop answering and
+`setMachineRejects(true)` makes it refuse this device. The relay's states and reasons are the
+daemon's: requests go through while it's `connecting`; "The always-on machine can't be reached.",
+"This device isn't paired with the always-on machine." and "The always-on machine no longer
+accepts this device. Pair it again." otherwise.
 
 ### Tests
 
@@ -270,6 +280,7 @@ away, env locks, read-only, every Settings flow, and pairing a browser then revo
 cursor audit of every new screen and state in `e2e/polish.spec.ts`. `e2e/fullstack/
 agent-anywhere.spec.ts` runs them against the real daemons (the served one, a second one as the
 always-on machine, a sync service): held here, sync setup, pairing the machine, a handover and
-back, a device paired through `/api/pair` and revoked, and a remote host's pairing screen. Acting
-on the machine's agent through the relay (S3) and pairing a browser over https (the cookie is
-`Secure`; the harness has no TLS proxy yet) are `test.fixme`.
+back, replying to the machine's orchestrator through the relay (and getting its answer), the
+machine going down (read-only, "can't be reached") and coming back, a device paired through
+`/api/pair` and revoked, and a remote host's pairing screen. Pairing a browser over https (the
+cookie is `Secure`; the harness has no TLS proxy yet) is `test.fixme`.
