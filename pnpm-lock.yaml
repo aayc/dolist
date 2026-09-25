@@ -211,6 +211,9 @@ importers:
       '@ddl/core':
         specifier: workspace:*
         version: link:../packages/core
+      '@ddl/storage':
+        specifier: workspace:*
+        version: link:../packages/storage
     devDependencies:
       tsx:
         specifier: ^4.23.15

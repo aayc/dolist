@@ -23,6 +23,10 @@ import {
   type Capability,
   createOrchestratorTools,
   createRoutineTools,
+  type DigestLine,
+  DRAWING_MARKER,
+  DrawingDescriptions,
+  drawingBudget,
   formatOrchestratorDigest,
   type Harness,
   type OrchestratorToolHost,
@@ -33,7 +37,7 @@ import {
   TOOL,
   ToolInputError,
 } from "@ddl/agent";
-import { type RoutineRequest, routineRequest } from "@ddl/agent/testing";
+import { flowchartDrawing, type RoutineRequest, routineRequest } from "@ddl/agent/testing";
 import {
   addDays,
   DEFAULT_MODEL,
@@ -49,6 +53,7 @@ import {
   toISODate,
   withTimeout,
 } from "@ddl/core";
+import { MemoryStorageProvider } from "@ddl/storage";
 import type { EvalCaseResult, EvalMode, EvalSuite, EvalSuiteResult } from "../types";
 
 /** `routine`: something recurring, turned into a routine (create_routine) instead of done once. */
@@ -89,6 +94,13 @@ interface TriageCase {
   direct?: string;
   /** Agent status of a direct case's task (default `working`: a subagent is on it). */
   agentStatus?: "working" | "done" | "waiting_user";
+  /**
+   * A drawing embedded right under the task (`![[<name>.excalidraw|360|right-wrap]]`), which the
+   * digest describes: labeled boxes in a row and arrows between them.
+   */
+  drawing?: { name: string; boxes: string[]; arrows?: Array<[string, string, string?]> };
+  /** Words a delegation's goal or instructions must contain (e.g. the drawing's labels). */
+  mentions?: string[];
 }
 
 interface RecordedCall {
@@ -200,6 +212,21 @@ function loadDataset(): { cases: TriageCase[]; problems: string[] } {
     if (c.computerAccess !== undefined && c.computerAccess !== "missing") {
       problems.push(`${where}: computerAccess can only be "missing"`);
     }
+    if (c.drawing !== undefined) {
+      const { name, boxes, arrows = [] } = c.drawing;
+      const labels = new Set(Array.isArray(boxes) ? boxes : []);
+      if (typeof name !== "string" || !/^[\w -]{1,60}$/.test(name) || labels.size === 0) {
+        problems.push(`${where}: a drawing needs a plain name and boxes`);
+      } else if (!arrows.every(([from, to]) => labels.has(from) && labels.has(to))) {
+        problems.push(`${where}: a drawing's arrows must connect its boxes`);
+      }
+    }
+    if (c.mentions !== undefined) {
+      if (c.expected !== "delegate") problems.push(`${where}: mentions only apply to delegate`);
+      if (!Array.isArray(c.mentions) || !c.mentions.every((m) => typeof m === "string" && m)) {
+        problems.push(`${where}: mentions must be non-empty strings`);
+      }
+    }
     cases.push(c as TriageCase);
   });
   if (cases.length < MIN_CASES) problems.push(`only ${cases.length} cases (need ${MIN_CASES})`);
@@ -221,17 +248,51 @@ function resolveTemplates(text: string, now: number): string {
   );
 }
 
-function digestFor(c: TriageCase, now: number): string {
+/**
+ * The whole-note view of a case with a drawing: the task, the embed under it described by the
+ * runtime's own `DrawingDescriptions`, then the filler tasks.
+ */
+async function drawingView(c: TriageCase, text: string): Promise<DigestLine[] | undefined> {
+  if (!c.drawing) return undefined;
+  const { name, boxes, arrows } = c.drawing;
+  const storage = new MemoryStorageProvider({
+    initialFiles: {
+      [`Excalidraw/${name}.excalidraw.md`]: flowchartDrawing({
+        boxes,
+        ...(arrows ? { arrows } : {}),
+      }),
+    },
+  });
+  const lines: DigestLine[] = [
+    { n: 1, text: `- [ ] ${text}`, taskId: CASE_TASK_ID },
+    { n: 2, text: `![[${name}.excalidraw|360|right-wrap]]` },
+    ...FILLER_TASKS.map((task, i) => ({
+      n: i + 3,
+      text: `- [${task.checkbox === "done" ? "x" : " "}] ${task.text}`,
+      taskId: task.taskId,
+      ...(task.agentStatus ? { agentStatus: task.agentStatus } : {}),
+      ...(task.agentSummary ? { agentSummary: task.agentSummary } : {}),
+    })),
+  ];
+  const drawings = new DrawingDescriptions({ storage });
+  const blocks = await drawings.blocks(lines.map((line) => line.text).join("\n"), drawingBudget());
+  for (const block of blocks) lines[block.line]!.drawing = block.lines;
+  return lines;
+}
+
+async function digestFor(c: TriageCase, now: number): Promise<string> {
   const day = today(new Date(now));
   const text = resolveTemplates(c.task, now);
   const direct = c.direct !== undefined;
   const status = c.agentStatus ?? "working";
+  const view = await drawingView(c, text);
   return formatOrchestratorDigest({
     now,
     notes: [
       {
         notePath: dailyNotePath(day, DEFAULT_SETTINGS.dailyNotes),
         date: toISODate(day),
+        ...(view ? { view } : {}),
         changed: direct
           ? []
           : [
@@ -493,7 +554,8 @@ async function runCase(
   });
   const started = performance.now();
   try {
-    await withTimeout(session.prompt(digestFor(c, Date.now())), CASE_TIMEOUT_MS, "case timed out");
+    const digest = await digestFor(c, Date.now());
+    await withTimeout(session.prompt(digest), CASE_TIMEOUT_MS, "case timed out");
   } catch (err) {
     error = err instanceof Error ? err.message : String(err);
     await session.abort().catch(() => {});
@@ -615,6 +677,29 @@ async function baselineDirect(ctx: ScriptContext, message: string): Promise<void
   }
 }
 
+const REFERS_TO_DRAWING = /\b(diagram|drawing|sketch|flow ?chart|whiteboard|mock-?up|wireframe)\b/i;
+
+/** The digest's drawing blocks, one line each: "The drawing <path>: <its description>". */
+function digestDrawings(message: string): string[] {
+  const out: Array<{ path: string; description: string[] }> = [];
+  let current: { path: string; description: string[] } | null = null;
+  for (const line of message.split("\n")) {
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith(`${DRAWING_MARKER} `)) {
+      const rest = trimmed.slice(DRAWING_MARKER.length + 1);
+      current = { path: rest.split(" · ")[0]!, description: [] };
+      out.push(current);
+    } else if (current && /^\s{4,}\S/.test(line)) {
+      current.description.push(trimmed);
+    } else {
+      current = null;
+    }
+  }
+  return out
+    .filter((drawing) => drawing.description.length > 0)
+    .map((drawing) => `The drawing ${drawing.path}: ${drawing.description.join(" ")}`);
+}
+
 const baselineScript: AgentScript = async (ctx) => {
   const direct = DIRECT_LINE.exec(ctx.message);
   if (direct) {
@@ -641,10 +726,17 @@ const baselineScript: AgentScript = async (ctx) => {
     }
     const { decision, capabilities } = baselineTriage(item.text, access);
     switch (decision) {
-      case "delegate":
+      case "delegate": {
+        const drawings = REFERS_TO_DRAWING.test(item.text) ? digestDrawings(ctx.message) : [];
         await ctx.callTool(TOOL.postComment, { taskId, text: "On it.", summary: "On it" });
-        await ctx.callTool(TOOL.spawnSubagent, { taskId, goal: item.text, capabilities });
+        await ctx.callTool(TOOL.spawnSubagent, {
+          taskId,
+          goal: item.text,
+          capabilities,
+          ...(drawings.length > 0 ? { instructions: drawings.join("\n") } : {}),
+        });
         break;
+      }
       case "comment":
         if (access === "missing" && namesDesktopApp(item.text)) {
           await ctx.callTool(TOOL.postComment, {
@@ -695,9 +787,23 @@ function routineMismatches(c: TriageCase, routine: CreatedRoutine | undefined): 
   return mismatches;
 }
 
-function score(c: TriageCase, outcome: Outcome): EvalCaseResult & { recall: number | null } {
+/** What a delegation's goal and instructions leave out of the words the case needs said. */
+function unmentioned(c: TriageCase, outcome: Outcome): string[] {
+  if (!c.mentions || outcome.decision !== "delegate") return [];
+  const spawn = outcome.calls.find(
+    (call) => call.tool === TOOL.spawnSubagent && call.input.taskId === CASE_TASK_ID,
+  );
+  const said = `${String(spawn?.input.goal ?? "")} ${String(spawn?.input.instructions ?? "")}`;
+  return c.mentions.filter((word) => !said.toLowerCase().includes(word.toLowerCase()));
+}
+
+function score(
+  c: TriageCase,
+  outcome: Outcome,
+): EvalCaseResult & { recall: number | null; mentioned: boolean | null } {
   const allowed = [c.expected, ...(c.acceptable ?? [])];
   const decisionOk = allowed.includes(outcome.decision);
+  const missingWords = unmentioned(c, outcome);
   const granted = outcome.decision === "delegate" || outcome.decision === "routine";
   const missing =
     granted && c.capabilities
@@ -712,6 +818,7 @@ function score(c: TriageCase, outcome: Outcome): EvalCaseResult & { recall: numb
   const replyMissing = c.direct !== undefined && !outcome.reply.trim();
   if (outcome.error) notes.push(`error: ${outcome.error}`);
   if (missing.length > 0) notes.push(`missing capabilities: ${missing.join(", ")}`);
+  if (missingWords.length > 0) notes.push(`instructions leave out: ${missingWords.join(", ")}`);
   notes.push(...routineIssues);
   if (replyMissing) notes.push("no reply in the chat");
   if (outcome.calls.length === 0) notes.push("no tool calls");
@@ -724,6 +831,7 @@ function score(c: TriageCase, outcome: Outcome): EvalCaseResult & { recall: numb
     passed:
       decisionOk &&
       missing.length === 0 &&
+      missingWords.length === 0 &&
       routineIssues.length === 0 &&
       !replyMissing &&
       !outcome.error,
@@ -741,6 +849,7 @@ function score(c: TriageCase, outcome: Outcome): EvalCaseResult & { recall: numb
     latencyMs: Math.round(outcome.firstToolMs ?? outcome.turnMs),
     ...(notes.length > 0 ? { notes: notes.join("; ") } : {}),
     recall,
+    mentioned: c.mentions ? outcome.decision === "delegate" && missingWords.length === 0 : null,
   };
 }
 
@@ -767,8 +876,8 @@ async function run(options: {
   const cases = options.filter ? all.filter((c) => c.id.includes(options.filter!)) : all;
   const thresholds: Record<string, number> =
     mode === "mock"
-      ? { datasetValid: 1, accuracy: 0.9 }
-      : { accuracy: 0.8, capabilityRecall: 0.75, p95FirstToolMs: 6_000 };
+      ? { datasetValid: 1, accuracy: 0.9, mentionRecall: 1 }
+      : { accuracy: 0.8, capabilityRecall: 0.75, mentionRecall: 0.75, p95FirstToolMs: 6_000 };
 
   let harness: Harness;
   let webTools: ToolSpec[] = stubWebTools();
@@ -810,6 +919,7 @@ async function run(options: {
     return [c.expected, ...(c.acceptable ?? [])].includes(actual);
   }).length;
   const recalls = outcomes.map((o) => o.recall).filter((r): r is number => r !== null);
+  const mentioned = outcomes.map((o) => o.mentioned).filter((m): m is boolean => m !== null);
   const firstTool = outcomes
     .filter((o) => !(o.notes ?? "").includes("no tool calls"))
     .map((o) => o.latencyMs);
@@ -819,12 +929,16 @@ async function run(options: {
     accuracy: cases.length ? decisionCorrect / cases.length : 0,
     passRate: cases.length ? outcomes.filter((o) => o.passed).length / cases.length : 0,
     capabilityRecall: recalls.length ? recalls.reduce((a, b) => a + b, 0) / recalls.length : 1,
+    // Delegations that passed on what the digest described (the drawings' labels).
+    mentionRecall: mentioned.length ? mentioned.filter(Boolean).length / mentioned.length : 1,
     p50FirstToolMs: percentile(firstTool, 50),
     p95FirstToolMs: percentile(firstTool, 95),
     errors: outcomes.filter((o) => (o.notes ?? "").includes("error:")).length,
   };
 
-  const results: EvalCaseResult[] = outcomes.map(({ recall: _, ...result }) => result);
+  const results: EvalCaseResult[] = outcomes.map(
+    ({ recall: _, mentioned: __, ...result }) => result,
+  );
   if (problems.length > 0) {
     results.unshift({
       id: "dataset",
