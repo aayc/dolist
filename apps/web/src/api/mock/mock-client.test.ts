@@ -3,9 +3,12 @@ import {
   type AgentHarnessKind,
   APPROVAL_POLICIES,
   type ApprovalPolicy,
+  emptyDrawingScene,
   ORCHESTRATOR_THREAD_ID,
+  parseDrawingFile,
   type ServerEvent,
   type ServerEventOf,
+  serializeDrawingFile,
   today,
   toISODate,
 } from "@ddl/core";
@@ -456,5 +459,63 @@ describe("MockDaemonClient agent simulation", () => {
     expect(ofType(events, "task.record").at(-1)?.record.status).toBe("cancelled");
     const { thread } = await call(client.getThread(threadId));
     expect(thread.status).toBe("cancelled");
+  });
+});
+
+describe("MockDaemonClient: drawings", () => {
+  const DRAWING = "Excalidraw/Plan.excalidraw.md";
+
+  it("keeps drawing files like notes, and never reads one as a task list", async () => {
+    const { client } = create();
+    const content = serializeDrawingFile({
+      ...emptyDrawingScene(),
+      elements: [
+        { id: "tBuy1234", type: "text", text: "- [ ] Buy paint", originalText: "- [ ] Buy paint" },
+      ],
+    });
+    const written = await call(client.writeNote(DRAWING, { content, baseVersion: null }));
+    expect((await call(client.readNote(DRAWING))).content).toBe(content);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect((await call(client.getTaskRecords(DRAWING))).records).toEqual([]);
+    const stale = client
+      .writeNote(DRAWING, { content: `${content}\n`, baseVersion: "nope" })
+      .catch((error: unknown) => error);
+    expect(await call(stale)).toBeInstanceOf(ConflictError);
+    expect(written.path).toBe(DRAWING);
+  });
+
+  it("seeds a demo drawing embedded in Sketches.md", async () => {
+    const { client } = create();
+    const drawing = await call(client.readNote("Excalidraw/Garden plan.excalidraw.md"));
+    expect(parseDrawingFile(drawing.content).scene.elements.length).toBeGreaterThan(2);
+    expect((await call(client.readNote("Sketches.md"))).content).toContain(
+      "![[Garden plan.excalidraw|300|right-wrap]]",
+    );
+  });
+
+  it("with persistVault, a new client in the same tab finds the vault it left", async () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("sessionStorage", {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => store.set(key, value),
+    });
+    vi.stubGlobal("addEventListener", () => {});
+    try {
+      const options = {
+        speed: 10,
+        installHooks: false,
+        persistSettings: false,
+        persistVault: true,
+      };
+      const first = new MockDaemonClient(options);
+      first.connect();
+      await call(first.writeNote("Kept.md", { content: "still here", baseVersion: null }));
+      await vi.advanceTimersByTimeAsync(100);
+      const second = new MockDaemonClient(options);
+      second.connect();
+      expect((await call(second.readNote("Kept.md"))).content).toBe("still here");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
