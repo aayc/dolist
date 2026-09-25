@@ -156,6 +156,30 @@ describe("RoutineView", () => {
     expect(one("routine-run-problem")).toBeUndefined();
   });
 
+  it("drops a stale reason once the run it was about ends", async () => {
+    const running = routineFixture({
+      lastRun: { threadId: "thr_1", trigger: "manual", status: "working", startedAt: 1 },
+    });
+    const { actions, one } = render(<RoutineView routineId="rtn_1" />, { routines: [running] });
+    actions.runNow.mockResolvedValueOnce({
+      ok: false,
+      problem: {
+        title: "It can't run right now",
+        body: "“Morning briefing” is running right now.",
+      },
+    });
+    await click(one("routine-run"));
+    expect(one("routine-run-problem")).toBeDefined();
+    act(() =>
+      useRoutinesStore.setState(
+        applyRoutinesChanged(initialRoutinesState, [
+          { ...running, lastRun: { ...running.lastRun!, status: "done", finishedAt: 2 } },
+        ]),
+      ),
+    );
+    expect(one("routine-run-problem")).toBeUndefined();
+  });
+
   it("pauses and resumes", async () => {
     const { actions, one } = render(<RoutineView routineId="rtn_1" />);
     expect(one("routine-pause")?.textContent).toBe("Pause");

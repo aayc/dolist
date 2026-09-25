@@ -107,6 +107,13 @@ function RoutineDetails({ routine }: { routine: Routine }) {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [starting, setStarting] = useState(false);
   const next = nextRunLabel(routine);
+  const { lastRun } = routine;
+  const lastRunKey = lastRun ? `${lastRun.threadId}:${lastRun.status}:${lastRun.finishedAt}` : "";
+
+  // Why the last Run now didn't start stops being true once a run starts or ends.
+  useEffect(() => {
+    if (lastRunKey) setNotice(null);
+  }, [lastRunKey]);
 
   const runNow = async () => {
     setStarting(true);
