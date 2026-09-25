@@ -63,7 +63,7 @@ Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md). Spec, with the exact wire contra
 | Stream | Branch | State |
 | --- | --- | --- |
 | S0 wire contract | `feat/always-on` | done at `72a9ee8`; adding `heldHere` and the fencing types now; S1–S5 branch from its final commit |
-| S6 VM setup kit (Linux bundle, systemd, Azure guide, CI smoke) | `feat/always-on-kit` | in progress |
+| S6 VM setup kit (Linux bundle, systemd, Azure guide, CI smoke) | `feat/always-on-kit` | done (`395902c`); bundle smoke-tested on the Mac; validating `setup.sh` under systemd in a throwaway OrbStack Linux machine (the `Linux bundle` workflow can only be dispatched once it's on `main`) |
 | S1 remote access and pairing | from `feat/always-on` | not started (waits for S0) |
 | S2 placement, lease priorities, machine link | from `feat/always-on` | not started (waits for S0) |
 | S3 relay | from `feat/always-on` | not started (waits for S0) |
@@ -71,6 +71,13 @@ Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md). Spec, with the exact wire contra
 | S5 macOS Settings | from `feat/always-on` | not started (waits for S0) |
 
 The spec's "As built by S0" section records S0's names and extra error codes; S1–S5 follow it.
+
+Kit follow-ups at merge time (marked `FOLLOW-UP` in the code): the pairing step of
+`deploy/linux/smoke-check.mjs`; drop the `config.json` override in `deploy/linux/setup-test.sh`
+once the daemon accepts `agent.placement` and `remote.hosts`; confirm the names S1/S2 ship match
+the kit (those keys, `DDL_AGENT_PLACEMENT`, `DDL_REMOTE_HOSTS`, the `pair` CLI command). The Azure
+guide adds a NAT gateway (outbound internet without a public IP), which bills even while the VM is
+deallocated.
 
 Next: when S0 lands, start S1–S5; merge S1, S2, S3, then S4 and S5 into `feat/always-on`; add the
 pairing step to S6's CI smoke test; merge the kit; full verification; `main`; push; CI. After
