@@ -13,7 +13,7 @@ import { ApiError, errorBody } from "../errors";
 import { idParam, readJson } from "../http-utils";
 import { MAX_PAIRED_DEVICES } from "../paired-devices";
 import { PAIRING_LIMITS } from "../pairing";
-import { principalOf, requestHostKind } from "../security";
+import { CLEARED_DEVICE_COOKIE, deviceCookie, principalOf, requestHostKind } from "../security";
 
 /** `POST /api/pair` needs no credential, so it reads small bodies only. */
 export const MAX_PAIR_BODY_BYTES = 1024;
@@ -68,8 +68,18 @@ export function registerPairingRoutes(app: Hono, ctx: AppContext): void {
     }),
     async (c) => {
       const request = await readJson(c, PairRequestSchema);
-      if (request.kind === "browser") {
-        throw new ApiError(400, "invalid_request", "Browsers can't pair yet");
+      const kind = hostKind(c, ctx);
+      const browser = request.kind === "browser";
+      // The cookie only works on a remote Host, from its own https page; locally the page has the token.
+      if (
+        browser &&
+        (kind !== "remote" || !ctx.policy.isOwnOrigin(hostOf(c), c.req.header("origin")))
+      ) {
+        throw new ApiError(
+          400,
+          "invalid_request",
+          "A browser pairs from the daemon's page on one of its remote hosts (https://…); on this machine the page needs no pairing",
+        );
       }
       if (ctx.devices.isFull) {
         throw new ApiError(
@@ -84,7 +94,12 @@ export function registerPairingRoutes(app: Hono, ctx: AppContext): void {
         throw new ApiError(401, "pairing_rejected", "Wrong, expired or already used pairing code");
       }
       const { device, token } = await ctx.devices.add(redeemed.name ?? request.name, request.kind);
-      log.info("Paired a device", { device: device.id, kind: device.kind, host: hostKind(c, ctx) });
+      log.info("Paired a device", { device: device.id, kind: device.kind, host: kind });
+      if (browser) {
+        c.header("Set-Cookie", deviceCookie(token));
+        const body: PairResponse = { device };
+        return c.json(body, 201);
+      }
       const body: PairResponse = { device, token };
       return c.json(body, 201);
     },
@@ -105,6 +120,10 @@ export function registerPairingRoutes(app: Hono, ctx: AppContext): void {
     const id = idParam(c, "id");
     if (!(await ctx.devices.revoke(id))) throw new ApiError(404, "not_found", "Unknown device");
     log.info("Revoked a device", { device: id });
+    const principal = principalOf(c);
+    if (principal?.kind === "device" && principal.device.id === id) {
+      if (principal.device.kind === "browser") c.header("Set-Cookie", CLEARED_DEVICE_COOKIE);
+    }
     return c.body(null, 204);
   });
 }
@@ -125,7 +144,10 @@ function rateLimit(ctx: AppContext): MiddlewareHandler {
   };
 }
 
+function hostOf(c: Context): string {
+  return c.req.header("host") ?? new URL(c.req.url).host;
+}
+
 function hostKind(c: Context, ctx: AppContext) {
-  const authority = new URL(c.req.url).host;
-  return requestHostKind(ctx.policy, c.req.header("host") ?? authority, authority);
+  return requestHostKind(ctx.policy, hostOf(c), new URL(c.req.url).host);
 }

@@ -3,7 +3,8 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, join, resolve, sep } from "node:path";
 import type { Context, Hono } from "hono";
 import type { AppContext } from "../context";
-import { requestHostKind, type SecurityPolicy } from "../security";
+import { COOKIE_DEVICE_KINDS } from "../paired-devices";
+import { deviceCookieValue, requestHostKind, type SecurityPolicy } from "../security";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -79,8 +80,9 @@ export function registerWebRoutes(app: Hono, ctx: AppContext): void {
   };
   const serveIndex = (c: Context, index: IndexDocument): Response => {
     const authority = new URL(c.req.url).host;
-    const kind = requestHostKind(ctx.policy, c.req.header("host") ?? authority, authority);
-    const html = kind === "loopback" ? index.withToken : index.remote.pairing;
+    const host = c.req.header("host") ?? authority;
+    const kind = requestHostKind(ctx.policy, host, authority);
+    const html = kind === "loopback" ? index.withToken : index.remote[remoteAuthMode(ctx, host, c)];
     return c.html(html, 200, {
       // Remote hosts change live, so the CSP is built per request.
       ...documentHeaders(appContentSecurityPolicy(index.scriptHashes, ctx.policy)),
@@ -100,6 +102,17 @@ export function registerWebRoutes(app: Hono, ctx: AppContext): void {
     }
     return isStaticAssetPath(pathname) ? c.text("Not found", 404) : serveIndex(c, index);
   });
+}
+
+/**
+ * `cookie` when the browser holds a paired device's cookie usable on this Host. A navigation from
+ * another site arrives without it (`SameSite=Strict`), so `pairing` can be a false negative that
+ * the page's own requests, which carry the cookie, then correct.
+ */
+function remoteAuthMode(ctx: AppContext, host: string, c: Context): RemoteAuthMode {
+  if (ctx.policy.remoteOrigin(host) === null) return "pairing";
+  const cookie = deviceCookieValue(c.req.header("cookie"));
+  return ctx.devices.authenticate(cookie, COOKIE_DEVICE_KINDS) ? "cookie" : "pairing";
 }
 
 export function injectToken(html: string, token: string): string {

@@ -87,6 +87,103 @@ describe("POST /api/pair", () => {
     expect((await pair(app, { code, name: "Phone", kind: "app" })).status).toBe(201);
   });
 
+  it("gives a browser an HttpOnly cookie instead of a token", async () => {
+    const app = await createTestApp({ remoteHosts: createRemoteHosts([REMOTE]) });
+    const code = await issueCode(app, "Work browser");
+    const res = await pair(
+      app,
+      { code, name: "Browser", kind: "browser" },
+      { host: REMOTE, origin: `https://${REMOTE}` },
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { device: object; token?: string };
+    expect(body).toEqual({
+      device: expect.objectContaining({ name: "Work browser", kind: "browser" }),
+    });
+    const cookie = res.headers.get("set-cookie") ?? "";
+    const [pairValue, ...attributes] = cookie.split(/;\s*/);
+    expect(pairValue).toMatch(/^__Host-ddl-device=[A-Za-z0-9_-]{43}$/);
+    expect(attributes.sort()).toEqual(
+      ["HttpOnly", "Max-Age=34560000", "Path=/", "SameSite=Strict", "Secure"].sort(),
+    );
+    const value = pairValue!.slice("__Host-ddl-device=".length);
+    const withCookie = { cookie: `theme=dark; __Host-ddl-device=${value}` };
+    const tree = (headers: Record<string, string>, host = REMOTE) =>
+      app.request(API_ROUTES.tree, { host, token: null, headers });
+    expect((await tree({ ...withCookie, origin: `https://${REMOTE}` })).status).toBe(200);
+    expect((await tree({ ...withCookie, "sec-fetch-site": "same-origin" })).status).toBe(200);
+    // Not a bearer token, not without proof it's the page itself, never on loopback.
+    expect((await app.request(API_ROUTES.tree, { host: REMOTE, token: value })).status).toBe(401);
+    expect((await tree(withCookie)).status).toBe(401);
+    for (const site of ["same-site", "cross-site", "none"]) {
+      expect((await tree({ ...withCookie, "sec-fetch-site": site })).status, site).toBe(401);
+    }
+    expect((await tree({ ...withCookie, origin: "http://127.0.0.1:7331" })).status).toBe(401);
+    expect(
+      (await tree({ ...withCookie, origin: "http://127.0.0.1:7331" }, "127.0.0.1:7331")).status,
+    ).toBe(401);
+    expect(
+      (await tree({ ...withCookie, "sec-fetch-site": "same-origin" }, "127.0.0.1:7331")).status,
+    ).toBe(401);
+    // Two device cookies are ambiguous.
+    const twice = { cookie: `__Host-ddl-device=${value}; __Host-ddl-device=${value}` };
+    expect((await tree({ ...twice, origin: `https://${REMOTE}` })).status).toBe(401);
+  });
+
+  it("pairs a browser only from its own page on a remote host", async () => {
+    const remoteHosts = createRemoteHosts([REMOTE, "other.example.com"]);
+    let clock = 1_790_000_000_000;
+    const app = await createTestApp({
+      remoteHosts,
+      allowedOrigins: ["http://app.example:8443"],
+      pairing: new PairingCodes({ now: () => (clock += 15_000) }),
+    });
+    const code = await issueCode(app);
+    const body = { code, name: "Browser", kind: "browser" };
+    for (const [host, origin] of [
+      ["127.0.0.1:7331", "http://127.0.0.1:7331"],
+      ["127.0.0.1:7331", undefined],
+      [REMOTE, undefined],
+      [REMOTE, "https://other.example.com"],
+      ["other.example.com", `https://${REMOTE}`],
+      ["app.example:8443", "http://app.example:8443"],
+    ] as const) {
+      const res = await pair(app, body, { host, ...(origin ? { origin } : {}) });
+      expect(res.status, `${host} ${origin}`).toBe(400);
+      expect(res.headers.get("set-cookie")).toBeNull();
+    }
+    // The refusals didn't use the code up.
+    const ok = await pair(app, body, { host: REMOTE, origin: `https://${REMOTE}` });
+    expect(ok.status).toBe(201);
+  });
+
+  it("clears a browser's cookie when it revokes itself", async () => {
+    const app = await createTestApp({ remoteHosts: createRemoteHosts([REMOTE]) });
+    const browser = await app.devices.add("Browser", "browser");
+    const phone = await app.devices.add("Phone", "app");
+    const asBrowser = {
+      host: REMOTE,
+      origin: `https://${REMOTE}`,
+      token: null,
+      headers: { cookie: `__Host-ddl-device=${browser.token}` },
+    };
+    const other = await app.request(API_ROUTES.pairedDevice(phone.device.id), {
+      ...asBrowser,
+      method: "DELETE",
+    });
+    expect(other.status).toBe(204);
+    expect(other.headers.get("set-cookie")).toBeNull();
+    const self = await app.request(API_ROUTES.pairedDevice(browser.device.id), {
+      ...asBrowser,
+      method: "DELETE",
+    });
+    expect(self.status).toBe(204);
+    expect(self.headers.get("set-cookie")).toBe(
+      "__Host-ddl-device=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0",
+    );
+    expect((await app.request(API_ROUTES.tree, asBrowser)).status).toBe(401);
+  });
+
   it("never logs a code or a token", async () => {
     const logger = new RecordingLogger();
     const app = await createTestApp({ logger });

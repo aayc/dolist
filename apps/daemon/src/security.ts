@@ -1,7 +1,7 @@
 import { API_ROUTES, isLoopbackHostname, type PairedDevice } from "@ddl/core";
 import type { Context, MiddlewareHandler } from "hono";
 import { errorBody } from "./errors";
-import { BEARER_DEVICE_KINDS, type PairedDeviceStore } from "./paired-devices";
+import { BEARER_DEVICE_KINDS, COOKIE_DEVICE_KINDS, type PairedDeviceStore } from "./paired-devices";
 import type { RemoteHosts } from "./remote-hosts";
 import { createTokenVerifier, parseBearer } from "./token";
 
@@ -39,6 +39,51 @@ export interface SecurityPolicy {
   remoteSocketSources(): string[];
   /** A bearer token: the master token, or the token of a paired app or daemon. */
   authenticateBearer(candidate: string | null | undefined): Principal | null;
+  /**
+   * A paired browser's device cookie: only on a remote Host, and only from the page itself, i.e.
+   * with an Origin equal to the Host's own `https://` origin or, for the requests browsers send
+   * without one (same-origin GETs), with `Sec-Fetch-Site: same-origin`.
+   */
+  authenticateCookie(request: CookieRequest): Principal | null;
+  /** Whether `origin` is the request's own (the Host's `https://` origin on a remote Host). */
+  isOwnOrigin(host: string | null | undefined, origin: string | null | undefined): boolean;
+}
+
+export interface CookieRequest {
+  kind: HostKind;
+  host: string | null | undefined;
+  cookie: string | null | undefined;
+  origin: string | null | undefined;
+  fetchSite: string | null | undefined;
+}
+
+/**
+ * The paired browser's credential. The `__Host-` prefix makes browsers insist on `Secure`,
+ * `Path=/` and no `Domain`, so no other host (another tailnet name included) can set or overwrite
+ * it. Script on the page never sees it (`HttpOnly`).
+ */
+export const DEVICE_COOKIE = "__Host-ddl-device";
+/** Browsers cap cookie lifetimes at 400 days. */
+const DEVICE_COOKIE_MAX_AGE_S = 400 * 24 * 60 * 60;
+const COOKIE_ATTRIBUTES = "HttpOnly; Secure; SameSite=Strict; Path=/";
+
+export function deviceCookie(token: string): string {
+  return `${DEVICE_COOKIE}=${token}; ${COOKIE_ATTRIBUTES}; Max-Age=${DEVICE_COOKIE_MAX_AGE_S}`;
+}
+
+export const CLEARED_DEVICE_COOKIE = `${DEVICE_COOKIE}=; ${COOKIE_ATTRIBUTES}; Max-Age=0`;
+
+/** The device cookie's value, when the header carries exactly one. */
+export function deviceCookieValue(header: string | null | undefined): string | undefined {
+  if (!header) return undefined;
+  const values: string[] = [];
+  for (const part of header.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq !== -1 && part.slice(0, eq).trim() === DEVICE_COOKIE) {
+      values.push(part.slice(eq + 1).trim());
+    }
+  }
+  return values.length === 1 ? values[0] : undefined;
 }
 
 export interface SecurityPolicyOptions {
@@ -101,6 +146,15 @@ export function createSecurityPolicy(options: SecurityPolicyOptions): SecurityPo
     const normalized = normalizeOrigin(origin);
     return origins.has(normalized) || remote().origins.has(normalized);
   };
+  const remoteOrigin = (host: string | null | undefined): string | null => {
+    if (hostKind(host) !== "remote") return null;
+    const origin = `https://${withoutDefaultPort(host!.trim().toLowerCase())}`;
+    return isOriginAllowed(origin) ? origin : null;
+  };
+  const isOwnOrigin = (host: string | null | undefined, origin: string | null | undefined) => {
+    const own = remoteOrigin(host);
+    return own !== null && typeof origin === "string" && normalizeOrigin(origin) === own;
+  };
   const verifyMaster = createTokenVerifier(options.token);
   const devices = options.devices;
   return {
@@ -110,17 +164,24 @@ export function createSecurityPolicy(options: SecurityPolicyOptions): SecurityPo
     hostKind,
     isHostAllowed: (host) => hostKind(host) !== null,
     isOriginAllowed,
-    remoteOrigin: (host) => {
-      if (hostKind(host) !== "remote") return null;
-      const origin = `https://${withoutDefaultPort(host!.trim().toLowerCase())}`;
-      return isOriginAllowed(origin) ? origin : null;
-    },
+    remoteOrigin,
     remoteSocketSources: () => [...remote().sockets],
     authenticateBearer: (candidate) => {
       if (verifyMaster(candidate)) return { kind: "master" };
       const device = devices?.authenticate(candidate, BEARER_DEVICE_KINDS);
       return device ? { kind: "device", device } : null;
     },
+    authenticateCookie: ({ kind, host, cookie, origin, fetchSite }) => {
+      if (kind !== "remote" || remoteOrigin(host) === null) return null;
+      const fromPage =
+        origin === undefined || origin === null
+          ? fetchSite === "same-origin"
+          : isOwnOrigin(host, origin);
+      if (!fromPage) return null;
+      const device = devices?.authenticate(deviceCookieValue(cookie), COOKIE_DEVICE_KINDS);
+      return device ? { kind: "device", device } : null;
+    },
+    isOwnOrigin,
   };
 }
 
@@ -195,10 +256,11 @@ export function isApiPath(path: string): boolean {
 
 /**
  * Host allowlist on every request (the web app's index.html carries the token), then Origin
- * allowlist and authentication on `/api/*`. Requests without an Origin (curl, native clients) are
- * accepted with a valid credential; a present-but-unknown Origin, including `null`, never is.
- * `POST /api/pair` is the one route without a credential: its pairing code is checked (and
- * rate-limited) by the route itself.
+ * allowlist and authentication on `/api/*`: a bearer token (master or paired app/daemon), or on a
+ * remote Host a paired browser's cookie sent by its own page. Requests without an Origin (curl,
+ * native clients) are accepted with a valid bearer token; a present-but-unknown Origin, including
+ * `null`, never is. `POST /api/pair` is the one route without a credential: its pairing code is
+ * checked (and rate-limited) by the route itself.
  */
 export function requestGuard(policy: SecurityPolicy): MiddlewareHandler {
   return async (c, next) => {
@@ -219,7 +281,18 @@ export function requestGuard(policy: SecurityPolicy): MiddlewareHandler {
         return c.json(errorBody("forbidden_origin", "Origin not allowed"), 403);
       }
       if (c.req.method === "POST" && c.req.path === API_ROUTES.pair) return next();
-      const principal = policy.authenticateBearer(parseBearer(c.req.header("authorization")));
+      const authorization = c.req.header("authorization");
+      // A request that names a bearer token is judged by it alone, never by a cookie as well.
+      const principal =
+        authorization !== undefined
+          ? policy.authenticateBearer(parseBearer(authorization))
+          : policy.authenticateCookie({
+              kind,
+              host,
+              cookie: c.req.header("cookie"),
+              origin,
+              fetchSite: c.req.header("sec-fetch-site"),
+            });
       if (!principal) {
         c.header("WWW-Authenticate", "Bearer");
         return c.json(errorBody("unauthorized", "Missing or invalid bearer token"), 401);

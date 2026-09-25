@@ -507,6 +507,21 @@ const scenarios: Record<string, Scenario> = {
     expect(limited.body).toMatchObject({ error: "rate_limited" });
     expect(limited.response.headers.get("retry-after")).toMatch(/^[1-9]\d*$/);
     expect(app.devices.size).toBe(1);
+
+    const host = "vm-name.tailnet-name.ts.net";
+    const remote = await setup(observed, { remoteHosts: createRemoteHosts([host]) });
+    const browserCode = (await remote.api.call("pairingCodes", "POST", { json: {} })).body as {
+      code: string;
+    };
+    const browser = await remote.api.call("pair", "POST", {
+      json: { code: browserCode.code, name: "Browser", kind: "browser" },
+      token: null,
+      host,
+      origin: `https://${host}`,
+    });
+    expect(browser.status).toBe(201);
+    expect(browser.body).toEqual({ device: expect.objectContaining({ kind: "browser" }) });
+    expect(browser.response.headers.get("set-cookie")).toMatch(/^__Host-ddl-device=/);
   },
 
   "GET devices": async (observed) => {
