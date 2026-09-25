@@ -12,7 +12,7 @@ final class OrchestratorActivityStore {
   /// How long a turn's outcome stays on its lines before fading.
   static let outcomeHold: TimeInterval = 6
   /// "Nothing to do" goes sooner.
-  static let nothingToDoHold: TimeInterval = 3
+  static let nothingToDoHold: TimeInterval = 2.5
   /// A fading chip is removed once the editor's fade (0.4 s) is over.
   static let fadeDuration: TimeInterval = 0.5
   /// A noticed line nothing followed (a missed event, an older daemon) stops showing its dot.

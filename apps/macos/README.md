@@ -135,8 +135,9 @@ app's.
   acts, then the outcome ("Added a task ↗", "Added 3 tasks ↗", "Replied ↗", "Started a task ↗",
   "Made a routine ↗", "Needs your approval ↗", "Nothing to do"). While a turn waits for your
   approval its chips say "Needs your approval ↗" until it moves on. An outcome fades after 6 s,
-  "Nothing to do" after 3 s. Clicking a chip opens the thread its turn started, or the
-  orchestrator's chat window scrolled to the turn (its first message briefly highlighted). The
+  "Nothing to do" after 2.5 s (the web's timings). Clicking a chip opens the thread its turn
+  started, or the orchestrator's chat window scrolled to the turn (its first message briefly
+  highlighted). The
   tooltip says what it's doing or what it did. With Reduce Motion nothing pulses and outcomes just
   go.
 - **Where chips go:** each is placed once per document by its line and text (the same line if
