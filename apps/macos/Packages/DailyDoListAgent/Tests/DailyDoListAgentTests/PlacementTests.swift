@@ -56,15 +56,14 @@ struct PlacementTests {
     #expect(location.setUp == .alwaysOnMachine && !location.canSwitch)
     #expect(
       AgentReadOnly(placement: Fixture.placement(heldHere: .noMachine, runsOn: Fixture.workLaptop))?
-        .reason == "Work laptop runs the agent")
+        .reason == "The agent is running on Work laptop")
   }
 
   @Test func theHandoverShowsAsItHappens() throws {
     let location = try #require(
       Location(
         status: Fixture.placement(
-          .alwaysOnMachine, runsOn: Fixture.thisMac, relay: .connecting,
-          note: "Handing the agent to vm-name…")))
+          .alwaysOnMachine, runsOn: nil, note: "Handing the agent to vm-name…")))
     #expect(location.selection == .alwaysOnMachine && location.canSwitch)
     #expect(
       location.line == Location.Line("Handing the agent to vm-name…", tone: .info, inProgress: true)
@@ -75,16 +74,24 @@ struct PlacementTests {
   @Test func anUnreachableMachineOffersToRunHere() throws {
     let location = try #require(
       Location(
-        status: Fixture.placement(.alwaysOnMachine, runsOn: Fixture.machine, relay: .unreachable)))
-    #expect(location.line == Location.Line("Can't reach vm-name", tone: .warning))
+        status: Fixture.placement(.alwaysOnMachine, runsOn: Fixture.machine, relay: .unreachable),
+        machineName: "vm-name"))
+    #expect(location.line == Location.Line("vm-name can't be reached", tone: .warning))
     #expect(location.offersRunHere && location.canSwitch)
 
     let unpaired = try #require(
       Location(
         status: Fixture.placement(.alwaysOnMachine, runsOn: nil, relay: .notPaired),
-        machineName: "vm-name"))
-    #expect(unpaired.line?.text == "This device isn't paired with vm-name yet")
-    #expect(unpaired.setUp == .alwaysOnMachine && !unpaired.offersRunHere)
+        machineName: "vm-name", problem: "This device isn't paired with the always-on machine."))
+    #expect(unpaired.line?.text == "This device isn't paired with the always-on machine")
+    #expect(unpaired.setUp == .alwaysOnMachine && !unpaired.pairsAgain && !unpaired.offersRunHere)
+
+    let revoked = try #require(
+      Location(
+        status: Fixture.placement(.alwaysOnMachine, runsOn: nil, relay: .notPaired),
+        problem: "The always-on machine no longer accepts this device. Pair it again."))
+    #expect(revoked.line?.text == "The always-on machine no longer accepts this device")
+    #expect(revoked.setUp == .alwaysOnMachine && revoked.pairsAgain)
 
     let connecting = try #require(
       Location(status: Fixture.placement(.alwaysOnMachine, runsOn: nil, relay: .connecting)))
@@ -207,11 +214,11 @@ struct PlacementTests {
     return anchors
   }
 
-  private func panel(_ placement: AgentPlacementStatus, opened: Locked<[Location.SetUp]>)
-    -> some View
-  {
+  private func panel(
+    _ placement: AgentPlacementStatus, problem: String? = nil, opened: Locked<[Location.SetUp]>
+  ) -> some View {
     let store = SampleData.makeStore(now: SnapshotTests.now)
-    store.apply(.agentStatus(Fixture.status(placement: placement)))
+    store.apply(.agentStatus(Fixture.status(problem: problem, placement: placement)))
     return AgentPanel(
       store: store, selectedThreadId: .constant(nil),
       shortcuts: AgentPanelShortcuts(runHere: .init(id: "agent.runHere")),
@@ -234,6 +241,20 @@ struct PlacementTests {
       let text = anchor.tooltipContent()?.plainText ?? ""
       #expect(!text.contains { "⌘⌥⌃⇧".contains($0) }, "\(text)")
     }
+  }
+
+  @Test func aRevokedDeviceOffersToPairAgain() throws {
+    let opened = Locked<[Location.SetUp]>([])
+    let found = anchors(
+      panel(
+        Fixture.placement(.alwaysOnMachine, runsOn: nil, relay: .notPaired),
+        problem: "The always-on machine no longer accepts this device. Pair it again.",
+        opened: opened),
+      size: CGSize(width: 400, height: 500))
+    #expect(
+      found.contains {
+        $0.tooltipContent()?.plainText == "Pair this device with the always-on machine again"
+      })
   }
 
   @Test func runHereRunsTheHostsCommand() throws {
@@ -259,8 +280,7 @@ struct PlacementTests {
       ("orchestrator-here", Fixture.placement()),
       (
         "orchestrator-handover",
-        Fixture.placement(
-          .alwaysOnMachine, relay: .connecting, note: "Handing the agent to vm-name…")
+        Fixture.placement(.alwaysOnMachine, runsOn: nil, note: "Handing the agent to vm-name…")
       ),
       (
         "orchestrator-unreachable",
