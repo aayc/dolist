@@ -145,8 +145,12 @@ Spec: [docs/specs/obsidian-migration.md](docs/specs/obsidian-migration.md).
 Spec: [docs/specs/orchestrator-activity.md](docs/specs/orchestrator-activity.md) (user request:
 see it notice, work and conclude on any line, not only checkbox tasks). Branches from
 `feat/always-on` (so the relay forwards the new event): `feat/orchestrator-activity` (wire,
-agent, daemon, web) and `feat/orchestrator-activity-mac` (Swift models and the Mac editor, against
-the spec's exact wire): in progress.
+agent, daemon, web; wire committed at `6c1bfce`): in progress. `feat/orchestrator-activity-mac`:
+done (`226aeee`, 7 commits; Models 46, Client 122, Editor 254, Agent 314, app 292). At merge: apply
+`/tmp/ddl-orchestrator-activity-merge.patch` (the Swift fixture-test entries, also listed in the
+Mac stream's report), and line the web up with the Mac's choices or vice versa: no chip on a line
+that has a task badge; "Edited the note ↗", "Started N tasks ↗"; outcomes fade after 6 s ("Nothing
+to do" after 3 s); a dot nothing follows expires after 60 s.
 
 ### Agent journal
 
