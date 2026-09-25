@@ -51,8 +51,8 @@ packages/
   storage/        StorageProvider interface; local-fs, memory, s3 (stub); SyncEngine; search
   editor/         CodeMirror 6 markdown editor: live preview, tasks, vim, agent badges
   agent/          Agent runtime: watcher, orchestrator, subagents, harnesses (Pi │ Cursor CLI),
-                  safety, approvals, execution providers (local/cloud), threads/artifacts, tools,
-                  LLM client
+                  safety, approvals, execution providers (local/cloud; computer use with app
+                  control through the ddl-computer helper), threads/artifacts, tools, LLM client
   connectors/     MCP client: mcpServers config → ToolSpecs (stdio / streamable HTTP / SSE)
 evals/            Agent evals (safety verdicts, triage, latency); mock mode runs in CI
 scripts/          Repo tooling (secret scan, bench/bundle budgets, git hooks)
@@ -120,7 +120,12 @@ and package READMEs (`packages/storage`, `packages/connectors`, `packages/editor
    execution, connector (MCP), and whatever a harness's CLI runs itself after asking (the Cursor
    CLI's web search/fetch) — executes only after `beforeToolCall` (the SafetyGate) allows it.
    Never add a code path that executes a tool without it. New tools must declare honest
-   `ToolSafetyHints`; hints may only make things *more* restricted.
+   `ToolSafetyHints`; hints may only make things *more* restricted. A tool that knows the real
+   target better than the model's words (the app's real name, the element's real accessibility
+   label) reports it through `subject(input)`: the evaluator adds it to the model's own text (a
+   union, never a replacement) and only takes extra risky hits from it, so it can only make a
+   verdict stricter. Act on exactly the target the approval described (app control binds element
+   ids to their snapshot).
 2. **Harness isolation.** Only `packages/agent/src/harness/` may import `@earendil-works/pi-*` or
    know about the Cursor CLI (its ACP protocol, config files, tool kinds): Pi lives in
    `harness/pi/`, the Cursor CLI in `harness/cursor/`, and `harness/registry.ts` picks one from
@@ -199,6 +204,14 @@ and package READMEs (`packages/storage`, `packages/connectors`, `packages/editor
   `OPENROUTER_API_KEY` needed, though the safety judge and our `web_search` still use one when set.
   It keeps a private CLI config under `$DDL_HOME/cursor/` and never uses yours. Tests must not
   spawn the real CLI: use `src/harness/cursor/testing/fake-cursor-cli.ts` (see `cursor.test.ts`).
+- **Computer helper (app control):** on macOS the daemon finds `ddl-computer`
+  (`DDL_COMPUTER_HELPER`, `off` to disable; then `<daemon entry dir>/../bin/ddl-computer`, the copy
+  the Mac app bundles; then a dev build in `apps/macos/Packages/DailyDoListComputer/.build/`) and
+  passes it to the execution provider; without one, computer use stays screen-level. The client
+  speaks the helper's JSON-lines RPC (`src/execution/local/app-control/`). Tests must not run the
+  real helper, take real screenshots or send real input: use
+  `src/execution/local/app-control/testing/fake-computer-helper.ts` (see `client.test.ts`), and the
+  daemon's `FakeSystemSettings` for the System Settings route (`createApp` opens nothing by default).
 - **E2E typing:** use Playwright's real keyboard (`page.keyboard.type`). Automation "fill"-style
   typing into CodeMirror rebuilds text from the DOM (including badge widgets) and corrupts notes.
 
@@ -244,8 +257,9 @@ and real-keyboard e2e tests in `apps/web/e2e/vim.spec.ts`.
   and register it in `createExecutionProvider`. Tools are built by `createExecutionTools` from the
   provider's controllers, so they work unchanged.
 - **Add a tool:** name it in `packages/agent/src/tools/contracts.ts`, implement a `ToolSpec` with
-  honest safety hints and a `describe()` for approval cards, add safety eval cases, and render it
-  nicely in the thread UI if it's user-visible.
+  honest safety hints and a `describe()` for approval cards (and a `subject()` when the tool knows
+  the real target, see invariant 1), add safety eval cases (a `subject` field feeds the hint), and
+  render it nicely in the thread UI if it's user-visible.
 - **Add a connector:** add an entry to `~/.daily-do-list/mcp.json` (`mcpServers` format, same as
   Claude Desktop/Cursor). See `packages/connectors/README.md`.
 - **Add a setting:** extend `AppSettings` + `DEFAULT_SETTINGS` in `packages/core/src/settings.ts`,

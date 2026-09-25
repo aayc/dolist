@@ -33,6 +33,7 @@ Precedence: environment variable → `$DDL_HOME/config.json` → default.
 | `DDL_MODEL` | `deepseek/deepseek-v4.1-flash` | Default OpenRouter model (used until the vault's settings pick one). |
 | `DDL_WEB_DIST` | `apps/web/dist` | Built web UI to serve. |
 | `DDL_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. |
+| `DDL_COMPUTER_HELPER` | found automatically | The `ddl-computer` helper for app control (macOS), or `off`. Otherwise: `<entry script dir>/../bin/ddl-computer` (the app bundle's copy), then a dev build in `apps/macos/Packages/DailyDoListComputer/.build/{release,debug}/`. Without one, computer use stays screen-level. |
 | `OPENROUTER_API_KEY` | — | Required for `live` agents. Without it the agent reports a problem; notes keep working. |
 
 Env files fill in variables that are not already set, in this order: `$DDL_HOME/.env` (preferred:
@@ -71,7 +72,8 @@ of this repository. Values are never logged.
 
 - `sync`: `{ "kind": "none" }`, `{ "kind": "local", "root": "~/Library/Mobile Documents/…" }` or
   `{ "kind": "s3", "bucket": "…", "prefix": "…", "region": "…" }`.
-- `execution`: `local` (browser headless by default; computer use defaults to on for macOS only) or
+- `execution`: `local` (browser headless by default; computer use defaults to on for macOS only,
+  with app control when the helper is found, see `DDL_COMPUTER_HELPER`) or
   `{ "kind": "cloud", "endpoint": "https://…", "apiKeyEnv": "NAME_OF_ENV_VAR" }`.
 - `allowedOrigins`: extra exact origins (`scheme://host[:port]`) for other clients, for example a
   Vite dev server on another port or a native shell (`tauri://localhost`). HTTP(S) origins also allow
@@ -152,6 +154,7 @@ All paths come from `API_ROUTES` in `@ddl/core` (`packages/core/src/protocol.ts`
 | POST | `/api/approvals/<id>` | `ApprovalDecisionRequest` → `{ approval }` (404 unknown, 409 already decided with `approval`) |
 | GET | `/api/artifacts/<threadId>/<artifactId>[?download=1]` | → artifact bytes |
 | GET | `/api/connectors` | → `{ connectors: ConnectorStatus[] }` |
+| POST | `/api/computer/permissions/open` | `ComputerPermissionsOpenRequest` (`{ pane: "accessibility" \| "screenRecording" }`) → `{ ok: true }` (404 off macOS, 500 if it didn't open) |
 
 Notes:
 
@@ -164,6 +167,10 @@ Notes:
   writer creates it first, theirs is returned with `created: false`.
 - Thread actions that take longer than 3 s answer `202 { ok: true, pending: true }` and finish in
   the background.
+- `computer/permissions/open` runs `open` on a fixed System Settings deep link for the pane (the
+  pane, then Privacy & Security); nothing from the request reaches the command. `AgentStatusResponse`
+  reports `execution.computerAccess`: both permissions, whether app control is available, and the
+  app macOS attributes the daemon's permissions to (found by walking the parent process chain).
 - Everything outside `/api/*` and `/ws` serves the built UI with SPA fallback. Hashed files under
   `/assets/` are cached immutably. If there is no build, a short page explains how to create one.
 

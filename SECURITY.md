@@ -59,6 +59,22 @@ or timeouts block the action.
 prompt injection. The gate and approvals are the control that keeps injected instructions from
 turning into risky actions without your consent.
 
+**Computer use and app control (macOS).** With the Accessibility and Screen Recording permissions,
+agents can operate your apps: screen-level (the real cursor and keyboard) or, with the
+`ddl-computer` helper, one app at a time in the background through its accessibility tree. Every
+action in another app needs your approval; only reading an app (its window, a screenshot, the app
+list) doesn't. Approval cards and the safety rules see what the tool knows about the real target —
+the app's real name and the element's label from the latest snapshot — alongside the model's own
+description, and the action runs against exactly that snapshot (a changed window makes it stale
+instead of hitting another element). Standing grants ("approve for this task") are scoped to one
+app. Return, typed line breaks and send buttons in messaging apps count as sending a message.
+Some apps are off-limits even with approval, refused by the safety rules by name and by the helper
+by bundle id and process tree: Daily Do List itself (an agent could approve its own actions),
+System Settings, Keychain Access and Passwords, password managers, authenticators, the system's
+login and security prompts, and browser windows showing the Daily Do List web UI. The helper gets
+a minimal environment without API keys. `POST /api/computer/permissions/open` (authenticated like
+every route) only ever opens fixed System Settings deep links.
+
 **Secrets.** API keys live outside the repository, in `~/.daily-do-list/.env` or the process
 environment. They are read at runtime and never logged. This public repository is scanned on every
 commit and push: pre-commit and pre-push hooks, plus gitleaks and CodeQL in CI.
@@ -75,6 +91,8 @@ Examples:
 
 - bypassing the safety gate or approvals, or any tool that executes without the gate;
 - prompt injection that leads to a risky action without approval;
+- an agent operating a protected app, or an approval card that names a different app or element
+  than the one acted on;
 - getting past the daemon's (or the Cursor harness MCP bridge's) token, `Host` or `Origin` checks,
   or reading the vault or agent state from a web page;
 - getting the Cursor CLI to run one of its own tools (files, shell, fetch) under the Cursor harness;
@@ -94,5 +112,7 @@ Examples:
 
 - Keep the daemon on localhost. Don't expose its port through tunnels or reverse proxies.
 - Read approval cards before approving, especially payments and outgoing messages.
+- Grant computer use permissions only to the app that runs Daily Do List (Settings → Computer Use
+  names it), and turn them off when you stop using computer use.
 - Only configure MCP servers you trust, and give connectors least-privilege tokens.
 - Keep `~/.daily-do-list` private. It holds the daemon token, your API keys and agent state.
