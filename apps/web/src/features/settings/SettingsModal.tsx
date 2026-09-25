@@ -5,11 +5,12 @@ import {
   type ThemePreference,
 } from "@ddl/core";
 import { X } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, Suspense, useEffect, useState } from "react";
 import { errorMessage } from "../../api/errors";
 import { useServices } from "../../app/services";
 import { IconButton } from "../../components/IconButton";
 import { cx } from "../../lib/cx";
+import { preloadable } from "../../lib/preloadable";
 import { useAgentStore } from "../../state/agent-store";
 import { useConnectionStore } from "../../state/connection-store";
 import { useSettingsStore } from "../../state/settings-store";
@@ -17,11 +18,13 @@ import { type SettingsSection, ui } from "../../state/ui-store";
 import { useVaultStore } from "../../state/vault-store";
 import { useVimStore } from "../../state/vim-store";
 import { Modal } from "../overlays/Modal";
+import type { RemoteSectionKey } from "../remote/settings/RemoteSection";
 import { ApprovalPolicySetting } from "./ApprovalPolicySetting";
 import { HARNESS_OPTIONS, shownHarness } from "./agent-harness";
 import { ComputerUseSection } from "./ComputerUseSection";
 import { dailyPreview } from "./daily-preview";
 import { draftToCommit } from "./draft";
+import { Setting } from "./Setting";
 import "../../styles/settings.css";
 
 const SECTIONS: ReadonlyArray<{ key: SettingsSection; label: string }> = [
@@ -29,13 +32,29 @@ const SECTIONS: ReadonlyArray<{ key: SettingsSection; label: string }> = [
   { key: "editor", label: "Editor" },
   { key: "daily", label: "Daily notes" },
   { key: "agent", label: "Agent" },
+  { key: "location", label: "Agent location" },
   { key: "computer", label: "Computer use" },
   { key: "connectors", label: "Connectors" },
   { key: "about", label: "About" },
 ];
 
+/** Where the agent runs, other devices and remote access: a chunk loaded with Settings. */
+const RemoteSection = preloadable(() =>
+  import("../remote/settings/RemoteSection").then((m) => m.RemoteSection),
+);
+const REMOTE_SECTIONS: ReadonlySet<SettingsSection> = new Set<RemoteSectionKey>(["location"]);
+
+function isRemoteSection(section: SettingsSection): section is RemoteSectionKey {
+  return REMOTE_SECTIONS.has(section);
+}
+
 export function SettingsModal({ section }: { section: SettingsSection }) {
   const [active, setActive] = useState(section);
+  // Opening Settings at a section while it's open (a link inside it) switches to that section.
+  useEffect(() => setActive(section), [section]);
+  useEffect(() => {
+    void RemoteSection.preload();
+  }, []);
   return (
     <Modal label="Settings" className="settings-modal" testId="settings-modal">
       <nav className="settings-nav" aria-label="Settings sections">
@@ -65,31 +84,16 @@ export function SettingsModal({ section }: { section: SettingsSection }) {
         {active === "editor" ? <EditorSection /> : null}
         {active === "daily" ? <DailySection /> : null}
         {active === "agent" ? <AgentSection /> : null}
+        {isRemoteSection(active) ? (
+          <Suspense fallback={<div className="thread-loading" aria-busy="true" />}>
+            <RemoteSection section={active} go={setActive} />
+          </Suspense>
+        ) : null}
         {active === "computer" ? <ComputerUseSection /> : null}
         {active === "connectors" ? <ConnectorsSection /> : null}
         {active === "about" ? <AboutSection /> : null}
       </div>
     </Modal>
-  );
-}
-
-function Setting({
-  name,
-  description,
-  children,
-}: {
-  name: string;
-  description?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <div className="setting">
-      <div className="setting-info">
-        <div className="setting-name">{name}</div>
-        {description ? <div className="setting-description">{description}</div> : null}
-      </div>
-      <div className="setting-control">{children}</div>
-    </div>
   );
 }
 

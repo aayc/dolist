@@ -122,3 +122,284 @@
 .agent-location-action.link-button {
   font-size: 12px;
 }
+
+/* ── Settings: Agent location, Always-on machine, Sync, Devices, Remote access ── */
+
+.settings-content .placement-toggle {
+  width: 100%;
+  max-width: 380px;
+}
+
+.settings-content .agent-location-line {
+  margin: 4px 0 8px;
+  font-size: 13px;
+}
+
+.settings-error {
+  margin: 6px 0 0;
+  color: var(--ddl-danger);
+  font-size: 12px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.settings-locked {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-m);
+  background: var(--ddl-bg-secondary);
+  color: var(--ddl-text-muted);
+  font-size: 12px;
+}
+
+.settings-success {
+  margin: 8px 0 0;
+  color: var(--ddl-success);
+  font-size: 13px;
+}
+
+.readiness {
+  margin: 0;
+}
+
+.readiness-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 8px 0;
+  border-top: 1px solid var(--ddl-border);
+  font-size: 13px;
+}
+
+.readiness-row dt {
+  flex: none;
+  width: 140px;
+  color: var(--ddl-text-muted);
+}
+
+.readiness-row dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-width: 0;
+  margin: 0;
+}
+
+.readiness-hint {
+  color: var(--ddl-text-muted);
+  font-size: 12px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.readiness-hint .link-button {
+  font-size: 12px;
+}
+
+.remote-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 460px;
+  margin-top: 4px;
+}
+
+.remote-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.remote-field-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.remote-field-hint {
+  color: var(--ddl-text-muted);
+  font-size: 12px;
+}
+
+.remote-field-error {
+  color: var(--ddl-danger);
+  font-size: 12px;
+}
+
+.remote-field .input[aria-invalid="true"] {
+  border-color: var(--ddl-danger);
+}
+
+.remote-field .input:disabled {
+  color: var(--ddl-text-muted);
+}
+
+.remote-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.pairing-code-input {
+  font-family: var(--ddl-font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pairing-code-input::placeholder {
+  letter-spacing: 0.08em;
+}
+
+.copy-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.copy-value-text {
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.pairing-code-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 460px;
+  padding: 14px 16px;
+  border: 1px solid var(--ddl-border);
+  border-radius: var(--radius-m);
+  background: var(--ddl-bg-secondary);
+  font-size: 13px;
+}
+
+.pairing-code-big .copy-value-text {
+  font-family: var(--ddl-font-mono);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+.pairing-code-panel.is-expired .pairing-code-big .copy-value-text {
+  color: var(--ddl-text-faint);
+  text-decoration: line-through;
+}
+
+.pairing-code-meta {
+  color: var(--ddl-text-muted);
+}
+
+.device-list,
+.host-list {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.device-row,
+.host-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 0;
+  border-top: 1px solid var(--ddl-border);
+  font-size: 13px;
+}
+
+.device-row > svg {
+  flex: none;
+  color: var(--ddl-text-muted);
+}
+
+.device-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.device-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.device-meta {
+  color: var(--ddl-text-muted);
+  font-size: 12px;
+}
+
+.host-row code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.host-add {
+  display: flex;
+  gap: 8px;
+  max-width: 460px;
+}
+
+.host-add .input {
+  flex: 1;
+}
+
+.machine-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.machine-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+
+.machine-card-head > svg {
+  color: var(--ddl-info);
+}
+
+.machine-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.machine-url {
+  flex: 1;
+  min-width: 0;
+  color: var(--ddl-text-muted);
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+a.button {
+  color: inherit;
+  text-decoration: none;
+}
+
+.sync-conflicts {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: var(--ddl-text-muted);
+  font-size: 12px;
+}
+
+.remote-actions .settings-success {
+  margin: 0;
+}
