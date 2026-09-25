@@ -4,20 +4,22 @@ import SwiftUI
 
 /// A section of Settings → Always-On.
 enum AlwaysOnSection: String, CaseIterable, Identifiable {
-  case agentLocation
+  case agentLocation, alwaysOnMachine
 
   var id: String { rawValue }
 
   var title: String {
     switch self {
     case .agentLocation: "Agent Location"
+    case .alwaysOnMachine: "Always-On Machine"
     }
   }
 
   /// Where the orchestrator control sends the user to set up what's missing.
   init(_ setUp: OrchestratorLocation.SetUp) {
     switch setUp {
-    case .alwaysOnMachine, .sync: self = .agentLocation
+    case .alwaysOnMachine: self = .alwaysOnMachine
+    case .sync: self = .agentLocation
     }
   }
 }
@@ -44,10 +46,12 @@ struct AlwaysOnSettingsPane: View {
       Group {
         switch ui.alwaysOnSection {
         case .agentLocation: AgentLocationSection(model: model, remote: remote)
+        case .alwaysOnMachine: MachineSection(model: model, remote: remote)
         }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
+    .background(Color(nsColor: .windowBackgroundColor))
     .task(id: model.client.map(ObjectIdentifier.init)) { await remote.load() }
   }
 }

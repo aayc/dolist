@@ -116,6 +116,12 @@ final class RemoteSettingsStore {
     }
   }
 
+  /// The machine's last known status, quietly (no error shows when it fails).
+  func refreshMachine() async {
+    guard let client, let status = try? await client.machineStatus() else { return }
+    machine = status
+  }
+
   func checkMachine() async {
     guard let client else { return }
     await run(.checkMachine) { self.machine = try await client.checkMachine() }

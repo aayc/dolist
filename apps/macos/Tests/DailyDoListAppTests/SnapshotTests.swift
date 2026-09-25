@@ -284,23 +284,34 @@ struct SnapshotTests {
 
   /// Settings → Always-On against the in-memory daemon: each section in its usual states.
   @Test func alwaysOnSettings() async throws {
-    func model(_ remote: InMemoryDaemonClient.Remote) async throws -> AppModel {
+    typealias Prepare = @MainActor (InMemoryDaemonClient, AppModel) async -> Void
+    func model(_ remote: InMemoryDaemonClient.Remote, _ prepare: Prepare) async throws -> AppModel {
       let client = InMemoryDaemonClient(
-        seed: .empty, clock: .immediate(), agent: .enabled, clientId: "macos_test", remote: remote)
+        seed: .empty, clock: .immediate(start: referenceNow), agent: .enabled,
+        clientId: "macos_test", remote: remote)
       let model = AppModel(environment: makeEnvironment(client: client))
       await model.boot()
       try await eventually("placement") { model.agent?.placement != nil }
+      await prepare(client, model)
       await model.remote.load()
       return model
     }
     let size = CGSize(width: 600, height: 720)
-    let shots: [(String, InMemoryDaemonClient.Remote, AlwaysOnSection)] = [
-      ("settings-always-on-agent-location", .alwaysOn, .agentLocation),
-      ("settings-always-on-agent-location-held", .standalone, .agentLocation),
-      ("settings-always-on-agent-location-host", .host, .agentLocation),
+    let nothing: Prepare = { _, _ in }
+    let unreachable: Prepare = { client, model in
+      await client.simulateMachine(reachable: false)
+      await model.remote.checkMachine()
+    }
+    let shots: [(String, InMemoryDaemonClient.Remote, AlwaysOnSection, Prepare)] = [
+      ("settings-always-on-agent-location", .alwaysOn, .agentLocation, nothing),
+      ("settings-always-on-agent-location-held", .standalone, .agentLocation, nothing),
+      ("settings-always-on-agent-location-host", .host, .agentLocation, nothing),
+      ("settings-always-on-machine", .alwaysOn, .alwaysOnMachine, nothing),
+      ("settings-always-on-machine-pair", .standalone, .alwaysOnMachine, nothing),
+      ("settings-always-on-machine-unreachable", .alwaysOn, .alwaysOnMachine, unreachable),
     ]
-    for (name, remote, section) in shots {
-      let model = try await model(remote)
+    for (name, remote, section, prepare) in shots {
+      let model = try await model(remote, prepare)
       model.ui.alwaysOnSection = section
       for dark in [false, true] {
         try await render(
