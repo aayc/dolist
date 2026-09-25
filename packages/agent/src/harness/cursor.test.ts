@@ -669,3 +669,110 @@ describe("CursorHarness (fake CLI)", { timeout: SPAWN_TIMEOUT_MS }, () => {
     await expect(s.create()).rejects.toThrow(/replaced/);
   });
 });
+
+describe("prewarming", () => {
+  const sessionsIn = (home: string) => readdir(path.join(home, "cursor", "sessions"));
+  const acpSessionsIn = (home: string) =>
+    readdir(path.join(home, "cursor", "config", "acp-sessions")).catch(() => []);
+
+  it("a session started after prewarm takes the warm CLI, with its own AGENTS.md", async () => {
+    const pids = path.join(await tempDir("ddl-cursor-pids-"), "pids.txt");
+    const s = await setup({ flags: [`--fake-pids=${pids}`] });
+    await s.harness.prewarm();
+    const spare = await pidsIn(pids);
+    expect(spare).toHaveLength(1);
+    const session = await s.create({ systemPrompt: "You are the prewarmed test agent." });
+    await session.prompt("!agents");
+    expect(lastText(s.events)).toContain("You are the prewarmed test agent.");
+    await session.prompt("!list");
+    expect(await pidsIn(pids)).toEqual(spare);
+  });
+
+  it("waits for a spare that is still starting instead of starting a second CLI", async () => {
+    const pids = path.join(await tempDir("ddl-cursor-pids-"), "pids.txt");
+    const s = await setup({ flags: [`--fake-pids=${pids}`] });
+    void s.harness.prewarm();
+    void s.harness.prewarm();
+    const session = await s.create();
+    await session.prompt("!say ready");
+    expect(lastText(s.events)).toBe("ready");
+    expect(await pidsIn(pids)).toHaveLength(1);
+  });
+
+  it("starts a new CLI when the spare died", async () => {
+    const pids = path.join(await tempDir("ddl-cursor-pids-"), "pids.txt");
+    const s = await setup({ flags: [`--fake-pids=${pids}`] });
+    await s.harness.prewarm();
+    const [spare] = await pidsIn(pids);
+    process.kill(spare!, "SIGKILL");
+    await waitFor(() => !alive(spare!));
+    const session = await s.create();
+    await session.prompt("!say fresh");
+    expect(lastText(s.events)).toBe("fresh");
+    expect(await pidsIn(pids)).toHaveLength(2);
+  });
+
+  it("doesn't use a spare prepared for other MCP servers of the user", async () => {
+    const pids = path.join(await tempDir("ddl-cursor-pids-"), "pids.txt");
+    const s = await setup({
+      flags: [`--fake-pids=${pids}`],
+      userMcp: { mcpServers: { notes: { command: "notes-mcp" } } },
+    });
+    await s.harness.prewarm();
+    const [spare] = await pidsIn(pids);
+    await writeFile(
+      path.join(s.userHome, ".cursor", "mcp.json"),
+      JSON.stringify({
+        mcpServers: { notes: { command: "notes-mcp" }, mail: { command: "mail" } },
+      }),
+    );
+    const session = await s.create();
+    await session.prompt("!cli");
+    expect(lastText(s.events)).toContain("Mcp(mail:*)");
+    expect(await pidsIn(pids)).toHaveLength(2);
+    await waitFor(() => !alive(spare!));
+  });
+
+  it("stops a spare nobody took after its time to live, leaving no files", async () => {
+    const pids = path.join(await tempDir("ddl-cursor-pids-"), "pids.txt");
+    const s = await setup({ flags: [`--fake-pids=${pids}`], harness: { spareTtlMs: 150 } });
+    await s.harness.prewarm();
+    const [spare] = await pidsIn(pids);
+    await waitFor(() => !alive(spare!));
+    await waitFor(async () => (await sessionsIn(s.home)).length === 0);
+    expect(await acpSessionsIn(s.home)).toEqual([]);
+  });
+
+  it("dispose stops the spare; a claimed spare's files go with its session", async () => {
+    const pids = path.join(await tempDir("ddl-cursor-pids-"), "pids.txt");
+    const s = await setup({ flags: [`--fake-pids=${pids}`] });
+    await s.harness.prewarm();
+    const session = await s.create();
+    await session.prompt("!say claimed");
+    await s.harness.prewarm();
+    const started = await pidsIn(pids);
+    expect(started).toHaveLength(2);
+    await session.dispose();
+    await s.harness.dispose();
+    await waitFor(() => started.every((pid) => !alive(pid)));
+    expect(await sessionsIn(s.home)).toEqual([]);
+    expect(await acpSessionsIn(s.home)).toEqual([]);
+    await expect(s.harness.prewarm()).resolves.toBeUndefined();
+    expect(await pidsIn(pids)).toHaveLength(2);
+  });
+
+  it("warm() resumes a suspended session before its next prompt", async () => {
+    const pids = path.join(await tempDir("ddl-cursor-pids-"), "pids.txt");
+    const s = await setup({ flags: [`--fake-pids=${pids}`], harness: { idleTimeoutMs: 400 } });
+    const session = await s.create();
+    await session.prompt("!say one");
+    const [first] = await pidsIn(pids);
+    await waitFor(() => !alive(first!));
+    session.warm?.();
+    await waitFor(async () => (await pidsIn(pids)).length === 2);
+    const before = s.events.length;
+    await session.prompt("!say two");
+    expect(texts(s.events.slice(before))).toEqual(["two"]);
+    expect(await pidsIn(pids)).toHaveLength(2);
+  });
+});

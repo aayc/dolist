@@ -315,3 +315,55 @@ describe("mock mode smoke test", () => {
     expect(new ScriptedHarness({}).name).toBe("scripted");
   });
 });
+
+describe("AgentRuntime warm-up", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function prewarmingHarness() {
+    const prewarm = vi.fn(async () => {});
+    return {
+      prewarm,
+      harness: Object.assign(new ScriptedHarness({ scriptFor: () => async () => {} }), { prewarm }),
+    };
+  }
+
+  it("typing in a watched note prewarms the harness, at most every 5 s", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const { prewarm, harness } = prewarmingHarness();
+    const t = await runtime({ harness });
+    t.runtime.noteEditorActivity("Projects/plan.md", 0);
+    expect(prewarm).not.toHaveBeenCalled();
+    t.runtime.noteEditorActivity(TODAY, 0);
+    t.runtime.noteEditorActivity(TODAY, 1);
+    expect(prewarm).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(Date.now() + 5_000);
+    t.runtime.noteEditorActivity(TODAY, 2);
+    expect(prewarm).toHaveBeenCalledTimes(2);
+  });
+
+  it("a watched note changed elsewhere (no typing reported) prewarms too", async () => {
+    const { prewarm, harness } = prewarmingHarness();
+    const t = await runtime({ harness });
+    await t.storage.write(TODAY, "- [ ] Renew passport");
+    await vi.waitFor(() => expect(prewarm).toHaveBeenCalledTimes(1), WAIT);
+  });
+
+  it("notes the startup scan finds don't prewarm", async () => {
+    const { prewarm, harness } = prewarmingHarness();
+    const storage = new MemoryStorageProvider();
+    await storage.write(TODAY, "- [ ] Renew passport");
+    await runtime({ harness, storage });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(prewarm).not.toHaveBeenCalled();
+  });
+
+  it("a paused agent doesn't prewarm", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const { prewarm, harness } = prewarmingHarness();
+    const t = await runtime({ harness, settings: { agent: { enabled: false } } });
+    t.runtime.noteEditorActivity(TODAY, 0);
+    expect(prewarm).not.toHaveBeenCalled();
+  });
+});

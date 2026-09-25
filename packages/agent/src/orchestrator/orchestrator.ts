@@ -330,6 +330,11 @@ export class Orchestrator {
     this.previousStatus.delete(taskId);
   }
 
+  /** A task may be coming (the user is typing): get the day's session ready for its prompt. */
+  warm(): void {
+    if (!this.stopped) this.session?.session.warm?.();
+  }
+
   async stop(): Promise<void> {
     this.stopped = true;
     if (this.timer) clearTimeout(this.timer);

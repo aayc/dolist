@@ -87,6 +87,8 @@ export interface HarnessSession {
    * is queued as a follow-up and the promise resolves when that follow-up has been handled.
    */
   prompt(text: string): Promise<void>;
+  /** A prompt is probably coming (the user is typing): get ready for it, e.g. resume a suspended CLI. */
+  warm?(): void;
   /** Inject guidance into the in-flight run (delivered at the next turn boundary). */
   steer(text: string): Promise<void>;
   abort(): Promise<void>;
@@ -96,6 +98,8 @@ export interface HarnessSession {
 export interface Harness {
   readonly name: string;
   createSession(options: HarnessSessionOptions): Promise<HarnessSession>;
+  /** A session is probably coming soon: prepare for it (never rejects). */
+  prewarm?(): Promise<void>;
   /**
    * Releases shared resources (processes, listeners). Sessions still open keep working; the
    * resources close once they have been disposed. No new sessions afterwards.

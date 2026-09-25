@@ -59,6 +59,44 @@ import { trackAcpSession } from "./workspace";
 
 type ConnectionHandlers = Pick<AcpConnectionOptions, "onNotification" | "onRequest" | "onExit">;
 
+/** A CLI that is already running and initialized (see `CursorHarness.prewarm`). */
+export interface WarmCli {
+  conn: AcpConnection;
+  canResume: boolean;
+}
+
+/** The ACP handshake, and the checks that this CLI can run our sessions. */
+export async function initializeCli(
+  conn: AcpConnection,
+  timeoutMs: number,
+): Promise<{ canResume: boolean }> {
+  const init = parseInitializeResult(
+    await conn.request(
+      "initialize",
+      {
+        protocolVersion: ACP_PROTOCOL_VERSION,
+        clientCapabilities: {
+          fs: { readTextFile: false, writeTextFile: false },
+          terminal: false,
+        },
+        clientInfo: { name: "daily-do-list", version: "0.1.0" },
+      },
+      { timeoutMs },
+    ),
+  );
+  if (init.protocolVersion !== ACP_PROTOCOL_VERSION) {
+    throw new Error(
+      `The Cursor CLI speaks ACP version ${init.protocolVersion}, not ${ACP_PROTOCOL_VERSION}; update the harness or the CLI (\`agent update\`)`,
+    );
+  }
+  if (!init.mcpHttp) {
+    throw new Error(
+      "This Cursor CLI can't connect to HTTP MCP servers; update it with `agent update`",
+    );
+  }
+  return { canResume: init.loadSession };
+}
+
 type PromptBlock =
   | { type: "text"; text: string }
   | { type: "image"; data: string; mimeType: string };
@@ -153,17 +191,27 @@ export class CursorHarnessSession implements HarnessSession {
     return this.draining;
   }
 
-  /** Starts the CLI, creates the ACP session with our MCP endpoint and selects the model. */
-  async start(endpoint: Pick<McpRegistration, "url" | "token">): Promise<void> {
+  /**
+   * Starts the CLI (or takes over a warm one), creates the ACP session with our MCP endpoint and
+   * selects the model.
+   */
+  async start(endpoint: Pick<McpRegistration, "url" | "token">, warm?: WarmCli): Promise<void> {
     this.mcpServer = {
       type: "http",
       name: this.init.serverName,
       url: endpoint.url,
       headers: [{ name: "Authorization", value: `Bearer ${endpoint.token}` }],
     };
-    const conn = this.spawn();
+    let conn: AcpConnection;
+    if (warm) {
+      conn = warm.conn;
+      conn.bind(this.handlers(() => conn));
+    } else {
+      conn = this.spawn();
+    }
     try {
-      await this.initialize(conn);
+      if (warm) this.canResume = warm.canResume;
+      else await this.initialize(conn);
       const created = parseSessionResult(
         await conn.request(
           "session/new",
@@ -231,6 +279,27 @@ export class CursorHarnessSession implements HarnessSession {
       this.conn = undefined;
       void conn.close(0);
     }, this.init.cancelGraceMs);
+  }
+
+  /**
+   * Gets a suspended session's CLI running again before its next prompt arrives (the user started
+   * typing) and restarts the idle countdown; resuming takes seconds.
+   */
+  warm(): void {
+    if (this.closed) return;
+    if (this.conn && !this.conn.closed) {
+      if (!this.draining) this.scheduleSuspend();
+      return;
+    }
+    if (!this.canResume || !this.acpSessionId) return;
+    this.connection().then(
+      () => {
+        if (!this.draining) this.scheduleSuspend();
+      },
+      (error: unknown) => {
+        this.logger.debug("Couldn't warm the Cursor session", { error: describeError(error) });
+      },
+    );
   }
 
   dispose(): Promise<void> {
@@ -355,40 +424,20 @@ export class CursorHarnessSession implements HarnessSession {
   // ── Connection ────────────────────────────────────────────────────────────
 
   private spawn(): AcpConnection {
-    const conn: AcpConnection = this.init.spawn({
-      onNotification: (method, params) => this.onNotification(method, params),
-      onRequest: (method, params) => this.onRequest(method, params),
-      onExit: (exit) => this.onExit(conn, exit.signal ?? exit.code),
-    });
+    const conn: AcpConnection = this.init.spawn(this.handlers(() => conn));
     return conn;
   }
 
   private async initialize(conn: AcpConnection): Promise<void> {
-    const init = parseInitializeResult(
-      await conn.request(
-        "initialize",
-        {
-          protocolVersion: ACP_PROTOCOL_VERSION,
-          clientCapabilities: {
-            fs: { readTextFile: false, writeTextFile: false },
-            terminal: false,
-          },
-          clientInfo: { name: "daily-do-list", version: "0.1.0" },
-        },
-        { timeoutMs: this.init.requestTimeoutMs },
-      ),
-    );
-    if (init.protocolVersion !== ACP_PROTOCOL_VERSION) {
-      throw new Error(
-        `The Cursor CLI speaks ACP version ${init.protocolVersion}, not ${ACP_PROTOCOL_VERSION}; update the harness or the CLI (\`agent update\`)`,
-      );
-    }
-    if (!init.mcpHttp) {
-      throw new Error(
-        "This Cursor CLI can't connect to HTTP MCP servers; update it with `agent update`",
-      );
-    }
-    this.canResume = init.loadSession;
+    ({ canResume: this.canResume } = await initializeCli(conn, this.init.requestTimeoutMs));
+  }
+
+  private handlers(conn: () => AcpConnection): ConnectionHandlers {
+    return {
+      onNotification: (method, params) => this.onNotification(method, params),
+      onRequest: (method, params) => this.onRequest(method, params),
+      onExit: (exit) => this.onExit(conn(), exit.signal ?? exit.code),
+    };
   }
 
   private connection(): Promise<AcpConnection> {

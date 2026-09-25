@@ -58,6 +58,9 @@ import { createKnowledgeTools } from "./tools/knowledge";
 import { categoryForVerb, createMockIrreversibleActionTool, riskyVerb } from "./tools/mock";
 import { createNoteEditTool, type NoteEditHost } from "./tools/notes";
 
+/** Editor activity warms the harness (`warmUp`) at most this often. */
+const WARM_UP_INTERVAL_MS = 5_000;
+
 /** Seams for tests and embedders; production callers pass nothing. */
 export interface AgentRuntimeOverrides {
   createSafetyEvaluator?: (options: SafetyEvaluatorOptions) => SafetyEvaluator;
@@ -170,6 +173,7 @@ class Runtime implements AgentRuntime {
   private turnProblem: string | undefined;
   private started = false;
   private stopped = false;
+  private lastWarmUp = Number.NEGATIVE_INFINITY;
   private recoveredTriage = false;
   private statusQueued = false;
   private lastStatusJson = "";
@@ -399,6 +403,21 @@ class Runtime implements AgentRuntime {
 
   noteEditorActivity(notePath: string, line: number): void {
     this.watcher.noteEditorActivity(notePath, line);
+    if (this.watcher.watches(notePath)) this.warmUp();
+  }
+
+  /**
+   * The user is typing in a watched note, so a task, and with it a prompt and maybe a new session,
+   * may follow: resume the orchestrator's suspended session and prewarm a CLI now, while they type
+   * and the task settles, instead of seconds after the task arrives.
+   */
+  private warmUp(): void {
+    if (!this.enabled || !this.started || this.stopped) return;
+    const now = this.now();
+    if (now - this.lastWarmUp < WARM_UP_INTERVAL_MS) return;
+    this.lastWarmUp = now;
+    void this.harness?.prewarm?.();
+    this.orchestrator.warm();
   }
 
   // ── Queries ───────────────────────────────────────────────────────────────
@@ -724,6 +743,11 @@ class Runtime implements AgentRuntime {
           this.records.syncTasks(notePath, tasks);
           this.syncAnchors(notePath);
         }),
+      ),
+      // Edits from another device or editor report no typing; the change itself is the hint.
+      this.watcher.on(
+        "changed",
+        safe(() => this.warmUp()),
       ),
     );
     if (this.options.connectors) {

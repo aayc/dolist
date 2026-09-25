@@ -4,7 +4,7 @@
  * fake ShellExecutor, the CLI's own web search routed through the gate, a disabled built-in the
  * CLI must refuse, queued prompts and abort. Uses a little of your Cursor usage.
  *
- *   pnpm --filter @ddl/agent exec tsx scripts/smoke-cursor.ts [--model=claude-opus-5-5] [--binary=agent]
+ *   pnpm --filter @ddl/agent exec tsx scripts/smoke-cursor.ts [--model=claude-opus-5-5] [--binary=agent] [--prewarm]
  *
  * The model defaults to the app's (`DEFAULT_CURSOR_MODEL`).
  *
@@ -28,6 +28,8 @@ const arg = (name: string) =>
   process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(`--${name}=`.length);
 const MODEL = arg("model") ?? DEFAULT_CURSOR_MODEL;
 const BINARY = arg("binary");
+/** Start the session from a prewarmed CLI (`CursorHarness.prewarm`), as the app does while you type. */
+const PREWARM = process.argv.includes("--prewarm");
 
 const checks: Array<{ name: string; ok: boolean; detail?: string }> = [];
 function check(name: string, ok: boolean, detail?: string) {
@@ -168,6 +170,11 @@ async function main(): Promise<void> {
     let stats = newStats();
     const events: HarnessEvent[] = [];
     const print = transcript(() => stats);
+    if (PREWARM) {
+      const warmStarted = performance.now();
+      await harness.prewarm?.();
+      console.log(`prewarmed a CLI in ${Math.round(performance.now() - warmStarted)}ms`);
+    }
     const createStarted = performance.now();
     session = await harness.createSession({
       sessionId: "thr_smoke",

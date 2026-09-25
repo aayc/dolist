@@ -115,3 +115,21 @@ The target is a visible acknowledgment on a new task within ~2–3 s of finishin
 (0.7 s after leaving the line, 2.5 s otherwise) + batch (150 ms) + the orchestrator's first tool
 call. The triage eval measures time-to-first-tool-call (target p95 < 6 s with the live model);
 orchestrator turns use low thinking effort for speed.
+
+Where the time goes with the Cursor harness (measured against the real CLI, Apple Silicon):
+
+| Step | Time |
+| --- | --- |
+| Our pipeline: note saved → task settled → orchestrator → subagent → done, fake model, settle excluded | ~7 ms |
+| Settle (cursor left the line / otherwise) + batch window | 0.85 s / 2.65 s |
+| A new CLI session: spawn + `initialize` ~0.35 s, the process's first `session/new` ~3 s | ~3.5 s |
+| Resuming a session the harness suspended after 5 idle minutes | ~4.8 s |
+| `session/set_model`, only when the model changed (the choice persists in the private config) | ~1.2 s |
+| Model time to first token (Claude Opus 5.5, short prompt) | ~2.5 s |
+
+Typing in a watched note, or a watched note changing on disk, warms the harness (at most every
+5 s): the orchestrator's suspended session resumes in the background, so the ~4.8 s is spent while
+you type and the task settles; and the Cursor harness starts and initializes a spare CLI for the
+next session (~0.35 s off it, more when the machine is busy). The rest of a session's start can't
+move earlier: the CLI reads the session's `AGENTS.md` during its first `session/new`, which is
+also the slow part. `smoke-cursor.ts --prewarm` checks a session started from a spare CLI.

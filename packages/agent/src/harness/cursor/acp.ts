@@ -45,16 +45,19 @@ export interface AcpExit {
   error?: string;
 }
 
-export interface AcpConnectionOptions {
+export interface AcpHandlers {
+  onNotification?: (method: string, params: unknown) => void;
+  /** Answers requests from the agent; throw `AcpRpcError` for protocol errors. */
+  onRequest?: (method: string, params: unknown) => Promise<unknown>;
+  onExit?: (exit: AcpExit) => void;
+}
+
+export interface AcpConnectionOptions extends AcpHandlers {
   command: string;
   args: readonly string[];
   cwd: string;
   env: Record<string, string>;
   logger?: Logger;
-  onNotification?: (method: string, params: unknown) => void;
-  /** Answers requests from the agent; throw `AcpRpcError` for protocol errors. */
-  onRequest?: (method: string, params: unknown) => Promise<unknown>;
-  onExit?: (exit: AcpExit) => void;
   maxLineBytes?: number;
 }
 
@@ -68,6 +71,7 @@ interface PendingRequest {
 export class AcpConnection {
   private readonly child: ChildProcess;
   private readonly options: AcpConnectionOptions;
+  private handlers: AcpHandlers;
   private readonly logger: Logger;
   private readonly pending = new Map<number, PendingRequest>();
   private readonly exited: Promise<void>;
@@ -78,6 +82,7 @@ export class AcpConnection {
 
   private constructor(options: AcpConnectionOptions) {
     this.options = options;
+    this.handlers = options;
     this.logger = options.logger ?? silentLogger;
     this.child = spawn(options.command, [...options.args], {
       cwd: options.cwd,
@@ -112,6 +117,11 @@ export class AcpConnection {
 
   get closed(): boolean {
     return this.closedWith !== undefined;
+  }
+
+  /** Hands the connection to a new owner (a prewarmed CLI to its session). */
+  bind(handlers: AcpHandlers): void {
+    this.handlers = handlers;
   }
 
   /** The CLI's process id, which is also its process group's (it's spawned detached). */
@@ -227,7 +237,7 @@ export class AcpConnection {
 
   private dispatchNotification(method: string, params: unknown): void {
     try {
-      this.options.onNotification?.(method, params);
+      this.handlers.onNotification?.(method, params);
     } catch (error) {
       this.logger.warn("ACP notification handler threw", { method, error: messageOf(error) });
     }
@@ -235,8 +245,9 @@ export class AcpConnection {
 
   private async dispatchRequest(id: number | string, method: string, params: unknown) {
     try {
-      if (!this.options.onRequest) throw new AcpRpcError(METHOD_NOT_FOUND, "Method not found");
-      const result = await this.options.onRequest(method, params);
+      const { onRequest } = this.handlers;
+      if (!onRequest) throw new AcpRpcError(METHOD_NOT_FOUND, "Method not found");
+      const result = await onRequest(method, params);
       this.write({ jsonrpc: "2.0", id, result: result ?? null });
     } catch (error) {
       const code = error instanceof AcpRpcError ? error.code : INTERNAL_ERROR;
@@ -260,7 +271,7 @@ export class AcpConnection {
     }
     this.pending.clear();
     try {
-      this.options.onExit?.(exit);
+      this.handlers.onExit?.(exit);
     } catch (error) {
       this.logger.warn("ACP exit handler threw", { error: messageOf(error) });
     }

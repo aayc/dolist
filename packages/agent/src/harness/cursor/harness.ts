@@ -18,7 +18,7 @@ import { AcpConnection } from "./acp";
 import { cliEnvironment, cursorCliProblem, findCursorCli } from "./cli";
 import { buildAgentsMd } from "./instructions";
 import { McpBridge } from "./mcp-bridge";
-import { CursorHarnessSession, describeError } from "./session";
+import { CursorHarnessSession, describeError, initializeCli, type WarmCli } from "./session";
 import {
   type CliPermissions,
   type CursorHome,
@@ -30,7 +30,9 @@ import {
   recordCliProcess,
   removeAcpSession,
   removeSessionDirs,
+  type SessionDirs,
   stopLeftoverClis,
+  writeAgentsMd,
   writeCliConfig,
 } from "./workspace";
 
@@ -54,9 +56,30 @@ export interface CursorHarnessOptions {
   requestTimeoutMs?: number;
   /** How long a cancelled turn may take to stop before the CLI is stopped. Default 10 s. */
   cancelGraceMs?: number;
+  /** A prewarmed CLI no session has taken is stopped after this long. Default 2 min. */
+  spareTtlMs?: number;
 }
 
+/** A CLI started ahead of its session (`prewarm`), with what its session must match. */
+interface WarmSpare extends WarmCli {
+  dirs: SessionDirs;
+  serverName: string;
+  userServers: readonly string[];
+  permissions: CliPermissions;
+}
+
+/** What a spare has started so far, to stop it at any point. */
+interface SpareState {
+  dropped: boolean;
+  expiry?: ReturnType<typeof setTimeout>;
+  conn?: AcpConnection;
+  dirs?: SessionDirs;
+}
+
+type Spare = SpareState & { ready: Promise<WarmSpare> };
+
 const SERVER_NAME = "ddl";
+const DEFAULT_SPARE_TTL_MS = 2 * 60_000;
 const DEFAULT_IDLE_TIMEOUT_MS = 5 * 60_000;
 const DEFAULT_DETACH_AFTER_MS = 45_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 90_000;
@@ -68,6 +91,7 @@ export class CursorHarness implements Harness {
   private readonly logger: Logger;
   private readonly home: CursorHome;
   private readonly sessions = new Set<CursorHarnessSession>();
+  private spare: Spare | undefined;
   private bridge: McpBridge | undefined;
   private prepared: Promise<McpBridge> | undefined;
   private retired = false;
@@ -80,7 +104,29 @@ export class CursorHarness implements Harness {
     this.home = cursorHome(options.home);
   }
 
-  async createSession(options: HarnessSessionOptions): Promise<HarnessSession> {
+  createSession(options: HarnessSessionOptions): Promise<HarnessSession> {
+    return this.open(options, true);
+  }
+
+  /**
+   * Starts and initializes a CLI for the next session ahead of time (the user is typing, so a task
+   * may follow), which takes ~0.35 s off that session's ~3.5 s start, more on a busy or cold
+   * machine. It can't go further: the CLI reads its folder's AGENTS.md during the process's first
+   * `session/new` (the slow part), so that has to wait for the session's AGENTS.md. The spare runs
+   * with the permission config from the start. One at a time, stopped after `spareTtlMs` without a
+   * session. Resolves when it's ready; never rejects.
+   */
+  prewarm(): Promise<void> {
+    if (this.retired) return Promise.resolve();
+    const spare = this.spare ?? this.startSpare();
+    this.armSpareExpiry(spare);
+    return spare.ready.then(
+      () => {},
+      () => {},
+    );
+  }
+
+  private async open(options: HarnessSessionOptions, useSpare: boolean): Promise<HarnessSession> {
     if (this.retired) throw new Error("Cursor harness: this harness has been replaced");
     if (options.signal?.aborted) throw new Error("Session creation aborted");
     validateTools(options.tools);
@@ -95,20 +141,11 @@ export class CursorHarness implements Harness {
     if (clash) throw new Error(`Tool "${clash.name}" conflicts with an enabled built-in tool`);
     const tools = [...builtins, ...options.tools];
 
-    const env = this.options.env ?? process.env;
-    const userHome = this.options.userHome ?? os.homedir();
-    const binary = findCursorCli({
-      ...(this.options.binary ? { binary: this.options.binary } : {}),
-      env,
-      homeDir: userHome,
-    });
-    if (!binary) throw new Error(cursorCliProblem({ state: "missing" }));
-
+    const { env, userHome, binary } = this.locateCli();
     const userServers = await readUserMcpServers(userHome, logger);
-    const serverName = userServers.includes(SERVER_NAME)
-      ? `${SERVER_NAME}-${randomBytes(3).toString("hex")}`
-      : SERVER_NAME;
-    const permissions = cliPermissions(serverName, userServers);
+    const warm = useSpare ? await this.claimSpare(userServers) : undefined;
+    const serverName = warm?.serverName ?? pickServerName(userServers);
+    const permissions = warm?.permissions ?? cliPermissions(serverName, userServers);
     const bridge = await this.prepare(permissions);
     const webAllowed = tools.some((t) => t.name === TOOL.webSearch || t.name === TOOL.webFetch);
     const agentsMd = buildAgentsMd({
@@ -120,7 +157,13 @@ export class CursorHarness implements Harness {
       hasShell: builtinNames.has(TOOL.bash),
       webAllowed,
     });
-    const dirs = await createSessionDirs(this.home, options.sessionId, { agentsMd, permissions });
+    let dirs: SessionDirs;
+    if (warm) {
+      dirs = warm.dirs;
+      await writeAgentsMd(dirs, agentsMd);
+    } else {
+      dirs = await createSessionDirs(this.home, options.sessionId, { agentsMd, permissions });
+    }
     const resolved = await realpath(dirs.workspace);
     const cliEnv = cliEnvironment(env, {
       CURSOR_CONFIG_DIR: this.home.configDir,
@@ -167,14 +210,124 @@ export class CursorHarness implements Harness {
     unregister = registration.unregister;
     this.sessions.add(session);
     try {
-      await session.start(registration);
+      await session.start(registration, warm);
       if (options.signal?.aborted) throw new Error("Session creation aborted");
     } catch (error) {
       await session.dispose();
+      if (warm && !this.retired && !options.signal?.aborted) {
+        logger.debug("The prewarmed Cursor CLI failed; starting another", {
+          error: describeError(error),
+        });
+        return this.open(options, false);
+      }
       throw new Error(`Cursor harness: ${describeError(error)}`);
     }
-    logger.debug("session ready", { tools: tools.map((t) => t.name) });
+    logger.debug("session ready", { tools: tools.map((t) => t.name), prewarmed: !!warm });
     return session;
+  }
+
+  private locateCli(): { env: NodeJS.ProcessEnv; userHome: string; binary: string } {
+    const env = this.options.env ?? process.env;
+    const userHome = this.options.userHome ?? os.homedir();
+    const binary = findCursorCli({
+      ...(this.options.binary ? { binary: this.options.binary } : {}),
+      env,
+      homeDir: userHome,
+    });
+    if (!binary) throw new Error(cursorCliProblem({ state: "missing" }));
+    return { env, userHome, binary };
+  }
+
+  // ── The prewarmed CLI ─────────────────────────────────────────────────────
+
+  private startSpare(): Spare {
+    const state: SpareState = { dropped: false };
+    const spare: Spare = Object.assign(state, { ready: this.warmSpare(state) });
+    spare.ready.catch((error: unknown) => {
+      if (!spare.dropped) {
+        this.logger.debug("Couldn't prewarm a Cursor CLI", { error: describeError(error) });
+      }
+      void this.dropSpare(spare);
+    });
+    this.spare = spare;
+    return spare;
+  }
+
+  private async warmSpare(spare: SpareState): Promise<WarmSpare> {
+    const { env, userHome, binary } = this.locateCli();
+    const userServers = await readUserMcpServers(userHome, this.logger);
+    const serverName = pickServerName(userServers);
+    const permissions = cliPermissions(serverName, userServers);
+    await this.prepare(permissions);
+    spare.dirs = await createSessionDirs(this.home, "prewarmed", { permissions });
+    const dirs = spare.dirs;
+    this.checkSpare(spare);
+    const conn = AcpConnection.spawn({
+      command: binary,
+      args: [...(this.options.binaryArgs ?? []), "acp"],
+      cwd: dirs.workspace,
+      env: cliEnvironment(env, {
+        CURSOR_CONFIG_DIR: this.home.configDir,
+        CURSOR_DATA_DIR: dirs.data,
+      }),
+      logger: this.logger,
+      onExit: () => {
+        if (this.spare === spare) void this.dropSpare(spare);
+      },
+    });
+    spare.conn = conn;
+    this.checkSpare(spare);
+    await recordCliProcess(dirs, conn.pid);
+    const timeoutMs = this.options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    const { canResume } = await initializeCli(conn, timeoutMs);
+    this.checkSpare(spare);
+    return {
+      conn,
+      canResume,
+      dirs,
+      serverName,
+      userServers,
+      permissions,
+    };
+  }
+
+  /** A spare stopped while it was starting cleans up what it had started. */
+  private checkSpare(spare: SpareState): void {
+    if (!spare.dropped) return;
+    void this.dropSpare(spare, true);
+    throw new Error("The prewarmed Cursor CLI was stopped");
+  }
+
+  /** The spare, if it's (or becomes) ready and still fits: the user's MCP servers are unchanged. */
+  private async claimSpare(userServers: readonly string[]): Promise<WarmSpare | undefined> {
+    const spare = this.spare;
+    if (!spare) return undefined;
+    this.spare = undefined;
+    clearTimeout(spare.expiry);
+    const warm = await spare.ready.catch(() => undefined);
+    if (!warm || spare.dropped || warm.conn.closed || !sameItems(warm.userServers, userServers)) {
+      await this.dropSpare(spare);
+      return undefined;
+    }
+    return warm;
+  }
+
+  private async dropSpare(spare: SpareState, again = false): Promise<void> {
+    if (spare.dropped && !again) return;
+    spare.dropped = true;
+    if (this.spare === spare) this.spare = undefined;
+    clearTimeout(spare.expiry);
+    await spare.conn?.close(0);
+    if (spare.dirs) await removeSessionDirs(spare.dirs);
+  }
+
+  private armSpareExpiry(spare: SpareState): void {
+    clearTimeout(spare.expiry);
+    spare.expiry = setTimeout(
+      () => void this.dropSpare(spare),
+      this.options.spareTtlMs ?? DEFAULT_SPARE_TTL_MS,
+    );
+    spare.expiry.unref?.();
   }
 
   /**
@@ -188,6 +341,7 @@ export class CursorHarness implements Harness {
   /** Stops accepting sessions; shared resources close once the open sessions are disposed. */
   async dispose(): Promise<void> {
     this.retired = true;
+    if (this.spare) await this.dropSpare(this.spare);
     if (this.sessions.size === 0) await this.closeShared();
   }
 
@@ -212,6 +366,17 @@ export class CursorHarness implements Harness {
     this.closing ??= this.bridge?.close() ?? Promise.resolve();
     return this.closing;
   }
+}
+
+/** Our MCP server's name: distinct from the user's servers, which the permission config denies. */
+function pickServerName(userServers: readonly string[]): string {
+  return userServers.includes(SERVER_NAME)
+    ? `${SERVER_NAME}-${randomBytes(3).toString("hex")}`
+    : SERVER_NAME;
+}
+
+function sameItems(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((item) => b.includes(item));
 }
 
 function validateTools(tools: readonly ToolSpec[]): void {

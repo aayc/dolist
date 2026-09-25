@@ -62,6 +62,8 @@ export type TaskWatcherEvents = {
   note: NoteEvent;
   /** Every re-parse of a watched note (unsettled): keeps lines/text of records current. */
   tasks: { notePath: string; date: string | null; tasks: readonly TrackedTask[] };
+  /** A watched note changed on disk (not found by a scan), before anything settles. */
+  changed: { notePath: string };
 };
 
 /** Read access to the tracked tasks, shared with the orchestrator. */
@@ -270,6 +272,15 @@ export class TaskWatcher implements TaskLookup {
     if (state?.prose.timer) this.scheduleProse(state);
   }
 
+  /** Whether tasks in this note reach the orchestrator (a daily note inside the window). */
+  watches(notePath: string): boolean {
+    try {
+      return this.isInWindow(normalizePath(notePath));
+    } catch {
+      return false;
+    }
+  }
+
   getTasks(notePath: string): readonly TrackedTask[] {
     return this.notes.get(notePath)?.tasks ?? [];
   }
@@ -413,6 +424,7 @@ export class TaskWatcher implements TaskLookup {
     if (!state.loaded) await this.loadState(state);
     const file = await this.storage.read(state.notePath);
     if (!this.running) return;
+    if (cause === "event") this.emitter.emit("changed", { notePath: state.notePath });
     const at = this.now();
     if (!file) {
       state.content = null;

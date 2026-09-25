@@ -146,10 +146,14 @@ export async function writeCliConfig(configDir: string, permissions: CliPermissi
   await writeFileAtomic(file, `${JSON.stringify(config, null, 2)}\n`);
 }
 
+/**
+ * A session's folder: the CLI's workspace (with the project permission config, and AGENTS.md when
+ * given; a prewarmed CLI gets it with `writeAgentsMd` before its session starts) and its data dir.
+ */
 export async function createSessionDirs(
   home: CursorHome,
   sessionId: string,
-  files: { agentsMd: string; permissions: CliPermissions },
+  files: { agentsMd?: string; permissions: CliPermissions },
 ): Promise<SessionDirs> {
   const root = path.join(
     home.sessionsDir,
@@ -165,7 +169,7 @@ export async function createSessionDirs(
     for (const dir of [root, dirs.workspace, path.join(dirs.workspace, ".cursor"), dirs.data]) {
       await ensurePrivateDir(dir);
     }
-    await writeFileAtomic(path.join(dirs.workspace, "AGENTS.md"), files.agentsMd);
+    if (files.agentsMd !== undefined) await writeAgentsMd(dirs, files.agentsMd);
     await writeFileAtomic(
       path.join(dirs.workspace, ".cursor", "cli.json"),
       `${JSON.stringify({ permissions: files.permissions }, null, 2)}\n`,
@@ -175,6 +179,10 @@ export async function createSessionDirs(
     await removeSessionDirs(dirs);
     throw error;
   }
+}
+
+export async function writeAgentsMd(dirs: SessionDirs, agentsMd: string): Promise<void> {
+  await writeFileAtomic(path.join(dirs.workspace, "AGENTS.md"), agentsMd);
 }
 
 export async function removeSessionDirs(dirs: SessionDirs): Promise<void> {

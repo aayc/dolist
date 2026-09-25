@@ -185,7 +185,10 @@ processes. `prompt` queues follow-ups; `steer` is delivered at the next turn bou
 follow-up within the same run (ACP can't inject into a running turn); `abort` sends
 `session/cancel` and stops the CLI if the turn doesn't end within 10 s. Idle sessions end their
 process after 5 minutes (each is 100–500 MB) and resume with `session/load` on the next prompt, as
-does a session whose CLI crashed. Each session records its CLI's pid in its folder (`cli.pid`):
+does a session whose CLI crashed. Resuming takes ~5 s, so typing in a watched note warms the
+harness: the orchestrator's suspended session resumes right away, and a spare CLI starts for the
+next new session (it gets that session's `AGENTS.md` before its first `session/new` and is stopped
+after 2 idle minutes). See `docs/PERFORMANCE.md` for the numbers. Each session records its CLI's pid in its folder (`cli.pid`):
 a daemon that was killed can leave CLI processes running (the CLI doesn't always exit when its
 input closes), so the next daemon stops the process of every session folder no live session owns —
 only while that process still works inside the folder, so a reused pid is never signalled — and
