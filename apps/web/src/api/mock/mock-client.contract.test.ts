@@ -14,7 +14,7 @@ import {
 } from "@ddl/contract/wire";
 import { type ServerEvent, type ServerEventOf, today, toISODate } from "@ddl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { HttpError } from "../errors";
+import { HttpError, NetworkError } from "../errors";
 import { MockDaemonClient } from "./mock-client";
 
 beforeEach(() => {
@@ -96,9 +96,42 @@ async function checkQueries(client: MockDaemonClient, notePath: string) {
 
 /**
  * Event types of flows the mock doesn't have yet. A stream adding a flow to the mock removes its
- * events here (the import from Obsidian comes with its web flow).
+ * events here.
  */
-const NOT_MOCKED_YET = new Set<string>(["import.progress"]);
+const NOT_MOCKED_YET = new Set<string>();
+
+/** Imports the mock's Obsidian vault to the end, switches to it, and updates it from Obsidian. */
+async function importAndSwitch(client: MockDaemonClient) {
+  expectWire("SyncStatusResponse", await call(client.getSyncStatus()));
+  expectWire("DeviceVaultResponse", await call(client.getVault()));
+  expectWire("ObsidianImportStatusResponse", await call(client.getObsidianImport()));
+  expectWire("ObsidianImportPreview", await call(client.previewObsidianImport("~/Plain notes")));
+  const preview = await call(client.previewObsidianImport("~/Obsidian Notebook"));
+  expectWire("ObsidianImportPreview", preview);
+  const cancelled = await call(client.startObsidianImport({ source: preview.source }));
+  expectWire("ObsidianImportJobResponse", cancelled);
+  await vi.advanceTimersByTimeAsync(1_000);
+  expectWire("ObsidianImportJobResponse", await call(client.cancelObsidianImport()));
+  expectWire(
+    "ObsidianImportJobResponse",
+    await call(
+      client.startObsidianImport({ source: preview.source, destination: "~/Obsidian import" }),
+    ),
+  );
+  await vi.advanceTimersByTimeAsync(5_000);
+  const { job } = await call(client.getObsidianImport());
+  expectWire("ObsidianImportStatusResponse", { job });
+  expect(job).toMatchObject({ state: "done", destination: "/Users/me/Obsidian import" });
+  const switched = await call(client.switchVault(job!.destination));
+  expectWire("DeviceVaultResponse", switched);
+  await vi.advanceTimersByTimeAsync(2_000);
+  const status = await call(client.getObsidianImport());
+  expectWire("ObsidianImportStatusResponse", status);
+  expect(status.imported).toMatchObject({ source: preview.source });
+  expectWire("ObsidianImportJobResponse", await call(client.updateFromObsidian()));
+  await vi.advanceTimersByTimeAsync(2_000);
+  expectWire("ObsidianImportStatusResponse", await call(client.getObsidianImport()));
+}
 
 describe("MockDaemonClient ⇄ wire contract", () => {
   it("runs a full scenario emitting only conformant events and results", async () => {
@@ -199,6 +232,7 @@ describe("MockDaemonClient ⇄ wire contract", () => {
       await call(client.updateSettings({ agent: { harness: "cursor", cursorModel: " gpt-5.5 " } })),
     );
     expectWire("AgentStatusResponse", await call(client.setAgentEnabled(false)));
+    await importAndSwitch(client);
     await checkQueries(client, path);
     client.disconnect();
 
@@ -403,5 +437,187 @@ describe("MockDaemonClient ⇄ wire contract", () => {
     const error = await failure(none.openComputerPermissions("screenRecording"));
     expect(error.status).toBe(404);
     expectWire("ApiErrorBody", error.body);
+  });
+});
+
+describe("MockDaemonClient: importing from Obsidian and switching vaults", () => {
+  function hooked(options: { importStepMs?: number } = {}) {
+    const client = new MockDaemonClient({
+      installHooks: false,
+      persistSettings: false,
+      ...options,
+    });
+    const events: ServerEvent[] = [];
+    const states: Array<[string, boolean]> = [];
+    client.onEvent((event) => events.push(event));
+    client.onConnectionChange(({ state, reconnected }) => states.push([state, reconnected]));
+    client.connect();
+    return { client, events, states };
+  }
+
+  it("runs an import through its phases with progress events, one job at a time", async () => {
+    const { client, events } = hooked();
+    const source = "/Users/me/Obsidian Notebook";
+    const preview = await call(client.previewObsidianImport(`${source}/`));
+    expect(preview).toMatchObject({
+      source,
+      defaultDestination: "/Users/me/Obsidian Notebook (Daily Do List)",
+      isObsidianVault: true,
+      carryOver: { vault: "/Users/me/Demo Vault", dailyNotesFrom: "obsidian" },
+    });
+    expect(preview.carryOver.daily.merged).toBe(1);
+    expect(preview.carryOver.collisions.items).toContainEqual({
+      from: "Ideas.md",
+      to: "Ideas (Daily Do List).md",
+    });
+    const { job } = await call(client.startObsidianImport({ source }));
+    expect(job).toMatchObject({ state: "running", phase: "checking" });
+    const busy = await failure(client.startObsidianImport({ source }));
+    expect([busy.status, busy.body]).toMatchObject([409, { error: "conflict" }]);
+    await vi.advanceTimersByTimeAsync(10_000);
+    const phases = ofType(events, "import.progress").map((e) => e.job.phase);
+    expect([...new Set(phases)]).toEqual(["checking", "copying", "carrying_over", "finishing"]);
+    const done = ofType(events, "import.progress").at(-1)!.job;
+    expect(done).toMatchObject({ state: "done", result: { copied: { files: 64 } } });
+    const again = await failure(
+      client.startObsidianImport({ source, destination: done.destination }),
+    );
+    expect(again.message).toBe(`${done.destination} isn't empty`);
+    expect((await call(client.previewObsidianImport(source))).defaultDestination).toBe(
+      "/Users/me/Obsidian Notebook (Daily Do List 2)",
+    );
+  });
+
+  it("cancels a running job, and says when nothing runs", async () => {
+    const { client } = hooked();
+    const idle = await failure(client.cancelObsidianImport());
+    expect(idle.status).toBe(404);
+    expectWire("ApiErrorBody", idle.body);
+    await call(client.startObsidianImport({ source: "~/Obsidian Notebook" }));
+    await vi.advanceTimersByTimeAsync(1_000);
+    const { job } = await call(client.cancelObsidianImport());
+    expect(job.state).toBe("cancelled");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect((await call(client.getObsidianImport())).job?.state).toBe("cancelled");
+  });
+
+  it("switches by restarting: nothing answers until the daemon is back on the new vault", async () => {
+    const { client, states } = hooked({ importStepMs: 10 });
+    await call(client.startObsidianImport({ source: "~/Obsidian Notebook" }));
+    await vi.advanceTimersByTimeAsync(1_000);
+    const { job } = await call(client.getObsidianImport());
+    const switched = await call(client.switchVault(job!.destination));
+    expect(switched).toEqual({ path: job!.destination, lockedByEnv: false, restart: "supervisor" });
+    const away = client.health().catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await away).toBeInstanceOf(NetworkError);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(states.slice(-2)).toEqual([
+      ["reconnecting", false],
+      ["online", true],
+    ]);
+    expect((await call(client.health())).vaultName).toBe("Obsidian Notebook (Daily Do List)");
+    expect(await call(client.getObsidianImport())).toEqual({
+      job: null,
+      imported: {
+        source: "/Users/me/Obsidian Notebook",
+        importedAt: job!.startedAt,
+        previousVault: "/Users/me/Demo Vault",
+      },
+    });
+    expect(await call(client.switchVault(job!.destination))).toEqual({
+      path: job!.destination,
+      lockedByEnv: false,
+    });
+  });
+
+  it("updates an imported vault, and only an imported one", async () => {
+    const { client, events } = hooked({ importStepMs: 10 });
+    const never = await failure(client.updateFromObsidian());
+    expect([never.status, never.message]).toEqual([
+      404,
+      "This vault wasn't imported from Obsidian",
+    ]);
+    await call(client.startObsidianImport({ source: "~/Obsidian Notebook" }));
+    await vi.advanceTimersByTimeAsync(1_000);
+    const { job } = await call(client.getObsidianImport());
+    await call(client.switchVault(job!.destination));
+    await vi.advanceTimersByTimeAsync(2_000);
+    const update = (await call(client.updateFromObsidian())).job;
+    expect(update).toMatchObject({ kind: "update", destination: job!.destination });
+    await vi.advanceTimersByTimeAsync(1_000);
+    const done = (await call(client.getObsidianImport())).job!;
+    expect(done.update?.added.paths).toEqual(["Journal/Phone notes.md"]);
+    expect(
+      ofType(events, "vault.changed").some(
+        (e) => e.origin === "external" && e.changes[0]?.path === "Journal/Phone notes.md",
+      ),
+    ).toBe(true);
+    expect((await call(client.getObsidianImport())).imported?.updatedAt).toEqual(
+      expect.any(Number),
+    );
+  });
+
+  it("answers the daemon's errors: sources, destinations, paired devices, DDL_VAULT and sync", async () => {
+    const client = new MockDaemonClient({ installHooks: false, persistSettings: false });
+    client.connect();
+    const hooks = client.testHooks();
+    const cases: Array<[() => Promise<unknown>, number, string, RegExp]> = [
+      [() => client.previewObsidianImport("Notes"), 400, "invalid_request", /absolute path/],
+      [() => client.previewObsidianImport("/Users/me/Nope"), 400, "invalid_request", /no folder/],
+      [
+        () => client.previewObsidianImport("~/.daily-do-list"),
+        400,
+        "invalid_request",
+        /own folder/,
+      ],
+      [() => client.previewObsidianImport("~/Demo Vault"), 400, "invalid_request", /current/],
+      [
+        () =>
+          client.startObsidianImport({
+            source: "~/Obsidian Notebook",
+            destination: "~/Obsidian Notebook/New",
+          }),
+        400,
+        "invalid_request",
+        /inside the Obsidian vault/,
+      ],
+      [
+        () => client.startObsidianImport({ source: "~/Plain notes", destination: "/nowhere/New" }),
+        400,
+        "invalid_request",
+        /doesn't exist/,
+      ],
+      [() => client.switchVault("~/Nope"), 400, "invalid_request", /no folder/],
+    ];
+    hooks.setSyncing(true);
+    cases.push([() => client.switchVault("~/Plain notes"), 409, "conflict", /turn sync off/]);
+    for (const [run, status, code, message] of cases) {
+      const error = await failure(run());
+      expect([error.status, (error.body as { error: string }).error]).toEqual([status, code]);
+      expect(error.message).toMatch(message);
+      expectWire("ApiErrorBody", error.body);
+    }
+    expect((await call(client.getSyncStatus())).target).toBe("remote");
+    expect((await call(client.previewObsidianImport("~/Plain notes"))).warnings).toContainEqual(
+      expect.stringMatching(/turn sync off/),
+    );
+    hooks.setSyncing(false);
+    hooks.setVaultLockedByEnv(true);
+    expect((await call(client.getVault())).lockedByEnv).toBe(true);
+    const locked = await failure(client.switchVault("~/Plain notes"));
+    expect([locked.status, locked.body]).toMatchObject([409, { error: "locked_by_env" }]);
+    hooks.setPairedDevice(true);
+    for (const run of [
+      () => client.getVault(),
+      () => client.getObsidianImport(),
+      () => client.previewObsidianImport("~/Obsidian Notebook"),
+      () => client.startObsidianImport({ source: "~/Obsidian Notebook" }),
+      () => client.updateFromObsidian(),
+    ]) {
+      const error = await failure(run());
+      expect([error.status, error.body]).toMatchObject([403, { error: "forbidden_device" }]);
+      expectWire("ApiErrorBody", error.body);
+    }
   });
 });

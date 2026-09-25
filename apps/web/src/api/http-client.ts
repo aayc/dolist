@@ -14,9 +14,16 @@ import {
   type CreateRoutineRequest,
   createId,
   type DailyNoteResponse,
+  type DeviceVaultRequest,
+  type DeviceVaultResponse,
   type HealthResponse,
   isCompatibleApiVersion,
   type NoteResponse,
+  type ObsidianImportJobResponse,
+  type ObsidianImportPreview,
+  type ObsidianImportPreviewRequest,
+  type ObsidianImportRequest,
+  type ObsidianImportStatusResponse,
   type PostMessageRequest,
   type RenameRequest,
   type RoutineListResponse,
@@ -26,6 +33,7 @@ import {
   type ServerEvent,
   type SetAgentEnabledRequest,
   type SettingsResponse,
+  type SyncStatusResponse,
   type TaskRecordsResponse,
   type ThreadListResponse,
   type ThreadResponse,
@@ -389,6 +397,39 @@ export class HttpDaemonClient implements DaemonClient {
 
   resumeRoutine(id: string): Promise<RoutineResponse> {
     return this.request("POST", API_ROUTES.routineResume(id));
+  }
+
+  getSyncStatus(): Promise<SyncStatusResponse> {
+    return this.request("GET", API_ROUTES.syncStatus);
+  }
+
+  getVault(): Promise<DeviceVaultResponse> {
+    return this.request("GET", API_ROUTES.deviceVault);
+  }
+
+  switchVault(path: string): Promise<DeviceVaultResponse> {
+    return this.request("PUT", API_ROUTES.deviceVault, { path } satisfies DeviceVaultRequest);
+  }
+
+  previewObsidianImport(source: string): Promise<ObsidianImportPreview> {
+    const body: ObsidianImportPreviewRequest = { source };
+    return this.request("POST", API_ROUTES.importObsidianPreview, body);
+  }
+
+  getObsidianImport(): Promise<ObsidianImportStatusResponse> {
+    return this.request("GET", API_ROUTES.importObsidian);
+  }
+
+  startObsidianImport(request: ObsidianImportRequest): Promise<ObsidianImportJobResponse> {
+    return this.request("POST", API_ROUTES.importObsidian, request);
+  }
+
+  cancelObsidianImport(): Promise<ObsidianImportJobResponse> {
+    return this.request("POST", API_ROUTES.importObsidianCancel);
+  }
+
+  updateFromObsidian(): Promise<ObsidianImportJobResponse> {
+    return this.request("POST", API_ROUTES.importObsidianUpdate);
   }
 
   async getArtifact(threadId: string, artifactId: string): Promise<ArtifactContent> {
