@@ -1,0 +1,45 @@
+# The sync service of the always-on machine (installed by setup.sh; see deploy/linux/README.md).
+# It binds 127.0.0.1 only; `tailscale serve` forwards HTTPS from the tailnet to it.
+[Unit]
+Description=Daily Do List sync service
+Documentation=file:/opt/ddl/current/deploy/README.md
+After=network.target
+
+[Service]
+Type=simple
+User=ddl
+Group=ddl
+WorkingDirectory=/var/lib/ddl
+# The port: DDL_SYNC_PORT in /etc/ddl/sync.env, which setup.sh writes (--sync-port).
+Environment=DDL_SYNC_PORT=7332
+EnvironmentFile=-/etc/ddl/sync.env
+ExecStart=/usr/bin/env node /opt/ddl/current/sync/dist/main.js serve --db /var/lib/ddl/sync/sync.db --host 127.0.0.1 --port ${DDL_SYNC_PORT}
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+UMask=0077
+
+# Hardening: only the sync database is writable. Node's JIT needs writable executable memory, so
+# no MemoryDenyWriteExecute.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ReadWritePaths=/var/lib/ddl/sync
+CapabilityBoundingSet=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
