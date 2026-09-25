@@ -3,6 +3,7 @@
  * text. `flowchartDrawing` returns the `.excalidraw.md` file the app writes.
  */
 import {
+  DRAWING_FONT_FAMILIES,
   type DrawingElement,
   type DrawingScene,
   emptyDrawingScene,
@@ -48,6 +49,7 @@ export function flowchartScene(spec: FlowchartSpec): DrawingScene {
       originalText: label,
       containerId: id,
       fontSize: 20,
+      fontFamily: DRAWING_FONT_FAMILIES.Excalifont,
     });
   });
   (spec.arrows ?? []).forEach(([from, to, label], i) => {
@@ -86,6 +88,7 @@ export function flowchartScene(spec: FlowchartSpec): DrawingScene {
         originalText: label,
         containerId: id,
         fontSize: 16,
+        fontFamily: DRAWING_FONT_FAMILIES.Excalifont,
       });
     }
   });
@@ -100,6 +103,7 @@ export function flowchartScene(spec: FlowchartSpec): DrawingScene {
       text,
       originalText: text,
       fontSize: 16,
+      fontFamily: DRAWING_FONT_FAMILIES.Excalifont,
     });
   });
   return { ...emptyDrawingScene(), elements };

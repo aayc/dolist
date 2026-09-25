@@ -318,6 +318,11 @@ export type ExecutionConfig =
         /** The `ddl-computer` helper binary; without it computer use stays screen-level. */
         helper?: string;
       };
+      /**
+       * The built drawing render page (`scripts/build-drawing-renderer.mjs`); with a browser, it
+       * renders drawings for `read_drawing`. Without it drawings are described in text only.
+       */
+      drawingRenderer?: string;
     }
   | {
       kind: "cloud";

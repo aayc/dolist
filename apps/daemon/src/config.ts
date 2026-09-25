@@ -7,6 +7,7 @@ import { type AgentMode, DEFAULT_MODEL, type LogLevel, SYNC_ID_PATTERN } from "@
 import type { SyncTargetConfig } from "@ddl/storage";
 import { z } from "zod";
 import { type ComputerHelperDiscovery, discoverComputerHelper } from "./computer-helper";
+import { type DrawingRendererDiscovery, discoverDrawingRenderer } from "./drawing-renderer";
 import { loadEnvFiles } from "./env-file";
 import { displayPath, resolveUserPath } from "./home-paths";
 
@@ -47,6 +48,8 @@ export interface DaemonConfig {
   execution: ExecutionConfig;
   /** Where the computer helper was found (its path is in `execution`), or why it wasn't. */
   computerHelper: ComputerHelperDiscovery;
+  /** Where the drawing render page was found (its path is in `execution`), or why it wasn't. */
+  drawingRenderer: DrawingRendererDiscovery;
   /** Extra browser origins allowed to call the API and WebSocket (e.g. a native shell). */
   allowedOrigins: string[];
   webDist: string;
@@ -170,6 +173,8 @@ export interface LoadConfigOptions {
   entryScript?: string;
   /** Whether a path is an executable file (tests). */
   isExecutable?: (path: string) => boolean;
+  /** Where to look for the drawing render page besides next to the entry script (tests). */
+  drawingRendererBuilds?: readonly string[];
 }
 
 /**
@@ -199,14 +204,19 @@ export function loadConfig(options: LoadConfigOptions = {}): DaemonConfig {
   const fromHome = { homedir, base: home };
   const vaultEnv = nonEmpty(env.DDL_VAULT);
   const webDistEnv = nonEmpty(env.DDL_WEB_DIST);
+  const entryScript = options.entryScript ?? process.argv[1];
   const computerHelper = discoverComputerHelper({
     env,
     platform,
     cwd,
-    ...((options.entryScript ?? process.argv[1])
-      ? { entryScript: options.entryScript ?? process.argv[1] }
-      : {}),
+    ...(entryScript ? { entryScript } : {}),
     ...(options.isExecutable ? { isExecutable: options.isExecutable } : {}),
+  });
+  const drawingRenderer = discoverDrawingRenderer({
+    env,
+    cwd,
+    ...(entryScript ? { entryScript } : {}),
+    ...(options.drawingRendererBuilds ? { builds: options.drawingRendererBuilds } : {}),
   });
 
   return {
@@ -219,8 +229,12 @@ export function loadConfig(options: LoadConfigOptions = {}): DaemonConfig {
       parseEnumEnv("DDL_AGENT_MODE", env.DDL_AGENT_MODE, AGENT_MODES) ?? file.agentMode ?? "live",
     model: nonEmpty(env.DDL_MODEL) ?? file.model ?? DEFAULT_MODEL,
     sync: remoteSyncFromEnv(env) ?? resolveSync(file.sync, fromHome),
-    execution: resolveExecution(file.execution, home, platform, fromHome, computerHelper.path),
+    execution: resolveExecution(file.execution, home, platform, fromHome, {
+      helper: computerHelper.path,
+      drawingRenderer: drawingRenderer.path,
+    }),
     computerHelper,
+    drawingRenderer,
     allowedOrigins: file.allowedOrigins ?? [],
     webDist: webDistEnv
       ? resolveUserPath(webDistEnv, fromCwd)
@@ -259,6 +273,9 @@ export function summarizeConfig(
     computerHelper: config.computerHelper.path
       ? `${displayPath(config.computerHelper.path, homedir)} (${config.computerHelper.source})`
       : (config.computerHelper.problem ?? "none"),
+    drawingRenderer: config.drawingRenderer.path
+      ? displayPath(config.drawingRenderer.path, homedir)
+      : (config.drawingRenderer.problem ?? "none"),
     allowedOrigins: config.allowedOrigins,
     webDist: displayPath(config.webDist, homedir),
     envFiles: config.envFiles.map((path) => displayPath(path, homedir)),
@@ -328,18 +345,20 @@ function resolveExecution(
   home: string,
   platform: NodeJS.Platform,
   paths: { homedir: string; base: string },
-  helper: string | undefined,
+  found: { helper: string | undefined; drawingRenderer: string | undefined },
 ): ExecutionConfig {
   if (execution?.kind === "cloud") return execution;
   const browser = { headless: true, ...execution?.browser };
   if (browser.executablePath)
     browser.executablePath = resolveUserPath(browser.executablePath, paths);
   const computer = execution?.computer ?? { enabled: platform === "darwin" };
+  const { helper, drawingRenderer } = found;
   return {
     kind: "local",
     home,
     browser,
     computer: computer.enabled && helper ? { ...computer, helper } : computer,
+    ...(drawingRenderer ? { drawingRenderer } : {}),
   };
 }
 
