@@ -66,7 +66,7 @@ Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md). Spec, with the exact wire contra
 | S6 VM setup kit (Linux bundle, systemd, Azure guide, CI smoke) | `feat/always-on-kit` | done (`bd333f7`), merged into `feat/always-on` at `24d750a`: pairing smoke step, no config override, `setup.sh` names the machine in the vault so `always_on_host` applies, x64 and arm64 CI jobs; 14/14 checks under real systemd in OrbStack |
 | S1 remote access and pairing | `feat/always-on-remote` | done (`48d4ec7`), merged into `feat/always-on` at `0501be1` |
 | S2 placement, lease priorities, fencing, machine link | `feat/always-on-placement` | done (`bb18e4b`), merged into `feat/always-on` at `394a6dd` (with S1: daemon 1061, sync 63, storage 303, contract 1123 tests green) |
-| S3 relay | `feat/always-on-relay` | built (`6f5aa68`); `feat/always-on` merged into it at `569d3a6` (relay wired to S2's supervisor and machine link, `placement-lease.ts` dropped); S3 is fixing 6 daemon tests whose assumptions changed with S2's lease gating, then it merges into `feat/always-on` |
+| S3 relay | `feat/always-on-relay` | done (`34e4d4c`), merged into `feat/always-on` at `8197988`: the relay reads only S2's supervisor and machine link (test-only overrides removed); tests pair for real. Also fixed: a device joining a synced vault no longer resets everyone's settings (first run writes `settings.json` only when it imported Obsidian settings) |
 | S4 web Settings, the orchestrator toggle, pairing screen | `feat/always-on-web` | built (`2a885ee`: toggle, 5 Settings sections, pairing screen and cookie mode, read-only states; 667 unit, 107 functional e2e, perf and bundle green on the mock); `feat/always-on` (S1+S2) merged in; now running the fullstack e2e (the handover test waits for S3) |
 | S5 macOS Settings and the orchestrator toggle | `feat/always-on-mac` | built (`4ec0e17`: Swift client for every new route with `.pairingRejected`, WebSocket header auth off loopback, the toggle and Agent-menu commands, Settings → Always-On with 5 sections, read-only states), merged into `feat/always-on` at `094370c` (Swift model, domain, client and integration tests green); now adding integration tests against the real S1/S2 routes |
 
@@ -92,7 +92,16 @@ The kit's names match what S1/S2 shipped (`agent.placement`, `remote.hosts`,
 `DDL_AGENT_PLACEMENT`, `DDL_REMOTE_HOSTS` comma-separated, the `pair` CLI). Only the real VM can
 verify the `az` commands, Tailscale login and `tailscale serve`.
 
-Now unblocked by S1+S2 on `feat/always-on`: S4's fullstack e2e (merge `feat/always-on` into
+`main` (the journal) merged into `feat/always-on` at `6bc4f0b`: journals are fenced like every
+agent file through the sync service (a holder whose target copy changed too pushes the union),
+and the daemon stamps journal events with the lease epoch. The journal's two-device tests were
+rewritten for fencing.
+
+Before `main`: S4's fullstack e2e with the relay (merge `feat/always-on` into
+`feat/always-on-web` when S4 reports), S5's integration tests (running), then the full
+verification, merge, push, CI (CI, macOS app, Security, Linux bundle) and install.
+
+Earlier notes, now unblocked by S1+S2 on `feat/always-on`: S4's fullstack e2e (merge `feat/always-on` into
 `feat/always-on-web` when S4 reports "ready for backend", then resume it), the kit's follow-ups
 (the pairing smoke step, dropping the `config.json` override), and S3's wiring to S2's
 `agent-location.ts` (S2 names: `MachineCredentialSource.current()`, `PlacementSource.current()`,
