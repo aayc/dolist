@@ -967,6 +967,11 @@
       "enum": ["pi", "cursor"],
       "description": "What runs the orchestrator and subagent conversations: `pi` (the Pi coding-agent SDK on the OpenRouter `model`) or `cursor` (the Cursor CLI's agent on `cursorModel`, signed in with the user's Cursor account)."
     },
+    "ApprovalPolicy": {
+      "type": "string",
+      "enum": ["ask_every_action", "ask_risky", "ask_high_risk", "run_everything"],
+      "description": "When agents ask before acting: `ask_every_action` (every action that changes something), `ask_risky` (what the safety check flags; the default), `ask_high_risk` (only high-risk actions) or `run_everything` (never). Actions the safety check denies stay blocked under every policy."
+    },
     "AgentSettings": {
       "type": "object",
       "properties": {
@@ -993,6 +998,9 @@
           "minimum": 60000,
           "maximum": 2592000000,
           "description": "How long an approval request waits before it is auto-denied."
+        },
+        "approvalPolicy": {
+          "$ref": "#/$defs/ApprovalPolicy"
         },
         "harness": {
           "$ref": "#/$defs/AgentHarnessKind"
@@ -1028,6 +1036,7 @@
         "maxConcurrentSubagents",
         "actOnExistingTasks",
         "approvalTimeoutMs",
+        "approvalPolicy",
         "harness",
         "model",
         "cursorModel",
@@ -1166,6 +1175,9 @@
               "minimum": 60000,
               "maximum": 2592000000,
               "description": "How long an approval request waits before it is auto-denied."
+            },
+            "approvalPolicy": {
+              "$ref": "#/$defs/ApprovalPolicy"
             },
             "harness": {
               "$ref": "#/$defs/AgentHarnessKind"

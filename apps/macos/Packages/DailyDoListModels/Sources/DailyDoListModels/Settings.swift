@@ -100,6 +100,20 @@ public enum AgentHarnessKind: String, Codable, Hashable, Sendable, CaseIterable 
   case pi, cursor
 }
 
+/// When agents ask before acting (`ApprovalPolicy` in `@ddl/core`), from strictest to loosest:
+/// every action that changes something, what the safety check flags (the default), only high-risk
+/// actions, or never. Actions the safety check denies stay blocked under every policy. Closed like
+/// every value clients send: decoding it on its own rejects unknown values (`AgentSettings`
+/// tolerates them, see `approvalPolicy`).
+public enum ApprovalPolicy: String, Codable, Hashable, Sendable, CaseIterable {
+  case askEveryAction = "ask_every_action"
+  case askRisky = "ask_risky"
+  case askHighRisk = "ask_high_risk"
+  case runEverything = "run_everything"
+
+  public static let `default` = ApprovalPolicy.askRisky
+}
+
 public struct AgentSettings: Codable, Hashable, Sendable {
   /// Master switch.
   public var enabled: Bool
@@ -124,11 +138,16 @@ public struct AgentSettings: Codable, Hashable, Sendable {
   public var actOnExistingTasks: Bool
   /// How long an approval request waits before it is auto-denied.
   public var approvalTimeoutMs: Int
+  /// When agents ask before acting. Daemons older than this setting don't send it, and a policy
+  /// this client doesn't know (added by a newer daemon) also decodes as the default, the way the
+  /// daemon treats a value it doesn't know. Only sent back when the user picks a policy.
+  public var approvalPolicy: ApprovalPolicy
 
   public init(
     enabled: Bool, settleMs: Int, maxConcurrentSubagents: Int, harness: AgentHarnessKind = .pi,
     model: String, cursorModel: String = AgentSettings.defaultCursorModel, judgeModel: String,
-    watch: AgentWatchWindow, actOnExistingTasks: Bool, approvalTimeoutMs: Int
+    watch: AgentWatchWindow, actOnExistingTasks: Bool, approvalTimeoutMs: Int,
+    approvalPolicy: ApprovalPolicy = .default
   ) {
     self.enabled = enabled
     self.settleMs = settleMs
@@ -140,9 +159,11 @@ public struct AgentSettings: Codable, Hashable, Sendable {
     self.watch = watch
     self.actOnExistingTasks = actOnExistingTasks
     self.approvalTimeoutMs = approvalTimeoutMs
+    self.approvalPolicy = approvalPolicy
   }
 
-  /// Daemons older than the harness setting send neither `harness` nor `cursorModel`.
+  /// Daemons older than the harness setting send neither `harness` nor `cursorModel`, and older
+  /// than the approval policy no `approvalPolicy`.
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     enabled = try container.decode(Bool.self, forKey: .enabled)
@@ -158,6 +179,9 @@ public struct AgentSettings: Codable, Hashable, Sendable {
     watch = try container.decode(AgentWatchWindow.self, forKey: .watch)
     actOnExistingTasks = try container.decode(Bool.self, forKey: .actOnExistingTasks)
     approvalTimeoutMs = try container.decode(Int.self, forKey: .approvalTimeoutMs)
+    approvalPolicy =
+      try container.decodeIfPresent(String.self, forKey: .approvalPolicy)
+      .flatMap(ApprovalPolicy.init(rawValue:)) ?? .default
   }
 
   public static let defaultModel = "deepseek/deepseek-v4.1-flash"
@@ -170,7 +194,7 @@ public struct AgentSettings: Codable, Hashable, Sendable {
     enabled: true, settleMs: 2500, maxConcurrentSubagents: 3, harness: .pi, model: defaultModel,
     cursorModel: defaultCursorModel, judgeModel: defaultModel,
     watch: AgentWatchWindow(pastDays: 0, futureDays: 7), actOnExistingTasks: true,
-    approvalTimeoutMs: 12 * 60 * 60 * 1000)
+    approvalTimeoutMs: 12 * 60 * 60 * 1000, approvalPolicy: .default)
 }
 
 public struct AppSettings: Codable, Hashable, Sendable {
@@ -296,12 +320,13 @@ public struct SettingsPatch: Codable, Hashable, Sendable {
     public var watch: WatchPatch?
     public var actOnExistingTasks: Bool?
     public var approvalTimeoutMs: Int?
+    public var approvalPolicy: ApprovalPolicy?
 
     public init(
       enabled: Bool? = nil, settleMs: Int? = nil, maxConcurrentSubagents: Int? = nil,
       harness: AgentHarnessKind? = nil, model: String? = nil, cursorModel: String? = nil,
       judgeModel: String? = nil, watch: WatchPatch? = nil, actOnExistingTasks: Bool? = nil,
-      approvalTimeoutMs: Int? = nil
+      approvalTimeoutMs: Int? = nil, approvalPolicy: ApprovalPolicy? = nil
     ) {
       self.enabled = enabled
       self.settleMs = settleMs
@@ -313,6 +338,7 @@ public struct SettingsPatch: Codable, Hashable, Sendable {
       self.watch = watch
       self.actOnExistingTasks = actOnExistingTasks
       self.approvalTimeoutMs = approvalTimeoutMs
+      self.approvalPolicy = approvalPolicy
     }
   }
 
@@ -365,6 +391,7 @@ extension AppSettings {
       }
       if let v = p.actOnExistingTasks { next.agent.actOnExistingTasks = v }
       if let v = p.approvalTimeoutMs { next.agent.approvalTimeoutMs = v }
+      if let v = p.approvalPolicy { next.agent.approvalPolicy = v }
     }
     return next
   }

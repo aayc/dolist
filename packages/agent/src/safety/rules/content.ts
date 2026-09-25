@@ -7,6 +7,7 @@
  */
 import { findCardNumbers, findSecrets, findSsns } from "../sensitive";
 import { MONEY_TRANSFER_TEXT } from "../vocab";
+import { APP_CONFIG_WRITE } from "./path-rules";
 import { info, quote, type RuleHit, type SafetyRuleInfo } from "./types";
 
 interface TextPattern {
@@ -178,7 +179,29 @@ export const SSN_VALUE_RULE = info(
   "Enters or sends a social security number",
 );
 
-/** Code or typed text that will run: catastrophic snippets and secret access are hard denies. */
+/**
+ * The app's own folder (a vault's `.daily-do-list/` sidecar, or the default `$DDL_HOME`) named in
+ * text, other than the agents' workspaces inside it.
+ */
+const APP_STATE_TEXT_RE = /\.daily-do-list(?![\w-])(?!\/workspaces\b)/i;
+
+/**
+ * Code that names the app's own settings or state, run now or staged to run later: code the agent
+ * runs could otherwise change the approval policy or grants. Paths built at runtime aren't seen.
+ */
+export function appStateInCodeHits(text: string, where: string): RuleHit[] {
+  const m = APP_STATE_TEXT_RE.exec(text);
+  if (!m) return [];
+  const snippet = text.slice(Math.max(0, m.index - 20), m.index + 40);
+  return [
+    { rule: APP_CONFIG_WRITE, evidence: `the app's own files in ${where}: ${quote(snippet)}` },
+  ];
+}
+
+/**
+ * Code or typed text that will run: catastrophic snippets, secret access and the app's own files
+ * are hard denies.
+ */
 export function executedTextHits(text: string, where: string): RuleHit[] {
   const hits: RuleHit[] = [];
   const hardline = hardlineInText(text);
@@ -189,6 +212,7 @@ export function executedTextHits(text: string, where: string): RuleHit[] {
     });
   const secret = secretAccessInText(text);
   if (secret) hits.push({ rule: EMBEDDED_SECRET, evidence: `${secret.label} in ${where}` });
+  hits.push(...appStateInCodeHits(text, where));
   return hits;
 }
 

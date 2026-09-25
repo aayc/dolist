@@ -273,6 +273,29 @@ struct SnapshotTests {
         AgentSettingsPane(model: model, settings: model.settings).frame(width: 600, height: 1_000),
         size: CGSize(width: 600, height: 1_000), dark: dark, name: "settings-agent-cursor")
     }
+    await model.settings.update(SettingsPatch(agent: .init(approvalPolicy: .runEverything)))
+    for dark in [false, true] {
+      try await render(
+        AgentSettingsPane(model: model, settings: model.settings).frame(width: 600, height: 1_000),
+        size: CGSize(width: 600, height: 1_000), dark: dark, name: "settings-agent-run-everything")
+    }
+    await model.teardown()
+  }
+
+  @Test func statusBarWithAnApprovalPolicy() async throws {
+    let (model, workspace) = try await bootedModel()
+    let bar = StatusBar(model: model, workspace: workspace)
+    let size = CGSize(width: 1000, height: 26)
+    for (policy, name) in [
+      (ApprovalPolicy.runEverything, "status-bar-runs-everything"),
+      (.askHighRisk, "status-bar-asks-only-for-high-risk"),
+      (.askEveryAction, "status-bar-asks-before-every-action"),
+    ] {
+      await model.settings.update(SettingsPatch(agent: .init(approvalPolicy: policy)))
+      for dark in [false, true] {
+        try await render(bar, size: size, dark: dark, name: name)
+      }
+    }
     await model.teardown()
   }
 

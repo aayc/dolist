@@ -1,6 +1,8 @@
 import {
   type AgentStatusResponse,
+  APPROVAL_POLICIES,
   type ApprovalDecisionRequest,
+  type ApprovalPolicy,
   type ApprovalRequest,
   type AppSettings,
   type ArtifactMeta,
@@ -15,6 +17,7 @@ import {
   type MessageAuthor,
   parseDailyNotePath,
   parseTasks,
+  type RiskLevel,
   resolveLineAnchors,
   type ServerEvent,
   type SurfaceKind,
@@ -59,6 +62,13 @@ export interface MockAgentHost {
   settings(): AppSettings;
   /** The simulated Mac's computer access (absent: no computer use). */
   computerAccess?(): ComputerAccess | undefined;
+}
+
+/** The daemon's gate for the simulated risky steps, which the safety check always wants approved. */
+function policyAsks(policy: ApprovalPolicy, risk: RiskLevel): boolean {
+  if (policy === "run_everything") return false;
+  if (policy === "ask_high_risk") return risk === "high" || risk === "critical";
+  return true;
 }
 
 export const MOCK_CONNECTORS: ConnectorStatus[] = [
@@ -414,6 +424,49 @@ export class MockAgent {
     if (risky.page)
       this.showSurface(thread, "browser", { page: risky.page, action: { kind: "click" } }, false);
 
+    const decision = policyAsks(this.host.settings().agent.approvalPolicy, risky.risk)
+      ? await this.askApproval(job, thread, risky, signal)
+      : ({ decision: "approve" } satisfies ApprovalDecisionRequest);
+    const approved = decision.decision === "approve";
+    this.patchRecord(job.taskId, {
+      status: "working",
+      summary: approved ? "Finishing up…" : "Wrapping up…",
+    });
+    this.setThreadStatus(
+      thread,
+      "working",
+      approved ? "Approved — continuing" : "Denied — skipping that step",
+    );
+    if (approved) {
+      await this.sleep(800, signal);
+      this.replaceMessage(thread, {
+        ...message,
+        status: "ok",
+        resultPreview: "Done",
+        endedAt: Date.now(),
+      });
+      await this.say(thread, author, risky.approvedText, signal);
+      this.finish(job, thread, "done", risky.approvedSummary);
+      return;
+    }
+    this.replaceMessage(thread, {
+      ...message,
+      status: "blocked",
+      resultPreview: decision.note ? `Denied: ${decision.note}` : "Denied by you",
+      endedAt: Date.now(),
+    });
+    const note = decision.note ? `\n\n> Your note: ${decision.note}` : "";
+    await this.say(thread, author, `${risky.deniedText}${note}`, signal);
+    this.finish(job, thread, "done", risky.deniedSummary);
+  }
+
+  /** Puts an approval card in the thread and waits for the user's decision. */
+  private async askApproval(
+    job: Job,
+    thread: Thread,
+    risky: RiskyAction,
+    signal: AbortSignal,
+  ): Promise<ApprovalDecisionRequest> {
     const now = Date.now();
     const approval: ApprovalRequest = {
       id: createId("apr"),
@@ -448,38 +501,7 @@ export class MockAgent {
     const decision = await this.waitFor(job.decision.promise, signal);
     job.approvalId = null;
     job.decision = null;
-
-    const approved = decision.decision === "approve";
-    this.patchRecord(job.taskId, {
-      status: "working",
-      summary: approved ? "Finishing up…" : "Wrapping up…",
-    });
-    this.setThreadStatus(
-      thread,
-      "working",
-      approved ? "Approved — continuing" : "Denied — skipping that step",
-    );
-    if (approved) {
-      await this.sleep(800, signal);
-      this.replaceMessage(thread, {
-        ...message,
-        status: "ok",
-        resultPreview: "Done",
-        endedAt: Date.now(),
-      });
-      await this.say(thread, author, risky.approvedText, signal);
-      this.finish(job, thread, "done", risky.approvedSummary);
-      return;
-    }
-    this.replaceMessage(thread, {
-      ...message,
-      status: "blocked",
-      resultPreview: decision.note ? `Denied: ${decision.note}` : "Denied by you",
-      endedAt: Date.now(),
-    });
-    const note = decision.note ? `\n\n> Your note: ${decision.note}` : "";
-    await this.say(thread, author, `${risky.deniedText}${note}`, signal);
-    this.finish(job, thread, "done", risky.deniedSummary);
+    return decision;
   }
 
   private finish(job: Job, thread: Thread, status: TaskAgentStatus, summary: string): void {
@@ -753,6 +775,19 @@ export class MockAgent {
       if (job.approvalId === id) job.decision?.resolve(request);
     }
     return updated;
+  }
+
+  /** Like the daemon: a looser approval policy approves what is waiting that it wouldn't ask about. */
+  applyApprovalPolicy(previous: ApprovalPolicy, next: ApprovalPolicy): void {
+    if (APPROVAL_POLICIES.indexOf(next) <= APPROVAL_POLICIES.indexOf(previous)) return;
+    for (const approval of [...this.approvals.values()]) {
+      if (approval.status !== "pending" || policyAsks(next, approval.risk)) continue;
+      this.decide(approval.id, {
+        decision: "approve",
+        scope: "once",
+        note: "Approved by your approval policy",
+      });
+    }
   }
 
   cancel(threadId: string): void {

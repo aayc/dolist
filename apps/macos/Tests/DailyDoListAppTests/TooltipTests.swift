@@ -1,5 +1,6 @@
 import AppKit
 import DailyDoListAgent
+import DailyDoListModels
 import DailyDoListUI
 import DailyDoListUITestSupport
 import SwiftUI
@@ -117,6 +118,30 @@ struct TooltipTests {
     #expect(
       !anchors.contains { $0.tooltipContent()?.plainText.contains("apps that have no") == true },
       "the detail fits at this width, so it has no tooltip")
+  }
+
+  /// The status bar names a policy other than the default, and clicking it runs the command that
+  /// opens Settings → Agent.
+  @Test func theApprovalPolicyItemRunsItsCommand() async throws {
+    let (model, workspace) = try await SnapshotTests().bootedModel()
+    let item = { (anchors: [TooltipAnchorView]) in
+      anchors.first { $0.command == CommandID.approvalPolicy.rawValue }
+    }
+    #expect(item(anchors(model, workspace)) == nil, "quiet with the default policy")
+
+    await model.settings.update(SettingsPatch(agent: .init(approvalPolicy: .runEverything)))
+    let everything = try #require(item(anchors(model, workspace)))
+    #expect(
+      everything.tooltipContent()?.plainText
+        == "Agents run everything without asking — click to change")
+    #expect(everything.tooltipContent()?.lines.first?.keys == CommandID.approvalPolicy.shortcut)
+
+    await model.settings.update(SettingsPatch(agent: .init(approvalPolicy: .askEveryAction)))
+    let every = try #require(item(anchors(model, workspace)))
+    #expect(
+      every.tooltipContent()?.plainText
+        == "Agents ask before every action that changes something — click to change")
+    await model.teardown()
   }
 
   @Test func thePaletteShowsTheCatalogsShortcuts() async throws {

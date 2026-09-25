@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   type AgentHarnessKind,
+  APPROVAL_POLICIES,
   agentModel,
+  DEFAULT_APPROVAL_POLICY,
   DEFAULT_CURSOR_MODEL,
   DEFAULT_MODEL,
   DEFAULT_SETTINGS,
@@ -51,5 +53,30 @@ describe("agent settings", () => {
       model: "vendor/model-a",
       cursorModel: DEFAULT_CURSOR_MODEL,
     });
+  });
+});
+
+describe("approval policy", () => {
+  it("defaults to asking for risky actions, as before the setting existed", () => {
+    expect(DEFAULT_APPROVAL_POLICY).toBe("ask_risky");
+    expect(DEFAULT_SETTINGS.agent.approvalPolicy).toBe("ask_risky");
+  });
+
+  it("lists the policies from strictest to loosest", () => {
+    expect(APPROVAL_POLICIES).toEqual([
+      "ask_every_action",
+      "ask_risky",
+      "ask_high_risk",
+      "run_everything",
+    ]);
+  });
+
+  it("keeps the default when an older payload doesn't carry it, and takes a patch", () => {
+    const { approvalPolicy: _policy, ...older } = DEFAULT_SETTINGS.agent;
+    const merged = mergeSettings(DEFAULT_SETTINGS, { agent: { ...older, settleMs: 1000 } });
+    expect(merged.agent).toMatchObject({ approvalPolicy: "ask_risky", settleMs: 1000 });
+    const patched = mergeSettings(merged, { agent: { approvalPolicy: "run_everything" } });
+    expect(patched.agent.approvalPolicy).toBe("run_everything");
+    expect(patched.agent.settleMs).toBe(1000);
   });
 });

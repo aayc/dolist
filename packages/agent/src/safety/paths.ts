@@ -16,7 +16,15 @@ export interface ResolvedPath {
   location: PathLocation;
   /** Normalized absolute path, `~/…` when the home directory is unknown, or the raw text. */
   path: string;
+  /**
+   * The path spelled under the default `~/.daily-do-list` when it is inside the configured
+   * `$DDL_HOME`, so rules about the app's own files also cover a home somewhere else.
+   */
+  appPath?: string;
 }
+
+/** Where `$DDL_HOME` is by default; rules about the app's own files are written against it. */
+export const DEFAULT_APP_HOME = "~/.daily-do-list";
 
 const HOME_PREFIX_RE = /^(?:\/Users\/[^/]+|\/home\/[^/]+|\/root|\/var\/root)(?=\/|$)/;
 const TEMP_ROOTS_RE =
@@ -84,10 +92,33 @@ function locate(path: string, workspaceDir?: string): PathLocation {
 }
 
 /**
+ * `path` under `~/.daily-do-list` when it is inside `appHome` (`$DDL_HOME`). A home that is the
+ * user's home directory, a temp root or `/` would make everything app state, so it is ignored.
+ */
+function appHomePath(path: string, appHome?: string): string | undefined {
+  if (!appHome?.startsWith("/")) return undefined;
+  const home = normalizeAbsolute(appHome);
+  if (
+    home === "/" ||
+    HOME_PREFIX_RE.exec(home)?.[0] === home ||
+    TEMP_ROOTS_RE.exec(home)?.[0] === home
+  )
+    return undefined;
+  if (path === home) return DEFAULT_APP_HOME;
+  return path.startsWith(`${home}/`) ? `${DEFAULT_APP_HOME}${path.slice(home.length)}` : undefined;
+}
+
+/**
  * Resolves a path argument against the current directory. Relative paths are only placed when the
  * current directory is known; everything else is `unknown`, which the rules treat as outside.
+ * `appHome` is the configured `$DDL_HOME`, when known (see `ResolvedPath.appPath`).
  */
-export function resolvePath(raw: string, cwd: Cwd, workspaceDir?: string): ResolvedPath {
+export function resolvePath(
+  raw: string,
+  cwd: Cwd,
+  workspaceDir?: string,
+  appHome?: string,
+): ResolvedPath {
   const cleaned = cleanPathInput(raw);
   if (!cleaned) return { location: "unknown", path: raw };
   const home = inferHome(workspaceDir);
@@ -104,9 +135,11 @@ export function resolvePath(raw: string, cwd: Cwd, workspaceDir?: string): Resol
   } else {
     return { location: "unknown", path: cleaned };
   }
+  const appPath = appHomePath(resolved, appHome);
   return {
     location: resolved.startsWith("~") ? "outside" : locate(resolved, workspaceDir),
     path: resolved,
+    ...(appPath ? { appPath } : {}),
   };
 }
 

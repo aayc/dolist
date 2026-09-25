@@ -39,7 +39,15 @@ import { TaskBoard } from "./orchestrator/task-board";
 import { TaskWatcher } from "./orchestrator/task-watcher";
 import type { DigestCapabilities } from "./prompts/orchestrator";
 import type { AgentRuntime, AgentRuntimeEvents, AgentRuntimeOptions } from "./runtime-types";
-import { createApprovalBroker, createSafetyEvaluator, createSafetyGate } from "./safety";
+import {
+  createApprovalBroker,
+  createSafetyEvaluator,
+  createSafetyGate,
+  effectivePolicy,
+  isLooserPolicy,
+  POLICY_APPROVAL_NOTE,
+  policyAsks,
+} from "./safety";
 import type {
   ApprovalBroker,
   ApprovalBrokerOptions,
@@ -433,7 +441,30 @@ class Runtime implements AgentRuntime {
     if (previous.agent.harness !== agent.harness && this.switchesHarness()) {
       this.background(this.switchHarness());
     }
+    this.applyPolicyChange(previous.agent.approvalPolicy, agent.approvalPolicy);
     this.queueStatus();
+  }
+
+  /**
+   * The gate reads the policy on every call, so a change applies to the next one. A looser policy
+   * also approves what is already waiting and it would no longer ask about; a stricter one leaves
+   * waiting approvals alone.
+   */
+  private applyPolicyChange(previous: unknown, next: unknown): void {
+    const from = effectivePolicy(previous);
+    const to = effectivePolicy(next);
+    if (from === to) return;
+    const approved = isLooserPolicy(to, from)
+      ? this.safely(
+          () =>
+            this.broker.approvePending(
+              ({ request, verdict }) => !policyAsks(to, { decision: verdict, risk: request.risk }),
+              POLICY_APPROVAL_NOTE,
+            ),
+          [],
+        )
+      : [];
+    this.logger.info("Approval policy changed", { from, to, approvedPending: approved.length });
   }
 
   noteEditorActivity(notePath: string, line: number): void {
@@ -621,6 +652,8 @@ class Runtime implements AgentRuntime {
         evaluator: this.evaluator,
         approvals: this.broker,
         resolveContext: (sessionId) => this.resolveGateContext(sessionId),
+        appHome: this.options.home,
+        approvalPolicy: () => this.settings.agent.approvalPolicy,
         onVerdict: (call, verdict) => {
           logger.debug("Safety verdict", {
             tool: call.toolName,
@@ -1101,6 +1134,7 @@ function createInertApprovalBroker(reason: string): ApprovalBroker {
     list: () => [],
     findGrant: () => undefined,
     cancelForTask: () => {},
+    approvePending: () => [],
     onUpsert: () => () => {},
   };
 }

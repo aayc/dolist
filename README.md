@@ -43,6 +43,10 @@ It's a *do* list, not a *to-do* list: the point is that things get done.
   judge pipeline before it runs. Payments, bookings, outgoing messages, account changes,
   destructive commands and desktop control require your explicit approval; catastrophic actions are
   denied outright.
+- **Approval policies.** Choose in Settings → Agent how often agents ask: before every action that
+  changes something, for risky actions (the default), only for high-risk actions, or never ("Run
+  everything", confirmed first and shown in the status bar). Actions that are never allowed stay
+  blocked under every policy, and agents can't change the policy themselves.
 - **Real hands.** Subagents can use a real (headless) Chrome with its own profile, a shell in a
   per-task workspace, and — on macOS — the desktop via screenshots and mouse/keyboard.
 - **Connectors via MCP.** Add any MCP server (Google Workspace, Playwright, GitHub, Notion, …) with
@@ -162,7 +166,8 @@ flowchart LR
    files, connectors), work in their own workspace, post progress to the task's thread, create
    artifacts, and finish with a summary.
 4. The **safety evaluator** checks every single tool call. Risky ones pause the agent and show an
-   approval card; nothing irreversible happens without you.
+   approval card; nothing irreversible happens without you, unless you choose an approval policy
+   that runs it.
 
 Deep dives: [Architecture](docs/ARCHITECTURE.md) · [Agent system](docs/AGENT_SYSTEM.md) ·
 [Safety rules](packages/agent/src/safety/README.md) · [Connectors](packages/connectors/README.md) ·

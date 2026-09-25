@@ -84,7 +84,8 @@ through an `AttributedStorage` view. The WebSocket hub tags each `vault.changed`
 - Calm by default: a daily note's title is its date ("Thursday, September 24", with the year only
   when it isn't the current one; tabs and the explorer keep the file name). The status bar shows
   nothing while things are fine: no "Saved", no "Connected" (the in-browser demo gets a "Demo"
-  marker). Only badges that need the user are loud, and motion is CSS-only, paint-only and off
+  marker), and the approval policy only while it isn't the default ("Runs everything" in the
+  warning color). Only badges that need the user are loud, and motion is CSS-only, paint-only and off
   under `prefers-reduced-motion` (see `packages/editor/README.md`).
 - Tooltips: one delegated layer (`src/lib/tooltips.ts`, one element, document listeners) shows
   what an element declares with `data-tooltip`, React components and editor widgets alike, with

@@ -9,6 +9,7 @@
 import type {
   ActionCategory,
   ApprovalDecisionRequest,
+  ApprovalPolicy,
   ApprovalRequest,
   ApprovalScope,
   ApprovalStatus,
@@ -36,6 +37,8 @@ export interface ActionContext {
   rationale?: string;
   /** Absolute path of the task's scratch workspace; file writes inside it are low risk. */
   workspaceDir?: string;
+  /** `$DDL_HOME`: the app's config, keys and state live there; writing them is a hard deny. */
+  appHome?: string;
 }
 
 export type VerdictSource = "policy" | "grant" | "rules" | "llm" | "fallback";
@@ -56,6 +59,12 @@ export interface SafetyVerdict {
    * grants are scoped to it; calls without a target (everything else) match grants without one.
    */
   target?: string;
+  /**
+   * The action changes something (false for reads, searches and the agent's thread tools). The
+   * `ask_every_action` policy asks before effectful actions the evaluator allows; a verdict
+   * without it counts as effectful.
+   */
+  effectful?: boolean;
 }
 
 export interface SafetyEvaluator {
@@ -92,6 +101,20 @@ export interface NewApproval {
   timeoutMs?: number;
   /** See `SafetyVerdict.target`; a grant made from this approval is scoped to it. */
   target?: string;
+  /**
+   * The evaluator's decision behind the ask: `allow` when only the approval policy asks (ask
+   * before every action). Absent means `require_approval`.
+   */
+  verdict?: AskedVerdict;
+}
+
+/** Why an approval was asked: the evaluator wanted it, or it allowed it and the policy asks. */
+export type AskedVerdict = Exclude<SafetyDecision, "deny">;
+
+/** A pending approval, with what `approvePending` decides on. */
+export interface PendingApproval {
+  request: ApprovalRequest;
+  verdict: AskedVerdict;
 }
 
 export interface ApprovalOutcome {
@@ -157,6 +180,13 @@ export interface SafetyGateOptions {
   approvals: ApprovalBroker;
   /** Maps a harness session id to its task/thread context. */
   resolveContext(sessionId: string): GateContext;
+  /** `$DDL_HOME` (see `ActionContext.appHome`). */
+  appHome?: string;
+  /**
+   * The user's approval policy, read on every call so a change applies to the next one. Default
+   * `ask_risky`; a value that isn't a policy also counts as `ask_risky`.
+   */
+  approvalPolicy?(): ApprovalPolicy;
   /** Observe every verdict (logging, annotating the thread's tool-call message). */
   onVerdict?(call: ToolCallRequest, verdict: SafetyVerdict): void;
   approvalTimeoutMs?: number;
@@ -176,5 +206,10 @@ export interface ApprovalBroker {
   findGrant(ctx: GrantQuery): ApprovalGrant | undefined;
   /** Cancels (denies) every pending approval for a task, e.g. when the user deletes the task. */
   cancelForTask(taskId: string, reason: string): void;
+  /**
+   * Approves once, with `note`, every pending approval `approves` accepts (e.g. the ones a looser
+   * approval policy allows). Returns the approvals it approved.
+   */
+  approvePending(approves: (pending: PendingApproval) => boolean, note: string): ApprovalRequest[];
   onUpsert(listener: (approval: ApprovalRequest) => void): Unsubscribe;
 }

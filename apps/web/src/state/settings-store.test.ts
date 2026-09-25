@@ -23,6 +23,17 @@ describe("applySettings", () => {
     expect(getSettings().editor.vimrc).toBe("nmap j gj");
   });
 
+  it("asks for risky actions with a daemon older than the approval policy, and keeps a sent one", () => {
+    const { approvalPolicy: _policy, ...olderAgent } = DEFAULT_SETTINGS.agent;
+    applySettings({ ...DEFAULT_SETTINGS, agent: olderAgent } as AppSettings);
+    expect(getSettings().agent.approvalPolicy).toBe("ask_risky");
+    applySettings({
+      ...DEFAULT_SETTINGS,
+      agent: { ...DEFAULT_SETTINGS.agent, approvalPolicy: "run_everything" },
+    });
+    expect(getSettings().agent.approvalPolicy).toBe("run_everything");
+  });
+
   it("fills in the harness and Cursor model for a daemon older than the harness setting", () => {
     const { harness: _harness, cursorModel: _cursorModel, ...olderAgent } = DEFAULT_SETTINGS.agent;
     applySettings({

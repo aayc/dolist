@@ -260,8 +260,15 @@ include `DDL_MODEL` from the daemon config).
   fontSize? (8–48), spellcheck?, showLineNumbers? }, dailyNotes?/weeklyNotes?: { folder? (≤512), format? (≤128),
   template? (≤512) }, agent?: { enabled?, settleMs? (0–120000), maxConcurrentSubagents? (1–32),
   harness? ("pi" | "cursor"), model?, cursorModel?, judgeModel? (1–200 chars, trimmed),
-  watch?: { pastDays?, futureDays? (0–366) }, actOnExistingTasks?, approvalTimeoutMs? (1 min–30 days) } }
+  watch?: { pastDays?, futureDays? (0–366) }, actOnExistingTasks?, approvalTimeoutMs? (1 min–30 days),
+  approvalPolicy? ("ask_every_action" | "ask_risky" | "ask_high_risk" | "run_everything") } }
 ```
+
+- **Approval policy:** `agent.approvalPolicy` decides when agents ask before acting (see
+  `packages/agent/src/safety/README.md`). Files without it, and files with a policy this version
+  doesn't know, load with `ask_risky`, the behavior before the setting existed; an unknown value
+  stays in the file. Agents can't write this file: changing anything in `.daily-do-list/` is a hard
+  deny of the safety rules.
 
 - **Agent harness:** `agent.harness` picks what runs the agent: `pi` on the OpenRouter
   `agent.model`, or `cursor` (the Cursor CLI) on `agent.cursorModel`. `judgeModel` is an OpenRouter

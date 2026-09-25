@@ -10,7 +10,7 @@
  *
  * v1: the unversioned overrides object written before formats were versioned, plus `version: 1`.
  */
-import { AGENT_HARNESS_KINDS } from "@ddl/core";
+import { AGENT_HARNESS_KINDS, APPROVAL_POLICIES } from "@ddl/core";
 import { z } from "zod";
 import {
   decodePersisted,
@@ -66,6 +66,7 @@ export const PersistedSettingsOverridesSchema = z
           .int()
           .min(60_000)
           .max(30 * 24 * 60 * 60 * 1000),
+        approvalPolicy: z.enum(APPROVAL_POLICIES),
       })
       .partial(),
   })

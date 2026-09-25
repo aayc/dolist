@@ -119,4 +119,25 @@ describe("wire ⇄ persisted settings ranges", () => {
       expect(PersistedSettingsOverridesSchema.safeParse(patch).success, String(harness)).toBe(ok);
     }
   });
+
+  it("both accept exactly the known approval policies", () => {
+    for (const [approvalPolicy, ok] of [
+      ["ask_every_action", true],
+      ["ask_risky", true],
+      ["ask_high_risk", true],
+      ["run_everything", true],
+      ["never_ask", false],
+      ["Run_everything", false],
+      [" run_everything", false],
+      ["", false],
+      [0, false],
+      [true, false],
+      [null, false],
+    ] as const) {
+      const patch = { agent: { approvalPolicy } };
+      const label = String(approvalPolicy);
+      expect(UpdateSettingsRequestSchema.safeParse(patch).success, label).toBe(ok);
+      expect(PersistedSettingsOverridesSchema.safeParse(patch).success, label).toBe(ok);
+    }
+  });
 });

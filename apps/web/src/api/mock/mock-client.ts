@@ -2,6 +2,7 @@ import {
   AGENT_HARNESS_KINDS,
   type AgentStatusResponse,
   API_VERSION,
+  APPROVAL_POLICIES,
   type ApprovalDecisionRequest,
   type ApprovalListResponse,
   type ApprovalRequest,
@@ -101,13 +102,19 @@ const MODEL_ID_KEYS = ["model", "cursorModel", "judgeModel"] as const;
 /** The contract's `WIRE_LIMITS.modelIdLength` (zod stays out of the bundle). */
 const MAX_MODEL_ID_LENGTH = 200;
 
-/** The daemon's checks on the agent section: a known harness, and model ids trimmed to 1–200 chars. */
+/**
+ * The daemon's checks on the agent section: a known harness and approval policy, and model ids
+ * trimmed to 1–200 chars.
+ */
 function checkedSettingsPatch(patch: UpdateSettingsRequest): UpdateSettingsRequest {
   const { agent } = patch;
   if (!agent) return patch;
   const problems: string[] = [];
   if (agent.harness !== undefined && !AGENT_HARNESS_KINDS.includes(agent.harness)) {
     problems.push(`agent.harness must be one of ${AGENT_HARNESS_KINDS.join(", ")}`);
+  }
+  if (agent.approvalPolicy !== undefined && !APPROVAL_POLICIES.includes(agent.approvalPolicy)) {
+    problems.push(`agent.approvalPolicy must be one of ${APPROVAL_POLICIES.join(", ")}`);
   }
   const trimmed: Partial<Record<(typeof MODEL_ID_KEYS)[number], string>> = {};
   for (const key of MODEL_ID_KEYS) {
@@ -375,9 +382,11 @@ export class MockDaemonClient implements DaemonClient {
         throw error;
       });
     }
+    const previousPolicy = this.settings.agent.approvalPolicy;
     this.settings = mergeSettings(this.settings, checked);
     if (this.persistSettings) writeJson(STORAGE_KEYS.mockSettings, this.settings);
     this.emit({ type: "settings.changed", settings: this.settings });
+    this.agent.applyApprovalPolicy(previousPolicy, this.settings.agent.approvalPolicy);
     this.emit({ type: "agent.status", status: this.agent.status() });
     const settings = this.settings;
     return this.respond(() => ({ settings }));

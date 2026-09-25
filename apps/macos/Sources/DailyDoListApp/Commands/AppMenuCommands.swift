@@ -65,6 +65,7 @@ struct AppMenuCommands: Commands {
       item(.stopTask)
       item(.openInbox)
       Divider()
+      item(.approvalPolicy)
       item(.setUpComputerUse)
       item(.restartDaemon)
     }

@@ -36,6 +36,10 @@ struct InvalidFixtureTests {
       "empty Cursor model": .tolerated(constraint),
       "agent settings of a daemon older than the harness setting": .tolerated(
         "absent harness and cursorModel decode as .pi and the default Cursor model"),
+      "unknown approval policy": .tolerated(
+        "a policy a newer daemon added decodes as the default (AgentSettings.approvalPolicy)"),
+      "agent settings of a daemon older than the approval policy": .tolerated(
+        "an absent approvalPolicy decodes as the default, .askRisky"),
     ],
     "ApprovalDecisionRequest": [
       "unknown decision": .rejected,
@@ -171,6 +175,8 @@ struct InvalidFixtureTests {
       "unknown harness": .rejected,
       "blank Cursor model": .tolerated(constraint),
       "Cursor model over 200 characters": .tolerated(constraint),
+      "unknown approval policy": .rejected,
+      "approval policy of the wrong type": .rejected,
     ],
     "WriteNoteRequest": [
       "missing content": .rejected,

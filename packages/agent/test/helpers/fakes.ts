@@ -26,6 +26,7 @@ import type {
   ApprovalGrant,
   ApprovalOutcome,
   NewApproval,
+  PendingApproval,
   SafetyEvaluator,
   SafetyGate,
   SafetyGateOptions,
@@ -103,6 +104,12 @@ export class FakeApprovalBroker implements ApprovalBroker {
     for (const approval of this.list({ taskId, status: "pending" })) {
       this.finish(approval.id, "cancelled", reason);
     }
+  }
+
+  approvePending(approves: (pending: PendingApproval) => boolean, note: string) {
+    return this.list({ status: "pending" })
+      .filter((request) => approves({ request, verdict: "require_approval" }))
+      .map((request) => this.finish(request.id, "approved", note));
   }
 
   onUpsert(listener: (approval: ApprovalRequest) => void): Unsubscribe {

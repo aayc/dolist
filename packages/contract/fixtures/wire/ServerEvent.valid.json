@@ -198,7 +198,8 @@
           "judgeModel": "deepseek/deepseek-v4.1-flash",
           "watch": { "pastDays": 0, "futureDays": 7 },
           "actOnExistingTasks": true,
-          "approvalTimeoutMs": 43200000
+          "approvalTimeoutMs": 43200000,
+          "approvalPolicy": "ask_high_risk"
         }
       }
     }

@@ -63,4 +63,68 @@ struct AgentSettingsTests {
     #expect(AgentModelField(store.settings.agent).value == AgentSettings.defaultModel)
     #expect(store.settings.agent.cursorModel == "gpt-5.5")
   }
+
+  @Test func theApprovalPoliciesUseTheWebAppsWords() {
+    #expect(
+      ApprovalPolicy.allCases.map(\.settingsLabel) == [
+        "Ask before every action", "Ask for risky actions (recommended)",
+        "Ask only for high-risk actions", "Run everything",
+      ])
+    #expect(
+      ApprovalPolicy.allCases.map(\.settingsDescription) == [
+        "Every action that changes something asks first. Reading, searching and research don't.",
+        "The safety check decides: purchases, messages, bookings, deletions, account changes and anything it can't verify ask first.",
+        "Only high-risk actions ask first (sending messages, paying, deleting, account and credential changes); everything else runs.",
+        "Agents never ask. Actions that are never allowed stay blocked: deleting your home folder, reading passwords or keychains, controlling Daily Do List itself, System Settings or password managers.",
+      ])
+    #expect(RunEverythingConfirmation.title == "Run everything without asking?")
+    #expect(RunEverythingConfirmation.confirm == "Run everything")
+    #expect(RunEverythingConfirmation.message.contains(ApprovalPolicy.neverAllowed))
+  }
+
+  @Test func onlyRunEverythingAsksForConfirmation() {
+    #expect(ApprovalPolicy.allCases.filter(\.needsConfirmation) == [.runEverything])
+    #expect(ApprovalPolicyPicker.choice(.runEverything, current: .askRisky) == .confirm)
+    #expect(ApprovalPolicyPicker.choice(.runEverything, current: .askHighRisk) == .confirm)
+    #expect(ApprovalPolicyPicker.choice(.runEverything, current: .runEverything) == .unchanged)
+    #expect(ApprovalPolicyPicker.choice(.askRisky, current: .askRisky) == .unchanged)
+    for policy in [ApprovalPolicy.askEveryAction, .askRisky, .askHighRisk] {
+      #expect(ApprovalPolicyPicker.choice(policy, current: .runEverything) == .save(policy))
+    }
+  }
+
+  @Test func theStatusBarNamesEveryPolicyButTheDefault() {
+    #expect(ApprovalPolicyIndicator(.askRisky) == nil)
+    let everything = ApprovalPolicyIndicator(.runEverything)
+    #expect(everything?.label == "Runs everything" && everything?.isWarning == true)
+    #expect(everything?.tooltip == "Agents run everything without asking — click to change")
+    let highRisk = ApprovalPolicyIndicator(.askHighRisk)
+    #expect(highRisk?.label == "Asks only for high-risk" && highRisk?.isWarning == false)
+    let every = ApprovalPolicyIndicator(.askEveryAction)
+    #expect(every?.label == "Asks before every action" && every?.isWarning == false)
+  }
+
+  @MainActor
+  @Test func theApprovalPolicyIsSavedThroughTheDaemon() async {
+    let client = FakeDaemonClient()
+    let store = SettingsStore()
+    store.client = client
+    #expect(store.settings.agent.approvalPolicy == .askRisky)
+    for policy in [ApprovalPolicy.runEverything, .askEveryAction, .askHighRisk, .askRisky] {
+      await store.update(SettingsPatch(agent: .init(approvalPolicy: policy)))
+      #expect(store.settings.agent.approvalPolicy == policy)
+      #expect(client.withState { $0.settings.agent.approvalPolicy } == policy)
+    }
+  }
+
+  @MainActor
+  @Test func theApprovalPolicyCommandOpensSettingsOnTheAgentPane() async {
+    let model = AppModel(environment: makeEnvironment(client: FakeDaemonClient()))
+    await model.boot()
+    model.ui.settingsPane = .general
+    #expect(CommandCatalog(model: model).run(.approvalPolicy))
+    #expect(model.ui.settingsPane == .agent)
+    #expect(CommandID(vimCommandID: "settings:approvals") == .approvalPolicy)
+    await model.teardown()
+  }
 }

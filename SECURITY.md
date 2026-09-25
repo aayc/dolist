@@ -63,6 +63,17 @@ judge. Risky actions pause until you explicitly approve them in the UI: spending
 sending messages, deleting data, or changing your notes. The gate fails closed, so evaluator errors
 or timeouts block the action.
 
+**Approval policies.** Settings → Agent → Approvals chooses when agents ask: before every action
+that changes something, for risky actions (the default), only for high-risk actions, or never
+("Run everything", which asks you to confirm and stays visible in the status bar). The policy only
+decides whether an allowed or approval-worthy action asks you; the evaluator's verdict is the same
+under every policy, and actions it denies (deleting your home folder, reading keychains or
+password stores, operating Daily Do List, System Settings or a password manager, …) stay blocked.
+Agents can't change the policy: writing the vault's `.daily-do-list/` folder (settings, approval
+state, threads) or `$DDL_HOME` (config, keys, tokens), code that names those files, and reaching
+the daemon or the web dev server are hard denies. With "Run everything", programs an agent writes
+and runs aren't inspected while they run, so choose it only for agents and tasks you trust.
+
 **Untrusted content.** Web pages, emails, files and tool results that agents read may contain
 prompt injection. The gate and approvals are the control that keeps injected instructions from
 turning into risky actions without your consent.
@@ -101,6 +112,7 @@ Examples:
 
 - bypassing the safety gate or approvals, or any tool that executes without the gate;
 - prompt injection that leads to a risky action without approval;
+- an agent changing the approval policy, or a denied action running under any policy;
 - an agent operating a protected app, or an approval card that names a different app or element
   than the one acted on;
 - getting past the daemon's (or the Cursor harness MCP bridge's) token, `Host` or `Origin` checks,
@@ -124,6 +136,8 @@ Examples:
 
 - Keep the daemon on localhost. Don't expose its port through tunnels or reverse proxies.
 - Read approval cards before approving, especially payments and outgoing messages.
+- Keep the approval policy at "Ask for risky actions" unless you have a reason to change it; "Run
+  everything" lets agents spend money and send messages without asking.
 - Grant computer use permissions only to the app that runs Daily Do List (Settings → Computer Use
   names it), and turn them off when you stop using computer use.
 - Only configure MCP servers you trust, and give connectors least-privilege tokens.

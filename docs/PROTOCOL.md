@@ -824,6 +824,12 @@ What runs the orchestrator and subagent conversations: `pi` (the Pi coding-agent
 
 Type: `"pi"` | `"cursor"`
 
+#### ApprovalPolicy
+
+When agents ask before acting: `ask_every_action` (every action that changes something), `ask_risky` (what the safety check flags; the default), `ask_high_risk` (only high-risk actions) or `run_everything` (never). Actions the safety check denies stay blocked under every policy.
+
+Type: `"ask_every_action"` | `"ask_risky"` | `"ask_high_risk"` | `"run_everything"`
+
 #### AgentSettings
 
 Orchestrator and subagent settings.
@@ -835,6 +841,7 @@ Orchestrator and subagent settings.
 | `maxConcurrentSubagents` | integer (1–32) | yes |  |
 | `actOnExistingTasks` | boolean | yes |  |
 | `approvalTimeoutMs` | integer (60000–2592000000) | yes | How long an approval request waits before it is auto-denied. |
+| `approvalPolicy` | [`ApprovalPolicy`](#approvalpolicy) | yes |  |
 | `harness` | [`AgentHarnessKind`](#agentharnesskind) | yes |  |
 | `model` | string (`^\S(?:[\s\S]*\S)?$`, 1–200 chars) | yes | OpenRouter model id for the orchestrator and subagents with the Pi harness. |
 | `cursorModel` | string (`^\S(?:[\s\S]*\S)?$`, 1–200 chars) | yes | Model for the orchestrator and subagents with the Cursor harness (`claude-opus-5-5`, `composer-2.5`). The CLI's agent mode runs one preset per model; a variant id from `agent models` (`claude-opus-5-5-high-fast`) runs as its model's preset. |

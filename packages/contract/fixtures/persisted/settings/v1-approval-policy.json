@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "agent": {
+    "approvalPolicy": "ask_high_risk",
+    "approvalTimeoutMs": 3600000
+  }
+}

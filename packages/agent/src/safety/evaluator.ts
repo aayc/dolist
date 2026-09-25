@@ -241,6 +241,7 @@ export function fallbackVerdict(
     reason,
     summary,
     source: "fallback",
+    effectful: true,
     latencyMs,
   };
 }
@@ -272,6 +273,7 @@ export function createSafetyEvaluator(options: SafetyEvaluatorOptions = {}): Saf
         return {
           ...draft,
           summary,
+          effectful: analysis.effectful,
           latencyMs: performance.now() - started,
           ...(target ? { target } : {}),
         };
