@@ -4,7 +4,7 @@ The running handoff log: what shipped, what's in flight, what's next, and the de
 them, so work can continue on any machine at any point. Read it before starting; keep it current
 (the rules are in `AGENTS.md`, "Handoff log").
 
-**Last updated:** 2026-09-25 · `main` at `dffdfdd` (the agent journal) · in-flight branches pushed to
+**Last updated:** 2026-09-25 · `main` at `6750f36` (the merge-race fix; installed) · in-flight branches pushed to
 `origin`.
 
 ## Picking this up on another machine
@@ -22,6 +22,12 @@ them, so work can continue on any machine at any point. Read it before starting;
    `gh workflow run ci.yml --ref <branch>` (also `macos.yml`, `security.yml`).
 
 ## Shipped on `main` (newest first)
+
+- `6750f36` The editor merge race: an open editor never brings back lines deleted elsewhere
+  (root cause: the Mac `NotesStore.save()` kept a stale "unsaved" copy of a clean note); conflicts
+  save the merge, not the whole local text (web and Mac); remounted web editors keep unsaved
+  typing. CI and macOS green on the branch. **Installed** on the main development Mac (with the
+  journal).
 
 - `dffdfdd` The agent journal, phase 1: threads on an append-only journal
   (`.daily-do-list/state/journal/threads/`, union-merged by sync), snapshots byte-identical to
@@ -128,7 +134,7 @@ Spec: [docs/specs/obsidian-migration.md](docs/specs/obsidian-migration.md).
 
 | Stream | Branch | State |
 | --- | --- | --- |
-| M the editor merge race (data safety) | `fix/editor-merge-race` | fixed (`4d3ef06`): root cause in the Mac `NotesStore.save()` (a clean save kept a stale "unsaved" copy, shown again later and saved with a valid version); also conflicts no longer restore deleted lines (web and Mac, `mergeText` and its Swift port), and remounted web editors keep unsaved typing; guarantee in invariant 7. CI and macOS dispatched on the branch; merge to `main` when green. Now investigating the fuzz seed below and making model-check failures fail the property instead of becoming unhandled rejections. Left as is: on the Mac a remote change is an undoable step (⌘Z right after an external delete restores the lines) |
+| M the editor merge race (data safety) | `fix/editor-merge-race` | `4d3ef06` merged to `main` (`6750f36`); the fuzz follow-up (3 more commits so far) is still on the branch. Fixed (`4d3ef06`): root cause in the Mac `NotesStore.save()` (a clean save kept a stale "unsaved" copy, shown again later and saved with a valid version); also conflicts no longer restore deleted lines (web and Mac, `mergeText` and its Swift port), and remounted web editors keep unsaved typing; guarantee in invariant 7. CI and macOS dispatched on the branch; merge to `main` when green. Now investigating the fuzz seed below and making model-check failures fail the property instead of becoming unhandled rejections. Left as is: on the Mac a remote change is an undoable step (⌘Z right after an external delete restores the lines) |
 | I0 Import from Obsidian: engine, carry-over, vault switch, update | `feat/obsidian-import` | done (`9ebd1cd`, 12 commits); `feat/always-on` merged in at `f0ced02` (daemon 1205, contract 1284 tests green). After an import the real watcher finds no new work (every carried task keeps its id, thread and badge). Vault switch exits 75 (the Mac supervisor relaunches at once). Paired devices get 403 `forbidden_device`; switching is refused while sync is on. Journal files copied unchanged (`remapJournalFile` hook) |
 | I1 Import from Obsidian: web and Mac flows | `feat/obsidian-import-ui` (from `f0ced02`) | in progress |
 | B0 binary files, attachment sync, file serving | from `feat/always-on` or `main` | queued (after the always-on work lands; S2 changed the same sync code) |
