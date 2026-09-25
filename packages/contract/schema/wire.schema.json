@@ -1051,6 +1051,45 @@
       "additionalProperties": {},
       "description": "Orchestrator and subagent settings."
     },
+    "AlwaysOnMachine": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "1–64 characters (e.g. the first label of its host)."
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "description": "`https://<host>[:port]`: lowercase, no trailing `/`, path, query or credentials; plain http only to loopback."
+        }
+      },
+      "required": ["name", "url"],
+      "additionalProperties": {},
+      "description": "The always-on machine every device can hand the agent to. Its name and address sync; each device pairs once and keeps its own credential."
+    },
+    "RemoteSettings": {
+      "type": "object",
+      "properties": {
+        "alwaysOnMachine": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AlwaysOnMachine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null: no always-on machine."
+        }
+      },
+      "required": ["alwaysOnMachine"],
+      "additionalProperties": {},
+      "description": "Remote access settings shared by every device (non-secret)."
+    },
     "AppSettings": {
       "type": "object",
       "properties": {
@@ -1068,9 +1107,12 @@
         },
         "agent": {
           "$ref": "#/$defs/AgentSettings"
+        },
+        "remote": {
+          "$ref": "#/$defs/RemoteSettings"
         }
       },
-      "required": ["theme", "editor", "dailyNotes", "weeklyNotes", "agent"],
+      "required": ["theme", "editor", "dailyNotes", "weeklyNotes", "agent", "remote"],
       "additionalProperties": {},
       "description": "All user settings (stored in the vault sidecar so they travel with the vault)."
     },
@@ -1220,10 +1262,547 @@
             }
           },
           "additionalProperties": false
+        },
+        "remote": {
+          "type": "object",
+          "properties": {
+            "alwaysOnMachine": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 300,
+                      "description": "`https://<host>[:port]`: lowercase, no trailing `/`, path, query or credentials; plain http only to loopback."
+                    }
+                  },
+                  "required": ["name", "url"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The whole machine, or null to forget it."
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false,
       "description": "A deep partial of AppSettings (PATCH semantics). Unknown keys are rejected."
+    },
+    "AgentPlacement": {
+      "type": "string",
+      "enum": ["this_device", "always_on_machine", "always_on_host"],
+      "description": "Where this device's agent runs: `this_device` (here; takes the agent over from the always-on machine), `always_on_machine` (never here; relayed to the always-on machine) or `always_on_host` (this is the always-on machine; it runs the agent when no `this_device` does). Without sync a daemon runs its own agent whatever the placement."
+    },
+    "AgentRunsOn": {
+      "type": "object",
+      "properties": {
+        "deviceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$",
+          "description": "Device id (as the sync service knows it)."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^\\S(?:[\\s\\S]*\\S)?$"
+        },
+        "thisDevice": {
+          "type": "boolean"
+        },
+        "alwaysOnMachine": {
+          "type": "boolean",
+          "description": "The holder requested the lease with priority \"host\"."
+        }
+      },
+      "required": ["deviceId", "name", "thisDevice", "alwaysOnMachine"],
+      "additionalProperties": {},
+      "description": "The device that holds the agent lease."
+    },
+    "RelayState": {
+      "type": "string",
+      "enum": ["off", "connecting", "connected", "unreachable", "not_paired"],
+      "description": "The link to the always-on machine's agent: `off` (not relaying), `connecting`, `connected`, `unreachable` or `not_paired`."
+    },
+    "AgentPlacementStatus": {
+      "type": "object",
+      "properties": {
+        "placement": {
+          "$ref": "#/$defs/AgentPlacement"
+        },
+        "runsOn": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentRunsOn"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Who runs the agent now (null: nobody, or unknown without sync)."
+        },
+        "relay": {
+          "$ref": "#/$defs/RelayState"
+        },
+        "note": {
+          "description": "Short, human (\"Taking over from vm-1…\", \"Handing the agent to vm-1…\").",
+          "type": "string"
+        }
+      },
+      "required": ["placement", "runsOn", "relay"],
+      "additionalProperties": {},
+      "description": "This device's placement and who runs the agent now."
+    },
+    "AgentReadiness": {
+      "type": "object",
+      "properties": {
+        "harness": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "$ref": "#/$defs/AgentHarnessKind"
+            },
+            "ready": {
+              "type": "boolean"
+            },
+            "problem": {
+              "type": "string"
+            }
+          },
+          "required": ["kind", "ready"],
+          "additionalProperties": {}
+        },
+        "modelCredential": {
+          "type": "boolean",
+          "description": "A model credential for the configured harness is present."
+        },
+        "browser": {
+          "type": "boolean"
+        },
+        "computer": {
+          "type": "string",
+          "enum": ["available", "needs_permissions", "unsupported"]
+        },
+        "connectors": {
+          "type": "object",
+          "properties": {
+            "configured": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "connected": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["configured", "connected"],
+          "additionalProperties": {}
+        }
+      },
+      "required": ["harness", "modelCredential", "browser", "computer", "connectors"],
+      "additionalProperties": {},
+      "description": "Whether a daemon can run the agent: its harness, a model credential (never the value), the browser, desktop control and connectors."
+    },
+    "DeviceSyncSetup": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null: not syncing with the sync service."
+        },
+        "vault": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "description": "Device id (as the sync service knows it)."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The sync vault id."
+        },
+        "hasToken": {
+          "type": "boolean",
+          "description": "A vault token is saved."
+        }
+      },
+      "required": ["url", "vault", "hasToken"],
+      "additionalProperties": {},
+      "description": "This device's link to the sync service. The vault token is never returned."
+    },
+    "DeviceSettingsResponse": {
+      "type": "object",
+      "properties": {
+        "device": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "description": "Device id (as the sync service knows it)."
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^\\S(?:[\\s\\S]*\\S)?$"
+            }
+          },
+          "required": ["id", "name"],
+          "additionalProperties": {}
+        },
+        "placement": {
+          "$ref": "#/$defs/AgentPlacement"
+        },
+        "remoteHosts": {
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 259,
+            "description": "`host[:port]`, lowercase DNS name (never an IP address or a loopback name)."
+          },
+          "description": "Names this daemon answers to besides loopback (e.g. its tailnet name)."
+        },
+        "sync": {
+          "$ref": "#/$defs/DeviceSyncSetup"
+        },
+        "lockedByEnv": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["placement", "remoteHosts", "sync"]
+          },
+          "description": "Fields set by environment variables; clients show them read-only."
+        }
+      },
+      "required": ["device", "placement", "remoteHosts", "sync", "lockedByEnv"],
+      "additionalProperties": {},
+      "description": "This daemon's device-local settings (kept in `$DDL_HOME`, never synced)."
+    },
+    "DeviceSettingsPatch": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Trimmed, then 1–64 characters.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "placement": {
+          "$ref": "#/$defs/AgentPlacement"
+        },
+        "remoteHosts": {
+          "description": "DNS names with an optional `:port`, at most 8; trimmed and lowercased. No IPs, schemes or paths.",
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 269
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Body of `PATCH /api/device`: only the fields to change."
+    },
+    "DeviceSyncSetupRequest": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "description": "The sync service: https (plain http only to loopback)."
+        },
+        "vault": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$",
+          "description": "The vault id printed by `ddl-sync vault create`."
+        },
+        "token": {
+          "description": "The vault token; omit to keep the saved one. Stored 0600 in `$DDL_HOME`.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": ["url", "vault"],
+      "additionalProperties": false,
+      "description": "Body of `PUT /api/device/sync`: point this device at the sync service."
+    },
+    "PairedDeviceKind": {
+      "type": "string",
+      "enum": ["browser", "app", "daemon"],
+      "description": "`browser` (gets an HttpOnly cookie), `app` (a native client) or `daemon` (another daemon relaying to this one)."
+    },
+    "PairedDevice": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "kind": {
+          "$ref": "#/$defs/PairedDeviceKind"
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "lastSeenAt": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Epoch milliseconds."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Last use (updated at most once a minute)."
+        },
+        "current": {
+          "description": "The device making this request.",
+          "type": "boolean"
+        }
+      },
+      "required": ["id", "name", "kind", "createdAt", "lastSeenAt"],
+      "additionalProperties": {},
+      "description": "A device holding a credential for this daemon."
+    },
+    "PairingCodeRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "What the new device will be called.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      },
+      "additionalProperties": false,
+      "description": "Body of `POST /api/pairing-codes`."
+    },
+    "PairingCodeResponse": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 8,
+          "description": "8 characters of `23456789ABCDEFGHJKMNPQRSTVWXYZ`; show it as XXXX-XXXX."
+        },
+        "expiresAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 300
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`https://<first remote host>` for a QR code; null without remote hosts."
+        }
+      },
+      "required": ["code", "expiresAt", "url"],
+      "additionalProperties": {},
+      "description": "A single-use pairing code."
+    },
+    "PairRequest": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "The pairing code: 8 characters of `23456789ABCDEFGHJKMNPQRSTVWXYZ`, any case; spaces and dashes are ignored."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "kind": {
+          "$ref": "#/$defs/PairedDeviceKind"
+        }
+      },
+      "required": ["code", "name", "kind"],
+      "additionalProperties": false,
+      "description": "Body of `POST /api/pair`: exchange a pairing code for a device credential."
+    },
+    "PairResponse": {
+      "type": "object",
+      "properties": {
+        "device": {
+          "$ref": "#/$defs/PairedDevice"
+        },
+        "token": {
+          "description": "Send as `Authorization: Bearer <token>`.",
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 512
+        }
+      },
+      "required": ["device"],
+      "additionalProperties": {},
+      "description": "The paired device and, for `app` and `daemon` kinds, its token (shown once). A browser gets an HttpOnly cookie instead."
+    },
+    "PairedDevicesResponse": {
+      "type": "object",
+      "properties": {
+        "devices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PairedDevice"
+          }
+        }
+      },
+      "required": ["devices"],
+      "additionalProperties": {},
+      "description": "Every device paired with this daemon."
+    },
+    "MachineStatusResponse": {
+      "type": "object",
+      "properties": {
+        "machine": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AlwaysOnMachine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null: no always-on machine configured."
+        },
+        "paired": {
+          "type": "boolean",
+          "description": "This device holds a credential for the machine."
+        },
+        "reachable": {
+          "description": "null: not checked yet, or no machine.",
+          "type": ["boolean", "null"]
+        },
+        "checkedAt": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Epoch milliseconds."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "description": "The machine's daemon version.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "agent": {
+          "description": "Where the agent runs, as the machine reports it.",
+          "type": "object",
+          "properties": {
+            "runsOn": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AgentRunsOn"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "problem": {
+              "type": "string"
+            }
+          },
+          "required": ["runsOn"],
+          "additionalProperties": {}
+        },
+        "readiness": {
+          "description": "The machine's readiness.",
+          "$ref": "#/$defs/AgentReadiness"
+        },
+        "error": {
+          "description": "Why the last check or pairing failed.",
+          "type": "string"
+        }
+      },
+      "required": ["machine", "paired", "reachable", "checkedAt"],
+      "additionalProperties": {},
+      "description": "The always-on machine from this device's side: its address, this device's pairing and what the machine reports."
+    },
+    "MachinePairRequest": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "description": "`https://<tailnet name>[:port]`; case and a trailing `/` are normalized."
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "The pairing code: 8 characters of `23456789ABCDEFGHJKMNPQRSTVWXYZ`, any case; spaces and dashes are ignored."
+        },
+        "name": {
+          "description": "Default: the first label of the host.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      },
+      "required": ["url", "code"],
+      "additionalProperties": false,
+      "description": "Body of `POST /api/machine/pair`: pair this device with the always-on machine."
     },
     "AgentMode": {
       "type": "string",
@@ -1761,6 +2340,14 @@
         "problem": {
           "description": "Why the agent cannot run, when it can't.",
           "type": "string"
+        },
+        "placement": {
+          "description": "Where the agent runs for this device, and who runs it now.",
+          "$ref": "#/$defs/AgentPlacementStatus"
+        },
+        "readiness": {
+          "description": "This daemon's own readiness to run the agent.",
+          "$ref": "#/$defs/AgentReadiness"
         }
       },
       "required": [
@@ -1995,15 +2582,19 @@
         "invalid_path",
         "invalid_settings",
         "unauthorized",
+        "pairing_rejected",
         "forbidden_host",
         "forbidden_origin",
         "not_found",
         "conflict",
+        "locked_by_env",
         "payload_too_large",
         "upgrade_required",
+        "rate_limited",
         "http_error",
         "agent_error",
         "internal_error",
+        "machine_unreachable",
         "agent_unavailable"
       ],
       "description": "Machine-readable error code. Treat unknown codes like any failure with that HTTP status."

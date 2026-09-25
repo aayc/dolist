@@ -20,6 +20,7 @@ import {
   WIRE_LIMITS,
 } from "./primitives";
 import { named } from "./registry";
+import { AgentPlacementStatusSchema, AgentReadinessSchema } from "./remote";
 import { AppSettingsSchema } from "./settings";
 
 // ── Vault ─────────────────────────────────────────────────────────────────
@@ -263,6 +264,12 @@ export const AgentStatusResponseSchema = named(
     connectors: z.array(ConnectorStatusSchema),
     execution: ExecutionStatusSchema,
     problem: z.string().optional().describe("Why the agent cannot run, when it can't."),
+    placement: AgentPlacementStatusSchema.optional().describe(
+      "Where the agent runs for this device, and who runs it now.",
+    ),
+    readiness: AgentReadinessSchema.optional().describe(
+      "This daemon's own readiness to run the agent.",
+    ),
   }),
 );
 

@@ -168,6 +168,42 @@
     }
   },
   {
+    "name": "agent.status (relayed to the always-on machine)",
+    "value": {
+      "type": "agent.status",
+      "status": {
+        "mode": "live",
+        "enabled": true,
+        "model": "claude-opus-5-5",
+        "running": 1,
+        "queued": 0,
+        "pendingApprovals": 1,
+        "connectors": [],
+        "execution": {
+          "provider": "local",
+          "capabilities": { "shell": true, "browser": true, "computer": false }
+        },
+        "placement": {
+          "placement": "always_on_machine",
+          "runsOn": {
+            "deviceId": "dev_k3j9x0q2m1abc4d5e6f7",
+            "name": "vm-name",
+            "thisDevice": false,
+            "alwaysOnMachine": true
+          },
+          "relay": "connected"
+        },
+        "readiness": {
+          "harness": { "kind": "cursor", "ready": true },
+          "modelCredential": true,
+          "browser": true,
+          "computer": "available",
+          "connectors": { "configured": 2, "connected": 2 }
+        }
+      }
+    }
+  },
+  {
     "name": "surface.frame with a click action",
     "value": {
       "type": "surface.frame",
@@ -220,6 +256,9 @@
           "actOnExistingTasks": true,
           "approvalTimeoutMs": 43200000,
           "approvalPolicy": "ask_high_risk"
+        },
+        "remote": {
+          "alwaysOnMachine": { "name": "vm-name", "url": "https://vm-name.tailnet-name.ts.net" }
         }
       }
     }

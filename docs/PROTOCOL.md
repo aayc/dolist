@@ -85,40 +85,58 @@ API version: **1**. Machine-readable: `packages/contract/schema/wire.schema.json
 
 ### REST routes
 
-| Route | Method | Path | Body | Success |
-| --- | --- | --- | --- | --- |
-| `health` | GET | `/api/health` | — | 200 [`HealthResponse`](#healthresponse) |
-| `tree` | GET | `/api/vault/tree` | — | 200 [`VaultTreeResponse`](#vaulttreeresponse) |
-| `note` | GET | `/api/notes/*` | — | 200 [`NoteResponse`](#noteresponse) |
-| `note` | PUT | `/api/notes/*` | [`WriteNoteRequest`](#writenoterequest) | 200 [`WriteNoteResponse`](#writenoteresponse), 201 [`WriteNoteResponse`](#writenoteresponse) |
-| `note` | DELETE | `/api/notes/*` | — | 200 [`TrashResponse`](#trashresponse) |
-| `rename` | POST | `/api/notes-rename` | [`RenameRequest`](#renamerequest) | 200 [`RenameResponse`](#renameresponse) |
-| `folders` | POST | `/api/folders` | [`CreateFolderRequest`](#createfolderrequest) | 201 [`CreateFolderResponse`](#createfolderresponse) |
-| `folders` | DELETE | `/api/folders` | — | 200 [`TrashResponse`](#trashresponse) |
-| `daily` | GET | `/api/daily/:date` | — | 200 [`DailyNoteResponse`](#dailynoteresponse) |
-| `search` | GET | `/api/search` | — | 200 [`SearchResponse`](#searchresponse) |
-| `settings` | GET | `/api/settings` | — | 200 [`SettingsResponse`](#settingsresponse) |
-| `settings` | PUT | `/api/settings` | [`UpdateSettingsRequest`](#updatesettingsrequest) | 200 [`SettingsResponse`](#settingsresponse) |
-| `settings` | PATCH | `/api/settings` | [`UpdateSettingsRequest`](#updatesettingsrequest) | 200 [`SettingsResponse`](#settingsresponse) |
-| `agentStatus` | GET | `/api/agent/status` | — | 200 [`AgentStatusResponse`](#agentstatusresponse) |
-| `agentEnabled` | PUT | `/api/agent/enabled` | [`SetAgentEnabledRequest`](#setagentenabledrequest) | 200 [`AgentStatusResponse`](#agentstatusresponse) |
-| `agentEnabled` | POST | `/api/agent/enabled` | [`SetAgentEnabledRequest`](#setagentenabledrequest) | 200 [`AgentStatusResponse`](#agentstatusresponse) |
-| `tasks` | GET | `/api/tasks` | — | 200 [`TaskRecordsResponse`](#taskrecordsresponse) |
-| `threads` | GET | `/api/threads` | — | 200 [`ThreadListResponse`](#threadlistresponse) |
-| `thread` | GET | `/api/threads/:id` | — | 200 [`ThreadResponse`](#threadresponse) |
-| `threadMessages` | POST | `/api/threads/:id/messages` | [`PostMessageRequest`](#postmessagerequest) | 200 [`ThreadActionResponse`](#threadactionresponse), 202 [`ThreadActionResponse`](#threadactionresponse) |
-| `threadCancel` | POST | `/api/threads/:id/cancel` | — | 200 [`ThreadActionResponse`](#threadactionresponse), 202 [`ThreadActionResponse`](#threadactionresponse) |
-| `threadRetry` | POST | `/api/threads/:id/retry` | — | 200 [`ThreadActionResponse`](#threadactionresponse), 202 [`ThreadActionResponse`](#threadactionresponse) |
-| `approvals` | GET | `/api/approvals` | — | 200 [`ApprovalListResponse`](#approvallistresponse) |
-| `approval` | GET | `/api/approvals/:id` | — | 200 [`ApprovalResponse`](#approvalresponse) |
-| `approval` | POST | `/api/approvals/:id` | [`ApprovalDecisionRequest`](#approvaldecisionrequest) | 200 [`ApprovalResponse`](#approvalresponse) |
-| `artifact` | GET | `/api/artifacts/:threadId/:artifactId` | — | 200 bytes |
-| `connectors` | GET | `/api/connectors` | — | 200 [`ConnectorsResponse`](#connectorsresponse) |
-| `syncStatus` | GET | `/api/sync/status` | — | 200 [`SyncStatusResponse`](#syncstatusresponse) |
-| `computerPermissionsOpen` | POST | `/api/computer/permissions/open` | [`ComputerPermissionsOpenRequest`](#computerpermissionsopenrequest) | 200 [`OkResponse`](#okresponse) |
-| `ws` | GET | `/ws` | — | — |
+| Route | Method | Path | Auth | Body | Success |
+| --- | --- | --- | --- | --- | --- |
+| `health` | GET | `/api/health` | `bearer` | — | 200 [`HealthResponse`](#healthresponse) |
+| `tree` | GET | `/api/vault/tree` | `bearer` | — | 200 [`VaultTreeResponse`](#vaulttreeresponse) |
+| `note` | GET | `/api/notes/*` | `bearer` | — | 200 [`NoteResponse`](#noteresponse) |
+| `note` | PUT | `/api/notes/*` | `bearer` | [`WriteNoteRequest`](#writenoterequest) | 200 [`WriteNoteResponse`](#writenoteresponse), 201 [`WriteNoteResponse`](#writenoteresponse) |
+| `note` | DELETE | `/api/notes/*` | `bearer` | — | 200 [`TrashResponse`](#trashresponse) |
+| `rename` | POST | `/api/notes-rename` | `bearer` | [`RenameRequest`](#renamerequest) | 200 [`RenameResponse`](#renameresponse) |
+| `folders` | POST | `/api/folders` | `bearer` | [`CreateFolderRequest`](#createfolderrequest) | 201 [`CreateFolderResponse`](#createfolderresponse) |
+| `folders` | DELETE | `/api/folders` | `bearer` | — | 200 [`TrashResponse`](#trashresponse) |
+| `daily` | GET | `/api/daily/:date` | `bearer` | — | 200 [`DailyNoteResponse`](#dailynoteresponse) |
+| `search` | GET | `/api/search` | `bearer` | — | 200 [`SearchResponse`](#searchresponse) |
+| `settings` | GET | `/api/settings` | `bearer` | — | 200 [`SettingsResponse`](#settingsresponse) |
+| `settings` | PUT | `/api/settings` | `bearer` | [`UpdateSettingsRequest`](#updatesettingsrequest) | 200 [`SettingsResponse`](#settingsresponse) |
+| `settings` | PATCH | `/api/settings` | `bearer` | [`UpdateSettingsRequest`](#updatesettingsrequest) | 200 [`SettingsResponse`](#settingsresponse) |
+| `agentStatus` | GET | `/api/agent/status` | `bearer` | — | 200 [`AgentStatusResponse`](#agentstatusresponse) |
+| `agentEnabled` | PUT | `/api/agent/enabled` | `bearer` | [`SetAgentEnabledRequest`](#setagentenabledrequest) | 200 [`AgentStatusResponse`](#agentstatusresponse) |
+| `agentEnabled` | POST | `/api/agent/enabled` | `bearer` | [`SetAgentEnabledRequest`](#setagentenabledrequest) | 200 [`AgentStatusResponse`](#agentstatusresponse) |
+| `tasks` | GET | `/api/tasks` | `bearer` | — | 200 [`TaskRecordsResponse`](#taskrecordsresponse) |
+| `threads` | GET | `/api/threads` | `bearer` | — | 200 [`ThreadListResponse`](#threadlistresponse) |
+| `thread` | GET | `/api/threads/:id` | `bearer` | — | 200 [`ThreadResponse`](#threadresponse) |
+| `threadMessages` | POST | `/api/threads/:id/messages` | `bearer` | [`PostMessageRequest`](#postmessagerequest) | 200 [`ThreadActionResponse`](#threadactionresponse), 202 [`ThreadActionResponse`](#threadactionresponse) |
+| `threadCancel` | POST | `/api/threads/:id/cancel` | `bearer` | — | 200 [`ThreadActionResponse`](#threadactionresponse), 202 [`ThreadActionResponse`](#threadactionresponse) |
+| `threadRetry` | POST | `/api/threads/:id/retry` | `bearer` | — | 200 [`ThreadActionResponse`](#threadactionresponse), 202 [`ThreadActionResponse`](#threadactionresponse) |
+| `approvals` | GET | `/api/approvals` | `bearer` | — | 200 [`ApprovalListResponse`](#approvallistresponse) |
+| `approval` | GET | `/api/approvals/:id` | `bearer` | — | 200 [`ApprovalResponse`](#approvalresponse) |
+| `approval` | POST | `/api/approvals/:id` | `bearer` | [`ApprovalDecisionRequest`](#approvaldecisionrequest) | 200 [`ApprovalResponse`](#approvalresponse) |
+| `artifact` | GET | `/api/artifacts/:threadId/:artifactId` | `bearer` | — | 200 bytes |
+| `connectors` | GET | `/api/connectors` | `bearer` | — | 200 [`ConnectorsResponse`](#connectorsresponse) |
+| `syncStatus` | GET | `/api/sync/status` | `bearer` | — | 200 [`SyncStatusResponse`](#syncstatusresponse) |
+| `computerPermissionsOpen` | POST | `/api/computer/permissions/open` | `bearer` | [`ComputerPermissionsOpenRequest`](#computerpermissionsopenrequest) | 200 [`OkResponse`](#okresponse) |
+| `device` | GET | `/api/device` | `bearer` | — | 200 [`DeviceSettingsResponse`](#devicesettingsresponse) |
+| `device` | PATCH | `/api/device` | `bearer` | [`DeviceSettingsPatch`](#devicesettingspatch) | 200 [`DeviceSettingsResponse`](#devicesettingsresponse) |
+| `deviceSync` | PUT | `/api/device/sync` | `bearer` | [`DeviceSyncSetupRequest`](#devicesyncsetuprequest) | 200 [`DeviceSettingsResponse`](#devicesettingsresponse) |
+| `deviceSync` | DELETE | `/api/device/sync` | `bearer` | — | 200 [`DeviceSettingsResponse`](#devicesettingsresponse) |
+| `pairingCodes` | POST | `/api/pairing-codes` | `bearer` | [`PairingCodeRequest`](#pairingcoderequest) | 201 [`PairingCodeResponse`](#pairingcoderesponse) |
+| `pair` | POST | `/api/pair` | `pairing_code` | [`PairRequest`](#pairrequest) | 201 [`PairResponse`](#pairresponse) |
+| `devices` | GET | `/api/devices` | `bearer` | — | 200 [`PairedDevicesResponse`](#paireddevicesresponse) |
+| `pairedDevice` | DELETE | `/api/devices/:id` | `bearer` | — | 204 no body |
+| `machine` | GET | `/api/machine` | `bearer` | — | 200 [`MachineStatusResponse`](#machinestatusresponse) |
+| `machinePair` | POST | `/api/machine/pair` | `bearer` | [`MachinePairRequest`](#machinepairrequest) | 200 [`MachineStatusResponse`](#machinestatusresponse) |
+| `machineCheck` | POST | `/api/machine/check` | `bearer` | — | 200 [`MachineStatusResponse`](#machinestatusresponse) |
+| `machinePairing` | DELETE | `/api/machine/pairing` | `bearer` | — | 200 [`MachineStatusResponse`](#machinestatusresponse) |
+| `ws` | GET | `/ws` | `upgrade` | — | — |
 
-Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`, `forbidden_origin`), 500 (`internal_error`). Methods a route doesn't list answer 404 `not_found`.
+Auth:
+
+- `bearer`: `Authorization: Bearer <token>`, plus the Host and Origin checks.
+- `pairing_code`: No bearer token: the pairing code in the body is the credential (Host and Origin are still checked).
+- `upgrade`: WebSocket upgrade with the bearer token (`?token=`) and the Host check.
+
+Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`, `forbidden_origin`), 500 (`internal_error`), unless it lists that status itself. Methods a route doesn't list answer 404 `not_found`.
 
 #### `health` — `/api/health`
 
@@ -407,6 +425,114 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
   - `413` [`ApiErrorBody`](#apierrorbody) `payload_too_large` — Body over 5 MB.
   - `500` [`ApiErrorBody`](#apierrorbody) `internal_error` — System Settings didn't open.
 
+#### `device` — `/api/device`
+
+**GET** — This daemon's device-local settings (name, placement, remote hosts, sync).
+
+- Responses:
+  - `200` [`DeviceSettingsResponse`](#devicesettingsresponse) — The device settings.
+
+**PATCH** — Change the device's name, placement or remote hosts; applies live.
+
+- Body: [`DeviceSettingsPatch`](#devicesettingspatch)
+- Responses:
+  - `200` [`DeviceSettingsResponse`](#devicesettingsresponse) — The device settings now.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_json`, `invalid_request` — Malformed JSON or failed validation.
+  - `409` [`ApiErrorBody`](#apierrorbody) `locked_by_env` — An environment variable sets this field (see `lockedByEnv`).
+  - `413` [`ApiErrorBody`](#apierrorbody) `payload_too_large` — Body over 5 MB.
+
+#### `deviceSync` — `/api/device/sync`
+
+**PUT** — Sync this vault with the sync service (the token is stored 0600 in `$DDL_HOME`, never returned).
+
+- Body: [`DeviceSyncSetupRequest`](#devicesyncsetuprequest)
+- Responses:
+  - `200` [`DeviceSettingsResponse`](#devicesettingsresponse) — The device settings now.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_json`, `invalid_request` — Malformed JSON or failed validation.
+  - `409` [`ApiErrorBody`](#apierrorbody) `locked_by_env` — An environment variable sets this field (see `lockedByEnv`).
+  - `413` [`ApiErrorBody`](#apierrorbody) `payload_too_large` — Body over 5 MB.
+
+**DELETE** — Stop syncing with the sync service and delete the saved token.
+
+- Responses:
+  - `200` [`DeviceSettingsResponse`](#devicesettingsresponse) — The device settings now.
+  - `409` [`ApiErrorBody`](#apierrorbody) `locked_by_env` — An environment variable sets this field (see `lockedByEnv`).
+
+#### `pairingCodes` — `/api/pairing-codes`
+
+**POST** — Issue a single-use pairing code for a new device (valid for a few minutes).
+
+- Body: [`PairingCodeRequest`](#pairingcoderequest)
+- Responses:
+  - `201` [`PairingCodeResponse`](#pairingcoderesponse) — The code.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_json`, `invalid_request` — Malformed JSON or failed validation.
+  - `413` [`ApiErrorBody`](#apierrorbody) `payload_too_large` — Body over 5 MB.
+  - `429` [`ApiErrorBody`](#apierrorbody) `rate_limited` — Too many codes outstanding.
+
+#### `pair` — `/api/pair`
+
+**POST** — Exchange a pairing code for a device credential: a token for `app` and `daemon`, an HttpOnly cookie for `browser`.
+
+- Body: [`PairRequest`](#pairrequest)
+- Responses:
+  - `201` [`PairResponse`](#pairresponse) — Paired.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_json`, `invalid_request` — Malformed JSON or failed validation.
+  - `401` [`ApiErrorBody`](#apierrorbody) `pairing_rejected` — Wrong, expired or already used code.
+  - `413` [`ApiErrorBody`](#apierrorbody) `payload_too_large` — Body over 5 MB.
+  - `429` [`ApiErrorBody`](#apierrorbody) `rate_limited` — Too many attempts; try again in a minute.
+
+#### `devices` — `/api/devices`
+
+**GET** — The devices paired with this daemon.
+
+- Responses:
+  - `200` [`PairedDevicesResponse`](#paireddevicesresponse) — Paired devices.
+
+#### `pairedDevice` — `/api/devices/:id`
+
+- Path parameter `id`: string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) — Runtime id, safe to use in URLs.
+
+**DELETE** — Revoke a paired device: its credential stops working and its sockets close.
+
+- Responses:
+  - `204` no body — Revoked.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_request` — Invalid device id.
+  - `404` [`ApiErrorBody`](#apierrorbody) `not_found` — Unknown device.
+
+#### `machine` — `/api/machine`
+
+**GET** — The always-on machine: address, this device's pairing and its last known status.
+
+- Responses:
+  - `200` [`MachineStatusResponse`](#machinestatusresponse) — Machine status.
+
+#### `machinePair` — `/api/machine/pair`
+
+**POST** — Pair this device with the always-on machine using a code it issued, and make it the vault's always-on machine.
+
+- Body: [`MachinePairRequest`](#machinepairrequest)
+- Responses:
+  - `200` [`MachineStatusResponse`](#machinestatusresponse) — Paired: the machine's status.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_json`, `invalid_request` — Malformed JSON or failed validation.
+  - `401` [`ApiErrorBody`](#apierrorbody) `unauthorized`, `pairing_rejected` — Missing or invalid bearer token (`unauthorized`), or the machine rejected the code (`pairing_rejected`).
+  - `413` [`ApiErrorBody`](#apierrorbody) `payload_too_large` — Body over 5 MB.
+  - `429` [`ApiErrorBody`](#apierrorbody) `rate_limited` — The machine refused more attempts for now.
+  - `502` [`ApiErrorBody`](#apierrorbody) `machine_unreachable` — The machine didn't answer.
+
+#### `machineCheck` — `/api/machine/check`
+
+**POST** — Check the always-on machine now (reachability, version, agent, readiness).
+
+- Responses:
+  - `200` [`MachineStatusResponse`](#machinestatusresponse) — The fresh status.
+
+#### `machinePairing` — `/api/machine/pairing`
+
+**DELETE** — Forget this device's credential for the always-on machine (revoked on the machine when it answers).
+
+- Responses:
+  - `200` [`MachineStatusResponse`](#machinestatusresponse) — Unpaired: the machine's status.
+
 #### `ws` — `/ws`
 
 **GET** — WebSocket upgrade (`?token=`). Rejected upgrades answer 401/403/404 with an empty body.
@@ -425,15 +551,19 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
 | `invalid_path` | A vault path is malformed, hidden (dot-files, the sidecar) or not a text note. |
 | `invalid_settings` | The stored settings make the request impossible. |
 | `unauthorized` | Missing or wrong bearer token. |
+| `pairing_rejected` | The pairing code is wrong, expired or already used (checked here, or by the always-on machine). |
 | `forbidden_host` | The Host header is not a loopback address of this daemon (DNS rebinding). |
 | `forbidden_origin` | The Origin header is not allowed (CSRF). |
 | `not_found` | Unknown route (or method), or the addressed item doesn't exist. |
 | `conflict` | Stale `baseVersion`, existing target, or an approval that is no longer pending. |
+| `locked_by_env` | The device setting is set by an environment variable (see `lockedByEnv`); change it there. |
 | `payload_too_large` | Request body over 5 MB. |
 | `upgrade_required` | `/ws` requested without a WebSocket upgrade. |
+| `rate_limited` | Too many pairing attempts, or too many pairing codes outstanding; try later. |
 | `http_error` | Raised by the HTTP framework itself. |
 | `agent_error` | An agent action failed unexpectedly. |
 | `internal_error` | Unexpected daemon failure. |
+| `machine_unreachable` | The always-on machine didn't answer (network, TLS or timeout). |
 | `agent_unavailable` | The agent can't act right now (mode off, missing API key, safety system down). |
 
 ### WebSocket `/ws`
@@ -856,6 +986,27 @@ Orchestrator and subagent settings.
 
 _Tolerant: clients must ignore keys they don't know._
 
+#### AlwaysOnMachine
+
+The always-on machine every device can hand the agent to. Its name and address sync; each device pairs once and keeps its own credential.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | string (1–64 chars) | yes | 1–64 characters (e.g. the first label of its host). |
+| `url` | string (1–300 chars) | yes | `https://<host>[:port]`: lowercase, no trailing `/`, path, query or credentials; plain http only to loopback. |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### RemoteSettings
+
+Remote access settings shared by every device (non-secret).
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `alwaysOnMachine` | [`AlwaysOnMachine`](#alwaysonmachine) \| `null` | yes | null: no always-on machine. |
+
+_Tolerant: clients must ignore keys they don't know._
+
 #### AppSettings
 
 All user settings (stored in the vault sidecar so they travel with the vault).
@@ -867,6 +1018,7 @@ All user settings (stored in the vault sidecar so they travel with the vault).
 | `dailyNotes` | [`DailyNoteSettings`](#dailynotesettings) | yes |  |
 | `weeklyNotes` | [`WeeklyNoteSettings`](#weeklynotesettings) | yes |  |
 | `agent` | [`AgentSettings`](#agentsettings) | yes |  |
+| `remote` | [`RemoteSettings`](#remotesettings) | yes |  |
 
 _Tolerant: clients must ignore keys they don't know._
 
@@ -881,6 +1033,214 @@ A deep partial of AppSettings (PATCH semantics). Unknown keys are rejected.
 | `dailyNotes` | object | no |  |
 | `weeklyNotes` | object | no |  |
 | `agent` | object | no |  |
+| `remote` | object | no |  |
+
+_Strict: unknown keys are rejected._
+
+#### AgentPlacement
+
+Where this device's agent runs: `this_device` (here; takes the agent over from the always-on machine), `always_on_machine` (never here; relayed to the always-on machine) or `always_on_host` (this is the always-on machine; it runs the agent when no `this_device` does). Without sync a daemon runs its own agent whatever the placement.
+
+Type: `"this_device"` | `"always_on_machine"` | `"always_on_host"`
+
+#### AgentRunsOn
+
+The device that holds the agent lease.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `deviceId` | string (`^[A-Za-z0-9_-]{1,64}$`) | yes | Device id (as the sync service knows it). |
+| `name` | string (`^\S(?:[\s\S]*\S)?$`, 1–100 chars) | yes |  |
+| `thisDevice` | boolean | yes |  |
+| `alwaysOnMachine` | boolean | yes | The holder requested the lease with priority "host". |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### RelayState
+
+The link to the always-on machine's agent: `off` (not relaying), `connecting`, `connected`, `unreachable` or `not_paired`.
+
+Type: `"off"` | `"connecting"` | `"connected"` | `"unreachable"` | `"not_paired"`
+
+#### AgentPlacementStatus
+
+This device's placement and who runs the agent now.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `placement` | [`AgentPlacement`](#agentplacement) | yes |  |
+| `runsOn` | [`AgentRunsOn`](#agentrunson) \| `null` | yes | Who runs the agent now (null: nobody, or unknown without sync). |
+| `relay` | [`RelayState`](#relaystate) | yes |  |
+| `note` | string | no | Short, human ("Taking over from vm-1…", "Handing the agent to vm-1…"). |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### AgentReadiness
+
+Whether a daemon can run the agent: its harness, a model credential (never the value), the browser, desktop control and connectors.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `harness` | object | yes |  |
+| `modelCredential` | boolean | yes | A model credential for the configured harness is present. |
+| `browser` | boolean | yes |  |
+| `computer` | `"available"` \| `"needs_permissions"` \| `"unsupported"` | yes |  |
+| `connectors` | object | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### DeviceSyncSetup
+
+This device's link to the sync service. The vault token is never returned.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `url` | string (1–2048 chars) \| `null` | yes | null: not syncing with the sync service. |
+| `vault` | string (`^[A-Za-z0-9_-]{1,64}$`) \| `null` | yes | The sync vault id. |
+| `hasToken` | boolean | yes | A vault token is saved. |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### DeviceSettingsResponse
+
+This daemon's device-local settings (kept in `$DDL_HOME`, never synced).
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `device` | object | yes |  |
+| `placement` | [`AgentPlacement`](#agentplacement) | yes |  |
+| `remoteHosts` | string (1–259 chars)[] | yes | Names this daemon answers to besides loopback (e.g. its tailnet name). |
+| `sync` | [`DeviceSyncSetup`](#devicesyncsetup) | yes |  |
+| `lockedByEnv` | `"placement"` \| `"remoteHosts"` \| `"sync"`[] | yes | Fields set by environment variables; clients show them read-only. |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### DeviceSettingsPatch
+
+Body of `PATCH /api/device`: only the fields to change.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | string (1–64 chars) | no | Trimmed, then 1–64 characters. |
+| `placement` | [`AgentPlacement`](#agentplacement) | no |  |
+| `remoteHosts` | string (≤ 269 chars)[] | no | DNS names with an optional `:port`, at most 8; trimmed and lowercased. No IPs, schemes or paths. |
+
+_Strict: unknown keys are rejected._
+
+#### DeviceSyncSetupRequest
+
+Body of `PUT /api/device/sync`: point this device at the sync service.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `url` | string (1–2048 chars) | yes | The sync service: https (plain http only to loopback). |
+| `vault` | string (`^[A-Za-z0-9_-]{1,64}$`) | yes | The vault id printed by `ddl-sync vault create`. |
+| `token` | string (1–1024 chars) | no | The vault token; omit to keep the saved one. Stored 0600 in `$DDL_HOME`. |
+
+_Strict: unknown keys are rejected._
+
+#### PairedDeviceKind
+
+`browser` (gets an HttpOnly cookie), `app` (a native client) or `daemon` (another daemon relaying to this one).
+
+Type: `"browser"` | `"app"` | `"daemon"`
+
+#### PairedDevice
+
+A device holding a credential for this daemon.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | yes | Runtime id, safe to use in URLs. |
+| `name` | string (1–64 chars) | yes |  |
+| `kind` | [`PairedDeviceKind`](#paireddevicekind) | yes |  |
+| `createdAt` | integer (≥ 0) | yes | Epoch milliseconds. |
+| `lastSeenAt` | integer (≥ 0) \| `null` | yes | Last use (updated at most once a minute). |
+| `current` | boolean | no | The device making this request. |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### PairingCodeRequest
+
+Body of `POST /api/pairing-codes`.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | string (1–64 chars) | no | What the new device will be called. |
+
+_Strict: unknown keys are rejected._
+
+#### PairingCodeResponse
+
+A single-use pairing code.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `code` | string (8–8 chars) | yes | 8 characters of `23456789ABCDEFGHJKMNPQRSTVWXYZ`; show it as XXXX-XXXX. |
+| `expiresAt` | integer (≥ 0) | yes | Epoch milliseconds. |
+| `url` | string (≤ 300 chars) \| `null` | yes | `https://<first remote host>` for a QR code; null without remote hosts. |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### PairRequest
+
+Body of `POST /api/pair`: exchange a pairing code for a device credential.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `code` | string (1–32 chars) | yes | The pairing code: 8 characters of `23456789ABCDEFGHJKMNPQRSTVWXYZ`, any case; spaces and dashes are ignored. |
+| `name` | string (1–64 chars) | yes |  |
+| `kind` | [`PairedDeviceKind`](#paireddevicekind) | yes |  |
+
+_Strict: unknown keys are rejected._
+
+#### PairResponse
+
+The paired device and, for `app` and `daemon` kinds, its token (shown once). A browser gets an HttpOnly cookie instead.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `device` | [`PairedDevice`](#paireddevice) | yes |  |
+| `token` | string (16–512 chars) | no | Send as `Authorization: Bearer <token>`. |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### PairedDevicesResponse
+
+Every device paired with this daemon.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `devices` | [`PairedDevice`](#paireddevice)[] | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### MachineStatusResponse
+
+The always-on machine from this device's side: its address, this device's pairing and what the machine reports.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `machine` | [`AlwaysOnMachine`](#alwaysonmachine) \| `null` | yes | null: no always-on machine configured. |
+| `paired` | boolean | yes | This device holds a credential for the machine. |
+| `reachable` | boolean \| `null` | yes | null: not checked yet, or no machine. |
+| `checkedAt` | integer (≥ 0) \| `null` | yes |  |
+| `version` | string (1–100 chars) | no | The machine's daemon version. |
+| `agent` | object | no | Where the agent runs, as the machine reports it. |
+| `readiness` | [`AgentReadiness`](#agentreadiness) | no | The machine's readiness. |
+| `error` | string | no | Why the last check or pairing failed. |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### MachinePairRequest
+
+Body of `POST /api/machine/pair`: pair this device with the always-on machine.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `url` | string (1–300 chars) | yes | `https://<tailnet name>[:port]`; case and a trailing `/` are normalized. |
+| `code` | string (1–32 chars) | yes | The pairing code: 8 characters of `23456789ABCDEFGHJKMNPQRSTVWXYZ`, any case; spaces and dashes are ignored. |
+| `name` | string (1–64 chars) | no | Default: the first label of the host. |
 
 _Strict: unknown keys are rejected._
 
@@ -1159,6 +1519,8 @@ The agent runtime's state (also pushed as `agent.status`).
 | `connectors` | [`ConnectorStatus`](#connectorstatus)[] | yes |  |
 | `execution` | [`ExecutionStatus`](#executionstatus) | yes |  |
 | `problem` | string | no | Why the agent cannot run, when it can't. |
+| `placement` | [`AgentPlacementStatus`](#agentplacementstatus) | no | Where the agent runs for this device, and who runs it now. |
+| `readiness` | [`AgentReadiness`](#agentreadiness) | no | This daemon's own readiness to run the agent. |
 
 _Tolerant: clients must ignore keys they don't know._
 
@@ -1304,7 +1666,7 @@ _Strict: unknown keys are rejected._
 
 Machine-readable error code. Treat unknown codes like any failure with that HTTP status.
 
-Type: `"invalid_json"` | `"invalid_request"` | `"invalid_path"` | `"invalid_settings"` | `"unauthorized"` | `"forbidden_host"` | `"forbidden_origin"` | `"not_found"` | `"conflict"` | `"payload_too_large"` | `"upgrade_required"` | `"http_error"` | `"agent_error"` | `"internal_error"` | `"agent_unavailable"`
+Type: `"invalid_json"` | `"invalid_request"` | `"invalid_path"` | `"invalid_settings"` | `"unauthorized"` | `"pairing_rejected"` | `"forbidden_host"` | `"forbidden_origin"` | `"not_found"` | `"conflict"` | `"locked_by_env"` | `"payload_too_large"` | `"upgrade_required"` | `"rate_limited"` | `"http_error"` | `"agent_error"` | `"internal_error"` | `"machine_unreachable"` | `"agent_unavailable"`
 
 #### ApiErrorBody
 

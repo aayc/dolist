@@ -120,6 +120,41 @@ describe("wire ⇄ persisted settings ranges", () => {
     }
   });
 
+  it("both accept exactly the same always-on machines", () => {
+    const url = "https://vm-name.tailnet-name.ts.net";
+    for (const [alwaysOnMachine, ok] of [
+      [null, true],
+      [{ name: "vm-name", url }, true],
+      [{ name: "vm-name", url: `${url}:8443` }, true],
+      [{ name: "vm-name", url: "http://127.0.0.1:7400" }, true],
+      [{ name: "n".repeat(64), url }, true],
+      [{ name: "n".repeat(65), url }, false],
+      [{ name: "   ", url }, false],
+      [{ name: "tab\tname", url }, false],
+      [{ name: "vm-name", url: "http://vm-name.tailnet-name.ts.net" }, false],
+      [{ name: "vm-name", url: `${url}/` }, false],
+      [{ name: "vm-name", url: "https://VM-NAME.tailnet-name.ts.net" }, false],
+      [{ name: "vm-name", url: `${url}/api` }, false],
+      [{ name: "vm-name", url: "https://user:secret@vm-name.tailnet-name.ts.net" }, false],
+      [{ name: "vm-name", url: "https://100.64.0.1" }, false],
+      [{ name: "vm-name" }, false],
+      [{ url }, false],
+      ["vm-name", false],
+    ] as const) {
+      const patch = { remote: { alwaysOnMachine } };
+      const label = JSON.stringify(alwaysOnMachine);
+      expect(UpdateSettingsRequestSchema.safeParse(patch).success, label).toBe(ok);
+      expect(PersistedSettingsOverridesSchema.safeParse(patch).success, label).toBe(ok);
+    }
+  });
+
+  it("both trim the always-on machine's name the same way", () => {
+    const patch = { remote: { alwaysOnMachine: { name: "  vm-name ", url: "http://[::1]:7400" } } };
+    const expected = { remote: { alwaysOnMachine: { name: "vm-name", url: "http://[::1]:7400" } } };
+    expect(UpdateSettingsRequestSchema.parse(patch)).toEqual(expected);
+    expect(PersistedSettingsOverridesSchema.parse(patch)).toEqual(expected);
+  });
+
   it("both accept exactly the known approval policies", () => {
     for (const [approvalPolicy, ok] of [
       ["ask_every_action", true],

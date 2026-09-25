@@ -140,6 +140,25 @@ const agentStatus = shape({
     ),
   }),
   problem: optional(str),
+  placement: optional(
+    shape({
+      placement: str,
+      runsOn: nullable(
+        shape({ deviceId: str, name: str, thisDevice: bool, alwaysOnMachine: bool }),
+      ),
+      relay: str,
+      note: optional(str),
+    }),
+  ),
+  readiness: optional(
+    shape({
+      harness: shape({ kind: str, ready: bool, problem: optional(str) }),
+      modelCredential: bool,
+      browser: bool,
+      computer: str,
+      connectors: shape({ configured: num, connected: num }),
+    }),
+  ),
 });
 
 const periodicNotes = shape({ folder: str, format: str, template: str });
@@ -169,6 +188,7 @@ const settings = shape({
     approvalTimeoutMs: num,
     approvalPolicy: optional(str),
   }),
+  remote: optional(shape({ alwaysOnMachine: nullable(shape({ name: str, url: str })) })),
 });
 
 const validators: Record<ServerEvent["type"], Check> = {

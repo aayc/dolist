@@ -3,7 +3,12 @@ import { API_VERSION } from "@ddl/core";
 import { API_ERROR_CODE_DESCRIPTIONS, API_ERROR_CODES } from "../wire/errors";
 import { ClientEventSchema, ServerEventSchema } from "../wire/events";
 import { namedWireSchemas, wireRegistry } from "../wire/registry";
-import { COMMON_API_ERRORS, listOperations, type ResponseSpec } from "../wire/routes";
+import {
+  COMMON_API_ERRORS,
+  listOperations,
+  type ResponseSpec,
+  ROUTE_AUTH_DESCRIPTIONS,
+} from "../wire/routes";
 import { buildRoutesDocument, buildWireJsonSchema } from "./json-schema";
 
 export const GENERATED_BEGIN =
@@ -95,6 +100,7 @@ function fieldTable(schema: Json, defs: Json): string[] {
 
 function responseLine(status: string, spec: ResponseSpec): string {
   if (spec.kind === "binary") return `  - \`${status}\` bytes — ${spec.description}`;
+  if (spec.kind === "empty") return `  - \`${status}\` no body — ${spec.description}`;
   const id = wireRegistry.get(spec.schema)?.id;
   const schema = id ? link(id) : "see `routes.json`";
   const codes = spec.kind === "error" ? ` ${spec.codes.map((c) => `\`${c}\``).join(", ")}` : "";
@@ -115,26 +121,34 @@ export function renderProtocolReference(): string {
     "",
     "### REST routes",
     "",
-    "| Route | Method | Path | Body | Success |",
-    "| --- | --- | --- | --- | --- |",
+    "| Route | Method | Path | Auth | Body | Success |",
+    "| --- | --- | --- | --- | --- | --- |",
   ];
   for (const { name, method, route, operation } of operations) {
     const body = operation.body ? link(wireRegistry.get(operation.body)!.id) : "—";
     const success = Object.entries(operation.responses)
       .filter(([status]) => Number(status) < 300)
-      .map(([status, spec]) =>
-        spec.kind === "binary"
-          ? `${status} bytes`
-          : `${status} ${link(wireRegistry.get(spec.schema)!.id)}`,
-      )
+      .map(([status, spec]) => {
+        if (spec.kind === "binary") return `${status} bytes`;
+        if (spec.kind === "empty") return `${status} no body`;
+        return `${status} ${link(wireRegistry.get(spec.schema)!.id)}`;
+      })
       .join(", ");
-    out.push(`| \`${name}\` | ${method} | \`${route.path}\` | ${body} | ${success || "—"} |`);
+    out.push(
+      `| \`${name}\` | ${method} | \`${route.path}\` | \`${route.auth}\` | ${body} | ${success || "—"} |`,
+    );
   }
   out.push(
     "",
+    "Auth:",
+    "",
+    ...Object.entries(ROUTE_AUTH_DESCRIPTIONS).map(([kind, text]) => `- \`${kind}\`: ${text}`),
+    "",
     `Every \`/api/*\` route can also answer ${Object.entries(COMMON_API_ERRORS)
       .map(([status, spec]) => `${status} (${spec.codes.map((c) => `\`${c}\``).join(", ")})`)
-      .join(", ")}. Methods a route doesn't list answer 404 \`not_found\`.`,
+      .join(
+        ", ",
+      )}, unless it lists that status itself. Methods a route doesn't list answer 404 \`not_found\`.`,
     "",
   );
 

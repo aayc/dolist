@@ -1,0 +1,32 @@
+[
+  {
+    "name": "code too short",
+    "value": { "code": "K7PX4MQ", "name": "iPhone", "kind": "app" },
+    "path": ["code"],
+    "code": "custom"
+  },
+  {
+    "name": "code with an ambiguous character",
+    "value": { "code": "K7PX-4MQO", "name": "iPhone", "kind": "app" },
+    "path": ["code"],
+    "code": "custom"
+  },
+  {
+    "name": "missing name",
+    "value": { "code": "K7PX4MQ9", "kind": "app" },
+    "path": ["name"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "unknown kind",
+    "value": { "code": "K7PX4MQ9", "name": "iPhone", "kind": "phone" },
+    "path": ["kind"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "extra key",
+    "value": { "code": "K7PX4MQ9", "name": "iPhone", "kind": "app", "token": "x" },
+    "path": [],
+    "code": "unrecognized_keys"
+  }
+]

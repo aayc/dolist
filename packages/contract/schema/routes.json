@@ -2,8 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:daily-do-list:routes:v1",
   "title": "Daily Do List REST routes",
-  "description": "Path patterns use `:name` for one segment and `*` for the rest (a percent-encoded vault path). Every bearer route may also answer the `common` errors.",
+  "description": "Path patterns use `:name` for one segment and `*` for the rest (a percent-encoded vault path). Every `/api/*` route (auth `bearer` or `pairing_code`) may also answer the `common` errors unless it declares that status itself.",
   "x-api-version": 1,
+  "auth": {
+    "bearer": "`Authorization: Bearer <token>`, plus the Host and Origin checks.",
+    "pairing_code": "No bearer token: the pairing code in the body is the credential (Host and Origin are still checked).",
+    "upgrade": "WebSocket upgrade with the bearer token (`?token=`) and the Host check."
+  },
   "common": {
     "401": {
       "description": "Missing or invalid bearer token.",
@@ -982,6 +987,361 @@
         }
       }
     },
+    "device": {
+      "path": "/api/device",
+      "auth": "bearer",
+      "methods": {
+        "GET": {
+          "summary": "This daemon's device-local settings (name, placement, remote hosts, sync).",
+          "responses": {
+            "200": {
+              "description": "The device settings.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/DeviceSettingsResponse"
+              }
+            }
+          }
+        },
+        "PATCH": {
+          "summary": "Change the device's name, placement or remote hosts; applies live.",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/DeviceSettingsPatch"
+          },
+          "responses": {
+            "200": {
+              "description": "The device settings now.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/DeviceSettingsResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "409": {
+              "description": "An environment variable sets this field (see `lockedByEnv`).",
+              "codes": ["locked_by_env"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "deviceSync": {
+      "path": "/api/device/sync",
+      "auth": "bearer",
+      "methods": {
+        "PUT": {
+          "summary": "Sync this vault with the sync service (the token is stored 0600 in `$DDL_HOME`, never returned).",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/DeviceSyncSetupRequest"
+          },
+          "responses": {
+            "200": {
+              "description": "The device settings now.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/DeviceSettingsResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "409": {
+              "description": "An environment variable sets this field (see `lockedByEnv`).",
+              "codes": ["locked_by_env"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        },
+        "DELETE": {
+          "summary": "Stop syncing with the sync service and delete the saved token.",
+          "responses": {
+            "200": {
+              "description": "The device settings now.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/DeviceSettingsResponse"
+              }
+            },
+            "409": {
+              "description": "An environment variable sets this field (see `lockedByEnv`).",
+              "codes": ["locked_by_env"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "pairingCodes": {
+      "path": "/api/pairing-codes",
+      "auth": "bearer",
+      "methods": {
+        "POST": {
+          "summary": "Issue a single-use pairing code for a new device (valid for a few minutes).",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/PairingCodeRequest"
+          },
+          "responses": {
+            "201": {
+              "description": "The code.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/PairingCodeResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "429": {
+              "description": "Too many codes outstanding.",
+              "codes": ["rate_limited"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "pair": {
+      "path": "/api/pair",
+      "auth": "pairing_code",
+      "methods": {
+        "POST": {
+          "summary": "Exchange a pairing code for a device credential: a token for `app` and `daemon`, an HttpOnly cookie for `browser`.",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/PairRequest"
+          },
+          "responses": {
+            "201": {
+              "description": "Paired.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/PairResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "401": {
+              "description": "Wrong, expired or already used code.",
+              "codes": ["pairing_rejected"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "429": {
+              "description": "Too many attempts; try again in a minute.",
+              "codes": ["rate_limited"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "devices": {
+      "path": "/api/devices",
+      "auth": "bearer",
+      "methods": {
+        "GET": {
+          "summary": "The devices paired with this daemon.",
+          "responses": {
+            "200": {
+              "description": "Paired devices.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/PairedDevicesResponse"
+              }
+            }
+          }
+        }
+      }
+    },
+    "pairedDevice": {
+      "path": "/api/devices/:id",
+      "auth": "bearer",
+      "params": {
+        "$ref": "#/$defs/pairedDevice.params"
+      },
+      "methods": {
+        "DELETE": {
+          "summary": "Revoke a paired device: its credential stops working and its sockets close.",
+          "responses": {
+            "204": {
+              "description": "Revoked.",
+              "content": "none"
+            },
+            "400": {
+              "description": "Invalid device id.",
+              "codes": ["invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "Unknown device.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "machine": {
+      "path": "/api/machine",
+      "auth": "bearer",
+      "methods": {
+        "GET": {
+          "summary": "The always-on machine: address, this device's pairing and its last known status.",
+          "responses": {
+            "200": {
+              "description": "Machine status.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/MachineStatusResponse"
+              }
+            }
+          }
+        }
+      }
+    },
+    "machinePair": {
+      "path": "/api/machine/pair",
+      "auth": "bearer",
+      "methods": {
+        "POST": {
+          "summary": "Pair this device with the always-on machine using a code it issued, and make it the vault's always-on machine.",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/MachinePairRequest"
+          },
+          "responses": {
+            "200": {
+              "description": "Paired: the machine's status.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/MachineStatusResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "401": {
+              "description": "Missing or invalid bearer token (`unauthorized`), or the machine rejected the code (`pairing_rejected`).",
+              "codes": ["unauthorized", "pairing_rejected"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "429": {
+              "description": "The machine refused more attempts for now.",
+              "codes": ["rate_limited"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "502": {
+              "description": "The machine didn't answer.",
+              "codes": ["machine_unreachable"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "machineCheck": {
+      "path": "/api/machine/check",
+      "auth": "bearer",
+      "methods": {
+        "POST": {
+          "summary": "Check the always-on machine now (reachability, version, agent, readiness).",
+          "responses": {
+            "200": {
+              "description": "The fresh status.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/MachineStatusResponse"
+              }
+            }
+          }
+        }
+      }
+    },
+    "machinePairing": {
+      "path": "/api/machine/pairing",
+      "auth": "bearer",
+      "methods": {
+        "DELETE": {
+          "summary": "Forget this device's credential for the always-on machine (revoked on the machine when it answers).",
+          "responses": {
+            "200": {
+              "description": "Unpaired: the machine's status.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/MachineStatusResponse"
+              }
+            }
+          }
+        }
+      }
+    },
     "ws": {
       "path": "/ws",
       "auth": "upgrade",
@@ -1124,6 +1484,18 @@
         }
       },
       "required": ["path"],
+      "additionalProperties": false
+    },
+    "pairedDevice.params": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        }
+      },
+      "required": ["id"],
       "additionalProperties": false
     },
     "rename.POST.409": {

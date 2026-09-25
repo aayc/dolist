@@ -2,9 +2,9 @@
  * AppSettings. The full shape is a response (tolerant); `UpdateSettingsRequest` is its strict deep
  * partial. Both share the same field constraints, which are the daemon's accepted ranges.
  */
-import { AGENT_HARNESS_KINDS, APPROVAL_POLICIES } from "@ddl/core";
+import { AGENT_HARNESS_KINDS, APPROVAL_POLICIES, isMachineUrl } from "@ddl/core";
 import { z } from "zod";
-import { ModelIdSchema, WIRE_LIMITS } from "./primitives";
+import { DeviceNameInputSchema, DeviceNameSchema, ModelIdSchema, WIRE_LIMITS } from "./primitives";
 import { named } from "./registry";
 
 export const SETTINGS_RANGES = {
@@ -131,6 +131,38 @@ export const AgentSettingsSchema = named(
   }),
 );
 
+/** The machine's address as settings and responses carry it (`normalizeMachineUrl`'s form). */
+export const MachineUrlSchema = z
+  .string()
+  .min(1)
+  .max(300)
+  .refine(
+    isMachineUrl,
+    "must be https://<host>[:port] in lowercase, without path, query or credentials (plain http only to loopback)",
+  )
+  .describe(
+    "`https://<host>[:port]`: lowercase, no trailing `/`, path, query or credentials; plain http only to loopback.",
+  );
+
+const machineFields = {
+  name: DeviceNameSchema.describe("1–64 characters (e.g. the first label of its host)."),
+  url: MachineUrlSchema,
+};
+
+export const AlwaysOnMachineSchema = named(
+  "AlwaysOnMachine",
+  "The always-on machine every device can hand the agent to. Its name and address sync; each device pairs once and keeps its own credential.",
+  z.looseObject(machineFields),
+);
+
+export const RemoteSettingsSchema = named(
+  "RemoteSettings",
+  "Remote access settings shared by every device (non-secret).",
+  z.looseObject({
+    alwaysOnMachine: AlwaysOnMachineSchema.nullable().describe("null: no always-on machine."),
+  }),
+);
+
 export const AppSettingsSchema = named(
   "AppSettings",
   "All user settings (stored in the vault sidecar so they travel with the vault).",
@@ -140,6 +172,7 @@ export const AppSettingsSchema = named(
     dailyNotes: DailyNoteSettingsSchema,
     weeklyNotes: WeeklyNoteSettingsSchema,
     agent: AgentSettingsSchema,
+    remote: RemoteSettingsSchema,
   }),
 );
 
@@ -161,6 +194,14 @@ export const SettingsPatchSectionSchemas = {
       cursorModel: ModelIdInputSchema,
       judgeModel: ModelIdInputSchema,
       watch: z.strictObject(watchFields).partial(),
+    })
+    .partial(),
+  remote: z
+    .strictObject({
+      alwaysOnMachine: z
+        .strictObject({ name: DeviceNameInputSchema, url: MachineUrlSchema })
+        .nullable()
+        .describe("The whole machine, or null to forget it."),
     })
     .partial(),
 };

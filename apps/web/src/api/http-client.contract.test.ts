@@ -96,7 +96,7 @@ function responses(name: ApiRouteName, method: HttpMethod): Record<number, Respo
 
 /** An arbitrary valid body for a response spec. */
 function bodyFor(spec: ResponseSpec): fc.Arbitrary<unknown> {
-  if (spec.kind === "binary") return fc.constant(undefined);
+  if (spec.kind === "binary" || spec.kind === "empty") return fc.constant(undefined);
   const id = wireRegistry.get(spec.schema)?.id as WireSchemaName | undefined;
   if (id) return wireArbitraries[id]() as fc.Arbitrary<unknown>;
   // Anonymous union (rename 409): any member.

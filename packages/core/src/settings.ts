@@ -84,12 +84,29 @@ export interface AgentSettings {
   approvalPolicy: ApprovalPolicy;
 }
 
+/**
+ * The always-on machine every device of the vault can hand the agent to. Its name and address sync
+ * with the settings; each device pairs with it once and keeps its own credential in `DDL_HOME`.
+ */
+export interface AlwaysOnMachine {
+  /** 1–64 characters, trimmed. */
+  name: string;
+  /** `https://<host>[:port]` in the form `normalizeMachineUrl` returns. */
+  url: string;
+}
+
+/** Remote access settings shared by every device (non-secret). */
+export interface RemoteSettings {
+  alwaysOnMachine: AlwaysOnMachine | null;
+}
+
 export interface AppSettings {
   theme: ThemePreference;
   editor: EditorSettings;
   dailyNotes: DailyNoteSettings;
   weeklyNotes: WeeklyNoteSettings;
   agent: AgentSettings;
+  remote: RemoteSettings;
 }
 
 export const DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash";
@@ -126,6 +143,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     approvalTimeoutMs: 12 * 60 * 60 * 1000,
     approvalPolicy: DEFAULT_APPROVAL_POLICY,
   },
+  remote: { alwaysOnMachine: null },
 };
 
 export type DeepPartial<T> = {

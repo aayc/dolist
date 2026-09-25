@@ -62,5 +62,90 @@
         "capabilities": { "shell": true, "browser": false, "computer": false }
       }
     }
+  },
+  {
+    "name": "this device takes the agent over from the always-on machine",
+    "value": {
+      "mode": "live",
+      "enabled": true,
+      "model": "deepseek/deepseek-v4.1-flash",
+      "running": 0,
+      "queued": 0,
+      "pendingApprovals": 0,
+      "connectors": [],
+      "execution": {
+        "provider": "local",
+        "capabilities": { "shell": true, "browser": true, "computer": true }
+      },
+      "placement": {
+        "placement": "this_device",
+        "runsOn": {
+          "deviceId": "dev_k3j9x0q2m1abc4d5e6f7",
+          "name": "vm-name",
+          "thisDevice": false,
+          "alwaysOnMachine": true
+        },
+        "relay": "off",
+        "note": "Taking over from vm-name…"
+      },
+      "readiness": {
+        "harness": { "kind": "pi", "ready": false, "problem": "OPENROUTER_API_KEY is not set." },
+        "modelCredential": false,
+        "browser": true,
+        "computer": "needs_permissions",
+        "connectors": { "configured": 3, "connected": 1 }
+      },
+      "problem": "OPENROUTER_API_KEY is not set."
+    }
+  },
+  {
+    "name": "the always-on machine, running the agent",
+    "value": {
+      "mode": "live",
+      "enabled": true,
+      "model": "claude-opus-5-5",
+      "running": 2,
+      "queued": 1,
+      "pendingApprovals": 0,
+      "connectors": [],
+      "execution": {
+        "provider": "local",
+        "capabilities": { "shell": true, "browser": true, "computer": false }
+      },
+      "placement": {
+        "placement": "always_on_host",
+        "runsOn": {
+          "deviceId": "dev_k3j9x0q2m1abc4d5e6f7",
+          "name": "vm-name",
+          "thisDevice": true,
+          "alwaysOnMachine": true
+        },
+        "relay": "off"
+      },
+      "readiness": {
+        "harness": { "kind": "cursor", "ready": true },
+        "modelCredential": true,
+        "browser": true,
+        "computer": "unsupported",
+        "connectors": { "configured": 0, "connected": 0 }
+      }
+    }
+  },
+  {
+    "name": "set to the always-on machine, not paired: nobody known to run it",
+    "value": {
+      "mode": "off",
+      "enabled": true,
+      "model": "mock",
+      "running": 0,
+      "queued": 0,
+      "pendingApprovals": 0,
+      "connectors": [],
+      "execution": {
+        "provider": "local",
+        "capabilities": { "shell": false, "browser": false, "computer": false }
+      },
+      "placement": { "placement": "always_on_machine", "runsOn": null, "relay": "not_paired" }
+    }
   }
 ]

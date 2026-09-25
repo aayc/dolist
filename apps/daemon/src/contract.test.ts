@@ -503,6 +503,26 @@ async function settingsPatch(observed: Observed, method: "PUT" | "PATCH") {
   expect((await patch({ agent: { cursorModel: "  " } })).body).toMatchObject({
     error: "invalid_request",
   });
+  const machine = { name: "vm-name", url: "https://vm-name.tailnet-name.ts.net" };
+  expect(
+    (await patch({ remote: { alwaysOnMachine: { ...machine, name: " vm-name " } } })).body,
+  ).toMatchObject({ settings: { remote: { alwaysOnMachine: machine } } });
+  for (const url of [
+    "http://vm-name.tailnet-name.ts.net",
+    "https://vm-name.tailnet-name.ts.net/app",
+    "https://vm-name.tailnet-name.ts.net?x=1",
+    "https://user:secret@vm-name.tailnet-name.ts.net",
+  ]) {
+    expect((await patch({ remote: { alwaysOnMachine: { ...machine, url } } })).body).toMatchObject({
+      error: "invalid_request",
+    });
+  }
+  expect(
+    (await patch({ remote: { alwaysOnMachine: { ...machine, name: "n".repeat(65) } } })).body,
+  ).toMatchObject({ error: "invalid_request" });
+  expect((await patch({ remote: { alwaysOnMachine: null } })).body).toMatchObject({
+    settings: { remote: { alwaysOnMachine: null } },
+  });
   expect((await patch({ theme: "neon" })).body).toMatchObject({ error: "invalid_request" });
   expect((await patch({ dailyNotes: { folder: ".hidden" } })).body).toMatchObject({
     error: "invalid_request",
@@ -522,16 +542,46 @@ async function agentEnabled(observed: Observed, method: "PUT" | "POST") {
   expect((await api.call("agentEnabled", method, { body: TOO_BIG })).status).toBe(413);
 }
 
+/**
+ * Operations the contract declares that the daemon doesn't serve yet: they answer 404 like any
+ * unknown route. Remote access and pairing (S1) and device settings with the machine link (S2)
+ * replace each entry with a scenario.
+ */
+const NOT_SERVED_YET = new Set([
+  "GET device",
+  "PATCH device",
+  "PUT deviceSync",
+  "DELETE deviceSync",
+  "POST pairingCodes",
+  "POST pair",
+  "GET devices",
+  "DELETE pairedDevice",
+  "GET machine",
+  "POST machinePair",
+  "POST machineCheck",
+  "DELETE machinePairing",
+]);
+
 const operations = listOperations();
+const served = operations.filter((op) => !NOT_SERVED_YET.has(operationKey(op.name, op.method)));
 
 describe("every contract operation", () => {
   it("has a scenario (and nothing stale)", () => {
     expect(Object.keys(scenarios).sort()).toEqual(
-      operations.map(({ name, method }) => operationKey(name, method)).sort(),
+      served.map(({ name, method }) => operationKey(name, method)).sort(),
     );
+    const keys = new Set(operations.map(({ name, method }) => operationKey(name, method)));
+    for (const key of NOT_SERVED_YET) expect(keys.has(key), key).toBe(true);
   });
 
-  it.each(operations.map((op) => [operationKey(op.name, op.method), op] as const))(
+  it.each([...NOT_SERVED_YET])("%s is not served yet (404)", async (key) => {
+    const op = operations.find(({ name, method }) => operationKey(name, method) === key)!;
+    const app = await createTestApp();
+    const res = await app.request(routePath(op.name, { id: "x" }), { method: op.method });
+    expect(res.status).toBe(404);
+  });
+
+  it.each(served.map((op) => [operationKey(op.name, op.method), op] as const))(
     "%s reaches every declared status and answers each as declared",
     async (key, { operation }) => {
       const observed: Observed = new Map();

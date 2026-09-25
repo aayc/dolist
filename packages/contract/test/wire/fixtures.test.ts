@@ -82,6 +82,11 @@ describe("fixture coverage", () => {
       "PostMessageRequest",
       "ApprovalDecisionRequest",
       "UpdateSettingsRequest",
+      "DeviceSettingsPatch",
+      "DeviceSyncSetupRequest",
+      "PairingCodeRequest",
+      "PairRequest",
+      "MachinePairRequest",
       "ServerEvent",
       "ClientEvent",
     ]) {

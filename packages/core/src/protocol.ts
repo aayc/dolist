@@ -6,6 +6,7 @@
  *  - One WebSocket at `/ws` for server push (`ServerEvent`) and light client signals (`ClientEvent`).
  *
  * Auth: every request carries `Authorization: Bearer <token>`; the WebSocket passes `?token=`.
+ * The exception is `POST /api/pair`, where the pairing code in the body is the credential.
  * The daemon binds to 127.0.0.1 and rejects foreign `Host`/`Origin` headers (DNS-rebinding/CSRF).
  *
  * Runtime schemas for every shape here live in `@ddl/contract` (kept in lockstep by type tests);
@@ -22,7 +23,7 @@ import type {
   ThreadMessage,
   ThreadSummary,
 } from "./agent-types";
-import type { AppSettings, DeepPartial } from "./settings";
+import type { AgentHarnessKind, AlwaysOnMachine, AppSettings, DeepPartial } from "./settings";
 
 /**
  * Major version of the protocol, bumped only for breaking changes (everything else is additive).
@@ -99,6 +100,29 @@ export const API_ROUTES = {
    * (macOS; 404 elsewhere).
    */
   computerPermissionsOpen: "/api/computer/permissions/open",
+  /**
+   * GET → DeviceSettingsResponse · PATCH DeviceSettingsPatch → DeviceSettingsResponse (409 when a
+   * field is set by an environment variable)
+   */
+  device: "/api/device",
+  /** PUT DeviceSyncSetupRequest → DeviceSettingsResponse · DELETE → DeviceSettingsResponse (sync off) */
+  deviceSync: "/api/device/sync",
+  /** POST PairingCodeRequest → 201 PairingCodeResponse (429 when too many are outstanding) */
+  pairingCodes: "/api/pairing-codes",
+  /** POST PairRequest → 201 PairResponse. No bearer token: the pairing code is the credential. */
+  pair: "/api/pair",
+  /** GET → PairedDevicesResponse */
+  devices: "/api/devices",
+  /** DELETE → 204: revokes a paired device and closes its sockets */
+  pairedDevice: (id: string) => `/api/devices/${encodeURIComponent(id)}`,
+  /** GET → MachineStatusResponse */
+  machine: "/api/machine",
+  /** POST MachinePairRequest → MachineStatusResponse */
+  machinePair: "/api/machine/pair",
+  /** POST → MachineStatusResponse (checks the machine now) */
+  machineCheck: "/api/machine/check",
+  /** DELETE → MachineStatusResponse (drops this device's credential for the machine) */
+  machinePairing: "/api/machine/pairing",
   /** WebSocket: ServerEvent ⇄ ClientEvent */
   ws: "/ws",
 } as const;
@@ -278,6 +302,10 @@ export interface AgentStatusResponse {
   execution: ExecutionStatus;
   /** Present when the agent cannot run (e.g. missing OPENROUTER_API_KEY). */
   problem?: string;
+  /** Where the agent runs for this device, and who runs it now. */
+  placement?: AgentPlacementStatus;
+  /** This daemon's own readiness to run the agent. */
+  readiness?: AgentReadiness;
 }
 
 export interface SetAgentEnabledRequest {
@@ -352,6 +380,148 @@ export interface ComputerPermissionsOpenRequest {
   pane: ComputerPermissionPane;
 }
 
+// ── Placement, readiness ───────────────────────────────────────────────────
+
+/**
+ * Where this device's agent runs (a device-local setting, never synced):
+ * - `this_device`: here; it takes the agent lease over from the always-on machine.
+ * - `always_on_machine`: never here; agent routes and events relay to the always-on machine.
+ * - `always_on_host`: this is the always-on machine; it runs the agent when no `this_device` does.
+ * Without sync a daemon is standalone and runs its own agent whatever the placement.
+ */
+export type AgentPlacement = "this_device" | "always_on_machine" | "always_on_host";
+
+export interface AgentRunsOn {
+  deviceId: string;
+  name: string;
+  thisDevice: boolean;
+  /** The holder requested the lease with priority "host". */
+  alwaysOnMachine: boolean;
+}
+
+export type RelayState = "off" | "connecting" | "connected" | "unreachable" | "not_paired";
+
+export interface AgentPlacementStatus {
+  placement: AgentPlacement;
+  /** Who runs the agent now (null: nobody, or unknown without sync). */
+  runsOn: AgentRunsOn | null;
+  relay: RelayState;
+  /** Short, human ("Taking over from vm-1…", "Handing the agent to vm-1…"). */
+  note?: string;
+}
+
+export interface AgentReadiness {
+  harness: { kind: AgentHarnessKind; ready: boolean; problem?: string };
+  /** A model credential for the configured harness is present (never the value). */
+  modelCredential: boolean;
+  browser: boolean;
+  computer: "available" | "needs_permissions" | "unsupported";
+  connectors: { configured: number; connected: number };
+}
+
+// ── This daemon's device-local settings ────────────────────────────────────
+
+export interface DeviceSyncSetup {
+  /** null: not syncing with the sync service. */
+  url: string | null;
+  vault: string | null;
+  /** A vault token is saved (the token is never returned). */
+  hasToken: boolean;
+}
+
+export interface DeviceSettingsResponse {
+  device: { id: string; name: string };
+  placement: AgentPlacement;
+  /** Names this daemon answers to besides loopback (e.g. its tailnet name), lowercase. */
+  remoteHosts: string[];
+  sync: DeviceSyncSetup;
+  /** Fields set by environment variables; the UI shows them read-only. */
+  lockedByEnv: Array<"placement" | "remoteHosts" | "sync">;
+}
+
+export interface DeviceSettingsPatch {
+  /** 1–64 characters, trimmed. */
+  name?: string;
+  placement?: AgentPlacement;
+  /** DNS names (optional `:port`), at most 8, no IPs, no scheme or path (see `normalizeRemoteHost`). */
+  remoteHosts?: string[];
+}
+
+export interface DeviceSyncSetupRequest {
+  /** https (plain http only for loopback). */
+  url: string;
+  /** Sync vault id. */
+  vault: string;
+  /** Omit to keep the saved token. Written 0600 to `$DDL_HOME/sync-token`. */
+  token?: string;
+}
+
+// ── Pairing (this daemon issuing device credentials) ───────────────────────
+
+export type PairedDeviceKind = "browser" | "app" | "daemon";
+
+export interface PairedDevice {
+  id: string;
+  name: string;
+  kind: PairedDeviceKind;
+  createdAt: number;
+  lastSeenAt: number | null;
+  /** The device making this request. */
+  current?: boolean;
+}
+
+export interface PairingCodeRequest {
+  name?: string;
+}
+
+export interface PairingCodeResponse {
+  /** 8 characters, unambiguous alphabet, shown as XXXX-XXXX; single use. */
+  code: string;
+  expiresAt: number;
+  /** https://<first remote host> for the QR code, or null without remote hosts. */
+  url: string | null;
+}
+
+export interface PairRequest {
+  code: string;
+  name: string;
+  kind: PairedDeviceKind;
+}
+
+export interface PairResponse {
+  device: PairedDevice;
+  /** For "app" and "daemon" kinds; a browser gets an HttpOnly cookie instead. */
+  token?: string;
+}
+
+export interface PairedDevicesResponse {
+  devices: PairedDevice[];
+}
+
+// ── The always-on machine, from this device's side ─────────────────────────
+
+export interface MachineStatusResponse {
+  machine: AlwaysOnMachine | null;
+  /** This device holds a credential for it ($DDL_HOME/machine-token). */
+  paired: boolean;
+  /** null: not checked yet, or no machine. */
+  reachable: boolean | null;
+  checkedAt: number | null;
+  version?: string;
+  /** As the machine reports it. */
+  agent?: { runsOn: AgentRunsOn | null; problem?: string };
+  readiness?: AgentReadiness;
+  error?: string;
+}
+
+export interface MachinePairRequest {
+  /** `https://<tailnet name>[:port]`, no path, query or credentials (see `normalizeMachineUrl`). */
+  url: string;
+  code: string;
+  /** Default: the first label of the host. */
+  name?: string;
+}
+
 // ── Errors ────────────────────────────────────────────────────────────────
 
 /**
@@ -369,6 +539,8 @@ export type ApiErrorCode =
   | "invalid_settings"
   /** 401: missing or wrong bearer token. */
   | "unauthorized"
+  /** 401: a pairing code was wrong, expired or already used (here, or on the always-on machine). */
+  | "pairing_rejected"
   /** 403: the Host header is not a loopback address of this daemon (DNS rebinding). */
   | "forbidden_host"
   /** 403: the Origin header is not allowed (CSRF). */
@@ -377,16 +549,22 @@ export type ApiErrorCode =
   | "not_found"
   /** 409: optimistic-concurrency conflict, existing target, or an approval already decided. */
   | "conflict"
+  /** 409: a device setting is set by an environment variable (see `lockedByEnv`). */
+  | "locked_by_env"
   /** 413: request body over 5 MB. */
   | "payload_too_large"
   /** 426: `/ws` requested without a WebSocket upgrade. */
   | "upgrade_required"
+  /** 429: too many pairing attempts, or too many pairing codes outstanding. */
+  | "rate_limited"
   /** 4xx/5xx raised by the HTTP framework itself. */
   | "http_error"
   /** 500: an agent action failed unexpectedly. */
   | "agent_error"
   /** 500: unexpected daemon failure. */
   | "internal_error"
+  /** 502: the always-on machine didn't answer (network, TLS or timeout). */
+  | "machine_unreachable"
   /** 503: the agent runtime can't act right now (mode off, missing API key, safety system down). */
   | "agent_unavailable";
 
