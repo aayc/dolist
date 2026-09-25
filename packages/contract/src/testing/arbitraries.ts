@@ -439,6 +439,9 @@ const agentWatchWindow = (): Arb<core.AgentWatchWindow> =>
 
 const agentHarnessKind = () => enumOf<core.AgentHarnessKind>("pi", "cursor");
 
+const approvalPolicy = () =>
+  enumOf<core.ApprovalPolicy>("ask_every_action", "ask_risky", "ask_high_risk", "run_everything");
+
 const agentSettings = (): Arb<core.AgentSettings> =>
   fc.record({
     enabled: fc.boolean(),
@@ -451,6 +454,7 @@ const agentSettings = (): Arb<core.AgentSettings> =>
     watch: agentWatchWindow(),
     actOnExistingTasks: fc.boolean(),
     approvalTimeoutMs: intIn(SETTINGS_RANGES.approvalTimeoutMs),
+    approvalPolicy: approvalPolicy(),
   });
 
 const appSettings = (): Arb<core.AppSettings> =>
@@ -508,6 +512,7 @@ const updateSettingsRequest = (): Arb<core.UpdateSettingsRequest> =>
           }),
           actOnExistingTasks: fc.boolean(),
           approvalTimeoutMs: intIn(SETTINGS_RANGES.approvalTimeoutMs),
+          approvalPolicy: approvalPolicy(),
         },
         { requiredKeys: [] },
       ),
@@ -1016,6 +1021,7 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   WeeklyNoteSettings: weeklyNoteSettings,
   AgentWatchWindow: agentWatchWindow,
   AgentHarnessKind: agentHarnessKind,
+  ApprovalPolicy: approvalPolicy,
   AgentSettings: agentSettings,
   AppSettings: appSettings,
   UpdateSettingsRequest: updateSettingsRequest,
@@ -1117,6 +1123,7 @@ export const arb = plainFactories({
   weeklyNoteSettings,
   agentWatchWindow,
   agentHarnessKind,
+  approvalPolicy,
   agentSettings,
   appSettings,
   updateSettingsRequest,

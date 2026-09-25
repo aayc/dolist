@@ -2,7 +2,7 @@
  * AppSettings. The full shape is a response (tolerant); `UpdateSettingsRequest` is its strict deep
  * partial. Both share the same field constraints, which are the daemon's accepted ranges.
  */
-import { AGENT_HARNESS_KINDS } from "@ddl/core";
+import { AGENT_HARNESS_KINDS, APPROVAL_POLICIES } from "@ddl/core";
 import { z } from "zod";
 import { ModelIdSchema, WIRE_LIMITS } from "./primitives";
 import { named } from "./registry";
@@ -105,11 +105,18 @@ export const AgentHarnessKindSchema = named(
   z.enum(AGENT_HARNESS_KINDS),
 );
 
+export const ApprovalPolicySchema = named(
+  "ApprovalPolicy",
+  "When agents ask before acting: `ask_every_action` (every action that changes something), `ask_risky` (what the safety check flags; the default), `ask_high_risk` (only high-risk actions) or `run_everything` (never). Actions the safety check denies stay blocked under every policy.",
+  z.enum(APPROVAL_POLICIES),
+);
+
 export const AgentSettingsSchema = named(
   "AgentSettings",
   "Orchestrator and subagent settings.",
   z.looseObject({
     ...agentScalarFields,
+    approvalPolicy: ApprovalPolicySchema,
     harness: AgentHarnessKindSchema,
     model: ModelIdSchema.describe(
       "OpenRouter model id for the orchestrator and subagents with the Pi harness.",
@@ -148,6 +155,7 @@ export const SettingsPatchSectionSchemas = {
   agent: z
     .strictObject({
       ...agentScalarFields,
+      approvalPolicy: ApprovalPolicySchema,
       harness: AgentHarnessKindSchema,
       model: ModelIdInputSchema,
       cursorModel: ModelIdInputSchema,

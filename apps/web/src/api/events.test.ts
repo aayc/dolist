@@ -123,6 +123,13 @@ describe("parseServerEvent", () => {
         type: "settings.changed",
         settings: { ...DEFAULT_SETTINGS, agent: { ...DEFAULT_SETTINGS.agent, cursorModel: 5 } },
       },
+      {
+        type: "settings.changed",
+        settings: {
+          ...DEFAULT_SETTINGS,
+          agent: { ...DEFAULT_SETTINGS.agent, approvalPolicy: true },
+        },
+      },
       { type: "error" },
     ];
     for (const raw of cases) {
@@ -133,6 +140,14 @@ describe("parseServerEvent", () => {
 
   it("accepts settings from a daemon older than the harness setting", () => {
     const { harness: _harness, cursorModel: _cursorModel, ...older } = DEFAULT_SETTINGS.agent;
+    const raw = { type: "settings.changed", settings: { ...DEFAULT_SETTINGS, agent: older } };
+    const event = parseServerEvent(raw);
+    expect(event).toBe(raw);
+    expect(() => handleLikeTheUi(event!)).not.toThrow();
+  });
+
+  it("accepts settings from a daemon older than the approval policy", () => {
+    const { approvalPolicy: _policy, ...older } = DEFAULT_SETTINGS.agent;
     const raw = { type: "settings.changed", settings: { ...DEFAULT_SETTINGS, agent: older } };
     const event = parseServerEvent(raw);
     expect(event).toBe(raw);

@@ -21,6 +21,7 @@ import type {
   ApprovalOutcome,
   GrantQuery,
   NewApproval,
+  PendingApproval,
 } from "./types";
 
 export class ApprovalNotFoundError extends Error {
@@ -101,6 +102,8 @@ export function createApprovalBroker(
   const waiters = new Map<string, Waiter>();
   /** Targets of pending approvals (grants made from them are scoped to it). */
   const targets = new Map<string, string>();
+  /** Pending approvals asked only because the approval policy asks (the evaluator allowed them). */
+  const policyOnly = new Set<string>();
   const grants: ApprovalGrant[] = [];
   const listeners = new Set<(approval: ApprovalRequest) => void>();
 
@@ -209,6 +212,7 @@ export function createApprovalBroker(
     };
     approvals.set(id, decided);
     targets.delete(id);
+    policyOnly.delete(id);
     const waiter = waiters.get(id);
     waiters.delete(id);
     waiter?.cleanup();
@@ -285,6 +289,7 @@ export function createApprovalBroker(
       });
       approvals.set(approval.id, approval);
       if (input.target) targets.set(approval.id, input.target);
+      if (input.verdict === "allow") policyOnly.add(approval.id);
       emit(approval);
       schedulePersist();
       if (signal?.aborted) onAbort();
@@ -356,6 +361,21 @@ export function createApprovalBroker(
         if (approval.taskId === taskId && approval.status === "pending")
           finish(approval.id, "cancelled", reason);
       }
+    },
+
+    approvePending(
+      approves: (pending: PendingApproval) => boolean,
+      note: string,
+    ): ApprovalRequest[] {
+      const approved: ApprovalRequest[] = [];
+      for (const request of [...approvals.values()]) {
+        if (request.status !== "pending") continue;
+        const verdict = policyOnly.has(request.id) ? "allow" : "require_approval";
+        if (!approves({ request, verdict })) continue;
+        const decided = finish(request.id, "approved", note, "once");
+        if (decided) approved.push(decided);
+      }
+      return approved;
     },
 
     onUpsert(listener: (approval: ApprovalRequest) => void): Unsubscribe {

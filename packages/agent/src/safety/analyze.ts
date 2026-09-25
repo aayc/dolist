@@ -24,6 +24,11 @@ export interface ActionAnalysis {
   hits: RuleHit[];
   /** Read-only or internal: allowed without the judge unless a risky rule fires. */
   fastPath: boolean;
+  /**
+   * Changes something: everything off the fast path, plus the two writes on it (the agent's own
+   * note edits and connector drafts). What `ask_every_action` asks before.
+   */
+  effectful: boolean;
   /** Why the action could not be classified; empty when rules recognized it. */
   uncertainties: string[];
   /** Categories implied by the tool's own hints (never used to allow anything). */
@@ -75,13 +80,13 @@ function uiAnalysis(f: ActionFacts): FamilyResult {
 function shellAnalysis(f: ActionFacts): FamilyResult {
   const analysis = f.shell;
   if (!analysis) return { hits: [], uncertainties: ["no shell command given"] };
-  const workspaceDir = f.ctx.workspaceDir;
+  const { workspaceDir, appHome } = f.ctx;
   const home = inferHome(workspaceDir);
   const env: ShellEnv = {
     analysis,
     ...(workspaceDir ? { workspaceDir } : {}),
     ...(home ? { home } : {}),
-    resolve: (raw: string, cmd: { cwd: Cwd }) => resolvePath(raw, cmd.cwd, workspaceDir),
+    resolve: (raw: string, cmd: { cwd: Cwd }) => resolvePath(raw, cmd.cwd, workspaceDir, appHome),
   };
   const hits: RuleHit[] = [...analysisHits(env)];
   const uncertainties: string[] = [];
@@ -118,7 +123,7 @@ function connectorAnalysis(f: ActionFacts): FamilyResult {
   for (const url of f.urls) hits.push(...urlHits(url));
   // Connector servers resolve relative paths against their own roots, which we cannot see.
   for (const raw of f.paths) {
-    const target = resolvePath(raw, { kind: "unknown" }, f.ctx.workspaceDir);
+    const target = resolvePath(raw, { kind: "unknown" }, f.ctx.workspaceDir, f.ctx.appHome);
     hits.push(...(mcp.readOnly ? readPathHits(target, raw) : writePathHits(target, raw)));
   }
   if (f.shell) hits.push(...shellAnalysis(f).hits.filter((h) => h.rule.decision !== "allow"));
@@ -153,10 +158,13 @@ export function analyzeAction(ctx: ActionContext): ActionAnalysis {
   if (hints.destructive && facts.family !== "internal" && facts.family !== "knowledge")
     hintCategories.push("destructive");
 
+  const writesOnFastPath =
+    modelFacts.family === "note_edit" || hits.some((h) => h.rule.id === "mcp.draft");
   return {
     facts,
     hits: dedupe(hits),
     fastPath,
+    effectful: !fastPath || writesOnFastPath,
     uncertainties: isRisky(hits) ? [] : result.uncertainties,
     hintCategories,
   };

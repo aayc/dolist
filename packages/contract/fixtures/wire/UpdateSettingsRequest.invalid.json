@@ -86,5 +86,17 @@
     },
     "path": ["agent", "cursorModel"],
     "code": "too_big"
+  },
+  {
+    "name": "unknown approval policy",
+    "value": { "agent": { "approvalPolicy": "never_ask" } },
+    "path": ["agent", "approvalPolicy"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "approval policy of the wrong type",
+    "value": { "agent": { "approvalPolicy": true } },
+    "path": ["agent", "approvalPolicy"],
+    "code": "invalid_value"
   }
 ]

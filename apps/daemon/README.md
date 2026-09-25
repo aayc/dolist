@@ -101,6 +101,12 @@ preview, readable line length, line numbers, spellcheck) and `.obsidian/appearan
 (the Cursor CLI, signed in with your Cursor account) on `agent.cursorModel`. The safety judge's
 `agent.judgeModel` is an OpenRouter model with either harness.
 
+`agent.approvalPolicy` (`ask_every_action` | `ask_risky` | `ask_high_risk` | `run_everything`,
+default `ask_risky`) decides when agents ask before acting. A settings update hands it to the
+runtime, whose safety gate applies it from the next tool call; a looser policy approves what is
+waiting that it wouldn't ask about. The daemon's API and the settings file are out of agents' reach
+(the safety rules hard-deny both).
+
 ## Security model
 
 - **Loopback only.** The HTTP server listens on `127.0.0.1`; there is no option to bind elsewhere.

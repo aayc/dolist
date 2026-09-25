@@ -3,6 +3,14 @@
  * broker, and the gate that plugs both into the harness. See README.md for the pipeline.
  */
 
+export {
+  EVERY_ACTION_REASON,
+  effectivePolicy,
+  isLooserPolicy,
+  POLICY_ALLOW_REASONS,
+  POLICY_APPROVAL_NOTE,
+  policyAsks,
+} from "./approval-policy";
 export { APPROVALS_STATE_PATH } from "./approval-store";
 export type { PersistentApprovalBroker } from "./approvals";
 export { ApprovalNotFoundError, ApprovalStateError, createApprovalBroker } from "./approvals";

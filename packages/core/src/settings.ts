@@ -36,6 +36,26 @@ export type AgentHarnessKind = "pi" | "cursor";
 
 export const AGENT_HARNESS_KINDS: readonly AgentHarnessKind[] = ["pi", "cursor"];
 
+/**
+ * When agents ask before acting. The safety gate applies it to the evaluator's verdicts; hard
+ * denies apply under every policy.
+ * - `ask_every_action`: every effectful action asks, even ones the evaluator allows.
+ * - `ask_risky`: the evaluator decides (the default).
+ * - `ask_high_risk`: only verdicts of high or critical risk ask.
+ * - `run_everything`: nothing asks.
+ */
+export type ApprovalPolicy = "ask_every_action" | "ask_risky" | "ask_high_risk" | "run_everything";
+
+/** From strictest to loosest: each policy allows everything the ones before it allow. */
+export const APPROVAL_POLICIES: readonly ApprovalPolicy[] = [
+  "ask_every_action",
+  "ask_risky",
+  "ask_high_risk",
+  "run_everything",
+];
+
+export const DEFAULT_APPROVAL_POLICY: ApprovalPolicy = "ask_risky";
+
 /** Value ranges are enforced by the settings schemas in `@ddl/contract`. */
 export interface AgentSettings {
   /** Master switch. When false the orchestrator ignores note changes entirely. */
@@ -60,6 +80,8 @@ export interface AgentSettings {
   actOnExistingTasks: boolean;
   /** How long an approval request waits before it is auto-denied. */
   approvalTimeoutMs: number;
+  /** When agents ask before acting (see `ApprovalPolicy`). */
+  approvalPolicy: ApprovalPolicy;
 }
 
 export interface AppSettings {
@@ -102,6 +124,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     watch: { pastDays: 0, futureDays: 7 },
     actOnExistingTasks: true,
     approvalTimeoutMs: 12 * 60 * 60 * 1000,
+    approvalPolicy: DEFAULT_APPROVAL_POLICY,
   },
 };
 

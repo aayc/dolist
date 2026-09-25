@@ -40,7 +40,7 @@ export const APP_CONFIG_WRITE = info(
   "system",
   "deny",
   "critical",
-  "Changes the app's own keys, connector config or approval state (an agent could grant itself permissions)",
+  "Changes the app's own settings, keys, connector config or approval state (an agent could change its approval policy or grant itself permissions)",
 );
 export const PERSISTENCE_WRITE = info(
   "system.persistence-write",
@@ -78,15 +78,44 @@ export const OUTSIDE_WRITE = info(
   "Writes files outside the task workspace",
 );
 
-const APP_CONFIG_RE = /(?:^|\/)\.daily-do-list\/(?:\.env[^/]*|mcp\.json|state(?:\/|$))/i;
+/**
+ * The app's own files: the vault's `.daily-do-list/` sidecar (settings, approvals, threads) and
+ * `$DDL_HOME` (config, keys, tokens, harness config), except the agents' workspaces.
+ */
+const APP_STATE_RE = /(?:^|\/)\.daily-do-list(?:\/?$|\/(?!workspaces(?:\/|$)))/i;
+const APP_DIR_RE = /(?:^|\/)\.daily-do-list(?:\/|$)/i;
+const PARENT_SEGMENT_RE = /(?:^|\/)\.\.(?:\/|$)/;
+
+/** Whether `target` is the app's own state (a `..` after the app folder counts: it may climb out of the workspaces). */
+export function isAppState(target: ResolvedPath): boolean {
+  return [target.path, target.appPath].some(
+    (p) =>
+      p !== undefined &&
+      (APP_STATE_RE.test(p) || (APP_DIR_RE.test(p) && PARENT_SEGMENT_RE.test(p))),
+  );
+}
+
+function kindsOf(target: ResolvedPath) {
+  const kinds = sensitiveKinds(target.path);
+  if (target.appPath) for (const kind of sensitiveKinds(target.appPath)) kinds.add(kind);
+  return kinds;
+}
 
 function inScratch(target: ResolvedPath): boolean {
   return target.location === "workspace" || target.location === "temp";
 }
 
+/**
+ * Deleting, moving, re-permissioning or linking to the app's own state: a deleted settings file
+ * falls back to defaults, and writing through a link changes the file it points to.
+ */
+export function appStateHits(target: ResolvedPath, evidence: string): RuleHit[] {
+  return isAppState(target) ? [{ rule: APP_CONFIG_WRITE, evidence }] : [];
+}
+
 /** Hits for reading `target`'s contents. */
 export function readPathHits(target: ResolvedPath, evidence: string): RuleHit[] {
-  const kinds = sensitiveKinds(target.path);
+  const kinds = kindsOf(target);
   if (kinds.has("ssh-private-key")) return [{ rule: SSH_KEY_READ, evidence }];
   if (kinds.has("credential-store") || kinds.has("app-secret"))
     return [{ rule: CREDENTIAL_STORE_READ, evidence }];
@@ -103,14 +132,17 @@ export function readPathHits(target: ResolvedPath, evidence: string): RuleHit[] 
   return hits;
 }
 
-/** Hits for creating or modifying `target`. Writes inside the workspace or temp area are fine. */
+/**
+ * Hits for creating or modifying `target`. Writes inside the workspace or temp area are fine, except
+ * to the app's own state (a vault or `$DDL_HOME` may live in the temp area).
+ */
 export function writePathHits(target: ResolvedPath, evidence: string): RuleHit[] {
+  if (target.location === "workspace") return [];
+  const kinds = kindsOf(target);
+  if (isAppState(target) || kinds.has("app-secret")) return [{ rule: APP_CONFIG_WRITE, evidence }];
   if (inScratch(target)) return [];
   if (target.location === "unknown")
     return [{ rule: OUTSIDE_WRITE, evidence: `${evidence} (location unknown)` }];
-  const kinds = sensitiveKinds(target.path);
-  if (APP_CONFIG_RE.test(target.path) || kinds.has("app-secret"))
-    return [{ rule: APP_CONFIG_WRITE, evidence }];
   const hits: RuleHit[] = [];
   if (kinds.has("shell-startup") || kinds.has("persistence"))
     hits.push({ rule: PERSISTENCE_WRITE, evidence });

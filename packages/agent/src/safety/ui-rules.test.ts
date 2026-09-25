@@ -254,7 +254,11 @@ describe("navigation and fetches", () => {
     ["file:///etc/passwd", "deny", "browser.dangerous-scheme"],
     ["chrome://settings/passwords", "deny", "browser.dangerous-scheme"],
     ["http://localhost:7331/", "deny", "network.app-self-access"],
-    ["http://localhost:5173/", "require_approval", "network.local-address"],
+    // The web dev server forwards the API to the daemon with its token: it is the app too.
+    ["http://localhost:5173/", "deny", "network.app-self-access"],
+    ["http://127.0.0.1:5173/#/settings", "deny", "network.app-self-access"],
+    ["http://localhost:5174/", "require_approval", "network.local-address"],
+    ["http://localhost:4173/", "require_approval", "network.local-address"],
     ["http://192.168.1.1/admin", "require_approval", "network.local-address"],
     ["http://2130706433/", "require_approval", "network.local-address"],
     ["http://printer.local/", "require_approval", "network.local-address"],

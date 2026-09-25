@@ -87,6 +87,21 @@ describe("resolvePersistedSettings", () => {
     });
   });
 
+  it("keeps a known approval policy and drops any other value, so the default applies", () => {
+    expect(resolvePersistedSettings({ agent: { approvalPolicy: "run_everything" } })).toEqual({
+      overrides: { agent: { approvalPolicy: "run_everything" } },
+      invalid: [],
+      unknown: [],
+    });
+    for (const approvalPolicy of ["never_ask", "RUN_EVERYTHING", "", 3, null, ["ask_risky"]]) {
+      expect(resolvePersistedSettings({ agent: { approvalPolicy, settleMs: 100 } })).toEqual({
+        overrides: { agent: { settleMs: 100 } },
+        invalid: ["agent.approvalPolicy"],
+        unknown: [],
+      });
+    }
+  });
+
   it("drops empty sections and ignores a stray version key", () => {
     expect(resolvePersistedSettings({ version: 1, editor: { fontSize: 2 } })).toEqual({
       overrides: {},

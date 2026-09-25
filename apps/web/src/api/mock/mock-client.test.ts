@@ -1,6 +1,8 @@
 import { WIRE_LIMITS } from "@ddl/contract/wire";
 import {
   type AgentHarnessKind,
+  APPROVAL_POLICIES,
+  type ApprovalPolicy,
   type ServerEvent,
   type ServerEventOf,
   today,
@@ -205,6 +207,74 @@ describe("MockDaemonClient settings", () => {
     const longest = "m".repeat(WIRE_LIMITS.modelIdLength);
     const { settings } = await call(client.updateSettings({ agent: { cursorModel: longest } }));
     expect(settings.agent.cursorModel).toBe(longest);
+  });
+
+  it("stores every approval policy and rejects one it doesn't know", async () => {
+    const { client, events } = create();
+    expect((await call(client.getSettings())).settings.agent.approvalPolicy).toBe("ask_risky");
+    for (const approvalPolicy of APPROVAL_POLICIES) {
+      const { settings } = await call(client.updateSettings({ agent: { approvalPolicy } }));
+      expect(settings.agent.approvalPolicy).toBe(approvalPolicy);
+      expect(ofType(events, "settings.changed").at(-1)?.settings.agent.approvalPolicy).toBe(
+        approvalPolicy,
+      );
+    }
+    const rejected = client
+      .updateSettings({ agent: { approvalPolicy: "never_ask" as ApprovalPolicy } })
+      .then(
+        () => expect.unreachable("accepted an unknown policy"),
+        (error: unknown) => error,
+      );
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await rejected).toMatchObject({ status: 400, body: { error: "invalid_request" } });
+    expect((await call(client.getSettings())).settings.agent.approvalPolicy).toBe(
+      APPROVAL_POLICIES.at(-1),
+    );
+  });
+});
+
+describe("MockDaemonClient approval policies", () => {
+  it("runs the risky step without asking when the policy runs everything", async () => {
+    const { client, events } = create();
+    await call(client.updateSettings({ agent: { approvalPolicy: "run_everything" } }));
+    await writeTodayTask(client, "Order a new kettle");
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(ofType(events, "approval.upsert")).toEqual([]);
+    const final = ofType(events, "task.record").at(-1)?.record;
+    expect(final).toMatchObject({ status: "done", summary: "Ordered · arrives in 2 days" });
+  });
+
+  it("still asks for a high-risk step when only high-risk actions ask", async () => {
+    const { client, events } = create();
+    await call(client.updateSettings({ agent: { approvalPolicy: "ask_high_risk" } }));
+    await writeTodayTask(client, "Order a new kettle");
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(ofType(events, "approval.upsert").at(-1)?.approval).toMatchObject({
+      status: "pending",
+      risk: "high",
+    });
+  });
+
+  it("a looser policy approves what is waiting; a stricter one leaves it", async () => {
+    const { client, events } = create();
+    await writeTodayTask(client, "Order a new kettle");
+    await vi.advanceTimersByTimeAsync(3000);
+    const pending = ofType(events, "approval.upsert").at(-1)!.approval;
+    expect(pending.status).toBe("pending");
+
+    await call(client.updateSettings({ agent: { approvalPolicy: "ask_every_action" } }));
+    await call(client.updateSettings({ agent: { approvalPolicy: "ask_high_risk" } }));
+    expect(ofType(events, "approval.upsert").at(-1)?.approval.status).toBe("pending");
+
+    await call(client.updateSettings({ agent: { approvalPolicy: "run_everything" } }));
+    expect(ofType(events, "approval.upsert").at(-1)?.approval).toMatchObject({
+      id: pending.id,
+      status: "approved",
+      scope: "once",
+      decisionNote: "Approved by your approval policy",
+    });
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(ofType(events, "task.record").at(-1)?.record.status).toBe("done");
   });
 });
 

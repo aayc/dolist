@@ -5,7 +5,7 @@
 import { TOOL } from "../../tools/contracts";
 import type { ActionFacts } from "../facts";
 import { initialCwd, type ResolvedPath, resolvePath } from "../paths";
-import { writtenContentHits } from "./content";
+import { appStateInCodeHits, writtenContentHits } from "./content";
 import { readPathHits, writePathHits } from "./path-rules";
 import { info, quote, type RuleHit } from "./types";
 
@@ -36,7 +36,8 @@ const SECRET_WORDS_RE =
   /pass(?:word|wd|phrase)|secret|token|api[ _-]?key|private[ _-]?key|BEGIN [A-Z ]*PRIVATE|credential|aws_access|bearer/i;
 
 export function resolveToolPath(facts: ActionFacts, raw: string): ResolvedPath {
-  return resolvePath(raw, initialCwd(facts.ctx.workspaceDir), facts.ctx.workspaceDir);
+  const { workspaceDir, appHome } = facts.ctx;
+  return resolvePath(raw, initialCwd(workspaceDir), workspaceDir, appHome);
 }
 
 function str(value: unknown): string | undefined {
@@ -84,7 +85,8 @@ export function fileWriteAnalysis(facts: ActionFacts): FileAnalysis {
     ? resolveToolPath(facts, raw)
     : { location: "unknown", path: "(no path)" };
   hits.push(...writePathHits(target, raw ?? "(no path)"));
-  hits.push(...writtenContentHits(writtenContent(facts.input)));
+  const content = writtenContent(facts.input);
+  hits.push(...writtenContentHits(content), ...appStateInCodeHits(content, "written content"));
   return hits.length > 0
     ? { hits }
     : { hits, benign: { rule: FILES_WORKSPACE_WRITE, evidence: raw ?? "" } };

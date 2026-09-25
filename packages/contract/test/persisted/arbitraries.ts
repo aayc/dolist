@@ -356,6 +356,12 @@ export const settingsOverridesArb: fc.Arbitrary<PersistedSettingsOverrides> = fc
         ),
         actOnExistingTasks: fc.boolean(),
         approvalTimeoutMs: fc.integer({ min: 60_000, max: 30 * 24 * 60 * 60 * 1000 }),
+        approvalPolicy: fc.constantFrom(
+          "ask_every_action" as const,
+          "ask_risky" as const,
+          "ask_high_risk" as const,
+          "run_everything" as const,
+        ),
       },
       { requiredKeys: [] },
     ),

@@ -9,7 +9,8 @@ built to fail closed: when in doubt it asks, and any internal error becomes `req
 ```
 ToolCallRequest ─▶ SafetyGate ─▶ SafetyEvaluator ─▶ verdict
                         │            (policy → rules → judge → category policy)
-                        │ require_approval
+                        │ deny ─▶ blocked, under every approval policy
+                        │ the user's approval policy asks (see "The gate")
                         ├─▶ standing grant? ─▶ allow (source "grant")
                         └─▶ ApprovalBroker.request ─▶ approval card ─▶ approve / deny / expire / cancel
 ```
@@ -20,7 +21,8 @@ ToolCallRequest ─▶ SafetyGate ─▶ SafetyEvaluator ─▶ verdict
 | --- | --- |
 | `createSafetyEvaluator({ policy?, llm?, judgeModel?, logger? })` | The evaluator. With `policy.llmJudge` and an `llm`, uncertain actions go to the LLM judge. |
 | `createApprovalBroker({ storage?, defaultTimeoutMs?, now?, logger? })` | Pending approvals, decisions, standing grants, persistence. Returns a `PersistentApprovalBroker` (adds `ready`, `flush()`, `dispose()`). |
-| `createSafetyGate(options)` | `beforeToolCall` for `HarnessSessionOptions`. Never throws. |
+| `createSafetyGate(options)` | `beforeToolCall` for `HarnessSessionOptions`. Never throws. `options.approvalPolicy()` is read on every call. |
+| `policyAsks(policy, verdict)`, `effectivePolicy(value)`, `isLooserPolicy(next, previous)` | The approval policy as pure functions (`approval-policy.ts`), plus its reasons and `POLICY_APPROVAL_NOTE`. |
 | `DEFAULT_SAFETY_POLICY`, `resolvePolicy(partial)` | Default policy and safe merging of overrides (malformed values are ignored). |
 | `builtinToolHints(name)` | Hints for harness built-ins without a `ToolSpec`: `read/grep/find/ls` → read-only, `write/edit` → `file_write`, `bash` → `system` (its commands are analyzed by the shell rules). The Cursor harness sends its own versions of these, and the Cursor CLI's web search/fetch as `web_search {query}` / `web_fetch {url}`, all without a spec; they get the same verdicts (`harness-requests.test.ts`). |
 | `SAFETY_RULES` | Metadata of every rule (id, category, decision, risk, description), sorted by id. |
@@ -110,8 +112,9 @@ Then per family:
   and Korean terms. Card numbers are found however they are grouped (spaces, dashes, dots,
   non-breaking spaces, full-width or Arabic-Indic digits, after other numbers); keypad Enter and
   `⌘↩` count as Enter.
-- **URLs** (`rules/web.ts`): schemes, loopback/private/link-local hosts (the daemon port 7331 is a
-  hard deny), cloud metadata, secrets or personal data in URLs, and GET links that act
+- **URLs** (`rules/web.ts`): schemes, loopback/private/link-local hosts (the daemon port 7331 and
+  the web dev server's 5173, which forwards the API with the daemon's token, are hard denies),
+  cloud metadata, secrets or personal data in URLs, and GET links that act
   (unsubscribe, confirm/verify magic links, delete). URLs are read the way the tools that open
   them do: tabs/newlines and surrounding control characters are dropped (`java\tscript:` is
   `javascript:`), a scheme hidden by invisible or full-width characters still counts, a bare host
@@ -134,9 +137,14 @@ Then per family:
   invisible.
 - **Files** (`rules/files.ts`, `rules/path-rules.ts`): reads of keys/credential stores are denied,
   other secret-bearing files need approval; writes inside the workspace or the temp area are fine,
-  elsewhere they need approval (stricter for the app's own config/approval state, startup files,
-  credentials and system paths). Written content is scanned so a dangerous script cannot be staged
-  in the workspace and run later.
+  elsewhere they need approval (stricter for startup files, credentials and system paths). The
+  app's own files are a hard deny (`secrets.app-config-write`): writing, deleting, moving,
+  re-permissioning or linking to anything in a `.daily-do-list/` folder (the vault's sidecar with
+  the settings and approval state, and the default `$DDL_HOME`) except the agents' `workspaces/`,
+  or in the configured `$DDL_HOME` (`ActionContext.appHome`, from the runtime), temp area included.
+  Written content is scanned so a dangerous script cannot be staged in the workspace and run later,
+  and a written file or inline code (`python3 -c`, `node -e`, typed terminal text) that names the
+  app's own files is a hard deny too. Paths code builds at runtime can't be seen.
 - **Note edits** (`rules/notes.ts`, the `edit_note` tool): the agent's own text goes into the
   user's note directly — new lines, and lines it wrote before (marked `%%agent:<thread>%%`).
   Changing or deleting the user's lines or checking their boxes needs approval; writing the app's
@@ -155,9 +163,9 @@ Stable ids, grouped by decision (generated from `SAFETY_RULES`; 140 rules).
 | Rule id | Category | Decision | Risk | Matches |
 | --- | --- | --- | --- | --- |
 | `browser.dangerous-scheme` | system | deny | critical | Opens a script, local-file or browser-internal address |
-| `network.app-self-access` | system | deny | critical | Operates the Daily Do List app itself (an agent could approve its own actions) |
+| `network.app-self-access` | system | deny | critical | Operates the Daily Do List app itself (an agent could approve its own actions or change its settings) |
 | `notes.edit.hidden-path` | system | deny | critical | Writes to the app's hidden state instead of a note |
-| `secrets.app-config-write` | system | deny | critical | Changes the app's own keys, connector config or approval state (an agent could grant itself permissions) |
+| `secrets.app-config-write` | system | deny | critical | Changes the app's own settings, keys, connector config or approval state (an agent could change its approval policy or grant itself permissions) |
 | `secrets.credential-store` | credentials | deny | critical | Reads a password store, keychain, browser credential database or the app's API keys |
 | `secrets.embedded-access` | credentials | deny | critical | Reads private keys, keychains or credential stores from code or typed text |
 | `secrets.exfiltration` | credentials | deny | critical | Sends secrets (keys, .env files, credentials, environment variables) over the network |
@@ -333,16 +341,54 @@ schema (`decision`, `risk`, `categories`, `reason`); `reasoning: "off"`, `temper
   with a 250 ms debounce after load completes. Unreadable files are ignored; malformed entries are dropped. Approvals that were
   pending in a previous process load as `expired` (their agent is gone) and are re-emitted.
   Call `dispose()` on shutdown to flush and release waiting agents.
-- Agents cannot forge grants: writing to `.daily-do-list/state/`, `mcp.json` or the app's `.env` is
-  a hard deny (`secrets.app-config-write`).
+- Agents cannot forge grants or change their approval policy: changing anything in the vault's
+  `.daily-do-list/` (settings, `state/`) or `$DDL_HOME` (`mcp.json`, `.env`, `config.json`, tokens)
+  is a hard deny (`secrets.app-config-write`), and so is reaching the daemon or the web dev server
+  (`network.app-self-access`) or operating the app (`system.protected-app`);
+  `self-protection.test.ts` holds one case per path.
+- `approvePending(approves, note)` approves, once and with the note, the pending approvals a
+  callback accepts; the broker remembers for each whether the evaluator allowed it and only the
+  policy asked (`NewApproval.verdict`), so a looser policy can tell what it would no longer ask.
 
 ## The gate (`gate.ts`)
 
 `createSafetyGate` resolves the session context, builds the `ActionContext` (hints from the tool
-spec, else `builtinToolHints`, else `{}`), evaluates, and returns `{ allow: true }`,
-`{ allow: false, reason }` for denials, or waits on the broker after checking grants. Denied
-approvals return `User denied[: note]`, `Approval expired` or `Approval cancelled[: note]`.
-`onVerdict` sees every verdict (grant-covered calls are reported as `allow` with source `grant`).
+spec, else `builtinToolHints`, else `{}`, plus `appHome`), evaluates, applies the user's approval
+policy, and returns `{ allow: true }`, `{ allow: false, reason }` for denials, or waits on the
+broker after checking grants. Denied approvals return `User denied[: note]`, `Approval expired` or
+`Approval cancelled[: note]`. `onVerdict` sees every verdict (grant-covered calls are reported as
+`allow` with source `grant`).
+
+**Approval policies** (`settings.agent.approvalPolicy`, `approval-policy.ts`). The evaluator is the
+same under every policy; the gate reads the policy through `options.approvalPolicy()` on every
+call, after the evaluation, so a change applies to the next call. A value that isn't a policy
+counts as the default.
+
+| Evaluator verdict | `ask_every_action` | `ask_risky` (default) | `ask_high_risk` | `run_everything` |
+| --- | --- | --- | --- | --- |
+| `deny` | blocked | blocked | blocked | blocked |
+| `require_approval`, risk high/critical | grant, else ask | grant, else ask | grant, else ask | runs |
+| `require_approval`, risk medium | grant, else ask | grant, else ask | runs | runs |
+| `allow`, effectful | grant, else ask | runs | runs | runs |
+| `allow`, not effectful | runs | runs | runs | runs |
+
+- A policy that lets a `require_approval` verdict run reports it as `allow` with source `policy`
+  and the reason "Your approval policy runs everything without asking." or "Your approval policy
+  only asks for high-risk actions." (risk, categories and summary are the evaluator's).
+- `ask_every_action` asks about an allowed action with the evaluator's summary, risk and
+  categories and the reason "Your approval policy asks before every action." (reported as
+  `require_approval` with source `policy`); a task grant made from such a card covers the same
+  kind of action for the task.
+- **Effectful** (`SafetyVerdict.effectful`, from the analysis): everything off the read-only fast
+  path, plus the two writes on it — the agent's own note edits (`edit_note`) and connector drafts.
+  Not effectful: the thread and orchestration tools, note reads, web search and fetch, read-only
+  file tools and read-only browser/computer tools (snapshots, screenshots, scrolling, app state and
+  lists). Shell commands are never on the fast path, so `ls` asks under `ask_every_action`. A
+  verdict without `effectful` counts as effectful.
+- **Changing the policy** (the runtime's `updateSettings`): a looser policy approves, once and with
+  the note "Approved by your approval policy", every pending approval it would not ask about
+  (`approvePending`); a stricter one leaves pending approvals alone. Pending approvals only exist
+  in the running process (earlier ones load as `expired`).
 
 ## Adding a rule
 
@@ -398,5 +444,9 @@ run where the judge never answered does not pass.
 - Symlinks are not resolved (no file system access); creating links that point outside the
   workspace needs approval instead.
 - MCP tools are classified by name and arguments; annotations are hints and cannot relax rules.
+- Under `run_everything` (and `ask_high_risk` for medium-risk code), programs the agent writes and
+  runs are not inspected while they run: code that builds the path to the app's settings at
+  runtime isn't recognized. Direct paths to the settings (file tools, shell commands, inline code
+  and written files that name them, the daemon, the web UI, the app) are hard denies.
 - Commit phrases in languages the vocabularies don't cover are unrecognized clicks: the judge
   decides them, and without a judge they are allowed like "Continue".

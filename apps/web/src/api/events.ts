@@ -167,6 +167,7 @@ const settings = shape({
     watch: shape({ pastDays: num, futureDays: num }),
     actOnExistingTasks: bool,
     approvalTimeoutMs: num,
+    approvalPolicy: optional(str),
   }),
 });
 

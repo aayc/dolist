@@ -15,7 +15,8 @@ It is "do list", not "to-do list", because the system does the tasks.
 Product principles, in priority order:
 
 1. **Safety before autonomy.** Every tool call from every agent passes the safety gate. Risky
-   actions need explicit human approval. Fail closed.
+   actions need explicit approval unless the user chooses a policy that runs them; hard denies
+   always apply. Fail closed.
 2. **Responsiveness is a feature.** The editor must feel instant. Performance budgets are enforced
    in CI (see `docs/PERFORMANCE.md`). Never put network or O(document) work on the keystroke path.
 3. **Local-first, plain files.** Notes are plain markdown in a folder (Obsidian-compatible vault).
@@ -124,7 +125,11 @@ agent lease), `docs/CI.md`, `SECURITY.md`, `CONTRIBUTING.md`, and package README
 1. **Safety gate is mandatory.** Every tool — built-in, harness built-in (bash/read/write/edit),
    execution, connector (MCP), and whatever a harness's CLI runs itself after asking (the Cursor
    CLI's web search/fetch) — executes only after `beforeToolCall` (the SafetyGate) allows it.
-   Never add a code path that executes a tool without it. New tools must declare honest
+   Never add a code path that executes a tool without it. Risky actions need explicit approval
+   unless the user chooses a policy that runs them (`settings.agent.approvalPolicy`, applied only
+   in the gate, see `packages/agent/src/safety/README.md`); hard denies always apply, and agents
+   can never reach the policy (the sidecar, `$DDL_HOME`, the daemon, the web UI and the app itself
+   are hard denies). New tools must declare honest
    `ToolSafetyHints`; hints may only make things *more* restricted. A tool that knows the real
    target better than the model's words (the app's real name, the element's real accessibility
    label) reports it through `subject(input)`: the evaluator adds it to the model's own text (a
@@ -152,8 +157,10 @@ agent lease), `docs/CI.md`, `SECURITY.md`, `CONTRIBUTING.md`, and package README
 7. **Agents never silently change the user's words.** An agent writes in a note only through
  `edit_note`: every line it writes ends with an agent marker (`%%agent:<thread>%%`) so it is
  visibly the agent's, its own lines go in directly, and changing or deleting the user's lines (or
- checking their boxes) goes through approval. Everything else agents make lives in the sidecar
- (threads, artifacts). Clients merge agent edits into unsaved typing (`mergeText`).
+ checking their boxes) goes through approval unless the user's approval policy runs it (it is
+ medium risk: "Ask only for high-risk actions" and "Run everything" run it). Everything else
+ agents make lives in the sidecar (threads, artifacts). Clients merge agent edits into unsaved
+ typing (`mergeText`).
 8. **Keystroke path stays O(line).** No network, no full-document parse, no React re-render per
    keystroke. Persistence is debounced; anchors are mapped through CodeMirror transactions.
 9. **Time is local.** Daily notes use the user's local calendar date (`@ddl/core` dates), never UTC.

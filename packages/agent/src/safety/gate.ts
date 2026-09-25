@@ -1,10 +1,17 @@
 /**
  * The safety gate: plugged into `HarnessSessionOptions.beforeToolCall`, it evaluates every tool
- * call, honors standing grants for `require_approval` verdicts, and otherwise asks the user
- * through the approval broker. It never throws; any internal failure blocks the call.
+ * call, blocks denials under every approval policy, lets the policy decide which other verdicts
+ * ask the user, honors standing grants for those, and otherwise asks through the approval broker.
+ * It never throws; any internal failure blocks the call.
  */
 import { silentLogger } from "@ddl/core";
 import type { ToolCallDecision, ToolCallRequest } from "../harness/types";
+import {
+  EVERY_ACTION_REASON,
+  effectivePolicy,
+  POLICY_ALLOW_REASONS,
+  policyAsks,
+} from "./approval-policy";
 import { redactActionInput } from "./describe";
 import { builtinToolHints } from "./policy";
 import type {
@@ -56,17 +63,38 @@ export function createSafetyGate(options: SafetyGateOptions): SafetyGate {
         ...(context.taskText ? { taskText: context.taskText } : {}),
         ...(context.rationale ? { rationale: context.rationale } : {}),
         ...(context.workspaceDir ? { workspaceDir: context.workspaceDir } : {}),
+        ...(options.appHome ? { appHome: options.appHome } : {}),
       };
-      const verdict = await options.evaluator.evaluate(ctx);
+      const evaluated = await options.evaluator.evaluate(ctx);
 
-      if (verdict.decision === "allow") {
-        observe(call, verdict);
+      if (evaluated.decision === "deny") {
+        observe(call, evaluated);
+        return { allow: false, reason: evaluated.reason };
+      }
+      const policy = effectivePolicy(options.approvalPolicy?.());
+      if (!policyAsks(policy, { ...evaluated, decision: evaluated.decision })) {
+        observe(
+          call,
+          evaluated.decision === "allow"
+            ? evaluated
+            : {
+                ...evaluated,
+                decision: "allow",
+                source: "policy",
+                reason: POLICY_ALLOW_REASONS[policy] ?? evaluated.reason,
+              },
+        );
         return { allow: true };
       }
-      if (verdict.decision === "deny") {
-        observe(call, verdict);
-        return { allow: false, reason: verdict.reason };
-      }
+      const verdict: SafetyVerdict =
+        evaluated.decision === "allow"
+          ? {
+              ...evaluated,
+              decision: "require_approval",
+              source: "policy",
+              reason: EVERY_ACTION_REASON,
+            }
+          : evaluated;
 
       const grant = options.approvals.findGrant({
         toolName: ctx.toolName,
@@ -107,6 +135,7 @@ export function createSafetyGate(options: SafetyGateOptions): SafetyGate {
           ? {}
           : { timeoutMs: options.approvalTimeoutMs }),
         ...(verdict.target ? { target: verdict.target } : {}),
+        verdict: evaluated.decision,
       });
       return outcome.approved ? { allow: true } : { allow: false, reason: denialReason(outcome) };
     } catch (error) {

@@ -24,5 +24,13 @@
   {
     "name": "back to Pi with another OpenRouter model",
     "value": { "agent": { "harness": "pi", "model": "vendor/model-a" } }
+  },
+  {
+    "name": "run everything without asking",
+    "value": { "agent": { "approvalPolicy": "run_everything" } }
+  },
+  {
+    "name": "ask before every action",
+    "value": { "agent": { "approvalPolicy": "ask_every_action" } }
   }
 ]

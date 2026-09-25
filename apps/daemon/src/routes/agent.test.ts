@@ -49,6 +49,22 @@ describe("settings routes", () => {
     });
   });
 
+  it("hands an approval policy change to the runtime", async () => {
+    const runtime = new FakeAgentRuntime();
+    const { request, settings } = await createTestApp({ runtime });
+    const res = await request(API_ROUTES.settings, {
+      method: "PATCH",
+      json: { agent: { approvalPolicy: "run_everything" } },
+    });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as SettingsResponse).settings.agent.approvalPolicy).toBe(
+      "run_everything",
+    );
+    expect(settings.get().agent.approvalPolicy).toBe("run_everything");
+    const [applied] = runtime.callsTo("updateSettings").at(-1) ?? [];
+    expect((applied as AppSettings).agent.approvalPolicy).toBe("run_everything");
+  });
+
   it("rejects invalid values and unknown keys without applying anything", async () => {
     const runtime = new FakeAgentRuntime();
     const { request } = await createTestApp({ runtime });
@@ -58,6 +74,8 @@ describe("settings routes", () => {
       { agent: { nope: true } },
       { agent: { harness: "claude" } },
       { agent: { cursorModel: "" } },
+      { agent: { approvalPolicy: "never_ask" } },
+      { agent: { approvalPolicy: null } },
       { dailyNotes: { folder: ".hidden" } },
     ]) {
       const res = await request(API_ROUTES.settings, { method: "PUT", json });

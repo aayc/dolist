@@ -27,7 +27,7 @@ import {
   withScheme,
 } from "../shell-commands";
 import { DESTRUCTIVE_SQL_RULE, destructiveSqlInText, executedTextHits } from "./content";
-import { readPathHits, writePathHits } from "./path-rules";
+import { appStateHits, readPathHits, writePathHits } from "./path-rules";
 import {
   info,
   type Match,
@@ -1574,6 +1574,8 @@ function pathHits(cmd: ShellCommand, env: ShellEnv): RuleHit[] {
     const evidence = display(cmd);
     if (t.role === "read" || t.role === "link-target")
       hits.push(...readPathHits(t.resolved, evidence));
+    if (t.role === "link-target" || t.role === "delete" || t.role === "meta")
+      hits.push(...appStateHits(t.resolved, evidence));
     if (t.role === "write" && !DEVICE_RE.test(t.resolved.path))
       hits.push(...writePathHits(t.resolved, evidence));
   }

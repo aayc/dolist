@@ -299,3 +299,62 @@ describe("persistence", () => {
     expect(broker.get(approval.id)?.status).toBe("pending");
   });
 });
+
+describe("approvePending (a looser approval policy)", () => {
+  it("approves once, with the note, exactly the pending approvals it is asked to", async () => {
+    const broker = createApprovalBroker({ now: () => 5_000 });
+    const medium = start(broker, { risk: "medium", categories: ["form_submission"] });
+    const critical = start(broker, { risk: "critical" });
+    const everyAction = start(broker, {
+      risk: "low",
+      categories: ["file_write"],
+      verdict: "allow",
+    });
+    const decided = start(broker);
+    await broker.decide(decided.approval.id, { decision: "deny" });
+
+    const seen: string[] = [];
+    const approved = broker.approvePending(({ request, verdict }) => {
+      seen.push(`${request.risk}:${verdict}`);
+      return verdict === "allow" || request.risk === "medium";
+    }, "Approved by your approval policy");
+
+    expect(seen).toEqual(["medium:require_approval", "critical:require_approval", "low:allow"]);
+    expect(approved.map((a) => a.id)).toEqual([medium.approval.id, everyAction.approval.id]);
+    for (const { outcome } of [medium, everyAction]) {
+      await expect(outcome).resolves.toMatchObject({
+        approved: true,
+        note: "Approved by your approval policy",
+        request: {
+          status: "approved",
+          scope: "once",
+          decidedAt: 5_000,
+          decisionNote: "Approved by your approval policy",
+        },
+      });
+    }
+    expect(broker.get(critical.approval.id)?.status).toBe("pending");
+    expect(broker.get(decided.approval.id)?.status).toBe("denied");
+    // Approving for the policy creates no standing grant.
+    expect(broker.findGrant({ toolName: "browser_click", taskId: "task-1" })).toBeUndefined();
+    await broker.decide(critical.approval.id, { decision: "deny" });
+  });
+
+  it("forgets why an approval was asked once it is decided", async () => {
+    const broker = createApprovalBroker();
+    const first = start(broker, { verdict: "allow" });
+    await broker.decide(first.approval.id, { decision: "deny" });
+    const second = start(broker);
+    const verdicts: string[] = [];
+    broker.approvePending(({ verdict }) => {
+      verdicts.push(verdict);
+      return false;
+    }, "x");
+    expect(verdicts).toEqual(["require_approval"]);
+    await broker.decide(second.approval.id, { decision: "deny" });
+  });
+
+  it("approves nothing when nothing is pending", () => {
+    expect(createApprovalBroker().approvePending(() => true, "x")).toEqual([]);
+  });
+});

@@ -38,6 +38,7 @@ export const WIRE_SCHEMAS = {
   WeeklyNoteSettings: settings.WeeklyNoteSettingsSchema,
   AgentWatchWindow: settings.AgentWatchWindowSchema,
   AgentHarnessKind: settings.AgentHarnessKindSchema,
+  ApprovalPolicy: settings.ApprovalPolicySchema,
   AgentSettings: settings.AgentSettingsSchema,
   AppSettings: settings.AppSettingsSchema,
   UpdateSettingsRequest: settings.UpdateSettingsRequestSchema,

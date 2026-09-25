@@ -163,6 +163,54 @@ describe("settings store", () => {
     expect(await storedOverrides(storage)).toEqual({});
   });
 
+  it("defaults to asking for risky actions and persists every approval policy", async () => {
+    const storage = vault();
+    const store = await open(storage);
+    expect(store.get().agent.approvalPolicy).toBe("ask_risky");
+    for (const approvalPolicy of [
+      "run_everything",
+      "ask_high_risk",
+      "ask_every_action",
+      "ask_risky",
+    ] as const) {
+      const saved = await store.update({ agent: { approvalPolicy } });
+      expect(saved.agent.approvalPolicy).toBe(approvalPolicy);
+      expect(await storedOverrides(storage)).toEqual({ agent: { approvalPolicy } });
+      expect((await open(storage)).get()).toEqual(saved);
+    }
+  });
+
+  it("rejects approval policies it doesn't know, storing nothing", async () => {
+    const storage = vault();
+    const store = await open(storage);
+    for (const approvalPolicy of ["never_ask", "RUN_EVERYTHING", "", 1, null, true]) {
+      await expect(store.update({ agent: { approvalPolicy } } as never)).rejects.toBeInstanceOf(
+        SettingsValidationError,
+      );
+    }
+    expect(store.get().agent.approvalPolicy).toBe("ask_risky");
+    expect(await storedOverrides(storage)).toEqual({});
+  });
+
+  it("asks for risky actions when the file holds a policy from a newer app, and keeps it", async () => {
+    const storage = vault({
+      [SETTINGS_PATH]: JSON.stringify({ version: 1, agent: { approvalPolicy: "ask_payments" } }),
+    });
+    const { logger, entries } = recordingLogger();
+    const store = await open(storage, logger);
+    expect(store.get().agent.approvalPolicy).toBe("ask_risky");
+    expect(entries).toContainEqual({
+      level: "warn",
+      message: "Ignoring invalid settings; their defaults apply",
+      fields: { fields: ["agent.approvalPolicy"] },
+    });
+    await store.update({ theme: "dark" });
+    expect(await storedOverrides(storage)).toEqual({
+      agent: { approvalPolicy: "ask_payments" },
+      theme: "dark",
+    });
+  });
+
   it("serializes concurrent updates without losing either", async () => {
     const storage = vault();
     const store = await open(storage);
@@ -257,6 +305,29 @@ describe("golden settings fixtures through the real settings store", () => {
       expect(store.get().agent).toMatchObject({ harness: "pi", cursorModel: DEFAULT_CURSOR_MODEL });
     },
   );
+
+  it.each(["v1.json", "legacy-unversioned.json", "v1-cursor-harness.json"])(
+    "%s, written before the approval policy setting, asks for risky actions",
+    async (name) => {
+      const store = await open(vault({ [SETTINGS_PATH]: readFixture("settings", name) }));
+      expect(store.get().agent.approvalPolicy).toBe("ask_risky");
+    },
+  );
+
+  it("v1-approval-policy.json loads exactly and is not rewritten", async () => {
+    const content = readFixture("settings", "v1-approval-policy.json");
+    const storage = vault({ [SETTINGS_PATH]: content });
+    const store = await open(storage);
+    expect(store.get()).toEqual({
+      ...DEFAULT_SETTINGS,
+      agent: {
+        ...DEFAULT_SETTINGS.agent,
+        approvalPolicy: "ask_high_risk",
+        approvalTimeoutMs: 3_600_000,
+      },
+    });
+    expect((await storage.read(SETTINGS_PATH))!.content).toBe(content);
+  });
 
   it("v1-cursor-harness.json loads exactly and is not rewritten", async () => {
     const content = readFixture("settings", "v1-cursor-harness.json");
@@ -445,6 +516,20 @@ describe("persisted settings validation matches PUT /api/settings", () => {
     [
       "agent.approvalTimeoutMs",
       [60_000, 30 * 24 * 60 * 60 * 1000, 59_999, 30 * 24 * 60 * 60 * 1000 + 1],
+    ],
+    [
+      "agent.approvalPolicy",
+      [
+        "ask_every_action",
+        "ask_risky",
+        "ask_high_risk",
+        "run_everything",
+        "never_ask",
+        "Run_everything",
+        "",
+        0,
+        null,
+      ],
     ],
   ];
   const nest = (path: string, value: unknown) =>

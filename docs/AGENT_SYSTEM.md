@@ -158,6 +158,22 @@ Pipeline (details and the full rule table in `packages/agent/src/safety/README.m
 task / Deny with a note). Pending approvals time out (default 12 h → denied) and are cancelled when
 the task is removed or completed.
 
+**Approval policies.** The user's `settings.agent.approvalPolicy` (Settings → Agent → Approvals)
+decides which verdicts ask; the gate applies it after the evaluation, reading it on every call:
+
+- `ask_every_action` — every effectful action asks, even ones the evaluator allows (thread tools,
+  note reads, web search/fetch and read-only file, browser and computer tools never ask).
+- `ask_risky` (default) — the evaluator decides, as above.
+- `ask_high_risk` — only `require_approval` verdicts of high or critical risk ask; the rest run.
+- `run_everything` — nothing asks.
+
+`deny` verdicts are blocked under every policy. A looser policy approves the pending approvals it
+wouldn't ask about ("Approved by your approval policy"); a stricter one leaves them waiting.
+Agents can't change the policy: the settings file and the rest of the sidecar, `$DDL_HOME`, the
+daemon, the web dev server and the app itself are hard denies. Web and Mac show a policy other
+than the default in the status bar ("Runs everything" in the warning color), and "Run everything"
+asks for confirmation.
+
 ## 5. The Cursor CLI harness
 
 `@ddl/agent/cursor` (`src/harness/cursor/`) runs conversations on the Cursor CLI's agent

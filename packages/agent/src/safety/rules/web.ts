@@ -1,6 +1,7 @@
 /**
  * URL rules shared by browser navigation, web fetches, MCP tools with URL arguments and shell HTTP
- * clients: dangerous schemes, local/private network targets (including this app's own daemon),
+ * clients: dangerous schemes, local/private network targets (including this app's own daemon and
+ * web dev server),
  * secrets or personal data in URLs, and GET links that act (unsubscribe, confirm, delete).
  */
 import { findCardNumbers, findSecrets, findSsns } from "../sensitive";
@@ -8,6 +9,15 @@ import { info, type Match, type RuleHit, runRules, type SafetyRuleInfo } from ".
 
 /** The daemon's documented local port; an agent must never drive the app (it could approve itself). */
 export const DAEMON_PORT = "7331";
+/** The web dev server (`pnpm dev`), which forwards `/api` and `/ws` to the daemon with its token. */
+export const WEB_DEV_PORT = "5173";
+
+/** Loopback ports that serve Daily Do List itself (the ports ddl-computer's web UI guard protects). */
+const APP_PORTS: ReadonlySet<string> = new Set([DAEMON_PORT, WEB_DEV_PORT]);
+
+function isAppAddress(u: ParsedUrl): boolean {
+  return APP_PORTS.has(u.port) && isLoopbackHost(u.host);
+}
 
 export interface ParsedUrl {
   raw: string;
@@ -264,9 +274,9 @@ export const URL_RULES: readonly UrlRule[] = [
       "system",
       "deny",
       "critical",
-      "Operates the Daily Do List app itself (an agent could approve its own actions)",
+      "Operates the Daily Do List app itself (an agent could approve its own actions or change its settings)",
     ),
-    (u) => (isLoopbackHost(u.host) && u.port === DAEMON_PORT ? `${u.host}:${u.port}` : null),
+    (u) => (isAppAddress(u) ? `${u.host}:${u.port}` : null),
   ),
   urlRule(
     info(
@@ -317,8 +327,7 @@ export const URL_RULES: readonly UrlRule[] = [
       "Reaches a service on this computer or the local network",
     ),
     (u) => {
-      if ((u.port === DAEMON_PORT && isLoopbackHost(u.host)) || METADATA_HOSTS.has(u.host))
-        return null;
+      if (isAppAddress(u) || METADATA_HOSTS.has(u.host)) return null;
       return isPrivateHost(u.host) ? `${u.host}${u.port ? `:${u.port}` : ""}` : null;
     },
   ),
