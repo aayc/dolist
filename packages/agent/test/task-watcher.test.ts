@@ -1,4 +1,9 @@
-import type { AppSettings, DeepPartial } from "@ddl/core";
+import {
+  type AppSettings,
+  type DeepPartial,
+  emptyDrawingScene,
+  serializeDrawingFile,
+} from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TaskWatcher } from "../src/orchestrator/task-watcher";
@@ -178,6 +183,39 @@ describe("TaskWatcher scope", () => {
     await storage.write(TODAY, "- [ ] Today task");
     await vi.advanceTimersByTimeAsync(SETTLE);
     expect(kinds(events).sort()).toEqual(["added:Today task", "added:Tomorrow task"]);
+  });
+
+  it("never reads a drawing as a task list, even one at a daily note's path", async () => {
+    // The Excalidraw plugin can convert a note, today's included, into a drawing; its text
+    // elements are listed as lines under `## Text Elements`.
+    const drawing = serializeDrawingFile({
+      ...emptyDrawingScene(),
+      elements: [
+        { id: "k3JwQm9a", type: "text", text: "- [ ] Book the plumber" },
+        { id: "p2XnRt7c", type: "text", text: "Can you find a cheaper flight?" },
+      ],
+    });
+    expect(drawing).toContain("- [ ] Book the plumber ^k3JwQm9a");
+    const { storage, watcher, events } = setup({
+      settings: { dailyNotes: { format: "YYYY-MM-DD[.excalidraw]" } },
+    });
+    const notes: NoteEvent[] = [];
+    watcher.on("note", (event) => notes.push(event));
+    await watcher.start();
+    expect(watcher.watches("Daily/2026-09-23.excalidraw.md")).toBe(false);
+    await storage.write("Daily/2026-09-23.excalidraw.md", drawing);
+    await vi.advanceTimersByTimeAsync(SETTLE * 2);
+
+    watcher.updateSettings(testSettings({ agent: { settleMs: SETTLE } }));
+    await storage.write(TODAY, drawing);
+    await vi.advanceTimersByTimeAsync(SETTLE * 2);
+    expect(events).toEqual([]);
+    expect(notes).toEqual([]);
+    expect(watcher.getTasks(TODAY)).toEqual([]);
+
+    await storage.write(TODAY, "- [ ] Book the plumber");
+    await vi.advanceTimersByTimeAsync(SETTLE);
+    expect(kinds(events)).toEqual(["added:Book the plumber"]);
   });
 
   it("dedupes storage events for an already processed version", async () => {
