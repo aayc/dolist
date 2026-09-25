@@ -12,9 +12,10 @@ import Observation
 ///
 /// When someone else (e.g. the agent) changes a note that has unsaved local edits — announced by
 /// `vault.changed`, or found by a save's 409 — the two are merged line by line (`TextMerge`, base =
-/// the last server version we know). Without a conflict the editor gets only the other side's
-/// changes and the merged text is saved on top of their version; a conflict keeps ours and saves
-/// theirs as a conflict copy.
+/// the last server version we know). The editor gets only the other side's changes and the merged
+/// text is saved on top of their version; where both changed the same lines ours win and theirs
+/// is also saved as a conflict copy. A note without unsaved edits never writes, and a merge never
+/// brings back lines deleted elsewhere.
 @MainActor
 @Observable
 final class NotesStore {
@@ -47,7 +48,7 @@ final class NotesStore {
   var paths: [String] { Array(docs.keys) }
   func serverContent(_ path: String) -> String? { docs[path]?.serverContent }
   func version(_ path: String) -> String? { docs[path]?.version }
-  /// Unsaved local content captured from the editor (nil when clean).
+  /// Unsaved local text captured from the editor (nil while the note has no unsaved edits).
   func pendingContent(_ path: String) -> String? { docs[path]?.pendingContent }
 
   func isDirty(_ path: String) -> Bool {
@@ -162,32 +163,41 @@ final class NotesStore {
       delegate?.notesStore(self, applyRemote: fresh.content, to: path)
       return
     }
-    // Local edits pending: merge them with the new version and save the result on top of it.
-    if let merged = merge(doc, with: fresh) {
-      if Self.same(merged, fresh.content) {
-        doc.savedRev = doc.localRev
-        doc.pendingContent = nil
-        updateStatus(doc)
-      } else {
-        save(doc)
-      }
+    if conflicts(doc, with: fresh) {
+      // Both changed the same lines: the next save gets a 409, keeps a copy of theirs and merges.
+      doc.conflict = true
+      updateStatus(doc)
+      arm(doc, delay: saveDelay)
       return
     }
-    // A conflict: the next save gets a 409 and keeps a conflict copy of theirs.
-    doc.conflict = true
-    updateStatus(doc)
-    arm(doc, delay: saveDelay)
+    // Local edits pending: merge them with the new version and save the result on top of it.
+    let merged = merge(doc, with: fresh)
+    if Self.same(merged, fresh.content) {
+      doc.savedRev = doc.localRev
+      doc.pendingContent = nil
+      updateStatus(doc)
+    } else {
+      save(doc)
+    }
+  }
+
+  /// The note's local text: the editor's (live or snapshot), else the unsaved text captured from it.
+  private func localText(_ doc: NoteDoc) -> String {
+    delegate?.notesStore(self, liveContentOf: doc.path) ?? doc.pendingContent ?? doc.serverContent
+  }
+
+  private func conflicts(_ doc: NoteDoc, with current: NoteResponse) -> Bool {
+    TextMerge.merge(base: doc.serverContent, local: localText(doc), remote: current.content)
+      .conflict
   }
 
   /// Merges the note's live text with `current` (a newer server version) over the last version we
-  /// know. Without a conflict `current` becomes the base, the editor gets the merged text (the
-  /// delegate applies only the other side's changes) and the merged text is returned; nil on a
-  /// conflict, leaving everything as it was.
-  private func merge(_ doc: NoteDoc, with current: NoteResponse) -> String? {
-    let local =
-      delegate?.notesStore(self, liveContentOf: doc.path) ?? doc.pendingContent ?? doc.serverContent
+  /// know: `current` becomes the base, the editor gets the merged text (the delegate applies only
+  /// the other side's changes) and the merged text is returned. Where both changed the same lines
+  /// ours win; lines only `current` changed or removed never come back.
+  private func merge(_ doc: NoteDoc, with current: NoteResponse) -> String {
+    let local = localText(doc)
     let merged = TextMerge.merge(base: doc.serverContent, local: local, remote: current.content)
-    guard !merged.conflict else { return nil }
     doc.serverContent = current.content
     doc.version = current.version
     doc.mtime = current.mtime
@@ -264,7 +274,10 @@ final class NotesStore {
   private func save(_ doc: NoteDoc) -> Task<Void, Never>? {
     doc.timer?.cancel()
     doc.timer = nil
-    if let live = delegate?.notesStore(self, liveContentOf: doc.path) { doc.pendingContent = live }
+    if doc.localRev != doc.savedRev, let live = delegate?.notesStore(self, liveContentOf: doc.path)
+    {
+      doc.pendingContent = live
+    }
     if let inflight = doc.inflight {
       if doc.localRev == doc.savedRev { return inflight }
       doc.resave = true
@@ -353,24 +366,21 @@ final class NotesStore {
       delegate?.notesStore(self, applyRemote: current.content, to: doc.path)
       return
     }
-    // Both changed: merge, and save the merged text on top of theirs (it carries every edit known
-    // now).
-    if let merged = merge(doc, with: current) {
-      let mergedRev = doc.localRev
-      if Self.same(merged, current.content) {
-        acknowledge(
-          doc, content: merged, rev: mergedRev, version: current.version, mtime: current.mtime)
-      } else {
-        await write(doc, content: merged, rev: mergedRev, depth: depth + 1)
-      }
-      return
+    // Both changed the same lines: ours win, so preserve theirs next to the note first.
+    if conflicts(doc, with: current) {
+      let copyPath = try await writeConflictCopy(of: doc.path, content: current.content)
+      delegate?.notesStore(self, didSaveConflictCopy: copyPath, of: doc.path)
+      guard tracks(doc) else { return }
     }
-    // A conflict: keep ours; preserve theirs next to it.
-    let copyPath = try await writeConflictCopy(of: doc.path, content: current.content)
-    delegate?.notesStore(self, didSaveConflictCopy: copyPath, of: doc.path)
-    guard tracks(doc) else { return }
-    doc.version = current.version
-    await write(doc, content: content, rev: rev, depth: depth + 1)
+    // Merge, and save the merged text on top of theirs (it carries every edit known now).
+    let merged = merge(doc, with: current)
+    let mergedRev = doc.localRev
+    if Self.same(merged, current.content) {
+      acknowledge(
+        doc, content: merged, rev: mergedRev, version: current.version, mtime: current.mtime)
+    } else {
+      await write(doc, content: merged, rev: mergedRev, depth: depth + 1)
+    }
   }
 
   private func writeConflictCopy(of path: String, content: String) async throws -> String {
@@ -449,7 +459,9 @@ private final class NoteDoc {
   /// Incremented per local edit; `savedRev` is the last revision the server acknowledged.
   var localRev = 0
   var savedRev = 0
-  /// Local content captured from the editor when a save starts.
+  /// Unsaved local text, captured from the editor when a save starts or merged into; nil whenever
+  /// the note has no unsaved edits, so it never outlives the edits it holds (a note shown without
+  /// an editor snapshot shows it).
   var pendingContent: String?
   var lastEdit: TimeInterval = 0
   var timer: ScheduledAction?
