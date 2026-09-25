@@ -61,7 +61,7 @@ Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md). Spec, with the exact wire contra
 | S1 remote access and pairing | `feat/always-on-remote` | done (`48d4ec7`), merged into `feat/always-on` at `0501be1` |
 | S2 placement, lease priorities, fencing, machine link | `feat/always-on-placement` | done (`bb18e4b`), merged into `feat/always-on` at `394a6dd` (with S1: daemon 1061, sync 63, storage 303, contract 1123 tests green) |
 | S3 relay | `feat/always-on-relay` | built (`6f5aa68`); `feat/always-on` merged into it at `569d3a6` (relay wired to S2's supervisor and machine link, `placement-lease.ts` dropped); S3 is fixing 6 daemon tests whose assumptions changed with S2's lease gating, then it merges into `feat/always-on` |
-| S4 web Settings, the orchestrator toggle, pairing screen | `feat/always-on-web` (from `a0a924f`) | in progress; stops at "ready for backend" before its fullstack e2e |
+| S4 web Settings, the orchestrator toggle, pairing screen | `feat/always-on-web` | built (`2a885ee`: toggle, 5 Settings sections, pairing screen and cookie mode, read-only states; 667 unit, 107 functional e2e, perf and bundle green on the mock); `feat/always-on` (S1+S2) merged in; now running the fullstack e2e (the handover test waits for S3) |
 | S5 macOS Settings and the orchestrator toggle | `feat/always-on-mac` (from `a0a924f`) | in progress |
 
 S1 and S2 branch from `45a7cd1` (before routines), S3–S5 from `a0a924f` (after). S1 and S2 share
