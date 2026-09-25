@@ -80,6 +80,61 @@ describe("mergeText", () => {
     expect(mergeText(base, local, remote)).toEqual({ text: local, conflict: true });
   });
 
+  it("keeps lines deleted elsewhere deleted when the user added a line between them", () => {
+    const day = note("# Thursday", "- [ ] Rehearsal", "\t- Done: 11 bots %%agent:thr_1%%", "Notes");
+    const local = note(
+      "# Thursday",
+      "- [ ] Rehearsal",
+      "\t- ask about the 3 missing ones",
+      "\t- Done: 11 bots %%agent:thr_1%%",
+      "Notes",
+    );
+    const remote = note("# Thursday", "Notes");
+    expect(mergeText(day, local, remote)).toEqual({
+      text: note("# Thursday", "\t- ask about the 3 missing ones", "Notes"),
+      conflict: false,
+    });
+  });
+
+  it("keeps the other side's lines added inside a block the user rewrote, after it", () => {
+    const local = note("# Thursday", "- [x] Book a table", "- [x] Renew passport", "Notes");
+    const remote = note(
+      "# Thursday",
+      "- [ ] Book a table",
+      "  - Sole at 7 %%agent:thr_1%%",
+      "- [ ] Renew passport",
+      "Notes",
+    );
+    expect(mergeText(base, local, remote)).toEqual({
+      text: note(
+        "# Thursday",
+        "- [x] Book a table",
+        "- [x] Renew passport",
+        "  - Sole at 7 %%agent:thr_1%%",
+        "Notes",
+      ),
+      conflict: false,
+    });
+  });
+
+  it("doesn't bring back lines deleted elsewhere when the same line conflicts", () => {
+    const local = note("# Thursday", "- [ ] Book a table for 4", "- [ ] Renew passport", "Notes");
+    const remote = note("# Thursday", "- [x] Book a table", "Notes");
+    expect(mergeText(base, local, remote)).toEqual({
+      text: note("# Thursday", "- [ ] Book a table for 4", "Notes"),
+      conflict: true,
+    });
+  });
+
+  it("keeps only the user's own lines of a block both sides changed", () => {
+    const local = note("# Thursday", "- [ ] Book a table", "- [ ] Renew passport by May", "Notes");
+    const remote = note("# Thursday", "Notes");
+    expect(mergeText(base, local, remote)).toEqual({
+      text: note("# Thursday", "- [ ] Renew passport by May", "Notes"),
+      conflict: true,
+    });
+  });
+
   it("applies a deletion next to an edit", () => {
     const local = note("# Thursday", "- [ ] Book a table", "- [ ] Renew passport", "Notes!");
     const remote = note("# Thursday", "- [ ] Renew passport", "Notes");

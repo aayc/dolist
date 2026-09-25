@@ -43,6 +43,8 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
     var holdWrites = false
     var calls: [String] = []
     var writes: [(path: String, content: String, base: BaseVersion)] = []
+    /// Writes that landed, with the text they replaced.
+    var landed: [(path: String, before: String?, content: String)] = []
     var sent: [ClientEvent] = []
     var routines: [Routine] = []
     var routineTemplates: [RoutineTemplate] = []
@@ -78,6 +80,9 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
   var calls: [String] { lock.withLock { state.calls } }
   var writes: [(path: String, content: String, base: BaseVersion)] {
     lock.withLock { state.writes }
+  }
+  var landed: [(path: String, before: String?, content: String)] {
+    lock.withLock { state.landed }
   }
   var sent: [ClientEvent] { lock.withLock { state.sent } }
   func calls(_ prefix: String) -> [String] { calls.filter { $0.hasPrefix(prefix) } }
@@ -193,6 +198,7 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
       }
       state.versionCounter += 1
       let version = "v\(state.versionCounter)"
+      state.landed.append((path, existing?.content, content))
       state.notes[path] = Note(content: content, version: version)
       return WriteNoteResponse(path: path, version: version, mtime: 2_000)
     }
