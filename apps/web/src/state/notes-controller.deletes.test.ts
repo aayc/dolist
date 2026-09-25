@@ -79,10 +79,12 @@ class Editor implements NotesClient {
   readonly notes: NotesController;
   text: string;
   shown = true;
-  constructor(
-    readonly daemon: Daemon,
-    readonly id: string,
-  ) {
+  readonly daemon: Daemon;
+  readonly id: string;
+
+  constructor(daemon: Daemon, id: string) {
+    this.daemon = daemon;
+    this.id = id;
     this.text = daemon.content;
     daemon.editors.push(this);
     daemon.inbox.set(this, []);

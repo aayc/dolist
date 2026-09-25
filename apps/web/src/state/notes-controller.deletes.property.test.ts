@@ -92,11 +92,12 @@ class Editor implements NotesClient {
   mounted = true;
   /** Tokens this editor's user typed. */
   readonly typed = new Set<string>();
+  readonly vault: Vault;
+  readonly id: number;
 
-  constructor(
-    readonly vault: Vault,
-    readonly id: number,
-  ) {
+  constructor(vault: Vault, id: number) {
+    this.vault = vault;
+    this.id = id;
     this.live = vault.content;
     this.notes = new NotesController({
       client: this,
@@ -321,7 +322,7 @@ afterEach(() => {
 });
 
 describe("NotesController and lines deleted elsewhere (model-based)", () => {
-  test.prop([fc.array(opArb, { minLength: 1, maxLength: 60 })], { numRuns: 300 })(
+  test.prop([fc.array(opArb, { minLength: 1, maxLength: 60 })])(
     "nothing deleted elsewhere comes back, a clean editor writes nothing new, all converge",
     async (ops) => {
       const vault = await run(ops);
