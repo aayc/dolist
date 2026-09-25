@@ -231,6 +231,19 @@ describe("server events", () => {
     },
   );
 
+  test.prop([arb.orchestratorActivity()], { numRuns })(
+    "orchestrator activity carries the payload unchanged",
+    async (activity) => {
+      const from = client.messages.length;
+      runtime.emit("orchestrator.activity", activity);
+      const event = await client.next((e) => e.type === "orchestrator.activity", from);
+      expect(event).toStrictEqual(
+        JSON.parse(JSON.stringify({ type: "orchestrator.activity", activity })),
+      );
+      expectServerEvent(event);
+    },
+  );
+
   test.prop([arb.surfaceFrame()], { numRuns })(
     "frames reach subscribers as conformant surface.frame events",
     async (frame) => {

@@ -15,6 +15,8 @@ import {
   type AgentStatusResponse,
   API_ROUTES,
   API_VERSION,
+  type OrchestratorActivity,
+  type OrchestratorTrigger,
   summarizeThread,
   type ThreadListResponse,
 } from "@ddl/core";
@@ -618,6 +620,57 @@ describe("the agent relay over WebSocket", { timeout: 30_000 * TIME_SCALE }, () 
     expect(
       client.events.some((e) => e.type === "thread.upsert" && e.thread.id === "thr_local"),
     ).toBe(false);
+  });
+
+  it("shows what the machine's orchestrator is doing, and this device's once it stops relaying", async () => {
+    const trigger: OrchestratorTrigger = {
+      kind: "note",
+      notePath: "Daily/2026-09-23.md",
+      lines: [{ line: 3, text: "find a plumber for Saturday" }],
+      summary: "“find a plumber for Saturday”",
+    };
+    machineRuntime.orchestrator = { phase: "thinking", turnId: "msg_1", trigger, startedAt: 7 };
+    const { client, relay, local, placement } = await liveDevice();
+    await connected(relay);
+    // A client joining mid-turn gets the machine's turn from the resync.
+    const joined = await client.next(
+      "orchestrator.activity",
+      (e) => e.activity.turnId === "msg_1",
+      WAIT_MS,
+    );
+    expect(joined.activity).toEqual(machineRuntime.orchestrator);
+    expect(relay.status().orchestrator).toEqual(machineRuntime.orchestrator);
+
+    local.emit("orchestrator.activity", { phase: "noticed", trigger });
+    const done: OrchestratorActivity = {
+      phase: "idle",
+      turnId: "msg_1",
+      trigger,
+      startedAt: 7,
+      outcome: { kind: "delegated", count: 1, threadId: "thr_1", text: "Find a plumber" },
+    };
+    machineRuntime.emit("orchestrator.activity", done);
+    expect(
+      (await client.next("orchestrator.activity", (e) => e.activity.phase === "idle", WAIT_MS))
+        .activity,
+    ).toEqual(done);
+    await client.barrier();
+    expect(
+      client.events.some(
+        (e) => e.type === "orchestrator.activity" && e.activity.phase === "noticed",
+      ),
+    ).toBe(false);
+
+    placement.set("this_device");
+    expect(relay.state).toBe("off");
+    const own = await client.next(
+      "orchestrator.activity",
+      (e) => e.activity.turnId === undefined,
+      WAIT_MS,
+    );
+    expect(own.activity).toEqual({ phase: "idle" });
+    local.emit("orchestrator.activity", { phase: "noticed", trigger });
+    await client.next("orchestrator.activity", (e) => e.activity.phase === "noticed", WAIT_MS);
   });
 
   it("sends surface watches, reads and typing to the machine, and its frames back", async () => {

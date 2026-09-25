@@ -111,6 +111,7 @@ export class LeasedAgentRuntime implements AgentRuntime {
         });
       }
       this.#emitStatus();
+      this.#emitActivity();
       this.#emitRoutines();
     });
   }
@@ -127,7 +128,10 @@ export class LeasedAgentRuntime implements AgentRuntime {
         await this.#idle.followSidecar(true);
       }
       this.#emitStatus();
-      if (stack) this.#emitRoutines();
+      if (stack) {
+        this.#emitActivity();
+        this.#emitRoutines();
+      }
     });
   }
 
@@ -296,6 +300,11 @@ export class LeasedAgentRuntime implements AgentRuntime {
   #emitStatus(): void {
     // Listeners decorate what they're given: pass the undecorated status.
     this.#emit("status", this.#current().status());
+  }
+
+  /** Listeners follow the new runtime before the old one stops: its last turn never ends for them. */
+  #emitActivity(): void {
+    this.#emit("orchestrator.activity", this.#current().status().orchestrator ?? { phase: "idle" });
   }
 
   /** The other runtime's routines: scheduled or not, with or without live run statuses. */
