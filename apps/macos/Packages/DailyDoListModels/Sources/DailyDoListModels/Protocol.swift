@@ -36,6 +36,18 @@ public enum APIRoute {
   public static let device = "/api/device"
   /// PUT `DeviceSyncSetupRequest` · DELETE (sync off) → `DeviceSettingsResponse`.
   public static let deviceSync = "/api/device/sync"
+  /// GET → `DeviceVaultResponse` · PUT `DeviceVaultRequest` → `DeviceVaultResponse`, then the
+  /// daemon restarts on that vault. This machine only.
+  public static let deviceVault = "/api/device/vault"
+  /// POST `ObsidianImportPreviewRequest` → `ObsidianImportPreview` (reads, writes nothing).
+  public static let importObsidianPreview = "/api/import/obsidian/preview"
+  /// GET → `ObsidianImportStatusResponse` · POST `ObsidianImportRequest` → 202
+  /// `ObsidianImportJobResponse` (progress arrives as `import.progress` events).
+  public static let importObsidian = "/api/import/obsidian"
+  /// POST → `ObsidianImportJobResponse`: the stopped job, once its partial work is removed.
+  public static let importObsidianCancel = "/api/import/obsidian/cancel"
+  /// POST → 202 `ObsidianImportJobResponse`: copies what changed in Obsidian since the import.
+  public static let importObsidianUpdate = "/api/import/obsidian/update"
   /// POST `PairingCodeRequest` → 201 `PairingCodeResponse`.
   public static let pairingCodes = "/api/pairing-codes"
   /// POST `PairRequest` → 201 `PairResponse`. No bearer token: the code is the credential.
@@ -722,6 +734,8 @@ public struct ApiErrorCode: WireEnum {
   public static let pairingRejected: Self = "pairing_rejected"
   public static let forbiddenHost: Self = "forbidden_host"
   public static let forbiddenOrigin: Self = "forbidden_origin"
+  /// 403: only this machine may do this (importing a folder, switching vaults), not a paired device.
+  public static let forbiddenDevice: Self = "forbidden_device"
   public static let notFound: Self = "not_found"
   public static let conflict: Self = "conflict"
   /// 409: a device setting is set by an environment variable.

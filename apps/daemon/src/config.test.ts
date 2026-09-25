@@ -44,6 +44,8 @@ describe("loadConfig", () => {
     expect(config).toMatchObject({
       home: ddlHome,
       vaultPath: join(homedir, "DailyDoList"),
+      vaultFromEnv: false,
+      supervised: false,
       port: DEFAULT_PORT,
       agentMode: "live",
       model: DEFAULT_MODEL,
@@ -90,6 +92,11 @@ describe("loadConfig", () => {
     ).not.toHaveProperty("helper");
   });
 
+  it("knows when a supervisor restarts it (DDL_SUPERVISED=1, as the Mac app sets it)", () => {
+    expect(load({ DDL_SUPERVISED: "1" }).supervised).toBe(true);
+    expect(load({ DDL_SUPERVISED: "yes" }).supervised).toBe(false);
+  });
+
   it("gives the agent the drawing render page built next to the daemon", () => {
     expect(load().execution).not.toHaveProperty("drawingRenderer");
     expect(summarizeConfig(load(), homedir).drawingRenderer).toMatch(/not built/);
@@ -128,6 +135,7 @@ describe("loadConfig", () => {
     const fromFile = load();
     expect(fromFile).toMatchObject({
       vaultPath: join(homedir, "Notes"),
+      vaultFromEnv: false,
       port: 8000,
       agentMode: "mock",
       model: "vendor/file-model",
@@ -147,6 +155,7 @@ describe("loadConfig", () => {
     });
     expect(fromEnv).toMatchObject({
       vaultPath: join(cwd, "vault"),
+      vaultFromEnv: true,
       port: 0,
       agentMode: "off",
       model: "vendor/env-model",

@@ -5,6 +5,7 @@ import type { PairBrowser } from "../api/pairing";
 import { isMockMode, resolveStartup } from "../api/select-client";
 import { installGlobalHotkeys } from "../commands/keyboard";
 import { armCounts } from "../components/Count";
+import { announceVaultSwitch } from "../features/obsidian-import/vault-switch";
 import {
   applyEditorCssVars,
   applyTheme,
@@ -178,6 +179,7 @@ export async function startApp(container: HTMLElement): Promise<void> {
         initialLoaded = ok;
         armCounts();
         if (ok) {
+          announceVaultSwitch();
           onIdle(() => {
             void prefetchLazyChunks().then(() => {
               perf.prefetched = true;

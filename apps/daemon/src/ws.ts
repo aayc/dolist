@@ -18,6 +18,7 @@ import { type RawData, WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
 import { errorMessage } from "./errors";
 import { isValidClientId } from "./http-utils";
+import type { ObsidianImporter } from "./import/importer";
 import type { PairedDeviceStore } from "./paired-devices";
 import { forwardedByProxy, type Principal, requestHostKind, type SecurityPolicy } from "./security";
 import type { SettingsStore } from "./settings-store";
@@ -63,6 +64,8 @@ export interface WebSocketHubOptions {
   runtime: AgentRuntime;
   settings: SettingsStore;
   writes: WriteTracker;
+  /** Imports from Obsidian: their progress goes out as `import.progress`. */
+  imports?: Pick<ObsidianImporter, "onProgress">;
   logger: Logger;
   heartbeatMs?: number;
   coalesceMs?: number;
@@ -265,6 +268,9 @@ export function attachWebSocketHub(options: WebSocketHubOptions): WebSocketHub {
 
   const subscriptions: Unsubscribe[] = [
     ...(options.devices ? [options.devices.onRevoke(closeDevice)] : []),
+    ...(options.imports
+      ? [options.imports.onProgress((job) => broadcast({ type: "import.progress", job }))]
+      : []),
     options.storage.watch((event) => batcher.push(event)),
     options.settings.onChange((settings) => broadcast({ type: "settings.changed", settings })),
     runtime.on("task.records", ({ notePath, records }) =>

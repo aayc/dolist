@@ -42,12 +42,14 @@ import type {
 } from "./agent-location";
 import { createApp } from "./app";
 import type { DeviceSettings } from "./device-settings";
+import type { ObsidianImporter } from "./import/importer";
 import type { MachineLink } from "./machine-link";
 import { PairedDeviceStore } from "./paired-devices";
 import { PairingCodes } from "./pairing";
 import { createRemoteHosts, type RemoteHostRegistry } from "./remote-hosts";
 import { createSettingsStore, type SettingsStore } from "./settings-store";
 import type { SystemSettingsOpener } from "./system-settings";
+import type { VaultSwitch } from "./vault-switch";
 import { WriteTracker } from "./write-tracker";
 
 export const TEST_PORT = 7331;
@@ -422,6 +424,8 @@ export interface TestAppOptions<S extends StorageProvider = MemoryStorageProvide
   systemSettings?: FakeSystemSettings;
   device?: DeviceSettings;
   machine?: MachineLink;
+  vault?: VaultSwitch;
+  imports?: ObsidianImporter;
   relay?: { middleware(): MiddlewareHandler };
 }
 
@@ -470,6 +474,8 @@ export async function createTestApp<S extends StorageProvider = MemoryStoragePro
     ...(options.syncStatus ? { syncStatus: options.syncStatus } : {}),
     ...(options.device ? { device: options.device } : {}),
     ...(options.machine ? { machine: options.machine } : {}),
+    ...(options.vault ? { vault: options.vault } : {}),
+    ...(options.imports ? { imports: options.imports } : {}),
     systemSettings,
     ...(options.now ? { now: options.now } : {}),
     ...(options.relay ? { relay: options.relay } : {}),

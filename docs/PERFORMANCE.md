@@ -83,6 +83,7 @@ Vitest 5 benchmarks (`*.bench.ts`) assert p99 budgets inside the test and write
 | Drawing file, 2 000 elements: write back with the previous file / describe | 40 / 15 ms |
 | Vault listing / search, 2 000 notes (warm) | see `packages/storage/src/storage.bench.ts` |
 | 3-way merge, 2 000-line note | see `packages/storage/src/storage.bench.ts` |
+| Obsidian import preview, 10 000-note vault (warm; its report stays under 256 KB) | 1 500 ms |
 | Agent journal: one flushed append to a 5 000-event journal | 50 ms |
 | Agent journal: union merge, 5 000 shared events + 50 per side | 80 ms |
 

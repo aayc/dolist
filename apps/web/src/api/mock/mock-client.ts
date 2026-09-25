@@ -18,6 +18,7 @@ import {
   type DeviceSettingsPatch,
   type DeviceSettingsResponse,
   type DeviceSyncSetupRequest,
+  type DeviceVaultResponse,
   dailyNotePath,
   type HealthResponse,
   isHiddenPath,
@@ -28,6 +29,10 @@ import {
   type NoteResponse,
   normalizeDeviceName,
   normalizePath,
+  type ObsidianImportJobResponse,
+  type ObsidianImportPreview,
+  type ObsidianImportRequest,
+  type ObsidianImportStatusResponse,
   type PairedDevicesResponse,
   type PairingCodeRequest,
   type PairingCodeResponse,
@@ -59,9 +64,10 @@ import type {
   DaemonClient,
   ThreadFilter,
 } from "../client";
-import { ConflictError, HttpError } from "../errors";
+import { ConflictError, HttpError, NetworkError } from "../errors";
 import { MOCK_CONNECTORS, MockAgent, MockNotFoundError } from "./mock-agent";
 import { MockComputer, type MockComputerMode } from "./mock-computer";
+import { MockImports } from "./mock-import";
 import { MockPairing } from "./mock-pairing";
 import { MockRemote, type MockRemoteScenario } from "./mock-remote";
 import { MockRoutines } from "./mock-routines";
@@ -79,6 +85,10 @@ export interface MockDaemonClientOptions {
   installHooks?: boolean;
   /** The simulated Mac's computer access. Default `ready`. */
   computer?: MockComputerMode;
+  /** Delay between the progress steps of an import or update from Obsidian. */
+  importStepMs?: number;
+  /** How long the daemon is away when it restarts to open another vault. */
+  restartMs?: number;
   /** Keep the vault in sessionStorage, so a reload of the tab finds what it had (tests). */
   persistVault?: boolean;
   /** A starting point for the device side (placement, sync, the machine); null keeps the stored one. */
@@ -99,6 +109,12 @@ export interface MockTestHooks {
   deleteNote(path: string): void;
   readNote(path: string): string | null;
   listPaths(): string[];
+  /** This browser is a paired device: importing and switching vaults answer 403. */
+  setPairedDevice(on: boolean): void;
+  /** `DDL_VAULT` fixes the vault: switching answers 409 `locked_by_env`. */
+  setVaultLockedByEnv(on: boolean): void;
+  /** The vault syncs with the sync service: switching answers 409. */
+  setSyncing(on: boolean): void;
   /** The always-on machine stops (or starts) answering. */
   setMachineReachable(reachable: boolean): void;
   /** The always-on machine revokes (or accepts again) this device. */
@@ -200,6 +216,10 @@ export class MockDaemonClient implements DaemonClient {
   readonly agent: MockAgent;
   private readonly routines: MockRoutines;
   private readonly computer: MockComputer;
+  private readonly imports: MockImports;
+  private readonly restartMs: number;
+  /** Between a vault switch and the daemon coming back: nothing answers. */
+  private restarting = false;
   private readonly pairing: MockPairing;
   private readonly remote: MockRemote;
   private settings: AppSettings;
@@ -252,6 +272,27 @@ export class MockDaemonClient implements DaemonClient {
       vaultChanged: (changes) => this.vaultChanged(changes, "agent"),
       agentEnabled: () => this.agent.status().enabled,
     });
+    this.restartMs = options.restartMs ?? 1_200;
+    this.imports = new MockImports(
+      {
+        emit: (event) => this.emit(event),
+        settings: () => this.settings,
+        notePaths: () => this.vault.paths(),
+        agentCounts: () => ({
+          threads: this.agent.listThreads().length,
+          records: this.vault.paths().reduce((n, p) => n + this.agent.recordsFor(p).length, 0),
+          approvals: this.agent.listApprovals().length,
+          routines: this.routines.listResponse().routines.length,
+        }),
+        writeExternal: (path, content) => this.externalWrite(path, content),
+        restart: () => this.simulateRestart(),
+        syncing: () => this.remote.syncStatus().target !== "none",
+      },
+      {
+        persist: this.persistSettings,
+        ...(options.importStepMs === undefined ? {} : { stepMs: options.importStepMs }),
+      },
+    );
     seedVault(this.vault, this.agent, this.settings);
     if (options.persistVault) this.persistVault();
     if ((options.installHooks ?? true) && typeof window !== "undefined") {
@@ -334,14 +375,31 @@ export class MockDaemonClient implements DaemonClient {
     }
   }
 
-  private setState(state: ConnectionState): void {
+  private setState(state: ConnectionState, reconnected = false): void {
     this.state = state;
-    for (const listener of this.connectionListeners) listener({ state, reconnected: false });
+    for (const listener of this.connectionListeners) listener({ state, reconnected });
+  }
+
+  /** The daemon exits to open another vault and its supervisor starts it again. */
+  private simulateRestart(): void {
+    this.restarting = true;
+    setTimeout(() => this.setState("reconnecting"), 0);
+    setTimeout(() => {
+      this.restarting = false;
+      this.imports.restarted();
+      if (this.state === "offline") return;
+      this.setState("online", true);
+      this.emit({
+        type: "hello",
+        serverVersion: `mock-${__APP_VERSION__}`,
+        apiVersion: API_VERSION,
+      });
+    }, this.restartMs);
   }
 
   /** Events are cloned synchronously (the agent keeps mutating its own objects) and delivered async like a socket. */
   private emit(event: ServerEvent): void {
-    if (this.state === "offline") return;
+    if (this.state === "offline" || this.restarting) return;
     const copy = clone(event);
     setTimeout(() => {
       for (const listener of this.listeners) listener(copy);
@@ -351,6 +409,10 @@ export class MockDaemonClient implements DaemonClient {
   private respond<T>(produce: () => T): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       setTimeout(() => {
+        if (this.restarting) {
+          reject(new NetworkError("Could not reach the Daily Do List daemon"));
+          return;
+        }
         if (this.deviceId !== null && !this.pairing.has(this.deviceId)) {
           const message = "Missing or invalid bearer token";
           reject(new HttpError(401, message, { error: "unauthorized", message }));
@@ -406,13 +468,16 @@ export class MockDaemonClient implements DaemonClient {
       ok: true as const,
       version: `mock-${__APP_VERSION__}`,
       apiVersion: API_VERSION,
-      vaultName: "Demo Vault",
+      vaultName: this.imports.vaultName,
       agentMode: "mock" as const,
     }));
   }
 
   getTree(): Promise<VaultTreeResponse> {
-    return this.respond(() => ({ vaultName: "Demo Vault", entries: this.vault.entries() }));
+    return this.respond(() => ({
+      vaultName: this.imports.vaultName,
+      entries: this.vault.entries(),
+    }));
   }
 
   readNote(path: string): Promise<NoteResponse> {
@@ -698,21 +763,51 @@ export class MockDaemonClient implements DaemonClient {
     return this.respond(() => this.remote.forgetMachine());
   }
 
+  getVault(): Promise<DeviceVaultResponse> {
+    return this.respond(() => this.imports.vault());
+  }
+
+  switchVault(path: string): Promise<DeviceVaultResponse> {
+    return this.respond(() => this.imports.switchVault(path));
+  }
+
+  previewObsidianImport(source: string): Promise<ObsidianImportPreview> {
+    return this.respond(() => this.imports.preview(source));
+  }
+
+  getObsidianImport(): Promise<ObsidianImportStatusResponse> {
+    return this.respond(() => this.imports.status());
+  }
+
+  startObsidianImport(request: ObsidianImportRequest): Promise<ObsidianImportJobResponse> {
+    return this.respond(() => ({ job: this.imports.startImport(request) }));
+  }
+
+  cancelObsidianImport(): Promise<ObsidianImportJobResponse> {
+    return this.respond(() => ({ job: this.imports.cancel() }));
+  }
+
+  updateFromObsidian(): Promise<ObsidianImportJobResponse> {
+    return this.respond(() => ({ job: this.imports.startUpdate() }));
+  }
+
   // ── Test hooks ─────────────────────────────────────────────────────────
 
-  /** What `window.__ddlMock` offers the e2e tests. */
+  private externalWrite(path: string, content: string): void {
+    const target = normalizePath(path);
+    const existed = this.vault.has(target);
+    const note = this.vault.write(target, content);
+    this.vaultChanged(
+      [{ path: target, kind: existed ? "modified" : "created", version: note.version }],
+      "external",
+    );
+    this.agent.observeNote(target, content);
+    this.routines.observe([target]);
+  }
+
+  /** What `window.__ddlMock` holds (installed with `installHooks`). */
   testHooks(): MockTestHooks {
-    const externalWrite = (path: string, content: string) => {
-      const target = normalizePath(path);
-      const existed = this.vault.has(target);
-      const note = this.vault.write(target, content);
-      this.vaultChanged(
-        [{ path: target, kind: existed ? "modified" : "created", version: note.version }],
-        "external",
-      );
-      this.agent.observeNote(target, content);
-      this.routines.observe([target]);
-    };
+    const externalWrite = (path: string, content: string) => this.externalWrite(path, content);
     return {
       createNote: externalWrite,
       externalEdit: externalWrite,
@@ -724,6 +819,13 @@ export class MockDaemonClient implements DaemonClient {
       },
       readNote: (path) => this.vault.get(path)?.content ?? null,
       listPaths: () => this.vault.paths(),
+      setPairedDevice: (on) => {
+        this.imports.pairedDevice = on;
+      },
+      setVaultLockedByEnv: (on) => {
+        this.imports.lockedByEnv = on;
+      },
+      setSyncing: (on) => this.remote.setSynced(on),
       setMachineReachable: (reachable) => this.remote.setMachineReachable(reachable),
       setMachineRejects: (rejected) => this.remote.setMachineRejects(rejected),
     };

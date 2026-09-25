@@ -91,6 +91,17 @@ struct CommandCatalog {
         .reopenTab, "Reopen Closed Tab", palette: "Reopen closed tab",
         enabled: { ws()?.tabs.canReopenClosedTab ?? false },
         perform: later { await $0.reopenClosedTab() }),
+      AppCommand(
+        .importFromObsidian, "Import from Obsidian…", enabled: { !model.isDemo },
+        perform: { model.showImportFromObsidian() }),
+      AppCommand(
+        .updateFromObsidian, "Update from Obsidian",
+        enabled: { model.imports.imported != nil && !model.imports.isRunning },
+        perform: { Task { await model.imports.update() } }),
+      AppCommand(
+        .revealPreviousVault, "Reveal the Old Vault in Finder",
+        palette: "Reveal the old vault in Finder", enabled: { model.previousVaultURL != nil },
+        perform: { model.revealPreviousVault() }),
 
       // Go
       AppCommand(

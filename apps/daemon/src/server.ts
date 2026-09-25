@@ -19,8 +19,9 @@ import { AttributedStorage } from "./attributed-storage";
 import { type DaemonConfig, loadConfig, summarizeConfig } from "./config";
 import { DeviceSettings, deviceSettingsFiles } from "./device-settings";
 import { errorMessage } from "./errors";
-import { secretFile } from "./home-files";
+import { jsonObjectFile, secretFile } from "./home-files";
 import { displayPath } from "./home-paths";
+import { ObsidianImporter } from "./import/importer";
 import { LeasedAgentRuntime } from "./leased-runtime";
 import { MACHINE_TOKEN_FILE, MachineLink } from "./machine-link";
 import { PairedDeviceStore } from "./paired-devices";
@@ -34,6 +35,7 @@ import { SyncController } from "./sync-controller";
 import { loadOrCreateDevice } from "./sync-setup";
 import { createSystemSettingsOpener } from "./system-settings";
 import { loadOrCreateToken } from "./token";
+import { VaultSwitch } from "./vault-switch";
 import { DAEMON_VERSION } from "./version";
 import {
   createAgentStack,
@@ -62,6 +64,12 @@ export interface StartDaemonOptions {
   logger?: Logger;
   /** Agent lease timings (tests shorten them). */
   leaseTimings?: Partial<LeaseTimings>;
+  /**
+   * Shuts the daemon down and exits with `RESTART_EXIT_CODE` so it opens `vaultPath` when it
+   * starts again (see `VaultSwitch`). Without it a switch is written but takes effect at the next
+   * start.
+   */
+  onRestart?: (vaultPath: string) => void;
   /** The relay's link to the machine (tests shorten its backoff). */
   relayLinkTimings?: Partial<LinkTimings>;
 }
@@ -82,6 +90,7 @@ interface Resources {
   supervisor?: AgentSupervisor;
   relay?: AgentRelay;
   sync?: SyncController;
+  imports?: ObsidianImporter;
   server?: Server;
   hub?: WebSocketHub;
   devices?: PairedDeviceStore;
@@ -198,6 +207,34 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     });
     resources.supervisor = supervisor;
     resources.unsubscribes.push(followSyncedSettings(storage, settings, runtime, logger));
+    const syncing = () => deviceSettings.sync.kind !== "none";
+    const imports = new ObsidianImporter({
+      places: { home: config.home, vault: config.vaultPath, homedir: homedir() },
+      settings: () => settings.get(),
+      syncing,
+      logger: logger.child({ component: "import" }),
+    });
+    resources.imports = imports;
+    const vault = new VaultSwitch({
+      vaultPath: config.vaultPath,
+      lockedByEnv: config.vaultFromEnv,
+      supervised: config.supervised,
+      config: jsonObjectFile(config.configPath),
+      home: config.home,
+      homedir: homedir(),
+      blocked: () => {
+        if (imports.busy) return "An import from Obsidian is running; wait for it or cancel it";
+        if (syncing()) {
+          return "This device syncs its vault: turn sync off before switching vaults, or the old notes sync into the new one";
+        }
+        return null;
+      },
+      restart: (vaultPath) => {
+        if (options.onRestart) options.onRestart(vaultPath);
+        else logger.warn("The vault changes when the daemon starts again");
+      },
+      logger: logger.child({ component: "vault" }),
+    });
     await supervisor.start();
     // Clients talk to the relay; the supervisor drives the leased runtime underneath it.
     const relay = new AgentRelay({
@@ -229,6 +266,8 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       search: resolveVaultSearch(storage),
       syncStatus: () => sync.status(),
       device: deviceSettings,
+      vault,
+      imports,
       machine,
       systemSettings: createSystemSettingsOpener(),
       relay,
@@ -249,6 +288,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       runtime: relay,
       settings,
       writes,
+      imports,
       logger: logger.child({ component: "ws" }),
     });
 
@@ -311,7 +351,9 @@ async function shutdown(resources: Resources, logger: Logger): Promise<void> {
   for (const unsubscribe of resources.unsubscribes) unsubscribe();
   resources.readiness?.stop();
   resources.machine?.dispose();
-  const { supervisor, relay, runtime, sync, hub, server, devices, connectors, storage } = resources;
+  const { supervisor, relay, runtime, sync, imports, hub, server, devices, connectors, storage } =
+    resources;
+  if (imports) await step("imports", () => imports.close());
   if (supervisor) await step("agent lease", () => supervisor.stop());
   // The relay stops the leased runtime under it.
   if (relay) await step("agent relay", () => relay.stop());

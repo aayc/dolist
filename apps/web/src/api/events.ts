@@ -250,6 +250,24 @@ const settings = shape({
   remote: optional(shape({ alwaysOnMachine: nullable(shape({ name: str, url: str })) })),
 });
 
+const count = shape({ count: num });
+const importJob = shape({
+  id: str,
+  kind: oneOf("import", "update"),
+  state: oneOf("running", "done", "failed", "cancelled"),
+  phase: str,
+  source: str,
+  destination: str,
+  startedAt: num,
+  finishedAt: optional(num),
+  progress: shape({ files: num, totalFiles: num, bytes: num, totalBytes: num }),
+  error: optional(str),
+  result: optional(shape({ copied: shape({ files: num, bytes: num }), manifest: str })),
+  update: optional(
+    shape({ added: count, updated: count, restored: count, conflicts: count, unchanged: num }),
+  ),
+});
+
 const validators: Record<ServerEvent["type"], Check> = {
   hello: shape({ serverVersion: str, apiVersion: num }),
   error: shape({ message: str, code: optional(str) }),
@@ -292,6 +310,7 @@ const validators: Record<ServerEvent["type"], Check> = {
       at: num,
     }),
   }),
+  "import.progress": shape({ job: importJob }),
 };
 
 /** Validates the shape of a daemon push event; unknown or malformed events are dropped. */

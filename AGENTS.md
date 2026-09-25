@@ -266,6 +266,9 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
  `loadExcalidraw()`. `apps/web/excalidraw-assets.ts` serves its fonts from the build and replaces
  its optional heavy parts; it's a quarter of Total JS, so check `pnpm size:check` after touching
  it.
+- **Ignored folder names:** `.gitignore` ignores every folder named `vault/` (and, with macOS's
+ case-insensitive git, `Vault/`) to keep vault content out of the repo: don't name a source folder
+ that (the import UI lives in `obsidian-import/` and `ObsidianImport/`).
 - **E2E typing:** use Playwright's real keyboard (`page.keyboard.type`). Automation "fill"-style
   typing into CodeMirror rebuilds text from the DOM (including badge widgets) and corrupts notes.
 
@@ -389,7 +392,9 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
   `DailyDoListModels` in the same change. Its tests decode the `@ddl/contract` fixtures.
 - **Daemon supervision:** the app attaches to a running daemon and never stops one it didn't
   start. It reads the token from `$DDL_HOME/daemon-token` and never logs it. A managed daemon runs
-  on the system Node 24.4+ with a stdin watchdog, so it can't outlive the app.
+  on the system Node 24.4+ with a stdin watchdog, so it can't outlive the app. A daemon that exits
+  with 75 (`RESTART_EXIT_CODE`, e.g. after `PUT /api/device/vault`) is relaunched at once, not
+  counted as a crash; the two constants must stay equal.
 - **Computer use helper:** `DailyDoListComputer` builds `ddl-computer`; `ddl-computer serve`
   speaks JSON lines on stdin and stdout (the protocol and its limits are in `apps/macos/README.md`)
   and exits when stdin closes. The daemon spawns it, so macOS checks its permissions against the

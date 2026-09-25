@@ -15,6 +15,8 @@
  * user would get elsewhere: the vault's sync credentials, a pairing code printed on the machine,
  * and putting the served daemon back as it was. The served daemon doesn't sync until a spec sets
  * it up, so the other specs see it standalone as before.
+ * For the import spec, `<tmpdir>/ddl-e2e-obsidian-<port>/Obsidian Notebook` holds a synthetic
+ * Obsidian vault (the daemon's own test vault); new vaults imported next to it go with it on exit.
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -105,6 +107,10 @@ async function main(): Promise<void> {
     DDL_OPENROUTER_BASE_URL: fake.baseUrl,
     DDL_AGENT_MOCK_ACTIONS: "1",
   });
+  const imports = join(tmpdir(), `ddl-e2e-obsidian-${port}`);
+  await rm(imports, { recursive: true, force: true });
+  const { buildObsidianVault } = await import("../../../apps/daemon/src/import/test-vaults");
+  await buildObsidianVault(join(imports, "Obsidian Notebook"));
   const daemon = await startDaemon();
   const daemonToken = readFileSync(daemon.config.tokenPath, "utf8").trim();
   const machineUrl = machine.url;
@@ -142,6 +148,7 @@ async function main(): Promise<void> {
       await rm(home, { recursive: true, force: true });
       await rm(vault, { recursive: true, force: true });
       await rm(machineRoot, { recursive: true, force: true });
+      await rm(imports, { recursive: true, force: true });
       process.exit(0);
     })();
   };

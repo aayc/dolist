@@ -330,6 +330,47 @@ struct HTTPDaemonClientRESTTests {
       name: "forgetMachine", method: "DELETE", target: "/api/machine/pairing", body: nil,
       attributed: true, response: .json(value: SampleWire.machine),
       call: { try await $0.forgetMachine() }, verify: { $0 is MachineStatusResponse }),
+    Operation(
+      name: "deviceVault", method: "GET", target: "/api/device/vault", body: nil, attributed: false,
+      response: .json(value: SampleWire.vault), call: { try await $0.deviceVault() },
+      verify: { ($0 as? DeviceVaultResponse) == SampleWire.vault }),
+    Operation(
+      name: "switchVault", method: "PUT", target: "/api/device/vault",
+      body: ["path": "~/Obsidian Notebook (Daily Do List)"], attributed: true,
+      response: .json(
+        value: DeviceVaultResponse(
+          path: "/Users/me/Obsidian Notebook (Daily Do List)", lockedByEnv: false,
+          restart: .supervisor)),
+      call: {
+        try await $0.switchVault(DeviceVaultRequest(path: "~/Obsidian Notebook (Daily Do List)"))
+      },
+      verify: { ($0 as? DeviceVaultResponse)?.restart == .supervisor }),
+    Operation(
+      name: "obsidianImportStatus", method: "GET", target: "/api/import/obsidian", body: nil,
+      attributed: false, response: .json(value: SampleWire.importStatus),
+      call: { try await $0.obsidianImportStatus() },
+      verify: { ($0 as? ObsidianImportStatusResponse) == SampleWire.importStatus }),
+    Operation(
+      name: "startObsidianImport (202)", method: "POST", target: "/api/import/obsidian",
+      body: ["source": "~/Obsidian Notebook", "destination": "~/New"], attributed: true,
+      response: .json(202, value: ObsidianImportJobResponse(job: SampleWire.importJob)),
+      call: {
+        try await $0.startObsidianImport(
+          ObsidianImportRequest(source: "~/Obsidian Notebook", destination: "~/New"))
+      },
+      verify: { ($0 as? ObsidianImportJob) == SampleWire.importJob }),
+    Operation(
+      name: "cancelObsidianImport", method: "POST", target: "/api/import/obsidian/cancel",
+      body: nil, attributed: true,
+      response: .json(value: ObsidianImportJobResponse(job: SampleWire.importJob)),
+      call: { try await $0.cancelObsidianImport() },
+      verify: { ($0 as? ObsidianImportJob) == SampleWire.importJob }),
+    Operation(
+      name: "updateFromObsidian (202)", method: "POST", target: "/api/import/obsidian/update",
+      body: nil, attributed: true,
+      response: .json(202, value: ObsidianImportJobResponse(job: SampleWire.importJob)),
+      call: { try await $0.updateFromObsidian() },
+      verify: { ($0 as? ObsidianImportJob)?.id == "imp_1" }),
   ]
 
   @Test(arguments: operations)

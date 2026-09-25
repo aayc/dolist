@@ -1,0 +1,14 @@
+[
+  {
+    "name": "an absolute path",
+    "value": {
+      "source": "/Users/me/Obsidian/Notebook"
+    }
+  },
+  {
+    "name": "under the home folder",
+    "value": {
+      "source": "~/Documents/Obsidian Vault"
+    }
+  }
+]

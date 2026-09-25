@@ -421,6 +421,7 @@ test.describe("cursor audit", () => {
       "general",
       "editor",
       "daily",
+      "vault",
       "agent",
       "location",
       "machine",
@@ -434,6 +435,21 @@ test.describe("cursor audit", () => {
       await page.getByTestId(`settings-nav-${section}`).click();
       await audit(page, `settings/${section}`);
     }
+  });
+
+  test("import from Obsidian: the report, the import, the result", async ({ page }) => {
+    await openApp(page);
+    await page.getByTestId("ribbon-settings").click();
+    await page.getByTestId("settings-nav-vault").click();
+    await page.getByTestId("import-source").click();
+    await page.keyboard.type("~/Obsidian Notebook", { delay: 5 });
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("import-report")).toBeVisible();
+    await page.locator(".report-fold > summary").first().click();
+    await audit(page, "settings/vault, the report");
+    await page.getByTestId("import-start").click();
+    await expect(page.getByTestId("import-result")).toBeVisible({ timeout: 15_000 });
+    await audit(page, "settings/vault, imported");
   });
 
   test("drawings: selected, edited in place, and opened", async ({ page }) => {

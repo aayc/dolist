@@ -87,4 +87,19 @@ enum SampleWire {
     readiness: AgentReadiness(
       harness: .init(kind: .cursor, ready: true), modelCredential: true, browser: true,
       computer: .unsupported, connectors: .init(configured: 2, connected: 2)))
+
+  static let importJob = ObsidianImportJob(
+    id: "imp_1", kind: .import, state: .running, phase: .copying,
+    source: "/Users/me/Obsidian Notebook",
+    destination: "/Users/me/Obsidian Notebook (Daily Do List)",
+    startedAt: 1_790_000_000_000,
+    progress: ObsidianImportProgress(files: 12, totalFiles: 40, bytes: 1_200, totalBytes: 3_600))
+
+  static let importStatus = ObsidianImportStatusResponse(
+    job: nil,
+    imported: ObsidianImportOrigin(
+      source: "/Users/me/Obsidian Notebook", importedAt: 1_790_000_000_000,
+      previousVault: "/Users/me/DailyDoList"))
+
+  static let vault = DeviceVaultResponse(path: "/Users/me/DailyDoList", lockedByEnv: false)
 }

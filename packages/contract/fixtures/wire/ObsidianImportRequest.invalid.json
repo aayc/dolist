@@ -1,0 +1,28 @@
+[
+  {
+    "name": "blank destination",
+    "value": {
+      "source": "/Users/me/Obsidian",
+      "destination": ""
+    },
+    "path": ["destination"],
+    "code": "too_small"
+  },
+  {
+    "name": "source not a string",
+    "value": {
+      "source": 42
+    },
+    "path": ["source"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "extra key",
+    "value": {
+      "source": "/Users/me/Obsidian",
+      "overwrite": true
+    },
+    "path": [],
+    "code": "unrecognized_keys"
+  }
+]

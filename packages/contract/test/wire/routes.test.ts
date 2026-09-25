@@ -178,7 +178,13 @@ describe("operations", () => {
         "conflict": [
           409,
         ],
+        "forbidden_device": [
+          403,
+        ],
         "forbidden_host": [
+          403,
+        ],
+        "forbidden_origin": [
           403,
         ],
         "internal_error": [

@@ -241,6 +241,40 @@ public final class InMemoryDaemonClient: DaemonClient {
     try await call { $0.forgetMachine() }
   }
 
+  // MARK: - This machine's vault and importing from Obsidian
+
+  public func deviceVault() async throws -> DeviceVaultResponse {
+    try await call { daemon throws(DaemonClientError) in try daemon.deviceVault() }
+  }
+
+  public func switchVault(_ request: DeviceVaultRequest) async throws -> DeviceVaultResponse {
+    try await call { daemon throws(DaemonClientError) in try daemon.switchVault(request) }
+  }
+
+  public func previewObsidianImport(_ request: ObsidianImportPreviewRequest) async throws
+    -> ObsidianImportPreview
+  {
+    try await call { daemon throws(DaemonClientError) in try daemon.previewObsidianImport(request) }
+  }
+
+  public func obsidianImportStatus() async throws -> ObsidianImportStatusResponse {
+    try await call { daemon throws(DaemonClientError) in try daemon.obsidianImportStatus() }
+  }
+
+  public func startObsidianImport(_ request: ObsidianImportRequest) async throws
+    -> ObsidianImportJob
+  {
+    try await call { daemon throws(DaemonClientError) in try daemon.startObsidianImport(request) }
+  }
+
+  public func cancelObsidianImport() async throws -> ObsidianImportJob {
+    try await call { daemon throws(DaemonClientError) in try daemon.cancelObsidianImport() }
+  }
+
+  public func updateFromObsidian() async throws -> ObsidianImportJob {
+    try await call { daemon throws(DaemonClientError) in try daemon.updateFromObsidian() }
+  }
+
   // MARK: - Events
 
   /// Emits `.connecting`, `.connected`, the `hello` event, and `.resync` when reconnecting.
@@ -293,6 +327,14 @@ public final class InMemoryDaemonClient: DaemonClient {
     _ = try? await call {
       $0.simulateMachine(
         reachable: reachable, rejectsCodes: rejectsCodes, acceptsThisDevice: acceptsThisDevice)
+    }
+  }
+
+  /// This client is a paired device (the import and vault routes answer 403), or `DDL_VAULT`
+  /// fixes the vault (switching answers 409 `locked_by_env`); `nil` leaves a setting as it is.
+  public func simulateImportSettings(pairedDevice: Bool? = nil, lockedByEnv: Bool? = nil) async {
+    _ = try? await call {
+      $0.simulateImportSetting(pairedDevice: pairedDevice, lockedByEnv: lockedByEnv)
     }
   }
 

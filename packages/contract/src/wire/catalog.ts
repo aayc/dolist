@@ -1,6 +1,7 @@
 import * as domain from "./domain";
 import * as errors from "./errors";
 import * as events from "./events";
+import * as imports from "./imports";
 import * as remote from "./remote";
 import * as rest from "./rest";
 import * as settings from "./settings";
@@ -121,6 +122,31 @@ export const WIRE_SCHEMAS = {
   PairedDevicesResponse: remote.PairedDevicesResponseSchema,
   MachineStatusResponse: remote.MachineStatusResponseSchema,
   MachinePairRequest: remote.MachinePairRequestSchema,
+  // Switching vaults, importing from Obsidian
+  DaemonRestart: imports.DaemonRestartSchema,
+  DeviceVaultRequest: imports.DeviceVaultRequestSchema,
+  DeviceVaultResponse: imports.DeviceVaultResponseSchema,
+  ImportPathList: imports.ImportPathListSchema,
+  ImportMove: imports.ImportMoveSchema,
+  ImportMoveList: imports.ImportMoveListSchema,
+  ImportSkipReason: imports.ImportSkipReasonSchema,
+  ImportSkippedList: imports.ImportSkippedListSchema,
+  AttachmentType: imports.AttachmentTypeSchema,
+  AttachmentSummary: imports.AttachmentSummarySchema,
+  ObsidianPluginSupport: imports.ObsidianPluginSupportSchema,
+  ObsidianPlugin: imports.ObsidianPluginSchema,
+  ObsidianSettingsFound: imports.ObsidianSettingsFoundSchema,
+  DailyNotesSource: imports.DailyNotesSourceSchema,
+  CarryOverPlan: imports.CarryOverPlanSchema,
+  ObsidianImportPreviewRequest: imports.ObsidianImportPreviewRequestSchema,
+  ObsidianImportPreview: imports.ObsidianImportPreviewSchema,
+  ObsidianImportRequest: imports.ObsidianImportRequestSchema,
+  ObsidianImportResult: imports.ObsidianImportResultSchema,
+  ObsidianUpdateReport: imports.ObsidianUpdateReportSchema,
+  ObsidianImportJob: imports.ObsidianImportJobSchema,
+  ObsidianImportJobResponse: imports.ObsidianImportJobResponseSchema,
+  ObsidianImportOrigin: imports.ObsidianImportOriginSchema,
+  ObsidianImportStatusResponse: imports.ObsidianImportStatusResponseSchema,
   // Errors
   ApiErrorCode: errors.ApiErrorCodeSchema,
   ApiErrorBody: errors.ApiErrorBodySchema,
@@ -144,6 +170,7 @@ export const WIRE_SCHEMAS = {
   SettingsChangedEvent: events.SettingsChangedEventSchema,
   RoutinesChangedEvent: events.RoutinesChangedEventSchema,
   RoutineNotificationEvent: events.RoutineNotificationEventSchema,
+  ImportProgressEvent: events.ImportProgressEventSchema,
   ServerErrorEvent: events.ServerErrorEventSchema,
   ServerEvent: events.ServerEventSchema,
   ClientHelloEvent: events.ClientHelloEventSchema,
@@ -176,6 +203,9 @@ export const REQUEST_SCHEMA_NAMES = [
   "PairingCodeRequest",
   "PairRequest",
   "MachinePairRequest",
+  "DeviceVaultRequest",
+  "ObsidianImportPreviewRequest",
+  "ObsidianImportRequest",
   "ClientHelloEvent",
   "ClientPingEvent",
   "SurfaceSubscribeEvent",

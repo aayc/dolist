@@ -30,6 +30,20 @@ struct AppEnvironment {
   /// Permission checks and prompts, System Settings, the guide panel and relaunching for computer
   /// use (tests pass fakes; the default touches nothing and reports access as granted).
   var computerAccess: ComputerAccessSystem = .inert
+  /// Shows a file or folder in Finder.
+  var revealInFinder: @MainActor (URL) -> Void = {
+    NSWorkspace.shared.activateFileViewerSelecting([$0])
+  }
+  /// A folder picker (`NSOpenPanel`): the title and where it starts; nil when cancelled.
+  var chooseFolder: @MainActor (_ title: String, _ start: String?) -> URL? = {
+    FolderPicker.choose(title: $0, startingAt: $1)
+  }
+  /// Whether a folder exists on this Mac.
+  var folderExists: @MainActor (String) -> Bool = { path in
+    var isFolder: ObjCBool = false
+    return FileManager.default.fileExists(atPath: path, isDirectory: &isFolder)
+      && isFolder.boolValue
+  }
 
   /// The real app. Demo mode keeps its own preferences so demo tabs never replace real ones.
   static func live() -> AppEnvironment {

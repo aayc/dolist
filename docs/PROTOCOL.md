@@ -134,6 +134,13 @@ API version: **1**. Machine-readable: `packages/contract/schema/wire.schema.json
 | `device` | PATCH | `/api/device` | `bearer` | [`DeviceSettingsPatch`](#devicesettingspatch) | 200 [`DeviceSettingsResponse`](#devicesettingsresponse) |
 | `deviceSync` | PUT | `/api/device/sync` | `bearer` | [`DeviceSyncSetupRequest`](#devicesyncsetuprequest) | 200 [`DeviceSettingsResponse`](#devicesettingsresponse) |
 | `deviceSync` | DELETE | `/api/device/sync` | `bearer` | — | 200 [`DeviceSettingsResponse`](#devicesettingsresponse) |
+| `deviceVault` | GET | `/api/device/vault` | `bearer` | — | 200 [`DeviceVaultResponse`](#devicevaultresponse) |
+| `deviceVault` | PUT | `/api/device/vault` | `bearer` | [`DeviceVaultRequest`](#devicevaultrequest) | 200 [`DeviceVaultResponse`](#devicevaultresponse) |
+| `importObsidianPreview` | POST | `/api/import/obsidian/preview` | `bearer` | [`ObsidianImportPreviewRequest`](#obsidianimportpreviewrequest) | 200 [`ObsidianImportPreview`](#obsidianimportpreview) |
+| `importObsidian` | GET | `/api/import/obsidian` | `bearer` | — | 200 [`ObsidianImportStatusResponse`](#obsidianimportstatusresponse) |
+| `importObsidian` | POST | `/api/import/obsidian` | `bearer` | [`ObsidianImportRequest`](#obsidianimportrequest) | 202 [`ObsidianImportJobResponse`](#obsidianimportjobresponse) |
+| `importObsidianCancel` | POST | `/api/import/obsidian/cancel` | `bearer` | — | 200 [`ObsidianImportJobResponse`](#obsidianimportjobresponse) |
+| `importObsidianUpdate` | POST | `/api/import/obsidian/update` | `bearer` | — | 202 [`ObsidianImportJobResponse`](#obsidianimportjobresponse) |
 | `pairingCodes` | POST | `/api/pairing-codes` | `bearer` | [`PairingCodeRequest`](#pairingcoderequest) | 201 [`PairingCodeResponse`](#pairingcoderesponse) |
 | `pair` | POST | `/api/pair` | `pairing_code` | [`PairRequest`](#pairrequest) | 201 [`PairResponse`](#pairresponse) |
 | `devices` | GET | `/api/devices` | `bearer` | — | 200 [`PairedDevicesResponse`](#paireddevicesresponse) |
@@ -537,6 +544,72 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
   - `200` [`DeviceSettingsResponse`](#devicesettingsresponse) — The device settings now.
   - `409` [`ApiErrorBody`](#apierrorbody) `locked_by_env` — An environment variable sets this field (see `lockedByEnv`).
 
+#### `deviceVault` — `/api/device/vault`
+
+**GET** — The vault this daemon opens (this machine only).
+
+- Responses:
+  - `200` [`DeviceVaultResponse`](#devicevaultresponse) — The vault.
+  - `403` [`ApiErrorBody`](#apierrorbody) `forbidden_host`, `forbidden_origin`, `forbidden_device` — Foreign Host or Origin header, or a paired device (only this machine may do this).
+
+**PUT** — Open another vault: writes `vaultPath` to `$DDL_HOME/config.json`, answers, then exits with `RESTART_EXIT_CODE` (75) to start again on it (the Mac app restarts it; a daemon started by hand is started again by the user).
+
+- Body: [`DeviceVaultRequest`](#devicevaultrequest)
+- Responses:
+  - `200` [`DeviceVaultResponse`](#devicevaultresponse) — Switching (`restart` says who starts the daemon again), or already that vault (no `restart`).
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_json`, `invalid_request` — Malformed JSON or failed validation.
+  - `403` [`ApiErrorBody`](#apierrorbody) `forbidden_host`, `forbidden_origin`, `forbidden_device` — Foreign Host or Origin header, or a paired device (only this machine may do this).
+  - `409` [`ApiErrorBody`](#apierrorbody) `locked_by_env`, `conflict` — `DDL_VAULT` sets the vault (`locked_by_env`), or it can't change now: an import runs, the vault syncs, or the daemon is already restarting (`conflict`).
+  - `413` [`ApiErrorBody`](#apierrorbody) `payload_too_large` — Body over 5 MB.
+
+#### `importObsidianPreview` — `/api/import/obsidian/preview`
+
+**POST** — What importing an Obsidian vault would do: its notes, attachments, settings, plugins, canvases and drawings, and the carry-over plan for the current vault. Reads the folder, writes nothing.
+
+- Body: [`ObsidianImportPreviewRequest`](#obsidianimportpreviewrequest)
+- Responses:
+  - `200` [`ObsidianImportPreview`](#obsidianimportpreview) — The report.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_json`, `invalid_request` — Malformed JSON or failed validation.
+  - `403` [`ApiErrorBody`](#apierrorbody) `forbidden_host`, `forbidden_origin`, `forbidden_device` — Foreign Host or Origin header, or a paired device (only this machine may do this).
+  - `413` [`ApiErrorBody`](#apierrorbody) `payload_too_large` — Body over 5 MB.
+
+#### `importObsidian` — `/api/import/obsidian`
+
+**GET** — The running import or update, or the last one since the daemon started.
+
+- Responses:
+  - `200` [`ObsidianImportStatusResponse`](#obsidianimportstatusresponse) — The job, or null.
+  - `403` [`ApiErrorBody`](#apierrorbody) `forbidden_host`, `forbidden_origin`, `forbidden_device` — Foreign Host or Origin header, or a paired device (only this machine may do this).
+
+**POST** — Import an Obsidian vault into a new vault and carry the current vault over; `import.progress` events follow the job.
+
+- Body: [`ObsidianImportRequest`](#obsidianimportrequest)
+- Responses:
+  - `202` [`ObsidianImportJobResponse`](#obsidianimportjobresponse) — Started.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_json`, `invalid_request` — Malformed JSON or failed validation.
+  - `403` [`ApiErrorBody`](#apierrorbody) `forbidden_host`, `forbidden_origin`, `forbidden_device` — Foreign Host or Origin header, or a paired device (only this machine may do this).
+  - `409` [`ApiErrorBody`](#apierrorbody) `conflict` — An import or update is already running.
+  - `413` [`ApiErrorBody`](#apierrorbody) `payload_too_large` — Body over 5 MB.
+
+#### `importObsidianCancel` — `/api/import/obsidian/cancel`
+
+**POST** — Stop the running import or update; answers once what it wrote is removed (an update keeps the files it already copied).
+
+- Responses:
+  - `200` [`ObsidianImportJobResponse`](#obsidianimportjobresponse) — The stopped job.
+  - `403` [`ApiErrorBody`](#apierrorbody) `forbidden_host`, `forbidden_origin`, `forbidden_device` — Foreign Host or Origin header, or a paired device (only this machine may do this).
+  - `404` [`ApiErrorBody`](#apierrorbody) `not_found` — Nothing is running.
+
+#### `importObsidianUpdate` — `/api/import/obsidian/update`
+
+**POST** — Copy what changed in the Obsidian vault since the import into this vault, keeping both versions of a file changed on both sides; never deletes.
+
+- Responses:
+  - `202` [`ObsidianImportJobResponse`](#obsidianimportjobresponse) — Started.
+  - `403` [`ApiErrorBody`](#apierrorbody) `forbidden_host`, `forbidden_origin`, `forbidden_device` — Foreign Host or Origin header, or a paired device (only this machine may do this).
+  - `404` [`ApiErrorBody`](#apierrorbody) `not_found` — This vault wasn't imported from Obsidian, or the Obsidian vault isn't where it was.
+  - `409` [`ApiErrorBody`](#apierrorbody) `conflict` — An import or update is already running.
+
 #### `pairingCodes` — `/api/pairing-codes`
 
 **POST** — Issue a single-use pairing code for a new device (valid for a few minutes).
@@ -633,6 +706,7 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
 | `pairing_rejected` | The pairing code is wrong, expired or already used (checked here, or by the always-on machine). |
 | `forbidden_host` | The Host header is not a loopback address of this daemon (DNS rebinding). |
 | `forbidden_origin` | The Origin header is not allowed (CSRF). |
+| `forbidden_device` | Only this machine may do this (importing a folder, switching vaults), not a paired device. |
 | `not_found` | Unknown route (or method), or the addressed item doesn't exist. |
 | `conflict` | Stale `baseVersion`, existing target, or an approval that is no longer pending. |
 | `locked_by_env` | The device setting is set by an environment variable (see `lockedByEnv`); change it there. |
@@ -665,6 +739,7 @@ Server → client ([`ServerEvent`](#serverevent)); clients ignore types they don
 | `settings.changed` | [`SettingsChangedEvent`](#settingschangedevent) | The effective settings changed. |
 | `routines.changed` | [`RoutinesChangedEvent`](#routineschangedevent) | Every routine, whenever one changed (its file, its schedule, its last run). |
 | `routine.notification` | [`RoutineNotificationEvent`](#routinenotificationevent) | A routine's run finished and its `notify` says to tell the user (clients show a notification). |
+| `import.progress` | [`ImportProgressEvent`](#importprogressevent) | An import or update from Obsidian progressed (at most every 200 ms), changed phase, or ended (`job.state`). |
 | `error` | [`ServerErrorEvent`](#servererrorevent) | Something the client sent was rejected (or the connection is about to close). |
 
 Client → server ([`ClientEvent`](#clientevent)); anything else is answered with an `error` event:
@@ -1945,7 +2020,7 @@ _Strict: unknown keys are rejected._
 
 Machine-readable error code. Treat unknown codes like any failure with that HTTP status.
 
-Type: `"invalid_json"` | `"invalid_request"` | `"invalid_path"` | `"invalid_settings"` | `"unauthorized"` | `"pairing_rejected"` | `"forbidden_host"` | `"forbidden_origin"` | `"not_found"` | `"conflict"` | `"locked_by_env"` | `"payload_too_large"` | `"upgrade_required"` | `"rate_limited"` | `"http_error"` | `"agent_error"` | `"internal_error"` | `"machine_unreachable"` | `"agent_unavailable"`
+Type: `"invalid_json"` | `"invalid_request"` | `"invalid_path"` | `"invalid_settings"` | `"unauthorized"` | `"pairing_rejected"` | `"forbidden_host"` | `"forbidden_origin"` | `"forbidden_device"` | `"not_found"` | `"conflict"` | `"locked_by_env"` | `"payload_too_large"` | `"upgrade_required"` | `"rate_limited"` | `"http_error"` | `"agent_error"` | `"internal_error"` | `"machine_unreachable"` | `"agent_unavailable"`
 
 #### ApiErrorBody
 
@@ -1979,6 +2054,292 @@ _Tolerant: clients must ignore keys they don't know._
 | `error` | `"conflict"` | yes |  |
 | `message` | string | no |  |
 | `approval` | [`ApprovalRequest`](#approvalrequest) | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### DaemonRestart
+
+How a daemon that exits to apply a change comes back: `supervisor` (the Mac app starts it again) or `manual` (the user does).
+
+Type: `"supervisor"` | `"manual"`
+
+#### DeviceVaultRequest
+
+Body of `PUT /api/device/vault`: the vault this daemon should open.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `path` | string (1–1024 chars) | yes | An absolute path, or one starting with `~/` (the daemon user's home). |
+
+_Strict: unknown keys are rejected._
+
+#### DeviceVaultResponse
+
+The vault this daemon opens.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `path` | string (1–4096 chars) | yes | The vault's folder (absolute). |
+| `lockedByEnv` | boolean | yes | `DDL_VAULT` sets it: switching answers 409. |
+| `restart` | [`DaemonRestart`](#daemonrestart) | no | Set when switching: the daemon exits with `RESTART_EXIT_CODE` (75) right after answering and opens the new vault when it starts again. |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### ImportPathList
+
+Paths, sorted, at most 200; `count` is the full number.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `count` | integer (≥ 0) | yes |  |
+| `paths` | string (1–4096 chars)[] | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### ImportMove
+
+A file and where it goes.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `from` | string (1–4096 chars) | yes | Vault-relative, `/`-separated. |
+| `to` | string (1–4096 chars) | yes | Vault-relative, `/`-separated. |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### ImportMoveList
+
+Moves sorted by `from`, at most 200; `count` is the full number.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `count` | integer (≥ 0) | yes |  |
+| `items` | [`ImportMove`](#importmove)[] | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### ImportSkipReason
+
+Why a file isn't copied: a link leading outside the vault (`symlink_outside`) or to a folder (`symlink_folder`), not a regular file (`special_file`), unreadable, or the vault's own `.daily-do-list/` (`sidecar`).
+
+Type: `"symlink_outside"` | `"symlink_folder"` | `"special_file"` | `"unreadable"` | `"sidecar"`
+
+#### ImportSkippedList
+
+Files not copied, sorted by path, at most 200; `count` is the full number.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `count` | integer (≥ 0) | yes |  |
+| `items` | object[] | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### AttachmentType
+
+Kind of attachment, by file extension.
+
+Type: `"image"` | `"pdf"` | `"audio"` | `"video"` | `"other"`
+
+#### AttachmentSummary
+
+Attachments (files other than notes, canvases and drawings), by type.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `count` | integer (≥ 0) | yes |  |
+| `bytes` | integer (≥ 0) | yes |  |
+| `byType` | object[] | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### ObsidianPluginSupport
+
+How an Obsidian community plugin fares here.
+
+Type: `"supported"` | `"partial"` | `"unsupported"` | `"unknown"`
+
+#### ObsidianPlugin
+
+An enabled community plugin.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (1–100 chars) | yes |  |
+| `name` | string (1–200 chars) | no | From its manifest, when readable. |
+| `support` | [`ObsidianPluginSupport`](#obsidianpluginsupport) | yes |  |
+| `note` | string (1–500 chars) | yes | How it fares here, one sentence. |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### ObsidianSettingsFound
+
+The settings found in the Obsidian vault's config, and what is imported from them.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `files` | string (1–4096 chars)[] | yes | Config files found. |
+| `dailyNotes` | [`DailyNoteSettings`](#dailynotesettings) \| `null` | yes | Obsidian's daily notes (its defaults when the plugin is on without a config); null when it keeps none. |
+| `editor` | object | yes |  |
+| `vimrc` | boolean | yes | A vimrc is imported with the editor settings. |
+| `theme` | [`ThemePreference`](#themepreference) | no |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### DailyNotesSource
+
+Where the new vault's daily-note settings come from: Obsidian's config, Obsidian's defaults, or this vault's (Obsidian keeps no daily notes, or its format can't be read here).
+
+Type: `"obsidian"` | `"obsidian_defaults"` | `"daily_do_list"`
+
+#### CarryOverPlan
+
+What happens to the current vault's notes, routines, drawings and agent history in the new vault.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `vault` | string (1–4096 chars) | yes | The current vault: left untouched (it's the backup). |
+| `dailyNotes` | [`DailyNoteSettings`](#dailynotesettings) | yes | The new vault's daily-note settings. |
+| `dailyNotesFrom` | [`DailyNotesSource`](#dailynotessource) | yes |  |
+| `notes` | [`ImportMoveList`](#importmovelist) | yes | Every other file: at the same path unless it collides (see `collisions`). |
+| `daily` | object | yes |  |
+| `collisions` | [`ImportMoveList`](#importmovelist) | yes | Files renamed because the Obsidian vault has one at that path: `Name (Daily Do List).md`. |
+| `routines` | integer (≥ 0) | yes |  |
+| `drawings` | integer (≥ 0) | yes |  |
+| `agent` | object | yes |  |
+| `watchedOpenTasks` | integer (≥ 0) | yes | Open tasks in Obsidian's daily notes inside the agent's watch window; the agent acts on them after the switch only when `actOnExistingTasks` is on. |
+| `actOnExistingTasks` | boolean | yes |  |
+| `leftBehind` | [`ImportPathList`](#importpathlist) | yes | Files and folders of the current vault that stay behind: hidden ones (other than the sidecar and `.trash/`) and links leading out of it. |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### ObsidianImportPreviewRequest
+
+Body of `POST /api/import/obsidian/preview`.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `source` | string (1–1024 chars) | yes | The Obsidian vault's folder: absolute or `~/…`. Only ever read. |
+
+_Strict: unknown keys are rejected._
+
+#### ObsidianImportPreview
+
+What importing the Obsidian vault would do, computed without writing anything.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `source` | string (1–4096 chars) | yes | The resolved source folder. |
+| `defaultDestination` | string (1–4096 chars) | yes | The suggested new vault: next to the current one, never inside the source. |
+| `isObsidianVault` | boolean | yes | It has an `.obsidian/` folder. |
+| `files` | integer (≥ 0) | yes | Everything copied, `.obsidian/` and attachments included. |
+| `bytes` | integer (≥ 0) | yes |  |
+| `notes` | integer (≥ 0) | yes | Markdown notes outside hidden folders (drawings not included). |
+| `folders` | integer (≥ 0) | yes |  |
+| `attachments` | [`AttachmentSummary`](#attachmentsummary) | yes |  |
+| `settings` | [`ObsidianSettingsFound`](#obsidiansettingsfound) | yes |  |
+| `templates` | object | yes |  |
+| `plugins` | [`ObsidianPlugin`](#obsidianplugin)[] | yes | Enabled community plugins. |
+| `canvases` | [`ImportPathList`](#importpathlist) | yes | Canvas files: copied, not viewable here yet. |
+| `drawings` | [`ImportPathList`](#importpathlist) | yes | Excalidraw drawings (`*.excalidraw.md`). |
+| `skipped` | [`ImportSkippedList`](#importskippedlist) | yes |  |
+| `carryOver` | [`CarryOverPlan`](#carryoverplan) | yes |  |
+| `warnings` | string (≥ 1 chars)[] | yes | Things to know first, one sentence each. |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### ObsidianImportRequest
+
+Body of `POST /api/import/obsidian`.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `source` | string (1–1024 chars) | yes | The Obsidian vault's folder. |
+| `destination` | string (1–1024 chars) | no | A new or empty folder, never inside the source; default: the preview's `defaultDestination`. |
+
+_Strict: unknown keys are rejected._
+
+#### ObsidianImportResult
+
+What an import did.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `copied` | object | yes |  |
+| `skipped` | [`ImportSkippedList`](#importskippedlist) | yes |  |
+| `carryOver` | [`CarryOverPlan`](#carryoverplan) | yes |  |
+| `manifest` | string (1–4096 chars) | yes | The manifest (`.daily-do-list/import/obsidian.json`). |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### ObsidianUpdateReport
+
+What an update from Obsidian did. It never deletes.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `added` | [`ImportPathList`](#importpathlist) | yes | New in Obsidian: copied. |
+| `updated` | [`ImportPathList`](#importpathlist) | yes | Changed in Obsidian, unchanged here: replaced. |
+| `restored` | [`ImportPathList`](#importpathlist) | yes | Changed in Obsidian after being deleted here: written back. |
+| `conflicts` | [`ImportMoveList`](#importmovelist) | yes | Changed on both sides: `from` is kept, the Obsidian version saved as `to`. |
+| `deletedInSource` | [`ImportPathList`](#importpathlist) | yes | Deleted in Obsidian: kept here. |
+| `unchanged` | integer (≥ 0) | yes |  |
+| `skipped` | [`ImportSkippedList`](#importskippedlist) | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### ObsidianImportJob
+
+An import or update from Obsidian: its phase, progress and outcome.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | yes | Runtime id, safe to use in URLs. |
+| `kind` | `"import"` \| `"update"` | yes |  |
+| `state` | `"running"` \| `"done"` \| `"failed"` \| `"cancelled"` | yes |  |
+| `phase` | `"checking"` \| `"copying"` \| `"carrying_over"` \| `"finishing"` | yes | The current phase, or the last one reached. |
+| `source` | string (1–4096 chars) | yes |  |
+| `destination` | string (1–4096 chars) | yes | The new vault (`import`), or the vault being updated (`update`). |
+| `startedAt` | integer (≥ 0) | yes | Epoch milliseconds. |
+| `finishedAt` | integer (≥ 0) | no | Epoch milliseconds. |
+| `progress` | object | yes |  |
+| `error` | string (≥ 1 chars) | no | Why it failed. |
+| `result` | [`ObsidianImportResult`](#obsidianimportresult) | no | What an import did (`done`). |
+| `update` | [`ObsidianUpdateReport`](#obsidianupdatereport) | no | What an update did (`done`). |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### ObsidianImportJobResponse
+
+A job, as it stands.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `job` | [`ObsidianImportJob`](#obsidianimportjob) | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### ObsidianImportOrigin
+
+Where the vault this daemon serves was imported from (its import manifest).
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `source` | string (1–4096 chars) | yes | The Obsidian vault it was copied from. |
+| `importedAt` | integer (≥ 0) | yes | Epoch milliseconds. |
+| `updatedAt` | integer (≥ 0) | no | The last "Update from Obsidian". |
+| `previousVault` | string (1–4096 chars) | no | The vault that was current at the import, left untouched: the backup. |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### ObsidianImportStatusResponse
+
+The running job, or the last one since the daemon started, and where this vault was imported from.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `job` | [`ObsidianImportJob`](#obsidianimportjob) \| `null` | yes | null: none since the daemon started. |
+| `imported` | [`ObsidianImportOrigin`](#obsidianimportorigin) | no | Set when this vault was imported from Obsidian (so it can be updated from there). |
 
 _Tolerant: clients must ignore keys they don't know._
 
@@ -2176,6 +2537,17 @@ A routine's run finished and its `notify` says to tell the user (clients show a 
 
 _Tolerant: clients must ignore keys they don't know._
 
+#### ImportProgressEvent
+
+An import or update from Obsidian progressed (at most every 200 ms), changed phase, or ended (`job.state`).
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `type` | `"import.progress"` | yes |  |
+| `job` | [`ObsidianImportJob`](#obsidianimportjob) | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
 #### ServerErrorEvent
 
 Something the client sent was rejected (or the connection is about to close).
@@ -2192,7 +2564,7 @@ _Tolerant: clients must ignore keys they don't know._
 
 Every server → client WebSocket message, discriminated by `type`.
 
-Type: [`ServerHelloEvent`](#serverhelloevent) | [`VaultChangedEvent`](#vaultchangedevent) | [`TaskRecordsEvent`](#taskrecordsevent) | [`TaskRecordEvent`](#taskrecordevent) | [`ThreadUpsertEvent`](#threadupsertevent) | [`ThreadMessageEvent`](#threadmessageevent) | [`ThreadDeltaEvent`](#threaddeltaevent) | [`ApprovalUpsertEvent`](#approvalupsertevent) | [`AgentStatusEvent`](#agentstatusevent) | [`OrchestratorActivityEvent`](#orchestratoractivityevent) | [`SurfaceFrameEvent`](#surfaceframeevent) | [`SettingsChangedEvent`](#settingschangedevent) | [`RoutinesChangedEvent`](#routineschangedevent) | [`RoutineNotificationEvent`](#routinenotificationevent) | [`ServerErrorEvent`](#servererrorevent)
+Type: [`ServerHelloEvent`](#serverhelloevent) | [`VaultChangedEvent`](#vaultchangedevent) | [`TaskRecordsEvent`](#taskrecordsevent) | [`TaskRecordEvent`](#taskrecordevent) | [`ThreadUpsertEvent`](#threadupsertevent) | [`ThreadMessageEvent`](#threadmessageevent) | [`ThreadDeltaEvent`](#threaddeltaevent) | [`ApprovalUpsertEvent`](#approvalupsertevent) | [`AgentStatusEvent`](#agentstatusevent) | [`OrchestratorActivityEvent`](#orchestratoractivityevent) | [`SurfaceFrameEvent`](#surfaceframeevent) | [`SettingsChangedEvent`](#settingschangedevent) | [`RoutinesChangedEvent`](#routineschangedevent) | [`RoutineNotificationEvent`](#routinenotificationevent) | [`ImportProgressEvent`](#importprogressevent) | [`ServerErrorEvent`](#servererrorevent)
 
 #### ClientHelloEvent
 

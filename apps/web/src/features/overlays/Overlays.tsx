@@ -5,6 +5,7 @@ import {
   NewRoutineDialog,
   QuickSwitcher,
   SettingsModal,
+  VaultSwitchOverlay,
 } from "../../app/lazy";
 import { useUiStore } from "../../state/ui-store";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -31,6 +32,9 @@ export function Overlays() {
       break;
     case "new-routine":
       content = <NewRoutineDialog {...(overlay.draft ? { draft: overlay.draft } : {})} />;
+      break;
+    case "vault-switch":
+      content = <VaultSwitchOverlay path={overlay.path} restart={overlay.restart} />;
       break;
   }
   return <Suspense fallback={null}>{content}</Suspense>;

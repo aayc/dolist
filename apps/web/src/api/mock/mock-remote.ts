@@ -501,6 +501,14 @@ export class MockRemote {
     return this.deviceResponse();
   }
 
+  /** Test hook: this device syncs with the mock sync service, or stops, without Settings. */
+  setSynced(on: boolean): void {
+    this.update(() => {
+      this.state.sync = on ? MOCK_SYNC : NO_SYNC;
+      this.state.syncSince = on ? Date.now() : null;
+    });
+  }
+
   syncStatus(): SyncStatusResponse {
     const { sync, syncSince, device } = this.state;
     if (sync.url === null) {

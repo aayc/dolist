@@ -37,6 +37,7 @@ corruption.
 | `settings.json` | `apps/daemon/src/settings-store.ts` | JSON, pretty, user-editable | 1 | yes |
 | `corrupt/…` | `PersistedFile` (all owners) | copies / moved originals | — | yes |
 | `sync/<targetId>.json` | `packages/storage/src/sync/snapshot.ts` | JSON | `format: 1` | **never** (per device) |
+| `import/obsidian.json` | `apps/daemon/src/import/manifest.ts` | JSON, compact | 1 | **no** (excluded in `apps/daemon/src/wiring.ts`) |
 
 "Synced by the SyncEngine" is about the app's own sync. A vault that lives in a synced folder
 (iCloud Drive, Dropbox) carries *every* sidecar file, including the ones marked "no", so readers
@@ -48,7 +49,7 @@ Owned by other slices; listed so the inventory is complete.
 
 | Path | What | Owner |
 | --- | --- | --- |
-| `config.json` | Daemon config: vault path, port, agent mode, model, sync target, execution provider, allowed origins, log level | `apps/daemon/src/config.ts` |
+| `config.json` | Daemon config: vault path (also written by `PUT /api/device/vault`), port, agent mode, model, sync target, execution provider, allowed origins, log level | `apps/daemon/src/config.ts` |
 | `daemon-token` | Bearer token, 64 hex chars + newline, mode `0600` | `apps/daemon/src/token.ts` |
 | `.env` | Secrets such as `OPENROUTER_API_KEY` | `apps/daemon/src/env-file.ts` |
 | `mcp.json` | MCP connectors (`{ "mcpServers": { … } }`) | `packages/connectors` |
@@ -368,6 +369,39 @@ include `DDL_MODEL` from the daemon config).
 
 Version history: unversioned (before the contract) → **1**: same object plus `version`, added on
 the next write.
+
+### Import manifest — `import/obsidian.json`
+
+What an import from Obsidian copied into this vault (`apps/daemon/src/import/`), so "Update from
+Obsidian" can tell which files changed there, here, or on both sides.
+
+```text
+{ version: 1, source, importedAt, updatedAt?, previousVault?, files: { [vaultPath]: { sha256, size, mtimeMs, base? } } }
+```
+
+- `source`: the Obsidian vault's folder on this machine (absolute). The file is machine-local: the
+  sync engine never syncs `.daily-do-list/import/`, and another device's update would look for a
+  folder it doesn't have.
+- `previousVault`: the Daily Do List vault that was current at the import (absolute), left
+  untouched as the backup; clients show it after the switch ("Reveal the old vault"). Added within
+  v1: older files don't have it, and readers that don't know it ignore it.
+- `files` lists every file copied from the Obsidian vault (its `.obsidian/` included), sorted by
+  path. `sha256`, `size` and `mtimeMs` describe the Obsidian file when it was last copied or seen:
+  equal `size` and `mtimeMs` mean unchanged without reading it. `base` is the SHA-256 of what this
+  vault last got from Obsidian when that differs from `sha256` (a conflict kept here); a file here
+  that no longer matches `base ?? sha256` was changed here. A daily note merged at import keeps
+  Obsidian's hash, so it counts as changed here from the start.
+- Files carried over from the previous Daily Do List vault aren't listed: they never came from
+  Obsidian.
+- Written by the import (inside the staging folder, before it becomes the vault) and rewritten by
+  each update (atomic and synced), with `updatedAt`. An update keeps entries of files deleted in
+  Obsidian (it never deletes, and a file that comes back is compared with them).
+- Corrupt, missing or newer → "Update from Obsidian" answers 404 with the reason; nothing is
+  quarantined or rewritten (the file isn't needed for anything else).
+- Keys are read from the raw JSON, so a file named `__proto__` keeps its entry.
+
+Version history: **1** only. The format was versioned from the start: a file without `version` is
+corrupt (its golden fixtures have no `legacy-unversioned` case).
 
 ### Quarantine — `corrupt/`
 

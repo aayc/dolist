@@ -17,11 +17,18 @@ import {
   type DeviceSettingsPatch,
   type DeviceSettingsResponse,
   type DeviceSyncSetupRequest,
+  type DeviceVaultRequest,
+  type DeviceVaultResponse,
   type HealthResponse,
   isCompatibleApiVersion,
   type MachinePairRequest,
   type MachineStatusResponse,
   type NoteResponse,
+  type ObsidianImportJobResponse,
+  type ObsidianImportPreview,
+  type ObsidianImportPreviewRequest,
+  type ObsidianImportRequest,
+  type ObsidianImportStatusResponse,
   type PairedDevicesResponse,
   type PairingCodeRequest,
   type PairingCodeResponse,
@@ -458,6 +465,35 @@ export class HttpDaemonClient implements DaemonClient {
 
   forgetMachine(): Promise<MachineStatusResponse> {
     return this.request("DELETE", API_ROUTES.machinePairing);
+  }
+
+  getVault(): Promise<DeviceVaultResponse> {
+    return this.request("GET", API_ROUTES.deviceVault);
+  }
+
+  switchVault(path: string): Promise<DeviceVaultResponse> {
+    return this.request("PUT", API_ROUTES.deviceVault, { path } satisfies DeviceVaultRequest);
+  }
+
+  previewObsidianImport(source: string): Promise<ObsidianImportPreview> {
+    const body: ObsidianImportPreviewRequest = { source };
+    return this.request("POST", API_ROUTES.importObsidianPreview, body);
+  }
+
+  getObsidianImport(): Promise<ObsidianImportStatusResponse> {
+    return this.request("GET", API_ROUTES.importObsidian);
+  }
+
+  startObsidianImport(request: ObsidianImportRequest): Promise<ObsidianImportJobResponse> {
+    return this.request("POST", API_ROUTES.importObsidian, request);
+  }
+
+  cancelObsidianImport(): Promise<ObsidianImportJobResponse> {
+    return this.request("POST", API_ROUTES.importObsidianCancel);
+  }
+
+  updateFromObsidian(): Promise<ObsidianImportJobResponse> {
+    return this.request("POST", API_ROUTES.importObsidianUpdate);
   }
 
   async getArtifact(threadId: string, artifactId: string): Promise<ArtifactContent> {

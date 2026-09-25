@@ -11,6 +11,15 @@ import {
   ConflictResponseSchema,
 } from "./errors";
 import { ClientEventSchema, ServerEventSchema } from "./events";
+import {
+  DeviceVaultRequestSchema,
+  DeviceVaultResponseSchema,
+  ObsidianImportJobResponseSchema,
+  ObsidianImportPreviewRequestSchema,
+  ObsidianImportPreviewSchema,
+  ObsidianImportRequestSchema,
+  ObsidianImportStatusResponseSchema,
+} from "./imports";
 import { IsoDateSchema, RequestPathSchema, RuntimeIdSchema, WIRE_LIMITS } from "./primitives";
 import {
   DeviceSettingsPatchSchema,
@@ -170,6 +179,14 @@ const THREAD_ACTION_RESPONSES = {
 const DEVICE_SETTINGS_RESPONSES = {
   200: json(DeviceSettingsResponseSchema, "The device settings now."),
   409: error(["locked_by_env"], "An environment variable sets this field (see `lockedByEnv`)."),
+} as const;
+
+/** Routes that reach this machine's folders: a paired device is refused too. */
+const THIS_MACHINE_ONLY = {
+  403: error(
+    ["forbidden_host", "forbidden_origin", "forbidden_device"],
+    "Foreign Host or Origin header, or a paired device (only this machine may do this).",
+  ),
 } as const;
 
 const ThreadIdParams = z.object({ id: RuntimeIdSchema });
@@ -690,6 +707,110 @@ export const API_CONTRACT = {
       DELETE: {
         summary: "Stop syncing with the sync service and delete the saved token.",
         responses: DEVICE_SETTINGS_RESPONSES,
+      },
+    },
+  },
+  deviceVault: {
+    path: "/api/device/vault",
+    auth: "bearer",
+    methods: {
+      GET: {
+        summary: "The vault this daemon opens (this machine only).",
+        responses: { 200: json(DeviceVaultResponseSchema, "The vault."), ...THIS_MACHINE_ONLY },
+      },
+      PUT: {
+        summary:
+          "Open another vault: writes `vaultPath` to `$DDL_HOME/config.json`, answers, then exits with `RESTART_EXIT_CODE` (75) to start again on it (the Mac app restarts it; a daemon started by hand is started again by the user).",
+        body: DeviceVaultRequestSchema,
+        responses: {
+          200: json(
+            DeviceVaultResponseSchema,
+            "Switching (`restart` says who starts the daemon again), or already that vault (no `restart`).",
+          ),
+          400: invalidBody(),
+          ...THIS_MACHINE_ONLY,
+          409: error(
+            ["locked_by_env", "conflict"],
+            "`DDL_VAULT` sets the vault (`locked_by_env`), or it can't change now: an import runs, the vault syncs, or the daemon is already restarting (`conflict`).",
+          ),
+          ...BODY_ERRORS,
+        },
+      },
+    },
+  },
+  importObsidianPreview: {
+    path: "/api/import/obsidian/preview",
+    auth: "bearer",
+    methods: {
+      POST: {
+        summary:
+          "What importing an Obsidian vault would do: its notes, attachments, settings, plugins, canvases and drawings, and the carry-over plan for the current vault. Reads the folder, writes nothing.",
+        body: ObsidianImportPreviewRequestSchema,
+        responses: {
+          200: json(ObsidianImportPreviewSchema, "The report."),
+          400: invalidBody(),
+          ...THIS_MACHINE_ONLY,
+          ...BODY_ERRORS,
+        },
+      },
+    },
+  },
+  importObsidian: {
+    path: "/api/import/obsidian",
+    auth: "bearer",
+    methods: {
+      GET: {
+        summary: "The running import or update, or the last one since the daemon started.",
+        responses: {
+          200: json(ObsidianImportStatusResponseSchema, "The job, or null."),
+          ...THIS_MACHINE_ONLY,
+        },
+      },
+      POST: {
+        summary:
+          "Import an Obsidian vault into a new vault and carry the current vault over; `import.progress` events follow the job.",
+        body: ObsidianImportRequestSchema,
+        responses: {
+          202: json(ObsidianImportJobResponseSchema, "Started."),
+          400: invalidBody(),
+          ...THIS_MACHINE_ONLY,
+          409: error(["conflict"], "An import or update is already running."),
+          ...BODY_ERRORS,
+        },
+      },
+    },
+  },
+  importObsidianCancel: {
+    path: "/api/import/obsidian/cancel",
+    auth: "bearer",
+    methods: {
+      POST: {
+        summary:
+          "Stop the running import or update; answers once what it wrote is removed (an update keeps the files it already copied).",
+        responses: {
+          200: json(ObsidianImportJobResponseSchema, "The stopped job."),
+          ...THIS_MACHINE_ONLY,
+          404: error(["not_found"], "Nothing is running."),
+        },
+      },
+    },
+  },
+  importObsidianUpdate: {
+    path: "/api/import/obsidian/update",
+    auth: "bearer",
+    methods: {
+      POST: {
+        summary:
+          "Copy what changed in the Obsidian vault since the import into this vault, keeping both versions of a file changed on both sides; never deletes.",
+        responses: {
+          202: json(ObsidianImportJobResponseSchema, "Started."),
+          ...THIS_MACHINE_ONLY,
+          404: error(
+            ["not_found"],
+            "This vault wasn't imported from Obsidian, or the Obsidian vault isn't where it was.",
+          ),
+          409: error(["conflict"], "An import or update is already running."),
+        },
       },
     },
   },

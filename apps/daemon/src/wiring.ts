@@ -27,6 +27,7 @@ import {
 } from "@ddl/storage";
 import type { DaemonConfig } from "./config";
 import { errorMessage } from "./errors";
+import { IMPORT_DIR } from "./import/manifest";
 import { NullExecutionProvider } from "./null-execution";
 import { NullAgentRuntime } from "./null-runtime";
 import type { VaultSearch } from "./search";
@@ -221,8 +222,9 @@ export async function createSync(options: {
       primary: options.primary,
       target,
       logger,
-      // Machine-local agent scratch data must never leave this machine.
-      exclude: [".daily-do-list/state/tasks"],
+      // Machine-local data never leaves this machine: the agent's scratch data, and the import
+      // manifest (it names a folder on this machine).
+      exclude: [".daily-do-list/state/tasks", IMPORT_DIR],
       ...(fenced ? { fence: { covers: isAgentOwnedPath, epoch: leaseEpoch } } : {}),
     }),
     target,

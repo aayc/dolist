@@ -361,6 +361,47 @@ this device's choice, who runs the agent now and the relay to the machine in the
   (device settings, sync, the machine, paired devices, pairing codes, and the messages for each
   error code) and `Settings/AlwaysOn/`.
 
+## Importing from Obsidian
+
+The same flow as the web app's ([web README](../web/README.md#settings--vault-and-importing-from-obsidian)),
+natively. **Settings → General → Vault**, under the vault picker, shows the vault the daemon opens,
+and once it was imported: where from and when, **Update from Obsidian** (its progress with Cancel,
+then what it did), and the **Previous vault** with **Reveal in Finder**. The commands **File →
+Import from Obsidian…**, **Update from Obsidian** and **Reveal the Old Vault in Finder** are in the
+palette too, without shortcuts.
+
+- **The sheet** (`Settings/ObsidianImport/ObsidianImportSheet.swift`): **Choose Folder…** opens an
+  `NSOpenPanel` for the Obsidian vault, then the report (`ImportReportView`: counts, warnings,
+  settings, plugins with their support, canvases and drawings, the carry-over plan with the
+  `watchedOpenTasks` note, skipped files; long lists in disclosure groups), the new vault's folder
+  (the report's suggestion, or **Choose…** to pick or create an empty one), **Import** with the
+  phase, counts and a progress bar from `.importProgress` and **Cancel**, then the result and
+  **Switch to the New Vault**. Closing the sheet leaves a running import going; a toast says when
+  it ends, with Open.
+- **Blockers say why**, next to the disabled button: sync is on (**Open Sync Settings** goes to
+  Settings → Always-On → Sync, **Check Again** asks again), `DDL_VAULT` fixes the vault of a daemon
+  this app doesn't run, a paired device (403 `forbidden_device`), a job running, demo mode.
+- **The switch** (`AppModel+VaultSwitch.swift`) first saves open notes to the vault being left,
+  then:
+  - when this app runs the daemon and passes it `DDL_VAULT` (a vault picked in its preferences, so
+    `PUT /api/device/vault` would answer 409 `locked_by_env`), it sets the vault preference to the
+    new vault and restarts the supervised daemon;
+  - otherwise it asks the daemon (`PUT /api/device/vault`), which writes its `config.json` and exits
+    with 75: the app's supervisor relaunches a daemon it started (`DDL_SUPERVISED`, not a crash);
+    for a daemon it attached to, the app waits until it goes away or answers on the new vault, lets
+    go of it and boots again (starting its own if nobody answers); an external daemon started by
+    hand shows how to start it again and is waited for.
+
+  Then the app boots from scratch on the new vault: tabs, today's note, the agent and settings are
+  the new vault's.
+- **Code:** `ObsidianImportStore` (the vault, the job and its events, the report, the destination,
+  Update from Obsidian, and each action's inline error), `AppModel+Events` routes
+  `.importProgress` to it, and `AppEnvironment` injects the folder picker, Finder and folder checks
+  so tests use fakes. `InMemoryDaemonClient` imports two synthetic folders under `/Users/me` (an
+  Obsidian vault and a plain folder) with jobs on its virtual timeline, and answers a switch like a
+  supervised daemon (its health then names the new vault); `simulateImportSettings(pairedDevice:
+  lockedByEnv:)` simulates the refusals.
+
 ## Vim mode
 
 Turn it on with **Vim key bindings** in Settings → Appearance, View → Vim Key Bindings, or "Toggle
@@ -432,12 +473,14 @@ How a managed daemon is found and run:
    (`Contents/Resources/daemon/dist/main.js`), then a repository checkout (`DDL_REPO_ROOT`, or
    walking up from the app and from the current directory).
 3. **Launch:** `node <entry>` in the daemon's package directory, with your environment plus the
-   daemon settings. Its PATH starts with Node's folder and includes your login shell's PATH, so
+   daemon settings (and `DDL_SUPERVISED=1`, so it knows it will be started again). Its PATH starts with Node's folder and includes your login shell's PATH, so
    connectors started with `npx` or `uvx` work when the app was opened from Finder. The supervisor
    waits up to 20 s for the token file and a healthy `GET /api/health`.
 4. **Supervision:** an unexpected exit restarts the daemon after 1, 2, 4, 8… s (capped at 30 s).
-   After 5 failures within 2 minutes it gives up and shows the daemon's last output. An attached
-   daemon is health-checked every 5 s; if it goes away, the app starts its own.
+   After 5 failures within 2 minutes it gives up and shows the daemon's last output. A daemon that
+   exits with 75 (`DaemonSupervisor.restartExitStatus`, e.g. after switching vaults) asked to be
+   started again: it's relaunched at once, and that isn't a failure. An attached daemon is
+   health-checked every 5 s; if it goes away, the app starts its own.
 5. **Stop:** SIGTERM to the daemon's process group, then SIGKILL after 5 s. Quitting the app stops
    the managed daemon. If the app crashes, the daemon notices its stdin closing and shuts itself
    down (a small `--import` preload), so no orphan lingers.
@@ -647,10 +690,12 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   port) and the tests drive `HTTPDaemonClient`. They cover REST (daily notes from templates,
   optimistic concurrency and 409s, soft deletes, folders, search, settings), WebSocket events
   (hello, echo tagging, external edits), agent flows (streamed threads, artifacts, approve, deny,
-  retry, cancel), and a supervisor restart mid-stream (reconnect + resync). The always-on tests
-  add device settings (live changes, `lockedByEnv` from a second daemon's environment and its 409,
-  the validation bodies the app parses), pairing a device from the daemon's side (a code, `pair`
-  without the token, the device token as a bearer and on the WebSocket in the header or the
+  retry, cancel), a supervisor restart mid-stream (reconnect + resync), and importing a synthetic
+  Obsidian vault (the report, the import and its events, `locked_by_env`, the switch through the
+  vault the app passes and a restart, then Update from Obsidian; its own daemon). The always-on
+  tests add device settings (live changes, `lockedByEnv` from a second daemon's environment and
+  its 409, the validation bodies the app parses), pairing a device from the daemon's side (a code,
+  `pair` without the token, the device token as a bearer and on the WebSocket in the header or the
   loopback `?token=`, revoking it: 401, and its sockets close with 1008), the machine link (a
   second daemon as the always-on machine, paired over loopback: pair, check, Forget,
   `settings.changed`, 429 with `Retry-After`), and placement across two daemons syncing through
@@ -689,6 +734,13 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   their reasons, `thread-read-only`), and in the app `AlwaysOnCommandTests`,
   `RemoteSettingsTests` (every action and error message) and the `settings-always-on-*`
   snapshots.
+- **Importing from Obsidian**: the client's `InMemoryImportTests` and REST cases (and the
+  faithfulness test, which checks the fake's reports, jobs and events against the wire schema),
+  and in the app `ObsidianImportTests`: the store (report, progress, cancel, 409, a paired device,
+  an older daemon), `.importProgress` routing and the toast, the commands (Reveal through a fake
+  Finder), the Vault section's tooltips, and the switch (the preference and a restart, the daemon's
+  own switch under the app's supervisor and from an external daemon, sync, DDL_VAULT and the demo
+  blocking it). Snapshots: `app-snapshots/obsidian-import-*` and `settings-general-vault*`.
 - **The orchestrator's activity**: the models' `OrchestratorActivityTests` (spec-shaped JSON,
   lenient kinds), the client's `InMemoryActivityTests` (the fake's sequences, checked against the
   contract schema once it declares them), the editor's `OrchestratorChipTests` (matching lines,

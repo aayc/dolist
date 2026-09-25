@@ -27,6 +27,8 @@ struct DaemonProcessEnvironmentTests {
     #expect(variables["DDL_VAULT"] == "/Users/me/Vault")
     #expect(variables["DDL_PORT"] == "7999")
     #expect(variables["DDL_AGENT_MODE"] == "off")
+    #expect(
+      variables["DDL_SUPERVISED"] == "1", "the daemon knows it's started again after a restart")
     #expect(variables["EXTRA"] == "1")
     #expect(variables["PATH"] == "/only", "extraEnvironment wins over everything")
   }

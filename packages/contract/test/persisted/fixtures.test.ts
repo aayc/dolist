@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import {
   decodePersistedApprovals,
+  decodePersistedImportManifest,
   decodePersistedRecords,
   decodePersistedRoutines,
   decodePersistedSettings,
@@ -24,6 +25,7 @@ import {
   type JsonlFixtureFormat,
   listFixtures,
   readFixture,
+  VERSIONED_FROM_THE_START,
 } from "./fixtures";
 
 const DECODERS: Record<FixtureFormat, (text: string) => PersistedDecodeResult<unknown>> = {
@@ -33,6 +35,7 @@ const DECODERS: Record<FixtureFormat, (text: string) => PersistedDecodeResult<un
   "task-state": (text) => decodePersistedTaskState(text, "Daily/2026-09-23.md"),
   routines: decodePersistedRoutines,
   settings: decodePersistedSettings,
+  "import-manifest": decodePersistedImportManifest,
 };
 
 describe.each(FIXTURE_FORMATS)("%s fixtures", (format) => {
@@ -40,12 +43,10 @@ describe.each(FIXTURE_FORMATS)("%s fixtures", (format) => {
 
   it("cover every kind of file", () => {
     const kinds = new Set(names.map(fixtureKind));
-    expect([...kinds].sort()).toEqual([
-      "corrupt",
-      "future",
-      "legacy",
-      "v1",
-    ] satisfies FixtureKind[]);
+    const expected: FixtureKind[] = ["corrupt", "future", "legacy", "v1"];
+    expect([...kinds].sort()).toEqual(
+      VERSIONED_FROM_THE_START.has(format) ? expected.filter((k) => k !== "legacy") : expected,
+    );
     expect(names.filter((name) => fixtureKind(name) === null)).toEqual([]);
   });
 
@@ -89,6 +90,7 @@ describe("fixture coverage", () => {
       "task-state": "task-state",
       routines: "routines",
       settings: "settings",
+      "import-manifest": "import-manifest",
     };
     for (const format of PERSISTED_FORMATS) {
       if (format.version === null) continue;

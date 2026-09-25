@@ -54,6 +54,13 @@ export interface DaemonConfig {
   /** DDL_HOME: machine-local state (token, config, MCP config, workspaces, browser profile). */
   home: string;
   vaultPath: string;
+  /** `DDL_VAULT` set `vaultPath` (switching vaults is refused). */
+  vaultFromEnv: boolean;
+  /**
+   * A supervisor starts this daemon again when it exits with `RESTART_EXIT_CODE` (`DDL_SUPERVISED`,
+   * set by the Mac app).
+   */
+  supervised: boolean;
   /** The daemon always binds 127.0.0.1. `0` picks a free port. */
   port: number;
   agentMode: AgentMode;
@@ -275,6 +282,8 @@ export function loadConfig(options: LoadConfigOptions = {}): DaemonConfig {
     vaultPath: vaultEnv
       ? resolveUserPath(vaultEnv, fromCwd)
       : resolveUserPath(file.vaultPath ?? DEFAULT_VAULT, fromHome),
+    vaultFromEnv: vaultEnv !== undefined,
+    supervised: nonEmpty(env.DDL_SUPERVISED) === "1",
     port: parsePortEnv(env.DDL_PORT) ?? file.port ?? DEFAULT_PORT,
     agentMode:
       parseEnumEnv("DDL_AGENT_MODE", env.DDL_AGENT_MODE, AGENT_MODES) ?? file.agentMode ?? "live",

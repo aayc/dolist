@@ -1,0 +1,14 @@
+[
+  {
+    "name": "an absolute path",
+    "value": {
+      "path": "/Users/me/Notebook"
+    }
+  },
+  {
+    "name": "under the home folder",
+    "value": {
+      "path": "~/Café ☕ vault"
+    }
+  }
+]

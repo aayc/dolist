@@ -1,0 +1,331 @@
+/* Settings → Vault, importing from Obsidian, and the switch between vaults. */
+
+.vault-path code,
+.vault-switch-path code,
+.report-line code,
+.report-list code,
+.import-flow .settings-hint code {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.vault-update-hint {
+  margin-top: -4px;
+}
+
+.vault-update {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.import-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.import-flow > .link-button {
+  align-self: flex-start;
+}
+
+.import-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: import-step;
+}
+
+.import-step {
+  position: relative;
+  padding-left: 30px;
+  counter-increment: import-step;
+}
+
+.import-step::before {
+  content: counter(import-step);
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--ddl-accent-soft);
+  color: var(--ddl-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.import-step-title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.import-step .settings-hint {
+  margin-bottom: 8px;
+}
+
+.import-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.import-row .input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--ddl-font-mono);
+  font-size: 12px;
+}
+
+.import-actions {
+  display: flex;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+
+.import-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--ddl-border);
+  border-radius: var(--radius-m);
+  background: var(--ddl-bg-secondary);
+  font-size: 13px;
+}
+
+.vault-update .import-progress {
+  align-self: stretch;
+}
+
+.import-progress-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.import-progress-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--ddl-bg-active);
+}
+
+.import-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--ddl-accent);
+  transition: width var(--transition);
+}
+
+.import-result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.import-result .import-step-title {
+  margin-top: 8px;
+}
+
+/* The report: counts first, then groups a glance can skip. */
+.import-report {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.report-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.report-stat {
+  padding: 8px 10px;
+  border: 1px solid var(--ddl-border);
+  border-radius: var(--radius-m);
+  background: var(--ddl-bg-secondary);
+}
+
+.report-stat dt {
+  color: var(--ddl-text-muted);
+  font-size: 11px;
+}
+
+.report-stat dd {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 2px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-stat-detail {
+  color: var(--ddl-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.report-line {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.report-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 10px 8px 26px;
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--ddl-warning) 14%, transparent);
+  color: var(--ddl-text);
+  line-height: 1.5;
+}
+
+.report-group {
+  padding-top: 10px;
+  border-top: 1px solid var(--ddl-border);
+}
+
+.report-group-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ddl-text-muted);
+}
+
+.report-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+  line-height: 1.5;
+}
+
+.report-facts li {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.report-fact-name {
+  color: var(--ddl-text-muted);
+}
+
+.report-plugins {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.report-plugin {
+  display: grid;
+  grid-template-columns: 150px auto 1fr;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.report-plugin-name {
+  font-weight: 500;
+}
+
+.report-plugin .chip {
+  justify-self: start;
+}
+
+.report-plugin-note {
+  color: var(--ddl-text-muted);
+}
+
+.report-callout {
+  margin: 4px 0 8px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--ddl-accent);
+  border-radius: var(--radius-s);
+  background: var(--ddl-accent-soft);
+  line-height: 1.5;
+}
+
+.report-fold {
+  margin: 2px 0;
+}
+
+.report-fold > summary {
+  width: fit-content;
+  color: var(--ddl-accent);
+  cursor: pointer;
+}
+
+.report-fold > summary:hover {
+  color: var(--ddl-accent-strong);
+}
+
+.report-list {
+  max-height: 220px;
+  margin: 6px 0 0;
+  padding: 6px 10px 6px 26px;
+  overflow-y: auto;
+  border-radius: var(--radius-m);
+  background: var(--ddl-bg-secondary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.report-merged {
+  margin-left: 6px;
+}
+
+/* Switching vaults: the daemon restarts underneath. */
+.vault-switch-modal {
+  width: 440px;
+}
+
+.vault-switch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 28px 24px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.vault-switch p {
+  margin: 0;
+}
+
+.vault-switch-spinner {
+  color: var(--ddl-accent);
+}
+
+.vault-switch-title {
+  margin: 4px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+}

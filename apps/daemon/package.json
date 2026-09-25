@@ -12,7 +12,8 @@
     "build": "node build.mjs",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "bench": "vitest bench --run --reporter=default --reporter=json --outputFile.json=bench-results.json"
   },
   "dependencies": {
     "@ddl/agent": "workspace:*",

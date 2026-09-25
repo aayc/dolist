@@ -203,6 +203,37 @@ struct ProtocolFaithfulnessTests {
     try session.record(try await client.forgetMachine(), as: "MachineStatusResponse")
     try session.record(try await client.turnOffSync(), as: "DeviceSettingsResponse")
 
+    // Importing from Obsidian, switching to the new vault, and updating it.
+    try session.record(try await client.deviceVault(), as: "DeviceVaultResponse")
+    try session.record(try await client.obsidianImportStatus(), as: "ObsidianImportStatusResponse")
+    let preview = try await client.previewObsidianImport(
+      ObsidianImportPreviewRequest(source: "~/Obsidian Notebook"))
+    try session.record(preview, as: "ObsidianImportPreview")
+    try session.record(
+      try await client.previewObsidianImport(ObsidianImportPreviewRequest(source: "~/Plain notes")),
+      as: "ObsidianImportPreview")
+    try await session.recordError {
+      _ = try await client.previewObsidianImport(ObsidianImportPreviewRequest(source: "Notes"))
+    }
+    let started = try await client.startObsidianImport(
+      ObsidianImportRequest(source: preview.source))
+    try session.record(ObsidianImportJobResponse(job: started), as: "ObsidianImportJobResponse")
+    try await session.recordError {
+      _ = try await client.startObsidianImport(ObsidianImportRequest(source: preview.source))
+    }
+    await client.runUntilIdle()
+    try session.record(try await client.obsidianImportStatus(), as: "ObsidianImportStatusResponse")
+    try session.record(
+      try await client.switchVault(DeviceVaultRequest(path: started.destination)),
+      as: "DeviceVaultResponse")
+    try session.record(try await client.obsidianImportStatus(), as: "ObsidianImportStatusResponse")
+    let update = try await client.updateFromObsidian()
+    try session.record(ObsidianImportJobResponse(job: update), as: "ObsidianImportJobResponse")
+    try session.record(
+      ObsidianImportJobResponse(job: try await client.cancelObsidianImport()),
+      as: "ObsidianImportJobResponse")
+    try await session.recordError { _ = try await client.cancelObsidianImport() }
+
     await client.disconnect()
     try await recorder.waitForFinish()
     session.events = recorder.events
@@ -219,7 +250,7 @@ struct ProtocolFaithfulnessTests {
         "hello", "vault.changed", "task.records", "task.record", "thread.upsert", "thread.message",
         "thread.delta",
         "approval.upsert", "agent.status", "surface.frame", "settings.changed", "routines.changed",
-        "routine.notification",
+        "routine.notification", "import.progress",
       ])
     for event in session.events {
       let issues = schema.validate(event, as: "ServerEvent")
@@ -385,7 +416,7 @@ struct ProtocolFaithfulnessTests {
     "UpdateSettingsRequest/blank Cursor model",
     "UpdateSettingsRequest/blank always-on machine name", "DeviceSettingsPatch/blank name",
     "DeviceSyncSetupRequest/blank token",
-    "CreateRoutineRequest/blank instructions (trimmed to empty)",
+    "CreateRoutineRequest/blank instructions (trimmed to empty)", "DeviceVaultRequest/blank",
   ]
 
   /// The validator is strict enough to matter: it rejects every invalid fixture except the
@@ -426,7 +457,7 @@ struct ProtocolFaithfulnessTests {
     "agent.status": "AgentStatusEvent",
     "surface.frame": "SurfaceFrameEvent", "settings.changed": "SettingsChangedEvent",
     "routines.changed": "RoutinesChangedEvent", "routine.notification": "RoutineNotificationEvent",
-    "error": "ServerErrorEvent",
+    "import.progress": "ImportProgressEvent", "error": "ServerErrorEvent",
   ]
 
   static let messageDefinition: [String: String] = [

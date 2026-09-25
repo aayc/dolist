@@ -11,10 +11,15 @@ import type {
   DeviceSettingsPatch,
   DeviceSettingsResponse,
   DeviceSyncSetupRequest,
+  DeviceVaultResponse,
   HealthResponse,
   MachinePairRequest,
   MachineStatusResponse,
   NoteResponse,
+  ObsidianImportJobResponse,
+  ObsidianImportPreview,
+  ObsidianImportRequest,
+  ObsidianImportStatusResponse,
   PairedDevicesResponse,
   PairingCodeRequest,
   PairingCodeResponse,
@@ -153,4 +158,23 @@ export interface DaemonClient {
   checkMachine(): Promise<MachineStatusResponse>;
   /** Drops this device's credential for the machine. */
   forgetMachine(): Promise<MachineStatusResponse>;
+
+  // This machine's vault and importing from Obsidian: a paired device gets 403 `forbidden_device`.
+  /** The vault the daemon serves, and whether `DDL_VAULT` fixes it. */
+  getVault(): Promise<DeviceVaultResponse>;
+  /**
+   * Restarts the daemon on another vault; `restart` says who starts it again (absent: already that
+   * vault). 409 `locked_by_env`, or `conflict` while an import runs or the vault syncs.
+   */
+  switchVault(path: string): Promise<DeviceVaultResponse>;
+  /** Reads the folder and reports what an import would do; writes nothing. 400 for a bad source. */
+  previewObsidianImport(source: string): Promise<ObsidianImportPreview>;
+  /** The running or last job, and where this vault was imported from. */
+  getObsidianImport(): Promise<ObsidianImportStatusResponse>;
+  /** 400 for a bad source or destination, 409 while a job runs; `import.progress` events follow. */
+  startObsidianImport(request: ObsidianImportRequest): Promise<ObsidianImportJobResponse>;
+  /** Answers once the partial vault is removed. 404 when nothing runs. */
+  cancelObsidianImport(): Promise<ObsidianImportJobResponse>;
+  /** 404 when this vault wasn't imported or the Obsidian vault moved, 409 while a job runs. */
+  updateFromObsidian(): Promise<ObsidianImportJobResponse>;
 }

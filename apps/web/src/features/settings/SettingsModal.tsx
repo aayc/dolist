@@ -31,6 +31,7 @@ const SECTIONS: ReadonlyArray<{ key: SettingsSection; label: string }> = [
   { key: "general", label: "Appearance" },
   { key: "editor", label: "Editor" },
   { key: "daily", label: "Daily notes" },
+  { key: "vault", label: "Vault" },
   { key: "agent", label: "Agent" },
   { key: "location", label: "Agent location" },
   { key: "machine", label: "Always-on machine" },
@@ -58,12 +59,18 @@ function isRemoteSection(section: SettingsSection): section is RemoteSectionKey 
   return REMOTE_SECTIONS.has(section);
 }
 
+/** The vault and importing from Obsidian: a chunk loaded with Settings. */
+const VaultSection = preloadable(() =>
+  import("../obsidian-import/VaultSection").then((m) => m.VaultSection),
+);
+
 export function SettingsModal({ section }: { section: SettingsSection }) {
   const [active, setActive] = useState(section);
   // Opening Settings at a section while it's open (a link inside it) switches to that section.
   useEffect(() => setActive(section), [section]);
   useEffect(() => {
     void RemoteSection.preload();
+    void VaultSection.preload();
   }, []);
   return (
     <Modal label="Settings" className="settings-modal" testId="settings-modal">
@@ -93,6 +100,11 @@ export function SettingsModal({ section }: { section: SettingsSection }) {
         {active === "general" ? <AppearanceSection /> : null}
         {active === "editor" ? <EditorSection /> : null}
         {active === "daily" ? <DailySection /> : null}
+        {active === "vault" ? (
+          <Suspense fallback={<div className="thread-loading" aria-busy="true" />}>
+            <VaultSection onOpenSync={() => setActive("sync")} />
+          </Suspense>
+        ) : null}
         {active === "agent" ? <AgentSection /> : null}
         {isRemoteSection(active) ? (
           <Suspense fallback={<div className="thread-loading" aria-busy="true" />}>

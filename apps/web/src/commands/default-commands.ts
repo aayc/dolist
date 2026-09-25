@@ -95,6 +95,12 @@ export function createDefaultCommands(services: Services): Command[] {
       run: () => ui.openOverlay({ kind: "settings", section: "computer" }),
     },
     {
+      id: "vault:import-obsidian",
+      name: "Import from Obsidian…",
+      label: "Import from Obsidian",
+      run: () => ui.openOverlay({ kind: "settings", section: "vault" }),
+    },
+    {
       id: "settings:approvals",
       name: "Change approval policy",
       label: "Approval policy settings",
