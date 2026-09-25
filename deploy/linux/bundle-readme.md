@@ -9,13 +9,20 @@ installed system-wide (for example from NodeSource), and has no other runtime de
 | `daemon/` | The daemon: `dist/main.js` and its production `node_modules/`. |
 | `web/dist/` | The built web app. The daemon finds it next to `daemon/`, no configuration needed. |
 | `sync/` | The sync service: `dist/main.js`, one file with its dependencies bundled. |
+| `deploy/` | The setup kit: `setup.sh`, the systemd units and their guide (`deploy/README.md`). |
 | `bundle.json` | Version, commit, target platform and build time. |
 
-The setup kit (a `setup.sh` that installs this bundle with systemd units, and its guide) lives in
-the repository under `deploy/linux/`, with a guide for an Azure VM reachable only over Tailscale in
-`deploy/azure/`.
+Install it as services (a system user, systemd units, the sync vault, Chromium for the agent's
+browser); running it again upgrades to the bundle it comes from:
 
-Try it without installing anything (temporary folders, other ports than your usual ones):
+```sh
+tar -xzf ddl-linux-x64.tar.gz
+sudo ./ddl-linux-x64/deploy/setup.sh --host vm-name.tailnet-name.ts.net
+```
+
+The repository has a guide for an Azure VM reachable only over Tailscale (`deploy/azure/`).
+
+Or try it without installing anything (temporary folders, other ports than your usual ones):
 
 ```sh
 node sync/dist/main.js vault create --name Personal --db /tmp/ddl-try/sync.db

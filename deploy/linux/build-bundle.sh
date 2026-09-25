@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Builds the always-on machine's bundle, ddl-linux-<arch>.tar.gz: the daemon with its production
-# dependencies, the built web app where the daemon looks for it, the sync service and a README.
-# It runs on the system Node.js 24.4+ of a glibc Linux (Ubuntu LTS). Works on Linux and macOS.
+# dependencies, the built web app where the daemon looks for it, the sync service, the setup kit
+# (setup.sh, systemd units) and a README. It runs on the system Node.js 24.4+ of a glibc Linux
+# (Ubuntu LTS). Works on Linux and macOS.
 #
 #   deploy/linux/build-bundle.sh [--arch x64|arm64] [--output DIR]
 #
@@ -16,7 +17,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ARCH=""
 OUTPUT="$SCRIPT_DIR/build"
 
-usage() { sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; }
 step() { printf '\n==> %s\n' "$*"; }
 fail() {
   echo "build-bundle: $*" >&2
@@ -108,6 +109,12 @@ rm -rf "$STAGE/web/dist/.vite"
 cp -RP "$REPO_ROOT/apps/sync/dist" "$STAGE/sync/dist"
 printf '{ "name": "ddl-sync", "private": true, "type": "module" }\n' >"$STAGE/sync/package.json"
 
+mkdir -p "$STAGE/deploy"
+cp "$SCRIPT_DIR/setup.sh" "$SCRIPT_DIR/setup-helper.mjs" "$SCRIPT_DIR/ddl-daemon.service" \
+  "$SCRIPT_DIR/ddl-sync.service" "$STAGE/deploy/"
+cp "$SCRIPT_DIR/README.md" "$STAGE/deploy/README.md"
+chmod 0755 "$STAGE/deploy/setup.sh"
+
 cp "$SCRIPT_DIR/bundle-readme.md" "$STAGE/README.md"
 cp "$REPO_ROOT/LICENSE" "$REPO_ROOT/THIRD_PARTY_NOTICES.md" "$STAGE/"
 
@@ -134,7 +141,8 @@ process.stdout.write(`${JSON.stringify(info, null, 2)}\n`);
 
 # 4. Checks ---------------------------------------------------------------------------------------
 step "Checking the bundle"
-for file in daemon/dist/main.js daemon/package.json web/dist/index.html sync/dist/main.js; do
+for file in daemon/dist/main.js daemon/package.json web/dist/index.html sync/dist/main.js \
+  deploy/setup.sh deploy/setup-helper.mjs; do
   [ -f "$STAGE/$file" ] || fail "the bundle has no $file"
 done
 if [ -n "$(find "$STAGE" -type l -lname '/*' | head -n 1)" ]; then
