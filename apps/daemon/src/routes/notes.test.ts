@@ -1,7 +1,12 @@
 import {
   API_ROUTES,
   type ConflictResponse,
+  drawingPathForName,
+  emptyDrawingScene,
   type NoteResponse,
+  newDrawingName,
+  parseDrawingFile,
+  serializeDrawingFile,
   type VaultTreeResponse,
   type WriteNoteResponse,
 } from "@ddl/core";
@@ -73,6 +78,55 @@ describe("notes CRUD", () => {
     const res = await request(API_ROUTES.note("a.md"), { method: "PUT", json: { content: "new" } });
     expect(res.status).toBe(200);
     expect((await storage.read("a.md"))?.content).toBe("new");
+  });
+});
+
+describe("drawings", () => {
+  it("reads and writes an .excalidraw.md drawing through the notes API", async () => {
+    const { request } = await createTestApp();
+    const path = drawingPathForName(newDrawingName(new Date(2026, 8, 25, 11, 52, 33)));
+    expect(path).toBe("Excalidraw/Drawing 2026-09-25 11.52.33.excalidraw.md");
+    const scene = {
+      ...emptyDrawingScene(),
+      elements: [
+        { id: "r1", type: "rectangle", x: 0, y: 0, width: 160, height: 80, boundElements: [] },
+        { id: "k3JwQm9a", type: "text", text: "API", originalText: "API", containerId: "r1" },
+      ],
+    };
+
+    const created = await request(API_ROUTES.note(path), {
+      method: "PUT",
+      json: { content: serializeDrawingFile(scene), baseVersion: null },
+    });
+    expect(created.status).toBe(201);
+    const v1 = (await created.json()) as WriteNoteResponse;
+
+    const read = (await (await request(API_ROUTES.note(path))).json()) as NoteResponse;
+    expect(read.version).toBe(v1.version);
+    const parsed = parseDrawingFile(read.content);
+    expect(parsed.problems).toEqual([]);
+    expect(parsed.scene).toEqual(scene);
+
+    const moved = structuredClone(parsed.scene);
+    moved.elements[0]!.x = 40;
+    const updated = await request(API_ROUTES.note(path), {
+      method: "PUT",
+      json: { content: serializeDrawingFile(moved, read.content), baseVersion: v1.version },
+    });
+    expect(updated.status).toBe(200);
+    const stale = await request(API_ROUTES.note(path), {
+      method: "PUT",
+      json: { content: serializeDrawingFile(scene, read.content), baseVersion: v1.version },
+    });
+    expect(stale.status).toBe(409);
+    const conflict = (await stale.json()) as ConflictResponse;
+    expect(parseDrawingFile(conflict.current!.content).scene.elements[0]).toMatchObject({ x: 40 });
+
+    const tree = (await (await request(API_ROUTES.tree)).json()) as VaultTreeResponse;
+    expect(tree.entries.map((e) => `${e.kind}:${e.path}`).sort()).toEqual([
+      `file:${path}`,
+      "folder:Excalidraw",
+    ]);
   });
 });
 

@@ -74,6 +74,8 @@ Vitest 5 benchmarks (`*.bench.ts`) assert p99 budgets inside the test and write
 | Editor: 500 single-char inserts, 2 000 lines, 30 badges | 500 ms |
 | Live preview decorations, 60 / 150-line viewport | 2 / 4 ms |
 | Agent-line decorations (agent text, markers), 150-line viewport | 1 ms |
+| Drawing file, 2 000 elements: parse `json` / `compressed-json` | 25 / 80 ms |
+| Drawing file, 2 000 elements: write back with the previous file / describe | 40 / 15 ms |
 | Vault listing / search, 2 000 notes (warm) | see `packages/storage/src/storage.bench.ts` |
 | 3-way merge, 2 000-line note | see `packages/storage/src/storage.bench.ts` |
 

@@ -1,0 +1,111 @@
+{
+  "about": "Text in a rectangle, an ellipse (wrapped: text differs from originalText) and a diamond; an arrow label; `#` and `^` in text; non-ASCII text.",
+  "title": "ours-containers",
+  "parse": {
+    "readable": true,
+    "compressed": false,
+    "problems": [],
+    "frontmatter": {
+      "excalidraw-plugin": "parsed",
+      "tags": "[excalidraw]"
+    },
+    "sections": ["", "# Excalidraw Data", "## Text Elements", "## Drawing"],
+    "textElements": [
+      {
+        "id": "tBedPlan",
+        "text": "Plan the beds"
+      },
+      {
+        "id": "tSeedsOr",
+        "text": "Order seeds before March"
+      },
+      {
+        "id": "tFrostyQ",
+        "text": "Frost?"
+      },
+      {
+        "id": "tGardenN",
+        "text": "# Garden\nBeds: 4\nWater ^ daily"
+      },
+      {
+        "id": "tUnicode",
+        "text": "Überblick 🌱 日本"
+      },
+      {
+        "id": "tThenLbl",
+        "text": "then"
+      }
+    ],
+    "elements": [
+      {
+        "id": "r",
+        "type": "rectangle"
+      },
+      {
+        "id": "tBedPlan",
+        "type": "text"
+      },
+      {
+        "id": "e",
+        "type": "ellipse"
+      },
+      {
+        "id": "tSeedsOr",
+        "type": "text"
+      },
+      {
+        "id": "d",
+        "type": "diamond"
+      },
+      {
+        "id": "tFrostyQ",
+        "type": "text"
+      },
+      {
+        "id": "tGardenN",
+        "type": "text"
+      },
+      {
+        "id": "tUnicode",
+        "type": "text"
+      },
+      {
+        "id": "ar",
+        "type": "arrow"
+      },
+      {
+        "id": "tThenLbl",
+        "type": "text"
+      }
+    ],
+    "texts": [
+      {
+        "id": "tBedPlan",
+        "text": "Plan the beds"
+      },
+      {
+        "id": "tSeedsOr",
+        "text": "Order seeds\nbefore March"
+      },
+      {
+        "id": "tFrostyQ",
+        "text": "Frost?"
+      },
+      {
+        "id": "tGardenN",
+        "text": "# Garden\nBeds: 4\nWater ^ daily"
+      },
+      {
+        "id": "tUnicode",
+        "text": "Überblick 🌱 日本"
+      },
+      {
+        "id": "tThenLbl",
+        "text": "then"
+      }
+    ],
+    "files": []
+  },
+  "description": "Drawing “ours-containers” (620×345 px, 10 elements)\nText: “# Garden Beds: 4 Water ^ daily”, “Überblick 🌱 日本”\nShapes: rectangle “Plan the beds”, ellipse “Order seeds before March”, diamond “Frost?”\nArrows: “Plan the beds” → “Order seeds before March” labeled “then”",
+  "roundTrip": "ours-containers.excalidraw.md"
+}

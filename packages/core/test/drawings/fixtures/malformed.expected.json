@@ -1,0 +1,46 @@
+{
+  "about": "The scene's JSON is cut off: unreadable, described as empty, never written back.",
+  "title": "malformed",
+  "parse": {
+    "readable": false,
+    "compressed": false,
+    "problems": [
+      {
+        "code": "invalid-json",
+        "severity": "error"
+      }
+    ],
+    "frontmatter": {
+      "excalidraw-plugin": "parsed",
+      "tags": "[excalidraw]"
+    },
+    "sections": ["", "# Excalidraw Data", "## Text Elements", "## Drawing"],
+    "textElements": [
+      {
+        "id": "tBrowser",
+        "text": "Browser"
+      },
+      {
+        "id": "tApiNode",
+        "text": "API"
+      },
+      {
+        "id": "tDbStore",
+        "text": "Database"
+      },
+      {
+        "id": "tHttpsLb",
+        "text": "HTTPS"
+      },
+      {
+        "id": "tCaption",
+        "text": "Request path"
+      }
+    ],
+    "elements": [],
+    "texts": [],
+    "files": []
+  },
+  "description": "Drawing “malformed” (empty)",
+  "roundTrip": null
+}
