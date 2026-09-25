@@ -4,16 +4,17 @@ import { mergeText } from "./merge";
 
 /**
  * Notes whose lines are unique (blank lines aside), edited on both sides with lines that are
- * unique too, so where each output line came from is unambiguous.
+ * unique too, so where each output line came from is unambiguous. "edit" appends a word to lines
+ * (still similar to what they were), "replace" puts new lines in their place.
  */
 interface Edit {
-  kind: "insert" | "delete" | "replace";
+  kind: "insert" | "delete" | "replace" | "edit";
   at: number;
   count: number;
 }
 
 const editArb: fc.Arbitrary<Edit> = fc.record({
-  kind: fc.constantFrom("insert", "delete", "replace"),
+  kind: fc.constantFrom("insert", "delete", "replace", "edit"),
   at: fc.nat(),
   count: fc.integer({ min: 1, max: 3 }),
 });
@@ -31,7 +32,12 @@ function edit(base: readonly string[], edits: readonly Edit[], side: string): st
     const added = Array.from({ length: count }, fresh);
     if (kind === "insert") lines.splice(i, 0, ...added);
     else if (kind === "delete") lines.splice(i, count);
-    else lines.splice(i, count, ...added);
+    else if (kind === "replace") lines.splice(i, count, ...added);
+    else {
+      for (let k = i; k < Math.min(lines.length, i + count); k++) {
+        if (lines[k] !== "") lines[k] = `${lines[k]} ${fresh()}`;
+      }
+    }
   }
   return lines;
 }
@@ -45,6 +51,25 @@ const tripleArb = fc
   }));
 
 const content = (lines: readonly string[]) => new Set(lines.filter((line) => line !== ""));
+
+/** The other side (the agent, say) only adds lines and types on existing ones. */
+const addingArb = fc
+  .tuple(
+    baseArb,
+    fc.array(editArb, { maxLength: 4 }),
+    fc.array(
+      editArb.map((e) => ({
+        ...e,
+        kind: e.kind === "insert" ? ("insert" as const) : ("edit" as const),
+      })),
+      { maxLength: 4 },
+    ),
+  )
+  .map(([base, mine, theirs]) => ({
+    base,
+    local: edit(base, mine, "mine"),
+    remote: edit(base, theirs, "theirs"),
+  }));
 
 describe("mergeText (properties)", () => {
   test.prop([tripleArb])(
@@ -80,6 +105,18 @@ describe("mergeText (properties)", () => {
       }
       if (conflict) return;
       for (const line of content(remote.filter((line) => !base.includes(line)))) {
+        expect(out.has(line), `dropped ${JSON.stringify(line)}`).toBe(true);
+      }
+    },
+  );
+
+  test.prop([addingArb])(
+    "keeps every line the other side added next to lines it typed on, whatever the user did",
+    ({ base, local, remote }) => {
+      const out = content(
+        mergeText(base.join("\n"), local.join("\n"), remote.join("\n")).text.split("\n"),
+      );
+      for (const line of remote.filter((line) => line.startsWith("theirs"))) {
         expect(out.has(line), `dropped ${JSON.stringify(line)}`).toBe(true);
       }
     },
