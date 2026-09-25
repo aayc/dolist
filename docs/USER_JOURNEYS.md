@@ -4,7 +4,8 @@ The daily note is alive: one orchestrator watches the whole note, attaches threa
 line needs one, sends subagents to do the work, and writes results back into the note in its own
 color. These journeys are the product's contract. Each one names the tests that keep it working.
 
-How it works underneath: [AGENT_SYSTEM.md](AGENT_SYSTEM.md) ("The living list" and sections 1–3).
+How it works underneath: [AGENT_SYSTEM.md](AGENT_SYSTEM.md) ("The living list", "Routines" and
+sections 1–3).
 
 ## J1. A task comes alive
 
@@ -175,3 +176,53 @@ Stop, restarts), `src/orchestrator/chat.test.ts` (thinking, retention), the brai
 tests and the `direct-*` triage eval cases, web e2e `orchestrator.spec.ts`, Mac
 `OrchestratorChatTests`, `OrchestratorWindowTests`, `InMemoryOrchestratorTests` and the snapshots
 `orchestrator-chat-*`, `orchestrator-window-*`.
+
+## J12. A morning briefing, created by saying it
+
+1. You add `- [ ] Every morning at 7:30, brief me on my calendar and the SF weather` to today's
+   note (or write it to the orchestrator in its chat).
+2. The orchestrator doesn't do it once: it proposes a routine. Under the default approval policy
+   an approval card asks *Create routine “Morning briefing”: every day at 7:30 (Every day at 7:30
+   AM) — Brief me on my calendar and the SF weather.* With *Run everything* it's created without
+   asking; *Deny* and nothing is written, and the task says *Okay — I won't set up that routine.*
+3. Approved, the file `Routines/Morning briefing.md` appears in the vault (schedule, notify and
+   uses in its frontmatter, the instructions below), editable in Obsidian like any note. The
+   task's badge reads *Routine created*, with a comment naming the schedule.
+4. The Routines section lists it: its schedule in words, its next run, and after each run its
+   status. Each morning at 7:30 a run starts in a thread of its own under the routine (never in the
+   task inbox), told what the previous run found; when it finishes, a notification shows the
+   first lines of the briefing. You can reply in the run's thread like in any task's.
+5. The Mac slept through 7:30? The briefing runs once when it wakes, marked as a catch-up. Switched
+   the agent off for the weekend? Routines start again from their next slot. **Run now**,
+   **Pause** and **Resume** work from the routine's page; pausing and resuming change `paused` in
+   the file, and work even while the agent runs on another device.
+
+The UI parts (the Routines section, a routine's runs, Run now, Pause, New routine from a template,
+Repeat this) are covered by the web and Mac work on routines.
+
+Tests: `packages/agent/test/scenarios/routines.test.ts` (created by saying it under each policy,
+declined), `src/routines/scheduler.test.ts` (next runs, catch-up once, the budget, run threads with
+the previous result), `src/routines/tools.test.ts` (the routine tools through the gate under every
+policy), the `routine-*` triage and safety eval cases, the daemon's `routes/routines.test.ts` and
+`leased-runtime.test.ts` (routine files editable without the agent, scheduling only under the
+lease).
+
+## J13. A watch that only notifies on change
+
+1. You write `- [ ] Check the price of the Fellow Stagg kettle every 2 hours and tell me when it
+   drops below $120`.
+2. The orchestrator creates the routine *Price watch* with `notify: when changed` and only the web
+   capability.
+3. Every two hours a run checks the price and reports in its thread. When nothing changed, it says
+   so in one line and sets `changed: false`: no notification. When the price drops, it says what's
+   new and a notification tells you (*Price watch — Now $109: below your $120*).
+4. A run that fails, or needs you, notifies even when nothing changed; with `notify: never`
+   nothing ever does. A run stops after 15 minutes of work (waiting for your approval doesn't
+   count), and **Run now** allows a few extra runs a day.
+
+The UI parts (the notification, the watch's runs under its routine) are covered by the web and Mac
+work on routines.
+
+Tests: `packages/agent/test/scenarios/routines.test.ts` (a watch that notifies only for the run
+that found something new), `src/routines/scheduler.test.ts` (`shouldNotify`, notified once per run,
+the time limit), and the `routine-price-watch` and `routine-back-in-stock` triage eval cases.
