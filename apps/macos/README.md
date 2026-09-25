@@ -63,7 +63,7 @@ future iPhone app too.
 | Test every package and the shell | `apps/macos/scripts/test.sh` |
 | Test one package | `apps/macos/scripts/test.sh DailyDoListDaemon` (or `app`) |
 | Filter tests | `apps/macos/scripts/test.sh DailyDoListModels -- --filter ContractFixture` |
-| Integration tests | `pnpm --filter @ddl/daemon build && apps/macos/scripts/test.sh integration` |
+| Integration tests | `pnpm --filter @ddl/daemon --filter @ddl/sync build && apps/macos/scripts/test.sh integration` |
 | Format / lint Swift (swift-format, `.swift-format`) | `pnpm lint:fix` / `node scripts/lint.mjs --all --only swift` |
 | Package the app | `apps/macos/scripts/build-app.sh [--release] [--with-daemon] [--zip] [--output DIR] [--open]` |
 | Re-render the icon source | `swift apps/macos/scripts/make-icon.swift --png apps/macos/Resources/AppIcon-1024.png` |
@@ -263,6 +263,14 @@ this device's choice, who runs the agent now and the relay to the machine in the
   Inputs are checked as you type with `DailyDoListDomain`'s port of the core's validators, and
   every error the daemon can answer has its own inline message (a code the machine refused is
   not a rejected token; an unreachable machine, a limit reached, a locked field each say so).
+- **What the daemon does** (the integration tests check it): without sync the agent is held
+  here as `no_sync` (checked before a missing machine); with sync and no machine yet, the device
+  that asked first keeps the agent, so this one can be held here while another runs it (the
+  control then names that device). A change shows in a re-fetch of the status at once, with the
+  "Handing the agent to …" note; the machine takes the agent up to ~40 s later (the lease's
+  renewals), and a device set to run it itself takes it back the same way ("Taking over from
+  …"). Until the relay lands, `relay` stays `off` while the agent runs on the machine, and the
+  status's `problem` says where it runs, so the panel shows the agent as unavailable here.
 - **Code:** in `DailyDoListAgent`, `OrchestratorLocation` (what the control shows),
   `AgentReadOnly`, `AgentStore+Placement` (`moveOrchestrator(to:)`, `canMoveOrchestrator(to:)`,
   `readOnly`), `OrchestratorLocationBar` and `ReadOnlyBanner`. In the app, `RemoteSettingsStore`
@@ -549,8 +557,17 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   port) and the tests drive `HTTPDaemonClient`. They cover REST (daily notes from templates,
   optimistic concurrency and 409s, soft deletes, folders, search, settings), WebSocket events
   (hello, echo tagging, external edits), agent flows (streamed threads, artifacts, approve, deny,
-  retry, cancel), and a supervisor restart mid-stream (reconnect + resync). They're skipped with
-  a message when Node 24.4+ or the built daemon is missing.
+  retry, cancel), and a supervisor restart mid-stream (reconnect + resync). The always-on tests
+  add device settings (live changes, `lockedByEnv` from a second daemon's environment and its 409,
+  the validation bodies the app parses), pairing a device from the daemon's side (a code, `pair`
+  without the token, the device token as a bearer and on the WebSocket in the header or the
+  loopback `?token=`, revoking it: 401, and its sockets close with 1008), the machine link (a
+  second daemon as the always-on machine, paired over loopback: pair, check, Forget,
+  `settings.changed`, 429 with `Retry-After`), and placement across two daemons syncing through
+  the real sync service (`no_sync`, then `no_machine`, the takeover note, handing the agent to the
+  machine; about 70 s). They're skipped with a message when Node 24.4+ or the built daemon is
+  missing (the placement suite also when the sync service isn't built). The relay's states and
+  its read-only 503s aren't covered until the relay lands.
 - **Vim**: `DailyDoListVim` replays the web app's vim vectors against its reference buffer, and
   `DailyDoListEditor` replays all of them again through the real editor, with live preview both
   off and on. Vim-mode tests drive the editor with real `NSEvent`s (typing, undo grouping, IME,

@@ -90,8 +90,14 @@ All methods throw `DaemonClientError`:
   disk now (nil when gone). A folder rename onto an existing folder is `.http(409, …)` instead (no
   `current` in the body).
 - `.approvalConflict(ApprovalConflictResponse)` — 409 on `decideApproval`: already decided.
+- `.rateLimited(retryAfter:body:)` — 429 (too many pairing attempts, pairing codes waiting, or
+  the machine refusing more): `retryAfter` is the daemon's `Retry-After` in seconds when it sent
+  one (`pair` does: when the next attempt can go).
 - `.http(status:body:)` — any other non-2xx; `body` is the `ApiErrorBody` when there is one.
-  `error.httpStatus` and `error.apiErrorCode` read them off any case.
+  `error.httpStatus` and `error.apiErrorCode` read them off any case. For a 400
+  `invalid_request`, `body.problems` splits the daemon's validation report (one
+  `✖ <message>\n  → at <path>` per problem) into `ValidationProblem`s (`path`, `message`); a
+  message in another form is one problem without a path.
 - `.decoding("<Type> at <codingPath>: <reason>")` — a 2xx body that doesn't match the protocol.
 - `.cancelled` — the calling task was cancelled.
 
@@ -199,17 +205,24 @@ ends, the routine's last run is updated and `routine.notification` follows the r
 (odd-numbered runs "found something new"). Stop, Retry and replies work on runs. The demo seed
 has four routines, two with past runs, one paused and one with a schedule it can't read.
 
-This device, pairing and the always-on machine follow the daemon's rules too. Device settings
-check names, remote hosts (normalized, at most 8, no repeats) and `lockedByEnv` (409); the sync
+This device, pairing and the always-on machine follow the daemon's rules too, with its messages
+(checked against the real daemon by the integration tests). Device settings check names, remote
+hosts (normalized, at most 8, no repeats) and `lockedByEnv` (409, after the 400s); the sync
 setup checks the address and vault, needs a token the first time and never returns it; pairing
-codes are single use, last five minutes, at most three wait at once, and `pair` allows five
-attempts a minute (after ten failures every waiting code is dropped); pairing the machine checks
-the address and code, then makes it the vault's machine (`settings.changed`). The agent status
-carries `placement` and `readiness`: switching placement runs a simulated handover (2 s to the
-machine, 3 s back) whose note shows in `agent.status` until it's done, and while the machine is
-unreachable or unpaired, another device holds the agent, or it's moving, agent actions answer
-503 with the reason (reads still work). `simulateMachine(reachable:rejectsCodes:)` and
-`simulateAgentElsewhere(_:)` drive those states.
+codes are single use, last five minutes, at most three wait at once, a device paired with a
+code gets the name the code was issued for (else the one it sent), and `pair` allows five
+attempts a minute (`.rateLimited` with `Retry-After`; after ten failures every waiting code is
+dropped); pairing the machine checks the address and code, then makes it the vault's machine
+(`settings.changed`); Forget drops the credential and the last check, and a check without a
+credential only learns that the machine answers. The agent status carries `placement` and
+`readiness`: the agent is held here without sync (`no_sync`, checked first) or without a machine
+(`no_machine`), and a standalone daemon runs its own agent, never as the always-on machine.
+Switching placement runs a simulated handover (2 s to the machine, during which nobody holds
+it; 3 s back) whose note shows in `agent.status` and as the status's `problem` until it's done.
+While the machine is unreachable or unpaired, another device holds the agent, or it's moving,
+agent actions answer 503 with the reason (reads still work) and the status's `problem` says
+where the agent runs. `simulateMachine(reachable:rejectsCodes:)` and `simulateAgentElsewhere(_:)`
+drive those states.
 
 Extras: `advance(by:)`, `runUntilIdle()`, `pendingActions`, `now`,
 `simulateExternalEdit(_:content:)` (origin `external`, `nil` deletes), `connectionState`,
@@ -222,7 +235,9 @@ empty subfolders of a moved folder are not kept (like the daemon), scripts are t
 real mock runtime may ask questions after a denial), routines never start on their own (their
 schedule only sets `nextRunAt`; runs come from `runRoutine`) and have no run-time limit, the
 always-on machine is simulated in process (relayed actions run on the fake's own agent, and the
-machine's status never checks itself), and nothing persists.
+machine's status never checks itself), the fake plays the relay too (`connected`,
+`unreachable`; the daemon reports `off` until the relay lands), handovers take seconds instead of
+the lease's renewals (up to ~40 s), and nothing persists.
 
 ## Tests
 
