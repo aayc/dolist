@@ -1,0 +1,130 @@
+name: Linux bundle
+
+# The always-on machine's kit (deploy/linux), for x64 and arm64: builds ddl-linux-<arch>.tar.gz and
+# smoke-tests it unpacked (the sync service and the daemon with the mock agent, on free ports,
+# pairing a device), then installs it with setup.sh on a fresh runner of the same architecture and
+# checks the systemd services. Runs when the kit or anything the bundle contains changes (keep both
+# path lists in sync), and on demand.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/linux/**"
+      - "apps/daemon/**"
+      - "apps/sync/**"
+      - "apps/web/**"
+      - "packages/**"
+      - "patches/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - ".nvmrc"
+      - ".github/actions/setup/**"
+      - ".github/workflows/linux-bundle.yml"
+  pull_request:
+    paths:
+      - "deploy/linux/**"
+      - "apps/daemon/**"
+      - "apps/sync/**"
+      - "apps/web/**"
+      - "packages/**"
+      - "patches/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - ".nvmrc"
+      - ".github/actions/setup/**"
+      - ".github/workflows/linux-bundle.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # Superseded PR runs are cancelled; every commit on main keeps its own run.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  TURBO_TELEMETRY_DISABLED: "1"
+
+jobs:
+  # Each architecture is built, smoke-tested and installed on its own runner: x64, and arm64 (the
+  # recommended Azure size, Standard_D4ps_v6, is Arm64) on GitHub's arm64 runners.
+  bundle:
+    name: Linux bundle (${{ matrix.arch }}, smoke test)
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+
+      - name: Build the bundle
+        run: deploy/linux/build-bundle.sh --arch "$ARCH"
+
+      - name: Smoke test (unpacked, mock agent, free ports, pairing)
+        run: deploy/linux/smoke-test.sh "deploy/linux/build/ddl-linux-$ARCH.tar.gz"
+
+      - name: Upload the bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ddl-linux-${{ matrix.arch }}
+          path: |
+            deploy/linux/build/ddl-linux-${{ matrix.arch }}.tar.gz
+            deploy/linux/build/ddl-linux-${{ matrix.arch }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  setup:
+    # A hosted runner is a disposable Ubuntu VM with systemd and passwordless sudo.
+    name: Linux setup kit (${{ matrix.arch }}, systemd)
+    needs: bundle
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Put Node.js where systemd finds it
+        # setup.sh and the units use the node on systemd's default PATH, as on a real machine. A
+        # copy, so the service user doesn't depend on the tool cache's permissions.
+        run: |
+          sudo install -m 0755 "$(command -v node)" /usr/local/bin/node
+          /usr/local/bin/node --version
+
+      - name: Download the bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ddl-linux-${{ matrix.arch }}
+          path: bundle
+
+      - name: Install with setup.sh, run it again, upgrade, check the services and pairing
+        run: sudo --preserve-env=CI deploy/linux/setup-test.sh "bundle/ddl-linux-$ARCH.tar.gz"

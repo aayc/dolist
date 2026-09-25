@@ -40,6 +40,46 @@ Requests with unexpected `Host` or `Origin` headers are rejected, which blocks D
 cross-site requests from web pages. No unauthenticated endpoint reads the vault or triggers agent
 work.
 
+**Remote access (opt-in).** A daemon is local-only unless remote hosts are configured, and then it
+is reachable only through a private network, with device credentials. It keeps binding
+`127.0.0.1`; a private-network proxy on the same machine (`tailscale serve`) terminates TLS and
+forwards to it. Remote hosts (`remote.hosts` in `$DDL_HOME/config.json`, or `DDL_REMOTE_HOSTS`)
+are configured, never inferred: each adds exactly one allowed `Host`, its `https://` Origin and a
+`wss://` entry in the page's Content Security Policy. Everything else still gets `forbidden_host`.
+A request whose `Host` is loopback but that carries proxy forwarding headers (`Forwarded`,
+`X-Forwarded-For`, `X-Forwarded-Host`, `X-Real-IP`) is refused, so a proxy that rewrites the
+`Host` can't make remote traffic look local.
+
+- **The master token never leaves the machine.** `index.html` embeds it only for loopback Hosts.
+  For a remote Host the page carries `<meta name="ddl-auth" content="cookie">` or `"pairing"`,
+  never a token, and the WebSocket's `?token=` is refused (it would land in proxy logs).
+- **Pairing.** Only an authenticated client (a local one, an already-paired device, or `pair` on
+  the machine itself) can issue a pairing code: 8 characters of a 30-character unambiguous
+  alphabet, single use, valid for 5 minutes, at most 3 outstanding, kept in memory only.
+  `POST /api/pair` is the one route without a credential. It reads JSON bodies of at most 1 KB,
+  allows 5 attempts a minute across all clients (all remote traffic arrives from the one local
+  proxy), and after 10 wrong codes invalidates every outstanding code. A wrong or expired code
+  answers `pairing_rejected`.
+- **Device tokens.** Each paired app or daemon gets its own 256-bit random token, shown once. Only
+  its SHA-256 hash is stored, in `$DDL_HOME/devices.json` (mode 0600, never synced), with the
+  device's name, kind, pairing time and last use (written at most once a minute); candidates are
+  compared with every stored hash in constant time. An app's or daemon's token is accepted only as
+  a bearer token. Revoking a device (Settings, `DELETE /api/devices/:id`, or `revoke` on the
+  machine) stops its token at once and closes its WebSockets (close code 1008).
+- **Browser cookie.** A browser on a remote host pairs from its own page and gets
+  `__Host-ddl-device` (`HttpOnly; Secure; SameSite=Strict; Path=/`), never a token script can
+  read. The cookie is accepted only on a remote Host and only from that page: with an `Origin`
+  equal to the Host's own `https://` origin, or, for the same-origin GETs browsers send without an
+  `Origin`, with `Sec-Fetch-Site: same-origin` (WebSocket upgrades always need the `Origin`). It is
+  never accepted on loopback Hosts, and a request that sends an `Authorization` header is judged by
+  that header alone.
+- **Never logged:** tokens, cookies and pairing codes. Logs record device ids, kinds and outcomes
+  only.
+- **Secrets stay put.** `devices.json`, `machine-token`, `sync-token` and `daemon-token` live 0600 in
+  `$DDL_HOME`, never in `settings.json` (which syncs) and never in API responses. Agents can't read
+  or write them: the safety rules hard-deny it, including through `$DDL_HOME`, globs, recursive
+  searches and archives of `$DDL_HOME`.
+
 **Cursor harness MCP bridge.** With the Cursor CLI harness, the daemon also listens on an ephemeral
 `127.0.0.1` port: the MCP endpoint through which the CLI calls this app's tools. Each agent session
 gets its own random path and a random 32-byte bearer token (compared in constant time), handed only
@@ -55,6 +95,18 @@ vaults' tokens and unknown vaults all get the same 401. Paths are validated, bod
 are size-limited, each vault is rate-limited, and logs never contain tokens, contents or paths.
 Vaults are administered with its CLI only. There is no end-to-end encryption yet, so whoever runs
 the server can read the notes. Details: [docs/SYNC.md](docs/SYNC.md#security).
+
+**Agent relay.** A device whose agent runs on the always-on machine forwards its agent routes and
+events to that machine's daemon, using the device credential the machine issued it. The relay is
+not an open proxy: it forwards only an allowlist of agent routes (threads, approvals, artifacts,
+task records, routines, agent status; never notes, settings, sync or device routes), only to the
+configured machine URL (`https`, plain `http` only to loopback), with the target rebuilt from
+validated ids and declared query parameters. Nothing from the client's request is passed on (its
+`Authorization`, cookies, `Host`, `Origin` or other headers): the relay sends only its own bearer
+token, in a header, never in a URL. Bodies are validated and size-limited, redirects aren't
+followed, calls time out, answers are size-limited, and the events the machine sends are validated
+before local clients see them. The token and bodies are never logged. When the machine can't be
+reached, the device shows the synced agent state read-only and refuses agent actions.
 
 **Agent safety gate.** Every tool call from every agent passes the safety gate before it executes.
 That includes built-in tools, the harness's shell and file tools, browser and computer control,
@@ -117,8 +169,13 @@ Examples:
   than the one acted on;
 - getting past the daemon's (or the Cursor harness MCP bridge's) token, `Host` or `Origin` checks,
   or reading the vault or agent state from a web page;
+- pairing without a valid code, guessing codes faster than the limits allow, using a revoked
+  device's token or cookie, getting the master token onto a page served for a remote host, or using
+  a browser's device cookie from anywhere but its own page;
 - reading or changing a vault on the sync service without its token, telling whether a vault id
   exists, or getting two devices to run the agent at once;
+- getting the agent relay to forward anything but its allowlisted agent routes, to send a request
+  anywhere but the configured always-on machine, or to leak its credential;
 - getting the Cursor CLI to run one of its own tools (files, shell, fetch) under the Cursor harness;
 - secrets leaking into logs, threads, artifacts or the repository;
 - path traversal outside the vault or agent workspaces;
@@ -134,14 +191,20 @@ Examples:
 
 ## Staying safe as a user
 
-- Keep the daemon on localhost. Don't expose its port through tunnels or reverse proxies.
+- Keep the daemon on localhost. To reach it from your other devices, use a private network
+  (`tailscale serve` to its loopback port) and add that name to `remote.hosts`. Never expose it on
+  the public internet: no public tunnels (Tailscale Funnel), port forwards or public reverse
+  proxies.
+- Pair only devices you control: a pairing code is as good as a password for five minutes. Revoke a
+  lost device right away (Settings → Devices, or `node dist/main.js revoke <device id>` on the
+  machine running the daemon).
 - Read approval cards before approving, especially payments and outgoing messages.
 - Keep the approval policy at "Ask for risky actions" unless you have a reason to change it; "Run
   everything" lets agents spend money and send messages without asking.
 - Grant computer use permissions only to the app that runs Daily Do List (Settings → Computer Use
   names it), and turn them off when you stop using computer use.
 - Only configure MCP servers you trust, and give connectors least-privilege tokens.
-- Keep `~/.daily-do-list` private. It holds the daemon token, your API keys, the sync token and
-  agent state.
+- Keep `~/.daily-do-list` private. It holds the daemon token, your API keys, the sync token, the
+  paired devices, the always-on machine's credential and agent state.
 - If you run the sync service, serve it over HTTPS only, keep its database and backups private (it
   holds your notes), and rotate a vault's token (`vault rotate-token`) if a device is lost.

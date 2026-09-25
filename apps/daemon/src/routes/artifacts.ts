@@ -45,6 +45,26 @@ export function registerArtifactRoutes(app: Hono, ctx: AppContext): void {
   });
 }
 
+/**
+ * Headers for artifact bytes relayed from the always-on machine, under the same rules as local
+ * ones: a valid type, active content as an attachment, the sandbox CSP and nosniff.
+ */
+export function relayedArtifactHeaders(
+  contentType: string | null,
+  disposition: string | null,
+): Record<string, string> {
+  const mimeType = safeMimeType(contentType ?? "");
+  const known = disposition !== null && /^(inline|attachment);/.test(disposition);
+  const params = known ? disposition.slice(disposition.indexOf(";")) : '; filename="artifact"';
+  const inline = known && disposition.startsWith("inline;") && !ACTIVE_CONTENT_TYPES.has(mimeType);
+  return {
+    "Content-Type": withCharset(mimeType),
+    "Content-Disposition": `${inline ? "inline" : "attachment"}${params}`,
+    "Content-Security-Policy": ARTIFACT_CSP,
+    "X-Content-Type-Options": "nosniff",
+  };
+}
+
 /** The runtime-provided type without parameters, or octet-stream when it is not a valid type. */
 export function safeMimeType(value: string): string {
   const type = value.split(";", 1)[0]!.trim().toLowerCase();

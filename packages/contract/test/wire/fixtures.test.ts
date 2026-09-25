@@ -83,6 +83,11 @@ describe("fixture coverage", () => {
       "ApprovalDecisionRequest",
       "CreateRoutineRequest",
       "UpdateSettingsRequest",
+      "DeviceSettingsPatch",
+      "DeviceSyncSetupRequest",
+      "PairingCodeRequest",
+      "PairRequest",
+      "MachinePairRequest",
       "ServerEvent",
       "ClientEvent",
     ]) {

@@ -121,16 +121,19 @@ struct ClampedNumberField: View {
   }
 }
 
-/// Inline explanatory or warning text under a control.
+/// Inline explanatory or warning text under a control. With `markdown`, `code` spans show as code.
 struct SettingsNote: View {
   let text: String
   var tone: Color = .secondary
+  var markdown = false
 
   var body: some View {
-    Text(text)
-      .font(.caption)
-      .foregroundStyle(tone)
-      .fixedSize(horizontal: false, vertical: true)
+    Group {
+      if markdown { Text(SettingsCallout.inlineMarkdown(text)) } else { Text(text) }
+    }
+    .font(.caption)
+    .foregroundStyle(tone)
+    .fixedSize(horizontal: false, vertical: true)
   }
 }
 

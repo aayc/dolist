@@ -76,6 +76,7 @@ packages/
                   control through the ddl-computer helper), threads/artifacts, tools, LLM client
   connectors/     MCP client: mcpServers config → ToolSpecs (stdio / streamable HTTP / SSE)
 evals/            Agent evals (safety verdicts, triage, latency); mock mode runs in CI
+deploy/           The always-on machine: linux/ (bundle, systemd units, setup.sh), azure/ (VM guide)
 scripts/          Repo tooling (secret scan, bench/bundle budgets, git hooks)
 docs/             Architecture, agent system, performance, security model, cross-platform plan
 ```
@@ -136,7 +137,8 @@ Docs index: `PROGRESS.md` (the handoff log: current state and decisions), `docs/
 `docs/AGENT_SYSTEM.md`,
 `docs/USER_JOURNEYS.md` (the living-list journeys and their tests),
 `docs/PERFORMANCE.md`, `docs/CROSS_PLATFORM.md`, `docs/SYNC.md` (devices sharing a vault, the
-agent lease), `docs/ALWAYS_ON.md` (design: the agent on an always-on machine), `docs/CI.md`, `SECURITY.md`, `CONTRIBUTING.md`, and package READMEs
+agent lease), `docs/ALWAYS_ON.md` (design: the agent on an always-on machine; setting one up:
+`deploy/linux/README.md`, `deploy/azure/README.md`), `docs/CI.md`, `SECURITY.md`, `CONTRIBUTING.md`, and package READMEs
 (`packages/storage`, `packages/connectors`, `packages/editor`, `packages/agent/src/safety`,
 `packages/agent/src/execution`, `apps/web` (the agent chat, whose pacing and activity wording the
 Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
@@ -171,10 +173,16 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
    via `globalThis` are fine). It runs in the browser, the daemon and future native shells.
 5. **Wire protocol lives in `packages/core/src/protocol.ts`.** Daemon and clients import the same
    types. Changing a shape = update both sides in the same change.
-6. **The daemon is local-only and authenticated.** Bind `127.0.0.1`, require the bearer token,
-   reject unexpected `Host`/`Origin` headers. Never add an unauthenticated endpoint that reads the
-   vault or triggers agent work. The same holds for every other listener (the Cursor harness's MCP
-   bridge: loopback, per-session random path and token, no `Origin`).
+6. **The daemon is local-only unless remote hosts are configured, and always authenticated.** It
+   binds `127.0.0.1` only. Other devices reach it only through a private-network proxy on the same
+   machine (e.g. `tailscale serve`), under a remote host that is configured (`remote.hosts`), never
+   inferred, and only with device credentials: a paired device's token, or a paired browser's
+   HttpOnly cookie sent by its own page. The master token (`daemon-token`) never leaves the
+   machine: a page on a remote Host never embeds it, and `?token=` works on loopback Hosts only.
+   Require a credential and reject unexpected `Host`/`Origin` headers. Never add an unauthenticated
+   endpoint that reads the vault or triggers agent work (`POST /api/pair` is the one route without
+   a credential: its single-use, rate-limited code is one). The same holds for every other listener
+   (the Cursor harness's MCP bridge: loopback, per-session random path and token, no `Origin`).
 7. **Agents never silently change the user's words.** An agent writes in a note only through
  `edit_note`: every line it writes ends with an agent marker (`%%agent:<thread>%%`) so it is
  visibly the agent's, its own lines go in directly, and changing or deleting the user's lines (or

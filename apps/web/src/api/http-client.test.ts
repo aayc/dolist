@@ -108,6 +108,20 @@ describe("HttpDaemonClient REST", () => {
     expect((error as HttpError).message).toBe("No such note");
   });
 
+  it("keeps a 429's Retry-After", async () => {
+    const { client } = setup(
+      () =>
+        new Response(JSON.stringify({ error: "rate_limited", message: "Too many" }), {
+          status: 429,
+          headers: { "content-type": "application/json", "retry-after": "12" },
+        }),
+    );
+    await expect(client.createPairingCode()).rejects.toMatchObject({
+      status: 429,
+      retryAfterSeconds: 12,
+    });
+  });
+
   it("uses the daily route with create and tolerates empty bodies", async () => {
     const { client, requests } = setup((url) =>
       url.includes("/api/daily/")
@@ -190,5 +204,97 @@ describe("HttpDaemonClient event stream", () => {
     expect(sockets[2]!.sent.map((s) => JSON.parse(s).type)).toEqual(["hello"]);
     client.disconnect();
     expect(client.connectionState).toBe("offline");
+  });
+});
+
+describe("HttpDaemonClient with a device cookie (a paired remote browser)", () => {
+  function cookieSetup(responder: (url: string, init: RequestInit) => Response) {
+    const requests: Captured[] = [];
+    const sockets: FakeSocket[] = [];
+    const onUnauthorized = vi.fn();
+    const client = new HttpDaemonClient({
+      baseUrl: "https://vm-name.tailnet-name.ts.net",
+      token: null,
+      onUnauthorized,
+      fetch: (async (url: string, init: RequestInit) => {
+        requests.push({ url, init });
+        return responder(url, init);
+      }) as unknown as typeof fetch,
+      createSocket: (url) => {
+        const socket = new FakeSocket(url);
+        sockets.push(socket);
+        return socket;
+      },
+    });
+    return { client, requests, sockets, onUnauthorized };
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("sends no Authorization header and lets the browser send the cookie", async () => {
+    const { client, requests } = cookieSetup(() => jsonResponse(200, { devices: [] }));
+    await client.listDevices();
+    await client.updateDevice({ placement: "always_on_machine" });
+    for (const { init } of requests) {
+      expect(init.headers).not.toHaveProperty("Authorization");
+      expect(init.credentials).toBe("same-origin");
+    }
+    expect(requests[1]).toMatchObject({
+      url: "https://vm-name.tailnet-name.ts.net/api/device",
+      init: { method: "PATCH", body: JSON.stringify({ placement: "always_on_machine" }) },
+    });
+  });
+
+  it("opens the socket without a token in the URL", () => {
+    const { client, sockets } = cookieSetup(() => jsonResponse(200, {}));
+    client.connect();
+    expect(sockets[0]!.url).toBe("wss://vm-name.tailnet-name.ts.net/ws");
+    client.disconnect();
+  });
+
+  it("reports a 401 once (the device was revoked) and stops the socket", async () => {
+    const { client, sockets, onUnauthorized } = cookieSetup(() =>
+      jsonResponse(401, { error: "unauthorized", message: "Missing or invalid bearer token" }),
+    );
+    client.connect();
+    sockets[0]!.open();
+    await expect(client.getDevice()).rejects.toMatchObject({ status: 401 });
+    await expect(client.listDevices()).rejects.toMatchObject({ status: 401 });
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    expect(client.connectionState).toBe("offline");
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(sockets).toHaveLength(1);
+  });
+
+  it("probes with a request when the socket drops, since a refused upgrade has no status", async () => {
+    let revoked = false;
+    const { client, requests, sockets, onUnauthorized } = cookieSetup(() =>
+      revoked ? jsonResponse(401, { error: "unauthorized" }) : jsonResponse(200, {}),
+    );
+    client.connect();
+    sockets[0]!.open();
+    revoked = true;
+    sockets[0]!.drop();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(requests.map((r) => r.url)).toEqual(["https://vm-name.tailnet-name.ts.net/api/health"]);
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it("with the embedded token, a 401 is just an error and nothing probes", async () => {
+    const { client, requests, sockets } = setup(() => jsonResponse(401, { error: "unauthorized" }));
+    client.connect();
+    sockets[0]!.open();
+    await expect(client.getDevice()).rejects.toMatchObject({ status: 401 });
+    expect(client.connectionState).toBe("online");
+    sockets[0]!.drop();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(requests).toHaveLength(1);
+    client.disconnect();
   });
 });

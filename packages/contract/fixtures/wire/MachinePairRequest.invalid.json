@@ -1,0 +1,44 @@
+[
+  {
+    "name": "plain http to the tailnet",
+    "value": { "url": "http://vm-name.tailnet-name.ts.net", "code": "K7PX4MQ9" },
+    "path": ["url"],
+    "code": "custom"
+  },
+  {
+    "name": "address with a path",
+    "value": { "url": "https://vm-name.tailnet-name.ts.net/api", "code": "K7PX4MQ9" },
+    "path": ["url"],
+    "code": "custom"
+  },
+  {
+    "name": "address with credentials",
+    "value": { "url": "https://user:secret@vm-name.tailnet-name.ts.net", "code": "K7PX4MQ9" },
+    "path": ["url"],
+    "code": "custom"
+  },
+  {
+    "name": "an IP address",
+    "value": { "url": "https://100.64.0.1", "code": "K7PX4MQ9" },
+    "path": ["url"],
+    "code": "custom"
+  },
+  {
+    "name": "missing code",
+    "value": { "url": "https://vm-name.tailnet-name.ts.net" },
+    "path": ["code"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "malformed code",
+    "value": { "url": "https://vm-name.tailnet-name.ts.net", "code": "1234" },
+    "path": ["code"],
+    "code": "custom"
+  },
+  {
+    "name": "extra key",
+    "value": { "url": "https://vm-name.tailnet-name.ts.net", "code": "K7PX4MQ9", "token": "x" },
+    "path": [],
+    "code": "unrecognized_keys"
+  }
+]

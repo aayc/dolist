@@ -68,6 +68,15 @@ input:is([type="checkbox"], [type="radio"], [type="range"]),
   cursor: default;
 }
 
+/* A disabled control's reason (DisabledReason): the wrapper takes the pointer for its tooltip. */
+.disabled-reason {
+  display: inline-flex;
+}
+
+.disabled-reason > :disabled {
+  pointer-events: none;
+}
+
 /* The app is chrome; the text it shows (notes, messages, artifacts, values) stays selectable. */
 .app {
   user-select: none;

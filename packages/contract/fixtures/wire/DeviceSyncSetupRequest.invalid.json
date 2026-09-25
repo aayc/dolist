@@ -1,0 +1,38 @@
+[
+  {
+    "name": "plain http to another machine",
+    "value": { "url": "http://sync.example.com", "vault": "v_k3j9x0q2m1abc4d5e6f7" },
+    "path": ["url"],
+    "code": "custom"
+  },
+  {
+    "name": "credentials in the URL",
+    "value": { "url": "https://user:secret@sync.example.com", "vault": "v_k3j9x0q2m1abc4d5e6f7" },
+    "path": ["url"],
+    "code": "custom"
+  },
+  {
+    "name": "vault id with a space",
+    "value": { "url": "https://sync.example.com", "vault": "my vault" },
+    "path": ["vault"],
+    "code": "invalid_format"
+  },
+  {
+    "name": "missing vault",
+    "value": { "url": "https://sync.example.com" },
+    "path": ["vault"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "blank token",
+    "value": { "url": "https://sync.example.com", "vault": "v_other", "token": "  " },
+    "path": ["token"],
+    "code": "too_small"
+  },
+  {
+    "name": "extra key",
+    "value": { "url": "https://sync.example.com", "vault": "v_other", "deviceName": "Laptop" },
+    "path": [],
+    "code": "unrecognized_keys"
+  }
+]

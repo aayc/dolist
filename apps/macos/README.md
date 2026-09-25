@@ -43,7 +43,7 @@ future iPhone app too.
 | `Sources/DailyDoListApp/System` | OS integration: launch at login (`SMAppService`), the global hotkey (Carbon), shortcut parsing, conflicts with macOS shortcuts, and the computer-use permissions with their guide panel. |
 | `Packages/DailyDoListModels` (iOS) | Swift mirror of the wire protocol (`packages/core/src/protocol.ts`), checked against the `@ddl/contract` fixtures. |
 | `Packages/DailyDoListClient` (iOS) | `DaemonClient`: `HTTPDaemonClient` (REST + WebSocket, reconnects and resyncs) and `InMemoryDaemonClient` (the demo and test fake). |
-| `Packages/DailyDoListDomain` (iOS) | Pure domain logic ported from `@ddl/core`: dates and daily notes, task parsing and tracking, line anchors, agent-line markers, three-way merges, wikilinks, paths, fuzzy matching. |
+| `Packages/DailyDoListDomain` (iOS) | Pure domain logic ported from `@ddl/core`: dates and daily notes, task parsing and tracking, line anchors, agent-line markers, three-way merges, wikilinks, paths, fuzzy matching, and the remote access validators. |
 | `Packages/DailyDoListEditor` | The TextKit markdown editor: live preview, clickable checkboxes, agent badges, and vim mode (it hosts `DailyDoListVim`). |
 | `Packages/DailyDoListVim` (iOS) | Vim mode: a port of the web editor's vim.js and its CodeMirror 6 adapter, checked against the web app's vim vectors; hosts implement `VimEditor` ([README](Packages/DailyDoListVim/README.md)). |
 | `Packages/DailyDoListAgent` | Agent state and UI: inbox, threads (the live chat: [The agent chat](#the-agent-chat)), the orchestrator's chat ([The orchestrator's chat](#the-orchestrators-chat)), routines ([Routines](#routines)), approval cards, artifacts, notifications, menu bar, Dock badge. |
@@ -63,7 +63,7 @@ future iPhone app too.
 | Test every package and the shell | `apps/macos/scripts/test.sh` |
 | Test one package | `apps/macos/scripts/test.sh DailyDoListDaemon` (or `app`) |
 | Filter tests | `apps/macos/scripts/test.sh DailyDoListModels -- --filter ContractFixture` |
-| Integration tests | `pnpm --filter @ddl/daemon build && apps/macos/scripts/test.sh integration` |
+| Integration tests | `pnpm --filter @ddl/daemon --filter @ddl/sync build && apps/macos/scripts/test.sh integration` |
 | Format / lint Swift (swift-format, `.swift-format`) | `pnpm lint:fix` / `node scripts/lint.mjs --all --only swift` |
 | Package the app | `apps/macos/scripts/build-app.sh [--release] [--with-daemon] [--zip] [--output DIR] [--open]` |
 | Re-render the icon source | `swift apps/macos/scripts/make-icon.swift --png apps/macos/Resources/AppIcon-1024.png` |
@@ -217,6 +217,82 @@ a thread, so a routine has its own inbox of runs, and a finished run can notify 
   `MainWindowView`. Demo mode has four routines (one paused, one with a schedule it can't read)
   with past runs, and runs Run Now like the daemon.
 
+## Where the agent runs
+
+Each device chooses where its orchestrator runs: here, or on the always-on machine that keeps
+working while the Mac sleeps ([docs/ALWAYS_ON.md](../../docs/ALWAYS_ON.md)). The daemon reports
+this device's choice, who runs the agent now and the relay to the machine in the agent status
+(`placement`), and applies a change live (`PATCH /api/device`).
+
+- **The toggle:** under the agent panel's header, "Orchestrator [This device | Always-on
+  machine]" (a native segmented control) is one click away. Switching shows the handover's note
+  as it happens ("Handing the agent to vm-name…", "Taking over from vm-name…"). While the agent is
+  held on this device (no always-on machine set up, or no sync) the control is disabled: its
+  tooltip says why, a line under it says what it's waiting for, and **Set Up…** opens the right
+  section of Settings. When the machine can't be reached, **Run It on This Device Instead** takes
+  it back; when this device isn't paired, **Pair…** opens Settings, and **Pair Again…** when the
+  machine no longer accepts it. "Connecting to vm-name…" shows while the relay connects. On the
+  always-on machine itself the row just says "This is the always-on machine".
+- **Commands:** **Agent → Run the Orchestrator on This Device** and **… on the Always-On
+  Machine** (also in the palette, and `:obcommand agent.runHere` / `agent.runOnMachine`). They're
+  checked items: the current place is checked and can't be chosen again, and both are off while
+  the agent is held here. No shortcut: none fits the command table without clashing.
+- **Read-only:** set to the always-on machine, this device relays the agent's reads and actions
+  to it. When the relay can't reach the machine, this device isn't paired with it (or the
+  machine no longer accepts it), another device runs the agent, or the machine isn't running it,
+  the daemon serves the synced copy and answers actions with 503. The panel then shows a banner
+  ("The always-on machine can't be reached — showing the last synced state"), and every action
+  that would fail stays visible but disabled, with the reason in its tooltip: Approve and Deny,
+  the chat bar ("Replies are off while this is read-only") and its Stop, a thread's Stop and
+  Retry, the orchestrator's Stop, Run Now and **Stop Task**. During a handover and while the
+  relay connects, the location line says what's happening and there's no banner; actions work
+  while it connects (the daemon forwards them already). An action tried anyway shows the
+  daemon's message in the panel's toast. These are the web app's rules and words
+  (`readOnlyReason`, `availabilityBanner`).
+- **Settings → Always-On** has five sections (a segmented control; the toggle's links open the
+  right one):
+  - **Location:** the same choice, who runs the agent now, and this device's readiness (agent,
+    model credential, browser, desktop control, connectors) with a fix for each problem
+    (Agent Settings…, Set Up… for computer use, Connectors…).
+  - **Machine:** pair with the always-on machine (its address, a code it issued, an optional
+    name), then what it reports: reachable, version, where its agent runs, its readiness and
+    what the last check found wrong. **Check Now**, **Pair Again…** (a new code, for when the
+    machine no longer accepts this device), **Forget This Machine…** (drops this device's
+    credential only) and **Open Its Web App**. Its status refreshes every 15 s while the section
+    shows.
+  - **Sync:** the sync service's address, the vault and the vault token. The token is
+    write-only: "Saved" with **Replace…**, never shown. The sync status, and **Turn Off Sync…**.
+  - **Devices:** this device's name, the devices paired with this daemon with **Revoke…**, and
+    **Get a Pairing Code**: `XXXX-XXXX` with a copy button, a countdown to its expiry and the
+    address to open on the new device. No QR code yet.
+  - **Remote Access:** the names this daemon answers to besides this Mac (checked like the
+    daemon checks them: a DNS name with an optional port, no scheme, path or IP, at most 8).
+
+  A field an environment variable sets (`DDL_AGENT_PLACEMENT`, `DDL_REMOTE_HOSTS`,
+  `DDL_SYNC_*`: the daemon's `lockedByEnv`) shows read-only and names the variable to change.
+  Inputs are checked as you type with `DailyDoListDomain`'s port of the core's validators, and
+  every error the daemon can answer has its own inline message (a code the machine refused is
+  not a rejected token; an unreachable machine, a limit reached, a locked field each say so).
+- **What the daemon does** (the integration tests check it): without sync the agent is held
+  here as `no_sync` (checked before a missing machine); with sync and no machine yet, the device
+  that asked first keeps the agent, so this one can be held here while another runs it (the
+  control then names that device). A change shows in a re-fetch of the status at once, with the
+  "Handing the agent to …" note; the machine takes the agent up to ~40 s later (the lease's
+  renewals), and a device set to run it itself takes it back the same way ("Taking over from
+  …"). The relay reports `off` while this device lets go of the lease, then `connecting` and
+  `connected`. While connected the status is the machine's agent under this device's placement,
+  so `problem` clears once the machine runs it; the machine's thread, approval and routine
+  events reach this device's clients, and this device's own routine events are muted. Stopping
+  the machine makes it `unreachable` at once, and it reconnects on its own when the machine is
+  back (with backoff, up to 30 s). Revoked on the machine, this device is `not_paired` with "The
+  always-on machine no longer accepts this device. Pair it again.", and the machine's check
+  says so too; after Forget it's "This device isn't paired with the always-on machine.".
+- **Code:** in `DailyDoListAgent`, `OrchestratorLocation` (what the control shows),
+  `AgentReadOnly`, `AgentStore+Placement` (`moveOrchestrator(to:)`, `canMoveOrchestrator(to:)`,
+  `readOnly`), `OrchestratorLocationBar` and `ReadOnlyBanner`. In the app, `RemoteSettingsStore`
+  (device settings, sync, the machine, paired devices, pairing codes, and the messages for each
+  error code) and `Settings/AlwaysOn/`.
+
 ## Vim mode
 
 Turn it on with **Vim key bindings** in Settings → Appearance, View → Vim Key Bindings, or "Toggle
@@ -254,9 +330,10 @@ which is Obsidian's: `DailyDoListVim` is a port of the same engine (vim.js), and
 
 `--demo` (or `DDL_DEMO=1`) runs the whole UI against `InMemoryDaemonClient`: sample notes, routines
 with past runs, and a simulated agent that streams, asks for approvals and finishes tasks and runs
-in real time. There's no
-daemon, no Node and no network, which makes it good for trying the app, UI work and screenshots.
-Connection settings apply on the next normal launch.
+in real time. The demo syncs and has a paired always-on machine (`vm-name`), so the orchestrator
+toggle and Settings → Always-On work, handovers included. There's no daemon, no Node and no
+network, which makes it good for trying the app, UI work and screenshots. Connection settings
+apply on the next normal launch.
 
 ## Managed vs. external daemon
 
@@ -496,8 +573,21 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   port) and the tests drive `HTTPDaemonClient`. They cover REST (daily notes from templates,
   optimistic concurrency and 409s, soft deletes, folders, search, settings), WebSocket events
   (hello, echo tagging, external edits), agent flows (streamed threads, artifacts, approve, deny,
-  retry, cancel), and a supervisor restart mid-stream (reconnect + resync). They're skipped with
-  a message when Node 24.4+ or the built daemon is missing.
+  retry, cancel), and a supervisor restart mid-stream (reconnect + resync). The always-on tests
+  add device settings (live changes, `lockedByEnv` from a second daemon's environment and its 409,
+  the validation bodies the app parses), pairing a device from the daemon's side (a code, `pair`
+  without the token, the device token as a bearer and on the WebSocket in the header or the
+  loopback `?token=`, revoking it: 401, and its sockets close with 1008), the machine link (a
+  second daemon as the always-on machine, paired over loopback: pair, check, Forget,
+  `settings.changed`, 429 with `Retry-After`), and placement across two daemons syncing through
+  the real sync service (`no_sync`, then `no_machine`, the takeover note, handing the agent to the
+  machine; about 70 s). The relay suite pairs a laptop set to the always-on machine and acts
+  through it: the orchestrator's chat, an approval raised on the machine and decided from the
+  laptop, a routine written on the laptop and run on the machine, and their events on the
+  laptop's socket; then the machine stops (the synced copy answers reads, actions get 503) and
+  comes back, and a second test revokes, pairs again and forgets (about 35 s each). They're
+  skipped with a message when Node 24.4+ or the built daemon is missing (the two-daemon suites
+  also when the sync service isn't built).
 - **Vim**: `DailyDoListVim` replays the web app's vim vectors against its reference buffer, and
   `DailyDoListEditor` replays all of them again through the real editor, with live preview both
   off and on. Vim-mode tests drive the editor with real `NSEvent`s (typing, undo grouping, IME,
@@ -517,6 +607,14 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   `RoutineViewTests` (what each screen offers, and the `routines-*` snapshots), the client's
   `InMemoryRoutineTests` and REST cases, and in the app `RoutineCommandTests`, the tooltip checks
   and the `main-window-routine*` snapshots.
+- **Where the agent runs**: the client's `InMemoryRemoteTests` (placement, handovers, the relay's
+  states and 503s, a revoked device, device settings, sync, pairing, the machine) and REST cases
+  (`pairing_rejected`, the WebSocket's header auth), the agent package's `PlacementTests` (what
+  the toggle shows in each state, moving the orchestrator, its tooltips, the `orchestrator-*`
+  snapshots) and `ReadOnlyTests` (the web's rules: when there's a banner, disabled actions and
+  their reasons, `thread-read-only`), and in the app `AlwaysOnCommandTests`,
+  `RemoteSettingsTests` (every action and error message) and the `settings-always-on-*`
+  snapshots.
 - **Computer use access**: `ComputerAccessTests` run the permission flow against fakes (the
   prompt before the System Settings link, the links' fallbacks, the guide's steps, polling that
   stops, the relaunch's order, the banner's rules and its dismissal), and the snapshots draw the

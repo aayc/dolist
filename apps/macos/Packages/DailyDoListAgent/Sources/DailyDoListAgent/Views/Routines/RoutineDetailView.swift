@@ -18,7 +18,7 @@ struct RoutineDetailView: View {
         VStack(spacing: 0) {
           RoutineHeader(
             routine: routine, now: now, isBusy: store.busyRoutineIds.contains(routineId),
-            onRun: run, onSetPaused: setPaused,
+            readOnlyReason: store.readOnly?.reason, onRun: run, onSetPaused: setPaused,
             onEdit: actions.edit.map { edit in { edit(routine) } })
           callouts(routine)
           AgentHairline()
@@ -122,6 +122,8 @@ struct RoutineHeader: View {
   let routine: Routine
   let now: Date
   let isBusy: Bool
+  /// Run Now can't reach the agent from this device.
+  var readOnlyReason: String?
   let onRun: () -> Void
   let onSetPaused: (Bool) -> Void
   let onEdit: (() -> Void)?
@@ -175,10 +177,13 @@ struct RoutineHeader: View {
         .buttonStyle(
           ChromeButtonStyle(horizontalPadding: 9, verticalPadding: 3, showsBorder: true)
         )
-        .disabled(isBusy)
         .tooltip(
-          "Run now", detail: extraRunsDetail, whenDisabled: "Working on it…",
-          accessibility: .none)
+          TooltipContent("Run now", detail: extraRunsDetail),
+          whenDisabled: readOnlyReason.map { TooltipContent("Run now", detail: $0) }
+            ?? TooltipContent("Working on it…"),
+          accessibility: .none
+        )
+        .disabled(isBusy || readOnlyReason != nil)
       }
       Text(verbatim: details)
         .font(.caption)

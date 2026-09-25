@@ -180,6 +180,7 @@ struct ChatView: View {
     case .approval(let item):
       context.approval = store.approvals[item.approvalId]
       context.isDeciding = store.decidingApprovalIds.contains(item.approvalId)
+      context.readOnlyReason = store.readOnly?.reason
       context.announces =
         context.approval?.isPending == true && reveal.needsAnnouncement(item.id)
     case .artifact(let item):

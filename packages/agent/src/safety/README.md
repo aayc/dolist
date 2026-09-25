@@ -136,15 +136,37 @@ Then per family:
   local code (`python3 script.py`, `npm test`, `./run.sh`) is uncertain by design: its effects are
   invisible.
 - **Files** (`rules/files.ts`, `rules/path-rules.ts`): reads of keys/credential stores are denied,
-  other secret-bearing files need approval; writes inside the workspace or the temp area are fine,
+  other secret-bearing files need approval. Credential stores are the folders that exist to hold
+  logins, with everything in them (`~/.aws`, `~/.azure`, `~/.gnupg`, `~/.password-store`,
+  `~/.kube`, `~/.config/{gh,gcloud,op}`, the Cursor CLI's `~/.local/share/cursor-agent`, browser
+  profiles, `~/Library/Keychains`), and the login files among others (`~/.docker/config.json`,
+  `~/.cursor/mcp.json`, `~/.netrc`, …); home paths match in any case and through
+  `/System/Volumes/Data`. Shell histories (`secrets.shell-history`) outside the workspace and the
+  temp area are hard denies too. Reading a `.env` file outside them (`secrets.env-file`) follows
+  the approval policy (an agent may need a project's settings to run it); sending one off the
+  machine stays a hard deny (`secrets.exfiltration`).
+  A read of a folder or a glob counts as reading all it contains
+  (recursive searches, archives, copies, syncs, `find` feeding a reader): the home folder itself, a
+  folder above it or a glob at its top (`~/.*`, `~/*`) is a hard deny (`secrets.home-folder`), and
+  so is a folder that holds logins among other things (`~/Library`, `~/Library/Application Support`,
+  `~/.config`, `~/.local`; `secrets.credential-folder`), whole or spanned by a glob. A whole
+  folder of personal files (`~/Documents`, `~/Desktop`, `~/Downloads`, …) needs approval
+  (`privacy.personal-folder`); one specific file, a subfolder, a project folder and listing names
+  (`ls ~`, `find ~ -name x`, a connector's `list_directory`) stay allowed. A recursive search for
+  passwords or tokens outside the workspace needs approval from the shell as from the grep tool.
+  Writes inside the workspace or the temp area are fine,
   elsewhere they need approval (stricter for startup files, credentials and system paths). The
   app's own files are a hard deny (`secrets.app-config-write`): writing, deleting, moving,
   re-permissioning or linking to anything in a `.daily-do-list/` folder (the vault's sidecar with
   the settings and approval state, and the default `$DDL_HOME`) except the agents' `workspaces/`,
   or in the configured `$DDL_HOME` (`ActionContext.appHome`, from the runtime), temp area included.
+  Reading `$DDL_HOME`'s credentials is a hard deny too (`secrets.credential-store`): `.env`, the
+  token files (`daemon-token`, `sync-token`, `machine-token`), the paired devices' `devices.json`,
+  and `$DDL_HOME` itself or a glob right inside it (recursive, archiving and wildcard readers).
+  Agents' shells inherit `$DDL_HOME`, so the shell parser reads it as the app's home.
   Written content is scanned so a dangerous script cannot be staged in the workspace and run later,
   and a written file or inline code (`python3 -c`, `node -e`, typed terminal text) that names the
-  app's own files is a hard deny too. Paths code builds at runtime can't be seen.
+  app's own files or `DDL_HOME` is a hard deny too. Paths code builds at runtime can't be seen.
 - **Note edits** (`rules/notes.ts`, the `edit_note` tool): the agent's own text goes into the
   user's note directly — new lines, and lines it wrote before (marked `%%agent:<thread>%%`).
   Changing or deleting the user's lines or checking their boxes needs approval; writing the app's
@@ -158,7 +180,7 @@ Then per family:
 
 ## Rules
 
-Stable ids, grouped by decision (generated from `SAFETY_RULES`; 140 rules).
+Stable ids, grouped by decision (generated from `SAFETY_RULES`; 152 rules).
 
 | Rule id | Category | Decision | Risk | Matches |
 | --- | --- | --- | --- | --- |
@@ -166,11 +188,15 @@ Stable ids, grouped by decision (generated from `SAFETY_RULES`; 140 rules).
 | `network.app-self-access` | system | deny | critical | Operates the Daily Do List app itself (an agent could approve its own actions or change its settings) |
 | `notes.edit.hidden-path` | system | deny | critical | Writes to the app's hidden state instead of a note |
 | `secrets.app-config-write` | system | deny | critical | Changes the app's own settings, keys, connector config or approval state (an agent could change its approval policy or grant itself permissions) |
-| `secrets.credential-store` | credentials | deny | critical | Reads a password store, keychain, browser credential database or the app's API keys |
+| `secrets.credential-folder` | credentials | deny | critical | Reads a whole folder that holds saved logins and private data (~/Library, ~/.config, …) |
+| `secrets.credential-store` | credentials | deny | critical | Reads saved logins: a password store, keychain, browser credential database, cloud, cluster, Docker or Cursor credentials, or the app's API keys and tokens |
 | `secrets.embedded-access` | credentials | deny | critical | Reads private keys, keychains or credential stores from code or typed text |
+| `secrets.env-file` | credentials | require_approval | high | Reads a .env file outside the task workspace (it holds API keys and passwords) |
 | `secrets.exfiltration` | credentials | deny | critical | Sends secrets (keys, .env files, credentials, environment variables) over the network |
 | `secrets.gpg-export` | credentials | deny | critical | Exports GPG secret keys |
+| `secrets.home-folder` | credentials | deny | critical | Reads your whole home folder, including SSH keys and cloud credentials |
 | `secrets.keychain-dump` | credentials | deny | critical | Dumps passwords from the macOS keychain |
+| `secrets.shell-history` | credentials | deny | critical | Reads your shell history (commands you typed, often with passwords and tokens in them) |
 | `secrets.ssh-private-key` | credentials | deny | critical | Reads a private SSH key |
 | `shell.hardline.embedded` | destructive | deny | critical | Runs a catastrophic command hidden inside code or typed text |
 | `shell.hardline.fork-bomb` | system | deny | critical | Runs a fork bomb |
@@ -200,6 +226,7 @@ Stable ids, grouped by decision (generated from `SAFETY_RULES`; 140 rules).
 | `credentials.cloud-metadata` | credentials | require_approval | high | Reads a cloud instance-metadata endpoint (serves live credentials) |
 | `credentials.credential-file-write` | credentials | require_approval | high | Overwrites keys or credential files |
 | `credentials.env-dump` | credentials | require_approval | medium | Prints environment variables that may contain API keys |
+| `credentials.runtime-folder-read` | credentials | require_approval | high | Reads a whole folder chosen when the command runs, which could be your home folder |
 | `credentials.secret-and-network` | credentials | require_approval | critical | Reads secrets and uses the network in the same command |
 | `credentials.secret-in-request` | credentials | require_approval | critical | Sends a secret (API key, token, password) in a network request |
 | `credentials.secret-in-url` | credentials | require_approval | high | Puts a secret or credentials into a URL |
@@ -259,10 +286,14 @@ Stable ids, grouped by decision (generated from `SAFETY_RULES`; 140 rules).
 | `privacy.personal-data` | privacy | require_approval | high | Reads your messages, mail, photos or browsing data |
 | `privacy.personal-data-in-url` | privacy | require_approval | high | Puts a card number or ID number into a URL |
 | `privacy.personal-field` | privacy | require_approval | medium | Shares personal details (ID numbers, date of birth, phone, address) |
+| `privacy.personal-folder` | privacy | require_approval | medium | Reads a whole folder of your personal files (Documents, Desktop, Downloads, …) |
 | `privacy.screen-capture` | privacy | require_approval | medium | Captures your screen or camera from the shell |
 | `publishing.post-control` | publishing | require_approval | high | Posts, publishes, shares, uploads or reacts publicly |
 | `publishing.shell-publish` | publishing | require_approval | high | Publishes code, packages or deployments |
 | `publishing.social-api` | publishing | require_approval | high | Posts to a social network or code host |
+| `routines.change` | file_write | require_approval | medium | Changes what a routine does or when it runs, or resumes it |
+| `routines.create` | file_write | require_approval | medium | Creates a routine: work the agent will do on its own, on a schedule |
+| `routines.file-edit` | file_write | require_approval | medium | Edits a routine's file (what the agent does on its own, and when) |
 | `system.app-automation` | system | require_approval | high | Scripts other apps on your Mac (AppleScript, Shortcuts) |
 | `system.code-hazard-write` | system | require_approval | high | Writes a script that deletes system data, reads secrets or runs downloaded code |
 | `system.config-change` | system | require_approval | high | Changes system, network or global tool configuration |
@@ -296,6 +327,9 @@ Stable ids, grouped by decision (generated from `SAFETY_RULES`; 140 rules).
 | `mcp.read-action` | read | allow | low | Connector tool that only reads (get, list, search, …) |
 | `notes.edit.own` | file_write | allow | low | Adds its own text to a note, or changes lines it wrote |
 | `notes.read` | read | allow | low | Reads or searches your notes |
+| `routines.pause` | file_write | allow | low | Pauses a routine |
+| `routines.read` | read | allow | low | Lists routines and their last results |
+| `routines.run` | compute | allow | low | Runs a routine now (each of its actions is checked as usual) |
 | `shell.compute` | compute | allow | low | Runs computations (calculators, text processing, inline code without side effects) |
 | `shell.read-only` | read | allow | low | Runs read-only shell commands (listing, reading, searching, git status, HTTP GET) |
 | `shell.workspace-write` | file_write | allow | low | Creates or changes files inside the task workspace |
@@ -442,7 +476,13 @@ run where the judge never answered does not pass.
 - Running local code (scripts, tests, build tools) cannot be verified statically and needs the
   judge or approval; written content is scanned for obvious hazards only.
 - Symlinks are not resolved (no file system access); creating links that point outside the
-  workspace needs approval instead.
+  workspace needs approval instead (a link to the whole home folder or a credential folder is a
+  hard deny, since later reads through it look like workspace reads).
+- A folder only known at runtime (`d=~; tar czf x.tgz $d`, `for d in */; do rg x "$d"; done`)
+  can't be placed, so recursive searches, archives and recursive copies of it need approval
+  (`credentials.runtime-folder-read`) rather than being denied; a single file in a variable is
+  read like any unknown path. A recursive read of an ordinary project folder reads the `.env`
+  files in it without asking.
 - MCP tools are classified by name and arguments; annotations are hints and cannot relax rules.
 - Under `run_everything` (and `ask_high_risk` for medium-risk code), programs the agent writes and
   runs are not inspected while they run: code that builds the path to the app's settings at

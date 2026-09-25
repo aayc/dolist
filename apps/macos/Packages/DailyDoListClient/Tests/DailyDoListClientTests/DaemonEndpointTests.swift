@@ -36,6 +36,27 @@ struct DaemonEndpointTests {
         == "http://127.0.0.1:7331/api/notes/a%20b.md")
   }
 
+  @Test func onlyLoopbackDaemonsGetTheTokenInTheWebSocketURL() throws {
+    for base in ["http://127.0.0.1:7331", "http://localhost:7331", "http://[::1]:7331"] {
+      let endpoint = DaemonEndpoint(baseURL: try #require(URL(string: base)), token: "abc123")
+      #expect(endpoint.isLoopback, "\(base)")
+      #expect(endpoint.webSocketURL.query == "token=abc123")
+      #expect(endpoint.webSocketRequest.value(forHTTPHeaderField: "Authorization") == nil)
+    }
+    let remote = DaemonEndpoint(
+      baseURL: try #require(URL(string: "https://vm-name.tailnet-name.ts.net")), token: "abc123")
+    #expect(!remote.isLoopback)
+    #expect(remote.webSocketURL.absoluteString == "wss://vm-name.tailnet-name.ts.net/ws")
+    #expect(remote.webSocketRequest.url == remote.webSocketURL)
+    #expect(remote.webSocketRequest.value(forHTTPHeaderField: "Authorization") == "Bearer abc123")
+    // An address that only looks local is remote too.
+    for base in ["http://0.0.0.0:7331", "http://192.168.1.20:7331", "http://localhost.example"] {
+      let endpoint = DaemonEndpoint(baseURL: try #require(URL(string: base)), token: "t")
+      #expect(!endpoint.isLoopback, "\(base)")
+      #expect(endpoint.webSocketURL.query == nil)
+    }
+  }
+
   @Test func discoverReadsAndTrimsTheToken() throws {
     let home = try TempHome()
     defer { home.cleanup() }

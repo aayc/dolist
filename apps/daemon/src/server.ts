@@ -1,54 +1,57 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { homedir } from "node:os";
-import type { AgentRuntime, ExecutionProvider } from "@ddl/agent";
+import { join } from "node:path";
 import type { ConnectorToolSource } from "@ddl/connectors";
 import {
   type AppSettings,
   createConsoleLogger,
+  debounce,
   type Logger,
-  type SyncStatusResponse,
   type Unsubscribe,
-  withTimeout,
 } from "@ddl/core";
 import type { StorageProvider } from "@ddl/storage";
 import { getRequestListener } from "@hono/node-server";
-import {
-  AgentLease,
-  agentLeaseClient,
-  LEASE_CHECKING_PROBLEM,
-  type LeaseTimings,
-} from "./agent-lease";
+import { LEASE_CHECKING_PROBLEM, type LeaseTimings } from "./agent-lease";
+import { AgentSupervisor } from "./agent-supervisor";
 import { createApp } from "./app";
 import { AttributedStorage } from "./attributed-storage";
 import { type DaemonConfig, loadConfig, summarizeConfig } from "./config";
+import { DeviceSettings, deviceSettingsFiles } from "./device-settings";
 import { errorMessage } from "./errors";
+import { secretFile } from "./home-files";
 import { displayPath } from "./home-paths";
 import { LeasedAgentRuntime } from "./leased-runtime";
-import { disabledSyncStatusResponse, toSyncStatusResponse } from "./routes/sync";
+import { MACHINE_TOKEN_FILE, MachineLink } from "./machine-link";
+import { PairedDeviceStore } from "./paired-devices";
+import { ReadinessMonitor, systemReadinessProbes } from "./readiness";
+import type { LinkTimings } from "./relay/link";
+import { AgentRelay } from "./relay/relay";
+import { createRemoteHosts } from "./remote-hosts";
 import { createSecurityPolicy } from "./security";
-import { createSettingsStore } from "./settings-store";
-import { type PreparedSync, prepareSync } from "./sync-setup";
+import { createSettingsStore, SETTINGS_PATH, type SettingsStore } from "./settings-store";
+import { SyncController } from "./sync-controller";
+import { loadOrCreateDevice } from "./sync-setup";
 import { createSystemSettingsOpener } from "./system-settings";
 import { loadOrCreateToken } from "./token";
 import { DAEMON_VERSION } from "./version";
 import {
   createAgentStack,
   createConnectors,
-  createSync,
   createVaultStorage,
   resolveVaultSearch,
-  type SyncHandle,
   settingsDefaults,
 } from "./wiring";
 import { WriteTracker } from "./write-tracker";
 import { attachWebSocketHub, type WebSocketHub } from "./ws";
 
-/** Loopback only: agents can act on this machine, so the daemon is never reachable remotely. */
+/**
+ * Loopback only: agents can act on this machine. Other devices reach the daemon only through a
+ * private-network proxy on this machine (`tailscale serve`), under a configured remote host.
+ */
 export const BIND_HOST = "127.0.0.1";
 const HTTP_CLOSE_GRACE_MS = 2_000;
-/** A sync pass run around agent handovers (before starting, after stopping) is bounded by this. */
-const HANDOVER_SYNC_TIMEOUT_MS = 15_000;
+const SETTINGS_RELOAD_DEBOUNCE_MS = 100;
 
 type FetchCallback = Parameters<typeof getRequestListener>[0];
 
@@ -59,6 +62,8 @@ export interface StartDaemonOptions {
   logger?: Logger;
   /** Agent lease timings (tests shorten them). */
   leaseTimings?: Partial<LeaseTimings>;
+  /** The relay's link to the machine (tests shorten its backoff). */
+  relayLinkTimings?: Partial<LinkTimings>;
 }
 
 export interface RunningDaemon {
@@ -71,13 +76,15 @@ export interface RunningDaemon {
 interface Resources {
   storage?: StorageProvider;
   connectors?: ConnectorToolSource;
-  execution?: ExecutionProvider | null;
-  runtime?: AgentRuntime;
-  leasedRuntime?: LeasedAgentRuntime;
-  lease?: AgentLease;
-  sync?: SyncHandle | null;
+  runtime?: LeasedAgentRuntime;
+  readiness?: ReadinessMonitor;
+  machine?: MachineLink;
+  supervisor?: AgentSupervisor;
+  relay?: AgentRelay;
+  sync?: SyncController;
   server?: Server;
   hub?: WebSocketHub;
+  devices?: PairedDeviceStore;
   unsubscribes: Unsubscribe[];
 }
 
@@ -90,6 +97,12 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
   const resources: Resources = { unsubscribes: [] };
   try {
     const token = await loadOrCreateToken(config.tokenPath, logger);
+    const devices = await PairedDeviceStore.open({
+      path: config.pairedDevicesPath,
+      logger: logger.child({ component: "pairing" }),
+    });
+    resources.devices = devices;
+    const remoteHosts = createRemoteHosts(config.remoteHosts);
     const writes = new WriteTracker();
 
     const storage = await createVaultStorage(config, logger);
@@ -102,57 +115,99 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
 
     const connectors = await createConnectors(config, logger);
     resources.connectors = connectors;
-    const prepared = await prepareSync({
-      config,
-      env,
-      logger: logger.child({ component: "sync" }),
-    });
+    const device = await loadOrCreateDevice(config.devicePath, logger);
     const agentStorage = new AttributedStorage(storage, writes, { origin: "agent" });
-    const createStack = (current: AppSettings) =>
-      createAgentStack({
-        config,
-        env,
-        storage: agentStorage,
-        settings: current,
-        connectors,
-        logger,
-      });
-    // Devices sharing a vault through the sync service run the agent on one of them only.
-    const leasedRuntime =
-      prepared.remote && config.agentMode !== "off"
-        ? new LeasedAgentRuntime({
-            mode: config.agentMode,
-            settings: settings.get(),
-            connectors,
-            createStack,
-            storage: agentStorage,
-            problem: prepared.remote.problem ?? LEASE_CHECKING_PROBLEM,
-            logger: logger.child({ component: "agent" }),
-          })
-        : undefined;
-    let runtime: AgentRuntime;
-    if (leasedRuntime) {
-      runtime = leasedRuntime;
-      resources.leasedRuntime = leasedRuntime;
-    } else {
-      const agent = await createStack(settings.get());
-      runtime = agent.runtime;
-      resources.execution = agent.execution;
-    }
-    resources.runtime = runtime;
-
-    const sync = prepared.target
-      ? await createSync({
-          target: prepared.target,
-          primary: new AttributedStorage(storage, writes, { origin: "sync" }),
+    let supervisor: AgentSupervisor | undefined;
+    // The real runtime exists only while this device runs the agent (see AgentSupervisor).
+    const runtime = new LeasedAgentRuntime({
+      mode: config.agentMode,
+      settings: settings.get(),
+      connectors,
+      createStack: (current: AppSettings) =>
+        createAgentStack({
+          config,
+          env,
+          storage: agentStorage,
+          settings: current,
+          connectors,
           logger,
-        })
-      : null;
+          leaseEpoch: () => supervisor?.heldEpoch ?? null,
+        }),
+      storage: agentStorage,
+      problem: LEASE_CHECKING_PROBLEM,
+      statusExtras: (status) => {
+        const current = readiness.current(status);
+        return {
+          ...(supervisor ? { placement: supervisor.status() } : {}),
+          ...(current ? { readiness: current } : {}),
+        };
+      },
+      logger: logger.child({ component: "agent" }),
+    });
+    resources.runtime = runtime;
+    const readiness = new ReadinessMonitor({
+      mode: config.agentMode,
+      harness: () => settings.get().agent.harness,
+      connectors,
+      probes: systemReadinessProbes({ env, execution: config.execution }),
+      onChange: () => runtime.refreshStatus(),
+      logger: logger.child({ component: "readiness" }),
+    });
+    resources.readiness = readiness;
+
+    const sync = new SyncController({
+      primary: new AttributedStorage(storage, writes, { origin: "sync" }),
+      device,
+      syncTokenPath: config.syncTokenPath,
+      env,
+      leaseEpoch: () => supervisor?.heldEpoch ?? null,
+      logger,
+    });
     resources.sync = sync;
-    if (sync) {
-      resources.unsubscribes.push(sync.engine.onStatus((status) => logSyncStatus(logger, status)));
-      await sync.engine.start();
-    }
+    await sync.configure(config.sync);
+    const deviceSettings = new DeviceSettings({
+      device,
+      placement: config.placement,
+      sync: config.sync,
+      lockedByEnv: config.lockedByEnv,
+      remoteHosts,
+      files: deviceSettingsFiles(config),
+      hasToken:
+        Boolean(env.DDL_SYNC_TOKEN?.trim()) ||
+        (await secretFile(config.syncTokenPath).read()) !== null,
+      applySync: (next) => supervisor?.applySync(next) ?? Promise.resolve(),
+      logger: logger.child({ component: "device" }),
+    });
+    const machine = await MachineLink.load({
+      settings,
+      credentialFile: secretFile(join(config.home, MACHINE_TOKEN_FILE)),
+      deviceName: () => device.name,
+      logger: logger.child({ component: "machine" }),
+    });
+    resources.machine = machine;
+    supervisor = new AgentSupervisor({
+      runtime,
+      sync,
+      device,
+      agentMode: config.agentMode,
+      placement: deviceSettings,
+      settings,
+      credential: machine,
+      ...(options.leaseTimings ? { leaseTimings: options.leaseTimings } : {}),
+      logger,
+    });
+    resources.supervisor = supervisor;
+    resources.unsubscribes.push(followSyncedSettings(storage, settings, runtime, logger));
+    await supervisor.start();
+    // Clients talk to the relay; the supervisor drives the leased runtime underneath it.
+    const relay = new AgentRelay({
+      local: runtime,
+      placement: supervisor,
+      machine,
+      logger: logger.child({ component: "relay" }),
+      ...(options.relayLinkTimings ? { linkTimings: options.relayLinkTimings } : {}),
+    });
+    resources.relay = relay;
 
     // The app is built after listen() because the bound port is part of the Host/Origin allowlist.
     let handler: FetchCallback = () => new Response("Starting", { status: 503 });
@@ -161,60 +216,50 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     const port = await listen(server, config.port);
     const app = createApp({
       storage,
-      runtime,
+      runtime: relay,
       settings,
       config: { port, allowedOrigins: config.allowedOrigins },
       token,
+      remoteHosts,
+      devices,
       logger: logger.child({ component: "http" }),
       webDist: config.webDist,
       connectors,
       writes,
       search: resolveVaultSearch(storage),
-      syncStatus: () => syncStatusOf(sync, prepared),
+      syncStatus: () => sync.status(),
+      device: deviceSettings,
+      machine,
       systemSettings: createSystemSettingsOpener(),
+      relay,
     });
     handler = app.fetch;
 
     resources.hub = attachWebSocketHub({
       server,
-      policy: createSecurityPolicy({ port, token, extraOrigins: config.allowedOrigins }),
+      policy: createSecurityPolicy({
+        port,
+        token,
+        extraOrigins: config.allowedOrigins,
+        remoteHosts,
+        devices,
+      }),
+      devices,
       storage,
-      runtime,
+      runtime: relay,
       settings,
       writes,
       logger: logger.child({ component: "ws" }),
     });
 
     try {
-      await runtime.start();
+      await relay.start();
     } catch (error) {
       logger.error("The agent runtime failed to start; notes remain available", {
         error: errorMessage(error),
       });
     }
-
-    const leaseClient = prepared.remote?.client;
-    if (leasedRuntime && prepared.remote && leaseClient) {
-      const lease = new AgentLease({
-        client: agentLeaseClient(leaseClient),
-        device: prepared.remote.device,
-        ...(options.leaseTimings ? { timings: options.leaseTimings } : {}),
-        // Pull what the previous device's agent wrote before loading it.
-        onAcquired: async () => {
-          await syncPass(sync, logger);
-          await leasedRuntime.activate();
-        },
-        // Push the stopped agent's last state for whichever device takes over.
-        onUnavailable: async (problem) => {
-          const wasRunning = leasedRuntime.active;
-          await leasedRuntime.deactivate(problem);
-          if (wasRunning) void syncPass(sync, logger);
-        },
-        logger: logger.child({ component: "lease" }),
-      });
-      resources.lease = lease;
-      lease.start();
-    }
+    void readiness.refresh();
 
     const url = `http://${BIND_HOST}:${port}`;
     logger.info("Listening", { url, vault: displayPath(config.vaultPath, homedir()) });
@@ -264,26 +309,51 @@ async function shutdown(resources: Resources, logger: Logger): Promise<void> {
     }
   };
   for (const unsubscribe of resources.unsubscribes) unsubscribe();
-  const { lease, leasedRuntime, runtime, sync, hub, server, execution, connectors, storage } =
-    resources;
-  if (lease) {
-    await step("agent lease", () =>
-      lease.stop(async () => {
-        await leasedRuntime?.deactivate("The daemon is shutting down.");
-        await syncPass(sync ?? null, logger);
-      }),
-    );
-  }
-  if (runtime) await step("agent runtime", () => runtime.stop());
-  if (sync) {
-    await step("sync", () => sync.engine.stop());
-    await step("sync target", () => sync.target.dispose());
-  }
+  resources.readiness?.stop();
+  resources.machine?.dispose();
+  const { supervisor, relay, runtime, sync, hub, server, devices, connectors, storage } = resources;
+  if (supervisor) await step("agent lease", () => supervisor.stop());
+  // The relay stops the leased runtime under it.
+  if (relay) await step("agent relay", () => relay.stop());
+  else if (runtime) await step("agent runtime", () => runtime.stop());
+  if (sync) await step("sync", () => sync.stop());
   if (hub) await step("websockets", () => hub.close());
   if (server) await step("http", () => closeServer(server));
-  if (execution) await step("execution", () => execution.dispose());
+  if (devices) await step("paired devices", () => devices.flush());
   if (connectors) await step("connectors", () => connectors.dispose());
   if (storage) await step("storage", () => storage.dispose());
+}
+
+/**
+ * Settings changed on another device arrive through sync: reload them so the agent, the clients
+ * (`settings.changed`) and the placement (the vault's always-on machine) follow at once. The
+ * store's own writes reload to what it already has, which changes nothing.
+ */
+function followSyncedSettings(
+  storage: StorageProvider,
+  settings: SettingsStore,
+  runtime: LeasedAgentRuntime,
+  logger: Logger,
+): Unsubscribe {
+  const reload = debounce(() => {
+    settings.reload().then(
+      (next) => {
+        if (next) runtime.updateSettings(next);
+      },
+      (error: unknown) => {
+        logger.warn("Could not reload settings synced from another device", {
+          error: errorMessage(error),
+        });
+      },
+    );
+  }, SETTINGS_RELOAD_DEBOUNCE_MS);
+  const unwatch = storage.watch((event) => {
+    if (event.path === SETTINGS_PATH) reload();
+  });
+  return () => {
+    unwatch();
+    reload.cancel();
+  };
 }
 
 function closeServer(server: Server): Promise<void> {
@@ -297,37 +367,4 @@ function closeServer(server: Server): Promise<void> {
     });
     server.closeIdleConnections();
   });
-}
-
-function logSyncStatus(logger: Logger, status: { state: string; lastError?: string }): void {
-  if (status.state === "error") logger.warn("Sync failed", { error: status.lastError });
-  else logger.debug("Sync status", { state: status.state });
-}
-
-/** One sync pass, best effort and bounded (agent handovers wait for it). */
-async function syncPass(sync: SyncHandle | null, logger: Logger): Promise<void> {
-  if (!sync) return;
-  try {
-    await withTimeout(sync.engine.syncOnce(), HANDOVER_SYNC_TIMEOUT_MS, "Sync pass timed out");
-  } catch (error) {
-    logger.warn("Sync pass around the agent handover failed", { error: errorMessage(error) });
-  }
-}
-
-function syncStatusOf(sync: SyncHandle | null, prepared: PreparedSync): SyncStatusResponse {
-  const remote = prepared.remote
-    ? { host: prepared.remote.host, deviceName: prepared.remote.device.name }
-    : undefined;
-  if (sync) return toSyncStatusResponse(sync.engine.status(), remote);
-  if (!remote) return disabledSyncStatusResponse();
-  return {
-    state: "error",
-    target: "remote",
-    lastSyncedAt: null,
-    pendingChanges: 0,
-    conflicts: [],
-    ...(prepared.remote?.problem ? { lastError: prepared.remote.problem } : {}),
-    remoteHost: remote.host,
-    deviceName: remote.deviceName,
-  };
 }

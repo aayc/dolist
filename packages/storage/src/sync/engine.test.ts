@@ -1,12 +1,14 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { isAgentOwnedPath } from "@ddl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appendToFile } from "../append";
 import { LocalFsStorageProvider } from "../local-fs";
 import { MemoryStorageProvider } from "../memory";
 import {
   ConflictError,
+  StaleLeaseError,
   StorageError,
   type StorageProvider,
   type SyncStatus,
@@ -546,6 +548,120 @@ describe.each(PAIRS)("SyncEngine (%s)", (_name, makePair) => {
 
   it("refuses to sync a storage with itself", () => {
     expect(() => new SyncEngine({ primary, target: primary })).toThrow(StorageError);
+  });
+});
+
+describe("SyncEngine with fenced agent files", () => {
+  const THREAD = ".daily-do-list/threads/thr_1.json";
+  let primary: MemoryStorageProvider;
+  let target: MemoryStorageProvider;
+  let epoch: number | null;
+  /** The target refuses fenced changes as made under an earlier grant. */
+  let stale: boolean;
+  let engine: SyncEngine;
+
+  beforeEach(() => {
+    primary = new MemoryStorageProvider({ id: "vault" });
+    target = new MemoryStorageProvider({ id: "service" });
+    epoch = 1;
+    stale = false;
+    const write = target.write.bind(target);
+    target.write = async (path, content, options) => {
+      if (stale && isAgentOwnedPath(path)) throw new StaleLeaseError(path, "stale", 2);
+      return write(path, content, options);
+    };
+    engine = new SyncEngine({
+      primary,
+      target,
+      now: () => NOW,
+      fence: { covers: isAgentOwnedPath, epoch: () => epoch },
+    });
+  });
+
+  const read = async (provider: StorageProvider, path: string) =>
+    (await provider.read(path))?.content;
+
+  it("lets the lease holder push its version, without merging or conflict copies", async () => {
+    await seed(primary, { [THREAD]: '{"v":"base"}' });
+    await engine.syncOnce();
+    await primary.write(THREAD, '{"v":"ours"}');
+    target.simulateExternalChange(THREAD, '{"v":"theirs"}');
+    const report = await engine.syncOnce();
+    expect(report).toMatchObject({ pushed: [THREAD], conflicts: [] });
+    expect(await read(target, THREAD)).toBe('{"v":"ours"}');
+    expect((await primary.list({ includeHidden: true })).map((f) => f.path)).not.toContain(
+      expect.stringContaining("conflict"),
+    );
+  });
+
+  it("gives the holder the union of a journal both sides changed, never dropping the target's events", async () => {
+    const path = ".daily-do-list/state/journal/threads/thr_a.jsonl";
+    const event = (id: string, seq: number, eventEpoch = 1) =>
+      `${JSON.stringify({ v: 1, id, epoch: eventEpoch, seq, at: seq, type: "status", status: "working" })}\n`;
+    await seed(primary, { [path]: event("evt_1", 1) });
+    await engine.syncOnce();
+    await appendToFile(primary, path, event("evt_ours", 2, 2));
+    await appendToFile(target, path, event("evt_previous_holder", 2));
+
+    const report = await engine.syncOnce();
+    expect(report).toMatchObject({ pushed: [path], conflicts: [] });
+    const union = event("evt_1", 1) + event("evt_previous_holder", 2) + event("evt_ours", 2, 2);
+    expect(await read(primary, path)).toBe(union);
+    expect(await read(target, path)).toBe(union);
+    expect(await engine.syncOnce()).toMatchObject(emptyReport());
+  });
+
+  it("takes the holder's version when this device doesn't hold the lease", async () => {
+    await seed(primary, { [THREAD]: '{"v":"base"}', ".daily-do-list/state/records.json": "[1]" });
+    await engine.syncOnce();
+    epoch = null;
+    await primary.write(THREAD, '{"v":"written offline"}');
+    await primary.write(".daily-do-list/state/records.json", "[1,2]");
+    await primary.write(".daily-do-list/threads/thr_new.json", '{"v":"new"}');
+    target.simulateExternalChange(".daily-do-list/state/records.json", "[1,3]");
+    await primary.write(".daily-do-list/settings.json", '{"theme":"dark"}');
+    await primary.write("Inbox/note.md", "- [ ] still syncs");
+
+    const report = await engine.syncOnce();
+    expect(await read(primary, THREAD)).toBe('{"v":"base"}');
+    expect(await read(primary, ".daily-do-list/state/records.json")).toBe("[1,3]");
+    expect(await read(target, THREAD)).toBe('{"v":"base"}');
+    expect(await read(target, ".daily-do-list/settings.json")).toBe('{"theme":"dark"}');
+    expect(await read(target, "Inbox/note.md")).toBe("- [ ] still syncs");
+    // Never on the service, so nothing to take instead: it stays here, unsent.
+    expect(await read(primary, ".daily-do-list/threads/thr_new.json")).toBe('{"v":"new"}');
+    expect(await target.read(".daily-do-list/threads/thr_new.json")).toBeNull();
+    expect(report.conflicts).toEqual([]);
+    expect(engine.status().pendingChanges).toBe(0);
+
+    // Once it holds the lease again, the file goes out.
+    epoch = 3;
+    await engine.syncOnce();
+    expect(await read(target, ".daily-do-list/threads/thr_new.json")).toBe('{"v":"new"}');
+  });
+
+  it("drops what the service refuses as written under an earlier grant", async () => {
+    await seed(primary, { [THREAD]: '{"v":"base"}', ".daily-do-list/threads/thr_2.json": "{}" });
+    await engine.syncOnce();
+    await primary.write(THREAD, '{"v":"stale"}');
+    await target.delete(".daily-do-list/threads/thr_2.json");
+    await primary.write(".daily-do-list/threads/thr_2.json", '{"v":"edited"}');
+    target.simulateExternalChange(THREAD, '{"v":"new holder"}');
+    stale = true;
+    const report = await engine.syncOnce();
+    expect(await read(primary, THREAD)).toBe('{"v":"new holder"}');
+    expect(await primary.read(".daily-do-list/threads/thr_2.json")).toBeNull();
+    expect(await read(target, THREAD)).toBe('{"v":"new holder"}');
+    expect(report.conflicts).toEqual([]);
+    expect(engine.status()).toMatchObject({ state: "idle", pendingChanges: 0 });
+    expect(engine.status().lastError).toBeUndefined();
+  });
+
+  it("pulls the holder's changes like any other", async () => {
+    epoch = null;
+    target.simulateExternalChange(THREAD, '{"v":"holder"}');
+    expect(await engine.syncOnce()).toMatchObject({ pulled: [THREAD] });
+    expect(await read(primary, THREAD)).toBe('{"v":"holder"}');
   });
 });
 

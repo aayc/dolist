@@ -1,6 +1,7 @@
 import * as domain from "./domain";
 import * as errors from "./errors";
 import * as events from "./events";
+import * as remote from "./remote";
 import * as rest from "./rest";
 import * as settings from "./settings";
 
@@ -48,6 +49,8 @@ export const WIRE_SCHEMAS = {
   AgentHarnessKind: settings.AgentHarnessKindSchema,
   ApprovalPolicy: settings.ApprovalPolicySchema,
   AgentSettings: settings.AgentSettingsSchema,
+  AlwaysOnMachine: settings.AlwaysOnMachineSchema,
+  RemoteSettings: settings.RemoteSettingsSchema,
   AppSettings: settings.AppSettingsSchema,
   UpdateSettingsRequest: settings.UpdateSettingsRequestSchema,
   // REST
@@ -93,6 +96,25 @@ export const WIRE_SCHEMAS = {
   SyncStatusResponse: rest.SyncStatusResponseSchema,
   ComputerPermissionPane: rest.ComputerPermissionPaneSchema,
   ComputerPermissionsOpenRequest: rest.ComputerPermissionsOpenRequestSchema,
+  // Placement, device settings, pairing, the always-on machine
+  AgentPlacement: remote.AgentPlacementSchema,
+  AgentRunsOn: remote.AgentRunsOnSchema,
+  RelayState: remote.RelayStateSchema,
+  AgentPlacementStatus: remote.AgentPlacementStatusSchema,
+  AgentReadiness: remote.AgentReadinessSchema,
+  DeviceSyncSetup: remote.DeviceSyncSetupSchema,
+  DeviceSettingsResponse: remote.DeviceSettingsResponseSchema,
+  DeviceSettingsPatch: remote.DeviceSettingsPatchSchema,
+  DeviceSyncSetupRequest: remote.DeviceSyncSetupRequestSchema,
+  PairedDeviceKind: remote.PairedDeviceKindSchema,
+  PairedDevice: remote.PairedDeviceSchema,
+  PairingCodeRequest: remote.PairingCodeRequestSchema,
+  PairingCodeResponse: remote.PairingCodeResponseSchema,
+  PairRequest: remote.PairRequestSchema,
+  PairResponse: remote.PairResponseSchema,
+  PairedDevicesResponse: remote.PairedDevicesResponseSchema,
+  MachineStatusResponse: remote.MachineStatusResponseSchema,
+  MachinePairRequest: remote.MachinePairRequestSchema,
   // Errors
   ApiErrorCode: errors.ApiErrorCodeSchema,
   ApiErrorBody: errors.ApiErrorBodySchema,
@@ -142,6 +164,11 @@ export const REQUEST_SCHEMA_NAMES = [
   "ApprovalDecisionRequest",
   "CreateRoutineRequest",
   "ComputerPermissionsOpenRequest",
+  "DeviceSettingsPatch",
+  "DeviceSyncSetupRequest",
+  "PairingCodeRequest",
+  "PairRequest",
+  "MachinePairRequest",
   "ClientHelloEvent",
   "ClientPingEvent",
   "SurfaceSubscribeEvent",

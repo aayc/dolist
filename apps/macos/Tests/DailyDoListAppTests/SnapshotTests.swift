@@ -282,6 +282,74 @@ struct SnapshotTests {
     await model.teardown()
   }
 
+  /// Settings → Always-On against the in-memory daemon: each section in its usual states.
+  @Test func alwaysOnSettings() async throws {
+    typealias Prepare = @MainActor (InMemoryDaemonClient, AppModel) async -> Void
+    func model(_ remote: InMemoryDaemonClient.Remote, _ prepare: Prepare) async throws -> AppModel {
+      let client = InMemoryDaemonClient(
+        seed: .empty, clock: .immediate(start: referenceNow), agent: .enabled,
+        clientId: "macos_test", remote: remote)
+      let model = AppModel(environment: makeEnvironment(client: client))
+      await model.boot()
+      try await eventually("placement") { model.agent?.placement != nil }
+      await prepare(client, model)
+      await model.remote.load()
+      return model
+    }
+    let size = CGSize(width: 600, height: 720)
+    let nothing: Prepare = { _, _ in }
+    let unreachable: Prepare = { client, model in
+      await client.simulateMachine(reachable: false)
+      await model.remote.checkMachine()
+    }
+    var relayed = InMemoryDaemonClient.Remote.alwaysOn
+    relayed.placement = .alwaysOnMachine
+    let revoked: Prepare = { client, model in
+      await client.simulateMachine(acceptsThisDevice: false)
+      await model.agent?.refresh()
+      await model.remote.checkMachine()
+    }
+    var locked = InMemoryDaemonClient.Remote.host
+    locked.lockedByEnv = [.placement, .remoteHosts, .sync]
+    let paired: Prepare = { client, model in
+      _ = try? await client.updateDeviceSettings(
+        DeviceSettingsPatch(remoteHosts: ["studio.tailnet-name.ts.net"]))
+      for (name, kind) in [("Phone", PairedDeviceKind.app), ("Browser on vm-name", .browser)] {
+        if let code = try? await client.createPairingCode(PairingCodeRequest()) {
+          _ = try? await client.pair(PairRequest(code: code.code, name: name, kind: kind))
+        }
+      }
+      await model.remote.createPairingCode(name: "Tablet")
+    }
+    let codeWithoutHosts: Prepare = { _, model in await model.remote.createPairingCode(name: nil) }
+    let shots: [(String, InMemoryDaemonClient.Remote, AlwaysOnSection, Prepare)] = [
+      ("settings-always-on-agent-location", .alwaysOn, .agentLocation, nothing),
+      ("settings-always-on-agent-location-held", .standalone, .agentLocation, nothing),
+      ("settings-always-on-agent-location-host", .host, .agentLocation, nothing),
+      ("settings-always-on-machine", .alwaysOn, .alwaysOnMachine, nothing),
+      ("settings-always-on-machine-pair", .standalone, .alwaysOnMachine, nothing),
+      ("settings-always-on-machine-unreachable", .alwaysOn, .alwaysOnMachine, unreachable),
+      ("settings-always-on-machine-revoked", relayed, .alwaysOnMachine, revoked),
+      ("settings-always-on-sync", .alwaysOn, .sync, nothing),
+      ("settings-always-on-sync-off", .standalone, .sync, nothing),
+      ("settings-always-on-sync-locked", locked, .sync, nothing),
+      ("settings-always-on-devices", .alwaysOn, .devices, paired),
+      ("settings-always-on-devices-code", .alwaysOn, .devices, codeWithoutHosts),
+      ("settings-always-on-remote-access", .host, .remoteAccess, nothing),
+      ("settings-always-on-remote-access-none", .alwaysOn, .remoteAccess, nothing),
+    ]
+    for (name, remote, section, prepare) in shots {
+      let model = try await model(remote, prepare)
+      model.ui.alwaysOnSection = section
+      for dark in [false, true] {
+        try await render(
+          AlwaysOnSettingsPane(model: model, remote: model.remote).frame(
+            width: size.width, height: size.height), size: size, dark: dark, name: name)
+      }
+      await model.teardown()
+    }
+  }
+
   @Test func statusBarWithAnApprovalPolicy() async throws {
     let (model, workspace) = try await bootedModel()
     let bar = StatusBar(model: model, workspace: workspace)

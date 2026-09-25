@@ -1,0 +1,52 @@
+[
+  {
+    "name": "no always-on machine",
+    "value": { "machine": null, "paired": false, "reachable": null, "checkedAt": null }
+  },
+  {
+    "name": "paired and reachable, running the agent",
+    "value": {
+      "machine": { "name": "vm-name", "url": "https://vm-name.tailnet-name.ts.net" },
+      "paired": true,
+      "reachable": true,
+      "checkedAt": 1790000600000,
+      "version": "0.1.0",
+      "agent": {
+        "runsOn": {
+          "deviceId": "dev_k3j9x0q2m1abc4d5e6f7",
+          "name": "vm-name",
+          "thisDevice": false,
+          "alwaysOnMachine": true
+        }
+      },
+      "readiness": {
+        "harness": { "kind": "cursor", "ready": true },
+        "modelCredential": true,
+        "browser": true,
+        "computer": "unsupported",
+        "connectors": { "configured": 2, "connected": 1 }
+      }
+    }
+  },
+  {
+    "name": "paired, the machine's agent can't run",
+    "value": {
+      "machine": { "name": "vm-name", "url": "https://vm-name.tailnet-name.ts.net:8443" },
+      "paired": true,
+      "reachable": true,
+      "checkedAt": 1790000600000,
+      "version": "0.1.0",
+      "agent": { "runsOn": null, "problem": "The Cursor CLI isn't signed in." }
+    }
+  },
+  {
+    "name": "configured on another device, not paired here, unreachable",
+    "value": {
+      "machine": { "name": "vm-name", "url": "https://vm-name.tailnet-name.ts.net" },
+      "paired": false,
+      "reachable": false,
+      "checkedAt": 1790000600000,
+      "error": "The machine didn't answer in 5 s."
+    }
+  }
+]

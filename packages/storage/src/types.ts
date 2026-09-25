@@ -127,6 +127,32 @@ export class NotFoundError extends StorageError {
   }
 }
 
+/**
+ * The sync service refused a change to one of the agent's files: it wasn't made under the current
+ * agent lease grant from this device (`stale_lease`).
+ */
+export class StaleLeaseError extends StorageError {
+  /** The current grant's epoch, or null when nobody holds the agent lease. */
+  readonly currentEpoch: number | null;
+
+  constructor(path: string, message: string, currentEpoch: number | null) {
+    super(message, path);
+    this.name = "StaleLeaseError";
+    this.currentEpoch = currentEpoch;
+  }
+}
+
+/**
+ * Fencing of the agent's files on the sync service: only the device holding the agent lease may
+ * change them, and it proves that with the grant's epoch (`LEASE_EPOCH_HEADER` in `@ddl/core`).
+ */
+export interface LeaseFence {
+  /** Paths only the lease holder may change on the target. */
+  covers(path: string): boolean;
+  /** The epoch of the agent lease grant this device holds now, or null when it holds none. */
+  epoch(): number | null;
+}
+
 export class NotImplementedError extends StorageError {
   constructor(feature: string) {
     super(`Not implemented yet: ${feature}`);

@@ -110,6 +110,79 @@ const ATTEMPTS: Attempt[] = [
     appHome: CUSTOM_HOME,
     workspaceDir: `${CUSTOM_HOME}/workspaces/task-1`,
   },
+  // The daemon's credential files: the paired devices, the always-on machine's and the sync
+  // service's tokens, and the daemon's own. Reading them is a hard deny however it's spelled.
+  {
+    name: "read the paired devices' token hashes",
+    toolName: TOOL.read,
+    input: { path: "~/.daily-do-list/devices.json" },
+    rule: "secrets.credential-store",
+  },
+  {
+    name: "read the always-on machine's token",
+    toolName: TOOL.read,
+    input: { path: "/Users/me/.daily-do-list/machine-token" },
+    rule: "secrets.credential-store",
+  },
+  {
+    name: "read the paired devices of a DDL_HOME somewhere else, from its workspace",
+    toolName: TOOL.bash,
+    input: { command: "cat ../../devices.json" },
+    rule: "secrets.credential-store",
+    appHome: CUSTOM_HOME,
+    workspaceDir: `${CUSTOM_HOME}/workspaces/task-1`,
+  },
+  {
+    name: "read the daemon token through $DDL_HOME",
+    toolName: TOOL.bash,
+    input: { command: 'cat "$DDL_HOME/daemon-token"' },
+    rule: "secrets.credential-store",
+  },
+  {
+    name: "read every file in DDL_HOME with a glob",
+    toolName: TOOL.bash,
+    input: { command: "head -n 5 ~/.daily-do-list/*" },
+    rule: "secrets.credential-store",
+  },
+  {
+    name: "search DDL_HOME recursively",
+    toolName: TOOL.bash,
+    input: { command: "grep -r token ~/.daily-do-list" },
+    rule: "secrets.credential-store",
+  },
+  {
+    name: "archive DDL_HOME",
+    toolName: TOOL.bash,
+    input: { command: "tar czf /tmp/backup.tgz ~/.daily-do-list" },
+    rule: "secrets.credential-store",
+  },
+  {
+    name: "copy the sync token out",
+    toolName: TOOL.bash,
+    input: { command: "cp ~/.daily-do-list/sync-token /tmp/t" },
+    rule: "secrets.credential-store",
+  },
+  {
+    name: "read the paired devices through a connector's file tool",
+    toolName: "mcp__fs__read_file",
+    input: { path: "/Users/me/.daily-do-list/devices.json" },
+    rule: "secrets.credential-store",
+    hints: { readOnly: true },
+  },
+  {
+    name: "read a token in code that finds DDL_HOME at runtime",
+    toolName: TOOL.bash,
+    input: {
+      command: `python3 -c "import os; print(open(os.environ['DDL_HOME'] + '/machine-token').read())"`,
+    },
+    rule: "secrets.app-config-write",
+  },
+  {
+    name: "pair a device of its own by rewriting devices.json",
+    toolName: TOOL.write,
+    input: { path: "~/.daily-do-list/devices.json", content: '{"version":1,"devices":[]}' },
+    rule: "secrets.app-config-write",
+  },
   {
     name: "write settings through a connector's file tool",
     toolName: "mcp__fs__write_file",

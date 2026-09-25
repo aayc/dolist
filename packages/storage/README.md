@@ -110,8 +110,9 @@ merge still conflicts, the vault's version wins everywhere and the target's vers
 `<name> (conflict YYYY-MM-DD HHmm).<ext>` on both sides. The agent's append-only journals
 (`.daily-do-list/state/journal/**.jsonl`, `isJournalPath`) are merged as the union of both copies'
 lines by event id, ordered by `(epoch, seq, id)` (`mergeJournals`): the result depends only on the
-set of lines, so every device ends with the same bytes, and there is never a conflict copy. Other
-formats (JSON, `.canvas`, …) keep the version with the newest mtime, and the other becomes the
+set of lines, so every device ends with the same bytes, and there is never a conflict copy. With a
+lease fence, only the holder pushes them (as the union when the target's copy changed too); others
+take the target's copy. Other formats (JSON, `.canvas`, …) keep the version with the newest mtime, and the other becomes the
 conflict copy. Nothing is ever silently dropped.
 
 **Appends.** `StorageProvider.append` (optional; local-fs and memory have it, `appendToFile` falls

@@ -64,6 +64,9 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
       throw UnscriptedCall(name: "pauseRoutine")
     }
     var routineRuns: @Sendable (String) async throws -> [ThreadSummary] = { _ in [] }
+    var updateDeviceSettings:
+      @Sendable (DeviceSettingsPatch) async throws -> DeviceSettingsResponse =
+        { _ in throw UnscriptedCall(name: "updateDeviceSettings") }
   }
 
   let clientId = "test-client"
@@ -197,6 +200,12 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
   func threads(routineId: String) async throws -> [ThreadSummary] {
     log("threads:routine:\(routineId)")
     return try await current.routineRuns(routineId)
+  }
+
+  // This device
+  func updateDeviceSettings(_ patch: DeviceSettingsPatch) async throws -> DeviceSettingsResponse {
+    log("updateDeviceSettings:\(patch.placement?.rawValue ?? "-")")
+    return try await current.updateDeviceSettings(patch)
   }
 
   // Events

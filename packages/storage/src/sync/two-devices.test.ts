@@ -5,6 +5,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { isAgentOwnedPath } from "@ddl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LocalFsStorageProvider } from "../local-fs";
 import type { RemoteStorageProvider } from "../remote";
@@ -41,11 +42,20 @@ describe("two devices syncing through the sync service", { timeout: 30_000 * TIM
   let dir: string;
   let devices: Device[];
 
+  /** The agent lease epoch each device believes it holds (the daemon's fence). */
+  const epochs = new Map<string, number>();
+
   async function device(name: string, options: SyncStartOptions = FAST): Promise<Device> {
     const vault = new LocalFsStorageProvider({ root: join(dir, name) });
     await vault.init();
-    const remote = sync.provider(`dev_${name}`);
-    const engine = new SyncEngine({ primary: vault, target: remote, now: () => NOW });
+    const leaseEpoch = () => epochs.get(name) ?? null;
+    const remote = sync.provider(`dev_${name}`, { leaseEpoch });
+    const engine = new SyncEngine({
+      primary: vault,
+      target: remote,
+      now: () => NOW,
+      fence: { covers: isAgentOwnedPath, epoch: leaseEpoch },
+    });
     const created: Device = { vault, remote, engine };
     devices.push(created);
     engine.start(options);
@@ -72,6 +82,7 @@ describe("two devices syncing through the sync service", { timeout: 30_000 * TIM
     sync = await startTestSyncServer();
     dir = await mkdtemp(join(tmpdir(), "ddl-two-devices-"));
     devices = [];
+    epochs.clear();
   });
 
   afterEach(async () => {
@@ -156,60 +167,74 @@ describe("two devices syncing through the sync service", { timeout: 30_000 * TIM
         .filter(Boolean)
         .map((line) => (JSON.parse(line) as { id: string }).id);
 
-    it("appended on two devices at once ends as the same union on both, never a conflict copy", async () => {
+    // Through the sync service a journal is fenced like every agent file: only the lease holder's
+    // appends travel. (Without a lease, e.g. a mirrored folder, journals merge as a union: see
+    // the engine's tests.)
+    it("travels from the lease holder; a device without the lease gives way, never a conflict copy", async () => {
+      const grant = sync.holdAgentLease("dev_a");
+      epochs.set("a", grant.epoch);
       const a = await device("a");
       const b = await device("b");
-      await a.vault.append(path, event("evt_base", 1));
+      await a.vault.append(path, event("evt_base", 1, grant.epoch));
       await settled(a, b);
 
       await Promise.all([
         (async () => {
-          for (let i = 0; i < 5; i++) await a.vault.append(path, event(`evt_a${i}`, 2 + i));
+          for (let i = 0; i < 5; i++) {
+            await a.vault.append(path, event(`evt_a${i}`, 2 + i, grant.epoch));
+          }
         })(),
         (async () => {
-          for (let i = 0; i < 5; i++) await b.vault.append(path, event(`evt_b${i}`, 2 + i, 1));
+          for (let i = 0; i < 5; i++) await b.vault.append(path, event(`evt_b${i}`, 2 + i));
         })(),
       ]);
 
       const files = await settled(a, b);
       expect(Object.keys(files)).toEqual([path]);
-      expect(idsIn(files[path])).toEqual([
-        "evt_base",
-        ...[0, 1, 2, 3, 4].map((i) => `evt_a${i}`),
-        ...[0, 1, 2, 3, 4].map((i) => `evt_b${i}`),
-      ]);
+      expect(idsIn(files[path])).toEqual(["evt_base", ...[0, 1, 2, 3, 4].map((i) => `evt_a${i}`)]);
       for (const d of [a, b]) expect(d.engine.status().conflicts).toEqual([]);
     });
 
-    it("from an old device reconnecting after appending offline keeps both devices' events", async () => {
-      const a = await device("a");
-      const b = await device("b");
-      await a.vault.append(path, event("evt_base", 1));
-      await settled(a, b);
+    it.each([
+      ["still believes it holds the lease", true],
+      ["knows it lost the lease", false],
+    ])(
+      "from a former holder that %s and appended offline gives way to the new holder's",
+      async (_label, believesItHolds) => {
+        const grantA = sync.holdAgentLease("dev_a");
+        epochs.set("a", grantA.epoch);
+        const a = await device("a");
+        const b = await device("b");
+        await a.vault.append(path, event("evt_base", 1, grantA.epoch));
+        await settled(a, b);
 
-      // b goes offline and keeps appending under the old grant; a takes over with a new one.
-      await b.engine.stop();
-      await b.vault.append(path, event("evt_old1", 2) + event("evt_old2", 3));
-      await a.vault.append(path, event("evt_new1", 1, 1));
-      await a.vault.append(path, event("evt_new2", 2, 1));
-      await eventually(async () =>
-        expect(a.engine.status()).toMatchObject({ state: "idle", pendingChanges: 0 }),
-      );
+        // a goes offline and keeps appending under its grant; b takes over with a new one.
+        await a.engine.stop();
+        await a.vault.append(
+          path,
+          event("evt_old1", 2, grantA.epoch) + event("evt_old2", 3, grantA.epoch),
+        );
+        grantA.release();
+        if (!believesItHolds) epochs.delete("a");
+        const grantB = sync.holdAgentLease("dev_b");
+        epochs.set("b", grantB.epoch);
+        await b.vault.append(path, event("evt_new1", 1, grantB.epoch));
+        await b.vault.append(path, event("evt_new2", 2, grantB.epoch));
+        await eventually(async () =>
+          expect(b.engine.status()).toMatchObject({ state: "idle", pendingChanges: 0 }),
+        );
 
-      b.engine.start(FAST);
-      const files = await settled(a, b);
-      expect(idsIn(files[path])).toEqual([
-        "evt_base",
-        "evt_old1",
-        "evt_old2",
-        "evt_new1",
-        "evt_new2",
-      ]);
-      expect(Object.keys(files)).toEqual([path]);
-    });
+        a.engine.start(FAST);
+        const files = await settled(a, b);
+        expect(idsIn(files[path])).toEqual(["evt_base", "evt_new1", "evt_new2"]);
+        expect(Object.keys(files)).toEqual([path]);
+        for (const d of [a, b]) expect(d.engine.status().conflicts).toEqual([]);
+      },
+    );
   });
 
   it("syncs the agent's sidecar files but never the per-device sync snapshots", async () => {
+    epochs.set("a", sync.holdAgentLease("dev_a").epoch);
     const a = await device("a");
     const b = await device("b");
     const thread = JSON.stringify({ format: 1, id: "thr_k3j9x0q2m1ab", title: "Find a dentist" });
@@ -224,4 +249,61 @@ describe("two devices syncing through the sync service", { timeout: 30_000 * TIM
     const onServer = sync.server.store.listFiles(sync.vault, "").files.map((f) => f.path);
     expect(onServer).toEqual([".daily-do-list/threads/thr_k3j9x0q2m1ab.json"]);
   });
+
+  it.each([
+    ["still believes it holds the lease", true],
+    ["knows it lost the lease", false],
+  ])(
+    "never lets a former lease holder that %s overwrite the new holder's agent state",
+    async (_label, believesItHolds) => {
+      const THREAD = ".daily-do-list/threads/thr_1.json";
+      const RECORDS = ".daily-do-list/state/records.json";
+      const grantA = sync.holdAgentLease("dev_a");
+      epochs.set("a", grantA.epoch);
+      const a = await device("a");
+      const b = await device("b");
+      await a.vault.write(THREAD, '{"status":"working"}');
+      await a.vault.write(RECORDS, '["from a"]');
+      await settled(a, b);
+
+      // A goes offline and keeps writing, then loses the lease to B, which writes its own state.
+      await a.engine.stop();
+      await a.vault.write(THREAD, '{"status":"done on a, offline"}');
+      await a.vault.write(RECORDS, '["from a, offline"]');
+      await a.vault.write(".daily-do-list/threads/thr_offline.json", '{"status":"new on a"}');
+      await a.vault.write(".daily-do-list/settings.json", '{"theme":"dark"}');
+      await a.vault.write("Inbox/offline.md", "- [ ] written offline on a\n");
+      grantA.release();
+      if (!believesItHolds) epochs.delete("a");
+      epochs.set("b", sync.holdAgentLease("dev_b").epoch);
+      await b.vault.write(THREAD, '{"status":"retried on b"}');
+      await b.vault.write(RECORDS, '["from b"]');
+      await eventually(async () =>
+        expect(sync.server.store.read(sync.vault, RECORDS)?.content).toBe('["from b"]'),
+      );
+
+      // A reconnects: B's agent state wins on every device, A's notes and settings still sync.
+      a.engine.start(FAST);
+      const OFFLINE = ".daily-do-list/threads/thr_offline.json";
+      let files: Record<string, string> = {};
+      await eventually(async () => {
+        const { [OFFLINE]: _kept, ...onA } = await contents(a);
+        files = onA;
+        expect(await contents(b)).toEqual(files);
+        for (const d of [a, b]) {
+          expect(d.engine.status()).toMatchObject({ state: "idle", pendingChanges: 0 });
+        }
+      });
+      expect(files[THREAD]).toBe('{"status":"retried on b"}');
+      expect(files[RECORDS]).toBe('["from b"]');
+      expect(files[".daily-do-list/settings.json"]).toBe('{"theme":"dark"}');
+      expect(files["Inbox/offline.md"]).toBe("- [ ] written offline on a\n");
+      expect(sync.server.store.read(sync.vault, THREAD)?.content).toBe('{"status":"retried on b"}');
+      // Never on the service: it stays on A, unsent, until A runs the agent again.
+      expect(await a.vault.read(OFFLINE)).not.toBeNull();
+      expect(sync.server.store.read(sync.vault, OFFLINE)).toBeNull();
+      expect(Object.keys(files).filter((path) => path.includes("conflict"))).toEqual([]);
+      for (const d of [a, b]) expect(d.engine.status().conflicts).toEqual([]);
+    },
+  );
 });

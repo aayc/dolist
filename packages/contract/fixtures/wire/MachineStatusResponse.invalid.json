@@ -1,0 +1,61 @@
+[
+  {
+    "name": "machine address over plain http",
+    "value": {
+      "machine": { "name": "vm-name", "url": "http://vm-name.tailnet-name.ts.net" },
+      "paired": false,
+      "reachable": null,
+      "checkedAt": null
+    },
+    "path": ["machine", "url"],
+    "code": "custom"
+  },
+  {
+    "name": "missing reachable (null is required before a check)",
+    "value": { "machine": null, "paired": false, "checkedAt": null },
+    "path": ["reachable"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "unknown computer readiness",
+    "value": {
+      "machine": { "name": "vm-name", "url": "https://vm-name.tailnet-name.ts.net" },
+      "paired": true,
+      "reachable": true,
+      "checkedAt": 1790000600000,
+      "readiness": {
+        "harness": { "kind": "pi", "ready": true },
+        "modelCredential": true,
+        "browser": true,
+        "computer": "virtual_display",
+        "connectors": { "configured": 0, "connected": 0 }
+      }
+    },
+    "path": ["readiness", "computer"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "unknown harness in the readiness",
+    "value": {
+      "machine": { "name": "vm-name", "url": "https://vm-name.tailnet-name.ts.net" },
+      "paired": true,
+      "reachable": true,
+      "checkedAt": 1790000600000,
+      "readiness": {
+        "harness": { "kind": "claude", "ready": true },
+        "modelCredential": true,
+        "browser": true,
+        "computer": "unsupported",
+        "connectors": { "configured": 0, "connected": 0 }
+      }
+    },
+    "path": ["readiness", "harness", "kind"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "paired as a string",
+    "value": { "machine": null, "paired": "yes", "reachable": null, "checkedAt": null },
+    "path": ["paired"],
+    "code": "invalid_type"
+  }
+]

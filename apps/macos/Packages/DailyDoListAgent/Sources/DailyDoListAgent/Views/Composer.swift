@@ -48,9 +48,12 @@ struct Composer: View {
         .padding(.vertical, 3)
         HStack(spacing: 6) {
           if model.canStop {
-            StopButton(isStopping: model.isStopping, command: stop) { model.stop() }
-              .transition(
-                reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
+            StopButton(
+              isStopping: model.isStopping, unavailableReason: model.stopUnavailableReason,
+              command: stop
+            ) { model.stop() }
+            .transition(
+              reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
           }
           SendButton(isEnabled: model.canSend) { model.send() }
         }
@@ -114,6 +117,7 @@ private struct SendButton: View {
 /// Stops the agent: a square in a quiet circle, with the host's Stop shortcut.
 private struct StopButton: View {
   let isStopping: Bool
+  var unavailableReason: String?
   let command: AgentPanelShortcuts.Command
   let action: () -> Void
 
@@ -126,9 +130,13 @@ private struct StopButton: View {
       }
     }
     .buttonStyle(ComposerButtonStyle(kind: .stop))
-    .tooltip("Stop", keys: command.keys, command: command.id, accessibility: .keysOnly)
+    .tooltip(
+      TooltipContent("Stop", keys: command.keys),
+      whenDisabled: unavailableReason.map { TooltipContent("Stop", detail: $0) },
+      command: command.id, accessibility: .keysOnly
+    )
     .accessibilityLabel("Stop")
-    .disabled(isStopping)
+    .disabled(isStopping || unavailableReason != nil)
   }
 }
 

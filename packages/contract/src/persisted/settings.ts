@@ -10,7 +10,7 @@
  *
  * v1: the unversioned overrides object written before formats were versioned, plus `version: 1`.
  */
-import { AGENT_HARNESS_KINDS, APPROVAL_POLICIES } from "@ddl/core";
+import { AGENT_HARNESS_KINDS, APPROVAL_POLICIES, isMachineUrl, REMOTE_LIMITS } from "@ddl/core";
 import { z } from "zod";
 import {
   decodePersisted,
@@ -67,6 +67,22 @@ export const PersistedSettingsOverridesSchema = z
           .min(60_000)
           .max(30 * 24 * 60 * 60 * 1000),
         approvalPolicy: z.enum(APPROVAL_POLICIES),
+      })
+      .partial(),
+    remote: z
+      .object({
+        // The machine is one value: a bad name or address drops it whole (no machine).
+        alwaysOnMachine: z
+          .object({
+            name: z
+              .string()
+              .trim()
+              .min(1)
+              .max(REMOTE_LIMITS.deviceNameLength)
+              .refine((name) => !/\p{Cc}/u.test(name)),
+            url: z.string().refine(isMachineUrl),
+          })
+          .nullable(),
       })
       .partial(),
   })

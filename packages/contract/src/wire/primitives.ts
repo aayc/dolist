@@ -1,4 +1,4 @@
-import { normalizePath } from "@ddl/core";
+import { normalizeDeviceName, normalizePath, REMOTE_LIMITS, SYNC_LIMITS } from "@ddl/core";
 import { z } from "zod";
 
 /** Size limits of the wire protocol. The daemon enforces the request-side ones. */
@@ -97,3 +97,32 @@ export const ModelIdSchema = z
   .min(1)
   .max(WIRE_LIMITS.modelIdLength)
   .regex(/^\S(?:[\s\S]*\S)?$/, "must not start or end with whitespace");
+
+const CONTROL = /\p{Cc}/u;
+const TRIMMED = /^\S(?:[\s\S]*\S)?$/;
+
+/** A device or machine name a client sends: trimmed, then 1–64 characters, no control characters. */
+export const DeviceNameInputSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(REMOTE_LIMITS.deviceNameLength)
+  .refine((name) => !CONTROL.test(name), "must not contain control characters");
+
+/** A device or machine name the daemon reports after taking it from a client (`normalizeDeviceName`). */
+export const DeviceNameSchema = z
+  .string()
+  .min(1)
+  .max(REMOTE_LIMITS.deviceNameLength)
+  .refine(
+    (name) => normalizeDeviceName(name) === name,
+    "must not start or end with whitespace or contain control characters",
+  );
+
+/** A device's name as other devices see it through the sync service (up to 100 characters). */
+export const SyncDeviceNameSchema = z
+  .string()
+  .min(1)
+  .max(SYNC_LIMITS.deviceNameLength)
+  .regex(TRIMMED, "must not start or end with whitespace")
+  .refine((name) => !CONTROL.test(name), "must not contain control characters");

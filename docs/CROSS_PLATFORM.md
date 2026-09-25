@@ -69,8 +69,10 @@ The detailed plan, with the decisions made so far, is [apps/mobile/PLAN.md](../a
 
 The first two items are phase 1 of [ALWAYS_ON.md](./ALWAYS_ON.md).
 
-- [ ] Device-scoped tokens and pairing endpoint in the daemon (today there is one local token).
-- [ ] Remote access story (Tailscale/relay) with TLS; keep `127.0.0.1` binding the default.
+- [x] Device-scoped tokens and pairing endpoint in the daemon (`POST /api/pairing-codes`,
+  `POST /api/pair`, revocation; see [apps/daemon/README.md](../apps/daemon/README.md#remote-access-and-pairing)).
+- [x] Remote access story (Tailscale/relay) with TLS; keep `127.0.0.1` binding the default
+  (`tailscale serve` to the loopback port, `remote.hosts`; see [ALWAYS_ON.md](./ALWAYS_ON.md#remote-access)).
 - [ ] Compact iPhone layouts for the note, thread and approval views.
 - [ ] `S3StorageProvider` implementation (the stub documents the plan) or iCloud sync target docs.
 - [ ] `CloudExecutionProvider` implementation (the stub documents the interface).

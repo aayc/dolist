@@ -80,3 +80,32 @@ describe("approval policy", () => {
     expect(patched.agent.settleMs).toBe(1000);
   });
 });
+
+describe("remote settings", () => {
+  const machine = { name: "vm-name", url: "https://vm-name.tailnet-name.ts.net" };
+
+  it("default to no always-on machine", () => {
+    expect(DEFAULT_SETTINGS.remote).toEqual({ alwaysOnMachine: null });
+  });
+
+  it("set, replace and clear the always-on machine with patches", () => {
+    const set = mergeSettings(DEFAULT_SETTINGS, { remote: { alwaysOnMachine: machine } });
+    expect(set.remote.alwaysOnMachine).toEqual(machine);
+    expect(DEFAULT_SETTINGS.remote.alwaysOnMachine).toBeNull();
+
+    const other = { name: "vm-2", url: "https://vm-2.tailnet-name.ts.net:8443" };
+    expect(mergeSettings(set, { remote: { alwaysOnMachine: other } }).remote).toEqual({
+      alwaysOnMachine: other,
+    });
+    expect(mergeSettings(set, { remote: { alwaysOnMachine: null } }).remote).toEqual({
+      alwaysOnMachine: null,
+    });
+    expect(mergeSettings(set, { remote: {} }).remote.alwaysOnMachine).toEqual(machine);
+    expect(mergeSettings(set, { theme: "light" }).remote.alwaysOnMachine).toEqual(machine);
+  });
+
+  it("keep the default when an older payload doesn't carry the section", () => {
+    const { remote: _remote, ...older } = DEFAULT_SETTINGS;
+    expect(mergeSettings(DEFAULT_SETTINGS, older).remote).toEqual({ alwaysOnMachine: null });
+  });
+});

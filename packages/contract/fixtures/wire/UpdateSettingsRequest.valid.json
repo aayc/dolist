@@ -32,5 +32,14 @@
   {
     "name": "ask before every action",
     "value": { "agent": { "approvalPolicy": "ask_every_action" } }
-  }
+  },
+  {
+    "name": "set the always-on machine",
+    "value": {
+      "remote": {
+        "alwaysOnMachine": { "name": "vm-name", "url": "https://vm-name.tailnet-name.ts.net" }
+      }
+    }
+  },
+  { "name": "forget the always-on machine", "value": { "remote": { "alwaysOnMachine": null } } }
 ]
