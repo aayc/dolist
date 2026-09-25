@@ -332,6 +332,55 @@ struct DaemonSupervisorTests {
       "restarts reuse the resolved Node")
   }
 
+  @Test func aDaemonThatAsksToRestartIsStartedAgainAtOnce() async throws {
+    let harness = SupervisorHarness()
+    _ = try #require(await harness.supervisor.start())
+    let first = try #require(harness.lastProcess)
+    var states: [DaemonSupervisorState] = []
+    let updates = harness.supervisor.stateUpdates()
+    let collector = Task { @MainActor in
+      for await state in updates {
+        states.append(state)
+        if states.count == 3 { break }
+      }
+    }
+
+    first.crash(
+      status: DaemonSupervisor.restartExitStatus, output: ["Restarting to open ~/Imported…"])
+
+    #expect(
+      await harness.waitUntil {
+        harness.machine.processes.count == 2 && harness.supervisor.state.isRunning
+      })
+    await collector.value
+    #expect(states.map(\.pid) == [first.pid, nil, harness.lastProcess?.pid])
+    #expect(states.dropFirst().first == .starting)
+    #expect(harness.clock.sleeps.allSatisfy { $0 < .seconds(1) }, "no backoff")
+    #expect(harness.supervisor.lastError == nil)
+  }
+
+  @Test func restartRequestsAreNotFailures() async throws {
+    let harness = SupervisorHarness()
+    _ = try #require(await harness.supervisor.start())
+    for round in 1...6 {
+      try #require(harness.lastProcess).crash(status: DaemonSupervisor.restartExitStatus)
+      #expect(
+        await harness.waitUntil {
+          harness.machine.processes.count == round + 1 && harness.supervisor.state.isRunning
+        })
+    }
+
+    try #require(harness.lastProcess).crash(status: 1)
+
+    #expect(
+      await harness.waitUntil {
+        harness.machine.processes.count == 8 && harness.supervisor.state.isRunning
+      })
+    #expect(
+      harness.clock.sleeps.filter { $0 >= .seconds(1) } == [.seconds(1)],
+      "the crash is the first failure: the first backoff")
+  }
+
   @Test func givesUpAfterFiveFailuresWithinTwoMinutes() async throws {
     let harness = SupervisorHarness()
     _ = try #require(await harness.supervisor.start())

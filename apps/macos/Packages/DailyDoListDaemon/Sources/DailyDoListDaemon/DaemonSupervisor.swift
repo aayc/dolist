@@ -10,7 +10,9 @@ import Observation
 ///   A port held by something else fails with a message that says so.
 /// - A managed daemon that exits unexpectedly, or an attached one that stops answering, is
 ///   brought back with exponential backoff (`.restarting`) until the `DaemonRestartPolicy` gives
-///   up (`.failed`, with the daemon's last output).
+///   up (`.failed`, with the daemon's last output). A managed daemon that exits with
+///   `restartExitStatus` asked to be started again (to open another vault): it's relaunched at
+///   once (`.starting`), and that doesn't count as a failure.
 /// - `stop()` sends SIGTERM to the managed daemon's process group, then SIGKILL after a grace
 ///   period. `restart()` is `stop()` + `start()`.
 ///
@@ -36,6 +38,8 @@ public final class DaemonSupervisor {
 
   /// Capacity of `logLines`.
   public static let logCapacity = 1_000
+  /// The daemon's `RESTART_EXIT_CODE` (`EX_TEMPFAIL`): it exits with it to be started again.
+  public static let restartExitStatus: Int32 = 75
   /// Daemon lines included in failure messages.
   static let failureTailLength = 12
 
@@ -399,7 +403,32 @@ public final class DaemonSupervisor {
     // Exits during startup and stop are handled by those flows.
     guard process === handle, case .running(let pid, _) = state, pid == handle.pid else { return }
     process = nil
-    recover(reason: "The daemon \(exit).")
+    if exit == .exited(status: Self.restartExitStatus) {
+      relaunch()
+    } else {
+      recover(reason: "The daemon \(exit).")
+    }
+  }
+
+  /// Starts the daemon again right away, as it asked; only a failure to come back counts.
+  private func relaunch() {
+    let gen = generation
+    log("The daemon asked to be started again (e.g. to open another vault)")
+    setState(.starting)
+    watchTask?.cancel()
+    watchTask = Task { [weak self] in
+      guard let self, isCurrent(gen) else { return }
+      switch await acquire(gen, reuseResolvedNode: true) {
+      case .cancelled:
+        return
+      case .failed(let error):
+        guard isCurrent(gen) else { return }
+        recover(reason: error.summary)
+      case let outcome:
+        guard isCurrent(gen) else { return }
+        _ = settle(outcome, gen)
+      }
+    }
   }
 
   /// Health-checks an attached daemon (it isn't our child, so we can't watch it exit).

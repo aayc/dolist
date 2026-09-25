@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import type { AgentRuntime } from "@ddl/agent";
 import type { ConnectorToolSource } from "@ddl/connectors";
 import { WIRE_LIMITS } from "@ddl/contract";
@@ -10,7 +11,8 @@ import type { DaemonConfig } from "./config";
 import type { AppContext } from "./context";
 import { type DeviceSettings, memoryDeviceSettings } from "./device-settings";
 import { createErrorHandler, errorBody } from "./errors";
-import { memorySecretFile } from "./home-files";
+import { memoryJsonObjectFile, memorySecretFile } from "./home-files";
+import { ObsidianImporter } from "./import/importer";
 import { MachineLink } from "./machine-link";
 import { PairedDeviceStore } from "./paired-devices";
 import { PairingCodes } from "./pairing";
@@ -32,6 +34,7 @@ import type { VaultSearch } from "./search";
 import { createSecurityPolicy, isApiPath, requestGuard, securityHeaders } from "./security";
 import type { SettingsStore } from "./settings-store";
 import { NO_SYSTEM_SETTINGS, type SystemSettingsOpener } from "./system-settings";
+import { VaultSwitch } from "./vault-switch";
 import { DAEMON_VERSION } from "./version";
 import { WriteTracker } from "./write-tracker";
 
@@ -60,6 +63,10 @@ export interface AppDeps {
   syncStatus?: () => SyncStatusResponse;
   /** Device-local settings. Default: kept in memory (tests). */
   device?: DeviceSettings;
+  /** Which vault this daemon opens. Default: a fixed one (tests have no vault folder). */
+  vault?: VaultSwitch;
+  /** Importing Obsidian vaults. Default: nothing to carry over, no home folder (tests). */
+  imports?: ObsidianImporter;
   /** The always-on machine link. Default: its credential kept in memory (tests). */
   machine?: MachineLink;
   /** Opens System Settings for computer use permissions. Default: opens nothing (tests). */
@@ -100,6 +107,25 @@ export function createApp(deps: AppDeps): Hono {
         settings: deps.settings,
         credentialFile: memorySecretFile(),
         deviceName: () => device.device.name,
+        logger: deps.logger,
+      }),
+    vault:
+      deps.vault ??
+      new VaultSwitch({
+        vaultPath: "/vault",
+        lockedByEnv: true,
+        supervised: false,
+        config: memoryJsonObjectFile(),
+        home: null,
+        homedir: homedir(),
+        restart: () => {},
+        logger: deps.logger,
+      }),
+    imports:
+      deps.imports ??
+      new ObsidianImporter({
+        places: { home: null, vault: null, homedir: homedir() },
+        settings: () => deps.settings.get(),
         logger: deps.logger,
       }),
     systemSettings: deps.systemSettings ?? NO_SYSTEM_SETTINGS,

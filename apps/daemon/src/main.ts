@@ -1,6 +1,9 @@
+import { homedir } from "node:os";
 import { withTimeout } from "@ddl/core";
 import { runCli } from "./cli";
+import { displayPath } from "./home-paths";
 import { type RunningDaemon, startDaemon } from "./server";
+import { RESTART_EXIT_CODE } from "./vault-switch";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
@@ -26,6 +29,23 @@ function installSignalHandlers(daemon: RunningDaemon): void {
   process.on("SIGHUP", stop);
 }
 
+/** Shuts down, then exits so the daemon opens `vaultPath` when it starts again. */
+function restartFor(daemon: RunningDaemon, vaultPath: string): void {
+  const vault = displayPath(vaultPath, homedir());
+  process.stdout.write(
+    daemon.config.supervised
+      ? `\n  Restarting to open ${vault}…\n\n`
+      : `\n  Daily Do List opens ${vault} from now on. Start it again (for example \`pnpm start\`) to use it.\n\n`,
+  );
+  withTimeout(daemon.close(), SHUTDOWN_TIMEOUT_MS, "Shutdown timed out").then(
+    () => process.exit(RESTART_EXIT_CODE),
+    (error: unknown) => {
+      process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+      process.exit(RESTART_EXIT_CODE);
+    },
+  );
+}
+
 const args = process.argv.slice(2);
 if (args.length > 0) {
   const code = await runCli(args, {
@@ -37,7 +57,13 @@ if (args.length > 0) {
   process.stdout.write("", () => process.stderr.write("", () => process.exit(code)));
 } else {
   try {
-    const daemon = await startDaemon();
+    let running: RunningDaemon | undefined;
+    const daemon = await startDaemon({
+      onRestart: (vaultPath) => {
+        if (running) restartFor(running, vaultPath);
+      },
+    });
+    running = daemon;
     installSignalHandlers(daemon);
     process.stdout.write(`\n  Daily Do List is running at ${daemon.url}\n\n`);
   } catch (error) {
