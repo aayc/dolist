@@ -12,7 +12,119 @@ export type TriageDecision =
   | { kind: "ignore"; reason: "deferred" | "harmful" | "chore" }
   | { kind: "ask"; question: string }
   | { kind: "answer"; answer?: string; summary?: string }
-  | { kind: "delegate"; capabilities: Capability[] };
+  | { kind: "delegate"; capabilities: Capability[] }
+  | { kind: "routine"; routine: RoutineRequest };
+
+/** Something the user wants done again and again: a routine, as `create_routine` takes it. */
+export interface RoutineRequest {
+  name: string;
+  schedule: string;
+  instructions: string;
+  notify: "always" | "when_changed";
+  capabilities: Capability[];
+}
+
+const RECURRENCE =
+  /\b(?:every|each)\s+(?:(\d+)\s*(hours?|hrs?|minutes?|mins?)|(?:other\s+)?(morning|evening|night|afternoon|day|weekday|weekend|week|month|hour|monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?(?:\s+(morning|evening|night|afternoon))?)\b|\b(daily|hourly|weekly|monthly)\b/i;
+const AT_TIME = /\s*\bat\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?|noon)\b/i;
+const PART_OF_DAY: Record<string, string> = {
+  morning: "8:00",
+  afternoon: "14:00",
+  evening: "18:00",
+  night: "21:00",
+};
+const WATCH =
+  /\b(?:when|if|once)\b[^.]*\b(?:drops?|falls?|changes?|goes (?:up|down)|below|above|under|over|available|in stock|back|new|opens?|released?)\b|\b(?:watch|monitor|track|alert me|let me know|tell me when|notify me)\b/i;
+
+/** "Every morning, brief me on…", "check X every 2 hours and tell me when…": a routine to create. */
+export function routineRequest(text: string): RoutineRequest | undefined {
+  const recurrence = RECURRENCE.exec(text);
+  if (!recurrence) return undefined;
+  const at = AT_TIME.exec(text)?.[1]?.replace(/\s+/g, "");
+  const schedule = scheduleFor(recurrence, at);
+  const instructions = sentence(
+    text
+      .replace(recurrence[0], " ")
+      .replace(AT_TIME, " ")
+      .replace(/^\s*(?:please|can you|could you)\s+/i, "")
+      .replace(/\s+([,.;!?])/g, "$1")
+      .replace(/^[\s,;:-]+|[\s,;:-]+$/g, "")
+      .replace(/\s{2,}/g, " "),
+  );
+  if (instructions.split(" ").length < 2) return undefined;
+  const capabilities = desiredCapabilities(instructions);
+  if (
+    /\b(weather|news|headlines|prices?|stock|availability|flights?|deals?)\b/i.test(instructions)
+  ) {
+    if (!capabilities.includes("web")) capabilities.push("web");
+  }
+  return {
+    name: routineName(instructions, schedule),
+    schedule,
+    instructions,
+    notify: WATCH.test(text) ? "when_changed" : "always",
+    capabilities,
+  };
+}
+
+function scheduleFor(match: RegExpExecArray, at: string | undefined): string {
+  const [, count, unit, period, part, adverb] = match;
+  if (count && unit) {
+    const n = Number(count);
+    return /^h/i.test(unit) ? `every ${n} hours` : `every ${Math.max(15, n)} minutes`;
+  }
+  const word = (period ?? adverb ?? "").toLowerCase();
+  const time = at ?? PART_OF_DAY[(part ?? "").toLowerCase()] ?? PART_OF_DAY[word];
+  switch (word) {
+    case "hour":
+    case "hourly":
+      return "every hour";
+    case "week":
+    case "weekly":
+      return `every monday at ${time ?? "9:00"}`;
+    case "month":
+    case "monthly":
+      return `every month on the 1st at ${time ?? "9:00"}`;
+    case "weekday":
+      return `every weekday at ${time ?? "8:00"}`;
+    case "weekend":
+      return `every weekend at ${time ?? "10:00"}`;
+    case "morning":
+    case "afternoon":
+    case "evening":
+    case "night":
+    case "day":
+    case "daily":
+      return `every day at ${time ?? "8:00"}`;
+    default:
+      return `every ${word} at ${time ?? "9:00"}`;
+  }
+}
+
+function routineName(instructions: string, schedule: string): string {
+  const t = instructions.toLowerCase();
+  if (/\bbrief(?:ing)?\b/.test(t)) {
+    const hour = Number(/at (\d{1,2})/.exec(schedule)?.[1] ?? 8);
+    return hour < 12 ? "Morning briefing" : "Daily briefing";
+  }
+  if (/\b(prices?|in stock|availability|stock)\b/.test(t)) return "Price watch";
+  if (/\b(news|headlines)\b/.test(t)) return "News digest";
+  if (/\breview (?:my|the) week\b/.test(t)) return "Weekly review";
+  if (/\b(inbox|emails?)\b/.test(t)) return "Inbox triage";
+  if (/\b(unfinished|carry (?:over|forward))\b/.test(t)) return "Carry over unfinished tasks";
+  const words = instructions
+    .replace(/[^\p{L}\p{N}\s'-]/gu, "")
+    .split(/\s+/)
+    .slice(0, 4);
+  return words.join(" ");
+}
+
+function sentence(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  const upper = trimmed[0]!.toUpperCase() + trimmed.slice(1);
+  return /[.!?]$/.test(upper) ? upper : `${upper}.`;
+}
 
 export interface TriageInput {
   text: string;
@@ -63,6 +175,8 @@ export function triage(input: TriageInput): TriageDecision {
     };
   }
   if (PHYSICAL.test(text) && !ONLINE.test(text)) return { kind: "ignore", reason: "chore" };
+  const routine = routineRequest(text);
+  if (routine) return { kind: "routine", routine };
   if (isVague(text)) return { kind: "ask", question: clarifyingQuestion(text) };
   if (isQuickQuestion(text)) {
     const known = quickAnswer(text);

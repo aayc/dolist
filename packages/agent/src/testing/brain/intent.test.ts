@@ -6,13 +6,28 @@ import type { Capability } from "../../execution/types";
 import { formatOrchestratorDigest } from "../../prompts/orchestrator";
 import { parseDigest } from "./digest";
 import { planDirect } from "./direct";
-import { evaluateArithmetic, grantableCapabilities, quickAnswer, triage } from "./intent";
+import {
+  evaluateArithmetic,
+  grantableCapabilities,
+  quickAnswer,
+  routineRequest,
+  triage,
+} from "./intent";
 
 interface TriageCase {
   id: string;
   task: string;
   notes?: string[];
-  expected: "delegate" | "comment" | "ask_user" | "ignore" | "drop" | "forward" | "reply";
+  expected:
+    | "delegate"
+    | "comment"
+    | "ask_user"
+    | "ignore"
+    | "routine"
+    | "drop"
+    | "forward"
+    | "reply";
+  notify?: "always" | "when_changed";
   acceptable?: string[];
   capabilities?: Capability[];
   computerAccess?: "missing";
@@ -33,6 +48,7 @@ const OUTCOME = {
   answer: "comment",
   ask: "ask_user",
   ignore: "ignore",
+  routine: "routine",
 } as const;
 
 describe("triage against the eval dataset", () => {
@@ -68,6 +84,9 @@ describe("triage against the eval dataset", () => {
         const missing = c.capabilities.filter((cap) => !decision.capabilities.includes(cap));
         if (missing.length > 0) misses.push(`${c.id}: missing capabilities ${missing.join(", ")}`);
       }
+      if (decision.kind === "routine" && c.notify && decision.routine.notify !== c.notify) {
+        misses.push(`${c.id}: notify ${decision.routine.notify}, expected ${c.notify}`);
+      }
     }
     expect(cases.length).toBeGreaterThan(50);
     expect(misses).toEqual([]);
@@ -101,21 +120,81 @@ describe("triage against the eval dataset", () => {
         ],
         capabilities: { available: ["web"], unavailable: [], connectors: [] },
       });
-      const plan = planDirect(parseDigest(digest), [], false);
+      const plan = planDirect(parseDigest(digest), [], false, {
+        canCreateRoutines: true,
+        uses: (routine) => routine.capabilities,
+      });
       const own = plan.calls.filter(
         (call) => (call.arguments as { taskId?: string }).taskId === "tsk_case",
       );
-      const outcome = own.some((call) => call.name === "message_subagent")
-        ? "forward"
-        : own.length > 0
-          ? "drop"
-          : plan.reply
-            ? "reply"
-            : "nothing";
+      const outcome = plan.calls.some((call) => call.name === "create_routine")
+        ? "routine"
+        : own.some((call) => call.name === "message_subagent")
+          ? "forward"
+          : own.length > 0
+            ? "drop"
+            : plan.reply
+              ? "reply"
+              : "nothing";
       return `${c.id}: ${outcome}`;
     });
     expect(direct.length).toBeGreaterThanOrEqual(6);
     expect(outcomes).toEqual(direct.map((c) => `${c.id}: ${c.expected}`));
+  });
+});
+
+describe("routineRequest", () => {
+  it.each([
+    [
+      "Every morning, brief me on my calendar and the weather",
+      {
+        name: "Morning briefing",
+        schedule: "every day at 8:00",
+        instructions: "Brief me on my calendar and the weather.",
+        notify: "always",
+      },
+    ],
+    [
+      "Check the price of the Moka pot at shop.example.com every 2 hours and tell me when it drops below $30",
+      {
+        name: "Price watch",
+        schedule: "every 2 hours",
+        instructions:
+          "Check the price of the Moka pot at shop.example.com and tell me when it drops below $30.",
+        notify: "when_changed",
+      },
+    ],
+    [
+      "Every weekday at 7:30 send me the top tech headlines",
+      {
+        name: "News digest",
+        schedule: "every weekday at 7:30",
+        instructions: "Send me the top tech headlines.",
+        notify: "always",
+      },
+    ],
+    [
+      "Every Sunday evening review my week from my daily notes",
+      { name: "Weekly review", schedule: "every sunday at 18:00", notify: "always" },
+    ],
+    ["hourly: watch example.com/status for new incidents", { schedule: "every hour" }],
+  ])("reads %j", (text, expected) => {
+    expect(routineRequest(text)).toMatchObject(expected);
+  });
+
+  it("gives runs the capabilities their instructions need", () => {
+    expect(
+      routineRequest("Every morning brief me on my calendar and the weather")?.capabilities,
+    ).toEqual(["connectors", "web"]);
+    expect(routineRequest("every hour check the price of the kettle")?.capabilities).toEqual([
+      "web",
+    ]);
+  });
+
+  it("leaves one-off tasks and chores alone", () => {
+    expect(routineRequest("Research the best espresso grinders under $300")).toBeUndefined();
+    expect(triage({ text: "Water the plants every day" }).kind).toBe("ignore");
+    expect(triage({ text: "Every morning brief me on the news" }).kind).toBe("routine");
   });
 });
 
