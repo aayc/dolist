@@ -3,20 +3,24 @@ import AppKit
 /// How loud an agent badge is. Only badges that need the user stand out; work in progress is a
 /// neutral pill and finished work is quiet text.
 enum BadgeTier: Equatable, Sendable {
-  /// `waiting_approval`, `waiting_user`: warning-tinted pill with a warning border, primary text.
+  /// `waiting_approval`, `waiting_user`, a chip asking for approval: warning-tinted pill with a
+  /// warning border, primary text.
   case needsYou
   /// `failed`: danger text and dot on a faint danger fill, no border.
   case failed
-  /// `triaging`, `queued`, `working`: subtle surface fill, hairline border, secondary text.
+  /// `triaging`, `queued`, `working`, a chip while the orchestrator looks or acts: subtle surface
+  /// fill, hairline border, secondary text.
   case working
-  /// `done`, `cancelled` and statuses this build doesn't know: no fill, no border, tertiary text.
+  /// `done`, `cancelled`, the other chips and statuses this build doesn't know: no fill, no
+  /// border, tertiary text.
   case quiet
 
   init(status: String) {
+    typealias Chip = EditorBadge.OrchestratorStatus
     switch status {
-    case "waiting_approval", "waiting_user": self = .needsYou
+    case "waiting_approval", "waiting_user", Chip.needsYou: self = .needsYou
     case "failed": self = .failed
-    case "triaging", "queued", "working": self = .working
+    case "triaging", "queued", "working", Chip.looking, Chip.acting: self = .working
     default: self = .quiet
     }
   }
@@ -52,16 +56,18 @@ struct BadgeStyle {
     }
   }
 
-  /// Status dot: triaging accent, working info, needs you warning, done success, failed danger;
-  /// queued, cancelled and unknown statuses faint.
+  /// Status dot: triaging (and a chip noticing or looking) accent, working (and acting) info,
+  /// needs you warning, done green, failed danger; queued, cancelled, "nothing to do" and unknown
+  /// statuses faint.
   static func dotColor(_ status: String) -> NSColor {
+    typealias Chip = EditorBadge.OrchestratorStatus
     switch status {
-    case "triaging": EditorColors.accent
-    case "working": EditorColors.info
-    case "waiting_approval", "waiting_user": EditorColors.warning
-    case "done": EditorColors.success
-    case "failed": EditorColors.danger
-    default: EditorColors.tertiaryText
+    case "triaging", Chip.noticed, Chip.looking: return EditorColors.accent
+    case "working", Chip.acting: return EditorColors.info
+    case "waiting_approval", "waiting_user", Chip.needsYou: return EditorColors.warning
+    case "done", Chip.done: return EditorColors.success
+    case "failed": return EditorColors.danger
+    default: return EditorColors.tertiaryText
     }
   }
 }

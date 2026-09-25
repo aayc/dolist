@@ -45,11 +45,16 @@ extension FakeDaemon {
     let reply = orchestratorReply(to: text)
     jobGeneration += 1
     let jobId = nextID("reply")
+    let trigger = OrchestratorTrigger(kind: .message, summary: "your message")
     jobs[jobId] = Job(
       id: jobId, taskId: nil, threadId: id, script: nil,
-      beats: [Job.Beat(delay: 200, step: .turn("You wrote to me"))]
-        + say("orchestrator", reply, after: 1_000) + [Job.Beat(delay: 0, step: .end)],
-      generation: jobGeneration)
+      beats: [
+        Job.Beat(delay: 200, step: .turn("You wrote to me")),
+        Job.Beat(delay: 300, step: .phase(.thinking)),
+      ]
+        + say("orchestrator", reply, after: 700)
+        + [Job.Beat(delay: 0, step: .outcome(OrchestratorOutcome(kind: .replied)))],
+      generation: jobGeneration, activity: OrchestratorActivity(phase: .reading, trigger: trigger))
     scheduleNextBeat(jobId)
   }
 
@@ -57,17 +62,27 @@ extension FakeDaemon {
   func stopOrchestratorTurn() {
     let running = jobs.values.filter { $0.threadId == OrchestratorThread.id }
     guard !running.isEmpty else { return }
-    for job in running.sorted(by: { $0.id < $1.id }) { abort(job) }
+    for job in running.sorted(by: { $0.id < $1.id }) {
+      abort(job)
+      if var activity = job.activity {
+        activity.phase = .idle
+        emitActivity(activity)
+      }
+    }
     pushMessage(
       OrchestratorThread.id,
       Self.statusMessage(.cancelled, "You stopped this run", at: nowMillis, id: nextID("msg")))
     endOrchestratorTurn()
   }
 
-  func beginOrchestratorTurn(_ trigger: String) {
+  /// Starts a turn with a status line saying what woke it; returns that message's id (the turn's).
+  @discardableResult
+  func beginOrchestratorTurn(_ trigger: String) -> String {
     let id = OrchestratorThread.id
+    let messageId = nextID("msg")
     threads[id]?.status = .working
-    pushMessage(id, Self.statusMessage(.working, trigger, at: nowMillis, id: nextID("msg")))
+    pushMessage(id, Self.statusMessage(.working, trigger, at: nowMillis, id: messageId))
+    return messageId
   }
 
   func endOrchestratorTurn() {

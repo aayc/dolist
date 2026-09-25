@@ -83,6 +83,17 @@ extension Workspace {
     ui.showThread(threadId)
   }
 
+  /// Chip click: the thread of the turn's outcome when it has one, else the orchestrator's chat
+  /// at the turn.
+  func openChip(_ id: String) {
+    let chip = orchestrator.chip(id)
+    if let threadId = chip?.threadToOpen {
+      ui.showThread(threadId)
+    } else {
+      openOrchestratorTurn?(chip?.turnId)
+    }
+  }
+
   /// Badge click: open the task's thread (or the inbox until the orchestrator creates one).
   func openTaskThread(_ badge: EditorBadge) {
     let threadId =
@@ -161,8 +172,16 @@ extension Workspace: EditorCoordinatorHost {
     agent?.records(for: path) ?? []
   }
 
+  func editorChips(for path: String) -> [OrchestratorChip] {
+    orchestrator.chips(for: path)
+  }
+
   func editorDidClickBadge(_ badge: EditorBadge) {
-    openTaskThread(badge)
+    if OrchestratorChip.isChipId(badge.id) {
+      openChip(badge.id)
+    } else {
+      openTaskThread(badge)
+    }
   }
 
   func editorDidClickAgentThread(_ threadId: String) {

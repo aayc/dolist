@@ -97,6 +97,9 @@ public final class AgentStore {
   public internal(set) var pendingPlacement: AgentPlacement?
   /// The always-on machine's name, from the host's settings (`remote.alwaysOnMachine`).
   public var alwaysOnMachineName: String?
+  /// A message of the orchestrator's chat to show (a turn opened from the editor), until the chat
+  /// has scrolled to it.
+  public internal(set) var orchestratorFocus: OrchestratorFocus?
 
   // MARK: Bookkeeping
 

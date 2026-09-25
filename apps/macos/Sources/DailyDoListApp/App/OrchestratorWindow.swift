@@ -35,6 +35,13 @@ struct OrchestratorWindowView: View {
 }
 
 extension AppModel {
+  /// A chip or the orchestrator's indicators: its chat's window, scrolled to the turn (the
+  /// turn's first message) when there is one.
+  func showOrchestratorTurn(_ turnId: String?) {
+    if let turnId { agent?.focusOrchestratorMessage(turnId) }
+    showOrchestratorWindow()
+  }
+
   /// Agent → Orchestrator Chat: brings its window forward, opening it if needed.
   func showOrchestratorWindow() {
     if environment.enablesSystemServices { NSApplication.shared.activate() }

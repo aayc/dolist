@@ -34,35 +34,48 @@ struct MotionState: Equatable {
   private(set) var known: [String: EditorBadge] = [:]
   private(set) var appearing: [String: TimeInterval] = [:]
   private(set) var crossfading: [String: Crossfade] = [:]
-  /// When each triaging badge started triaging (the phase of its pulse).
+  /// Badges fading out, by when they started (once over, a fading badge isn't drawn at all).
+  private(set) var fading: [String: TimeInterval] = [:]
+  /// When each pulsing badge (triaging, a chip noticing or looking) started (its pulse's phase).
   private(set) var pulsing: [String: TimeInterval] = [:]
   /// Checkmarks popping in, by the offset of their status character (`x` in `- [x]`).
   private(set) var checking: [Int: TimeInterval] = [:]
 
   /// Nothing moves and nothing could pulse.
   var isIdle: Bool {
-    appearing.isEmpty && crossfading.isEmpty && pulsing.isEmpty && checking.isEmpty
+    appearing.isEmpty && crossfading.isEmpty && fading.isEmpty && pulsing.isEmpty
+      && checking.isEmpty
   }
-  /// Something plays for a limited time (appear, crossfade, checkmark).
-  var hasTransitions: Bool { !appearing.isEmpty || !crossfading.isEmpty || !checking.isEmpty }
+  /// Something plays for a limited time (appear, crossfade, fade out, checkmark).
+  var hasTransitions: Bool {
+    !appearing.isEmpty || !crossfading.isEmpty || !fading.isEmpty || !checking.isEmpty
+  }
   var hasPulses: Bool { !pulsing.isEmpty }
   var checkOffsets: [Int] { Array(checking.keys) }
 
-  /// The badges were set. With `animated`, a badge that wasn't there fades in and one whose look
-  /// changed crossfades; without (a document's first badges, Reduce Motion) they just show.
-  /// Badges set again with the same id and look (or only moved to another line) don't move.
+  /// The badges were set. With `animated`, a badge that wasn't there fades in, one whose look
+  /// changed crossfades and one that started fading fades out; without (a document's first
+  /// badges, Reduce Motion) they just show, or vanish. Badges set again with the same id and look
+  /// (or only moved to another line) don't move.
   mutating func setBadges(_ badges: [EditorBadge], now: TimeInterval, animated: Bool) {
     var next: [String: EditorBadge] = [:]
     for badge in badges where badge.isDrawn { next[badge.id] = badge }
     for (id, badge) in next {
       let old = known[id]
-      if badge.status == "triaging" {
-        if old?.status != "triaging" { pulsing[id] = now }
+      if badge.pulses, !badge.isFading {
+        if old?.pulses != true || old?.isFading == true { pulsing[id] = now }
       } else {
         pulsing[id] = nil
       }
+      if badge.isFading {
+        appearing[id] = nil
+        crossfading[id] = nil
+        if animated, let old, !old.isFading { fading[id] = now }
+        continue
+      }
+      fading[id] = nil
       guard animated else { continue }
-      if let old {
+      if let old, !old.isFading {
         if old.looksDifferent(from: badge) {
           crossfading[id] = Crossfade(previous: old, start: now)
         }
@@ -73,6 +86,7 @@ struct MotionState: Equatable {
     for id in known.keys where next[id] == nil {
       appearing[id] = nil
       crossfading[id] = nil
+      fading[id] = nil
       pulsing[id] = nil
     }
     known = next
@@ -101,6 +115,7 @@ struct MotionState: Equatable {
   mutating func prune(now: TimeInterval) {
     appearing = appearing.filter { now - $0.value < MotionTimeline.appearDuration }
     crossfading = crossfading.filter { now - $0.value.start < MotionTimeline.crossfadeDuration }
+    fading = fading.filter { now - $0.value < MotionTimeline.fadeOutDuration }
     checking = checking.filter { now - $0.value < MotionTimeline.checkDuration }
   }
 
@@ -108,11 +123,17 @@ struct MotionState: Equatable {
   mutating func finishTransitions() {
     appearing.removeAll()
     crossfading.removeAll()
+    fading.removeAll()
     checking.removeAll()
   }
 
   func isTransitioning(_ id: String) -> Bool {
-    appearing[id] != nil || crossfading[id] != nil
+    appearing[id] != nil || crossfading[id] != nil || fading[id] != nil
+  }
+
+  /// Whether a badge is drawn at all: a fading badge only until its fade is over.
+  func isVisible(_ badge: EditorBadge) -> Bool {
+    !badge.isFading || fading[badge.id] != nil
   }
 
   func isPulsing(_ id: String) -> Bool {
@@ -132,6 +153,9 @@ struct MotionState: Equatable {
         paint.previousOpacity = 1 - weight
       }
     }
+    if let start = fading[badge.id] {
+      paint.opacity *= MotionTimeline.fadeOut(after: now - start)
+    }
     if pulses, let start = pulsing[badge.id] {
       paint.dotOpacity = MotionTimeline.pulse(after: now - start)
     }
@@ -147,6 +171,13 @@ struct MotionState: Equatable {
 }
 
 extension EditorBadge {
+  /// Statuses whose dot breathes while on screen: triaging, and a chip noticing or looking.
+  static let pulsingStatuses: Set<String> = [
+    "triaging", OrchestratorStatus.noticed, OrchestratorStatus.looking,
+  ]
+
+  var pulses: Bool { Self.pulsingStatuses.contains(status) }
+
   /// Whether switching from this badge to `other` changes what's drawn (status, label, unread dot).
   func looksDifferent(from other: EditorBadge) -> Bool {
     status != other.status || displayLabel != other.displayLabel

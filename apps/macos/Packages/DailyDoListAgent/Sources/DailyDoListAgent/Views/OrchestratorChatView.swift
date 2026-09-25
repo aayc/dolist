@@ -134,14 +134,21 @@ struct OrchestratorHeader: View {
 }
 
 /// The chat's messages with the composer below. Follows new content while scrolled to the bottom
-/// and leaves the position alone while the user reads further up (like ``ChatView``).
+/// and leaves the position alone while the user reads further up (like ``ChatView``). A turn
+/// opened from the editor (``AgentStore/orchestratorFocus``) is scrolled to and highlighted for a
+/// moment once its message is loaded.
 struct OrchestratorMessages: View {
   let store: AgentStore
   let thread: AgentThread
   let onOpenTask: (String) -> Void
   @State private var isPinned = true
   @State private var viewportHeight: CGFloat = 0
+  @State private var highlighted: String?
   @Environment(\.agentReferenceDate) private var referenceDate
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  /// How long a turn opened from the editor stays highlighted.
+  static let highlightDuration: Duration = .seconds(2)
 
   private static let bottomId = "orchestrator-bottom"
   private nonisolated static let space = "orchestrator-scroll"
@@ -179,6 +186,12 @@ struct OrchestratorMessages: View {
             LazyVStack(alignment: .leading, spacing: 12) {
               ForEach(thread.messages) { message in
                 row(for: message, link: message.orchestratorTaskId.flatMap { links[$0] }, now: now)
+                  .background {
+                    RoundedRectangle(cornerRadius: 6)
+                      .fill(AgentTheme.accentSoft)
+                      .padding(-6)
+                      .opacity(highlighted == message.id ? 1 : 0)
+                  }
                   .id(message.id)
               }
             }
@@ -202,15 +215,39 @@ struct OrchestratorMessages: View {
         } action: { height in
           if height != viewportHeight { viewportHeight = height }
         }
-        .onAppear { proxy.scrollTo(Self.bottomId, anchor: .bottom) }
+        .onAppear {
+          proxy.scrollTo(Self.bottomId, anchor: .bottom)
+          reveal(proxy)
+        }
+        .onChange(of: store.orchestratorFocus) { reveal(proxy) }
         .onChange(of: followKey) {
-          guard isPinned else { return }
+          guard !reveal(proxy), isPinned else { return }
           proxy.scrollTo(Self.bottomId, anchor: .bottom)
         }
       }
       AgentHairline()
       Composer(store: store, threadId: thread.id)
     }
+  }
+
+  /// Scrolls to the message the store asked to show, once it's loaded, and highlights it for a
+  /// moment (the highlight just goes with Reduce Motion). True when it did.
+  @discardableResult
+  private func reveal(_ proxy: ScrollViewProxy) -> Bool {
+    guard let focus = store.orchestratorFocus,
+      thread.messages.contains(where: { $0.id == focus.messageId })
+    else { return false }
+    store.orchestratorFocusShown(focus.serial)
+    isPinned = false
+    proxy.scrollTo(focus.messageId, anchor: .center)
+    highlighted = focus.messageId
+    let fade: Animation? = reduceMotion ? nil : .easeOut(duration: 0.6)
+    Task { @MainActor in
+      try? await Task.sleep(for: Self.highlightDuration)
+      guard highlighted == focus.messageId else { return }
+      withAnimation(fade) { highlighted = nil }
+    }
+    return true
   }
 
   @ViewBuilder
