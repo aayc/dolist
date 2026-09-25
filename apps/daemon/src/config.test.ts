@@ -276,6 +276,39 @@ describe("loadConfig", () => {
     expect(() => load()).toThrow(/host/);
   });
 
+  it("reads the placement, and which device settings env vars lock", () => {
+    expect(load()).toMatchObject({ placement: "this_device", lockedByEnv: [] });
+    mkdirSync(ddlHome, { recursive: true });
+    const file = join(ddlHome, "config.json");
+    writeFileSync(
+      file,
+      JSON.stringify({
+        agent: { placement: "always_on_host" },
+        remote: { hosts: ["vm-name.tailnet-name.ts.net"] },
+      }),
+    );
+    expect(load()).toMatchObject({
+      placement: "always_on_host",
+      remoteHosts: ["vm-name.tailnet-name.ts.net"],
+      lockedByEnv: [],
+    });
+    expect(
+      load({
+        DDL_AGENT_PLACEMENT: "Always_On_Machine",
+        DDL_REMOTE_HOSTS: "a.example,b.example:8443",
+        DDL_SYNC_URL: "https://sync.example.com",
+        DDL_SYNC_VAULT: "v_1",
+      }),
+    ).toMatchObject({
+      placement: "always_on_machine",
+      remoteHosts: ["a.example", "b.example:8443"],
+      lockedByEnv: ["placement", "remoteHosts", "sync"],
+    });
+    expect(() => load({ DDL_AGENT_PLACEMENT: "cloud" })).toThrow(/DDL_AGENT_PLACEMENT/);
+    writeFileSync(file, JSON.stringify({ agent: { placement: "cloud" } }));
+    expect(() => load()).toThrow(/placement/);
+  });
+
   it("refuses a sync token in config.json without repeating it", () => {
     mkdirSync(ddlHome, { recursive: true });
     const token = randomBytes(32).toString("base64url");

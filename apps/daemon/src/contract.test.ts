@@ -23,8 +23,12 @@ import {
   operationKey,
   routePath,
 } from "./contract-test-helpers";
+import { memoryDeviceSettings } from "./device-settings";
+import { type FakeMachine, startFakeMachine } from "./fake-machine";
+import { memorySecretFile } from "./home-files";
+import { MachineLink } from "./machine-link";
 import { createRemoteHosts } from "./remote-hosts";
-import type { SettingsStore } from "./settings-store";
+import { createSettingsStore, type SettingsStore } from "./settings-store";
 import {
   createTestApp,
   FakeAgentRuntime,
@@ -133,11 +137,39 @@ async function routinePaused(observed: Observed, name: "routinePause" | "routine
   expect((await call()).body).toMatchObject({ error: "conflict" });
 }
 
+async function withFakeMachine(run: (machine: FakeMachine) => Promise<void>): Promise<void> {
+  const machine = await startFakeMachine();
+  try {
+    await run(machine);
+  } finally {
+    await machine.close();
+  }
+}
+
+/** An app whose machine link keeps its credential in memory and shares the app's settings. */
+async function machineSetup(observed: Observed) {
+  const storage = new MemoryStorageProvider();
+  const settings = await createSettingsStore({ storage });
+  const link = new MachineLink({
+    settings,
+    credentialFile: memorySecretFile(),
+    deviceName: () => "Laptop",
+    logger: silentLogger,
+  });
+  const env = await setup(observed, { storage, settings, machine: link });
+  return { ...env, link };
+}
+
 function hiddenDailyFolderSettings(): SettingsStore {
   const settings: AppSettings = mergeSettings(DEFAULT_SETTINGS, {
     dailyNotes: { folder: ".hidden" },
   });
-  return { get: () => settings, update: async () => settings, onChange: () => () => {} };
+  return {
+    get: () => settings,
+    update: async () => settings,
+    reload: async () => null,
+    onChange: () => () => {},
+  };
 }
 
 type Scenario = (observed: Observed) => Promise<void>;
@@ -574,6 +606,228 @@ const scenarios: Record<string, Scenario> = {
     });
   },
 
+  "GET device": async (observed) => {
+    const { api } = await setup(observed);
+    expect((await api.call("device", "GET")).body).toEqual({
+      device: { id: "dev_this_device", name: "This device" },
+      placement: "this_device",
+      remoteHosts: [],
+      sync: { url: null, vault: null, hasToken: false },
+      lockedByEnv: [],
+    });
+    const synced = await setup(observed, {
+      device: memoryDeviceSettings({
+        placement: "always_on_host",
+        sync: { kind: "remote", url: "https://sync.example.com", vault: "v_1" },
+        hasToken: true,
+        lockedByEnv: ["placement", "sync"],
+        remoteHosts: createRemoteHosts(["vm-name.tailnet-name.ts.net"]),
+      }),
+    });
+    expect((await synced.api.call("device", "GET")).body).toEqual({
+      device: { id: "dev_this_device", name: "This device" },
+      placement: "always_on_host",
+      remoteHosts: ["vm-name.tailnet-name.ts.net"],
+      sync: { url: "https://sync.example.com", vault: "v_1", hasToken: true },
+      lockedByEnv: ["placement", "sync"],
+    });
+  },
+
+  "PATCH device": async (observed) => {
+    const remoteHosts = createRemoteHosts();
+    const { api } = await setup(observed, { device: memoryDeviceSettings({ remoteHosts }) });
+    const patch = (json: unknown, init = {}) => api.call("device", "PATCH", { json, ...init });
+    expect(
+      (
+        await patch({
+          name: "  Work laptop ",
+          placement: "always_on_machine",
+          remoteHosts: [" VM-Name.Tailnet-Name.ts.net "],
+        })
+      ).body,
+    ).toMatchObject({
+      device: { name: "Work laptop" },
+      placement: "always_on_machine",
+      remoteHosts: ["vm-name.tailnet-name.ts.net"],
+    });
+    expect(remoteHosts.list()).toEqual(["vm-name.tailnet-name.ts.net"]);
+    for (const bad of [
+      { name: "" },
+      { name: "n".repeat(65) },
+      { placement: "somewhere" },
+      { remoteHosts: ["100.64.0.1"] },
+      { remoteHosts: ["https://vm-name.tailnet-name.ts.net"] },
+      { remoteHosts: ["a.example", "a.example"] },
+      { remoteHosts: Array.from({ length: 9 }, (_, i) => `h${i}.example`) },
+      { sync: { url: "https://sync.example.com" } },
+    ]) {
+      expect((await patch(bad)).body).toMatchObject({ error: "invalid_request" });
+    }
+    expect((await patch(undefined, { body: "{" })).body).toMatchObject({ error: "invalid_json" });
+    expect((await patch(undefined, { body: TOO_BIG })).status).toBe(413);
+
+    const locked = await setup(observed, {
+      device: memoryDeviceSettings({ lockedByEnv: ["placement", "remoteHosts"] }),
+    });
+    const lockedPatch = (json: unknown) => locked.api.call("device", "PATCH", { json });
+    expect((await lockedPatch({ placement: "always_on_host" })).body).toMatchObject({
+      error: "locked_by_env",
+    });
+    expect((await lockedPatch({ remoteHosts: [] })).status).toBe(409);
+    expect((await lockedPatch({ name: "Renamed" })).body).toMatchObject({
+      device: { name: "Renamed" },
+      placement: "this_device",
+    });
+  },
+
+  "PUT deviceSync": async (observed) => {
+    const applied: unknown[] = [];
+    const device = memoryDeviceSettings({ applySync: async (sync) => void applied.push(sync) });
+    const { api } = await setup(observed, { device });
+    const put = (json: unknown, init = {}) => api.call("deviceSync", "PUT", { json, ...init });
+    const token = "t".repeat(43);
+    const saved = await put({ url: "https://sync.example.com", vault: "v_1", token: ` ${token} ` });
+    expect(saved.body).toMatchObject({
+      sync: { url: "https://sync.example.com", vault: "v_1", hasToken: true },
+    });
+    expect(JSON.stringify(saved.body)).not.toContain(token);
+    expect(applied).toEqual([{ kind: "remote", url: "https://sync.example.com", vault: "v_1" }]);
+    expect((await put({ url: "http://127.0.0.1:7332", vault: "v_2" })).body).toMatchObject({
+      sync: { url: "http://127.0.0.1:7332", vault: "v_2", hasToken: true },
+    });
+    for (const bad of [
+      { url: "http://sync.example.com", vault: "v_1" },
+      { url: "https://user:pw@sync.example.com", vault: "v_1" },
+      { url: "https://sync.example.com", vault: "not a vault" },
+      { url: "https://sync.example.com", vault: "v_1", token: "two words" },
+      { url: "https://sync.example.com", vault: "v_1", extra: true },
+    ]) {
+      expect((await put(bad)).body).toMatchObject({ error: "invalid_request" });
+    }
+    const fresh = await setup(observed);
+    expect(
+      (
+        await fresh.api.call("deviceSync", "PUT", {
+          json: { url: "https://s.example", vault: "v" },
+        })
+      ).body,
+    ).toMatchObject({ error: "invalid_request", message: expect.stringMatching(/token/) });
+    expect((await put(undefined, { body: "{" })).body).toMatchObject({ error: "invalid_json" });
+    expect((await put(undefined, { body: TOO_BIG })).status).toBe(413);
+    const locked = await setup(observed, {
+      device: memoryDeviceSettings({ lockedByEnv: ["sync"] }),
+    });
+    expect(
+      (
+        await locked.api.call("deviceSync", "PUT", {
+          json: { url: "https://sync.example.com", vault: "v_1", token },
+        })
+      ).body,
+    ).toMatchObject({ error: "locked_by_env" });
+    expect(applied).toHaveLength(2);
+  },
+
+  "DELETE deviceSync": async (observed) => {
+    const applied: unknown[] = [];
+    const device = memoryDeviceSettings({
+      sync: { kind: "remote", url: "https://sync.example.com", vault: "v_1" },
+      hasToken: true,
+      applySync: async (sync) => void applied.push(sync),
+    });
+    const { api } = await setup(observed, { device });
+    expect((await api.call("deviceSync", "DELETE")).body).toMatchObject({
+      sync: { url: null, vault: null, hasToken: false },
+    });
+    expect(applied).toEqual([{ kind: "none" }]);
+    const locked = await setup(observed, {
+      device: memoryDeviceSettings({ lockedByEnv: ["sync"] }),
+    });
+    expect((await locked.api.call("deviceSync", "DELETE")).body).toMatchObject({
+      error: "locked_by_env",
+    });
+  },
+
+  "GET machine": async (observed) => {
+    await withFakeMachine(async (fake) => {
+      const { api, link } = await machineSetup(observed);
+      expect((await api.call("machine", "GET")).body).toEqual({
+        machine: null,
+        paired: false,
+        reachable: null,
+        checkedAt: null,
+      });
+      await link.pair({ url: fake.url, code: fake.code, name: "vm-1" });
+      expect((await api.call("machine", "GET")).body).toMatchObject({
+        machine: { name: "vm-1", url: fake.url },
+        paired: true,
+        reachable: true,
+        version: "0.2.0",
+        agent: { runsOn: { name: "vm-1" } },
+        readiness: { harness: { kind: "cursor" } },
+      });
+    });
+  },
+
+  "POST machinePair": async (observed) => {
+    await withFakeMachine(async (fake) => {
+      const { api } = await machineSetup(observed);
+      const pair = (json: unknown, init = {}) => api.call("machinePair", "POST", { json, ...init });
+      for (const bad of [
+        { url: "http://vm-1.tailnet-name.ts.net", code: fake.code },
+        { url: "https://vm-1.tailnet-name.ts.net/app", code: fake.code },
+        { url: fake.url, code: "ILLO-0000" },
+        { url: fake.url, code: fake.code, token: "x" },
+      ]) {
+        expect((await pair(bad)).body).toMatchObject({ error: "invalid_request" });
+      }
+      expect((await pair(undefined, { body: "{" })).body).toMatchObject({ error: "invalid_json" });
+      expect((await pair(undefined, { body: TOO_BIG })).status).toBe(413);
+      expect((await pair({ url: fake.url, code: "ZZZZ-ZZZZ" })).body).toMatchObject({
+        error: "pairing_rejected",
+      });
+      fake.pairAnswer = { status: 429, body: { error: "rate_limited" } };
+      expect((await pair({ url: fake.url, code: fake.code })).body).toMatchObject({
+        error: "rate_limited",
+      });
+      const closed = await startFakeMachine();
+      await closed.close();
+      expect((await pair({ url: closed.url, code: fake.code })).body).toMatchObject({
+        error: "machine_unreachable",
+      });
+      const paired = await pair({ url: `${fake.url}/`, code: fake.code.toLowerCase() });
+      expect(paired.body).toMatchObject({ machine: { url: fake.url }, paired: true });
+      expect(JSON.stringify(paired.body)).not.toMatch(/token/i);
+    });
+  },
+
+  "POST machineCheck": async (observed) => {
+    await withFakeMachine(async (fake) => {
+      const { api, link } = await machineSetup(observed);
+      expect((await api.call("machineCheck", "POST")).body).toMatchObject({ machine: null });
+      await link.pair({ url: fake.url, code: fake.code, name: "vm-1" });
+      fake.revokeAll();
+      expect((await api.call("machineCheck", "POST")).body).toMatchObject({
+        paired: true,
+        reachable: true,
+        error: expect.stringMatching(/pair again/),
+      });
+    });
+  },
+
+  "DELETE machinePairing": async (observed) => {
+    await withFakeMachine(async (fake) => {
+      const { api, link } = await machineSetup(observed);
+      await link.pair({ url: fake.url, code: fake.code, name: "vm-1" });
+      expect((await api.call("machinePairing", "DELETE")).body).toEqual({
+        machine: { name: "vm-1", url: fake.url },
+        paired: false,
+        reachable: null,
+        checkedAt: null,
+      });
+      expect(fake.revoked).toHaveLength(1);
+    });
+  },
+
   "GET ws": async (observed) => {
     const { api } = await setup(observed);
     expect((await api.call("ws", "GET")).status).toBe(426);
@@ -759,18 +1013,10 @@ async function agentEnabled(observed: Observed, method: "PUT" | "POST") {
 
 /**
  * Operations the contract declares that the daemon doesn't serve yet: they answer 404 like any
- * unknown route. Device settings with the machine link (S2) replace each entry with a scenario.
+ * unknown route. A stream adding routes lists them here until it replaces each with a
+ * scenario.
  */
-const NOT_SERVED_YET = new Set([
-  "GET device",
-  "PATCH device",
-  "PUT deviceSync",
-  "DELETE deviceSync",
-  "GET machine",
-  "POST machinePair",
-  "POST machineCheck",
-  "DELETE machinePairing",
-]);
+const NOT_SERVED_YET = new Set<string>([]);
 
 const operations = listOperations();
 const served = operations.filter((op) => !NOT_SERVED_YET.has(operationKey(op.name, op.method)));
@@ -784,12 +1030,14 @@ describe("every contract operation", () => {
     for (const key of NOT_SERVED_YET) expect(keys.has(key), key).toBe(true);
   });
 
-  it.each([...NOT_SERVED_YET])("%s is not served yet (404)", async (key) => {
-    const op = operations.find(({ name, method }) => operationKey(name, method) === key)!;
-    const app = await createTestApp();
-    const res = await app.request(routePath(op.name, { id: "x" }), { method: op.method });
-    expect(res.status).toBe(404);
-  });
+  if (NOT_SERVED_YET.size > 0) {
+    it.each([...NOT_SERVED_YET])("%s is not served yet (404)", async (key) => {
+      const op = operations.find(({ name, method }) => operationKey(name, method) === key)!;
+      const app = await createTestApp();
+      const res = await app.request(routePath(op.name, { id: "x" }), { method: op.method });
+      expect(res.status).toBe(404);
+    });
+  }
 
   it.each(served.map((op) => [operationKey(op.name, op.method), op] as const))(
     "%s reaches every declared status and answers each as declared",

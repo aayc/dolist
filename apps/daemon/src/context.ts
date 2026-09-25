@@ -2,6 +2,8 @@ import type { AgentRuntime } from "@ddl/agent";
 import type { ConnectorToolSource } from "@ddl/connectors";
 import type { Logger, SyncStatusResponse } from "@ddl/core";
 import type { StorageProvider } from "@ddl/storage";
+import type { DeviceSettings } from "./device-settings";
+import type { MachineLink } from "./machine-link";
 import type { PairedDeviceStore } from "./paired-devices";
 import type { PairingCodes } from "./pairing";
 import type { RemoteHosts } from "./remote-hosts";
@@ -30,6 +32,10 @@ export interface AppContext {
   writes: WriteTracker;
   search: VaultSearch;
   syncStatus: () => SyncStatusResponse;
+  /** This device's name, placement, remote hosts and sync setup. */
+  device: DeviceSettings;
+  /** The always-on machine: pairing, checks, this device's credential. */
+  machine: MachineLink;
   systemSettings: SystemSettingsOpener;
   now: () => Date;
   version: string;

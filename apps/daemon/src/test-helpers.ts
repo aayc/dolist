@@ -31,6 +31,8 @@ import {
 import { MemoryStorageProvider, type StorageProvider } from "@ddl/storage";
 import type { Hono } from "hono";
 import { createApp } from "./app";
+import type { DeviceSettings } from "./device-settings";
+import type { MachineLink } from "./machine-link";
 import { PairedDeviceStore } from "./paired-devices";
 import { PairingCodes } from "./pairing";
 import { createRemoteHosts, type RemoteHostRegistry } from "./remote-hosts";
@@ -338,6 +340,8 @@ export interface TestAppOptions<S extends StorageProvider = MemoryStorageProvide
   now?: () => Date;
   logger?: Logger;
   systemSettings?: FakeSystemSettings;
+  device?: DeviceSettings;
+  machine?: MachineLink;
 }
 
 export interface TestApp<S extends StorageProvider = MemoryStorageProvider> {
@@ -383,6 +387,8 @@ export async function createTestApp<S extends StorageProvider = MemoryStoragePro
     webDist: options.webDist ?? null,
     writes,
     ...(options.syncStatus ? { syncStatus: options.syncStatus } : {}),
+    ...(options.device ? { device: options.device } : {}),
+    ...(options.machine ? { machine: options.machine } : {}),
     systemSettings,
     ...(options.now ? { now: options.now } : {}),
   });

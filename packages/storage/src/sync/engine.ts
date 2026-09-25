@@ -6,6 +6,8 @@ import {
   ConflictError,
   type FileContent,
   type FileEntry,
+  type LeaseFence,
+  StaleLeaseError,
   StorageError,
   type StorageEvent,
   type StorageProvider,
@@ -15,7 +17,7 @@ import {
   type WriteResult,
 } from "../types";
 import { conflictCopyPath, isConflictCopyPath } from "./conflict-path";
-import { decideSync } from "./decide";
+import { decideSync, type SyncDecision } from "./decide";
 import { mergeText } from "./diff3";
 import {
   emptySnapshot,
@@ -37,6 +39,13 @@ export interface SyncEngineOptions {
   now?: () => number;
   /** Extra vault-relative path prefixes that are never synced. */
   exclude?: string[];
+  /**
+   * Paths only the agent lease holder may change on the target (the sync service's agent files).
+   * While this device doesn't hold the lease, or when the target refuses a change as made under
+   * an earlier grant, the target's version of such a path wins: local changes are dropped, never
+   * saved as a conflict copy. A local file the target never had stays here, unsent.
+   */
+  fence?: LeaseFence;
 }
 
 export interface SyncStartOptions {
@@ -107,6 +116,7 @@ export class SyncEngine {
   private readonly logger: Logger;
   private readonly now: () => number;
   private readonly rules: IgnoreRules;
+  private readonly fence: LeaseFence | undefined;
   private readonly snapshotFile: string;
   private readonly statusListeners = new Set<(status: SyncStatus) => void>();
   /** Paths changed in the vault since the current/last run started. */
@@ -140,6 +150,7 @@ export class SyncEngine {
     });
     this.now = options.now ?? Date.now;
     this.rules = new IgnoreRules([SYNC_STATE_DIR, ...(options.exclude ?? [])]);
+    this.fence = options.fence;
     this.snapshotFile = snapshotPath(options.target.id);
     this.current = {
       state: "idle",
@@ -358,6 +369,10 @@ export class SyncEngine {
   private async syncPath(path: string, ctx: RunContext): Promise<void> {
     const base = ctx.snapshot.entries.get(path);
     const decision = decideSync(base, ctx.primaryFiles.get(path), ctx.targetFiles.get(path));
+    if (this.fence?.covers(path)) {
+      await this.syncFencedPath(path, decision, base, ctx);
+      return;
+    }
     switch (decision.action) {
       case "skip":
         return;
@@ -433,6 +448,103 @@ export class SyncEngine {
       }
     }
     await this.resolveConflict(path, ours, theirs, ctx);
+  }
+
+  /**
+   * A path only the lease holder may change on the target. Pulls work as usual. The holder pushes
+   * its version (it is the authority: no merge, no conflict copy); anyone else, or a holder whose
+   * grant the target no longer accepts, takes the target's version.
+   */
+  private async syncFencedPath(
+    path: string,
+    decision: SyncDecision,
+    base: SnapshotEntry | undefined,
+    ctx: RunContext,
+  ): Promise<void> {
+    switch (decision.action) {
+      case "skip":
+        return;
+      case "forget":
+        this.forget(ctx, path);
+        return;
+      case "pull": {
+        const source = await this.readOrDefer(this.target, path);
+        const written = await this.writePrimary(
+          path,
+          source.content,
+          decision.primary?.version ?? null,
+        );
+        this.record(ctx, path, written.version, source.version, source.content);
+        ctx.report.pulled.push(path);
+        return;
+      }
+      case "delete-primary":
+        await this.deletePrimary(path, decision.primary.version);
+        this.forget(ctx, path);
+        ctx.report.deletedLocal.push(path);
+        return;
+    }
+    if (this.fence?.epoch() === null) {
+      await this.yieldToTarget(path, base, ctx);
+      return;
+    }
+    try {
+      if (decision.action === "delete-target") {
+        await this.target.delete(path, { ifMatch: decision.target.version });
+        this.forget(ctx, path);
+        ctx.report.deletedRemote.push(path);
+        return;
+      }
+      const ours = await this.readOrDefer(this.primary, path);
+      let ifMatch = decision.target?.version ?? null;
+      if (decision.action === "reconcile") {
+        const current = await this.readOrDefer(this.target, path);
+        if (current.content === ours.content) {
+          this.record(ctx, path, ours.version, current.version, ours.content);
+          return;
+        }
+        ifMatch = current.version;
+      }
+      const written = await this.target.write(path, ours.content, { ifMatch });
+      this.record(ctx, path, ours.version, written.version, ours.content);
+      ctx.report.pushed.push(path);
+    } catch (error) {
+      if (!(error instanceof StaleLeaseError)) throw error;
+      this.logger.warn("agent file refused: this device no longer holds the agent lease", { path });
+      await this.yieldToTarget(path, base, ctx);
+    }
+  }
+
+  /** Makes the vault's copy of a fenced path the target's; one the target never had stays here. */
+  private async yieldToTarget(
+    path: string,
+    base: SnapshotEntry | undefined,
+    ctx: RunContext,
+  ): Promise<void> {
+    const ours = ctx.primaryFiles.get(path);
+    const theirs = await this.target.read(path);
+    if (theirs) {
+      const current = ours ? await this.primary.read(path) : null;
+      if (current?.content !== theirs.content) {
+        const written = await this.writePrimary(path, theirs.content, current?.version ?? null);
+        this.record(ctx, path, written.version, theirs.version, theirs.content);
+        ctx.report.pulled.push(path);
+        this.logger.warn("dropped this device's changes to an agent file for the lease holder's", {
+          path,
+        });
+      } else {
+        this.record(ctx, path, current.version, theirs.version, theirs.content);
+      }
+      return;
+    }
+    if (ours && base) {
+      await this.deletePrimary(path, ours.version);
+      this.forget(ctx, path);
+      ctx.report.deletedLocal.push(path);
+      this.logger.warn("dropped an agent file the lease holder deleted", { path });
+      return;
+    }
+    if (!ours && base) this.forget(ctx, path);
   }
 
   /** Text keeps the vault's version; other formats keep the newest. The other becomes a copy. */

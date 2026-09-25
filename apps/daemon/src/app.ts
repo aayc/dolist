@@ -8,7 +8,10 @@ import { bodyLimit } from "hono/body-limit";
 import { getPath } from "hono/utils/url";
 import type { DaemonConfig } from "./config";
 import type { AppContext } from "./context";
+import { type DeviceSettings, memoryDeviceSettings } from "./device-settings";
 import { createErrorHandler, errorBody } from "./errors";
+import { memorySecretFile } from "./home-files";
+import { MachineLink } from "./machine-link";
 import { PairedDeviceStore } from "./paired-devices";
 import { PairingCodes } from "./pairing";
 import { createRemoteHosts, type RemoteHosts } from "./remote-hosts";
@@ -16,6 +19,8 @@ import { registerAgentRoutes } from "./routes/agent";
 import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerComputerRoutes } from "./routes/computer";
 import { registerDailyRoutes } from "./routes/daily";
+import { registerDeviceRoutes } from "./routes/device";
+import { registerMachineRoutes } from "./routes/machine";
 import { registerNoteRoutes } from "./routes/notes";
 import { registerPairingRoutes } from "./routes/pairing";
 import { registerRoutineRoutes } from "./routes/routines";
@@ -53,6 +58,10 @@ export interface AppDeps {
   search?: VaultSearch;
   /** The sync engine's status; absent = sync is off. */
   syncStatus?: () => SyncStatusResponse;
+  /** Device-local settings. Default: kept in memory (tests). */
+  device?: DeviceSettings;
+  /** The always-on machine link. Default: its credential kept in memory (tests). */
+  machine?: MachineLink;
   /** Opens System Settings for computer use permissions. Default: opens nothing (tests). */
   systemSettings?: SystemSettingsOpener;
   now?: () => Date;
@@ -62,6 +71,7 @@ export interface AppDeps {
 export function createApp(deps: AppDeps): Hono {
   const remoteHosts = deps.remoteHosts ?? createRemoteHosts();
   const devices = deps.devices ?? new PairedDeviceStore({ path: null, logger: deps.logger });
+  const device = deps.device ?? memoryDeviceSettings({ remoteHosts });
   const ctx: AppContext = {
     storage: deps.storage,
     runtime: deps.runtime,
@@ -83,6 +93,15 @@ export function createApp(deps: AppDeps): Hono {
     writes: deps.writes ?? new WriteTracker(),
     search: deps.search ?? ((query, limit) => searchVault(deps.storage, query, { limit })),
     syncStatus: deps.syncStatus ?? disabledSyncStatusResponse,
+    device,
+    machine:
+      deps.machine ??
+      new MachineLink({
+        settings: deps.settings,
+        credentialFile: memorySecretFile(),
+        deviceName: () => device.device.name,
+        logger: deps.logger,
+      }),
     systemSettings: deps.systemSettings ?? NO_SYSTEM_SETTINGS,
     now: deps.now ?? (() => new Date()),
     version: deps.version ?? DAEMON_VERSION,
@@ -115,6 +134,8 @@ export function createApp(deps: AppDeps): Hono {
   registerRoutineRoutes(app, ctx);
   registerArtifactRoutes(app, ctx);
   registerSyncRoutes(app, ctx);
+  registerDeviceRoutes(app, ctx);
+  registerMachineRoutes(app, ctx);
   registerComputerRoutes(app, ctx);
   registerPairingRoutes(app, ctx);
   app.all("/api/*", (c) => c.json(errorBody("not_found", "Unknown API route"), 404));
