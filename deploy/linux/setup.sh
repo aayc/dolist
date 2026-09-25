@@ -285,7 +285,11 @@ install -m 0644 -o root -g root "$CURRENT/deploy/ddl-sync.service" \
 systemctl daemon-reload
 systemctl enable --quiet ddl-sync.service ddl-daemon.service
 if [ "$NO_START" = 0 ]; then
-  systemctl restart ddl-sync.service ddl-daemon.service
+  # One `systemctl restart` of both stops them at the same time. The daemon has to stop first: it
+  # gives the agent lease back through the sync service, else its next run waits for it to run out.
+  systemctl stop ddl-daemon.service
+  systemctl restart ddl-sync.service
+  systemctl start ddl-daemon.service
   as_user "$NODE" "$HELPER" wait-healthy --url "$SYNC_URL/v1/health" ||
     fail "the sync service didn't start: journalctl -u ddl-sync -n 50"
   as_user "$NODE" "$HELPER" wait-healthy --url "http://127.0.0.1:$PORT/api/health" \
