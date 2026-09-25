@@ -11,6 +11,10 @@
 import { syntaxTree } from "@codemirror/language";
 import type { EditorState, Line, Range, SelectionRange, Text } from "@codemirror/state";
 import { Decoration, type DecorationSet } from "@codemirror/view";
+import { embedRenderers, embedSelection } from "../embeds/layer";
+import { embedOfLine } from "../embeds/parse";
+import type { EmbedPlacement, EmbedRenderer } from "../embeds/types";
+import { EmbedWidget } from "../embeds/widget";
 import { RENDERED_LINK_CLASS, RENDERED_WIKILINK_CLASS } from "../links";
 import { isDoneStatusChar } from "../task-lines";
 import { BulletWidget, CheckboxWidget, HorizontalRuleWidget } from "./widgets";
@@ -79,6 +83,16 @@ const FRONTMATTER_CLOSE = /^(?:---|\.\.\.)\s*$/;
 const FRONTMATTER_MAX_LINES = 200;
 
 const checkboxCache = new Map<string, Decoration>();
+const embedLineCache = new Map<EmbedPlacement, Decoration>();
+
+function embedLine(placement: EmbedPlacement): Decoration {
+  let deco = embedLineCache.get(placement);
+  if (!deco) {
+    deco = Decoration.line({ class: `cm-ddl-embed-line cm-ddl-embed-line-${placement}` });
+    embedLineCache.set(placement, deco);
+  }
+  return deco;
+}
 
 function checkbox(statusChar: string, readOnly: boolean): Decoration {
   const key = `${statusChar}\u0000${readOnly}`;
@@ -111,6 +125,8 @@ class LivePreviewBuilder {
   private readonly selection: readonly SelectionRange[];
   private readonly readOnly: boolean;
   private readonly frontmatterEnd: number;
+  private readonly renderers: readonly EmbedRenderer[];
+  private readonly selectedEmbed: number | null;
   private rangeFrom = 0;
   private rangeTo = 0;
   /** End of the previous visible range (-1 while decorating the first one). */
@@ -125,6 +141,8 @@ class LivePreviewBuilder {
     this.selection = focused ? state.selection.ranges : [];
     this.readOnly = state.readOnly;
     this.frontmatterEnd = frontmatterEnd(state.doc);
+    this.renderers = embedRenderers(state);
+    this.selectedEmbed = state.field(embedSelection, false) ?? null;
   }
 
   run(tree: Tree, from: number, to: number): void {
@@ -289,6 +307,7 @@ class LivePreviewBuilder {
   }
 
   private wikiLink(node: SyntaxNode): void {
+    if (this.embed(node)) return;
     if (this.touches(node.from, node.to)) return;
     let target: SyntaxNode | null = null;
     let alias: SyntaxNode | null = null;
@@ -301,6 +320,27 @@ class LivePreviewBuilder {
     this.hide(node.from, shown.from);
     this.hide(shown.to, node.to);
     this.ranges.push(WIKILINK.range(shown.from, shown.to));
+  }
+
+  /**
+   * An embed alone on its line that a host renderer draws: the box replaces the syntax unless the
+   * selection is on the line (then the syntax shows in full). True when the node was handled.
+   */
+  private embed(node: SyntaxNode): boolean {
+    if (this.renderers.length === 0 || this.doc.sliceString(node.from, node.from + 1) !== "!") {
+      return false;
+    }
+    const line = this.doc.lineAt(node.from);
+    const embed = embedOfLine(line);
+    if (embed?.from !== node.from) return false;
+    const renderer = this.renderers.find((candidate) => candidate.matches(embed.spec.target));
+    if (!renderer) return false;
+    if (this.touches(line.from, line.to)) return true;
+    this.ranges.push(embedLine(embed.spec.placement).range(line.from));
+    const selected = this.selectedEmbed === embed.from;
+    const widget = new EmbedWidget(renderer, embed, selected, this.readOnly);
+    this.ranges.push(Decoration.replace({ widget }).range(embed.from, embed.to));
+    return true;
   }
 
   private quoteMark(from: number, to: number): void {
