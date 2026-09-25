@@ -122,6 +122,7 @@ struct ObsidianImportTests {
     environment.folderExists = { $0 == "/Users/me/Demo Vault" }
     let model = AppModel(environment: environment)
     await model.boot()
+    try await eventually("connected") { model.connection.isOnline }
     let catalog = CommandCatalog(model: model)
     let names = catalog.paletteCommands.map(\.paletteTitle)
     #expect(names.contains("Import from Obsidian…"))
@@ -133,6 +134,8 @@ struct ObsidianImportTests {
 
     let job = try await client.startObsidianImport(ObsidianImportRequest(source: Self.obsidian))
     await client.runUntilIdle()
+    // Its progress events reach the app before the switch, as they would before anyone clicks.
+    try await eventually("the job to finish") { model.imports.job?.state == .done }
     _ = try await client.switchVault(DeviceVaultRequest(path: job.destination))
     await model.imports.load()
     #expect(model.imports.imported?.previousVault == "/Users/me/Demo Vault")
@@ -150,8 +153,11 @@ struct ObsidianImportTests {
     environment.folderExists = { _ in true }
     let model = AppModel(environment: environment)
     await model.boot()
+    try await eventually("connected") { model.connection.isOnline }
     let job = try await client.startObsidianImport(ObsidianImportRequest(source: Self.obsidian))
     await client.runUntilIdle()
+    // Its progress events reach the app before the switch, as they would before anyone clicks.
+    try await eventually("the job to finish") { model.imports.job?.state == .done }
     _ = try await client.switchVault(DeviceVaultRequest(path: job.destination))
     await model.imports.load()
     let size = CGSize(width: 600, height: 520)
