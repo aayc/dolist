@@ -23,6 +23,11 @@ fix; `7ce1e9f` installed) · in-flight branches pushed to `origin`.
 
 ## Shipped on `main` (newest first)
 
+- `3f69ea2` What the orchestrator is doing while you write: it notices, reads, thinks, acts and
+  concludes on any line, not only checkbox tasks; chips on the lines that woke it, the note header
+  and the status bar, on the web and the Mac with the same wording and timings
+  ([spec](docs/specs/orchestrator-activity.md)). CI, macOS app and Security green on the branch;
+  dispatched on `main`.
 - `b0897e8` A lease priority test waits for the supervisor's status, not only the sync
   service's record (it failed under load).
 - `bbe8aff` Linux kit: `setup.sh` stops the daemon before the sync service. One `systemctl
@@ -129,21 +134,6 @@ Spec: [docs/specs/obsidian-migration.md](docs/specs/obsidian-migration.md).
 | I1 Import from Obsidian: web and Mac flows | `feat/obsidian-import-ui` | done (`8e875b7`, 11 commits): web Settings → Vault and the palette command (the report, import with progress and Cancel, Switch to the new vault behind an overlay that waits for the daemon and reloads, Update from Obsidian); Mac Settings → General → Vault and File menu commands (folder picker, `.importProgress`, the switch through the app's vault preference or the daemon's own restart); README "Moving from Obsidian". Added to I0's contract (optional): `imported` in `GET /api/import/obsidian` and the previous vault in the manifest. **Merged into `feat/obsidian-import` with `main`** (`8ba35c6`): 10 conflicts; the vault section links to Settings → Sync; the web mock has one sync state. Verified: lint, typecheck, TS unit suites (the stdio connector flake passes alone), functional e2e 114 and fullstack 17 passed, Swift Models, Client, Agent, app, and integration (28 against real daemons, incl. the import and the relay suites). CI, macOS app and Security dispatched. Still to try for real: the Mac switch in the running app, the web switch against a restarting daemon, a real (large) Obsidian vault |
 | B0 binary files, attachment sync, file serving | from `main` | queued, unblocked (the always-on work, which changed the same sync code, is on `main`) |
 | P images, tables, callouts, backlinks (web and Mac) | after the drawings' embed layer | queued (images share the drawings' embed layer) |
-
-### What the orchestrator is doing while you write
-
-Spec: [docs/specs/orchestrator-activity.md](docs/specs/orchestrator-activity.md) (user request:
-see it notice, work and conclude on any line, not only checkbox tasks). Branches from
-`feat/always-on` (so the relay forwards the new event). **Built and integrated** on
-`feat/orchestrator-activity` (`0eef27d`): the web side (wire `6c1bfce`, agent phases and
-outcomes, the relay forwards it, chips, header and status bar; a dot 300 ms after the last
-keystroke; a watcher race fixed) with the Mac side merged in; both platforms use the same
-wording and timings (the table in `apps/web/README.md`). `main` (with the always-on work) merged
-in at `2b8a768` (5 conflicts: the mock notices prose only while the agent runs on this device;
-the status carries the activity and the placement). Lint, typecheck, TS unit suites (the helper
-and stdio subprocess tests flaked under load, pass alone), functional e2e 116 passed; every Swift
-package running; CI, macOS app and Security dispatched (Security green). Next: merge to `main`
-when green, install.
 
 ### Agent journal
 
