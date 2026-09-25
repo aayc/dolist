@@ -104,6 +104,18 @@ Spec: [docs/specs/drawings.md](docs/specs/drawings.md).
 | X4 the agent sees drawings (descriptions, `read_drawing`, renderer) | from `feat/drawings` | waits for X0 |
 | X3 Mac editor integration (exclusion paths, in-place canvas) | from X2 | waits for X2's canvas |
 
+### Moving from Obsidian
+
+Spec: [docs/specs/obsidian-migration.md](docs/specs/obsidian-migration.md).
+
+| Stream | Branch | State |
+| --- | --- | --- |
+| M the editor merge race (data safety) | `fix/editor-merge-race` (from `main`) | in progress |
+| I0 Import from Obsidian: engine, carry-over, vault switch, update | `feat/obsidian-import` (from `feat/always-on` at `394a6dd`) | in progress |
+| I1 Import from Obsidian: web and Mac flows | from I0 | waits for I0's routes |
+| B0 binary files, attachment sync, file serving | from `feat/always-on` or `main` | queued (after the always-on work lands; S2 changed the same sync code) |
+| P images, tables, callouts, backlinks (web and Mac) | after the drawings' embed layer | queued (images share the drawings' embed layer) |
+
 ### Agent journal — phase 1 (threads)
 
 Spec: [docs/specs/agent-journal.md](docs/specs/agent-journal.md). Branch `feat/agent-journal`
@@ -177,6 +189,11 @@ state and client ids for idempotent mutations.
   movable and resizable; the real Excalidraw on the web (lazy-loaded); on the Mac a native engine
   written from scratch with the core tools (the user's choice, for speed); the orchestrator always
   sees a text description plus an image for vision-capable models.
+- **Moving from Obsidian** (2026-09-25): the user will switch from Obsidian (Obsidian Sync) by
+  **copying** the vault, not sharing the folder. Build the merge-race fix, Import from Obsidian
+  (report first, a new vault from a copy, carry-over of Daily Do List notes, routines and agent
+  history with daily-note paths remapped, then switch; plus Update from Obsidian), images, tables,
+  callouts, backlinks, and attachment sync.
 - **Journaling** (2026-09-25): not Temporal. Fencing now, in the always-on lease work; the agent
   journal as its own stream right after routines lands.
 - **iPhone** (2026-09-25): deferred. When it resumes: native Swift, a free Apple ID (no push or
