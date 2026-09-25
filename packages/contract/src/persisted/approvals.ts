@@ -8,7 +8,9 @@
  * into something broader.
  *
  * v1: `{ version, grants, approvals }`. The writer always wrote `version: 1`; the reader accepts the
- * same shape without it, as the pre-contract reader did.
+ * same shape without it, as the pre-contract reader did. Grants may carry a `target` (the app a
+ * computer action targeted): an addition older readers keep ignoring, since they drop no grant for
+ * an unknown key (a grant they read without its target only covers calls without one).
  */
 import { z } from "zod";
 import {
@@ -41,6 +43,8 @@ export const PersistedApprovalGrantSchema = z
     categories: z.array(PersistedActionCategorySchema).optional(),
     /** When set, the grant does not cover riskier calls. */
     risk: PersistedRiskLevelSchema.optional(),
+    /** The app (normalized name) the approved action targeted; only calls on it are covered. */
+    target: z.string().min(1).max(200).optional(),
   })
   .refine((grant) => grant.scope !== "task" || grant.taskId !== null, {
     message: "a task grant needs a taskId",
@@ -149,5 +153,6 @@ function grantKey(grant: PersistedApprovalGrant): string {
     grant.taskId,
     grant.risk ?? null,
     grant.categories ? [...grant.categories].sort() : null,
+    grant.target ?? null,
   ]);
 }

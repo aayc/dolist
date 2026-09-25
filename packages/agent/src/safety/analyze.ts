@@ -4,7 +4,7 @@
  * It never decides; the evaluator combines this with policy, hints and the LLM judge.
  */
 import type { ActionCategory } from "@ddl/core";
-import { type ActionFacts, buildFacts } from "./facts";
+import { type ActionFacts, buildFacts, COMPUTER_READ_RE, withSubject } from "./facts";
 import { type Cwd, inferHome, resolvePath } from "./paths";
 import { ACTION_CATEGORIES } from "./policy";
 import { searchQueryHits, sensitiveValueHits, sqlHits, writtenContentHits } from "./rules/content";
@@ -132,70 +132,17 @@ function connectorAnalysis(f: ActionFacts): FamilyResult {
 }
 
 export function analyzeAction(ctx: ActionContext): ActionAnalysis {
-  const facts = buildFacts(ctx);
+  const modelFacts = buildFacts(ctx);
+  // What the tool knows about the real target joins the model's words; its rule hits may only add
+  // risk, so everything else below comes from the model's own facts.
+  const facts = withSubject(modelFacts);
+  const subjectHits =
+    facts === modelFacts || !facts.ui
+      ? []
+      : uiAnalysis(facts).hits.filter((hit) => hit.rule.decision !== "allow");
   const hints = ctx.hints ?? {};
-  let result: FamilyResult = { hits: [], uncertainties: [] };
-  let fastPath = hints.readOnly === true;
-  switch (facts.family) {
-    case "internal":
-      fastPath = true;
-      break;
-    case "knowledge":
-      fastPath = true;
-      result.hits = [{ rule: NOTES_READ, evidence: facts.operation }];
-      break;
-    case "web_search": {
-      fastPath = true;
-      const query = typeof facts.input.query === "string" ? facts.input.query : "";
-      const hits = searchQueryHits(query);
-      result.hits = hits.length > 0 ? hits : [{ rule: WEB_SEARCH, evidence: quote(query) }];
-      break;
-    }
-    case "web_fetch":
-      fastPath = true;
-      result.hits = webUrlHits(facts.urls);
-      break;
-    case "browser":
-      fastPath ||=
-        facts.ui?.action === "navigate" ||
-        facts.ui?.action === "read" ||
-        facts.ui?.action === "hover";
-      result = uiAnalysis(facts);
-      break;
-    case "computer":
-      fastPath = /(?:^|_)screenshot$/.test(facts.operation);
-      result = uiAnalysis(facts);
-      break;
-    case "shell":
-      result = shellAnalysis(facts);
-      break;
-    case "file_read": {
-      fastPath = true;
-      const r = fileReadAnalysis(facts);
-      result.hits = r.benign ? [...r.hits, r.benign] : r.hits;
-      break;
-    }
-    case "file_write": {
-      const r = fileWriteAnalysis(facts);
-      result.hits = r.benign ? [...r.hits, r.benign] : r.hits;
-      break;
-    }
-    case "note_edit":
-      result.hits = noteEditHits(facts.input);
-      fastPath = result.hits.every((hit) => hit.rule.decision === "allow");
-      break;
-    case "mcp":
-      result = connectorAnalysis(facts);
-      fastPath ||= result.hits.some(
-        (h) => h.rule.id === "mcp.read-action" || h.rule.id === "mcp.draft",
-      );
-      break;
-    case "custom":
-      result.hits = contentHits(facts, hints.readOnly !== true);
-      if (result.hits.length === 0)
-        result.uncertainties.push(`tool ${quote(ctx.toolName)} has no specific safety rules`);
-      break;
-  }
+  const { result, fastPath } = familyAnalysis(modelFacts, ctx, hints.readOnly === true);
+  const hits = [...result.hits, ...subjectHits];
 
   const hintCategories: ActionCategory[] = [];
   if (
@@ -208,9 +155,77 @@ export function analyzeAction(ctx: ActionContext): ActionAnalysis {
 
   return {
     facts,
-    hits: dedupe(result.hits),
+    hits: dedupe(hits),
     fastPath,
-    uncertainties: isRisky(result.hits) ? [] : result.uncertainties,
+    uncertainties: isRisky(hits) ? [] : result.uncertainties,
     hintCategories,
   };
+}
+
+function familyAnalysis(
+  f: ActionFacts,
+  ctx: ActionContext,
+  readOnly: boolean,
+): { result: FamilyResult; fastPath: boolean } {
+  let result: FamilyResult = { hits: [], uncertainties: [] };
+  let fastPath = readOnly;
+  switch (f.family) {
+    case "internal":
+      fastPath = true;
+      break;
+    case "knowledge":
+      fastPath = true;
+      result.hits = [{ rule: NOTES_READ, evidence: f.operation }];
+      break;
+    case "web_search": {
+      fastPath = true;
+      const query = typeof f.input.query === "string" ? f.input.query : "";
+      const hits = searchQueryHits(query);
+      result.hits = hits.length > 0 ? hits : [{ rule: WEB_SEARCH, evidence: quote(query) }];
+      break;
+    }
+    case "web_fetch":
+      fastPath = true;
+      result.hits = webUrlHits(f.urls);
+      break;
+    case "browser":
+      fastPath ||=
+        f.ui?.action === "navigate" || f.ui?.action === "read" || f.ui?.action === "hover";
+      result = uiAnalysis(f);
+      break;
+    case "computer":
+      fastPath = COMPUTER_READ_RE.test(f.operation);
+      result = uiAnalysis(f);
+      break;
+    case "shell":
+      result = shellAnalysis(f);
+      break;
+    case "file_read": {
+      fastPath = true;
+      const r = fileReadAnalysis(f);
+      result.hits = r.benign ? [...r.hits, r.benign] : r.hits;
+      break;
+    }
+    case "file_write": {
+      const r = fileWriteAnalysis(f);
+      result.hits = r.benign ? [...r.hits, r.benign] : r.hits;
+      break;
+    }
+    case "note_edit":
+      result.hits = noteEditHits(f.input);
+      fastPath = result.hits.every((hit) => hit.rule.decision === "allow");
+      break;
+    case "mcp":
+      result = connectorAnalysis(f);
+      fastPath ||= result.hits.some(
+        (h) => h.rule.id === "mcp.read-action" || h.rule.id === "mcp.draft",
+      );
+      break;
+    case "custom":
+      result.hits = contentHits(f, !readOnly);
+      if (result.hits.length === 0)
+        result.uncertainties.push(`tool ${quote(ctx.toolName)} has no specific safety rules`);
+      break;
+  }
+  return { result, fastPath };
 }

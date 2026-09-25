@@ -1,9 +1,11 @@
 /**
  * Rules for browser and computer-use actions: what a click commits to (purchase, booking,
  * sending, posting, account changes, deletion, form submission), what is typed and where
- * (credentials, card numbers, personal data, secrets), key presses, uploads and page scripts.
+ * (credentials, card numbers, personal data, secrets), key presses, uploads and page scripts, and
+ * which app a computer action targets (protected apps, messaging apps).
  */
-import type { ActionFacts } from "../facts";
+import { messagingApp, protectedApp, protectedAppMentioned } from "../apps";
+import { type ActionFacts, COMPUTER_READ_RE } from "../facts";
 import { findCardNumbers, findSecrets, findSsns, looksLikeSecret } from "../sensitive";
 import {
   ACCOUNT_CONTROL,
@@ -67,7 +69,29 @@ function typedInto(test: (element: string) => boolean) {
 const matches = (re: RegExp) => (element: string) => re.test(element);
 
 function isComputerNonRead(f: ActionFacts): boolean {
-  return f.ui?.surface === "computer" && !/(?:^|_)screenshot$/.test(f.operation);
+  return f.ui?.surface === "computer" && !COMPUTER_READ_RE.test(f.operation);
+}
+
+/** The protected app a computer action targets, by app name or (screen-level) click target. */
+function protectedTarget(f: ActionFacts): Match {
+  if (f.ui?.surface !== "computer") return null;
+  const named = f.app ? protectedApp(...f.app.names) : undefined;
+  if (named) return named;
+  // A screen-level click names what it clicks only in its description.
+  return !f.app && f.ui.action === "click" && f.element ? protectedAppMentioned(f.element) : null;
+}
+
+/** Return, a typed line break or a send-like control in a messaging app. */
+function desktopSend(f: ActionFacts): Match {
+  if (f.ui?.surface !== "computer" || !f.app) return null;
+  const app = messagingApp(...f.app.names);
+  if (!app) return null;
+  if (f.ui.action === "key" && f.key && /(?:^|\+)enter$/.test(f.key)) return `Enter in ${app}`;
+  if (f.ui.action === "type" && f.typedLineBreak) return `a line break typed in ${app}`;
+  if (f.ui.action === "click" && f.element && COMMUNICATION_CONTROL.test(f.element)) {
+    return `${label(f)} in ${app}`;
+  }
+  return null;
 }
 
 /** True when typing targets something whose value must never be shown. */
@@ -91,13 +115,37 @@ const personalField = (f: ActionFacts): Match => {
 export const UI_RULES: readonly ActionRule[] = [
   uiRule(
     info(
+      "system.protected-app",
+      "system",
+      "deny",
+      "critical",
+      "Operates a protected app: Daily Do List itself, System Settings, a password manager, a keychain or an authenticator",
+    ),
+    protectedTarget,
+  ),
+  uiRule(
+    info(
       "computer_control.desktop-action",
       "computer_control",
       "require_approval",
       "medium",
       "Controls your computer's mouse or keyboard",
     ),
-    (f) => (isComputerNonRead(f) ? (f.elementLabel ? label(f) : f.operation) : null),
+    (f) => {
+      if (!isComputerNonRead(f)) return null;
+      const target = f.elementLabel ? label(f) : f.operation;
+      return f.app ? `${target} in ${f.app.label}` : target;
+    },
+  ),
+  uiRule(
+    info(
+      "communication.desktop-send",
+      "communication",
+      "require_approval",
+      "high",
+      "Sends a message in a messaging app (Return, a typed line break or a send button)",
+    ),
+    desktopSend,
   ),
 
   uiRule(
@@ -401,7 +449,7 @@ export const BENIGN_UI = {
 export function benignUiHit(f: ActionFacts): RuleHit | undefined {
   const action = f.ui?.action;
   if (!action || f.ui?.surface !== "browser") {
-    return f.ui?.surface === "computer" && /(?:^|_)screenshot$/.test(f.operation)
+    return f.ui?.surface === "computer" && COMPUTER_READ_RE.test(f.operation)
       ? { rule: BENIGN_UI.read, evidence: f.operation }
       : undefined;
   }

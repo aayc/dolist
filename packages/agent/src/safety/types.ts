@@ -51,6 +51,11 @@ export interface SafetyVerdict {
   source: VerdictSource;
   matchedRules?: string[];
   latencyMs: number;
+  /**
+   * The app a computer action targets (its normalized real name, else the model's words). Standing
+   * grants are scoped to it; calls without a target (everything else) match grants without one.
+   */
+  target?: string;
 }
 
 export interface SafetyEvaluator {
@@ -85,6 +90,8 @@ export interface NewApproval {
   categories: ActionCategory[];
   reason: string;
   timeoutMs?: number;
+  /** See `SafetyVerdict.target`; a grant made from this approval is scoped to it. */
+  target?: string;
 }
 
 export interface ApprovalOutcome {
@@ -106,12 +113,18 @@ export interface ApprovalGrant {
   categories?: ActionCategory[];
   /** Risk of the approved action; the grant does not cover riskier calls. */
   risk?: RiskLevel;
+  /**
+   * The app the approved action targeted (normalized name). A grant only covers calls with the
+   * same target; one without a target only covers calls without one (screen-level, non-computer).
+   */
+  target?: string;
 }
 
 /** What `findGrant` matches on; `categories`/`risk` narrow the match to what the user approved. */
 export interface GrantQuery extends Pick<ActionContext, "toolName" | "taskId"> {
   categories?: ActionCategory[];
   risk?: RiskLevel;
+  target?: string;
 }
 
 export interface SafetyEvaluatorOptions {

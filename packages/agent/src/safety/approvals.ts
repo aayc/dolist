@@ -70,6 +70,7 @@ function sameGrant(a: ApprovalGrant, b: ApprovalGrant): boolean {
     a.scope === b.scope &&
     a.taskId === b.taskId &&
     a.risk === b.risk &&
+    a.target === b.target &&
     JSON.stringify([...(a.categories ?? [])].sort()) ===
       JSON.stringify([...(b.categories ?? [])].sort())
   );
@@ -84,6 +85,8 @@ export function createApprovalBroker(
   const defaultTimeoutMs = options.defaultTimeoutMs ?? DEFAULT_SETTINGS.agent.approvalTimeoutMs;
   const approvals = new Map<string, ApprovalRequest>();
   const waiters = new Map<string, Waiter>();
+  /** Targets of pending approvals (grants made from them are scoped to it). */
+  const targets = new Map<string, string>();
   const grants: ApprovalGrant[] = [];
   const listeners = new Set<(approval: ApprovalRequest) => void>();
 
@@ -191,6 +194,7 @@ export function createApprovalBroker(
       ...(note ? { decisionNote: note } : {}),
     };
     approvals.set(id, decided);
+    targets.delete(id);
     const waiter = waiters.get(id);
     waiters.delete(id);
     waiter?.cleanup();
@@ -206,6 +210,7 @@ export function createApprovalBroker(
   }
 
   function addGrant(approval: ApprovalRequest, scope: Exclude<ApprovalScope, "once">): void {
+    const target = targets.get(approval.id);
     const grant: ApprovalGrant = {
       toolName: approval.toolName,
       scope,
@@ -213,6 +218,7 @@ export function createApprovalBroker(
       createdAt: now(),
       categories: [...approval.categories],
       risk: approval.risk,
+      ...(target ? { target } : {}),
     };
     if (!grants.some((g) => sameGrant(g, grant))) grants.push(grant);
   }
@@ -264,6 +270,7 @@ export function createApprovalBroker(
         },
       });
       approvals.set(approval.id, approval);
+      if (input.target) targets.set(approval.id, input.target);
       emit(approval);
       schedulePersist();
       if (signal?.aborted) onAbort();
@@ -316,6 +323,8 @@ export function createApprovalBroker(
         if (grant.toolName !== query.toolName) continue;
         if (grant.scope === "task" && (query.taskId === null || grant.taskId !== query.taskId))
           continue;
+        // Approving "Press Send in Grok Bot" says nothing about WhatsApp, or the whole screen.
+        if ((grant.target ?? undefined) !== (query.target ?? undefined)) continue;
         if (
           query.categories &&
           grant.categories &&

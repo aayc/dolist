@@ -69,6 +69,16 @@ describe("golden approvals fixtures through the real approval broker", () => {
         categories: ["booking"],
       }),
     ).toMatchObject({ scope: "always", taskId: null, risk: "high" });
+    // A target-scoped grant covers its app only, never another app or the whole screen.
+    const appGrant = {
+      toolName: "computer_set_value",
+      taskId: "tsk_7fq2m9x0ab",
+      categories: ["computer_control" as const],
+      risk: "medium" as const,
+    };
+    expect(b.findGrant({ ...appGrant, target: "grok bot" })).toMatchObject({ target: "grok bot" });
+    expect(b.findGrant({ ...appGrant, target: "whatsapp" })).toBeUndefined();
+    expect(b.findGrant(appGrant)).toBeUndefined();
 
     expect(b.get("apr_book01")).toEqual(BOOKING);
     const expired = {
@@ -125,6 +135,9 @@ describe("golden approvals fixtures through the real approval broker", () => {
     ).toBeUndefined();
     expect(b.findGrant({ toolName: "browser_click", taskId: "tsk_1" })).toBeUndefined();
     expect(b.findGrant({ toolName: "browser_type", taskId: null })).toBeUndefined();
+    // A malformed target drops the grant; it never becomes an unscoped (screen-level) grant.
+    expect(b.findGrant({ toolName: "computer_press", taskId: null })).toBeUndefined();
+    expect(b.findGrant({ toolName: "computer_press", taskId: null, target: "" })).toBeUndefined();
     expect(b.findGrant({ toolName: "bash", taskId: "tsk_9" })).toMatchObject({
       scope: "always",
       taskId: null,

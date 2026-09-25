@@ -73,6 +73,9 @@ describe("decodePersistedApprovals", () => {
     ["an empty tool name", { ...grant, toolName: "" }],
     ["scope once", { ...grant, scope: "once" }],
     ["no createdAt", { ...grant, createdAt: undefined }],
+    ["an empty target", { ...grant, target: "" }],
+    ["a target that isn't text", { ...grant, target: 7 }],
+    ["a target over 200 characters", { ...grant, target: "x".repeat(201) }],
   ])("drops a grant with %s instead of widening it", (_label, bad) => {
     const result = decodeGrants([bad]);
     expect(result.value.grants).toEqual([]);
@@ -139,6 +142,21 @@ describe("mergePersistedApprovals", () => {
       { grants: [], approvals: [{ ...approval, status: "denied" }] },
     );
     expect(kept.approvals).toEqual([approval]);
+  });
+
+  it("keeps grants for different targets apart", () => {
+    const grok = { ...grant, target: "grok bot" };
+    const merged = mergePersistedApprovals(
+      { grants: [grant, grok], approvals: [] },
+      {
+        grants: [
+          { ...grok, createdAt: 5 },
+          { ...grant, target: "whatsapp" },
+        ],
+        approvals: [],
+      },
+    );
+    expect(merged.grants.map((g) => g.target ?? null)).toEqual([null, "grok bot", "whatsapp"]);
   });
 
   test.prop([

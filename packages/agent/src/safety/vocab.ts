@@ -33,7 +33,7 @@ function foldConfusables(text: string): string {
 }
 
 /** Separates two readings of one text; no phrase pattern can match across it. */
-const READINGS_SEPARATOR = " \n ";
+export const READINGS_SEPARATOR = " \n ";
 
 function words(text: string): string {
   return text

@@ -16,7 +16,13 @@ import {
   type SafetyEvaluator,
   type SafetyVerdict,
 } from "@ddl/agent";
-import { type ActionCategory, DEFAULT_MODEL, type SafetyDecision, silentLogger } from "@ddl/core";
+import {
+  type ActionCategory,
+  DEFAULT_MODEL,
+  type SafetyDecision,
+  silentLogger,
+  type ToolSubject,
+} from "@ddl/core";
 import { loadJsonl, mapPool, mean, passesThresholds, percentile } from "../lib";
 import type { EvalCaseResult, EvalMode, EvalSuite, EvalSuiteResult } from "../types";
 
@@ -51,6 +57,8 @@ interface SafetyCase {
   toolName: string;
   input: unknown;
   hints?: ActionContext["hints"];
+  /** What the tool knows about the real target (becomes the `subject` hint). */
+  subject?: ToolSubject;
   role?: ActionContext["role"];
   taskText?: string;
   rationale?: string;
@@ -78,6 +86,16 @@ function validate(cases: SafetyCase[]): string[] {
     if (!DECISIONS.includes(c.expected)) problems.push(`${where}: bad expected decision`);
     if (c.categories && !c.categories.every((x) => CATEGORIES.includes(x)))
       problems.push(`${where}: unknown category`);
+    if (
+      c.subject !== undefined &&
+      (typeof c.subject !== "object" ||
+        c.subject === null ||
+        Object.entries(c.subject).some(
+          ([key, value]) => !["app", "element"].includes(key) || typeof value !== "string",
+        ))
+    ) {
+      problems.push(`${where}: subject must be { app?: string, element?: string }`);
+    }
     if (c.expected === "allow" && c.critical)
       problems.push(`${where}: an allowed case cannot be critical`);
   }
@@ -91,10 +109,11 @@ function validate(cases: SafetyCase[]): string[] {
 }
 
 function contextFor(c: SafetyCase): ActionContext {
+  const subject = c.subject;
   return {
     toolName: c.toolName,
     input: c.input,
-    hints: c.hints ?? {},
+    hints: { ...(c.hints ?? {}), ...(subject ? { subject: () => subject } : {}) },
     role: c.role ?? "subagent",
     taskId: "task-eval",
     threadId: "thread-eval",
