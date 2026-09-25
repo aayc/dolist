@@ -24,7 +24,10 @@ extension AgentState {
       return upsertApproval(approval)
     case .agentStatus(let status):
       return setStatus(status)
-    case .hello, .vaultChanged, .surfaceFrame, .settingsChanged, .error, .unknown:
+    case .routinesChanged(let routines):
+      return setRoutines(routines)
+    case .hello, .vaultChanged, .surfaceFrame, .settingsChanged, .routineNotification, .error,
+      .unknown:
       return []
     }
   }
