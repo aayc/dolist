@@ -131,6 +131,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
           settings: current,
           connectors,
           logger,
+          leaseEpoch: () => supervisor?.heldEpoch ?? null,
         }),
       storage: agentStorage,
       problem: LEASE_CHECKING_PROBLEM,

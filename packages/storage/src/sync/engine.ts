@@ -1,5 +1,5 @@
 import { type Debounced, debounce, type Logger, silentLogger, type Unsubscribe } from "@ddl/core";
-import { isBinaryPath, isMergeablePath, utf8ByteLength } from "../file-types";
+import { isBinaryPath, isJournalPath, isMergeablePath, utf8ByteLength } from "../file-types";
 import { IgnoreRules } from "../ignore-rules";
 import { errorMessage } from "../internal/fs-errors";
 import {
@@ -19,6 +19,7 @@ import {
 import { conflictCopyPath, isConflictCopyPath } from "./conflict-path";
 import { decideSync, type SyncDecision } from "./decide";
 import { mergeText } from "./diff3";
+import { mergeJournals } from "./journal-merge";
 import {
   emptySnapshot,
   parseSnapshot,
@@ -104,8 +105,9 @@ export function disabledSyncStatus(): SyncStatus {
  *   the write fail and the path is retried next run);
  * - changed on both → identical content just updates the snapshot; markdown/text is merged line
  *   by line against the stored base (diff3); a conflicting merge keeps the vault's version and
- *   saves the target's as `<name> (conflict YYYY-MM-DD HHmm).<ext>` on both sides; other formats
- *   keep the newest (by mtime) and save the other as the conflict copy;
+ *   saves the target's as `<name> (conflict YYYY-MM-DD HHmm).<ext>` on both sides; the agent's
+ *   journals are merged as a union of their lines (`mergeJournals`), never a conflict copy; other
+ *   formats keep the newest (by mtime) and save the other as the conflict copy;
  * - deleted on one side and unchanged on the other → deleted there; deleted vs modified → the
  *   modified file is restored.
  * Binary files (images, PDFs, …) are skipped: the provider API is text-only.
@@ -431,6 +433,10 @@ export class SyncEngine {
       this.record(ctx, path, ours.version, theirs.version, ours.content);
       return;
     }
+    if (isJournalPath(path)) {
+      await this.mergeJournal(path, ours, theirs, ctx);
+      return;
+    }
     if (base?.b !== undefined && isMergeablePath(path)) {
       const merged = mergeText(base.b, ours.content, theirs.content, { unionInsertions: true });
       if (merged.clean) {
@@ -497,6 +503,8 @@ export class SyncEngine {
       }
       const ours = await this.readOrDefer(this.primary, path);
       let ifMatch = decision.target?.version ?? null;
+      let content = ours.content;
+      let primaryVersion = ours.version;
       if (decision.action === "reconcile") {
         const current = await this.readOrDefer(this.target, path);
         if (current.content === ours.content) {
@@ -504,9 +512,16 @@ export class SyncEngine {
           return;
         }
         ifMatch = current.version;
+        // A journal keeps every event either side has, even under the holder's authority.
+        if (isJournalPath(path)) {
+          content = mergeJournals(ours.content, current.content);
+          if (content !== ours.content) {
+            primaryVersion = (await this.writePrimary(path, content, ours.version)).version;
+          }
+        }
       }
-      const written = await this.target.write(path, ours.content, { ifMatch });
-      this.record(ctx, path, ours.version, written.version, ours.content);
+      const written = await this.target.write(path, content, { ifMatch });
+      this.record(ctx, path, primaryVersion, written.version, content);
       ctx.report.pushed.push(path);
     } catch (error) {
       if (!(error instanceof StaleLeaseError)) throw error;
@@ -545,6 +560,26 @@ export class SyncEngine {
       return;
     }
     if (!ours && base) this.forget(ctx, path);
+  }
+
+  /** An agent journal changed on both sides: both get the union of its lines, never a copy. */
+  private async mergeJournal(
+    path: string,
+    ours: FileContent,
+    theirs: FileContent,
+    ctx: RunContext,
+  ): Promise<void> {
+    const merged = mergeJournals(ours.content, theirs.content);
+    const primaryVersion =
+      merged === ours.content
+        ? ours.version
+        : (await this.writePrimary(path, merged, ours.version)).version;
+    const targetVersion =
+      merged === theirs.content
+        ? theirs.version
+        : (await this.target.write(path, merged, { ifMatch: theirs.version })).version;
+    this.record(ctx, path, primaryVersion, targetVersion, merged);
+    ctx.report.merged.push(path);
   }
 
   /** Text keeps the vault's version; other formats keep the newest. The other becomes a copy. */

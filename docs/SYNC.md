@@ -97,6 +97,14 @@ happens on the devices, in the engine, exactly as for a local mirror folder
 - Edits to the same line: the device that syncs second keeps its own text and saves the other
   device's as `<name> (conflict YYYY-MM-DD HHmm).md`; the copy then syncs to every device, and
   every device lists it under `conflicts` in its sync status until someone deletes it.
+- The agent's journals (`.daily-do-list/state/journal/**.jsonl`: append-only, one event with a
+  unique id per line) merge as the union of both copies' lines, ordered by `(epoch, seq, id)`.
+  The result depends only on the set of lines, so every device ends with the same bytes, and there
+  is never a conflict copy. Through the sync service they are fenced like every agent file (see
+  [the agent lease](#the-agent-lease)): only the lease holder's appends travel, and when the
+  holder finds the service's copy changed too it pushes the union, so it never drops an event.
+  A device without the lease, or a former holder that appended offline, gives way. Without a
+  lease (a mirrored folder), two devices appending at once keep every event.
 - Other formats (JSON such as the agent's thread files, canvases) keep the newest by modification
   time and save the other as the conflict copy. The server stamps `mtime` with its own clock when
   it accepts a write, so compare notes across devices with that in mind.
@@ -107,7 +115,7 @@ happens on the devices, in the engine, exactly as for a local mirror folder
   `SyncAbortedError` instead of deleting every note.
 
 What syncs: every text file in the vault, including the agent's sidecar (`.daily-do-list/threads`,
-`artifacts`, `state/records.json`, `approvals.json`, `settings.json`). What doesn't: each device's
+`artifacts`, `state/journal`, `state/records.json`, `approvals.json`, `settings.json`). What doesn't: each device's
 own sync snapshot (`.daily-do-list/sync/`), the agent's machine-local scratch data
 (`.daily-do-list/state/tasks`), junk and temp files, and binary files (images, PDFs, …).
 

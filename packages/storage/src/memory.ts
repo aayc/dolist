@@ -122,6 +122,28 @@ export class MemoryStorageProvider implements StorageProvider {
     };
   }
 
+  async append(path: string, content: string, options: WriteOptions = {}): Promise<WriteResult> {
+    const p = toVaultPath(path);
+    if (this.folders.has(p)) throw new StorageError(`Not a file: "${p}"`, p);
+    const existing = this.files.get(p);
+    this.checkPrecondition(p, existing, options);
+    this.assertCanHoldFile(p);
+    const file = this.store(p, (existing?.content ?? "") + content);
+    this.emit({
+      kind: existing ? "modified" : "created",
+      path: p,
+      version: file.version,
+      self: true,
+    });
+    return {
+      path: p,
+      version: file.version,
+      mtime: file.mtime,
+      size: byteLength(file.content),
+      created: !existing,
+    };
+  }
+
   async delete(path: string, options: WriteOptions = {}): Promise<void> {
     const p = toVaultPath(path);
     const existing = this.files.get(p);

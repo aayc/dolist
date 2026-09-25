@@ -182,7 +182,8 @@ and the phone use the always-on machine.
   stops its agent, runs a sync pass and releases, and the requester starts from the synced state
   (about half a minute). When that device quits or sleeps, the always-on machine takes the lease
   back as today. Equal priorities keep first come, first served. A run in progress at handover
-  stops; its thread can be retried.
+  stops on the old holder and resumes on the new one from its thread's journal (unless it stopped
+  in the middle of an action that may or may not have happened: that one waits for the user).
 - **Everything the agent needs to move syncs already**: notes, routine files, threads, artifacts,
   task records, approvals, routines state and settings (the sidecar, see [SYNC.md](./SYNC.md)).
   What stays with each machine is what belongs to it: connectors (`mcp.json`), API keys, the
@@ -195,10 +196,12 @@ and the phone use the always-on machine.
   the agent's sidecar files (threads, artifacts, `state/`) that don't carry the current one, so a
   device that lost the agent while offline can't overwrite the new holder's state when it
   reconnects.
-- **The journal (next):** agent state becomes append-only events that merge as a union, side
-  effects are journaled before and after they run (never re-run when uncertain), and a run
-  resumes on the new machine instead of stopping
-  ([docs/specs/agent-journal.md](./specs/agent-journal.md)). Temporal was considered and rejected:
+- **The journal (phase 1 built, for threads):** thread state is append-only events that merge as
+  a union (`state/journal/threads/`, under the fenced `state/`), side effects are journaled before
+  and after they run (never re-run when uncertain), and a run resumes on the new machine instead of
+  stopping ([docs/specs/agent-journal.md](./specs/agent-journal.md),
+  [AGENT_SYSTEM.md](./AGENT_SYSTEM.md#the-journal-write-ahead-interrupted-steps-and-resuming)).
+  Approvals and routines state follow in phase 2. Temporal was considered and rejected:
   a central server every device would depend on, histories outside the vault, and replay that
   needs control of the agent loop, which lives inside the harness.
 
@@ -279,7 +282,5 @@ Each phase ships on its own, with tests, docs and CI green.
 ## Open questions
 
 - Model credentials on the VM: the Cursor CLI signed in there, an OpenRouter key, or both.
-- Lease handover mid-run: the new holder restores threads from the sidecar, but a run in flight on
-  the old holder stops. Is resuming it worth building?
 - Frames through the relay (up to 10 per second) are forwarded as they are; lowering the rate for
   remote viewers remains possible if links turn out slow.

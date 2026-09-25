@@ -1,0 +1,2 @@
+{"v":1,"id":"evt_f01","epoch":0,"seq":1,"at":1790154000000,"type":"thread.created","thread":{"id":"thr_journal00005","taskId":null,"notePath":null,"title":"From the future","status":"working","createdAt":1790154000000}}
+{"v":2,"id":"evt_f02","epoch":3,"seq":2,"at":1790154001000,"type":"hologram","frames":9}
