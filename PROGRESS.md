@@ -57,7 +57,7 @@ Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md). Spec, with the exact wire contra
 | Stream | Branch | State |
 | --- | --- | --- |
 | S0 wire contract | `feat/always-on` | done at `45a7cd1` (incl. `heldHere` and the fencing types); `main` (routines) merged in at `a0a924f` |
-| S6 VM setup kit (Linux bundle, systemd, Azure guide, CI smoke) | `feat/always-on-kit` | done (`fa54df1`); `setup.sh` under real systemd passed in OrbStack on Ubuntu 24.04 and 26.04 arm64 (with the sandbox checked from inside each service); now switching the Azure guide to a public IP with inbound closed and `Standard_D4ps_v6` |
+| S6 VM setup kit (Linux bundle, systemd, Azure guide, CI smoke) | `feat/always-on-kit` | Azure guide done (`9494baa`: public IP with all inbound closed, `--nsg ""`, `Standard_D4ps_v6` on the Gen2 arm64 image with the NVMe controller; OpenSSH off at first boot); `feat/always-on` merged in; now adding the pairing smoke step, dropping the config override, an arm64 CI job, and rerunning the systemd test in OrbStack |
 | S1 remote access and pairing | `feat/always-on-remote` | done (`48d4ec7`), merged into `feat/always-on` at `0501be1` |
 | S2 placement, lease priorities, fencing, machine link | `feat/always-on-placement` | done (`bb18e4b`), merged into `feat/always-on` at `394a6dd` (with S1: daemon 1061, sync 63, storage 303, contract 1123 tests green) |
 | S3 relay | `feat/always-on-relay` (from `a0a924f`) | in progress |
@@ -75,13 +75,9 @@ To verify on the real VM (S1): `tailscale serve` must keep the original `Host`; 
 refuses loopback-Host requests that carry proxy forwarding headers (so a Host-rewriting proxy
 fails closed instead of getting the master token).
 
-Kit follow-ups at merge time (marked `FOLLOW-UP` in the code): the pairing step of
-`deploy/linux/smoke-check.mjs`; drop the `config.json` override in `deploy/linux/setup-test.sh`
-once the daemon accepts `agent.placement` and `remote.hosts`; confirm the names S1/S2 ship match
-the kit (those keys, `DDL_AGENT_PLACEMENT`, `DDL_REMOTE_HOSTS`, the `pair` CLI command). The Azure
-guide adds a NAT gateway (outbound internet without a public IP), which bills even while the VM is
-deallocated; per the user's decision, switch the guide's default to a public IP with every
-inbound port closed (keep the NAT gateway as an option) and recommend `Standard_D4ps_v6` (arm64).
+The kit's names match what S1/S2 shipped (`agent.placement`, `remote.hosts`,
+`DDL_AGENT_PLACEMENT`, `DDL_REMOTE_HOSTS` comma-separated, the `pair` CLI). Only the real VM can
+verify the `az` commands, Tailscale login and `tailscale serve`.
 
 Now unblocked by S1+S2 on `feat/always-on`: S4's fullstack e2e (merge `feat/always-on` into
 `feat/always-on-web` when S4 reports "ready for backend", then resume it), the kit's follow-ups
