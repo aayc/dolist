@@ -180,7 +180,9 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
  checking their boxes) goes through approval unless the user's approval policy runs it (it is
  medium risk: "Ask only for high-risk actions" and "Run everything" run it). Everything else
  agents make lives in the sidecar (threads, artifacts). Clients merge agent edits into unsaved
- typing (`mergeText`).
+ typing (`mergeText`). An editor with no unsaved typing never writes, and a merge never brings
+ back a line deleted elsewhere unless the user typed it (property-tested on web and Mac; see
+ "Saving and merging" in `packages/editor/README.md`).
 8. **Keystroke path stays O(line).** No network, no full-document parse, no React re-render per
    keystroke. Persistence is debounced; anchors are mapped through CodeMirror transactions.
 9. **Time is local.** Daily notes use the user's local calendar date (`@ddl/core` dates), never UTC.
