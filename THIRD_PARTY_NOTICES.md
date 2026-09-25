@@ -19,6 +19,8 @@ per-file tables live next to the code:
 | [Hermes Agent](https://github.com/NousResearch/hermes-agent) | Adapted: MCP tool naming/schema repair/redaction/backoff (`packages/connectors`); hardline + dangerous shell patterns and judge prompt defenses (`packages/agent/src/safety`) | MIT, © 2025 Nous Research |
 | [CodeMirror vim mode](https://github.com/replit/codemirror-vim) (`@replit/codemirror-vim`, `@replit/codemirror-vim-core`) and [CodeMirror 6](https://codemirror.net) (`@codemirror/state`, `view`, `commands`, `search`, `language`, `@marijn/find-cluster-break`) | npm dependencies of the web editor; ported to Swift for the native apps (`apps/macos/Packages/DailyDoListVim`) | MIT, © 2018-2021 Marijn Haverbeke and others |
 
+| [Excalidraw](https://github.com/excalidraw/excalidraw) (`@excalidraw/excalidraw`) and its fonts (Excalifont, Virgil, Xiaolai, Nunito, Lilita One, Comic Shanns, Cascadia Code, Liberation Sans, Assistant) | npm dependency of the web app: the drawing editor and renderer (`apps/web/src/features/drawings`). The build serves the fonts itself, with their notices in `assets/excalidraw-<version>/NOTICE.txt` (from `apps/web/excalidraw-notice.txt`) | MIT, © 2020 Excalidraw; fonts SIL OFL 1.1 (Comic Shanns MIT) |
+
 All other dependencies are installed from npm under their own licenses (see each package in
 `node_modules` or `pnpm licenses list`).
 
