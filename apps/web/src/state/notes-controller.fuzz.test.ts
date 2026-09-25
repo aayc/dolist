@@ -58,6 +58,12 @@ class World {
     return version;
   }
 
+  /** Whether `word` was ever saved: in a version of the note or a conflict copy. */
+  saved(word: string): boolean {
+    const has = (text: string) => text.split(/\s+/).includes(word);
+    return this.history.some(has) || [...this.copies()].some(has);
+  }
+
   /** Contents preserved in conflict copies. */
   copies(): Set<string> {
     const out = new Set<string>();
@@ -103,7 +109,10 @@ class Client implements NotesClient {
   cacheDropped = false;
   forgotten = false;
   failNextWrite = false;
-  /** Contents this client wrote, or had applied to its editor: overwriting those is informed. */
+  /**
+   * Contents this client wrote or showed in its editor (applied, merged, or typed): overwriting
+   * those is informed.
+   */
   readonly seen = new Set<string>();
   /** The server text most recently delivered to this client (a read, or a 409's current text). */
   private delivered: string | null = null;
@@ -125,13 +134,13 @@ class Client implements NotesClient {
           else this.cacheDropped = true;
         },
         applyMerge: (_path, content) => {
+          // A merge may drop what the other side changed or removed, which was saved, but never
+          // the user's unsaved typing: every word it drops was saved somewhere (words are unique).
           const shown = this.shown();
-          const kept = shown.split(/\s+/).every((word) => content.split(/\s+/).includes(word));
+          const kept = new Set(content.split(/\s+/));
+          const lost = shown.split(/\s+/).filter((word) => !kept.has(word) && !world.saved(word));
           world.check(() =>
-            expect(
-              kept || this.world.history.includes(shown),
-              `client ${this.id} merged away ${JSON.stringify(shown)}`,
-            ).toBe(true),
+            expect(lost, `client ${this.id} merged away ${JSON.stringify(shown)}`).toEqual([]),
           );
           // The merge was built from the server text just delivered: that text was seen.
           if (this.delivered !== null) this.seen.add(this.delivered);
@@ -228,6 +237,7 @@ class Client implements NotesClient {
     const words = first.split(" ");
     const line = remove && words.length > 1 ? words.slice(0, -1).join(" ") : `${first} ${token}`;
     this.live = [line, ...rest].join("\n");
+    this.seen.add(this.live);
     this.notes.markDirty(PATH);
   }
 
@@ -242,13 +252,13 @@ class Client implements NotesClient {
     this.active = true;
     if (this.cacheDropped) {
       this.cacheDropped = false;
-      this.live = this.notes.serverContent(PATH) ?? this.live;
+      this.live = this.notes.content(PATH) ?? this.live;
     }
   }
 
   /** What the user sees for the note (or would see when switching back). */
   shown(): string {
-    return this.cacheDropped ? (this.notes.serverContent(PATH) ?? this.live) : this.live;
+    return this.cacheDropped ? (this.notes.content(PATH) ?? this.live) : this.live;
   }
 }
 
