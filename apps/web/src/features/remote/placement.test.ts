@@ -194,6 +194,13 @@ describe("the read-only reason", () => {
     expect(readOnlyReason(status({ ...relayed, relay: "connected", runsOn: OTHER }))).toBe(
       "The agent is running on Work laptop",
     );
+    // Relayed while the machine doesn't run the agent (the daemon answers 503 until it does).
+    expect(readOnlyReason(status({ placement: "always_on_machine", runsOn: null }))).toBe(
+      "The always-on machine isn't running the agent right now",
+    );
+    expect(
+      readOnlyReason(status({ placement: "always_on_machine", runsOn: null, heldHere: "no_sync" })),
+    ).toBeNull();
     // Taking over from the machine: read-only until this device holds the agent.
     expect(readOnlyReason(status({ runsOn: MACHINE, note: "Taking over from vm-1…" }))).toBe(
       "The agent is running on vm-1",

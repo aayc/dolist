@@ -423,7 +423,8 @@ a.button {
   --tone: var(--ddl-warning);
 }
 
-.agent-banner.is-elsewhere {
+.agent-banner.is-elsewhere,
+.agent-banner.is-idle {
   --tone: var(--ddl-info);
 }
 

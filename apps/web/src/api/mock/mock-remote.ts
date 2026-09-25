@@ -369,19 +369,21 @@ export class MockRemote {
   }
 
   /**
-   * Why this device can't act on the agent right now (its routes answer 503 with it), like the
-   * daemon's read-only fallback: the machine can't be used from here, or another device runs it.
+   * Why this device can't act on the agent right now (its routes answer 503 with it), worded like
+   * the daemon's read-only fallback: the handover while it happens, who runs the agent, or the
+   * always-on machine not running it. Only "can't be reached" is the relay's (S3).
    */
   problem(): string | undefined {
     const name = this.machine()?.name ?? "the always-on machine";
     if (this.runsOn?.thisDevice) return undefined;
+    if (this.relay === "connecting") return this.note ?? `Handing the agent to ${name}…`;
     if (this.relay === "unreachable") return `The always-on machine (${name}) can't be reached.`;
-    if (this.relay === "not_paired") {
-      return "This device isn't paired with the always-on machine: pair it in Settings.";
+    if (this.relay === "connected" && this.runsOn?.alwaysOnMachine) return undefined;
+    if (!this.runsOn) {
+      return this.machine()
+        ? `The agent runs on the always-on machine (${name}), which isn't running it right now.`
+        : undefined;
     }
-    if (this.relay === "connecting") return "Connecting to the always-on machine…";
-    if (!this.runsOn) return undefined;
-    if (this.relay === "connected" && this.runsOn.alwaysOnMachine) return undefined;
     return `The agent is running on ${this.runsOn.name}.`;
   }
 

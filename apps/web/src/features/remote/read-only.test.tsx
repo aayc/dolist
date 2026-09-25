@@ -111,6 +111,12 @@ describe("the read-only banner", () => {
       kind: "elsewhere",
       text: "The agent is running on Work laptop — showing the last synced state",
     });
+    expect(
+      availabilityBanner({ placement: "always_on_machine", runsOn: null, relay: "off" }),
+    ).toEqual({
+      kind: "idle",
+      text: "The always-on machine isn't running the agent right now — showing the last synced state",
+    });
   });
 
   it("stays away while this device can act on the agent, or while it's being handed over", () => {

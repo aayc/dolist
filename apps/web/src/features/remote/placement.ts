@@ -197,7 +197,19 @@ export function readOnlyReason(placement: AgentPlacementStatus | undefined): str
       break;
   }
   const { runsOn } = placement;
-  if (!runsOn) return null;
+  if (!runsOn) return machineIdle(placement) ? MACHINE_IDLE : null;
   if (placement.relay === "connected" && runsOn.alwaysOnMachine) return null;
   return `The agent is running on ${runsOn.name}`;
+}
+
+export const MACHINE_IDLE = "The always-on machine isn't running the agent right now";
+
+/** Set to the always-on machine, which nobody runs the agent on (and no relay to ask it). */
+export function machineIdle(placement: AgentPlacementStatus): boolean {
+  return (
+    placement.placement === "always_on_machine" &&
+    !placement.heldHere &&
+    placement.runsOn === null &&
+    placement.relay === "off"
+  );
 }
