@@ -84,7 +84,11 @@ future iPhone app too.
   "Demo" marker in demo mode), and the agent's mode when it isn't `live`. The agent item says
   what the agent can do right now: "Agent on" / "Agent paused" (click to toggle), "Agent off",
   or "Agent unavailable" when the daemon reports a problem (click for the reason and a way to
-  Settings → Agent). It never shows "on" next to a problem.
+  Settings → Agent). It never shows "on" next to a problem. An approval policy other than the
+  default shows too ("Runs everything" in the warning color, "Asks only for high-risk" or "Asks
+  before every action"); clicking it runs Agent → Approval Policy… (Settings → Agent).
+- **Settings → Agent → Approvals** chooses when agents ask before acting, with the web app's four
+  choices and descriptions; "Run everything" is saved only after a confirmation alert.
 - **Agent badges** are loud only when they need you, and move gently (fade-ins, crossfades, the
   triaging pulse, checkmarks popping in) unless Reduce Motion is on. See the
   [editor README](Packages/DailyDoListEditor/README.md#behavior).

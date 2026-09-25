@@ -40,18 +40,24 @@ struct AgentSettingsPane: View {
           title: "Max concurrent subagents", value: agent.maxConcurrentSubagents,
           range: SettingsRanges.maxConcurrentSubagents
         ) { update(.init(maxConcurrentSubagents: $0)) }
+        SettingsToggle(
+          "Act on tasks that already exist",
+          isOn: Binding(
+            get: { agent.actOnExistingTasks },
+            set: { update(.init(actOnExistingTasks: $0)) }))
+      }
+      Section("Approvals") {
+        SettingsNote(text: "When agents ask you before they act.")
+        ApprovalPolicyPicker(selection: agent.approvalPolicy) {
+          update(.init(approvalPolicy: $0))
+        }
         ClampedNumberField(
           title: "Approval timeout", value: agent.approvalTimeoutMs / 60_000,
           range: (SettingsRanges.approvalTimeoutMs.lowerBound / 60_000)...(SettingsRanges
             .approvalTimeoutMs.upperBound / 60_000),
           step: 15, unit: "min"
         ) { update(.init(approvalTimeoutMs: $0 * 60_000)) }
-        SettingsNote(text: "Risky actions waiting longer than this are denied automatically.")
-        SettingsToggle(
-          "Act on tasks that already exist",
-          isOn: Binding(
-            get: { agent.actOnExistingTasks },
-            set: { update(.init(actOnExistingTasks: $0)) }))
+        SettingsNote(text: "Actions waiting longer than this for your approval are denied.")
       }
       Section("Models") {
         LabeledContent("Agent") {

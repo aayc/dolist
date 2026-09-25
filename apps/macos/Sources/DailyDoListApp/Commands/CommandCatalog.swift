@@ -196,6 +196,9 @@ struct CommandCatalog {
       AppCommand(.setUpComputerUse, "Set Up Computer Use…", palette: "Set up computer use") {
         model.showSettings(.computerUse)
       },
+      AppCommand(.approvalPolicy, "Approval Policy…", palette: "Change approval policy") {
+        model.showSettings(.agent)
+      },
       AppCommand(
         .restartDaemon, "Restart Daemon", palette: "Restart the daemon",
         enabled: { !model.isDemo && model.preferences.daemonMode == .managed },

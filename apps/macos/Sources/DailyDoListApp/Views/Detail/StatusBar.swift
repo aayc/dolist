@@ -123,6 +123,17 @@ struct AgentStatusItems: View {
     }
     .animation(
       .countAppearance(reduceMotion: reduceMotion), value: agent.pendingApprovalCount > 0)
+
+    if let policy = ApprovalPolicyIndicator(model.settings.settings.agent.approvalPolicy) {
+      Button {
+        CommandCatalog(model: model).run(.approvalPolicy)
+      } label: {
+        Label(policy.label, systemImage: policy.systemImage)
+          .foregroundStyle(policy.isWarning ? Theme.warning : Theme.mutedText)
+      }
+      .buttonStyle(.statusItem)
+      .tooltip(policy.tooltip, command: .approvalPolicy)
+    }
   }
 
   /// "2 agent tasks running · 1 queued" (the web app's wording).
