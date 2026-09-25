@@ -227,19 +227,36 @@ public struct ExcalidrawMarkdown: Sendable {
     var closed: Bool
   }
 
-  /// Lines of `text` with where each starts and where the next one does.
-  static func lines(_ text: String, from start: String.Index? = nil) -> [(
-    start: String.Index, end: String.Index, next: String.Index
-  )] {
-    var result: [(start: String.Index, end: String.Index, next: String.Index)] = []
-    var position = start ?? text.startIndex
-    while position < text.endIndex {
-      let newline = text[position...].firstIndex(of: "\n")
-      let end = newline ?? text.endIndex
-      result.append((position, end, newline.map { text.index(after: $0) } ?? end))
-      position = newline.map { text.index(after: $0) } ?? text.endIndex
+  /// Lines of `text` (from `start`) with where each starts, ends and where the next one does,
+  /// scanned lazily on the UTF-8 view (a line break is always a character boundary).
+  static func lines(_ text: String, from start: String.Index? = nil) -> LineSequence {
+    LineSequence(text: text, start: start ?? text.startIndex)
+  }
+
+  struct LineSequence: Sequence {
+    let text: String
+    let start: String.Index
+
+    struct Iterator: IteratorProtocol {
+      let utf8: String.UTF8View
+      var position: String.Index
+
+      mutating func next() -> (start: String.Index, end: String.Index, next: String.Index)? {
+        guard position < utf8.endIndex else { return nil }
+        let lineStart = position
+        let newline = utf8[position...].firstIndex(of: 10)
+        let end = newline ?? utf8.endIndex
+        position = newline.map { utf8.index(after: $0) } ?? utf8.endIndex
+        return (lineStart, end, position)
+      }
     }
-    return result
+
+    func makeIterator() -> Iterator { Iterator(utf8: text.utf8, position: start) }
+  }
+
+  /// The first byte of a line, for cheap checks before comparing text.
+  static func firstByte(_ text: String, _ index: String.Index) -> UInt8? {
+    index < text.utf8.endIndex ? text.utf8[index] : nil
   }
 
   static func isDrawingHeading(_ line: Substring) -> Bool {
@@ -278,7 +295,10 @@ public struct ExcalidrawMarkdown: Sendable {
   /// The last `## Drawing` heading followed (after blank lines) by a json or compressed-json fence.
   static func findDrawingBlock(_ body: String) -> DrawingBlock? {
     var found: DrawingBlock?
-    for line in lines(body) where isDrawingHeading(body[line.start..<line.end]) {
+    for line in lines(body)
+    where firstByte(body, line.start) == UInt8(ascii: "#")
+      && isDrawingHeading(body[line.start..<line.end])
+    {
       if let block = readDrawingBlock(
         body, start: line.start, heading: String(body[line.start..<line.end]))
       {
@@ -398,7 +418,9 @@ public struct ExcalidrawMarkdown: Sendable {
   /// `## Element Links`, `## Embedded Files` or the drawing.
   static func splitSections(_ body: String, drawing: DrawingBlock?) -> [DrawingFileSection] {
     let limit = drawing?.start ?? body.endIndex
-    let before = lines(body).filter { $0.start < limit }
+    let before = lines(body).prefix { $0.start < limit }.filter {
+      firstByte(body, $0.start) == UInt8(ascii: "#")
+    }
     let data =
       before.first { isDataHeading(String(body[$0.start..<$0.end])) }
       ?? before.first { isTextHeading(String(body[$0.start..<$0.end])) }
@@ -422,7 +444,9 @@ public struct ExcalidrawMarkdown: Sendable {
     var inText = false
     for line in lines(text) {
       let content = text[line.start..<line.end]
-      let starts = inText ? isAfterTextHeading(content) : isHeading(content)
+      let starts =
+        firstByte(text, line.start) == UInt8(ascii: "#")
+        && (inText ? isAfterTextHeading(content) : isHeading(content))
       if starts {
         sections.append(DrawingFileSection(heading: String(content), body: ""))
         inText = dataArea && isTextHeading(String(content))

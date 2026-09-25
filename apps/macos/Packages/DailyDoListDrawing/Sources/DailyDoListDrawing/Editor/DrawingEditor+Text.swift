@@ -40,6 +40,10 @@ extension DrawingEditor {
   public func updateEditingText(_ text: String) {
     guard let id = editingTextId, let element = element(id), element.text != nil else { return }
     let normalized = TextLayout.normalize(text)
+    if element.extraField("rawText") != nil {
+      // The plugin's copy of the text follows what's typed.
+      update(id) { $0.setExtraField("rawText", .string(normalized)) }
+    }
     if element.containerId != nil {
       update(id) { $0.text?.originalText = normalized }
       layoutLabel(id)

@@ -12,24 +12,27 @@ enum SceneWriter {
   ]
 
   static func object(for scene: ExcalidrawScene, previous: ExcalidrawScene?) -> JSONObject {
-    let current = SceneCodec.encodeObject(scene)
-    let old = previous.map(SceneCodec.encodeObject)
+    var sceneOnly = scene
+    sceneOnly.elements = []
+    let current = SceneCodec.encodeObject(sceneOnly)
+    let old = previous.map { previous -> JSONObject in
+      var copy = previous
+      copy.elements = []
+      return SceneCodec.encodeObject(copy)
+    }
     let merged = old.map { mergeFields(current, $0) } ?? current
 
-    var previousElements: [String: JSONObject] = [:]
-    for item in old?["elements"]?.arrayValue ?? [] {
-      if let element = item.objectValue, let id = element["id"]?.stringValue,
-        previousElements[id] == nil
-      {
-        previousElements[id] = element
-      }
+    var previousElements: [String: ExcalidrawElement] = [:]
+    for element in previous?.elements ?? [] where previousElements[element.id] == nil {
+      previousElements[element.id] = element
     }
-    let elements = (current["elements"]?.arrayValue ?? []).map { item -> JSONValue in
-      guard let element = item.objectValue else { return item }
-      let id = element["id"]?.stringValue ?? ""
-      let before = previousElements[id]
-      let merged = before.map { mergeFields(element, $0) } ?? element
-      return .object(withFreshRawText(merged, previous: before))
+    let elements = scene.elements.map { element -> JSONValue in
+      let encoded = ElementCodec.encode(element)
+      guard let before = previousElements[element.id] else { return .object(encoded) }
+      // Unchanged elements merge to themselves.
+      if before == element { return .object(encoded) }
+      let old = ElementCodec.encode(before)
+      return .object(withFreshRawText(mergeFields(encoded, old), previous: old))
     }
     let appState = mergeFields(
       current["appState"]?.objectValue ?? JSONObject(),
