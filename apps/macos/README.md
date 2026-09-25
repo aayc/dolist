@@ -40,14 +40,14 @@ future iPhone app too.
 | --- | --- |
 | `Package.swift`, `Sources/DailyDoList` | The executable: `@main` and nothing else. |
 | `Sources/DailyDoListApp` | The app shell: scenes, `AppModel`, stores, workspace, settings panes, commands, the command palette. |
-| `Sources/DailyDoListApp/System` | OS integration: launch at login (`SMAppService`), the global hotkey (Carbon), shortcut parsing, conflicts with macOS shortcuts. |
+| `Sources/DailyDoListApp/System` | OS integration: launch at login (`SMAppService`), the global hotkey (Carbon), shortcut parsing, conflicts with macOS shortcuts, and the computer-use permissions with their guide panel. |
 | `Packages/DailyDoListModels` (iOS) | Swift mirror of the wire protocol (`packages/core/src/protocol.ts`), checked against the `@ddl/contract` fixtures. |
 | `Packages/DailyDoListClient` (iOS) | `DaemonClient`: `HTTPDaemonClient` (REST + WebSocket, reconnects and resyncs) and `InMemoryDaemonClient` (the demo and test fake). |
 | `Packages/DailyDoListDomain` (iOS) | Pure domain logic ported from `@ddl/core`: dates and daily notes, task parsing and tracking, line anchors, agent-line markers, three-way merges, wikilinks, paths, fuzzy matching. |
 | `Packages/DailyDoListEditor` | The TextKit markdown editor: live preview, clickable checkboxes, agent badges, and vim mode (it hosts `DailyDoListVim`). |
 | `Packages/DailyDoListVim` (iOS) | Vim mode: a port of the web editor's vim.js and its CodeMirror 6 adapter, checked against the web app's vim vectors; hosts implement `VimEditor` ([README](Packages/DailyDoListVim/README.md)). |
 | `Packages/DailyDoListAgent` | Agent state and UI: inbox, threads, approval cards, artifacts, notifications, menu bar, Dock badge. |
-| `Packages/DailyDoListUI` | What the shell, the agent UI and the editor share: the app's one tooltip (`TooltipCenter`, `.tooltip(…)`), keycaps (`KeyShortcut`, `Keycaps`), `.pointingHandCursor()`, `IconButton` and the chrome button styles. `DailyDoListUITestSupport` finds tooltips in tests and draws them into snapshots. |
+| `Packages/DailyDoListUI` | What the shell, the agent UI and the editor share: the app's one tooltip (`TooltipCenter`, `.tooltip(…)`), keycaps (`KeyShortcut`, `Keycaps`), `.pointingHandCursor()`, `IconButton`, and the chrome and accent button styles. `DailyDoListUITestSupport` finds tooltips in tests and draws them into snapshots. |
 | `Packages/DailyDoListDaemon` | `DaemonSupervisor`: finds Node and the daemon, attaches or launches, health-checks, restarts, stops. |
 | `IntegrationTests/` | End-to-end tests against the real daemon (a separate package). |
 | `Resources/` | `Info.plist.template` and the rendered 1024 px icon (`AppIcon-1024.png`). |
@@ -245,7 +245,43 @@ right-click → Open, or `xattr -dr com.apple.quarantine "Daily Do List.app"`.
 | Notifications (approval requests, finished tasks) | The standard notification prompt on first use; manage it in System Settings → Notifications. |
 | Launch at login | Only works from a signed `.app` (`build-app.sh`; a `swift run` build explains why it's unavailable). When macOS says it needs approval, the toggle offers **Open Login Items Settings…**. |
 | Global shortcut (off by default; default ⌃⌥⌘D: open today's note) | No permission (Carbon hotkeys). ⌃⌥⌘D is free on a stock Mac; ⌥⌘D would clash with macOS's own "Turn Dock hiding on/off". The app detects clashes with common system shortcuts and says which setting to turn off, or pick another shortcut in Settings → General. |
-| Computer use and browser automation by agents | The daemon is the app's child process, so Accessibility and Screen Recording prompts name **Daily Do List**. Grants survive rebuilds only when builds are signed with the local identity ([Keeping permissions across builds](#keeping-permissions-across-builds)); after an ad-hoc build, grant them again. |
+| Computer use and browser automation by agents | The daemon is the app's child process, so Accessibility and Screen Recording prompts name **Daily Do List**, and Settings → Computer Use walks you through both ([Computer use access](#computer-use-access)). Grants survive rebuilds only when builds are signed with the local identity ([Keeping permissions across builds](#keeping-permissions-across-builds)); after an ad-hoc build, grant them again. |
+
+## Computer use access
+
+Agents that work in other apps need two macOS permissions: **Accessibility** (read other apps'
+controls, click and type in them) and **Screen Recording** (see their windows). macOS checks them
+on the app that started the daemon, so Daily Do List asks for them for itself.
+
+- **Where:** Settings → Computer Use says what agents can do there and the guardrails, with a row
+  per permission. **Set Up Computer Use…** (Agent menu, command palette) opens it, and so does the
+  main window's banner, "Let the agent use your apps", shown while access is missing, the agent
+  is on and the app runs its own daemon. Dismissing the banner is remembered.
+- **Allow…** shows macOS's own prompt first (it adds Daily Do List to the list, switched off),
+  then opens System Settings on that exact list: `x-apple.systempreferences:` links to
+  `Privacy_Accessibility` or `Privacy_ScreenCapture` under the pane's older and newer names, then
+  Privacy & Security itself. The first link that opens wins.
+- **The guide:** a small floating panel at the right edge of the screen that never takes the focus
+  from System Settings. It says "Turn on **Daily Do List** under Accessibility", offers the app's
+  icon to drag into the list when it isn't there, and checks the permission off the moment the
+  switch flips. After Accessibility it offers **Next: Screen Recording**. When everything is on it
+  says "All set", closes after 1.5 s and brings Daily Do List back.
+- **Polling** (every 0.5 s) only runs while the guide or the Computer Use tab is showing, or System
+  Settings is in front, and stops once both are granted. The app also re-checks whenever it
+  becomes active.
+- **Screen Recording applies after a relaunch.** macOS offers **Quit & Reopen** itself; the guide,
+  the tab and the banner offer **Relaunch Now**. That saves your notes, stops the managed daemon,
+  opens a new instance (`createsNewApplicationInstance`, with this one's arguments and `DDL_*`
+  variables) and quits, so the new instance starts its own daemon and the grant reaches it. A
+  launch within 10 minutes of asking reopens Settings → Computer Use, so you see the result.
+- **Only the app's own daemon gets them.** When the app uses a daemon it didn't start (`pnpm dev`
+  in a terminal, or an external one), macOS checks the app that started that daemon, such as your
+  terminal, and the tab says so. It also warns when the app is signed ad hoc, which loses the
+  grants on every rebuild ([Keeping permissions across builds](#keeping-permissions-across-builds)).
+- **Code:** `Sources/DailyDoListApp/System/ComputerAccess*.swift` and `ComputerPermission.swift`.
+  Every OS call (the TCC checks and prompts, `NSWorkspace`, System Settings' state, the panel,
+  relaunching) is behind a protocol in `ComputerAccessSystem`, and time behind `AppScheduler`, so
+  the tests drive the whole flow with fakes and never prompt.
 
 ## Troubleshooting
 
@@ -291,5 +327,11 @@ right-click → Open, or `xattr -dr com.apple.quarantine "Daily Do List.app"`.
   command show the catalog's keys, and no string in the sources spells a shortcut out. Snapshots
   draw the real bubble where it would show (`app-snapshots/tooltip-*`, `editor-snapshots/tooltip-*`,
   `ui-snapshots/`).
+- **Computer use access**: `ComputerAccessTests` run the permission flow against fakes (the
+  prompt before the System Settings link, the links' fallbacks, the guide's steps, polling that
+  stops, the relaunch's order, the banner's rules and its dismissal), and the snapshots draw the
+  Computer Use tab, the guide and the banner (`app-snapshots/settings-computer-use-*`,
+  `computer-access-guide-*`, `computer-access-banner-*`). Nothing in the tests prompts, opens
+  System Settings or relaunches.
 - The web UI's e2e and perf budgets don't cover this app. Check UI changes by hand
   (`run-app.sh --demo` is quickest).

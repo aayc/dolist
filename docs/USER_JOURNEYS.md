@@ -102,3 +102,24 @@ The badge is the one-glance status next to the line ("Booked · Tue 9:30am", "3 
 Anything worth keeping goes into the note as the agent's line, with its source.
 
 Tests: the scenario matrix in `packages/agent/test/scenarios/` and the journeys above.
+
+## J9. Letting the agent use your apps (Mac)
+
+1. While computer use isn't set up and the agent is on, a banner under the tabs says *Let the
+   agent use your apps*. **Set Up…** (or **Set Up Computer Use…** in the Agent menu or the
+   palette) opens Settings → Computer Use: what agents can do in other apps, the guardrails (they
+   ask before every action there, and never touch Daily Do List, System Settings or password
+   managers), and a row for Accessibility and one for Screen Recording.
+2. **Allow…** shows macOS's prompt, then opens System Settings on that exact list. A small panel
+   beside it says *Turn on **Daily Do List** under Accessibility*, with the app's icon to drag into
+   the list if it isn't there.
+3. The moment the switch is on, the panel checks it off and offers **Next: Screen Recording**.
+4. Screen Recording applies after a relaunch: choose **Quit & Reopen** in macOS's dialog or
+   **Relaunch Now** in the panel. Daily Do List comes back on Settings → Computer Use with both
+   permissions on. Once everything is on, the panel says *All set* and gets out of the way.
+
+Tests: Mac `ComputerAccessTests` (prompt before the link, the links' fallbacks, the check while
+polling, polling that stops, Next, the relaunch's order and the setup resuming after it), the
+banner's rules and its dismissal (`ComputerAccessBannerTests`), the command
+(`ComputerAccessAppTests`), and the snapshots `settings-computer-use-*`,
+`computer-access-guide-*` and `computer-access-banner-*`.

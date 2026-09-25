@@ -193,6 +193,9 @@ struct CommandCatalog {
       ) {
         ui.showInbox()
       },
+      AppCommand(.setUpComputerUse, "Set Up Computer Use…", palette: "Set up computer use") {
+        model.showSettings(.computerUse)
+      },
       AppCommand(
         .restartDaemon, "Restart Daemon", palette: "Restart the daemon",
         enabled: { !model.isDemo && model.preferences.daemonMode == .managed },

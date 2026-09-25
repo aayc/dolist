@@ -84,6 +84,41 @@ struct TooltipTests {
     await model.teardown()
   }
 
+  /// The computer use banner's button runs the catalog's command; its dismiss button says that
+  /// dismissing is for good.
+  @Test func theComputerUseBannerRunsItsCommand() throws {
+    let model = AppModel(
+      environment: makeEnvironment(
+        client: FakeDaemonClient(), computerAccess: ComputerAccessFakes().system()))
+    let size = CGSize(width: 900, height: 34)
+    let hosting = NSHostingView(
+      rootView: ComputerAccessBanner(model: model, kind: .setUp)
+        .environment(\.tooltipCenter, QuietTooltips.makeCenter()))
+    let window = NSWindow(
+      contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
+      backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = hosting
+    hosting.frame = NSRect(origin: .zero, size: size)
+    window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
+    window.orderFrontRegardless()
+    defer { window.close() }
+    for _ in 0..<4 {
+      hosting.layoutSubtreeIfNeeded()
+      window.displayIfNeeded()
+      RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+    }
+    let anchors = tooltipAnchors(in: hosting)
+    let setUp = try #require(
+      anchors.first { $0.command == CommandID.setUpComputerUse.rawValue }, "Set Up… runs it")
+    #expect(setUp.tooltipContent()?.plainText == "Open Settings → Computer Use")
+    #expect(setUp.tooltipContent()?.lines.first?.keys == CommandID.setUpComputerUse.shortcut)
+    #expect(anchors.contains { $0.tooltipContent()?.plainText == "Don't show again" })
+    #expect(
+      !anchors.contains { $0.tooltipContent()?.plainText.contains("apps that have no") == true },
+      "the detail fits at this width, so it has no tooltip")
+  }
+
   @Test func thePaletteShowsTheCatalogsShortcuts() async throws {
     let model = AppModel(environment: makeEnvironment(client: FakeDaemonClient()))
     await model.boot()
