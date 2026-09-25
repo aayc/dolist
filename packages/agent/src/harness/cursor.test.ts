@@ -22,8 +22,12 @@ import { CursorHarness, type CursorHarnessOptions } from "./cursor/harness";
 import type { HarnessEvent, HarnessSession, HarnessSessionOptions, ToolCallRequest } from "./types";
 
 const FAKE_CLI = fileURLToPath(new URL("./cursor/testing/fake-cursor-cli.ts", import.meta.url));
-/** Every test starts the fake CLI as a process; a loaded machine can take seconds to do that. */
-const SPAWN_TIMEOUT_MS = 30_000;
+/**
+ * Every test starts the fake CLI as a process, some several times; with other tests doing the same
+ * on a busy machine, one start can take many seconds. Failure bounds only.
+ */
+const SPAWN_TIMEOUT_MS = 120_000;
+const CLI_START_TIMEOUT_MS = 60_000;
 const cleanup: string[] = [];
 const sessions: HarnessSession[] = [];
 
@@ -71,7 +75,7 @@ async function setup(
     },
     userHome,
     idleTimeoutMs: 0,
-    requestTimeoutMs: 15_000,
+    requestTimeoutMs: CLI_START_TIMEOUT_MS,
     cancelGraceMs: 400,
     ...options.harness,
   });
@@ -133,7 +137,10 @@ function alive(pid: number): boolean {
   }
 }
 
-async function waitFor(check: () => boolean | Promise<boolean>, ms = 4_000): Promise<void> {
+async function waitFor(
+  check: () => boolean | Promise<boolean>,
+  ms = CLI_START_TIMEOUT_MS,
+): Promise<void> {
   const until = Date.now() + ms;
   while (!(await check())) {
     if (Date.now() > until) throw new Error("timed out waiting");
@@ -496,8 +503,9 @@ describe("CursorHarness (fake CLI)", { timeout: SPAWN_TIMEOUT_MS }, () => {
     const s = await setup();
     const session = await s.create();
     await session.prompt("!say remember me");
-    const run = session.prompt("!hang");
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    const before = s.events.length;
+    const run = session.prompt("!say hanging\n!hang");
+    await waitFor(() => s.events.slice(before).some((e) => e.type === "text_delta"));
     await session.abort();
     await run;
     expect(errors(s.events)).toEqual([]);
@@ -512,7 +520,7 @@ describe("CursorHarness (fake CLI)", { timeout: SPAWN_TIMEOUT_MS }, () => {
     const [name] = await readdir(sessions);
     const pidFile = path.join(sessions, name!, "cli.pid");
     await expect
-      .poll(() => readFile(pidFile, "utf8").catch(() => ""), { timeout: 5_000 })
+      .poll(() => readFile(pidFile, "utf8").catch(() => ""), { timeout: CLI_START_TIMEOUT_MS })
       .toMatch(/^\d+\n$/);
     const pid = Number((await readFile(pidFile, "utf8")).trim());
     expect(() => process.kill(pid, 0)).not.toThrow();
@@ -713,7 +721,7 @@ describe("CursorHarness (fake CLI)", { timeout: SPAWN_TIMEOUT_MS }, () => {
   });
 });
 
-describe("prewarming", () => {
+describe("prewarming", { timeout: SPAWN_TIMEOUT_MS }, () => {
   const sessionsIn = (home: string) => readdir(path.join(home, "cursor", "sessions"));
   const acpSessionsIn = (home: string) =>
     readdir(path.join(home, "cursor", "config", "acp-sessions")).catch(() => []);

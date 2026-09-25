@@ -1,16 +1,17 @@
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  FAKE_HELPER,
+  FAKE_HELPER_HELLO_TIMEOUT_MS,
+  FAKE_HELPER_TEST_TIMEOUT_MS,
+} from "./app-control/testing/fake-helper";
 import type { CommandRunner } from "./jxa";
 import { LocalExecutionProvider } from "./provider";
 import { workspaceDirName } from "./workspace";
 
 const CHROME = { executablePath: "/opt/chrome/chrome", source: "chrome" as const };
-const FAKE_HELPER = fileURLToPath(
-  new URL("./app-control/testing/fake-computer-helper.ts", import.meta.url),
-);
 
 /** `ps`, `plutil` and the JXA permission probe, scripted (nothing real is queried). */
 function scripted(permissions: { accessibility: boolean; screenRecording: boolean | null }) {
@@ -149,7 +150,8 @@ describe("LocalExecutionProvider", () => {
     await expect(browser?.session("thread")).rejects.toThrow(/disposed/);
   });
 
-  it("runs shell commands", async () => {
+  // A login shell sources the user's profile: seconds on a busy machine.
+  it("runs shell commands", { timeout: 60_000 }, async () => {
     const provider = new LocalExecutionProvider(
       { kind: "local", home },
       { resolveBrowser: () => undefined },
@@ -160,7 +162,7 @@ describe("LocalExecutionProvider", () => {
     await provider.dispose();
   });
 
-  describe("computer access", { timeout: 30_000 }, () => {
+  describe("computer access", { timeout: FAKE_HELPER_TEST_TIMEOUT_MS }, () => {
     it("reports the helper's permissions, app control and the host app", async () => {
       const { runner, calls } = scripted({ accessibility: false, screenRecording: false });
       const provider = new LocalExecutionProvider(
@@ -170,6 +172,7 @@ describe("LocalExecutionProvider", () => {
           resolveBrowser: () => undefined,
           runner,
           helperArgs: [FAKE_HELPER, "serve", "--fake-no-screen"],
+          helperHelloTimeoutMs: FAKE_HELPER_HELLO_TIMEOUT_MS,
         },
       );
       try {

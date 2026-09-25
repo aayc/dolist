@@ -38,6 +38,8 @@ export interface LocalProviderDeps {
   spawnHelper?: SpawnHelper;
   /** Arguments for the helper command (tests: the fake helper script). Default `["serve"]`. */
   helperArgs?: readonly string[];
+  /** How long a started helper may take to answer (tests: the fake helper starts slowly). */
+  helperHelloTimeoutMs?: number;
   now?: () => number;
 }
 
@@ -139,6 +141,9 @@ export class LocalExecutionProvider implements ExecutionProvider {
         command: helper,
         ...(this.deps.helperArgs ? { args: this.deps.helperArgs } : {}),
         ...(this.deps.spawnHelper ? { spawn: this.deps.spawnHelper } : {}),
+        ...(this.deps.helperHelloTimeoutMs !== undefined
+          ? { helloTimeoutMs: this.deps.helperHelloTimeoutMs }
+          : {}),
         logger: this.logger,
       }),
       hostApp: () => this.hostApp(),

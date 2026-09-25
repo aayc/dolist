@@ -5,19 +5,19 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { type ToolResult, type ToolSpec, toolResultText } from "@ddl/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { TOOL } from "../tools/contracts";
 import { createComputerTools } from "./computer-tools";
 import { HelperClient } from "./local/app-control/client";
 import { HelperAppController } from "./local/app-control/controller";
+import {
+  FAKE_HELPER,
+  FAKE_HELPER_HELLO_TIMEOUT_MS,
+  FAKE_HELPER_TEST_TIMEOUT_MS,
+} from "./local/app-control/testing/fake-helper";
 import type { ComputerController, ExecutionToolContext, FrameListener } from "./types";
 
-const FAKE_HELPER = fileURLToPath(
-  new URL("./local/app-control/testing/fake-computer-helper.ts", import.meta.url),
-);
-const SPAWN_TIMEOUT_MS = 30_000;
 const cleanup: Array<() => Promise<void>> = [];
 
 afterEach(async () => {
@@ -53,6 +53,7 @@ async function setup(options: { flags?: string[]; watching?: boolean } = {}): Pr
     client: new HelperClient({
       command: process.execPath,
       args: [FAKE_HELPER, "serve", `--fake-log=${logFile}`, ...(options.flags ?? [])],
+      helloTimeoutMs: FAKE_HELPER_HELLO_TIMEOUT_MS,
     }),
   });
   cleanup.push(async () => {
@@ -107,7 +108,7 @@ function idOf(tree: string, needle: string): string {
   return id;
 }
 
-describe("app control tools", { timeout: SPAWN_TIMEOUT_MS }, () => {
+describe("app control tools", { timeout: FAKE_HELPER_TEST_TIMEOUT_MS }, () => {
   it("adds the app tools and `app` targets only when app control exists", async () => {
     const { tools } = await setup();
     expect([...tools.keys()]).toEqual([
@@ -352,7 +353,11 @@ describe("app control tools", { timeout: SPAWN_TIMEOUT_MS }, () => {
   it("keeps a thread's ids unique across rebuilt tool sets", async () => {
     // A retried subagent on the same thread gets new tools over the same controller.
     const controller = new HelperAppController({
-      client: new HelperClient({ command: process.execPath, args: [FAKE_HELPER, "serve"] }),
+      client: new HelperClient({
+        command: process.execPath,
+        args: [FAKE_HELPER, "serve"],
+        helloTimeoutMs: FAKE_HELPER_HELLO_TIMEOUT_MS,
+      }),
     });
     cleanup.push(() => controller.dispose());
     const ctx = (threadId: string): ExecutionToolContext => ({
