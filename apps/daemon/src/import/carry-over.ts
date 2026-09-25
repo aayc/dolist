@@ -34,7 +34,7 @@ import {
   toISODate,
 } from "@ddl/core";
 import { TRASH_DIR } from "../vault-ops";
-import { copyFileAtomic, readRegularFile, writeFileAtomic } from "./files";
+import { copyFileAtomic, readRegularFile, UnreadableSourceError, writeFileAtomic } from "./files";
 import type { ObsidianConfig } from "./obsidian-config";
 import { freeName, pathKey } from "./places";
 import { BoundedList, moveList, pathList } from "./report-lists";
@@ -218,7 +218,7 @@ export async function carriedDailyText(
   move: FileMove,
   readObsidian: (path: string) => Promise<string | null>,
 ): Promise<{ text: string; offset: number }> {
-  if (!move.daily?.merged) return { text: await readText(move.absolute), offset: 0 };
+  if (!move.daily?.merged) return { text: await readCarried(move), offset: 0 };
   const merged = await mergedDailyNote(carry, move.to, (await readObsidian(move.to)) ?? "");
   return { text: merged.text, offset: merged.offsets.get(move.from) ?? 0 };
 }
@@ -235,7 +235,7 @@ export async function mergedDailyNote(
   let text = obsidianText;
   const offsets = new Map<string, number>();
   for (const member of carry.merges.get(to) ?? []) {
-    const next = appendSection(text, await readText(member.absolute));
+    const next = appendSection(text, await readCarried(member));
     offsets.set(member.from, next.offset);
     text = next.text;
   }
@@ -256,12 +256,17 @@ export async function writeCarriedFiles(
   for (const move of carry.moves) {
     run.signal.throwIfAborted();
     if (!move.daily?.merged) {
-      await copyFileAtomic(move.absolute, join(root, move.to), {
-        signal: run.signal,
-        onBytes: (bytes) => run.bytes(bytes),
-      });
+      try {
+        await copyFileAtomic(move.absolute, join(root, move.to), {
+          signal: run.signal,
+          onBytes: (bytes) => run.bytes(bytes),
+        });
+      } catch (error) {
+        if (!(error instanceof UnreadableSourceError)) throw error;
+        throw new Error(`${move.from} in the current vault can't be read`, { cause: error });
+      }
     } else if (!originals.has(move.to)) {
-      const original = await readText(join(root, move.to));
+      const original = await readText(join(root, move.to), move.to);
       originals.set(move.to, original);
       const { text } = await mergedDailyNote(carry, move.to, original);
       if (text !== original) await writeFileAtomic(join(root, move.to), text);
@@ -449,9 +454,14 @@ function lineCount(text: string): number {
   return count;
 }
 
-async function readText(absolute: string): Promise<string> {
+function readCarried(move: FileMove): Promise<string> {
+  return readText(move.absolute, `${move.from} in the current vault`);
+}
+
+async function readText(absolute: string, name: string): Promise<string> {
   const bytes = await readRegularFile(absolute, Number.MAX_SAFE_INTEGER);
-  return bytes ? bytes.toString("utf8") : "";
+  if (!bytes) throw new Error(`${name} can't be read`);
+  return bytes.toString("utf8");
 }
 
 function compare(a: string, b: string): number {
