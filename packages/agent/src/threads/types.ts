@@ -3,6 +3,7 @@
  * requests, artifacts and live surfaces. Persisted in the vault sidecar (`.daily-do-list/threads/`)
  * through the StorageProvider so they sync along with the notes.
  */
+import type { PersistedJournalAllowedVia, PersistedJournalEvent } from "@ddl/contract";
 import type {
   ArtifactKind,
   ArtifactMeta,
@@ -14,6 +15,9 @@ import type {
   ThreadSummary,
   Unsubscribe,
 } from "@ddl/core";
+import type { OpenToolCall } from "./journal/fold";
+
+export type { OpenToolCall } from "./journal/fold";
 
 export interface NewArtifact {
   title: string;
@@ -70,3 +74,52 @@ export interface ThreadStore {
   flush(): Promise<void>;
   on(listener: (event: ThreadStoreEvent) => void): Unsubscribe;
 }
+
+/** A call the safety gate let through, as recorded right before it runs. */
+export interface ToolCallStart {
+  tool: string;
+  /** What it does, in words ("Press Send in Slack"). */
+  target: string;
+  via?: PersistedJournalAllowedVia;
+  /** The approval card a person decided, when there was one. */
+  approvalId?: string;
+}
+
+export interface ToolCallEnd {
+  outcome: "ok" | "error" | "blocked";
+  /** What the model read (redacted, capped). */
+  output?: string;
+}
+
+/**
+ * The agent-state side of the thread journal (beyond what `ThreadStore` shows): the tool call
+ * write-ahead log and the prompts that rebuild an agent session after a restart.
+ */
+export interface ThreadJournal {
+  /** A tool call reached the safety gate (`input` display-safe). */
+  recordToolRequested(
+    threadId: string,
+    call: { callId: string; tool: string; sessionId: string; input: unknown },
+  ): void;
+  /** The gate blocked the call. */
+  recordToolBlocked(threadId: string, callId: string, reason: string): void;
+  /**
+   * Write-ahead: durably records that the call was allowed and is about to run. Resolves false
+   * when the thread keeps no journal (there is nothing to resume it from); rejects when the record
+   * couldn't be written, and then the call must not run.
+   */
+  recordToolStarting(threadId: string, callId: string, start: ToolCallStart): Promise<boolean>;
+  recordToolFinished(threadId: string, callId: string, end: ToolCallEnd): void;
+  /** A prompt sent to the thread's agent session. */
+  recordPrompt(threadId: string, sessionId: string, text: string): void;
+  /** Calls that started and never finished: after a restart, they may or may not have happened. */
+  openToolCalls(threadId: string): OpenToolCall[];
+  /** Marks open calls (all, or these) interrupted, never to be re-run automatically. */
+  markInterrupted(threadId: string, callIds?: readonly string[]): OpenToolCall[];
+  /** Calls marked interrupted since the thread's agent was last prompted. */
+  interruptedCalls(threadId: string): OpenToolCall[];
+  /** The thread's journal as stored, in canonical order (to rebuild an agent session). */
+  readJournal(threadId: string): Promise<PersistedJournalEvent[]>;
+}
+
+export type JournaledThreadStore = ThreadStore & ThreadJournal;
