@@ -19,3 +19,10 @@ export interface RenderPageOutput {
   width: number;
   height: number;
 }
+
+declare global {
+  interface Window {
+    /** Set by the render page's script once it has loaded. */
+    ddlRenderDrawing?: (input: RenderPageInput) => Promise<RenderPageOutput>;
+  }
+}

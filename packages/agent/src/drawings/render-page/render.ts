@@ -26,13 +26,7 @@ function withFonts(elements: readonly unknown[]): unknown[] {
   });
 }
 
-declare global {
-  interface Window {
-    ddlRenderDrawing?: (input: RenderPageInput) => Promise<RenderPageOutput>;
-  }
-}
-
-window.ddlRenderDrawing = async (input) => {
+window.ddlRenderDrawing = async (input: RenderPageInput): Promise<RenderPageOutput> => {
   let size = { width: 0, height: 0 };
   const blob = await exportToBlob({
     elements: withFonts(input.elements) as ExportOptions["elements"],
