@@ -110,8 +110,8 @@
 }
 
 /* Excalidraw's library button would sit under Done; libraries aren't part of drawings yet. */
-.drawing-overlay .default-sidebar-trigger,
-.drawing-pane .default-sidebar-trigger {
+.drawing-overlay .excalidraw .default-sidebar-trigger,
+.drawing-pane .excalidraw .default-sidebar-trigger {
   display: none;
 }
 
