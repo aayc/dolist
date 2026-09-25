@@ -111,6 +111,32 @@ test.describe("the orchestrator toggle", () => {
     await expect(page.getByTestId("agent-banner")).toHaveCount(0);
   });
 
+  test("says so when the machine no longer accepts this device, and pairs again", async ({
+    page,
+  }) => {
+    await openApp(page, "mockSpeed=4&mockRemote=relayed");
+    await openPanel(page);
+    await page.evaluate(() => window.__ddlMock!.setMachineRejects(true));
+    await expect(page.getByTestId("agent-banner")).toContainText(
+      "The always-on machine no longer accepts this device — showing the last synced state",
+    );
+    await expect(line(page)).toHaveText("The always-on machine no longer accepts this device");
+    await page.getByTestId("agent-banner-pair").click();
+    await expect(page.getByTestId("machine-status")).toContainText(
+      "no longer accepts this device's credential",
+    );
+    await page.getByTestId("machine-pair-again").click();
+    await expect(page.getByTestId("machine-url")).toHaveValue("https://vm-1.tailnet-name.ts.net");
+    await expect(page.getByTestId("machine-name")).toHaveValue("vm-1");
+    await typeInto(page, "machine-code", "ABCD2345");
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("machine-pair-form")).toHaveCount(0);
+    await expect(page.getByTestId("machine-error")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(line(page)).toHaveText("Running on vm-1");
+    await expect(page.getByTestId("agent-banner")).toHaveCount(0);
+  });
+
   test("says this is the always-on machine on the machine itself", async ({ page }) => {
     await openApp(page, "mockRemote=host");
     await openPanel(page);

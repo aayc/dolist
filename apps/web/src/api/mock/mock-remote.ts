@@ -37,6 +37,7 @@ import type { MockPairing } from "./mock-pairing";
  * - `ready`: syncs, paired with the always-on machine, the agent runs here;
  * - `relayed`: the agent runs on the always-on machine, relayed here;
  * - `unreachable` / `not_paired`: set to the always-on machine, which can't be used from here;
+ * - `rejected`: set to the always-on machine, which no longer accepts this device;
  * - `elsewhere`: another laptop set to run the agent got there first;
  * - `host`: this is the always-on machine;
  * - `locked`: like `ready`, with every device setting set by environment variables;
@@ -49,6 +50,7 @@ export const MOCK_REMOTE_SCENARIOS = [
   "relayed",
   "unreachable",
   "not_paired",
+  "rejected",
   "elsewhere",
   "host",
   "locked",
@@ -101,7 +103,14 @@ interface MockDeviceState {
   /** When sync was set up (the mock's "last synced"). */
   syncSince: number | null;
   lockedByEnv: LockedField[];
-  machine: { paired: boolean; reachable: boolean; checkedAt: number | null; error?: string };
+  machine: {
+    paired: boolean;
+    reachable: boolean;
+    checkedAt: number | null;
+    error?: string;
+    /** The machine revoked this device: it answers, but refuses its credential. */
+    rejected?: boolean;
+  };
   /** Another laptop holding the agent lease at the same priority (first come, first served). */
   otherHolder: { deviceId: string; name: string } | null;
   /** This device can't run the agent well (for the readiness hints). */
@@ -139,11 +148,17 @@ function preset(scenario: MockRemoteScenario, now: number): MockDeviceState {
           paired: true,
           reachable: false,
           checkedAt: now - 20_000,
-          error: "The machine didn't answer in 5 s",
+          error: "Couldn't reach vm-1: it didn't answer in 5 s",
         },
       };
     case "not_paired":
       return { ...synced, placement: "always_on_machine" };
+    case "rejected":
+      return {
+        ...paired,
+        placement: "always_on_machine",
+        machine: { ...paired.machine, rejected: true },
+      };
     case "elsewhere":
       return { ...paired, otherHolder: { deviceId: "dev_work_laptop", name: "Work laptop" } };
     case "host":
@@ -172,6 +187,13 @@ const MACHINE_READINESS: AgentReadiness = {
   computer: "unsupported",
   connectors: { configured: 2, connected: 2 },
 };
+
+/** The relay's reasons (the daemon's `RELAY_PROBLEMS`). */
+export const MOCK_RELAY_PROBLEMS = {
+  notPaired: "This device isn't paired with the always-on machine.",
+  rejected: "The always-on machine no longer accepts this device. Pair it again.",
+  unreachable: "The always-on machine can't be reached.",
+} as const;
 
 /** How long a handover takes at speed 1 (the daemon's takes about half a minute). */
 const HANDING_OVER_MS = 1_200;
@@ -272,7 +294,8 @@ export class MockRemote {
     if (effective === "always_on_machine") {
       const { paired, reachable } = this.state.machine;
       this.runsOn = this.otherHolder() ?? this.machineHolder();
-      this.relay = !paired ? "not_paired" : reachable ? "connected" : "unreachable";
+      const { rejected } = this.state.machine;
+      this.relay = !paired || rejected ? "not_paired" : reachable ? "connected" : "unreachable";
       return;
     }
     this.runsOn = this.otherHolder() ?? this.self(effective === "always_on_host");
@@ -370,14 +393,24 @@ export class MockRemote {
 
   /**
    * Why this device can't act on the agent right now (its routes answer 503 with it), worded like
-   * the daemon's read-only fallback: the handover while it happens, who runs the agent, or the
-   * always-on machine not running it. Only "can't be reached" is the relay's (S3).
+   * the daemon's relay and read-only fallback. Nothing while the relay connects: requests are
+   * already forwarded then.
    */
   problem(): string | undefined {
     const name = this.machine()?.name ?? "the always-on machine";
     if (this.runsOn?.thisDevice) return undefined;
-    if (this.relay === "connecting") return this.note ?? `Handing the agent to ${name}…`;
-    if (this.relay === "unreachable") return `The always-on machine (${name}) can't be reached.`;
+    switch (this.relay) {
+      case "connecting":
+        return undefined;
+      case "unreachable":
+        return MOCK_RELAY_PROBLEMS.unreachable;
+      case "not_paired":
+        return this.state.machine.rejected
+          ? MOCK_RELAY_PROBLEMS.rejected
+          : MOCK_RELAY_PROBLEMS.notPaired;
+      default:
+        break;
+    }
     if (this.relay === "connected" && this.runsOn?.alwaysOnMachine) return undefined;
     if (!this.runsOn) {
       return this.machine()
@@ -514,7 +547,8 @@ export class MockRemote {
     const machine = this.machine();
     const { paired, reachable, checkedAt, error } = this.state.machine;
     if (!machine) return { machine: null, paired: false, reachable: null, checkedAt: null };
-    const answered = paired && reachable && checkedAt !== null;
+    const rejected = this.state.machine.rejected === true;
+    const answered = paired && reachable && !rejected && checkedAt !== null;
     return {
       machine,
       paired,
@@ -527,7 +561,11 @@ export class MockRemote {
             readiness: MACHINE_READINESS,
           }
         : {}),
-      ...(error && !reachable ? { error } : {}),
+      ...(rejected
+        ? { error: `${machine.name} no longer accepts this device's credential: pair again.` }
+        : error && !reachable
+          ? { error }
+          : {}),
     };
   }
 
@@ -556,13 +594,17 @@ export class MockRemote {
     if (!name) throw invalid("Too big: expected string to have <=64 characters", "name");
     const { hostname } = new URL(url);
     if (hostname.split(".")[0] === MOCK_MACHINE_TRIGGERS.offlineHost) {
-      throw failure(502, "machine_unreachable", `${hostname} didn't answer in 5 s`);
+      throw failure(502, "machine_unreachable", `Couldn't reach ${name}: it didn't answer in 5 s`);
     }
     if (code === MOCK_MACHINE_TRIGGERS.rejectedCode) {
-      throw failure(401, "pairing_rejected", "The machine rejected the pairing code");
+      throw failure(
+        401,
+        "pairing_rejected",
+        `${name} rejected the pairing code: it may be wrong, expired or already used`,
+      );
     }
     if (code === MOCK_MACHINE_TRIGGERS.rateLimitedCode) {
-      throw failure(429, "rate_limited", "Too many pairing attempts: try again in a minute");
+      throw failure(429, "rate_limited", `${name} refused more pairing attempts for now`);
     }
     this.update(() => {
       this.host.setMachine({ name, url });
@@ -586,7 +628,19 @@ export class MockRemote {
       const { paired } = this.state.machine;
       this.state.machine = reachable
         ? { paired, reachable, checkedAt: Date.now() }
-        : { paired, reachable, checkedAt: Date.now(), error: "The machine didn't answer in 5 s" };
+        : {
+            paired,
+            reachable,
+            checkedAt: Date.now(),
+            error: `Couldn't reach ${this.machine()?.name ?? "the machine"}: it didn't answer in 5 s`,
+          };
+    });
+  }
+
+  /** The machine revokes (or accepts again) this device's credential. */
+  setMachineRejects(rejected: boolean): void {
+    this.update(() => {
+      this.state.machine = { ...this.state.machine, rejected, checkedAt: Date.now() };
     });
   }
 

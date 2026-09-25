@@ -425,11 +425,14 @@ describe("MockDaemonClient ⇄ wire contract", () => {
       await call(client.updateDevice({ placement: "always_on_machine" })),
     );
     await vi.advanceTimersByTimeAsync(1);
-    expect(ofType(events, "agent.status").at(-1)?.status.placement).toMatchObject({
+    const handing = ofType(events, "agent.status").at(-1)?.status;
+    expect(handing?.placement).toMatchObject({
       placement: "always_on_machine",
       note: "Handing the agent to vm-2…",
       relay: "connecting",
     });
+    // Requests are already forwarded while the relay connects.
+    expect(handing?.problem).toBeUndefined();
     await vi.advanceTimersByTimeAsync(1_000);
     const relayed = ofType(events, "agent.status").at(-1)!.status;
     expect(relayed.placement).toMatchObject({
@@ -439,13 +442,28 @@ describe("MockDaemonClient ⇄ wire contract", () => {
     expect(relayed.placement?.note).toBeUndefined();
     expect(relayed.problem).toBeUndefined();
 
+    // The machine revokes this device: not paired, and it says so.
+    client.testHooks().setMachineRejects(true);
+    await vi.advanceTimersByTimeAsync(1);
+    const rejected = ofType(events, "agent.status").at(-1)!.status;
+    expect(rejected.placement?.relay).toBe("not_paired");
+    expect(rejected.problem).toBe(
+      "The always-on machine no longer accepts this device. Pair it again.",
+    );
+    const machineNow = await call(client.getMachine());
+    expectWire("MachineStatusResponse", machineNow);
+    expect(machineNow).toMatchObject({ paired: true, reachable: true });
+    expect(machineNow.error).toContain("no longer accepts this device's credential");
+    client.testHooks().setMachineRejects(false);
+    await vi.advanceTimersByTimeAsync(1);
+
     // Once it can't be reached, agent actions answer 503 with why, and the status says so too.
     client.testHooks().setMachineReachable(false);
     await vi.advanceTimersByTimeAsync(1);
     const down = ofType(events, "agent.status").at(-1)!.status;
     expectWire("AgentStatusResponse", down);
     expect(down.placement?.relay).toBe("unreachable");
-    expect(down.problem).toBe("The always-on machine (vm-2) can't be reached.");
+    expect(down.problem).toBe("The always-on machine can't be reached.");
     const refused = await failure(client.postMessage("orchestrator", "hi"));
     expect(refused.status).toBe(503);
     expectWire("ApiErrorBody", refused.body);
@@ -569,6 +587,7 @@ describe("MockDaemonClient ⇄ wire contract", () => {
     for (const [scenario, expected] of [
       ["relayed", { relay: "connected", runsOn: { alwaysOnMachine: true, thisDevice: false } }],
       ["not_paired", { relay: "not_paired" }],
+      ["rejected", { relay: "not_paired" }],
       ["unreachable", { relay: "unreachable" }],
       ["elsewhere", { relay: "off", runsOn: { name: "Work laptop", thisDevice: false } }],
       [
@@ -585,9 +604,16 @@ describe("MockDaemonClient ⇄ wire contract", () => {
       expectWire("AgentStatusResponse", status, scenario);
       expect(status.placement, scenario).toMatchObject(expected);
       expectWire("MachineStatusResponse", await call(client.getMachine()), scenario);
-      if (scenario === "elsewhere") {
+      const refusal = {
+        elsewhere: "The agent is running on Work laptop.",
+        not_paired: "This device isn't paired with the always-on machine.",
+        rejected: "The always-on machine no longer accepts this device. Pair it again.",
+        unreachable: "The always-on machine can't be reached.",
+      }[scenario as string];
+      if (refusal) {
+        expect(status.problem, scenario).toBe(refusal);
         const error = await failure(client.retryThread("orchestrator"));
-        expect(error.message).toBe("The agent is running on Work laptop.");
+        expect(error.message, scenario).toBe(refusal);
       }
     }
   });

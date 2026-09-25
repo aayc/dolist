@@ -99,6 +99,8 @@ export interface MockTestHooks {
   listPaths(): string[];
   /** The always-on machine stops (or starts) answering. */
   setMachineReachable(reachable: boolean): void;
+  /** The always-on machine revokes (or accepts again) this device. */
+  setMachineRejects(rejected: boolean): void;
 }
 
 declare global {
@@ -695,6 +697,7 @@ export class MockDaemonClient implements DaemonClient {
       readNote: (path) => this.vault.get(path)?.content ?? null,
       listPaths: () => this.vault.paths(),
       setMachineReachable: (reachable) => this.remote.setMachineReachable(reachable),
+      setMachineRejects: (rejected) => this.remote.setMachineRejects(rejected),
     };
   }
 }
