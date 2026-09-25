@@ -27,7 +27,6 @@ import { PairedDeviceStore } from "./paired-devices";
 import { ReadinessMonitor, systemReadinessProbes } from "./readiness";
 import type { LinkTimings } from "./relay/link";
 import { AgentRelay } from "./relay/relay";
-import type { MachineCredentialSource, PlacementSource } from "./relay/sources";
 import { createRemoteHosts } from "./remote-hosts";
 import { createSecurityPolicy } from "./security";
 import { createSettingsStore, SETTINGS_PATH, type SettingsStore } from "./settings-store";
@@ -63,10 +62,6 @@ export interface StartDaemonOptions {
   logger?: Logger;
   /** Agent lease timings (tests shorten them). */
   leaseTimings?: Partial<LeaseTimings>;
-  /** Where this device's agent runs, for the relay. Default: the agent supervisor (tests override). */
-  placement?: PlacementSource;
-  /** This device's credential for the always-on machine. Default: the machine link. */
-  machine?: MachineCredentialSource;
   /** The relay's link to the machine (tests shorten its backoff). */
   relayLinkTimings?: Partial<LinkTimings>;
 }
@@ -206,8 +201,8 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     // Clients talk to the relay; the supervisor drives the leased runtime underneath it.
     const relay = new AgentRelay({
       local: runtime,
-      placement: options.placement ?? supervisor,
-      machine: options.machine ?? machine,
+      placement: supervisor,
+      machine,
       logger: logger.child({ component: "relay" }),
       ...(options.relayLinkTimings ? { linkTimings: options.relayLinkTimings } : {}),
     });

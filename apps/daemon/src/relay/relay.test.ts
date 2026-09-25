@@ -22,6 +22,7 @@ import { MemoryStorageProvider } from "@ddl/storage";
 import { getRequestListener } from "@hono/node-server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WebSocketServer } from "ws";
+import type { MachineCredential } from "../agent-location";
 import { createApp } from "../app";
 import { contractClient } from "../contract-test-helpers";
 import { createSecurityPolicy } from "../security";
@@ -38,6 +39,8 @@ import {
   FakeAgentRuntime,
   makeApproval,
   makeThread,
+  SettableMachineCredential,
+  SettablePlacement,
   testToken,
 } from "../test-helpers";
 import { WriteTracker } from "../write-tracker";
@@ -45,7 +48,6 @@ import { attachWebSocketHub } from "../ws";
 import { callMachine, MachineUnavailableError } from "./http";
 import type { LinkTimings } from "./link";
 import { AgentRelay, RELAY_PROBLEMS } from "./relay";
-import { type MachineCredential, SettableMachineCredential, SettablePlacement } from "./sources";
 
 const TIME_SCALE = Number(process.env.TEST_TIME_SCALE) || 1;
 const WAIT_MS = 10_000 * TIME_SCALE;
@@ -457,7 +459,7 @@ describe("the agent relay over HTTP", () => {
     await app.request("/api/threads?notePath=Daily%2Fa.md&token=leak&notePath=second&x=1", {
       origin: "http://127.0.0.1:7331",
       clientId: "client_1",
-      headers: { cookie: "ddl_device=abc", "x-forwarded-for": "10.0.0.1", "x-extra": "1" },
+      headers: { cookie: "ddl_device=abc", "x-request-id": "req_1", "x-extra": "1" },
     });
     await app.request("/api/threads/thr_1/messages", {
       method: "POST",
@@ -474,7 +476,7 @@ describe("the agent relay over HTTP", () => {
       expect(request.url).not.toContain("token");
       expect(request.headers.authorization).toBe(`Bearer ${token}`);
       expect(request.headers.host).toBe(new URL(recorder.url).host);
-      for (const header of ["cookie", "origin", "x-ddl-client", "x-forwarded-for", "x-extra"]) {
+      for (const header of ["cookie", "origin", "x-ddl-client", "x-request-id", "x-extra"]) {
         expect(request.headers[header]).toBeUndefined();
       }
     }

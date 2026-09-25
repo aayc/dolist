@@ -8,7 +8,7 @@ import {
   type Unsubscribe,
 } from "@ddl/core";
 import { type RawData, WebSocket } from "ws";
-import type { MachineCredential } from "./sources";
+import type { MachineCredential } from "../agent-location";
 
 /**
  * `connecting` until the first connection is up, then `connected`, or until the next success

@@ -3,7 +3,7 @@
  * it: the machine token, the allowlisted target and a validated body. Nothing from the client's
  * request (its Authorization, cookies, Host, Origin or other headers) is passed on.
  */
-import type { MachineCredential } from "./sources";
+import type { MachineCredential } from "../agent-location";
 
 export const RELAY_LIMITS = {
   /** Every call to the machine, answer included. */

@@ -41,6 +41,11 @@ import {
 import type { Context, MiddlewareHandler } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { z } from "zod";
+import type {
+  MachineCredential,
+  MachineCredentialSource,
+  PlacementSource,
+} from "../agent-location";
 import { errorBody, errorMessage } from "../errors";
 import { readJson } from "../http-utils";
 import { AgentUnavailableError } from "../null-runtime";
@@ -48,7 +53,6 @@ import { relayedArtifactHeaders } from "../routes/artifacts";
 import { callMachine, type MachineAnswer, MachineUnavailableError } from "./http";
 import { type LinkState, type LinkTimings, MachineLink } from "./link";
 import { matchRelayRoute, type RelayRoute } from "./routes";
-import type { MachineCredential, MachineCredentialSource, PlacementSource } from "./sources";
 
 /** Why the machine's agent can't be reached from this device (`problem`, 503 messages). */
 export const RELAY_PROBLEMS = {
@@ -60,7 +64,9 @@ export const RELAY_PROBLEMS = {
 export interface AgentRelayOptions {
   /** This device's own runtime: it answers whenever the relay doesn't forward. */
   local: AgentRuntime;
-  placement: PlacementSource;
+  /** Where this device's agent runs (the agent supervisor); the relay reports its state there. */
+  placement: Pick<PlacementSource, "current" | "onChange" | "setRelay">;
+  /** This device's credential for the always-on machine (the machine link). */
   machine: MachineCredentialSource;
   logger: Logger;
   /** Per call to the machine (default `RELAY_LIMITS.timeoutMs`). */
@@ -396,7 +402,7 @@ export class AgentRelay implements AgentRuntime {
     if (state === this.#state && problem === this.#problem) return;
     this.#state = state;
     this.#problem = problem;
-    this.#options.placement.setRelay?.(state === "off" ? null : state);
+    this.#options.placement.setRelay(state === "off" ? null : state);
     this.#events.emit("status", this.status());
   }
 

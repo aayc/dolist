@@ -382,8 +382,10 @@ When this device's effective placement is `always_on_machine` and it holds a cre
 machine, the daemon forwards the agent to the always-on machine's daemon, so this device's clients
 show and act on the machine's agent with the same API ([docs/ALWAYS_ON.md](../../docs/ALWAYS_ON.md#the-agent-relay)).
 Otherwise everything stays local, as without a relay. The code is in `src/relay/`; it reads the
-placement and the credential through two small interfaces (`src/relay/sources.ts`) and follows
-their changes live. A relaying device never asks for the agent lease.
+effective placement from the agent supervisor (and reports the relay state back to it, for the
+status's `placement` block) and the credential from the machine link (`machine-token`, only while
+its URL is the vault's always-on machine), through the interfaces in `src/agent-location.ts`, and
+follows their changes live. A relaying device never asks for the agent lease.
 
 **Forwarded** (the allowlist in `src/relay/routes.ts`, derived from the contract):
 
