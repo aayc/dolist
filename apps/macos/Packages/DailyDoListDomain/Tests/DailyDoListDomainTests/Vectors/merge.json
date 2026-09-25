@@ -1053,6 +1053,27 @@
       "conflict": false
     },
     {
+      "base": "# Thursday\n- [ ] Rehearsal\n\t- Done: 11 bots %%agent:thr_1%%\nNotes",
+      "local": "# Thursday\n- [ ] Rehearsal\n\t- ask about it\n\t- Done: 11 bots %%agent:thr_1%%\nNotes",
+      "remote": "# Thursday\nNotes",
+      "text": "# Thursday\n\t- ask about it\nNotes",
+      "conflict": false
+    },
+    {
+      "base": "a\nb\nc\nd",
+      "local": "a!\nb\nc\nd",
+      "remote": "a?\nb",
+      "text": "a!\nb",
+      "conflict": true
+    },
+    {
+      "base": "a\nb\nc",
+      "local": "A\nB\nc",
+      "remote": "a\nx\nb\nc",
+      "text": "A\nB\nx\nc",
+      "conflict": false
+    },
+    {
       "base": "  - note\ncafé\n- [ ] a\ncafé\ntext\n- [ ] b\n## h\ncafé",
       "local": "  - note\ncafé\n  - found it %%agent:thr_1%%\n  - found it %%agent:thr_1%%\n- [ ] a\ncafé\ntext\n- [ ] b\n## h\ncafé",
       "remote": "  - note\ncafé\n- [ ] a\ncafé\ntext\n  - found it %%agent:thr_1%%\ncafé\n  - note\n## h\ncafé",
@@ -1077,8 +1098,8 @@
       "base": "\n\n## h",
       "local": "\ntext\n- [ ] a\n\ntext\n## h\ncafé\n  - note\n## h",
       "remote": "\n- [ ] b",
-      "text": "\ntext\n- [ ] a\n\ntext\n## h\ncafé\n  - note\n## h",
-      "conflict": true
+      "text": "\ntext\n- [ ] a\n- [ ] b\ntext\n## h\ncafé\n  - note",
+      "conflict": false
     },
     {
       "base": "line\r\n- [ ] a\n- [ ] a\ntext",
@@ -1119,8 +1140,8 @@
       "base": "## h\ncafé\ncafé\nline\r\ntext\ncafé\n  - note\ncafé",
       "local": "## h\ncafé\ncafé\nline\r\nline\r\ntext\ncafé\ntext\n  - note\ncafé",
       "remote": "## h\ntext\nline\r\ncafé\ncafé\ncafé\n  - note\ncafé",
-      "text": "## h\ntext\nline\r\ncafé\ncafé\nline\r\nline\r\ntext\ncafé\ntext\n  - note\ncafé",
-      "conflict": true
+      "text": "## h\ntext\nline\r\ncafé\ncafé\nline\r\ncafé\ntext\n  - note\ncafé",
+      "conflict": false
     },
     {
       "base": "## h\n\n- [ ] b\n- [ ] a",
@@ -1378,7 +1399,7 @@
       "base": "café\ntext\n\n  - note\n  - found it %%agent:thr_1%%",
       "local": "café\n- [ ] a\n\ntext\ncafé\ntext\n  - found it %%agent:thr_1%%\ncafé\n  - found it %%agent:thr_1%%",
       "remote": "\n  - note",
-      "text": "café\n- [ ] a\n\ntext\ncafé\ntext\n  - found it %%agent:thr_1%%\ncafé",
+      "text": "- [ ] a\n\ntext\ncafé\ntext\n  - found it %%agent:thr_1%%\ncafé",
       "conflict": true
     },
     {
@@ -1812,7 +1833,7 @@
       "base": "  - note\nline\r\n  - note\n",
       "local": "line\r\ncafé\nline\r\n  - note",
       "remote": "café\ntext\n  - note\n",
-      "text": "line\r\ncafé\nline\r\n  - note",
+      "text": "café\nline\r\n  - note",
       "conflict": true
     },
     {
@@ -2302,7 +2323,7 @@
       "base": "  - note\n  - note\n\nline\r",
       "local": "  - note\n  - note\nline\r",
       "remote": "## h\n  - note",
-      "text": "## h\n  - note\n  - note\nline\r",
+      "text": "## h\n  - note",
       "conflict": true
     },
     {
@@ -2449,7 +2470,7 @@
       "base": "café\n## h",
       "local": "café\n\n- [ ] b\n  - note\n  - found it %%agent:thr_1%%\ntext\ncafé\n- [ ] b\n## h",
       "remote": "- [ ] b\n  - found it %%agent:thr_1%%",
-      "text": "café\n\n- [ ] b\n  - note\n  - found it %%agent:thr_1%%\ntext\ncafé\n- [ ] b\n## h",
+      "text": "café\n\n- [ ] b\n  - note\n  - found it %%agent:thr_1%%\ntext\ncafé\n- [ ] b",
       "conflict": true
     },
     {
@@ -2974,7 +2995,7 @@
       "base": "café\n## h",
       "local": "## h\n  - note",
       "remote": "line\r\n",
-      "text": "## h\n  - note",
+      "text": "  - note",
       "conflict": true
     },
     {
@@ -3128,7 +3149,7 @@
       "base": "café\ncafé\ncafé",
       "local": "café\ncafé\ncafé\n  - note\ncafé",
       "remote": "text\n- [ ] a\ncafé",
-      "text": "café\ncafé\ncafé\n  - note\ncafé",
+      "text": "café\ncafé\n  - note\ncafé",
       "conflict": true
     },
     {
@@ -3478,7 +3499,7 @@
       "base": "text\n## h\n## h\n  - note",
       "local": "text\n## h\n  - note",
       "remote": "\ncafé\n  - found it %%agent:thr_1%%\ncafé\n- [ ] b\n  - note",
-      "text": "text\n## h\n  - note",
+      "text": "  - note",
       "conflict": true
     },
     {
@@ -3555,7 +3576,7 @@
       "base": "  - note\n  - found it %%agent:thr_1%%",
       "local": "  - note\ncafé\ncafé",
       "remote": "café\n\n- [ ] b\n- [ ] a",
-      "text": "  - note\ncafé\ncafé",
+      "text": "café\ncafé",
       "conflict": true
     },
     {
@@ -3611,8 +3632,8 @@
       "base": "\n- [ ] a\n## h\ncafé\n  - note\n## h",
       "local": "\n- [ ] a\n## h\n- [ ] b\n- [ ] b\n- [ ] a\n## h\n- [ ] a\n- [ ] b\nline\r\n## h",
       "remote": "## h\ncafé\n- [ ] b\ntext\n  - note\n## h",
-      "text": "## h\n- [ ] b\n- [ ] b\n- [ ] a\n## h\n- [ ] a\n- [ ] b\nline\r\n## h",
-      "conflict": true
+      "text": "## h\n- [ ] b\n- [ ] b\n- [ ] a\n## h\n- [ ] a\n- [ ] b\nline\r\n- [ ] b\ntext\n## h",
+      "conflict": false
     },
     {
       "base": "- [ ] a\n  - found it %%agent:thr_1%%\n- [ ] b\n## h\n- [ ] b",
@@ -3695,8 +3716,8 @@
       "base": "line\r\n## h\ncafé\ncafé",
       "local": "## h\ncafé\ncafé\n- [ ] a\ncafé",
       "remote": "line\r\n- [ ] a\ncafé\ncafé\ncafé",
-      "text": "## h\ncafé\ncafé\n- [ ] a\ncafé",
-      "conflict": true
+      "text": "- [ ] a\ncafé\ncafé\ncafé\n- [ ] a\ncafé",
+      "conflict": false
     },
     {
       "base": "  - note\ncafé\n\n- [ ] b\ncafé\n\ncafé\n\nline\r\n",
@@ -3723,7 +3744,7 @@
       "base": "café\n- [ ] a\nline\r\n  - found it %%agent:thr_1%%",
       "local": "café\n- [ ] a\nline\r\n  - note\n  - note\n## h\ncafé\ncafé",
       "remote": "café\n- [ ] a\n- [ ] b\ncafé",
-      "text": "café\n- [ ] a\nline\r\n  - note\n  - note\n## h\ncafé\ncafé",
+      "text": "café\n- [ ] a\n  - note\n  - note\n## h\ncafé\ncafé",
       "conflict": true
     },
     {

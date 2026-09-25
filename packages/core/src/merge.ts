@@ -1,8 +1,10 @@
 /**
  * Line-based three-way merge, for a note changed by the user (local) and by someone else (remote,
  * e.g. the agent) since the version both started from (base). Edits to different lines merge;
- * both sides inserting at the same place keep both (local first); only changes to the same lines
- * are a conflict.
+ * both sides inserting at the same place keep both (local first); lines one side adds inside a
+ * block the other side changed go after that block. Only changes to the same lines are a
+ * conflict, and even then a line only the other side changed or removed never comes back: the
+ * merge never reintroduces text deleted elsewhere unless the user typed it.
  */
 
 /** Replaces the lines `[start, end)` of the old text with `lines`. */
@@ -14,7 +16,10 @@ export interface LineHunk {
 
 export interface MergeResult {
   text: string;
-  /** Both sides changed the same lines; `text` then keeps the local version of those lines. */
+  /**
+   * Both sides changed the same lines. `text` then has the user's version of the lines the user
+   * changed there, and none of the other lines of that block (the remote text has them).
+   */
   conflict: boolean;
 }
 
@@ -149,9 +154,15 @@ export function mergeText(base: string, local: string, remote: string): MergeRes
         out.push(...remoteLines);
       } else if (start === end) {
         out.push(...localLines, ...remoteLines);
+      } else if (mine.every(isInsertion)) {
+        out.push(...remoteLines, ...mine.flatMap((hunk) => hunk.lines));
+      } else if (theirs.every(isInsertion)) {
+        out.push(...localLines, ...theirs.flatMap((hunk) => hunk.lines));
       } else {
+        // Every base line of the block is covered by a hunk, so the lines no local hunk covers
+        // were changed or removed by the other side: keep only what the user wrote.
         conflict = true;
-        out.push(...localLines);
+        out.push(...mine.flatMap((hunk) => hunk.lines));
       }
     }
     position = end;
@@ -174,6 +185,10 @@ function applyHunks(
   }
   out.push(...base.slice(at, end));
   return out;
+}
+
+function isInsertion(hunk: LineHunk): boolean {
+  return hunk.start === hunk.end;
 }
 
 function sameLines(a: readonly string[], b: readonly string[]): boolean {
