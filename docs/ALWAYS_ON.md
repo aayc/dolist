@@ -1,8 +1,8 @@
 # Always-on agent: design
 
-Status: design, not built. This document is the plan for running the agent on an always-on
-machine instead of the laptop. The phases at the end are the build order; each one ships on its
-own.
+Status: phases 1 to 3 (remote access, the always-on daemon with its setup kit, the relay) and the
+Settings below are being built; phases 4 and 5 are design only. This document is the plan for
+running the agent on an always-on machine, or on any device, chosen per device.
 
 ## Goal
 
@@ -121,9 +121,57 @@ and the user approves from any device.
   The two daemons pair once, like any device, and the relay uses that device token.
 - **Offline:** when the holder can't be reached, the relay answers `agent_unavailable` and the UI
   shows the synced threads read-only (the sidecar already syncs, see [SYNC.md](./SYNC.md)).
-- **Lease preference:** a device setting `agent.runHere`: `preferred` (the VM), `fallback` (take
-  the lease only after the preferred holder has been gone for a while) or `never`. Today whoever
-  asks first wins.
+- **Only to the always-on machine.** A device relays to the holder only when the holder is the
+  always-on machine it paired with. When another laptop holds the agent, the rest show its work
+  read-only from the synced sidecar.
+
+## Where the agent runs: a choice per device
+
+Each device chooses where its agent runs, and the choice can change at any time. For example: a
+personal laptop uses the always-on machine, a work laptop runs the agent itself, and the web app
+and the phone use the always-on machine.
+
+- **Placement is a device setting**, kept in that device's `DDL_HOME` (never synced, since each
+  device chooses for itself):
+  - `this_device`: run the agent here. While this device runs, it takes the agent over from the
+    always-on machine.
+  - `always_on_machine`: never run it here; relay to the always-on machine.
+  - `always_on_host`: this is the always-on machine; it runs the agent whenever no device set to
+    `this_device` is running.
+
+  A device without sync is standalone and runs its own agent, as today.
+- **Handover uses the agent lease with a priority.** A `this_device` request outranks the
+  always-on machine's: the sync service marks a takeover, the holder sees it on its next renewal,
+  stops its agent, runs a sync pass and releases, and the requester starts from the synced state
+  (about half a minute). When that device quits or sleeps, the always-on machine takes the lease
+  back as today. Equal priorities keep first come, first served. A run in progress at handover
+  stops; its thread can be retried.
+- **Everything the agent needs to move syncs already**: notes, routine files, threads, artifacts,
+  task records, approvals, routines state and settings (the sidecar, see [SYNC.md](./SYNC.md)).
+  What stays with each machine is what belongs to it: connectors (`mcp.json`), API keys, the
+  agent's browser logins, the harness login and macOS permissions. Settings shows each machine's
+  readiness (harness signed in, model credential present, connectors connected, browser and
+  desktop available), so moving the agent never fails silently.
+- **The always-on machine's name and address are synced settings**, so every device knows it;
+  each device still pairs once and keeps its own credential.
+
+## Settings
+
+Everything needed lives in Settings, on the web and in the Mac app:
+
+- **Agent location:** this device, or the always-on machine (on the VM: "this is the always-on
+  machine"), where the agent runs right now, and this device's readiness.
+- **Always-on machine:** its address (tailnet name), pairing with a code, and its status
+  (reachable, version, where its agent runs, its readiness). Forgetting it drops this device's
+  credential.
+- **Sync:** the sync service's address, the vault, the vault token (write-only: never shown again)
+  and the sync status.
+- **Devices:** the devices paired with this daemon, a pairing code (and a QR code for the phone),
+  and revoking a device.
+- **Remote access:** the names this daemon answers to (on the VM, its tailnet name).
+
+Secrets (the vault token, device credentials) are stored `0600` in `DDL_HOME`, never in
+`settings.json` (which syncs) and never returned by the API.
 
 ## Lending the laptop's hands
 
@@ -165,12 +213,14 @@ Each phase ships on its own, with tests, docs and CI green.
    and a setup guide. Done when a second machine on the private network pairs and uses the full
    app, a revoked device is cut off immediately, and every existing security test still holds
    (plus a Host/Origin/token matrix for remote hosts).
-2. **The always-on daemon.** A Linux bundle (`pnpm deploy` output, like the Mac app's), a systemd
-   unit, a setup script, the sync service on the same VM, health and log rotation, and the lease
-   preference. Done when the VM runs routines on schedule with the laptop asleep.
+2. **The always-on daemon.** A Linux bundle (`pnpm deploy` output, like the Mac app's), systemd
+   units, a setup kit (`deploy/linux`, `deploy/azure`), the sync service on the same VM, health
+   and log rotation, and placement per device with lease priorities. Done when the VM runs
+   routines on schedule with the laptop asleep, and a device set to `this_device` takes the agent
+   over and hands it back.
 3. **The agent relay.** Done when the laptop's app shows and approves the VM agent's work,
    including the orchestrator chat and routines, and degrades to read-only when the VM is
-   unreachable.
+   unreachable. Settings (above) ships with phases 1 to 3.
 4. **Linux desktop.** `LinuxComputerController`, the virtual display, VNC for takeover. Done when
    the screen-level computer tools pass their contract tests on Linux with fakes, and a smoke test
    drives a real app on the VM.
