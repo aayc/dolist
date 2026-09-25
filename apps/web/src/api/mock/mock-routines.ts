@@ -33,7 +33,7 @@ export interface MockRoutinesHost {
   vault: MockVault;
   agent: MockAgent;
   emit(event: ServerEvent): void;
-  /** Announces a routine file the daemon itself wrote. */
+  /** Announces a routine file the daemon wrote (like the daemon, as the agent's write). */
   vaultChanged(changes: VaultChange[]): void;
   agentEnabled(): boolean;
 }

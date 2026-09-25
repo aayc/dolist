@@ -295,6 +295,15 @@ describe("MockDaemonClient ⇄ wire contract", () => {
     expect(spent.status).toBe(409);
     expect(spent.message).toContain("already ran the most extra times allowed today");
 
+    // Files written through the routes are the agent's writes, not the client's.
+    expect(
+      ofType(events, "vault.changed").find((e) => e.changes[0]?.path === routine.path),
+    ).toEqual({
+      type: "vault.changed",
+      changes: [{ path: routine.path, kind: "created", version: expect.any(String) }],
+      origin: "agent",
+    });
+
     const paused = (await call(client.pauseRoutine(routine.id))).routine;
     expect(paused).toMatchObject({ paused: true });
     expect(paused.nextRunAt).toBeUndefined();

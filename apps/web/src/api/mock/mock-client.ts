@@ -177,7 +177,7 @@ export class MockDaemonClient implements DaemonClient {
       vault: this.vault,
       agent: this.agent,
       emit: (event) => this.emit(event),
-      vaultChanged: (changes) => this.vaultChanged(changes, "external"),
+      vaultChanged: (changes) => this.vaultChanged(changes, "agent"),
       agentEnabled: () => this.agent.status().enabled,
     });
     seedVault(this.vault, this.agent, this.settings);
@@ -264,7 +264,7 @@ export class MockDaemonClient implements DaemonClient {
     });
   }
 
-  private vaultChanged(changes: VaultChange[], origin: "client" | "external"): void {
+  private vaultChanged(changes: VaultChange[], origin: "client" | "external" | "agent"): void {
     this.emit({
       type: "vault.changed",
       changes,
