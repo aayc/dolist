@@ -125,7 +125,7 @@ Spec: [docs/specs/drawings.md](docs/specs/drawings.md).
 | X0 format and description (core, shared fixtures) | `feat/drawings` | done (`048dbed`): plugin-exact files (verified against plugin 2.27.3 source), embeds, `describeDrawing`, 11 shared fixtures, the watcher ignores drawings |
 | X2 Mac drawing engine (`DailyDoListDrawing`) | `feat/drawings-mac-engine` | done (`06d8d1c`, 13 commits; X0 merged in at `178a7f5`, all 11 shared fixtures replay byte for byte in Swift): Rough.js port matching Rough.js 4.6.4 within 1e-7, Excalidraw-like rendering light and dark, the core tools, 2–3 ms frames at 2,000 elements (release). Deferred: images, rotation handle, elbow arrows, frames, z-order, copy/paste, snapping |
 | X1 web editor (generic embed layer, floats, move/resize, in-place Excalidraw) | `feat/drawings-web` (from `048dbed`) | in progress |
-| X4 the agent sees drawings (descriptions, `read_drawing`, renderer) | `feat/drawings-agent` (from `048dbed`) | in progress |
+| X4 the agent sees drawings (descriptions, `read_drawing`, renderer) | `feat/drawings-agent` | done (`3655c0b`, 8 commits): descriptions in the digest, `read_note` and subagent kickoffs (bounded, cached, marked as data), `read_drawing` with a PNG for vision models (Pi from its catalog, Cursor from ACP's image capability), its own headless Chromium (no profile, network blocked, closes idle), cache in `$DDL_HOME/cache/drawings`; drawings never re-triage tasks and agents never write in them. Evals: safety 287/289, triage 80/81, no new misses. Merges into `feat/drawings` with X1 |
 | X3 Mac editor integration (exclusion paths, in-place canvas) | `feat/drawings-mac-editor` (from `178a7f5`) | in progress |
 
 ### Moving from Obsidian
@@ -134,7 +134,7 @@ Spec: [docs/specs/obsidian-migration.md](docs/specs/obsidian-migration.md).
 
 | Stream | Branch | State |
 | --- | --- | --- |
-| M the editor merge race (data safety) | `fix/editor-merge-race` | `4d3ef06` merged to `main` (`6750f36`); the fuzz follow-up (3 more commits so far) is still on the branch. Fixed (`4d3ef06`): root cause in the Mac `NotesStore.save()` (a clean save kept a stale "unsaved" copy, shown again later and saved with a valid version); also conflicts no longer restore deleted lines (web and Mac, `mergeText` and its Swift port), and remounted web editors keep unsaved typing; guarantee in invariant 7. CI and macOS dispatched on the branch; merge to `main` when green. Now investigating the fuzz seed below and making model-check failures fail the property instead of becoming unhandled rejections. Left as is: on the Mac a remote change is an undoable step (⌘Z right after an external delete restores the lines) |
+| M the editor merge race (data safety) | `fix/editor-merge-race` | `4d3ef06` merged to `main` (`6750f36`). Follow-up done (`361f8ac`): the fuzz seed was a real merge bug (an edit plus a line added under it were one block, so an agent's line ended up in a conflict copy); `mergeText` and the Swift port now split replaced blocks; the model tests fail properly instead of via unhandled rejections; two oracle fixes. CI and macOS dispatched on the branch; merge to `main` when green. Fixed (`4d3ef06`): root cause in the Mac `NotesStore.save()` (a clean save kept a stale "unsaved" copy, shown again later and saved with a valid version); also conflicts no longer restore deleted lines (web and Mac, `mergeText` and its Swift port), and remounted web editors keep unsaved typing; guarantee in invariant 7. CI and macOS dispatched on the branch; merge to `main` when green. Now investigating the fuzz seed below and making model-check failures fail the property instead of becoming unhandled rejections. Left as is: on the Mac a remote change is an undoable step (⌘Z right after an external delete restores the lines) |
 | I0 Import from Obsidian: engine, carry-over, vault switch, update | `feat/obsidian-import` | done (`9ebd1cd`, 12 commits); `feat/always-on` merged in at `f0ced02` (daemon 1205, contract 1284 tests green). After an import the real watcher finds no new work (every carried task keeps its id, thread and badge). Vault switch exits 75 (the Mac supervisor relaunches at once). Paired devices get 403 `forbidden_device`; switching is refused while sync is on. Journal files copied unchanged (`remapJournalFile` hook) |
 | I1 Import from Obsidian: web and Mac flows | `feat/obsidian-import-ui` (from `f0ced02`) | in progress |
 | B0 binary files, attachment sync, file serving | from `feat/always-on` or `main` | queued (after the always-on work lands; S2 changed the same sync code) |
@@ -183,10 +183,6 @@ state and client ids for idempotent mutations.
   `OrchestratorChatView`, as on the web.
 - **Flaky guard:** core's `trackTasks` performance guard fails under machine load and passes
   alone; make it robust to load without loosening it.
-- **Web fuzz failure (pre-existing on `main`, being investigated on `fix/editor-merge-race`):**
-  `apps/web/src/state/notes-controller.fuzz.test.ts` with `FC_SEED=213577334`: a merge drops shown
-  text (`"- [\n- a3 %%agent%%"`); the assertion throws inside an async handler, so it surfaces as
-  an unhandled rejection (tests "pass", Vitest exits 1, CI can fail at random).
 - **Flaky under load:** storage's file-watcher tests (`local-fs.watch.test.ts`,
   `internal/directory-tree-watcher.test.ts`) fail now and then when the machine is saturated and
   pass alone; make them robust without loosening them. Same for the agent's subprocess tests
