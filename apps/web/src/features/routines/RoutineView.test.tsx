@@ -170,13 +170,12 @@ describe("RoutineView", () => {
     });
     await click(one("routine-run"));
     expect(one("routine-run-problem")).toBeDefined();
-    act(() =>
-      useRoutinesStore.setState(
-        applyRoutinesChanged(initialRoutinesState, [
-          { ...running, lastRun: { ...running.lastRun!, status: "done", finishedAt: 2 } },
-        ]),
-      ),
-    );
+    const show = (routine: Routine) =>
+      act(() => useRoutinesStore.setState(applyRoutinesChanged(initialRoutinesState, [routine])));
+    // Still true while the same run goes on.
+    show({ ...running, lastRun: { ...running.lastRun!, status: "waiting_approval" } });
+    expect(one("routine-run-problem")).toBeDefined();
+    show({ ...running, lastRun: { ...running.lastRun!, status: "done", finishedAt: 2 } });
     expect(one("routine-run-problem")).toBeUndefined();
   });
 
