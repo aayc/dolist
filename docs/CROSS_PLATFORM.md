@@ -55,6 +55,8 @@ A native SwiftUI/AppKit app built from independent Swift packages (see
 
 ## iPhone app (apps/mobile)
 
+The detailed plan, with the decisions made so far, is [apps/mobile/PLAN.md](../apps/mobile/PLAN.md).
+
 1. A native SwiftUI app reusing `DailyDoListModels`, `DailyDoListClient`, `DailyDoListDomain` and
    `DailyDoListVim` (Foundation-only, declared for iOS 17), with a compact UI: single pane, thread
    as a sheet, approvals as native notifications with Approve/Deny actions.

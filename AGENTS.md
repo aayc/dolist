@@ -48,7 +48,7 @@ apps/
   sync/           Sync service: per-vault change log (SQLite) + HTTP API + live push; agent lease
   macos/          Native macOS app (SwiftUI/AppKit): app shell + Swift packages; supervises the daemon
                   and bundles ddl-computer, the helper the daemon spawns to operate other apps
-  mobile/         (planned) native iOS app reusing the Swift packages — docs only for now
+  mobile/         (planned) native iOS app reusing the Swift packages — plan in PLAN.md
 packages/
   core/           Pure, isomorphic domain logic + wire protocol types (no dependencies!)
   storage/        StorageProvider interface; local-fs, memory, remote (sync service), s3 (stub);

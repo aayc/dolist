@@ -1,7 +1,9 @@
 # apps/mobile — iPhone app (planned)
 
-A Tauri 2 iOS shell around `apps/web`. It will connect to a daemon it does not host — your Mac
-(paired via QR code, device-scoped token) or a cloud daemon — and cache the vault offline. Not
-implemented yet; this folder is intentionally not a workspace package until it has code.
+A native SwiftUI iPhone app that reuses the macOS app's Foundation-only Swift packages and talks
+to a daemon it doesn't host: your Mac's, or the always-on one
+([docs/ALWAYS_ON.md](../../docs/ALWAYS_ON.md)). Not implemented yet; the web app covers mobile use
+for now, and this folder is intentionally not a workspace package until it has code.
 
-See [docs/CROSS_PLATFORM.md](../../docs/CROSS_PLATFORM.md) for the plan.
+The plan (decisions, architecture, daemon prerequisites, testing, build order):
+[PLAN.md](./PLAN.md). The cross-platform picture: [docs/CROSS_PLATFORM.md](../../docs/CROSS_PLATFORM.md).
