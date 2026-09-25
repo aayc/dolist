@@ -342,6 +342,11 @@ same algorithm.
   the editor's text, remote = the new text), the editor gets only the other side's changes, and
   the result is saved on top of the new version. A save that meets a newer version (409) merges
   the same way.
+- **Line by line:** a diff reports a line edited next to lines added (a task, and the agent's line
+  under it) as one replaced block. `mergeText` splits such blocks first, pairing each old line with
+  the new line that is most likely it edited (Dice similarity ≥ 0.5, or one extends the other), so
+  the added lines survive an edit of that line on the other side, and the same edit made on both
+  sides is taken once.
 - **Conflicts** (both sides changed the same lines): the user's version of those lines wins, and
   the other version is saved next to the note as `<name> (conflict).md`.
 - **Unsaved text** captured from the editor (when a save starts, or merged into a note that isn't

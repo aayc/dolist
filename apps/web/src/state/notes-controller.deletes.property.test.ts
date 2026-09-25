@@ -24,8 +24,23 @@ class Vault {
   readonly editors: Editor[] = [];
   /** Lines the API client deleted (and nobody wrote since). */
   readonly deleted = new Set<string>();
+  /**
+   * Failures raised inside the controller's async work (its hooks, promises nobody awaits): thrown
+   * there, they would become unhandled rejections that fast-check never sees.
+   */
+  readonly failures: unknown[] = [];
   counter = 0;
   private read: string | null = null;
+
+  /** Starts controller work nobody awaits, recording its failure. */
+  track(work: Promise<unknown>): void {
+    work.catch((error: unknown) => this.failures.push(error));
+  }
+
+  /** Fails the property with the first failure recorded since the run started. */
+  rethrow(): void {
+    if (this.failures.length > 0) throw this.failures[0];
+  }
 
   get version(): string {
     return `h:${this.content}`;
@@ -40,7 +55,7 @@ class Vault {
     const version = this.version;
     for (const editor of this.editors) {
       if (editor === writer) continue;
-      this.queue.push({ run: () => void editor.notes.handleRemoteChange(PATH, version) });
+      this.queue.push({ run: () => this.track(editor.notes.handleRemoteChange(PATH, version)) });
     }
   }
 
@@ -109,7 +124,9 @@ class Editor implements NotesClient {
         applyMerge: (_path, content) => this.show(content),
         onSaveState: () => {},
         onConflictCopy: () => {
-          throw new Error("nothing here conflicts");
+          vault.failures.push(
+            new Error(`editor ${id} made a conflict copy: nothing here conflicts`),
+          );
         },
         onRemoteDelete: () => {},
         onSaveError: () => {},
@@ -194,7 +211,7 @@ class Editor implements NotesClient {
   /** Switches to another note (flushing this one) or back. */
   toggleTab(): void {
     if (this.active) {
-      void this.notes.flush(PATH);
+      this.vault.track(this.notes.flush(PATH));
       this.cached = this.mounted ? this.live : null;
       this.active = false;
     } else {
@@ -212,7 +229,7 @@ class Editor implements NotesClient {
   /** `EditorController.unmount` (flush, drop every cached state) and `mount`. */
   toggleMount(): void {
     if (this.mounted) {
-      if (this.active) void this.notes.flush(PATH);
+      if (this.active) this.vault.track(this.notes.flush(PATH));
       this.mounted = false;
       this.cached = null;
       this.live = null;
@@ -274,10 +291,10 @@ async function run(ops: readonly Op[]): Promise<Vault> {
         e!.toggleMount();
         break;
       case "flush":
-        void e!.notes.flush(PATH);
+        vault.track(e!.notes.flush(PATH));
         break;
       case "resync":
-        void e!.notes.handleRemoteChange(PATH);
+        vault.track(e!.notes.handleRemoteChange(PATH));
         break;
       case "deliver":
         if (vault.queue.length > 0) vault.deliver(op.i);
@@ -299,6 +316,7 @@ async function run(ops: readonly Op[]): Promise<Vault> {
         break;
     }
     await vi.advanceTimersByTimeAsync(0);
+    vault.rethrow();
   }
   for (const e of vault.editors) {
     if (!e.mounted) e.toggleMount();
@@ -306,10 +324,12 @@ async function run(ops: readonly Op[]): Promise<Vault> {
   }
   for (let i = 0; i < 400; i++) {
     await vi.advanceTimersByTimeAsync(0);
+    vault.rethrow();
     if (vault.queue.length > 0) vault.deliver(0);
     else if (vi.getTimerCount() === 0) break;
     else await vi.advanceTimersByTimeAsync(5_000);
   }
+  vault.rethrow();
   return vault;
 }
 

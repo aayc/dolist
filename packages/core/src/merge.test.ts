@@ -96,20 +96,35 @@ describe("mergeText", () => {
     });
   });
 
-  it("keeps the other side's lines added inside a block the user rewrote, after it", () => {
+  const withAgentLine = note(
+    "# Thursday",
+    "- [ ] Book a table",
+    "  - Sole at 7 %%agent:thr_1%%",
+    "- [ ] Renew passport",
+    "Notes",
+  );
+
+  it("keeps the other side's line where it added it, between lines the user edited", () => {
     const local = note("# Thursday", "- [x] Book a table", "- [x] Renew passport", "Notes");
-    const remote = note(
-      "# Thursday",
-      "- [ ] Book a table",
-      "  - Sole at 7 %%agent:thr_1%%",
-      "- [ ] Renew passport",
-      "Notes",
-    );
-    expect(mergeText(base, local, remote)).toEqual({
+    expect(mergeText(base, local, withAgentLine)).toEqual({
       text: note(
         "# Thursday",
         "- [x] Book a table",
+        "  - Sole at 7 %%agent:thr_1%%",
         "- [x] Renew passport",
+        "Notes",
+      ),
+      conflict: false,
+    });
+  });
+
+  it("keeps the other side's lines added inside a block the user rewrote, after it", () => {
+    const local = note("# Thursday", "- [ ] Call the dentist", "- [ ] Water the plants", "Notes");
+    expect(mergeText(base, local, withAgentLine)).toEqual({
+      text: note(
+        "# Thursday",
+        "- [ ] Call the dentist",
+        "- [ ] Water the plants",
         "  - Sole at 7 %%agent:thr_1%%",
         "Notes",
       ),
@@ -131,6 +146,44 @@ describe("mergeText", () => {
     const remote = note("# Thursday", "Notes");
     expect(mergeText(base, local, remote)).toEqual({
       text: note("# Thursday", "- [ ] Renew passport by May", "Notes"),
+      conflict: true,
+    });
+  });
+
+  // A diff reports "line edited, line added under it" as one replaced block; the fuzz test's
+  // shrunk counterexamples (two tabs, the agent adding a line) are these two merges.
+  it("takes the same edit once and keeps the line the other side added under it", () => {
+    expect(mergeText("- [ ] start", "- [ ]", "- [ ]\n- a3 %%agent%%")).toEqual({
+      text: "- [ ]\n- a3 %%agent%%",
+      conflict: false,
+    });
+  });
+
+  it("keeps the line the other side added under a line both edited", () => {
+    const remote = "- [ ] start c0e0\n- a3 %%agent%%";
+    expect(mergeText("- [ ] start", "- [ ] start c1e1", remote)).toEqual({
+      text: "- [ ] start c1e1\n- a3 %%agent%%",
+      conflict: true,
+    });
+  });
+
+  it("keeps the other side's new lines inside a block both changed, after the user's lines", () => {
+    const local = note("# Thursday", "- [ ] Book a table for 4", "- [ ] Renew it", "Notes");
+    const remote = note(
+      "# Thursday",
+      "- [x] Book a table",
+      "  - Sole at 7 %%agent:thr_1%%",
+      "- [ ] Renew passport",
+      "Notes",
+    );
+    expect(mergeText(base, local, remote)).toEqual({
+      text: note(
+        "# Thursday",
+        "- [ ] Book a table for 4",
+        "  - Sole at 7 %%agent:thr_1%%",
+        "- [ ] Renew it",
+        "Notes",
+      ),
       conflict: true,
     });
   });

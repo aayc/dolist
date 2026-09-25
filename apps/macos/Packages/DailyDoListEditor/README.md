@@ -381,7 +381,9 @@ The editor never saves: the app's `NotesStore` does, with the same algorithm as 
   change) and an inactive note drops its snapshot. With unsaved edits, `TextMerge` merges them
   (base = the server text the edits started from), the editor gets only the other side's changes
   through `applyRemoteChanges`, and the result is saved on top of the new version; a 409 merges the
-  same way. When both changed the same lines, the user's version of those lines wins and the other
+  same way. Like `mergeText`, `TextMerge` splits a replaced block into the lines edited and the
+  lines added next to them before merging, so an agent line added under a task survives an edit of
+  that task. When both changed the same lines, the user's version of those lines wins and the other
   version is saved as `<name> (conflict).md`.
 - **Unsaved text** captured from the editor (when a save starts, or merged into a note that isn't
   shown) exists only while there are unsaved edits. A note shown without a snapshot (a remote
