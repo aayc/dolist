@@ -18,6 +18,7 @@
  * new path. Every accepted write, delete and rename appends to the vault's change log under a
  * per-vault sequence number (`seq`) that only grows.
  */
+import { SIDECAR_DIR } from "./paths";
 import { encodeVaultPath } from "./protocol";
 
 /** Major version of the sync protocol, reported by `GET /v1/health`. */
@@ -25,6 +26,45 @@ export const SYNC_API_VERSION = 1;
 
 /** Header naming the device on mutating requests. */
 export const SYNC_DEVICE_HEADER = "x-ddl-device";
+
+/**
+ * Header carrying the epoch of the agent lease grant a write is made under. Writes, deletes and
+ * renames touching an agent-owned path need the current epoch from the holding device, or they
+ * are refused with `stale_lease`.
+ */
+export const LEASE_EPOCH_HEADER = "X-DDL-Lease-Epoch";
+
+/**
+ * Agent-owned sidecar paths: only the current agent lease holder may write them. Settings
+ * (`.daily-do-list/settings.json`) are not agent-owned: any device may change them.
+ */
+export const AGENT_OWNED_PREFIXES = [
+  `${SIDECAR_DIR}/threads/`,
+  `${SIDECAR_DIR}/artifacts/`,
+  `${SIDECAR_DIR}/state/`,
+] as const;
+
+/**
+ * True for a canonical vault path under an agent-owned prefix, or one of those folders itself
+ * (`.daily-do-list/threads`).
+ */
+export function isAgentOwnedPath(path: string): boolean {
+  return AGENT_OWNED_PREFIXES.some(
+    (prefix) => path.startsWith(prefix) || path === prefix.slice(0, -1),
+  );
+}
+
+/**
+ * True when deleting or renaming the folder `path` would touch agent-owned paths: it is one of
+ * them, or an ancestor of an agent-owned folder (`.daily-do-list`, or the vault root `""`).
+ */
+export function folderHoldsAgentOwnedPaths(path: string): boolean {
+  return (
+    path === "" ||
+    isAgentOwnedPath(path) ||
+    AGENT_OWNED_PREFIXES.some((prefix) => prefix.startsWith(`${path}/`))
+  );
+}
 
 /** Leases a vault can grant, one holder each. `agent`: the device that runs the agent. */
 export const SYNC_LEASE_NAMES = ["agent"] as const;
@@ -218,6 +258,11 @@ export interface SyncLeaseHolder {
   deviceName: string;
   /** Epoch ms, server clock. */
   expiresAt: number;
+  /**
+   * Fencing token of this grant: +1 on every new grant of the lease in the vault, unchanged on
+   * renewal. Writes to agent-owned paths carry it in `LEASE_EPOCH_HEADER`.
+   */
+  epoch: number;
   /** The priority the holder requested the lease with. */
   priority: SyncLeasePriority;
   /** A higher-priority device is waiting: stop, sync and release (answered on renewal). */
@@ -257,6 +302,11 @@ export type SyncErrorCode =
   | "path_blocked"
   /** 409: another device holds the lease (the body carries `holder`). */
   | "lease_held"
+  /**
+   * 409: a write, delete or rename touching an agent-owned path without the current agent grant's
+   * epoch from this device (`X-DDL-Device` + `LEASE_EPOCH_HEADER`); see `SyncStaleLeaseBody`.
+   */
+  | "stale_lease"
   /** 413: body or file over the size limit. */
   | "payload_too_large"
   /** 413: the write would exceed the vault's storage quota. */
@@ -283,4 +333,13 @@ export interface SyncLeaseConflictBody extends SyncErrorBody {
   holder: SyncLeaseHolder;
   /** This request outranks the holder: a takeover is pending, ask again to get the lease. */
   takeoverPending?: boolean;
+}
+
+/** 409 body of a write refused because it wasn't made under the current agent grant. */
+export interface SyncStaleLeaseBody extends SyncErrorBody {
+  error: "stale_lease";
+  message: string;
+  /** The current grant's epoch, or null when nobody holds the agent lease. */
+  currentEpoch: number | null;
+  holder: SyncLeaseHolder | null;
 }

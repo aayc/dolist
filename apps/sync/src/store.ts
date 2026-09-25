@@ -15,7 +15,7 @@ import {
 import { generateToken, hashToken, sameHash } from "./tokens";
 
 /** Bumped with every schema change; `migrate` upgrades older databases in place. */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const MAX_VAULT_NAME_LENGTH = 100;
 
 const SCHEMA = `
@@ -65,6 +65,7 @@ CREATE TABLE leases (
   session TEXT NOT NULL,
   expires_at INTEGER NOT NULL,
   priority TEXT NOT NULL DEFAULT 'interactive',
+  epoch INTEGER NOT NULL DEFAULT 1,
   PRIMARY KEY (vault, name)
 ) STRICT, WITHOUT ROWID;
 `;
@@ -72,6 +73,8 @@ CREATE TABLE leases (
 /** `MIGRATIONS[n - 1]` upgrades a schema `n` database to `n + 1`. */
 const MIGRATIONS = [
   "ALTER TABLE leases ADD COLUMN priority TEXT NOT NULL DEFAULT 'interactive'",
+  // A lease held during the upgrade becomes grant 1.
+  "ALTER TABLE leases ADD COLUMN epoch INTEGER NOT NULL DEFAULT 1",
 ] as const;
 
 export interface VaultInfo {
@@ -454,30 +457,31 @@ export class SyncStore {
 
   // ── Leases ───────────────────────────────────────────────────────────────
 
-  /** Grants the lease when it is free, expired, or already held by this device and session. */
+  /**
+   * Grants the lease when it is free, expired, or already held by this device and session. A
+   * renewal keeps the grant's epoch; any other grant takes the next one.
+   */
   acquireLease(vault: string, name: SyncLeaseName, request: SyncLeaseRequest): LeaseOutcome {
     return this.#transaction(() => {
       const now = this.#now();
       const current = this.#leaseRow(vault, name);
-      if (
-        current &&
-        current.expiresAt > now &&
-        !(current.device === request.device && current.session === request.session)
-      ) {
-        return { ok: false, holder: holderOf(current) };
-      }
+      const live = current !== null && current.expiresAt > now;
+      const renewal =
+        live && current.device === request.device && current.session === request.session;
+      if (live && !renewal) return { ok: false, holder: holderOf(current) };
       const holder: SyncLeaseHolder = {
         device: request.device,
         deviceName: request.deviceName,
         expiresAt: now + request.ttlMs,
+        epoch: renewal ? current.epoch : (current?.epoch ?? 0) + 1,
         priority: request.priority ?? "interactive",
       };
       this.#run(
-        `INSERT INTO leases (vault, name, device, device_name, session, expires_at, priority)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO leases (vault, name, device, device_name, session, expires_at, priority, epoch)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (vault, name) DO UPDATE SET device = excluded.device,
            device_name = excluded.device_name, session = excluded.session,
-           expires_at = excluded.expires_at, priority = excluded.priority`,
+           expires_at = excluded.expires_at, priority = excluded.priority, epoch = excluded.epoch`,
         vault,
         name,
         holder.device,
@@ -485,12 +489,16 @@ export class SyncStore {
         request.session,
         holder.expiresAt,
         holder.priority,
+        holder.epoch,
       );
       return { ok: true, holder };
     });
   }
 
-  /** Releases the lease if this device and session hold it; a free or expired lease is fine too. */
+  /**
+   * Releases the lease if this device and session hold it; a free or expired lease is fine too.
+   * The row stays (expired) so the next grant continues its epoch.
+   */
   releaseLease(
     vault: string,
     name: SyncLeaseName,
@@ -498,15 +506,13 @@ export class SyncStore {
     session: string,
   ): { ok: true } | { ok: false; holder: SyncLeaseHolder } {
     return this.#transaction(() => {
+      const now = this.#now();
       const current = this.#leaseRow(vault, name);
-      if (!current || current.expiresAt <= this.#now()) {
-        if (current) this.#run("DELETE FROM leases WHERE vault = ? AND name = ?", vault, name);
-        return { ok: true };
-      }
+      if (!current || current.expiresAt <= now) return { ok: true };
       if (current.device !== device || current.session !== session) {
         return { ok: false, holder: holderOf(current) };
       }
-      this.#run("DELETE FROM leases WHERE vault = ? AND name = ?", vault, name);
+      this.#run("UPDATE leases SET expires_at = ? WHERE vault = ? AND name = ?", now, vault, name);
       return { ok: true };
     });
   }
@@ -645,7 +651,7 @@ export class SyncStore {
 
   #leaseRow(vault: string, name: string): LeaseRow | null {
     const row = this.#get(
-      `SELECT device, device_name, session, expires_at, priority FROM leases
+      `SELECT device, device_name, session, expires_at, priority, epoch FROM leases
        WHERE vault = ? AND name = ?`,
       vault,
       name,
@@ -657,6 +663,7 @@ export class SyncStore {
           session: String(row.session),
           expiresAt: Number(row.expires_at),
           priority: row.priority === "host" ? "host" : "interactive",
+          epoch: Number(row.epoch),
         }
       : null;
   }
@@ -733,6 +740,7 @@ interface LeaseRow {
   session: string;
   expiresAt: number;
   priority: SyncLeasePriority;
+  epoch: number;
 }
 
 function holderOf(row: LeaseRow): SyncLeaseHolder {
@@ -740,6 +748,7 @@ function holderOf(row: LeaseRow): SyncLeaseHolder {
     device: row.device,
     deviceName: row.deviceName,
     expiresAt: row.expiresAt,
+    epoch: row.epoch,
     priority: row.priority,
   };
 }

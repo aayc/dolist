@@ -47,9 +47,28 @@ describe("agent lease", () => {
         device: "dev_laptop",
         deviceName: "Laptop",
         expiresAt: clock + 60_000,
+        epoch: 1,
         priority: "interactive",
       },
     });
+  });
+
+  it("numbers its grants: a renewal keeps the epoch, every new grant takes the next", async () => {
+    const epoch = async (request: typeof laptop) => (await acquire(request)).body.lease.epoch;
+    expect(await epoch(laptop)).toBe(1);
+    clock += 20_000;
+    expect(await epoch(laptop)).toBe(1);
+    expect((await acquire(desktop)).body).toMatchObject({ holder: { epoch: 1 } });
+    await release(laptop);
+    expect((await t.api("GET", "/leases/agent")).body).toEqual({ holder: null });
+    expect(await epoch(desktop)).toBe(2);
+    clock += 60_000;
+    expect(await epoch(desktop)).toBe(3);
+    clock += 60_000;
+    expect(await epoch({ ...laptop, session: "s_laptop_2" })).toBe(4);
+    expect((await release(desktop)).status).toBe(409);
+    const inB = await t.api("POST", "/leases/agent", { body: laptop, device: laptop.device }, t.b);
+    expect(inB.body.lease.epoch).toBe(1);
   });
 
   it("reports the priority its holder asked with (interactive when absent)", async () => {
@@ -137,8 +156,11 @@ describe("agent lease", () => {
   });
 });
 
-describe("lease priority in a database from before priorities (schema 1)", () => {
-  it("is added as interactive to the lease held during the upgrade", async () => {
+describe.each([
+  [1, "priorities", ["epoch", "priority"]],
+  [2, "epochs", ["epoch"]],
+] as const)("the lease in a database from before %s (schema %i)", (version, _before, dropped) => {
+  it("keeps the lease held during the upgrade as interactive grant 1", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ddl-sync-lease-"));
     try {
       const db = join(dir, "sync.db");
@@ -146,14 +168,16 @@ describe("lease priority in a database from before priorities (schema 1)", () =>
       const { vault } = created.createVault("Personal");
       created.close();
       const { DatabaseSync } = process.getBuiltinModule("node:sqlite");
-      const v1 = new DatabaseSync(db);
-      v1.exec("ALTER TABLE leases DROP COLUMN priority");
-      v1.prepare(
-        `INSERT INTO leases (vault, name, device, device_name, session, expires_at)
-         VALUES (?, 'agent', 'dev_laptop', 'Laptop', 's_laptop_1', ?)`,
-      ).run(vault.id, clock + 60_000);
-      v1.exec("PRAGMA user_version = 1");
-      v1.close();
+      const old = new DatabaseSync(db);
+      for (const column of dropped) old.exec(`ALTER TABLE leases DROP COLUMN ${column}`);
+      old
+        .prepare(
+          `INSERT INTO leases (vault, name, device, device_name, session, expires_at)
+           VALUES (?, 'agent', 'dev_laptop', 'Laptop', 's_laptop_1', ?)`,
+        )
+        .run(vault.id, clock + 60_000);
+      old.exec(`PRAGMA user_version = ${version}`);
+      old.close();
 
       const store = new SyncStore(db, { now: () => clock });
       try {
@@ -161,12 +185,20 @@ describe("lease priority in a database from before priorities (schema 1)", () =>
           device: "dev_laptop",
           deviceName: "Laptop",
           expiresAt: clock + 60_000,
+          epoch: 1,
           priority: "interactive",
+        });
+        expect(store.acquireLease(vault.id, "agent", laptop)).toMatchObject({
+          ok: true,
+          holder: { epoch: 1 },
         });
         clock += 60_000;
         expect(
           store.acquireLease(vault.id, "agent", { ...desktop, priority: "host" }),
-        ).toMatchObject({ ok: true, holder: { device: "dev_desktop", priority: "host" } });
+        ).toMatchObject({
+          ok: true,
+          holder: { device: "dev_desktop", priority: "host", epoch: 2 },
+        });
       } finally {
         store.close();
       }

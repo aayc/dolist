@@ -31,6 +31,7 @@ const STATE_STATUS: Partial<Record<SyncErrorCode, ContentfulStatusCode>> = {
   not_a_folder: 409,
   path_blocked: 409,
   lease_held: 409,
+  stale_lease: 409,
   quota_exceeded: 413,
 };
 
