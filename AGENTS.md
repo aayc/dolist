@@ -264,7 +264,7 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
 - **Excalidraw (web drawings)** is one lazy chunk: import `@excalidraw/excalidraw` only from
  `apps/web/src/features/drawings/excalidraw-module.ts` (and the components it loads), through
  `loadExcalidraw()`. `apps/web/excalidraw-assets.ts` serves its fonts from the build and replaces
- its optional heavy parts; Total JS is near its budget, so check `pnpm size:check` after touching
+ its optional heavy parts; it's a quarter of Total JS, so check `pnpm size:check` after touching
  it.
 - **E2E typing:** use Playwright's real keyboard (`page.keyboard.type`). Automation "fill"-style
   typing into CodeMirror rebuilds text from the DOM (including badge widgets) and corrupts notes.

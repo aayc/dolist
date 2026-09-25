@@ -22,7 +22,7 @@ import { markdownTable, REPO_ROOT, textTable, writeStepSummary } from "./lib/rep
 const BUDGET_KB = {
   initialJs: 320,
   initialCss: 40,
-  totalJs: 1200,
+  totalJs: 1300,
 };
 const KB = 1000;
 const LARGEST_CHUNKS_SHOWN = 10;

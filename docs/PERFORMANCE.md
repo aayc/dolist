@@ -101,9 +101,9 @@ budgets.
 
 | Bundle | Budget (gzip) | Current |
 | --- | --- | --- |
-| Initial JS (entry + static imports) | 320 kB | ~276 kB |
+| Initial JS (entry + static imports) | 320 kB | ~279 kB |
 | Initial CSS | 40 kB | ~8 kB |
-| Total JS | 1 200 kB | ~1 190 kB |
+| Total JS | 1 300 kB | ~1 217 kB |
 
 The initial JS is dominated by CodeMirror core and React. `@codemirror/lang-markdown` would embed
 `@codemirror/lang-html` and with it the JS and CSS parsers (~60 kB gz); our `pnpm patch`
@@ -119,8 +119,13 @@ drawing. `apps/web/excalidraw-assets.ts` keeps its heaviest optional parts out o
 small replacements: font subsetting (HarfBuzz and WOFF2 in WebAssembly, ~740 kB gz; exports embed
 whole fonts instead), the Mermaid importer (several MB), pica and image-blob-reduce (~29 kB gz; a
 canvas downscales pasted images), pako (~14 kB gz; Excalidraw embeds scenes in exported images
-uncompressed without it), browser-fs-access (a file input opens images) and the translations. Total JS is close to its budget: a new dependency
-of that size needs a look at what else can go.
+uncompressed without it), browser-fs-access (a file input opens images) and the translations.
+
+Total JS counts every chunk, including the lazy ones: the code block languages (~400 kB gz, each
+loaded for a fenced block in that language), Excalidraw (~327 kB gz) and the mock the e2e tests
+run against the production build (~27 kB gz). It was raised from 1 200 to 1 300 kB when drawings
+and the always-on work landed together; startup is guarded by the initial JS budget, which
+didn't change. A new dependency of Excalidraw's size still needs a look at what else can go.
 
 Gzip sizes differ a little between machines for the same bytes (Node's zlib on CI's x86 runners
 compresses ~0.5% worse than on Apple Silicon), so keep some headroom under the budget.
