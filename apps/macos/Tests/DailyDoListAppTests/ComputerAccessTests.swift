@@ -544,6 +544,20 @@ struct ComputerAccessAppTests {
       small.maxY - ComputerAccessGuideLayout.margin <= second.maxY, "the card's top is on screen")
   }
 
+  /// The panel floats over System Settings without taking the focus from it, and stays up while
+  /// Daily Do List is in the background (it's never ordered in here).
+  @Test func theGuidePanelNeverTakesTheFocus() {
+    let panel = ComputerAccessGuidePanelPresenter.makePanel()
+    #expect(panel.styleMask.contains(.nonactivatingPanel))
+    #expect(panel.level == .floating)
+    #expect(!panel.hidesOnDeactivate)
+    #expect(panel.becomesKeyOnlyIfNeeded)
+    #expect(!panel.canBecomeMain)
+    #expect(!panel.isOpaque && panel.backgroundColor == .clear)
+    #expect(panel.collectionBehavior.contains(.canJoinAllSpaces))
+    #expect(!panel.isVisible)
+  }
+
   @Test func theIconDragsTheAppBundle() throws {
     let url = URL(fileURLWithPath: "/Applications/Daily Do List.app")
     let view = AppIconDragView(icon: NSImage(size: NSSize(width: 32, height: 32)), bundleURL: url)

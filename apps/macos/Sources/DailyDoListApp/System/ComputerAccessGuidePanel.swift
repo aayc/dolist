@@ -70,7 +70,7 @@ final class ComputerAccessGuidePanelPresenter: ComputerAccessGuidePresenting {
     }
   }
 
-  private static func makePanel() -> NSPanel {
+  static func makePanel() -> NSPanel {
     let panel = GuidePanel(
       contentRect: NSRect(origin: .zero, size: ComputerAccessGuideLayout.panelSize),
       styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
