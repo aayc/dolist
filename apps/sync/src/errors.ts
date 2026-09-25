@@ -1,4 +1,10 @@
-import type { Logger, SyncErrorBody, SyncErrorCode } from "@ddl/core";
+import type {
+  Logger,
+  SyncErrorBody,
+  SyncErrorCode,
+  SyncLeaseHolder,
+  SyncStaleLeaseBody,
+} from "@ddl/core";
 import type { Context, ErrorHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
@@ -31,8 +37,24 @@ const STATE_STATUS: Partial<Record<SyncErrorCode, ContentfulStatusCode>> = {
   not_a_folder: 409,
   path_blocked: 409,
   lease_held: 409,
+  stale_lease: 409,
   quota_exceeded: 413,
 };
+
+/** A change to the agent's files not made under the current agent grant from this device. */
+export class StaleLeaseRefusal extends Error {
+  readonly holder: SyncLeaseHolder | null;
+
+  constructor(holder: SyncLeaseHolder | null) {
+    super(
+      holder
+        ? "Only the device holding the agent lease may change the agent's files, with its current grant's epoch"
+        : "Nobody holds the agent lease, so the agent's files can't change",
+    );
+    this.name = "StaleLeaseRefusal";
+    this.holder = holder;
+  }
+}
 
 export function errorBody(code: SyncErrorCode, message: string): SyncErrorBody {
   return { error: code, message };
@@ -45,6 +67,15 @@ export function createErrorHandler(logger: Logger): ErrorHandler {
       return c.json(errorBody(error.code, error.message), error.status);
     }
     if (error instanceof VaultStateError) return stateErrorResponse(c, error);
+    if (error instanceof StaleLeaseRefusal) {
+      const body: SyncStaleLeaseBody = {
+        error: "stale_lease",
+        message: error.message,
+        currentEpoch: error.holder?.epoch ?? null,
+        holder: error.holder,
+      };
+      return c.json(body, 409);
+    }
     if (error instanceof HTTPException) {
       return error.status === 413
         ? c.json(errorBody("payload_too_large", "Request body too large"), 413)

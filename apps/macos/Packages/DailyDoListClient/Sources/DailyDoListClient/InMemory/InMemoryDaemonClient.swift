@@ -149,6 +149,38 @@ public final class InMemoryDaemonClient: DaemonClient {
     }
   }
 
+  // MARK: - Routines
+
+  public func routines() async throws -> RoutineListResponse {
+    try await call {
+      RoutineListResponse(routines: $0.routineList(), templates: FakeDaemon.templates)
+    }
+  }
+
+  public func routine(_ id: String) async throws -> Routine {
+    try await call { daemon throws(DaemonClientError) in try daemon.routineResponse(id) }
+  }
+
+  public func createRoutine(_ request: CreateRoutineRequest) async throws -> Routine {
+    try await call { daemon throws(DaemonClientError) in try daemon.createRoutine(request) }
+  }
+
+  public func runRoutine(_ id: String) async throws -> RoutineRunResponse {
+    try await call { daemon throws(DaemonClientError) in try daemon.runRoutine(id) }
+  }
+
+  public func pauseRoutine(_ id: String) async throws -> Routine {
+    try await call { daemon throws(DaemonClientError) in try daemon.setRoutinePaused(id, true) }
+  }
+
+  public func resumeRoutine(_ id: String) async throws -> Routine {
+    try await call { daemon throws(DaemonClientError) in try daemon.setRoutinePaused(id, false) }
+  }
+
+  public func threads(routineId: String) async throws -> [ThreadSummary] {
+    try await call { $0.routineRuns(routineId) }
+  }
+
   // MARK: - Events
 
   /// Emits `.connecting`, `.connected`, the `hello` event, and `.resync` when reconnecting.

@@ -102,6 +102,32 @@ describe("resolvePersistedSettings", () => {
     }
   });
 
+  it("keeps a valid always-on machine and drops an unusable one whole", () => {
+    const machine = { name: "vm-name", url: "https://vm-name.tailnet-name.ts.net" };
+    expect(resolvePersistedSettings({ remote: { alwaysOnMachine: machine } })).toEqual({
+      overrides: { remote: { alwaysOnMachine: machine } },
+      invalid: [],
+      unknown: [],
+    });
+    expect(resolvePersistedSettings({ remote: { alwaysOnMachine: null } })).toEqual({
+      overrides: { remote: { alwaysOnMachine: null } },
+      invalid: [],
+      unknown: [],
+    });
+    for (const alwaysOnMachine of [
+      { ...machine, url: "http://vm-name.tailnet-name.ts.net" },
+      { ...machine, name: "" },
+      { name: "vm-name" },
+      "https://vm-name.tailnet-name.ts.net",
+    ]) {
+      expect(resolvePersistedSettings({ remote: { alwaysOnMachine }, theme: "dark" })).toEqual({
+        overrides: { theme: "dark" },
+        invalid: ["remote.alwaysOnMachine"],
+        unknown: [],
+      });
+    }
+  });
+
   it("drops empty sections and ignores a stray version key", () => {
     expect(resolvePersistedSettings({ version: 1, editor: { fontSize: 2 } })).toEqual({
       overrides: {},

@@ -151,6 +151,56 @@ public final class SampleDaemonClient: DaemonClient, @unchecked Sendable {
     return payload
   }
 
+  // MARK: Routines
+
+  public func routines() async throws -> RoutineListResponse {
+    read { RoutineListResponse(routines: $0.routines, templates: $0.routineTemplates) }
+  }
+
+  public func routine(_ id: String) async throws -> Routine {
+    guard let routine = read({ $0.routines.first { $0.id == id } }) else {
+      throw Self.notFound("Routine")
+    }
+    return routine
+  }
+
+  public func createRoutine(_ request: CreateRoutineRequest) async throws -> Routine {
+    let routine = Routine(
+      id: "rtn_\(UUID().uuidString.prefix(8).lowercased())", path: "Routines/\(request.name).md",
+      name: request.name, schedule: request.schedule, notify: request.notify ?? .always,
+      uses: request.uses ?? [], instructions: request.instructions)
+    let routines = lock.withLock {
+      snapshot.routines.append(routine)
+      return snapshot.routines
+    }
+    broadcast(.routinesChanged(routines))
+    return routine
+  }
+
+  public func runRoutine(_ id: String) async throws -> RoutineRunResponse {
+    throw DaemonClientError.http(
+      status: 503,
+      body: ApiErrorBody(error: .agentUnavailable, message: "The sample doesn't run routines."))
+  }
+
+  public func pauseRoutine(_ id: String) async throws -> Routine { try setPaused(id, true) }
+  public func resumeRoutine(_ id: String) async throws -> Routine { try setPaused(id, false) }
+
+  private func setPaused(_ id: String, _ paused: Bool) throws -> Routine {
+    let result: (Routine, [Routine])? = lock.withLock {
+      guard let index = snapshot.routines.firstIndex(where: { $0.id == id }) else { return nil }
+      snapshot.routines[index].paused = paused
+      return (snapshot.routines[index], snapshot.routines)
+    }
+    guard let (routine, routines) = result else { throw Self.notFound("Routine") }
+    broadcast(.routinesChanged(routines))
+    return routine
+  }
+
+  public func threads(routineId: String) async throws -> [ThreadSummary] {
+    read { $0.threads.filter { $0.routineId == routineId } }
+  }
+
   // MARK: Events
 
   public func connect() async {}

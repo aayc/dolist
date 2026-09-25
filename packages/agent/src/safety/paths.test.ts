@@ -66,6 +66,15 @@ describe("sensitiveKinds", () => {
     ["~/Library/Keychains/login.keychain-db", "credential-store"],
     ["/Users/me/Library/Application Support/Google/Chrome/Default/Login Data", "credential-store"],
     ["~/.daily-do-list/.env", "app-secret"],
+    ["~/.daily-do-list/daemon-token", "app-secret"],
+    ["~/.daily-do-list/sync-token", "app-secret"],
+    ["~/.daily-do-list/machine-token", "app-secret"],
+    ["~/.daily-do-list/devices.json", "app-secret"],
+    ["/var/lib/ddl/.daily-do-list/devices.json", "app-secret"],
+    ["~/.daily-do-list", "app-secret"],
+    ["~/.daily-do-list/", "app-secret"],
+    ["~/.daily-do-list/*", "app-secret"],
+    ["~/.daily-do-list/dev*", "app-secret"],
     ["/vault/.daily-do-list/state/approvals.json", "app-state"],
     ["/work/app/.env.local", "env-file"],
     ["/work/certs/server.pem", "key-material"],
@@ -79,6 +88,21 @@ describe("sensitiveKinds", () => {
     ["/usr/local/bin/tool", "system"],
   ])("%s is %s", (path, kind) => {
     expect(sensitiveKinds(path).has(kind as never)).toBe(true);
+  });
+
+  it("keeps the app's other files and a vault's sidecar as app state, not secrets", () => {
+    for (const path of [
+      "~/.daily-do-list/config.json",
+      "~/.daily-do-list/workspaces/task-1/notes.md",
+      "~/.daily-do-list/workspaces/*",
+      "~/DailyDoList/.daily-do-list",
+      "~/DailyDoList/.daily-do-list/*",
+      "~/DailyDoList/.daily-do-list/settings.json",
+    ]) {
+      const kinds = sensitiveKinds(path);
+      expect(kinds.has("app-secret"), path).toBe(false);
+      expect(kinds.has("app-state"), path).toBe(true);
+    }
   });
 
   it("does not flag public keys, env templates or ordinary files", () => {

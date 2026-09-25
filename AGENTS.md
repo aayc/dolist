@@ -39,6 +39,23 @@ Product principles, in priority order:
 - Test fixtures and examples must be synthetic (no real names, emails, addresses or notes).
 - Before committing, run `git status` and review every staged file.
 
+## Handoff log: `PROGRESS.md`
+
+Work moves between machines and agents, so `PROGRESS.md` (repo root) always holds the current
+state: what shipped, what's in flight (branch, spec, status, next step), what's next, and the
+user's decisions.
+
+- **Read it before starting.** Don't re-ask a question its decisions already answer.
+- **Keep it current.** Update it whenever work starts, lands, stalls or changes direction, or the
+  user decides something. Commit it on `main` and push, so another machine can pick up at any
+  moment.
+- **In-flight work lives on pushed branches.** Push a stream's branch whenever `PROGRESS.md`
+  mentions it. Specs for work split across streams go in `docs/specs/`, not in temp files.
+- **Only the integrator edits it.** Parallel streams on feature branches report back instead of
+  editing it, so it never conflicts; the lead records their state.
+- **It's public too.** No secrets, tokens, machine or network names, IP addresses or absolute
+  paths; describe machines generically ("the main development Mac").
+
 ## Repository map
 
 ```
@@ -114,7 +131,9 @@ Scope commands to the package you are working in while iterating. Before you fin
 
 Key flows are documented in `docs/ARCHITECTURE.md` and `docs/AGENT_SYSTEM.md`.
 
-Docs index: `README.md` (product + quick start), `docs/ARCHITECTURE.md`, `docs/AGENT_SYSTEM.md`,
+Docs index: `PROGRESS.md` (the handoff log: current state and decisions), `docs/specs/`
+(multi-stream specs), `README.md` (product + quick start), `docs/ARCHITECTURE.md`,
+`docs/AGENT_SYSTEM.md`,
 `docs/USER_JOURNEYS.md` (the living-list journeys and their tests),
 `docs/PERFORMANCE.md`, `docs/CROSS_PLATFORM.md`, `docs/SYNC.md` (devices sharing a vault, the
 agent lease), `docs/ALWAYS_ON.md` (design: the agent on an always-on machine; setting one up:
@@ -153,10 +172,16 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
    via `globalThis` are fine). It runs in the browser, the daemon and future native shells.
 5. **Wire protocol lives in `packages/core/src/protocol.ts`.** Daemon and clients import the same
    types. Changing a shape = update both sides in the same change.
-6. **The daemon is local-only and authenticated.** Bind `127.0.0.1`, require the bearer token,
-   reject unexpected `Host`/`Origin` headers. Never add an unauthenticated endpoint that reads the
-   vault or triggers agent work. The same holds for every other listener (the Cursor harness's MCP
-   bridge: loopback, per-session random path and token, no `Origin`).
+6. **The daemon is local-only unless remote hosts are configured, and always authenticated.** It
+   binds `127.0.0.1` only. Other devices reach it only through a private-network proxy on the same
+   machine (e.g. `tailscale serve`), under a remote host that is configured (`remote.hosts`), never
+   inferred, and only with device credentials: a paired device's token, or a paired browser's
+   HttpOnly cookie sent by its own page. The master token (`daemon-token`) never leaves the
+   machine: a page on a remote Host never embeds it, and `?token=` works on loopback Hosts only.
+   Require a credential and reject unexpected `Host`/`Origin` headers. Never add an unauthenticated
+   endpoint that reads the vault or triggers agent work (`POST /api/pair` is the one route without
+   a credential: its single-use, rate-limited code is one). The same holds for every other listener
+   (the Cursor harness's MCP bridge: loopback, per-session random path and token, no `Origin`).
 7. **Agents never silently change the user's words.** An agent writes in a note only through
  `edit_note`: every line it writes ends with an agent marker (`%%agent:<thread>%%`) so it is
  visibly the agent's, its own lines go in directly, and changing or deleting the user's lines (or
@@ -209,7 +234,8 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
  use (the Pi harness from `@ddl/agent/pi`, the Cursor harness from `@ddl/agent/cursor`, Playwright
  via `import()` where Chrome launches). Don't re-export them from a package index or import them
  statically elsewhere: `apps/daemon/build.mjs` fails the build if they would load before the
- daemon answers.
+ daemon answers. The one static agent import is `@ddl/agent/routines` (routine files, editable
+ while no agent runs here): keep that entry free of harness, execution and model code.
 - **Pi harness:** sessions are hermetic (isolated `agentDir` under `$DDL_HOME/pi`, no discovered
   extensions/skills/context files) and refuse to start if the safety-gate extension didn't load.
 - **Cursor harness:** set `agent.harness` to `cursor` in Settings (the other settings keep working;

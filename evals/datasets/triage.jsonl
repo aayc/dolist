@@ -67,3 +67,13 @@
 {"id":"direct-forward-extra-check","task":"Compare flights to Denver for Thanksgiving","direct":"Also check Southwest for the Denver flights","expected":"forward"}
 {"id":"direct-status-question","task":"Research standing desks under $500","direct":"What are you working on right now?","expected":"reply"}
 {"id":"direct-status-waiting","task":"Book a table for Friday dinner","agentStatus":"waiting_user","direct":"Is anything waiting on me?","expected":"reply"}
+{"id":"routine-morning-briefing","task":"Every morning at 7:30, brief me on my calendar and the SF weather","expected":"routine","capabilities":["web"],"routine":{"schedule":"every day at 7:30","notify":"always"}}
+{"id":"routine-price-watch","task":"Check the price of the Fellow Stagg kettle every 2 hours and tell me when it drops below $120","expected":"routine","capabilities":["web"],"routine":{"schedule":"every 2 hours","notify":"when_changed"}}
+{"id":"routine-weekly-review","task":"Each Sunday at 6pm, review my week from my daily notes","expected":"routine","routine":{"schedule":"every sunday at 18:00","notify":"always"}}
+{"id":"routine-news-digest","task":"Every evening, send me a digest of cycling news with links","expected":"routine","capabilities":["web"]}
+{"id":"routine-inbox-triage","task":"Every weekday at 9, go through my new email and flag anything urgent","expected":"routine","capabilities":["connectors"],"routine":{"schedule":"every weekday at 9:00"}}
+{"id":"routine-back-in-stock","task":"Let me know when the Switch 2 is back in stock at Target, check hourly","expected":"routine","capabilities":["web"],"routine":{"schedule":"every hour","notify":"when_changed"}}
+{"id":"routine-carry-over","task":"Every day at 6am, carry over yesterday's unfinished tasks into today's note","expected":"routine","routine":{"schedule":"every day at 6:00"}}
+{"id":"not-routine-morning-routine-research","task":"Research a good morning routine for better sleep","expected":"delegate","capabilities":["web"]}
+{"id":"direct-routine-news-digest","task":"Compare flights to Denver for Thanksgiving","direct":"Every evening at 6pm, send me a digest of bike news","expected":"routine","routine":{"schedule":"every day at 18:00","notify":"always"}}
+{"id":"direct-routine-price-watch","task":"Research standing desks under $500","agentStatus":"done","direct":"Can you check the price of the blue Stagg kettle every hour and tell me when it's under $100?","expected":"routine","routine":{"schedule":"every hour","notify":"when_changed"}}

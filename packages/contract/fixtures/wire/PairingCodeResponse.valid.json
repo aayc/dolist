@@ -1,0 +1,14 @@
+[
+  {
+    "name": "with a remote host for the QR code",
+    "value": {
+      "code": "K7PX4MQ9",
+      "expiresAt": 1790000300000,
+      "url": "https://vm-name.tailnet-name.ts.net"
+    }
+  },
+  {
+    "name": "without remote hosts",
+    "value": { "code": "23456789", "expiresAt": 1790000300000, "url": null }
+  }
+]

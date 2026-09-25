@@ -112,6 +112,10 @@ public enum ServerEvent: Hashable, Sendable {
   case agentStatus(AgentStatusResponse)
   case surfaceFrame(SurfaceFrame)
   case settingsChanged(AppSettings)
+  /// Every routine, whenever one changed.
+  case routinesChanged([Routine])
+  /// A run finished and its routine's `notify` says to tell the user.
+  case routineNotification(RoutineNotification)
   case error(ServerErrorEvent)
   /// A type this client doesn't know (from a newer daemon): ignore it.
   case unknown(type: String, raw: JSONValue)
@@ -129,6 +133,8 @@ public enum ServerEvent: Hashable, Sendable {
     case .agentStatus: "agent.status"
     case .surfaceFrame: "surface.frame"
     case .settingsChanged: "settings.changed"
+    case .routinesChanged: "routines.changed"
+    case .routineNotification: "routine.notification"
     case .error: "error"
     case .unknown(let type, _): type
     }
@@ -137,7 +143,7 @@ public enum ServerEvent: Hashable, Sendable {
 
 extension ServerEvent: Codable {
   private enum Keys: String, CodingKey {
-    case type, record, thread, approval, status, settings
+    case type, record, thread, approval, status, settings, routines, notification
   }
 
   public init(from decoder: Decoder) throws {
@@ -158,6 +164,11 @@ extension ServerEvent: Codable {
     case "surface.frame": self = .surfaceFrame(try SurfaceFrame(from: decoder))
     case "settings.changed":
       self = .settingsChanged(try c.decode(AppSettings.self, forKey: .settings))
+    case "routines.changed":
+      self = .routinesChanged(try c.decode([Routine].self, forKey: .routines))
+    case "routine.notification":
+      self = .routineNotification(
+        try c.decode(RoutineNotification.self, forKey: .notification))
     case "error": self = .error(try ServerErrorEvent(from: decoder))
     default: self = .unknown(type: type, raw: try JSONValue(from: decoder))
     }
@@ -183,6 +194,11 @@ extension ServerEvent: Codable {
       try encodeTagged(frame, kind: "surface.frame", key: "type", to: encoder)
     case .settingsChanged(let settings):
       try encodeWrapped(settings, key: .settings, type: "settings.changed", to: encoder)
+    case .routinesChanged(let routines):
+      try encodeWrapped(routines, key: .routines, type: "routines.changed", to: encoder)
+    case .routineNotification(let notification):
+      try encodeWrapped(
+        notification, key: .notification, type: "routine.notification", to: encoder)
     case .error(let e): try encodeTagged(e, kind: "error", key: "type", to: encoder)
     case .unknown(_, let raw): try raw.encode(to: encoder)
     }

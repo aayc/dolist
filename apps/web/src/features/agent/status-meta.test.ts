@@ -1,6 +1,6 @@
-import type { ThreadSummary } from "@ddl/core";
+import { ORCHESTRATOR_THREAD_ID, type ThreadSummary } from "@ddl/core";
 import { describe, expect, it } from "vitest";
-import { authorLabel, groupThreads, inboxGroupOf } from "./status-meta";
+import { authorLabel, groupThreads, inboxGroupOf, isInboxThread } from "./status-meta";
 
 const now = new Date(2026, 8, 23, 15, 0).getTime();
 const yesterday = new Date(2026, 8, 22, 15, 0).getTime();
@@ -21,6 +21,24 @@ function thread(patch: Partial<ThreadSummary>): ThreadSummary {
     ...patch,
   };
 }
+
+describe("what the inbox lists", () => {
+  it("lists task threads, but not the orchestrator's chat (pinned above them)", () => {
+    expect(isInboxThread(thread({}))).toBe(true);
+    expect(isInboxThread(thread({ id: ORCHESTRATOR_THREAD_ID, taskId: null }))).toBe(false);
+  });
+
+  it("leaves a routine's runs under their routine, unless one waits for you", () => {
+    const run = (patch: Partial<ThreadSummary>) =>
+      thread({ routineId: "rtn_1", taskId: "run_1", notePath: "Routines/Watch.md", ...patch });
+    expect(isInboxThread(run({ status: "done" }))).toBe(false);
+    expect(isInboxThread(run({ status: "working" }))).toBe(false);
+    expect(isInboxThread(run({ status: "failed" }))).toBe(false);
+    expect(isInboxThread(run({ status: "waiting_approval" }))).toBe(true);
+    expect(isInboxThread(run({ status: "working", pendingApprovals: 1 }))).toBe(true);
+    expect(isInboxThread(run({ status: "waiting_user" }))).toBe(true);
+  });
+});
 
 describe("inbox grouping", () => {
   it("puts anything waiting on the user first", () => {

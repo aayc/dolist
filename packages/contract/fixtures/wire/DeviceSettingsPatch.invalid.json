@@ -1,0 +1,68 @@
+[
+  {
+    "name": "blank name",
+    "value": { "name": "   " },
+    "path": ["name"],
+    "code": "too_small"
+  },
+  {
+    "name": "name over 64 characters",
+    "value": { "name": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn" },
+    "path": ["name"],
+    "code": "too_big"
+  },
+  {
+    "name": "unknown placement",
+    "value": { "placement": "cloud" },
+    "path": ["placement"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "remote host with a scheme",
+    "value": { "remoteHosts": ["https://vm-name.tailnet-name.ts.net"] },
+    "path": ["remoteHosts", 0],
+    "code": "custom"
+  },
+  {
+    "name": "remote host that is an IP address",
+    "value": { "remoteHosts": ["100.64.0.1"] },
+    "path": ["remoteHosts", 0],
+    "code": "custom"
+  },
+  {
+    "name": "localhost as a remote host",
+    "value": { "remoteHosts": ["localhost:7331"] },
+    "path": ["remoteHosts", 0],
+    "code": "custom"
+  },
+  {
+    "name": "the same host twice (after lowercasing)",
+    "value": { "remoteHosts": ["vm-name.tailnet-name.ts.net", "VM-Name.tailnet-name.ts.net"] },
+    "path": ["remoteHosts"],
+    "code": "custom"
+  },
+  {
+    "name": "more than 8 remote hosts",
+    "value": {
+      "remoteHosts": [
+        "a.ts.net",
+        "b.ts.net",
+        "c.ts.net",
+        "d.ts.net",
+        "e.ts.net",
+        "f.ts.net",
+        "g.ts.net",
+        "h.ts.net",
+        "i.ts.net"
+      ]
+    },
+    "path": ["remoteHosts"],
+    "code": "too_big"
+  },
+  {
+    "name": "unknown key (the device id can't change)",
+    "value": { "id": "dev_other" },
+    "path": [],
+    "code": "unrecognized_keys"
+  }
+]

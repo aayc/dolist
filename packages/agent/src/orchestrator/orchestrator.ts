@@ -34,10 +34,12 @@ import {
   type DigestChange,
   type DigestLine,
   type DigestNote,
+  type DigestRoutine,
   formatOrchestratorDigest,
   type OrchestratorDigest,
 } from "../prompts/orchestrator";
 import { formatTaskUpdate } from "../prompts/subagent";
+import type { RoutineRunTriage } from "../routines/scheduler";
 import type { GateContext } from "../safety/types";
 import type { AnchorLineInput } from "../tools/contracts";
 import { ToolInputError } from "../tools/input";
@@ -81,6 +83,8 @@ export interface OrchestratorOptions {
   onTurnResult?: (error: string | null) => void;
   /** Records every turn in the orchestrator's own chat, where the user can write to it. */
   chat?: OrchestratorChat;
+  /** The user's routines, listed in every digest so it knows what already exists. */
+  routines?: () => DigestRoutine[];
 }
 
 type QueueItem =
@@ -96,6 +100,8 @@ type QueueItem =
   | { kind: "report"; report: SubagentReport; dueAt: number }
   /** The user wrote to the orchestrator in its chat; `messageId` is that chat message. */
   | { kind: "direct"; text: string; messageId: string; dueAt: number }
+  /** A routine run with no `uses`, triaged like a task (its record is `taskId`). */
+  | { kind: "routine"; taskId: string; run: RoutineRunTriage; dueAt: number }
   | {
       kind: "note";
       notePath: string;
@@ -333,6 +339,19 @@ export class Orchestrator {
     this.scheduleDrain();
   }
 
+  /** A routine's run to triage like a task: usually a subagent with the capabilities it needs. */
+  handleRoutineRun(run: RoutineRunTriage): void {
+    if (this.stopped) return;
+    this.beginTriage(run.taskId);
+    this.queue.set(`routine:${run.taskId}`, {
+      kind: "routine",
+      taskId: run.taskId,
+      run,
+      dueAt: this.now() + this.batchWindowMs,
+    });
+    this.scheduleDrain();
+  }
+
   /** Re-triages a task from scratch (retry of a task no subagent worked on). */
   retryTask(taskId: string): void {
     const found = this.options.lookup.findTask(taskId);
@@ -371,6 +390,7 @@ export class Orchestrator {
   dropQueued(taskId: string): void {
     this.queue.delete(`task:${taskId}`);
     this.queue.delete(`report:${taskId}`);
+    this.queue.delete(`routine:${taskId}`);
     for (const [key, item] of this.queue) {
       if (item.kind === "reply" && item.taskId === taskId) this.queue.delete(key);
     }
@@ -546,7 +566,10 @@ export class Orchestrator {
       }
     }
     for (const item of turn.items) {
-      const taskId = item.kind === "task" || item.kind === "reply" ? item.taskId : null;
+      const taskId =
+        item.kind === "task" || item.kind === "reply" || item.kind === "routine"
+          ? item.taskId
+          : null;
       if (!taskId) continue;
       const previous = this.previousStatus.get(taskId);
       this.previousStatus.delete(taskId);
@@ -674,6 +697,9 @@ export class Orchestrator {
         case "direct":
           direct++;
           break;
+        case "routine":
+          events.push(`Routine “${truncate(item.run.name, TRIGGER_TASK_CHARS)}” is due`);
+          break;
       }
     }
     const parts = [...notes].map(([notePath, { tasks, lines }]) => {
@@ -793,11 +819,26 @@ export class Orchestrator {
             new Set(direct.map((item) => item.messageId)),
           ) ?? [])
         : [];
+    const routineRuns = items.flatMap((item) =>
+      item.kind === "routine"
+        ? [
+            {
+              taskId: item.taskId,
+              name: item.run.name,
+              instructions: item.run.instructions,
+              ...(item.run.scheduleText ? { scheduleText: item.run.scheduleText } : {}),
+            },
+          ]
+        : [],
+    );
+    const routines = this.options.routines?.() ?? [];
     return {
       now,
       notes: [...notes.values()],
       replies,
       reports,
+      ...(routineRuns.length > 0 ? { routineRuns } : {}),
+      ...(routines.length > 0 ? { routines } : {}),
       ...(direct.length > 0 ? { direct: direct.map((item) => item.text) } : {}),
       ...(chat.length > 0 ? { chat } : {}),
       subagents: subagents.list().map((agent) => ({

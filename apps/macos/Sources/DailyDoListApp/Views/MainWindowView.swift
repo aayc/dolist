@@ -1,3 +1,4 @@
+import DailyDoListAgent
 import DailyDoListDomain
 import SwiftUI
 
@@ -94,6 +95,14 @@ struct WorkspaceView: View {
       ToastOverlay(toasts: model.toasts)
         .padding(.bottom, Theme.statusBarHeight + 8)
         .padding(.trailing, 12)
+    }
+    .sheet(item: $ui.routineSheet) { sheet in
+      if let agent = model.agent {
+        NewRoutineSheet(store: agent, draft: sheet.draft) { routine in
+          ui.routineSheet = nil
+          if let routine { ui.showRoutine(routine.id) }
+        }
+      }
     }
     .alert(
       "Delete “\(ui.pendingDeletion?.name ?? "")”?",

@@ -8,7 +8,7 @@ import { chmod, readFile, stat, writeFile } from "node:fs/promises";
 import { hostname as osHostname } from "node:os";
 import { createId, type Logger, SYNC_ID_PATTERN, SYNC_LIMITS } from "@ddl/core";
 import { SyncServiceClient, type SyncTargetConfig } from "@ddl/storage";
-import type { DaemonConfig } from "./config";
+import type { DaemonSyncConfig } from "./config";
 
 export interface DeviceIdentity {
   /** Random and stable: recorded on every change this device makes, and holds the agent lease. */
@@ -33,19 +33,18 @@ export interface PreparedSync {
 
 const MAX_TOKEN_LENGTH = 512;
 
-/** Resolves the configured sync target, loading the device identity and token it needs. */
+/** Resolves a sync setup into its target, loading the token it needs. */
 export async function prepareSync(options: {
-  config: Pick<DaemonConfig, "sync" | "syncTokenPath" | "devicePath">;
+  sync: DaemonSyncConfig;
+  syncTokenPath: string;
+  device: DeviceIdentity;
   env: Record<string, string | undefined>;
   logger: Logger;
-  hostname?: string;
 }): Promise<PreparedSync> {
-  const { config, env, logger } = options;
-  const sync = config.sync;
+  const { sync, device, env, logger } = options;
   if (sync.kind !== "remote") return { target: sync };
-  const device = await loadOrCreateDevice(config.devicePath, logger, options.hostname);
   const host = new URL(sync.url).host;
-  const token = await loadSyncToken({ path: config.syncTokenPath, env, logger });
+  const token = await loadSyncToken({ path: options.syncTokenPath, env, logger });
   if (!token) {
     const problem =
       "Sync with the sync server is set up, but there is no token: save the vault's token in ~/.daily-do-list/sync-token (chmod 600) or DDL_SYNC_TOKEN.";
@@ -170,8 +169,13 @@ function validName(value: unknown): string | undefined {
   return name || undefined;
 }
 
+/** A vault token as the token file may hold it: one line, no spaces, at most 512 characters. */
+export function isValidSyncToken(token: string): boolean {
+  return token.length > 0 && token.length <= MAX_TOKEN_LENGTH && !/\s/.test(token);
+}
+
 function validToken(token: string, source: string): string {
-  if (token.length > MAX_TOKEN_LENGTH || /\s/.test(token)) {
+  if (!isValidSyncToken(token)) {
     throw new Error(`${source} doesn't hold a sync token (one line, no spaces)`);
   }
   return token;

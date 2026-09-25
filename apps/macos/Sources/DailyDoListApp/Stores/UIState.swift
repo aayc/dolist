@@ -1,3 +1,4 @@
+import DailyDoListAgent
 import Foundation
 import Observation
 
@@ -18,6 +19,12 @@ struct PendingDeletion: Identifiable, Equatable {
   var name: String { NotePaths.displayName(path, isFolder: isFolder) }
 }
 
+/// The New Routine sheet, open with what its fields start from.
+struct RoutineSheet: Identifiable {
+  let id = UUID()
+  var draft: RoutineDraft
+}
+
 /// Window layout and transient UI state (persisted parts go to ``AppPreferences``).
 @MainActor
 @Observable
@@ -35,8 +42,14 @@ final class UIState {
   /// The Settings window's pane, so the app can open Settings where a problem gets fixed.
   var settingsPane: SettingsPane = .general
 
-  /// Thread shown in the agent panel; nil = the inbox.
+  /// Thread shown in the agent panel; nil = the inbox (or the routines).
   var selectedThreadId: String?
+  /// The agent panel's list: the task inbox or the routines.
+  var agentSection: AgentPanelSection = .inbox
+  /// The routine whose runs the routines section shows; nil = every routine.
+  var selectedRoutineId: String?
+  /// The New Routine sheet while it's open.
+  var routineSheet: RoutineSheet?
   var palette: PaletteMode?
   /// Explorer entry being renamed inline.
   var renamingPath: String?
@@ -62,22 +75,53 @@ final class UIState {
 
   /// ⌘⇧A: the inbox in the agent panel (hides the panel if the inbox is already showing).
   func toggleInbox() {
-    if inspectorPresented, selectedThreadId == nil {
+    if inspectorPresented, selectedThreadId == nil, agentSection == .inbox {
       inspectorPresented = false
     } else {
-      selectedThreadId = nil
-      inspectorPresented = true
+      showInbox()
     }
   }
 
   func showInbox() {
+    agentSection = .inbox
     selectedThreadId = nil
     inspectorPresented = true
   }
 
+  /// A task's thread, with the inbox behind it.
   func showThread(_ threadId: String) {
+    agentSection = .inbox
     selectedThreadId = threadId
     inspectorPresented = true
+  }
+
+  /// Every routine in the agent panel.
+  func showRoutines() {
+    agentSection = .routines
+    selectedRoutineId = nil
+    selectedThreadId = nil
+    inspectorPresented = true
+  }
+
+  /// A routine's own inbox of runs.
+  func showRoutine(_ routineId: String) {
+    agentSection = .routines
+    selectedRoutineId = routineId
+    selectedThreadId = nil
+    inspectorPresented = true
+  }
+
+  /// A routine's run, with its routine's runs behind it.
+  func showRoutineRun(routineId: String, threadId: String) {
+    agentSection = .routines
+    selectedRoutineId = routineId
+    selectedThreadId = threadId
+    inspectorPresented = true
+  }
+
+  /// Opens the New Routine sheet.
+  func newRoutine(_ draft: RoutineDraft = RoutineDraft()) {
+    routineSheet = RoutineSheet(draft: draft)
   }
 
   func focusSearch() {

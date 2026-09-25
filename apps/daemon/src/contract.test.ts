@@ -3,12 +3,15 @@
  * app, every declared status is reached, and every answer parses (strictly) with the schema the
  * contract declares for that status.
  */
+import { RoutineConflictError, RoutineInputError } from "@ddl/agent/routines";
 import { API_CONTRACT, listOperations } from "@ddl/contract";
 import {
   type ApiRouteName,
   type AppSettings,
   DEFAULT_SETTINGS,
   mergeSettings,
+  type RoutineListResponse,
+  type RoutineResponse,
   silentLogger,
 } from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
@@ -20,13 +23,19 @@ import {
   operationKey,
   routePath,
 } from "./contract-test-helpers";
-import type { SettingsStore } from "./settings-store";
+import { memoryDeviceSettings } from "./device-settings";
+import { type FakeMachine, startFakeMachine } from "./fake-machine";
+import { memorySecretFile } from "./home-files";
+import { MachineLink } from "./machine-link";
+import { createRemoteHosts } from "./remote-hosts";
+import { createSettingsStore, type SettingsStore } from "./settings-store";
 import {
   createTestApp,
   FakeAgentRuntime,
   FakeSystemSettings,
   makeApproval,
   makeThread,
+  type TestApp,
   type TestAppOptions,
 } from "./test-helpers";
 
@@ -36,12 +45,15 @@ interface Env {
   api: ContractClient;
   storage: MemoryStorageProvider;
   runtime: FakeAgentRuntime;
+  app: TestApp;
 }
 
 async function setup(observed: Observed, options: TestAppOptions = {}): Promise<Env> {
-  const runtime = (options.runtime as FakeAgentRuntime | undefined) ?? new FakeAgentRuntime();
-  const app = await createTestApp({ ...options, runtime });
-  return { api: contractClient(app, observed), storage: app.storage, runtime };
+  const storage = options.storage ?? new MemoryStorageProvider();
+  const runtime =
+    (options.runtime as FakeAgentRuntime | undefined) ?? new FakeAgentRuntime({ storage });
+  const app = await createTestApp({ ...options, storage, runtime });
+  return { api: contractClient(app, observed), storage: app.storage, runtime, app };
 }
 
 function unavailable(message = "OPENROUTER_API_KEY is not set"): Error {
@@ -96,11 +108,68 @@ async function threadAction(
   }
 }
 
+const BRIEFING = {
+  name: "Morning briefing",
+  schedule: "every weekday at 7:30",
+  instructions: "Brief me for the day: calendar, weather, leftovers.",
+};
+
+/** A test app whose vault holds the routine `BRIEFING`, created through the API. */
+async function withRoutine(observed: Observed): Promise<Env & { id: string }> {
+  const env = await setup(observed);
+  const { body } = await env.api.call("routines", "POST", { json: BRIEFING });
+  return { ...env, id: (body as RoutineResponse).routine.id };
+}
+
+async function routinePaused(observed: Observed, name: "routinePause" | "routineResume") {
+  const { api, storage, runtime, id } = await withRoutine(observed);
+  const call = (routineId = id) => api.call(name, "POST", { params: { id: routineId } });
+  const paused = name === "routinePause";
+  const { routine } = (await call()).body as RoutineResponse;
+  expect(routine).toMatchObject({ id, paused });
+  expect(routine.nextRunAt === undefined).toBe(paused);
+  expect((await storage.read("Routines/Morning briefing.md"))?.content).toContain(
+    `paused: ${paused}`,
+  );
+  expect((await call("bad id")).status).toBe(400);
+  expect((await call("rtn_missing")).status).toBe(404);
+  runtime.routineError = new RoutineConflictError("The routine's file kept changing.");
+  expect((await call()).body).toMatchObject({ error: "conflict" });
+}
+
+async function withFakeMachine(run: (machine: FakeMachine) => Promise<void>): Promise<void> {
+  const machine = await startFakeMachine();
+  try {
+    await run(machine);
+  } finally {
+    await machine.close();
+  }
+}
+
+/** An app whose machine link keeps its credential in memory and shares the app's settings. */
+async function machineSetup(observed: Observed) {
+  const storage = new MemoryStorageProvider();
+  const settings = await createSettingsStore({ storage });
+  const link = new MachineLink({
+    settings,
+    credentialFile: memorySecretFile(),
+    deviceName: () => "Laptop",
+    logger: silentLogger,
+  });
+  const env = await setup(observed, { storage, settings, machine: link });
+  return { ...env, link };
+}
+
 function hiddenDailyFolderSettings(): SettingsStore {
   const settings: AppSettings = mergeSettings(DEFAULT_SETTINGS, {
     dailyNotes: { folder: ".hidden" },
   });
-  return { get: () => settings, update: async () => settings, onChange: () => () => {} };
+  return {
+    get: () => settings,
+    update: async () => settings,
+    reload: async () => null,
+    onChange: () => () => {},
+  };
 }
 
 type Scenario = (observed: Observed) => Promise<void>;
@@ -309,10 +378,15 @@ const scenarios: Record<string, Scenario> = {
   "GET threads": async (observed) => {
     const runtime = new FakeAgentRuntime();
     runtime.threads.set("thr_1", makeThread("thr_1"));
+    runtime.threads.set("thr_run", makeThread("thr_run", { routineId: "rtn_1" }));
     const { api } = await setup(observed, { runtime });
     const threads = (query?: Record<string, string>) => api.call("threads", "GET", { query });
-    expect((await threads()).body).toMatchObject({ threads: [{ id: "thr_1" }] });
-    expect((await threads({ notePath: "", taskId: "" })).status).toBe(200);
+    expect((await threads()).body).toMatchObject({ threads: [{ id: "thr_1" }, { id: "thr_run" }] });
+    expect((await threads({ routineId: "rtn_1" })).body).toEqual({
+      threads: [expect.objectContaining({ id: "thr_run", routineId: "rtn_1" })],
+    });
+    expect((await threads({ notePath: "", taskId: "", routineId: "" })).status).toBe(200);
+    expect((await threads({ routineId: "r".repeat(201) })).status).toBe(400);
     expect((await threads({ notePath: ".hidden/x.md" })).body).toMatchObject({
       error: "invalid_path",
     });
@@ -418,6 +492,87 @@ const scenarios: Record<string, Scenario> = {
     expect((await get("thr_1", "art_missing")).status).toBe(404);
   },
 
+  "GET routines": async (observed) => {
+    const empty = await setup(observed);
+    const none = (await empty.api.call("routines", "GET")).body as RoutineListResponse;
+    expect(none.routines).toEqual([]);
+    expect(none.templates.map((template) => template.id)).toContain("morning-briefing");
+    const { api, id } = await withRoutine(observed);
+    expect((await api.call("routines", "GET")).body).toMatchObject({
+      routines: [
+        {
+          id,
+          path: "Routines/Morning briefing.md",
+          name: "Morning briefing",
+          schedule: "every weekday at 7:30",
+          scheduleText: "Every weekday at 7:30 AM",
+          notify: "always",
+          paused: false,
+          runCount: 0,
+          extraRunsLeft: 5,
+        },
+      ],
+    });
+  },
+
+  "POST routines": async (observed) => {
+    const { api, storage } = await setup(observed);
+    const create = (json: unknown, init = {}) => api.call("routines", "POST", { json, ...init });
+    const created = await create({ ...BRIEFING, notify: "when_changed", uses: ["web"] });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({
+      routine: { name: "Morning briefing", notify: "when_changed", uses: ["web"], paused: false },
+    });
+    expect((await storage.read("Routines/Morning briefing.md"))?.content).toBe(
+      "---\nschedule: every weekday at 7:30\nnotify: when changed\nuses: [web]\n---\nBrief me for the day: calendar, weather, leftovers.\n",
+    );
+    expect((await create(BRIEFING)).body).toMatchObject({ error: "conflict" });
+    const unreadable = await create({ ...BRIEFING, name: "Later", schedule: "whenever I like" });
+    expect(unreadable.body).toMatchObject({ error: "invalid_request" });
+    expect((await create({ ...BRIEFING, name: "a/b" })).body).toMatchObject({
+      error: "invalid_request",
+    });
+    expect((await create({ ...BRIEFING, sneaky: 1 })).body).toMatchObject({
+      error: "invalid_request",
+    });
+    expect((await create(undefined, { body: "{" })).body).toMatchObject({ error: "invalid_json" });
+    expect((await create(undefined, { body: TOO_BIG })).status).toBe(413);
+    expect(await storage.read("Routines/Later.md")).toBeNull();
+  },
+
+  "GET routine": async (observed) => {
+    const { api, id } = await withRoutine(observed);
+    const get = (routineId: string) => api.call("routine", "GET", { params: { id: routineId } });
+    expect((await get(id)).body).toMatchObject({ routine: { id, name: "Morning briefing" } });
+    expect((await get("bad id")).status).toBe(400);
+    expect((await get("rtn_missing")).status).toBe(404);
+  },
+
+  "POST routineRun": async (observed) => {
+    const { api, runtime, id } = await withRoutine(observed);
+    const run = (routineId = id) => api.call("routineRun", "POST", { params: { id: routineId } });
+    const started = await run();
+    expect(started.body).toMatchObject({ routine: { id }, threadId: "thr_run_1" });
+    expect(runtime.threads.get("thr_run_1")?.routineId).toBe(id);
+    expect((await run("bad id")).status).toBe(400);
+    expect((await run("rtn_missing")).status).toBe(404);
+    runtime.routineError = new RoutineConflictError("“Morning briefing” is running right now.");
+    expect((await run()).body).toEqual({
+      error: "conflict",
+      message: "“Morning briefing” is running right now.",
+    });
+    runtime.routineError = new RoutineInputError("“Morning briefing” can't run: no schedule.");
+    expect((await run()).body).toMatchObject({ error: "conflict" });
+    runtime.routineError = unavailable("The agent is running on Desktop.");
+    expect((await run()).body).toEqual({
+      error: "agent_unavailable",
+      message: "The agent is running on Desktop.",
+    });
+  },
+
+  "POST routinePause": (observed) => routinePaused(observed, "routinePause"),
+  "POST routineResume": (observed) => routinePaused(observed, "routineResume"),
+
   "GET connectors": async (observed) => {
     const { api } = await setup(observed);
     expect((await api.call("connectors", "GET")).body).toEqual({ connectors: [] });
@@ -451,10 +606,324 @@ const scenarios: Record<string, Scenario> = {
     });
   },
 
+  "GET device": async (observed) => {
+    const { api } = await setup(observed);
+    expect((await api.call("device", "GET")).body).toEqual({
+      device: { id: "dev_this_device", name: "This device" },
+      placement: "this_device",
+      remoteHosts: [],
+      sync: { url: null, vault: null, hasToken: false },
+      lockedByEnv: [],
+    });
+    const synced = await setup(observed, {
+      device: memoryDeviceSettings({
+        placement: "always_on_host",
+        sync: { kind: "remote", url: "https://sync.example.com", vault: "v_1" },
+        hasToken: true,
+        lockedByEnv: ["placement", "sync"],
+        remoteHosts: createRemoteHosts(["vm-name.tailnet-name.ts.net"]),
+      }),
+    });
+    expect((await synced.api.call("device", "GET")).body).toEqual({
+      device: { id: "dev_this_device", name: "This device" },
+      placement: "always_on_host",
+      remoteHosts: ["vm-name.tailnet-name.ts.net"],
+      sync: { url: "https://sync.example.com", vault: "v_1", hasToken: true },
+      lockedByEnv: ["placement", "sync"],
+    });
+  },
+
+  "PATCH device": async (observed) => {
+    const remoteHosts = createRemoteHosts();
+    const { api } = await setup(observed, { device: memoryDeviceSettings({ remoteHosts }) });
+    const patch = (json: unknown, init = {}) => api.call("device", "PATCH", { json, ...init });
+    expect(
+      (
+        await patch({
+          name: "  Work laptop ",
+          placement: "always_on_machine",
+          remoteHosts: [" VM-Name.Tailnet-Name.ts.net "],
+        })
+      ).body,
+    ).toMatchObject({
+      device: { name: "Work laptop" },
+      placement: "always_on_machine",
+      remoteHosts: ["vm-name.tailnet-name.ts.net"],
+    });
+    expect(remoteHosts.list()).toEqual(["vm-name.tailnet-name.ts.net"]);
+    for (const bad of [
+      { name: "" },
+      { name: "n".repeat(65) },
+      { placement: "somewhere" },
+      { remoteHosts: ["100.64.0.1"] },
+      { remoteHosts: ["https://vm-name.tailnet-name.ts.net"] },
+      { remoteHosts: ["a.example", "a.example"] },
+      { remoteHosts: Array.from({ length: 9 }, (_, i) => `h${i}.example`) },
+      { sync: { url: "https://sync.example.com" } },
+    ]) {
+      expect((await patch(bad)).body).toMatchObject({ error: "invalid_request" });
+    }
+    expect((await patch(undefined, { body: "{" })).body).toMatchObject({ error: "invalid_json" });
+    expect((await patch(undefined, { body: TOO_BIG })).status).toBe(413);
+
+    const locked = await setup(observed, {
+      device: memoryDeviceSettings({ lockedByEnv: ["placement", "remoteHosts"] }),
+    });
+    const lockedPatch = (json: unknown) => locked.api.call("device", "PATCH", { json });
+    expect((await lockedPatch({ placement: "always_on_host" })).body).toMatchObject({
+      error: "locked_by_env",
+    });
+    expect((await lockedPatch({ remoteHosts: [] })).status).toBe(409);
+    expect((await lockedPatch({ name: "Renamed" })).body).toMatchObject({
+      device: { name: "Renamed" },
+      placement: "this_device",
+    });
+  },
+
+  "PUT deviceSync": async (observed) => {
+    const applied: unknown[] = [];
+    const device = memoryDeviceSettings({ applySync: async (sync) => void applied.push(sync) });
+    const { api } = await setup(observed, { device });
+    const put = (json: unknown, init = {}) => api.call("deviceSync", "PUT", { json, ...init });
+    const token = "t".repeat(43);
+    const saved = await put({ url: "https://sync.example.com", vault: "v_1", token: ` ${token} ` });
+    expect(saved.body).toMatchObject({
+      sync: { url: "https://sync.example.com", vault: "v_1", hasToken: true },
+    });
+    expect(JSON.stringify(saved.body)).not.toContain(token);
+    expect(applied).toEqual([{ kind: "remote", url: "https://sync.example.com", vault: "v_1" }]);
+    expect((await put({ url: "http://127.0.0.1:7332", vault: "v_2" })).body).toMatchObject({
+      sync: { url: "http://127.0.0.1:7332", vault: "v_2", hasToken: true },
+    });
+    for (const bad of [
+      { url: "http://sync.example.com", vault: "v_1" },
+      { url: "https://user:pw@sync.example.com", vault: "v_1" },
+      { url: "https://sync.example.com", vault: "not a vault" },
+      { url: "https://sync.example.com", vault: "v_1", token: "two words" },
+      { url: "https://sync.example.com", vault: "v_1", extra: true },
+    ]) {
+      expect((await put(bad)).body).toMatchObject({ error: "invalid_request" });
+    }
+    const fresh = await setup(observed);
+    expect(
+      (
+        await fresh.api.call("deviceSync", "PUT", {
+          json: { url: "https://s.example", vault: "v" },
+        })
+      ).body,
+    ).toMatchObject({ error: "invalid_request", message: expect.stringMatching(/token/) });
+    expect((await put(undefined, { body: "{" })).body).toMatchObject({ error: "invalid_json" });
+    expect((await put(undefined, { body: TOO_BIG })).status).toBe(413);
+    const locked = await setup(observed, {
+      device: memoryDeviceSettings({ lockedByEnv: ["sync"] }),
+    });
+    expect(
+      (
+        await locked.api.call("deviceSync", "PUT", {
+          json: { url: "https://sync.example.com", vault: "v_1", token },
+        })
+      ).body,
+    ).toMatchObject({ error: "locked_by_env" });
+    expect(applied).toHaveLength(2);
+  },
+
+  "DELETE deviceSync": async (observed) => {
+    const applied: unknown[] = [];
+    const device = memoryDeviceSettings({
+      sync: { kind: "remote", url: "https://sync.example.com", vault: "v_1" },
+      hasToken: true,
+      applySync: async (sync) => void applied.push(sync),
+    });
+    const { api } = await setup(observed, { device });
+    expect((await api.call("deviceSync", "DELETE")).body).toMatchObject({
+      sync: { url: null, vault: null, hasToken: false },
+    });
+    expect(applied).toEqual([{ kind: "none" }]);
+    const locked = await setup(observed, {
+      device: memoryDeviceSettings({ lockedByEnv: ["sync"] }),
+    });
+    expect((await locked.api.call("deviceSync", "DELETE")).body).toMatchObject({
+      error: "locked_by_env",
+    });
+  },
+
+  "GET machine": async (observed) => {
+    await withFakeMachine(async (fake) => {
+      const { api, link } = await machineSetup(observed);
+      expect((await api.call("machine", "GET")).body).toEqual({
+        machine: null,
+        paired: false,
+        reachable: null,
+        checkedAt: null,
+      });
+      await link.pair({ url: fake.url, code: fake.code, name: "vm-1" });
+      expect((await api.call("machine", "GET")).body).toMatchObject({
+        machine: { name: "vm-1", url: fake.url },
+        paired: true,
+        reachable: true,
+        version: "0.2.0",
+        agent: { runsOn: { name: "vm-1" } },
+        readiness: { harness: { kind: "cursor" } },
+      });
+    });
+  },
+
+  "POST machinePair": async (observed) => {
+    await withFakeMachine(async (fake) => {
+      const { api } = await machineSetup(observed);
+      const pair = (json: unknown, init = {}) => api.call("machinePair", "POST", { json, ...init });
+      for (const bad of [
+        { url: "http://vm-1.tailnet-name.ts.net", code: fake.code },
+        { url: "https://vm-1.tailnet-name.ts.net/app", code: fake.code },
+        { url: fake.url, code: "ILLO-0000" },
+        { url: fake.url, code: fake.code, token: "x" },
+      ]) {
+        expect((await pair(bad)).body).toMatchObject({ error: "invalid_request" });
+      }
+      expect((await pair(undefined, { body: "{" })).body).toMatchObject({ error: "invalid_json" });
+      expect((await pair(undefined, { body: TOO_BIG })).status).toBe(413);
+      expect((await pair({ url: fake.url, code: "ZZZZ-ZZZZ" })).body).toMatchObject({
+        error: "pairing_rejected",
+      });
+      fake.pairAnswer = { status: 429, body: { error: "rate_limited" } };
+      expect((await pair({ url: fake.url, code: fake.code })).body).toMatchObject({
+        error: "rate_limited",
+      });
+      const closed = await startFakeMachine();
+      await closed.close();
+      expect((await pair({ url: closed.url, code: fake.code })).body).toMatchObject({
+        error: "machine_unreachable",
+      });
+      const paired = await pair({ url: `${fake.url}/`, code: fake.code.toLowerCase() });
+      expect(paired.body).toMatchObject({ machine: { url: fake.url }, paired: true });
+      expect(JSON.stringify(paired.body)).not.toMatch(/token/i);
+    });
+  },
+
+  "POST machineCheck": async (observed) => {
+    await withFakeMachine(async (fake) => {
+      const { api, link } = await machineSetup(observed);
+      expect((await api.call("machineCheck", "POST")).body).toMatchObject({ machine: null });
+      await link.pair({ url: fake.url, code: fake.code, name: "vm-1" });
+      fake.revokeAll();
+      expect((await api.call("machineCheck", "POST")).body).toMatchObject({
+        paired: true,
+        reachable: true,
+        error: expect.stringMatching(/pair again/),
+      });
+    });
+  },
+
+  "DELETE machinePairing": async (observed) => {
+    await withFakeMachine(async (fake) => {
+      const { api, link } = await machineSetup(observed);
+      await link.pair({ url: fake.url, code: fake.code, name: "vm-1" });
+      expect((await api.call("machinePairing", "DELETE")).body).toEqual({
+        machine: { name: "vm-1", url: fake.url },
+        paired: false,
+        reachable: null,
+        checkedAt: null,
+      });
+      expect(fake.revoked).toHaveLength(1);
+    });
+  },
+
   "GET ws": async (observed) => {
     const { api } = await setup(observed);
     expect((await api.call("ws", "GET")).status).toBe(426);
     expect((await api.call("ws", "GET", { host: "evil.example:7331" })).status).toBe(403);
+  },
+
+  "POST pairingCodes": async (observed) => {
+    const remoteHosts = createRemoteHosts();
+    const { api } = await setup(observed, { remoteHosts });
+    const issue = (json: unknown, init = {}) => api.call("pairingCodes", "POST", { json, ...init });
+    const first = await issue({});
+    expect(first.status).toBe(201);
+    expect(first.body).toMatchObject({ code: expect.stringMatching(/^[2-9A-Z]{8}$/), url: null });
+    remoteHosts.set(["vm-name.tailnet-name.ts.net:443", "other.example.com"]);
+    expect((await issue({ name: " Phone " })).body).toMatchObject({
+      url: "https://vm-name.tailnet-name.ts.net",
+    });
+    remoteHosts.set(["vm-name.tailnet-name.ts.net:8443"]);
+    expect((await issue({})).body).toMatchObject({
+      url: "https://vm-name.tailnet-name.ts.net:8443",
+    });
+    expect((await issue({})).body).toMatchObject({ error: "rate_limited" });
+    expect((await issue({ name: "   " })).body).toMatchObject({ error: "invalid_request" });
+    expect((await issue({ name: "Phone", expiresIn: 60 })).status).toBe(400);
+    expect((await issue(undefined, { body: "{" })).body).toMatchObject({ error: "invalid_json" });
+    expect((await issue(undefined, { body: TOO_BIG })).status).toBe(413);
+  },
+
+  "POST pair": async (observed) => {
+    const { api, app } = await setup(observed);
+    const issued = await api.call("pairingCodes", "POST", { json: { name: "Phone" } });
+    const { code } = issued.body as { code: string };
+    const pair = (json: unknown, init = {}) =>
+      api.call("pair", "POST", { json, token: null, ...init });
+    const typed = `${code.slice(0, 4).toLowerCase()} ${code.slice(4)}`;
+    const paired = await pair({ code: typed, name: "Tablet", kind: "app" });
+    expect(paired.status).toBe(201);
+    const { device, token } = paired.body as { device: { id: string }; token: string };
+    // The issuer's name wins over the one the new device picked.
+    expect(device).toMatchObject({ name: "Phone", kind: "app", lastSeenAt: null });
+    expect((await api.call("devices", "GET", { token })).status).toBe(200);
+    expect((await pair({ code, name: "Tablet", kind: "app" })).body).toMatchObject({
+      error: "pairing_rejected",
+    });
+    expect((await pair({ code: "0000-1111", name: "x", kind: "app" })).body).toMatchObject({
+      error: "invalid_request",
+    });
+    expect((await pair(undefined, { body: "x".repeat(2_048) })).status).toBe(413);
+    expect((await pair({ code: "ZZZZZZZZ", name: "x", kind: "daemon" })).status).toBe(401);
+    const limited = await pair({ code: "ZZZZZZZZ", name: "x", kind: "app" });
+    expect(limited.body).toMatchObject({ error: "rate_limited" });
+    expect(limited.response.headers.get("retry-after")).toMatch(/^[1-9]\d*$/);
+    expect(app.devices.size).toBe(1);
+
+    const host = "vm-name.tailnet-name.ts.net";
+    const remote = await setup(observed, { remoteHosts: createRemoteHosts([host]) });
+    const browserCode = (await remote.api.call("pairingCodes", "POST", { json: {} })).body as {
+      code: string;
+    };
+    const browser = await remote.api.call("pair", "POST", {
+      json: { code: browserCode.code, name: "Browser", kind: "browser" },
+      token: null,
+      host,
+      origin: `https://${host}`,
+    });
+    expect(browser.status).toBe(201);
+    expect(browser.body).toEqual({ device: expect.objectContaining({ kind: "browser" }) });
+    expect(browser.response.headers.get("set-cookie")).toMatch(/^__Host-ddl-device=/);
+  },
+
+  "GET devices": async (observed) => {
+    const { api, app } = await setup(observed);
+    expect((await api.call("devices", "GET")).body).toEqual({ devices: [] });
+    const phone = await app.devices.add("Phone", "app");
+    const laptop = await app.devices.add("Laptop", "daemon");
+    const asPhone = await api.call("devices", "GET", { token: phone.token });
+    expect(asPhone.body).toEqual({
+      devices: [{ ...phone.device, lastSeenAt: expect.any(Number), current: true }, laptop.device],
+    });
+    const asMaster = (await api.call("devices", "GET")).body as { devices: object[] };
+    expect(asMaster.devices.every((d) => !("current" in d))).toBe(true);
+    expect(JSON.stringify(asMaster)).not.toContain(phone.token);
+  },
+
+  "DELETE pairedDevice": async (observed) => {
+    const { api, app } = await setup(observed);
+    const phone = await app.devices.add("Phone", "app");
+    const revoke = (id: string, token?: string) =>
+      api.call("pairedDevice", "DELETE", { params: { id }, ...(token ? { token } : {}) });
+    expect((await revoke("bad id")).status).toBe(400);
+    expect((await revoke("pd_unknown")).body).toMatchObject({ error: "not_found" });
+    const done = await revoke(phone.device.id, phone.token);
+    expect(done.status).toBe(204);
+    expect(await done.response.text()).toBe("");
+    expect((await api.call("devices", "GET", { token: phone.token })).status).toBe(401);
+    expect((await revoke(phone.device.id)).status).toBe(404);
   },
 
   "POST computerPermissionsOpen": async (observed) => {
@@ -503,6 +972,26 @@ async function settingsPatch(observed: Observed, method: "PUT" | "PATCH") {
   expect((await patch({ agent: { cursorModel: "  " } })).body).toMatchObject({
     error: "invalid_request",
   });
+  const machine = { name: "vm-name", url: "https://vm-name.tailnet-name.ts.net" };
+  expect(
+    (await patch({ remote: { alwaysOnMachine: { ...machine, name: " vm-name " } } })).body,
+  ).toMatchObject({ settings: { remote: { alwaysOnMachine: machine } } });
+  for (const url of [
+    "http://vm-name.tailnet-name.ts.net",
+    "https://vm-name.tailnet-name.ts.net/app",
+    "https://vm-name.tailnet-name.ts.net?x=1",
+    "https://user:secret@vm-name.tailnet-name.ts.net",
+  ]) {
+    expect((await patch({ remote: { alwaysOnMachine: { ...machine, url } } })).body).toMatchObject({
+      error: "invalid_request",
+    });
+  }
+  expect(
+    (await patch({ remote: { alwaysOnMachine: { ...machine, name: "n".repeat(65) } } })).body,
+  ).toMatchObject({ error: "invalid_request" });
+  expect((await patch({ remote: { alwaysOnMachine: null } })).body).toMatchObject({
+    settings: { remote: { alwaysOnMachine: null } },
+  });
   expect((await patch({ theme: "neon" })).body).toMatchObject({ error: "invalid_request" });
   expect((await patch({ dailyNotes: { folder: ".hidden" } })).body).toMatchObject({
     error: "invalid_request",
@@ -522,16 +1011,35 @@ async function agentEnabled(observed: Observed, method: "PUT" | "POST") {
   expect((await api.call("agentEnabled", method, { body: TOO_BIG })).status).toBe(413);
 }
 
+/**
+ * Operations the contract declares that the daemon doesn't serve yet: they answer 404 like any
+ * unknown route. A stream adding routes lists them here until it replaces each with a
+ * scenario.
+ */
+const NOT_SERVED_YET = new Set<string>([]);
+
 const operations = listOperations();
+const served = operations.filter((op) => !NOT_SERVED_YET.has(operationKey(op.name, op.method)));
 
 describe("every contract operation", () => {
   it("has a scenario (and nothing stale)", () => {
     expect(Object.keys(scenarios).sort()).toEqual(
-      operations.map(({ name, method }) => operationKey(name, method)).sort(),
+      served.map(({ name, method }) => operationKey(name, method)).sort(),
     );
+    const keys = new Set(operations.map(({ name, method }) => operationKey(name, method)));
+    for (const key of NOT_SERVED_YET) expect(keys.has(key), key).toBe(true);
   });
 
-  it.each(operations.map((op) => [operationKey(op.name, op.method), op] as const))(
+  if (NOT_SERVED_YET.size > 0) {
+    it.each([...NOT_SERVED_YET])("%s is not served yet (404)", async (key) => {
+      const op = operations.find(({ name, method }) => operationKey(name, method) === key)!;
+      const app = await createTestApp();
+      const res = await app.request(routePath(op.name, { id: "x" }), { method: op.method });
+      expect(res.status).toBe(404);
+    });
+  }
+
+  it.each(served.map((op) => [operationKey(op.name, op.method), op] as const))(
     "%s reaches every declared status and answers each as declared",
     async (key, { operation }) => {
       const observed: Observed = new Map();
@@ -619,6 +1127,10 @@ describe("unknown routes", () => {
       thread: [{ id: "thr_1" }, "/api/threads/thr_1"],
       artifact: [{ threadId: "t 1", artifactId: "a/b" }, "/api/artifacts/t%201/a%2Fb"],
       daily: [{ date: "2026-09-23" }, "/api/daily/2026-09-23"],
+      routine: [{ id: "rtn_1" }, "/api/routines/rtn_1"],
+      routineRun: [{ id: "rtn_1" }, "/api/routines/rtn_1/run"],
+      routinePause: [{ id: "rtn_1" }, "/api/routines/rtn_1/pause"],
+      routineResume: [{ id: "rtn_1" }, "/api/routines/rtn_1/resume"],
     };
     for (const [name, [params, expected]] of Object.entries(samples)) {
       expect(routePath(name as ApiRouteName, params)).toBe(expected);

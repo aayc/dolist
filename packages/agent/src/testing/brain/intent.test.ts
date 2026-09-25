@@ -1,18 +1,33 @@
 import { readFileSync } from "node:fs";
-import { addDays, today, toISODate } from "@ddl/core";
+import { addDays, describeSchedulePhrase, today, toISODate } from "@ddl/core";
 import { fc, test } from "@fast-check/vitest";
 import { describe, expect, it } from "vitest";
 import type { Capability } from "../../execution/types";
 import { formatOrchestratorDigest } from "../../prompts/orchestrator";
 import { parseDigest } from "./digest";
 import { planDirect } from "./direct";
-import { evaluateArithmetic, grantableCapabilities, quickAnswer, triage } from "./intent";
+import {
+  evaluateArithmetic,
+  grantableCapabilities,
+  quickAnswer,
+  routineRequest,
+  triage,
+} from "./intent";
 
 interface TriageCase {
   id: string;
   task: string;
   notes?: string[];
-  expected: "delegate" | "comment" | "ask_user" | "ignore" | "drop" | "forward" | "reply";
+  expected:
+    | "delegate"
+    | "comment"
+    | "ask_user"
+    | "ignore"
+    | "routine"
+    | "drop"
+    | "forward"
+    | "reply";
+  routine?: { schedule?: string; notify?: "always" | "when_changed" | "never" };
   acceptable?: string[];
   capabilities?: Capability[];
   computerAccess?: "missing";
@@ -33,6 +48,7 @@ const OUTCOME = {
   answer: "comment",
   ask: "ask_user",
   ignore: "ignore",
+  routine: "routine",
 } as const;
 
 describe("triage against the eval dataset", () => {
@@ -64,9 +80,25 @@ describe("triage against the eval dataset", () => {
         misses.push(`${c.id}: got ${outcome}, expected ${c.expected}`);
         continue;
       }
-      if (decision.kind === "delegate" && c.capabilities) {
-        const missing = c.capabilities.filter((cap) => !decision.capabilities.includes(cap));
+      const granted =
+        decision.kind === "delegate"
+          ? decision.capabilities
+          : decision.kind === "routine"
+            ? decision.routine.capabilities
+            : [];
+      if (c.capabilities) {
+        const missing = c.capabilities.filter((cap) => !granted.includes(cap));
         if (missing.length > 0) misses.push(`${c.id}: missing capabilities ${missing.join(", ")}`);
+      }
+      if (decision.kind === "routine" && c.routine) {
+        const { schedule, notify } = c.routine;
+        if (notify && decision.routine.notify !== notify) {
+          misses.push(`${c.id}: notify ${decision.routine.notify}, expected ${notify}`);
+        }
+        const words = describeSchedulePhrase(decision.routine.schedule);
+        if (schedule && words !== describeSchedulePhrase(schedule)) {
+          misses.push(`${c.id}: schedule ${words}, expected ${describeSchedulePhrase(schedule)}`);
+        }
       }
     }
     expect(cases.length).toBeGreaterThan(50);
@@ -101,21 +133,91 @@ describe("triage against the eval dataset", () => {
         ],
         capabilities: { available: ["web"], unavailable: [], connectors: [] },
       });
-      const plan = planDirect(parseDigest(digest), [], false);
+      const plan = planDirect(parseDigest(digest), [], false, {
+        canCreateRoutines: true,
+        uses: (routine) => routine.capabilities,
+      });
       const own = plan.calls.filter(
         (call) => (call.arguments as { taskId?: string }).taskId === "tsk_case",
       );
-      const outcome = own.some((call) => call.name === "message_subagent")
-        ? "forward"
-        : own.length > 0
-          ? "drop"
-          : plan.reply
-            ? "reply"
-            : "nothing";
+      const outcome = plan.calls.some((call) => call.name === "create_routine")
+        ? "routine"
+        : own.some((call) => call.name === "message_subagent")
+          ? "forward"
+          : own.length > 0
+            ? "drop"
+            : plan.reply
+              ? "reply"
+              : "nothing";
       return `${c.id}: ${outcome}`;
     });
     expect(direct.length).toBeGreaterThanOrEqual(6);
     expect(outcomes).toEqual(direct.map((c) => `${c.id}: ${c.expected}`));
+  });
+});
+
+describe("routineRequest", () => {
+  it.each([
+    [
+      "Every morning, brief me on my calendar and the weather",
+      {
+        name: "Morning briefing",
+        schedule: "every day at 8:00",
+        instructions: "Brief me on my calendar and the weather.",
+        notify: "always",
+      },
+    ],
+    [
+      "Check the price of the Moka pot at shop.example.com every 2 hours and tell me when it drops below $30",
+      {
+        name: "Price watch",
+        schedule: "every 2 hours",
+        instructions:
+          "Check the price of the Moka pot at shop.example.com and tell me when it drops below $30.",
+        notify: "when_changed",
+      },
+    ],
+    [
+      "Every weekday at 7:30 send me the top tech headlines",
+      {
+        name: "News digest",
+        schedule: "every weekday at 7:30",
+        instructions: "Send me the top tech headlines.",
+        notify: "always",
+      },
+    ],
+    [
+      "Every Sunday evening review my week from my daily notes",
+      { name: "Weekly review", schedule: "every sunday at 18:00", notify: "always" },
+    ],
+    ["hourly: watch example.com/status for new incidents", { schedule: "every hour" }],
+  ])("reads %j", (text, expected) => {
+    expect(routineRequest(text)).toMatchObject(expected);
+  });
+
+  it("gives runs the capabilities their instructions need", () => {
+    expect(
+      routineRequest("Every morning brief me on my calendar and the weather")?.capabilities,
+    ).toEqual(["connectors", "web"]);
+    expect(routineRequest("every hour check the price of the kettle")?.capabilities).toEqual([
+      "web",
+    ]);
+  });
+
+  it("leaves one-off tasks and chores alone", () => {
+    expect(routineRequest("Research the best espresso grinders under $300")).toBeUndefined();
+    expect(triage({ text: "Water the plants every day" }).kind).toBe("ignore");
+    expect(triage({ text: "Every morning brief me on the news" }).kind).toBe("routine");
+  });
+
+  it("a recurring request that names an app is still a routine", () => {
+    const desktopApps = ["Calendar", "Notes", "Music"];
+    expect(triage({ text: "Every morning brief me on my calendar", desktopApps }).kind).toBe(
+      "routine",
+    );
+    expect(triage({ text: "Open Calendar and add lunch on Friday", desktopApps }).kind).toBe(
+      "delegate",
+    );
   });
 });
 

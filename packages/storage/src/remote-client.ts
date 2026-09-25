@@ -54,6 +54,8 @@ export interface SyncRequest {
   body?: unknown;
   /** Sends `X-DDL-Device` (every mutating request). */
   mutating?: boolean;
+  /** Extra request headers (e.g. the lease epoch). */
+  headers?: Record<string, string>;
   signal?: AbortSignal;
   /** Statuses answered normally instead of thrown (e.g. 404 for a missing file). */
   accept?: readonly number[];
@@ -66,7 +68,8 @@ export interface SyncResponse<T> {
 
 export type LeaseAttempt =
   | { granted: true; lease: SyncLeaseHolder }
-  | { granted: false; holder: SyncLeaseHolder };
+  /** `takeoverPending`: this request outranks the holder, which was asked to yield. */
+  | { granted: false; holder: SyncLeaseHolder; takeoverPending?: boolean };
 
 /**
  * HTTP client of one vault on a sync server (`@ddl/core` `sync-service.ts`): authentication,
@@ -116,7 +119,10 @@ export class SyncServiceClient {
     for (const [name, value] of Object.entries(init.query ?? {})) {
       if (value !== undefined) url.searchParams.set(name, value);
     }
-    const headers: Record<string, string> = { authorization: `Bearer ${this.#token}` };
+    const headers: Record<string, string> = {
+      ...init.headers,
+      authorization: `Bearer ${this.#token}`,
+    };
     if (init.mutating) headers[SYNC_DEVICE_HEADER] = this.deviceId;
     let body: string | undefined;
     if (init.body !== undefined) {
@@ -192,7 +198,11 @@ function leaseAttempt(
   status: number,
   body: SyncLeaseResponse | SyncLeaseConflictBody | undefined,
 ): LeaseAttempt {
-  if (status === 409 && body && "holder" in body) return { granted: false, holder: body.holder };
+  if (status === 409 && body && "holder" in body) {
+    return body.takeoverPending === true
+      ? { granted: false, holder: body.holder, takeoverPending: true }
+      : { granted: false, holder: body.holder };
+  }
   if (body && "lease" in body) return { granted: true, lease: body.lease };
   throw new SyncRequestError("The sync server sent an unexpected lease response", status);
 }

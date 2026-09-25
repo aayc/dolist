@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "routines": {
+    "rtn_0a1b2c3d4e5f60": {
+      "path": "Routines/Morning briefing.md",
+      "scheduleKey": "every weekday at 7:30",
+      "nextRunAt": 1790749800000,
+      "runs": [],
+      "updatedAt": 1790663460000
+    },
+    "rtn_bad_status": {
+      "path": "Routines/Broken.md",
+      "scheduleKey": "hourly",
+      "nextRunAt": 1790749800000,
+      "lastRun": { "runId": "run_1", "threadId": "thr_1", "trigger": "schedule", "status": "sleeping", "startedAt": 1 },
+      "runs": [],
+      "updatedAt": 1
+    },
+    "rtn_no_path": { "scheduleKey": null, "nextRunAt": null, "runs": [], "updatedAt": 1 }
+  }
+}

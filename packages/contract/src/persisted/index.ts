@@ -81,6 +81,20 @@ export {
   type PersistedFormatName,
 } from "./registry";
 export {
+  decodePersistedRoutines,
+  encodePersistedRoutines,
+  mergePersistedRoutines,
+  PERSISTED_ROUTINE_RUNS_KEPT,
+  PERSISTED_ROUTINES_VERSION,
+  type PersistedRoutineRun,
+  PersistedRoutineRunSchema,
+  type PersistedRoutineState,
+  PersistedRoutineStateSchema,
+  type PersistedRoutines,
+  type PersistedRoutinesFile,
+  PersistedRoutinesFileSchema,
+} from "./routines";
+export {
   decodePersistedSettings,
   encodePersistedSettings,
   PERSISTED_SETTINGS_VERSION,

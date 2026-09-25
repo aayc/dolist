@@ -1,3 +1,12 @@
+import {
+  isMachineUrl,
+  isRemoteHost,
+  normalizeDeviceName,
+  PAIRING_CODE_ALPHABET,
+  PAIRING_CODE_LENGTH,
+  REMOTE_LIMITS,
+  SYNC_LIMITS,
+} from "@ddl/core";
 import fc from "fast-check";
 import { WIRE_LIMITS } from "../wire/primitives";
 
@@ -275,6 +284,86 @@ export const modelId = () =>
     },
     { weight: 1, arbitrary: trimmedText(WIRE_LIMITS.modelIdLength) },
     { weight: 1, arbitrary: fc.constant("m".repeat(WIRE_LIMITS.modelIdLength)) },
+  );
+
+const DEVICE_NAMES = ["Work laptop", "MacBook Pro", "vm-name", "iPhone", "Café ☕", "Büro-PC"];
+
+/** A device or machine name as `normalizeDeviceName` returns it (1–64 characters). */
+export const deviceName = (max: number = REMOTE_LIMITS.deviceNameLength) =>
+  fc.oneof(
+    { weight: 4, arbitrary: fc.constantFrom(...DEVICE_NAMES) },
+    {
+      weight: 2,
+      arbitrary: fc
+        .string({ unit: "grapheme", minLength: 1, maxLength: 24 })
+        .filter((name) => normalizeDeviceName(name) === name && name.length <= max),
+    },
+    { weight: 1, arbitrary: fc.constantFrom("x", "n".repeat(max)) },
+  );
+
+/** A device name as the sync service knows it (up to 100 characters). */
+export const syncDeviceName = () => deviceName(SYNC_LIMITS.deviceNameLength);
+
+/** A sync device id: `dev_` and 20 characters, plus the 1- and 64-character extremes. */
+export const syncDeviceId = () =>
+  fc.oneof(
+    { weight: 6, arbitrary: createdId("dev", 20) },
+    { weight: 1, arbitrary: fc.constantFrom("d", "D".repeat(64), "dev_A-b_9") },
+  );
+
+const REMOTE_HOSTS = [
+  "vm-name.tailnet-name.ts.net",
+  "vm-name.tailnet-name.ts.net:8443",
+  "always-on.example.com",
+  "vm-1",
+];
+
+/** `host[:port]` as a daemon reports its remote hosts (lowercase DNS names). */
+export const remoteHost = () =>
+  fc.oneof(
+    { weight: 4, arbitrary: fc.constantFrom(...REMOTE_HOSTS) },
+    { weight: 2, arbitrary: fc.domain().filter(isRemoteHost) },
+    {
+      weight: 1,
+      arbitrary: fc
+        .tuple(fc.domain(), fc.integer({ min: 1, max: 65_535 }))
+        .map(([host, port]) => `${host}:${port}`)
+        .filter(isRemoteHost),
+    },
+  );
+
+/** A machine URL in its normalized form: `https://<remote host>`, or plain http to loopback. */
+export const machineUrl = () =>
+  fc.oneof(
+    {
+      weight: 6,
+      arbitrary: remoteHost()
+        .map((host) => `https://${host}`)
+        .filter(isMachineUrl),
+    },
+    {
+      weight: 1,
+      arbitrary: fc.constantFrom(
+        "http://127.0.0.1:7400",
+        "http://localhost:7400",
+        "http://[::1]:7400",
+        "https://127.0.0.1:8443",
+      ),
+    },
+  );
+
+const pairingChar = chars(PAIRING_CODE_ALPHABET);
+
+/** A pairing code as the daemon issues it: 8 characters of the unambiguous alphabet. */
+export const pairingCode = () =>
+  fc.string({ unit: pairingChar, minLength: PAIRING_CODE_LENGTH, maxLength: PAIRING_CODE_LENGTH });
+
+/** A pairing code as a user types it: canonical, `XXXX-XXXX` or lowercase. */
+export const pairingCodeInput = () =>
+  fc.oneof(
+    pairingCode(),
+    pairingCode().map((code) => `${code.slice(0, 4)}-${code.slice(4)}`),
+    pairingCode().map((code) => code.toLowerCase()),
   );
 
 /** A Cursor CLI model id, optionally with parameters, without surrounding whitespace. */

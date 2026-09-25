@@ -25,7 +25,7 @@ import {
 } from "@ddl/core";
 import type { StorageProvider } from "@ddl/storage";
 import { artifactExtension, decodeBase64, encodeBase64, utf8Length } from "./artifacts";
-import type { NewArtifact, ThreadStore, ThreadStoreEvent } from "./types";
+import type { NewArtifact, ThreadFilter, ThreadStore, ThreadStoreEvent } from "./types";
 
 export const THREADS_DIR = PERSISTED_PATHS.threads;
 export const ARTIFACTS_DIR = PERSISTED_PATHS.artifacts;
@@ -123,6 +123,7 @@ class SidecarThreadStore implements ThreadStore {
     taskId: string | null;
     notePath: string | null;
     title: string;
+    routineId?: string;
   }): Thread {
     const at = this.now();
     const thread: Thread = {
@@ -136,6 +137,7 @@ class SidecarThreadStore implements ThreadStore {
       messages: [],
       artifacts: [],
       surfaces: [],
+      ...(input.routineId ? { routineId: input.routineId } : {}),
     };
     this.threads.set(thread.id, thread);
     this.fileAt(threadPath(thread.id), null);
@@ -157,11 +159,12 @@ class SidecarThreadStore implements ThreadStore {
     return best ? snapshot(best) : undefined;
   }
 
-  list(filter: { notePath?: string; taskId?: string } = {}): ThreadSummary[] {
+  list(filter: ThreadFilter = {}): ThreadSummary[] {
     const out: ThreadSummary[] = [];
     for (const thread of this.threads.values()) {
       if (filter.notePath !== undefined && thread.notePath !== filter.notePath) continue;
       if (filter.taskId !== undefined && thread.taskId !== filter.taskId) continue;
+      if (filter.routineId !== undefined && thread.routineId !== filter.routineId) continue;
       out.push(this.summarize(thread));
     }
     return out.sort((a, b) => b.updatedAt - a.updatedAt);

@@ -1,6 +1,7 @@
 import * as domain from "./domain";
 import * as errors from "./errors";
 import * as events from "./events";
+import * as remote from "./remote";
 import * as rest from "./rest";
 import * as settings from "./settings";
 
@@ -30,6 +31,13 @@ export const WIRE_SCHEMAS = {
   Thread: domain.ThreadSchema,
   CitedSource: domain.CitedSourceSchema,
   ThreadSummary: domain.ThreadSummarySchema,
+  RoutineNotify: domain.RoutineNotifySchema,
+  RoutineUse: domain.RoutineUseSchema,
+  RoutineRunTrigger: domain.RoutineRunTriggerSchema,
+  RoutineRun: domain.RoutineRunSchema,
+  Routine: domain.RoutineSchema,
+  RoutineTemplate: domain.RoutineTemplateSchema,
+  RoutineNotification: domain.RoutineNotificationSchema,
   SurfaceFrameAction: domain.SurfaceFrameActionSchema,
   SurfaceFrame: domain.SurfaceFrameSchema,
   // Settings
@@ -41,6 +49,8 @@ export const WIRE_SCHEMAS = {
   AgentHarnessKind: settings.AgentHarnessKindSchema,
   ApprovalPolicy: settings.ApprovalPolicySchema,
   AgentSettings: settings.AgentSettingsSchema,
+  AlwaysOnMachine: settings.AlwaysOnMachineSchema,
+  RemoteSettings: settings.RemoteSettingsSchema,
   AppSettings: settings.AppSettingsSchema,
   UpdateSettingsRequest: settings.UpdateSettingsRequestSchema,
   // REST
@@ -77,11 +87,34 @@ export const WIRE_SCHEMAS = {
   ApprovalResponse: rest.ApprovalResponseSchema,
   ApprovalDecisionRequest: rest.ApprovalDecisionRequestSchema,
   ConnectorsResponse: rest.ConnectorsResponseSchema,
+  RoutineListResponse: rest.RoutineListResponseSchema,
+  RoutineResponse: rest.RoutineResponseSchema,
+  CreateRoutineRequest: rest.CreateRoutineRequestSchema,
+  RoutineRunResponse: rest.RoutineRunResponseSchema,
   SyncState: rest.SyncStateSchema,
   SyncTargetKind: rest.SyncTargetKindSchema,
   SyncStatusResponse: rest.SyncStatusResponseSchema,
   ComputerPermissionPane: rest.ComputerPermissionPaneSchema,
   ComputerPermissionsOpenRequest: rest.ComputerPermissionsOpenRequestSchema,
+  // Placement, device settings, pairing, the always-on machine
+  AgentPlacement: remote.AgentPlacementSchema,
+  AgentRunsOn: remote.AgentRunsOnSchema,
+  RelayState: remote.RelayStateSchema,
+  AgentPlacementStatus: remote.AgentPlacementStatusSchema,
+  AgentReadiness: remote.AgentReadinessSchema,
+  DeviceSyncSetup: remote.DeviceSyncSetupSchema,
+  DeviceSettingsResponse: remote.DeviceSettingsResponseSchema,
+  DeviceSettingsPatch: remote.DeviceSettingsPatchSchema,
+  DeviceSyncSetupRequest: remote.DeviceSyncSetupRequestSchema,
+  PairedDeviceKind: remote.PairedDeviceKindSchema,
+  PairedDevice: remote.PairedDeviceSchema,
+  PairingCodeRequest: remote.PairingCodeRequestSchema,
+  PairingCodeResponse: remote.PairingCodeResponseSchema,
+  PairRequest: remote.PairRequestSchema,
+  PairResponse: remote.PairResponseSchema,
+  PairedDevicesResponse: remote.PairedDevicesResponseSchema,
+  MachineStatusResponse: remote.MachineStatusResponseSchema,
+  MachinePairRequest: remote.MachinePairRequestSchema,
   // Errors
   ApiErrorCode: errors.ApiErrorCodeSchema,
   ApiErrorBody: errors.ApiErrorBodySchema,
@@ -102,6 +135,8 @@ export const WIRE_SCHEMAS = {
   AgentStatusEvent: events.AgentStatusEventSchema,
   SurfaceFrameEvent: events.SurfaceFrameEventSchema,
   SettingsChangedEvent: events.SettingsChangedEventSchema,
+  RoutinesChangedEvent: events.RoutinesChangedEventSchema,
+  RoutineNotificationEvent: events.RoutineNotificationEventSchema,
   ServerErrorEvent: events.ServerErrorEventSchema,
   ServerEvent: events.ServerEventSchema,
   ClientHelloEvent: events.ClientHelloEventSchema,
@@ -127,7 +162,13 @@ export const REQUEST_SCHEMA_NAMES = [
   "SetAgentEnabledRequest",
   "PostMessageRequest",
   "ApprovalDecisionRequest",
+  "CreateRoutineRequest",
   "ComputerPermissionsOpenRequest",
+  "DeviceSettingsPatch",
+  "DeviceSyncSetupRequest",
+  "PairingCodeRequest",
+  "PairRequest",
+  "MachinePairRequest",
   "ClientHelloEvent",
   "ClientPingEvent",
   "SurfaceSubscribeEvent",

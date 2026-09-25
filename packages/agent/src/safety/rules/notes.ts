@@ -1,3 +1,4 @@
+import { isRoutineFolderPath, ROUTINE_FILE_EDIT } from "./routines";
 import type { RuleHit } from "./types";
 import { info } from "./types";
 
@@ -57,6 +58,7 @@ export function noteEditHits(input: Readonly<Record<string, unknown>>): RuleHit[
   if (path.split("/").some((segment) => segment.startsWith("."))) {
     hits.push({ rule: NOTE_EDIT_HIDDEN, evidence: path });
   }
+  if (isRoutineFolderPath(path)) hits.push({ rule: ROUTINE_FILE_EDIT, evidence: path });
   const edits = Array.isArray(input.edits) ? input.edits : [];
   if (edits.length === 0) hits.push({ rule: NOTE_EDIT_UNREADABLE, evidence: "no edits" });
   for (const edit of edits) {

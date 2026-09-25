@@ -11,7 +11,13 @@ import { fileURLToPath } from "node:url";
 
 export const FIXTURES_DIR = fileURLToPath(new URL("../../fixtures/persisted/", import.meta.url));
 
-export type FixtureFormat = "threads" | "records" | "approvals" | "task-state" | "settings";
+export type FixtureFormat =
+  | "threads"
+  | "records"
+  | "approvals"
+  | "task-state"
+  | "routines"
+  | "settings";
 export type FixtureKind = "v1" | "legacy" | "corrupt" | "future";
 
 export const FIXTURE_FORMATS: readonly FixtureFormat[] = [
@@ -19,6 +25,7 @@ export const FIXTURE_FORMATS: readonly FixtureFormat[] = [
   "records",
   "approvals",
   "task-state",
+  "routines",
   "settings",
 ];
 

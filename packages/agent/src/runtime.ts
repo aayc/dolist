@@ -7,11 +7,14 @@ import {
   type AppSettings,
   type ArtifactMeta,
   agentModel,
+  type CreateRoutineRequest,
   createId,
   dailyNotePath,
   Emitter,
   isOrchestratorThread,
   type Logger,
+  type Routine,
+  type RoutineRunResponse,
   resolveLineAnchors,
   type SurfaceKind,
   silentLogger,
@@ -39,7 +42,10 @@ import { TaskRecords } from "./orchestrator/records";
 import { badgeFrom, SubagentManager } from "./orchestrator/subagents";
 import { TaskBoard } from "./orchestrator/task-board";
 import { TaskWatcher } from "./orchestrator/task-watcher";
-import type { DigestCapabilities } from "./prompts/orchestrator";
+import type { DigestCapabilities, DigestRoutine } from "./prompts/orchestrator";
+import { RoutineLibrary } from "./routines/library";
+import { isRoutineRunId, RoutineScheduler } from "./routines/scheduler";
+import { createRoutineHost } from "./routines/tool-host";
 import type { AgentRuntime, AgentRuntimeEvents, AgentRuntimeOptions } from "./runtime-types";
 import {
   createApprovalBroker,
@@ -68,6 +74,7 @@ import { TOOL } from "./tools/contracts";
 import { createKnowledgeTools } from "./tools/knowledge";
 import { categoryForVerb, createMockIrreversibleActionTool, riskyVerb } from "./tools/mock";
 import { createNoteEditTool, type NoteEditHost } from "./tools/notes";
+import { createRoutineTools } from "./tools/routines";
 
 /** Editor activity warms the harness (`warmUp`) at most this often. */
 const WARM_UP_INTERVAL_MS = 5_000;
@@ -86,6 +93,8 @@ export interface AgentRuntimeOverrides {
   reportDelayMs?: number;
   /** An orchestrator turn taking longer is aborted and its tasks fail. Default 180s. */
   turnTimeoutMs?: number;
+  /** A routine run stops after this much working time. Default 15 minutes. */
+  maxRoutineRunMs?: number;
   /** Word delay of the default mock harness. Default 15ms (visible streaming). */
   mockWordDelayMs?: number;
   /** See `TaskWatcherOptions.quickSettleMs`. */
@@ -159,6 +168,10 @@ class Runtime implements AgentRuntime {
   private readonly orchestrator: Orchestrator;
   /** The orchestrator's own chat (`ORCHESTRATOR_THREAD_ID`). */
   private readonly chat: OrchestratorChat;
+  /** Routine files joined with the scheduler's state. */
+  private readonly routines: RoutineLibrary;
+  /** Starts routine runs; active only while the agent runs and is enabled. */
+  private readonly scheduler: RoutineScheduler;
   private readonly knowledgeTools: ToolSpec[];
   /** `edit_note`, shared by the orchestrator and every subagent. */
   private readonly noteEditTool: ToolSpec;
@@ -178,6 +191,8 @@ class Runtime implements AgentRuntime {
   private readonly retiredHarnesses = new Set<Harness>();
   private harnessSetups = 0;
   private webTools: ToolSpec[] = [];
+  /** create_routine, update_routine, run_routine, list_routines (the orchestrator's). */
+  private readonly routineTools: ToolSpec[];
   private settings: AppSettings;
   private enabled: boolean;
   /** Why the agent cannot run at all (configuration). */
@@ -246,6 +261,7 @@ class Runtime implements AgentRuntime {
     const noteEditHost: NoteEditHost = {
       storage,
       locate: (taskId) => {
+        if (isRoutineRunId(taskId)) return null;
         const found = this.watcher.findTask(taskId);
         if (found)
           return { notePath: found.notePath, line: found.task.line, text: found.task.text };
@@ -260,6 +276,17 @@ class Runtime implements AgentRuntime {
       },
     };
     this.noteEditTool = createNoteEditTool(noteEditHost);
+    this.routines = new RoutineLibrary({
+      storage,
+      now,
+      logger: this.logger.child({ component: "routines" }),
+      liveRun: (runId) => {
+        const record = this.records.get(runId);
+        return record
+          ? { status: record.status, ...(record.summary ? { summary: record.summary } : {}) }
+          : undefined;
+      },
+    });
     const executionTools = overrides.createExecutionTools ?? createExecutionTools;
     this.subagents = new SubagentManager({
       harness: () => this.harness,
@@ -271,7 +298,12 @@ class Runtime implements AgentRuntime {
       execution: options.execution,
       executionTools,
       ...(options.connectors ? { connectors: options.connectors } : {}),
-      taskTools: (taskId) => [createNoteEditTool(noteEditHost, { ownTask: taskId })],
+      taskTools: (taskId) => [
+        createNoteEditTool(
+          noteEditHost,
+          isRoutineRunId(taskId) ? { signAs: taskId } : { ownTask: taskId },
+        ),
+      ],
       knowledgeTools: () => this.knowledgeTools,
       webTools: () => this.webTools,
       ...(this.mode === "mock" ||
@@ -287,8 +319,12 @@ class Runtime implements AgentRuntime {
       getSettings: () => this.settings,
       onFrame: (threadId, surface, frame) => this.onFrame(threadId, surface, frame),
       isWatched: (threadId, surface) => this.surfaceSubscribers.has(surfaceKey(threadId, surface)),
-      onFinished: (report) => this.orchestrator.notifySubagentFinished(report),
+      onFinished: (report) =>
+        isRoutineRunId(report.taskId)
+          ? this.scheduler.onSubagentFinished(report)
+          : this.orchestrator.notifySubagentFinished(report),
       onChange: () => this.queueStatus(),
+      routineBrief: (taskId) => this.scheduler.brief(taskId),
       now,
       logger: this.logger.child({ component: "subagents" }),
     });
@@ -308,7 +344,9 @@ class Runtime implements AgentRuntime {
         ...this.knowledgeTools.filter((tool) => tool.name === TOOL.readNote),
         this.noteEditTool,
         ...this.webTools,
+        ...this.routineTools,
       ],
+      routines: () => this.digestRoutines(),
       capabilities: () => this.capabilities(),
       getSettings: () => this.settings,
       cwd: options.home,
@@ -325,6 +363,27 @@ class Runtime implements AgentRuntime {
       },
       chat: this.chat,
     });
+    this.scheduler = new RoutineScheduler({
+      library: this.routines,
+      threads: this.threads,
+      records: this.records,
+      board: this.board,
+      subagents: this.subagents,
+      triage: (run) => this.orchestrator.handleRoutineRun(run),
+      dropTriage: (runId) => this.orchestrator.dropQueued(runId),
+      capabilities: () => this.capabilities().available,
+      onNotification: (notification) => this.emitter.emit("routine.notification", notification),
+      now,
+      logger: this.logger.child({ component: "routine-scheduler" }),
+      ...(overrides.maxRoutineRunMs !== undefined ? { maxRunMs: overrides.maxRoutineRunMs } : {}),
+    });
+    this.routineTools = createRoutineTools(
+      createRoutineHost({
+        library: this.routines,
+        scheduler: this.scheduler,
+        onChanged: () => this.scheduler.tick(),
+      }),
+    );
     this.wireEvents();
   }
 
@@ -336,8 +395,12 @@ class Runtime implements AgentRuntime {
       this.records.load().catch((error: unknown) => {
         this.logger.error("Failed to load task records", { error: errorText(error) });
       }),
+      this.routines.start().catch((error: unknown) => {
+        this.logger.error("Failed to load routines", { error: errorText(error) });
+      }),
     ]);
     this.reconcileAfterRestart();
+    this.safely(() => this.scheduler.reconcileAfterRestart(), undefined);
     this.safely(() => this.chat.ensure(), undefined);
     if (this.mode === "off") {
       this.problem = OFF_PROBLEM;
@@ -365,12 +428,15 @@ class Runtime implements AgentRuntime {
     await this.harnessReady;
     if (this.stopped) return;
     if (this.canRun() && this.enabled) await this.startWatching();
+    this.syncScheduler({ catchUp: true });
     this.queueStatus();
   }
 
   async stop(): Promise<void> {
     if (this.stopped) return;
     this.stopped = true;
+    this.scheduler.stop();
+    this.routines.stop();
     this.computerStatus.stop();
     for (const timer of this.missingAnchors.values()) clearTimeout(timer);
     this.missingAnchors.clear();
@@ -390,9 +456,12 @@ class Runtime implements AgentRuntime {
     // The broker persists with a debounce; unflushed approvals would vanish on restart while
     // their thread messages still point at them.
     const broker = this.broker as ApprovalBroker & { flush?: () => Promise<void> };
-    await Promise.all([this.threads.flush(), this.records.flush(), broker.flush?.()]).catch(
-      (error: unknown) => this.logError("flush", error),
-    );
+    await Promise.all([
+      this.threads.flush(),
+      this.records.flush(),
+      this.routines.state.flush(),
+      broker.flush?.(),
+    ]).catch((error: unknown) => this.logError("flush", error));
     for (const dispose of this.disposers.splice(0)) this.safely(dispose, undefined);
     this.surfaceSubscribers.clear();
   }
@@ -430,7 +499,18 @@ class Runtime implements AgentRuntime {
       if (enabled) await this.startWatching();
       else await this.watcher.stop();
     }
+    // Turning the agent back on isn't missing runs: routines start again from their next slot.
+    this.syncScheduler({ catchUp: false });
     this.queueStatus();
+  }
+
+  /** The scheduler runs exactly while the agent can act here and is enabled. */
+  private syncScheduler(options: { catchUp: boolean }): void {
+    if (this.started && !this.stopped && this.canRun() && this.enabled) {
+      this.scheduler.activate(options);
+    } else {
+      this.scheduler.deactivate();
+    }
   }
 
   updateSettings(settings: AppSettings): void {
@@ -500,11 +580,59 @@ class Runtime implements AgentRuntime {
   // ── Queries ───────────────────────────────────────────────────────────────
 
   getTaskRecords(notePath: string): TaskAgentRecord[] {
-    return this.records.list(notePath);
+    return this.records.list(notePath).filter((record) => !isRoutineRunId(record.taskId));
   }
 
-  listThreads(filter?: { notePath?: string; taskId?: string }): ThreadSummary[] {
+  listThreads(filter?: {
+    notePath?: string;
+    taskId?: string;
+    routineId?: string;
+  }): ThreadSummary[] {
     return this.threads.list(filter);
+  }
+
+  listRoutines(): Routine[] {
+    return this.routines.list();
+  }
+
+  getRoutine(id: string): Routine | undefined {
+    return this.routines.get(id);
+  }
+
+  async createRoutine(input: CreateRoutineRequest): Promise<Routine> {
+    const routine = await this.routines.create(input);
+    this.scheduler.tick();
+    return this.routines.get(routine.id) ?? routine;
+  }
+
+  async setRoutinePaused(id: string, paused: boolean): Promise<Routine> {
+    const routine = await this.routines.setPaused(id, paused);
+    this.scheduler.tick();
+    return this.routines.get(routine.id) ?? routine;
+  }
+
+  async runRoutine(id: string): Promise<RoutineRunResponse> {
+    if (!this.canRun() || this.stopped || !this.started) {
+      throw new AgentUnavailableError(
+        this.problem ?? this.harnessProblem ?? "The agent is not running.",
+      );
+    }
+    if (!this.enabled) {
+      throw new AgentUnavailableError("The agent is paused: switch it on to run routines.");
+    }
+    const { routineId, threadId } = this.scheduler.runNow(id);
+    const routine = this.routines.get(routineId);
+    if (!routine) throw new AgentUnavailableError("The routine disappeared while starting.");
+    return { routine, threadId };
+  }
+
+  private digestRoutines(): DigestRoutine[] {
+    return this.routines.list().map((routine) => ({
+      name: routine.name,
+      schedule: routine.scheduleText ?? routine.schedule,
+      paused: routine.paused,
+      ...(routine.error ? { error: routine.error } : {}),
+    }));
   }
 
   getThread(id: string): { thread: Thread; approvals: ApprovalRequest[] } | undefined {
@@ -620,6 +748,16 @@ class Runtime implements AgentRuntime {
     const taskId = thread.taskId;
     if (this.records.getSpec(taskId) || this.subagents.hasSubagent(taskId)) {
       await this.subagents.retry(taskId);
+      return;
+    }
+    const brief = this.scheduler.brief(taskId);
+    if (brief) {
+      this.orchestrator.handleRoutineRun({
+        taskId,
+        name: brief.name,
+        instructions: brief.instructions,
+        ...(brief.scheduleText ? { scheduleText: brief.scheduleText } : {}),
+      });
       return;
     }
     this.orchestrator.retryTask(taskId);
@@ -778,6 +916,7 @@ class Runtime implements AgentRuntime {
     }
     if (this.canRun() && this.enabled) await this.startWatching();
     else if (!this.canRun()) await this.watcher.stop();
+    this.syncScheduler({ catchUp: true });
     this.queueStatus();
   }
 
@@ -879,14 +1018,27 @@ class Runtime implements AgentRuntime {
           }
         }),
       ),
+      // A routine's runs are task-like records, but not lines of a note: clients never see them.
       this.records.on(
         "task.record",
-        safe((record) => this.emitter.emit("task.record", record)),
+        safe((record) => {
+          if (isRoutineRunId(record.taskId)) this.scheduler.onRecord(record);
+          else this.emitter.emit("task.record", record);
+        }),
       ),
       this.records.on(
         "task.records",
-        safe((payload) => this.emitter.emit("task.records", payload)),
+        safe(({ notePath, records }) =>
+          this.emitter.emit("task.records", {
+            notePath,
+            records: records.filter((record) => !isRoutineRunId(record.taskId)),
+          }),
+        ),
       ),
+      this.routines.on(() =>
+        this.safely(() => this.emitter.emit("routines.changed", this.routines.list()), undefined),
+      ),
+      this.routines.catalog.on(() => this.safely(() => this.scheduler.tick(), undefined)),
       this.broker.onUpsert(safe((approval) => this.onApproval(approval))),
       this.watcher.on(
         "task",

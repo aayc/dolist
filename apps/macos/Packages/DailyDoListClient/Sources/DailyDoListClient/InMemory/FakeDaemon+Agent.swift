@@ -225,7 +225,8 @@ extension FakeDaemon {
       status: thread.status,
       createdAt: thread.createdAt, updatedAt: thread.updatedAt, messageCount: thread.messages.count,
       lastMessagePreview: preview, artifactCount: thread.artifacts.count, surfaces: thread.surfaces,
-      pendingApprovals: approvals.values.filter { $0.threadId == thread.id && $0.isPending }.count)
+      pendingApprovals: approvals.values.filter { $0.threadId == thread.id && $0.isPending }.count,
+      routineId: thread.routineId)
   }
 
   /// The first `max` UTF-16 units of `text`, never ending on half of a surrogate pair.
@@ -307,6 +308,10 @@ extension FakeDaemon {
     let threadId = try RequestGuards.runtimeID(threadId, "id")
     guard let thread = threads[threadId] else { throw .notFound("Thread not found") }
     guard simulation == .enabled else { throw Self.agentUnavailable() }
+    if thread.routineId != nil {
+      retryRun(threadId)
+      return ThreadActionResponse()
+    }
     guard let taskId = thread.taskId, jobs[taskId] == nil,
       !waitingJobs.contains(where: { $0.taskId == taskId })
     else { return ThreadActionResponse() }
@@ -735,7 +740,10 @@ extension FakeDaemon {
         if let text = records[taskId]?.text { recordReport(taskText: text, status: status) }
       }
       if let threadId = job.threadId {
-        setThreadStatus(threadId, status, status == .done ? "Task complete" : nil)
+        let routineRun = threads[threadId]?.routineId != nil
+        setThreadStatus(
+          threadId, status, status == .done ? (routineRun ? "Run complete" : "Task complete") : nil)
+        finishRun(threadId, status: status, summary: summary)
       }
       if status == .done, let taskId = job.taskId, let threadId = job.threadId,
         let line = job.script?.noteLine
@@ -850,6 +858,7 @@ extension FakeDaemon {
     guard threads[threadId] != nil else { return }
     threads[threadId]?.status = status
     pushMessage(threadId, Self.statusMessage(status, text, at: nowMillis, id: nextID("msg")))
+    syncRoutineRun(threadId)
   }
 
   /// A finished agent text message (`streaming: false`).

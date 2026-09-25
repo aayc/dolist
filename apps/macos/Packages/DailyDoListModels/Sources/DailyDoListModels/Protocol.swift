@@ -27,10 +27,35 @@ public enum APIRoute {
   public static let threads = "/api/threads"
   public static let approvals = "/api/approvals"
   public static let connectors = "/api/connectors"
+  /// GET `RoutineListResponse` · POST `CreateRoutineRequest` → 201 `RoutineResponse`.
+  public static let routines = "/api/routines"
   public static let syncStatus = "/api/sync/status"
   /// POST `ComputerPermissionsOpenRequest`: opens System Settings at that privacy pane.
   public static let computerPermissionsOpen = "/api/computer/permissions/open"
+  /// GET → `DeviceSettingsResponse` · PATCH `DeviceSettingsPatch` → `DeviceSettingsResponse`.
+  public static let device = "/api/device"
+  /// PUT `DeviceSyncSetupRequest` · DELETE (sync off) → `DeviceSettingsResponse`.
+  public static let deviceSync = "/api/device/sync"
+  /// POST `PairingCodeRequest` → 201 `PairingCodeResponse`.
+  public static let pairingCodes = "/api/pairing-codes"
+  /// POST `PairRequest` → 201 `PairResponse`. No bearer token: the code is the credential.
+  public static let pair = "/api/pair"
+  /// GET → `PairedDevicesResponse`.
+  public static let devices = "/api/devices"
+  /// GET → `MachineStatusResponse`.
+  public static let machine = "/api/machine"
+  /// POST `MachinePairRequest` → `MachineStatusResponse`.
+  public static let machinePair = "/api/machine/pair"
+  /// POST → `MachineStatusResponse` (checks the machine now).
+  public static let machineCheck = "/api/machine/check"
+  /// DELETE → `MachineStatusResponse` (drops this device's credential for the machine).
+  public static let machinePairing = "/api/machine/pairing"
   public static let webSocket = "/ws"
+
+  /// DELETE → 204: revokes a paired device.
+  public static func pairedDevice(_ id: String) -> String {
+    "\(devices)/\(encodeURIComponent(id))"
+  }
 
   public static func note(_ path: String) -> String { "/api/notes/\(encodeVaultPath(path))" }
 
@@ -49,12 +74,23 @@ public enum APIRoute {
     "/api/tasks?notePath=\(encodeURIComponent(notePath))"
   }
 
-  public static func threads(notePath: String? = nil, taskId: String? = nil) -> String {
+  public static func threads(
+    notePath: String? = nil, taskId: String? = nil, routineId: String? = nil
+  ) -> String {
     var query: [String] = []
     if let notePath { query.append("notePath=\(encodeURIComponent(notePath))") }
     if let taskId { query.append("taskId=\(encodeURIComponent(taskId))") }
+    if let routineId { query.append("routineId=\(encodeURIComponent(routineId))") }
     return query.isEmpty ? threads : "\(threads)?\(query.joined(separator: "&"))"
   }
+
+  public static func routine(_ id: String) -> String { "\(routines)/\(encodeURIComponent(id))" }
+  /// POST → `RoutineRunResponse`.
+  public static func routineRun(_ id: String) -> String { "\(routine(id))/run" }
+  /// POST → `RoutineResponse` (sets `paused: true` in the file).
+  public static func routinePause(_ id: String) -> String { "\(routine(id))/pause" }
+  /// POST → `RoutineResponse` (sets `paused: false` in the file).
+  public static func routineResume(_ id: String) -> String { "\(routine(id))/resume" }
 
   public static func thread(_ id: String) -> String { "/api/threads/\(encodeURIComponent(id))" }
   public static func threadMessages(_ id: String) -> String { "\(thread(id))/messages" }
@@ -500,11 +536,16 @@ public struct AgentStatusResponse: Codable, Hashable, Sendable {
   public var execution: ExecutionStatus
   /// Present when the agent cannot run (e.g. missing or rejected API key).
   public var problem: String?
+  /// Where the agent runs for this device, and who runs it now (absent from older daemons).
+  public var placement: AgentPlacementStatus?
+  /// This daemon's own readiness to run the agent (absent from older daemons).
+  public var readiness: AgentReadiness?
 
   public init(
     mode: AgentMode, enabled: Bool, model: String, running: Int, queued: Int,
     pendingApprovals: Int, connectors: [ConnectorStatus], execution: ExecutionStatus,
-    problem: String? = nil
+    problem: String? = nil, placement: AgentPlacementStatus? = nil,
+    readiness: AgentReadiness? = nil
   ) {
     self.mode = mode
     self.enabled = enabled
@@ -515,6 +556,8 @@ public struct AgentStatusResponse: Codable, Hashable, Sendable {
     self.connectors = connectors
     self.execution = execution
     self.problem = problem
+    self.placement = placement
+    self.readiness = readiness
   }
 }
 
@@ -672,15 +715,23 @@ public struct ApiErrorCode: WireEnum {
   public static let invalidPath: Self = "invalid_path"
   public static let invalidSettings: Self = "invalid_settings"
   public static let unauthorized: Self = "unauthorized"
+  /// 401: a pairing code was wrong, expired or already used (here, or on the always-on machine).
+  public static let pairingRejected: Self = "pairing_rejected"
   public static let forbiddenHost: Self = "forbidden_host"
   public static let forbiddenOrigin: Self = "forbidden_origin"
   public static let notFound: Self = "not_found"
   public static let conflict: Self = "conflict"
+  /// 409: a device setting is set by an environment variable.
+  public static let lockedByEnv: Self = "locked_by_env"
   public static let payloadTooLarge: Self = "payload_too_large"
   public static let upgradeRequired: Self = "upgrade_required"
+  /// 429: too many pairing attempts, or too many pairing codes outstanding.
+  public static let rateLimited: Self = "rate_limited"
   public static let httpError: Self = "http_error"
   public static let agentError: Self = "agent_error"
   public static let internalError: Self = "internal_error"
+  /// 502: the always-on machine didn't answer.
+  public static let machineUnreachable: Self = "machine_unreachable"
   public static let agentUnavailable: Self = "agent_unavailable"
 }
 

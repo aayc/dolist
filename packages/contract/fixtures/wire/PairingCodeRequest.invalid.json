@@ -1,0 +1,20 @@
+[
+  {
+    "name": "blank name",
+    "value": { "name": "" },
+    "path": ["name"],
+    "code": "too_small"
+  },
+  {
+    "name": "name with a newline",
+    "value": { "name": "Work\nlaptop" },
+    "path": ["name"],
+    "code": "custom"
+  },
+  {
+    "name": "extra key",
+    "value": { "kind": "app" },
+    "path": [],
+    "code": "unrecognized_keys"
+  }
+]

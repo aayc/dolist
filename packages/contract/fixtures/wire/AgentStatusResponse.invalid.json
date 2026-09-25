@@ -1,0 +1,45 @@
+[
+  {
+    "name": "unknown reason for holding the agent here",
+    "value": {
+      "mode": "live",
+      "enabled": true,
+      "model": "mock",
+      "running": 0,
+      "queued": 0,
+      "pendingApprovals": 0,
+      "connectors": [],
+      "execution": {
+        "provider": "local",
+        "capabilities": { "shell": true, "browser": true, "computer": false }
+      },
+      "placement": {
+        "placement": "always_on_machine",
+        "heldHere": "machine_asleep",
+        "runsOn": null,
+        "relay": "off"
+      }
+    },
+    "path": ["placement", "heldHere"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "placement without its relay state",
+    "value": {
+      "mode": "live",
+      "enabled": true,
+      "model": "mock",
+      "running": 0,
+      "queued": 0,
+      "pendingApprovals": 0,
+      "connectors": [],
+      "execution": {
+        "provider": "local",
+        "capabilities": { "shell": true, "browser": true, "computer": false }
+      },
+      "placement": { "placement": "this_device", "runsOn": null }
+    },
+    "path": ["placement", "relay"],
+    "code": "invalid_value"
+  }
+]

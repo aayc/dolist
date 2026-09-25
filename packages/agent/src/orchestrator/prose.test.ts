@@ -13,6 +13,8 @@ describe("mayBeRequest", () => {
     "Please compare the two insurance quotes",
     "## Can you plan a weekend in Lisbon",
     "Remind me to water the plants",
+    "Every morning, brief me on my calendar and the weather",
+    "each weekday at 7:30 send me the top headlines",
   ])("wakes the orchestrator: %s", (line) => {
     expect(mayBeRequest(line)).toBe(true);
   });
@@ -22,6 +24,7 @@ describe("mayBeRequest", () => {
     "# Thursday",
     "Notes from standup: ship the launch review by Friday.",
     "- met Sam for coffee",
+    "Every day I walk the dog before work.",
     "Ideas: raised beds, drip irrigation",
     "ok",
     "",

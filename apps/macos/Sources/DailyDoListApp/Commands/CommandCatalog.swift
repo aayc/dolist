@@ -207,6 +207,12 @@ struct CommandCatalog {
       ) {
         model.showOrchestratorWindow()
       },
+      AppCommand(.showRoutines, "Show Routines", palette: "Show routines", enabled: ready) {
+        model.showRoutines()
+      },
+      AppCommand(
+        .newRoutine, "New Routine…", palette: "Create new routine",
+        enabled: { ready() && model.agent != nil }, perform: { model.newRoutine() }),
       AppCommand(.setUpComputerUse, "Set Up Computer Use…", palette: "Set up computer use") {
         model.showSettings(.computerUse)
       },

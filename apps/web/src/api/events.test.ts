@@ -48,6 +48,17 @@ function handleLikeTheUi(event: ServerEvent): void {
   }
 }
 
+const AGENT_STATUS = {
+  mode: "live",
+  enabled: true,
+  model: "m",
+  running: 0,
+  queued: 0,
+  pendingApprovals: 0,
+  connectors: [],
+  execution: { provider: "local", capabilities: { shell: true, browser: true, computer: false } },
+};
+
 const junk = fc.oneof(
   fc.anything({ withNullPrototype: true, maxDepth: 4 }),
   fc
@@ -130,6 +141,41 @@ describe("parseServerEvent", () => {
           agent: { ...DEFAULT_SETTINGS.agent, approvalPolicy: true },
         },
       },
+      {
+        type: "settings.changed",
+        settings: { ...DEFAULT_SETTINGS, remote: { alwaysOnMachine: "vm-name" } },
+      },
+      {
+        type: "settings.changed",
+        settings: { ...DEFAULT_SETTINGS, remote: { alwaysOnMachine: { name: "vm-name" } } },
+      },
+      {
+        type: "agent.status",
+        status: {
+          ...AGENT_STATUS,
+          placement: { placement: "this_device", runsOn: { deviceId: "d" }, relay: "off" },
+        },
+      },
+      {
+        type: "agent.status",
+        status: {
+          ...AGENT_STATUS,
+          placement: { placement: "always_on_machine", heldHere: 1, runsOn: null, relay: "off" },
+        },
+      },
+      {
+        type: "agent.status",
+        status: {
+          ...AGENT_STATUS,
+          readiness: {
+            harness: { kind: "pi" },
+            modelCredential: true,
+            browser: true,
+            computer: "available",
+            connectors: { configured: 0, connected: 0 },
+          },
+        },
+      },
       { type: "error" },
     ];
     for (const raw of cases) {
@@ -144,6 +190,18 @@ describe("parseServerEvent", () => {
     const event = parseServerEvent(raw);
     expect(event).toBe(raw);
     expect(() => handleLikeTheUi(event!)).not.toThrow();
+  });
+
+  it("accepts settings and agent status from a daemon older than the always-on machine", () => {
+    const { remote: _remote, ...settings } = DEFAULT_SETTINGS;
+    for (const raw of [
+      { type: "settings.changed", settings },
+      { type: "agent.status", status: AGENT_STATUS },
+    ]) {
+      const event = parseServerEvent(raw);
+      expect(event).toBe(raw);
+      expect(() => handleLikeTheUi(event!)).not.toThrow();
+    }
   });
 
   it("accepts settings from a daemon older than the approval policy", () => {

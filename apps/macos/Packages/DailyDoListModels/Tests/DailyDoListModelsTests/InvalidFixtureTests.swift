@@ -19,8 +19,13 @@ struct InvalidFixtureTests {
   static let constraint = "value constraints (lengths, ranges, formats) are the producer's job"
   static let unknownKey = "unknown keys are ignored when decoding; Swift never produces them"
   static let openEnum = "open enum (WireEnum): unknown values decode and round-trip"
+  static let requiredNullable = "required-but-nullable fields decode a missing key as nil"
 
   static let expectations: [String: [String: Expectation]] = [
+    "AgentStatusResponse": [
+      "unknown reason for holding the agent here": .tolerated(openEnum),
+      "placement without its relay state": .rejected,
+    ],
     "ApiErrorBody": [
       "unknown code": .tolerated("ApiErrorCode is open: unknown codes are handled by HTTP status"),
       "missing code": .rejected,
@@ -40,6 +45,11 @@ struct InvalidFixtureTests {
         "a policy a newer daemon added decodes as the default (AgentSettings.approvalPolicy)"),
       "agent settings of a daemon older than the approval policy": .tolerated(
         "an absent approvalPolicy decodes as the default, .askRisky"),
+      "settings of a daemon older than the always-on machine": .tolerated(
+        "an absent remote section decodes as no always-on machine"),
+      "always-on machine over plain http": .tolerated(constraint),
+      "always-on machine address with a trailing slash": .tolerated(constraint),
+      "always-on machine without a name": .rejected,
     ],
     "ApprovalDecisionRequest": [
       "unknown decision": .rejected,
@@ -86,10 +96,78 @@ struct InvalidFixtureTests {
       "path is null": .rejected,
       "extra key": .tolerated(unknownKey),
     ],
+    "CreateRoutineRequest": [
+      "missing schedule": .rejected,
+      "blank instructions (trimmed to empty)": .tolerated(constraint),
+      "unknown notify": .tolerated(openEnum),
+      "unknown capability": .tolerated(openEnum),
+      "empty name": .tolerated(constraint),
+      "extra key (state never goes in the file)": .tolerated(unknownKey),
+    ],
+    "DeviceSettingsPatch": [
+      "blank name": .tolerated(constraint),
+      "name over 64 characters": .tolerated(constraint),
+      "unknown placement": .tolerated(openEnum),
+      "remote host with a scheme": .tolerated(constraint),
+      "remote host that is an IP address": .tolerated(constraint),
+      "localhost as a remote host": .tolerated(constraint),
+      "the same host twice (after lowercasing)": .tolerated(constraint),
+      "more than 8 remote hosts": .tolerated(constraint),
+      "unknown key (the device id can't change)": .tolerated(unknownKey),
+    ],
+    "DeviceSettingsResponse": [
+      "unknown placement": .tolerated(openEnum),
+      "remote host that is an IP address": .tolerated(constraint),
+      "missing sync setup": .rejected,
+      "unknown locked field": .tolerated(openEnum),
+    ],
+    "DeviceSyncSetupRequest": [
+      "plain http to another machine": .tolerated(constraint),
+      "credentials in the URL": .tolerated(constraint),
+      "vault id with a space": .tolerated(constraint),
+      "missing vault": .rejected,
+      "blank token": .tolerated(constraint),
+      "extra key": .tolerated(unknownKey),
+    ],
     "HealthResponse": [
       "ok false": .tolerated("`ok` is a plain Bool"),
       "string apiVersion": .rejected,
       "unknown agent mode": .tolerated(openEnum),
+    ],
+    "MachinePairRequest": [
+      "plain http to the tailnet": .tolerated(constraint),
+      "address with a path": .tolerated(constraint),
+      "address with credentials": .tolerated(constraint),
+      "an IP address": .tolerated(constraint),
+      "missing code": .rejected,
+      "malformed code": .tolerated(constraint),
+      "extra key": .tolerated(unknownKey),
+    ],
+    "MachineStatusResponse": [
+      "machine address over plain http": .tolerated(constraint),
+      "missing reachable (null is required before a check)": .tolerated(requiredNullable),
+      "unknown computer readiness": .tolerated(openEnum),
+      "unknown harness in the readiness": .tolerated(
+        "the readiness keeps the harness as sent (AgentReadiness.Harness.kind is a String)"),
+      "paired as a string": .rejected,
+    ],
+    "PairRequest": [
+      "code too short": .tolerated(constraint),
+      "code with an ambiguous character": .tolerated(constraint),
+      "missing name": .rejected,
+      "unknown kind": .tolerated(openEnum),
+      "extra key": .tolerated(unknownKey),
+    ],
+    "PairingCodeRequest": [
+      "blank name": .tolerated(constraint),
+      "name with a newline": .tolerated(constraint),
+      "extra key": .tolerated(unknownKey),
+    ],
+    "PairingCodeResponse": [
+      "code shown with its dash": .tolerated(constraint),
+      "code with an ambiguous character": .tolerated(constraint),
+      "plain http QR code URL": .tolerated(constraint),
+      "missing url (null is required without remote hosts)": .tolerated(requiredNullable),
     ],
     "PostMessageRequest": [
       "empty text": .tolerated(constraint),
@@ -177,6 +255,13 @@ struct InvalidFixtureTests {
       "Cursor model over 200 characters": .tolerated(constraint),
       "unknown approval policy": .rejected,
       "approval policy of the wrong type": .rejected,
+      "always-on machine over plain http": .tolerated(constraint),
+      "always-on machine address with a path": .tolerated(constraint),
+      "always-on machine address with credentials": .tolerated(constraint),
+      "always-on machine without an address": .rejected,
+      "blank always-on machine name": .tolerated(constraint),
+      "always-on machine name over 64 characters": .tolerated(constraint),
+      "unknown key in the always-on machine": .tolerated(unknownKey),
     ],
     "WriteNoteRequest": [
       "missing content": .rejected,
@@ -247,6 +332,12 @@ struct InvalidFixtureTests {
     #expect(try Fixtures.decode(SurfaceKind.self, "terminal").rawValue == "terminal")
     #expect(try Fixtures.decode(VaultChangeOrigin.self, "cloud").rawValue == "cloud")
     #expect(try Fixtures.decode(AgentMode.self, "auto").rawValue == "auto")
+    #expect(try Fixtures.decode(AgentPlacement.self, "cloud").rawValue == "cloud")
+    #expect(try Fixtures.decode(RelayState.self, "degraded").rawValue == "degraded")
+    #expect(try Fixtures.decode(HeldHereReason.self, "machine_asleep") == "machine_asleep")
+    #expect(try Fixtures.decode(PairedDeviceKind.self, "watch").rawValue == "watch")
+    #expect(try Fixtures.decode(ComputerReadiness.self, "virtual_display") == "virtual_display")
+    #expect(try Fixtures.decode(DeviceSettingField.self, "name").rawValue == "name")
     #expect(
       try JSONEncoder.daemon.encode(RiskLevel(rawValue: "extreme")) == Data(#""extreme""#.utf8))
 

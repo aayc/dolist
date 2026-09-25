@@ -1,0 +1,49 @@
+[
+  {
+    "name": "unknown placement",
+    "value": {
+      "device": { "id": "dev_a1b2c3d4e5f6g7h8i9j0", "name": "Work laptop" },
+      "placement": "cloud",
+      "remoteHosts": [],
+      "sync": { "url": null, "vault": null, "hasToken": false },
+      "lockedByEnv": []
+    },
+    "path": ["placement"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "remote host that is an IP address",
+    "value": {
+      "device": { "id": "dev_a1b2c3d4e5f6g7h8i9j0", "name": "vm-name" },
+      "placement": "always_on_host",
+      "remoteHosts": ["100.64.0.1"],
+      "sync": { "url": null, "vault": null, "hasToken": false },
+      "lockedByEnv": []
+    },
+    "path": ["remoteHosts", 0],
+    "code": "custom"
+  },
+  {
+    "name": "missing sync setup",
+    "value": {
+      "device": { "id": "dev_a1b2c3d4e5f6g7h8i9j0", "name": "Work laptop" },
+      "placement": "this_device",
+      "remoteHosts": [],
+      "lockedByEnv": []
+    },
+    "path": ["sync"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "unknown locked field",
+    "value": {
+      "device": { "id": "dev_a1b2c3d4e5f6g7h8i9j0", "name": "Work laptop" },
+      "placement": "this_device",
+      "remoteHosts": [],
+      "sync": { "url": null, "vault": null, "hasToken": false },
+      "lockedByEnv": ["name"]
+    },
+    "path": ["lockedByEnv", 0],
+    "code": "invalid_value"
+  }
+]

@@ -90,6 +90,10 @@ const SANDBOX_TOOLS: ReadonlySet<string> = new Set([
   "list_tasks",
   "anchor_line",
   "edit_note",
+  "create_routine",
+  "update_routine",
+  "run_routine",
+  "list_routines",
 ]);
 const SANDBOX_CAPABILITIES: readonly Capability[] = ["web", "files"];
 

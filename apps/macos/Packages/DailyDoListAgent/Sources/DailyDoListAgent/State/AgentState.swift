@@ -21,6 +21,8 @@ struct AgentState: Equatable, Sendable {
   /// Fully loaded threads by id (opened in the panel), kept live by events.
   var loadedThreads: [String: AgentThread] = [:]
   var approvals: [String: ApprovalRequest] = [:]
+  /// Every routine, sorted by name (`routines.changed` replaces the whole list).
+  var routines: [Routine] = []
   /// Streaming text messages created locally from deltas that arrived before their message.
   var deltaPlaceholders: Set<MessageKey> = []
   /// Ids of optimistic user messages awaiting the daemon's copy, oldest first, by thread.
@@ -37,6 +39,7 @@ struct AgentState: Equatable, Sendable {
     static let threads = Changes(rawValue: 1 << 2)
     static let loadedThreads = Changes(rawValue: 1 << 3)
     static let approvals = Changes(rawValue: 1 << 4)
+    static let routines = Changes(rawValue: 1 << 5)
   }
 }
 
@@ -96,6 +99,15 @@ extension AgentState {
       status: thread.status, createdAt: thread.createdAt, updatedAt: thread.updatedAt,
       messageCount: thread.messages.count, lastMessagePreview: preview,
       artifactCount: thread.artifacts.count, surfaces: thread.surfaces,
-      pendingApprovals: pendingApprovals)
+      pendingApprovals: pendingApprovals, routineId: thread.routineId)
+  }
+
+  /// A thread that belongs in the task inbox: not the orchestrator's chat, and not a routine's
+  /// run unless it waits on the user (a run's approval surfaces like any other).
+  func isInInbox(_ summary: ThreadSummary) -> Bool {
+    if summary.isOrchestrator { return false }
+    guard summary.isRoutineRun else { return true }
+    return summary.pendingApprovals > 0 || summary.status.needsUser
+      || threadIdsWithPendingApprovals.contains(summary.id)
   }
 }

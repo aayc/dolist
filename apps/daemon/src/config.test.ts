@@ -219,6 +219,96 @@ describe("loadConfig", () => {
     );
   });
 
+  it("reads remote hosts from config.json or DDL_REMOTE_HOSTS, normalized", () => {
+    expect(load()).toMatchObject({ remoteHosts: [], remoteHostsFromEnv: false });
+    mkdirSync(ddlHome, { recursive: true });
+    const file = join(ddlHome, "config.json");
+    writeFileSync(
+      file,
+      JSON.stringify({
+        remote: { hosts: [" VM-Name.Tailnet-Name.ts.net ", "vm-name.tailnet-name.ts.net"] },
+      }),
+    );
+    const fromFile = load();
+    expect(fromFile).toMatchObject({
+      remoteHosts: ["vm-name.tailnet-name.ts.net"],
+      remoteHostsFromEnv: false,
+      pairedDevicesPath: join(ddlHome, "devices.json"),
+    });
+    expect(summarizeConfig(fromFile, homedir).remoteHosts).toEqual(["vm-name.tailnet-name.ts.net"]);
+
+    const fromEnv = load({
+      DDL_REMOTE_HOSTS: "vm-name.tailnet-name.ts.net:8443, other.example.com,",
+    });
+    expect(fromEnv).toMatchObject({
+      remoteHosts: ["vm-name.tailnet-name.ts.net:8443", "other.example.com"],
+      remoteHostsFromEnv: true,
+    });
+    expect(load({ DDL_REMOTE_HOSTS: "," })).toMatchObject({
+      remoteHosts: [],
+      remoteHostsFromEnv: true,
+    });
+    expect(load({ DDL_REMOTE_HOSTS: "  " })).toMatchObject({ remoteHostsFromEnv: false });
+  });
+
+  it("refuses remote hosts that aren't DNS names", () => {
+    for (const bad of [
+      "https://vm-name.tailnet-name.ts.net",
+      "vm-name.tailnet-name.ts.net/app",
+      "100.64.0.1",
+      "localhost",
+      "127.0.0.1:7331",
+      "[::1]",
+      "vm-name.tailnet-name.ts.net:0",
+    ]) {
+      expect(() => load({ DDL_REMOTE_HOSTS: bad }), bad).toThrow(/DDL_REMOTE_HOSTS/);
+    }
+    const nine = Array.from({ length: 9 }, (_, i) => `host-${i}.example.com`);
+    expect(() => load({ DDL_REMOTE_HOSTS: nine.join(",") })).toThrow(/At most 8/);
+
+    mkdirSync(ddlHome, { recursive: true });
+    const file = join(ddlHome, "config.json");
+    writeFileSync(file, JSON.stringify({ remote: { hosts: ["100.64.0.1"] } }));
+    expect(() => load()).toThrow(/DNS name[\s\S]*remote\.hosts/);
+    writeFileSync(file, JSON.stringify({ remote: { hosts: nine } }));
+    expect(() => load()).toThrow(ConfigError);
+    writeFileSync(file, JSON.stringify({ remote: { host: "vm-name.tailnet-name.ts.net" } }));
+    expect(() => load()).toThrow(/host/);
+  });
+
+  it("reads the placement, and which device settings env vars lock", () => {
+    expect(load()).toMatchObject({ placement: "this_device", lockedByEnv: [] });
+    mkdirSync(ddlHome, { recursive: true });
+    const file = join(ddlHome, "config.json");
+    writeFileSync(
+      file,
+      JSON.stringify({
+        agent: { placement: "always_on_host" },
+        remote: { hosts: ["vm-name.tailnet-name.ts.net"] },
+      }),
+    );
+    expect(load()).toMatchObject({
+      placement: "always_on_host",
+      remoteHosts: ["vm-name.tailnet-name.ts.net"],
+      lockedByEnv: [],
+    });
+    expect(
+      load({
+        DDL_AGENT_PLACEMENT: "Always_On_Machine",
+        DDL_REMOTE_HOSTS: "a.example,b.example:8443",
+        DDL_SYNC_URL: "https://sync.example.com",
+        DDL_SYNC_VAULT: "v_1",
+      }),
+    ).toMatchObject({
+      placement: "always_on_machine",
+      remoteHosts: ["a.example", "b.example:8443"],
+      lockedByEnv: ["placement", "remoteHosts", "sync"],
+    });
+    expect(() => load({ DDL_AGENT_PLACEMENT: "cloud" })).toThrow(/DDL_AGENT_PLACEMENT/);
+    writeFileSync(file, JSON.stringify({ agent: { placement: "cloud" } }));
+    expect(() => load()).toThrow(/placement/);
+  });
+
   it("refuses a sync token in config.json without repeating it", () => {
     mkdirSync(ddlHome, { recursive: true });
     const token = randomBytes(32).toString("base64url");

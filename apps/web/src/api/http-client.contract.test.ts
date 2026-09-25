@@ -96,7 +96,7 @@ function responses(name: ApiRouteName, method: HttpMethod): Record<number, Respo
 
 /** An arbitrary valid body for a response spec. */
 function bodyFor(spec: ResponseSpec): fc.Arbitrary<unknown> {
-  if (spec.kind === "binary") return fc.constant(undefined);
+  if (spec.kind === "binary" || spec.kind === "empty") return fc.constant(undefined);
   const id = wireRegistry.get(spec.schema)?.id as WireSchemaName | undefined;
   if (id) return wireArbitraries[id]() as fc.Arbitrary<unknown>;
   // Anonymous union (rename 409): any member.
@@ -254,8 +254,9 @@ const CASES: Array<Case<unknown>> = [
   withCase({
     name: "threads",
     method: "GET",
-    input: fc.constant(null),
-    invoke: (c) => c.listThreads(),
+    input: fc.option(arb.runtimeId("rtn"), { nil: undefined }),
+    invoke: (c, routineId) => c.listThreads(routineId ? { routineId } : undefined),
+    expectSent: (routineId, sent) => expect(sent.query).toEqual(routineId ? { routineId } : {}),
     result: self,
   }),
   withCase({
@@ -318,6 +319,53 @@ const CASES: Array<Case<unknown>> = [
     invoke: (c, pane) => c.openComputerPermissions(pane),
     expectSent: (pane, sent) => expect(sent.body).toStrictEqual({ pane }),
     result: nothing,
+  }),
+  withCase({
+    name: "routines",
+    method: "GET",
+    input: fc.constant(null),
+    invoke: (c) => c.listRoutines(),
+    result: self,
+  }),
+  withCase({
+    name: "routines",
+    method: "POST",
+    input: arb.createRoutineRequest(),
+    invoke: (c, request) => c.createRoutine(request),
+    expectSent: (request, sent) => expect(sent.body).toStrictEqual(request),
+    result: self,
+  }),
+  withCase({
+    name: "routine",
+    method: "GET",
+    input: arb.runtimeId("rtn"),
+    invoke: (c, id) => c.getRoutine(id),
+    expectSent: (id, sent) => expect(sent.params.id).toBe(id),
+    result: self,
+  }),
+  withCase({
+    name: "routineRun",
+    method: "POST",
+    input: arb.runtimeId("rtn"),
+    invoke: (c, id) => c.runRoutine(id),
+    expectSent: (id, sent) => expect(sent.params.id).toBe(id),
+    result: self,
+  }),
+  withCase({
+    name: "routinePause",
+    method: "POST",
+    input: arb.runtimeId("rtn"),
+    invoke: (c, id) => c.pauseRoutine(id),
+    expectSent: (id, sent) => expect(sent.params.id).toBe(id),
+    result: self,
+  }),
+  withCase({
+    name: "routineResume",
+    method: "POST",
+    input: arb.runtimeId("rtn"),
+    invoke: (c, id) => c.resumeRoutine(id),
+    expectSent: (id, sent) => expect(sent.params.id).toBe(id),
+    result: self,
   }),
 ];
 

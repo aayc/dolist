@@ -200,6 +200,59 @@ struct HTTPDaemonClientRESTTests {
           "apr_1", ApprovalDecisionRequest(decision: .deny, note: "I'll call instead"))
       },
       verify: { ($0 as? ApprovalRequest) == SampleWire.approval }),
+    Operation(
+      name: "routines", method: "GET", target: "/api/routines", body: nil, attributed: false,
+      response: .json(
+        value: RoutineListResponse(routines: [SampleWire.routine], templates: [SampleWire.template])
+      ),
+      call: { try await $0.routines() },
+      verify: {
+        ($0 as? RoutineListResponse)
+          == RoutineListResponse(routines: [SampleWire.routine], templates: [SampleWire.template])
+      }),
+    Operation(
+      name: "routine", method: "GET", target: "/api/routines/rtn_0a1b2c3d4e5f60", body: nil,
+      attributed: false, response: .json(value: RoutineResponse(routine: SampleWire.routine)),
+      call: { try await $0.routine("rtn_0a1b2c3d4e5f60") },
+      verify: { ($0 as? Routine) == SampleWire.routine }),
+    Operation(
+      name: "createRoutine (201)", method: "POST", target: "/api/routines",
+      body: [
+        "name": "Morning briefing", "schedule": "every weekday at 7:30",
+        "instructions": "Brief me for the day.", "notify": "when_changed", "uses": ["web"],
+      ],
+      attributed: true, response: .json(201, value: RoutineResponse(routine: SampleWire.routine)),
+      call: {
+        try await $0.createRoutine(
+          CreateRoutineRequest(
+            name: "Morning briefing", schedule: "every weekday at 7:30",
+            instructions: "Brief me for the day.", notify: .whenChanged, uses: [.web]))
+      },
+      verify: { ($0 as? Routine) == SampleWire.routine }),
+    Operation(
+      name: "runRoutine", method: "POST", target: "/api/routines/rtn_0a1b2c3d4e5f60/run",
+      body: nil, attributed: true,
+      response: .json(value: RoutineRunResponse(routine: SampleWire.routine, threadId: "thr_new")),
+      call: { try await $0.runRoutine("rtn_0a1b2c3d4e5f60") },
+      verify: { ($0 as? RoutineRunResponse)?.threadId == "thr_new" }),
+    Operation(
+      name: "pauseRoutine", method: "POST", target: "/api/routines/rtn_0a1b2c3d4e5f60/pause",
+      body: nil, attributed: true,
+      response: .json(value: RoutineResponse(routine: SampleWire.routine)),
+      call: { try await $0.pauseRoutine("rtn_0a1b2c3d4e5f60") },
+      verify: { ($0 as? Routine) == SampleWire.routine }),
+    Operation(
+      name: "resumeRoutine", method: "POST", target: "/api/routines/rtn_0a1b2c3d4e5f60/resume",
+      body: nil, attributed: true,
+      response: .json(value: RoutineResponse(routine: SampleWire.routine)),
+      call: { try await $0.resumeRoutine("rtn_0a1b2c3d4e5f60") },
+      verify: { ($0 as? Routine) == SampleWire.routine }),
+    Operation(
+      name: "threads (routine)", method: "GET", target: "/api/threads?routineId=rtn_0a1b2c3d4e5f60",
+      body: nil, attributed: false,
+      response: .json(value: ThreadListResponse(threads: [SampleWire.runSummary])),
+      call: { try await $0.threads(routineId: "rtn_0a1b2c3d4e5f60") },
+      verify: { ($0 as? [ThreadSummary]) == [SampleWire.runSummary] }),
   ]
 
   @Test(arguments: operations)
@@ -328,6 +381,56 @@ struct HTTPDaemonClientRESTTests {
     } catch let error as DaemonClientError {
       #expect(error.httpStatus == 503 && error.apiErrorCode == .agentUnavailable)
     }
+  }
+
+  @Test func routineErrorsKeepTheDaemonsReason() async throws {
+    let busy = #"{"error":"conflict","message":"“Morning briefing” is already running."}"#
+    let stub = Stub { _ in .json(409, busy) }
+    let client = stub.client()
+    await #expect(
+      throws: DaemonClientError.http(
+        status: 409,
+        body: ApiErrorBody(error: .conflict, message: "“Morning briefing” is already running."))
+    ) {
+      try await client.runRoutine("rtn_1")
+    }
+    stub.setHandler { _ in
+      .json(503, #"{"error":"agent_unavailable","message":"The agent is paused"}"#)
+    }
+    await #expect(
+      throws: DaemonClientError.http(
+        status: 503, body: ApiErrorBody(error: .agentUnavailable, message: "The agent is paused"))
+    ) {
+      try await client.runRoutine("rtn_1")
+    }
+    stub.setHandler { _ in
+      .json(400, #"{"error":"invalid_request","message":"Couldn't read “whenever”."}"#)
+    }
+    await #expect(
+      throws: DaemonClientError.http(
+        status: 400,
+        body: ApiErrorBody(error: .invalidRequest, message: "Couldn't read “whenever”."))
+    ) {
+      try await client.createRoutine(
+        CreateRoutineRequest(name: "A", schedule: "whenever", instructions: "x"))
+    }
+    stub.setHandler { _ in .json(409, #"{"error":"conflict","message":"It exists."}"#) }
+    await #expect(
+      throws: DaemonClientError.http(
+        status: 409, body: ApiErrorBody(error: .conflict, message: "It exists."))
+    ) {
+      try await client.createRoutine(
+        CreateRoutineRequest(name: "A", schedule: "hourly", instructions: "x"))
+    }
+    for id in ["..", "rtn/1", ""] {
+      await #expect(
+        throws: DaemonClientError.http(
+          status: 400, body: ApiErrorBody(error: .invalidRequest, message: "Invalid routine id"))
+      ) {
+        try await client.pauseRoutine(id)
+      }
+    }
+    #expect(stub.requests.count == 4)
   }
 
   @Test func malformedBodiesAreDecodingErrors() async throws {

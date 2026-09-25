@@ -4,18 +4,23 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { deferred } from "@ddl/core";
+import { deferred, LEASE_EPOCH_HEADER } from "@ddl/core";
 import { createSyncServer, type RunningSyncServer } from "@ddl/sync";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { describeStorageContract } from "./contract-suite";
 import { RemoteStorageProvider, reconnectDelay, type WebSocketWithHeaders } from "./remote";
 import { SyncRequestError } from "./remote-client";
 import { startTestSyncServer, type TestSyncServer } from "./testing/sync-server";
-import { StorageError, type StorageEvent } from "./types";
+import { StaleLeaseError, StorageError, type StorageEvent } from "./types";
 
 describeStorageContract("RemoteStorageProvider", async () => {
   const sync = await startTestSyncServer();
-  return { provider: sync.provider("dev_contract"), cleanup: () => sync.close() };
+  // The suite writes the agent's files too, which only the agent lease holder may do.
+  const { epoch } = sync.holdAgentLease("dev_contract");
+  return {
+    provider: sync.provider("dev_contract", { leaseEpoch: () => epoch }),
+    cleanup: () => sync.close(),
+  };
 });
 
 /** A WebSocket stand-in the test drives by hand (HTTP still goes to the real server). */
@@ -209,6 +214,42 @@ describe("RemoteStorageProvider", () => {
     off();
     await vi.waitFor(() => expect(sync.server.hub.count(sync.vault)).toBe(0));
     expect(a.streamConnected).toBe(false);
+  });
+
+  it("sends the lease epoch with changes to the agent's files while it holds the lease", async () => {
+    const sent: Array<{ method: string; path: string; epoch: string | null }> = [];
+    const recording: typeof fetch = async (input, init) => {
+      const url = new URL(String(input));
+      const headers = new Headers(init?.headers);
+      if (init?.method && init.method !== "GET") {
+        sent.push({
+          method: init.method,
+          path: decodeURIComponent(url.pathname.replace(/^.*\/vaults\/[^/]+/, "")),
+          epoch: headers.get(LEASE_EPOCH_HEADER),
+        });
+      }
+      return fetch(input, init);
+    };
+    const grant = sync.holdAgentLease("dev_a");
+    let epoch: number | null = grant.epoch;
+    const a = sync.provider("dev_a", { fetch: recording, leaseEpoch: () => epoch });
+    await a.write(".daily-do-list/threads/t.json", "{}");
+    await a.write(".daily-do-list/settings.json", "{}");
+    await a.write("Daily/a.md", "a");
+    await a.rename("Daily/a.md", ".daily-do-list/state/a.md");
+    await a.deleteFolder(".daily-do-list/state");
+    epoch = null;
+    const refused = await a.delete(".daily-do-list/threads/t.json").catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(StaleLeaseError);
+    expect(refused).toMatchObject({ path: ".daily-do-list/threads/t.json", currentEpoch: 1 });
+    expect(sent).toEqual([
+      { method: "PUT", path: "/files/.daily-do-list/threads/t.json", epoch: "1" },
+      { method: "PUT", path: "/files/.daily-do-list/settings.json", epoch: null },
+      { method: "PUT", path: "/files/Daily/a.md", epoch: null },
+      { method: "POST", path: "/rename", epoch: "1" },
+      { method: "DELETE", path: "/folders", epoch: "1" },
+      { method: "DELETE", path: "/files/.daily-do-list/threads/t.json", epoch: null },
+    ]);
   });
 
   it("reports a rejected token without revealing it", async () => {

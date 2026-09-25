@@ -197,27 +197,73 @@ public struct AgentSettings: Codable, Hashable, Sendable {
     approvalTimeoutMs: 12 * 60 * 60 * 1000, approvalPolicy: .default)
 }
 
+/// The always-on machine every device of the vault can hand the agent to. Its name and address
+/// sync with the settings; each device pairs with it once and keeps its own credential.
+public struct AlwaysOnMachine: Codable, Hashable, Sendable {
+  /// 1–64 characters.
+  public var name: String
+  /// `https://<host>[:port]`, lowercase, without a trailing `/` (plain http only to loopback).
+  public var url: String
+
+  public init(name: String, url: String) {
+    self.name = name
+    self.url = url
+  }
+}
+
+/// Remote access settings shared by every device (non-secret).
+public struct RemoteSettings: Codable, Hashable, Sendable {
+  public var alwaysOnMachine: AlwaysOnMachine?
+
+  public init(alwaysOnMachine: AlwaysOnMachine? = nil) {
+    self.alwaysOnMachine = alwaysOnMachine
+  }
+
+  public static let defaults = RemoteSettings()
+
+  enum CodingKeys: String, CodingKey { case alwaysOnMachine }
+
+  public func encode(to encoder: Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    // Required on the wire: null without an always-on machine.
+    try c.encode(alwaysOnMachine, forKey: .alwaysOnMachine)
+  }
+}
+
 public struct AppSettings: Codable, Hashable, Sendable {
   public var theme: ThemePreference
   public var editor: EditorSettings
   public var dailyNotes: DailyNoteSettings
   public var weeklyNotes: WeeklyNoteSettings
   public var agent: AgentSettings
+  /// Daemons older than the always-on machine don't send it: they decode as having none.
+  public var remote: RemoteSettings
 
   public init(
     theme: ThemePreference, editor: EditorSettings, dailyNotes: DailyNoteSettings,
-    weeklyNotes: WeeklyNoteSettings, agent: AgentSettings
+    weeklyNotes: WeeklyNoteSettings, agent: AgentSettings, remote: RemoteSettings = .defaults
   ) {
     self.theme = theme
     self.editor = editor
     self.dailyNotes = dailyNotes
     self.weeklyNotes = weeklyNotes
     self.agent = agent
+    self.remote = remote
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    theme = try container.decode(ThemePreference.self, forKey: .theme)
+    editor = try container.decode(EditorSettings.self, forKey: .editor)
+    dailyNotes = try container.decode(DailyNoteSettings.self, forKey: .dailyNotes)
+    weeklyNotes = try container.decode(WeeklyNoteSettings.self, forKey: .weeklyNotes)
+    agent = try container.decode(AgentSettings.self, forKey: .agent)
+    remote = try container.decodeIfPresent(RemoteSettings.self, forKey: .remote) ?? .defaults
   }
 
   public static let defaults = AppSettings(
     theme: .dark, editor: .defaults, dailyNotes: .defaults, weeklyNotes: .defaults,
-    agent: .defaults)
+    agent: .defaults, remote: .defaults)
 }
 
 /// Accepted value ranges (same as the daemon's settings schema in `@ddl/contract`).
@@ -244,21 +290,63 @@ public struct SettingsPatch: Codable, Hashable, Sendable {
   public var dailyNotes: DailyNotesPatch?
   public var weeklyNotes: WeeklyNotesPatch?
   public var agent: AgentPatch?
+  public var remote: RemotePatch?
 
   public init(
     theme: ThemePreference? = nil, editor: EditorPatch? = nil,
     dailyNotes: DailyNotesPatch? = nil, weeklyNotes: WeeklyNotesPatch? = nil,
-    agent: AgentPatch? = nil
+    agent: AgentPatch? = nil, remote: RemotePatch? = nil
   ) {
     self.theme = theme
     self.editor = editor
     self.dailyNotes = dailyNotes
     self.weeklyNotes = weeklyNotes
     self.agent = agent
+    self.remote = remote
   }
 
   public var isEmpty: Bool {
     theme == nil && editor == nil && dailyNotes == nil && weeklyNotes == nil && agent == nil
+      && remote == nil
+  }
+
+  /// A change to the always-on machine: a whole new one, or none.
+  public enum AlwaysOnMachineChange: Hashable, Sendable {
+    case set(AlwaysOnMachine)
+    /// Sent as `null`.
+    case clear
+  }
+
+  public struct RemotePatch: Codable, Hashable, Sendable {
+    /// nil leaves the machine as it is.
+    public var alwaysOnMachine: AlwaysOnMachineChange?
+
+    public init(alwaysOnMachine: AlwaysOnMachineChange? = nil) {
+      self.alwaysOnMachine = alwaysOnMachine
+    }
+
+    enum CodingKeys: String, CodingKey { case alwaysOnMachine }
+
+    /// Absent → nil, `null` → `.clear`, an object → `.set`.
+    public init(from decoder: Decoder) throws {
+      let c = try decoder.container(keyedBy: CodingKeys.self)
+      if !c.contains(.alwaysOnMachine) {
+        alwaysOnMachine = nil
+      } else if try c.decodeNil(forKey: .alwaysOnMachine) {
+        alwaysOnMachine = .clear
+      } else {
+        alwaysOnMachine = .set(try c.decode(AlwaysOnMachine.self, forKey: .alwaysOnMachine))
+      }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+      var c = encoder.container(keyedBy: CodingKeys.self)
+      switch alwaysOnMachine {
+      case nil: break
+      case .clear: try c.encodeNil(forKey: .alwaysOnMachine)
+      case .set(let machine): try c.encode(machine, forKey: .alwaysOnMachine)
+      }
+    }
   }
 
   public struct EditorPatch: Codable, Hashable, Sendable {
@@ -392,6 +480,11 @@ extension AppSettings {
       if let v = p.actOnExistingTasks { next.agent.actOnExistingTasks = v }
       if let v = p.approvalTimeoutMs { next.agent.approvalTimeoutMs = v }
       if let v = p.approvalPolicy { next.agent.approvalPolicy = v }
+    }
+    switch patch.remote?.alwaysOnMachine {
+    case nil: break
+    case .clear: next.remote.alwaysOnMachine = nil
+    case .set(let machine): next.remote.alwaysOnMachine = machine
     }
     return next
   }

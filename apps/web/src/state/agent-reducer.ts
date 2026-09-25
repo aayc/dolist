@@ -182,6 +182,7 @@ export function applyThreadResponse(state: AgentState, response: ThreadResponse)
         artifactCount: thread.artifacts.length,
         surfaces: thread.surfaces,
         pendingApprovals,
+        ...(thread.routineId === undefined ? {} : { routineId: thread.routineId }),
       };
   return {
     ...state,
@@ -195,6 +196,28 @@ export function applyThreadList(state: AgentState, threads: readonly ThreadSumma
   const map: Record<string, ThreadSummary> = {};
   for (const thread of threads) map[thread.id] = thread;
   return { ...state, threads: map };
+}
+
+/** Adds a filtered list (a routine's runs) to what's known, newer copies winning. */
+export function mergeThreadSummaries(
+  state: AgentState,
+  threads: readonly ThreadSummary[],
+): AgentState {
+  let map: Record<string, ThreadSummary> | null = null;
+  for (const thread of threads) {
+    const known = state.threads[thread.id];
+    if (known && known.updatedAt > thread.updatedAt) continue;
+    map ??= { ...state.threads };
+    map[thread.id] = thread;
+  }
+  return map ? { ...state, threads: map } : state;
+}
+
+/** A routine's runs, newest first. */
+export function routineRuns(threads: AgentState["threads"], routineId: string): ThreadSummary[] {
+  return Object.values(threads)
+    .filter((thread) => thread.routineId === routineId)
+    .sort((a, b) => b.createdAt - a.createdAt);
 }
 
 export function applyApprovalList(

@@ -55,6 +55,15 @@ against a live daemon). Vault paths are percent-encoded per segment like `encode
 the `DailyDoListModels` types. `artifact(threadId:artifactId:)` returns the raw bytes and the media
 type without parameters (`text/markdown`, not `text/markdown; charset=utf-8`).
 
+Routines: `routines()` (`GET /api/routines`: every routine and the starter templates),
+`routine(_:)`, `createRoutine(_:)` (`POST /api/routines`, 201; writes `Routines/<name>.md`),
+`runRoutine(_:)` (the new run's thread id with the routine), `pauseRoutine(_:)` /
+`resumeRoutine(_:)` (they rewrite the file's `paused:` line), and `threads(routineId:)`
+(`GET /api/threads?routineId=`: a routine's runs). The routes' refusals keep the daemon's reason
+in the error body: 400 for a name or schedule it can't use, 409 for a taken name or a run that
+can't start now (a run going, a problem, no extra runs left today), 503 when the agent can't run
+on this device.
+
 ### Errors
 
 All methods throw `DaemonClientError`:
@@ -154,6 +163,19 @@ with the note quoted. Tasks mentioning "browse" show a browser surface and send 
 `retryThread`, `postMessage` (orchestrator reply) and `thread.read` (clears `unread`) work; deleting
 a task line drops its record. Writes emit `vault.changed` with origin `client` and this `clientId`.
 
+Routines are read from the vault like the daemon reads them: every `Routines/<name>.md` (a port of
+`@ddl/core`'s file format and schedule phrases, with the same error messages, the schedule in words
+and the next run in the clock's time zone), ids from the path, and `routines.changed` after any
+change to such a file or to a run. `createRoutine` checks the name, the instructions and the
+schedule (400 with the reason) and a taken name (409), then writes the file; pause and resume
+rewrite its `paused:` line. `runRoutine` answers 409 while a run is going, for a routine with a
+problem and after five extra runs a day, and 503 with the agent disabled or paused; otherwise it
+starts a thread (`routineId`, task id `run_…`, the routine's file as its note) that streams a
+report, or waits on an approval when the instructions order, book or send something. When it
+ends, the routine's last run is updated and `routine.notification` follows the routine's `notify`
+(odd-numbered runs "found something new"). Stop, Retry and replies work on runs. The demo seed
+has four routines, two with past runs, one paused and one with a schedule it can't read.
+
 Extras: `advance(by:)`, `runUntilIdle()`, `pendingActions`, `now`,
 `simulateExternalEdit(_:content:)` (origin `external`, `nil` deletes), `connectionState`.
 Connection semantics match `HTTPDaemonClient` (`connect` → `.connecting`, `.connected`, `hello`;
@@ -161,7 +183,9 @@ Connection semantics match `HTTPDaemonClient` (`connect` → `.connecting`, `.co
 
 Differences from the real daemon: no approval expiry, no `vault.changed` coalescing window,
 empty subfolders of a moved folder are not kept (like the daemon), scripts are the web mock's (the
-real mock runtime may ask questions after a denial), and nothing persists.
+real mock runtime may ask questions after a denial), routines never start on their own (their
+schedule only sets `nextRunAt`; runs come from `runRoutine`) and have no run-time limit, and
+nothing persists.
 
 ## Tests
 

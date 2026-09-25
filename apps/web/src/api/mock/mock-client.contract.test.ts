@@ -153,6 +153,31 @@ describe("MockDaemonClient ⇄ wire contract", () => {
     }
     await vi.advanceTimersByTimeAsync(5_000);
 
+    const routines = await call(client.listRoutines());
+    expectWire("RoutineListResponse", routines);
+    const template = routines.templates[0]!;
+    const created = await call(
+      client.createRoutine({
+        name: template.name,
+        schedule: template.schedule,
+        instructions: template.instructions,
+        notify: template.notify,
+        uses: template.uses,
+      }),
+    );
+    expectWire("RoutineResponse", created);
+    expectWire("RoutineResponse", await call(client.getRoutine(created.routine.id)));
+    const started = await call(client.runRoutine(created.routine.id));
+    expectWire("RoutineRunResponse", started);
+    await vi.advanceTimersByTimeAsync(3_000);
+    expectWire(
+      "ThreadListResponse",
+      await call(client.listThreads({ routineId: created.routine.id })),
+    );
+    expectWire("RoutineResponse", await call(client.pauseRoutine(created.routine.id)));
+    expectWire("RoutineResponse", await call(client.resumeRoutine(created.routine.id)));
+    expectWire("RoutineListResponse", await call(client.listRoutines()));
+
     // Removing a task that has a record publishes the note's records snapshot.
     const current = await call(client.readNote(path));
     const kept = current.content.split("\n").filter((line) => !line.includes("robot vacuums"));
@@ -213,6 +238,116 @@ describe("MockDaemonClient ⇄ wire contract", () => {
       expectWire(schema, error.body, `${status} body`);
     }
     expect((await failure(client.getThread("thr_missing"))).message).toBe("Thread not found");
+  });
+
+  it("keeps routines like the daemon: runs, notifications, the budget and its errors", async () => {
+    const { client, events } = create();
+    const request = {
+      name: "Price check",
+      schedule: "every 2 hours",
+      instructions: "Check the kettle's price.",
+      notify: "when_changed" as const,
+    };
+    const { routine } = await call(client.createRoutine(request));
+    expect(routine).toMatchObject({
+      path: "Routines/Price check.md",
+      scheduleText: expect.any(String),
+      paused: false,
+      runCount: 0,
+      extraRunsLeft: 5,
+    });
+    expect(routine.nextRunAt).toBeGreaterThan(Date.now());
+
+    const first = await call(client.runRoutine(routine.id));
+    expect(first.routine.lastRun).toMatchObject({ threadId: first.threadId, trigger: "manual" });
+    const busy = await failure(client.runRoutine(routine.id));
+    expect(busy.status).toBe(409);
+    expect(busy.message).toBe("“Price check” is running right now.");
+    expectWire("ApiErrorBody", busy.body);
+    await vi.advanceTimersByTimeAsync(3_000);
+    const done = (await call(client.getRoutine(routine.id))).routine;
+    expect(done.lastRun).toMatchObject({ status: "done", changed: true, summary: "3 updates" });
+    const thread = (await call(client.getThread(first.threadId))).thread;
+    expect(thread).toMatchObject({ routineId: routine.id, notePath: routine.path });
+    // The first run found something new; the second didn't, so "when changed" stays quiet.
+    await call(client.runRoutine(routine.id));
+    await vi.advanceTimersByTimeAsync(3_000);
+    const notifications = ofType(events, "routine.notification");
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]!.notification).toMatchObject({
+      routineId: routine.id,
+      title: "Price check",
+      threadId: first.threadId,
+      status: "done",
+    });
+    const runs = await call(client.listThreads({ routineId: routine.id }));
+    expect(runs.threads.map((t) => t.routineId)).toEqual([routine.id, routine.id]);
+    expect(ofType(events, "routines.changed").at(-1)!.routines[0]).toMatchObject({
+      runCount: 2,
+      extraRunsLeft: 3,
+    });
+
+    for (let i = 0; i < 3; i++) {
+      await call(client.runRoutine(routine.id));
+      await vi.advanceTimersByTimeAsync(3_000);
+    }
+    const spent = await failure(client.runRoutine(routine.id));
+    expect(spent.status).toBe(409);
+    expect(spent.message).toContain("already ran the most extra times allowed today");
+
+    // Files written through the routes are the agent's writes, not the client's.
+    expect(
+      ofType(events, "vault.changed").find((e) => e.changes[0]?.path === routine.path),
+    ).toEqual({
+      type: "vault.changed",
+      changes: [{ path: routine.path, kind: "created", version: expect.any(String) }],
+      origin: "agent",
+    });
+
+    const paused = (await call(client.pauseRoutine(routine.id))).routine;
+    expect(paused).toMatchObject({ paused: true });
+    expect(paused.nextRunAt).toBeUndefined();
+    expect((await call(client.readNote(routine.path))).content).toContain("paused: true");
+    expect((await call(client.resumeRoutine(routine.id))).routine.paused).toBe(false);
+
+    await call(client.setAgentEnabled(false));
+    const off = await failure(client.runRoutine(routine.id));
+    expect(off.status).toBe(503);
+    expect(off.body).toMatchObject({ error: "agent_unavailable" });
+
+    const cases: Array<[() => Promise<unknown>, number]> = [
+      [() => client.createRoutine(request), 409],
+      [() => client.createRoutine({ ...request, name: "Bad", schedule: "whenever" }), 400],
+      [() => client.createRoutine({ ...request, name: "a/b" }), 400],
+      [() => client.createRoutine({ ...request, name: "Empty", instructions: " " }), 400],
+      [() => client.getRoutine("rtn_missing"), 404],
+      [() => client.runRoutine("rtn_missing"), 404],
+      [() => client.pauseRoutine("rtn_missing"), 404],
+    ];
+    for (const [run, status] of cases) {
+      const error = await failure(run());
+      expect(error.status).toBe(status);
+      expectWire("ApiErrorBody", error.body, `${status} body`);
+      expect(error.message.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("reports a routine whose file has a problem, and refuses to run it", async () => {
+    const { client, events } = create();
+    await vi.advanceTimersByTimeAsync(1);
+    await call(
+      client.writeNote("Routines/Broken.md", {
+        content: "---\nschedule: whenever I feel like it\n---\nDo things.",
+        baseVersion: null,
+      }),
+    );
+    const broken = ofType(events, "routines.changed").at(-1)!.routines[0]!;
+    expect(broken.error).toBeTruthy();
+    expect(broken.scheduleText).toBeUndefined();
+    expect(broken.nextRunAt).toBeUndefined();
+    const error = await failure(client.runRoutine(broken.id));
+    expect(error.status).toBe(409);
+    expect(error.message).toContain("“Broken” can't run");
   });
 
   it("refuses to decide an approval twice, with the daemon's 409 body", async () => {

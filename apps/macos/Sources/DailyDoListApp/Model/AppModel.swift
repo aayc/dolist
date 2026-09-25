@@ -157,13 +157,41 @@ public final class AppModel {
     Task { await workspace.openToday() }
   }
 
-  /// Opens a thread in the agent panel of the main window.
+  /// Opens a thread in the agent panel of the main window (a routine's run with its routine's
+  /// runs behind it).
   func openThread(_ threadId: String?) {
-    if environment.enablesSystemServices {
-      NSApplication.shared.activate()
-      showMainWindow()
+    bringMainWindowForward()
+    if let threadId, let routineId = agent?.routineId(forThread: threadId) {
+      ui.showRoutineRun(routineId: routineId, threadId: threadId)
+    } else if let threadId {
+      ui.showThread(threadId)
+    } else {
+      ui.showInbox()
     }
-    if let threadId { ui.showThread(threadId) } else { ui.showInbox() }
+  }
+
+  /// A routine's run, from its notification.
+  func openRoutineRun(routineId: String, threadId: String) {
+    bringMainWindowForward()
+    ui.showRoutineRun(routineId: routineId, threadId: threadId)
+  }
+
+  /// Show Routines: every routine in the agent panel.
+  func showRoutines() {
+    bringMainWindowForward()
+    ui.showRoutines()
+  }
+
+  /// New Routine…: the sheet, over the main window.
+  func newRoutine(_ draft: RoutineDraft = RoutineDraft()) {
+    bringMainWindowForward()
+    ui.newRoutine(draft)
+  }
+
+  private func bringMainWindowForward() {
+    guard environment.enablesSystemServices else { return }
+    NSApplication.shared.activate()
+    showMainWindow()
   }
 
   func setAgentEnabled(_ enabled: Bool) async {

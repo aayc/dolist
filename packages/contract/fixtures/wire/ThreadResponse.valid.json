@@ -205,6 +205,42 @@
     }
   },
   {
+    "name": "a routine's run",
+    "value": {
+      "thread": {
+        "id": "thr_r0ut1n3run01",
+        "taskId": "run_k3j9x0q2m1ab",
+        "notePath": "Routines/Morning briefing.md",
+        "title": "Morning briefing",
+        "status": "done",
+        "createdAt": 1790663400000,
+        "updatedAt": 1790663460000,
+        "routineId": "rtn_0a1b2c3d4e5f60",
+        "messages": [
+          {
+            "id": "msg_r1",
+            "author": "system",
+            "createdAt": 1790663400000,
+            "kind": "status",
+            "status": "working",
+            "text": "Scheduled run · Every weekday at 7:30 AM"
+          },
+          {
+            "id": "msg_r2",
+            "author": "subagent:researcher",
+            "createdAt": 1790663460000,
+            "kind": "text",
+            "role": "agent",
+            "text": "3 meetings today; 68°F and sunny. New since yesterday: the offsite moved to Thursday."
+          }
+        ],
+        "artifacts": [],
+        "surfaces": []
+      },
+      "approvals": []
+    }
+  },
+  {
     "name": "a thread not attached to a task",
     "value": {
       "thread": {

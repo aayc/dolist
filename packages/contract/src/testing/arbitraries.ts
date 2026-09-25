@@ -259,6 +259,7 @@ const threadBase = () => ({
   createdAt: p.epochMs(),
   updatedAt: p.epochMs(),
   surfaces: surfaces(),
+  routineId: p.runtimeId("rtn"),
 });
 
 const citedSource = (): Arb<core.CitedSource> =>
@@ -464,6 +465,12 @@ const agentSettings = (): Arb<core.AgentSettings> =>
     approvalPolicy: approvalPolicy(),
   });
 
+const alwaysOnMachine = (): Arb<core.AlwaysOnMachine> =>
+  fc.record({ name: p.deviceName(), url: p.machineUrl() });
+
+const remoteSettings = (): Arb<core.RemoteSettings> =>
+  fc.record({ alwaysOnMachine: maybe(alwaysOnMachine()) });
+
 const appSettings = (): Arb<core.AppSettings> =>
   fc.record({
     theme: themePreference(),
@@ -471,6 +478,7 @@ const appSettings = (): Arb<core.AppSettings> =>
     dailyNotes: dailyNoteSettings(),
     weeklyNotes: weeklyNoteSettings(),
     agent: agentSettings(),
+    remote: remoteSettings(),
   });
 
 /** Every key optional, recursively (absent keys, never `undefined` values). */
@@ -523,6 +531,7 @@ const updateSettingsRequest = (): Arb<core.UpdateSettingsRequest> =>
         },
         { requiredKeys: [] },
       ),
+      remote: partialOf<core.RemoteSettings>({ alwaysOnMachine: maybe(alwaysOnMachine()) }),
     },
     { requiredKeys: [] },
   );
@@ -737,6 +746,8 @@ const agentStatusResponse = (): Arb<core.AgentStatusResponse> =>
       connectors: fc.array(connectorStatus(), { maxLength: 4 }),
       execution: executionStatus(),
       problem: p.text(500),
+      placement: agentPlacementStatus(),
+      readiness: agentReadiness(),
     },
     {
       requiredKeys: [
@@ -778,6 +789,120 @@ const approvalDecisionRequest = (): Arb<core.ApprovalDecisionRequest> =>
 const connectorsResponse = (): Arb<core.ConnectorsResponse> =>
   fc.record({ connectors: fc.array(connectorStatus(), { maxLength: 4 }) });
 
+// ── Routines ──────────────────────────────────────────────────────────────
+
+const ROUTINE_USES: core.RoutineUse[] = [
+  "web",
+  "browser",
+  "computer",
+  "shell",
+  "files",
+  "connectors",
+];
+const routineNotify = () => enumOf<core.RoutineNotify>("always", "when_changed", "never");
+const routineUse = () => enumOf(...ROUTINE_USES);
+const routineRunTrigger = () => enumOf<core.RoutineRunTrigger>("schedule", "catch_up", "manual");
+const schedulePhrase = () =>
+  fc.oneof(
+    { weight: 4, arbitrary: enumOf("every weekday at 7:30", "every 2 hours", "hourly") },
+    { weight: 1, arbitrary: p.text(200) },
+  );
+const routineName = () =>
+  fc.oneof(
+    { weight: 4, arbitrary: enumOf("Morning briefing", "Price watch", "Café ☕ digest") },
+    { weight: 1, arbitrary: p.segment() },
+  );
+
+const routineRun = (): Arb<core.RoutineRun> =>
+  fc.record(
+    {
+      threadId: p.runtimeId("thr"),
+      trigger: routineRunTrigger(),
+      status: taskAgentStatus(),
+      startedAt: p.epochMs(),
+      finishedAt: p.epochMs(),
+      summary: p.text(200),
+      changed: fc.boolean(),
+    },
+    { requiredKeys: ["threadId", "trigger", "status", "startedAt"] },
+  );
+
+const routine = (): Arb<core.Routine> =>
+  fc
+    .record(
+      {
+        id: p.runtimeId("rtn"),
+        name: routineName(),
+        schedule: schedulePhrase(),
+        scheduleText: p.text(200),
+        notify: routineNotify(),
+        uses: fc.uniqueArray(routineUse(), { maxLength: 6 }),
+        paused: fc.boolean(),
+        instructions: p.text(),
+        error: p.text(300),
+        nextRunAt: p.epochMs(),
+        lastRun: routineRun(),
+        runCount: p.count(500),
+        extraRunsLeft: p.count(5),
+      },
+      {
+        requiredKeys: [
+          "id",
+          "name",
+          "schedule",
+          "notify",
+          "uses",
+          "paused",
+          "instructions",
+          "runCount",
+          "extraRunsLeft",
+        ],
+      },
+    )
+    .map((r) => ({ ...r, path: `Routines/${r.name}.md` }));
+
+const routineTemplate = (): Arb<core.RoutineTemplate> =>
+  fc.record({
+    id: p.id("tpl"),
+    name: routineName(),
+    description: p.text(200),
+    schedule: p.lengthWithin(schedulePhrase(), 1, 200),
+    notify: routineNotify(),
+    uses: fc.uniqueArray(routineUse(), { maxLength: 6 }),
+    instructions: p.lengthWithin(p.text(), 1, 10_000),
+  });
+
+const routineNotification = (): Arb<core.RoutineNotification> =>
+  fc.record({
+    routineId: p.runtimeId("rtn"),
+    title: routineName(),
+    body: p.text(300),
+    threadId: p.runtimeId("thr"),
+    status: taskAgentStatus(),
+    at: p.epochMs(),
+  });
+
+const routineListResponse = (): Arb<core.RoutineListResponse> =>
+  fc.record({
+    routines: fc.array(routine(), { maxLength: 4 }),
+    templates: fc.array(routineTemplate(), { maxLength: 3 }),
+  });
+const routineResponse = (): Arb<core.RoutineResponse> => fc.record({ routine: routine() });
+const createRoutineRequest = (): Arb<core.CreateRoutineRequest> =>
+  fc.record(
+    {
+      name: routineName(),
+      schedule: p.trimmedText(200),
+      instructions: p.trimmedText(8_000),
+      notify: routineNotify(),
+      uses: fc.uniqueArray(routineUse(), { maxLength: 6 }),
+      paused: fc.boolean(),
+    },
+    { requiredKeys: ["name", "schedule", "instructions"] },
+  );
+const routineRunResponse = (): Arb<core.RoutineRunResponse> =>
+  fc.record({ routine: routine(), threadId: p.runtimeId("thr") });
+
 // ── Sync ──────────────────────────────────────────────────────────────────
 
 const syncState = () => enumOf<core.SyncState>("idle", "syncing", "error", "disabled");
@@ -798,6 +923,189 @@ const syncStatusResponse = (): Arb<core.SyncStatusResponse> =>
       deviceName: p.lengthWithin(p.label(), 1, 100),
     },
     { requiredKeys: ["state", "target", "lastSyncedAt", "pendingChanges", "conflicts"] },
+  );
+
+// ── Placement, device settings, pairing, the always-on machine ────────────
+
+const agentPlacement = () =>
+  enumOf<core.AgentPlacement>("this_device", "always_on_machine", "always_on_host");
+const relayState = () =>
+  enumOf<core.RelayState>("off", "connecting", "connected", "unreachable", "not_paired");
+
+const agentRunsOn = (): Arb<core.AgentRunsOn> =>
+  fc.record({
+    deviceId: p.syncDeviceId(),
+    name: p.syncDeviceName(),
+    thisDevice: fc.boolean(),
+    alwaysOnMachine: fc.boolean(),
+  });
+
+const PLACEMENT_NOTES = ["Taking over from vm-1…", "Handing the agent to vm-1…", ""];
+
+function agentPlacementStatus(): Arb<core.AgentPlacementStatus> {
+  return fc.record(
+    {
+      placement: agentPlacement(),
+      heldHere: enumOf<NonNullable<core.AgentPlacementStatus["heldHere"]>>("no_machine", "no_sync"),
+      runsOn: maybe(agentRunsOn()),
+      relay: relayState(),
+      note: fc.oneof(fc.constantFrom(...PLACEMENT_NOTES), p.text(200)),
+    },
+    { requiredKeys: ["placement", "runsOn", "relay"] },
+  );
+}
+
+function agentReadiness(): Arb<core.AgentReadiness> {
+  return fc.record({
+    harness: fc.record(
+      {
+        kind: agentHarnessKind(),
+        ready: fc.boolean(),
+        problem: fc.oneof(
+          fc.constantFrom("The Cursor CLI isn't signed in", "OPENROUTER_API_KEY is not set"),
+          p.text(300),
+        ),
+      },
+      { requiredKeys: ["kind", "ready"] },
+    ),
+    modelCredential: fc.boolean(),
+    browser: fc.boolean(),
+    computer: enumOf<core.AgentReadiness["computer"]>(
+      "available",
+      "needs_permissions",
+      "unsupported",
+    ),
+    connectors: fc.record({ configured: p.count(20), connected: p.count(20) }),
+  });
+}
+
+const syncUrl = () =>
+  enumOf(
+    "https://sync.example.com",
+    "https://vm-name.tailnet-name.ts.net:8443",
+    "https://sync.example.com/ddl",
+    "http://127.0.0.1:7332",
+  );
+
+const deviceSyncSetup = (): Arb<core.DeviceSyncSetup> =>
+  fc.oneof(
+    fc.record({ url: syncUrl(), vault: p.syncDeviceId(), hasToken: fc.boolean() }),
+    fc.record({ url: fc.constant(null), vault: fc.constant(null), hasToken: fc.boolean() }),
+  );
+
+const LOCKABLE: Array<core.DeviceSettingsResponse["lockedByEnv"][number]> = [
+  "placement",
+  "remoteHosts",
+  "sync",
+];
+
+const remoteHosts = () =>
+  fc.oneof(
+    { weight: 6, arbitrary: fc.uniqueArray(p.remoteHost(), { maxLength: 3 }) },
+    {
+      weight: 1,
+      arbitrary: fc.constant(Array.from({ length: 8 }, (_, i) => `vm-${i}.tailnet-name.ts.net`)),
+    },
+  );
+
+const deviceSettingsResponse = (): Arb<core.DeviceSettingsResponse> =>
+  fc.record({
+    device: fc.record({ id: p.syncDeviceId(), name: p.syncDeviceName() }),
+    placement: agentPlacement(),
+    remoteHosts: remoteHosts(),
+    sync: deviceSyncSetup(),
+    lockedByEnv: fc.subarray(LOCKABLE),
+  });
+
+const deviceSettingsPatch = (): Arb<core.DeviceSettingsPatch> =>
+  fc.record(
+    { name: p.deviceName(), placement: agentPlacement(), remoteHosts: remoteHosts() },
+    { requiredKeys: [] },
+  );
+
+const deviceSyncSetupRequest = (): Arb<core.DeviceSyncSetupRequest> =>
+  fc.record(
+    {
+      url: syncUrl(),
+      vault: p.syncDeviceId(),
+      token: fc.oneof(
+        fc.string({ unit: fc.constantFrom(..."abcXYZ0189_-"), minLength: 43, maxLength: 43 }),
+        fc.constantFrom("t", "k".repeat(1024)),
+      ),
+    },
+    { requiredKeys: ["url", "vault"] },
+  );
+
+const pairedDeviceKind = () => enumOf<core.PairedDeviceKind>("browser", "app", "daemon");
+
+const pairedDevice = (): Arb<core.PairedDevice> =>
+  fc.record(
+    {
+      id: p.runtimeId("pdv"),
+      name: p.deviceName(),
+      kind: pairedDeviceKind(),
+      createdAt: p.epochMs(),
+      lastSeenAt: maybe(p.epochMs()),
+      current: fc.boolean(),
+    },
+    { requiredKeys: ["id", "name", "kind", "createdAt", "lastSeenAt"] },
+  );
+
+const pairingCodeRequest = (): Arb<core.PairingCodeRequest> =>
+  fc.record({ name: p.deviceName() }, { requiredKeys: [] });
+
+const pairingCodeResponse = (): Arb<core.PairingCodeResponse> =>
+  fc.record({
+    code: p.pairingCode(),
+    expiresAt: p.epochMs(),
+    url: maybe(p.machineUrl().filter((url) => url.startsWith("https://"))),
+  });
+
+const pairRequest = (): Arb<core.PairRequest> =>
+  fc.record({ code: p.pairingCodeInput(), name: p.deviceName(), kind: pairedDeviceKind() });
+
+const deviceToken = () =>
+  fc.oneof(
+    fc.string({ unit: fc.constantFrom(..."abcXYZ0189_-"), minLength: 43, maxLength: 43 }),
+    fc.constantFrom("t".repeat(16), "T".repeat(512)),
+  );
+
+const pairResponse = (): Arb<core.PairResponse> =>
+  fc.record({ device: pairedDevice(), token: deviceToken() }, { requiredKeys: ["device"] });
+
+const pairedDevicesResponse = (): Arb<core.PairedDevicesResponse> =>
+  fc.record({ devices: fc.array(pairedDevice(), { maxLength: 5 }) });
+
+const machineStatusResponse = (): Arb<core.MachineStatusResponse> =>
+  fc.record(
+    {
+      machine: maybe(alwaysOnMachine()),
+      paired: fc.boolean(),
+      reachable: maybe(fc.boolean()),
+      checkedAt: maybe(p.epochMs()),
+      version: fc.constantFrom("0.1.0", "1.2.3-beta.1", "v".repeat(100)),
+      agent: fc.record(
+        { runsOn: maybe(agentRunsOn()), problem: p.text(300) },
+        { requiredKeys: ["runsOn"] },
+      ),
+      readiness: agentReadiness(),
+      error: fc.oneof(fc.constantFrom("The machine didn't answer in 5 s"), p.text(300)),
+    },
+    { requiredKeys: ["machine", "paired", "reachable", "checkedAt"] },
+  );
+
+const machinePairRequest = (): Arb<core.MachinePairRequest> =>
+  fc.record(
+    {
+      url: fc.oneof(
+        p.machineUrl(),
+        p.machineUrl().map((url) => `${url}/`),
+        p.machineUrl().map((url) => url.toUpperCase()),
+      ),
+      code: p.pairingCodeInput(),
+      name: p.deviceName(),
+    },
+    { requiredKeys: ["url", "code"] },
   );
 
 // ── Errors ────────────────────────────────────────────────────────────────
@@ -899,6 +1207,16 @@ const surfaceFrameEvent = (): Arb<EventOf<"surface.frame">> =>
   );
 const settingsChangedEvent = (): Arb<EventOf<"settings.changed">> =>
   fc.record({ type: fc.constant("settings.changed" as const), settings: appSettings() });
+const routinesChangedEvent = (): Arb<EventOf<"routines.changed">> =>
+  fc.record({
+    type: fc.constant("routines.changed" as const),
+    routines: fc.array(routine(), { maxLength: 4 }),
+  });
+const routineNotificationEvent = (): Arb<EventOf<"routine.notification">> =>
+  fc.record({
+    type: fc.constant("routine.notification" as const),
+    notification: routineNotification(),
+  });
 const serverErrorEvent = (): Arb<EventOf<"error">> =>
   fc.record(
     { type: fc.constant("error" as const), message: p.text(300), code: wsErrorCode() },
@@ -918,6 +1236,8 @@ const serverEvent = (): Arb<core.ServerEvent> =>
     agentStatusEvent(),
     surfaceFrameEvent(),
     settingsChangedEvent(),
+    routinesChangedEvent(),
+    routineNotificationEvent(),
     serverErrorEvent(),
   );
 
@@ -1021,6 +1341,13 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   Thread: thread,
   CitedSource: citedSource,
   ThreadSummary: threadSummary,
+  RoutineNotify: routineNotify,
+  RoutineUse: routineUse,
+  RoutineRunTrigger: routineRunTrigger,
+  RoutineRun: routineRun,
+  Routine: routine,
+  RoutineTemplate: routineTemplate,
+  RoutineNotification: routineNotification,
   SurfaceFrameAction: surfaceFrameAction,
   SurfaceFrame: surfaceFrame,
   ThemePreference: themePreference,
@@ -1031,6 +1358,8 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   AgentHarnessKind: agentHarnessKind,
   ApprovalPolicy: approvalPolicy,
   AgentSettings: agentSettings,
+  AlwaysOnMachine: alwaysOnMachine,
+  RemoteSettings: remoteSettings,
   AppSettings: appSettings,
   UpdateSettingsRequest: updateSettingsRequest,
   AgentMode: agentMode,
@@ -1066,11 +1395,33 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   ApprovalResponse: approvalResponse,
   ApprovalDecisionRequest: approvalDecisionRequest,
   ConnectorsResponse: connectorsResponse,
+  RoutineListResponse: routineListResponse,
+  RoutineResponse: routineResponse,
+  CreateRoutineRequest: createRoutineRequest,
+  RoutineRunResponse: routineRunResponse,
   SyncState: syncState,
   SyncTargetKind: syncTargetKind,
   SyncStatusResponse: syncStatusResponse,
   ComputerPermissionPane: computerPermissionPane,
   ComputerPermissionsOpenRequest: computerPermissionsOpenRequest,
+  AgentPlacement: agentPlacement,
+  AgentRunsOn: agentRunsOn,
+  RelayState: relayState,
+  AgentPlacementStatus: agentPlacementStatus,
+  AgentReadiness: agentReadiness,
+  DeviceSyncSetup: deviceSyncSetup,
+  DeviceSettingsResponse: deviceSettingsResponse,
+  DeviceSettingsPatch: deviceSettingsPatch,
+  DeviceSyncSetupRequest: deviceSyncSetupRequest,
+  PairedDeviceKind: pairedDeviceKind,
+  PairedDevice: pairedDevice,
+  PairingCodeRequest: pairingCodeRequest,
+  PairingCodeResponse: pairingCodeResponse,
+  PairRequest: pairRequest,
+  PairResponse: pairResponse,
+  PairedDevicesResponse: pairedDevicesResponse,
+  MachineStatusResponse: machineStatusResponse,
+  MachinePairRequest: machinePairRequest,
   ApiErrorCode: apiErrorCode,
   ApiErrorBody: apiErrorBody,
   ConflictResponse: conflictResponse,
@@ -1089,6 +1440,8 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   AgentStatusEvent: agentStatusEvent,
   SurfaceFrameEvent: surfaceFrameEvent,
   SettingsChangedEvent: settingsChangedEvent,
+  RoutinesChangedEvent: routinesChangedEvent,
+  RoutineNotificationEvent: routineNotificationEvent,
   ServerErrorEvent: serverErrorEvent,
   ServerEvent: serverEvent,
   ClientHelloEvent: clientHelloEvent,
@@ -1134,6 +1487,8 @@ export const arb = plainFactories({
   agentHarnessKind,
   approvalPolicy,
   agentSettings,
+  alwaysOnMachine,
+  remoteSettings,
   appSettings,
   updateSettingsRequest,
   agentMode,
@@ -1169,8 +1524,37 @@ export const arb = plainFactories({
   approvalResponse,
   approvalDecisionRequest,
   connectorsResponse,
+  routineNotify,
+  routineUse,
+  routineRunTrigger,
+  routineRun,
+  routine,
+  routineTemplate,
+  routineNotification,
+  routineListResponse,
+  routineResponse,
+  createRoutineRequest,
+  routineRunResponse,
   computerPermissionPane,
   computerPermissionsOpenRequest,
+  agentPlacement,
+  agentRunsOn,
+  relayState,
+  agentPlacementStatus,
+  agentReadiness,
+  deviceSyncSetup,
+  deviceSettingsResponse,
+  deviceSettingsPatch,
+  deviceSyncSetupRequest,
+  pairedDeviceKind,
+  pairedDevice,
+  pairingCodeRequest,
+  pairingCodeResponse,
+  pairRequest,
+  pairResponse,
+  pairedDevicesResponse,
+  machineStatusResponse,
+  machinePairRequest,
   apiErrorCode,
   apiErrorBody,
   conflictResponse,
@@ -1189,6 +1573,8 @@ export const arb = plainFactories({
   agentStatusEvent,
   surfaceFrameEvent,
   settingsChangedEvent,
+  routinesChangedEvent,
+  routineNotificationEvent,
   serverErrorEvent,
   serverEvent,
   clientHelloEvent,
@@ -1216,4 +1602,8 @@ export const arb = plainFactories({
   base64: p.base64,
   modelId: p.modelId,
   cursorModelId: p.cursorModelId,
+  deviceName: p.deviceName,
+  remoteHost: p.remoteHost,
+  machineUrl: p.machineUrl,
+  pairingCode: p.pairingCode,
 });

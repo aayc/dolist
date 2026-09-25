@@ -12,7 +12,11 @@ import type {
   ApprovalStatus,
   AppSettings,
   ArtifactMeta,
+  CreateRoutineRequest,
   Logger,
+  Routine,
+  RoutineNotification,
+  RoutineRunResponse,
   ServerEventOf,
   ServerEventPayload,
   SurfaceKind,
@@ -40,6 +44,8 @@ export interface AgentRuntimeEvents {
   "approval.upsert": ServerEventOf<"approval.upsert">["approval"];
   status: ServerEventOf<"agent.status">["status"];
   "surface.frame": ServerEventPayload<"surface.frame">;
+  "routines.changed": Routine[];
+  "routine.notification": RoutineNotification;
 }
 
 export interface AgentRuntime {
@@ -54,7 +60,7 @@ export interface AgentRuntime {
   noteEditorActivity(notePath: string, line: number): void;
 
   getTaskRecords(notePath: string): TaskAgentRecord[];
-  listThreads(filter?: { notePath?: string; taskId?: string }): ThreadSummary[];
+  listThreads(filter?: { notePath?: string; taskId?: string; routineId?: string }): ThreadSummary[];
   getThread(id: string): { thread: Thread; approvals: ApprovalRequest[] } | undefined;
   listApprovals(filter?: { status?: ApprovalStatus }): ApprovalRequest[];
   readArtifact(
@@ -70,6 +76,16 @@ export interface AgentRuntime {
   markThreadRead(threadId: string): void;
   /** Frames for a surface only flow while at least one subscriber exists. */
   subscribeSurface(threadId: string, surface: SurfaceKind): Unsubscribe;
+
+  /** Every routine (its file joined with the scheduler's state), sorted by name. */
+  listRoutines(): Routine[];
+  getRoutine(id: string): Routine | undefined;
+  /** Writes `Routines/<name>.md` (`RoutineInputError` / `RoutineConflictError` when it can't). */
+  createRoutine(input: CreateRoutineRequest): Promise<Routine>;
+  /** Sets `paused` in the routine's file. */
+  setRoutinePaused(id: string, paused: boolean): Promise<Routine>;
+  /** Runs it now, within its extra runs for today. */
+  runRoutine(id: string): Promise<RoutineRunResponse>;
 
   on<K extends keyof AgentRuntimeEvents>(
     event: K,

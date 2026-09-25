@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentRuntime, AgentRuntimeEvents } from "@ddl/agent";
+import { RoutineLibrary, UnknownRoutineError } from "@ddl/agent/routines";
 import {
   type AgentMode,
   type AgentStatusResponse,
@@ -13,8 +14,11 @@ import {
   type ArtifactMeta,
   CLIENT_ID_HEADER,
   type ComputerPermissionPane,
+  type CreateRoutineRequest,
   Emitter,
   type Logger,
+  type Routine,
+  type RoutineRunResponse,
   type SurfaceKind,
   type SyncStatusResponse,
   silentLogger,
@@ -27,6 +31,11 @@ import {
 import { MemoryStorageProvider, type StorageProvider } from "@ddl/storage";
 import type { Hono } from "hono";
 import { createApp } from "./app";
+import type { DeviceSettings } from "./device-settings";
+import type { MachineLink } from "./machine-link";
+import { PairedDeviceStore } from "./paired-devices";
+import { PairingCodes } from "./pairing";
+import { createRemoteHosts, type RemoteHostRegistry } from "./remote-hosts";
 import { createSettingsStore, type SettingsStore } from "./settings-store";
 import type { SystemSettingsOpener } from "./system-settings";
 import { WriteTracker } from "./write-tracker";
@@ -59,14 +68,27 @@ export class FakeAgentRuntime implements AgentRuntime {
   /** Makes thread actions take this long (to exercise the 202 path). */
   actionDelayMs = 0;
   actionError: Error | undefined;
+  /** Routine files, read and written like the real runtime does (in its own vault by default). */
+  readonly routineLibrary: RoutineLibrary;
+  /** Makes creating, pausing, resuming and running routines fail with this. */
+  routineError: Error | undefined;
   private readonly events = new Emitter<RuntimeEventMap>();
+  private runs = 0;
+
+  constructor(options: { storage?: StorageProvider } = {}) {
+    this.routineLibrary = new RoutineLibrary({
+      storage: options.storage ?? new MemoryStorageProvider(),
+    });
+  }
 
   async start(): Promise<void> {
     this.track("start");
+    await this.routineLibrary.start();
   }
 
   async stop(): Promise<void> {
     this.track("stop");
+    this.routineLibrary.stop();
   }
 
   status(): AgentStatusResponse {
@@ -104,11 +126,16 @@ export class FakeAgentRuntime implements AgentRuntime {
     return this.records.get(notePath) ?? [];
   }
 
-  listThreads(filter?: { notePath?: string; taskId?: string }): ThreadSummary[] {
+  listThreads(filter?: {
+    notePath?: string;
+    taskId?: string;
+    routineId?: string;
+  }): ThreadSummary[] {
     this.track("listThreads", filter);
     return [...this.threads.values()]
       .filter((t) => !filter?.notePath || t.notePath === filter.notePath)
       .filter((t) => !filter?.taskId || t.taskId === filter.taskId)
+      .filter((t) => !filter?.routineId || t.routineId === filter.routineId)
       .map((t) => summarizeThread(t));
   }
 
@@ -173,6 +200,45 @@ export class FakeAgentRuntime implements AgentRuntime {
       this.track("releaseSurface", threadId, surface);
       this.activeSurfaces.set(key, (this.activeSurfaces.get(key) ?? 1) - 1);
     };
+  }
+
+  listRoutines(): Routine[] {
+    return this.routineLibrary.list();
+  }
+
+  getRoutine(id: string): Routine | undefined {
+    return this.routineLibrary.get(id);
+  }
+
+  async createRoutine(input: CreateRoutineRequest): Promise<Routine> {
+    this.track("createRoutine", input);
+    if (this.routineError) throw this.routineError;
+    return this.routineLibrary.create(input);
+  }
+
+  async setRoutinePaused(id: string, paused: boolean): Promise<Routine> {
+    this.track("setRoutinePaused", id, paused);
+    if (this.routineError) throw this.routineError;
+    return this.routineLibrary.setPaused(id, paused);
+  }
+
+  /** Records a run thread (`thr_run_<n>`) under the routine, as the real scheduler would. */
+  async runRoutine(id: string): Promise<RoutineRunResponse> {
+    this.track("runRoutine", id);
+    if (this.routineError) throw this.routineError;
+    const routine = this.routineLibrary.get(id);
+    if (!routine) throw new UnknownRoutineError(`with id ${id}`);
+    const threadId = `thr_run_${++this.runs}`;
+    this.threads.set(
+      threadId,
+      makeThread(threadId, {
+        taskId: `run_${this.runs}`,
+        notePath: routine.path,
+        title: routine.name,
+        routineId: routine.id,
+      }),
+    );
+    return { routine, threadId };
   }
 
   on<K extends keyof AgentRuntimeEvents>(
@@ -267,10 +333,15 @@ export interface TestAppOptions<S extends StorageProvider = MemoryStorageProvide
   settings?: SettingsStore;
   webDist?: string | null;
   allowedOrigins?: string[];
+  remoteHosts?: RemoteHostRegistry;
+  devices?: PairedDeviceStore;
+  pairing?: PairingCodes;
   syncStatus?: () => SyncStatusResponse;
   now?: () => Date;
   logger?: Logger;
   systemSettings?: FakeSystemSettings;
+  device?: DeviceSettings;
+  machine?: MachineLink;
 }
 
 export interface TestApp<S extends StorageProvider = MemoryStorageProvider> {
@@ -278,6 +349,9 @@ export interface TestApp<S extends StorageProvider = MemoryStorageProvider> {
   storage: S;
   runtime: AgentRuntime;
   settings: SettingsStore;
+  remoteHosts: RemoteHostRegistry;
+  devices: PairedDeviceStore;
+  pairing: PairingCodes;
   token: string;
   writes: WriteTracker;
   systemSettings: FakeSystemSettings;
@@ -292,21 +366,29 @@ export async function createTestApp<S extends StorageProvider = MemoryStoragePro
   options: TestAppOptions<S> = {},
 ): Promise<TestApp<S>> {
   const storage = options.storage ?? (new MemoryStorageProvider() as StorageProvider as S);
-  const runtime = options.runtime ?? new FakeAgentRuntime();
+  const runtime = options.runtime ?? new FakeAgentRuntime({ storage });
   const settings = options.settings ?? (await createSettingsStore({ storage }));
   const token = testToken();
   const writes = new WriteTracker();
   const systemSettings = options.systemSettings ?? new FakeSystemSettings();
+  const remoteHosts = options.remoteHosts ?? createRemoteHosts();
+  const devices = options.devices ?? new PairedDeviceStore({ path: null, logger: silentLogger });
+  const pairing = options.pairing ?? new PairingCodes();
   const app = createApp({
     storage,
     runtime,
     settings,
     config: { port: TEST_PORT, allowedOrigins: options.allowedOrigins ?? [] },
     token,
+    remoteHosts,
+    devices,
+    pairing,
     logger: options.logger ?? silentLogger,
     webDist: options.webDist ?? null,
     writes,
     ...(options.syncStatus ? { syncStatus: options.syncStatus } : {}),
+    ...(options.device ? { device: options.device } : {}),
+    ...(options.machine ? { machine: options.machine } : {}),
     systemSettings,
     ...(options.now ? { now: options.now } : {}),
   });
@@ -331,5 +413,17 @@ export async function createTestApp<S extends StorageProvider = MemoryStoragePro
     );
   };
 
-  return { app, storage, runtime, settings, token, writes, systemSettings, request };
+  return {
+    app,
+    storage,
+    runtime,
+    settings,
+    remoteHosts,
+    devices,
+    pairing,
+    token,
+    writes,
+    systemSettings,
+    request,
+  };
 }

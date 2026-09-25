@@ -5,7 +5,7 @@
  */
 import { type HttpMethod, WIRE_SCHEMAS, type WireSchemaName } from "@ddl/contract";
 import { arb, invalidFor, wireArbitraries } from "@ddl/contract/testing";
-import type { ApiRouteName, Thread } from "@ddl/core";
+import { type ApiRouteName, ROUTINE_TEMPLATES, type Thread } from "@ddl/core";
 import { fc, test } from "@fast-check/vitest";
 import { beforeAll, describe, expect } from "vitest";
 import { type ContractClient, contractClient, isSchemaRejection } from "./contract-test-helpers";
@@ -68,6 +68,20 @@ describe("runtime data comes back unchanged and conformant", () => {
       expect(body).toStrictEqual(json({ approval }));
     }
   });
+
+  test.prop([fc.uniqueArray(arb.routine(), { selector: (r) => r.id, maxLength: 4 })], {
+    numRuns,
+  })("GET routines and routines/:id", async (routines) => {
+    runtime.listRoutines = () => routines;
+    runtime.getRoutine = (id) => routines.find((routine) => routine.id === id);
+    expect((await api.call("routines", "GET")).body).toStrictEqual(
+      json({ routines, templates: ROUTINE_TEMPLATES }),
+    );
+    for (const routine of routines) {
+      const { body } = await api.call("routine", "GET", { params: { id: routine.id } });
+      expect(body).toStrictEqual(json({ routine }));
+    }
+  });
 });
 
 describe("vault data comes back unchanged and conformant", () => {
@@ -109,6 +123,7 @@ const BODY_CASES: BodyCase[] = [
   { name: "agentEnabled", method: "POST", schema: "SetAgentEnabledRequest" },
   { name: "threadMessages", method: "POST", schema: "PostMessageRequest", params: { id: "thr_1" } },
   { name: "approval", method: "POST", schema: "ApprovalDecisionRequest", params: { id: "apr_1" } },
+  { name: "routines", method: "POST", schema: "CreateRoutineRequest" },
   { name: "computerPermissionsOpen", method: "POST", schema: "ComputerPermissionsOpenRequest" },
 ];
 
@@ -179,6 +194,7 @@ describe("queries and paths never crash the daemon", () => {
     for (const [route, query] of [
       ["tasks", { notePath }],
       ["threads", { notePath, taskId }],
+      ["threads", { routineId: taskId }],
       ["approvals", { status }],
     ] as const) {
       expect((await api.call(route, "GET", { query })).status).not.toBe(500);
@@ -211,8 +227,11 @@ describe("queries and paths never crash the daemon", () => {
   });
 
   test.prop([fc.oneof(arb.runtimeId(), arb.text(250))], { numRuns })("ids", async (id) => {
-    for (const route of ["thread", "approval"] as const) {
+    for (const route of ["thread", "approval", "routine"] as const) {
       expect((await api.call(route, "GET", { params: { id } })).status).not.toBe(500);
+    }
+    for (const route of ["routineRun", "routinePause", "routineResume"] as const) {
+      expect((await api.call(route, "POST", { params: { id } })).status).not.toBe(500);
     }
     const artifact = await api.call("artifact", "GET", {
       params: { threadId: id, artifactId: id },

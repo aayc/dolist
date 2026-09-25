@@ -115,6 +115,23 @@ This is a deliberate change to invariant 6 ("the daemon is local-only"): it beco
 unless remote hosts are configured, and then only through a private network with device tokens".
 `AGENTS.md` changes with phase 1.
 
+### With Tailscale
+
+On the machine running the daemon (placeholders: `vm-name.tailnet-name.ts.net`, port 7331):
+
+1. `sudo tailscale serve --bg --https=443 http://127.0.0.1:7331`. Tailscale terminates TLS with the
+   tailnet's certificate and keeps the original `Host`. Never `tailscale funnel`: that publishes
+   the daemon on the internet.
+2. `"remote": { "hosts": ["vm-name.tailnet-name.ts.net"] }` in `$DDL_HOME/config.json` (or
+   `DDL_REMOTE_HOSTS`), then restart the daemon. Without it every request through the proxy gets
+   `forbidden_host`; a proxy that rewrote the `Host` to loopback would be refused too.
+3. `node dist/main.js pair` on that machine (as the daemon's user) prints a code; open
+   `https://vm-name.tailnet-name.ts.net` on the new device, or enter it as the always-on machine's
+   address, and type the code.
+
+Details (credentials per client, the cookie rules, limits): [apps/daemon/README.md](../apps/daemon/README.md#remote-access-and-pairing)
+and [SECURITY.md](../SECURITY.md).
+
 ## The agent relay
 
 Today a daemon that doesn't hold the agent lease shows no threads or approvals ("The agent is
@@ -146,7 +163,12 @@ and the phone use the always-on machine.
   - `always_on_host`: this is the always-on machine; it runs the agent whenever no device set to
     `this_device` is running.
 
-  A device without sync is standalone and runs its own agent, as today.
+  A device without sync is standalone and runs its own agent, as today. Without an always-on
+  machine set up (or without sync), the agent is held on the device whatever it chose, and the
+  choice applies again once both are set up.
+- **One toggle:** "where the orchestrator runs" (this device or the always-on machine) sits in the
+  agent panel's header on the web and the Mac, not only in Settings, and can be flipped at any
+  time; the handover shows as it happens.
 - **Handover uses the agent lease with a priority.** A `this_device` request outranks the
   always-on machine's: the sync service marks a takeover, the holder sees it on its next renewal,
   stops its agent, runs a sync pass and releases, and the requester starts from the synced state
@@ -161,6 +183,16 @@ and the phone use the always-on machine.
   desktop available), so moving the agent never fails silently.
 - **The always-on machine's name and address are synced settings**, so every device knows it;
   each device still pairs once and keeps its own credential.
+- **Fencing:** every lease grant has an increasing epoch, and the sync service refuses writes to
+  the agent's sidecar files (threads, artifacts, `state/`) that don't carry the current one, so a
+  device that lost the agent while offline can't overwrite the new holder's state when it
+  reconnects.
+- **The journal (next):** agent state becomes append-only events that merge as a union, side
+  effects are journaled before and after they run (never re-run when uncertain), and a run
+  resumes on the new machine instead of stopping
+  ([docs/specs/agent-journal.md](./specs/agent-journal.md)). Temporal was considered and rejected:
+  a central server every device would depend on, histories outside the vault, and replay that
+  needs control of the agent loop, which lives inside the harness.
 
 ## Settings
 

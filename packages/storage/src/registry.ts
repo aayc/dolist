@@ -7,6 +7,8 @@ import type { StorageConfig, StorageProvider, SyncTargetConfig } from "./types";
 
 export interface ProviderDeps {
   logger?: Logger;
+  /** The sync service only: the agent lease epoch this device holds (see `RemoteStorageOptions`). */
+  leaseEpoch?: () => number | null;
 }
 
 /**
@@ -47,6 +49,7 @@ export async function createSyncTarget(
       return new RemoteStorageProvider({
         ...options,
         ...(deps.logger ? { logger: deps.logger } : {}),
+        ...(deps.leaseEpoch ? { leaseEpoch: deps.leaseEpoch } : {}),
       });
     }
   }
