@@ -60,4 +60,31 @@ enum SampleWire {
     title: "Morning briefing", status: .done, createdAt: 1_790_663_400_000,
     updatedAt: 1_790_663_460_000, messageCount: 3, artifactCount: 0, surfaces: [],
     pendingApprovals: 0, routineId: "rtn_0a1b2c3d4e5f60")
+
+  static let device = DeviceSettingsResponse(
+    device: .init(id: "dev_laptop", name: "Work laptop"), placement: .alwaysOnMachine,
+    remoteHosts: ["laptop.tailnet-name.ts.net"],
+    sync: DeviceSyncSetup(url: "https://sync.example.com", vault: "vault_1", hasToken: true),
+    lockedByEnv: [.remoteHosts])
+
+  static let syncStatus = SyncStatusResponse(
+    state: .idle, target: .remote, lastSyncedAt: 1_790_000_000_000, pendingChanges: 0,
+    conflicts: [], remoteHost: "sync.example.com", deviceName: "Work laptop")
+
+  static let pairingCode = PairingCodeResponse(
+    code: "ABCD2345", expiresAt: 1_790_000_300_000, url: "https://laptop.tailnet-name.ts.net")
+
+  static let pairedDevice = PairedDevice(
+    id: "pdv_1", name: "Phone", kind: .app, createdAt: 1_790_000_000_000,
+    lastSeenAt: 1_790_000_060_000)
+
+  static let machine = MachineStatusResponse(
+    machine: AlwaysOnMachine(name: "vm-name", url: "https://vm-name.tailnet-name.ts.net"),
+    paired: true, reachable: true, checkedAt: 1_790_000_000_000, version: "0.1.0",
+    agent: .init(
+      runsOn: AgentRunsOn(
+        deviceId: "dev_vm", name: "vm-name", thisDevice: false, alwaysOnMachine: true)),
+    readiness: AgentReadiness(
+      harness: .init(kind: .cursor, ready: true), modelCredential: true, browser: true,
+      computer: .unsupported, connectors: .init(configured: 2, connected: 2)))
 }

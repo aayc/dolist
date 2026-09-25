@@ -264,6 +264,28 @@ struct ProtocolFaithfulnessTests {
         "UpdateSettingsRequest",
         SettingsPatch(agent: .init(harness: .cursor, cursorModel: "gpt-5.5[reasoning=high]"))
       ),
+      ("DeviceSettingsPatch", DeviceSettingsPatch()),
+      ("DeviceSettingsPatch", DeviceSettingsPatch(placement: .alwaysOnMachine)),
+      (
+        "DeviceSettingsPatch",
+        DeviceSettingsPatch(name: "Work laptop", remoteHosts: ["laptop.tailnet-name.ts.net"])
+      ),
+      (
+        "DeviceSyncSetupRequest",
+        DeviceSyncSetupRequest(url: "https://sync.example.com", vault: "vault_1", token: "t0k3n")
+      ),
+      ("DeviceSyncSetupRequest", DeviceSyncSetupRequest(url: "http://127.0.0.1:7332", vault: "v")),
+      ("PairingCodeRequest", PairingCodeRequest()),
+      ("PairingCodeRequest", PairingCodeRequest(name: "Phone")),
+      ("PairRequest", PairRequest(code: "abcd-2345", name: "Studio Mac", kind: .app)),
+      (
+        "MachinePairRequest",
+        MachinePairRequest(url: "https://vm-name.tailnet-name.ts.net/", code: "ABCD 2345")
+      ),
+      (
+        "MachinePairRequest",
+        MachinePairRequest(url: "https://vm-name.tailnet-name.ts.net", code: "ABCD2345", name: "VM")
+      ),
       (
         "ClientEvent",
         ClientEvent.hello(

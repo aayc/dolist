@@ -9,10 +9,11 @@ let package = Package(
     .library(name: "DailyDoListClient", targets: ["DailyDoListClient"])
   ],
   dependencies: [
-    .package(path: "../DailyDoListModels")
+    .package(path: "../DailyDoListModels"),
+    .package(path: "../DailyDoListDomain"),
   ],
   targets: [
-    .target(name: "DailyDoListClient", dependencies: ["DailyDoListModels"]),
+    .target(name: "DailyDoListClient", dependencies: ["DailyDoListModels", "DailyDoListDomain"]),
     .testTarget(name: "DailyDoListClientTests", dependencies: ["DailyDoListClient"]),
   ]
 )

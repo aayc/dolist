@@ -253,6 +253,83 @@ struct HTTPDaemonClientRESTTests {
       response: .json(value: ThreadListResponse(threads: [SampleWire.runSummary])),
       call: { try await $0.threads(routineId: "rtn_0a1b2c3d4e5f60") },
       verify: { ($0 as? [ThreadSummary]) == [SampleWire.runSummary] }),
+    Operation(
+      name: "syncStatus", method: "GET", target: "/api/sync/status", body: nil, attributed: false,
+      response: .json(value: SampleWire.syncStatus), call: { try await $0.syncStatus() },
+      verify: { ($0 as? SyncStatusResponse) == SampleWire.syncStatus }),
+    Operation(
+      name: "deviceSettings", method: "GET", target: "/api/device", body: nil, attributed: false,
+      response: .json(value: SampleWire.device), call: { try await $0.deviceSettings() },
+      verify: { ($0 as? DeviceSettingsResponse) == SampleWire.device }),
+    Operation(
+      name: "updateDeviceSettings", method: "PATCH", target: "/api/device",
+      body: ["placement": "this_device", "remoteHosts": ["vm-name.tailnet-name.ts.net"]],
+      attributed: true, response: .json(value: SampleWire.device),
+      call: {
+        try await $0.updateDeviceSettings(
+          DeviceSettingsPatch(placement: .thisDevice, remoteHosts: ["vm-name.tailnet-name.ts.net"]))
+      },
+      verify: { ($0 as? DeviceSettingsResponse) == SampleWire.device }),
+    Operation(
+      name: "setUpSync", method: "PUT", target: "/api/device/sync",
+      body: ["url": "https://sync.example.com", "vault": "vault_1", "token": "vault-token"],
+      attributed: true, response: .json(value: SampleWire.device),
+      call: {
+        try await $0.setUpSync(
+          DeviceSyncSetupRequest(
+            url: "https://sync.example.com", vault: "vault_1", token: "vault-token"))
+      },
+      verify: { ($0 as? DeviceSettingsResponse)?.sync.hasToken == true }),
+    Operation(
+      name: "setUpSync (keeps the token)", method: "PUT", target: "/api/device/sync",
+      body: ["url": "https://sync.example.com", "vault": "vault_2"], attributed: true,
+      response: .json(value: SampleWire.device),
+      call: {
+        try await $0.setUpSync(
+          DeviceSyncSetupRequest(url: "https://sync.example.com", vault: "vault_2"))
+      },
+      verify: { $0 is DeviceSettingsResponse }),
+    Operation(
+      name: "turnOffSync", method: "DELETE", target: "/api/device/sync", body: nil,
+      attributed: true, response: .json(value: SampleWire.device),
+      call: { try await $0.turnOffSync() }, verify: { $0 is DeviceSettingsResponse }),
+    Operation(
+      name: "createPairingCode (201)", method: "POST", target: "/api/pairing-codes",
+      body: ["name": "Phone"], attributed: true,
+      response: .json(201, value: SampleWire.pairingCode),
+      call: { try await $0.createPairingCode(PairingCodeRequest(name: "Phone")) },
+      verify: { ($0 as? PairingCodeResponse) == SampleWire.pairingCode }),
+    Operation(
+      name: "pairedDevices", method: "GET", target: "/api/devices", body: nil, attributed: false,
+      response: .json(value: PairedDevicesResponse(devices: [SampleWire.pairedDevice])),
+      call: { try await $0.pairedDevices() },
+      verify: { ($0 as? [PairedDevice]) == [SampleWire.pairedDevice] }),
+    Operation(
+      name: "revokeDevice (204)", method: "DELETE", target: "/api/devices/pdv_1", body: nil,
+      attributed: true, response: .respond(status: 204, headers: [:], body: Data()),
+      call: { try await $0.revokeDevice("pdv_1") }, verify: { $0 is Void }),
+    Operation(
+      name: "machineStatus", method: "GET", target: "/api/machine", body: nil, attributed: false,
+      response: .json(value: SampleWire.machine), call: { try await $0.machineStatus() },
+      verify: { ($0 as? MachineStatusResponse) == SampleWire.machine }),
+    Operation(
+      name: "pairMachine", method: "POST", target: "/api/machine/pair",
+      body: ["url": "https://vm-name.tailnet-name.ts.net", "code": "abcd-2345"], attributed: true,
+      response: .json(value: SampleWire.machine),
+      call: {
+        try await $0.pairMachine(
+          MachinePairRequest(url: "https://vm-name.tailnet-name.ts.net", code: "abcd-2345"))
+      },
+      verify: { ($0 as? MachineStatusResponse) == SampleWire.machine }),
+    Operation(
+      name: "checkMachine", method: "POST", target: "/api/machine/check", body: nil,
+      attributed: true, response: .json(value: SampleWire.machine),
+      call: { try await $0.checkMachine() },
+      verify: { ($0 as? MachineStatusResponse) == SampleWire.machine }),
+    Operation(
+      name: "forgetMachine", method: "DELETE", target: "/api/machine/pairing", body: nil,
+      attributed: true, response: .json(value: SampleWire.machine),
+      call: { try await $0.forgetMachine() }, verify: { $0 is MachineStatusResponse }),
   ]
 
   @Test(arguments: operations)
@@ -292,6 +369,99 @@ struct HTTPDaemonClientRESTTests {
     stub.setHandler { _ in .respond(status: 200, headers: [:], body: Data([0xFF])) }
     let untyped = try await stub.client().artifact(threadId: "thr_1", artifactId: "art_2")
     #expect(untyped.mimeType == "application/octet-stream")
+  }
+
+  // MARK: - Pairing
+
+  @Test func pairSendsTheCodeWithoutTheToken() async throws {
+    let response = PairResponse(
+      device: SampleWire.pairedDevice, token: String(repeating: "d", count: 32))
+    let stub = Stub { _ in .json(201, value: response) }
+    let paired = try await stub.client().pair(
+      PairRequest(code: "abcd-2345", name: "Studio Mac", kind: .app))
+    #expect(paired == response)
+    let request = try #require(stub.requests.first)
+    #expect(request.method == "POST")
+    #expect(request.target == "/api/pair")
+    #expect(request.header("Authorization") == nil, "the code is the credential")
+    #expect(request.jsonBody == ["code": "abcd-2345", "name": "Studio Mac", "kind": "app"])
+  }
+
+  @Test func aRejectedPairingCodeIsNotARejectedToken() async throws {
+    let rejected = #"{"error":"pairing_rejected","message":"That code expired."}"#
+    let stub = Stub { _ in .json(401, rejected) }
+    let client = stub.client()
+    await #expect(throws: DaemonClientError.pairingRejected("That code expired.")) {
+      try await client.pair(PairRequest(code: "ABCD2345", name: "Phone", kind: .app))
+    }
+    let pairMachine = { @Sendable in
+      try await client.pairMachine(
+        MachinePairRequest(url: "https://vm-name.tailnet-name.ts.net", code: "ABCD2345"))
+    }
+    await #expect(throws: DaemonClientError.pairingRejected("That code expired.")) {
+      try await pairMachine()
+    }
+    let error = DaemonClientError.pairingRejected("That code expired.")
+    #expect(error.httpStatus == 401 && error.apiErrorCode == .pairingRejected)
+
+    // The machine pairing route also checks the bearer token: its 401 is still "unauthorized".
+    stub.setHandler { _ in .json(401, #"{"error":"unauthorized"}"#) }
+    await #expect(throws: DaemonClientError.unauthorized) { try await pairMachine() }
+    // Every other route treats any 401 as a rejected token.
+    stub.setHandler { _ in .json(401, rejected) }
+    await #expect(throws: DaemonClientError.unauthorized) { try await client.deviceSettings() }
+    await #expect(throws: DaemonClientError.unauthorized) {
+      try await client.createPairingCode(PairingCodeRequest())
+    }
+  }
+
+  @Test func pairingAndDeviceErrorsKeepTheDaemonsReason() async throws {
+    let stub = Stub { _ in .json(429, #"{"error":"rate_limited","message":"Try again soon."}"#) }
+    let client = stub.client()
+    await #expect(
+      throws: DaemonClientError.http(
+        status: 429, body: ApiErrorBody(error: .rateLimited, message: "Try again soon."))
+    ) {
+      try await client.createPairingCode(PairingCodeRequest())
+    }
+    stub.setHandler { _ in
+      .json(502, #"{"error":"machine_unreachable","message":"No answer from vm-name."}"#)
+    }
+    await #expect(
+      throws: DaemonClientError.http(
+        status: 502,
+        body: ApiErrorBody(error: .machineUnreachable, message: "No answer from vm-name."))
+    ) {
+      try await client.pairMachine(
+        MachinePairRequest(url: "https://vm-name.tailnet-name.ts.net", code: "ABCD2345"))
+    }
+    stub.setHandler { _ in
+      .json(409, #"{"error":"locked_by_env","message":"Set by DDL_AGENT_PLACEMENT."}"#)
+    }
+    await #expect(
+      throws: DaemonClientError.http(
+        status: 409, body: ApiErrorBody(error: .lockedByEnv, message: "Set by DDL_AGENT_PLACEMENT.")
+      )
+    ) {
+      try await client.updateDeviceSettings(DeviceSettingsPatch(placement: .thisDevice))
+    }
+    stub.setHandler { _ in .json(404, #"{"error":"not_found","message":"Unknown device"}"#) }
+    await #expect(
+      throws: DaemonClientError.http(
+        status: 404, body: ApiErrorBody(error: .notFound, message: "Unknown device"))
+    ) {
+      try await client.revokeDevice("pdv_9")
+    }
+    let before = stub.requests.count
+    for id in ["..", "pdv/1", ""] {
+      await #expect(
+        throws: DaemonClientError.http(
+          status: 400, body: ApiErrorBody(error: .invalidRequest, message: "Invalid device id"))
+      ) {
+        try await client.revokeDevice(id)
+      }
+    }
+    #expect(stub.requests.count == before)
   }
 
   // MARK: - Status mapping
