@@ -270,6 +270,8 @@ struct ProtocolFaithfulnessTests {
   static let trimmedCases: Set<String> = [
     "PostMessageRequest/whitespace only (trimmed to empty)", "UpdateSettingsRequest/blank model",
     "UpdateSettingsRequest/blank Cursor model",
+    "UpdateSettingsRequest/blank always-on machine name", "DeviceSettingsPatch/blank name",
+    "DeviceSyncSetupRequest/blank token",
   ]
 
   /// The validator is strict enough to matter: it rejects every invalid fixture except the

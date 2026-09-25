@@ -4,8 +4,8 @@ import Foundation
 /// Validates JSON against the generated contract schema (`packages/contract/schema/wire.schema.json`)
 /// in *exact* mode: an object may only carry keys its schema declares, like the contract's
 /// `exact()` conformance tests hold producers to. Supports what the export uses: `$ref`,
-/// `oneOf`/`anyOf`, `type`, `const`, `enum`, `properties`/`required`, `items`, numeric bounds,
-/// string lengths (UTF-16, like JavaScript) and `pattern`.
+/// `oneOf`/`anyOf`, `type`, `const`, `enum`, `properties`/`required`, `items` and their count,
+/// numeric bounds, string lengths (UTF-16, like JavaScript) and `pattern`.
 struct WireSchema: Sendable {
   let definitions: [String: JSONValue]
 
@@ -117,6 +117,12 @@ struct WireSchema: Sendable {
         issues.append("\(path): \(number) > \(max)")
       }
     case .array(let items):
+      if let min = keywords["minItems"]?.numberValue, Double(items.count) < min {
+        issues.append("\(path): fewer than \(Int(min)) items")
+      }
+      if let max = keywords["maxItems"]?.numberValue, Double(items.count) > max {
+        issues.append("\(path): more than \(Int(max)) items")
+      }
       if let itemSchema = keywords["items"] {
         for (index, item) in items.enumerated() {
           check(item, against: itemSchema, at: "\(path)[\(index)]", into: &issues)
