@@ -30,7 +30,9 @@ export interface LeasedAgentRuntimeOptions {
   /** Why the agent isn't running here yet. */
   problem: string;
   /** Added to every status (and `status` event): where the agent runs, this daemon's readiness. */
-  statusExtras?: () => Pick<AgentStatusResponse, "placement" | "readiness">;
+  statusExtras?: (
+    status: AgentStatusResponse,
+  ) => Pick<AgentStatusResponse, "placement" | "readiness">;
   logger: Logger;
 }
 
@@ -239,7 +241,7 @@ export class LeasedAgentRuntime implements AgentRuntime {
   }
 
   #decorate(status: AgentStatusResponse): AgentStatusResponse {
-    const extras = this.#options.statusExtras?.();
+    const extras = this.#options.statusExtras?.(status);
     if (!extras) return status;
     return {
       ...status,

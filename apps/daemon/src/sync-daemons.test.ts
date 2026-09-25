@@ -205,6 +205,14 @@ describe("two daemons sharing a vault through the sync service", {
         relay: "off",
       }),
     );
+    await eventually(async () =>
+      expect((await agentStatus(vm)).readiness).toMatchObject({
+        harness: { kind: "pi", ready: true },
+        modelCredential: true,
+        computer: "unsupported",
+        connectors: { configured: 0, connected: 0 },
+      }),
+    );
     const laptop = await startDevice("Laptop");
     // Without an always-on machine both ask as `interactive`: the first one keeps it.
     await eventually(async () =>

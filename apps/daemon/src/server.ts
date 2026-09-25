@@ -21,6 +21,7 @@ import { errorMessage } from "./errors";
 import { secretFile } from "./home-files";
 import { displayPath } from "./home-paths";
 import { LeasedAgentRuntime } from "./leased-runtime";
+import { ReadinessMonitor, systemReadinessProbes } from "./readiness";
 import { createRemoteHosts } from "./remote-hosts";
 import { createSecurityPolicy } from "./security";
 import { createSettingsStore, SETTINGS_PATH, type SettingsStore } from "./settings-store";
@@ -66,6 +67,7 @@ interface Resources {
   storage?: StorageProvider;
   connectors?: ConnectorToolSource;
   runtime?: LeasedAgentRuntime;
+  readiness?: ReadinessMonitor;
   supervisor?: AgentSupervisor;
   sync?: SyncController;
   server?: Server;
@@ -112,10 +114,25 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
           logger,
         }),
       problem: LEASE_CHECKING_PROBLEM,
-      statusExtras: () => (supervisor ? { placement: supervisor.status() } : {}),
+      statusExtras: (status) => {
+        const current = readiness.current(status);
+        return {
+          ...(supervisor ? { placement: supervisor.status() } : {}),
+          ...(current ? { readiness: current } : {}),
+        };
+      },
       logger: logger.child({ component: "agent" }),
     });
     resources.runtime = runtime;
+    const readiness = new ReadinessMonitor({
+      mode: config.agentMode,
+      harness: () => settings.get().agent.harness,
+      connectors,
+      probes: systemReadinessProbes({ env, execution: config.execution }),
+      onChange: () => runtime.refreshStatus(),
+      logger: logger.child({ component: "readiness" }),
+    });
+    resources.readiness = readiness;
 
     const sync = new SyncController({
       primary: new AttributedStorage(storage, writes, { origin: "sync" }),
@@ -193,6 +210,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
         error: errorMessage(error),
       });
     }
+    void readiness.refresh();
 
     const url = `http://${BIND_HOST}:${port}`;
     logger.info("Listening", { url, vault: displayPath(config.vaultPath, homedir()) });
@@ -242,6 +260,7 @@ async function shutdown(resources: Resources, logger: Logger): Promise<void> {
     }
   };
   for (const unsubscribe of resources.unsubscribes) unsubscribe();
+  resources.readiness?.stop();
   const { supervisor, runtime, sync, hub, server, connectors, storage } = resources;
   if (supervisor) await step("agent lease", () => supervisor.stop());
   if (runtime) await step("agent runtime", () => runtime.stop());
