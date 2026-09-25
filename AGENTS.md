@@ -59,6 +59,7 @@ packages/
                   control through the ddl-computer helper), threads/artifacts, tools, LLM client
   connectors/     MCP client: mcpServers config → ToolSpecs (stdio / streamable HTTP / SSE)
 evals/            Agent evals (safety verdicts, triage, latency); mock mode runs in CI
+deploy/           The always-on machine: linux/ (bundle, systemd units, setup.sh), azure/ (VM guide)
 scripts/          Repo tooling (secret scan, bench/bundle budgets, git hooks)
 docs/             Architecture, agent system, performance, security model, cross-platform plan
 ```
@@ -116,7 +117,8 @@ Key flows are documented in `docs/ARCHITECTURE.md` and `docs/AGENT_SYSTEM.md`.
 Docs index: `README.md` (product + quick start), `docs/ARCHITECTURE.md`, `docs/AGENT_SYSTEM.md`,
 `docs/USER_JOURNEYS.md` (the living-list journeys and their tests),
 `docs/PERFORMANCE.md`, `docs/CROSS_PLATFORM.md`, `docs/SYNC.md` (devices sharing a vault, the
-agent lease), `docs/ALWAYS_ON.md` (design: the agent on an always-on machine), `docs/CI.md`, `SECURITY.md`, `CONTRIBUTING.md`, and package READMEs
+agent lease), `docs/ALWAYS_ON.md` (design: the agent on an always-on machine; setting one up:
+`deploy/linux/README.md`, `deploy/azure/README.md`), `docs/CI.md`, `SECURITY.md`, `CONTRIBUTING.md`, and package READMEs
 (`packages/storage`, `packages/connectors`, `packages/editor`, `packages/agent/src/safety`,
 `packages/agent/src/execution`, `apps/web` (the agent chat, whose pacing and activity wording the
 Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).

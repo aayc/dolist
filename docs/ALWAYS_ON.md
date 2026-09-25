@@ -77,6 +77,12 @@ Setup principles:
 - **Separate accounts.** The agent's browser on the VM is signed in only to what the user gives
   it. A mistake lands on the agent's machine, not on the user's.
 
+Setting one up: the [Linux setup kit](../deploy/linux/README.md) builds a bundle (daemon, web app,
+sync service) and installs it with `setup.sh` as two hardened systemd services under their own
+user, with the always-on placement and the tailnet name as remote host, and the
+[Azure guide](../deploy/azure/README.md) creates a VM with no public IP, inbound traffic denied and
+encryption at host, joined to the tailnet at first boot.
+
 ## Remote access
 
 The daemon keeps binding `127.0.0.1`. A private overlay network (Tailscale, or any equivalent such
