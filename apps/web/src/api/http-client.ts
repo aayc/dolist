@@ -11,6 +11,7 @@ import {
   type ComputerPermissionsOpenRequest,
   type ConnectorStatus,
   type CreateFolderRequest,
+  type CreateRoutineRequest,
   createId,
   type DailyNoteResponse,
   type HealthResponse,
@@ -18,6 +19,9 @@ import {
   type NoteResponse,
   type PostMessageRequest,
   type RenameRequest,
+  type RoutineListResponse,
+  type RoutineResponse,
+  type RoutineRunResponse,
   type SearchResponse,
   type ServerEvent,
   type SetAgentEnabledRequest,
@@ -38,6 +42,7 @@ import type {
   ConnectionChange,
   ConnectionState,
   DaemonClient,
+  ThreadFilter,
   WriteOptions,
 } from "./client";
 import { ConflictError, HttpError, NetworkError } from "./errors";
@@ -319,8 +324,9 @@ export class HttpDaemonClient implements DaemonClient {
     return this.request("GET", API_ROUTES.tasks(notePath));
   }
 
-  listThreads(): Promise<ThreadListResponse> {
-    return this.request("GET", API_ROUTES.threads);
+  listThreads(filter: ThreadFilter = {}): Promise<ThreadListResponse> {
+    const query = filter.routineId ? `?routineId=${encodeURIComponent(filter.routineId)}` : "";
+    return this.request("GET", `${API_ROUTES.threads}${query}`);
   }
 
   getThread(id: string): Promise<ThreadResponse> {
@@ -359,6 +365,30 @@ export class HttpDaemonClient implements DaemonClient {
   async openComputerPermissions(pane: ComputerPermissionPane): Promise<void> {
     const body: ComputerPermissionsOpenRequest = { pane };
     await this.request("POST", API_ROUTES.computerPermissionsOpen, body);
+  }
+
+  listRoutines(): Promise<RoutineListResponse> {
+    return this.request("GET", API_ROUTES.routines);
+  }
+
+  getRoutine(id: string): Promise<RoutineResponse> {
+    return this.request("GET", API_ROUTES.routine(id));
+  }
+
+  createRoutine(request: CreateRoutineRequest): Promise<RoutineResponse> {
+    return this.request("POST", API_ROUTES.routines, request);
+  }
+
+  runRoutine(id: string): Promise<RoutineRunResponse> {
+    return this.request("POST", API_ROUTES.routineRun(id));
+  }
+
+  pauseRoutine(id: string): Promise<RoutineResponse> {
+    return this.request("POST", API_ROUTES.routinePause(id));
+  }
+
+  resumeRoutine(id: string): Promise<RoutineResponse> {
+    return this.request("POST", API_ROUTES.routineResume(id));
   }
 
   async getArtifact(threadId: string, artifactId: string): Promise<ArtifactContent> {

@@ -78,7 +78,11 @@ async function resync(services: Services): Promise<void> {
   } catch {
     // The next reconnect retries.
   }
-  await Promise.allSettled([services.workspace.resync(), services.agent.resync()]);
+  await Promise.allSettled([
+    services.workspace.resync(),
+    services.agent.resync(),
+    services.routines.resync(),
+  ]);
 }
 
 function installSettingsEffects(services: Services, appliedTheme: ThemePreference): void {

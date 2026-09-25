@@ -53,6 +53,8 @@ export default defineConfig({
             // Kept apart from ./test-results, which every functional run wipes.
             outputDir: "./.playwright-fullstack/test-results",
             fullyParallel: false,
+            // Every spec shares one daemon and vault (today's note, the agent switch).
+            workers: 1,
             use: {
               viewport: { width: 1400, height: 900 },
               baseURL: `http://127.0.0.1:${FULLSTACK_PORT}`,
