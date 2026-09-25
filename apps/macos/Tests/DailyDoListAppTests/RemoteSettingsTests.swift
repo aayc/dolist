@@ -82,6 +82,40 @@ struct RemoteSettingsTests {
     #expect(store.machine?.paired == false && store.machine?.machine?.name == "vm-name")
   }
 
+  // MARK: - Sync
+
+  @Test func syncKeepsTheTokenWriteOnly() async {
+    var remote = InMemoryDaemonClient.Remote.alwaysOn
+    remote.syncURL = nil
+    remote.vault = nil
+    let (store, _) = store(remote)
+    await store.load()
+    #expect(store.device?.sync == DeviceSyncSetup(url: nil, vault: nil, hasToken: false))
+    #expect(store.syncStatus?.state == .disabled)
+
+    #expect(
+      await store.setUpSync(url: "https://sync.example.com", vault: "v1", token: nil) == false)
+    #expect(store.error(.sync) == "token: this device has no vault token yet")
+    #expect(await store.setUpSync(url: "https://sync.example.com", vault: "v1", token: "t0k3n"))
+    #expect(store.device?.sync.hasToken == true && store.error(.sync) == nil)
+    #expect(store.syncStatus?.state == .idle && store.syncStatus?.remoteHost == "sync.example.com")
+    #expect(await store.turnOffSync())
+    #expect(store.device?.sync.url == nil && store.syncStatus?.state == .disabled)
+  }
+
+  @Test func settingsAnEnvironmentVariableSetsAreRefusedWithWhy() async {
+    var remote = InMemoryDaemonClient.Remote.alwaysOn
+    remote.lockedByEnv = [.sync, .remoteHosts]
+    let (store, _) = store(remote)
+    await store.load()
+    #expect(await store.turnOffSync() == false)
+    #expect(
+      store.error(.turnOffSync) == "Sync is set by DDL_SYNC_URL, DDL_SYNC_VAULT and DDL_SYNC_TOKEN."
+    )
+    #expect(await store.setRemoteHosts([]) == false)
+    #expect(store.error(.remoteHosts) == "The remote hosts are set by DDL_REMOTE_HOSTS.")
+  }
+
   // MARK: - Messages
 
   @Test func everyErrorCodeHasAClearMessage() {

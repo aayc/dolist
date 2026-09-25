@@ -4,7 +4,7 @@ import SwiftUI
 
 /// A section of Settings → Always-On.
 enum AlwaysOnSection: String, CaseIterable, Identifiable {
-  case agentLocation, alwaysOnMachine
+  case agentLocation, alwaysOnMachine, sync
 
   var id: String { rawValue }
 
@@ -12,6 +12,7 @@ enum AlwaysOnSection: String, CaseIterable, Identifiable {
     switch self {
     case .agentLocation: "Agent Location"
     case .alwaysOnMachine: "Always-On Machine"
+    case .sync: "Sync"
     }
   }
 
@@ -19,7 +20,7 @@ enum AlwaysOnSection: String, CaseIterable, Identifiable {
   init(_ setUp: OrchestratorLocation.SetUp) {
     switch setUp {
     case .alwaysOnMachine: self = .alwaysOnMachine
-    case .sync: self = .agentLocation
+    case .sync: self = .sync
     }
   }
 }
@@ -47,6 +48,7 @@ struct AlwaysOnSettingsPane: View {
         switch ui.alwaysOnSection {
         case .agentLocation: AgentLocationSection(model: model, remote: remote)
         case .alwaysOnMachine: MachineSection(model: model, remote: remote)
+        case .sync: SyncSection(model: model, remote: remote)
         }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

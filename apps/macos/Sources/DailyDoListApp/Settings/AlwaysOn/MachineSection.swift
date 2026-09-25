@@ -179,8 +179,8 @@ struct PairMachineForm: View {
     } footer: {
       SettingsNote(
         text:
-          "Get a pairing code on the always-on machine: in its web app (Settings → Devices), or with its daemon's `pair` command. Codes work once, for five minutes."
-      )
+          "Get a pairing code on the always-on machine: in its web app (Settings → Devices), or with its daemon's `pair` command. Codes work once, for five minutes.",
+        markdown: true)
     }
     .onAppear { if !edited { url = initialURL } }
   }
