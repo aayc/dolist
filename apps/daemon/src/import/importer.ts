@@ -31,6 +31,7 @@ import { MANIFEST_PATH, writeManifest } from "./manifest";
 import { type ObsidianConfig, readObsidianConfig } from "./obsidian-config";
 import { defaultDestination, type ImportPlaces, resolveDestination, resolveSource } from "./places";
 import { pathList, skippedList } from "./report-lists";
+import { type MergedSettings, mergeSettingsFile, SETTINGS_PATH } from "./settings-merge";
 import { carrySidecar } from "./sidecar";
 import { type SourceScan, scanSource } from "./source-scan";
 
@@ -55,6 +56,7 @@ interface Analysis {
   obsidian: ObsidianConfig;
   scan: SourceScan;
   carry: CarryOver;
+  settings: MergedSettings;
   warnings: string[];
 }
 
@@ -151,6 +153,12 @@ export class ObsidianImporter {
           },
         },
       );
+      const settingsFile = join(staging, SETTINGS_PATH);
+      if (analysis.settings.kind === "merged") {
+        await writeFileAtomic(settingsFile, analysis.settings.text);
+      } else {
+        await copyFileAtomic(analysis.settings.absolute, settingsFile, { signal: run.signal });
+      }
       run.phase("finishing");
       await writeManifest(staging, {
         source,
@@ -231,14 +239,14 @@ export class ObsidianImporter {
       settings,
       this.#now(),
     );
-    return {
-      source,
-      vault,
-      obsidian,
-      scan,
-      carry,
-      warnings: this.#warnings(obsidian, scan, carry),
-    };
+    const merged = await mergeSettingsFile(vault, carry.plan.dailyNotes, obsidian.patch);
+    const warnings = this.#warnings(obsidian, scan, carry);
+    if (merged.kind === "newer") {
+      warnings.push(
+        "This vault's settings were saved by a newer version of Daily Do List, so they're copied unchanged: check the daily-note settings after switching.",
+      );
+    }
+    return { source, vault, obsidian, scan, carry, settings: merged, warnings };
   }
 
   #warnings(obsidian: ObsidianConfig, scan: SourceScan, carry: CarryOver): string[] {

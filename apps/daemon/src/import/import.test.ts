@@ -1,15 +1,19 @@
 import { lstat, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { decodePersistedImportManifest } from "@ddl/contract";
-import { type ObsidianImportJob, parseTasks } from "@ddl/core";
+import { type ObsidianImportJob, parseTasks, silentLogger } from "@ddl/core";
+import { MemoryStorageProvider } from "@ddl/storage";
 import { afterEach, describe, expect, it } from "vitest";
+import { createSettingsStore } from "../settings-store";
 import { sha256 } from "./files";
 import { ObsidianImporter } from "./importer";
 import {
+  CURRENT_SETTINGS_FILE,
   currentFiles,
   currentSettings,
   link,
   makeTestbed,
+  OBSIDIAN_DAILY,
   OBSIDIAN_FILES,
   ROUTINE_PATH,
   snapshotTree,
@@ -23,6 +27,7 @@ let bed: Testbed;
 let counter = 0;
 /** The one Obsidian note the current vault's daily note is appended to. */
 const MERGED_NOTE = "Journal/Daily/2026/09/2026-09-24.md";
+const SETTINGS_FILE = ".daily-do-list/settings.json";
 
 async function setup(options: { obsidian?: VaultOptions; current?: VaultOptions } = {}) {
   bed = await makeTestbed(options);
@@ -257,6 +262,68 @@ describe("carrying over the current vault", () => {
         "utf8",
       ),
     ).toBe(currentFiles()[ROUTINE_PATH]);
+  });
+});
+
+describe("the new vault's settings", () => {
+  async function settingsOf(job: ObsidianImportJob): Promise<Record<string, unknown>> {
+    return JSON.parse(await readFile(join(destinationOf(job), SETTINGS_FILE), "utf8"));
+  }
+
+  it("keep the agent's and take daily notes and the editor from Obsidian", async () => {
+    const importer = await setup();
+    const settings = await settingsOf(await runImport(importer));
+    expect(settings).toEqual({
+      version: 1,
+      theme: "light",
+      editor: {
+        vimMode: true,
+        fontSize: 18,
+        livePreview: true,
+        showLineNumbers: true,
+        spellcheck: false,
+        vimrc: OBSIDIAN_FILES[".obsidian.vimrc"],
+      },
+      dailyNotes: OBSIDIAN_DAILY,
+      agent: CURRENT_SETTINGS_FILE.agent,
+      futureFeature: { enabled: true },
+    });
+  });
+
+  it("are what the daemon's settings store reads in the new vault", async () => {
+    const importer = await setup();
+    const job = await runImport(importer);
+    const storage = new MemoryStorageProvider();
+    await storage.write(
+      SETTINGS_FILE,
+      await readFile(join(destinationOf(job), SETTINGS_FILE), "utf8"),
+    );
+    const store = await createSettingsStore({ storage, logger: silentLogger });
+    expect(store.get()).toMatchObject({
+      theme: "light",
+      dailyNotes: OBSIDIAN_DAILY,
+      editor: { vimMode: true, fontSize: 18, showLineNumbers: true },
+      agent: { model: "mock-model", actOnExistingTasks: false },
+    });
+  });
+
+  it("take Obsidian's theme when this vault never chose one", async () => {
+    const importer = await setup({ current: { files: { ".daily-do-list/settings.json": null } } });
+    expect(await settingsOf(await runImport(importer))).toMatchObject({
+      theme: "dark",
+      dailyNotes: OBSIDIAN_DAILY,
+      editor: { vimMode: true },
+    });
+  });
+
+  it("are copied unchanged, with a warning, when a newer app wrote them", async () => {
+    const newer = '{"version":2,"dailyNotes":{"folder":"Daily"}}\n';
+    const importer = await setup({ current: { files: { ".daily-do-list/settings.json": newer } } });
+    expect((await importer.preview(bed.source)).warnings).toContain(
+      "This vault's settings were saved by a newer version of Daily Do List, so they're copied unchanged: check the daily-note settings after switching.",
+    );
+    const job = await runImport(importer);
+    expect(await readFile(join(destinationOf(job), SETTINGS_FILE), "utf8")).toBe(newer);
   });
 });
 
