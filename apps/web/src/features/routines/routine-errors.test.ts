@@ -37,6 +37,16 @@ describe("runProblem", () => {
       "The agent is paused: switch it on to run routines.",
     ],
     [
+      daemonError(503, "agent_unavailable", "The agent is running on Desktop."),
+      "The agent can't run here",
+      "The agent is running on Desktop.",
+    ],
+    [
+      daemonError(400, "invalid_request", "Invalid routine id."),
+      "Couldn't start the run",
+      "Invalid routine id.",
+    ],
+    [
       daemonError(404, "not_found", "Routine not found"),
       "This routine is gone",
       "Its file was moved or deleted.",
