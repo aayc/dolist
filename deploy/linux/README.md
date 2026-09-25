@@ -88,12 +88,16 @@ What `setup.sh` does, and does again safely on every run:
    Playwright, into `~ddl/.cache/ms-playwright`, plus the system libraries it needs (apt).
 7. Installs and enables `ddl-sync.service` and `ddl-daemon.service`, restarts them and waits until
    both answer their health checks.
-8. Prints the next steps (below). It never prints a token.
+8. Names this machine the vault's always-on machine (`remote.alwaysOnMachine` in the synced
+   settings: the host's first label and `https://<host>`) when the vault names none yet. The
+   daemon applies `always_on_host` only then (pairing a laptop with the machine sets it too);
+   before, it competes for the agent like any laptop. A vault that already names another machine
+   is left alone.
+9. Prints the next steps (below). It never prints a token.
 
-> **Placement and remote hosts.** `agent.placement` and `remote.hosts` belong to the always-on
-> phases of [docs/ALWAYS_ON.md](../../docs/ALWAYS_ON.md): remote access (remote hosts, pairing)
-> and placement per device (lease priorities). They take effect once those land in the daemon;
-> until then the daemon rejects a `config.json` that has them, since it refuses unknown keys.
+`remote.hosts` is a JSON list in `config.json`, one name per `--host`. (The daemon's
+`DDL_REMOTE_HOSTS` override takes names separated by commas; the kit doesn't use it, and setting it
+makes the names read-only in Settings.)
 
 ### Next steps
 

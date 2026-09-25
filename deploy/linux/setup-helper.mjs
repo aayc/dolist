@@ -10,10 +10,13 @@
 //   node setup-helper.mjs has-vault --id <vault id>       < `ddl-sync vault list --json`
 //   node setup-helper.mjs save-sync-token --file <path>   < `ddl-sync vault create|rotate-token --json`
 //   node setup-helper.mjs wait-healthy --url <url> [--token-file <path>] [--timeout-s N]
+//   node setup-helper.mjs set-machine --daemon-url <url> --token-file <path> --host <remote host>
 //
 // write-config fills in `vaultPath` only when it's unset, sets `port` and `agent.placement` when
 // given, and replaces `sync` and `remote.hosts` when given; every other key is kept.
-// save-sync-token prints the vault id.
+// save-sync-token prints the vault id. set-machine names this machine as the vault's always-on
+// machine (`remote.alwaysOnMachine` in the synced settings) unless the vault already names one, and
+// prints `set`, `kept`, or `other <name> <url>`.
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -49,6 +52,9 @@ try {
       break;
     case "wait-healthy":
       await waitHealthy(rest);
+      break;
+    case "set-machine":
+      await setMachine(rest);
       break;
     default:
       throw new UsageError(`unknown command "${command ?? ""}"`);
@@ -136,7 +142,7 @@ function writeConfig(args) {
     const invalid = hosts.filter((host) => !isRemoteHost(host));
     if (invalid.length > 0) {
       throw new UsageError(
-        `not a DNS name (optionally with :port, no scheme, path or IP address): ${invalid.join(", ")}`,
+        `not a remote host (a DNS name with an optional :port; no scheme, path, IP address or loopback name; one name per --host): ${invalid.join(", ")}`,
       );
     }
     if (hosts.length > MAX_REMOTE_HOSTS) {
@@ -210,6 +216,47 @@ async function waitHealthy(args) {
   }
 }
 
+/**
+ * The daemon applies `always_on_host` only once the vault's settings name an always-on machine
+ * (pairing a laptop does it too); until then it competes for the agent like any laptop.
+ */
+async function setMachine(args) {
+  const { values } = parse(args, {
+    "daemon-url": { type: "string" },
+    "token-file": { type: "string" },
+    host: { type: "string" },
+  });
+  const base = required(values["daemon-url"], "--daemon-url").replace(/\/$/, "");
+  const host = required(values.host, "--host").trim().toLowerCase();
+  if (!isRemoteHost(host)) throw new UsageError(`--host "${host}" is not a remote host`);
+  const token = readFileSync(required(values["token-file"], "--token-file"), "utf8").trim();
+  const url = new URL(`https://${host}`).origin;
+  const name = host.split(":")[0].split(".")[0];
+  const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+  const current = await fetch(`${base}/api/settings`, {
+    headers,
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!current.ok) throw new Error(`GET /api/settings: HTTP ${current.status}`);
+  const machine = (await current.json())?.settings?.remote?.alwaysOnMachine ?? null;
+  if (machine?.url === url) {
+    process.stdout.write("kept\n");
+    return;
+  }
+  if (machine) {
+    process.stdout.write(`other ${machine.name} ${machine.url}\n`);
+    return;
+  }
+  const update = await fetch(`${base}/api/settings`, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify({ remote: { alwaysOnMachine: { name, url } } }),
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!update.ok) throw new Error(`PUT /api/settings: HTTP ${update.status}`);
+  process.stdout.write("set\n");
+}
+
 function readConfig(file) {
   if (!existsSync(file)) return {};
   const config = readJson(file);
@@ -232,14 +279,18 @@ function writePrivate(file, content) {
   renameSync(temporary, file);
 }
 
+/** The daemon's rule (`normalizeRemoteHost` in @ddl/core), for a trimmed, lowercased value. */
 function isRemoteHost(value) {
-  const match = /^([^:]+)(?::(\d{1,5}))?$/.exec(value);
-  if (!match || value.length > 253) return false;
-  const [, host, port] = match;
-  if (port !== undefined && (Number(port) < 1 || Number(port) > 65_535)) return false;
-  const labels = host.split(".");
-  if (labels.every((label) => /^\d+$/.test(label))) return false;
-  return labels.length >= 2 && labels.every((label) => DNS_LABEL.test(label));
+  const colon = value.indexOf(":");
+  const hostname = colon === -1 ? value : value.slice(0, colon);
+  const port = colon === -1 ? null : value.slice(colon + 1);
+  if (hostname.length === 0 || hostname.length > 253) return false;
+  const labels = hostname.split(".");
+  if (!labels.every((label) => DNS_LABEL.test(label))) return false;
+  // URL parsers read a name whose last label is numeric as an IPv4 address.
+  if (/^[0-9]+$/.test(labels.at(-1))) return false;
+  if (hostname === "localhost" || hostname.endsWith(".localhost")) return false;
+  return port === null || (/^[1-9][0-9]{0,4}$/.test(port) && Number(port) <= 65_535);
 }
 
 function isRecord(value) {

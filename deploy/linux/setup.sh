@@ -292,6 +292,17 @@ if [ "$NO_START" = 0 ]; then
     --token-file "$DDL_HOME_DIR/daemon-token" ||
     fail "the daemon didn't start: journalctl -u ddl-daemon -n 50"
   note "ddl-sync and ddl-daemon are running"
+  # always_on_host applies once the vault's (synced) settings name the always-on machine.
+  if [ -n "$remote_host" ]; then
+    machine="$(as_user "$NODE" "$HELPER" set-machine --daemon-url "http://127.0.0.1:$PORT" \
+      --token-file "$DDL_HOME_DIR/daemon-token" --host "$remote_host")"
+    case "$machine" in
+      set) note "the vault's settings now name this machine the always-on machine" ;;
+      kept) note "the vault's settings already name this machine the always-on machine" ;;
+      *) note "the vault's settings name another always-on machine (${machine#other }): to hand" \
+        "the agent to this one, change it in Settings -> Always-on machine" ;;
+    esac
+  fi
 else
   note "enabled ddl-sync and ddl-daemon (not started: --no-start)"
 fi
@@ -313,8 +324,9 @@ Next steps:
 EOF
 if [ -z "$remote_host" ]; then
   cat <<'EOF'
-   No remote host is configured yet, so the daemon answers on loopback only. Run this script
-   again with --host vm-name.tailnet-name.ts.net (its name on the tailnet).
+   No remote host is configured yet, so the daemon answers on loopback only, and the vault
+   doesn't know this machine as its always-on machine. Run this script again with
+   --host vm-name.tailnet-name.ts.net (its name on the tailnet).
 EOF
 fi
 cat <<EOF
