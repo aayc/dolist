@@ -261,7 +261,10 @@ describe("AgentSupervisor", () => {
         epoch,
       }),
     );
+    // The sync service records the new priority before the supervisor has read the answer.
+    await vi.waitFor(() =>
+      expect(supervisor.status().runsOn).toMatchObject({ thisDevice: true, alwaysOnMachine: true }),
+    );
     expect(runtime.active).toBe(true);
-    expect(supervisor.status().runsOn).toMatchObject({ thisDevice: true, alwaysOnMachine: true });
   });
 });
