@@ -115,7 +115,12 @@ Spec: [docs/specs/obsidian-migration.md](docs/specs/obsidian-migration.md).
 ### Agent journal — phase 1 (threads)
 
 Spec: [docs/specs/agent-journal.md](docs/specs/agent-journal.md). Branch `feat/agent-journal`
-from `main` at `a42bcf3`: in progress. Phase 1: the journal is the source of truth for threads
+(from `main`): **built** (`5bdb2f1`, 9 commits; journal at
+`.daily-do-list/state/journal/threads/<id>.jsonl`, snapshots byte-identical to the old store,
+the gate's decisions unchanged, a call whose "about to run" can't be written is blocked; bench:
+flushed append p99 10.4 ms, 5k-event union merge 22.8 ms). CI (CI, Security) dispatched on the
+branch before merging to `main`; after the always-on merge, pass S2's lease epoch as
+`AgentRuntimeOptions.leaseEpoch`. Phase 1: the journal is the source of truth for threads
 (append-only JSONL, union merge in the sync engine), today's thread JSON is still written as a
 derived snapshot (so the relay's read-only view, older daemons and the clients keep working),
 write-ahead around tool calls with "interrupted" instead of re-running, resume after a restart,
