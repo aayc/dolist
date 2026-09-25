@@ -104,6 +104,27 @@ public protocol DaemonClient: AnyObject, Sendable {
   /// Forgets this device's credential for the always-on machine (revoked there when it answers).
   func forgetMachine() async throws -> MachineStatusResponse
 
+  // This machine's vault and importing from Obsidian (a paired device gets 403
+  // `forbidden_device`; a daemon without these routes answers 404)
+  /// The vault the daemon opens, and whether `DDL_VAULT` fixes it.
+  func deviceVault() async throws -> DeviceVaultResponse
+  /// Restarts the daemon on another vault (`restart` says who starts it again; none: already that
+  /// vault). 409 `locked_by_env`, or `conflict` while an import runs or the vault syncs.
+  func switchVault(_ request: DeviceVaultRequest) async throws -> DeviceVaultResponse
+  /// What importing a folder would do; reads it, writes nothing. 400 for a folder it can't use.
+  func previewObsidianImport(_ request: ObsidianImportPreviewRequest) async throws
+    -> ObsidianImportPreview
+  /// The running or last job, and where this vault was imported from.
+  func obsidianImportStatus() async throws -> ObsidianImportStatusResponse
+  /// Starts an import; `importProgress` events follow. 400 for a bad source or destination, 409
+  /// while a job runs.
+  func startObsidianImport(_ request: ObsidianImportRequest) async throws -> ObsidianImportJob
+  /// Stops the running job once its partial work is removed. 404 when nothing runs.
+  func cancelObsidianImport() async throws -> ObsidianImportJob
+  /// Copies what changed in Obsidian since the import. 404 when this vault wasn't imported or the
+  /// Obsidian vault moved, 409 while a job runs.
+  func updateFromObsidian() async throws -> ObsidianImportJob
+
   // Events (WebSocket)
   /// Opens the event connection (idempotent); reconnects automatically until `disconnect()`.
   func connect() async
@@ -167,6 +188,38 @@ extension DaemonClient {
 
   public func forgetMachine() async throws -> MachineStatusResponse {
     throw notServed(APIRoute.machinePairing)
+  }
+
+  public func deviceVault() async throws -> DeviceVaultResponse {
+    throw notServed(APIRoute.deviceVault)
+  }
+
+  public func switchVault(_ request: DeviceVaultRequest) async throws -> DeviceVaultResponse {
+    throw notServed(APIRoute.deviceVault)
+  }
+
+  public func previewObsidianImport(_ request: ObsidianImportPreviewRequest) async throws
+    -> ObsidianImportPreview
+  {
+    throw notServed(APIRoute.importObsidianPreview)
+  }
+
+  public func obsidianImportStatus() async throws -> ObsidianImportStatusResponse {
+    throw notServed(APIRoute.importObsidian)
+  }
+
+  public func startObsidianImport(_ request: ObsidianImportRequest) async throws
+    -> ObsidianImportJob
+  {
+    throw notServed(APIRoute.importObsidian)
+  }
+
+  public func cancelObsidianImport() async throws -> ObsidianImportJob {
+    throw notServed(APIRoute.importObsidianCancel)
+  }
+
+  public func updateFromObsidian() async throws -> ObsidianImportJob {
+    throw notServed(APIRoute.importObsidianUpdate)
   }
 
   private func notServed(_ route: String) -> DaemonClientError {

@@ -14,6 +14,7 @@ actor FakeDaemon {
     case settle(taskId: String, token: Int)
     case beat(jobId: String, generation: Int)
     case handover(generation: Int)
+    case importStep(generation: Int, step: Int)
   }
 
   struct Scheduled: Sendable {
@@ -70,6 +71,9 @@ actor FakeDaemon {
   // Device settings, pairing, the always-on machine
   var remote: FakeRemote
 
+  // The vault's location, and importing from Obsidian
+  var imports: FakeImports
+
   init(
     seed: InMemoryDaemonClient.Seed, clock: SimulationClock, simulation: AgentSimulation,
     clientId: String, remote setup: InMemoryDaemonClient.Remote = .standalone
@@ -90,6 +94,7 @@ actor FakeDaemon {
     remote.holder = applies && setup.placement == .alwaysOnMachine ? .machine : .thisDevice
     if setup.machinePaired { remote.machineCheckedAt = start }
     self.remote = remote
+    imports = FakeImports(vaultName: seed.vaultName)
     pendingSeed = seed
   }
 
@@ -200,6 +205,7 @@ actor FakeDaemon {
     case .settle(let taskId, let token): settled(taskId, token: token)
     case .beat(let jobId, let generation): runBeat(jobId, generation: generation)
     case .handover(let generation): finishHandover(generation: generation)
+    case .importStep(let generation, let step): runImportStep(generation: generation, step: step)
     }
   }
 
