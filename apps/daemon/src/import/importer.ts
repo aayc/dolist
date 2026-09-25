@@ -17,7 +17,12 @@ import {
   type Unsubscribe,
 } from "@ddl/core";
 import { errorMessage } from "../errors";
-import { type CarryOver, countWatchedOpenTasks, planCarryOver } from "./carry-over";
+import {
+  type CarryOver,
+  countWatchedOpenTasks,
+  planCarryOver,
+  writeCarriedFiles,
+} from "./carry-over";
 import { copySource, createStaging, publish, removeStaging } from "./copy";
 import { readRegularFile } from "./files";
 import { type JobListener, type JobRun, JobRunner } from "./jobs";
@@ -123,6 +128,8 @@ export class ObsidianImporter {
     try {
       run.phase("copying");
       const copy = await copySource(source, staging, run);
+      run.phase("carrying_over");
+      await writeCarriedFiles(carry, staging, run);
       run.phase("finishing");
       await writeManifest(staging, {
         source,

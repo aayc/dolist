@@ -10,7 +10,7 @@
  * - Hidden files and folders other than the sidecar and `.trash/` stay behind, as do links that
  *   lead outside the vault. The sidecar is carried by `sidecar.ts`.
  */
-import { basename } from "node:path";
+import { basename, join } from "node:path";
 import {
   type AppSettings,
   addDays,
@@ -34,7 +34,7 @@ import {
   toISODate,
 } from "@ddl/core";
 import { TRASH_DIR } from "../vault-ops";
-import { readRegularFile } from "./files";
+import { copyFileAtomic, readRegularFile, writeFileAtomic } from "./files";
 import type { ObsidianConfig } from "./obsidian-config";
 import { freeName, pathKey } from "./places";
 import { BoundedList, moveList, pathList } from "./report-lists";
@@ -218,18 +218,60 @@ export async function carriedDailyText(
   move: FileMove,
   readObsidian: (path: string) => Promise<string | null>,
 ): Promise<{ text: string; offset: number }> {
-  const own = await readText(move.absolute);
-  if (!move.daily?.merged) return { text: own, offset: 0 };
-  const group = carry.merges.get(move.to) ?? [move];
-  let text = (await readObsidian(move.to)) ?? "";
-  let offset = 0;
-  for (const member of group) {
-    const addition = member === move ? own : await readText(member.absolute);
-    const next = appendSection(text, addition);
-    if (member === move) offset = next.offset;
+  if (!move.daily?.merged) return { text: await readText(move.absolute), offset: 0 };
+  const merged = await mergedDailyNote(carry, move.to, (await readObsidian(move.to)) ?? "");
+  return { text: merged.text, offset: merged.offsets.get(move.from) ?? 0 };
+}
+
+/**
+ * The Obsidian note at `to` with every daily note carried into it appended, and the line each of
+ * them starts at (by its current path).
+ */
+export async function mergedDailyNote(
+  carry: CarryOver,
+  to: string,
+  obsidianText: string,
+): Promise<{ text: string; offsets: Map<string, number> }> {
+  let text = obsidianText;
+  const offsets = new Map<string, number>();
+  for (const member of carry.merges.get(to) ?? []) {
+    const next = appendSection(text, await readText(member.absolute));
+    offsets.set(member.from, next.offset);
     text = next.text;
   }
-  return { text, offset };
+  return { text, offsets };
+}
+
+/**
+ * Writes the carried files into the new vault at `root`, where the Obsidian vault was copied:
+ * copies byte for byte, and Obsidian notes with this vault's daily notes appended. Returns the
+ * Obsidian notes' text from before the merge, by path.
+ */
+export async function writeCarriedFiles(
+  carry: CarryOver,
+  root: string,
+  run: { signal: AbortSignal; file(): void; bytes(bytes: number): void },
+): Promise<Map<string, string>> {
+  const originals = new Map<string, string>();
+  for (const move of carry.moves) {
+    run.signal.throwIfAborted();
+    if (!move.daily?.merged) {
+      await copyFileAtomic(move.absolute, join(root, move.to), {
+        signal: run.signal,
+        onBytes: (bytes) => run.bytes(bytes),
+      });
+    } else if (!originals.has(move.to)) {
+      const original = await readText(join(root, move.to));
+      originals.set(move.to, original);
+      const { text } = await mergedDailyNote(carry, move.to, original);
+      if (text !== original) await writeFileAtomic(join(root, move.to), text);
+      run.bytes(move.size);
+    } else {
+      run.bytes(move.size);
+    }
+    run.file();
+  }
+  return originals;
 }
 
 /**

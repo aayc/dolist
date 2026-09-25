@@ -1,15 +1,17 @@
 import { lstat, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { decodePersistedImportManifest } from "@ddl/contract";
-import type { ObsidianImportJob } from "@ddl/core";
+import { type ObsidianImportJob, parseTasks } from "@ddl/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { sha256 } from "./files";
 import { ObsidianImporter } from "./importer";
 import {
+  currentFiles,
   currentSettings,
   link,
   makeTestbed,
   OBSIDIAN_FILES,
+  ROUTINE_PATH,
   snapshotTree,
   T0,
   type Testbed,
@@ -19,6 +21,8 @@ import {
 
 let bed: Testbed;
 let counter = 0;
+/** The one Obsidian note the current vault's daily note is appended to. */
+const MERGED_NOTE = "Journal/Daily/2026/09/2026-09-24.md";
 
 async function setup(options: { obsidian?: VaultOptions; current?: VaultOptions } = {}) {
   bed = await makeTestbed(options);
@@ -70,6 +74,7 @@ describe("importing copies the Obsidian vault", () => {
     expect(job).toMatchObject({ id: started.id, state: "done", phase: "finishing" });
     const destination = destinationOf(job);
     for (const [path, content] of Object.entries(OBSIDIAN_FILES)) {
+      if (path === MERGED_NOTE) continue;
       expect(await readFile(join(destination, path)), path).toEqual(Buffer.from(content));
       expect((await lstat(join(destination, path))).mtimeMs, path).toBe(T0);
     }
@@ -157,6 +162,101 @@ describe("importing copies the Obsidian vault", () => {
     expect(job.state).toBe("done");
     expect(await readdir(destination)).not.toContain(".DS_Store");
     expect(await readFile(join(destination, "Ideas.md"), "utf8")).toBe(OBSIDIAN_FILES["Ideas.md"]);
+  });
+});
+
+describe("carrying over the current vault", () => {
+  it("moves daily notes to Obsidian's folder and format, byte for byte", async () => {
+    const importer = await setup();
+    const destination = destinationOf(await runImport(importer));
+    const files = currentFiles();
+    for (const date of ["2026-09-22", "2026-09-23"]) {
+      const to = join(destination, `Journal/Daily/2026/09/${date}.md`);
+      expect(await readFile(to, "utf8")).toBe(files[`Daily/${date}.md`]);
+      expect((await lstat(to)).mtimeMs).toBe(T0);
+    }
+    await expect(lstat(join(destination, "Daily"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("appends a date in both under ## From Daily Do List, closing Obsidian's open code block", async () => {
+    const importer = await setup();
+    const destination = destinationOf(await runImport(importer));
+    const merged = await readFile(join(destination, "Journal/Daily/2026/09/2026-09-24.md"), "utf8");
+    expect(merged).toBe(
+      `${OBSIDIAN_FILES["Journal/Daily/2026/09/2026-09-24.md"]}\`\`\`\n\n## From Daily Do List\n\n${currentFiles()["Daily/2026-09-24.md"]}`,
+    );
+    expect(parseTasks(merged).map((task) => task.text)).toEqual([
+      "Water the plants",
+      "Answer the landlord",
+      "Book the dentist",
+      "Draft the quarterly report",
+    ]);
+  });
+
+  it("keeps everything else at its path, and both files when names collide", async () => {
+    const importer = await setup();
+    const destination = destinationOf(await runImport(importer));
+    const files = currentFiles();
+    for (const path of [
+      ROUTINE_PATH,
+      "Excalidraw/Flow.excalidraw.md",
+      "Notes/Groceries.md",
+      "Attachments/receipt.png",
+      ".trash/Deleted note.md",
+    ]) {
+      expect(await readFile(join(destination, path)), path).toEqual(Buffer.from(files[path]!));
+    }
+    expect(await readFile(join(destination, "ideas (Daily Do List).md"), "utf8")).toBe(
+      files["ideas.md"],
+    );
+    expect(await readFile(join(destination, "Ideas.md"), "utf8")).toBe(OBSIDIAN_FILES["Ideas.md"]);
+    expect(await readFile(join(destination, "Excalidraw/Sketch.excalidraw.md"), "utf8")).toBe(
+      OBSIDIAN_FILES["Excalidraw/Sketch.excalidraw.md"],
+    );
+  });
+
+  it("leaves hidden folders behind: the new vault's .obsidian is Obsidian's", async () => {
+    const importer = await setup();
+    const destination = destinationOf(await runImport(importer));
+    expect(await readFile(join(destination, ".obsidian/app.json"), "utf8")).toBe(
+      OBSIDIAN_FILES[".obsidian/app.json"],
+    );
+  });
+
+  it("leaves the current vault exactly as it was", async () => {
+    const importer = await setup();
+    const before = await snapshotTree(bed.vault);
+    await runImport(importer);
+    expect(await snapshotTree(bed.vault)).toEqual(before);
+  });
+
+  it("lists only Obsidian's files in the manifest, merged notes with their Obsidian hash", async () => {
+    const importer = await setup();
+    const job = await runImport(importer);
+    const text = await readFile(join(destinationOf(job), job.result!.manifest), "utf8");
+    const manifest = decodePersistedImportManifest(text);
+    if (!manifest.ok) throw new Error("manifest unreadable");
+    expect([...manifest.value.files.keys()].sort()).toEqual(Object.keys(OBSIDIAN_FILES).sort());
+    expect(manifest.value.files.get("Journal/Daily/2026/09/2026-09-24.md")?.sha256).toBe(
+      sha256(Buffer.from(OBSIDIAN_FILES["Journal/Daily/2026/09/2026-09-24.md"]!)),
+    );
+  });
+
+  it("renames a colliding routine the Daily Do List way", async () => {
+    const importer = await setup({
+      obsidian: { files: { [ROUTINE_PATH]: "Obsidian's own note about mornings.\n" } },
+    });
+    const job = await runImport(importer);
+    expect(job.result?.carryOver.collisions.items).toEqual([
+      { from: ROUTINE_PATH, to: "Routines/Morning briefing (Daily Do List).md" },
+      { from: "ideas.md", to: "ideas (Daily Do List).md" },
+    ]);
+    expect(
+      await readFile(
+        join(destinationOf(job), "Routines/Morning briefing (Daily Do List).md"),
+        "utf8",
+      ),
+    ).toBe(currentFiles()[ROUTINE_PATH]);
   });
 });
 
