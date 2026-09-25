@@ -161,9 +161,9 @@ plugin's syntax ([spec](../../../../docs/specs/drawings.md)):
   around it allowed; not in a list, quote or heading, not the agent's) is drawn as the drawing
   while live preview is on and the selection isn't on its line; then, and in source mode, its
   syntax shows. The host answers `drawingFor(target)` with `.loading`, `.missing`, `.unreadable`
-  or `.ready(EditorDrawing)` (path, scene, content hash); nil keeps embeds as text. Placeholders
-  show while loading ("Drawing not found", "Couldn't show this drawing"; an empty drawing says
-  "Double-click to draw").
+  or `.ready(EditorDrawing)` (path, scene, content hash); nil keeps embeds as text. A placeholder
+  shows while loading, and the web's words otherwise (“Plan” doesn't exist, "This drawing can't be
+  read", "Empty drawing · double-click to draw"), wrapped to the box.
 - **Sizes and places** (`EmbedGeometry`, the web's CSS): the width from the modifier (`360`,
   `50%`), else the drawing's own width, else 360, full width with no placement; never wider than
   the column; the height from `WxH` or the drawing's proportions (160 while unknown). Rows

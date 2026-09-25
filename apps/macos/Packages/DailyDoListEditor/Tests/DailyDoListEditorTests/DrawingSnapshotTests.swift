@@ -63,6 +63,35 @@ struct DrawingSnapshotTests {
     try write(editor.snapshot(), "drawings-selected.png")
   }
 
+  @Test func placeholdersKeepTheirWordsInsideTheBox() throws {
+    let text = """
+      ![[A drawing with a rather long name.excalidraw|150|right-wrap]]
+
+      ![[Broken.excalidraw|150|right-wrap]]
+      The caret's line.
+      """
+    let editor = DrawingEditorHarness(
+      text: text,
+      drawings: [
+        "A drawing with a rather long name.excalidraw": .missing,
+        "Broken.excalidraw": .unreadable,
+      ])
+    let rep = editor.snapshot()
+    try write(rep, "drawings-placeholders.png")
+    let scale = CGFloat(rep.pixelsWide) / editor.textView.visibleRect.width
+    let background = try #require(rep.colorAt(x: 4, y: 4)?.usingColorSpace(.sRGB))
+    for line in [0, 2] {
+      let box = try #require(editor.box(line: line), "line \(line) isn't drawn")
+      #expect(
+        distinctColors(in: box, rep: rep, scale: scale, excluding: background) > 2,
+        "no words on line \(line)")
+      let outside = CGRect(x: box.minX - 40, y: box.minY, width: 36, height: box.height)
+      #expect(
+        distinctColors(in: outside, rep: rep, scale: scale, excluding: background) == 0,
+        "the words on line \(line) spill out of the box")
+    }
+  }
+
   private func write(_ rep: NSBitmapImageRep, _ name: String) throws {
     let png = try #require(rep.representation(using: .png, properties: [:]))
     try FileManager.default.createDirectory(

@@ -26,12 +26,18 @@ struct DrawingDocumentPane: View {
         ProgressView().controlSize(.small).frame(maxWidth: .infinity, maxHeight: .infinity)
       case .missing, .unreadable:
         VStack(spacing: 8) {
-          Text(state == .missing ? "Drawing not found" : "Couldn't show this drawing")
-            .font(.title3.weight(.semibold))
-            .foregroundStyle(Theme.mutedText)
-          Text("Its Markdown source is still there.")
-            .font(.system(size: 13))
-            .foregroundStyle(Theme.faintText)
+          Text(
+            state == .missing
+              ? "“\(DrawingFileName.title(fromPath: path))” was deleted"
+              : "This drawing can't be read"
+          )
+          .font(.title3.weight(.semibold))
+          .foregroundStyle(Theme.mutedText)
+          if state == .unreadable {
+            Text("Its Markdown source is still there.")
+              .font(.system(size: 13))
+              .foregroundStyle(Theme.faintText)
+          }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       }

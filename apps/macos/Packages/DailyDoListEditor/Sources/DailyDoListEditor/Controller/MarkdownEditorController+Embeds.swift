@@ -346,7 +346,10 @@ extension MarkdownEditorController {
       switch item.state {
       case .ready(let drawing):
         guard let natural = embeds.naturalSize(of: drawing) else {
-          drawPlaceholder(item.rect, text: configuration.isEditable ? "Double-click to draw" : nil)
+          drawPlaceholder(
+            item.rect,
+            text: configuration.isEditable
+              ? "Empty drawing · double-click to draw" : "Empty drawing")
           continue
         }
         let target = EmbedGeometry.fit(natural, in: item.rect)
@@ -364,9 +367,9 @@ extension MarkdownEditorController {
       case .loading:
         drawPlaceholder(item.rect, text: nil)
       case .missing:
-        drawPlaceholder(item.rect, text: "Drawing not found")
+        drawPlaceholder(item.rect, text: "“\(item.embed.spec.name)” doesn't exist")
       case .unreadable:
-        drawPlaceholder(item.rect, text: "Couldn't show this drawing")
+        drawPlaceholder(item.rect, text: "This drawing can't be read")
       }
     }
   }
@@ -376,13 +379,20 @@ extension MarkdownEditorController {
     EditorColors.codeBackground.setFill()
     path.fill()
     guard let text else { return }
+    let paragraph = NSMutableParagraphStyle()
+    paragraph.alignment = .center
     let attributes: [NSAttributedString.Key: Any] = [
       .font: NSFont.systemFont(ofSize: 13), .foregroundColor: EditorColors.secondaryText,
+      .paragraphStyle: paragraph,
     ]
-    let size = (text as NSString).size(withAttributes: attributes)
+    let box = rect.insetBy(dx: 8, dy: 6)
+    let options: NSString.DrawingOptions = [.usesLineFragmentOrigin, .truncatesLastVisibleLine]
+    let needed = (text as NSString).boundingRect(
+      with: box.size, options: options, attributes: attributes)
+    let height = min(box.height, ceil(needed.height))
     (text as NSString).draw(
-      at: CGPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2),
-      withAttributes: attributes)
+      with: CGRect(x: box.minX, y: box.midY - height / 2, width: box.width, height: height),
+      options: options, attributes: attributes)
   }
 
   private func drawEditingFrame(_ rect: CGRect) {
