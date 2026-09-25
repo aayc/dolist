@@ -6,7 +6,7 @@
  * Run with `pnpm --filter @ddl/web e2e:fullstack`.
  */
 import { expect, type Page, test } from "@playwright/test";
-import { badge, focusEditorEnd } from "../helpers";
+import { focusEditorEnd } from "../helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -175,11 +175,13 @@ test("Repeat this: a finished task becomes a routine once you give it a schedule
   page,
 }) => {
   test.setTimeout(90_000);
+  const task = "What's the tallest building in NYC?";
   await openApp(page);
   await focusEditorEnd(page);
-  await page.keyboard.type("What's the tallest building in NYC?", { delay: 5 });
+  await page.keyboard.type(task, { delay: 5 });
   await page.keyboard.press("Enter");
-  const done = badge(page).and(page.locator(".cm-ddl-badge-done"));
+  // Today's note may hold other specs' tasks: this one's badge is on its own line.
+  const done = page.locator(".cm-line", { hasText: task }).locator(".cm-ddl-badge-done");
   await expect(done).toHaveCount(1, { timeout: 30_000 });
   await done.click();
 
