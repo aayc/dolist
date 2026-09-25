@@ -21,7 +21,15 @@ export function artifactKindLabel(meta: Pick<ArtifactMeta, "kind" | "language">)
   return meta.kind.charAt(0).toUpperCase() + meta.kind.slice(1);
 }
 
-export function ArtifactCard({ threadId, artifactId }: { threadId: string; artifactId: string }) {
+export function ArtifactCard({
+  threadId,
+  artifactId,
+  className,
+}: {
+  threadId: string;
+  artifactId: string;
+  className?: string;
+}) {
   const meta = useAgentStore((s) =>
     s.details[threadId]?.artifacts.find((a) => a.id === artifactId),
   );
@@ -29,7 +37,7 @@ export function ArtifactCard({ threadId, artifactId }: { threadId: string; artif
   return (
     <button
       type="button"
-      className="artifact-card"
+      className={className ? `artifact-card ${className}` : "artifact-card"}
       data-testid="artifact-card"
       data-tooltip={meta?.title}
       data-tooltip-overflow=".artifact-card-title"

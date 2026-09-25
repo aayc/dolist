@@ -28,7 +28,14 @@ function decidedText(approval: ApprovalRequest): string {
   }
 }
 
-export function ApprovalCard({ approval }: { approval: ApprovalRequest }) {
+export function ApprovalCard({
+  approval,
+  arriving = false,
+}: {
+  approval: ApprovalRequest;
+  /** It just arrived while you watch: a gentle attention animation. */
+  arriving?: boolean;
+}) {
   const { agent } = useServices();
   const [showInput, setShowInput] = useState(false);
   const [denying, setDenying] = useState(false);
@@ -45,10 +52,16 @@ export function ApprovalCard({ approval }: { approval: ApprovalRequest }) {
 
   return (
     <section
-      className={cx("approval-card", `risk-${approval.risk}`, `is-${approval.status}`)}
+      className={cx(
+        "approval-card",
+        `risk-${approval.risk}`,
+        `is-${approval.status}`,
+        arriving && pending && "is-arriving",
+      )}
       aria-label="Approval request"
       data-testid="approval-card"
       data-status={approval.status}
+      data-approval-id={approval.id}
     >
       <header className="approval-head">
         <Icon size={16} aria-hidden="true" />

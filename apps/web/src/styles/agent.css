@@ -274,6 +274,14 @@
   min-height: 0;
 }
 
+.chat-main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .chat-scroll {
   flex: 1;
   overflow-y: auto;
@@ -287,7 +295,20 @@
   padding: 12px 12px 16px;
 }
 
+/* Rows that arrive while you watch fade and slide in; history doesn't. */
+.is-entering {
+  animation: ddl-enter 180ms ease-out backwards;
+}
+
+@keyframes ddl-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
 .message {
+  position: relative;
   max-width: 100%;
 }
 
@@ -301,17 +322,106 @@
   font-weight: 600;
 }
 
-.message-author time {
+.message-author time,
+.message-meta time {
   color: var(--ddl-text-faint);
   font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hover actions: shown on hover or keyboard focus, taking no room. */
+.message-actions {
+  position: absolute;
+  top: -5px;
+  right: -4px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.message:hover .message-actions,
+.message:focus-within .message-actions {
+  opacity: 1;
+}
+
+.icon-button.message-copy {
+  width: 24px;
+  height: 24px;
+  color: var(--ddl-text-faint);
+}
+
+.icon-button.message-copy.is-copied {
+  color: var(--ddl-success);
 }
 
 .message.is-user {
-  align-self: flex-end;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.message-line {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 4px;
+  width: 100%;
+}
+
+.message-bubble {
+  min-width: 0;
   max-width: 85%;
   padding: 6px 10px;
   border-radius: var(--radius-l) var(--radius-l) 2px var(--radius-l);
   background: var(--ddl-accent-soft);
+  overflow-wrap: anywhere;
+  transition: opacity var(--transition);
+}
+
+.message-meta {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  min-height: 24px;
+  color: var(--ddl-text-faint);
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.message.is-user:hover .message-meta,
+.message.is-user:focus-within .message-meta,
+.message.is-user.is-pending .message-meta {
+  opacity: 1;
+}
+
+.message.is-sending .message-bubble {
+  opacity: 0.6;
+}
+
+.message.is-failed .message-bubble {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ddl-danger) 55%, transparent);
+}
+
+.message-failed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ddl-danger);
+  font-size: 12px;
+}
+
+.message-failed .link-button {
+  font-size: 12px;
+}
+
+.link-button.is-quiet {
+  color: var(--ddl-text-muted);
+}
+
+.link-button.is-quiet:hover:not(:disabled) {
+  color: var(--ddl-text);
 }
 
 .message-plain {
@@ -319,20 +429,194 @@
   white-space: pre-wrap;
 }
 
-.streaming-text {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+/* The reveal point of text typing out: solid while it moves, a slow blink while it waits. */
+.type-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  margin-left: 1px;
+  border-radius: 1px;
+  background: var(--ddl-accent);
+  vertical-align: -0.18em;
+  animation: ddl-caret 1.1s ease-in-out 0.5s infinite;
 }
 
-.streaming-caret {
-  display: inline-block;
-  width: 7px;
-  height: 1em;
-  margin-left: 2px;
-  vertical-align: text-bottom;
+@keyframes ddl-caret {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.15;
+  }
+}
+
+/* ── Live activity ──────────────────────────────────────── */
+
+/* Always there (a live region); empty, it takes back the list's gap. */
+.chat-activity-slot:empty {
+  margin-top: -8px;
+}
+
+.chat-activity {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  min-height: 26px;
+  padding: 3px 11px 3px 9px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--ddl-bg-hover) 70%, transparent);
+  color: var(--ddl-text-muted);
+  font-size: 12px;
+  text-align: left;
+  animation: ddl-activity-in 200ms ease-out backwards;
+}
+
+@keyframes ddl-activity-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+.chat-activity-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: ddl-activity-in 160ms ease-out backwards;
+}
+
+.chat-activity-elapsed {
+  flex: none;
+  color: var(--ddl-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-activity-icon {
+  flex: none;
+  color: var(--ddl-accent);
+}
+
+.chat-activity.is-queued .chat-activity-icon {
+  color: var(--ddl-text-faint);
+}
+
+.chat-activity.is-tool .chat-activity-icon {
+  animation: ddl-pulse 1.4s ease-in-out infinite;
+}
+
+.chat-activity.is-approval {
+  border-color: color-mix(in srgb, var(--ddl-warning) 35%, transparent);
+  background: color-mix(in srgb, var(--ddl-warning) 10%, transparent);
+  color: var(--ddl-text);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.chat-activity.is-approval .chat-activity-icon {
+  color: var(--ddl-warning);
+  animation: ddl-pulse 1.6s ease-in-out infinite;
+}
+
+button.chat-activity.is-approval:hover {
+  border-color: color-mix(in srgb, var(--ddl-warning) 60%, transparent);
+  background: color-mix(in srgb, var(--ddl-warning) 16%, transparent);
+}
+
+.thinking-dots {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  height: 14px;
+  padding: 0 1px;
+}
+
+.thinking-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
   background: var(--ddl-accent);
-  animation: ddl-pulse 1s ease-in-out infinite;
+  animation: ddl-dot 1.2s ease-in-out infinite;
+}
+
+.thinking-dots i:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.thinking-dots i:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+@keyframes ddl-dot {
+  0%,
+  70%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+/* ── Jump to latest ─────────────────────────────────────── */
+
+.jump-latest {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px 0 10px;
+  border: 1px solid var(--ddl-border);
+  border-radius: 14px;
+  background: var(--ddl-bg-elevated);
+  box-shadow: var(--ddl-shadow-small);
+  color: var(--ddl-text);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, 8px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    background-color var(--transition-fast),
+    visibility 0s linear 160ms;
+}
+
+.jump-latest.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+  transition-delay: 0s;
+}
+
+.jump-latest:hover {
+  background: var(--ddl-bg-hover);
+}
+
+.jump-latest:active {
+  transform: translate(-50%, 0) scale(var(--press-scale));
+}
+
+.jump-latest-count {
+  color: var(--ddl-accent);
+  font-weight: 600;
+}
+
+.jump-latest-number {
+  display: inline-block;
 }
 
 .markdown {
@@ -394,6 +678,42 @@
   padding: 0;
   border: 0;
   background: none;
+}
+
+/* A code block in a message and its copy button (see code-copy.ts). */
+.code-wrap {
+  position: relative;
+  margin: 0 0 8px;
+}
+
+.code-wrap > pre {
+  margin: 0;
+}
+
+.icon-button.code-copy {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--ddl-border);
+  background: var(--ddl-bg-elevated);
+  opacity: 0;
+  transition:
+    opacity var(--transition-fast),
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-press);
+}
+
+.code-wrap:hover .code-copy,
+.code-copy:focus-visible,
+.code-copy.is-copied {
+  opacity: 1;
+}
+
+.icon-button.code-copy.is-copied {
+  color: var(--ddl-success);
 }
 
 .markdown a[data-wikilink] {
@@ -550,6 +870,54 @@
   border-color: color-mix(in srgb, var(--ddl-danger) 40%, var(--ddl-border));
 }
 
+.tool-call.is-running {
+  border-color: color-mix(in srgb, var(--ddl-accent) 35%, var(--ddl-border));
+}
+
+.tool-call-status {
+  flex: none;
+}
+
+/* Seen running: ✓, ✕ or the shield lands with a quick pop. */
+.tool-call-status.is-settled {
+  animation: ddl-settle 280ms cubic-bezier(0.2, 0.9, 0.3, 1.25) backwards;
+}
+
+@keyframes ddl-settle {
+  from {
+    opacity: 0;
+    transform: scale(0.4) rotate(-45deg);
+  }
+}
+
+.tool-group {
+  border: 1px solid var(--ddl-border);
+  border-radius: var(--radius-m);
+  background: var(--ddl-bg);
+  font-size: 12px;
+}
+
+.tool-group-icons {
+  display: inline-flex;
+  flex: none;
+  gap: 3px;
+  color: var(--ddl-text-muted);
+}
+
+.tool-group-label {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tool-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  border-top: 1px solid var(--ddl-border);
+  animation: ddl-activity-in 160ms ease-out backwards;
+}
+
 .tool-call-input,
 .approval-input {
   max-height: 240px;
@@ -579,6 +947,7 @@ svg.tone-warning {
 /* ── Approval card ──────────────────────────────────────── */
 
 .approval-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -586,6 +955,41 @@ svg.tone-warning {
   border: 1px solid color-mix(in srgb, var(--ddl-warning) 55%, var(--ddl-border));
   border-radius: var(--radius-l);
   background: color-mix(in srgb, var(--ddl-warning) 8%, var(--ddl-bg));
+}
+
+/* A card that arrives while you watch (or that the activity row points at) asks for attention. */
+.approval-card.is-arriving {
+  animation: ddl-enter 200ms ease-out backwards;
+}
+
+.approval-card.is-arriving::after,
+.approval-card.is-flashing::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ddl-warning) 45%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  animation: ddl-attention 1.4s ease-out backwards;
+}
+
+.approval-card.is-arriving::after {
+  animation-delay: 120ms;
+}
+
+@keyframes ddl-attention {
+  0% {
+    opacity: 0;
+    transform: scale(0.995);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.03);
+  }
 }
 
 .approval-card.is-loading {
@@ -981,31 +1385,203 @@ svg.tone-warning {
 /* ── Composer ───────────────────────────────────────────── */
 
 .composer {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
   flex: none;
   padding: 8px 10px 10px;
   border-top: 1px solid var(--ddl-border);
 }
 
-.composer-input {
-  flex: 1;
-  min-height: 32px;
-  max-height: 160px;
-  padding: 6px 10px;
+.composer-box {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--ddl-border);
-  border-radius: var(--radius-l);
+  border-radius: 12px;
   background: var(--ddl-bg);
-  resize: none;
-  field-sizing: content;
-  transition: border-color var(--transition-fast);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition);
 }
 
-.composer-input:focus {
+.composer-box:hover {
+  border-color: color-mix(in srgb, var(--ddl-text-faint) 45%, var(--ddl-border));
+}
+
+.composer-box:focus-within {
   border-color: var(--ddl-accent);
+  box-shadow:
+    0 0 0 3px var(--ddl-accent-soft),
+    0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
-.composer-input:disabled {
+.composer-box.is-disabled {
   opacity: 0.6;
+}
+
+.composer-field {
+  position: relative;
+}
+
+/* The sizer mirrors the input's text box exactly: its height is the input's natural height. */
+.composer-input,
+.composer-sizer {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 8px 12px 2px;
+  border: 0;
+  font: inherit;
+  line-height: 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.composer-input {
+  height: 30px;
+  min-height: 30px;
+  /* 8 lines, then it scrolls. */
+  max-height: 170px;
+  overflow-y: hidden;
+  background: transparent;
+  color: var(--ddl-text);
+  resize: none;
+  transition: height 120ms ease;
+}
+
+.composer-input::placeholder {
+  color: var(--ddl-text-faint);
+}
+
+.composer-sizer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.composer-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 6px 12px;
+}
+
+/*
+ * Laid out only while you type: the first layout of the ↩ and ⇧ glyphs looks up fallback fonts
+ * (~12 ms), which would otherwise land on opening a thread.
+ */
+.composer-hint {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ddl-text-faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.composer-box:focus-within .composer-hint {
+  display: inline-flex;
+  animation: ddl-hint-in 160ms ease-out backwards;
+}
+
+@keyframes ddl-hint-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.composer-bar > .icon-button:first-of-type {
+  margin-left: auto;
+}
+
+.composer-hint-gap {
+  width: 6px;
+}
+
+.icon-button.composer-send {
+  border-radius: 50%;
+  background: var(--ddl-accent);
+  color: var(--ddl-accent-contrast);
+}
+
+.icon-button.composer-send:hover:not(:disabled) {
+  background: var(--ddl-accent-strong);
+  color: var(--ddl-accent-contrast);
+}
+
+.icon-button.composer-send:active:not(:disabled) {
+  background: var(--ddl-accent-strong);
+  transform: scale(0.9);
+}
+
+.icon-button.composer-send:disabled {
+  background: var(--ddl-bg-hover);
+  color: var(--ddl-text-faint);
+  opacity: 1;
+}
+
+.icon-button.composer-stop {
+  border: 1px solid var(--ddl-border);
+  border-radius: 50%;
+  animation: ddl-pop-in-small 160ms ease-out backwards;
+}
+
+.icon-button.composer-stop svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+
+.icon-button.composer-stop:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--ddl-danger) 50%, var(--ddl-border));
+  background: color-mix(in srgb, var(--ddl-danger) 12%, transparent);
+  color: var(--ddl-danger);
+}
+
+.icon-button.composer-stop.is-stopping svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  animation: ddl-spin 900ms linear infinite;
+}
+
+@keyframes ddl-pop-in-small {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-entering,
+  .approval-card.is-arriving,
+  .tool-call-status.is-settled,
+  .tool-group-list,
+  .chat-activity,
+  .chat-activity-label,
+  .chat-activity.is-tool .chat-activity-icon,
+  .chat-activity.is-approval .chat-activity-icon,
+  .thinking-dots i,
+  .type-caret,
+  .composer-box:focus-within .composer-hint,
+  .icon-button.composer-stop,
+  .icon-button.composer-stop.is-stopping svg {
+    animation: none;
+  }
+
+  .approval-card.is-arriving::after,
+  .approval-card.is-flashing::after {
+    display: none;
+  }
+
+  .thinking-dots i {
+    opacity: 0.7;
+  }
+
+  .jump-latest,
+  .composer-input {
+    transition: none;
+  }
 }

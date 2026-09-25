@@ -162,8 +162,9 @@ export class AgentActions {
     await this.guard("Couldn't retry the task", () => this.client.retryThread(threadId));
   }
 
-  async postMessage(threadId: string, text: string): Promise<boolean> {
-    return this.guard("Couldn't send your message", () => this.client.postMessage(threadId, text));
+  /** Throws on failure: the chat shows the reply as failed, with a retry, instead of a toast. */
+  postMessage(threadId: string, text: string): Promise<void> {
+    return this.client.postMessage(threadId, text);
   }
 
   async setEnabled(enabled: boolean): Promise<void> {

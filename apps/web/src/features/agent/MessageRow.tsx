@@ -1,93 +1,132 @@
 import type { StatusMessage, TextMessage, ThreadMessage } from "@ddl/core";
-import { memo } from "react";
+import { memo, useRef } from "react";
 import { cx } from "../../lib/cx";
 import { formatTimestamp } from "../../lib/format";
 import { useAgentStore } from "../../state/agent-store";
+import { AgentText, findTextMessage } from "./AgentText";
 import { ApprovalCard } from "./ApprovalCard";
 import { ArtifactCard } from "./ArtifactCard";
-import { Markdown } from "./Markdown";
-import { StreamingText } from "./StreamingText";
+import { CopyButton } from "./CopyButton";
 import { authorLabel, STATUS_META } from "./status-meta";
 import { ToolCallRow } from "./ToolCallRow";
 
 interface MessageRowProps {
   threadId: string;
   message: ThreadMessage;
+  /** Arrived while the thread is on screen: it enters with a short fade (history doesn't). */
+  live: boolean;
 }
 
-/** While a text message streams, its deltas are painted in place by <StreamingText>, so the row skips re-renders. */
+/** Agent text paints its own updates from the store (see `AgentText`), so its row never re-renders. */
 function sameRow(a: MessageRowProps, b: MessageRowProps): boolean {
-  if (a.threadId !== b.threadId) return false;
+  if (a.threadId !== b.threadId || a.live !== b.live) return false;
   if (a.message === b.message) return true;
   return (
     a.message.kind === "text" &&
     b.message.kind === "text" &&
     a.message.id === b.message.id &&
-    a.message.streaming === true &&
-    b.message.streaming === true
+    a.message.role !== "user" &&
+    b.message.role !== "user"
   );
 }
 
-export const MessageRow = memo(function MessageRow({ threadId, message }: MessageRowProps) {
+export const MessageRow = memo(function MessageRow({ threadId, message, live }: MessageRowProps) {
+  const entering = live ? "is-entering" : undefined;
   switch (message.kind) {
     case "text":
-      return <TextMessageView threadId={threadId} message={message} />;
+      return message.role === "user" ? (
+        <UserMessage message={message} />
+      ) : (
+        <AgentMessage threadId={threadId} message={message} live={live} />
+      );
     case "tool_call":
-      return <ToolCallRow message={message} />;
+      return <ToolCallRow message={message} live={live} className={entering} />;
     case "status":
-      return <StatusDivider message={message} />;
+      return <StatusDivider message={message} className={entering} />;
     case "approval":
-      return <ApprovalSlot approvalId={message.approvalId} />;
+      return <ApprovalSlot approvalId={message.approvalId} live={live} />;
     case "artifact":
-      return <ArtifactCard threadId={threadId} artifactId={message.artifactId} />;
+      return (
+        <ArtifactCard threadId={threadId} artifactId={message.artifactId} className={entering} />
+      );
   }
 }, sameRow);
 
-function TextMessageView({ threadId, message }: { threadId: string; message: TextMessage }) {
-  const mine = message.role === "user";
+function MessageTime({ at }: { at: number }) {
+  return <time dateTime={new Date(at).toISOString()}>{formatTimestamp(at)}</time>;
+}
+
+function AgentMessage({
+  threadId,
+  message,
+  live,
+}: {
+  threadId: string;
+  message: TextMessage;
+  live: boolean;
+}) {
   return (
     <div
       className={cx(
         "message",
-        mine ? "is-user" : "is-agent",
+        "is-agent",
         message.role === "system" && "is-system",
+        live && "is-entering",
       )}
       data-testid="message-text"
-      data-streaming={message.streaming ? "true" : "false"}
     >
-      {mine ? null : (
-        <div className="message-author">
-          {authorLabel(message.author)}
-          <time>{formatTimestamp(message.createdAt)}</time>
-        </div>
-      )}
+      <div className="message-author">
+        {authorLabel(message.author)}
+        <MessageTime at={message.createdAt} />
+        <span className="message-actions">
+          <CopyButton
+            getText={() =>
+              findTextMessage(useAgentStore.getState().details[threadId], message.id)?.text ??
+              message.text
+            }
+          />
+        </span>
+      </div>
       <div className="message-body">
-        {message.streaming ? (
-          <StreamingText threadId={threadId} messageId={message.id} />
-        ) : mine ? (
-          <p className="message-plain">{message.text}</p>
-        ) : (
-          <Markdown source={message.text} />
-        )}
+        <AgentText threadId={threadId} message={message} live={live} />
       </div>
     </div>
   );
 }
 
-function StatusDivider({ message }: { message: StatusMessage }) {
+/** Your reply: its time and a copy button show beside it on hover. */
+export function UserMessage({ message }: { message: Pick<TextMessage, "text" | "createdAt"> }) {
   return (
-    <div
-      className={cx("status-divider", `tone-${STATUS_META[message.status].tone}`)}
-      data-testid="status-divider"
-    >
-      <span>{message.text ?? STATUS_META[message.status].label}</span>
-      <time>{formatTimestamp(message.createdAt)}</time>
+    <div className="message is-user" data-testid="message-text">
+      <div className="message-line">
+        <div className="message-meta">
+          <MessageTime at={message.createdAt} />
+          <CopyButton getText={() => message.text} />
+        </div>
+        <div className="message-bubble message-body">
+          <p className="message-plain">{message.text}</p>
+        </div>
+      </div>
     </div>
   );
 }
 
-function ApprovalSlot({ approvalId }: { approvalId: string }) {
+function StatusDivider({ message, className }: { message: StatusMessage; className?: string }) {
+  return (
+    <div
+      className={cx("status-divider", `tone-${STATUS_META[message.status].tone}`, className)}
+      data-testid="status-divider"
+    >
+      <span>{message.text ?? STATUS_META[message.status].label}</span>
+      <MessageTime at={message.createdAt} />
+    </div>
+  );
+}
+
+function ApprovalSlot({ approvalId, live }: { approvalId: string; live: boolean }) {
   const approval = useAgentStore((s) => s.approvals[approvalId]);
+  // Only a card that arrives while you watch asks for attention; history stays still.
+  const arriving = useRef(live);
   if (!approval) return <div className="approval-card is-loading" aria-busy="true" />;
-  return <ApprovalCard approval={approval} />;
+  return <ApprovalCard approval={approval} arriving={arriving.current} />;
 }

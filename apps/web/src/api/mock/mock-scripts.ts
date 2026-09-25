@@ -413,7 +413,7 @@ function computerScript(topic: string): TaskScript {
         action: { kind: "key", text: "⌘⇧N" },
       },
     ],
-    finalText: `Finished **${topic}**: screenshots are now grouped in a “Screenshots” folder and the rest of Downloads is untouched.`,
+    finalText: `Finished **${topic}**: screenshots are now grouped in a “Screenshots” folder and the rest of Downloads is untouched.\n\nTo put them back:\n\n\`\`\`sh\nmv ~/Downloads/Screenshots/* ~/Downloads/\n\`\`\``,
     doneSummary: "Organized 6 files",
   };
 }

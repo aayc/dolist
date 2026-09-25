@@ -1,6 +1,6 @@
 import type { ToolCallMessage } from "@ddl/core";
 import { ChevronRight, CircleCheck, CircleX, LoaderCircle, ShieldX } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { cx } from "../../lib/cx";
 import { toolIcon } from "./tool-icons";
 
@@ -11,27 +11,26 @@ const STATUS_LABEL: Record<ToolCallMessage["status"], string> = {
   blocked: "Blocked by safety policy",
 };
 
-function StatusIcon({ status }: { status: ToolCallMessage["status"] }) {
+function StatusIcon({ status, settled }: { status: ToolCallMessage["status"]; settled: boolean }) {
   const props = {
     size: 14,
     "aria-label": STATUS_LABEL[status],
     "data-tooltip": STATUS_LABEL[status],
   };
+  const done = cx("tool-call-status", settled && "is-settled");
   switch (status) {
     case "running":
-      return <LoaderCircle {...props} className="spin tone-info" />;
+      return <LoaderCircle {...props} className="tool-call-status spin tone-info" />;
     case "ok":
-      return <CircleCheck {...props} className="tone-success" />;
+      return <CircleCheck {...props} className={cx(done, "tone-success")} />;
     case "error":
-      return <CircleX {...props} className="tone-danger" />;
+      return <CircleX {...props} className={cx(done, "tone-danger")} />;
     case "blocked":
-      return <ShieldX {...props} className="tone-warning" />;
+      return <ShieldX {...props} className={cx(done, "tone-warning")} />;
   }
 }
 
-function duration(message: ToolCallMessage): string | null {
-  if (!message.endedAt) return null;
-  const ms = message.endedAt - message.createdAt;
+export function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms} ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
   // Long durations are usually time spent waiting for the user's approval.
@@ -40,13 +39,23 @@ function duration(message: ToolCallMessage): string | null {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
-export function ToolCallRow({ message }: { message: ToolCallMessage }) {
+export function ToolCallRow({
+  message,
+  live = false,
+  className,
+}: {
+  message: ToolCallMessage;
+  /** Seen running: finishing plays a quick ✓ / ✕ / shield transition. */
+  live?: boolean;
+  className?: string | undefined;
+}) {
   const [open, setOpen] = useState(false);
+  const sawRunning = useRef(live || message.status === "running");
   const Icon = toolIcon(message.toolName);
-  const took = duration(message);
+  const took = message.endedAt ? formatDuration(message.endedAt - message.createdAt) : null;
   return (
     <div
-      className={cx("tool-call", `is-${message.status}`)}
+      className={cx("tool-call", `is-${message.status}`, className)}
       data-testid="tool-call"
       data-status={message.status}
       data-tool={message.toolName}
@@ -62,7 +71,7 @@ export function ToolCallRow({ message }: { message: ToolCallMessage }) {
         <code className="tool-call-name">{message.toolName}</code>
         <span className="tool-call-spacer" />
         {took ? <span className="tool-call-duration">{took}</span> : null}
-        <StatusIcon status={message.status} />
+        <StatusIcon status={message.status} settled={sawRunning.current} />
         <ChevronRight
           size={14}
           className={cx("tool-call-chevron", open && "is-open")}
