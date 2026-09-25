@@ -1,0 +1,30 @@
+#cloud-config
+# First boot of the always-on machine on Azure (see deploy/azure/README.md): system updates,
+# Tailscale joined to your tailnet with Tailscale SSH, and Node.js 24 for deploy/linux/setup.sh.
+#
+# <tailscale-auth-key> is a placeholder. The guide fills it into a temporary copy of this file,
+# from a local file that is never committed, only while creating the VM. Never put a real key in
+# this file. Azure keeps the rendered copy root-only on the VM (/var/lib/cloud), so use a
+# single-use key that expires soon: once the machine has joined, it's worthless.
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - curl
+  - unattended-upgrades
+
+write_files:
+  # On tmpfs, deleted as soon as Tailscale has used it.
+  - path: /run/ddl-bootstrap/tailscale-auth-key
+    owner: root:root
+    permissions: "0600"
+    content: "<tailscale-auth-key>"
+
+runcmd:
+  # Tailscale from its official repository; the machine's tailnet name is its host name (the VM's).
+  - [sh, -c, "curl -fsSL https://tailscale.com/install.sh | sh"]
+  - [tailscale, up, "--auth-key=file:/run/ddl-bootstrap/tailscale-auth-key", --ssh]
+  - [rm, -f, /run/ddl-bootstrap/tailscale-auth-key]
+  - [tailscale, set, --auto-update]
+  # Node.js 24 from NodeSource, system-wide, where the systemd units find it.
+  - [sh, -c, "curl -fsSL https://deb.nodesource.com/setup_24.x -o /tmp/nodesource_setup.sh && bash /tmp/nodesource_setup.sh && apt-get install -y nodejs"]

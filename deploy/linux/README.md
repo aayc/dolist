@@ -4,7 +4,7 @@ This kit installs Daily Do List on an always-on Linux machine: the daemon (with 
 web app) and the sync service, as systemd services under their own user. Both keep binding
 `127.0.0.1`; `tailscale serve` makes them reachable from your devices over HTTPS, with no public
 ports ([docs/ALWAYS_ON.md](../../docs/ALWAYS_ON.md) has the design). For a VM on Azure, start with
-`deploy/azure/README.md`, which ends by running this kit.
+[deploy/azure/README.md](../azure/README.md), which ends by running this kit.
 
 | File | Purpose |
 | --- | --- |
