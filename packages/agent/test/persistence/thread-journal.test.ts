@@ -110,7 +110,13 @@ describe("golden journals through the real thread store", () => {
     expect(store.get(id)).toEqual(expected);
     expect(store.openToolCalls(id)).toEqual([]);
     expect(store.interruptedCalls(id)).toEqual([
-      { callId: "call_03", tool: "computer_open_app", target: "Open Slack", startedAt: T + 9000 },
+      {
+        callId: "call_03",
+        tool: "computer_open_app",
+        target: "Open Slack",
+        effectful: true,
+        startedAt: T + 9000,
+      },
     ]);
     await store.flush();
     expect((await storage.read(threadPath(id)))!.content).toBe(encodePersistedThread(expected));
@@ -572,6 +578,7 @@ describe("tool call write-ahead records", () => {
         tool: "computer_press",
         target: "Press Send in Slack",
         approvalId: "apr_1",
+        effectful: true,
         startedAt: NOW,
       },
     ];

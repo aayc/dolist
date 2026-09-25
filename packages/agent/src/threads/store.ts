@@ -477,24 +477,38 @@ class SidecarThreadStore implements JournaledThreadStore {
       ...(start.via ? { via: start.via } : {}),
       ...(start.approvalId ? { approvalId: start.approvalId } : {}),
     });
+    const effectful = start.effectful !== false;
     this.commit(entry, {
       type: "tool.started",
       call: callId,
       tool: start.tool,
       target: truncate(start.target, MAX_TARGET_CHARS),
       ...(start.approvalId ? { approvalId: start.approvalId } : {}),
+      ...(effectful ? {} : { effectful: false }),
     });
-    await this.flushJournal(entry);
+    if (effectful) await this.flushJournal(entry);
+    else this.schedule(threadId, this.flushDelayMs);
     return true;
   }
 
   recordToolFinished(threadId: string, callId: string, end: ToolCallEnd): void {
+    const entry = this.entries.get(threadId);
+    const effectful = entry?.fold.open.get(callId)?.effectful === true;
     this.record(threadId, {
       type: "tool.finished",
       call: callId,
       outcome: end.outcome,
       ...(end.output === undefined ? {} : { output: truncate(end.output, MAX_OUTPUT_CHARS) }),
     });
+    // Until this is on disk a restart would take the step for an uncertain one: write it now.
+    if (entry && effectful) {
+      this.flushJournal(entry).catch((error: unknown) => {
+        this.logger.warn("Failed to journal a tool result; will retry", {
+          threadId,
+          error: errorText(error),
+        });
+      });
+    }
   }
 
   recordPrompt(threadId: string, sessionId: string, text: string): void {

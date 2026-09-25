@@ -142,6 +142,8 @@ const LineSchema = z.discriminatedUnion("type", [
     /** What it does, in words ("Press Send in Slack"). */
     target: z.string(),
     approvalId: z.string().optional(),
+    /** False for calls that change nothing (safe to redo); absent counts as true. */
+    effectful: z.boolean().optional(),
   }),
   /** How it ended; `output` is what the model read (redacted, capped, images left out). */
   z.object({

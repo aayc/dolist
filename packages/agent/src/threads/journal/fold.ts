@@ -22,6 +22,8 @@ export interface OpenToolCall {
   /** What it does, in words ("Press Send in Slack"). */
   target: string;
   approvalId?: string;
+  /** It may change something; false for reads, which are safe to do again. */
+  effectful: boolean;
   startedAt: number;
 }
 
@@ -73,6 +75,7 @@ export function applyJournalPayload(
         tool: payload.tool,
         target: payload.target,
         ...(payload.approvalId ? { approvalId: payload.approvalId } : {}),
+        effectful: payload.effectful !== false,
         startedAt: at,
       });
       return;

@@ -57,6 +57,7 @@ import {
   policyAsks,
 } from "./safety";
 import type {
+  AllowedCall,
   ApprovalBroker,
   ApprovalBrokerOptions,
   ApprovalOutcome,
@@ -67,9 +68,11 @@ import type {
   SafetyGate,
   SafetyGateOptions,
 } from "./safety/types";
+import type { OpenToolCall } from "./threads/journal/fold";
+import { journalingHarness } from "./threads/journal/tool-ledger";
 import { SourceCatalog } from "./threads/sources";
 import { createThreadStore } from "./threads/store";
-import type { ThreadStore } from "./threads/types";
+import type { JournaledThreadStore } from "./threads/types";
 import { TOOL } from "./tools/contracts";
 import { createKnowledgeTools } from "./tools/knowledge";
 import { categoryForVerb, createMockIrreversibleActionTool, riskyVerb } from "./tools/mock";
@@ -160,7 +163,11 @@ class Runtime implements AgentRuntime {
   private readonly logger: Logger;
   private readonly now: () => number;
   private readonly emitter = new Emitter<RuntimeEventMap>();
-  private readonly threads: ThreadStore;
+  private readonly threads: JournaledThreadStore;
+  /** How the gate allowed each call in flight (`sessionId\0toolCallId`), for the journal. */
+  private readonly allowedCalls = new Map<string, AllowedCall>();
+  /** Each harness with the journal's tool call records around its sessions (one per harness). */
+  private readonly journaledHarnesses = new WeakMap<Harness, Harness>();
   private readonly records: TaskRecords;
   private readonly watcher: TaskWatcher;
   private readonly board: TaskBoard;
@@ -289,9 +296,10 @@ class Runtime implements AgentRuntime {
     });
     const executionTools = overrides.createExecutionTools ?? createExecutionTools;
     this.subagents = new SubagentManager({
-      harness: () => this.harness,
+      harness: () => this.journaled(this.harness),
       board: this.board,
       threads: this.threads,
+      journal: this.threads,
       records: this.records,
       approvals: () => this.broker,
       beforeToolCall: this.beforeToolCall,
@@ -334,7 +342,7 @@ class Runtime implements AgentRuntime {
       logger: this.logger.child({ component: "orchestrator-chat" }),
     });
     this.orchestrator = new Orchestrator({
-      harness: () => this.harness,
+      harness: () => this.journaled(this.harness),
       board: this.board,
       records: this.records,
       subagents: this.subagents,
@@ -399,6 +407,7 @@ class Runtime implements AgentRuntime {
         this.logger.error("Failed to load routines", { error: errorText(error) });
       }),
     ]);
+    this.safely(() => this.markInterruptedToolCalls(), undefined);
     this.reconcileAfterRestart();
     this.safely(() => this.scheduler.reconcileAfterRestart(), undefined);
     this.safely(() => this.chat.ensure(), undefined);
@@ -846,6 +855,9 @@ class Runtime implements AgentRuntime {
             latencyMs: verdict.latencyMs,
           });
         },
+        onAllowed: (call, allowed) => {
+          this.allowedCalls.set(callKey(call), allowed);
+        },
         approvalTimeoutMs: this.settings.agent.approvalTimeoutMs,
         logger,
       });
@@ -1125,17 +1137,73 @@ class Runtime implements AgentRuntime {
     return this.subagents.contextFor(sessionId) ?? { taskId: null, threadId: null };
   }
 
-  /** Stable function handed to every session; delegates to the current gate and fails closed. */
+  /**
+   * Stable function handed to every session; delegates to the current gate and fails closed. An
+   * allowed call carries how it was allowed (for the journal's write-ahead record).
+   */
   private readonly beforeToolCall = async (call: ToolCallRequest): Promise<ToolCallDecision> => {
     const gate = this.gate;
     if (!gate) return { allow: false, reason: "The safety gate is unavailable." };
+    const key = callKey(call);
     try {
-      return await gate(call);
+      const decision = await gate(call);
+      const allowed = this.allowedCalls.get(key);
+      return decision.allow && allowed ? { ...allowed, ...decision } : decision;
     } catch (error) {
       this.logger.error("Safety gate threw", { tool: call.toolName, error: errorText(error) });
       return { allow: false, reason: `The safety check failed: ${errorText(error)}` };
+    } finally {
+      this.allowedCalls.delete(key);
     }
   };
+
+  /** The harness with the journal's tool call records around every session it creates. */
+  private journaled(harness: Harness | null): Harness | null {
+    if (!harness) return null;
+    let wrapped = this.journaledHarnesses.get(harness);
+    if (!wrapped) {
+      wrapped = journalingHarness(harness, {
+        journal: this.threads,
+        threadFor: (sessionId) => this.resolveGateContext(sessionId).threadId,
+        logger: this.logger.child({ component: "tool-ledger" }),
+      });
+      this.journaledHarnesses.set(harness, wrapped);
+    }
+    return wrapped;
+  }
+
+  /**
+   * Tool calls that started and never finished belong to a process that's gone: they may or may
+   * not have happened. Each is marked interrupted (never re-run automatically), its row in the
+   * thread ends, and one that could have changed something gets a system line saying so.
+   */
+  private markInterruptedToolCalls(): void {
+    for (const { id } of this.threads.list()) {
+      for (const call of this.threads.markInterrupted(id)) this.showInterrupted(id, call);
+    }
+  }
+
+  private showInterrupted(threadId: string, call: OpenToolCall): void {
+    const row = this.threads
+      .get(threadId)
+      ?.messages.find((m) => m.kind === "tool_call" && m.toolCallId === call.callId);
+    if (row?.kind === "tool_call" && row.status === "running") {
+      this.threads.upsertMessage(threadId, {
+        ...row,
+        status: "error",
+        resultPreview: call.effectful
+          ? "Interrupted: it may or may not have happened"
+          : "Interrupted",
+        endedAt: row.endedAt ?? call.startedAt,
+      });
+    }
+    if (call.effectful) {
+      this.postSystemNote(
+        threadId,
+        `Interrupted during: ${call.target}. It may or may not have happened, and it won't run again on its own.`,
+      );
+    }
+  }
 
   private onApproval(approval: ApprovalRequest): void {
     this.emitter.emit("approval.upsert", approval);
@@ -1300,6 +1368,10 @@ class Runtime implements AgentRuntime {
 
 function surfaceKey(threadId: string, surface: SurfaceKind): string {
   return `${threadId}\u0000${surface}`;
+}
+
+function callKey(call: ToolCallRequest): string {
+  return `${call.sessionId}\u0000${call.toolCallId}`;
 }
 
 /** Stand-in when the real broker failed to start: nothing is pending and nothing can be approved. */

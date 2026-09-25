@@ -24,7 +24,19 @@ export interface ToolCallRequest {
   spec?: ToolSpec;
 }
 
-export type ToolCallDecision = { allow: true } | { allow: false; reason: string };
+export type ToolCallDecision =
+  | {
+      allow: true;
+      /** What the call does, in words (the safety evaluator's summary). */
+      summary?: string;
+      /** How the gate let it through. */
+      via?: "evaluator" | "policy" | "grant" | "approval";
+      /** The approval request a person approved. */
+      approvalId?: string;
+      /** False for calls that change nothing (reads, searches, thread tools); absent counts as true. */
+      effectful?: boolean;
+    }
+  | { allow: false; reason: string };
 
 export type HarnessEvent =
   | { type: "turn_start" }

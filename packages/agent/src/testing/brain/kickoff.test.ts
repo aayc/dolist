@@ -25,10 +25,11 @@ describe("parseKickoff ⇄ buildSubagentKickoff", () => {
         reassignment: fc.boolean(),
         retry: fc.boolean(),
         replies: fc.array(line, { maxLength: 2 }),
+        uncertain: fc.array(line, { maxLength: 2 }),
       },
-      { requiredKeys: ["text", "notes", "goal", "reassignment", "retry", "replies"] },
+      { requiredKeys: ["text", "notes", "goal", "reassignment", "retry", "replies", "uncertain"] },
     ),
-  ])("recovers task, notes, goal, instructions, flags and follow-ups", (input) => {
+  ])("recovers task, notes, goal, instructions, flags, follow-ups and uncertain steps", (input) => {
     const text = buildSubagentKickoff({
       now: NOW,
       task: {
@@ -42,9 +43,11 @@ describe("parseKickoff ⇄ buildSubagentKickoff", () => {
       followUps: input.replies.map((reply) => formatSteerMessage("user", reply)),
       reassignment: input.reassignment,
       retry: input.retry,
+      uncertain: input.uncertain,
     });
     expect(isKickoff(text)).toBe(true);
     const parsed = parseKickoff(text)!;
+    expect(parsed.uncertain).toEqual(input.uncertain);
     expect(parsed.task).toBe(input.text);
     expect(parsed.notes).toEqual(input.notes);
     expect(parsed.goal).toBe(input.goal);

@@ -83,6 +83,11 @@ export interface ToolCallStart {
   via?: PersistedJournalAllowedVia;
   /** The approval card a person decided, when there was one. */
   approvalId?: string;
+  /**
+   * False for calls that change nothing: recorded without waiting for the disk, since redoing
+   * them is harmless. Absent counts as true.
+   */
+  effectful?: boolean;
 }
 
 export interface ToolCallEnd {
@@ -104,9 +109,10 @@ export interface ThreadJournal {
   /** The gate blocked the call. */
   recordToolBlocked(threadId: string, callId: string, reason: string): void;
   /**
-   * Write-ahead: durably records that the call was allowed and is about to run. Resolves false
-   * when the thread keeps no journal (there is nothing to resume it from); rejects when the record
-   * couldn't be written, and then the call must not run.
+   * Write-ahead: records that the call was allowed and is about to run, durably for an effectful
+   * call (resolving once it's on disk). Resolves false when the thread keeps no journal (there is
+   * nothing to resume it from); rejects when the record couldn't be written, and then the call
+   * must not run.
    */
   recordToolStarting(threadId: string, callId: string, start: ToolCallStart): Promise<boolean>;
   recordToolFinished(threadId: string, callId: string, end: ToolCallEnd): void;

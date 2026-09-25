@@ -40,7 +40,7 @@ import {
 import type { RoutineBrief } from "../routines/scheduler";
 import type { ApprovalBroker, GateContext } from "../safety/types";
 import { defaultMimeType } from "../threads/artifacts";
-import type { ThreadStore } from "../threads/types";
+import type { ThreadJournal, ThreadStore } from "../threads/types";
 import { ToolInputError } from "../tools/input";
 import { createThreadTools, THREAD_TOOL_NAMES, type ThreadToolHost } from "../tools/thread";
 import type { TaskRecords } from "./records";
@@ -80,6 +80,8 @@ export interface SubagentManagerOptions {
   harness: () => Harness | null;
   board: TaskBoard;
   threads: ThreadStore;
+  /** The threads' journal: prompts are recorded to rebuild a session; interrupted steps are read. */
+  journal?: ThreadJournal;
   records: TaskRecords;
   approvals: () => ApprovalBroker;
   /** The safety gate; every subagent tool call goes through it. */
@@ -280,6 +282,7 @@ export class SubagentManager {
     if (run.state === "running" && run.session?.isRunning) {
       try {
         await run.session.steer(wrapped);
+        if (run.sessionId) this.options.journal?.recordPrompt(run.threadId, run.sessionId, wrapped);
         return true;
       } catch (error) {
         this.logger.warn("Steering failed; delivering with the next turn", {
@@ -432,15 +435,21 @@ export class SubagentManager {
       const prompt = this.buildPrompt(run, fresh, history || undefined);
       run.state = "running";
       this.options.onChange();
-      await run.session.prompt(prompt);
+      await this.prompt(run, run.session, prompt);
       if (!run.closed && needsNudge(run.turn)) {
         run.turn.nudged = true;
-        await run.session.prompt(FINISH_NUDGE);
+        await this.prompt(run, run.session, FINISH_NUDGE);
       }
     } catch (error) {
       if (!run.closed) run.turn.error = errorText(error);
     }
     if (!run.closed) this.complete(run);
+  }
+
+  /** Prompts the session, journaling the prompt first (a restart rebuilds the session from it). */
+  private prompt(run: Run, session: HarnessSession, text: string): Promise<void> {
+    if (run.sessionId) this.options.journal?.recordPrompt(run.threadId, run.sessionId, text);
+    return session.prompt(text);
   }
 
   private complete(run: Run): void {
@@ -592,7 +601,11 @@ export class SubagentManager {
       const task = this.options.board.describe(run.taskId);
       const record = this.options.records.get(run.taskId);
       const routine = this.options.routineBrief?.(run.taskId);
+      const uncertain = (this.options.journal?.interruptedCalls(run.threadId) ?? [])
+        .filter((call) => call.effectful)
+        .map((call) => call.target);
       return buildSubagentKickoff({
+        ...(uncertain.length > 0 ? { uncertain } : {}),
         now: this.now(),
         ...(routine ? { routine } : {}),
         task: {
