@@ -216,7 +216,7 @@ export function createSyncApp(options: SyncAppOptions): Hono<Env> {
       throw new SyncApiError(400, "invalid_request", `device must match ${SYNC_DEVICE_HEADER}`);
     }
     const outcome = store.acquireLease(c.get("vault"), name, request);
-    if (!outcome.ok) return leaseHeld(c, outcome.holder);
+    if (!outcome.ok) return leaseHeld(c, outcome.holder, outcome.takeoverPending);
     const body: SyncLeaseResponse = { lease: outcome.holder };
     return c.json(body);
   });
@@ -300,11 +300,18 @@ function leaseName(c: Context<Env>): SyncLeaseName {
   return known;
 }
 
-function leaseHeld(c: Context<Env>, holder: SyncLeaseConflictBody["holder"]): Response {
+function leaseHeld(
+  c: Context<Env>,
+  holder: SyncLeaseConflictBody["holder"],
+  takeoverPending?: boolean,
+): Response {
   const body: SyncLeaseConflictBody = {
     error: "lease_held",
-    message: "Another device holds the lease",
+    message: takeoverPending
+      ? "Another device holds the lease; it was asked to hand it over"
+      : "Another device holds the lease",
     holder,
+    ...(takeoverPending ? { takeoverPending: true } : {}),
   };
   return c.json(body, 409);
 }

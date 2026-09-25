@@ -4,7 +4,19 @@ import {
   folderHoldsAgentOwnedPaths,
   isAgentOwnedPath,
   LEASE_EPOCH_HEADER,
+  outranks,
+  SYNC_LEASE_TAKEOVER,
 } from "./sync-service";
+
+describe("lease priorities", () => {
+  it("rank interactive over host, and nothing else over anything", () => {
+    expect(outranks("interactive", "host")).toBe(true);
+    expect(outranks("host", "interactive")).toBe(false);
+    expect(outranks("interactive", "interactive")).toBe(false);
+    expect(outranks("host", "host")).toBe(false);
+    expect(SYNC_LEASE_TAKEOVER).toEqual({ graceMs: 30_000, expiresAfterMs: 60_000, pollMs: 3_000 });
+  });
+});
 
 describe("agent-owned paths", () => {
   it("are the agent's threads, artifacts and state", () => {
