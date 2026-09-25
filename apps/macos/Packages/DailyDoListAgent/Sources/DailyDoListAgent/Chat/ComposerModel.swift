@@ -22,8 +22,8 @@ final class ComposerModel {
 
   var status: TaskAgentStatus? { store.threadStatus(threadId) }
 
-  /// Why replies are off (the agent is off, paused or has a problem).
-  var unavailableReason: String? { store.unavailableReason }
+  /// Why replies are off (read-only on this device, or the agent is off, paused or has a problem).
+  var unavailableReason: String? { store.readOnly?.reason ?? store.unavailableReason }
 
   var canSend: Bool {
     unavailableReason == nil && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -32,8 +32,12 @@ final class ComposerModel {
   /// The agent is working on the thread: Stop shows beside Send.
   var canStop: Bool { status?.isActive == true }
 
+  /// Stop can't reach the agent from this device (it shows, disabled, with the reason).
+  var stopUnavailableReason: String? { store.readOnly?.reason }
+
   /// What the empty input says.
   var placeholder: String {
+    if store.readOnly != nil { return "Replies are off while this is read-only" }
     if unavailableReason != nil { return "Replies are off while the agent can't act" }
     if !store.pendingApprovals(forThread: threadId).isEmpty {
       return "Approve above, or reply to change course…"
@@ -55,7 +59,7 @@ final class ComposerModel {
   /// Stops the agent's work on the thread.
   @discardableResult
   func stop() -> Task<Void, Never>? {
-    guard canStop, !isStopping else { return nil }
+    guard canStop, !isStopping, stopUnavailableReason == nil else { return nil }
     isStopping = true
     return Task {
       await store.cancelThread(threadId)

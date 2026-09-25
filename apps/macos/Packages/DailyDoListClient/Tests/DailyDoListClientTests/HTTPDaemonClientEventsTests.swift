@@ -59,6 +59,24 @@ struct HTTPDaemonClientEventsTests {
     await client.disconnect()
   }
 
+  @Test func aRemoteDaemonGetsTheTokenInTheAuthorizationHeader() async throws {
+    let server = try await TestWebSocketServer()
+    var endpoint = DaemonEndpoint(baseURL: server.baseURL, token: "test-token")
+    endpoint.treatsAsRemote = true
+    let client = HTTPDaemonClient(
+      endpoint: endpoint, session: URLSession(configuration: .ephemeral), clientId: "macos_test",
+      clientVersion: "macos/test", options: Self.fastOptions)
+    let recorder = StreamRecorder(client.events())
+    await client.connect()
+    let peer = try await server.peer(1)
+    try await recorder.waitFor("hello event") { $0 == .event(.hello(Self.hello)) }
+    let upgrade = try #require(peer.upgrade)
+    #expect(upgrade.target == "/ws", "no token in the URL")
+    #expect(upgrade.headers["authorization"] == "Bearer test-token")
+    #expect(upgrade.headers["origin"] == nil)
+    await client.disconnect()
+  }
+
   @Test func incompatibleHelloStopsReconnecting() async throws {
     let server = try await TestWebSocketServer {
       $0.send(#"{"type":"hello","serverVersion":"9.0.0","apiVersion":2}"#)

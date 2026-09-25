@@ -13,6 +13,7 @@ actor FakeDaemon {
   enum TimedAction: Sendable {
     case settle(taskId: String, token: Int)
     case beat(jobId: String, generation: Int)
+    case handover(generation: Int)
   }
 
   struct Scheduled: Sendable {
@@ -66,9 +67,12 @@ actor FakeDaemon {
   var routineStates: [String: FakeRoutineState] = [:]
   var runChanges: [String: Bool] = [:]
 
+  // Device settings, pairing, the always-on machine
+  var remote: FakeRemote
+
   init(
     seed: InMemoryDaemonClient.Seed, clock: SimulationClock, simulation: AgentSimulation,
-    clientId: String
+    clientId: String, remote setup: InMemoryDaemonClient.Remote = .standalone
   ) {
     self.clientId = clientId
     self.simulation = simulation
@@ -78,7 +82,14 @@ actor FakeDaemon {
     let start = (clock.start.timeIntervalSince1970 * 1000).rounded(.down)
     nowMillis = start
     virtualAnchor = start
-    settings = Self.defaultSettings
+    var settings = Self.defaultSettings
+    settings.remote.alwaysOnMachine = setup.machine
+    self.settings = settings
+    var remote = FakeRemote(setup)
+    let applies = setup.machine != nil && setup.syncURL != nil
+    remote.holder = applies && setup.placement == .alwaysOnMachine ? .machine : .thisDevice
+    if setup.machinePaired { remote.machineCheckedAt = start }
+    self.remote = remote
     pendingSeed = seed
   }
 
@@ -188,6 +199,7 @@ actor FakeDaemon {
     switch action {
     case .settle(let taskId, let token): settled(taskId, token: token)
     case .beat(let jobId, let generation): runBeat(jobId, generation: generation)
+    case .handover(let generation): finishHandover(generation: generation)
     }
   }
 

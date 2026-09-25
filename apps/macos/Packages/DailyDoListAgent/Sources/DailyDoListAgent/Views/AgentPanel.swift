@@ -25,16 +25,19 @@ public struct AgentPanelShortcuts: Hashable, Sendable {
   public var routines: Command
   /// Opens the New Routine sheet (the Routines tab's New Routine button).
   public var newRoutine: Command
+  /// Runs the orchestrator on this device ("Run It on This Device Instead").
+  public var runHere: Command
 
   public init(
     hidePanel: KeyShortcut? = nil, inbox: KeyShortcut? = nil, stop: Command = Command(),
-    routines: Command = Command(), newRoutine: Command = Command()
+    routines: Command = Command(), newRoutine: Command = Command(), runHere: Command = Command()
   ) {
     self.hidePanel = hidePanel
     self.inbox = inbox
     self.stop = stop
     self.routines = routines
     self.newRoutine = newRoutine
+    self.runHere = runHere
   }
 }
 
@@ -60,6 +63,7 @@ public struct AgentPanel: View {
   let noteLinks: AgentNoteLinks
   let shortcuts: AgentPanelShortcuts
   let onOpenOrchestratorWindow: (() -> Void)?
+  let placementActions: AgentPlacementActions
   /// The host keeps the section: the header shows the Inbox and Routines tabs.
   let showsSections: Bool
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -77,6 +81,8 @@ public struct AgentPanel: View {
   ///   - section: the inbox or the routines (constant: the inbox only, without the tabs).
   ///   - selectedRoutineId: the routine whose runs show in the routines section.
   ///   - routineActions: New Routine (also "Repeat this" on finished tasks) and Edit File.
+  ///   - placementActions: what the "where the orchestrator runs" control opens to set up what's
+  ///     missing. The control shows when the daemon reports placement.
   public init(
     store: AgentStore, selectedThreadId: Binding<String?>,
     onShowInNote: ((TaskLocation) -> Void)? = nil, onClose: (() -> Void)? = nil,
@@ -85,9 +91,11 @@ public struct AgentPanel: View {
     onOpenOrchestratorWindow: (() -> Void)? = nil,
     section: Binding<AgentPanelSection>? = nil,
     selectedRoutineId: Binding<String?> = .constant(nil),
-    routineActions: AgentRoutineActions = .none
+    routineActions: AgentRoutineActions = .none,
+    placementActions: AgentPlacementActions = .none
   ) {
     self.onOpenOrchestratorWindow = onOpenOrchestratorWindow
+    self.placementActions = placementActions
     self.store = store
     self._selectedThreadId = selectedThreadId
     self._section = section ?? .constant(.inbox)
@@ -105,6 +113,14 @@ public struct AgentPanel: View {
   public var body: some View {
     VStack(spacing: 0) {
       header
+      if let location = store.orchestratorLocation {
+        OrchestratorLocationBar(
+          store: store, location: location, runHere: shortcuts.runHere, actions: placementActions)
+      }
+      if let readOnly = store.readOnly {
+        ReadOnlyBanner(readOnly: readOnly)
+          .transition(.opacity)
+      }
       Group {
         if let threadId = selectedThreadId, OrchestratorThread.isOrchestrator(threadId) {
           OrchestratorChatView(
@@ -146,6 +162,7 @@ public struct AgentPanel: View {
       }
     }
     .animation(.snappy(duration: 0.2), value: store.lastError?.id)
+    .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: store.readOnly)
     .frame(minWidth: 300)
     .foregroundStyle(AgentTheme.text)
     .tint(AgentTheme.accent)

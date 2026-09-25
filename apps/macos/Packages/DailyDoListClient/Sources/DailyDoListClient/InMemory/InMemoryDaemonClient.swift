@@ -22,14 +22,18 @@ public final class InMemoryDaemonClient: DaemonClient {
   ///     or `.manual()`, which start at a fixed date in UTC.
   ///   - agent: Whether the agent simulation runs.
   ///   - clientId: Echoed on `vault.changed` events caused by this client's writes.
+  ///   - remote: Sync, the always-on machine and placement at start (`.standalone`: neither, so
+  ///     the agent is held on this device).
   public init(
     seed: Seed = .demo,
     clock: SimulationClock = .realTime(),
     agent: AgentSimulation = .enabled,
-    clientId: String = "demo_client"
+    clientId: String = "demo_client",
+    remote: Remote = .standalone
   ) {
     self.clientId = clientId
-    daemon = FakeDaemon(seed: seed, clock: clock, simulation: agent, clientId: clientId)
+    daemon = FakeDaemon(
+      seed: seed, clock: clock, simulation: agent, clientId: clientId, remote: remote)
   }
 
   deinit {
@@ -181,6 +185,62 @@ public final class InMemoryDaemonClient: DaemonClient {
     try await call { $0.routineRuns(routineId) }
   }
 
+  // MARK: - This device, pairing and the always-on machine
+
+  public func syncStatus() async throws -> SyncStatusResponse {
+    try await call { $0.syncStatus() }
+  }
+
+  public func deviceSettings() async throws -> DeviceSettingsResponse {
+    try await call { $0.deviceSettings() }
+  }
+
+  public func updateDeviceSettings(_ patch: DeviceSettingsPatch) async throws
+    -> DeviceSettingsResponse
+  {
+    try await call { daemon throws(DaemonClientError) in try daemon.updateDeviceSettings(patch) }
+  }
+
+  public func setUpSync(_ request: DeviceSyncSetupRequest) async throws -> DeviceSettingsResponse {
+    try await call { daemon throws(DaemonClientError) in try daemon.setUpSync(request) }
+  }
+
+  public func turnOffSync() async throws -> DeviceSettingsResponse {
+    try await call { daemon throws(DaemonClientError) in try daemon.turnOffSync() }
+  }
+
+  public func createPairingCode(_ request: PairingCodeRequest) async throws -> PairingCodeResponse {
+    try await call { daemon throws(DaemonClientError) in try daemon.createPairingCode(request) }
+  }
+
+  public func pair(_ request: PairRequest) async throws -> PairResponse {
+    try await call { daemon throws(DaemonClientError) in try daemon.pair(request) }
+  }
+
+  public func pairedDevices() async throws -> [PairedDevice] {
+    try await call { $0.pairedDevices() }
+  }
+
+  public func revokeDevice(_ id: String) async throws {
+    try await call { daemon throws(DaemonClientError) in try daemon.revokeDevice(id) }
+  }
+
+  public func machineStatus() async throws -> MachineStatusResponse {
+    try await call { $0.machineStatus() }
+  }
+
+  public func pairMachine(_ request: MachinePairRequest) async throws -> MachineStatusResponse {
+    try await call { daemon throws(DaemonClientError) in try daemon.pairMachine(request) }
+  }
+
+  public func checkMachine() async throws -> MachineStatusResponse {
+    try await call { $0.checkMachine() }
+  }
+
+  public func forgetMachine() async throws -> MachineStatusResponse {
+    try await call { $0.forgetMachine() }
+  }
+
   // MARK: - Events
 
   /// Emits `.connecting`, `.connected`, the `hello` event, and `.resync` when reconnecting.
@@ -222,6 +282,18 @@ public final class InMemoryDaemonClient: DaemonClient {
     try await call { daemon throws(DaemonClientError) in
       try daemon.simulateExternalEdit(path, content: content)
     }
+  }
+
+  /// The always-on machine stops (or starts) answering, or refuses every pairing code. A change
+  /// of reachability is announced with `agent.status`.
+  public func simulateMachine(reachable: Bool? = nil, rejectsCodes: Bool? = nil) async {
+    _ = try? await call { $0.simulateMachine(reachable: reachable, rejectsCodes: rejectsCodes) }
+  }
+
+  /// Another device set to run the agent itself holds it (`nil`: it lets go), announced with
+  /// `agent.status`.
+  public func simulateAgentElsewhere(_ deviceName: String?) async {
+    _ = try? await call { $0.simulateAgentElsewhere(deviceName) }
   }
 }
 
