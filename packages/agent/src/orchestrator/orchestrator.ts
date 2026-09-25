@@ -20,6 +20,7 @@ import {
   truncate,
   withTimeout,
 } from "@ddl/core";
+import { type DrawingDescriptions, drawingBudget } from "../drawings/descriptions";
 import type {
   Harness,
   HarnessEvent,
@@ -36,6 +37,7 @@ import {
   type DigestNote,
   type DigestRoutine,
   formatOrchestratorDigest,
+  MAX_VIEW_LINES,
   type OrchestratorDigest,
 } from "../prompts/orchestrator";
 import { formatTaskUpdate } from "../prompts/subagent";
@@ -85,6 +87,8 @@ export interface OrchestratorOptions {
   chat?: OrchestratorChat;
   /** The user's routines, listed in every digest so it knows what already exists. */
   routines?: () => DigestRoutine[];
+  /** Describes the drawings the digest's notes embed (under their embed lines). */
+  drawings?: Pick<DrawingDescriptions, "blocks">;
 }
 
 type QueueItem =
@@ -512,6 +516,7 @@ export class Orchestrator {
       chat?.setLabels(session.labels);
       if (!turn.cancelled) {
         const digest = this.buildDigest(items, session.turns === 0);
+        await this.describeDrawings(digest);
         const prompt = session.session.prompt(formatOrchestratorDigest(digest));
         try {
           await withTimeout(
@@ -930,6 +935,32 @@ export class Orchestrator {
       listTasks: async ({ notePath }) => this.describeTasks(notePath ?? this.todayPath()),
       anchorLine: async (input) => this.anchorLine(input),
     };
+  }
+
+  /**
+   * Each drawing embedded in a note of the digest gets its description under the embed line; one
+   * budget for the whole digest. Drawings that can't be described never fail the turn.
+   */
+  private async describeDrawings(digest: OrchestratorDigest): Promise<void> {
+    const drawings = this.options.drawings;
+    if (!drawings) return;
+    const budget = drawingBudget();
+    for (const note of digest.notes) {
+      const view = note.view?.slice(0, MAX_VIEW_LINES);
+      if (!view) continue;
+      try {
+        const blocks = await drawings.blocks(view.map((line) => line.text).join("\n"), budget);
+        for (const block of blocks) {
+          const line = view[block.line];
+          if (line) line.drawing = [...(line.drawing ?? []), ...block.lines];
+        }
+      } catch (error) {
+        this.logger.warn("Could not describe the drawings of a note", {
+          notePath: note.notePath,
+          error: errorText(error),
+        });
+      }
+    }
   }
 
   /** The whole note, numbered, with what the agent knows about each line. */

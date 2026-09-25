@@ -9,25 +9,28 @@ import {
   truncate,
 } from "@ddl/core";
 import { type StorageProvider, searchVault } from "@ddl/storage";
+import { type DrawingDescriptions, drawingBudget } from "../drawings/descriptions";
 import { TOOL } from "./contracts";
 import { asInput, guarded, optionalInt, requireString, ToolInputError } from "./input";
 
 export interface KnowledgeToolsOptions {
   storage: StorageProvider;
   maxNoteChars?: number;
+  /** Describes the drawings a note embeds, after its text. */
+  drawings?: Pick<DrawingDescriptions, "blocks">;
 }
 
 const DEFAULT_MAX_NOTE_CHARS = 40_000;
 
 export function createKnowledgeTools(options: KnowledgeToolsOptions): ToolSpec[] {
-  const { storage } = options;
+  const { storage, drawings } = options;
   const maxChars = options.maxNoteChars ?? DEFAULT_MAX_NOTE_CHARS;
 
   const readNote: ToolSpec = {
     name: TOOL.readNote,
     label: "Read note",
     description:
-      "Read a note from the user's vault by path (e.g. Daily/2026-09-23.md or a wikilink target like Projects/Kyoto).",
+      "Read a note from the user's vault by path (e.g. Daily/2026-09-23.md or a wikilink target like Projects/Kyoto). Drawings the note embeds are described after its text.",
     parameters: {
       type: "object",
       properties: { path: { type: "string", description: "Vault-relative path." } },
@@ -50,7 +53,8 @@ export function createKnowledgeTools(options: KnowledgeToolsOptions): ToolSpec[]
           file.content.length > maxChars
             ? `${file.content.slice(0, maxChars)}\n\n[… truncated: ${file.content.length - maxChars} more characters]`
             : file.content;
-        return textResult(`# ${path}\n\n${body}`, { path, version: file.version });
+        const described = drawings ? await describeEmbeds(drawings, body) : "";
+        return textResult(`# ${path}\n\n${body}${described}`, { path, version: file.version });
       }),
   };
 
@@ -90,6 +94,29 @@ export function createKnowledgeTools(options: KnowledgeToolsOptions): ToolSpec[]
   };
 
   return [readNote, searchNotes];
+}
+
+/**
+ * The note's drawings, after its text rather than under their embeds, so the note reads exactly as
+ * it is (edit_note finds lines by their number and text).
+ */
+async function describeEmbeds(
+  drawings: Pick<DrawingDescriptions, "blocks">,
+  body: string,
+): Promise<string> {
+  const blocks = await drawings.blocks(body, drawingBudget()).catch(() => []);
+  if (blocks.length === 0) return "";
+  const lines = [
+    "",
+    "",
+    "---",
+    "Drawings embedded in this note (described by the system from their files; not part of the note's text):",
+  ];
+  for (const block of blocks) {
+    const [head = "", ...rest] = block.lines;
+    lines.push(`line ${block.line + 1}: ${head}`, ...rest);
+  }
+  return lines.join("\n");
 }
 
 async function resolveNotePath(

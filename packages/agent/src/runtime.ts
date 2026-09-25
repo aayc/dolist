@@ -26,6 +26,7 @@ import {
   truncate,
   type Unsubscribe,
 } from "@ddl/core";
+import { DrawingDescriptions } from "./drawings/descriptions";
 import { createExecutionTools } from "./execution";
 import { ComputerStatusMonitor } from "./execution/computer-status";
 import type { Capability, ExecutionToolFactory, FrameListener } from "./execution/types";
@@ -173,6 +174,8 @@ class Runtime implements AgentRuntime {
   /** Starts routine runs; active only while the agent runs and is enabled. */
   private readonly scheduler: RoutineScheduler;
   private readonly knowledgeTools: ToolSpec[];
+  /** Descriptions of the drawings notes embed, wherever the agent reads a note. */
+  private readonly drawings: DrawingDescriptions;
   /** `edit_note`, shared by the orchestrator and every subagent. */
   private readonly noteEditTool: ToolSpec;
   private readonly sourceCatalog = new SourceCatalog();
@@ -257,7 +260,12 @@ class Runtime implements AgentRuntime {
       now,
       logger: this.logger,
     });
-    this.knowledgeTools = createKnowledgeTools({ storage });
+    this.drawings = new DrawingDescriptions({
+      storage,
+      now,
+      logger: this.logger.child({ component: "drawings" }),
+    });
+    this.knowledgeTools = createKnowledgeTools({ storage, drawings: this.drawings });
     const noteEditHost: NoteEditHost = {
       storage,
       locate: (taskId) => {
@@ -325,6 +333,7 @@ class Runtime implements AgentRuntime {
           : this.orchestrator.notifySubagentFinished(report),
       onChange: () => this.queueStatus(),
       routineBrief: (taskId) => this.scheduler.brief(taskId),
+      drawings: this.drawings,
       now,
       logger: this.logger.child({ component: "subagents" }),
     });
@@ -347,6 +356,7 @@ class Runtime implements AgentRuntime {
         ...this.routineTools,
       ],
       routines: () => this.digestRoutines(),
+      drawings: this.drawings,
       capabilities: () => this.capabilities(),
       getSettings: () => this.settings,
       cwd: options.home,
@@ -997,6 +1007,7 @@ class Runtime implements AgentRuntime {
         }
       };
     this.disposers.push(
+      this.options.storage.watch(safe((event) => this.drawings.onStorageEvent(event))),
       this.threads.on(
         safe((event) => {
           if (event.type === "thread.upsert") this.emitter.emit("thread.upsert", event.thread);
