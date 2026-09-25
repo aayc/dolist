@@ -153,6 +153,33 @@ struct RemoteSettingsTests {
     #expect(store.error(.rename) == "name: must be 1-64 characters without control characters")
   }
 
+  // MARK: - Remote access
+
+  @Test func remoteHostsAreCheckedBeforeTheyreSent() async {
+    let hosts = ["studio.tailnet-name.ts.net"]
+    #expect(RemoteAccessSection.problem("", in: hosts) == nil)
+    #expect(RemoteAccessSection.problem(" VM-Name.Tailnet-Name.ts.net:8443 ", in: hosts) == nil)
+    #expect(
+      RemoteAccessSection.problem("Studio.Tailnet-Name.ts.net", in: hosts) == "It's already listed."
+    )
+    for bad in ["https://vm.ts.net", "100.64.0.1", "vm.ts.net/app", "localhost"] {
+      #expect(
+        RemoteAccessSection.problem(bad, in: hosts)?.hasPrefix("Use a DNS name") == true, "\(bad)")
+    }
+    let full = (1...8).map { "host\($0).ts.net" }
+    #expect(RemoteAccessSection.problem("vm.ts.net", in: full) == "At most 8 names.")
+
+    let (store, _) = store(.standalone)
+    await store.load()
+    #expect(
+      await store.setRemoteHosts([
+        "vm-name.tailnet-name.ts.net", "vm-name.tailnet-name.ts.net:8443",
+      ]))
+    #expect(store.device?.remoteHosts.count == 2)
+    #expect(await store.setRemoteHosts([]))
+    #expect(store.device?.remoteHosts == [])
+  }
+
   // MARK: - Messages
 
   @Test func everyErrorCodeHasAClearMessage() {

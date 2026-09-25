@@ -327,6 +327,8 @@ struct SnapshotTests {
       ("settings-always-on-sync-locked", locked, .sync, nothing),
       ("settings-always-on-devices", .alwaysOn, .devices, paired),
       ("settings-always-on-devices-code", .alwaysOn, .devices, codeWithoutHosts),
+      ("settings-always-on-remote-access", .host, .remoteAccess, nothing),
+      ("settings-always-on-remote-access-none", .alwaysOn, .remoteAccess, nothing),
     ]
     for (name, remote, section, prepare) in shots {
       let model = try await model(remote, prepare)

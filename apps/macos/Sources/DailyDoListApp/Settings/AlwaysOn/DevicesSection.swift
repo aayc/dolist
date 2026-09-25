@@ -78,7 +78,8 @@ struct DevicesSection: View {
         PairingCodeCard(
           code: code, now: model.environment.now,
           onNewCode: { Task { await remote.createPairingCode(name: trimmedName) } },
-          onDone: { remote.dismissPairingCode() })
+          onDone: { remote.dismissPairingCode() },
+          onAddNames: { model.ui.alwaysOnSection = .remoteAccess })
       } else {
         TextField("Name", text: $newDeviceName, prompt: Text("Optional, e.g. Phone"))
         HStack {
@@ -173,6 +174,7 @@ struct PairingCodeCard: View {
   let now: () -> Date
   let onNewCode: () -> Void
   let onDone: () -> Void
+  let onAddNames: () -> Void
 
   var body: some View {
     TimelineView(.periodic(from: .now, by: 1)) { _ in
@@ -198,10 +200,14 @@ struct PairingCodeCard: View {
           }
           SettingsNote(text: "On the new device, open this address and enter the code.")
         } else {
-          SettingsNote(
-            text:
-              "Other devices can't reach this daemon yet: add the name they reach it by in Remote Access.",
-            tone: Theme.warning)
+          HStack(alignment: .firstTextBaseline) {
+            SettingsNote(
+              text:
+                "Other devices can't reach this daemon yet: add the name they reach it by.",
+              tone: Theme.warning)
+            Spacer()
+            Button("Remote Access…", action: onAddNames).pointingHandCursor()
+          }
         }
         HStack {
           Spacer()
