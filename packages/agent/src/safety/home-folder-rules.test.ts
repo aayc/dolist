@@ -103,11 +103,16 @@ describe("shell histories and .env files", () => {
     ["tail -100 /Users/me/.bash_history", "secrets.shell-history"],
     ["cat ~/.psql_history", "secrets.shell-history"],
     ["cat ~/.zsh_sessions/ABC.history", "secrets.shell-history"],
-    ["cat ~/Projects/app/.env", "secrets.env-file"],
-    ["cat ../task-2/.env.local", "secrets.env-file"],
-    ["source ~/Projects/app/.envrc", "secrets.env-file"],
   ])("%s", async (command, ruleId) => {
     await expectShell(command, "deny", ruleId);
+  });
+
+  it.each([
+    ["cat ~/Projects/app/.env"],
+    ["cat ../task-2/.env.local"],
+    ["source ~/Projects/app/.envrc"],
+  ])("a .env outside the workspace follows the approval policy: %s", async (command) => {
+    await expectShell(command, "require_approval", "secrets.env-file");
   });
 
   it("reads them freely in the workspace and the temp area", async () => {

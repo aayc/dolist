@@ -74,8 +74,6 @@ describe("secret access and exfiltration (never allowed)", () => {
     ["cat ~/.daily-do-list/.env", "secrets.credential-store"],
     ["cat ~/.zsh_history", "secrets.shell-history"],
     ["grep -i token ~/.bash_history", "secrets.shell-history"],
-    ["cat /Users/me/work/app/.env", "secrets.env-file"],
-    ["cp ../task-2/.env.local .", "secrets.env-file"],
     [
       "sqlite3 ~/Library/Application\\ Support/Google/Chrome/Default/Login\\ Data 'select * from logins'",
       "secrets.credential-store",
@@ -94,6 +92,13 @@ describe("secret access and exfiltration (never allowed)", () => {
   ])("%s", async (command, ruleId) => {
     await expectVerdict(command, "deny", ruleId);
   });
+
+  it.each([["cat /Users/me/work/app/.env"], ["cp ../task-2/.env.local ."]])(
+    "reading a .env outside the workspace follows the approval policy: %s",
+    async (command) => {
+      await expectVerdict(command, "require_approval", "secrets.env-file");
+    },
+  );
 
   it("allows using an SSH key for authentication without reading it", async () => {
     const verdict = await expectVerdict(

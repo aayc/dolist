@@ -44,8 +44,8 @@ export const SHELL_HISTORY_READ = info(
 export const ENV_FILE_READ = info(
   "secrets.env-file",
   "credentials",
-  "deny",
-  "critical",
+  "require_approval",
+  "high",
   "Reads a .env file outside the task workspace (it holds API keys and passwords)",
 );
 export const PERSONAL_FOLDER_READ = info(
