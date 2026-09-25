@@ -11,9 +11,9 @@
 //   node setup-helper.mjs save-sync-token --file <path>   < `ddl-sync vault create|rotate-token --json`
 //   node setup-helper.mjs wait-healthy --url <url> [--token-file <path>] [--timeout-s N]
 //
-// write-config fills in `vaultPath` and `port` only when they're unset, always sets
-// `agent.placement` when given, and replaces `sync` and `remote.hosts` when given; every other key
-// is kept. save-sync-token prints the vault id.
+// write-config fills in `vaultPath` only when it's unset, sets `port` and `agent.placement` when
+// given, and replaces `sync` and `remote.hosts` when given; every other key is kept.
+// save-sync-token prints the vault id.
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -112,7 +112,7 @@ function writeConfig(args) {
   if (values["vault-path"] !== undefined && config.vaultPath === undefined) {
     config.vaultPath = values["vault-path"];
   }
-  if (values.port !== undefined && config.port === undefined) {
+  if (values.port !== undefined) {
     const port = Number(values.port);
     if (!/^\d+$/.test(values.port) || port < 1 || port > 65_535) {
       throw new UsageError("--port must be an integer from 1 to 65535");

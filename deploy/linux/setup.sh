@@ -5,8 +5,8 @@
 # again keeps the config, tokens, vault and sync database, and swaps in the given bundle.
 # See deploy/linux/README.md.
 #
-#   sudo ./setup.sh [--bundle FILE] [--host NAME]... [--vault-name NAME] [--skip-browser]
-#                   [--no-start]
+#   sudo ./setup.sh [--bundle FILE] [--host NAME]... [--vault-name NAME] [--port N]
+#                   [--sync-port N] [--skip-browser] [--no-start]
 #
 #   --bundle FILE    the ddl-linux-<arch>.tar.gz to install (default: the unpacked bundle that
 #                    contains this script)
@@ -14,6 +14,8 @@
 #                    vm-name.tailnet-name.ts.net (repeatable; default: the tailnet name from
 #                    `tailscale status`, when Tailscale is up)
 #   --vault-name N   name of the sync vault when it's created (default: Personal)
+#   --port N         the daemon's loopback port (default: the configured one, else 7331)
+#   --sync-port N    the sync service's loopback port (default: the configured one, else 7332)
 #   --skip-browser   don't install Chromium and the system libraries it needs
 #   --no-start       enable the services without (re)starting them
 set -euo pipefail
@@ -26,26 +28,30 @@ VAULT_DIR="$STATE/DailyDoList"
 SYNC_DIR="$STATE/sync"
 SYNC_DB="$SYNC_DIR/sync.db"
 ENV_FILE=/etc/ddl/ddl.env
+# The sync service's port, read by ddl-sync.service (not secret).
+SYNC_ENV_FILE=/etc/ddl/sync.env
 UNIT_DIR=/etc/systemd/system
-DAEMON_PORT=7331
-SYNC_PORT=7332
-SYNC_URL="http://127.0.0.1:$SYNC_PORT"
+DEFAULT_PORT=7331
+DEFAULT_SYNC_PORT=7332
 KEEP_RELEASES=3
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUNDLE_FILE=""
 HOSTS=()
 VAULT_NAME=Personal
+PORT_ARG=""
+SYNC_PORT_ARG=""
 SKIP_BROWSER=0
 NO_START=0
 
-usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; }
 step() { printf '\n==> %s\n' "$*"; }
 note() { printf '    %s\n' "$*"; }
 fail() {
   echo "setup: $*" >&2
   exit 1
 }
+is_port() { [[ "$1" =~ ^[0-9]{1,5}$ ]] && [ "$1" -ge 1 ] && [ "$1" -le 65535 ]; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -62,6 +68,11 @@ while [ $# -gt 0 ]; do
     --vault-name)
       [ $# -ge 2 ] || fail "--vault-name needs a name"
       VAULT_NAME="$2"
+      shift
+      ;;
+    --port | --sync-port)
+      if [ $# -lt 2 ] || ! is_port "$2"; then fail "$1 needs a port number (1-65535)"; fi
+      if [ "$1" = --port ]; then PORT_ARG="$2"; else SYNC_PORT_ARG="$2"; fi
       shift
       ;;
     --skip-browser) SKIP_BROWSER=1 ;;
@@ -211,9 +222,22 @@ step "Sync vault and config"
 CONFIG="$DDL_HOME_DIR/config.json"
 SYNC_TOKEN="$DDL_HOME_DIR/sync-token"
 SYNC_CLI="$CURRENT/sync/dist/main.js"
+configured_port="$(as_user "$NODE" "$HELPER" read-config --file "$CONFIG" --key port)"
+PORT="${PORT_ARG:-${configured_port:-$DEFAULT_PORT}}"
 configured_url="$(as_user "$NODE" "$HELPER" read-config --file "$CONFIG" --key sync.url)"
+configured_sync_port=""
+if [[ "$configured_url" =~ ^http://127\.0\.0\.1:([0-9]+)$ ]]; then
+  configured_sync_port="${BASH_REMATCH[1]}"
+fi
+SYNC_PORT="${SYNC_PORT_ARG:-${configured_sync_port:-$DEFAULT_SYNC_PORT}}"
+SYNC_URL="http://127.0.0.1:$SYNC_PORT"
+cat >"$SYNC_ENV_FILE" <<EOF
+# The sync service's loopback port, for ddl-sync.service (setup.sh --sync-port).
+DDL_SYNC_PORT=$SYNC_PORT
+EOF
+chmod 0644 "$SYNC_ENV_FILE"
 sync_args=()
-if [ -n "$configured_url" ] && [ "$configured_url" != "$SYNC_URL" ]; then
+if [ -n "$configured_url" ] && [ -z "$configured_sync_port" ]; then
   note "config.json syncs with $configured_url; leaving sync as it is"
 else
   vault_id="$(as_user "$NODE" "$HELPER" read-config --file "$CONFIG" --key sync.vault)"
@@ -237,10 +261,10 @@ fi
 host_args=()
 for host in "${HOSTS[@]}"; do host_args+=(--remote-host "$host"); done
 as_user "$NODE" "$HELPER" write-config --file "$CONFIG" --vault-path "$VAULT_DIR" \
-  --port "$DAEMON_PORT" --placement always_on_host "${sync_args[@]}" "${host_args[@]}"
-port="$(as_user "$NODE" "$HELPER" read-config --file "$CONFIG" --key port)"
+  --port "$PORT" --placement always_on_host "${sync_args[@]}" "${host_args[@]}"
 remote_host="$(as_user "$NODE" "$HELPER" read-config --file "$CONFIG" --key remote.hosts.0)"
-note "$CONFIG: placement always_on_host, remote host ${remote_host:-none}"
+note "$CONFIG: port $PORT, placement always_on_host, remote host ${remote_host:-none}"
+note "$SYNC_ENV_FILE: sync service port $SYNC_PORT"
 
 # 6. Chromium for the agent's browser: Playwright's build, matching the bundled Playwright ------
 if [ "$SKIP_BROWSER" = 0 ]; then
@@ -260,7 +284,7 @@ if [ "$NO_START" = 0 ]; then
   systemctl restart ddl-sync.service ddl-daemon.service
   as_user "$NODE" "$HELPER" wait-healthy --url "$SYNC_URL/v1/health" ||
     fail "the sync service didn't start: journalctl -u ddl-sync -n 50"
-  as_user "$NODE" "$HELPER" wait-healthy --url "http://127.0.0.1:${port:-$DAEMON_PORT}/api/health" \
+  as_user "$NODE" "$HELPER" wait-healthy --url "http://127.0.0.1:$PORT/api/health" \
     --token-file "$DDL_HOME_DIR/daemon-token" ||
     fail "the daemon didn't start: journalctl -u ddl-daemon -n 50"
   note "ddl-sync and ddl-daemon are running"
@@ -273,14 +297,14 @@ host="${remote_host:-vm-name.tailnet-name.ts.net}"
 cat <<EOF
 
 Daily Do List $RELEASE is installed.
-  Daemon:  http://127.0.0.1:${port:-$DAEMON_PORT} (ddl-daemon)   Sync: $SYNC_URL (ddl-sync)
+  Daemon:  http://127.0.0.1:$PORT (ddl-daemon)   Sync: $SYNC_URL (ddl-sync)
   Vault:   $VAULT_DIR   Home: $DDL_HOME_DIR
   Logs:    journalctl -u ddl-daemon -u ddl-sync -f
 
 Next steps:
 
 1. Serve both on the tailnet over HTTPS (enable HTTPS certificates for the tailnet first):
-     sudo tailscale serve --bg --https=443 http://127.0.0.1:${port:-$DAEMON_PORT}
+     sudo tailscale serve --bg --https=443 http://127.0.0.1:$PORT
      sudo tailscale serve --bg --https=8443 $SYNC_URL
 EOF
 if [ -z "$remote_host" ]; then

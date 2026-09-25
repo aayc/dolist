@@ -1,17 +1,24 @@
 #!/usr/bin/env bash
-# Installs a Linux bundle with setup.sh on a disposable Ubuntu machine with systemd (a CI runner)
-# and checks the result: the service user, folder and secret modes, config.json, the release
-# layout, the units (systemd-analyze verify), a second run changing nothing, both services running
-# under their hardened units, and no token in setup.sh's output or the journal. It changes the
-# machine (a system user, /opt/ddl, /var/lib/ddl, units), so it refuses to run outside CI.
+# Installs a Linux bundle with setup.sh on a disposable Ubuntu machine with systemd (a CI runner,
+# or a throwaway VM such as an OrbStack machine) and checks the result: the service user, folder
+# and secret modes, config.json, the release layout, the units (systemd-analyze verify), a second
+# run changing nothing, both services running under their hardened units, and no token in
+# setup.sh's output or the journal. It changes the machine (a system user, /opt/ddl, /var/lib/ddl,
+# units), so it runs only with CI=true or DDL_SETUP_TEST_DISPOSABLE=1.
 #
 #   sudo --preserve-env=CI deploy/linux/setup-test.sh <ddl-linux-<arch>.tar.gz>
+#
+# SETUP_TEST_PORT and SETUP_TEST_SYNC_PORT run the services on other ports than 7331 and 7332
+# (through setup.sh --port and --sync-port), e.g. in an OrbStack machine, whose loopback ports
+# OrbStack forwards to the Mac's.
 set -euo pipefail
 
 REMOTE_HOST=vm-name.tailnet-name.ts.net
 STATE=/var/lib/ddl
 DDL_HOME_DIR="$STATE/.daily-do-list"
 CONFIG="$DDL_HOME_DIR/config.json"
+PORT="${SETUP_TEST_PORT:-7331}"
+SYNC_PORT="${SETUP_TEST_SYNC_PORT:-7332}"
 
 fail() {
   echo "setup-test: $*" >&2
@@ -19,7 +26,9 @@ fail() {
 }
 pass() { echo "ok    $*"; }
 
-[ "${CI:-}" = true ] || fail "only on a disposable CI machine: it installs system services"
+if [ "${CI:-}" != true ] && [ "${DDL_SETUP_TEST_DISPOSABLE:-}" != 1 ]; then
+  fail "only on a disposable machine (CI=true or DDL_SETUP_TEST_DISPOSABLE=1): it installs services"
+fi
 [ "$(id -u)" -eq 0 ] || fail "run it as root"
 if [ $# -ne 1 ] || [ ! -f "$1" ]; then fail "usage: $0 <ddl-linux-<arch>.tar.gz>"; fi
 BUNDLE_FILE="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
@@ -30,6 +39,7 @@ on_exit() {
   if [ "$status" -ne 0 ]; then
     echo "--- journal ---" >&2
     journalctl -u ddl-daemon -u ddl-sync --no-pager -n 80 >&2 || true
+    systemctl stop ddl-daemon ddl-sync 2>/dev/null || true
   fi
   rm -rf "$WORK"
 }
@@ -48,7 +58,7 @@ expect_config() {
   [ "$got" = "$2" ] || fail "config.json $1 is '$got', expected '$2'"
 }
 fingerprint() {
-  sha256sum "$CONFIG" "$DDL_HOME_DIR/sync-token" /etc/ddl/ddl.env
+  sha256sum "$CONFIG" "$DDL_HOME_DIR/sync-token" /etc/ddl/ddl.env /etc/ddl/sync.env
   readlink /opt/ddl/current
 }
 
@@ -56,6 +66,8 @@ tar -xzf "$BUNDLE_FILE" -C "$WORK"
 SETUP="$(find "$WORK" -mindepth 3 -maxdepth 3 -path '*/deploy/setup.sh' | head -n 1)"
 [ -n "$SETUP" ] || fail "no deploy/setup.sh in the bundle"
 SETUP_ARGS=(--host "$REMOTE_HOST" --vault-name CI --skip-browser --no-start)
+if [ "$PORT" != 7331 ]; then SETUP_ARGS+=(--port "$PORT"); fi
+if [ "$SYNC_PORT" != 7332 ]; then SETUP_ARGS+=(--sync-port "$SYNC_PORT"); fi
 
 # 1. First run ------------------------------------------------------------------------------------
 "$SETUP" "${SETUP_ARGS[@]}" | tee "$WORK/setup-1.log"
@@ -69,13 +81,15 @@ done
 expect_mode /etc/ddl/ddl.env "600 ddl:ddl"
 expect_mode "$DDL_HOME_DIR/sync-token" "600 ddl:ddl"
 expect_mode "$CONFIG" "600 ddl:ddl"
+expect_mode /etc/ddl/sync.env "644 root:root"
 pass "service user, folders 0700, secrets 0600"
 
 expect_config agent.placement always_on_host
 expect_config remote.hosts.0 "$REMOTE_HOST"
 expect_config sync.kind remote
-expect_config sync.url http://127.0.0.1:7332
-expect_config port 7331
+expect_config sync.url "http://127.0.0.1:$SYNC_PORT"
+expect_config port "$PORT"
+grep -qx "DDL_SYNC_PORT=$SYNC_PORT" /etc/ddl/sync.env || fail "sync.env doesn't set $SYNC_PORT"
 expect_config vaultPath "$STATE/DailyDoList"
 [ -n "$(helper read-config --file "$CONFIG" --key sync.vault)" ] || fail "config.json has no sync.vault"
 pass "config.json"
@@ -107,8 +121,8 @@ pass "second run: idempotent"
 
 # 3. The services, under their hardened units ------------------------------------------------------
 systemctl start ddl-sync
-helper wait-healthy --url http://127.0.0.1:7332/v1/health
-pass "ddl-sync running"
+helper wait-healthy --url "http://127.0.0.1:$SYNC_PORT/v1/health"
+pass "ddl-sync running on port $SYNC_PORT"
 
 # FOLLOW-UP for the lead: once the daemon accepts agent.placement and remote.hosts (the placement
 # and remote-access streams), delete this override so that the unit runs on the config.json
@@ -127,10 +141,39 @@ systemctl daemon-reload
 daemon_home="$ci_home"
 
 systemctl start ddl-daemon
-helper wait-healthy --url http://127.0.0.1:7331/api/health --token-file "$daemon_home/daemon-token"
-index="$(curl -fsS http://127.0.0.1:7331/)"
+helper wait-healthy --url "http://127.0.0.1:$PORT/api/health" \
+  --token-file "$daemon_home/daemon-token"
+index="$(curl -fsS "http://127.0.0.1:$PORT/")"
 grep -q '<meta name="ddl-token"' <<<"$index" || fail "the daemon doesn't serve the web app"
-pass "ddl-daemon running and serving the web app"
+pass "ddl-daemon running on port $PORT and serving the web app"
+
+# The sandbox is in effect, seen from inside each service's mount namespace as its user.
+# Containers can switch it off for every service (OrbStack's LXC machines do, with a drop-in).
+protect="$(systemctl show -p ProtectSystem --value ddl-daemon)"
+[ "$protect" = strict ] ||
+  fail "systemd's sandboxing is overridden here (ProtectSystem=$protect); see deploy/linux/README.md"
+daemon_pid="$(systemctl show -p MainPID --value ddl-daemon)"
+sync_pid="$(systemctl show -p MainPID --value ddl-sync)"
+in_service() {
+  local pid="$1"
+  shift
+  nsenter -t "$pid" -m setpriv --reuid=ddl --regid=ddl --clear-groups "$@"
+}
+for pid in "$daemon_pid" "$sync_pid"; do
+  grep -q '^NoNewPrivs:[[:space:]]*1$' "/proc/$pid/status" || fail "pid $pid can gain privileges"
+  [[ "$(nsenter -t "$pid" -m findmnt -no OPTIONS -T /usr)" == ro* ]] || fail "/usr is writable"
+  if in_service "$pid" ls /home >/dev/null 2>&1; then fail "pid $pid can read /home"; fi
+done
+in_service "$daemon_pid" touch "$daemon_home/sandbox-probe" || fail "the daemon can't write its home"
+rm -f "$daemon_home/sandbox-probe"
+in_service "$daemon_pid" touch /tmp/ddl-sandbox-probe
+[ ! -e /tmp/ddl-sandbox-probe ] || fail "the daemon's /tmp isn't private"
+if in_service "$sync_pid" touch "$DDL_HOME_DIR/sandbox-probe" 2>/dev/null; then
+  fail "the sync service can write the daemon's home"
+fi
+in_service "$sync_pid" touch "$STATE/sync/sandbox-probe" || fail "the sync service can't write its folder"
+rm -f "$STATE/sync/sandbox-probe"
+pass "sandbox: no new privileges, read-only system, no /home, private /tmp, only their own folders"
 for unit in ddl-daemon ddl-sync; do
   systemd-analyze security --no-pager "$unit.service" | grep -i 'overall exposure' || true
 done

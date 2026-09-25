@@ -183,9 +183,11 @@ bundle change (the two path lists in the workflow must stay in sync).
 - `setup` ("Linux setup kit (systemd)") installs that bundle on a fresh runner (a disposable VM
   with systemd) with `deploy/linux/setup-test.sh`: it runs `setup.sh` twice (the second run must
   change nothing), checks the service user, the `0700` folders and `0600` secrets, `config.json`,
-  the root-owned release, `systemd-analyze verify` on the units, starts both services under their
-  hardened units, and checks that no token reached `setup.sh`'s output or the journal. It refuses
-  to run outside CI.
+  the root-owned release, `systemd-analyze verify` on the units, starts both services, checks
+  their sandbox from inside (no new privileges, read-only system, no `/home`, private `/tmp`, only
+  their own folders writable), and checks that no token reached `setup.sh`'s output or the
+  journal. It runs only with `CI=true` or `DDL_SETUP_TEST_DISPOSABLE=1`; the kit's README shows how
+  to run it in an OrbStack machine.
 
 ```sh
 deploy/linux/build-bundle.sh                                   # this machine's CPU; --arch x64|arm64

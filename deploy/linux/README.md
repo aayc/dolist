@@ -65,8 +65,9 @@ sudo ./ddl-linux-x64/deploy/setup.sh --host vm-name.tailnet-name.ts.net
 `--host` is the name the daemon answers to besides loopback: the machine's name on the tailnet.
 Without it, `setup.sh` takes the name from `tailscale status` when Tailscale is up. Other options:
 `--bundle FILE` installs a tarball without unpacking it first, `--vault-name NAME` names the sync
-vault (default `Personal`), `--skip-browser` skips Chromium, and `--no-start` enables the services
-without starting them.
+vault (default `Personal`), `--port N` and `--sync-port N` change the loopback ports of the daemon
+and the sync service (default 7331 and 7332; later runs keep them), `--skip-browser` skips
+Chromium, and `--no-start` enables the services without starting them.
 
 What `setup.sh` does, and does again safely on every run:
 
@@ -146,6 +147,7 @@ What `setup.sh` does, and does again safely on every run:
 | `/var/lib/ddl/sync/sync.db` | The sync service's database (with `-wal` and `-shm` files next to it). |
 | `/var/lib/ddl/.cache/ms-playwright` | Chromium for the agent's browser. |
 | `/etc/ddl/ddl.env` | Environment of `ddl-daemon.service`: API keys, `DDL_*` overrides (`0600`). |
+| `/etc/ddl/sync.env` | The sync service's port (`DDL_SYNC_PORT`), written by `setup.sh`. |
 | `/etc/systemd/system/ddl-*.service` | The units. |
 
 The units run as `ddl` with `Restart=on-failure` and systemd's hardening: no new privileges, a
@@ -204,6 +206,33 @@ sudo systemctl start ddl-sync
 ```
 
 On Azure, a disk snapshot also works (see the Azure guide).
+
+## Test the kit on a throwaway machine
+
+`setup-test.sh` installs a bundle with `setup.sh` on a disposable machine with systemd and checks
+what CI checks: two runs (the second changes nothing), modes and owners, `config.json`, the units,
+both services running inside their sandbox, and no token in the output or the journal. Since it
+installs system services, it runs only with `CI=true` or `DDL_SETUP_TEST_DISPOSABLE=1`.
+
+On a Mac, an [OrbStack](https://orbstack.dev) Linux machine works with two adjustments. OrbStack
+forwards the machine's loopback ports to the Mac's, where Daily Do List may already use 7331, so
+the test runs on other ports. And its machines are LXC containers that switch systemd's sandboxing
+off for every service with a drop-in, which the test would catch, so mask it in the throwaway
+machine:
+
+```sh
+deploy/linux/build-bundle.sh --arch arm64          # the machine's CPU
+orb create ubuntu:noble ddl-kit-test
+orb -m ddl-kit-test -u root -w /tmp bash -c '
+  curl -fsSL https://deb.nodesource.com/setup_24.x -o /tmp/nodesource_setup.sh
+  bash /tmp/nodesource_setup.sh && apt-get install -y nodejs
+  mkdir -p /etc/systemd/system/service.d
+  : >/etc/systemd/system/service.d/zzz-lxc-service.conf && systemctl daemon-reload'
+orb -m ddl-kit-test -u root -w /tmp env DDL_SETUP_TEST_DISPOSABLE=1 SETUP_TEST_PORT=17331 \
+  SETUP_TEST_SYNC_PORT=17332 "$PWD/deploy/linux/setup-test.sh" \
+  "$PWD/deploy/linux/build/ddl-linux-arm64.tar.gz"
+orb delete ddl-kit-test
+```
 
 ## Uninstall
 

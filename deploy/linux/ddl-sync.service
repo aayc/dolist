@@ -10,7 +10,10 @@ Type=simple
 User=ddl
 Group=ddl
 WorkingDirectory=/var/lib/ddl
-ExecStart=/usr/bin/env node /opt/ddl/current/sync/dist/main.js serve --db /var/lib/ddl/sync/sync.db --host 127.0.0.1 --port 7332
+# The port: DDL_SYNC_PORT in /etc/ddl/sync.env, which setup.sh writes (--sync-port).
+Environment=DDL_SYNC_PORT=7332
+EnvironmentFile=-/etc/ddl/sync.env
+ExecStart=/usr/bin/env node /opt/ddl/current/sync/dist/main.js serve --db /var/lib/ddl/sync/sync.db --host 127.0.0.1 --port ${DDL_SYNC_PORT}
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=15
