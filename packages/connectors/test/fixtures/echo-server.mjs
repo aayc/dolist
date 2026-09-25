@@ -7,9 +7,6 @@
  *   FIXTURE_CRASH_MARKER  file path; while the file exists the server exits at startup
  */
 import { existsSync, writeFileSync } from "node:fs";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 const label = process.env.FIXTURE_LABEL ?? "echo";
 const crashMarker = process.env.FIXTURE_CRASH_MARKER;
@@ -18,6 +15,12 @@ if (crashMarker && existsSync(crashMarker)) {
   process.stderr.write("fixture: refusing to start (crash marker present)\n");
   process.exit(3);
 }
+// Loaded only once past the check: a refusal shouldn't pay for loading the SDK.
+const { Server } = await import("@modelcontextprotocol/sdk/server/index.js");
+const { StdioServerTransport } = await import("@modelcontextprotocol/sdk/server/stdio.js");
+const { CallToolRequestSchema, ListToolsRequestSchema } = await import(
+  "@modelcontextprotocol/sdk/types.js"
+);
 process.stderr.write(`fixture ${label} started\n`);
 
 const text = (value) => ({ content: [{ type: "text", text: String(value) }] });

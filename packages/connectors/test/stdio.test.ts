@@ -2,7 +2,7 @@
 /**
  * Process-lifecycle tests against a real stdio MCP server (`fixtures/echo-server.mjs`).
  */
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,7 +12,7 @@ import { parseServerConfig, type ServerSpec } from "../src/config";
 import { McpConnection } from "../src/connection";
 import { McpTimeoutError, McpTransportError, McpUnavailableError } from "../src/errors";
 import { createConnectorManager } from "../src/manager";
-import { createTransportSource } from "../src/transports";
+import { createTransportSource, type TransportSource } from "../src/transports";
 import type { ConnectorsConfig, ConnectorToolSource } from "../src/types";
 import { isProcessAlive, waitFor } from "./support/wait";
 
@@ -24,7 +24,13 @@ const FAST_RETRY = {
   jitter: 0,
   cooldownMs: 60_000,
 };
-const SLOW = { timeout: 20_000 };
+/**
+ * Failure bound for a child process to start (connect included), restart or exit: Node plus the
+ * MCP SDK start slowly on a busy machine.
+ */
+const PROCESS_WAIT_MS = 60_000;
+/** Tests start several child processes, some one after another. */
+const SLOW = { timeout: 3 * PROCESS_WAIT_MS };
 const ctx = { toolCallId: "call-1" };
 
 let dir: string;
@@ -40,7 +46,13 @@ afterEach(async () => {
 });
 
 function fixture(env: Record<string, string> = {}, extra: Record<string, unknown> = {}) {
-  return { command: process.execPath, args: [FIXTURE], env, ...extra };
+  return {
+    command: process.execPath,
+    args: [FIXTURE],
+    env,
+    connectTimeoutMs: PROCESS_WAIT_MS,
+    ...extra,
+  };
 }
 
 function specOf(raw: unknown): ServerSpec {
@@ -77,6 +89,29 @@ function textOf(result: unknown): string {
   return first?.type === "text" ? first.text : "";
 }
 
+/**
+ * `source`, collecting the pid of every process it starts. Recorded on spawn, so even a process
+ * killed before it got to run its own code (a busy machine can take longer than a short connect
+ * timeout just to start Node) is accounted for.
+ */
+function recordingPids(source: TransportSource, pids: number[]): TransportSource {
+  return {
+    kind: source.kind,
+    sseFallback: source.sseFallback,
+    stderrTail: (count) => source.stderrTail(count),
+    async open(options) {
+      const handle = await source.open(options);
+      const start = handle.transport.start.bind(handle.transport);
+      handle.transport.start = async () => {
+        await start();
+        const pid = handle.pid();
+        if (pid !== null) pids.push(pid);
+      };
+      return handle;
+    },
+  };
+}
+
 /** Server name → pid, via each fixture's `pid` tool. */
 async function pids(source: ConnectorToolSource): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
@@ -93,7 +128,7 @@ describe("stdio servers", () => {
     const conn = new McpConnection({
       serverName: "srv",
       source: createTransportSource(spec, { env: {}, logger: silentLogger }),
-      connectTimeoutMs: 10_000,
+      connectTimeoutMs: PROCESS_WAIT_MS,
     });
     cleanup.push(() => conn.close());
     await conn.ready();
@@ -107,7 +142,7 @@ describe("stdio servers", () => {
     expect(conn.stderrTail()).toContain("fixture one started");
 
     await conn.close();
-    await waitFor(() => !isProcessAlive(pid), "child process exit");
+    await waitFor(() => !isProcessAlive(pid), "child process exit", PROCESS_WAIT_MS);
   });
 
   it(
@@ -171,11 +206,19 @@ describe("stdio servers", () => {
       const steadyEcho = byName(tools, "mcp__steady__echo");
 
       await expect(crash.execute({}, ctx)).rejects.toBeInstanceOf(McpTransportError);
-      await waitFor(() => statusOf(source, "flaky")?.state === "connected", "flaky restarted");
+      await waitFor(
+        () => statusOf(source, "flaky")?.state === "connected",
+        "flaky restarted",
+        PROCESS_WAIT_MS,
+      );
       expect(textOf(await flakyEcho.execute({ text: "back" }, ctx))).toBe("flaky: back");
 
       await expect(crash.execute({ persist: true }, ctx)).rejects.toBeInstanceOf(McpTransportError);
-      await waitFor(() => statusOf(source, "flaky")?.state === "error", "flaky gave up");
+      await waitFor(
+        () => statusOf(source, "flaky")?.state === "error",
+        "flaky gave up",
+        PROCESS_WAIT_MS,
+      );
       expect(statusOf(source, "flaky")?.error).toContain("refusing to start");
       expect(textOf(await steadyEcho.execute({ text: "still here" }, ctx))).toBe(
         "steady: still here",
@@ -190,20 +233,30 @@ describe("stdio servers", () => {
   );
 
   it("kills a server that never finishes starting", SLOW, async () => {
-    const pidFile = join(dir, "pid");
-    const script = `require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(() => {}, 1000);`;
-    const spec = specOf({ command: process.execPath, args: ["-e", script], connectTimeoutMs: 300 });
+    const spec = specOf({
+      command: process.execPath,
+      args: ["-e", "setInterval(() => {}, 1000);"],
+      connectTimeoutMs: 300,
+    });
+    const started: number[] = [];
     const conn = new McpConnection({
       serverName: "mute",
-      source: createTransportSource(spec, { env: {}, logger: silentLogger }),
+      source: recordingPids(
+        createTransportSource(spec, { env: {}, logger: silentLogger }),
+        started,
+      ),
       connectTimeoutMs: spec.connectTimeoutMs,
     });
     cleanup.push(() => conn.close());
     await conn.ready();
     expect(conn.state).toBe("error");
     expect(conn.lastError).toBeInstanceOf(McpTimeoutError);
-    const pid = Number(await readFile(pidFile, "utf8"));
-    await waitFor(() => !isProcessAlive(pid), "unresponsive process killed", 10_000);
+    expect(started).toHaveLength(1);
+    await waitFor(
+      () => !isProcessAlive(started[0] ?? 0),
+      "unresponsive process killed",
+      PROCESS_WAIT_MS,
+    );
   });
 
   it(
@@ -226,6 +279,7 @@ describe("stdio servers", () => {
       await waitFor(
         () => !isProcessAlive(before.gone ?? 0) && !isProcessAlive(before.change ?? 0),
         "old processes exited",
+        PROCESS_WAIT_MS,
       );
       const after = await pids(source);
       expect(after.keep).toBe(before.keep);
@@ -247,6 +301,7 @@ describe("stdio servers", () => {
     await waitFor(
       () => Object.values(running).every((pid) => !isProcessAlive(pid)),
       "children exited",
+      PROCESS_WAIT_MS,
     );
     expect(await source.getTools()).toEqual([]);
   });
