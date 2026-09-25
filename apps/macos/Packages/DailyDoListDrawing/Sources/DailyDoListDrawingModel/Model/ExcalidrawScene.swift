@@ -27,8 +27,11 @@ public struct ExcalidrawScene: Hashable, Sendable {
     self.source = source
   }
 
-  /// `source` of scenes this app creates.
-  public static let defaultSource = "daily-do-list"
+  /// `source` of scenes this app creates (`DRAWING_SCENE_SOURCE` in `@ddl/core`): the plugin reads
+  /// its version from `source` and treats anything else as a pre-1.8.16 drawing, so it names the
+  /// plugin version whose format we follow.
+  public static let defaultSource =
+    "https://github.com/zsviczian/obsidian-excalidraw-plugin/releases/tag/2.27.3"
 
   /// The canvas color (`appState.viewBackgroundColor`), white when unset.
   public var viewBackgroundColor: String {

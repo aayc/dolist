@@ -1,23 +1,58 @@
 import Foundation
 
-/// Why a drawing file couldn't be read.
-public enum DrawingFileError: Error, Equatable, CustomStringConvertible {
-  /// No `## Drawing` section with a `json` or `compressed-json` block.
-  case missingDrawing
-  /// The `compressed-json` block isn't valid LZ-String data.
-  case undecompressable
-  case invalidScene(SceneCodecError)
+/// What went wrong reading a drawing file (`DrawingProblem` in `@ddl/core`).
+public struct DrawingProblem: Hashable, Sendable {
+  public enum Code: String, Hashable, Sendable {
+    /// No `## Drawing` block with a json or compressed-json fence.
+    case noDrawing = "no-drawing"
+    case decompressFailed = "decompress-failed"
+    case invalidJSON = "invalid-json"
+    /// The JSON isn't an object with an `elements` array.
+    case notAScene = "not-a-scene"
+    /// Elements without a string `id` and `type` were dropped.
+    case invalidElement = "invalid-element"
+    /// The fence isn't closed; the rest of the file was read as the scene.
+    case unclosedFence = "unclosed-fence"
+  }
+
+  public enum Severity: String, Hashable, Sendable {
+    /// The scene couldn't be read.
+    case error
+    case warning
+  }
+
+  public var code: Code
+  public var severity: Severity
+  public var message: String
+}
+
+/// Thrown when asked to write over a file whose scene couldn't be read.
+public struct DrawingUnreadableError: Error, Hashable, Sendable, CustomStringConvertible {
+  public var problems: [DrawingProblem]
 
   public var description: String {
-    switch self {
-    case .missingDrawing: "The file has no “## Drawing” section."
-    case .undecompressable: "The compressed drawing couldn't be decompressed."
-    case .invalidScene(let error): error.description
-    }
+    "The previous drawing couldn't be read (\(problems.map(\.code.rawValue).joined(separator: ", "))); writing would lose it"
   }
 }
 
-/// A text element as the file's `## Text Elements` section lists it: its text, then ` ^id`.
+/// The frontmatter block of a drawing file.
+public struct DrawingFrontmatter: Hashable, Sendable {
+  /// The whole block with its `---` fences and final line break; `""` when there is none.
+  public var raw: String
+  /// Top-level `key: value` lines, values as written (`tags` → `[excalidraw]`), in order.
+  public var entries: [(key: String, value: String)]
+
+  public subscript(key: String) -> String? { entries.last { $0.key == key }?.value }
+
+  public static func == (lhs: DrawingFrontmatter, rhs: DrawingFrontmatter) -> Bool {
+    lhs.raw == rhs.raw && lhs.entries.map(\.key) == rhs.entries.map(\.key)
+      && lhs.entries.map(\.value) == rhs.entries.map(\.value)
+  }
+
+  public func hash(into hasher: inout Hasher) { hasher.combine(raw) }
+}
+
+/// One `## Text Elements` entry: the text, then ` ^<element id>` (an Obsidian block reference).
 public struct TextElementEntry: Hashable, Sendable {
   public var id: String
   public var text: String
@@ -28,239 +63,600 @@ public struct TextElementEntry: Hashable, Sendable {
   }
 }
 
-/// An Obsidian Excalidraw plugin file (`*.excalidraw.md`):
+/// A part of the file after the frontmatter, split at headings.
+public struct DrawingFileSection: Hashable, Sendable {
+  /// The heading line (`## Embedded Files`); `""` for the text above the drawing data.
+  public var heading: String
+  /// Everything after the heading line, up to the next section, verbatim.
+  public var body: String
+
+  public init(heading: String, body: String) {
+    self.heading = heading
+    self.body = body
+  }
+}
+
+/// An Obsidian Excalidraw plugin file (`Name.excalidraw.md`), read and written exactly the way
+/// `@ddl/core` does (`packages/core/src/drawings/file.ts`, the reference; the shared fixtures in
+/// `packages/core/test/drawings/` hold both to it):
 ///
 /// ```
 /// ---
+///
 /// excalidraw-plugin: parsed
 /// tags: [excalidraw]
+///
 /// ---
 /// ==⚠  Switch to EXCALIDRAW VIEW … ⚠== …
 ///
 /// # Excalidraw Data
 ///
 /// ## Text Elements
-/// Hello ^abc12345
+/// API ^k3JwQm9a
 ///
 /// %%
 /// ## Drawing
 /// ```json
-/// {"type":"excalidraw","version":2,…}
+/// { "type": "excalidraw", "version": 2, "source": …, "elements": […], … }
 /// ```
 /// %%
 /// ```
 ///
-/// It reads `json` and `compressed-json` drawings and always writes `json`. The frontmatter, the
-/// notice and any markdown above the data, the `## Element Links` and `## Embedded Files`
-/// sections, and what follows the drawing are kept verbatim; `## Text Elements` is regenerated
-/// from the scene.
-public struct ExcalidrawMarkdown: Hashable, Sendable {
-  public enum Encoding: Hashable, Sendable {
+/// It writes `json` and reads `json` and `compressed-json` (LZ-String base64). `## Text Elements`
+/// is the truth on reading (an edited entry updates its element, as in the plugin) and is
+/// regenerated on writing; everything else (frontmatter, the text above the data, other sections,
+/// fields of the scene, its `appState`, files and elements) is kept from the previous file.
+public struct ExcalidrawMarkdown: Sendable {
+  /// The scene (empty when it couldn't be read). Edit it and call ``serialized(compressed:)``.
+  public var scene: ExcalidrawScene
+  public let frontmatter: DrawingFrontmatter
+  /// As listed under `## Text Elements`; one that differed from its element was applied to it.
+  public let textElements: [TextElementEntry]
+  public let sections: [DrawingFileSection]
+  /// The scene was stored as `compressed-json`.
+  public let compressed: Bool
+  /// False when the scene couldn't be read: show the problem and don't save over the file.
+  public let readable: Bool
+  public let problems: [DrawingProblem]
+  /// The scene as read, what writing keeps fields from.
+  public let parsedScene: ExcalidrawScene
+
+  /// The line the plugin writes under the frontmatter, for readers without the plugin.
+  public static let notice =
+    "==⚠  Switch to EXCALIDRAW VIEW in the MORE OPTIONS menu of this document. ⚠== You can decompress Drawing data with the command palette: 'Decompress current Excalidraw file'. For more info check in plugin settings under 'Saving'"
+  static let defaultFrontmatter = "---\n\nexcalidraw-plugin: parsed\ntags: [excalidraw]\n\n---\n"
+  static let compressedLineChars = 256
+
+  // MARK: Reading
+
+  /// Reads a drawing file. Never throws: problems are reported, and a file whose scene is
+  /// unreadable comes back with an empty scene and `readable` false.
+  public static func parse(_ text: String) -> ExcalidrawMarkdown {
+    var source = text
+    if source.hasPrefix("\u{FEFF}") { source.removeFirst() }
+    source = source.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(
+      of: "\r", with: "\n")
+    var problems: [DrawingProblem] = []
+    let block = splitFrontmatter(source)
+    let frontmatter = DrawingFrontmatter(
+      raw: block?.raw ?? "", entries: block.map { frontmatterEntries($0.inner) } ?? [])
+    let body = String(source.dropFirst(frontmatter.raw.count))
+    let drawing = findDrawingBlock(body)
+
+    var scene: ExcalidrawScene?
+    if let drawing {
+      if !drawing.closed {
+        problems.append(
+          DrawingProblem(
+            code: .unclosedFence, severity: .warning,
+            message: "The scene's code block isn't closed; read it to the end of the file."))
+      }
+      scene = readScene(drawing, problems: &problems)
+    } else {
+      problems.append(
+        DrawingProblem(
+          code: .noDrawing, severity: .error,
+          message: "The file has no `## Drawing` section with the scene."))
+    }
+
+    let sections = splitSections(body, drawing: drawing)
+    let drawingIndex = drawing != nil ? findDrawingSection(sections) : sections.count
+    let textIndex = findSection(sections, isTextHeading, before: drawingIndex)
+    let ids = scene.map { Set($0.elements.map(\.id)) }
+    let entries = textIndex == -1 ? [] : readTextEntries(sections[textIndex].body, ids: ids).entries
+    if scene != nil { applyTextEntries(&scene!, entries) }
+    let result = scene ?? ExcalidrawScene()
+    return ExcalidrawMarkdown(
+      scene: result, frontmatter: frontmatter, textElements: entries, sections: sections,
+      compressed: drawing?.format == .compressedJSON, readable: scene != nil, problems: problems,
+      parsedScene: result)
+  }
+
+  static func splitFrontmatter(_ text: String) -> (raw: String, inner: String)? {
+    guard text.hasPrefix("---"), let first = text.firstIndex(of: "\n"),
+      trimEnd(text[..<first]) == "---"
+    else { return nil }
+    var position = text.index(after: first)
+    while position < text.endIndex {
+      let newline = text[position...].firstIndex(of: "\n")
+      let end = newline ?? text.endIndex
+      if trimEnd(text[position..<end]) == "---" {
+        let rawEnd = newline.map { text.index(after: $0) } ?? end
+        return (String(text[..<rawEnd]), String(text[text.index(after: first)..<position]))
+      }
+      guard let newline else { break }
+      position = text.index(after: newline)
+    }
+    return nil
+  }
+
+  static func frontmatterEntries(_ inner: String) -> [(key: String, value: String)] {
+    var entries: [(key: String, value: String)] = []
+    for line in inner.split(separator: "\n", omittingEmptySubsequences: false) {
+      guard let first = line.first, !JSWhitespace.contains(first), first != "#", first != "-",
+        let colon = line.firstIndex(of: ":"), colon != line.startIndex
+      else { continue }
+      var key = JSWhitespace.trim(line[..<colon])
+      if key.count >= 2, let q = key.first, q == "\"" || q == "'", key.last == q {
+        key = String(key.dropFirst().dropLast())
+      }
+      guard !key.isEmpty else { continue }
+      let value = JSWhitespace.trim(line[line.index(after: colon)...])
+      if let index = entries.firstIndex(where: { $0.key == key }) {
+        entries[index].value = value
+      } else {
+        entries.append((key, value))
+      }
+    }
+    return entries
+  }
+
+  enum SceneFormat: Equatable {
     case json
     case compressedJSON
   }
 
-  /// Everything above the data: frontmatter, the plugin's notice, the note's own markdown.
-  public var header: String
-  /// The plugin's newer layout opens the `%%` comment above `# Excalidraw Data` instead of
-  /// above `## Drawing`.
-  public var dataCommentedOut: Bool
-  /// The text elements as the file listed them (their raw text, links included).
-  public var textElements: [TextElementEntry]
-  /// Sections between the text elements and the drawing, verbatim (`## Element Links`,
-  /// `## Embedded Files`).
-  public var otherSections: String
-  public var scene: ExcalidrawScene
-  /// How the drawing was stored when read (it's always written as `json`).
-  public var encoding: Encoding
-  /// What follows the drawing's closing fence: the closing `%%` and anything after it.
-  public var trailer: String
-
-  /// Element versions as read, so text elements nobody changed keep their raw text.
-  var versionsAtRead: [String: Int] = [:]
-
-  public init(
-    scene: ExcalidrawScene, header: String = ExcalidrawMarkdown.defaultHeader,
-    dataCommentedOut: Bool = false, textElements: [TextElementEntry] = [],
-    otherSections: String = "", encoding: Encoding = .json, trailer: String = "%%\n"
-  ) {
-    self.scene = scene
-    self.header = header
-    self.dataCommentedOut = dataCommentedOut
-    self.textElements = textElements
-    self.otherSections = otherSections
-    self.encoding = encoding
-    self.trailer = trailer
+  struct DrawingBlock {
+    /// Where the heading line starts (an offset in the body, in characters).
+    var start: String.Index
+    var heading: String
+    var bodyStart: String.Index
+    var end: String.Index
+    var format: SceneFormat
+    var content: String
+    var closed: Bool
   }
 
-  /// The plugin's notice line.
-  public static let notice =
-    "==⚠  Switch to EXCALIDRAW VIEW in the MORE OPTIONS menu of this document. ⚠== You can decompress Drawing data with the command palette: 'Decompress current Excalidraw file'. For more info check in plugin settings under 'Saving'"
-
-  /// The frontmatter and notice of a new drawing (the plugin's `FRONTMATTER`, then a blank line).
-  public static let defaultHeader =
-    "---\n\nexcalidraw-plugin: parsed\ntags: [excalidraw]\n\n---\n\(notice)\n\n\n"
-
-  // MARK: Reading
-
-  public static func parse(_ text: String) throws -> ExcalidrawMarkdown {
-    let text = text.replacingOccurrences(of: "\r\n", with: "\n")
-    let ns = text as NSString
-    let whole = NSRange(location: 0, length: ns.length)
-
-    var encoding = Encoding.json
-    var match = drawingJSON.firstMatch(in: text, range: whole)
-    if text.contains("```compressed-json\n") {
-      if let compressed = drawingCompressed.firstMatch(in: text, range: whole) {
-        match = compressed
-        encoding = .compressedJSON
-      }
+  /// Lines of `text` with where each starts and where the next one does.
+  static func lines(_ text: String, from start: String.Index? = nil) -> [(
+    start: String.Index, end: String.Index, next: String.Index
+  )] {
+    var result: [(start: String.Index, end: String.Index, next: String.Index)] = []
+    var position = start ?? text.startIndex
+    while position < text.endIndex {
+      let newline = text[position...].firstIndex(of: "\n")
+      let end = newline ?? text.endIndex
+      result.append((position, end, newline.map { text.index(after: $0) } ?? end))
+      position = newline.map { text.index(after: $0) } ?? text.endIndex
     }
-    if match == nil {
-      match = drawingJSONUnterminated.firstMatch(in: text, range: whole)
-    }
-    guard let match else { throw DrawingFileError.missingDrawing }
+    return result
+  }
 
-    let headingStart = match.range.location + 1  // after the "\n" before "## Drawing"
-    let body = ns.substring(with: match.range(at: 1))
-    let after = ns.substring(from: match.range.location + match.range.length)
+  static func isDrawingHeading(_ line: Substring) -> Bool {
+    var rest = line
+    guard rest.hasPrefix("#") else { return false }
+    rest = rest.dropFirst()
+    if rest.hasPrefix("#") { rest = rest.dropFirst() }
+    guard rest.hasPrefix(" Drawing") else { return false }
+    return rest.dropFirst(8).allSatisfy { $0 == " " || $0 == "\t" }
+  }
 
-    var sceneText: String
-    switch encoding {
-    case .json:
-      sceneText = body
-    case .compressedJSON:
-      let cleaned = body.filter { $0 != "\n" && $0 != "\r" }
-      guard let decompressed = LZString.decompressFromBase64(cleaned), !decompressed.isEmpty else {
-        throw DrawingFileError.undecompressable
-      }
-      sceneText = decompressed
-    }
-    if let lastBrace = sceneText.lastIndex(of: "}") {
-      sceneText = String(sceneText[...lastBrace])
-    }
-    let scene: ExcalidrawScene
-    do {
-      scene = try SceneCodec.decode(sceneText)
-    } catch let error as SceneCodecError {
-      throw DrawingFileError.invalidScene(error)
-    }
+  static func sceneFence(_ line: Substring) -> SceneFormat? {
+    let trimmed = line.reversed().drop { $0 == " " || $0 == "\t" }
+    let content = String(trimmed.reversed())
+    if content == "```json" { return .json }
+    if content == "```compressed-json" { return .compressedJSON }
+    return nil
+  }
 
-    var before = ns.substring(to: headingStart)
-    var document = ExcalidrawMarkdown(
-      scene: scene, header: before, encoding: encoding, trailer: after)
-    let beforeNS = before as NSString
-    let beforeRange = NSRange(location: 0, length: beforeNS.length)
-    if let data = dataHeading.firstMatch(in: before, range: beforeRange)
-      ?? textElementsHeading.firstMatch(in: before, range: beforeRange)
-    {
-      document.header = beforeNS.substring(to: data.range.location)
-      document.dataCommentedOut = beforeNS.substring(with: data.range).hasPrefix("%%")
-      var section = beforeNS.substring(from: data.range.location + data.range.length)
-      // "# Excalidraw Data" is followed by "## Text Elements" (and blank lines between them).
-      let sectionNS = section as NSString
-      if let heading = textElementsHeading.firstMatch(
-        in: section, range: NSRange(location: 0, length: sectionNS.length)),
-        heading.range.location == leadingBlankLength(section)
+  static func isClosingFence(_ line: Substring) -> Bool {
+    line.hasPrefix("```") && line.dropFirst(3).allSatisfy { $0 == " " || $0 == "\t" }
+  }
+
+  /// `%%` then spaces or tabs, then a line break or the end.
+  static func commentLineLength(_ text: Substring) -> Int? {
+    guard text.hasPrefix("%%") else { return nil }
+    var index = text.index(text.startIndex, offsetBy: 2)
+    while index < text.endIndex, text[index] == " " || text[index] == "\t" {
+      index = text.index(after: index)
+    }
+    if index == text.endIndex { return text.distance(from: text.startIndex, to: index) }
+    guard text[index] == "\n" else { return nil }
+    return text.distance(from: text.startIndex, to: text.index(after: index))
+  }
+
+  /// The last `## Drawing` heading followed (after blank lines) by a json or compressed-json fence.
+  static func findDrawingBlock(_ body: String) -> DrawingBlock? {
+    var found: DrawingBlock?
+    for line in lines(body) where isDrawingHeading(body[line.start..<line.end]) {
+      if let block = readDrawingBlock(
+        body, start: line.start, heading: String(body[line.start..<line.end]))
       {
-        section = sectionNS.substring(from: heading.range.location + heading.range.length)
+        found = block
       }
-      if !document.dataCommentedOut, section.hasSuffix("%%\n") {
-        section.removeLast(3)
-      }
-      let (entries, rest) = splitTextElements(section)
-      document.textElements = entries
-      document.otherSections = rest
-    } else {
-      // No data section yet (the plugin's blank template): the opening "%%" belongs to it.
-      if before.hasSuffix("%%\n") { before.removeLast(3) }
-      document.header = before
     }
-    document.versionsAtRead = Dictionary(
-      scene.elements.map { ($0.id, $0.version) }, uniquingKeysWith: { first, _ in first })
-    return document
+    return found
+  }
+
+  static func readDrawingBlock(_ body: String, start: String.Index, heading: String)
+    -> DrawingBlock?
+  {
+    let headingEnd = body.index(start, offsetBy: heading.count)
+    let bodyStart = headingEnd < body.endIndex ? body.index(after: headingEnd) : body.endIndex
+    for line in lines(body, from: bodyStart) {
+      let text = body[line.start..<line.end]
+      if JSWhitespace.trim(text).isEmpty { continue }
+      guard let format = sceneFence(text) else { return nil }
+      let contentStart = line.next
+      for candidate in lines(body, from: contentStart)
+      where isClosingFence(body[candidate.start..<candidate.end]) {
+        var end = candidate.end
+        if end < body.endIndex, body[end] == "\n" { end = body.index(after: end) }
+        if let comment = commentLineLength(body[end...]) {
+          end = body.index(end, offsetBy: comment)
+        }
+        return DrawingBlock(
+          start: start, heading: heading, bodyStart: bodyStart, end: end, format: format,
+          content: String(body[contentStart..<candidate.start]), closed: true)
+      }
+      var content = String(body[contentStart...])
+      // No closing fence: the rest, minus a trailing `%%` line.
+      if let range = content.range(of: "\n%%[ \\t]*\\n*$", options: .regularExpression) {
+        content.replaceSubrange(range, with: "\n")
+      }
+      return DrawingBlock(
+        start: start, heading: heading, bodyStart: bodyStart, end: body.endIndex, format: format,
+        content: content, closed: false)
+    }
+    return nil
+  }
+
+  static func readScene(_ block: DrawingBlock, problems: inout [DrawingProblem]) -> ExcalidrawScene?
+  {
+    var json = block.content
+    if block.format == .compressedJSON {
+      let packed = String(block.content.filter { !JSWhitespace.contains($0) })
+      guard !packed.isEmpty, let unpacked = LZString.decompressFromBase64(packed), !unpacked.isEmpty
+      else {
+        problems.append(
+          DrawingProblem(
+            code: .decompressFailed, severity: .error,
+            message: "The compressed scene couldn't be decompressed."))
+        return nil
+      }
+      json = unpacked
+    }
+    // Like the plugin: ignore anything after the last brace.
+    if let last = json.lastIndex(of: "}") { json = String(json[...last]) }
+    let value: JSONValue
+    do {
+      value = try JSONParser.parse(json)
+    } catch {
+      problems.append(
+        DrawingProblem(
+          code: .invalidJSON, severity: .error, message: "The scene isn't valid JSON: \(error)"))
+      return nil
+    }
+    guard var object = value.objectValue, let items = object["elements"]?.arrayValue else {
+      problems.append(
+        DrawingProblem(
+          code: .notAScene, severity: .error,
+          message: "The scene isn't an object with an `elements` list."))
+      return nil
+    }
+    let kept = items.filter { item in
+      guard let element = item.objectValue else { return false }
+      return element["id"]?.stringValue != nil && element["type"]?.stringValue != nil
+    }
+    let dropped = items.count - kept.count
+    if dropped > 0 {
+      problems.append(
+        DrawingProblem(
+          code: .invalidElement, severity: .warning,
+          message:
+            "\(dropped) element\(dropped == 1 ? "" : "s") without an id and a type were dropped."))
+    }
+    object["elements"] = .array(kept)
+    if object["appState"]?.objectValue == nil { object["appState"] = .object(JSONObject()) }
+    if object["files"]?.objectValue == nil { object["files"] = .object(JSONObject()) }
+    return try? SceneCodec.decode(.object(object))
+  }
+
+  static func isTextHeading(_ line: String) -> Bool {
+    line.range(of: "^##? Text Elements[ \\t]*$", options: .regularExpression) != nil
+  }
+
+  static func isDataHeading(_ line: String) -> Bool {
+    line.range(of: "^# Excalidraw Data[ \\t]*$", options: .regularExpression) != nil
+  }
+
+  static func isAfterTextHeading(_ line: Substring) -> Bool {
+    String(line).range(
+      of: "^##? (?:Element Links|Embedded [Ff]iles)[ \\t]*$", options: .regularExpression) != nil
+  }
+
+  /// `^#{1,6}(?:[ \t].*)?$`.
+  static func isHeading(_ line: Substring) -> Bool {
+    let hashes = line.prefix { $0 == "#" }.count
+    guard (1...6).contains(hashes) else { return false }
+    let rest = line.dropFirst(hashes)
+    return rest.isEmpty || rest.first == " " || rest.first == "\t"
+  }
+
+  /// The text after the frontmatter as sections: the part above the drawing data (heading
+  /// `""`), then one per heading from `# Excalidraw Data` on. `## Text Elements` runs to
+  /// `## Element Links`, `## Embedded Files` or the drawing.
+  static func splitSections(_ body: String, drawing: DrawingBlock?) -> [DrawingFileSection] {
+    let limit = drawing?.start ?? body.endIndex
+    let before = lines(body).filter { $0.start < limit }
+    let data =
+      before.first { isDataHeading(String(body[$0.start..<$0.end])) }
+      ?? before.first { isTextHeading(String(body[$0.start..<$0.end])) }
+    let dataStart = data?.start ?? limit
+    var sections = [DrawingFileSection(heading: "", body: String(body[..<dataStart]))]
+    splitAtHeadings(String(body[dataStart..<limit]), into: &sections, dataArea: true)
+    if let drawing {
+      sections.append(
+        DrawingFileSection(
+          heading: drawing.heading, body: String(body[drawing.bodyStart..<drawing.end])))
+      splitAtHeadings(String(body[drawing.end...]), into: &sections, dataArea: false)
+    }
+    return sections
+  }
+
+  /// Appends `text`'s sections; text before its first heading joins the last section.
+  static func splitAtHeadings(
+    _ text: String, into sections: inout [DrawingFileSection], dataArea: Bool
+  ) {
+    guard !text.isEmpty else { return }
+    var inText = false
+    for line in lines(text) {
+      let content = text[line.start..<line.end]
+      let starts = inText ? isAfterTextHeading(content) : isHeading(content)
+      if starts {
+        sections.append(DrawingFileSection(heading: String(content), body: ""))
+        inText = dataArea && isTextHeading(String(content))
+      } else {
+        sections[sections.count - 1].body += text[line.start..<line.next]
+      }
+    }
+  }
+
+  /// A block reference: `^` + non-space characters, after whitespace or at the start, then
+  /// spaces or tabs, then line breaks or the end.
+  static let blockReference = try! NSRegularExpression(
+    pattern: "(?<=^|\\s)\\^(\\S+)[ \\t]*(?:\\n+|$(?![\\s\\S]))")
+
+  /// The entries of a `## Text Elements` body, and where the text after the last one starts.
+  static func readTextEntries(_ body: String, ids: Set<String>?) -> (
+    entries: [TextElementEntry], tail: String.Index
+  ) {
+    var entries: [TextElementEntry] = []
+    let ns = body as NSString
+    var chunk = 0
+    var tail = 0
+    for match in blockReference.matches(in: body, range: NSRange(location: 0, length: ns.length)) {
+      let id = ns.substring(with: match.range(at: 1))
+      let known = ids == nil || ids!.contains(id)
+      if !known && id.count != 8 { continue }
+      if known {
+        var text = ns.substring(
+          with: NSRange(location: chunk, length: match.range.location - chunk))
+        while text.hasPrefix("\n") { text.removeFirst() }
+        if text.hasSuffix(" ") || text.hasSuffix("\t") { text.removeLast() }
+        entries.append(TextElementEntry(id: id, text: text))
+      }
+      chunk = match.range.location + match.range.length
+      tail = chunk
+    }
+    let tailIndex = String.Index(utf16Offset: tail, in: body)
+    return (entries, tailIndex)
+  }
+
+  /// The plugin treats `## Text Elements` as the truth: an entry that differs updates its element.
+  static func applyTextEntries(_ scene: inout ExcalidrawScene, _ entries: [TextElementEntry]) {
+    guard !entries.isEmpty else { return }
+    var indices: [String: Int] = [:]
+    for (index, element) in scene.elements.enumerated()
+    where element.type == .text && !element.isDeleted {
+      indices[element.id] = index
+    }
+    for entry in entries {
+      guard let index = indices[entry.id] else { continue }
+      var element = scene.elements[index]
+      var current = sectionText(element)
+      while current.hasPrefix("\n") { current.removeFirst() }
+      guard entry.text != current else { continue }
+      if element.text == nil { element.text = TextProperties(text: "") }
+      element.text?.text = entry.text
+      element.text?.originalText = entry.text
+      if element.extraField("rawText") != nil {
+        element.setExtraField("rawText", .string(entry.text))
+      }
+      scene.elements[index] = element
+    }
+  }
+
+  /// What `## Text Elements` lists for a text element: the plugin's raw text, else the text as
+  /// typed, else the text.
+  static func sectionText(_ element: ExcalidrawElement) -> String {
+    if let raw = element.extraField("rawText")?.stringValue, !raw.isEmpty { return raw }
+    return displayText(element)
+  }
+
+  static func displayText(_ element: ExcalidrawElement) -> String {
+    if let original = element.text?.originalText, !original.isEmpty { return original }
+    return element.text?.text ?? ""
   }
 
   // MARK: Writing
 
-  /// The file's text, with the drawing as uncompressed `json`.
-  public func serialized() -> String {
-    var output = header
-    if !output.isEmpty, !output.hasSuffix("\n") { output += "\n" }
-    if dataCommentedOut { output += "%%\n" }
-    output += "# Excalidraw Data\n\n## Text Elements\n"
-    for entry in regeneratedTextElements() {
-      output += "\(entry.text) ^\(entry.id)\n\n"
-    }
-    output += otherSections
-    if !dataCommentedOut { output += "%%\n" }
-    output += "## Drawing\n```json\n"
-    output += SceneCodec.encode(scene)
-    output += "\n```\n"
-    output += trailer.isEmpty ? "%%\n" : trailer
-    return output
+  /// This file with its scene written back (the file as read is the previous file).
+  public func serialized(compressed: Bool = false) throws -> String {
+    try Self.serialize(scene, previous: self, compressed: compressed)
   }
 
-  /// The `## Text Elements` entries for the current scene: ids the file listed keep their
-  /// place, new ones follow in z-order. The text is the element's raw text: the plugin's
-  /// `rawText`, the file's own text while the element is unchanged, else `originalText`.
-  public func regeneratedTextElements() -> [TextElementEntry] {
-    let texts = scene.elements.filter { $0.type == .text && !$0.isDeleted }
-    let byId = Dictionary(texts.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-    let listed = Dictionary(
-      textElements.map { ($0.id, $0.text) }, uniquingKeysWith: { first, _ in first })
-    var order: [String] = []
-    var seen = Set<String>()
-    for entry in textElements where byId[entry.id] != nil && seen.insert(entry.id).inserted {
-      order.append(entry.id)
+  /// A new file for a scene: the plugin's frontmatter and notice, the data sections, the scene.
+  public static func newFile(for scene: ExcalidrawScene) -> String {
+    // A new file has no previous one to be unreadable.
+    (try? serialize(scene, previous: nil)) ?? ""
+  }
+
+  /// The file for `scene`. With the previous file, everything that isn't regenerated is kept.
+  /// Throws ``DrawingUnreadableError`` when the previous file's scene couldn't be read.
+  public static func serialize(
+    _ scene: ExcalidrawScene, previous: ExcalidrawMarkdown?, compressed: Bool = false
+  ) throws -> String {
+    if let previous, !previous.readable {
+      throw DrawingUnreadableError(problems: previous.problems)
     }
-    for element in texts where seen.insert(element.id).inserted { order.append(element.id) }
-    return order.compactMap { id in
-      guard let element = byId[id] else { return nil }
-      if let raw = element.extraField("rawText")?.stringValue {
-        return TextElementEntry(id: id, text: raw)
+    let written = SceneWriter.object(for: scene, previous: previous?.parsedScene)
+    let entries = SceneWriter.textEntries(written)
+    let json = JSONWriter.string(.object(written), indent: "\t")
+    let block =
+      compressed
+      ? "```compressed-json\n\(chunkLines(LZString.compressToBase64(json)))\n```\n%%\n"
+      : "```json\n\(json)\n```\n%%\n"
+    let entriesText = entries.map { "\($0.text) ^\($0.id)\n\n" }.joined()
+
+    guard let previous else {
+      return defaultFrontmatter + "\(notice)\n\n" + "# Excalidraw Data\n\n"
+        + "## Text Elements\n\(entriesText)%%\n" + "## Drawing\n\(block)"
+    }
+
+    var sections = previous.sections
+    if findDrawingSection(sections) == -1 {
+      sections.append(DrawingFileSection(heading: "## Drawing", body: ""))
+    }
+    let drawingIndex = findDrawingSection(sections)
+    sections[drawingIndex].body = block + afterSceneBlock(sections[drawingIndex].body)
+
+    let textIndex = findSection(sections, isTextHeading, before: drawingIndex)
+    if textIndex != -1 {
+      let old = sections[textIndex].body
+      let ids = Set(previous.parsedScene.elements.map(\.id))
+      sections[textIndex].body = entriesText + old[readTextEntries(old, ids: ids).tail...]
+    } else {
+      let dataIndex = findSection(sections, isDataHeading, before: drawingIndex)
+      if dataIndex != -1 && dataIndex + 1 < drawingIndex {
+        sections.insert(
+          DrawingFileSection(heading: "## Text Elements", body: entriesText), at: dataIndex + 1)
+      } else {
+        // The plugin's layout: the data, then `%%` to hide the scene in reading view.
+        if sections[drawingIndex - 1].body.hasSuffix("%%\n") {
+          sections[drawingIndex - 1].body.removeLast(3)
+        }
+        var inserted: [DrawingFileSection] = []
+        if dataIndex == -1 {
+          inserted.append(DrawingFileSection(heading: "# Excalidraw Data", body: "\n"))
+        }
+        inserted.append(DrawingFileSection(heading: "## Text Elements", body: "\(entriesText)%%\n"))
+        sections.insert(contentsOf: inserted, at: drawingIndex)
       }
-      if let text = listed[id], versionsAtRead[id] == element.version {
-        return TextElementEntry(id: id, text: text)
+    }
+    return frontmatterForWriting(previous.frontmatter)
+      + sections.map { $0.heading.isEmpty ? $0.body : "\($0.heading)\n\($0.body)" }.joined()
+  }
+
+  /// The section holding the scene: the last `## Drawing` whose body opens with its fence.
+  static func findDrawingSection(_ sections: [DrawingFileSection]) -> Int {
+    var index = sections.count - 1
+    while index > 0 {
+      let section = sections[index]
+      if isDrawingHeading(Substring(section.heading)) {
+        let firstLine =
+          section.body.split(separator: "\n", omittingEmptySubsequences: false)
+          .first { !$0.allSatisfy { $0 == " " || $0 == "\t" } } ?? ""
+        if sceneFence(firstLine) != nil { return index }
       }
-      let text = element.text?.originalText ?? element.text?.text ?? ""
-      return TextElementEntry(id: id, text: text)
+      index -= 1
     }
+    return -1
   }
 
-  // MARK: Parsing helpers
-
-  private static func regex(_ pattern: String) -> NSRegularExpression {
-    // The patterns are constants; a typo is a programming error.
-    try! NSRegularExpression(pattern: pattern, options: [.anchorsMatchLines])
-  }
-
-  // The plugin's own patterns (excalidrawMarkdownParsing.ts), capturing the block's body.
-  static let drawingJSON = regex("\\n##? Drawing\\n[^`]*```json\\n([\\s\\S]*?)```\\n")
-  static let drawingJSONUnterminated = regex(
-    "\\n##? Drawing\\n[^`]*```json\\n([\\s\\S]*?)```")
-  static let drawingCompressed = regex(
-    "\\n##? Drawing\\n[^`]*```compressed-json\\n([\\s\\S]*?)```\\n?")
-  static let dataHeading = regex("^(%%\\n+)?# Excalidraw Data(?:\\n|$)")
-  static let textElementsHeading = regex("^(%%\\n+)?##? Text Elements(?:\\n|$)")
-  static let blockReference = regex("\\s\\^([A-Za-z0-9_-]+)\\n+")
-
-  private static func leadingBlankLength(_ text: String) -> Int {
-    (text as NSString).length - (text.drop { $0 == "\n" } as Substring).utf16.count
-  }
-
-  /// The text elements (each text up to its ` ^id`) and what follows the last one, verbatim.
-  static func splitTextElements(_ section: String) -> ([TextElementEntry], String) {
-    let ns = section as NSString
-    var entries: [TextElementEntry] = []
-    var position = 0
-    let whole = NSRange(location: 0, length: ns.length)
-    for match in blockReference.matches(in: section, range: whole) {
-      let text = ns.substring(
-        with: NSRange(location: position, length: match.range.location - position))
-      entries.append(TextElementEntry(id: ns.substring(with: match.range(at: 1)), text: text))
-      position = match.range.location + match.range.length
+  static func findSection(
+    _ sections: [DrawingFileSection], _ matches: (String) -> Bool, before end: Int
+  ) -> Int {
+    guard end > 1 else { return -1 }
+    for index in 1..<min(end, sections.count) where matches(sections[index].heading) {
+      return index
     }
-    return (entries, ns.substring(from: position))
+    return -1
+  }
+
+  /// What follows the scene's closing fence and `%%` line in the drawing section's body.
+  static func afterSceneBlock(_ body: String) -> String {
+    let allLines = lines(body)
+    guard let open = allLines.first(where: { sceneFence(body[$0.start..<$0.end]) != nil }) else {
+      return ""
+    }
+    guard
+      let close = lines(body, from: open.end).first(where: {
+        $0.start > open.start && isClosingFence(body[$0.start..<$0.end])
+      })
+    else { return "" }
+    var after = body[close.end...]
+    if after.hasPrefix("\n") { after = after.dropFirst() }
+    if let comment = commentLineLength(after) { after = after.dropFirst(comment) }
+    return String(after)
+  }
+
+  static func frontmatterForWriting(_ frontmatter: DrawingFrontmatter) -> String {
+    if frontmatter.raw.isEmpty { return defaultFrontmatter }
+    if frontmatter["excalidraw-plugin"] != nil { return frontmatter.raw }
+    // The plugin recognizes drawings by this key; add it the way the plugin does.
+    guard let range = frontmatter.raw.range(of: "^---[ \\t]*\\n", options: .regularExpression)
+    else {
+      return frontmatter.raw
+    }
+    return frontmatter.raw.replacingCharacters(in: range, with: "---\nexcalidraw-plugin: parsed\n")
+  }
+
+  static func chunkLines(_ text: String) -> String {
+    var lines: [Substring] = []
+    var index = text.startIndex
+    while index < text.endIndex {
+      let end =
+        text.index(index, offsetBy: compressedLineChars, limitedBy: text.endIndex) ?? text.endIndex
+      lines.append(text[index..<end])
+      index = end
+    }
+    return lines.joined(separator: "\n\n")
+  }
+
+  static func trimEnd(_ text: Substring) -> String {
+    String(text.reversed().drop { JSWhitespace.contains($0) }.reversed())
+  }
+}
+
+/// JavaScript's `\s` (what `trim` and `\s` regexes strip).
+enum JSWhitespace {
+  static let scalars: Set<UInt32> = [
+    0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x20, 0xA0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004,
+    0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200A, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF,
+  ]
+
+  static func contains(_ character: Character) -> Bool {
+    character.unicodeScalars.allSatisfy { scalars.contains($0.value) }
+  }
+
+  static func contains(_ scalar: Unicode.Scalar) -> Bool { scalars.contains(scalar.value) }
+
+  static func trim(_ text: Substring) -> String {
+    let scalars = text.unicodeScalars
+    guard let first = scalars.firstIndex(where: { !contains($0) }),
+      let last = scalars.lastIndex(where: { !contains($0) })
+    else { return "" }
+    return String(String.UnicodeScalarView(scalars[first...last]))
   }
 }

@@ -83,8 +83,10 @@ public enum SceneCodec {
       }
       return current
     }
+    // Excalidraw's keys first (as `JSON.stringify` of the plugin's scene object), then the others
+    // in the order they came.
     var output = JSONObject()
-    for key in preserved.keyOrder + sceneKeys where !output.contains(key) {
+    for key in sceneKeys + preserved.keyOrder where !output.contains(key) {
       if let item = value(for: key) { output[key] = item }
     }
     for (key, item) in preserved.extra where key != unreadableKey && !output.contains(key) {

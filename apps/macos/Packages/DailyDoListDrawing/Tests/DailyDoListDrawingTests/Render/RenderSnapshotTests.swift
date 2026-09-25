@@ -27,7 +27,7 @@ struct RenderSnapshotTests {
   }
 
   @Test func rendersThePluginFixtureInBothThemes() throws {
-    let document = try ExcalidrawMarkdown.parse(Fixtures.text("plugin-json.excalidraw.md"))
+    let document = ExcalidrawMarkdown.parse(try Fixtures.text("plugin-json.excalidraw.md"))
     for theme in DrawingTheme.allCases {
       let image = try #require(DrawingImage.render(document.scene, scale: 2, theme: theme))
       _ = try Pixels.writePNG(image, name: "plugin-fixture-\(theme.rawValue)")

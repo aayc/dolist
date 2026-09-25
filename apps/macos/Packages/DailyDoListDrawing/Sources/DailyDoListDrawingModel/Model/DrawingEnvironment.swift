@@ -7,7 +7,8 @@ public protocol DrawingEnvironment: AnyObject, Sendable {
   func now() -> Int
   /// A random integer in 0..<2^31 (Excalidraw's `randomInteger`).
   func randomInteger() -> Int
-  /// A new element id (21 URL-safe characters, like nanoid).
+  /// A new element id: 8 characters from [0-9a-zA-Z], as the Obsidian plugin makes them (it
+  /// reads `## Text Elements` references as exactly 8 characters and re-ids longer ones).
   func randomId() -> String
 }
 
@@ -20,7 +21,7 @@ public final class SystemDrawingEnvironment: DrawingEnvironment {
 
   public func randomId() -> String {
     var generator = SystemRandomNumberGenerator()
-    return NanoID.make(using: &generator)
+    return ElementID.make(using: &generator)
   }
 }
 
@@ -63,11 +64,11 @@ public final class DeterministicDrawingEnvironment: DrawingEnvironment, @uncheck
   }
 }
 
-/// nanoid's default alphabet and length.
-enum NanoID {
-  static let alphabet = Array("useandom-26T198340PX75pxJACKVERYMINDBUSHWOLF_GQZbfghjklqvwyzrict")
+/// Element ids like `newDrawingElementId` in `@ddl/core` (Obsidian block references allow no `_`).
+enum ElementID {
+  static let alphabet = Array("1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-  static func make(using generator: inout some RandomNumberGenerator, length: Int = 21) -> String {
+  static func make(using generator: inout some RandomNumberGenerator, length: Int = 8) -> String {
     String(
       (0..<length).map { _ in alphabet[Int.random(in: 0..<alphabet.count, using: &generator)] })
   }

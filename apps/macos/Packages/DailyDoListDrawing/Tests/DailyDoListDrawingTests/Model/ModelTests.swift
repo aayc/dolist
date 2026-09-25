@@ -16,10 +16,10 @@ struct ModelTests {
     #expect(element.updated == 1_000)
   }
 
-  @Test func idsAreNanoIDShaped() {
+  @Test func idsAreThePluginsEightCharacters() {
     let id = SystemDrawingEnvironment().randomId()
-    #expect(id.count == 21)
-    #expect(id.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" })
+    #expect(id.count == 8)
+    #expect(id.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber) })
   }
 
   @Test(
