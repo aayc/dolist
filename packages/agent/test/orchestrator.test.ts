@@ -4,6 +4,7 @@ import {
   type TextMessage,
   type ToolCallMessage,
   textResult,
+  toolResultText,
 } from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -388,6 +389,55 @@ describe("orchestrator control plane", () => {
     await t.storage.write(TODAY, "- [ ] Plan Kyoto trip\n  - [ ] Book flights\n");
     await t.waitForStatus("Book flights", "ignored");
     expect(digests.join("\n")).toContain('"Book flights" (subtask of "Plan Kyoto trip")');
+  });
+
+  it("searches and reads the user's other notes, beyond the daily note", async () => {
+    const storage = new MemoryStorageProvider();
+    await storage.write("Projects/Kyoto trip.md", "# Kyoto trip\n\nStay at a ryokan near Gion.\n");
+    const turns: Array<{ tools: string[]; search: string; read: string }> = [];
+    const t = await runtime({
+      storage,
+      scriptFor: scripts(
+        async (ctx) => {
+          const search = await ctx.callTool("search_notes", { query: "ryokan" });
+          const read = await ctx.callTool("read_note", { path: "[[Kyoto trip]]" });
+          turns.push({
+            tools: ctx.tools.map((tool) => tool.name).sort(),
+            search: toolResultText(search.result),
+            read: toolResultText(read.result),
+          });
+          for (const item of parseDigestItems(ctx.message)) {
+            await ctx.callTool("set_task_status", { taskId: item.taskId, status: "ignored" });
+          }
+        },
+        async () => {},
+      ),
+    });
+    await t.storage.write(TODAY, "- [ ] Plan the Kyoto trip\n");
+    await t.waitForStatus("Plan the Kyoto trip", "ignored");
+
+    const [turn] = turns;
+    // web_search and web_fetch join these in live mode.
+    expect(turn?.tools).toEqual([
+      "anchor_line",
+      "ask_user",
+      "cancel_subagent",
+      "create_routine",
+      "edit_note",
+      "list_routines",
+      "list_tasks",
+      "message_subagent",
+      "post_comment",
+      "read_note",
+      "run_routine",
+      "search_notes",
+      "set_task_status",
+      "spawn_subagent",
+      "update_routine",
+    ]);
+    expect(turn?.search).toContain("Projects/Kyoto trip.md:3: Stay at a ryokan near Gion.");
+    expect(turn?.read).toContain("# Projects/Kyoto trip.md");
+    expect(turn?.read).toContain("Stay at a ryokan near Gion.");
   });
 
   it("retries a failed subagent in a fresh session primed with the thread history", async () => {

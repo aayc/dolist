@@ -74,8 +74,8 @@ harness's), instead of every judge call and search failing with a 401.
   doesn't delegate it: it asks the user to allow access in Settings → Computer Use and waits.
 - The orchestrator's tools: `spawn_subagent`, `post_comment`, `ask_user`, `set_task_status`,
   `message_subagent`, `cancel_subagent`, `list_tasks`, `anchor_line`, `edit_note`, `read_note`,
-  `web_search`, `web_fetch`, and the routine tools (`create_routine`, `update_routine`,
-  `run_routine`, `list_routines`; see [Routines](#routines)).
+  `search_notes`, `web_search`, `web_fetch`, and the routine tools (`create_routine`,
+  `update_routine`, `run_routine`, `list_routines`; see [Routines](#routines)).
 - **Anchors**: `anchor_line` attaches a thread to any line that isn't a task (a question, a
   heading…). It becomes a record with `anchor: "line"` and an `anc_…` id that every task tool
   accepts, so the line gets a badge and its own thread like a task. Anchors follow their line as

@@ -63,7 +63,7 @@ export interface OrchestratorOptions {
   lookup: TaskLookup;
   /** The safety gate. */
   beforeToolCall: (call: ToolCallRequest) => Promise<ToolCallDecision>;
-  /** Tools besides the orchestrator's own: read_note, web_search, web_fetch. */
+  /** Tools besides the orchestrator's own: the notes (read, search, edit), the web, routines. */
   tools: () => ToolSpec[];
   capabilities: () => DigestCapabilities;
   getSettings: () => AppSettings;

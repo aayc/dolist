@@ -341,7 +341,7 @@ class Runtime implements AgentRuntime {
       lookup: this.watcher,
       beforeToolCall: this.beforeToolCall,
       tools: () => [
-        ...this.knowledgeTools.filter((tool) => tool.name === TOOL.readNote),
+        ...this.knowledgeTools,
         this.noteEditTool,
         ...this.webTools,
         ...this.routineTools,
