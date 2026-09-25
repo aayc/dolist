@@ -268,4 +268,8 @@ probe), `api/pairing.test.ts`, the client's contract test (every new route) and 
 E2E: `e2e/agent-anywhere.spec.ts` (the toggle and its handover, held here, the machine going
 away, env locks, read-only, every Settings flow, and pairing a browser then revoking it), and the
 cursor audit of every new screen and state in `e2e/polish.spec.ts`. `e2e/fullstack/
-agent-anywhere.spec.ts` runs the same flows against the real daemon.
+agent-anywhere.spec.ts` runs them against the real daemons (the served one, a second one as the
+always-on machine, a sync service): held here, sync setup, pairing the machine, a handover and
+back, a device paired through `/api/pair` and revoked, and a remote host's pairing screen. Acting
+on the machine's agent through the relay (S3) and pairing a browser over https (the cookie is
+`Secure`; the harness has no TLS proxy yet) are `test.fixme`.
