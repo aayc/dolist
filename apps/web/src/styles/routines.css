@@ -40,22 +40,119 @@
 
 .routines-notice {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   align-items: flex-start;
-  gap: 4px;
-  margin: 4px 2px 10px;
+  gap: 4px 8px;
+  margin: 0 0 10px;
   padding: 8px 10px;
   border-radius: var(--radius-m);
   background: color-mix(in srgb, var(--ddl-warning) 12%, transparent);
   font-size: 12px;
+  line-height: 1.45;
+}
+
+.routines-notice.is-alert {
+  background: color-mix(in srgb, var(--ddl-danger) 12%, transparent);
+  animation: ddl-routine-notice 180ms ease-out;
+}
+
+@keyframes ddl-routine-notice {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .routines-notice.is-alert {
+    animation: none;
+  }
 }
 
 .routines-notice p {
   margin: 0;
 }
 
+.routines-notice-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .routines-notice-title {
   font-weight: 600;
+}
+
+.routines-notice-title svg {
+  vertical-align: -2px;
+}
+
+.routine-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: none;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ddl-border);
+}
+
+.routine-toolbar .button {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.routine-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 2px 4px 10px;
+  font-size: 12px;
+}
+
+.routine-facts > div {
+  display: contents;
+}
+
+.routine-facts dt {
+  color: var(--ddl-text-faint);
+}
+
+.routine-facts dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--ddl-text-muted);
+}
+
+.routine-instructions {
+  display: -webkit-box;
+  margin: 0 4px 12px;
+  padding: 8px 10px;
+  overflow: hidden;
+  border-left: 2px solid var(--ddl-border);
+  color: var(--ddl-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.routine-runs-empty {
+  margin: 4px 6px;
+  color: var(--ddl-text-faint);
+  font-size: 12px;
+}
+
+.routine-run-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  color: var(--ddl-warning);
+  font-size: 11px;
 }
 
 .routines-empty .button {

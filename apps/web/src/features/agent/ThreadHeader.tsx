@@ -17,17 +17,31 @@ export function ThreadHeader({ threadId }: { threadId: string }) {
   const notePath = useAgentStore(
     (s) => s.details[threadId]?.notePath ?? s.threads[threadId]?.notePath ?? null,
   );
+  const routineId = useAgentStore(
+    (s) => s.details[threadId]?.routineId ?? s.threads[threadId]?.routineId,
+  );
   const active = isActiveTaskStatus(status);
-  const canRetry = status === "failed" || status === "cancelled" || status === "done";
+  // A routine runs again with its Run now, which counts against its extra runs for the day.
+  const canRetry =
+    !routineId && (status === "failed" || status === "cancelled" || status === "done");
 
   return (
     <header className="thread-header" data-tooltip-placement="bottom">
-      <IconButton
-        icon={ArrowLeft}
-        label="Back to inbox"
-        onClick={() => ui.showInbox()}
-        data-testid="thread-back"
-      />
+      {routineId ? (
+        <IconButton
+          icon={ArrowLeft}
+          label="Back to the routine"
+          onClick={() => ui.showRoutine(routineId)}
+          data-testid="thread-back"
+        />
+      ) : (
+        <IconButton
+          icon={ArrowLeft}
+          label="Back to inbox"
+          onClick={() => ui.showInbox()}
+          data-testid="thread-back"
+        />
+      )}
       <div className="thread-heading">
         <h2
           className="thread-title"
@@ -62,7 +76,7 @@ export function ThreadHeader({ threadId }: { threadId: string }) {
         {notePath ? (
           <IconButton
             icon={NotebookPen}
-            label="Show task in note"
+            label={routineId ? "Open the routine's file" : "Show task in note"}
             onClick={() => void agent.revealTask(threadId)}
             data-testid="thread-open-note"
           />

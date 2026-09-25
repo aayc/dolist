@@ -2,6 +2,7 @@ import { isOrchestratorThread } from "@ddl/core";
 import { useServices } from "../../app/services";
 import { useUiStore } from "../../state/ui-store";
 import { RoutinesView } from "../routines/RoutinesView";
+import { RoutineView } from "../routines/RoutineView";
 import { ensureAgentCommands } from "./agent-commands";
 import { Inbox } from "./Inbox";
 import { OrchestratorView } from "./OrchestratorView";
@@ -20,5 +21,7 @@ export function AgentPanel() {
   if (view.kind === "thread") return <ThreadView key={view.threadId} threadId={view.threadId} />;
   if (view.kind === "task") return <TaskPending taskId={view.taskId} />;
   if (view.kind === "routines") return <RoutinesView />;
+  if (view.kind === "routine")
+    return <RoutineView key={view.routineId} routineId={view.routineId} />;
   return <Inbox />;
 }

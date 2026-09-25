@@ -42,8 +42,11 @@ export function RoutinesView() {
       </header>
       <div className="routines-scroll">
         {status === "error" ? (
-          <div className="routines-notice" role="alert" data-testid="routines-error">
-            <p>Couldn't load your routines: {error}</p>
+          <div className="routines-notice is-alert" role="alert" data-testid="routines-error">
+            <div className="routines-notice-text">
+              <p className="routines-notice-title">Couldn't load your routines</p>
+              <p>{error}</p>
+            </div>
             <button type="button" className="link-button" onClick={() => void actions.load()}>
               Try again
             </button>
