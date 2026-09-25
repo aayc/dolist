@@ -111,9 +111,11 @@ state and client ids for idempotent mutations.
 
 ## Next up (not started)
 
-- **Security (priority):** recursive reads of the whole home folder (`grep -r … ~`, `tar … ~`)
-  still pass the safety rules, which exposes `~/.ssh` and other secrets (pre-existing; found by
-  S1, which closed the `DDL_HOME` token-file hole). Deny or ask, with eval cases.
+- **Security (priority, in progress on `fix/home-folder-reads` from `feat/always-on`):**
+  recursive reads of the whole home folder (`grep -r … ~`, `tar … ~`) still pass the safety
+  rules, which exposes `~/.ssh` and other secrets (pre-existing; found by S1, which closed the
+  `DDL_HOME` token-file hole). Deny bulk and secret-path reads, ask for broad recursive ones, with
+  eval cases; merges into `feat/always-on`.
 
 - **iPhone app:** deferred; the web app covers mobile for now. Plan in
   [apps/mobile/PLAN.md](apps/mobile/PLAN.md); needs full Xcode and remote access (S1) first.
