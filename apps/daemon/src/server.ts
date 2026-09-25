@@ -22,13 +22,16 @@ import {
 import { createApp } from "./app";
 import { AttributedStorage } from "./attributed-storage";
 import { type DaemonConfig, loadConfig, summarizeConfig } from "./config";
+import { DeviceSettings, deviceSettingsFiles } from "./device-settings";
 import { errorMessage } from "./errors";
+import { secretFile } from "./home-files";
 import { displayPath } from "./home-paths";
 import { LeasedAgentRuntime } from "./leased-runtime";
+import { createRemoteHosts } from "./remote-hosts";
 import { disabledSyncStatusResponse, toSyncStatusResponse } from "./routes/sync";
 import { createSecurityPolicy } from "./security";
 import { createSettingsStore } from "./settings-store";
-import { type PreparedSync, prepareSync } from "./sync-setup";
+import { loadOrCreateDevice, type PreparedSync, prepareSync } from "./sync-setup";
 import { createSystemSettingsOpener } from "./system-settings";
 import { loadOrCreateToken } from "./token";
 import { DAEMON_VERSION } from "./version";
@@ -102,8 +105,22 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
 
     const connectors = await createConnectors(config, logger);
     resources.connectors = connectors;
+    const deviceSettings = new DeviceSettings({
+      device: await loadOrCreateDevice(config.devicePath, logger),
+      placement: config.placement,
+      sync: config.sync,
+      lockedByEnv: config.lockedByEnv,
+      remoteHosts: createRemoteHosts(config.remoteHosts),
+      files: deviceSettingsFiles(config),
+      hasToken:
+        Boolean(env.DDL_SYNC_TOKEN?.trim()) ||
+        (await secretFile(config.syncTokenPath).read()) !== null,
+      logger: logger.child({ component: "device" }),
+    });
     const prepared = await prepareSync({
-      config,
+      sync: config.sync,
+      syncTokenPath: config.syncTokenPath,
+      device: deviceSettings.device,
       env,
       logger: logger.child({ component: "sync" }),
     });
@@ -170,6 +187,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       writes,
       search: resolveVaultSearch(storage),
       syncStatus: () => syncStatusOf(sync, prepared),
+      device: deviceSettings,
       systemSettings: createSystemSettingsOpener(),
     });
     handler = app.fetch;

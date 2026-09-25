@@ -27,6 +27,7 @@ import {
 import { MemoryStorageProvider, type StorageProvider } from "@ddl/storage";
 import type { Hono } from "hono";
 import { createApp } from "./app";
+import type { DeviceSettings } from "./device-settings";
 import { createSettingsStore, type SettingsStore } from "./settings-store";
 import type { SystemSettingsOpener } from "./system-settings";
 import { WriteTracker } from "./write-tracker";
@@ -271,6 +272,7 @@ export interface TestAppOptions<S extends StorageProvider = MemoryStorageProvide
   now?: () => Date;
   logger?: Logger;
   systemSettings?: FakeSystemSettings;
+  device?: DeviceSettings;
 }
 
 export interface TestApp<S extends StorageProvider = MemoryStorageProvider> {
@@ -307,6 +309,7 @@ export async function createTestApp<S extends StorageProvider = MemoryStoragePro
     webDist: options.webDist ?? null,
     writes,
     ...(options.syncStatus ? { syncStatus: options.syncStatus } : {}),
+    ...(options.device ? { device: options.device } : {}),
     systemSettings,
     ...(options.now ? { now: options.now } : {}),
   });

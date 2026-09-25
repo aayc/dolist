@@ -3,7 +3,16 @@ import { homedir as osHomedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExecutionConfig } from "@ddl/agent";
-import { type AgentMode, DEFAULT_MODEL, type LogLevel, SYNC_ID_PATTERN } from "@ddl/core";
+import {
+  type AgentMode,
+  type AgentPlacement,
+  DEFAULT_MODEL,
+  type DeviceSettingsResponse,
+  type LogLevel,
+  normalizeRemoteHost,
+  REMOTE_LIMITS,
+  SYNC_ID_PATTERN,
+} from "@ddl/core";
 import type { SyncTargetConfig } from "@ddl/storage";
 import { z } from "zod";
 import { type ComputerHelperDiscovery, discoverComputerHelper } from "./computer-helper";
@@ -28,6 +37,9 @@ export interface RemoteSyncConfig {
 
 export type DaemonSyncConfig = Exclude<SyncTargetConfig, { kind: "remote" }> | RemoteSyncConfig;
 
+/** Device settings an environment variable decides (clients show them read-only). */
+export type EnvLockedField = DeviceSettingsResponse["lockedByEnv"][number];
+
 const DEFAULT_HOME = "~/.daily-do-list";
 const DEFAULT_VAULT = "~/DailyDoList";
 /** Resolved from this module so it works both from `src/` (tsx) and the `dist/` bundle. */
@@ -44,6 +56,12 @@ export interface DaemonConfig {
   /** Default model for the LLM client and for `agent.model` unless the vault's settings override it. */
   model: string;
   sync: DaemonSyncConfig;
+  /** Where this device's agent runs (`agent.placement`, `DDL_AGENT_PLACEMENT`). */
+  placement: AgentPlacement;
+  /** Names this daemon answers to besides loopback (`remote.hosts`, `DDL_REMOTE_HOSTS`). */
+  remoteHosts: string[];
+  /** Device settings set by environment variables: `PATCH /api/device` refuses to change them. */
+  lockedByEnv: EnvLockedField[];
   execution: ExecutionConfig;
   /** Where the computer helper was found (its path is in `execution`), or why it wasn't. */
   computerHelper: ComputerHelperDiscovery;
@@ -69,6 +87,13 @@ export class ConfigError extends Error {
 
 const AGENT_MODES = ["live", "mock", "off"] as const satisfies readonly AgentMode[];
 const LOG_LEVELS = ["debug", "info", "warn", "error"] as const satisfies readonly LogLevel[];
+export const AGENT_PLACEMENTS = [
+  "this_device",
+  "always_on_machine",
+  "always_on_host",
+] as const satisfies readonly AgentPlacement[];
+/** Any of these set in the environment decides the sync setup. */
+export const SYNC_ENV_VARS = ["DDL_SYNC_URL", "DDL_SYNC_VAULT", "DDL_SYNC_TOKEN"] as const;
 
 const PathSchema = z.string().trim().min(1);
 
@@ -146,12 +171,25 @@ const OriginSchema = z
       ),
   );
 
+const RemoteHostSchema = z
+  .string()
+  .refine(
+    (host) => normalizeRemoteHost(host) === host,
+    "must be a lowercase DNS name with an optional :port (no scheme, path, IP address or loopback name)",
+  );
+
 const ConfigFileSchema = z.strictObject({
   vaultPath: PathSchema.optional(),
   port: z.int().min(0).max(65535).optional(),
   agentMode: z.enum(AGENT_MODES).optional(),
   model: z.string().trim().min(1).optional(),
   sync: SyncSchema.optional(),
+  agent: z.strictObject({ placement: z.enum(AGENT_PLACEMENTS).optional() }).optional(),
+  remote: z
+    .strictObject({
+      hosts: z.array(RemoteHostSchema).max(REMOTE_LIMITS.remoteHosts).optional(),
+    })
+    .optional(),
   execution: ExecutionSchema.optional(),
   allowedOrigins: z.array(OriginSchema).optional(),
   webDist: PathSchema.optional(),
@@ -219,6 +257,12 @@ export function loadConfig(options: LoadConfigOptions = {}): DaemonConfig {
       parseEnumEnv("DDL_AGENT_MODE", env.DDL_AGENT_MODE, AGENT_MODES) ?? file.agentMode ?? "live",
     model: nonEmpty(env.DDL_MODEL) ?? file.model ?? DEFAULT_MODEL,
     sync: remoteSyncFromEnv(env) ?? resolveSync(file.sync, fromHome),
+    placement:
+      parseEnumEnv("DDL_AGENT_PLACEMENT", env.DDL_AGENT_PLACEMENT, AGENT_PLACEMENTS) ??
+      file.agent?.placement ??
+      "this_device",
+    remoteHosts: remoteHostsFromEnv(env) ?? file.remote?.hosts ?? [],
+    lockedByEnv: lockedByEnv(env),
     execution: resolveExecution(file.execution, home, platform, fromHome, computerHelper.path),
     computerHelper,
     allowedOrigins: file.allowedOrigins ?? [],
@@ -252,6 +296,7 @@ export function summarizeConfig(
     model: config.model,
     sync:
       config.sync.kind === "remote" ? `remote (${safeHost(config.sync.url)})` : config.sync.kind,
+    placement: config.placement,
     execution:
       execution.kind === "local"
         ? `local (browser ${execution.browser?.headless === false ? "headed" : "headless"}, computer use ${execution.computer?.enabled ? "on" : "off"})`
@@ -317,6 +362,41 @@ function remoteSyncFromEnv(env: Record<string, string | undefined>): RemoteSyncC
     throw new ConfigError(`Invalid DDL_SYNC_URL/DDL_SYNC_VAULT:\n${z.prettifyError(parsed.error)}`);
   }
   return parsed.data;
+}
+
+/** A sync setup as `config.json` accepts it (what `PUT /api/device/sync` writes). */
+export function validRemoteSync(
+  url: string,
+  vault: string,
+): { ok: true; config: RemoteSyncConfig } | { ok: false; message: string } {
+  const parsed = RemoteSyncSchema.safeParse({ kind: "remote", url, vault });
+  return parsed.success
+    ? { ok: true, config: parsed.data }
+    : { ok: false, message: z.prettifyError(parsed.error) };
+}
+
+/** `DDL_REMOTE_HOSTS`: names separated by commas or spaces. */
+function remoteHostsFromEnv(env: Record<string, string | undefined>): string[] | undefined {
+  const raw = nonEmpty(env.DDL_REMOTE_HOSTS);
+  if (raw === undefined) return undefined;
+  const hosts: string[] = [];
+  for (const entry of raw.split(/[\s,]+/).filter(Boolean)) {
+    const host = normalizeRemoteHost(entry);
+    if (!host) throw new ConfigError(`DDL_REMOTE_HOSTS: "${entry}" is not a DNS name[:port]`);
+    if (!hosts.includes(host)) hosts.push(host);
+  }
+  if (hosts.length > REMOTE_LIMITS.remoteHosts) {
+    throw new ConfigError(`DDL_REMOTE_HOSTS: at most ${REMOTE_LIMITS.remoteHosts} names`);
+  }
+  return hosts;
+}
+
+function lockedByEnv(env: Record<string, string | undefined>): EnvLockedField[] {
+  const locked: EnvLockedField[] = [];
+  if (nonEmpty(env.DDL_AGENT_PLACEMENT)) locked.push("placement");
+  if (nonEmpty(env.DDL_REMOTE_HOSTS)) locked.push("remoteHosts");
+  if (SYNC_ENV_VARS.some((name) => nonEmpty(env[name]))) locked.push("sync");
+  return locked;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

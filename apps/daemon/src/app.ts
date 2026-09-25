@@ -8,11 +8,13 @@ import { bodyLimit } from "hono/body-limit";
 import { getPath } from "hono/utils/url";
 import type { DaemonConfig } from "./config";
 import type { AppContext } from "./context";
+import { type DeviceSettings, memoryDeviceSettings } from "./device-settings";
 import { createErrorHandler, errorBody } from "./errors";
 import { registerAgentRoutes } from "./routes/agent";
 import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerComputerRoutes } from "./routes/computer";
 import { registerDailyRoutes } from "./routes/daily";
+import { registerDeviceRoutes } from "./routes/device";
 import { registerNoteRoutes } from "./routes/notes";
 import { registerSettingsRoutes } from "./routes/settings";
 import { disabledSyncStatusResponse, registerSyncRoutes } from "./routes/sync";
@@ -43,6 +45,8 @@ export interface AppDeps {
   search?: VaultSearch;
   /** The sync engine's status; absent = sync is off. */
   syncStatus?: () => SyncStatusResponse;
+  /** Device-local settings. Default: kept in memory (tests). */
+  device?: DeviceSettings;
   /** Opens System Settings for computer use permissions. Default: opens nothing (tests). */
   systemSettings?: SystemSettingsOpener;
   now?: () => Date;
@@ -66,6 +70,7 @@ export function createApp(deps: AppDeps): Hono {
     writes: deps.writes ?? new WriteTracker(),
     search: deps.search ?? ((query, limit) => searchVault(deps.storage, query, { limit })),
     syncStatus: deps.syncStatus ?? disabledSyncStatusResponse,
+    device: deps.device ?? memoryDeviceSettings(),
     systemSettings: deps.systemSettings ?? NO_SYSTEM_SETTINGS,
     now: deps.now ?? (() => new Date()),
     version: deps.version ?? DAEMON_VERSION,
@@ -97,6 +102,7 @@ export function createApp(deps: AppDeps): Hono {
   registerAgentRoutes(app, ctx);
   registerArtifactRoutes(app, ctx);
   registerSyncRoutes(app, ctx);
+  registerDeviceRoutes(app, ctx);
   registerComputerRoutes(app, ctx);
   app.all("/api/*", (c) => c.json(errorBody("not_found", "Unknown API route"), 404));
   app.all("/ws", (c) => c.json(errorBody("upgrade_required", "Use a WebSocket upgrade"), 426));

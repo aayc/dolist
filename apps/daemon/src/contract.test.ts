@@ -20,6 +20,8 @@ import {
   operationKey,
   routePath,
 } from "./contract-test-helpers";
+import { memoryDeviceSettings } from "./device-settings";
+import { createRemoteHosts } from "./remote-hosts";
 import type { SettingsStore } from "./settings-store";
 import {
   createTestApp,
@@ -451,6 +453,80 @@ const scenarios: Record<string, Scenario> = {
     });
   },
 
+  "GET device": async (observed) => {
+    const { api } = await setup(observed);
+    expect((await api.call("device", "GET")).body).toEqual({
+      device: { id: "dev_this_device", name: "This device" },
+      placement: "this_device",
+      remoteHosts: [],
+      sync: { url: null, vault: null, hasToken: false },
+      lockedByEnv: [],
+    });
+    const synced = await setup(observed, {
+      device: memoryDeviceSettings({
+        placement: "always_on_host",
+        sync: { kind: "remote", url: "https://sync.example.com", vault: "v_1" },
+        hasToken: true,
+        lockedByEnv: ["placement", "sync"],
+        remoteHosts: createRemoteHosts(["vm-name.tailnet-name.ts.net"]),
+      }),
+    });
+    expect((await synced.api.call("device", "GET")).body).toEqual({
+      device: { id: "dev_this_device", name: "This device" },
+      placement: "always_on_host",
+      remoteHosts: ["vm-name.tailnet-name.ts.net"],
+      sync: { url: "https://sync.example.com", vault: "v_1", hasToken: true },
+      lockedByEnv: ["placement", "sync"],
+    });
+  },
+
+  "PATCH device": async (observed) => {
+    const remoteHosts = createRemoteHosts();
+    const { api } = await setup(observed, { device: memoryDeviceSettings({ remoteHosts }) });
+    const patch = (json: unknown, init = {}) => api.call("device", "PATCH", { json, ...init });
+    expect(
+      (
+        await patch({
+          name: "  Work laptop ",
+          placement: "always_on_machine",
+          remoteHosts: [" VM-Name.Tailnet-Name.ts.net "],
+        })
+      ).body,
+    ).toMatchObject({
+      device: { name: "Work laptop" },
+      placement: "always_on_machine",
+      remoteHosts: ["vm-name.tailnet-name.ts.net"],
+    });
+    expect(remoteHosts.list()).toEqual(["vm-name.tailnet-name.ts.net"]);
+    for (const bad of [
+      { name: "" },
+      { name: "n".repeat(65) },
+      { placement: "somewhere" },
+      { remoteHosts: ["100.64.0.1"] },
+      { remoteHosts: ["https://vm-name.tailnet-name.ts.net"] },
+      { remoteHosts: ["a.example", "a.example"] },
+      { remoteHosts: Array.from({ length: 9 }, (_, i) => `h${i}.example`) },
+      { sync: { url: "https://sync.example.com" } },
+    ]) {
+      expect((await patch(bad)).body).toMatchObject({ error: "invalid_request" });
+    }
+    expect((await patch(undefined, { body: "{" })).body).toMatchObject({ error: "invalid_json" });
+    expect((await patch(undefined, { body: TOO_BIG })).status).toBe(413);
+
+    const locked = await setup(observed, {
+      device: memoryDeviceSettings({ lockedByEnv: ["placement", "remoteHosts"] }),
+    });
+    const lockedPatch = (json: unknown) => locked.api.call("device", "PATCH", { json });
+    expect((await lockedPatch({ placement: "always_on_host" })).body).toMatchObject({
+      error: "locked_by_env",
+    });
+    expect((await lockedPatch({ remoteHosts: [] })).status).toBe(409);
+    expect((await lockedPatch({ name: "Renamed" })).body).toMatchObject({
+      device: { name: "Renamed" },
+      placement: "this_device",
+    });
+  },
+
   "GET ws": async (observed) => {
     const { api } = await setup(observed);
     expect((await api.call("ws", "GET")).status).toBe(426);
@@ -548,8 +624,6 @@ async function agentEnabled(observed: Observed, method: "PUT" | "POST") {
  * replace each entry with a scenario.
  */
 const NOT_SERVED_YET = new Set([
-  "GET device",
-  "PATCH device",
   "PUT deviceSync",
   "DELETE deviceSync",
   "POST pairingCodes",
