@@ -23,6 +23,12 @@ fix; `7ce1e9f` installed) · in-flight branches pushed to `origin`.
 
 ## Shipped on `main` (newest first)
 
+- `052dcc8` Drawings in notes: Excalidraw-compatible drawings in the Obsidian Excalidraw plugin's
+  format, embedded with its syntax, floated with text wrapping around them, movable and
+  resizable; the real Excalidraw on the web (lazy-loaded), a native engine on the Mac; the agent
+  sees each drawing as a description and, with `read_drawing`, an image
+  ([spec](docs/specs/drawings.md)). Total JS budget now 1,300 kB (per the user). CI, macOS app,
+  Security and Linux bundle green on the branch; dispatched on `main`.
 - `3f69ea2` What the orchestrator is doing while you write: it notices, reads, thinks, acts and
   concludes on any line, not only checkbox tasks; chips on the lines that woke it, the note header
   and the status bar, on the web and the Mac with the same wording and timings
@@ -99,29 +105,6 @@ only it can: the `az` commands, the Tailscale login, and that `tailscale serve` 
 Host-rewriting proxy fails closed instead of getting the master token).
 
 Open: browser pairing over https stays fixme in the e2e harness (no TLS proxy there).
-
-### Drawings in notes (Excalidraw-compatible)
-
-Spec: [docs/specs/drawings.md](docs/specs/drawings.md).
-
-| Stream | Branch | State |
-| --- | --- | --- |
-| X0 format and description (core, shared fixtures) | `feat/drawings` | done (`048dbed`): plugin-exact files (verified against plugin 2.27.3 source), embeds, `describeDrawing`, 11 shared fixtures, the watcher ignores drawings |
-| X2 Mac drawing engine (`DailyDoListDrawing`) | `feat/drawings-mac-engine` | done (`06d8d1c`, 13 commits; X0 merged in at `178a7f5`, all 11 shared fixtures replay byte for byte in Swift): Rough.js port matching Rough.js 4.6.4 within 1e-7, Excalidraw-like rendering light and dark, the core tools, 2–3 ms frames at 2,000 elements (release). Deferred: images, rotation handle, elbow arrows, frames, z-order, copy/paste, snapping |
-| X1 web editor (generic embed layer, floats, move/resize, in-place Excalidraw) | `feat/drawings-web` | done (`d471e8e`, 14 commits): the embed layer (`packages/editor/src/embeds/`, ready for images), the real Excalidraw lazy-loaded with self-hosted fonts, insert (⌘⇧X), move/resize/delete, element-level merges (`mergeDrawingElements` in core), drawing files open full size; typing beside six drawings p95 1.7 ms. **Merged with X4 into `feat/drawings`** (lint, typecheck, core 584, daemon 598, web 556, agent tests, evals green) |
-| X4 the agent sees drawings (descriptions, `read_drawing`, renderer) | `feat/drawings-agent` | done (`3655c0b`, 8 commits): descriptions in the digest, `read_note` and subagent kickoffs (bounded, cached, marked as data), `read_drawing` with a PNG for vision models (Pi from its catalog, Cursor from ACP's image capability), its own headless Chromium (no profile, network blocked, closes idle), cache in `$DDL_HOME/cache/drawings`; drawings never re-triage tasks and agents never write in them. Evals: safety 287/289, triage 80/81, no new misses. Merges into `feat/drawings` with X1 |
-| X3 Mac editor integration (exclusion paths, in-place canvas) | `feat/drawings-mac-editor` (from `178a7f5`) | done (`8ace18d`, 7 commits): floats with TextKit exclusion paths, move/resize, the native canvas in place, Insert Drawing (⇧⌘X), `.excalidraw.md` files open full size, element-level merges (`SceneMerge`, same rules as `mergeDrawingElements`; shared merge vectors are a follow-up); a keystroke beside a float 0.48 ms average / 0.75 ms p95 in a 2,000-line note with six drawings (release). **Merged with X2 into `feat/drawings` at `cddf779`**: lint, typecheck, core 584, web 556, editor 276, Swift Drawing 97, Editor 294 (vim replays 100%), app 258 green |
-
-**All drawings streams are in `feat/drawings` (`cddf779`).** The Mac placeholders now use the web's words and wrap inside the box (`73b887b`). `feat/always-on` merged in at
-`0174e2b` (12 conflicts: the orchestrator gets every knowledge tool, `search_notes` and
-`read_drawing`; a subagent's kickoff carries both the task's drawings and the journal's uncertain
-side effects; polish audits take `{ ignore, minControls }`; 153 safety rules), then `main` at
-`4caaf0f`. Together they came to 1,217 kB of total web JS against a 1,200 kB budget; per the user
-the Total JS budget is now 1,300 kB (`5fa14c6`; startup JS unchanged, 278.5 of 320 kB, and the
-reason is in `docs/PERFORMANCE.md`). Verified: lint, typecheck, every TS unit suite, build and
-bundle budget, mock evals (safety 327/329, no false allows; triage 80/81), functional e2e 117
-passed, every Swift package and the app. CI, macOS app, Security and Linux bundle dispatched on
-the branch. Next: merge to `main` when green, install.
 
 ### Moving from Obsidian
 
