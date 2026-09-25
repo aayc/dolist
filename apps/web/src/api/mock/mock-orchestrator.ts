@@ -22,6 +22,14 @@ export interface MockOrchestratorHost {
   work(): { working: string[]; done: number };
 }
 
+/** A tool call recorded in the chat as the turn makes it. */
+export type MockTool = (
+  toolName: string,
+  label: string,
+  input: Record<string, unknown>,
+  resultPreview: string,
+) => Promise<void>;
+
 interface Turn {
   /** The status line that opens it in the chat. */
   label: string;
@@ -34,6 +42,8 @@ interface Turn {
 const READING_MS = 120;
 const DECISION_DELAY_MS = 250;
 const REPLY_DELAY_MS = 1_500;
+/** Like the daemon: a finished turn's outcome stays in the status this long. */
+const OUTCOME_STATUS_MS = 8_000;
 
 /**
  * The orchestrator's own chat for the mock daemon: each simulated decision is a turn (a status
@@ -46,7 +56,10 @@ export class MockOrchestrator {
   private readonly host: MockOrchestratorHost;
   private readonly turns: Turn[] = [];
   private current: AbortController | null = null;
-  private activityNow: OrchestratorActivity = { phase: "idle" };
+  private turnActivity: OrchestratorActivity | null = null;
+  /** Lines noticed per note and not yet taken by a turn. */
+  private readonly noticed = new Map<string, OrchestratorActivity>();
+  private ended: { activity: OrchestratorActivity; at: number } | null = null;
 
   constructor(host: MockOrchestratorHost) {
     this.host = host;
@@ -65,9 +78,51 @@ export class MockOrchestrator {
     };
   }
 
-  /** What it is doing now (`AgentStatusResponse.orchestrator`). */
+  /** What it is doing now (`AgentStatusResponse.orchestrator`), as the daemon reports it. */
   get activity(): OrchestratorActivity {
-    return this.activityNow;
+    if (this.turnActivity) return this.turnActivity;
+    const waiting = [...this.noticed.values()].at(-1);
+    if (waiting) return waiting;
+    if (this.ended && Date.now() - this.ended.at < OUTCOME_STATUS_MS) return this.ended.activity;
+    return { phase: "idle" };
+  }
+
+  /** Unsettled lines of a note that may be requests; none withdraws the ones noticed before. */
+  notice(notePath: string, lines: ReadonlyArray<{ line: number; text: string }>): void {
+    const previous = this.noticed.get(notePath);
+    if (lines.length === 0) {
+      if (!previous) return;
+      this.noticed.delete(notePath);
+      this.emitActivity({ phase: "idle", trigger: noteTrigger(notePath, []) });
+      return;
+    }
+    const activity: OrchestratorActivity = {
+      phase: "noticed",
+      trigger: noteTrigger(notePath, lines),
+      startedAt: previous?.startedAt ?? Date.now(),
+    };
+    this.noticed.delete(notePath);
+    this.noticed.set(notePath, activity);
+    this.emitActivity(activity);
+  }
+
+  /** Lines of a note settled: a turn decides (`act` does it and says what it did). */
+  noteSettled(input: {
+    notePath: string;
+    lines: ReadonlyArray<{ line: number; text: string }>;
+    act: (tool: MockTool, signal: AbortSignal) => Promise<OrchestratorOutcome>;
+  }): void {
+    const count = input.lines.length;
+    this.enqueue(
+      `${input.notePath} changed: ${count} ${count === 1 ? "line" : "lines"}`,
+      noteTrigger(input.notePath, input.lines),
+      (signal) =>
+        input.act(
+          (toolName, label, toolInput, resultPreview) =>
+            this.tool(toolName, label, toolInput, resultPreview, signal),
+          signal,
+        ),
+    );
   }
 
   /** A new task was handed to a subagent. */
@@ -170,11 +225,12 @@ export class MockOrchestrator {
       const opening = this.statusLine("working", turn.label);
       this.push(opening);
       const base = { turnId: opening.id, trigger: turn.trigger, startedAt: Date.now() };
-      this.setActivity({ phase: "reading", ...base });
+      this.takeNoticed(turn.trigger);
+      this.setPhase({ phase: "reading", ...base });
       let outcome: OrchestratorOutcome | undefined;
       try {
         await this.host.sleep(READING_MS, controller.signal);
-        this.setActivity({ phase: "thinking", ...base });
+        this.setPhase({ phase: "thinking", ...base });
         await this.host.sleep(turn.delayMs, controller.signal);
         outcome = await turn.run(controller.signal);
       } catch {
@@ -182,15 +238,43 @@ export class MockOrchestrator {
       }
       this.current = null;
       this.setStatus("idle");
-      this.setActivity({ phase: "idle", ...base, ...(outcome ? { outcome } : {}) });
+      const ended: OrchestratorActivity = {
+        phase: "idle",
+        ...base,
+        ...(outcome ? { outcome } : {}),
+      };
+      this.turnActivity = null;
+      this.ended = { activity: ended, at: Date.now() };
+      this.emitActivity(ended);
     }
   }
 
-  private setActivity(activity: OrchestratorActivity): void {
-    if (activity.phase === this.activityNow.phase && activity.turnId === this.activityNow.turnId) {
-      return;
+  private setPhase(activity: OrchestratorActivity): void {
+    const now = this.turnActivity;
+    if (activity.phase === now?.phase && activity.turnId === now.turnId) return;
+    this.turnActivity = activity;
+    this.emitActivity(activity);
+  }
+
+  /** The turn takes over the noticed lines it carries. */
+  private takeNoticed(trigger: OrchestratorTrigger): void {
+    if (!trigger.notePath || !trigger.lines) return;
+    const noticed = this.noticed.get(trigger.notePath);
+    const left = noticed?.trigger?.lines?.filter(
+      (line) => !trigger.lines!.some((t) => t.line === line.line || t.text === line.text),
+    );
+    if (!left) return;
+    if (left.length === 0) this.noticed.delete(trigger.notePath);
+    else {
+      this.noticed.set(trigger.notePath, {
+        ...noticed,
+        phase: "noticed",
+        trigger: noteTrigger(trigger.notePath, left),
+      });
     }
-    this.activityNow = activity;
+  }
+
+  private emitActivity(activity: OrchestratorActivity): void {
     this.host.emit({ type: "orchestrator.activity", activity });
   }
 
@@ -217,13 +301,7 @@ export class MockOrchestrator {
     resultPreview: string,
     signal: AbortSignal,
   ): Promise<void> {
-    const { turnId, trigger, startedAt } = this.activityNow;
-    this.setActivity({
-      phase: "acting",
-      ...(turnId ? { turnId } : {}),
-      ...(trigger ? { trigger } : {}),
-      ...(startedAt !== undefined ? { startedAt } : {}),
-    });
+    if (this.turnActivity) this.setPhase({ ...this.turnActivity, phase: "acting" });
     const message: ToolCallMessage = {
       id: createId("msg"),
       kind: "tool_call",
@@ -313,4 +391,22 @@ function excerpt(text: string): string {
 
 function quoted(text: string): string {
   return `“${excerpt(text)}”`;
+}
+
+function noteTrigger(
+  notePath: string,
+  lines: ReadonlyArray<{ line: number; text: string }>,
+): OrchestratorTrigger {
+  const sorted = [...lines].sort((a, b) => a.line - b.line).slice(0, 20);
+  return {
+    kind: "note",
+    notePath,
+    lines: sorted.map(({ line, text }) => ({ line, text })),
+    summary:
+      sorted.length === 1
+        ? quoted(sorted[0]!.text)
+        : sorted.length === 0
+          ? "your note"
+          : `${lines.length} lines in your note`,
+  };
 }

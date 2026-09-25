@@ -16,6 +16,7 @@ import {
   isWithinWindow,
   type LocalDate,
   type Logger,
+  mayBeRequest,
   normalizePath,
   type ParsedTask,
   parseDailyNotePath,
@@ -29,7 +30,6 @@ import {
   type Unsubscribe,
 } from "@ddl/core";
 import type { StorageEvent, StorageProvider } from "@ddl/storage";
-import { mayBeRequest } from "./prose";
 import type { NoteEvent, TaskEvent } from "./types";
 
 export const TASK_STATE_DIR = PERSISTED_PATHS.taskState;

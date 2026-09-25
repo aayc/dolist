@@ -12,10 +12,14 @@ import {
   createId,
   type Deferred,
   deferred,
+  isAgentLine,
   isBlankTaskText,
   isOrchestratorThread,
+  isTaskLine,
   isWithinWindow,
   type MessageAuthor,
+  mayBeRequest,
+  type OrchestratorOutcome,
   parseDailyNotePath,
   parseTasks,
   type RiskLevel,
@@ -50,7 +54,7 @@ import {
   renderBrowserFrame,
   renderDesktopFrame,
 } from "./mock-frames";
-import { MockOrchestrator } from "./mock-orchestrator";
+import { MockOrchestrator, type MockTool } from "./mock-orchestrator";
 import {
   buildScript,
   type RiskyAction,
@@ -175,6 +179,54 @@ function routineResult(run: MockRoutineRun): { text: string; summary: string } {
 
 const FRAME_INTERVAL_MS = 350;
 
+interface ProseLine {
+  /** 0-based. */
+  line: number;
+  /** Trimmed. */
+  text: string;
+}
+
+interface ProseState {
+  /** The user's non-task lines as of the last settle; null until the note was first seen. */
+  settled: string[] | null;
+  /** Which lines were last noticed (their numbers). */
+  noticed: string;
+  timer: ReturnType<typeof setTimeout> | undefined;
+  content: string;
+}
+
+/** Lines the simulated orchestrator hands to a subagent (a question gets an answer instead). */
+const MOCK_REQUEST =
+  /^(?:[-*+]\s+)?(?:please\s+)?(?:find|look\s*up|look\s+into|research|book|reserve|buy|order|schedule|plan|compare|check|draft|write|email|send|get|renew|cancel|track|organi[sz]e|prepare|can\s+you|could\s+you|help\s+me)\b/i;
+
+/** The user's non-task lines (no blank, task or agent-written lines), trimmed, in note order. */
+function userProse(content: string): ProseLine[] {
+  const out: ProseLine[] = [];
+  const lines = content.split("\n");
+  for (let line = 0; line < lines.length; line++) {
+    const raw = lines[line]!.replace(/\r$/, "");
+    const text = raw.trim();
+    if (text === "" || isTaskLine(raw) || isAgentLine(raw)) continue;
+    out.push({ line, text });
+  }
+  return out;
+}
+
+/** Lines of `next` whose text isn't in `previous` (as many times): new or edited lines. */
+function newProse(next: readonly ProseLine[], previous: readonly string[]): ProseLine[] {
+  const left = new Map<string, number>();
+  for (const text of previous) left.set(text, (left.get(text) ?? 0) + 1);
+  return next.filter((entry) => {
+    const count = left.get(entry.text) ?? 0;
+    if (count > 0) left.set(entry.text, count - 1);
+    return count === 0;
+  });
+}
+
+function excerptOf(text: string, max = 60): string {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
 /**
  * Simulates the daemon's agent runtime faithfully enough for UI development, e2e tests and demos:
  * task identity tracking + settle debounce, triage → working → done records, threads with streamed
@@ -199,6 +251,7 @@ export class MockAgent {
   private readonly orchestrator: MockOrchestrator;
   /** Routine runs in progress (by task id), told how they ended. */
   private readonly routineRuns = new Map<string, (end: MockRoutineRunEnd) => void>();
+  private readonly prose = new Map<string, ProseState>();
 
   constructor(host: MockAgentHost, options: { speed?: number } = {}) {
     this.host = host;
@@ -248,12 +301,155 @@ export class MockAgent {
     if (this.followLineAnchors(path, content)) changed = true;
     if (changed) this.emitRecords(path);
 
-    if (options.initial || !this.enabled || !this.isWatched(path)) return;
+    const quiet = Boolean(options.initial) || !this.enabled || !this.isWatched(path);
+    this.trackProse(path, content, quiet);
+    if (quiet) return;
     for (const task of diff.added) this.considerTask(path, task);
     for (const { task } of diff.updated) this.considerTask(path, task);
     for (const { task } of diff.statusChanged) {
       if (task.status !== "open") this.clearSettle(task.id);
     }
+  }
+
+  // ── The note's other lines (prose) ─────────────────────────────────────
+
+  /**
+   * Like the daemon's watcher: new or edited lines that may be requests are noticed at once (once
+   * per line), then settle into one orchestrator turn. `quiet` only takes a baseline (the note was
+   * already there, or the agent isn't watching it).
+   */
+  private trackProse(path: string, content: string, quiet: boolean): void {
+    let state = this.prose.get(path);
+    if (!state) {
+      state = { settled: null, noticed: "", timer: undefined, content };
+      this.prose.set(path, state);
+    }
+    state.content = content;
+    const prose = userProse(content);
+    if (quiet) {
+      state.settled = prose.map((entry) => entry.text);
+      clearTimeout(state.timer);
+      this.noticeProse(path, state, []);
+      return;
+    }
+    const requests = newProse(prose, state.settled ?? []).filter((e) => mayBeRequest(e.text));
+    state.settled ??= [];
+    this.noticeProse(path, state, requests);
+    clearTimeout(state.timer);
+    if (requests.length === 0) return;
+    state.timer = setTimeout(
+      () => this.settleProse(path),
+      this.scaled(this.host.settings().agent.settleMs),
+    );
+  }
+
+  private noticeProse(path: string, state: ProseState, lines: ProseLine[]): void {
+    const noticed = lines.map((entry) => entry.line).join(",");
+    if (noticed === state.noticed) return;
+    state.noticed = noticed;
+    this.orchestrator.notice(path, lines);
+  }
+
+  private settleProse(path: string): void {
+    const state = this.prose.get(path);
+    if (!state || !this.enabled) return;
+    state.timer = undefined;
+    const settle = this.scaled(this.host.settings().agent.settleMs);
+    const activity = this.activity;
+    if (activity?.notePath === path && Date.now() - activity.at < settle) {
+      state.timer = setTimeout(() => this.settleProse(path), settle);
+      return;
+    }
+    const prose = userProse(state.content);
+    const lines = newProse(prose, state.settled ?? []).filter((e) => mayBeRequest(e.text));
+    state.settled = prose.map((entry) => entry.text);
+    if (lines.length === 0) {
+      this.noticeProse(path, state, []);
+      return;
+    }
+    state.noticed = "";
+    this.orchestrator.noteSettled({
+      notePath: path,
+      lines,
+      act: (tool, signal) => this.actOnLines(path, lines, tool, signal),
+    });
+  }
+
+  /**
+   * What the simulated orchestrator does with settled lines: a request gets a subagent (a thread
+   * anchored to its line), a question an answer, anything else nothing.
+   */
+  private async actOnLines(
+    path: string,
+    lines: readonly ProseLine[],
+    tool: MockTool,
+    signal: AbortSignal,
+  ): Promise<OrchestratorOutcome> {
+    const started: Array<{ threadId: string; text: string }> = [];
+    const answered: Array<{ threadId: string; text: string }> = [];
+    for (const line of lines) {
+      const question = /\?\s*$/.test(line.text);
+      if (!question && !MOCK_REQUEST.test(line.text)) continue;
+      await tool(
+        "anchor_line",
+        "Attach a thread to a line",
+        { notePath: path, line: line.line + 1, text: line.text },
+        "Attached a thread to the line.",
+      );
+      const { anchorId, thread } = this.anchorLine(path, line);
+      if (question) {
+        const answer = `A quick answer to “${excerptOf(line.text)}” (simulated in the demo): here's what I found.`;
+        await tool(
+          "post_comment",
+          "Comment on task",
+          { taskId: anchorId, text: answer },
+          "Comment posted.",
+        );
+        this.patchRecord(anchorId, { status: "done", summary: "Answered" });
+        await this.say(thread, "orchestrator", answer, signal);
+        this.setThreadStatus(thread, "done", "Answered");
+        answered.push({ threadId: thread.id, text: answer });
+        continue;
+      }
+      await tool(
+        "spawn_subagent",
+        "Delegate to subagent",
+        { taskId: anchorId, goal: line.text, capabilities: ["web"] },
+        `Subagent started for ${anchorId}.`,
+      );
+      this.startJob(path, { id: anchorId, text: line.text, line: line.line }, thread.id);
+      started.push({ threadId: thread.id, text: line.text });
+    }
+    const first = started[0] ?? answered[0];
+    if (!first) return { kind: "no_action" };
+    return {
+      kind: started.length > 0 ? "delegated" : "replied",
+      count: started.length > 0 ? started.length : answered.length,
+      threadId: first.threadId,
+      text: excerptOf(first.text, 150),
+    };
+  }
+
+  /** A record and a thread for a line that isn't a task, like the daemon's `anchor_line`. */
+  private anchorLine(path: string, line: ProseLine): { anchorId: string; thread: Thread } {
+    const date = parseDailyNotePath(path, this.host.settings().dailyNotes);
+    const anchorId = createId("anc", 10);
+    this.records.set(anchorId, {
+      taskId: anchorId,
+      notePath: path,
+      date: date ? toISODate(date) : null,
+      text: line.text,
+      line: line.line,
+      status: "triaging",
+      summary: "Reading the line…",
+      threadId: null,
+      updatedAt: Date.now(),
+      unread: 0,
+      anchor: "line",
+    });
+    const thread = this.createThread(anchorId);
+    this.patchRecord(anchorId, { threadId: thread.id });
+    return { anchorId, thread };
   }
 
   /** Moves line-anchor records with their line, like the daemon; a deleted line drops its anchor. */
@@ -306,6 +502,11 @@ export class MockAgent {
     if (!enabled) {
       for (const timer of this.settleTimers.values()) clearTimeout(timer);
       this.settleTimers.clear();
+      for (const [path, state] of this.prose) {
+        clearTimeout(state.timer);
+        state.timer = undefined;
+        this.noticeProse(path, state, []);
+      }
     }
     this.emitStatus();
   }
@@ -418,7 +619,8 @@ export class MockAgent {
     const author: MessageAuthor = `subagent:${script.subagent}`;
     const comment = `Picked this up — handing it to a **${script.subagent}** subagent.`;
     const record = this.records.get(job.taskId);
-    if (record) {
+    // A line's work was started by the turn that anchored it.
+    if (record && record.anchor !== "line") {
       this.orchestrator.delegated({
         notePath: record.notePath,
         taskId: job.taskId,
@@ -1402,6 +1604,12 @@ export class MockAgent {
     const tasks = this.tracked.get(path) ?? [];
     this.tracked.delete(path);
     for (const task of tasks) this.clearSettle(task.id);
+    const prose = this.prose.get(path);
+    if (prose) {
+      clearTimeout(prose.timer);
+      this.prose.delete(path);
+      this.orchestrator.notice(path, []);
+    }
     let changed = false;
     for (const [id, record] of [...this.records]) {
       if (record.notePath !== path) continue;
