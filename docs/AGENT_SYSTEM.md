@@ -29,7 +29,9 @@ OpenRouter accepts, Cursor the CLI installed and signed in. When that's missing,
 degraded and `status().problem` explains how to fix it. Changing `agent.harness` in Settings
 switches harnesses at runtime: running work finishes on the old one, new and idle sessions move to
 the new one. The safety judge and our `web_search` use OpenRouter with either harness; without a
-key the judge is off (uncertain actions ask you) and web search comes from the Cursor CLI.
+key the judge is off (uncertain actions ask you) and web search comes from the Cursor CLI. A key
+OpenRouter rejects counts as none: it's checked once at startup (the check is shared with the Pi
+harness's), instead of every judge call and search failing with a 401.
 
 ## 1. Watching the list (TaskWatcher)
 

@@ -14,6 +14,7 @@ import { MemoryStorageProvider } from "@ddl/storage";
 import { vi } from "vitest";
 import { type AgentScript, ScriptedHarness } from "../../src/harness/scripted";
 import type { Harness, HarnessSessionOptions } from "../../src/harness/types";
+import type { LlmClient } from "../../src/llm/types";
 import { type AgentRuntimeOverrides, createAgentRuntime } from "../../src/runtime";
 import type { AgentRuntime, AgentRuntimeEvents } from "../../src/runtime-types";
 import { createFakeExecution, type FakeExecution, fakeSafety, testSettings } from "./fakes";
@@ -50,6 +51,8 @@ export interface TestRuntimeOptions {
   /** Per-session scripts for a ScriptedHarness (otherwise the mode's default harness). */
   scriptFor?: (options: HarnessSessionOptions) => AgentScript;
   harness?: Harness;
+  /** The OpenRouter client live mode uses for the safety judge and web_search. */
+  llm?: LlmClient;
   overrides?: AgentRuntimeOverrides;
   execution?: FakeExecution;
   start?: boolean;
@@ -70,6 +73,7 @@ export async function createTestRuntime(options: TestRuntimeOptions = {}): Promi
       home: "/tmp/ddl-test-home",
       execution,
       ...(harness ? { harness } : {}),
+      ...(options.llm ? { llm: options.llm } : {}),
     },
     safety.overrides,
   );

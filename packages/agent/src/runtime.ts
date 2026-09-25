@@ -28,7 +28,7 @@ import type { CursorCliStatus } from "./harness/cursor/cli";
 import { type HarnessSetupContext, setupHarness } from "./harness/registry";
 import { ScriptedHarness } from "./harness/scripted";
 import type { Harness, ToolCallDecision, ToolCallRequest } from "./harness/types";
-import type { OpenRouterKeyCheck } from "./llm/openrouter";
+import { checkOpenRouterKey, type OpenRouterKeyCheck } from "./llm/openrouter";
 import type { LlmClient } from "./llm/types";
 import { createMockScript } from "./orchestrator/mock-script";
 import { Orchestrator } from "./orchestrator/orchestrator";
@@ -175,6 +175,10 @@ class Runtime implements AgentRuntime {
   private stopped = false;
   /** The first harness setup, which `start()` waits for (see `init`). */
   private harnessReady: Promise<void> = Promise.resolve();
+  /** OpenRouter rejected the key of `options.llm` (see `checkLlmKey`). */
+  private llmRejected = false;
+  /** One OpenRouter key check per key, shared by the Pi harness setup and `checkLlmKey`. */
+  private readonly keyChecks = new Map<string, Promise<OpenRouterKeyCheck>>();
   private lastWarmUp = Number.NEGATIVE_INFINITY;
   private recoveredTriage = false;
   private statusQueued = false;
@@ -315,7 +319,7 @@ class Runtime implements AgentRuntime {
     // Checking the harness can take seconds (the Cursor CLI's `agent status`, an OpenRouter key
     // check), and the daemon listens only once the runtime exists: it runs meanwhile, and
     // `start()` waits for it before watching notes.
-    this.harnessReady = this.setupHarness()
+    this.harnessReady = Promise.all([this.setupHarness(), this.checkLlmKey()])
       .then(async () => {
         if (this.mode === "live") await this.setupWebTools();
         const problem = this.problem ?? this.harnessProblem;
@@ -581,10 +585,10 @@ class Runtime implements AgentRuntime {
     const logger = this.logger.child({ component: "safety" });
     try {
       const live = this.mode === "live";
-      const llm = this.options.llm;
+      const llm = this.llm;
       if (live && !llm) {
         this.logger.warn(
-          "No LLM client in live mode: the safety judge and web search are disabled",
+          "No working OpenRouter key in live mode: the safety judge is off (uncertain actions ask the user) and our web_search is not offered (the Cursor harness searches with the CLI)",
         );
       }
       this.evaluator = createEvaluator({
@@ -678,14 +682,52 @@ class Runtime implements AgentRuntime {
     this.queueStatus();
   }
 
+  /** The OpenRouter client, unless OpenRouter rejected its key: then there is none. */
+  private get llm(): LlmClient | undefined {
+    return this.llmRejected ? undefined : this.options.llm;
+  }
+
+  /**
+   * A key OpenRouter rejects counts as no key. Otherwise the safety judge and our web_search call
+   * OpenRouter on every use and fail with a 401, while the Cursor harness could search itself.
+   */
+  private async checkLlmKey(): Promise<void> {
+    if (this.mode !== "live" || !this.options.llm) return;
+    const apiKey = this.overrides.openRouter?.apiKey ?? process.env.OPENROUTER_API_KEY?.trim();
+    if (!apiKey) return;
+    const check = await this.checkKey(apiKey);
+    if (check.status !== "invalid") return;
+    this.llmRejected = true;
+    this.logger.warn(
+      "OpenRouter rejected OPENROUTER_API_KEY: until it is fixed in ~/.daily-do-list/.env, the safety judge is off and web search comes from the Cursor CLI",
+      { httpStatus: check.httpStatus },
+    );
+    this.setupSafety();
+  }
+
+  private checkKey(apiKey: string): Promise<OpenRouterKeyCheck> {
+    let check = this.keyChecks.get(apiKey);
+    if (!check) {
+      const baseUrl =
+        this.overrides.openRouter?.baseUrl ??
+        (process.env.DDL_OPENROUTER_BASE_URL?.trim() || undefined);
+      const verify =
+        this.overrides.checkApiKey ??
+        ((key: string) => checkOpenRouterKey(key, baseUrl ? { baseUrl } : {}));
+      check = verify(apiKey);
+      this.keyChecks.set(apiKey, check);
+    }
+    return check;
+  }
+
   private harnessContext(): HarnessSetupContext {
-    const { openRouter, checkApiKey, checkCursorCli } = this.overrides;
+    const { openRouter, checkCursorCli } = this.overrides;
     return {
       home: this.options.home,
       logger: this.logger,
       env: process.env,
       ...(openRouter ? { openRouter } : {}),
-      ...(checkApiKey ? { checkOpenRouterKey: checkApiKey } : {}),
+      checkOpenRouterKey: (key) => this.checkKey(key),
       ...(checkCursorCli ? { checkCursorCli } : {}),
     };
   }
@@ -693,11 +735,14 @@ class Runtime implements AgentRuntime {
   private async setupWebTools(): Promise<void> {
     try {
       const factory = this.overrides.createWebTools ?? (await import("./tools/web")).createWebTools;
-      const llm = this.options.llm;
+      const llm = this.llm;
       this.webTools = factory({
         ...(llm ? { llm } : {}),
         logger: this.logger.child({ component: "web" }),
-      }).map((tool) => this.sourceCatalog.observe(tool));
+      })
+        // Without a model our web_search can only fail; the Cursor CLI searches instead (gated).
+        .filter((tool) => llm !== undefined || tool.name !== TOOL.webSearch)
+        .map((tool) => this.sourceCatalog.observe(tool));
     } catch (error) {
       this.logger.warn("Web tools unavailable", { error: errorText(error) });
     }

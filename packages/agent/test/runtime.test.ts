@@ -1,8 +1,10 @@
-import { deferred } from "@ddl/core";
+import { deferred, type ToolSpec, textResult } from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CursorCliStatus } from "../src/harness/cursor/cli";
 import { ScriptedHarness } from "../src/harness/scripted";
+import { MockLlmClient } from "../src/llm/mock";
+import type { OpenRouterKeyCheck } from "../src/llm/openrouter";
 import { createAgentRuntime, UnknownThreadError } from "../src/runtime";
 import { createFakeExecution, fakeSafety, testSettings } from "./helpers/fakes";
 import { createTestRuntime, isSubsequence, type TestRuntime, TODAY } from "./helpers/runtime";
@@ -389,5 +391,61 @@ describe("AgentRuntime startup", () => {
     check.resolve({ state: "signed_out", binary: "/usr/local/bin/agent" });
     await start;
     expect(t.runtime.status().problem).toBeTruthy();
+  });
+});
+
+describe("AgentRuntime OpenRouter key", () => {
+  const stubTool = (name: string): ToolSpec => ({
+    name,
+    label: name,
+    description: name,
+    parameters: { type: "object", properties: {} },
+    safety: { readOnly: true },
+    execute: async () => textResult("ok"),
+  });
+
+  /** A live runtime whose orchestrator sends every new task to a web subagent that notes its tools. */
+  async function webRun(keyCheck: OpenRouterKeyCheck) {
+    process.env.OPENROUTER_API_KEY = "the-configured-key";
+    const checkApiKey = vi.fn(async () => keyCheck);
+    const tools: string[][] = [];
+    const t = await runtime({
+      mode: "live",
+      llm: new MockLlmClient(),
+      overrides: {
+        checkApiKey,
+        createWebTools: () => [stubTool("web_fetch"), stubTool("web_search")],
+      },
+      scriptFor: (options) =>
+        options.role === "orchestrator"
+          ? async (ctx) => {
+              for (const match of ctx.message.matchAll(/\[added\] (\S+):/g)) {
+                await ctx.callTool("spawn_subagent", {
+                  taskId: match[1],
+                  goal: "look it up",
+                  capabilities: ["web"],
+                });
+              }
+            }
+          : async (ctx) => {
+              tools.push(ctx.tools.map((tool) => tool.name));
+              await ctx.callTool("finish_task", { status: "done", summary: "ok" });
+            },
+    });
+    await t.storage.write(TODAY, "- [ ] Find banana bread recipes\n");
+    await t.waitForStatus("Find banana bread recipes", "done");
+    expect(checkApiKey).toHaveBeenCalledWith("the-configured-key");
+    return tools[0] ?? [];
+  }
+
+  it("a key OpenRouter rejects counts as none: no web_search that can only fail", async () => {
+    const tools = await webRun({ status: "invalid", httpStatus: 401, message: "User not found." });
+    expect(tools).toContain("web_fetch");
+    expect(tools).not.toContain("web_search");
+  });
+
+  it("a key OpenRouter accepts keeps our web_search", async () => {
+    const tools = await webRun({ status: "valid" });
+    expect(tools).toContain("web_search");
   });
 });
