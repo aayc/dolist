@@ -18,11 +18,13 @@ import { type SettingsSection, ui } from "../../state/ui-store";
 import { useVaultStore } from "../../state/vault-store";
 import { useVimStore } from "../../state/vim-store";
 import { Modal } from "../overlays/Modal";
+import type { RemoteSectionKey } from "../remote/settings/RemoteSection";
 import { ApprovalPolicySetting } from "./ApprovalPolicySetting";
 import { HARNESS_OPTIONS, shownHarness } from "./agent-harness";
 import { ComputerUseSection } from "./ComputerUseSection";
 import { dailyPreview } from "./daily-preview";
 import { draftToCommit } from "./draft";
+import { Setting } from "./Setting";
 import "../../styles/settings.css";
 
 const SECTIONS: ReadonlyArray<{ key: SettingsSection; label: string }> = [
@@ -31,10 +33,31 @@ const SECTIONS: ReadonlyArray<{ key: SettingsSection; label: string }> = [
   { key: "daily", label: "Daily notes" },
   { key: "vault", label: "Vault" },
   { key: "agent", label: "Agent" },
+  { key: "location", label: "Agent location" },
+  { key: "machine", label: "Always-on machine" },
+  { key: "sync", label: "Sync" },
+  { key: "devices", label: "Devices" },
+  { key: "remote", label: "Remote access" },
   { key: "computer", label: "Computer use" },
   { key: "connectors", label: "Connectors" },
   { key: "about", label: "About" },
 ];
+
+/** Where the agent runs, other devices and remote access: a chunk loaded with Settings. */
+const RemoteSection = preloadable(() =>
+  import("../remote/settings/RemoteSection").then((m) => m.RemoteSection),
+);
+const REMOTE_SECTIONS: ReadonlySet<SettingsSection> = new Set<RemoteSectionKey>([
+  "location",
+  "machine",
+  "sync",
+  "devices",
+  "remote",
+]);
+
+function isRemoteSection(section: SettingsSection): section is RemoteSectionKey {
+  return REMOTE_SECTIONS.has(section);
+}
 
 /** The vault and importing from Obsidian: a chunk loaded with Settings. */
 const VaultSection = preloadable(() =>
@@ -46,6 +69,7 @@ export function SettingsModal({ section }: { section: SettingsSection }) {
   // Opening Settings at a section while it's open (a link inside it) switches to that section.
   useEffect(() => setActive(section), [section]);
   useEffect(() => {
+    void RemoteSection.preload();
     void VaultSection.preload();
   }, []);
   return (
@@ -78,35 +102,20 @@ export function SettingsModal({ section }: { section: SettingsSection }) {
         {active === "daily" ? <DailySection /> : null}
         {active === "vault" ? (
           <Suspense fallback={<div className="thread-loading" aria-busy="true" />}>
-            <VaultSection />
+            <VaultSection onOpenSync={() => setActive("sync")} />
           </Suspense>
         ) : null}
         {active === "agent" ? <AgentSection /> : null}
+        {isRemoteSection(active) ? (
+          <Suspense fallback={<div className="thread-loading" aria-busy="true" />}>
+            <RemoteSection section={active} go={setActive} />
+          </Suspense>
+        ) : null}
         {active === "computer" ? <ComputerUseSection /> : null}
         {active === "connectors" ? <ConnectorsSection /> : null}
         {active === "about" ? <AboutSection /> : null}
       </div>
     </Modal>
-  );
-}
-
-function Setting({
-  name,
-  description,
-  children,
-}: {
-  name: string;
-  description?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <div className="setting">
-      <div className="setting-info">
-        <div className="setting-name">{name}</div>
-        {description ? <div className="setting-description">{description}</div> : null}
-      </div>
-      <div className="setting-control">{children}</div>
-    </div>
   );
 }
 

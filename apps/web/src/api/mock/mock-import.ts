@@ -17,7 +17,6 @@ import {
   type ObsidianUpdateReport,
   parseDailyNotePath,
   type ServerEvent,
-  type SyncStatusResponse,
   today,
   toISODate,
 } from "@ddl/core";
@@ -94,6 +93,8 @@ export interface MockImportsHost {
   writeExternal(path: string, content: string): void;
   /** The daemon exits and a supervisor starts it again. */
   restart(): void;
+  /** The vault syncs with the sync service (this device's sync setup). */
+  syncing(): boolean;
 }
 
 export interface MockImportsOptions {
@@ -163,10 +164,9 @@ export class MockImports {
   private job: ObsidianImportJob | null = null;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private restarting = false;
-  /** Test hooks: this browser is a paired device, `DDL_VAULT` fixes the vault, the vault syncs. */
+  /** Test hooks: this browser is a paired device, `DDL_VAULT` fixes the vault. */
   pairedDevice = false;
   lockedByEnv = false;
-  syncing = false;
 
   constructor(host: MockImportsHost, options: MockImportsOptions = {}) {
     this.host = host;
@@ -187,20 +187,6 @@ export class MockImports {
   /** The daemon came back after a switch. */
   restarted(): void {
     this.restarting = false;
-  }
-
-  syncStatus(): SyncStatusResponse {
-    return this.syncing
-      ? {
-          state: "idle",
-          target: "remote",
-          lastSyncedAt: Date.now() - 60_000,
-          pendingChanges: 0,
-          conflicts: [],
-          remoteHost: "sync.example.com",
-          deviceName: "Mock Mac",
-        }
-      : { state: "disabled", target: "none", lastSyncedAt: null, pendingChanges: 0, conflicts: [] };
   }
 
   vault(): DeviceVaultResponse {
@@ -227,7 +213,7 @@ export class MockImports {
     if (this.job?.state === "running") {
       throw conflict("An import from Obsidian is running; wait for it or cancel it");
     }
-    if (this.syncing) {
+    if (this.host.syncing()) {
       throw conflict(
         "This device syncs its vault: turn sync off before switching vaults, or the old notes sync into the new one",
       );
@@ -249,7 +235,7 @@ export class MockImports {
     if (!obsidian) {
       warnings.push("This folder has no .obsidian folder: it's copied as a plain folder of notes.");
     }
-    if (this.syncing) {
+    if (this.host.syncing()) {
       warnings.push(
         "This device syncs its vault: turn sync off before switching to the new vault, or the old notes sync back into it.",
       );

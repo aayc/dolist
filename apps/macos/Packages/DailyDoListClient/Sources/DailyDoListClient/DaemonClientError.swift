@@ -14,6 +14,9 @@ public enum DaemonClientError: Error, Equatable, Sendable {
   case conflict(ConflictResponse)
   /// 409 on an approval decision: it is no longer pending.
   case approvalConflict(ApprovalConflictResponse)
+  /// 429: too many requests (pairing attempts, pairing codes waiting). `retryAfter` is the
+  /// daemon's `Retry-After` in seconds, when it sent one.
+  case rateLimited(retryAfter: Int?, body: ApiErrorBody?)
   /// Any other non-2xx answer. `body` is nil when it isn't an `ApiErrorBody`.
   case http(status: Int, body: ApiErrorBody?)
   /// The response did not match the protocol: `"<Type> at <codingPath>: <reason>"`.
@@ -33,6 +36,7 @@ extension DaemonClientError: LocalizedError {
       message ?? "That pairing code is wrong, expired or already used."
     case .conflict: "The note changed on disk before this edit was saved."
     case .approvalConflict: "That approval was already decided."
+    case .rateLimited(_, let body): body?.message ?? "Too many attempts: try again later."
     case .http(let status, let body): body?.message ?? "The daemon answered HTTP \(status)."
     case .decoding(let detail): "Unexpected response from the daemon: \(detail)"
     case .incompatibleApiVersion(let server):
@@ -49,6 +53,7 @@ extension DaemonClientError {
     case .http(_, let body): body?.error
     case .conflict(let response): response.error
     case .approvalConflict(let response): response.error
+    case .rateLimited(_, let body): body?.error ?? .rateLimited
     case .unauthorized: .unauthorized
     case .pairingRejected: .pairingRejected
     default: nil
@@ -60,6 +65,7 @@ extension DaemonClientError {
     switch self {
     case .http(let status, _): status
     case .conflict, .approvalConflict: 409
+    case .rateLimited: 429
     case .unauthorized, .pairingRejected: 401
     default: nil
     }

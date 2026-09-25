@@ -11,12 +11,13 @@ extension AgentStore {
   /// What the "where the orchestrator runs" control shows; nil without placement.
   public var orchestratorLocation: OrchestratorLocation? {
     OrchestratorLocation(
-      status: placement, machineName: alwaysOnMachineName, pending: pendingPlacement)
+      status: placement, machineName: alwaysOnMachineName, problem: status?.problem,
+      pending: pendingPlacement)
   }
 
   /// Agent actions can't be taken from this device right now, and why; nil when they can.
   public var readOnly: AgentReadOnly? {
-    AgentReadOnly(placement: placement, machineName: alwaysOnMachineName)
+    AgentReadOnly(placement: placement, problem: status?.problem)
   }
 
   /// Whether the orchestrator can be moved to `target` now (the command's availability).

@@ -1,7 +1,8 @@
 import { type ThemePreference, today, toISODate } from "@ddl/core";
 import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import { createDaemonClient, isMockMode } from "../api/select-client";
+import { createRoot, type Root } from "react-dom/client";
+import type { PairBrowser } from "../api/pairing";
+import { isMockMode, resolveStartup } from "../api/select-client";
 import { installGlobalHotkeys } from "../commands/keyboard";
 import { armCounts } from "../components/Count";
 import { announceVaultSwitch } from "../features/obsidian-import/vault-switch";
@@ -138,6 +139,16 @@ function installDebugHooks(services: Services): void {
   };
 }
 
+/** The pairing screen (its own chunk): a remote browser that isn't paired, or was revoked. */
+async function showPairing(container: HTMLElement, pair: PairBrowser, revoked: boolean) {
+  const { PairingScreen } = await import("../features/pairing/PairingScreen");
+  createRoot(container).render(
+    <StrictMode>
+      <PairingScreen pair={pair} revoked={revoked} onPaired={() => location.reload()} />
+    </StrictMode>,
+  );
+}
+
 export async function startApp(container: HTMLElement): Promise<void> {
   const perf = installPerfGlobal();
   const settings = getSettings();
@@ -146,7 +157,18 @@ export async function startApp(container: HTMLElement): Promise<void> {
   applyTheme(theme);
   applyEditorCssVars(settings);
 
-  const client = await createDaemonClient();
+  const startup = await resolveStartup();
+  if (startup.kind === "pairing") {
+    await showPairing(container, startup.pair, false);
+    return;
+  }
+  let root: Root | null = null;
+  // Cookie auth only: the device was revoked, so this page goes back to pairing.
+  const client = startup.createClient(() => {
+    root?.unmount();
+    root = null;
+    if (startup.pair) void showPairing(container, startup.pair, true);
+  });
   const services = createServices(client);
 
   let initialLoaded = false;
@@ -191,7 +213,8 @@ export async function startApp(container: HTMLElement): Promise<void> {
   installSettingsEffects(services, theme);
   installDebugHooks(services);
 
-  createRoot(container).render(
+  root = createRoot(container);
+  root.render(
     <StrictMode>
       <ServicesContext value={services}>
         <App />

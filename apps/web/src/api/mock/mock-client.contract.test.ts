@@ -16,6 +16,7 @@ import { type ServerEvent, type ServerEventOf, today, toISODate } from "@ddl/cor
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HttpError, NetworkError } from "../errors";
 import { MockDaemonClient } from "./mock-client";
+import { MockPairing } from "./mock-pairing";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -400,6 +401,294 @@ describe("MockDaemonClient ⇄ wire contract", () => {
     expect(error.status).toBe(409);
     expectWire("ApprovalConflictResponse", error.body);
     expect(error.body).toMatchObject({ approval: { id: approval.id, status: "denied" } });
+  });
+
+  it("keeps this device's settings, sync, pairing and the machine like the daemon", async () => {
+    const { client, events } = create();
+    await vi.advanceTimersByTimeAsync(1);
+    const status = await call(client.getAgentStatus());
+    expectWire("AgentStatusResponse", status);
+    expect(status.placement).toMatchObject({
+      placement: "this_device",
+      heldHere: "no_sync",
+      relay: "off",
+      runsOn: { thisDevice: true },
+    });
+    expect(status.readiness).toMatchObject({ modelCredential: true, computer: "available" });
+
+    const device = await call(client.getDevice());
+    expectWire("DeviceSettingsResponse", device);
+    expect(device).toMatchObject({ remoteHosts: [], sync: { url: null, hasToken: false } });
+    expectWire("SyncStatusResponse", await call(client.getSyncStatus()));
+
+    const synced = await call(
+      client.setupSync({
+        url: "https://sync.example.com",
+        vault: "vault_1",
+        token: "t0ken-t0ken",
+      }),
+    );
+    expectWire("DeviceSettingsResponse", synced);
+    expect(synced.sync).toEqual({
+      url: "https://sync.example.com",
+      vault: "vault_1",
+      hasToken: true,
+    });
+    const syncStatus = await call(client.getSyncStatus());
+    expectWire("SyncStatusResponse", syncStatus);
+    expect(syncStatus).toMatchObject({
+      state: "idle",
+      target: "remote",
+      remoteHost: "sync.example.com",
+    });
+    expect((await call(client.getAgentStatus())).placement?.heldHere).toBe("no_machine");
+
+    const machine = await call(
+      client.pairMachine({ url: "HTTPS://VM-2.tailnet-name.ts.net/", code: "abcd-efgh" }),
+    );
+    expectWire("MachineStatusResponse", machine);
+    expect(machine).toMatchObject({
+      machine: { name: "vm-2", url: "https://vm-2.tailnet-name.ts.net" },
+      paired: true,
+      reachable: true,
+      readiness: { computer: "unsupported" },
+    });
+    expect(ofType(events, "settings.changed").at(-1)?.settings.remote.alwaysOnMachine).toEqual(
+      machine.machine,
+    );
+    expectWire("MachineStatusResponse", await call(client.checkMachine()));
+    expect((await call(client.getAgentStatus())).placement?.heldHere).toBeUndefined();
+
+    // Handing the agent to the machine shows a note, then the machine runs it, relayed here.
+    expectWire(
+      "DeviceSettingsResponse",
+      await call(client.updateDevice({ placement: "always_on_machine" })),
+    );
+    await vi.advanceTimersByTimeAsync(1);
+    const handing = ofType(events, "agent.status").at(-1)?.status;
+    expect(handing?.placement).toMatchObject({
+      placement: "always_on_machine",
+      note: "Handing the agent to vm-2…",
+      relay: "connecting",
+    });
+    // Requests are already forwarded while the relay connects.
+    expect(handing?.problem).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(1_000);
+    const relayed = ofType(events, "agent.status").at(-1)!.status;
+    expect(relayed.placement).toMatchObject({
+      relay: "connected",
+      runsOn: { name: "vm-2", thisDevice: false, alwaysOnMachine: true },
+    });
+    expect(relayed.placement?.note).toBeUndefined();
+    expect(relayed.problem).toBeUndefined();
+
+    // The machine revokes this device: not paired, and it says so.
+    client.testHooks().setMachineRejects(true);
+    await vi.advanceTimersByTimeAsync(1);
+    const rejected = ofType(events, "agent.status").at(-1)!.status;
+    expect(rejected.placement?.relay).toBe("not_paired");
+    expect(rejected.problem).toBe(
+      "The always-on machine no longer accepts this device. Pair it again.",
+    );
+    const machineNow = await call(client.getMachine());
+    expectWire("MachineStatusResponse", machineNow);
+    expect(machineNow).toMatchObject({ paired: true, reachable: true });
+    expect(machineNow.error).toContain("no longer accepts this device's credential");
+    client.testHooks().setMachineRejects(false);
+    await vi.advanceTimersByTimeAsync(1);
+
+    // Once it can't be reached, agent actions answer 503 with why, and the status says so too.
+    client.testHooks().setMachineReachable(false);
+    await vi.advanceTimersByTimeAsync(1);
+    const down = ofType(events, "agent.status").at(-1)!.status;
+    expectWire("AgentStatusResponse", down);
+    expect(down.placement?.relay).toBe("unreachable");
+    expect(down.problem).toBe("The always-on machine can't be reached.");
+    const refused = await failure(client.postMessage("orchestrator", "hi"));
+    expect(refused.status).toBe(503);
+    expectWire("ApiErrorBody", refused.body);
+    expect(refused.body).toMatchObject({ error: "agent_unavailable" });
+
+    // Taking it back: a note while the machine hands it over, then it runs here.
+    await call(client.updateDevice({ placement: "this_device" }));
+    await vi.advanceTimersByTimeAsync(1);
+    expect(ofType(events, "agent.status").at(-1)?.status.placement?.note).toBe(
+      "Taking over from vm-2…",
+    );
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(ofType(events, "agent.status").at(-1)?.status.placement).toMatchObject({
+      relay: "off",
+      runsOn: { thisDevice: true },
+    });
+
+    const hosts = await call(
+      client.updateDevice({ remoteHosts: [" Laptop.Tailnet-Name.ts.net "] }),
+    );
+    expect(hosts.remoteHosts).toEqual(["laptop.tailnet-name.ts.net"]);
+    const code = await call(client.createPairingCode({ name: "Phone" }));
+    expectWire("PairingCodeResponse", code);
+    expect(code.url).toBe("https://laptop.tailnet-name.ts.net");
+    const devices = await call(client.listDevices());
+    expectWire("PairedDevicesResponse", devices);
+    const [first] = devices.devices;
+    await call(client.revokeDevice(first!.id));
+    expect((await call(client.listDevices())).devices).toHaveLength(devices.devices.length - 1);
+
+    expectWire("MachineStatusResponse", await call(client.forgetMachine()));
+    expectWire("DeviceSettingsResponse", await call(client.removeSync()));
+    expect((await call(client.getAgentStatus())).placement?.heldHere).toBe("no_sync");
+    client.disconnect();
+    for (const event of events) {
+      expect(exact(ServerEventSchema).safeParse(JSON.parse(JSON.stringify(event))).error).toBe(
+        undefined,
+      );
+    }
+  });
+
+  it("answers the device routes' errors with the daemon's codes and bodies", async () => {
+    const { client } = create();
+    const cases: Array<[() => Promise<unknown>, number, string]> = [
+      [() => client.updateDevice({ remoteHosts: ["https://vm.example"] }), 400, "invalid_request"],
+      [() => client.updateDevice({ remoteHosts: ["100.64.0.1"] }), 400, "invalid_request"],
+      [
+        () => client.updateDevice({ remoteHosts: ["a.example", "A.example"] }),
+        400,
+        "invalid_request",
+      ],
+      [() => client.updateDevice({ name: " " }), 400, "invalid_request"],
+      [
+        () => client.setupSync({ url: "http://sync.example.com", vault: "v" }),
+        400,
+        "invalid_request",
+      ],
+      [
+        () => client.setupSync({ url: "https://sync.example.com", vault: "v" }),
+        400,
+        "invalid_request",
+      ],
+      [
+        () => client.setupSync({ url: "https://sync.example.com", vault: "a b", token: "t" }),
+        400,
+        "invalid_request",
+      ],
+      [() => client.revokeDevice(".."), 400, "invalid_request"],
+      [() => client.revokeDevice("pdv_missing"), 404, "not_found"],
+      [
+        () => client.pairMachine({ url: "https://vm.example/path", code: "ABCDEFGH" }),
+        400,
+        "invalid_request",
+      ],
+      [
+        () => client.pairMachine({ url: "https://vm.example", code: "XXXX-XXXX" }),
+        401,
+        "pairing_rejected",
+      ],
+      [
+        () => client.pairMachine({ url: "https://vm.example", code: "YYYYYYYY" }),
+        429,
+        "rate_limited",
+      ],
+      [
+        () => client.pairMachine({ url: "https://offline.example", code: "ABCDEFGH" }),
+        502,
+        "machine_unreachable",
+      ],
+    ];
+    for (const [run, status, code] of cases) {
+      const error = await failure(run());
+      expect([error.status, (error.body as { error: string }).error]).toEqual([status, code]);
+      expectWire("ApiErrorBody", error.body, `${status} body`);
+    }
+    for (let i = 0; i < 3; i++) await call(client.createPairingCode());
+    const tooMany = await failure(client.createPairingCode());
+    expect(tooMany.status).toBe(429);
+    expectWire("ApiErrorBody", tooMany.body);
+
+    const locked = new MockDaemonClient({
+      installHooks: false,
+      persistSettings: false,
+      remote: "locked",
+    });
+    for (const run of [
+      () => locked.updateDevice({ placement: "always_on_machine" }),
+      () => locked.updateDevice({ remoteHosts: [] }),
+      () => locked.setupSync({ url: "https://sync.example.com", vault: "v", token: "t" }),
+      () => locked.removeSync(),
+    ]) {
+      const error = await failure(run());
+      expect(error.status).toBe(409);
+      expect(error.body).toMatchObject({ error: "locked_by_env" });
+      expectWire("ApiErrorBody", error.body);
+    }
+    expect((await call(locked.updateDevice({ name: "Renamed" }))).device.name).toBe("Renamed");
+  });
+
+  it("serves the scenarios' placements, and 503s agent actions while another device runs it", async () => {
+    for (const [scenario, expected] of [
+      ["relayed", { relay: "connected", runsOn: { alwaysOnMachine: true, thisDevice: false } }],
+      ["not_paired", { relay: "not_paired" }],
+      ["rejected", { relay: "not_paired" }],
+      ["unreachable", { relay: "unreachable" }],
+      ["elsewhere", { relay: "off", runsOn: { name: "Work laptop", thisDevice: false } }],
+      [
+        "host",
+        { placement: "always_on_host", runsOn: { thisDevice: true, alwaysOnMachine: true } },
+      ],
+    ] as const) {
+      const client = new MockDaemonClient({
+        installHooks: false,
+        persistSettings: false,
+        remote: scenario,
+      });
+      const status = await call(client.getAgentStatus());
+      expectWire("AgentStatusResponse", status, scenario);
+      expect(status.placement, scenario).toMatchObject(expected);
+      expectWire("MachineStatusResponse", await call(client.getMachine()), scenario);
+      const refusal = {
+        elsewhere: "The agent is running on Work laptop.",
+        not_paired: "This device isn't paired with the always-on machine.",
+        rejected: "The always-on machine no longer accepts this device. Pair it again.",
+        unreachable: "The always-on machine can't be reached.",
+      }[scenario as string];
+      if (refusal) {
+        expect(status.problem, scenario).toBe(refusal);
+        const error = await failure(client.retryThread("orchestrator"));
+        expect(error.message, scenario).toBe(refusal);
+      }
+    }
+  });
+
+  it("answers 401 once this browser's device is revoked, and says so once", async () => {
+    const setup = new MockDaemonClient({ installHooks: false, persistSettings: false });
+    const { code } = await call(setup.createPairingCode());
+    expect(code).toHaveLength(8);
+    const onUnauthorized = vi.fn();
+    const pairing = new MockPairing({ persist: false });
+    const issued = pairing.issue();
+    const { device } = pairing.pair({
+      code: issued.code,
+      name: "Chrome on macOS",
+      kind: "browser",
+    });
+    expect(() => pairing.pair({ code: issued.code, name: "Again", kind: "browser" })).toThrow(
+      "Wrong, expired or already used pairing code",
+    );
+    const client = new MockDaemonClient({
+      installHooks: false,
+      persistSettings: false,
+      pairing,
+      deviceId: device.id,
+      onUnauthorized,
+    });
+    const { devices } = await call(client.listDevices());
+    expect(devices.find((d) => d.current)?.id).toBe(device.id);
+    await call(client.revokeDevice(device.id));
+    await vi.advanceTimersByTimeAsync(1);
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    const error = await failure(client.getDevice());
+    expect(error.status).toBe(401);
+    expectWire("ApiErrorBody", error.body);
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
   it("simulates computer access: missing, then granted a moment after System Settings opens", async () => {

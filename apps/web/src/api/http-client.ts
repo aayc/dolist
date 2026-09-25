@@ -14,16 +14,24 @@ import {
   type CreateRoutineRequest,
   createId,
   type DailyNoteResponse,
+  type DeviceSettingsPatch,
+  type DeviceSettingsResponse,
+  type DeviceSyncSetupRequest,
   type DeviceVaultRequest,
   type DeviceVaultResponse,
   type HealthResponse,
   isCompatibleApiVersion,
+  type MachinePairRequest,
+  type MachineStatusResponse,
   type NoteResponse,
   type ObsidianImportJobResponse,
   type ObsidianImportPreview,
   type ObsidianImportPreviewRequest,
   type ObsidianImportRequest,
   type ObsidianImportStatusResponse,
+  type PairedDevicesResponse,
+  type PairingCodeRequest,
+  type PairingCodeResponse,
   type PostMessageRequest,
   type RenameRequest,
   type RoutineListResponse,
@@ -53,15 +61,25 @@ import type {
   ThreadFilter,
   WriteOptions,
 } from "./client";
-import { ConflictError, HttpError, NetworkError } from "./errors";
+import { HttpError, NetworkError } from "./errors";
 import { parseServerEvent } from "./events";
+import { readResponse } from "./http-response";
 import { ReconnectingSocket, type SocketLike } from "./socket";
 
 export interface HttpDaemonClientOptions {
   /** Daemon origin; empty = same origin (the daemon serves the UI, or the Vite dev proxy). */
   baseUrl?: string;
-  /** Bearer token (production: from the injected meta tag; dev: the proxy adds it). */
+  /**
+   * Bearer token (a loopback page: from the injected meta tag; dev: the proxy adds it). Without
+   * one, requests carry no Authorization header and the WebSocket URL no token: a remote page
+   * authenticates with its device cookie, which the browser sends on same-origin requests.
+   */
   token?: string | null;
+  /**
+   * Cookie auth: a request answered 401 means this browser's device was revoked. The socket can't
+   * tell (a refused upgrade has no status), so a dropped socket is followed by a probe request.
+   */
+  onUnauthorized?: () => void;
   clientId?: string;
   /** Sent in the WebSocket hello for diagnostics. */
   clientVersion?: string;
@@ -70,7 +88,10 @@ export interface HttpDaemonClientOptions {
   requestTimeoutMs?: number;
 }
 
-type Method = "GET" | "PUT" | "POST" | "DELETE";
+type Method = "GET" | "PUT" | "PATCH" | "POST" | "DELETE";
+
+/** A dropped socket probes the auth at most this often (cookie auth). */
+const AUTH_PROBE_MS = 5_000;
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -102,11 +123,15 @@ export class HttpDaemonClient implements DaemonClient {
   private readonly listeners = new Set<(event: ServerEvent) => void>();
   private readonly connectionListeners = new Set<(change: ConnectionChange) => void>();
   private readonly surfaces = new Map<string, ClientEvent>();
+  private readonly onUnauthorized: (() => void) | null;
+  private lastAuthProbe = Number.NEGATIVE_INFINITY;
+  private revoked = false;
   private state: ConnectionState = "offline";
 
   constructor(options: HttpDaemonClientOptions = {}) {
     this.baseUrl = (options.baseUrl ?? "").replace(/\/$/, "");
     this.token = options.token ?? null;
+    this.onUnauthorized = options.onUnauthorized ?? null;
     this.clientId = options.clientId ?? createId("web");
     this.clientVersion = options.clientVersion ?? `web/${__APP_VERSION__}`;
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
@@ -121,9 +146,25 @@ export class HttpDaemonClient implements DaemonClient {
       isFatalClose: isIncompatibleClose,
       onStateChange: (state, reconnected) => {
         this.state = state;
+        if (state === "reconnecting") this.probeAuth();
         for (const listener of this.connectionListeners) listener({ state, reconnected });
       },
     });
+  }
+
+  private probeAuth(): void {
+    if (!this.onUnauthorized || Date.now() - this.lastAuthProbe < AUTH_PROBE_MS) return;
+    this.lastAuthProbe = Date.now();
+    this.health().catch(() => {
+      // A 401 already went to onUnauthorized; anything else is the socket's to retry.
+    });
+  }
+
+  private unauthorized(status: number): void {
+    if (status !== 401 || !this.onUnauthorized || this.revoked) return;
+    this.revoked = true;
+    this.socket.close();
+    this.onUnauthorized();
   }
 
   get connectionState(): ConnectionState {
@@ -231,29 +272,8 @@ export class HttpDaemonClient implements DaemonClient {
     keepalive = false,
   ): Promise<T> {
     const response = await this.send_(method, path, body, keepalive);
-    const text = response.status === 204 ? "" : await response.text();
-    let data: unknown;
-    if (text) {
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = text;
-      }
-    }
-    if (!response.ok) {
-      // Only note conflicts carry `current`; other 409s (e.g. an approval already decided) don't.
-      if (response.status === 409 && isObject(data) && "current" in data) {
-        const current = isObject(data.current) ? (data.current as unknown as NoteResponse) : null;
-        throw new ConflictError(current, data);
-      }
-      const message =
-        (isObject(data) && typeof data.message === "string" && data.message) ||
-        (isObject(data) && typeof data.error === "string" && data.error) ||
-        response.statusText ||
-        `HTTP ${response.status}`;
-      throw new HttpError(response.status, message, data);
-    }
-    return data as T;
+    this.unauthorized(response.status);
+    return readResponse<T>(response);
   }
 
   health(): Promise<HealthResponse> {
@@ -403,6 +423,50 @@ export class HttpDaemonClient implements DaemonClient {
     return this.request("GET", API_ROUTES.syncStatus);
   }
 
+  getDevice(): Promise<DeviceSettingsResponse> {
+    return this.request("GET", API_ROUTES.device);
+  }
+
+  updateDevice(patch: DeviceSettingsPatch): Promise<DeviceSettingsResponse> {
+    return this.request("PATCH", API_ROUTES.device, patch);
+  }
+
+  setupSync(request: DeviceSyncSetupRequest): Promise<DeviceSettingsResponse> {
+    return this.request("PUT", API_ROUTES.deviceSync, request);
+  }
+
+  removeSync(): Promise<DeviceSettingsResponse> {
+    return this.request("DELETE", API_ROUTES.deviceSync);
+  }
+
+  createPairingCode(request: PairingCodeRequest = {}): Promise<PairingCodeResponse> {
+    return this.request("POST", API_ROUTES.pairingCodes, request);
+  }
+
+  listDevices(): Promise<PairedDevicesResponse> {
+    return this.request("GET", API_ROUTES.devices);
+  }
+
+  async revokeDevice(id: string): Promise<void> {
+    await this.request("DELETE", API_ROUTES.pairedDevice(id));
+  }
+
+  getMachine(): Promise<MachineStatusResponse> {
+    return this.request("GET", API_ROUTES.machine);
+  }
+
+  pairMachine(request: MachinePairRequest): Promise<MachineStatusResponse> {
+    return this.request("POST", API_ROUTES.machinePair, request);
+  }
+
+  checkMachine(): Promise<MachineStatusResponse> {
+    return this.request("POST", API_ROUTES.machineCheck);
+  }
+
+  forgetMachine(): Promise<MachineStatusResponse> {
+    return this.request("DELETE", API_ROUTES.machinePairing);
+  }
+
   getVault(): Promise<DeviceVaultResponse> {
     return this.request("GET", API_ROUTES.deviceVault);
   }
@@ -434,6 +498,7 @@ export class HttpDaemonClient implements DaemonClient {
 
   async getArtifact(threadId: string, artifactId: string): Promise<ArtifactContent> {
     const response = await this.send_("GET", API_ROUTES.artifact(threadId, artifactId));
+    this.unauthorized(response.status);
     if (!response.ok) throw new HttpError(response.status, response.statusText || "Artifact error");
     const blob = await response.blob();
     const mimeType =

@@ -318,10 +318,16 @@ public final class InMemoryDaemonClient: DaemonClient {
     }
   }
 
-  /// The always-on machine stops (or starts) answering, or refuses every pairing code. A change
-  /// of reachability is announced with `agent.status`.
-  public func simulateMachine(reachable: Bool? = nil, rejectsCodes: Bool? = nil) async {
-    _ = try? await call { $0.simulateMachine(reachable: reachable, rejectsCodes: rejectsCodes) }
+  /// The always-on machine stops (or starts) answering, refuses every pairing code, or no longer
+  /// accepts this device (it was revoked there; pairing again fixes it). A change of what the
+  /// relay reports is announced with `agent.status`.
+  public func simulateMachine(
+    reachable: Bool? = nil, rejectsCodes: Bool? = nil, acceptsThisDevice: Bool? = nil
+  ) async {
+    _ = try? await call {
+      $0.simulateMachine(
+        reachable: reachable, rejectsCodes: rejectsCodes, acceptsThisDevice: acceptsThisDevice)
+    }
   }
 
   /// This client is a paired device (the import and vault routes answer 403), or `DDL_VAULT`

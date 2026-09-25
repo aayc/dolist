@@ -365,6 +365,38 @@ real `NSEvent`s through `keyDown`:
   integration being released.
 - **Layout and performance**: headings and wrapped lines, and the numbers above.
 
+## Saving and merging (the app)
+
+The editor never saves: the app's `NotesStore` does, with the same algorithm as the web app's
+`NotesController` (described in `packages/editor/README.md`).
+
+- **Per note** it knows the server text and version it last saw, and whether there are unsaved
+  edits (a counter bumped by every `editorTextDidChange`, against the last one the daemon
+  acknowledged). `setText` and `applyRemoteChanges` never report a change, so only the user's own
+  edits count. The editor's text is read only when a save or a merge happens.
+- **Saving:** 300 ms after the last edit (sooner on ⌘S, `:w`, switching notes, the window
+  losing focus) it writes the text with `baseVersion` = the version it last saw, one write in
+  flight per note. A note without unsaved edits never writes.
+- **Someone else's change:** without unsaved edits, the active note gets `setText` (one minimal
+  change) and an inactive note drops its snapshot. With unsaved edits, `TextMerge` merges them
+  (base = the server text the edits started from), the editor gets only the other side's changes
+  through `applyRemoteChanges`, and the result is saved on top of the new version; a 409 merges the
+  same way. Like `mergeText`, `TextMerge` splits a replaced block into the lines edited and the
+  lines added next to them before merging, so an agent line added under a task survives an edit of
+  that task. When both changed the same lines, the user's version of those lines wins and the other
+  version is saved as `<name> (conflict).md`.
+- **Unsaved text** captured from the editor (when a save starts, or merged into a note that isn't
+  shown) exists only while there are unsaved edits. A note shown without a snapshot (a remote
+  change dropped it) shows that text, else the server's, never an older copy.
+
+**The guarantee:** an editor without unsaved typing never writes text the vault didn't have, and a
+merge never brings back a line deleted elsewhere unless the user typed it. `TextMergeTests`
+(properties over a seeded generator, and the vectors shared with `@ddl/core`), `RemoteDeleteTests`
+and `RemoteDeleteModelTests` (seeded interleavings of typing, tab switches, focus loss, agent lines,
+an API client deleting lines and events in any order) pin it. One difference from the web editor:
+remote changes are an undoable step here, so ⌘Z (or `u`) right after one takes it back, like any
+edit, and saves the result.
+
 ## Integration notes
 
 - Embed `view` (or `MarkdownEditorView`) and keep one controller per editor pane; switch

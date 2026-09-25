@@ -117,8 +117,8 @@ public struct AgentPanel: View {
         OrchestratorLocationBar(
           store: store, location: location, runHere: shortcuts.runHere, actions: placementActions)
       }
-      if let readOnly = store.readOnly {
-        ReadOnlyBanner(readOnly: readOnly)
+      if let readOnly = store.readOnly, let banner = readOnly.banner {
+        ReadOnlyBanner(kind: readOnly.kind, text: banner)
           .transition(.opacity)
       }
       Group {

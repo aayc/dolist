@@ -10,6 +10,11 @@ export type SettingsSection =
   | "daily"
   | "vault"
   | "agent"
+  | "location"
+  | "machine"
+  | "sync"
+  | "devices"
+  | "remote"
   | "computer"
   | "connectors"
   | "about";

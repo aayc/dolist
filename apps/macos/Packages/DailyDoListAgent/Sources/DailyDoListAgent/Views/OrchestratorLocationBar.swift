@@ -45,13 +45,18 @@ struct OrchestratorLocationBar: View {
             Button {
               open(setUp)
             } label: {
-              Text(location.heldHere == nil ? "Pair…" : "Set Up…")
+              Text(setUpTitle)
                 .font(.caption.weight(.medium))
                 .foregroundStyle(AgentTheme.accent)
             }
             .buttonStyle(ChromeButtonStyle(horizontalPadding: 4, verticalPadding: 1))
             .fixedSize()
-            .tooltip(setUp == .sync ? "Set up sync" : "Set up the always-on machine")
+            .tooltip(
+              setUp == .sync
+                ? "Set up sync"
+                : location.pairsAgain
+                  ? "Pair this device with the always-on machine again"
+                  : "Set up the always-on machine")
           }
         }
         .transition(.opacity)
@@ -73,6 +78,11 @@ struct OrchestratorLocationBar: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     .overlay(alignment: .bottom) { AgentHairline() }
     .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: location)
+  }
+
+  private var setUpTitle: String {
+    if location.heldHere != nil { return "Set Up…" }
+    return location.pairsAgain ? "Pair Again…" : "Pair…"
   }
 
   private func controls(labeled: Bool) -> some View {
@@ -113,16 +123,17 @@ struct OrchestratorLocationBar: View {
   }
 }
 
-/// Over the agent panel while its work is read-only here: what that means, and where to act.
+/// Over the agent panel while its work is read-only here: why, and that it's the synced copy.
 struct ReadOnlyBanner: View {
-  let readOnly: AgentReadOnly
+  let kind: AgentReadOnly.Kind
+  let text: String
 
   var body: some View {
     HStack(alignment: .firstTextBaseline, spacing: 8) {
-      Image(systemName: "eye")
+      Image(systemName: kind == .elsewhere || kind == .idle ? "eye" : "icloud.slash")
         .font(.system(size: 11, weight: .semibold))
         .foregroundStyle(AgentTheme.info)
-      Text(readOnly.banner)
+      Text(text)
         .font(.caption)
         .foregroundStyle(AgentTheme.text)
         .fixedSize(horizontal: false, vertical: true)

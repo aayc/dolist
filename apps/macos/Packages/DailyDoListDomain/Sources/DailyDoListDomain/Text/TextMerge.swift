@@ -13,7 +13,8 @@ public struct LineHunk: Hashable, Sendable {
 
 public struct MergeResult: Hashable, Sendable {
   public var text: String
-  /// Both sides changed the same lines; `text` then keeps the local version of those lines.
+  /// Both sides changed the same lines. `text` then has the user's version of the lines the user
+  /// changed there, and none of the other lines of that block (the remote text has them).
   public var conflict: Bool
 
   public init(text: String, conflict: Bool) {
@@ -25,13 +26,20 @@ public struct MergeResult: Hashable, Sendable {
 /// Line-based three-way merge (port of @ddl/core `merge.ts`), for a note changed by the user
 /// (local) and by someone else (remote, e.g. the agent) since the version both started from
 /// (base). Edits to different lines merge; both sides inserting at the same place keep both (local
-/// first); only changes to the same lines are a conflict.
+/// first); lines one side adds inside a block the other side changed go after that block. Only
+/// changes to the same lines are a conflict, and even then a line only the other side changed or
+/// removed never comes back: the merge never reintroduces text deleted elsewhere unless the user
+/// typed it.
 ///
 /// Lines split on `\n` only and compare by UTF-16 code units, like JavaScript's `===` (Swift's
 /// `==` would equate NFC and NFD spellings).
 public enum TextMerge {
   /// Past this many edit steps the middle of two texts is treated as one replaced block.
   public static let maxEditDistance = 2_000
+  /// Replaced blocks with more (old × new) line pairs than this aren't split line by line.
+  public static let maxSplitPairs = 10_000
+  /// How similar (Dice, `diceSimilarity`) a new line must be to an old one to be that line edited.
+  public static let editedLineSimilarity = 0.5
 
   /// `diffLines`: the hunks that turn `a` into `b` (Myers' O((N+M)·D) diff after trimming common
   /// ends).
@@ -53,10 +61,14 @@ public enum TextMerge {
     let baseLines = table.intern(lines(base))
     let localLines = table.intern(lines(local))
     let remoteLines = table.intern(lines(remote))
+    func changes(_ side: [Int], isLocal: Bool) -> [Side] {
+      diff(baseLines, side)
+        .flatMap { splitReplacement($0, base: baseLines, new: side, strings: table.strings) }
+        .map { Side(hunk: $0, lines: side, isLocal: isLocal) }
+    }
     // JavaScript's sort is stable: at equal bounds local hunks (listed first) come first.
     let sides =
-      (diff(baseLines, localLines).map { Side(hunk: $0, lines: localLines, isLocal: true) }
-      + diff(baseLines, remoteLines).map { Side(hunk: $0, lines: remoteLines, isLocal: false) })
+      (changes(localLines, isLocal: true) + changes(remoteLines, isLocal: false))
       .enumerated()
       .sorted {
         ($0.element.hunk.start, $0.element.hunk.end, $0.offset) < (
@@ -97,9 +109,17 @@ public enum TextMerge {
           out += remoteVersion
         } else if start == end {
           out += localVersion + remoteVersion
+        } else if mine.allSatisfy(\.isInsertion) {
+          out += remoteVersion + mine.flatMap { $0.lines[$0.hunk.lines] }
+        } else if theirs.allSatisfy(\.isInsertion) {
+          out += localVersion + theirs.flatMap { $0.lines[$0.hunk.lines] }
         } else {
+          // Every base line of the block is covered by a hunk, so the lines no local hunk covers
+          // were changed or removed by the other side: keep only what the user wrote, then the
+          // lines the other side added.
           conflict = true
-          out += localVersion
+          out += mine.flatMap { $0.lines[$0.hunk.lines] }
+          out += theirs.filter(\.isInsertion).flatMap { $0.lines[$0.hunk.lines] }
         }
       }
       position = end
@@ -141,6 +161,7 @@ public enum TextMerge {
     /// The side's lines (`hunk.lines` indexes them).
     var lines: [Int]
     var isLocal: Bool
+    var isInsertion: Bool { hunk.start == hunk.end }
   }
 
   /// Lines as small integers, equal exactly when the lines are equal code unit for code unit.
@@ -164,6 +185,80 @@ public enum TextMerge {
     let lower = max(0, min(from, lines.count))
     let upper = max(lower, min(to, lines.count))
     return lines[lower..<upper]
+  }
+
+  /// `editWeight`: how likely `after` is `before` edited, for pairing lines inside a replaced
+  /// block: their Dice similarity when at least `editedLineSimilarity`, that threshold when one
+  /// extends the other (typed on, or cut short, at the end), else 0 (not a pair).
+  private static func editWeight(_ before: TextFeatures, _ after: TextFeatures) -> Double {
+    let similarity = before.similarity(after)
+    if similarity >= editedLineSimilarity { return similarity }
+    return before.extends(after) ? editedLineSimilarity : 0
+  }
+
+  /// `splitReplacement`: a diff reports a line edited next to lines added or removed as one
+  /// replaced block, so an edit of that line by the other side would swallow the added lines.
+  /// This splits a replaced block into the lines it edited, the lines it inserted and the lines it
+  /// deleted: old and new lines are paired in order, most similar first, where the new line can be
+  /// the old one edited (`editWeight`). Blank lines hold nothing to edit, so new lines in their
+  /// place are an insertion and a deletion.
+  private static func splitReplacement(
+    _ hunk: IDHunk, base: [Int], new: [Int], strings: [String]
+  ) -> [IDHunk] {
+    let rows = hunk.end - hunk.start
+    let cols = hunk.lines.count
+    if rows == 0 || cols == 0 || rows * cols > maxSplitPairs { return [hunk] }
+    let old = (hunk.start..<hunk.end).map { TextFeatures(strings[base[$0]]) }
+    let added = hunk.lines.map { TextFeatures(strings[new[$0]]) }
+    // score[i][j]: the best total weight pairing the first i old lines with the first j new ones.
+    var weights = [[Double]](repeating: [Double](repeating: 0, count: cols), count: rows)
+    var score = [[Double]](repeating: [Double](repeating: 0, count: cols + 1), count: rows + 1)
+    for i in 1...rows {
+      for j in 1...cols {
+        let w = editWeight(old[i - 1], added[j - 1])
+        weights[i - 1][j - 1] = w
+        var best = max(score[i - 1][j], score[i][j - 1])
+        if w > 0 { best = max(best, score[i - 1][j - 1] + w) }
+        score[i][j] = best
+      }
+    }
+    var pairs: [(Int, Int)] = []
+    var i = rows
+    var j = cols
+    while i > 0 && j > 0 {
+      let w = weights[i - 1][j - 1]
+      if w > 0 && score[i][j] == score[i - 1][j - 1] + w {
+        i -= 1
+        j -= 1
+        pairs.append((i, j))
+      } else if score[i][j] == score[i - 1][j] {
+        i -= 1
+      } else {
+        j -= 1
+      }
+    }
+    let first = hunk.lines.lowerBound
+    var out: [IDHunk] = []
+    func push(_ start: Int, _ end: Int, _ lines: Range<Int>) {
+      if start < end, !lines.isEmpty, (start..<end).allSatisfy({ strings[base[$0]].isEmpty }) {
+        out.append(IDHunk(start: start, end: start, lines: lines))
+        out.append(IDHunk(start: start, end: end, lines: lines.lowerBound..<lines.lowerBound))
+      } else if start < end || !lines.isEmpty {
+        out.append(IDHunk(start: start, end: end, lines: lines))
+      }
+    }
+    var at = 0
+    var next = 0
+    for (pi, pj) in pairs.reversed() {
+      push(hunk.start + at, hunk.start + pi, (first + next)..<(first + pj))
+      if new[first + pj] != base[hunk.start + pi] {
+        push(hunk.start + pi, hunk.start + pi + 1, (first + pj)..<(first + pj + 1))
+      }
+      at = pi + 1
+      next = pj + 1
+    }
+    push(hunk.start + at, hunk.end, (first + next)..<hunk.lines.upperBound)
+    return out
   }
 
   /// `applyHunks`: base lines `start..<end` with one side's hunks applied.

@@ -1,0 +1,60 @@
+/* ── The pairing screen of a remote browser ── */
+
+.pairing-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px 16px;
+  overflow-y: auto;
+  background: var(--ddl-bg);
+}
+
+.pairing-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 400px;
+  padding: 28px;
+  border: 1px solid var(--ddl-border);
+  border-radius: var(--radius-l);
+  background: var(--ddl-bg-secondary);
+  box-shadow: var(--ddl-shadow-small);
+}
+
+.pairing-logo {
+  width: 40px;
+  height: 40px;
+}
+
+.pairing-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.pairing-lead,
+.pairing-hint {
+  margin: 0;
+  font-size: 13px;
+}
+
+.pairing-hint {
+  color: var(--ddl-text-muted);
+}
+
+.pairing-card .pairing-code-input {
+  height: 40px;
+  font-size: 18px;
+  text-align: center;
+}
+
+.pairing-error {
+  margin: 0;
+  font-size: 13px;
+}
+
+.pairing-submit {
+  height: 36px;
+}

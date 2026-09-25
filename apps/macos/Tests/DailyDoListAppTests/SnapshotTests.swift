@@ -302,6 +302,13 @@ struct SnapshotTests {
       await client.simulateMachine(reachable: false)
       await model.remote.checkMachine()
     }
+    var relayed = InMemoryDaemonClient.Remote.alwaysOn
+    relayed.placement = .alwaysOnMachine
+    let revoked: Prepare = { client, model in
+      await client.simulateMachine(acceptsThisDevice: false)
+      await model.agent?.refresh()
+      await model.remote.checkMachine()
+    }
     var locked = InMemoryDaemonClient.Remote.host
     locked.lockedByEnv = [.placement, .remoteHosts, .sync]
     let paired: Prepare = { client, model in
@@ -322,6 +329,7 @@ struct SnapshotTests {
       ("settings-always-on-machine", .alwaysOn, .alwaysOnMachine, nothing),
       ("settings-always-on-machine-pair", .standalone, .alwaysOnMachine, nothing),
       ("settings-always-on-machine-unreachable", .alwaysOn, .alwaysOnMachine, unreachable),
+      ("settings-always-on-machine-revoked", relayed, .alwaysOnMachine, revoked),
       ("settings-always-on-sync", .alwaysOn, .sync, nothing),
       ("settings-always-on-sync-off", .standalone, .sync, nothing),
       ("settings-always-on-sync-locked", locked, .sync, nothing),

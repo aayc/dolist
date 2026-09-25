@@ -8,13 +8,21 @@ import type {
   ConnectorStatus,
   CreateRoutineRequest,
   DailyNoteResponse,
+  DeviceSettingsPatch,
+  DeviceSettingsResponse,
+  DeviceSyncSetupRequest,
   DeviceVaultResponse,
   HealthResponse,
+  MachinePairRequest,
+  MachineStatusResponse,
   NoteResponse,
   ObsidianImportJobResponse,
   ObsidianImportPreview,
   ObsidianImportRequest,
   ObsidianImportStatusResponse,
+  PairedDevicesResponse,
+  PairingCodeRequest,
+  PairingCodeResponse,
   RoutineListResponse,
   RoutineResponse,
   RoutineRunResponse,
@@ -65,6 +73,8 @@ export interface ThreadFilter {
  * Everything the UI needs from the daemon: REST calls (`/api/*`), the server event stream (`/ws`)
  * and light client signals. Implemented by `HttpDaemonClient` and the in-browser `MockDaemonClient`.
  * Writes are tagged with `clientId` so the UI can ignore the echo of its own `vault.changed` events.
+ * A client authenticating with a device cookie reports a 401 (the device was revoked) through its
+ * `onUnauthorized` option: the page goes back to pairing.
  */
 export interface DaemonClient {
   readonly kind: ClientKind;
@@ -131,6 +141,23 @@ export interface DaemonClient {
   resumeRoutine(id: string): Promise<RoutineResponse>;
 
   getSyncStatus(): Promise<SyncStatusResponse>;
+  /** This daemon's device-local settings: name, placement, remote hosts, sync. */
+  getDevice(): Promise<DeviceSettingsResponse>;
+  /** 409 `locked_by_env`: an environment variable sets that field. */
+  updateDevice(patch: DeviceSettingsPatch): Promise<DeviceSettingsResponse>;
+  /** Syncs with the sync service; the token is written, never returned (omit it to keep it). */
+  setupSync(request: DeviceSyncSetupRequest): Promise<DeviceSettingsResponse>;
+  removeSync(): Promise<DeviceSettingsResponse>;
+  /** 429 `rate_limited` when too many codes are outstanding. */
+  createPairingCode(request?: PairingCodeRequest): Promise<PairingCodeResponse>;
+  listDevices(): Promise<PairedDevicesResponse>;
+  revokeDevice(id: string): Promise<void>;
+  getMachine(): Promise<MachineStatusResponse>;
+  /** 401 `pairing_rejected`, 429 `rate_limited`, 502 `machine_unreachable`. */
+  pairMachine(request: MachinePairRequest): Promise<MachineStatusResponse>;
+  checkMachine(): Promise<MachineStatusResponse>;
+  /** Drops this device's credential for the machine. */
+  forgetMachine(): Promise<MachineStatusResponse>;
 
   // This machine's vault and importing from Obsidian: a paired device gets 403 `forbidden_device`.
   /** The vault the daemon serves, and whether `DDL_VAULT` fixes it. */

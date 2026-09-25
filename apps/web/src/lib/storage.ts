@@ -40,6 +40,12 @@ export const STORAGE_KEYS = {
   layout: "ddl-layout",
   perf: "ddl-perf",
   mockSettings: "ddl-mock-settings",
+  /** The mock daemon's device-local settings (placement, remote hosts, sync, the machine link). */
+  mockDevice: "ddl-mock-device",
+  /** The mock daemon's pairing codes and paired devices. */
+  mockPairing: "ddl-mock-pairing",
+  /** The paired mock device this browser is (the mock's stand-in for the HttpOnly cookie). */
+  mockDeviceCookie: "ddl-mock-device-cookie",
   /** The mock daemon's vault: the one it serves, and the vaults imported from Obsidian. */
   mockVault: "ddl-mock-vault",
 } as const;

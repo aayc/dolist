@@ -35,7 +35,42 @@ func connectedClient(_ fixture: DaemonFixture) async throws -> (HTTPDaemonClient
 /// A unique suffix so notes of different runs and tests never collide.
 func unique() -> String { String(UUID().uuidString.prefix(8)) }
 
+/// Appends `- [ ] task` to today's daily note (created if needed), the only note the agent watches
+/// by default; returns the note's path.
+@MainActor
+func addTask(_ task: String, with client: HTTPDaemonClient) async throws -> String {
+  let note = try await client.dailyNote("today", create: true)
+  for _ in 0..<5 {
+    let current = try await client.readNote(note.path)
+    let body =
+      current.content.isEmpty || current.content.hasSuffix("\n")
+      ? current.content : current.content + "\n"
+    do {
+      _ = try await client.writeNote(
+        note.path, content: body + "- [ ] \(task)\n", baseVersion: .match(current.version))
+      return note.path
+    } catch DaemonClientError.conflict {
+      continue
+    }
+  }
+  throw FixtureError("couldn't append “\(task)” to \(note.path)")
+}
+
 extension EventLog {
+  /// Waits for the task's pending approval.
+  @MainActor
+  func pendingApproval(
+    for record: TaskAgentRecord, from: Int, timeout: Duration = .seconds(60)
+  ) async throws -> ApprovalRequest {
+    try await event(from: from, timeout: timeout, "a pending approval for “\(record.text)”") {
+      event -> ApprovalRequest? in
+      guard case .approvalUpsert(let approval) = event, approval.taskId == record.taskId,
+        approval.status == .pending
+      else { return nil }
+      return approval
+    }
+  }
+
   /// The first agent record for the task with this text (from `task.record` or `task.records`),
   /// optionally in one of `statuses`.
   @MainActor

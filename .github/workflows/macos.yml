@@ -10,6 +10,7 @@ on:
     paths:
       - "apps/macos/**"
       - "apps/daemon/**"
+      - "apps/sync/**"
       - "packages/core/**"
       - "packages/contract/**"
       - "packages/agent/**"
@@ -26,6 +27,7 @@ on:
     paths:
       - "apps/macos/**"
       - "apps/daemon/**"
+      - "apps/sync/**"
       - "packages/core/**"
       - "packages/contract/**"
       - "packages/agent/**"
@@ -75,8 +77,9 @@ jobs:
       - name: Swift format (swift-format lint, strict)
         run: node scripts/lint.mjs --all --only swift
 
-      - name: Build the daemon
-        run: pnpm --filter @ddl/daemon build
+      - name: Build the daemon and the sync service
+        # The integration tests run two synced daemons through the real sync service.
+        run: pnpm --filter @ddl/daemon --filter @ddl/sync build
 
       - name: Swift package tests
         run: apps/macos/scripts/test.sh

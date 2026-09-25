@@ -25,13 +25,43 @@ class World {
   readonly history: string[] = [];
   offline = false;
   remoteChanges = 0;
+  /**
+   * Failures raised inside the controller's async work (its hooks, promises nobody awaits): thrown
+   * there, they would become unhandled rejections that fast-check never sees.
+   */
+  readonly failures: unknown[] = [];
   private versions = 0;
+
+  /** Runs a model check from inside the controller, recording a failure instead of throwing. */
+  check(body: () => void): void {
+    try {
+      body();
+    } catch (error) {
+      this.failures.push(error);
+    }
+  }
+
+  /** Starts controller work nobody awaits, recording its failure. */
+  track(work: Promise<unknown>): void {
+    work.catch((error: unknown) => this.failures.push(error));
+  }
+
+  /** Fails the property with the first failure recorded since the run started. */
+  rethrow(): void {
+    if (this.failures.length > 0) throw this.failures[0];
+  }
 
   write(path: string, content: string): string {
     const version = `v${++this.versions}`;
     this.notes.set(path, { content, version });
     if (path === PATH) this.history.push(content);
     return version;
+  }
+
+  /** Whether `word` was ever saved: in a version of the note or a conflict copy. */
+  saved(word: string): boolean {
+    const has = (text: string) => text.split(/\s+/).includes(word);
+    return this.history.some(has) || [...this.copies()].some(has);
   }
 
   /** Contents preserved in conflict copies. */
@@ -51,7 +81,7 @@ class World {
     const current = this.notes.get(PATH);
     const version = this.write(PATH, `${current?.content ?? ""} ${token}`);
     this.remoteChanges++;
-    for (const client of this.clients) void client.notes.handleRemoteChange(PATH, version);
+    for (const client of this.clients) this.track(client.notes.handleRemoteChange(PATH, version));
   }
 
   /** The agent adds a line of its own at the end of the note (the user types on the first). */
@@ -60,13 +90,13 @@ class World {
     if (!current) return;
     const version = this.write(PATH, `${current.content}\n- ${token} %%agent%%`);
     this.remoteChanges++;
-    for (const client of this.clients) void client.notes.handleRemoteChange(PATH, version);
+    for (const client of this.clients) this.track(client.notes.handleRemoteChange(PATH, version));
   }
 
   remoteDelete(): void {
     if (!this.notes.delete(PATH)) return;
     this.remoteChanges++;
-    for (const client of this.clients) client.notes.handleRemoteDelete(PATH);
+    for (const client of this.clients) this.check(() => client.notes.handleRemoteDelete(PATH));
   }
 }
 
@@ -79,7 +109,10 @@ class Client implements NotesClient {
   cacheDropped = false;
   forgotten = false;
   failNextWrite = false;
-  /** Contents this client wrote, or had applied to its editor: overwriting those is informed. */
+  /**
+   * Contents this client wrote or showed in its editor (applied, merged, or typed): overwriting
+   * those is informed.
+   */
   readonly seen = new Set<string>();
   /** The server text most recently delivered to this client (a read, or a 409's current text). */
   private delivered: string | null = null;
@@ -95,18 +128,20 @@ class Client implements NotesClient {
       hooks: {
         readLive: (path) => (path === PATH && this.active && !this.forgotten ? this.live : null),
         applyRemote: (_path, content) => {
-          this.expectSaved("replacing the editor content with a remote version");
+          world.check(() => this.expectSaved("replacing the editor content with a remote version"));
           this.seen.add(content);
           if (this.active) this.live = content;
           else this.cacheDropped = true;
         },
         applyMerge: (_path, content) => {
+          // A merge may drop what the other side changed or removed, which was saved, but never
+          // the user's unsaved typing: every word it drops was saved somewhere (words are unique).
           const shown = this.shown();
-          const kept = shown.split(/\s+/).every((word) => content.split(/\s+/).includes(word));
-          expect(
-            kept || this.world.history.includes(shown),
-            `client ${this.id} merged away ${JSON.stringify(shown)}`,
-          ).toBe(true);
+          const kept = new Set(content.split(/\s+/));
+          const lost = shown.split(/\s+/).filter((word) => !kept.has(word) && !world.saved(word));
+          world.check(() =>
+            expect(lost, `client ${this.id} merged away ${JSON.stringify(shown)}`).toEqual([]),
+          );
           // The merge was built from the server text just delivered: that text was seen.
           if (this.delivered !== null) this.seen.add(this.delivered);
           this.live = content;
@@ -116,7 +151,7 @@ class Client implements NotesClient {
         onConflictCopy: () => {},
         onRemoteDelete: (_path, restored) => {
           if (restored) return;
-          this.expectSaved("dropping a note deleted elsewhere");
+          world.check(() => this.expectSaved("dropping a note deleted elsewhere"));
           this.forgotten = true;
         },
         onSaveError: () => {},
@@ -179,7 +214,9 @@ class Client implements NotesClient {
           this.seen.add(body.content);
           resolve({ path, version, mtime: 1 });
           for (const other of this.world.clients) {
-            if (other !== this && path === PATH) void other.notes.handleRemoteChange(path, version);
+            if (other !== this && path === PATH) {
+              this.world.track(other.notes.handleRemoteChange(path, version));
+            }
           }
         },
       });
@@ -200,6 +237,7 @@ class Client implements NotesClient {
     const words = first.split(" ");
     const line = remove && words.length > 1 ? words.slice(0, -1).join(" ") : `${first} ${token}`;
     this.live = [line, ...rest].join("\n");
+    this.seen.add(this.live);
     this.notes.markDirty(PATH);
   }
 
@@ -207,20 +245,20 @@ class Client implements NotesClient {
   toggleActive(): void {
     if (this.forgotten) return;
     if (this.active) {
-      void this.notes.flush(PATH);
+      this.world.track(this.notes.flush(PATH));
       this.active = false;
       return;
     }
     this.active = true;
     if (this.cacheDropped) {
       this.cacheDropped = false;
-      this.live = this.notes.serverContent(PATH) ?? this.live;
+      this.live = this.notes.content(PATH) ?? this.live;
     }
   }
 
   /** What the user sees for the note (or would see when switching back). */
   shown(): string {
-    return this.cacheDropped ? (this.notes.serverContent(PATH) ?? this.live) : this.live;
+    return this.cacheDropped ? (this.notes.content(PATH) ?? this.live) : this.live;
   }
 }
 
@@ -286,7 +324,7 @@ async function run(ops: readonly Op[], clients: number): Promise<World> {
         if (world.queue.length > 0) world.deliver(o.index);
         break;
       case "flush":
-        if (!c.forgotten) void c.notes.flush(PATH);
+        if (!c.forgotten) world.track(c.notes.flush(PATH));
         break;
       case "tab":
         c.toggleActive();
@@ -298,7 +336,7 @@ async function run(ops: readonly Op[], clients: number): Promise<World> {
         world.offline = o.on;
         break;
       case "resync":
-        if (!world.offline && !c.forgotten) void c.notes.handleRemoteChange(PATH);
+        if (!world.offline && !c.forgotten) world.track(c.notes.handleRemoteChange(PATH));
         break;
       case "remoteEdit":
         world.remoteEdit(`r${tokens++}`);
@@ -311,6 +349,7 @@ async function run(ops: readonly Op[], clients: number): Promise<World> {
         break;
     }
     await flushPromises();
+    world.rethrow();
   }
   // Back online: deliver everything and let retries/debounces run until nothing is pending.
   world.offline = false;
@@ -318,9 +357,12 @@ async function run(ops: readonly Op[], clients: number): Promise<World> {
     c.failNextWrite = false;
     if (!c.active) c.toggleActive();
   }
-  for (const c of world.clients) if (!c.forgotten) void c.notes.handleRemoteChange(PATH);
+  for (const c of world.clients) {
+    if (!c.forgotten) world.track(c.notes.handleRemoteChange(PATH));
+  }
   for (let i = 0; i < 400; i++) {
     await flushPromises();
+    world.rethrow();
     if (world.queue.length > 0) {
       world.deliver(0);
       continue;
@@ -329,6 +371,7 @@ async function run(ops: readonly Op[], clients: number): Promise<World> {
     if (!busy && vi.getTimerCount() === 0) break;
     await vi.advanceTimersByTimeAsync(31_000);
   }
+  world.rethrow();
   return world;
 }
 

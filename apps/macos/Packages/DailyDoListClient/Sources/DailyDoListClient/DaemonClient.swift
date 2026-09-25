@@ -81,11 +81,11 @@ public protocol DaemonClient: AnyObject, Sendable {
   func setUpSync(_ request: DeviceSyncSetupRequest) async throws -> DeviceSettingsResponse
   /// Stops syncing with the sync service and removes the saved token. 409 `locked_by_env`.
   func turnOffSync() async throws -> DeviceSettingsResponse
-  /// A single-use pairing code for a new device. 429 `rate_limited` with too many outstanding.
+  /// A single-use pairing code for a new device. Throws `.rateLimited` with too many waiting.
   func createPairingCode(_ request: PairingCodeRequest) async throws -> PairingCodeResponse
   /// Exchanges a pairing code for a device credential, without sending the token (the code is
   /// the credential). Throws `.pairingRejected` for a wrong, expired or used code, and
-  /// `.http(status: 429, …)` after too many attempts.
+  /// `.rateLimited` (with the daemon's `Retry-After`) after too many attempts.
   func pair(_ request: PairRequest) async throws -> PairResponse
   /// The devices paired with this daemon.
   func pairedDevices() async throws -> [PairedDevice]
@@ -97,7 +97,7 @@ public protocol DaemonClient: AnyObject, Sendable {
   func machineStatus() async throws -> MachineStatusResponse
   /// Pairs this device with the always-on machine using a code the machine issued, and makes it
   /// the vault's always-on machine. Throws `.pairingRejected` when the machine refuses the code,
-  /// 429 `rate_limited`, 502 `machine_unreachable`.
+  /// `.rateLimited` when it refuses more attempts, and 502 `machine_unreachable`.
   func pairMachine(_ request: MachinePairRequest) async throws -> MachineStatusResponse
   /// Checks the always-on machine now (reachability, version, agent, readiness).
   func checkMachine() async throws -> MachineStatusResponse
