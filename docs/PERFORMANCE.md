@@ -48,6 +48,11 @@ What keeps it fast:
   (~150 ms, imported where Chrome launches) live outside `main.js`. `apps/daemon/build.mjs` fails
   the build if anything but the Pi harness chunk imports them statically. Never re-export them
   from a package index.
+- **Nothing slow runs before the daemon listens.** The agent harness check (the Cursor CLI's
+  `agent status`, ~0.6 s warm and over 1 s cold; an OpenRouter key check over the network) runs
+  in the background: `createAgentRuntime` returns without it, and `start()`, after `listen`,
+  waits for it before watching notes. Awaiting it in `init` once put the macOS app's warm launch
+  at ~2 s.
 - **The app remembers where Node is.** Finding it means running the login shell and
   `node --version` (~300 ms); `$DDL_HOME/node-location.json` skips that while the binary is
   unchanged and is refreshed in the background after each launch.

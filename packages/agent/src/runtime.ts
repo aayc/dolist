@@ -173,6 +173,8 @@ class Runtime implements AgentRuntime {
   private turnProblem: string | undefined;
   private started = false;
   private stopped = false;
+  /** The first harness setup, which `start()` waits for (see `init`). */
+  private harnessReady: Promise<void> = Promise.resolve();
   private lastWarmUp = Number.NEGATIVE_INFINITY;
   private recoveredTriage = false;
   private statusQueued = false;
@@ -310,10 +312,16 @@ class Runtime implements AgentRuntime {
       return;
     }
     this.setupSafety();
-    await this.setupHarness();
-    if (this.mode === "live") await this.setupWebTools();
-    const problem = this.problem ?? this.harnessProblem;
-    if (problem) this.logger.warn("Agent runtime degraded", { problem });
+    // Checking the harness can take seconds (the Cursor CLI's `agent status`, an OpenRouter key
+    // check), and the daemon listens only once the runtime exists: it runs meanwhile, and
+    // `start()` waits for it before watching notes.
+    this.harnessReady = this.setupHarness()
+      .then(async () => {
+        if (this.mode === "live") await this.setupWebTools();
+        const problem = this.problem ?? this.harnessProblem;
+        if (problem) this.logger.warn("Agent runtime degraded", { problem });
+      })
+      .catch((error: unknown) => this.logError("setupHarness", error));
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -321,6 +329,8 @@ class Runtime implements AgentRuntime {
   async start(): Promise<void> {
     if (this.started || this.stopped) return;
     this.started = true;
+    await this.harnessReady;
+    if (this.stopped) return;
     if (this.canRun() && this.enabled) await this.startWatching();
     this.queueStatus();
   }
@@ -618,7 +628,12 @@ class Runtime implements AgentRuntime {
       });
       return;
     }
+    const setup = ++this.harnessSetups;
     const result = await setupHarness(this.settings.agent.harness, this.harnessContext());
+    if (setup !== this.harnessSetups || this.stopped) {
+      if ("harness" in result) await result.harness.dispose?.();
+      return;
+    }
     if ("problem" in result) this.harnessProblem = result.problem;
     else this.harness = result.harness;
   }

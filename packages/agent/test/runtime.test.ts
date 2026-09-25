@@ -1,5 +1,7 @@
+import { deferred } from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { CursorCliStatus } from "../src/harness/cursor/cli";
 import { ScriptedHarness } from "../src/harness/scripted";
 import { createAgentRuntime, UnknownThreadError } from "../src/runtime";
 import { createFakeExecution, fakeSafety, testSettings } from "./helpers/fakes";
@@ -365,5 +367,27 @@ describe("AgentRuntime warm-up", () => {
     const t = await runtime({ harness, settings: { agent: { enabled: false } } });
     t.runtime.noteEditorActivity(TODAY, 0);
     expect(prewarm).not.toHaveBeenCalled();
+  });
+});
+
+describe("AgentRuntime startup", () => {
+  it("is created without waiting for the harness check, which start() waits for", async () => {
+    const check = deferred<CursorCliStatus>();
+    // Resolving while the check is pending is the point: the daemon listens once this returns.
+    const t = await runtime({
+      mode: "live",
+      settings: { agent: { harness: "cursor" } },
+      overrides: { checkCursorCli: () => check.promise },
+      start: false,
+    });
+    let started = false;
+    const start = t.runtime.start().then(() => {
+      started = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(started).toBe(false);
+    check.resolve({ state: "signed_out", binary: "/usr/local/bin/agent" });
+    await start;
+    expect(t.runtime.status().problem).toBeTruthy();
   });
 });
