@@ -38,12 +38,16 @@ struct InMemoryRemoteTests {
 
   // MARK: - Placement
 
-  @Test func withoutAMachineTheAgentIsHeldHereWhateverIsStored() async throws {
+  /// Like the daemon: without sync it's `no_sync` (checked first), with sync and no machine
+  /// `no_machine`; a standalone daemon runs its own agent, never as the always-on machine.
+  @Test func withoutSyncOrAMachineTheAgentIsHeldHereWhateverIsStored() async throws {
     let client = Self.client()
     var placement = try await Self.placement(client)
-    #expect(placement.placement == .thisDevice && placement.heldHere == .noMachine)
+    #expect(placement.placement == .thisDevice && placement.heldHere == .noSync)
     #expect(placement.runsOn?.thisDevice == true && placement.relay == .off)
+    #expect(placement.runsOn?.alwaysOnMachine == false)
     #expect(placement.note == nil)
+    #expect(try await client.agentStatus().problem == nil)
     let readiness = try #require(try await client.agentStatus().readiness)
     #expect(readiness.harness.knownKind == .pi && readiness.harness.ready)
     #expect(readiness.connectors.configured == 3 && readiness.connectors.connected == 2)
@@ -53,13 +57,18 @@ struct InMemoryRemoteTests {
       DeviceSettingsPatch(placement: .alwaysOnMachine))
     #expect(device.placement == .alwaysOnMachine)
     placement = try await Self.placement(client)
-    #expect(placement.placement == .alwaysOnMachine && placement.heldHere == .noMachine)
+    #expect(placement.placement == .alwaysOnMachine && placement.heldHere == .noSync)
     #expect(placement.runsOn?.thisDevice == true && placement.relay == .off)
     #expect(await client.pendingActions == 0, "no handover while held here")
 
-    var noSync = InMemoryDaemonClient.Remote.alwaysOn
-    noSync.syncURL = nil
-    #expect(try await Self.placement(Self.client(noSync)).heldHere == .noSync)
+    var noMachine = InMemoryDaemonClient.Remote.alwaysOn
+    noMachine.machine = nil
+    #expect(try await Self.placement(Self.client(noMachine)).heldHere == .noMachine)
+    var host = InMemoryDaemonClient.Remote.host
+    host.machine = nil
+    let unnamed = try await Self.placement(Self.client(host))
+    #expect(unnamed.heldHere == .noMachine, "until the vault's settings name it")
+    #expect(unnamed.runsOn?.alwaysOnMachine == false, "it asks like any device meanwhile")
   }
 
   @Test func switchingShowsTheHandoverAsItHappens() async throws {
@@ -72,11 +81,13 @@ struct InMemoryRemoteTests {
     _ = try await client.updateDeviceSettings(DeviceSettingsPatch(placement: .alwaysOnMachine))
     placement = try await Self.placement(client)
     #expect(placement.note == "Handing the agent to vm-name…")
-    #expect(placement.relay == .connecting && placement.runsOn?.thisDevice == true)
+    #expect(placement.relay == .connecting && placement.runsOn == nil, "let go, not picked up")
+    #expect(try await client.agentStatus().problem == "Handing the agent to vm-name…")
     await client.advance(by: .seconds(2))
     placement = try await Self.placement(client)
     #expect(placement.note == nil && placement.relay == .connected)
     #expect(placement.runsOn?.name == "vm-name" && placement.runsOn?.alwaysOnMachine == true)
+    #expect(try await client.agentStatus().problem == nil, "relayed")
 
     _ = try await client.updateDeviceSettings(DeviceSettingsPatch(placement: .thisDevice))
     placement = try await Self.placement(client)
@@ -85,6 +96,7 @@ struct InMemoryRemoteTests {
     await client.advance(by: .seconds(3))
     placement = try await Self.placement(client)
     #expect(placement.note == nil && placement.runsOn?.thisDevice == true)
+    #expect(placement.runsOn?.alwaysOnMachine == false)
 
     try await recorder.waitFor("the last status") { item in
       if case .event(.agentStatus(let status)) = item {
@@ -140,6 +152,7 @@ struct InMemoryRemoteTests {
     await client.simulateAgentElsewhere("Work laptop")
     var placement = try await Self.placement(client)
     #expect(placement.runsOn?.name == "Work laptop" && placement.runsOn?.thisDevice == false)
+    #expect(try await client.agentStatus().problem == "The agent is running on Work laptop.")
     _ = try await client.updateDeviceSettings(DeviceSettingsPatch(placement: .thisDevice))
     #expect(try await Self.placement(client).runsOn?.name == "Work laptop", "first come")
     await Self.http(503, .agentUnavailable) {
@@ -248,12 +261,13 @@ struct InMemoryRemoteTests {
 
     let lower = first.code.lowercased()
     let paired = try await client.pair(
-      PairRequest(code: "\(lower.prefix(4))-\(lower.suffix(4))", name: "Phone", kind: .app))
-    #expect(paired.device.name == "Phone" && paired.device.kind == .app)
+      PairRequest(code: "\(lower.prefix(4))-\(lower.suffix(4))", name: "Studio Mac", kind: .app))
+    #expect(paired.device.name == "Phone", "the name the code was issued for wins")
+    #expect(paired.device.kind == .app)
     #expect((paired.token?.count ?? 0) >= 16)
     await #expect(
       throws: DaemonClientError.pairingRejected(
-        "That pairing code is wrong, expired or already used.")
+        "Wrong, expired or already used pairing code")
     ) {
       _ = try await client.pair(PairRequest(code: first.code, name: "Again", kind: .app))
     }
@@ -328,7 +342,7 @@ struct InMemoryRemoteTests {
       _ = try await client.pairMachine(MachinePairRequest(url: Self.machineURL, code: "ABCD2345"))
       Issue.record("expected the machine to refuse the code")
     } catch DaemonClientError.pairingRejected(let message) {
-      #expect(message?.hasPrefix("vm-name refused that pairing code") == true)
+      #expect(message?.hasPrefix("vm-name rejected the pairing code") == true)
     }
     await client.simulateMachine(rejectsCodes: false)
 
@@ -349,6 +363,9 @@ struct InMemoryRemoteTests {
     #expect(try await client.checkMachine().checkedAt != nil)
     let forgotten = try await client.forgetMachine()
     #expect(!forgotten.paired && forgotten.machine != nil, "the machine stays in settings")
+    #expect(forgotten.reachable == nil && forgotten.checkedAt == nil, "the last check is dropped")
+    let unpaired = try await client.checkMachine()
+    #expect(unpaired.reachable == true && unpaired.version == nil && unpaired.agent == nil)
     await client.disconnect()
   }
 

@@ -10,15 +10,18 @@ extension FakeDaemon {
 
   var machine: AlwaysOnMachine? { settings.remote.alwaysOnMachine }
 
-  /// Why the stored placement can't apply: no always-on machine, or no sync on this device.
+  /// Why the stored placement can't apply, checked in the daemon's order: no sync on this
+  /// device, then no always-on machine.
   var heldHere: HeldHereReason? {
-    if machine == nil { return .noMachine }
     if !remote.syncs { return .noSync }
+    if machine == nil { return .noMachine }
     return nil
   }
 
   var effectivePlacement: AgentPlacement { heldHere == nil ? remote.placement : .thisDevice }
 
+  /// The daemon reports `off` while it relays with a credential and no relay has said more; this
+  /// fake plays the relay too, so it reports what the relay would.
   var relayState: RelayState {
     guard effectivePlacement == .alwaysOnMachine else { return .off }
     if !remote.machinePaired { return .notPaired }
@@ -27,9 +30,21 @@ extension FakeDaemon {
   }
 
   func placementStatus() -> AgentPlacementStatus {
-    AgentPlacementStatus(
-      placement: remote.placement, heldHere: heldHere, runsOn: runsOn(remote.holder),
-      relay: relayState, note: remote.handover?.note)
+    // Handing the agent over, this device has let go before the machine picked it up.
+    let released = remote.handover?.to == .machine
+    return AgentPlacementStatus(
+      placement: remote.placement, heldHere: heldHere,
+      runsOn: released ? nil : runsOn(remote.holder), relay: relayState,
+      note: remote.handover?.note)
+  }
+
+  /// The agent status's `problem` while this device doesn't run the agent (the daemon's words).
+  var placementProblem: String? {
+    guard remote.syncs else { return nil }
+    if let handover = remote.handover { return handover.note }
+    if case .other(let name) = remote.holder { return "The agent is running on \(name)." }
+    guard effectivePlacement == .alwaysOnMachine, relayState != .connected else { return nil }
+    return "The agent is running on \(machine?.name ?? "the always-on machine")."
   }
 
   func runsOn(_ holder: FakeHolder) -> AgentRunsOn? {
@@ -37,13 +52,13 @@ extension FakeDaemon {
       return simulation == .enabled
         ? AgentRunsOn(
           deviceId: FakeRemote.deviceId, name: remote.deviceName, thisDevice: true,
-          alwaysOnMachine: remote.placement == .alwaysOnHost) : nil
+          alwaysOnMachine: false) : nil
     }
     switch holder {
     case .thisDevice:
       return AgentRunsOn(
         deviceId: FakeRemote.deviceId, name: remote.deviceName, thisDevice: true,
-        alwaysOnMachine: remote.placement == .alwaysOnHost)
+        alwaysOnMachine: effectivePlacement == .alwaysOnHost)
     case .machine:
       guard let machine else { return nil }
       return AgentRunsOn(
@@ -71,7 +86,8 @@ extension FakeDaemon {
         connected: connectors.filter { $0.state == .connected }.count))
   }
 
-  /// Why agent actions can't run from this device right now (the relay answers 503).
+  /// Why agent actions can't run from this device right now (the relay will answer 503; until it
+  /// exists, the daemon's agent is simply off here, with `placementProblem` as its problem).
   var readOnlyReason: String? {
     guard remote.syncs else { return nil }
     if case .other(let name) = remote.holder {
@@ -144,38 +160,41 @@ extension FakeDaemon {
   func updateDeviceSettings(_ patch: DeviceSettingsPatch) throws(DaemonClientError)
     -> DeviceSettingsResponse
   {
-    if patch.placement != nil, remote.isLocked(.placement) {
-      throw Self.lockedByEnv("The placement is set by DDL_AGENT_PLACEMENT.")
-    }
-    if patch.remoteHosts != nil, remote.isLocked(.remoteHosts) {
-      throw Self.lockedByEnv("The remote hosts are set by DDL_REMOTE_HOSTS.")
-    }
+    var problems: [String] = []
     var name: String?
     if let input = patch.name {
-      guard let valid = RemoteAccess.normalizeDeviceName(input) else {
-        throw .invalidRequest("name: must be 1-64 characters without control characters")
-      }
-      name = valid
+      name = RemoteAccess.normalizeDeviceName(input)
+      if name == nil { problems.append(Self.problem(Self.deviceNameProblem(input), at: "name")) }
     }
     var hosts: [String]?
     if let inputs = patch.remoteHosts {
       var normalized: [String] = []
-      for input in inputs {
-        guard let host = RemoteAccess.normalizeRemoteHost(input) else {
-          throw .invalidRequest(
-            "remoteHosts: “\(input)” must be a DNS name with an optional :port (no scheme, path, IP address or loopback name)"
-          )
+      for (index, input) in inputs.enumerated() {
+        if let host = RemoteAccess.normalizeRemoteHost(input) {
+          normalized.append(host)
+        } else {
+          problems.append(
+            Self.problem(
+              "must be a DNS name with an optional :port (no scheme, path, IP address or loopback name)",
+              at: "remoteHosts[\(index)]"))
         }
-        normalized.append(host)
       }
-      if normalized.count > RemoteAccess.Limits.remoteHosts {
-        throw .invalidRequest(
-          "remoteHosts: at most \(RemoteAccess.Limits.remoteHosts) names")
-      }
-      if Set(normalized).count != normalized.count {
-        throw .invalidRequest("remoteHosts: must not repeat a host")
+      if inputs.count > RemoteAccess.Limits.remoteHosts {
+        problems.append(
+          Self.problem(
+            "Too big: expected array to have <=\(RemoteAccess.Limits.remoteHosts) items",
+            at: "remoteHosts"))
+      } else if Set(normalized).count != normalized.count {
+        problems.append(Self.problem("must not repeat a host", at: "remoteHosts"))
       }
       hosts = normalized
+    }
+    if !problems.isEmpty { throw .invalidRequest(problems.joined(separator: "\n")) }
+    if patch.placement != nil, remote.isLocked(.placement) {
+      throw Self.lockedByEnv("DDL_AGENT_PLACEMENT sets where the agent runs on this device")
+    }
+    if patch.remoteHosts != nil, remote.isLocked(.remoteHosts) {
+      throw Self.lockedByEnv("DDL_REMOTE_HOSTS sets the names this daemon answers to")
     }
     if let name { remote.deviceName = name }
     if let hosts { remote.remoteHosts = hosts }
@@ -192,22 +211,26 @@ extension FakeDaemon {
   func setUpSync(_ request: DeviceSyncSetupRequest) throws(DaemonClientError)
     -> DeviceSettingsResponse
   {
-    if remote.isLocked(.sync) {
-      throw Self.lockedByEnv("Sync is set by DDL_SYNC_URL, DDL_SYNC_VAULT and DDL_SYNC_TOKEN.")
+    var problems: [String] = []
+    if !RemoteAccess.isSecureServiceURL(request.url) || request.url.utf16.count > 2048 {
+      problems.append(
+        Self.problem("must use https (plain http only to loopback), no credentials", at: "url"))
     }
-    guard RemoteAccess.isSecureServiceURL(request.url), request.url.utf16.count <= 2048 else {
-      throw .invalidRequest("url: must use https (plain http only to loopback), no credentials")
+    if !RemoteAccess.isSyncID(request.vault) {
+      problems.append(Self.problem("must be 1-64 characters of A-Z a-z 0-9 _ -", at: "vault"))
     }
-    guard RemoteAccess.isSyncID(request.vault) else {
-      throw .invalidRequest("vault: must be 1-64 characters of A-Z a-z 0-9 _ -")
+    let token = request.token?.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let token, token.isEmpty || token.utf16.count > 1024 {
+      problems.append(
+        Self.problem("Too small: expected string to have >=1 characters", at: "token"))
     }
-    if let token = request.token {
-      let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !trimmed.isEmpty, trimmed.utf16.count <= 1024 else {
-        throw .invalidRequest("token: must be 1-1024 characters")
-      }
-    } else if !remote.hasSyncToken {
-      throw .invalidRequest("token: this device has no vault token yet")
+    if !problems.isEmpty { throw .invalidRequest(problems.joined(separator: "\n")) }
+    if remote.isLocked(.sync) { throw Self.lockedByEnv(Self.syncLocked) }
+    if let token, token.contains(where: \.isWhitespace) {
+      throw .invalidRequest("token must be one line without spaces")
+    }
+    if token == nil && !remote.hasSyncToken {
+      throw .invalidRequest("No vault token is saved yet: include `token`")
     }
     remote.syncURL = request.url
     remote.vault = request.vault
@@ -217,9 +240,7 @@ extension FakeDaemon {
   }
 
   func turnOffSync() throws(DaemonClientError) -> DeviceSettingsResponse {
-    if remote.isLocked(.sync) {
-      throw Self.lockedByEnv("Sync is set by DDL_SYNC_URL, DDL_SYNC_VAULT and DDL_SYNC_TOKEN.")
-    }
+    if remote.isLocked(.sync) { throw Self.lockedByEnv(Self.syncLocked) }
     remote.syncURL = nil
     remote.vault = nil
     remote.hasSyncToken = false
@@ -248,15 +269,19 @@ extension FakeDaemon {
     var name: String?
     if let input = request.name {
       guard let valid = RemoteAccess.normalizeDeviceName(input) else {
-        throw .invalidRequest("name: must be 1-64 characters without control characters")
+        throw .invalidRequest(Self.problem(Self.deviceNameProblem(input), at: "name"))
       }
       name = valid
     }
     dropExpiredCodes()
     guard remote.pairingCodes.count < FakeRemote.maxOutstandingCodes else {
-      throw Self.rateLimited(
-        "\(FakeRemote.maxOutstandingCodes) pairing codes are waiting to be used. Use one, or wait for them to expire."
-      )
+      throw .rateLimited(
+        retryAfter: nil,
+        body: ApiErrorBody(
+          error: .rateLimited,
+          message:
+            "\(FakeRemote.maxOutstandingCodes) pairing codes are already waiting: use one, or wait until they expire"
+        ))
     }
     let code = nextPairingCode()
     let expiresAt = nowMillis + FakeRemote.pairingCodeLifetime
@@ -267,29 +292,42 @@ extension FakeDaemon {
     return PairingCodeResponse(code: code, expiresAt: expiresAt, url: url)
   }
 
+  /// Attempts are counted before the request is read, like the daemon's global limit.
   func pair(_ request: PairRequest) throws(DaemonClientError) -> PairResponse {
     remote.pairAttempts = remote.pairAttempts.filter { nowMillis - $0 < 60_000 }
-    guard remote.pairAttempts.count < FakeRemote.pairAttemptsPerMinute else {
-      throw Self.rateLimited("Too many pairing attempts. Try again in a minute.")
+    if remote.pairAttempts.count >= FakeRemote.pairAttemptsPerMinute {
+      let oldest = remote.pairAttempts.first ?? nowMillis
+      throw .rateLimited(
+        retryAfter: max(1, Int(((oldest + 60_000 - nowMillis) / 1000).rounded(.up))),
+        body: ApiErrorBody(
+          error: .rateLimited, message: "Too many pairing attempts: try again in a minute"))
     }
     remote.pairAttempts.append(nowMillis)
-    guard let name = RemoteAccess.normalizeDeviceName(request.name) else {
-      throw .invalidRequest("name: must be 1-64 characters without control characters")
+    var problems: [String] = []
+    let code = RemoteAccess.normalizePairingCode(request.code)
+    if code == nil {
+      problems.append(Self.problem("must be the 8-character pairing code (XXXX-XXXX)", at: "code"))
     }
-    guard let code = RemoteAccess.normalizePairingCode(request.code) else {
-      throw .invalidRequest("code: must be the 8-character pairing code (XXXX-XXXX)")
+    let name = RemoteAccess.normalizeDeviceName(request.name)
+    if name == nil {
+      problems.append(Self.problem(Self.deviceNameProblem(request.name), at: "name"))
+    }
+    guard let code, let name, problems.isEmpty else {
+      throw .invalidRequest(problems.joined(separator: "\n"))
     }
     dropExpiredCodes()
-    guard remote.pairingCodes.removeValue(forKey: code) != nil else {
+    guard let redeemed = remote.pairingCodes.removeValue(forKey: code) else {
       remote.pairFailures += 1
       if remote.pairFailures >= FakeRemote.failuresBeforeReset {
         remote.pairingCodes.removeAll()
         remote.pairFailures = 0
       }
-      throw .pairingRejected("That pairing code is wrong, expired or already used.")
+      throw .pairingRejected("Wrong, expired or already used pairing code")
     }
+    // The name the issuer gave the code wins over the one the new device sends.
     let device = PairedDevice(
-      id: nextID("pdv"), name: name, kind: request.kind, createdAt: nowMillis, lastSeenAt: nil)
+      id: nextID("pd"), name: redeemed.name ?? name, kind: request.kind, createdAt: nowMillis,
+      lastSeenAt: nil)
     remote.pairedDevices.append(device)
     let token = request.kind == .browser ? nil : "fake_" + nextPairingCode() + nextPairingCode()
     return PairResponse(device: device, token: token)
@@ -339,7 +377,12 @@ extension FakeDaemon {
     guard remote.machineReachable else {
       return MachineStatusResponse(
         machine: machine, paired: remote.machinePaired, reachable: false, checkedAt: checked,
-        error: "\(machine.name) didn't answer.")
+        error: "Couldn't reach \(machine.name): connect ECONNREFUSED")
+    }
+    // Without a credential the machine only answers that it's there.
+    guard remote.machinePaired else {
+      return MachineStatusResponse(
+        machine: machine, paired: false, reachable: true, checkedAt: checked)
     }
     let holder = remote.handover == nil ? remote.holder : .machine
     var runsOn = self.runsOn(holder)
@@ -357,31 +400,32 @@ extension FakeDaemon {
   func pairMachine(_ request: MachinePairRequest) throws(DaemonClientError)
     -> MachineStatusResponse
   {
-    guard let url = RemoteAccess.normalizeMachineURL(request.url) else {
-      throw .invalidRequest(
-        "url: must be https://<host>[:port] without path, query or credentials (plain http only to loopback)"
-      )
+    var problems: [String] = []
+    let url = RemoteAccess.normalizeMachineURL(request.url)
+    if url == nil {
+      problems.append(
+        Self.problem(
+          "must be https://<host>[:port] without path, query or credentials (plain http only to loopback)",
+          at: "url"))
     }
-    guard RemoteAccess.normalizePairingCode(request.code) != nil else {
-      throw .invalidRequest("code: must be the 8-character pairing code (XXXX-XXXX)")
+    if RemoteAccess.normalizePairingCode(request.code) == nil {
+      problems.append(Self.problem("must be the 8-character pairing code (XXXX-XXXX)", at: "code"))
     }
-    var name = RemoteAccess.defaultMachineName(url)
-    if let input = request.name {
-      guard let valid = RemoteAccess.normalizeDeviceName(input) else {
-        throw .invalidRequest("name: must be 1-64 characters without control characters")
-      }
-      name = valid
+    let customName = request.name.map(RemoteAccess.normalizeDeviceName)
+    if case .some(nil) = customName, let input = request.name {
+      problems.append(Self.problem(Self.deviceNameProblem(input), at: "name"))
     }
+    guard let url, problems.isEmpty else { throw .invalidRequest(problems.joined(separator: "\n")) }
+    let name = customName.flatMap { $0 } ?? RemoteAccess.defaultMachineName(url)
     guard remote.machineReachable else {
       throw .http(
         status: 502,
         body: ApiErrorBody(
-          error: .machineUnreachable,
-          message: "\(name) didn't answer. Is it running, and on the same private network?"))
+          error: .machineUnreachable, message: "Couldn't reach \(name): connect ECONNREFUSED"))
     }
     if remote.machineRejectsCodes {
       throw .pairingRejected(
-        "\(name) refused that pairing code: it's wrong, expired or already used.")
+        "\(name) rejected the pairing code: it may be wrong, expired or already used")
     }
     let next = settings.applying(
       SettingsPatch(
@@ -401,8 +445,10 @@ extension FakeDaemon {
     return machineStatus()
   }
 
+  /// Drops the credential and what the last check found (the daemon checks again on demand).
   func forgetMachine() -> MachineStatusResponse {
     remote.machinePaired = false
+    remote.machineCheckedAt = nil
     placementInputsChanged()
     return machineStatus()
   }
@@ -430,11 +476,26 @@ extension FakeDaemon {
 
   // MARK: - Errors
 
-  static func lockedByEnv(_ message: String) -> DaemonClientError {
-    .http(status: 409, body: ApiErrorBody(error: .lockedByEnv, message: message))
+  static let syncLocked =
+    "DDL_SYNC_URL, DDL_SYNC_VAULT or DDL_SYNC_TOKEN set the sync setup of this device"
+
+  /// Why a device or machine name was refused, in the daemon's words (its schema trims first).
+  static func deviceNameProblem(_ input: String) -> String {
+    let name = input.trimmingCharacters(in: .whitespacesAndNewlines)
+    if name.isEmpty { return "Too small: expected string to have >=1 characters" }
+    if name.utf16.count > RemoteAccess.Limits.deviceNameLength {
+      return "Too big: expected string to have <=\(RemoteAccess.Limits.deviceNameLength) characters"
+    }
+    return "must not contain control characters"
   }
 
-  static func rateLimited(_ message: String) -> DaemonClientError {
-    .http(status: 429, body: ApiErrorBody(error: .rateLimited, message: message))
+  /// `✖ <message>\n  → at <path>`: one problem as the daemon's validation reports it.
+  static func problem(_ message: String, at path: String) -> String {
+    "✖ \(message)\n  → at \(path)"
+  }
+
+  static func lockedByEnv(_ reason: String) -> DaemonClientError {
+    .http(
+      status: 409, body: ApiErrorBody(error: .lockedByEnv, message: "\(reason); change it there"))
   }
 }

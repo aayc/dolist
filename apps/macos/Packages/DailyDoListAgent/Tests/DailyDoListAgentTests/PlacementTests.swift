@@ -30,18 +30,33 @@ struct PlacementTests {
     )
     let tooltip = try #require(location.heldTooltip)
     #expect(tooltip.lines.first?.text == "No always-on machine is set up")
-    #expect(tooltip.detail == "The orchestrator runs on this device until one is.")
+    #expect(tooltip.detail == "Set one up to run the orchestrator there.")
 
     // The stored choice waits: the control shows where it runs now.
     let chosen = try #require(
       Location(status: Fixture.placement(.alwaysOnMachine, heldHere: .noMachine)))
     #expect(chosen.selection == .thisDevice && !chosen.canSwitch)
-    #expect(chosen.heldTooltip?.detail?.hasSuffix("as you chose, once that's done.") == true)
+    #expect(
+      chosen.heldTooltip?.detail
+        == "Set one up to run the orchestrator there. It moves there, as you chose, once that's done."
+    )
 
     let noSync = try #require(Location(status: Fixture.placement(heldHere: .noSync)))
     #expect(
       noSync.setUp == .sync && noSync.heldTooltip?.lines.first?.text == "This device doesn't sync")
     #expect(noSync.line?.text == "Runs here until this device syncs")
+  }
+
+  /// The real daemon: with sync on and no machine yet, the device that asked first holds the
+  /// agent, so this one is held here while another runs it.
+  @Test func heldHereWhileAnotherDeviceRunsItNamesThatDevice() throws {
+    let location = try #require(
+      Location(status: Fixture.placement(heldHere: .noMachine, runsOn: Fixture.workLaptop)))
+    #expect(location.line == Location.Line("Work laptop runs the agent now", tone: .faint))
+    #expect(location.setUp == .alwaysOnMachine && !location.canSwitch)
+    #expect(
+      AgentReadOnly(placement: Fixture.placement(heldHere: .noMachine, runsOn: Fixture.workLaptop))?
+        .reason == "Work laptop runs the agent")
   }
 
   @Test func theHandoverShowsAsItHappens() throws {
@@ -213,7 +228,7 @@ struct PlacementTests {
       size: CGSize(width: 400, height: 500))
     let toggle = try #require(
       found.first { $0.tooltipContent()?.lines.first?.text == "No always-on machine is set up" })
-    #expect(toggle.tooltipContent()?.detail == "The orchestrator runs on this device until one is.")
+    #expect(toggle.tooltipContent()?.detail == "Set one up to run the orchestrator there.")
     #expect(found.contains { $0.tooltipContent()?.plainText == "Set up the always-on machine" })
     for anchor in found {
       let text = anchor.tooltipContent()?.plainText ?? ""

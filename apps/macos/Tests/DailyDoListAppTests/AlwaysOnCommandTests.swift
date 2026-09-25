@@ -66,7 +66,7 @@ struct AlwaysOnCommandTests {
     #expect(!catalog.run(.runOrchestratorHere))
     #expect(!catalog.run(.runOrchestratorOnMachine))
     #expect(catalog.command(.runOrchestratorHere)?.isOn?() == true, "it runs here")
-    #expect(model.agent?.placement?.heldHere == .noMachine)
+    #expect(model.agent?.placement?.heldHere == .noSync)
     await model.teardown()
   }
 
