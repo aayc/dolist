@@ -30,6 +30,8 @@ export {
   desiredCapabilities,
   grantableCapabilities,
   quickAnswer,
+  type RoutineRequest,
+  routineRequest,
   type TriageDecision,
   triage,
 } from "./brain/intent";

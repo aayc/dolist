@@ -184,6 +184,45 @@ public final class HTTPDaemonClient: DaemonClient {
     return try await transport.bytes(APIRoute.artifact(threadId: thread, artifactId: artifact))
   }
 
+  // MARK: - Routines
+
+  public func routines() async throws -> RoutineListResponse {
+    try await transport.json(.get, APIRoute.routines)
+  }
+
+  public func routine(_ id: String) async throws -> Routine {
+    let id = try RequestGuards.runtimeID(id, "routine id")
+    return try await transport.json(.get, APIRoute.routine(id), as: RoutineResponse.self).routine
+  }
+
+  public func createRoutine(_ request: CreateRoutineRequest) async throws -> Routine {
+    try await transport.json(.post, APIRoute.routines, body: request, as: RoutineResponse.self)
+      .routine
+  }
+
+  public func runRoutine(_ id: String) async throws -> RoutineRunResponse {
+    try await transport.json(
+      .post, APIRoute.routineRun(try RequestGuards.runtimeID(id, "routine id")))
+  }
+
+  public func pauseRoutine(_ id: String) async throws -> Routine {
+    let id = try RequestGuards.runtimeID(id, "routine id")
+    return try await transport.json(.post, APIRoute.routinePause(id), as: RoutineResponse.self)
+      .routine
+  }
+
+  public func resumeRoutine(_ id: String) async throws -> Routine {
+    let id = try RequestGuards.runtimeID(id, "routine id")
+    return try await transport.json(.post, APIRoute.routineResume(id), as: RoutineResponse.self)
+      .routine
+  }
+
+  public func threads(routineId: String) async throws -> [ThreadSummary] {
+    try await transport.json(
+      .get, APIRoute.threads(routineId: routineId), as: ThreadListResponse.self
+    ).threads
+  }
+
   // MARK: - Events
 
   public func connect() async {

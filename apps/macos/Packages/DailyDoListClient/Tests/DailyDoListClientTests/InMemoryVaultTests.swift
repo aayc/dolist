@@ -412,7 +412,8 @@ struct InMemoryVaultTests {
     let all = try await client.threads(notePath: nil, taskId: nil)
     #expect(all.filter(\.isOrchestrator).map(\.status) == [.idle])
     let threads = all.filter { !$0.isOrchestrator }
-    #expect(threads.count == 6 && threads.allSatisfy { $0.status == .done })
+    #expect(threads.filter(\.isRoutineRun).count == 5, "the demo routines' runs")
+    #expect(threads.count == 11 && threads.allSatisfy { $0.status == .done })
 
     // Today's note shows the agent at work: its lines under the tasks (citing pages its threads
     // know), a task it wrote, and a prose question answered in a thread anchored to that line.

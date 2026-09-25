@@ -52,7 +52,8 @@ extension AppModel {
       // A record can move between notes: refresh whatever is shown.
       agent?.apply(event)
       workspace?.editor.recordsDidChange(for: nil)
-    case .threadUpsert, .threadMessage, .threadDelta, .approvalUpsert, .agentStatus, .surfaceFrame:
+    case .threadUpsert, .threadMessage, .threadDelta, .approvalUpsert, .agentStatus, .surfaceFrame,
+      .routinesChanged, .routineNotification:
       agent?.apply(event)
     case .error(let error):
       Self.log.warning("daemon error event: \(error.message, privacy: .public)")

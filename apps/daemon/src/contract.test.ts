@@ -3,12 +3,15 @@
  * app, every declared status is reached, and every answer parses (strictly) with the schema the
  * contract declares for that status.
  */
+import { RoutineConflictError, RoutineInputError } from "@ddl/agent/routines";
 import { API_CONTRACT, listOperations } from "@ddl/contract";
 import {
   type ApiRouteName,
   type AppSettings,
   DEFAULT_SETTINGS,
   mergeSettings,
+  type RoutineListResponse,
+  type RoutineResponse,
   silentLogger,
 } from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
@@ -39,8 +42,10 @@ interface Env {
 }
 
 async function setup(observed: Observed, options: TestAppOptions = {}): Promise<Env> {
-  const runtime = (options.runtime as FakeAgentRuntime | undefined) ?? new FakeAgentRuntime();
-  const app = await createTestApp({ ...options, runtime });
+  const storage = options.storage ?? new MemoryStorageProvider();
+  const runtime =
+    (options.runtime as FakeAgentRuntime | undefined) ?? new FakeAgentRuntime({ storage });
+  const app = await createTestApp({ ...options, storage, runtime });
   return { api: contractClient(app, observed), storage: app.storage, runtime };
 }
 
@@ -94,6 +99,35 @@ async function threadAction(
     expect((await call("thr_1", { json: undefined, body: "{" })).status).toBe(400);
     expect((await call("thr_1", { json: undefined, body: TOO_BIG })).status).toBe(413);
   }
+}
+
+const BRIEFING = {
+  name: "Morning briefing",
+  schedule: "every weekday at 7:30",
+  instructions: "Brief me for the day: calendar, weather, leftovers.",
+};
+
+/** A test app whose vault holds the routine `BRIEFING`, created through the API. */
+async function withRoutine(observed: Observed): Promise<Env & { id: string }> {
+  const env = await setup(observed);
+  const { body } = await env.api.call("routines", "POST", { json: BRIEFING });
+  return { ...env, id: (body as RoutineResponse).routine.id };
+}
+
+async function routinePaused(observed: Observed, name: "routinePause" | "routineResume") {
+  const { api, storage, runtime, id } = await withRoutine(observed);
+  const call = (routineId = id) => api.call(name, "POST", { params: { id: routineId } });
+  const paused = name === "routinePause";
+  const { routine } = (await call()).body as RoutineResponse;
+  expect(routine).toMatchObject({ id, paused });
+  expect(routine.nextRunAt === undefined).toBe(paused);
+  expect((await storage.read("Routines/Morning briefing.md"))?.content).toContain(
+    `paused: ${paused}`,
+  );
+  expect((await call("bad id")).status).toBe(400);
+  expect((await call("rtn_missing")).status).toBe(404);
+  runtime.routineError = new RoutineConflictError("The routine's file kept changing.");
+  expect((await call()).body).toMatchObject({ error: "conflict" });
 }
 
 function hiddenDailyFolderSettings(): SettingsStore {
@@ -309,10 +343,15 @@ const scenarios: Record<string, Scenario> = {
   "GET threads": async (observed) => {
     const runtime = new FakeAgentRuntime();
     runtime.threads.set("thr_1", makeThread("thr_1"));
+    runtime.threads.set("thr_run", makeThread("thr_run", { routineId: "rtn_1" }));
     const { api } = await setup(observed, { runtime });
     const threads = (query?: Record<string, string>) => api.call("threads", "GET", { query });
-    expect((await threads()).body).toMatchObject({ threads: [{ id: "thr_1" }] });
-    expect((await threads({ notePath: "", taskId: "" })).status).toBe(200);
+    expect((await threads()).body).toMatchObject({ threads: [{ id: "thr_1" }, { id: "thr_run" }] });
+    expect((await threads({ routineId: "rtn_1" })).body).toEqual({
+      threads: [expect.objectContaining({ id: "thr_run", routineId: "rtn_1" })],
+    });
+    expect((await threads({ notePath: "", taskId: "", routineId: "" })).status).toBe(200);
+    expect((await threads({ routineId: "r".repeat(201) })).status).toBe(400);
     expect((await threads({ notePath: ".hidden/x.md" })).body).toMatchObject({
       error: "invalid_path",
     });
@@ -417,6 +456,87 @@ const scenarios: Record<string, Scenario> = {
     expect((await get("thr_1", "art 1")).status).toBe(400);
     expect((await get("thr_1", "art_missing")).status).toBe(404);
   },
+
+  "GET routines": async (observed) => {
+    const empty = await setup(observed);
+    const none = (await empty.api.call("routines", "GET")).body as RoutineListResponse;
+    expect(none.routines).toEqual([]);
+    expect(none.templates.map((template) => template.id)).toContain("morning-briefing");
+    const { api, id } = await withRoutine(observed);
+    expect((await api.call("routines", "GET")).body).toMatchObject({
+      routines: [
+        {
+          id,
+          path: "Routines/Morning briefing.md",
+          name: "Morning briefing",
+          schedule: "every weekday at 7:30",
+          scheduleText: "Every weekday at 7:30 AM",
+          notify: "always",
+          paused: false,
+          runCount: 0,
+          extraRunsLeft: 5,
+        },
+      ],
+    });
+  },
+
+  "POST routines": async (observed) => {
+    const { api, storage } = await setup(observed);
+    const create = (json: unknown, init = {}) => api.call("routines", "POST", { json, ...init });
+    const created = await create({ ...BRIEFING, notify: "when_changed", uses: ["web"] });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({
+      routine: { name: "Morning briefing", notify: "when_changed", uses: ["web"], paused: false },
+    });
+    expect((await storage.read("Routines/Morning briefing.md"))?.content).toBe(
+      "---\nschedule: every weekday at 7:30\nnotify: when changed\nuses: [web]\n---\nBrief me for the day: calendar, weather, leftovers.\n",
+    );
+    expect((await create(BRIEFING)).body).toMatchObject({ error: "conflict" });
+    const unreadable = await create({ ...BRIEFING, name: "Later", schedule: "whenever I like" });
+    expect(unreadable.body).toMatchObject({ error: "invalid_request" });
+    expect((await create({ ...BRIEFING, name: "a/b" })).body).toMatchObject({
+      error: "invalid_request",
+    });
+    expect((await create({ ...BRIEFING, sneaky: 1 })).body).toMatchObject({
+      error: "invalid_request",
+    });
+    expect((await create(undefined, { body: "{" })).body).toMatchObject({ error: "invalid_json" });
+    expect((await create(undefined, { body: TOO_BIG })).status).toBe(413);
+    expect(await storage.read("Routines/Later.md")).toBeNull();
+  },
+
+  "GET routine": async (observed) => {
+    const { api, id } = await withRoutine(observed);
+    const get = (routineId: string) => api.call("routine", "GET", { params: { id: routineId } });
+    expect((await get(id)).body).toMatchObject({ routine: { id, name: "Morning briefing" } });
+    expect((await get("bad id")).status).toBe(400);
+    expect((await get("rtn_missing")).status).toBe(404);
+  },
+
+  "POST routineRun": async (observed) => {
+    const { api, runtime, id } = await withRoutine(observed);
+    const run = (routineId = id) => api.call("routineRun", "POST", { params: { id: routineId } });
+    const started = await run();
+    expect(started.body).toMatchObject({ routine: { id }, threadId: "thr_run_1" });
+    expect(runtime.threads.get("thr_run_1")?.routineId).toBe(id);
+    expect((await run("bad id")).status).toBe(400);
+    expect((await run("rtn_missing")).status).toBe(404);
+    runtime.routineError = new RoutineConflictError("“Morning briefing” is running right now.");
+    expect((await run()).body).toEqual({
+      error: "conflict",
+      message: "“Morning briefing” is running right now.",
+    });
+    runtime.routineError = new RoutineInputError("“Morning briefing” can't run: no schedule.");
+    expect((await run()).body).toMatchObject({ error: "conflict" });
+    runtime.routineError = unavailable("The agent is running on Desktop.");
+    expect((await run()).body).toEqual({
+      error: "agent_unavailable",
+      message: "The agent is running on Desktop.",
+    });
+  },
+
+  "POST routinePause": (observed) => routinePaused(observed, "routinePause"),
+  "POST routineResume": (observed) => routinePaused(observed, "routineResume"),
 
   "GET connectors": async (observed) => {
     const { api } = await setup(observed);
@@ -619,6 +739,10 @@ describe("unknown routes", () => {
       thread: [{ id: "thr_1" }, "/api/threads/thr_1"],
       artifact: [{ threadId: "t 1", artifactId: "a/b" }, "/api/artifacts/t%201/a%2Fb"],
       daily: [{ date: "2026-09-23" }, "/api/daily/2026-09-23"],
+      routine: [{ id: "rtn_1" }, "/api/routines/rtn_1"],
+      routineRun: [{ id: "rtn_1" }, "/api/routines/rtn_1/run"],
+      routinePause: [{ id: "rtn_1" }, "/api/routines/rtn_1/pause"],
+      routineResume: [{ id: "rtn_1" }, "/api/routines/rtn_1/resume"],
     };
     for (const [name, [params, expected]] of Object.entries(samples)) {
       expect(routePath(name as ApiRouteName, params)).toBe(expected);

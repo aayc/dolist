@@ -46,7 +46,7 @@ future iPhone app too.
 | `Packages/DailyDoListDomain` (iOS) | Pure domain logic ported from `@ddl/core`: dates and daily notes, task parsing and tracking, line anchors, agent-line markers, three-way merges, wikilinks, paths, fuzzy matching. |
 | `Packages/DailyDoListEditor` | The TextKit markdown editor: live preview, clickable checkboxes, agent badges, and vim mode (it hosts `DailyDoListVim`). |
 | `Packages/DailyDoListVim` (iOS) | Vim mode: a port of the web editor's vim.js and its CodeMirror 6 adapter, checked against the web app's vim vectors; hosts implement `VimEditor` ([README](Packages/DailyDoListVim/README.md)). |
-| `Packages/DailyDoListAgent` | Agent state and UI: inbox, threads (the live chat: [The agent chat](#the-agent-chat)), the orchestrator's chat ([The orchestrator's chat](#the-orchestrators-chat)), approval cards, artifacts, notifications, menu bar, Dock badge. |
+| `Packages/DailyDoListAgent` | Agent state and UI: inbox, threads (the live chat: [The agent chat](#the-agent-chat)), the orchestrator's chat ([The orchestrator's chat](#the-orchestrators-chat)), routines ([Routines](#routines)), approval cards, artifacts, notifications, menu bar, Dock badge. |
 | `Packages/DailyDoListUI` | What the shell, the agent UI and the editor share: the app's one tooltip (`TooltipCenter`, `.tooltip(…)`), keycaps (`KeyShortcut`, `Keycaps`), `.pointingHandCursor()`, `IconButton`, and the chrome and accent button styles. `DailyDoListUITestSupport` finds tooltips in tests and draws them into snapshots. |
 | `Packages/DailyDoListDaemon` | `DaemonSupervisor`: finds Node and the daemon, attaches or launches, health-checks, restarts, stops. |
 | `Packages/DailyDoListComputer` | `ddl-computer`, the helper the daemon spawns so agents can operate other apps through their accessibility tree ([The computer use helper](#the-computer-use-helper-ddl-computer)). Not linked into the app. |
@@ -179,6 +179,42 @@ thread under each (it opens in the main window's agent panel), the user's messag
 streamed replies. **Stop** in its header ends a turn in progress. The in-memory daemon of demo mode
 simulates it: a turn per delegated task and finished report, and a streamed reply when you write.
 
+## Routines
+
+A routine is a job the agent does on a schedule ("every weekday at 7:30, brief me for the day"):
+one note per routine in the vault's `Routines/` folder, run by the daemon's scheduler. Each run is
+a thread, so a routine has its own inbox of runs, and a finished run can notify you.
+
+- **Where:** the agent panel's header switches between **Inbox** and **Routines** (**Agent → Show
+  Routines**, ⇧⌘R, the palette's "Show routines", or `:obcommand routines:show`). The list shows
+  each routine's name (its file name), schedule in words, next run (or its last result while
+  paused), the last run's status, whether it's paused, and what's wrong with it (a schedule the
+  daemon can't read, a broken file). Its context menu has Run Now, Pause/Resume and Edit File.
+- **A routine's inbox:** selecting one shows its runs, newest first, titled by when they ran;
+  a run opens in the thread view with the chat's polish (typing, the activity row, replies), and
+  **‹ Morning briefing** goes back to its runs. A run's thread has no Show in Note or Repeat This.
+  Runs stay out of the task inbox, except one waiting on an approval or an answer, which shows
+  under "Needs you" like any other (its approval also notifies and sits in the menu bar window).
+- **Actions:** **Run Now** opens the new run; when the daemon refuses (409: a run is going, the
+  routine has a problem, today's extra runs are used up; 503: the agent can't run on this Mac),
+  its reason shows on the routine as a callout until dismissed. **Pause/Resume** flips at once
+  (and rolls back if the daemon says no). **Edit File** opens `Routines/<name>.md` in the editor.
+- **New Routine…** (⌥⌘N, the Agent menu, the palette, the list's button): a sheet with the
+  starter templates from the daemon, then the name, the schedule in your words, what to do, and
+  when to notify (every run, when something changed, never). The schedule is checked by the
+  daemon only: its message shows under the field that's wrong (a taken name under Name).
+  Creating it shows the new routine.
+- **Repeat This:** a finished task's thread offers it in its header; the sheet opens with the
+  task as the name and the instructions, and you pick the schedule.
+- **Notifications:** the daemon sends `routine.notification` when a run ends and the routine's
+  `notify` says so; the app posts it through the same notification center as approvals (grouped
+  per routine, "Run failed" or "Needs you" as the subtitle). Clicking it opens that run.
+- **Code:** `AgentStore+Routines` (list, runs, actions, `RoutineDraft`), `RoutineAlert` (409/503
+  reasons, form errors), `Views/Routines/`, and in the app `UIState.agentSection`,
+  `showRoutines()`/`showRoutine(_:)`/`showRoutineRun(routineId:threadId:)` and the sheet in
+  `MainWindowView`. Demo mode has four routines (one paused, one with a schedule it can't read)
+  with past runs, and runs Run Now like the daemon.
+
 ## Vim mode
 
 Turn it on with **Vim key bindings** in Settings → Appearance, View → Vim Key Bindings, or "Toggle
@@ -214,8 +250,9 @@ which is Obsidian's: `DailyDoListVim` is a port of the same engine (vim.js), and
 
 ## Demo mode
 
-`--demo` (or `DDL_DEMO=1`) runs the whole UI against `InMemoryDaemonClient`: sample notes and a
-simulated agent that streams, asks for approvals and finishes tasks in real time. There's no
+`--demo` (or `DDL_DEMO=1`) runs the whole UI against `InMemoryDaemonClient`: sample notes, routines
+with past runs, and a simulated agent that streams, asks for approvals and finishes tasks and runs
+in real time. There's no
 daemon, no Node and no network, which makes it good for trying the app, UI work and screenshots.
 Connection settings apply on the next normal launch.
 
@@ -305,7 +342,7 @@ right-click → Open, or `xattr -dr com.apple.quarantine "Daily Do List.app"`.
 
 | Feature | What macOS needs |
 | --- | --- |
-| Notifications (approval requests, finished tasks) | The standard notification prompt on first use; manage it in System Settings → Notifications. |
+| Notifications (approval requests, finished tasks, routine runs) | The standard notification prompt on first use; manage it in System Settings → Notifications. |
 | Launch at login | Only works from a signed `.app` (`build-app.sh`; a `swift run` build explains why it's unavailable). When macOS says it needs approval, the toggle offers **Open Login Items Settings…**. |
 | Global shortcut (off by default; default ⌃⌥⌘D: open today's note) | No permission (Carbon hotkeys). ⌃⌥⌘D is free on a stock Mac; ⌥⌘D would clash with macOS's own "Turn Dock hiding on/off". The app detects clashes with common system shortcuts and says which setting to turn off, or pick another shortcut in Settings → General. |
 | Computer use and browser automation by agents | The daemon is the app's child process, so Accessibility and Screen Recording prompts name **Daily Do List**, and Settings → Computer Use walks you through both ([Computer use access](#computer-use-access)). Grants survive rebuilds only when builds are signed with the local identity ([Keeping permissions across builds](#keeping-permissions-across-builds)); after an ad-hoc build, grant them again. |
@@ -473,6 +510,11 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   command show the catalog's keys, and no string in the sources spells a shortcut out. Snapshots
   draw the real bubble where it would show (`app-snapshots/tooltip-*`, `editor-snapshots/tooltip-*`,
   `ui-snapshots/`).
+- **Routines**: `StoreRoutineTests` (the list and its events, runs kept out of the inbox, Run
+  Now's 409/503 alerts, optimistic pause, form errors, drafts), `RoutineNotifierTests`,
+  `RoutineViewTests` (what each screen offers, and the `routines-*` snapshots), the client's
+  `InMemoryRoutineTests` and REST cases, and in the app `RoutineCommandTests`, the tooltip checks
+  and the `main-window-routine*` snapshots.
 - **Computer use access**: `ComputerAccessTests` run the permission flow against fakes (the
   prompt before the System Settings link, the links' fallbacks, the guide's steps, polling that
   stops, the relaunch's order, the banner's rules and its dismissal), and the snapshots draw the

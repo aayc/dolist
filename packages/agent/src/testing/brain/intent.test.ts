@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { addDays, today, toISODate } from "@ddl/core";
+import { addDays, describeSchedulePhrase, today, toISODate } from "@ddl/core";
 import { fc, test } from "@fast-check/vitest";
 import { describe, expect, it } from "vitest";
 import type { Capability } from "../../execution/types";
@@ -27,7 +27,7 @@ interface TriageCase {
     | "drop"
     | "forward"
     | "reply";
-  notify?: "always" | "when_changed";
+  routine?: { schedule?: string; notify?: "always" | "when_changed" | "never" };
   acceptable?: string[];
   capabilities?: Capability[];
   computerAccess?: "missing";
@@ -80,12 +80,25 @@ describe("triage against the eval dataset", () => {
         misses.push(`${c.id}: got ${outcome}, expected ${c.expected}`);
         continue;
       }
-      if (decision.kind === "delegate" && c.capabilities) {
-        const missing = c.capabilities.filter((cap) => !decision.capabilities.includes(cap));
+      const granted =
+        decision.kind === "delegate"
+          ? decision.capabilities
+          : decision.kind === "routine"
+            ? decision.routine.capabilities
+            : [];
+      if (c.capabilities) {
+        const missing = c.capabilities.filter((cap) => !granted.includes(cap));
         if (missing.length > 0) misses.push(`${c.id}: missing capabilities ${missing.join(", ")}`);
       }
-      if (decision.kind === "routine" && c.notify && decision.routine.notify !== c.notify) {
-        misses.push(`${c.id}: notify ${decision.routine.notify}, expected ${c.notify}`);
+      if (decision.kind === "routine" && c.routine) {
+        const { schedule, notify } = c.routine;
+        if (notify && decision.routine.notify !== notify) {
+          misses.push(`${c.id}: notify ${decision.routine.notify}, expected ${notify}`);
+        }
+        const words = describeSchedulePhrase(decision.routine.schedule);
+        if (schedule && words !== describeSchedulePhrase(schedule)) {
+          misses.push(`${c.id}: schedule ${words}, expected ${describeSchedulePhrase(schedule)}`);
+        }
       }
     }
     expect(cases.length).toBeGreaterThan(50);
@@ -195,6 +208,16 @@ describe("routineRequest", () => {
     expect(routineRequest("Research the best espresso grinders under $300")).toBeUndefined();
     expect(triage({ text: "Water the plants every day" }).kind).toBe("ignore");
     expect(triage({ text: "Every morning brief me on the news" }).kind).toBe("routine");
+  });
+
+  it("a recurring request that names an app is still a routine", () => {
+    const desktopApps = ["Calendar", "Notes", "Music"];
+    expect(triage({ text: "Every morning brief me on my calendar", desktopApps }).kind).toBe(
+      "routine",
+    );
+    expect(triage({ text: "Open Calendar and add lunch on Friday", desktopApps }).kind).toBe(
+      "delegate",
+    );
   });
 });
 

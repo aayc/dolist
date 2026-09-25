@@ -110,6 +110,9 @@ extension AppModel {
     let notifier = ApprovalNotifier(store: agent) { [weak self] threadId in
       self?.openThread(threadId)
     }
+    notifier.onOpenRoutineRun = { [weak self] routineId, threadId in
+      self?.openRoutineRun(routineId: routineId, threadId: threadId)
+    }
     notifier.isThreadOnScreen = { [weak self] threadId in
       guard let self else { return false }
       return self.ui.inspectorPresented && self.ui.selectedThreadId == threadId

@@ -9,13 +9,17 @@ import {
   type AppSettings,
   type ArtifactMeta,
   agentModel,
+  type CreateRoutineRequest,
   type Logger,
+  type Routine,
+  type RoutineRunResponse,
   type SurfaceKind,
   type TaskAgentRecord,
   type Thread,
   type ThreadSummary,
   type Unsubscribe,
 } from "@ddl/core";
+import type { StorageProvider } from "@ddl/storage";
 import { errorMessage } from "./errors";
 import { NullAgentRuntime } from "./null-runtime";
 import type { AgentStack } from "./wiring";
@@ -27,6 +31,8 @@ export interface LeasedAgentRuntimeOptions {
   connectors?: Pick<ConnectorToolSource, "status">;
   /** Creates the real runtime (loading threads and records from the vault as they are now). */
   createStack(settings: AppSettings): Promise<AgentStack>;
+  /** The vault as the agent sees it: routine files stay editable while the agent runs elsewhere. */
+  storage?: StorageProvider;
   /** Why the agent isn't running here yet. */
   problem: string;
   logger: Logger;
@@ -39,9 +45,11 @@ type Listener = (payload: never) => void;
  * exists only while this device holds the agent lease. `activate()` creates and starts it from
  * the vault's current state (so it never overwrites what another device's agent wrote);
  * `deactivate()` stops it, which flushes its state for sync. In between, a NullAgentRuntime
- * answers: notes keep working, agent commands fail with the reason (`problem`), and nothing is
- * written to the agent's sidecar files. Listeners follow the current runtime across swaps, and
- * every swap or change of reason emits `status`.
+ * answers: notes and routine files keep working, agent commands (running a routine included) fail
+ * with the reason (`problem`), and nothing is written to the agent's sidecar files. Routines are
+ * scheduled only by the real runtime, so only while this device holds the lease. Listeners follow
+ * the current runtime across swaps, and every swap emits `status` and `routines.changed` (a
+ * change of reason emits `status`).
  */
 export class LeasedAgentRuntime implements AgentRuntime {
   readonly mode: AgentMode;
@@ -68,6 +76,8 @@ export class LeasedAgentRuntime implements AgentRuntime {
       enabled: options.settings.agent.enabled,
       problem: options.problem,
       ...(options.connectors ? { connectors: options.connectors } : {}),
+      ...(options.storage ? { storage: options.storage } : {}),
+      logger: options.logger,
     });
   }
 
@@ -95,6 +105,7 @@ export class LeasedAgentRuntime implements AgentRuntime {
         });
       }
       this.#emitStatus();
+      this.#emitRoutines();
     });
   }
 
@@ -109,12 +120,16 @@ export class LeasedAgentRuntime implements AgentRuntime {
         await this.#dispose(stack);
       }
       this.#emitStatus();
+      if (stack) this.#emitRoutines();
     });
   }
 
   async start(): Promise<void> {
     this.#started = true;
     await this.#enqueue(async () => {
+      await this.#idle.start().catch((error: unknown) => {
+        this.#options.logger.error("Routines failed to load", { error: errorMessage(error) });
+      });
       await this.#active?.runtime.start();
     });
   }
@@ -122,6 +137,7 @@ export class LeasedAgentRuntime implements AgentRuntime {
   async stop(): Promise<void> {
     this.#stopped = true;
     await this.#enqueue(async () => {
+      await this.#idle.stop();
       const stack = this.#active;
       this.#active = null;
       if (!stack) return;
@@ -153,7 +169,11 @@ export class LeasedAgentRuntime implements AgentRuntime {
     return this.#current().getTaskRecords(notePath);
   }
 
-  listThreads(filter?: { notePath?: string; taskId?: string }): ThreadSummary[] {
+  listThreads(filter?: {
+    notePath?: string;
+    taskId?: string;
+    routineId?: string;
+  }): ThreadSummary[] {
     return this.#current().listThreads(filter);
   }
 
@@ -196,6 +216,26 @@ export class LeasedAgentRuntime implements AgentRuntime {
     return this.#current().subscribeSurface(threadId, surface);
   }
 
+  listRoutines(): Routine[] {
+    return this.#current().listRoutines();
+  }
+
+  getRoutine(id: string): Routine | undefined {
+    return this.#current().getRoutine(id);
+  }
+
+  createRoutine(input: CreateRoutineRequest): Promise<Routine> {
+    return this.#current().createRoutine(input);
+  }
+
+  setRoutinePaused(id: string, paused: boolean): Promise<Routine> {
+    return this.#current().setRoutinePaused(id, paused);
+  }
+
+  runRoutine(id: string): Promise<RoutineRunResponse> {
+    return this.#current().runRoutine(id);
+  }
+
   on<K extends keyof AgentRuntimeEvents>(
     event: K,
     listener: (payload: AgentRuntimeEvents[K]) => void,
@@ -225,13 +265,24 @@ export class LeasedAgentRuntime implements AgentRuntime {
   }
 
   #emitStatus(): void {
-    const status = this.status();
-    for (const { event, listener } of [...this.#subscriptions]) {
-      if (event !== "status") continue;
+    this.#emit("status", this.status());
+  }
+
+  /** The other runtime's routines: scheduled or not, with or without live run statuses. */
+  #emitRoutines(): void {
+    this.#emit("routines.changed", this.listRoutines());
+  }
+
+  #emit<K extends keyof AgentRuntimeEvents>(event: K, payload: AgentRuntimeEvents[K]): void {
+    for (const subscription of [...this.#subscriptions]) {
+      if (subscription.event !== event) continue;
       try {
-        (listener as (payload: AgentStatusResponse) => void)(status);
+        (subscription.listener as (payload: AgentRuntimeEvents[K]) => void)(payload);
       } catch (error) {
-        this.#options.logger.error("Agent status listener failed", { error: errorMessage(error) });
+        this.#options.logger.error("Agent runtime listener failed", {
+          event,
+          error: errorMessage(error),
+        });
       }
     }
   }

@@ -49,6 +49,24 @@ public protocol DaemonClient: AnyObject, Sendable {
     -> ApprovalRequest
   func artifact(threadId: String, artifactId: String) async throws -> ArtifactPayload
 
+  // Routines
+  /// Every routine (sorted by name) and the starter templates of "New Routine…".
+  func routines() async throws -> RoutineListResponse
+  func routine(_ id: String) async throws -> Routine
+  /// Writes `Routines/<name>.md`. Throws `.http(status: 400, …)` for a name or schedule the daemon
+  /// can't use (the message says why) and `.http(status: 409, …)` when the name is taken.
+  func createRoutine(_ request: CreateRoutineRequest) async throws -> Routine
+  /// Starts a run now. Throws `.http(status: 409, …)` while a run is going, when the routine has
+  /// a problem or today's extra runs are used up, and `.http(status: 503, …)` when the agent
+  /// can't run on this device.
+  func runRoutine(_ id: String) async throws -> RoutineRunResponse
+  /// Sets `paused: true` in the routine's file.
+  func pauseRoutine(_ id: String) async throws -> Routine
+  /// Sets `paused: false` in the routine's file.
+  func resumeRoutine(_ id: String) async throws -> Routine
+  /// A routine's runs (their threads), newest first.
+  func threads(routineId: String) async throws -> [ThreadSummary]
+
   // Events (WebSocket)
   /// Opens the event connection (idempotent); reconnects automatically until `disconnect()`.
   func connect() async
