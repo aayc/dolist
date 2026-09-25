@@ -71,14 +71,19 @@ Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md). Spec, with the exact wire contra
 | S4 web Settings and pairing screen | from `feat/always-on` | not started (waits for S0) |
 | S5 macOS Settings | from `feat/always-on` | not started (waits for S0) |
 
-Spec change after S0 started: `AgentPlacementStatus.heldHere` and the orchestrator toggle
-(below). When S0 reports, check it has `heldHere`; add it before S1–S5 fork if not.
+Spec changes after S0 started: `AgentPlacementStatus.heldHere`, the orchestrator toggle, and
+fencing (lease `epoch`, `AGENT_OWNED_PREFIXES`, `X-DDL-Lease-Epoch`, the `stale_lease` error).
+When S0 reports, check its contract has them; add what's missing before S1–S5 fork.
 
 Next: when S0 lands, start S1–S5; merge S1, S2, S3, then S4 and S5 into `feat/always-on`; add the
 pairing step to S6's CI smoke test; merge the kit; full verification; `main`; push; CI. After
 that, set up the VM with the kit.
 
 ## Next up (not started)
+
+- **Agent journal** (starts right after routines lands on `main`): append-only agent state,
+  write-ahead for side effects, resuming runs after a handover, idempotent relay mutations.
+  Draft spec: [docs/specs/agent-journal.md](docs/specs/agent-journal.md).
 
 - **iPhone app:** deferred; the web app covers mobile for now. Plan in
   [apps/mobile/PLAN.md](apps/mobile/PLAN.md); needs full Xcode and remote access (S1) first.
@@ -117,6 +122,8 @@ that, set up the VM with the kit.
   always-on machine) is one easy toggle in the agent panel's header, flippable at any time (the
   personal laptop may go local too); it's held on this device while no always-on machine is set
   up.
+- **Journaling** (2026-09-25): not Temporal. Fencing now, in the always-on lease work; the agent
+  journal as its own stream right after routines lands.
 - **iPhone** (2026-09-25): deferred. When it resumes: native Swift, a free Apple ID (no push or
   TestFlight yet), Siri and Shortcuts as the one extra, network still to decide.
 

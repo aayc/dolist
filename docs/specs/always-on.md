@@ -208,8 +208,28 @@ Sync service (`packages/core/src/sync-service.ts`, `apps/sync`):
 export type SyncLeasePriority = "host" | "interactive";
 // SyncLeaseRequest gains:  priority?: SyncLeasePriority   (absent = "interactive")
 // SyncLeaseHolder gains:   priority: SyncLeasePriority;  yieldRequested?: boolean
+//                          epoch: number   (fencing: +1 on every new grant, same on renewal)
 // SyncLeaseConflictBody gains: takeoverPending?: boolean  (this request outranks the holder)
+
+/** Agent-owned sidecar paths: only the current agent lease holder may write them. */
+export const AGENT_OWNED_PREFIXES = [
+  ".daily-do-list/threads/",
+  ".daily-do-list/artifacts/",
+  ".daily-do-list/state/",
+] as const;
+export const LEASE_EPOCH_HEADER = "X-DDL-Lease-Epoch";
+// SyncErrorCode gains "stale_lease" (409): a write, delete or rename touching an agent-owned path
+// without the current agent grant's epoch from this device (X-DDL-Device + epoch header). The
+// body carries `currentEpoch` (number | null) and `holder`.
 ```
+
+**Fencing (user decision, 2026-09-25):** the sync service enforces the rule above on every write,
+delete and rename that touches an agent-owned path (settings.json is not agent-owned: any device may
+change settings). The daemon's sync engine sends the header for agent-owned paths while it holds
+the lease; on `stale_lease` it drops its local changes to those paths in favor of the server's
+(they were written under a former grant) and logs a warning, never a conflict copy. A former
+holder can therefore never overwrite the current holder's agent state. All devices must run a
+daemon with fencing (document it in the upgrade notes).
 
 Swift: `DailyDoListModels` mirrors all of the above and decodes the new fixtures; unknown enum
 values decode leniently (follow the existing `WireEnum` pattern). Keep everything additive so
@@ -266,7 +286,10 @@ older clients still decode.
   `config.json` sync + `sync-token` 0600 and applies live; if a restart is truly unavoidable,
   say so in the response and document it), lease priorities and takeover in `apps/sync` and the
   daemon's lease client, live placement changes (switching away releases the lease cleanly),
-  the effective placement and `heldHere` ("no_machine", "no_sync"),
+  the effective placement and `heldHere` ("no_machine", "no_sync"), **fencing** (lease epochs,
+  the `stale_lease` rule in `apps/sync`, the epoch header and the drop-on-stale behavior in the
+  sync engine and `RemoteStorageProvider`, with a two-device test where a former holder
+  reconnects with unsynced agent writes),
   readiness, `placement`/`readiness` in agent status, `AppSettings.remote` handling, the machine
   link (`/api/machine*`, `$DDL_HOME/machine-token`, periodic status checks only while a client
   watches or on demand), docs in `docs/SYNC.md` (priorities) and `apps/daemon/README.md`.
