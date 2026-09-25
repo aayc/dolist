@@ -23,6 +23,8 @@ them, so work can continue on any machine at any point. Read it before starting;
 
 ## Shipped on `main` (newest first)
 
+- `0a041a6` The orchestrator can search the user's notes (`search_notes`, as subagents could), not
+  only read the ones it's told the name of.
 - `a42bcf3` Routines: standing jobs the agent runs on a schedule, one markdown file each in
   `Routines/`, each run a chat thread in the routine's own inbox, with notifications; on the web
   and the Mac ([docs/specs/routines.md](docs/specs/routines.md), journeys J12 and J13).
