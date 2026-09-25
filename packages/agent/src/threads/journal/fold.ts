@@ -94,6 +94,7 @@ export function applyJournalPayload(
       return;
     case "tool.requested":
     case "tool.decided":
+    case "run.text":
       return;
     default:
       break;

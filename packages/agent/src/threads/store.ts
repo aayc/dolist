@@ -517,6 +517,24 @@ class SidecarThreadStore implements JournaledThreadStore {
       session: sessionId,
       text: truncate(text, MAX_PROMPT_CHARS),
     });
+    // A session is rebuilt from its prompts: don't leave one waiting for the next batch.
+    const entry = this.entries.get(threadId);
+    if (entry) {
+      this.flushJournal(entry).catch((error: unknown) => {
+        this.logger.warn("Failed to journal a prompt; will retry", {
+          threadId,
+          error: errorText(error),
+        });
+      });
+    }
+  }
+
+  recordReply(threadId: string, sessionId: string, text: string): void {
+    this.record(threadId, {
+      type: "run.text",
+      session: sessionId,
+      text: truncate(text, MAX_PROMPT_CHARS),
+    });
   }
 
   openToolCalls(threadId: string): OpenToolCall[] {

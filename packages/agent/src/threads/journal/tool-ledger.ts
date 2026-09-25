@@ -69,7 +69,11 @@ function journaled(
     });
     const decision = await session.beforeToolCall(call);
     if (!decision.allow) {
-      journal.recordToolBlocked(threadId, call.toolCallId, decision.reason);
+      // Blocked because the session is closing (the agent stopping) isn't a verdict: a resumed
+      // run finds the call undecided and asks again.
+      if (session.signal?.aborted !== true) {
+        journal.recordToolBlocked(threadId, call.toolCallId, decision.reason);
+      }
       return decision;
     }
     try {
@@ -96,10 +100,17 @@ function journaled(
   };
 
   const onEvent = (event: HarnessEvent): void => {
+    if (event.type === "message_end" && session.role === "subagent" && event.text.trim()) {
+      const threadId = threadFor(session.sessionId);
+      if (threadId) journal.recordReply(threadId, session.sessionId, event.text);
+    }
     if (event.type === "tool_end") {
       const threadId = calls.get(event.toolCallId);
-      if (threadId) {
-        calls.delete(event.toolCallId);
+      calls.delete(event.toolCallId);
+      // A call cut off by the session closing may or may not have done its work (it stays open),
+      // and one blocked by it was never decided.
+      const cutOff = event.isError && session.signal?.aborted === true;
+      if (threadId && !cutOff) {
         journal.recordToolFinished(threadId, event.toolCallId, {
           outcome: event.blocked ? "blocked" : event.isError ? "error" : "ok",
           // Only a subagent's session is ever rebuilt; the orchestrator's results aren't kept.

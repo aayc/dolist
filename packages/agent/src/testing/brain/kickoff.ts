@@ -3,7 +3,7 @@
  * and the steering / follow-up messages (user replies, orchestrator messages, task edits, the
  * finish nudge). Round-trip tests keep this in sync with the prompt builders.
  */
-import { FINISH_NUDGE } from "../../prompts/subagent";
+import { FINISH_NUDGE, RESUME_NOTE } from "../../prompts/subagent";
 import { readJsonString } from "./text";
 
 export interface ParsedKickoff {
@@ -114,6 +114,8 @@ export function parseSteer(text: string): SteerMessage[] {
 function parseOne(part: string): SteerMessage | null {
   if (!part) return null;
   if (part === FINISH_NUDGE) return { kind: "nudge" };
+  // A session restored after a restart: nothing to adjust, the plan simply continues.
+  if (part === RESUME_NOTE) return null;
   const reply = "The user replied in the thread: ";
   if (part.startsWith(reply)) {
     return { kind: "user_reply", text: readJsonString(part, reply.length)?.value ?? part };

@@ -118,6 +118,8 @@ export interface ThreadJournal {
   recordToolFinished(threadId: string, callId: string, end: ToolCallEnd): void;
   /** A prompt sent to the thread's agent session. */
   recordPrompt(threadId: string, sessionId: string, text: string): void;
+  /** The final text of one message the session's model wrote. */
+  recordReply(threadId: string, sessionId: string, text: string): void;
   /** Calls that started and never finished: after a restart, they may or may not have happened. */
   openToolCalls(threadId: string): OpenToolCall[];
   /** Marks open calls (all, or these) interrupted, never to be re-run automatically. */

@@ -489,7 +489,7 @@ describe("restarts", () => {
     await second.waitForStatus(task, "done");
   });
 
-  it("marks interrupted work as failed and lets the user retry it", async () => {
+  it("leaves work a stop interrupted as it was, and the next start picks it back up", async () => {
     const storage = new MemoryStorageProvider();
     const first = await createTestRuntime({
       storage,
@@ -499,16 +499,14 @@ describe("restarts", () => {
     await first.storage.write(TODAY, `- [ ] ${task}\n`);
     await first.waitForStatus(task, "working");
     await first.runtime.stop();
-    expect(first.record(task)).toMatchObject({ status: "failed", summary: "Interrupted" });
+    expect(first.record(task)).toMatchObject({ status: "working" });
 
     const second = await runtime({ storage });
-    const record = second.record(task);
-    expect(record).toMatchObject({ status: "failed", summary: "Interrupted" });
-    await second.runtime.retryThread(record!.threadId!);
     await second.waitForStatus(task, "done");
+    expect(second.texts(task)).not.toContain("Interrupted because the agent restarted.");
   });
 
-  it("recovers records left active by a crash", async () => {
+  it("picks records left active by a crash back up", async () => {
     const storage = new MemoryStorageProvider();
     const first = await createTestRuntime({
       storage,
@@ -537,6 +535,6 @@ describe("restarts", () => {
     });
     await first.runtime.stop();
     const second = await runtime({ storage: crashed });
-    expect(second.record(task)).toMatchObject({ status: "failed", summary: "Interrupted" });
+    await second.waitForStatus(task, "done");
   });
 });

@@ -157,6 +157,8 @@ const LineSchema = z.discriminatedUnion("type", [
   z.object({ ...envelope, type: z.literal("tool.interrupted"), call: CallIdSchema }),
   /** A prompt sent to the thread's agent session (to rebuild the session after a restart). */
   z.object({ ...envelope, type: z.literal("run.prompted"), session: z.string(), text: z.string() }),
+  /** The final text of one message the session's model wrote (the same rebuild). */
+  z.object({ ...envelope, type: z.literal("run.text"), session: z.string(), text: z.string() }),
 ]);
 type Line = z.output<typeof LineSchema>;
 

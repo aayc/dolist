@@ -19,6 +19,7 @@ import {
   type SurfaceKind,
   silentLogger,
   type TaskAgentRecord,
+  type TaskAgentStatus,
   type Thread,
   type ThreadSummary,
   type ToolSpec,
@@ -70,6 +71,7 @@ import type {
 } from "./safety/types";
 import type { OpenToolCall } from "./threads/journal/fold";
 import { journalingHarness } from "./threads/journal/tool-ledger";
+import { buildTranscript } from "./threads/journal/transcript";
 import { SourceCatalog } from "./threads/sources";
 import { createThreadStore } from "./threads/store";
 import type { JournaledThreadStore } from "./threads/types";
@@ -81,6 +83,13 @@ import { createRoutineTools } from "./tools/routines";
 
 /** Editor activity warms the harness (`warmUp`) at most this often. */
 const WARM_UP_INTERVAL_MS = 5_000;
+
+/** A subagent was on it (or about to be) when the agent stopped. */
+const RESUMABLE_STATUSES: ReadonlySet<TaskAgentStatus> = new Set([
+  "queued",
+  "working",
+  "waiting_approval",
+]);
 
 /** Seams for tests and embedders; production callers pass nothing. */
 export interface AgentRuntimeOverrides {
@@ -218,6 +227,8 @@ class Runtime implements AgentRuntime {
   private readonly keyChecks = new Map<string, Promise<OpenRouterKeyCheck>>();
   private lastWarmUp = Number.NEGATIVE_INFINITY;
   private recoveredTriage = false;
+  /** Tasks whose work was going when the agent last stopped: `start()` picks them back up. */
+  private interruptedWork: string[] = [];
   private statusQueued = false;
   private lastStatusJson = "";
 
@@ -436,6 +447,7 @@ class Runtime implements AgentRuntime {
     if (this.mode !== "off") void this.computerStatus.refresh();
     await this.harnessReady;
     if (this.stopped) return;
+    await this.resumeInterruptedWork();
     if (this.canRun() && this.enabled) await this.startWatching();
     this.syncScheduler({ catchUp: true });
     this.queueStatus();
@@ -1106,20 +1118,15 @@ class Runtime implements AgentRuntime {
     }
   }
 
-  /** Sessions don't survive restarts: interrupted work becomes retryable, stale approvals go. */
+  /**
+   * Work that was going when the agent last stopped is picked back up by `start()` (it keeps its
+   * status until then); approvals left pending go (a resumed run asks again).
+   */
   private reconcileAfterRestart(): void {
-    for (const record of this.records.all()) {
-      if (
-        record.status === "queued" ||
-        record.status === "working" ||
-        record.status === "waiting_approval"
-      ) {
-        this.board.setStatus(record.taskId, "failed", {
-          summary: "Interrupted",
-          note: "Interrupted because the agent restarted. Use Retry to continue.",
-        });
-      }
-    }
+    this.interruptedWork = this.records
+      .all()
+      .filter((record) => RESUMABLE_STATUSES.has(record.status))
+      .map((record) => record.taskId);
     const stale = this.safely(() => this.broker.list({ status: "pending" }), []);
     for (const taskId of new Set(stale.map((a) => a.taskId))) {
       if (!taskId) continue;
@@ -1128,6 +1135,58 @@ class Runtime implements AgentRuntime {
         undefined,
       );
     }
+  }
+
+  /**
+   * Resumes the work `reconcileAfterRestart` found, each from its journal: a new session restored
+   * from the transcript of the last one continues it (the same path a handover takes). Work that
+   * stopped in the middle of an action that may or may not have happened isn't resumed: the user
+   * decides, with Retry. Without a harness, or without anything to run, it's interrupted as before.
+   */
+  private async resumeInterruptedWork(): Promise<void> {
+    for (const taskId of this.interruptedWork.splice(0)) {
+      const record = this.records.get(taskId);
+      if (!record || !RESUMABLE_STATUSES.has(record.status)) continue;
+      try {
+        await this.resumeWork(record);
+      } catch (error) {
+        this.logError("resume", error);
+        this.board.setStatus(taskId, "failed", {
+          summary: "Interrupted",
+          note: "Interrupted because the agent restarted. Use Retry to continue.",
+        });
+      }
+    }
+  }
+
+  private async resumeWork(record: TaskAgentRecord): Promise<void> {
+    const interrupted = (note: string) =>
+      this.board.setStatus(record.taskId, "failed", { summary: "Interrupted", note });
+    const restarted = "Interrupted because the agent restarted. Use Retry to continue.";
+    const threadId = record.threadId;
+    if (!this.canRun() || this.stopped || !threadId || !this.records.getSpec(record.taskId)) {
+      interrupted(restarted);
+      return;
+    }
+    if (this.threads.interruptedCalls(threadId).some((call) => call.effectful)) {
+      interrupted(
+        "The agent stopped in the middle of an action that may or may not have happened, so it didn't pick this back up on its own. Use Retry when you've checked: it asks again before doing anything.",
+      );
+      return;
+    }
+    if (isRoutineRunId(record.taskId) && !this.scheduler.adoptRun(record.taskId)) {
+      interrupted(restarted);
+      return;
+    }
+    const restored = buildTranscript(await this.threads.readJournal(threadId));
+    this.board.setStatus(record.taskId, record.status === "queued" ? "queued" : "working", {
+      note: "Picking this back up after the agent restarted.",
+    });
+    const resumed = this.subagents.resume(record.taskId, {
+      transcript: restored?.entries ?? [],
+      ...(restored ? { sessionId: restored.sessionId } : {}),
+    });
+    if (!resumed) interrupted(restarted);
   }
 
   private resolveGateContext(sessionId: string): GateContext {

@@ -28,6 +28,7 @@ import type {
   HarnessSession,
   ToolCallDecision,
   ToolCallRequest,
+  TranscriptEntry,
 } from "../harness/types";
 import {
   buildSubagentKickoff,
@@ -35,6 +36,7 @@ import {
   buildThreadHistory,
   FINISH_NUDGE,
   formatSteerMessage,
+  RESUME_NOTE,
   type SteerSource,
 } from "../prompts/subagent";
 import type { RoutineBrief } from "../routines/scheduler";
@@ -117,7 +119,9 @@ type RunState = "queued" | "starting" | "running" | "idle";
 
 type PendingPrompt =
   | { kind: "kickoff"; reassignment: boolean; retry: boolean }
-  | { kind: "message"; text: string };
+  | { kind: "message"; text: string }
+  /** Picking up a run the agent stopped in the middle of, from the journal's transcript. */
+  | { kind: "resume"; transcript: readonly TranscriptEntry[]; sessionId?: string };
 
 interface TurnState {
   finishStatus?: TaskAgentStatus;
@@ -125,6 +129,8 @@ interface TurnState {
   changed?: boolean;
   askedUser: boolean;
   error?: string;
+  /** The session to pick a run back up couldn't start. */
+  resumeFailed?: boolean;
   /** Text of the turn's final assistant message ("" when it ended with tool calls only). */
   finalText: string;
   nudged: boolean;
@@ -339,6 +345,32 @@ export class SubagentManager {
     return this.request(run, false);
   }
 
+  /**
+   * Picks up a task whose run the agent stopped in the middle of (a restart, a handover): a new
+   * session restored from `transcript` (the journal's record of the last session) continues it.
+   * Without a transcript it's primed with the thread's history instead. Null when there's no
+   * spec to run, or the task already has a subagent.
+   */
+  resume(
+    taskId: string,
+    restored: { transcript: readonly TranscriptEntry[]; sessionId?: string } = { transcript: [] },
+  ): SpawnResult | null {
+    if (this.stopped || this.runs.has(taskId)) return null;
+    const spec = this.options.records.getSpec(taskId);
+    if (!spec) return null;
+    const thread = this.options.board.ensureThread(taskId);
+    const run = this.createRun(spec, thread.id);
+    const { transcript } = restored;
+    run.needsHistory = transcript.length === 0 && hasHistory(thread);
+    run.pending = {
+      kind: "resume",
+      transcript,
+      ...(transcript.length > 0 && restored.sessionId ? { sessionId: restored.sessionId } : {}),
+    };
+    this.runs.set(taskId, run);
+    return this.request(run, true);
+  }
+
   /** Starts queued work when slots are free (call after the concurrency limit changes). */
   pump(): void {
     while (this.queue.length > 0 && this.runningCount() < this.maxConcurrent()) {
@@ -348,19 +380,18 @@ export class SubagentManager {
     }
   }
 
-  /** Aborts everything. Interrupted work is marked failed so the user can retry it. */
+  /**
+   * Aborts everything. Work in progress keeps its status, so the next start (here, or on the
+   * device taking the agent over) picks it back up from the journal; its pending approvals are
+   * cancelled (the resumed run asks again).
+   */
   async stop(): Promise<void> {
     this.stopped = true;
     await Promise.all(
       [...this.runs.values()].map(async (run) => {
         const interrupted = run.state !== "idle";
-        await this.close(run);
-        if (!interrupted) return;
-        this.cancelApprovals(run.taskId, "The agent stopped.");
-        this.options.board.setStatus(run.taskId, "failed", {
-          summary: "Interrupted",
-          note: "Interrupted because the agent stopped. Use Retry to continue.",
-        });
+        await this.close(run, "Interrupted");
+        if (interrupted) this.cancelApprovals(run.taskId, "The agent stopped.");
       }),
     );
   }
@@ -428,7 +459,12 @@ export class SubagentManager {
             ? buildThreadHistory(thread, this.options.records.get(run.taskId)?.status)
             : undefined;
         }
-        await this.openSession(run);
+        try {
+          await this.openSession(run);
+        } catch (error) {
+          if (run.pending?.kind === "resume") run.turn.resumeFailed = true;
+          throw error;
+        }
         run.needsHistory = false;
       }
       if (run.closed || !run.session) return;
@@ -456,7 +492,13 @@ export class SubagentManager {
     const { turn } = run;
     const board = this.options.board;
     let status: TaskAgentStatus;
-    if (turn.error) {
+    if (turn.error && turn.resumeFailed) {
+      status = "failed";
+      board.setStatus(run.taskId, "failed", {
+        summary: "Interrupted",
+        note: `Couldn't pick this back up after the agent restarted (${truncate(turn.error, 300)}). Use Retry to continue.`,
+      });
+    } else if (turn.error) {
       status = "failed";
       board.setStatus(run.taskId, "failed", {
         summary: `Failed: ${truncate(turn.error, 50)}`,
@@ -496,13 +538,13 @@ export class SubagentManager {
     }
   }
 
-  private async close(run: Run): Promise<void> {
+  private async close(run: Run, reason = "Cancelled"): Promise<void> {
     if (run.closed) return;
     run.closed = true;
     if (this.runs.get(run.taskId) === run) this.runs.delete(run.taskId);
     this.queue = this.queue.filter((r) => r !== run);
     run.controller.abort();
-    this.finalizeStreams(run, "Cancelled");
+    this.finalizeStreams(run, reason);
     await this.disposeSession(run);
     this.options.onChange();
   }
@@ -513,7 +555,10 @@ export class SubagentManager {
     run.workspace ??= await this.options.execution.prepareWorkspace(run.threadId);
     const task = this.options.board.describe(run.taskId);
     const tools = await this.buildTools(run, task);
-    const sessionId = this.nextSessionId(run);
+    const resume = run.pending?.kind === "resume" ? run.pending : undefined;
+    // A restored session keeps its id: its journal is one conversation across restarts.
+    const sessionId = resume?.sessionId ?? this.nextSessionId(run);
+    if (resume?.sessionId) this.usedSessionIds.add(run.threadId);
     const capabilities = run.spec.capabilities;
     this.bySession.set(sessionId, run);
     let session: HarnessSession;
@@ -533,6 +578,7 @@ export class SubagentManager {
         beforeToolCall: this.options.beforeToolCall,
         onEvent: (event) => this.onEvent(run, event),
         signal: run.controller.signal,
+        ...(resume?.transcript.length ? { transcript: resume.transcript } : {}),
       });
     } catch (error) {
       this.bySession.delete(sessionId);
@@ -597,7 +643,10 @@ export class SubagentManager {
     const pending = run.pending;
     run.pending = undefined;
     const inbox = run.inbox.splice(0);
-    if (fresh || pending?.kind === "kickoff") {
+    if (pending?.kind === "resume" && pending.transcript.length > 0) {
+      return [RESUME_NOTE, ...inbox].join("\n\n");
+    }
+    if (fresh || pending?.kind === "kickoff" || pending?.kind === "resume") {
       const task = this.options.board.describe(run.taskId);
       const record = this.options.records.get(run.taskId);
       const routine = this.options.routineBrief?.(run.taskId);
@@ -620,6 +669,7 @@ export class SubagentManager {
         followUps: pending?.kind === "message" ? [pending.text, ...inbox] : inbox,
         reassignment: !fresh && pending?.kind === "kickoff" && pending.reassignment,
         retry: pending?.kind === "kickoff" && pending.retry,
+        ...(pending?.kind === "resume" ? { resumed: true } : {}),
       });
     }
     return [pending?.kind === "message" ? pending.text : "", ...inbox]

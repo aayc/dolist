@@ -77,6 +77,39 @@ describe("pi-http: the real harness against the fake OpenRouter", () => {
     expectAllGated(t);
   });
 
+  it("a restart mid-approval restores the Pi session from the journal, which asks again", async () => {
+    const t = await fakeRuntime({ via: "pi-http", execution: { browser: true } });
+    const task = "Order printer ink (HP 63XL)";
+    await t.writeDailyNote([`- [ ] ${task}`]);
+    const first = await t.waitForApproval();
+    const server = t.server!;
+    const before = server.chatRequests().length;
+
+    await t.restart();
+    const again = await t.waitForApproval();
+    expect(again.id).not.toBe(first.id);
+    const restored = server
+      .chatRequests()
+      .slice(before)
+      .find((r) => r.stream && isSubagentRequest(r))!;
+    const messages = (restored.body as { messages: Array<{ role: string; content?: unknown }> })
+      .messages;
+    const text = (m: { content?: unknown }) =>
+      typeof m.content === "string" ? m.content : JSON.stringify(m.content ?? "");
+    // The whole conversation came back: the kickoff, the calls made and their results, then the
+    // note that the agent restarted.
+    expect(messages.filter((m) => m.role === "user").map(text)[0]).toContain(`Task: "${task}"`);
+    expect(messages.some((m) => m.role === "tool")).toBe(true);
+    expect(text(messages.at(-1)!)).toContain("The agent restarted while you were working");
+    expect(t.execution.browser!.effects).toEqual([]);
+
+    await t.approveNext();
+    await t.waitForStatus(task, "done");
+    expect(t.execution.browser!.effects).toHaveLength(1);
+    expect(t.kickoffs()).toHaveLength(1);
+    expectAllGated(t);
+  });
+
   it("a tool the policy blocks is refused by Pi and reported by the agent", async () => {
     const t = await fakeRuntime({
       via: "pi-http",
