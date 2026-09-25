@@ -59,7 +59,7 @@ Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md). Spec, with the exact wire contra
 | S0 wire contract | `feat/always-on` | done at `45a7cd1` (incl. `heldHere` and the fencing types); `main` (routines) merged in at `a0a924f` |
 | S6 VM setup kit (Linux bundle, systemd, Azure guide, CI smoke) | `feat/always-on-kit` | done (`fa54df1`); `setup.sh` under real systemd passed in OrbStack on Ubuntu 24.04 and 26.04 arm64 (with the sandbox checked from inside each service); now switching the Azure guide to a public IP with inbound closed and `Standard_D4ps_v6` |
 | S1 remote access and pairing | `feat/always-on-remote` | done (`48d4ec7`), merged into `feat/always-on` at `0501be1` |
-| S2 placement, lease priorities, fencing, machine link | `feat/always-on-placement` | in progress |
+| S2 placement, lease priorities, fencing, machine link | `feat/always-on-placement` | done (`bb18e4b`), merged into `feat/always-on` at `394a6dd` (with S1: daemon 1061, sync 63, storage 303, contract 1123 tests green) |
 | S3 relay | `feat/always-on-relay` (from `a0a924f`) | in progress |
 | S4 web Settings, the orchestrator toggle, pairing screen | `feat/always-on-web` (from `a0a924f`) | in progress; stops at "ready for backend" before its fullstack e2e |
 | S5 macOS Settings and the orchestrator toggle | `feat/always-on-mac` (from `a0a924f`) | in progress |
@@ -83,8 +83,13 @@ guide adds a NAT gateway (outbound internet without a public IP), which bills ev
 deallocated; per the user's decision, switch the guide's default to a public IP with every
 inbound port closed (keep the NAT gateway as an option) and recommend `Standard_D4ps_v6` (arm64).
 
-Next: merge S1, S2, S3, then S4 and S5 into `feat/always-on` (resume S4 for its fullstack e2e
-after S1/S2 are in); add the pairing step to S6's CI smoke test; merge the kit; full
+Now unblocked by S1+S2 on `feat/always-on`: S4's fullstack e2e (merge `feat/always-on` into
+`feat/always-on-web` when S4 reports "ready for backend", then resume it), the kit's follow-ups
+(the pairing smoke step, dropping the `config.json` override), and S3's wiring to S2's
+`agent-location.ts` (S2 names: `MachineCredentialSource.current()`, `PlacementSource.current()`,
+`setRelay()`; S3 coded against `credential()`/`effective()`: adapt at merge).
+
+Next: merge S3, then S4 and S5 into `feat/always-on`; add the pairing step to S6's CI smoke test; merge the kit; full
 verification; `main`; push; CI; install. After that, set up the VM with the kit.
 
 ### Drawings in notes (Excalidraw-compatible)
