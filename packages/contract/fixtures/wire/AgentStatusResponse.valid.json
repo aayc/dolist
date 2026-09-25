@@ -147,5 +147,54 @@
       },
       "placement": { "placement": "always_on_machine", "runsOn": null, "relay": "not_paired" }
     }
+  },
+  {
+    "name": "set to the always-on machine, held here: none is set up",
+    "value": {
+      "mode": "live",
+      "enabled": true,
+      "model": "deepseek/deepseek-v4.1-flash",
+      "running": 0,
+      "queued": 0,
+      "pendingApprovals": 0,
+      "connectors": [],
+      "execution": {
+        "provider": "local",
+        "capabilities": { "shell": true, "browser": true, "computer": true }
+      },
+      "placement": {
+        "placement": "always_on_machine",
+        "heldHere": "no_machine",
+        "runsOn": {
+          "deviceId": "dev_a1b2c3d4e5f6g7h8i9j0",
+          "name": "Work laptop",
+          "thisDevice": true,
+          "alwaysOnMachine": false
+        },
+        "relay": "off"
+      }
+    }
+  },
+  {
+    "name": "set to the always-on machine, held here: this device doesn't sync",
+    "value": {
+      "mode": "live",
+      "enabled": true,
+      "model": "deepseek/deepseek-v4.1-flash",
+      "running": 0,
+      "queued": 0,
+      "pendingApprovals": 0,
+      "connectors": [],
+      "execution": {
+        "provider": "local",
+        "capabilities": { "shell": true, "browser": true, "computer": false }
+      },
+      "placement": {
+        "placement": "always_on_machine",
+        "heldHere": "no_sync",
+        "runsOn": null,
+        "relay": "off"
+      }
+    }
   }
 ]

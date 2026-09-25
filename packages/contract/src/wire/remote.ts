@@ -64,7 +64,15 @@ export const AgentPlacementStatusSchema = named(
   "AgentPlacementStatus",
   "This device's placement and who runs the agent now.",
   z.looseObject({
-    placement: AgentPlacementSchema,
+    placement: AgentPlacementSchema.describe(
+      "The stored choice (see `heldHere` for when it can't apply).",
+    ),
+    heldHere: z
+      .enum(["no_machine", "no_sync"])
+      .optional()
+      .describe(
+        "Why the agent is held on this device despite the stored choice: no always-on machine is set up (`no_machine`), or this device doesn't sync (`no_sync`).",
+      ),
     runsOn: AgentRunsOnSchema.nullable().describe(
       "Who runs the agent now (null: nobody, or unknown without sync).",
     ),

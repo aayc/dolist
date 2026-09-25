@@ -143,6 +143,7 @@ const agentStatus = shape({
   placement: optional(
     shape({
       placement: str,
+      heldHere: optional(str),
       runsOn: nullable(
         shape({ deviceId: str, name: str, thisDevice: bool, alwaysOnMachine: bool }),
       ),

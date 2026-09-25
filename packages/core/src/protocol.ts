@@ -402,7 +402,14 @@ export interface AgentRunsOn {
 export type RelayState = "off" | "connecting" | "connected" | "unreachable" | "not_paired";
 
 export interface AgentPlacementStatus {
+  /** The stored choice (see heldHere for when it can't apply). */
   placement: AgentPlacement;
+  /**
+   * Why the agent is held on this device despite the stored choice: no always-on machine is set
+   * up (`no_machine`) or this device doesn't sync (`no_sync`). The stored choice applies again
+   * once both are set up.
+   */
+  heldHere?: "no_machine" | "no_sync";
   /** Who runs the agent now (null: nobody, or unknown without sync). */
   runsOn: AgentRunsOn | null;
   relay: RelayState;

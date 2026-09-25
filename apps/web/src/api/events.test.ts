@@ -160,6 +160,13 @@ describe("parseServerEvent", () => {
         type: "agent.status",
         status: {
           ...AGENT_STATUS,
+          placement: { placement: "always_on_machine", heldHere: 1, runsOn: null, relay: "off" },
+        },
+      },
+      {
+        type: "agent.status",
+        status: {
+          ...AGENT_STATUS,
           readiness: {
             harness: { kind: "pi" },
             modelCredential: true,

@@ -831,6 +831,7 @@ function agentPlacementStatus(): Arb<core.AgentPlacementStatus> {
   return fc.record(
     {
       placement: agentPlacement(),
+      heldHere: enumOf<NonNullable<core.AgentPlacementStatus["heldHere"]>>("no_machine", "no_sync"),
       runsOn: maybe(agentRunsOn()),
       relay: relayState(),
       note: fc.oneof(fc.constantFrom(...PLACEMENT_NOTES), p.text(200)),

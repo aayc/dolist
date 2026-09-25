@@ -1339,7 +1339,13 @@
       "type": "object",
       "properties": {
         "placement": {
+          "description": "The stored choice (see `heldHere` for when it can't apply).",
           "$ref": "#/$defs/AgentPlacement"
+        },
+        "heldHere": {
+          "description": "Why the agent is held on this device despite the stored choice: no always-on machine is set up (`no_machine`), or this device doesn't sync (`no_sync`).",
+          "type": "string",
+          "enum": ["no_machine", "no_sync"]
         },
         "runsOn": {
           "anyOf": [

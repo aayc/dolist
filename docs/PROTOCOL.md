@@ -1068,7 +1068,8 @@ This device's placement and who runs the agent now.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `placement` | [`AgentPlacement`](#agentplacement) | yes |  |
+| `placement` | [`AgentPlacement`](#agentplacement) | yes | The stored choice (see `heldHere` for when it can't apply). |
+| `heldHere` | `"no_machine"` \| `"no_sync"` | no | Why the agent is held on this device despite the stored choice: no always-on machine is set up (`no_machine`), or this device doesn't sync (`no_sync`). |
 | `runsOn` | [`AgentRunsOn`](#agentrunson) \| `null` | yes | Who runs the agent now (null: nobody, or unknown without sync). |
 | `relay` | [`RelayState`](#relaystate) | yes |  |
 | `note` | string | no | Short, human ("Taking over from vm-1…", "Handing the agent to vm-1…"). |
