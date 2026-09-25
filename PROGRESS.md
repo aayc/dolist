@@ -60,7 +60,7 @@ Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md). Spec, with the exact wire contra
 | S6 VM setup kit (Linux bundle, systemd, Azure guide, CI smoke) | `feat/always-on-kit` | Azure guide done (`9494baa`: public IP with all inbound closed, `--nsg ""`, `Standard_D4ps_v6` on the Gen2 arm64 image with the NVMe controller; OpenSSH off at first boot); `feat/always-on` merged in; now adding the pairing smoke step, dropping the config override, an arm64 CI job, and rerunning the systemd test in OrbStack |
 | S1 remote access and pairing | `feat/always-on-remote` | done (`48d4ec7`), merged into `feat/always-on` at `0501be1` |
 | S2 placement, lease priorities, fencing, machine link | `feat/always-on-placement` | done (`bb18e4b`), merged into `feat/always-on` at `394a6dd` (with S1: daemon 1061, sync 63, storage 303, contract 1123 tests green) |
-| S3 relay | `feat/always-on-relay` (from `a0a924f`) | in progress |
+| S3 relay | `feat/always-on-relay` | built (`6f5aa68`); `feat/always-on` merged into it at `569d3a6` (relay wired to S2's supervisor and machine link, `placement-lease.ts` dropped); S3 is fixing 6 daemon tests whose assumptions changed with S2's lease gating, then it merges into `feat/always-on` |
 | S4 web Settings, the orchestrator toggle, pairing screen | `feat/always-on-web` (from `a0a924f`) | in progress; stops at "ready for backend" before its fullstack e2e |
 | S5 macOS Settings and the orchestrator toggle | `feat/always-on-mac` (from `a0a924f`) | in progress |
 
