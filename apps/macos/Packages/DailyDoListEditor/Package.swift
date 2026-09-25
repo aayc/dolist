@@ -2,8 +2,9 @@
 import PackageDescription
 
 // Native markdown editor (AppKit/TextKit): Obsidian-style styling and live preview, clickable task
-// checkboxes, agent badges, list editing commands, and vim mode (DailyDoListVim drives the text
-// view through `VimEditor`). The tests replay the web app's vim vectors through the real editor.
+// checkboxes, agent badges, list editing commands, drawings embedded in notes (DailyDoListDrawing
+// draws and edits them), and vim mode (DailyDoListVim drives the text view through `VimEditor`).
+// The tests replay the web app's vim vectors through the real editor.
 let package = Package(
   name: "DailyDoListEditor",
   platforms: [.macOS(.v14)],
@@ -13,6 +14,7 @@ let package = Package(
   dependencies: [
     .package(path: "../DailyDoListVim"),
     .package(path: "../DailyDoListUI"),
+    .package(path: "../DailyDoListDrawing"),
   ],
   targets: [
     .target(
@@ -20,6 +22,7 @@ let package = Package(
       dependencies: [
         .product(name: "DailyDoListVim", package: "DailyDoListVim"),
         .product(name: "DailyDoListUI", package: "DailyDoListUI"),
+        .product(name: "DailyDoListDrawing", package: "DailyDoListDrawing"),
       ]),
     .testTarget(
       name: "DailyDoListEditorTests",
@@ -29,6 +32,7 @@ let package = Package(
         .product(name: "DailyDoListVimTestSupport", package: "DailyDoListVim"),
         .product(name: "DailyDoListUI", package: "DailyDoListUI"),
         .product(name: "DailyDoListUITestSupport", package: "DailyDoListUI"),
+        .product(name: "DailyDoListDrawing", package: "DailyDoListDrawing"),
       ]),
   ]
 )

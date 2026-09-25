@@ -61,6 +61,15 @@ public final class DrawingCanvasView: NSView {
   /// In display mode, keep the drawing fitted to the view as it resizes.
   public var fitsContentInDisplayMode = true
 
+  /// Whether the canvas shows its tool bar over itself while editing. A host that places the tool
+  /// bar elsewhere (next to a small canvas) turns this off and uses ``makeToolbarView()``.
+  public var showsToolbar = true {
+    didSet {
+      guard showsToolbar != oldValue else { return }
+      updateToolbar()
+    }
+  }
+
   var toolbarHost: NSHostingView<DrawingToolbar>?
   var textEditor: DrawingTextEditor?
   var trackingArea: NSTrackingArea?
@@ -201,8 +210,16 @@ public final class DrawingCanvasView: NSView {
 
   // MARK: Tool bar
 
+  /// A tool bar for this canvas, for the host to place: it follows the editor's tool, selection
+  /// and history like the built-in one.
+  public func makeToolbarView() -> NSView {
+    let host = NSHostingView(rootView: DrawingToolbar(editor: editor, theme: theme))
+    host.frame.size = host.fittingSize
+    return host
+  }
+
   func updateToolbar() {
-    if mode == .editing {
+    if mode == .editing && showsToolbar {
       let toolbar = DrawingToolbar(editor: editor, theme: theme)
       if let toolbarHost {
         toolbarHost.rootView = toolbar

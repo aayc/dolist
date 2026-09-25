@@ -12,8 +12,18 @@ protocol MarkdownTextViewHooks: AnyObject {
   func textViewHandleDeleteBackward(_ textView: MarkdownTextView) -> Bool
   func textView(_ textView: MarkdownTextView, performShortcut event: NSEvent) -> Bool
   func textView(
-    _ textView: MarkdownTextView, mouseDownAt point: NSPoint, modifiers: NSEvent.ModifierFlags
+    _ textView: MarkdownTextView, mouseDownAt point: NSPoint, modifiers: NSEvent.ModifierFlags,
+    clickCount: Int
   ) -> Bool
+  /// The mouse dragged or went up after a mouse down the editor took: true while it has the mouse
+  /// (a drawing being moved or resized).
+  func textView(_ textView: MarkdownTextView, mouseDraggedTo point: NSPoint, event: NSEvent?)
+    -> Bool
+  func textView(_ textView: MarkdownTextView, mouseUpAt point: NSPoint) -> Bool
+  /// The context menu is about to show.
+  func textView(_ textView: MarkdownTextView, willShowMenu menu: NSMenu)
+  /// Light or dark mode changed.
+  func textViewDidChangeAppearance(_ textView: MarkdownTextView)
   /// The pointer moved (nil: it left): tooltips, the hover highlights and the cursor follow it.
   func textView(
     _ textView: MarkdownTextView, mouseMovedTo point: NSPoint?, modifiers: NSEvent.ModifierFlags)
@@ -81,6 +91,13 @@ final class MarkdownTextView: NSTextView {
   // MARK: Keys
 
   override func keyDown(with event: NSEvent) {
+    // A key a subview (a drawing being edited in place) passed up the responder chain: never the
+    // note's, nor vim's.
+    if let responder = window?.firstResponder as? NSView, responder !== self,
+      responder.isDescendant(of: self)
+    {
+      return
+    }
     if hooks?.textView(self, handleKeyDown: event) == true { return }
     super.keyDown(with: event)
   }
@@ -234,8 +251,37 @@ final class MarkdownTextView: NSTextView {
 
   override func mouseDown(with event: NSEvent) {
     let point = convert(event.locationInWindow, from: nil)
-    if hooks?.textView(self, mouseDownAt: point, modifiers: event.modifierFlags) == true { return }
+    if hooks?.textView(
+      self, mouseDownAt: point, modifiers: event.modifierFlags, clickCount: event.clickCount)
+      == true
+    {
+      return
+    }
     super.mouseDown(with: event)
+  }
+
+  override func mouseDragged(with event: NSEvent) {
+    let point = convert(event.locationInWindow, from: nil)
+    if hooks?.textView(self, mouseDraggedTo: point, event: event) == true { return }
+    super.mouseDragged(with: event)
+  }
+
+  override func mouseUp(with event: NSEvent) {
+    if hooks?.textView(self, mouseUpAt: convert(event.locationInWindow, from: nil)) == true {
+      return
+    }
+    super.mouseUp(with: event)
+  }
+
+  override func menu(for event: NSEvent) -> NSMenu? {
+    let menu = super.menu(for: event)
+    if let menu { hooks?.textView(self, willShowMenu: menu) }
+    return menu
+  }
+
+  override func viewDidChangeEffectiveAppearance() {
+    super.viewDidChangeEffectiveAppearance()
+    hooks?.textViewDidChangeAppearance(self)
   }
 
   override func mouseMoved(with event: NSEvent) {

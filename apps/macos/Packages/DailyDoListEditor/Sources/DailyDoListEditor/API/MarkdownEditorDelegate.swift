@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 
 @MainActor
 public protocol MarkdownEditorDelegate: AnyObject {
@@ -24,9 +24,25 @@ public protocol MarkdownEditorDelegate: AnyObject {
   /// start loading what it needs) and again when its tooltip shows. Return what's known now; nil
   /// shows `link.fallbackText`.
   func editor(_ editor: MarkdownEditorController, previewFor link: EditorLinkPreview) -> String?
+  /// The drawing an embed names (`target` as written: `Plan.excalidraw`). Asked when an embed
+  /// line is laid out, then remembered: answer what's known now (`.loading` while reading it) and
+  /// call `drawingsDidChange()` when it changes. nil (the default) keeps embeds as text.
+  func editor(_ editor: MarkdownEditorController, drawingFor target: String) -> EditorDrawingState?
+  /// A change made while editing a drawing in place (every committed change): save it, debounced.
+  func editor(_ editor: MarkdownEditorController, didEditDrawing drawing: EditorDrawing)
+  /// Editing a drawing in place ended: a good moment to save it now.
+  func editor(_ editor: MarkdownEditorController, didEndEditingDrawing path: String)
+  /// The editor's context menu is about to open: add the host's items (Insert Drawing).
+  func editor(_ editor: MarkdownEditorController, willShowContextMenu menu: NSMenu)
 }
 
 extension MarkdownEditorDelegate {
+  public func editor(_ editor: MarkdownEditorController, drawingFor target: String)
+    -> EditorDrawingState?
+  { nil }
+  public func editor(_ editor: MarkdownEditorController, didEditDrawing drawing: EditorDrawing) {}
+  public func editor(_ editor: MarkdownEditorController, didEndEditingDrawing path: String) {}
+  public func editor(_ editor: MarkdownEditorController, willShowContextMenu menu: NSMenu) {}
   public func editorTextDidChange(_ editor: MarkdownEditorController, text: String) {}
   public func editor(_ editor: MarkdownEditorController, didClickBadge badge: EditorBadge) {}
   public func editor(

@@ -19,6 +19,9 @@ enum MarkerKind: Int, Sendable, CaseIterable {
   case task
   case bullet
   case agent
+  /// A whole line that is one drawing embed (`![[Plan.excalidraw|360|right-wrap]]`): the drawing
+  /// is drawn instead while the line is hidden. Last, so it wins over the link's own markers.
+  case embed
 
   /// Drawn as something else (checkbox, dot, sparkle) in a fixed-width slot instead of just
   /// disappearing.
@@ -163,6 +166,8 @@ struct LineTokens: Equatable, Sendable {
   var listPrefix: ListPrefixLayout?
   /// The agent marker ending the line, when the agent wrote it.
   var agent: AgentMarkerToken?
+  /// The `![[…]]` of a drawing embed alone on its line (spaces aside).
+  var embed: NSRange?
 
   init(kind: LineKind) {
     self.kind = kind
@@ -184,6 +189,7 @@ struct LineTokens: Equatable, Sendable {
     copy.listMarker = listMarker?.shifted(by: delta)
     copy.listPrefix = listPrefix?.offset(by: delta)
     copy.agent = agent?.offset(by: delta)
+    copy.embed = embed?.shifted(by: delta)
     return copy
   }
 }
