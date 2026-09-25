@@ -89,10 +89,15 @@ jobs:
       - name: Shared packages build for iOS
         # The Foundation-only packages the planned iPhone app reuses must not pick up AppKit.
         # DailyDoListComputer (the ddl-computer helper) is macOS-only, so it isn't listed.
+        # `package:scheme` builds one library of a package (DailyDoListDrawing's model; its
+        # renderer and canvas are AppKit).
         run: |
-          for pkg in DailyDoListModels DailyDoListClient DailyDoListDomain DailyDoListVim; do
-            echo "::group::$pkg"
-            (cd "apps/macos/Packages/$pkg" && xcodebuild build -quiet -scheme "$pkg" \
+          for entry in DailyDoListModels DailyDoListClient DailyDoListDomain DailyDoListVim \
+            DailyDoListDrawing:DailyDoListDrawingModel; do
+            pkg="${entry%%:*}"
+            scheme="${entry#*:}"
+            echo "::group::$scheme"
+            (cd "apps/macos/Packages/$pkg" && xcodebuild build -quiet -scheme "$scheme" \
               -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO)
             echo "::endgroup::"
           done

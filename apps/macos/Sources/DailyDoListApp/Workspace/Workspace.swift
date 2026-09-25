@@ -34,6 +34,12 @@ final class Workspace {
   let settings: SettingsStore
   let ui: UIState
   let search: SearchModel
+  /// The drawings notes embed, and drawings opened on their own.
+  @ObservationIgnored let drawings: DrawingStore
+  /// Bumped whenever a drawing loaded or changed (a drawing open on its own redraws).
+  private(set) var drawingsRevision = 0
+  /// Drawings open on their own that show their Markdown source instead of the drawing.
+  var drawingSourcePaths: Set<String> = []
   @ObservationIgnored let toasts: ToastStore
   @ObservationIgnored weak var agent: AgentStore?
   @ObservationIgnored let scheduler: AppScheduler
@@ -76,6 +82,7 @@ final class Workspace {
     notes = NotesStore(client: client, scheduler: scheduler)
     tabs = TabsStore()
     search = SearchModel(client: client, scheduler: scheduler)
+    drawings = DrawingStore(client: client, scheduler: scheduler)
     editor = EditorCoordinator(controller: editorController, scheduler: scheduler)
     treeRefresh = IdleTimer(scheduler: scheduler, delay: 0.3) { [weak self] in
       guard let self else { return }
@@ -96,8 +103,13 @@ final class Workspace {
       if state == .saved { self?.errorToasted.remove(path) }
     }
     editor.host = self
+    setUpDrawings()
     editor.controller.vim = vim
     editor.configure(settings.settings.editor)
+  }
+
+  func drawingsDidChange() {
+    drawingsRevision += 1
   }
 
   var activePath: String? { tabs.active }

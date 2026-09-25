@@ -18,6 +18,7 @@ let package = Package(
     .package(path: "Packages/DailyDoListVim"),
     .package(path: "Packages/DailyDoListAgent"),
     .package(path: "Packages/DailyDoListUI"),
+    .package(path: "Packages/DailyDoListDrawing"),
   ],
   targets: [
     .target(
@@ -31,6 +32,7 @@ let package = Package(
         .product(name: "DailyDoListVim", package: "DailyDoListVim"),
         .product(name: "DailyDoListAgent", package: "DailyDoListAgent"),
         .product(name: "DailyDoListUI", package: "DailyDoListUI"),
+        .product(name: "DailyDoListDrawing", package: "DailyDoListDrawing"),
       ]
     ),
     .executableTarget(name: "DailyDoList", dependencies: ["DailyDoListApp"]),
@@ -40,6 +42,7 @@ let package = Package(
         "DailyDoListApp", .product(name: "DailyDoListVim", package: "DailyDoListVim"),
         .product(name: "DailyDoListUI", package: "DailyDoListUI"),
         .product(name: "DailyDoListUITestSupport", package: "DailyDoListUI"),
+        .product(name: "DailyDoListDrawing", package: "DailyDoListDrawing"),
       ]),
   ]
 )

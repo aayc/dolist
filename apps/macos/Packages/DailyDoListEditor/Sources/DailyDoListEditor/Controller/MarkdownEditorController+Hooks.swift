@@ -116,10 +116,31 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
   // MARK: Mouse
 
   func textView(
-    _ textView: MarkdownTextView, mouseDownAt point: NSPoint, modifiers: NSEvent.ModifierFlags
+    _ textView: MarkdownTextView, mouseDownAt point: NSPoint, modifiers: NSEvent.ModifierFlags,
+    clickCount: Int
   ) -> Bool {
     vimHost.textWasClicked()
+    if embedMouseDown(at: point, clickCount: clickCount) { return true }
     return handleClick(at: point, modifiers: modifiers)
+  }
+
+  func textView(_ textView: MarkdownTextView, mouseDraggedTo point: NSPoint, event: NSEvent?)
+    -> Bool
+  {
+    embedMouseDragged(to: point, event: event)
+  }
+
+  func textView(_ textView: MarkdownTextView, mouseUpAt point: NSPoint) -> Bool {
+    embedMouseUp(at: point)
+  }
+
+  func textView(_ textView: MarkdownTextView, willShowMenu menu: NSMenu) {
+    delegate?.editor(self, willShowContextMenu: menu)
+  }
+
+  func textViewDidChangeAppearance(_ textView: MarkdownTextView) {
+    drawingSessionAppearanceDidChange()
+    if !highlighter.embedLines.isEmpty { textView.setNeedsDisplay(textView.visibleRect) }
   }
 
   /// Badge → `didClickBadge`; checkbox → toggle; sparkle → `didClickAgentThread`; link → follow
@@ -162,6 +183,7 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
       for rect in drawnSparkleRects { textView.setNeedsDisplay(rect.insetBy(dx: -2, dy: -2)) }
       decorations.hoveredSparkle = sparkle?.marker.location
     }
+    let embedCursor = embedHover(at: point)
     guard let point else {
       hoverLinkDidChange(nil)
       hoverTooltip(nil)
@@ -170,6 +192,10 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
     let hoveredLink = link(at: point)
     hoverLinkDidChange(hoveredLink)
     hoverTooltip(tooltipAnchor(at: point, badge: layout, link: hoveredLink))
+    if let embedCursor {
+      embedCursor.set()
+      return
+    }
     var clickable = layout != nil || sparkle != nil
     if !clickable, configuration.isEditable { clickable = checkboxLine(at: point) != nil }
     if !clickable, let hoveredLink {
@@ -191,6 +217,7 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
       case badge(String)
       case sparkle(Int)
       case link(NSRange)
+      case embedHandle(Int, EmbedHandle)
     }
 
     var key: Key
@@ -202,6 +229,12 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
   func tooltipAnchor(
     at point: NSPoint, badge: BadgeRenderer.Layout?, link: (target: LinkTarget, range: NSRange)?
   ) -> TooltipAnchor? {
+    if let hit = embedHandle(at: point) {
+      let text = hit.handle.tooltip
+      return TooltipAnchor(
+        key: .embedHandle(hit.embed.lineStart, hit.handle), rect: hit.handle.rect(in: hit.box)
+      ) { text }
+    }
     if let badge {
       let id = badge.badge.id
       return TooltipAnchor(key: .badge(id), rect: badge.rect) { [weak self] in
@@ -264,6 +297,7 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
   /// Before each draw: redraw badges that moved, note where sparkles are (hover redraws), and keep
   /// the pulse of a triaging badge in view going.
   func textViewWillDraw(_ textView: MarkdownTextView) {
+    layoutEmbedsForDrawing()
     let layouts = currentBadgeLayouts()
     motion.willDraw(pulseVisible: layouts.contains { self.motion.state.isPulsing($0.badge.id) })
     let rects = layouts.map(\.rect)
@@ -276,9 +310,11 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
 
   func textView(_ textView: MarkdownTextView, drawBackgroundIn rect: NSRect) {
     drawAnchoredLines(in: rect)
+    drawEmbeds(in: rect)
   }
 
   func textView(_ textView: MarkdownTextView, drawOverlaysIn dirtyRect: NSRect) {
+    drawEmbedOverlays(in: dirtyRect)
     vimHost.drawOverlays(in: dirtyRect)
     guard !badgeStore.isEmpty else { return }
     let layouts = currentBadgeLayouts()
@@ -301,13 +337,15 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
 
   func textViewDidChangeWidth(_ textView: MarkdownTextView) {
     updateTextGeometry()
+    embedsNeedLayout()
     vimHost.layoutDidChange()
   }
 
   // MARK: Vim
 
   func textView(_ textView: MarkdownTextView, handleKeyDown event: NSEvent) -> Bool {
-    vimHost.handleKeyDown(event)
+    if handleEmbedKey(event) { return true }
+    return vimHost.handleKeyDown(event)
   }
 
   func textView(_ textView: MarkdownTextView, claimsKeyEquivalent event: NSEvent) -> Bool {
@@ -349,7 +387,7 @@ extension MarkdownEditorController: MarkdownTextViewHooks {
   }
 
   func textViewDrawsInsertionPoint(_ textView: MarkdownTextView) -> Bool {
-    !vimHost.drawsBlockCursor
+    !vimHost.drawsBlockCursor && embeds.selectedLineStart == nil && embeds.session == nil
   }
 
   // MARK: Hit testing

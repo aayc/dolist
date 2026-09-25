@@ -201,7 +201,20 @@ struct DetailColumn: View {
             NoteHeaderView(workspace: workspace, path: path)
               .id(path)
           }
-          EditorPane(controller: workspace.editor.controller)
+          if let path = workspace.tabs.active, workspace.isDrawing(path),
+            !workspace.showsDrawingSource(path)
+          {
+            DrawingDocumentPane(workspace: workspace, path: path)
+              .id(path)
+          } else {
+            EditorPane(controller: workspace.editor.controller)
+              .overlay(alignment: .topTrailing) {
+                if let path = workspace.tabs.active, workspace.isDrawing(path) {
+                  DrawingSourceToggle(workspace: workspace, path: path, showsSource: true)
+                    .padding(10)
+                }
+              }
+          }
         }
         .opacity(workspace.tabs.active == nil ? 0 : 1)
         if workspace.tabs.active == nil {
