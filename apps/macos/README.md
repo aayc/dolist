@@ -49,6 +49,7 @@ future iPhone app too.
 | `Packages/DailyDoListAgent` | Agent state and UI: inbox, threads, approval cards, artifacts, notifications, menu bar, Dock badge. |
 | `Packages/DailyDoListUI` | What the shell, the agent UI and the editor share: the app's one tooltip (`TooltipCenter`, `.tooltip(…)`), keycaps (`KeyShortcut`, `Keycaps`), `.pointingHandCursor()`, `IconButton`, and the chrome and accent button styles. `DailyDoListUITestSupport` finds tooltips in tests and draws them into snapshots. |
 | `Packages/DailyDoListDaemon` | `DaemonSupervisor`: finds Node and the daemon, attaches or launches, health-checks, restarts, stops. |
+| `Packages/DailyDoListComputer` | `ddl-computer`, the helper the daemon spawns so agents can operate other apps through their accessibility tree ([The computer use helper](#the-computer-use-helper-ddl-computer)). Not linked into the app. |
 | `IntegrationTests/` | End-to-end tests against the real daemon (a separate package). |
 | `Resources/` | `Info.plist.template` and the rendered 1024 px icon (`AppIcon-1024.png`). |
 | `scripts/` | `test.sh`, `build-app.sh`, `run-app.sh`, `make-icon.swift`. |
@@ -213,7 +214,9 @@ restarts a managed daemon in place, and connected clients reconnect and resync.
   as is. `dist/`, `package.json` and the production `node_modules` (about 200 MB) are copied into
   `Contents/Resources/daemon/`. Workspace packages (already inlined into `dist/`), bin
   shims, pnpm metadata and dangling links are removed. The bundled daemon still needs the
-  system's Node 24.4+.
+  system's Node 24.4+. `ddl-computer` is built with the same configuration and copied to
+  `Contents/Resources/daemon/bin/`, where the daemon looks for it, and signed with the app's
+  identity before the app is.
 - Signature: the local identity "Daily Do List Local Signing" when
   `scripts/signing-identity.sh --create` has made it (or `--sign ID`, or `DDL_SIGN_IDENTITY`), else
   ad hoc (`--adhoc` forces it). Verified with `codesign --verify --deep --strict`. `--zip` writes
@@ -283,6 +286,86 @@ on the app that started the daemon, so Daily Do List asks for them for itself.
   relaunching) is behind a protocol in `ComputerAccessSystem`, and time behind `AppScheduler`, so
   the tests drive the whole flow with fakes and never prompt.
 
+## The computer use helper (`ddl-computer`)
+
+`Packages/DailyDoListComputer` builds `ddl-computer`, which lets agents operate native apps that
+have no connector or website (a chat app, Grok Bot, WhatsApp) one app at a time, in the background,
+through their accessibility tree: it reads the tree with element ids, presses buttons, sets text
+fields, types and presses keys at one process, and captures one app's window. The daemon spawns
+it, so macOS checks its Accessibility and Screen Recording against the app hosting the daemon
+([Computer use access](#computer-use-access)).
+
+- **Running:** `ddl-computer serve` reads one JSON request per line on stdin and writes one
+  response per line on stdout: `{"id": 1, "method": "snapshot", "params": {"pid": 42}}` gets
+  `{"id": 1, "result": {…}}` or `{"id": 1, "error": {"code": "stale", "message": "…"}}`. Requests
+  run one at a time, in order (clients may pipeline them and match responses by id). It exits
+  once stdin closes and what it read is answered (at most 10 s later), or as soon as stdout
+  closes, so it can't outlive the daemon. Its stderr log has method names, durations and error
+  codes only: never params, UI content or typed text.
+- **Errors:** `permission` (names the missing permission), `not_found` (app, window or element),
+  `stale` (read the app again), `protected`, `unsupported` (a value that can't be set, an action
+  the element lacks), `invalid` (bad or unknown params, or an ambiguous app name, with the
+  candidates listed) and `failed`. A line that isn't a request gets `"id": null`.
+- **Where the daemon finds it:** `<directory of dist/main.js>/../bin/ddl-computer`, which is
+  `Contents/Resources/daemon/bin/ddl-computer` in an app built with `build-app.sh --with-daemon`.
+  By itself: `swift build --package-path apps/macos/Packages/DailyDoListComputer -c release
+  --product ddl-computer`. `ddl-computer --version` prints the protocol version.
+
+| Method | Params | Result |
+| --- | --- | --- |
+| `hello` | | `{version: 1, pid}` |
+| `permissions` | | `{accessibility, screenRecording}`, checked without prompting |
+| `apps` | | `{apps: [{name, bundleId, pid, active, hidden}]}`: Dock apps, frontmost first; needs no permission |
+| `installedApps` | | `{apps: [{name, bundleId, path}]}`: `/Applications`, `~/Applications` and `/System/Applications`, and one folder level below them (`Utilities`), deduped by bundle id, by name |
+| `resolveApp` | one of `name`, `bundleId`, `pid` | `{name, bundleId, pid, launched}`. A name matches exactly (localized, bundle or file name), else by a unique prefix, else by a unique substring. An app that isn't running launches in the background (up to 10 s). |
+| `activate` | `pid` | `{ok}`: like clicking the app in the Dock, and only when asked |
+| `snapshot` | `pid`, `maxNodes` (400), `maxDepth` (30); `snapshotId` + `elementId` expand an element | `{snapshotId, app, window, text, elements, truncated}` |
+| `screenshot` | `pid` (else the main display), `maxWidth` (1280) | `{image, mimeType, width, height, scale, origin, app, window}`: a base64 JPEG whose longer side is at most `maxWidth`; `scale` is pixels per point |
+| `press` | `pid`, `snapshotId`, `elementId`, `action`: `press` (default), `show-menu`, `confirm`, `cancel`, `increment`, `decrement`, `raise`, `pick`, `scroll-to-visible` | `{ok, stale}` |
+| `setValue` | `pid`, `snapshotId`, `elementId`, `value` | `{ok, value, stale}`, the value read back |
+| `typeText` | `pid`, `text` (up to 10,000); `snapshotId` + `elementId` focus an element first | `{ok, stale}`. Each line break presses Return once, a tab presses Tab. |
+| `key` | `pid`, `combo`: `return`, `cmd+k`, `shift+tab` (the key names of `computer-keys.ts`) | `{ok, stale}` |
+| `click` | `pid`, `x`, `y`, `button` (`left`), `count` (1) | `{ok, stale}`; the point must be in one of the app's windows |
+| `scroll` | `pid`, `x`, `y`, `dx`, `dy` (lines; positive `dy` scrolls down) | `{ok}` |
+
+Points are global screen points (origin at the top-left of the main display). Params are checked
+strictly: unknown keys, wrong types, out-of-range numbers and text over the caps are `invalid`.
+
+- **Snapshots** read the app's focused window (else its main window, else its first; the app
+  itself when it has none) breadth-first, so the node budget covers the whole window before one
+  deep branch, and print it in document order, one element per line, two spaces per level:
+  `[e12] AXButton name="Send" actions=press,show-menu`. The name is the first non-empty of
+  `AXTitle`, `AXDescription`, `AXLabel`/`AXLabelValue`, `AXPlaceholderValue` and `AXHelp` (up to
+  120 characters), values are cut at 200, and a secure text field's value is never read
+  (`value=•••`). A line cut for size ends with `(+N descendants omitted)`, N being the children
+  left out; expanding that element adds its subtree to the same snapshot, under new ids.
+- **Staleness:** the helper keeps the latest snapshot of each app. A new snapshot, or an action
+  that can change the UI (all but `scroll` and `activate`), retires it: its ids then answer
+  `stale`, and the action returns `stale: true`. Before acting, the element is read again, and one
+  that's gone or whose role or name changed is `stale` too, so an action always hits the control
+  whose label the caller saw.
+- **Protected targets** are refused with `protected` before anything else, from the real process
+  and never from a name the model supplies (`ProtectedTargets.swift` is the one list): Daily Do
+  List, System Settings and its extensions, security prompts (`SecurityAgent`, `loginwindow`,
+  Touch ID sheets), Keychain Access, Passwords, password managers (1Password, Bitwarden, Dashlane,
+  LastPass, KeePassXC) and authenticators (Okta Verify, Yubico Authenticator), by bundle id and by
+  their real names; the apps the helper runs under (its parent processes: the app or terminal
+  hosting the daemon), and anything a protected app started; and any window showing Daily Do
+  List's web UI, a web area whose `AXURL` is on `127.0.0.1`, `localhost`, `::1` or `0.0.0.0` at
+  port 5173, 7331 or `$DDL_PORT`, or a window titled with "Daily Do List". Reads check the window
+  they read.
+  Input checks every window of the app, since keys and clicks can land in any of them, and a
+  window that can't be checked in time is refused.
+- **Limits:** input goes to one process (`CGEventPostToPid`), so the app stays in the background
+  and the cursor doesn't move, but some apps ignore events that don't come from the keyboard and
+  mouse, or hit-test with the real cursor: use `press` and `setValue`, or `activate` first. Typed
+  text travels in key events with keycode 0, which apps that read keycodes see as "a". Electron
+  apps only show their content to accessibility clients that ask (`AXManualAccessibility`, set on
+  the first read, which then waits 0.5 s), and setting a web text field's value may not reach the
+  page's state (`typeText` does). Each accessibility call has 2 s before the app counts as not
+  responding, and a snapshot returns what it has after 6 s (`truncated`). Window screenshots use
+  ScreenCaptureKit (the window alone, even when covered) and fall back to `screencapture -l`.
+
 ## Troubleshooting
 
 | Symptom | What to do |
@@ -333,5 +416,11 @@ on the app that started the daemon, so Daily Do List asks for them for itself.
   Computer Use tab, the guide and the banner (`app-snapshots/settings-computer-use-*`,
   `computer-access-guide-*`, `computer-access-banner-*`). Nothing in the tests prompts, opens
   System Settings or relaunches.
+- **Computer use helper**: `DailyDoListComputer`'s tests run the helper against fakes for
+  accessibility (a fake tree that records every read and action), apps, windows, input, capture,
+  permissions, parent processes and time: the codec and every error code, strict params, the tree
+  text, snapshots and staleness, every protected target, app resolution, key combos (their tables
+  are checked against `computer-keys.ts`), typing and clicks. They never read, capture or act on
+  a real app.
 - The web UI's e2e and perf budgets don't cover this app. Check UI changes by hand
   (`run-app.sh --demo` is quickest).

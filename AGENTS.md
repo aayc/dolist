@@ -45,6 +45,7 @@ apps/
   web/            React 19 + Vite UI (the browser client)
   daemon/         Node 24 local server: REST + WebSocket API, vault owner, runs the agent runtime
   macos/          Native macOS app (SwiftUI/AppKit): app shell + Swift packages; supervises the daemon
+                  and bundles ddl-computer, the helper the daemon spawns to operate other apps
   mobile/         (planned) native iOS app reusing the Swift packages — docs only for now
 packages/
   core/           Pure, isomorphic domain logic + wire protocol types (no dependencies!)
@@ -264,9 +265,11 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
   `System/`). Independent local packages live in `Packages/`: `DailyDoListModels` (wire models),
   `DailyDoListClient` (`HTTPDaemonClient` + `InMemoryDaemonClient`), `DailyDoListDomain` (ported
   `@ddl/core` logic), `DailyDoListEditor`, `DailyDoListAgent`, `DailyDoListVim` (the port of the
-  web editor's vim mode), `DailyDoListDaemon` (`DaemonSupervisor`), and `DailyDoListUI` (what the
-  shell, the agent UI and the editor share: tooltips, keycaps, the pointing hand, `IconButton`).
-  `IntegrationTests/` is a separate package that runs against the real daemon.
+  web editor's vim mode), `DailyDoListDaemon` (`DaemonSupervisor`), `DailyDoListUI` (what the
+  shell, the agent UI and the editor share: tooltips, keycaps, the pointing hand, `IconButton`),
+  and `DailyDoListComputer` (`ddl-computer`, the helper the daemon spawns to operate other apps
+  through their accessibility tree; not linked into the app). `IntegrationTests/` is a separate
+  package that runs against the real daemon.
 - **Commands:** `apps/macos/scripts/test.sh [Package|app|integration] [-- swift test args]`,
   `apps/macos/scripts/run-app.sh [--demo]`, and
   `apps/macos/scripts/build-app.sh [--release] [--with-daemon] [--zip]` (writes to
@@ -306,14 +309,26 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
 - **Daemon supervision:** the app attaches to a running daemon and never stops one it didn't
   start. It reads the token from `$DDL_HOME/daemon-token` and never logs it. A managed daemon runs
   on the system Node 24.4+ with a stdin watchdog, so it can't outlive the app.
+- **Computer use helper:** `DailyDoListComputer` builds `ddl-computer`; `ddl-computer serve`
+  speaks JSON lines on stdin and stdout (the protocol and its limits are in `apps/macos/README.md`)
+  and exits when stdin closes. The daemon spawns it, so macOS checks its permissions against the
+  app hosting the daemon. The protocol is a contract with the daemon's client: change both in the
+  same change. Protected targets (Daily Do List, the apps hosting the daemon, System Settings,
+  security prompts, password managers, authenticators, the web UI in any window) are one list,
+  `ProtectedTargets.swift`, applied to the real process, never to names the model supplies. The
+  helper logs only method names, durations and error codes, and its tests use fakes: a test never
+  reads, captures or acts on a real app.
 - **Packaging:** `build-app.sh` renders the icon (`scripts/make-icon.swift`), fills
   `Resources/Info.plist.template` and signs with the local identity from
   `scripts/signing-identity.sh` when it exists (so macOS keeps granted permissions across builds),
   else ad hoc. `--with-daemon` bundles
-  `pnpm deploy --prod --legacy` output into `Contents/Resources/daemon`. Don't rely on SwiftPM's
-  `Bundle.module` in app code: it looks next to the `.app`.
+  `pnpm deploy --prod --legacy` output into `Contents/Resources/daemon`, and `ddl-computer` into
+  its `bin/` (where the daemon looks: `<directory of dist/main.js>/../bin/ddl-computer`), signed
+  with the app's identity before the app. Don't rely on SwiftPM's `Bundle.module` in app code: it
+  looks next to the `.app`.
 - **CI:** `.github/workflows/macos.yml` (package tests, an iOS build of the Foundation-only
-  packages, integration tests, release build, zipped app artifact).
+  packages, integration tests, release build, a smoke test of the bundled `ddl-computer`, zipped
+  app artifact).
 
 ## Commits & PRs
 
