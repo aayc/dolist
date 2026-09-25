@@ -81,6 +81,18 @@ Next: merge S1, S2, S3, then S4 and S5 into `feat/always-on` (resume S4 for its 
 after S1/S2 are in); add the pairing step to S6's CI smoke test; merge the kit; full
 verification; `main`; push; CI; install. After that, set up the VM with the kit.
 
+### Drawings in notes (Excalidraw-compatible)
+
+Spec: [docs/specs/drawings.md](docs/specs/drawings.md).
+
+| Stream | Branch | State |
+| --- | --- | --- |
+| X0 format and description (core, shared fixtures) | `feat/drawings` (from `main`) | in progress |
+| X2 Mac drawing engine (`DailyDoListDrawing`) | `feat/drawings-mac-engine` (from `main`) | in progress |
+| X1 web editor (floats, move/resize, in-place Excalidraw) | from `feat/drawings` | waits for X0 |
+| X4 the agent sees drawings (descriptions, `read_drawing`, renderer) | from `feat/drawings` | waits for X0 |
+| X3 Mac editor integration (exclusion paths, in-place canvas) | from X2 | waits for X2's canvas |
+
 ### Agent journal — phase 1 (threads)
 
 Spec: [docs/specs/agent-journal.md](docs/specs/agent-journal.md). Branch `feat/agent-journal`
@@ -142,6 +154,11 @@ state and client ids for idempotent mutations.
   x86 alternatives: `Standard_B4as_v2` (about $110 plus disk and IP, just over) or
   `Standard_D2as_v5` (2 vCPU, 8 GB, about $63). The user runs `az login` and creates the Tailscale
   auth key file themselves; credentials never go in the chat or the repo.
+- **Drawings** (2026-09-25): Excalidraw-compatible drawings in notes, stored in Obsidian's
+  Excalidraw plugin format and embedded with its syntax; anchored with text wrapping around them,
+  movable and resizable; the real Excalidraw on the web (lazy-loaded); on the Mac a native engine
+  written from scratch with the core tools (the user's choice, for speed); the orchestrator always
+  sees a text description plus an image for vision-capable models.
 - **Journaling** (2026-09-25): not Temporal. Fencing now, in the always-on lease work; the agent
   journal as its own stream right after routines lands.
 - **iPhone** (2026-09-25): deferred. When it resumes: native Swift, a free Apple ID (no push or
