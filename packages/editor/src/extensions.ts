@@ -17,7 +17,7 @@ import { editorKeymap } from "./keymap";
 import { linkPreviews } from "./link-preview";
 import { linkClickHandler } from "./links";
 import { callbackNotifier } from "./listeners";
-import { literalHtmlTyping, markdownLanguageData, markdownSupport } from "./syntax/language";
+import { markdownLanguageData, markdownSupport } from "./syntax/language";
 import { editorTheme, markdownHighlightStyle } from "./theme";
 import type { EditorCallbacks, EditorConfig } from "./types";
 
@@ -28,7 +28,6 @@ import type { EditorCallbacks, EditorConfig } from "./types";
 const baseExtensions: Extension = [
   markdownSupport,
   markdownLanguageData,
-  literalHtmlTyping,
   syntaxHighlighting(markdownHighlightStyle),
   history(),
   drawSelection(),

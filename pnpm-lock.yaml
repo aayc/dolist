@@ -28,6 +28,11 @@ catalogs:
       specifier: ^4.6.5
       version: 4.6.5
 
+patchedDependencies:
+  '@codemirror/lang-markdown@6.5.2':
+    hash: 7be50eb8d19a5bd2ec0f28f1d1d70b7a7c26c8ef3c525a70bf2e64eb93bc5778
+    path: patches/@codemirror__lang-markdown@6.5.2.patch
+
 importers:
 
   .:
@@ -241,7 +246,7 @@ importers:
         version: 6.11.1
       '@codemirror/lang-markdown':
         specifier: ^6.5.2
-        version: 6.5.2
+        version: 6.5.2(patch_hash=7be50eb8d19a5bd2ec0f28f1d1d70b7a7c26c8ef3c525a70bf2e64eb93bc5778)
       '@codemirror/language':
         specifier: ^6.12.4
         version: 6.12.4
@@ -2505,7 +2510,7 @@ snapshots:
       '@lezer/highlight': 1.2.3
       '@lezer/lr': 1.4.10
 
-  '@codemirror/lang-markdown@6.5.2':
+  '@codemirror/lang-markdown@6.5.2(patch_hash=7be50eb8d19a5bd2ec0f28f1d1d70b7a7c26c8ef3c525a70bf2e64eb93bc5778)':
     dependencies:
       '@codemirror/autocomplete': 6.20.3
       '@codemirror/lang-html': 6.4.12
@@ -2601,7 +2606,7 @@ snapshots:
       '@codemirror/lang-json': 6.0.2
       '@codemirror/lang-less': 6.0.2
       '@codemirror/lang-liquid': 6.3.2
-      '@codemirror/lang-markdown': 6.5.2
+      '@codemirror/lang-markdown': 6.5.2(patch_hash=7be50eb8d19a5bd2ec0f28f1d1d70b7a7c26c8ef3c525a70bf2e64eb93bc5778)
       '@codemirror/lang-php': 6.0.2
       '@codemirror/lang-python': 6.2.1
       '@codemirror/lang-rust': 6.0.2

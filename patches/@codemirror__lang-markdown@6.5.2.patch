@@ -1,0 +1,144 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 62ab9c14016a4b738e683e648bbd024c821dc300..b1a07e19b2c7fa23095f55d69258685bebc4ca2e 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -5,7 +5,7 @@ var view = require('@codemirror/view');
+ var language = require('@codemirror/language');
+ var autocomplete = require('@codemirror/autocomplete');
+ var markdown$1 = require('@lezer/markdown');
+-var langHtml = require('@codemirror/lang-html');
++// Daily Do List patch: no @codemirror/lang-html unless `htmlTagLanguage` is given (~60 kB gz off startup).
+ var common = require('@lezer/common');
+ 
+ const data = language.defineLanguageFacet({ commentTokens: { block: { open: "<!--", close: "-->" } } });
+@@ -401,16 +401,15 @@ const markdownKeymap = [
+     { key: "Enter", run: insertNewlineContinueMarkup },
+     { key: "Backspace", run: deleteMarkupBackward }
+ ];
+-const htmlNoMatch = langHtml.html({ matchClosingTags: false });
+ /**
+ Markdown language support.
+ */
+ function markdown(config = {}) {
+-    let { codeLanguages, defaultCodeLanguage, addKeymap = true, base: { parser } = commonmarkLanguage, completeHTMLTags = true, pasteURLAsLink: pasteURL = true, htmlTagLanguage = htmlNoMatch } = config;
++    let { codeLanguages, defaultCodeLanguage, addKeymap = true, base: { parser } = commonmarkLanguage, completeHTMLTags = true, pasteURLAsLink: pasteURL = true, htmlTagLanguage } = config;
+     if (!(parser instanceof markdown$1.MarkdownParser))
+         throw new RangeError("Base parser provided to `markdown` should be a Markdown parser");
+     let extensions = config.extensions ? [config.extensions] : [];
+-    let support = [htmlTagLanguage.support, headerIndent], defaultCode;
++    let support = htmlTagLanguage ? [htmlTagLanguage.support, headerIndent] : [headerIndent], defaultCode;
+     if (pasteURL)
+         support.push(pasteURLAsLink);
+     if (defaultCodeLanguage instanceof language.LanguageSupport) {
+@@ -421,38 +420,12 @@ function markdown(config = {}) {
+         defaultCode = defaultCodeLanguage;
+     }
+     let codeParser = codeLanguages || defaultCode ? getCodeParser(codeLanguages, defaultCode) : undefined;
+-    extensions.push(markdown$1.parseCode({ codeParser, htmlParser: htmlTagLanguage.language.parser }));
++    extensions.push(markdown$1.parseCode({ codeParser, htmlParser: htmlTagLanguage ? htmlTagLanguage.language.parser : undefined }));
+     if (addKeymap)
+         support.push(state.Prec.high(view.keymap.of(markdownKeymap)));
+     let lang = mkLang(parser.configure(extensions));
+-    if (completeHTMLTags)
+-        support.push(lang.data.of({ autocomplete: htmlTagCompletion }));
+     return new language.LanguageSupport(lang, support);
+ }
+-function htmlTagCompletion(context) {
+-    let { state, pos } = context, m = /<[:\-\.\w\u00b7-\uffff]*$/.exec(state.sliceDoc(pos - 25, pos));
+-    if (!m)
+-        return null;
+-    let tree = language.syntaxTree(state).resolveInner(pos, -1);
+-    while (tree && !tree.type.isTop) {
+-        if (tree.name == "CodeBlock" || tree.name == "FencedCode" || tree.name == "ProcessingInstructionBlock" ||
+-            tree.name == "CommentBlock" || tree.name == "Link" || tree.name == "Image")
+-            return null;
+-        tree = tree.parent;
+-    }
+-    return {
+-        from: pos - m[0].length, to: pos,
+-        options: htmlTagCompletions(),
+-        validFor: /^<[:\-\.\w\u00b7-\uffff]*$/
+-    };
+-}
+-let _tagCompletions = null;
+-function htmlTagCompletions() {
+-    if (_tagCompletions)
+-        return _tagCompletions;
+-    let result = langHtml.htmlCompletionSource(new autocomplete.CompletionContext(state.EditorState.create({ extensions: htmlNoMatch }), 0, true));
+-    return _tagCompletions = result ? result.options : [];
+-}
+ const nonPlainText = /code|horizontalrule|html|link|comment|processing|escape|entity|image|mark|url/i;
+ /**
+ An extension that intercepts pastes when the pasted content looks
+diff --git a/dist/index.js b/dist/index.js
+index 2f05ddd05decf9ea94cd5eccaed9aef7c4b51ac2..65db3604945f82f615fa4029d7d860d5f34a0cd4 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -3,7 +3,7 @@ import { EditorView, keymap } from '@codemirror/view';
+ import { defineLanguageFacet, foldNodeProp, indentNodeProp, languageDataProp, foldService, syntaxTree, Language, LanguageDescription, ParseContext, indentUnit, LanguageSupport } from '@codemirror/language';
+ import { CompletionContext } from '@codemirror/autocomplete';
+ import { parser, GFM, Subscript, Superscript, Emoji, MarkdownParser, parseCode } from '@lezer/markdown';
+-import { html, htmlCompletionSource } from '@codemirror/lang-html';
++// Daily Do List patch: no @codemirror/lang-html unless `htmlTagLanguage` is given (~60 kB gz off startup).
+ import { NodeProp } from '@lezer/common';
+ 
+ const data = /*@__PURE__*/defineLanguageFacet({ commentTokens: { block: { open: "<!--", close: "-->" } } });
+@@ -399,16 +399,15 @@ const markdownKeymap = [
+     { key: "Enter", run: insertNewlineContinueMarkup },
+     { key: "Backspace", run: deleteMarkupBackward }
+ ];
+-const htmlNoMatch = /*@__PURE__*/html({ matchClosingTags: false });
+ /**
+ Markdown language support.
+ */
+ function markdown(config = {}) {
+-    let { codeLanguages, defaultCodeLanguage, addKeymap = true, base: { parser } = commonmarkLanguage, completeHTMLTags = true, pasteURLAsLink: pasteURL = true, htmlTagLanguage = htmlNoMatch } = config;
++    let { codeLanguages, defaultCodeLanguage, addKeymap = true, base: { parser } = commonmarkLanguage, completeHTMLTags = true, pasteURLAsLink: pasteURL = true, htmlTagLanguage } = config;
+     if (!(parser instanceof MarkdownParser))
+         throw new RangeError("Base parser provided to `markdown` should be a Markdown parser");
+     let extensions = config.extensions ? [config.extensions] : [];
+-    let support = [htmlTagLanguage.support, headerIndent], defaultCode;
++    let support = htmlTagLanguage ? [htmlTagLanguage.support, headerIndent] : [headerIndent], defaultCode;
+     if (pasteURL)
+         support.push(pasteURLAsLink);
+     if (defaultCodeLanguage instanceof LanguageSupport) {
+@@ -419,38 +418,12 @@ function markdown(config = {}) {
+         defaultCode = defaultCodeLanguage;
+     }
+     let codeParser = codeLanguages || defaultCode ? getCodeParser(codeLanguages, defaultCode) : undefined;
+-    extensions.push(parseCode({ codeParser, htmlParser: htmlTagLanguage.language.parser }));
++    extensions.push(parseCode({ codeParser, htmlParser: htmlTagLanguage ? htmlTagLanguage.language.parser : undefined }));
+     if (addKeymap)
+         support.push(Prec.high(keymap.of(markdownKeymap)));
+     let lang = mkLang(parser.configure(extensions));
+-    if (completeHTMLTags)
+-        support.push(lang.data.of({ autocomplete: htmlTagCompletion }));
+     return new LanguageSupport(lang, support);
+ }
+-function htmlTagCompletion(context) {
+-    let { state, pos } = context, m = /<[:\-\.\w\u00b7-\uffff]*$/.exec(state.sliceDoc(pos - 25, pos));
+-    if (!m)
+-        return null;
+-    let tree = syntaxTree(state).resolveInner(pos, -1);
+-    while (tree && !tree.type.isTop) {
+-        if (tree.name == "CodeBlock" || tree.name == "FencedCode" || tree.name == "ProcessingInstructionBlock" ||
+-            tree.name == "CommentBlock" || tree.name == "Link" || tree.name == "Image")
+-            return null;
+-        tree = tree.parent;
+-    }
+-    return {
+-        from: pos - m[0].length, to: pos,
+-        options: htmlTagCompletions(),
+-        validFor: /^<[:\-\.\w\u00b7-\uffff]*$/
+-    };
+-}
+-let _tagCompletions = null;
+-function htmlTagCompletions() {
+-    if (_tagCompletions)
+-        return _tagCompletions;
+-    let result = htmlCompletionSource(new CompletionContext(EditorState.create({ extensions: htmlNoMatch }), 0, true));
+-    return _tagCompletions = result ? result.options : [];
+-}
+ const nonPlainText = /code|horizontalrule|html|link|comment|processing|escape|entity|image|mark|url/i;
+ /**
+ An extension that intercepts pastes when the pasted content looks

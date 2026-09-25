@@ -80,17 +80,21 @@ budgets.
 
 | Bundle | Budget (gzip) | Current |
 | --- | --- | --- |
-| Initial JS (entry + static imports) | 320 kB | ~319 kB |
+| Initial JS (entry + static imports) | 320 kB | ~256 kB |
 | Initial CSS | 40 kB | ~7 kB |
-| Total JS | 1 200 kB | ~813 kB |
+| Total JS | 1 200 kB | ~815 kB |
 
-The initial JS is dominated by CodeMirror core and `@codemirror/lang-markdown`, which statically
-embeds `@codemirror/lang-html` (and with it the JS/CSS parsers, ~60 kB gz). Vim is loaded on
-demand — in parallel with startup when vim mode is on: `@ddl/editor`'s `vim.ts` is a tiny loader
-in the main bundle, and `vim-integration.ts` (the engine plus ex commands, clipboard registers,
-vimrc and the status plugin) is one lazy chunk of ~42 kB gz. Don't import `vim-integration` or
-`@replit/codemirror-vim` statically. A future win: patch `lang-markdown` (via `pnpm patch`) to drop
-the HTML embedding.
+The initial JS is dominated by CodeMirror core and React. `@codemirror/lang-markdown` would embed
+`@codemirror/lang-html` and with it the JS and CSS parsers (~60 kB gz); our `pnpm patch`
+(`patches/@codemirror__lang-markdown@*.patch`) mounts lang-html only when `htmlTagLanguage` is
+passed, so HTML in notes stays plain markdown (no tag colors) and those parsers load only for a
+fenced block that needs them. Vim is loaded on demand — in parallel with startup when vim mode is
+on: `@ddl/editor`'s `vim.ts` is a tiny loader in the main bundle, and `vim-integration.ts` (the
+engine plus ex commands, clipboard registers, vimrc and the status plugin) is one lazy chunk of
+~42 kB gz. Don't import `vim-integration` or `@replit/codemirror-vim` statically.
+
+Gzip sizes differ a little between machines for the same bytes (Node's zlib on CI's x86 runners
+compresses ~0.5% worse than on Apple Silicon), so keep some headroom under the budget.
 
 The app's own startup code is one chunk only while the entry reaches `app/services.ts` before the
 modules it shares with the lazy chunks: importing `commands/labels` from `bootstrap.tsx` or
