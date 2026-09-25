@@ -722,12 +722,14 @@ function mergeFields<T extends Record<string, unknown>>(
 
 /** Assignment that keeps a `__proto__` key a plain field, as `JSON.parse` does. */
 function setOwn(target: Record<string, unknown>, key: string, value: unknown): void {
-  Object.defineProperty(target, key, {
-    value,
-    enumerable: true,
-    writable: true,
-    configurable: true,
-  });
+  if (key !== "__proto__") target[key] = value;
+  else
+    Object.defineProperty(target, key, {
+      value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -468,6 +468,21 @@ describe("serializeDrawingFile with the previous file", () => {
     ).toBe(true);
   });
 
+  it("keeps fields named like Object.prototype members as plain fields", () => {
+    const json =
+      '{"type":"excalidraw","version":2,"elements":[{"id":"a","type":"rectangle","__proto__":{"x":1},"toString":"s"}]}';
+    const previous = `${FRONTMATTER}## Drawing\n\`\`\`json\n${json}\n\`\`\`\n%%\n`;
+    const written = serializeDrawingFile(
+      { ...emptyDrawingScene(), elements: [{ id: "a", type: "rectangle" }] },
+      previous,
+    );
+    const element = parseDrawingFile(written).scene.elements[0]!;
+    expect(Object.keys(element)).toEqual(["id", "type", "__proto__", "toString"]);
+    expect(JSON.stringify(element)).toBe(
+      '{"id":"a","type":"rectangle","__proto__":{"x":1},"toString":"s"}',
+    );
+  });
+
   it("is a fixed point: writing a parsed file back changes nothing", () => {
     const first = serializeDrawingFile(parseDrawingFile(PLUGIN_FILE).scene, PLUGIN_FILE);
     expect(serializeDrawingFile(parseDrawingFile(first).scene, first)).toBe(first);
