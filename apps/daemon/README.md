@@ -80,7 +80,8 @@ of this repository. Values are never logged.
   service ([docs/SYNC.md](../../docs/SYNC.md)); `url` must be `https` unless it is this machine.
   The token goes in `sync-token`, never here. With `remote` sync and an agent mode other than `off`,
   the agent runs only while this device holds the vault's agent lease (`src/agent-lease.ts`,
-  `src/leased-runtime.ts`); otherwise its status says which device runs it.
+  `src/leased-runtime.ts`); otherwise its status says which device runs it, and its threads,
+  approvals and task records show read-only from the synced sidecar (`src/sidecar-view.ts`).
 - `execution`: `local` (browser headless by default; computer use defaults to on for macOS only,
   with app control when the helper is found, see `DDL_COMPUTER_HELPER`) or
   `{ "kind": "cloud", "endpoint": "https://…", "apiKeyEnv": "NAME_OF_ENV_VAR" }`.
@@ -246,6 +247,72 @@ The server pings every 30 s and drops clients that do not answer. Under backpres
 `thread.message` carries the full text. A client with more than 16 MB buffered is disconnected and
 must reconnect and resync.
 
+## The agent relay
+
+When this device's effective placement is `always_on_machine` and it holds a credential for the
+machine, the daemon forwards the agent to the always-on machine's daemon, so this device's clients
+show and act on the machine's agent with the same API ([docs/ALWAYS_ON.md](../../docs/ALWAYS_ON.md#the-agent-relay)).
+Otherwise everything stays local, as without a relay. The code is in `src/relay/`; it reads the
+placement and the credential through two small interfaces (`src/relay/sources.ts`) and follows
+their changes live. A relaying device never asks for the agent lease.
+
+**Forwarded** (the allowlist in `src/relay/routes.ts`, derived from the contract):
+
+| Routes | Methods |
+| --- | --- |
+| `/api/threads`, `/api/threads/<id>` (the orchestrator's `thr_orchestrator` included) | GET |
+| `/api/threads/<id>/messages`, `…/cancel`, `…/retry` | POST |
+| `/api/approvals`, `/api/approvals/<id>` | GET; POST (decide) on `<id>` |
+| `/api/artifacts/<threadId>/<artifactId>` | GET |
+| `/api/tasks?notePath=` | GET |
+| `/api/routines`, `/api/routines/<id>` | GET; POST (create) on `/api/routines` |
+| `/api/routines/<id>/run`, `…/pause`, `…/resume` | POST |
+| `/api/agent/status` | GET (the machine's agent, with this device's `placement` block and `readiness`) |
+
+Everything else stays local: notes, folders, daily notes, search, settings (`/api/agent/enabled`
+included: it's a synced setting), sync, connectors, computer permissions, device routes, and any
+other method or path. It is not an open proxy:
+
+- requests go only to the configured machine URL (`https`, or `http` to loopback in tests), with
+  the target rebuilt from the contract's path, validated ids and the query parameters the
+  operation declares;
+- nothing from the client's request is passed on (its `Authorization`, cookies, `Host`, `Origin`
+  and other headers); the relay sends `Authorization: Bearer <machine token>` and, for bodies,
+  `Content-Type: application/json`;
+- bodies are validated with the contract's schemas first and held to the same 5 MB limit;
+  redirects aren't followed; each call times out after 5 s; answers are capped at 32 MB and must
+  be the daemon's JSON (or artifact bytes, served with the local artifact headers);
+- the token and bodies are never logged.
+
+**Events.** The relay holds one WebSocket to the machine's `/ws`, with the token in the
+`Authorization` header (never in the URL). The machine's agent events reach this device's clients
+in place of the local runtime's: `thread.*`, `approval.upsert`, `task.record(s)`,
+`routines.changed`, `routine.notification`, `surface.frame` and `agent.status` (merged as above).
+Clients' `surface.subscribe`/`unsubscribe`, `thread.read` and `editor.activity` go to the machine.
+The link pings every 15 s, reconnects with backoff (0.5 s up to 30 s), subscribes to watched
+surfaces again, and after every (re)connection pushes the machine's status, routines, approvals and
+thread summaries to local clients.
+
+**Relay state** (`agent.status` → `placement.relay`): `off` (not relaying), `connecting` (the
+first connection; requests are already forwarded), `connected`, `unreachable` (the link is down;
+retrying) or `not_paired` (no credential, or the machine refused it).
+
+**Fallback.** While `unreachable` or `not_paired`, and on any device that doesn't hold the agent
+(another device runs it), the daemon serves the agent read-only from the synced sidecar: threads
+(conflict copies merged), approvals, task records and artifacts, parsed with the contract's
+persisted formats; it never writes them. Routine files stay listable, creatable and pausable (they
+sync). Agent actions (messages, cancel, retry, deciding an approval, running a routine) answer 503
+`agent_unavailable` with one of:
+
+- "The always-on machine can't be reached."
+- "This device isn't paired with the always-on machine."
+- "The always-on machine no longer accepts this device. Pair it again." (it refused the credential)
+- "The agent is running on <device>." (another device holds the agent)
+
+A request forwarded while the machine stops answering falls back the same way (reads served here,
+actions 503). When the relay state changes, clients should fetch threads, approvals and task
+records again.
+
 ## Code map
 
 | Module | Role |
@@ -259,8 +326,11 @@ must reconnect and resync.
 | `src/ws.ts`, `vault-events.ts`, `write-tracker.ts` | WebSocket hub and change attribution. |
 | `src/settings-store.ts`, `settings-schema.ts`, `obsidian-import.ts` | Vault-backed settings. |
 | `src/null-runtime.ts`, `null-execution.ts` | Fallbacks when agents are unavailable (routine files stay editable through `@ddl/agent/routines`). |
+| `src/sidecar-view.ts` | The agent's work read-only from the synced sidecar, for a device that doesn't run it. |
 | `src/sync-setup.ts` | Sync service target: device identity, token, lease client. |
 | `src/agent-lease.ts`, `leased-runtime.ts` | The agent lease, and the runtime that exists only while holding it. |
+| `src/placement-lease.ts` | Asks for the lease only while the agent may run here (never while relaying). |
+| `src/relay/*` | The agent relay: allowlist, calls to the machine, its WebSocket link, the relaying runtime. |
 | `build.mjs` | esbuild bundle (workspace packages inlined, third-party dependencies external). |
 
 Tests are colocated (`*.test.ts`). They use in-memory vaults and temp directories and never touch the
