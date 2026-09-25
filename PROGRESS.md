@@ -129,8 +129,8 @@ Spec: [docs/specs/obsidian-migration.md](docs/specs/obsidian-migration.md).
 | Stream | Branch | State |
 | --- | --- | --- |
 | M the editor merge race (data safety) | `fix/editor-merge-race` | fixed (`4d3ef06`): root cause in the Mac `NotesStore.save()` (a clean save kept a stale "unsaved" copy, shown again later and saved with a valid version); also conflicts no longer restore deleted lines (web and Mac, `mergeText` and its Swift port), and remounted web editors keep unsaved typing; guarantee in invariant 7. CI and macOS dispatched on the branch; merge to `main` when green. Now investigating the fuzz seed below and making model-check failures fail the property instead of becoming unhandled rejections. Left as is: on the Mac a remote change is an undoable step (⌘Z right after an external delete restores the lines) |
-| I0 Import from Obsidian: engine, carry-over, vault switch, update | `feat/obsidian-import` (from `feat/always-on` at `394a6dd`) | in progress |
-| I1 Import from Obsidian: web and Mac flows | from I0 | waits for I0's routes |
+| I0 Import from Obsidian: engine, carry-over, vault switch, update | `feat/obsidian-import` | done (`9ebd1cd`, 12 commits); `feat/always-on` merged in at `f0ced02` (daemon 1205, contract 1284 tests green). After an import the real watcher finds no new work (every carried task keeps its id, thread and badge). Vault switch exits 75 (the Mac supervisor relaunches at once). Paired devices get 403 `forbidden_device`; switching is refused while sync is on. Journal files copied unchanged (`remapJournalFile` hook) |
+| I1 Import from Obsidian: web and Mac flows | `feat/obsidian-import-ui` (from `f0ced02`) | in progress |
 | B0 binary files, attachment sync, file serving | from `feat/always-on` or `main` | queued (after the always-on work lands; S2 changed the same sync code) |
 | P images, tables, callouts, backlinks (web and Mac) | after the drawings' embed layer | queued (images share the drawings' embed layer) |
 
