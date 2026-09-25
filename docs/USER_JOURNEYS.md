@@ -123,3 +123,28 @@ polling, polling that stops, Next, the relaunch's order and the setup resuming a
 banner's rules and its dismissal (`ComputerAccessBannerTests`), the command
 (`ComputerAccessAppTests`), and the snapshots `settings-computer-use-*`,
 `computer-access-guide-*` and `computer-access-banner-*`.
+
+## J10. Asking the orchestrator what it's doing, and redirecting it
+
+1. The inbox's first row is always **Orchestrator**, pinned above the task threads: its status
+   (*Working* while it decides, *Idle* otherwise) and its latest message. The palette's *Open the
+   orchestrator's chat* opens it too; on the Mac, **Agent → Orchestrator Chat** opens it in a
+   window of its own (choosing it again brings that window forward).
+2. The chat shows every time it woke up and why ("Daily/2026-09-24.md changed: 2 tasks", "“Research
+   desks” finished"), each decision as a tool call (*Delegate to subagent* with the capabilities it
+   granted, *Set task status → ignored*…) with a link to the task's thread under it, and *Thought
+   for 3 s* when it reasoned.
+3. You write *What are you working on?* and press Return. *You wrote to me* marks its turn, and
+   its answer streams in: what's running, what waits on you, what's done.
+4. You write *Drop the desk research*. It stops that task's subagent (the badge turns *Stopped*)
+   and says so. *Also check prices at IKEA* goes to the subagent working on the task, and it
+   tells you it passed it on.
+5. **Stop** in the chat's header ends a turn in progress. The chat, and what it knows of your
+   conversation, survive restarts.
+
+Tests: `packages/agent/test/scenarios/orchestrator-chat.test.ts` (turns recorded, direct messages
+answered and acted on through the gate, approvals in the chat, recent exchanges in the digest,
+Stop, restarts), `src/orchestrator/chat.test.ts` (thinking, retention), the brain's direct-message
+tests and the `direct-*` triage eval cases, web e2e `orchestrator.spec.ts`, Mac
+`OrchestratorChatTests`, `OrchestratorWindowTests`, `InMemoryOrchestratorTests` and the snapshots
+`orchestrator-chat-*`, `orchestrator-window-*`.

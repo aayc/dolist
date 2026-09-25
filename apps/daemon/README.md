@@ -177,6 +177,11 @@ Notes:
   writer creates it first, theirs is returned with `created: false`.
 - Thread actions that take longer than 3 s answer `202 { ok: true, pending: true }` and finish in
   the background.
+- `thr_orchestrator` (`ORCHESTRATOR_THREAD_ID`) is the orchestrator's own chat: it's listed with
+  the other threads (without `notePath`, so a `?notePath=` filter leaves it out) and records every
+  orchestrator turn. `POST …/messages` on it is a direct message the orchestrator answers in the
+  chat, `POST …/cancel` stops the turn in progress (a no-op when idle), and `…/retry` answers 503
+  `agent_unavailable`. With the agent off (`DDL_AGENT_MODE=off`) it doesn't exist.
 - `computer/permissions/open` runs `open` on a fixed System Settings deep link for the pane (the
   pane, then Privacy & Security); nothing from the request reaches the command. `AgentStatusResponse`
   reports `execution.computerAccess`: both permissions, whether app control is available, and the
@@ -196,7 +201,7 @@ Server → client (`ServerEvent`):
 | `hello` | On connect: `serverVersion`, `apiVersion`. |
 | `vault.changed` | Visible files changed. Coalesced over ~30 ms, one change per path. `origin` is `client` (with `clientId`, for writes made through the API), `agent`, `sync` or `external` (another app, such as Obsidian). |
 | `task.records` / `task.record` | Agent badges for a note / one task. |
-| `thread.upsert` / `thread.message` / `thread.delta` | Thread summaries, messages, streamed text. |
+| `thread.upsert` / `thread.message` / `thread.delta` | Thread summaries, messages, streamed text (the orchestrator's chat, `thr_orchestrator`, included). |
 | `approval.upsert` | An approval was created or decided. |
 | `agent.status` | `AgentStatusResponse` changed. |
 | `surface.frame` | Live browser/computer frame, only to clients subscribed to that thread's surface. |

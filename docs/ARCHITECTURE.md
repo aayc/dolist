@@ -96,6 +96,11 @@ through an `AttributedStorage` view. The WebSocket hub tags each `vault.changed`
   selectable, and `e2e/polish.spec.ts` audits both on every main screen.
 - Secondary UI (thread panel, artifact viewer, palette, settings, search) is code-split and
   prefetched on idle; vim mode is loaded on demand.
+- The agent panel's inbox pins the orchestrator's own chat above the task threads
+  (`OrchestratorInboxRow`); it opens in the panel as `OrchestratorView`, which composes the thread's
+  `MessageRow`s and `Composer` with a header of its own (status, Stop) and a link under each
+  decision to its task's thread, and from the palette ("Open the orchestrator's chat",
+  `agent:orchestrator`).
 - `DaemonClient` has two implementations: `HttpDaemonClient` (real) and `MockDaemonClient`
   (in-browser vault + simulated agent, used by e2e/perf tests and demos via `?mock=1`).
 
