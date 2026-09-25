@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   decodePersistedApprovals,
   decodePersistedRecords,
+  decodePersistedRoutines,
   decodePersistedSettings,
   decodePersistedTaskState,
   decodePersistedThread,
@@ -29,6 +30,7 @@ const DECODERS: Record<FixtureFormat, (text: string) => PersistedDecodeResult<un
   records: decodePersistedRecords,
   approvals: decodePersistedApprovals,
   "task-state": (text) => decodePersistedTaskState(text, "Daily/2026-09-23.md"),
+  routines: decodePersistedRoutines,
   settings: decodePersistedSettings,
 };
 
@@ -83,6 +85,7 @@ describe("fixture coverage", () => {
       records: "records",
       approvals: "approvals",
       "task-state": "task-state",
+      routines: "routines",
       settings: "settings",
     };
     for (const format of PERSISTED_FORMATS) {

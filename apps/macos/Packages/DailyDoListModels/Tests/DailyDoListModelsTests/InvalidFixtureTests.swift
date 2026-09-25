@@ -86,6 +86,14 @@ struct InvalidFixtureTests {
       "path is null": .rejected,
       "extra key": .tolerated(unknownKey),
     ],
+    "CreateRoutineRequest": [
+      "missing schedule": .rejected,
+      "blank instructions (trimmed to empty)": .tolerated(constraint),
+      "unknown notify": .tolerated(openEnum),
+      "unknown capability": .tolerated(openEnum),
+      "empty name": .tolerated(constraint),
+      "extra key (state never goes in the file)": .tolerated(unknownKey),
+    ],
     "HealthResponse": [
       "ok false": .tolerated("`ok` is a plain Bool"),
       "string apiVersion": .rejected,

@@ -199,6 +199,8 @@ export interface Thread {
    * saw of them: clients preview a citation from here, never by fetching the page.
    */
   sources?: CitedSource[];
+  /** Set on a routine's runs: the routine (`Routine.id`) this thread is one run of. */
+  routineId?: string;
 }
 
 /** A web page an agent found or read, as a citation preview. */
@@ -234,6 +236,8 @@ export interface ThreadSummary {
   artifactCount: number;
   surfaces: SurfaceKind[];
   pendingApprovals: number;
+  /** Set on a routine's runs (see `Thread.routineId`). */
+  routineId?: string;
 }
 
 const PREVIEW_LENGTH = 200;
@@ -267,7 +271,87 @@ export function summarizeThread(thread: Thread, pendingApprovals = 0): ThreadSum
     artifactCount: thread.artifacts.length,
     surfaces: thread.surfaces,
     pendingApprovals,
+    ...(thread.routineId === undefined ? {} : { routineId: thread.routineId }),
   };
+}
+
+// ── Routines ─────────────────────────────────────────────────────────────────
+
+/** When a finished run notifies: every time, only when it found something new, or never. */
+export type RoutineNotify = "always" | "when_changed" | "never";
+
+/** Capabilities a routine's runs get (the `uses` hint of its file). */
+export type RoutineUse = "web" | "browser" | "computer" | "shell" | "files" | "connectors";
+
+/** What started a run: its schedule, a slot missed while the Mac slept or the agent was down, or the user. */
+export type RoutineRunTrigger = "schedule" | "catch_up" | "manual";
+
+/** One run of a routine (its thread holds the conversation). */
+export interface RoutineRun {
+  threadId: string;
+  trigger: RoutineRunTrigger;
+  status: TaskAgentStatus;
+  startedAt: number;
+  finishedAt?: number;
+  /** One line: the run's badge text. */
+  summary?: string;
+  /** Whether the run found something new since the previous one (runs report it when they can). */
+  changed?: boolean;
+}
+
+/**
+ * A standing job the agent runs on a schedule: one markdown file in the vault's `Routines/`
+ * folder (the definition) plus the scheduler's state in the sidecar (next run, last run).
+ */
+export interface Routine {
+  /** Stable id derived from the file's path (`rtn_…`), safe in URLs. */
+  id: string;
+  /** `Routines/<name>.md`. */
+  path: string;
+  /** The file name without `.md`. */
+  name: string;
+  /** The schedule as written in the file. */
+  schedule: string;
+  /** The schedule in words (`Every weekday at 7:30 AM`); absent when it can't be read. */
+  scheduleText?: string;
+  notify: RoutineNotify;
+  uses: RoutineUse[];
+  paused: boolean;
+  /** The file's body: what each run does. */
+  instructions: string;
+  /** Why the routine can't run (an unreadable schedule, an unknown setting, no instructions). */
+  error?: string;
+  /** Absent while paused, invalid or unscheduled. */
+  nextRunAt?: number;
+  lastRun?: RoutineRun;
+  /** Runs kept (threads with this `routineId`). */
+  runCount: number;
+  /** Runs the user (or the agent) may still start today beyond the schedule. */
+  extraRunsLeft: number;
+}
+
+/** A starter routine the "New routine" sheet offers. */
+export interface RoutineTemplate {
+  id: string;
+  name: string;
+  /** One line for the picker. */
+  description: string;
+  schedule: string;
+  notify: RoutineNotify;
+  uses: RoutineUse[];
+  instructions: string;
+}
+
+/** A finished run worth telling the user about (sent according to the routine's `notify`). */
+export interface RoutineNotification {
+  routineId: string;
+  /** The routine's name. */
+  title: string;
+  /** The run's result in one or two lines. */
+  body: string;
+  threadId: string;
+  status: TaskAgentStatus;
+  at: number;
 }
 
 /** The action that produced a frame, for overlays (e.g. a click marker at x/y in frame pixels). */

@@ -21,6 +21,7 @@ import {
   ConnectorsResponseSchema,
   CreateFolderRequestSchema,
   CreateFolderResponseSchema,
+  CreateRoutineRequestSchema,
   DailyNoteResponseSchema,
   HealthResponseSchema,
   NoteResponseSchema,
@@ -28,6 +29,9 @@ import {
   PostMessageRequestSchema,
   RenameRequestSchema,
   RenameResponseSchema,
+  RoutineListResponseSchema,
+  RoutineResponseSchema,
+  RoutineRunResponseSchema,
   SearchResponseSchema,
   SetAgentEnabledRequestSchema,
   SetAgentEnabledResponseSchema,
@@ -123,6 +127,14 @@ const THREAD_ACTION_RESPONSES = {
 } as const;
 
 const ThreadIdParams = z.object({ id: RuntimeIdSchema });
+const RoutineIdParams = z.object({ id: RuntimeIdSchema });
+
+const ROUTINE_FILE_RESPONSES = {
+  200: json(RoutineResponseSchema, "The routine as its file now reads."),
+  400: error(["invalid_request"], "Invalid routine id."),
+  404: error(["not_found"], "Unknown routine."),
+  409: error(["conflict"], "The file changed while it was being written; try again."),
+} as const;
 const Flag = z.string().optional().describe("`1`, `true` or `yes` = on; anything else = off.");
 
 export const API_CONTRACT = {
@@ -358,10 +370,16 @@ export const API_CONTRACT = {
     auth: "bearer",
     methods: {
       GET: {
-        summary: "Thread summaries, optionally filtered by note or task (empty = no filter).",
+        summary:
+          "Thread summaries, optionally filtered by note, task or routine (empty = no filter).",
         query: z.looseObject({
           notePath: z.string().max(WIRE_LIMITS.requestPathLength).optional(),
           taskId: z.string().max(WIRE_LIMITS.idLength).optional(),
+          routineId: z
+            .string()
+            .max(WIRE_LIMITS.idLength)
+            .optional()
+            .describe("Only this routine's runs."),
         }),
         responses: {
           200: json(ThreadListResponseSchema, "Summaries."),
@@ -480,6 +498,83 @@ export const API_CONTRACT = {
           400: error(["invalid_request"], "Invalid id."),
           404: error(["not_found"], "Unknown artifact."),
         },
+      },
+    },
+  },
+  routines: {
+    path: "/api/routines",
+    auth: "bearer",
+    methods: {
+      GET: {
+        summary: "Every routine with its schedule, next and last run, plus the starter templates.",
+        responses: { 200: json(RoutineListResponseSchema, "Routines and templates.") },
+      },
+      POST: {
+        summary: "Create a routine: writes `Routines/<name>.md` (works while the agent is off).",
+        body: CreateRoutineRequestSchema,
+        responses: {
+          201: json(RoutineResponseSchema, "Created."),
+          400: invalidBody(["invalid_path"]),
+          409: error(["conflict"], "A routine with that name exists."),
+          ...BODY_ERRORS,
+        },
+      },
+    },
+  },
+  routine: {
+    path: "/api/routines/:id",
+    auth: "bearer",
+    params: RoutineIdParams,
+    methods: {
+      GET: {
+        summary: "One routine.",
+        responses: {
+          200: json(RoutineResponseSchema, "The routine."),
+          400: error(["invalid_request"], "Invalid routine id."),
+          404: error(["not_found"], "Unknown routine."),
+        },
+      },
+    },
+  },
+  routineRun: {
+    path: "/api/routines/:id/run",
+    auth: "bearer",
+    params: RoutineIdParams,
+    methods: {
+      POST: {
+        summary: "Run a routine now (counts against its extra runs for today).",
+        responses: {
+          200: json(RoutineRunResponseSchema, "The run started."),
+          400: error(["invalid_request"], "Invalid routine id."),
+          404: error(["not_found"], "Unknown routine."),
+          409: error(
+            ["conflict"],
+            "It can't run now: a run is going, it has a problem, or today's extra runs are used up.",
+          ),
+          503: error(["agent_unavailable"], "The agent can't run here right now."),
+        },
+      },
+    },
+  },
+  routinePause: {
+    path: "/api/routines/:id/pause",
+    auth: "bearer",
+    params: RoutineIdParams,
+    methods: {
+      POST: {
+        summary: "Pause a routine: sets `paused: true` in its file (works while the agent is off).",
+        responses: ROUTINE_FILE_RESPONSES,
+      },
+    },
+  },
+  routineResume: {
+    path: "/api/routines/:id/resume",
+    auth: "bearer",
+    params: RoutineIdParams,
+    methods: {
+      POST: {
+        summary: "Resume a routine: sets `paused: false` in its file; it runs from its next slot.",
+        responses: ROUTINE_FILE_RESPONSES,
       },
     },
   },

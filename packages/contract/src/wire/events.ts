@@ -5,6 +5,8 @@
 import { z } from "zod";
 import {
   ApprovalRequestSchema,
+  RoutineNotificationSchema,
+  RoutineSchema,
   SurfaceKindSchema,
   surfaceFrameShape,
   TaskAgentRecordSchema,
@@ -143,6 +145,21 @@ export const SettingsChangedEventSchema = named(
   z.looseObject({ type: z.literal("settings.changed"), settings: AppSettingsSchema }),
 );
 
+export const RoutinesChangedEventSchema = named(
+  "RoutinesChangedEvent",
+  "Every routine, whenever one changed (its file, its schedule, its last run).",
+  z.looseObject({ type: z.literal("routines.changed"), routines: z.array(RoutineSchema) }),
+);
+
+export const RoutineNotificationEventSchema = named(
+  "RoutineNotificationEvent",
+  "A routine's run finished and its `notify` says to tell the user (clients show a notification).",
+  z.looseObject({
+    type: z.literal("routine.notification"),
+    notification: RoutineNotificationSchema,
+  }),
+);
+
 export const ServerErrorEventSchema = named(
   "ServerErrorEvent",
   "Something the client sent was rejected (or the connection is about to close).",
@@ -168,6 +185,8 @@ export const ServerEventSchema = named(
     AgentStatusEventSchema,
     SurfaceFrameEventSchema,
     SettingsChangedEventSchema,
+    RoutinesChangedEventSchema,
+    RoutineNotificationEventSchema,
     ServerErrorEventSchema,
   ]),
 );

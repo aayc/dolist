@@ -1,0 +1,17 @@
+[
+  {
+    "name": "everything",
+    "value": {
+      "name": "Morning briefing",
+      "schedule": "every weekday at 7:30",
+      "instructions": "Brief me for the day: my calendar and the weather.",
+      "notify": "when_changed",
+      "uses": ["web", "connectors"],
+      "paused": false
+    }
+  },
+  {
+    "name": "just the required fields",
+    "value": { "name": "Café ☕ digest", "schedule": "hourly", "instructions": "Check the menu." }
+  }
+]

@@ -253,6 +253,9 @@ const threadBase = {
   createdAt: EpochMsSchema,
   updatedAt: EpochMsSchema,
   surfaces: z.array(SurfaceKindSchema),
+  routineId: RuntimeIdSchema.optional().describe(
+    "Set on a routine's runs: the routine (`Routine.id`) this thread is one run of. Clients list these under their routine, not in the task inbox.",
+  ),
 };
 
 export const CitedSourceSchema = named(
@@ -299,6 +302,94 @@ export const ThreadSummarySchema = named(
     lastMessagePreview: z.string().optional(),
     artifactCount: CountSchema,
     pendingApprovals: CountSchema,
+  }),
+);
+
+// ── Routines ─────────────────────────────────────────────────────────────
+
+export const RoutineNotifySchema = named(
+  "RoutineNotify",
+  "When a finished run notifies: `always`, `when_changed` (only when it found something new) or `never`. The file spells `when_changed` as `when changed`.",
+  z.enum(["always", "when_changed", "never"]),
+);
+
+export const RoutineUseSchema = named(
+  "RoutineUse",
+  "A capability a routine's runs get (its file's `uses`).",
+  z.enum(["web", "browser", "computer", "shell", "files", "connectors"]),
+);
+
+export const RoutineRunTriggerSchema = named(
+  "RoutineRunTrigger",
+  "What started a run: its schedule, a slot missed while the Mac slept or the daemon was down (`catch_up`, once however many were missed), or the user (`manual`).",
+  z.enum(["schedule", "catch_up", "manual"]),
+);
+
+export const RoutineRunSchema = named(
+  "RoutineRun",
+  "One run of a routine; its thread holds the conversation.",
+  z.looseObject({
+    threadId: RuntimeIdSchema,
+    trigger: RoutineRunTriggerSchema,
+    status: TaskAgentStatusSchema,
+    startedAt: EpochMsSchema,
+    finishedAt: EpochMsSchema.optional(),
+    summary: z.string().optional().describe("One line: the run's badge text."),
+    changed: z
+      .boolean()
+      .optional()
+      .describe("Whether the run found something new since the previous one."),
+  }),
+);
+
+export const RoutineSchema = named(
+  "Routine",
+  "A standing job the agent runs on a schedule: the file `Routines/<name>.md` (schedule, notify, uses and paused in its frontmatter, the instructions as its body) plus the scheduler's state.",
+  z.looseObject({
+    id: RuntimeIdSchema.describe("Stable id derived from the file's path (`rtn_…`)."),
+    path: VaultPathSchema,
+    name: z.string().min(1).describe("The file name without `.md`."),
+    schedule: z.string().describe("The schedule as written in the file."),
+    scheduleText: z
+      .string()
+      .optional()
+      .describe("The schedule in words; absent when it can't be read."),
+    notify: RoutineNotifySchema,
+    uses: z.array(RoutineUseSchema),
+    paused: z.boolean(),
+    instructions: z.string(),
+    error: z.string().optional().describe("Why the routine can't run."),
+    nextRunAt: EpochMsSchema.optional().describe("Absent while paused, invalid or unscheduled."),
+    lastRun: RoutineRunSchema.optional(),
+    runCount: CountSchema.describe("Runs kept (threads with this `routineId`)."),
+    extraRunsLeft: CountSchema.describe("Runs that may still start today beyond the schedule."),
+  }),
+);
+
+export const RoutineTemplateSchema = named(
+  "RoutineTemplate",
+  "A starter routine offered by “New routine”.",
+  z.looseObject({
+    id: IdSchema,
+    name: z.string().min(1),
+    description: z.string(),
+    schedule: z.string().min(1),
+    notify: RoutineNotifySchema,
+    uses: z.array(RoutineUseSchema),
+    instructions: z.string().min(1),
+  }),
+);
+
+export const RoutineNotificationSchema = named(
+  "RoutineNotification",
+  "A finished run to tell the user about (sent according to the routine's `notify`).",
+  z.looseObject({
+    routineId: RuntimeIdSchema,
+    title: z.string().describe("The routine's name."),
+    body: z.string().describe("The run's result in a line or two."),
+    threadId: RuntimeIdSchema,
+    status: TaskAgentStatusSchema,
+    at: EpochMsSchema,
   }),
 );
 

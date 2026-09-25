@@ -1,0 +1,28 @@
+[
+  {
+    "name": "a run started now",
+    "value": {
+      "routine": {
+        "id": "rtn_0a1b2c3d4e5f60",
+        "path": "Routines/Morning briefing.md",
+        "name": "Morning briefing",
+        "schedule": "every weekday at 7:30",
+        "scheduleText": "Every weekday at 7:30 AM",
+        "notify": "always",
+        "uses": ["web"],
+        "paused": false,
+        "instructions": "Brief me for the day.",
+        "nextRunAt": 1790749800000,
+        "lastRun": {
+          "threadId": "thr_n3w7hr34d000",
+          "trigger": "manual",
+          "status": "working",
+          "startedAt": 1790700000000
+        },
+        "runCount": 13,
+        "extraRunsLeft": 4
+      },
+      "threadId": "thr_n3w7hr34d000"
+    }
+  }
+]
