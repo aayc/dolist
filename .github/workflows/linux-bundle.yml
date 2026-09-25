@@ -1,0 +1,108 @@
+name: Linux bundle
+
+# The always-on machine's kit (deploy/linux): builds ddl-linux-x64.tar.gz and smoke-tests it
+# unpacked (the sync service and the daemon with the mock agent, on free ports), then installs it
+# with setup.sh on a fresh runner and checks the systemd services. Runs when the kit or anything
+# the bundle contains changes (keep both path lists in sync), and on demand.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/linux/**"
+      - "apps/daemon/**"
+      - "apps/sync/**"
+      - "apps/web/**"
+      - "packages/**"
+      - "patches/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - ".nvmrc"
+      - ".github/actions/setup/**"
+      - ".github/workflows/linux-bundle.yml"
+  pull_request:
+    paths:
+      - "deploy/linux/**"
+      - "apps/daemon/**"
+      - "apps/sync/**"
+      - "apps/web/**"
+      - "packages/**"
+      - "patches/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - ".nvmrc"
+      - ".github/actions/setup/**"
+      - ".github/workflows/linux-bundle.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # Superseded PR runs are cancelled; every commit on main keeps its own run.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  TURBO_TELEMETRY_DISABLED: "1"
+
+jobs:
+  bundle:
+    name: Linux bundle (smoke test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+
+      - name: Build the bundle
+        run: deploy/linux/build-bundle.sh --arch x64
+
+      - name: Smoke test (unpacked, mock agent, free ports)
+        # Pairing joins this test once remote access is merged: see the FOLLOW-UP at the end of
+        # deploy/linux/smoke-check.mjs.
+        run: deploy/linux/smoke-test.sh deploy/linux/build/ddl-linux-x64.tar.gz
+
+      - name: Upload the bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ddl-linux-x64
+          path: |
+            deploy/linux/build/ddl-linux-x64.tar.gz
+            deploy/linux/build/ddl-linux-x64.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  setup:
+    # A hosted runner is a disposable Ubuntu VM with systemd and passwordless sudo.
+    name: Linux setup kit (systemd)
+    needs: bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Put Node.js where systemd finds it
+        # setup.sh and the units use the node on systemd's default PATH, as on a real machine.
+        run: |
+          sudo ln -sf "$(command -v node)" /usr/local/bin/node
+          /usr/local/bin/node --version
+
+      - name: Download the bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ddl-linux-x64
+          path: bundle
+
+      - name: Install with setup.sh, run it again, start the services
+        run: sudo --preserve-env=CI deploy/linux/setup-test.sh bundle/ddl-linux-x64.tar.gz

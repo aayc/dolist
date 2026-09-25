@@ -10,6 +10,7 @@ cache, then `pnpm install --frozen-lockfile`.
 | CI (`ci.yml`) | push to `main`, pull requests, merge queue | `check`, `test-macos`, `bench`, `e2e`, `evals-mock` |
 | Security (`security.yml`) | push to `main`, pull requests, merge queue, weekly (Mon 05:27 UTC), manual | `gitleaks`, `codeql` (JS/TS + Actions), `dependency-review` (PRs) |
 | macOS app (`macos.yml`) | push to `main` and pull requests touching the app, the daemon, what it bundles or the vim vectors; manual | `app` |
+| Linux bundle (`linux-bundle.yml`) | push to `main` and pull requests touching `deploy/linux`, the daemon, the sync service, the web app or what they bundle; manual | `bundle`, `setup` |
 | Evals (live) (`evals.yml`) | weekly (Mon 06:43 UTC), manual | `gate`, `live` |
 | Dependabot (`dependabot.yml`) | weekly (Monday) | npm and GitHub Actions update PRs |
 
@@ -164,6 +165,32 @@ apps/macos/scripts/build-app.sh --release --with-daemon --zip
 
 With only the Command Line Tools installed (no Xcode), `test.sh` adds the framework and rpath flags
 Swift Testing needs.
+
+## Linux bundle (`linux-bundle.yml`)
+
+The always-on machine's kit (`deploy/linux`, see [ALWAYS_ON.md](./ALWAYS_ON.md)), on
+`ubuntu-latest`, only when the kit, the daemon, the sync service, the web app or a package they
+bundle change (the two path lists in the workflow must stay in sync).
+
+- `bundle` ("Linux bundle (smoke test)") builds `ddl-linux-x64.tar.gz` with
+  `deploy/linux/build-bundle.sh`, then `deploy/linux/smoke-test.sh` unpacks it into a temporary
+  folder and starts the sync service and the daemon (`DDL_AGENT_MODE=mock`, a temporary
+  `DDL_HOME` and vault, free loopback ports, sync on, a remote host configured).
+  `smoke-check.mjs` checks both health endpoints, the token and Host guards, the built web app
+  served to the loopback Host, a note reaching the sync service, and the agent holding the lease;
+  both processes must then stop cleanly on SIGTERM. The bundle is uploaded as the `ddl-linux-x64`
+  artifact (kept 7 days).
+- `setup` ("Linux setup kit (systemd)") installs that bundle on a fresh runner (a disposable VM
+  with systemd) with `deploy/linux/setup-test.sh`: it runs `setup.sh` twice (the second run must
+  change nothing), checks the service user, the `0700` folders and `0600` secrets, `config.json`,
+  the root-owned release, `systemd-analyze verify` on the units, starts both services under their
+  hardened units, and checks that no token reached `setup.sh`'s output or the journal. It refuses
+  to run outside CI.
+
+```sh
+deploy/linux/build-bundle.sh                                   # this machine's CPU; --arch x64|arm64
+deploy/linux/smoke-test.sh deploy/linux/build/ddl-linux-arm64.tar.gz   # Linux or macOS
+```
 
 ## Budgets
 

@@ -13,6 +13,8 @@ ports ([docs/ALWAYS_ON.md](../../docs/ALWAYS_ON.md) has the design). For a VM on
 | `setup-helper.mjs` | JSON config edits, the sync token and health checks for `setup.sh`. |
 | `ddl-daemon.service`, `ddl-sync.service` | The systemd units. |
 | `bundle-readme.md` | The README inside the tarball. |
+| `smoke-test.sh`, `smoke-check.mjs` | Start an unpacked bundle on free ports and check it (Linux or macOS). |
+| `setup-test.sh` | Install a bundle with `setup.sh` and check the services (CI runners only). |
 
 ## Requirements
 
@@ -42,6 +44,13 @@ It builds the daemon, the web app and the sync service, deploys the daemon's pro
 dependencies like the Mac app does (`pnpm deploy --prod --legacy`) with the native packages of the
 target platform, and lays them out as the daemon expects: it serves `web/dist` from next to
 `daemon/`, so no `webDist` setting is needed.
+
+Check a bundle without installing it: `deploy/linux/smoke-test.sh
+deploy/linux/build/ddl-linux-x64.tar.gz` unpacks it into a temporary folder, starts the sync
+service and the daemon (mock agent) on free loopback ports with a temporary home, checks health,
+the web app, a note syncing through the sync service and the agent lease, and stops both. CI runs
+it and then installs the bundle with `setup.sh` on a fresh runner (`setup-test.sh`); see
+[docs/CI.md](../../docs/CI.md).
 
 ## Install
 
