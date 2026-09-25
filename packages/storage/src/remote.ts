@@ -1,6 +1,9 @@
 import {
+  folderHoldsAgentOwnedPaths,
   InvalidPathError,
+  isAgentOwnedPath,
   isHiddenPath,
+  LEASE_EPOCH_HEADER,
   type Logger,
   normalizePath,
   SYNC_LIMITS,
@@ -30,6 +33,7 @@ import {
   type ListOptions,
   NotFoundError,
   type RemoteStorageConfig,
+  StaleLeaseError,
   type StorageCapabilities,
   StorageError,
   type StorageEvent,
@@ -46,6 +50,11 @@ export type WebSocketWithHeaders = new (
 
 export interface RemoteStorageOptions extends Omit<RemoteStorageConfig, "kind"> {
   logger?: Logger;
+  /**
+   * The epoch of the agent lease grant this device holds, or null. While set, changes to the
+   * agent's files carry it (`LEASE_EPOCH_HEADER`); without it the server refuses them.
+   */
+  leaseEpoch?: () => number | null;
   requestTimeoutMs?: number;
   /** Stream reconnection backoff: doubles from `initial` up to `max` (with jitter). */
   reconnectDelayMs?: { initial?: number; max?: number };
@@ -78,6 +87,7 @@ export class RemoteStorageProvider implements StorageProvider {
   readonly deviceName: string;
   readonly client: SyncServiceClient;
   readonly #logger: Logger;
+  readonly #leaseEpoch: () => number | null;
   readonly #rules = new IgnoreRules();
   readonly #listeners = new Set<(event: StorageEvent) => void>();
   readonly #abort = new AbortController();
@@ -112,6 +122,7 @@ export class RemoteStorageProvider implements StorageProvider {
     this.displayName = `${this.client.host}/${options.vault}`;
     this.deviceName = options.deviceName;
     this.#logger = (options.logger ?? silentLogger).child({ component: "storage.remote" });
+    this.#leaseEpoch = options.leaseEpoch ?? (() => null);
     this.#WebSocket =
       options.WebSocket ?? (globalThis.WebSocket as unknown as WebSocketWithHeaders);
     this.#reconnect = { ...DEFAULT_RECONNECT, ...options.reconnectDelayMs };
@@ -193,6 +204,7 @@ export class RemoteStorageProvider implements StorageProvider {
           body: request,
           mutating: true,
           path: p,
+          headers: this.#fenceHeaders(isAgentOwnedPath(p)),
         })
       ).body,
     );
@@ -223,6 +235,7 @@ export class RemoteStorageProvider implements StorageProvider {
       query: { ifMatch: options.ifMatch },
       mutating: true,
       path: p,
+      headers: this.#fenceHeaders(isAgentOwnedPath(p)),
     });
     this.#emit({ kind: "deleted", path: p, self: true });
   }
@@ -237,6 +250,7 @@ export class RemoteStorageProvider implements StorageProvider {
           body: request,
           mutating: true,
           path: (code) => (code === "not_found" ? src : dst),
+          headers: this.#fenceHeaders(isAgentOwnedPath(src) || isAgentOwnedPath(dst)),
         })
       ).body,
     );
@@ -268,7 +282,12 @@ export class RemoteStorageProvider implements StorageProvider {
         await this.#request<SyncDeleteFolderResponse>(
           "DELETE",
           SYNC_ROUTES.folders(this.client.vault),
-          { query: { path: p }, mutating: true, path: p },
+          {
+            query: { path: p },
+            mutating: true,
+            path: p,
+            headers: this.#fenceHeaders(folderHoldsAgentOwnedPaths(p)),
+          },
         )
       ).body,
     );
@@ -307,6 +326,12 @@ export class RemoteStorageProvider implements StorageProvider {
       const path = typeof init.path === "function" ? init.path(error.code) : init.path;
       throw toStorageError(error, path);
     }
+  }
+
+  /** The lease epoch for a change touching the agent's files, while this device holds the lease. */
+  #fenceHeaders(agentOwned: boolean): Record<string, string> {
+    const epoch = agentOwned ? this.#leaseEpoch() : null;
+    return epoch === null ? {} : { [LEASE_EPOCH_HEADER]: String(epoch) };
   }
 
   #visible(path: string, options: ListOptions): boolean {
@@ -521,6 +546,10 @@ function toStorageError(error: SyncRequestError, path: string | undefined): Erro
     case "payload_too_large":
     case "quota_exceeded":
       return new StorageError(message, path);
+    case "stale_lease": {
+      const current = error.body?.currentEpoch;
+      return new StaleLeaseError(path ?? "", message, typeof current === "number" ? current : null);
+    }
     default:
       return error;
   }

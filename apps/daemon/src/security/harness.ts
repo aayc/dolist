@@ -15,6 +15,9 @@ import { fc } from "@fast-check/vitest";
 import { getRequestListener } from "@hono/node-server";
 import { type ClientOptions, WebSocket } from "ws";
 import { createApp } from "../app";
+import { PairedDeviceStore } from "../paired-devices";
+import { PairingCodes } from "../pairing";
+import { createRemoteHosts, type RemoteHostRegistry } from "../remote-hosts";
 import { createSecurityPolicy } from "../security";
 import { createSettingsStore, type SettingsStore } from "../settings-store";
 import { FakeAgentRuntime, tempDir, testToken } from "../test-helpers";
@@ -44,6 +47,9 @@ export interface LiveAppOptions<S extends StorageProvider> {
   runtime?: FakeAgentRuntime;
   webDist?: string | null;
   allowedOrigins?: string[];
+  remoteHosts?: RemoteHostRegistry;
+  devices?: PairedDeviceStore;
+  pairing?: PairingCodes;
   logger?: Logger;
   hub?: HubTuning;
 }
@@ -56,6 +62,9 @@ export interface LiveApp<S extends StorageProvider> {
   readonly storage: S;
   readonly runtime: FakeAgentRuntime;
   readonly settings: SettingsStore;
+  readonly remoteHosts: RemoteHostRegistry;
+  readonly devices: PairedDeviceStore;
+  readonly pairing: PairingCodes;
   readonly writes: WriteTracker;
   readonly hub: WebSocketHub;
   readonly server: Server;
@@ -82,19 +91,32 @@ export async function startLiveApp<S extends StorageProvider = MemoryStorageProv
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as AddressInfo).port;
   const allowedOrigins = options.allowedOrigins ?? [];
+  const remoteHosts = options.remoteHosts ?? createRemoteHosts();
+  const devices = options.devices ?? new PairedDeviceStore({ path: null, logger });
+  const pairing = options.pairing ?? new PairingCodes();
   handler = createApp({
     storage,
     runtime,
     settings,
     config: { port, allowedOrigins },
     token,
+    remoteHosts,
+    devices,
+    pairing,
     logger,
     webDist: options.webDist ?? null,
     writes,
   }).fetch;
   const hub = attachWebSocketHub({
     server,
-    policy: createSecurityPolicy({ port, token, extraOrigins: allowedOrigins }),
+    policy: createSecurityPolicy({
+      port,
+      token,
+      extraOrigins: allowedOrigins,
+      remoteHosts,
+      devices,
+    }),
+    devices,
     storage,
     runtime,
     settings,
@@ -111,6 +133,9 @@ export async function startLiveApp<S extends StorageProvider = MemoryStorageProv
     storage,
     runtime,
     settings,
+    remoteHosts,
+    devices,
+    pairing,
     writes,
     hub,
     server,

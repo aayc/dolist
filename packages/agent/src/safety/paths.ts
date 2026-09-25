@@ -185,10 +185,15 @@ const SENSITIVE_PATTERNS: ReadonlyArray<readonly [SensitiveKind, RegExp]> = [
     "credential-store",
     /^\/(?:private\/)?(?:etc\/(?:shadow|gshadow|master\.passwd)$|var\/db\/dslocal\/nodes\/default\/users\/)/,
   ],
+  // `$DDL_HOME`'s credentials: API keys, `daemon-token`, `sync-token`, `machine-token` and the
+  // paired devices' token hashes (`devices.json`).
   [
     "app-secret",
-    /(?:^|\/)\.daily-do-list\/(?:\.env(?:\.[^/]*)?$|[^/]*(?:token|secret|credential)[^/]*$)/,
+    /(?:^|\/)\.daily-do-list\/(?:\.env(?:\.[^/]*)?$|devices\.json$|[^/]*(?:token|secret|credential)[^/]*$)/,
   ],
+  // `$DDL_HOME` itself and globs right inside it: recursive, archiving and wildcard readers pick up
+  // every credential there. (Anchored at the home directory: a vault's sidecar is not `$DDL_HOME`.)
+  ["app-secret", /^~\/\.daily-do-list(?:\/?$|\/[^/]*[*?][^/]*$)/],
   ["app-state", /(?:^|\/)\.daily-do-list(?:\/|$)/],
   [
     "env-file",

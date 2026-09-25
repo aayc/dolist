@@ -4,7 +4,9 @@ The local Daily Do List server. It owns the markdown vault (through a `StoragePr
 the web UI, exposes the REST + WebSocket API used by every client (web today, the macOS/iOS shells
 later) and runs the always-on agent runtime. Agents can run shell commands and drive a browser and
 the desktop, so the daemon is locked down: it binds `127.0.0.1` only, every API call needs a bearer
-token, and foreign `Host`/`Origin` headers are rejected.
+token, and foreign `Host`/`Origin` headers are rejected. Other devices reach it only through a
+private-network proxy under a configured remote host, with device credentials (see
+[Remote access and pairing](#remote-access-and-pairing)).
 
 ## Running
 
@@ -37,6 +39,12 @@ Precedence: environment variable → `$DDL_HOME/config.json` → default.
 | `OPENROUTER_API_KEY` | — | Required for `live` agents. Without it the agent reports a problem; notes keep working. |
 | `DDL_SYNC_URL`, `DDL_SYNC_VAULT` | — | Sync with the sync service (both, or neither; they override `sync` in `config.json`). |
 | `DDL_SYNC_TOKEN` | — | The sync service's vault token (else `$DDL_HOME/sync-token`). Never logged. |
+| `DDL_AGENT_PLACEMENT` | `this_device` | Where this device's agent runs: `this_device`, `always_on_machine` or `always_on_host` (overrides `agent.placement`). |
+| `DDL_REMOTE_HOSTS` | — | Comma-separated remote hosts (overrides `remote.hosts` in `config.json`; clients show them read-only). |
+
+A device setting set by an environment variable (the placement, the remote hosts, or the sync setup
+through any of the three sync variables) is listed in `lockedByEnv` by `GET /api/device`, and the API
+refuses to change it (409 `locked_by_env`).
 
 Env files fill in variables that are not already set, in this order: `$DDL_HOME/.env` (preferred:
 it lives outside the repo), then `.env.local` in the working directory, then `.env.local` at the root
@@ -50,8 +58,10 @@ of this repository. Values are never logged.
 | `config.json` | Optional daemon config (below). Unknown keys are rejected so typos surface. |
 | `mcp.json` | MCP connectors in the `mcpServers` format (see `packages/connectors`). |
 | `.env` | Secrets such as `OPENROUTER_API_KEY`. |
-| `sync-token` | The sync service's vault token (one line; tightened to `0600` when looser). |
-| `device.json` | `{ "id", "name" }` of this device for the sync service, created on first use (the name comes from the host name; edit it freely, never copy the file to another machine). |
+| `sync-token` | The sync service's vault token (one line; tightened to `0600` when looser). Written by `PUT /api/device/sync`, never returned. |
+| `device.json` | `{ "id", "name" }` of this device, created on first use (the name comes from the host name; rename it with `PATCH /api/device` or by hand, never copy the file to another machine). |
+| `devices.json` | Devices paired with this daemon: name, kind, pairing time, last use and the SHA-256 of each token (never the token). Mode `0600`, created on the first pairing. An unreadable file is moved aside to `devices.json.invalid` and every device pairs again. |
+| `machine-token` | This device's credential for the always-on machine, `{ "url", "deviceId", "token" }`, mode `0600`, written by `POST /api/machine/pair`. Used only while `url` is the vault's always-on machine. |
 | `workspaces/`, browser profile | Agent scratch space, managed by the execution provider. |
 
 `config.json` (all keys optional; relative paths resolve against `$DDL_HOME`, `~` is expanded):
@@ -63,12 +73,15 @@ of this repository. Values are never logged.
   "agentMode": "live",
   "model": "deepseek/deepseek-v4.1-flash",
   "sync": { "kind": "none" },
+  "agent": { "placement": "this_device" },
+  "remote": { "hosts": ["vm-name.tailnet-name.ts.net"] },
   "execution": {
     "kind": "local",
     "browser": { "headless": true, "channel": "chrome" },
     "computer": { "enabled": true }
   },
   "allowedOrigins": ["http://localhost:5174"],
+  "remote": { "hosts": ["vm-name.tailnet-name.ts.net"] },
   "webDist": "~/daily-do-list-web",
   "logLevel": "info"
 }
@@ -79,14 +92,29 @@ of this repository. Values are never logged.
   `{ "kind": "remote", "url": "https://sync.example.com", "vault": "<vault id>" }` for the sync
   service ([docs/SYNC.md](../../docs/SYNC.md)); `url` must be `https` unless it is this machine.
   The token goes in `sync-token`, never here. With `remote` sync and an agent mode other than `off`,
-  the agent runs only while this device holds the vault's agent lease (`src/agent-lease.ts`,
-  `src/leased-runtime.ts`); otherwise its status says which device runs it.
+  the agent runs only while this device holds the vault's agent lease (`src/agent-supervisor.ts`,
+  `src/agent-lease.ts`); otherwise its status says which device runs it. `PUT`/`DELETE
+  /api/device/sync` edit this key and apply without a restart.
+- `agent.placement`: where this device's agent runs (docs/ALWAYS_ON.md): `this_device` (default;
+  asks for the agent lease with priority `interactive`), `always_on_host` (this is the always-on
+  machine; priority `host`) or `always_on_machine` (never asks). It only matters with the sync
+  service, and applies once the vault has an always-on machine (`remote.alwaysOnMachine` in the
+  app settings); until then the agent is held on this device. `PATCH /api/device` edits it live.
+- `remote.hosts`: the DNS names (optional `:port`, at most 8, no IPs) this daemon answers to besides
+  loopback, for example its tailnet name. `PATCH /api/device` edits it live.
+
+`PATCH /api/device` and `PUT`/`DELETE /api/device/sync` rewrite `config.json` in place (atomically,
+mode `0600`), keeping every key they don't own.
 - `execution`: `local` (browser headless by default; computer use defaults to on for macOS only,
   with app control when the helper is found, see `DDL_COMPUTER_HELPER`) or
   `{ "kind": "cloud", "endpoint": "https://…", "apiKeyEnv": "NAME_OF_ENV_VAR" }`.
 - `allowedOrigins`: extra exact origins (`scheme://host[:port]`) for other clients, for example a
   Vite dev server on another port or a native shell (`tauri://localhost`). HTTP(S) origins also allow
-  their host in the `Host` allowlist.
+  their host in the `Host` allowlist; a host that isn't loopback is served like a remote host (never
+  the token in the page).
+- `remote.hosts`: the names this daemon answers to besides loopback, e.g. its tailnet name behind
+  `tailscale serve` (`host[:port]`, at most 8; no IPs, schemes or paths; `:443` is the same as no
+  port). Empty or absent: loopback only. See [Remote access and pairing](#remote-access-and-pairing).
 
 ### App settings
 
@@ -110,18 +138,27 @@ waiting that it wouldn't ask about. The daemon's API and the settings file are o
 ## Security model
 
 - **Loopback only.** The HTTP server listens on `127.0.0.1`; there is no option to bind elsewhere.
-- **Bearer token** on every `/api/*` request (`Authorization: Bearer <token>`), compared in constant
-  time. The WebSocket accepts `?token=` or the same header (the Vite dev proxy injects it).
+  Other devices come in through a private-network proxy on this machine, under a remote host.
+- **Bearer token** on every `/api/*` request (`Authorization: Bearer <token>`): the master token
+  (`daemon-token`) or a paired app's or daemon's token, compared in constant time. On a remote Host,
+  a paired browser's cookie instead (see below). The WebSocket takes the same header, and `?token=`
+  on loopback Hosts only (the Vite dev proxy injects the header).
 - **Host allowlist** on every request, including static files, which defeats DNS rebinding:
   `127.0.0.1:<port>`, `localhost:<port>`, `localhost:5173`, `127.0.0.1:5173` (the Vite proxy forwards
-  the browser's Host unless `changeOrigin` rewrites it to the daemon's), plus hosts of
-  `allowedOrigins`.
-- **Origin allowlist** on the API and WebSocket: the daemon and Vite origins plus `allowedOrigins`.
-  A missing Origin (curl, native clients, Node) is fine with a valid token; an unknown Origin,
-  including `null` (sandboxed iframes), is always rejected. No CORS headers are ever sent.
+  the browser's Host unless `changeOrigin` rewrites it to the daemon's), hosts of `allowedOrigins`,
+  and the remote hosts (read live). A loopback Host that arrives with proxy forwarding headers
+  (`Forwarded`, `X-Forwarded-For`, `X-Forwarded-Host`, `X-Real-IP`) is refused: the proxy must keep
+  the original Host. A request whose Host and absolute-form target differ is served as the stricter
+  of the two (remote if either is).
+- **Origin allowlist** on the API and WebSocket: the daemon and Vite origins, `allowedOrigins`, and
+  `https://<remote host>` for each remote host. A missing Origin (curl, native clients, Node) is
+  fine with a valid token; an unknown Origin, including `null` (sandboxed iframes), is always
+  rejected. No CORS headers are ever sent.
 - **Token hand-off to the browser.** In production `index.html` is rendered per request with
-  `<meta name="ddl-token" content="…">` and `Cache-Control: no-store`. It is readable only through
-  the allowlisted Host, never from another origin. In development the Vite proxy adds the header.
+  `Cache-Control: no-store`: on a loopback Host with `<meta name="ddl-token" content="…">`, readable
+  only through the allowlisted Host, never from another origin; on a remote Host with
+  `<meta name="ddl-auth" content="cookie|pairing">` and never a token. In development the Vite proxy
+  adds the header.
 - **Headers.** All responses: `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
   `Cross-Origin-Resource-Policy: same-origin`; API responses `Cache-Control: no-store`. HTML adds a
   CSP (`default-src 'self'`, inline scripts only by hash, `frame-ancestors 'none'`),
@@ -135,13 +172,72 @@ waiting that it wouldn't ask about. The daemon's API and the settings file are o
 - **Limitation:** any local process that can reach `127.0.0.1` with the right Host header can load
   `index.html`, and so the token. On a shared multi-user machine other OS users could obtain it.
 
+## Remote access and pairing
+
+Off by default. To use the daemon from other devices (the always-on machine, a phone, a second
+laptop), put it behind a private-network proxy on the same machine and name it:
+
+1. `tailscale serve --bg --https=443 http://127.0.0.1:7331` (the daemon keeps binding loopback; the
+   proxy terminates TLS and keeps the original `Host`).
+2. Add the name to `remote.hosts` in `config.json` (or `DDL_REMOTE_HOSTS`) and restart, e.g.
+   `"remote": { "hosts": ["vm-name.tailnet-name.ts.net"] }`. The live list is on the app context
+   (`remoteHosts`, `src/remote-hosts.ts`), so `PATCH /api/device` changes it without a restart.
+3. Pair each device with a code from an authenticated client: Settings → Devices, or `pair` on the
+   machine (see [Command line](#command-line)).
+
+Credentials by client:
+
+| Client | Credential | How |
+| --- | --- | --- |
+| This machine (local page, Mac app, CLI) | master token | page meta tag, `Authorization`, or `?token=` on the WebSocket (loopback only) |
+| Paired app or daemon | device token (from `POST /api/pair`, shown once) | `Authorization: Bearer <token>` on REST and on the WebSocket upgrade |
+| Paired browser on a remote host | `__Host-ddl-device` cookie (from `POST /api/pair` with `kind: "browser"`) | sent by the browser; accepted only with the page's own `Origin` (or `Sec-Fetch-Site: same-origin` on Origin-less GETs), never on loopback |
+
+- **Pairing codes:** `POST /api/pairing-codes` (any authenticated client) returns 8 characters of
+  an unambiguous alphabet (show them as `XXXX-XXXX`), single use, valid 5 minutes, at most 3
+  outstanding (else 429 `rate_limited`), plus `https://<first remote host>` for a QR code.
+- **`POST /api/pair`** needs no credential: the code is one. Host and Origin are checked, bodies are
+  at most 1 KB, 5 attempts a minute are allowed across all clients (429 `rate_limited` with
+  `Retry-After`), and 10 wrong codes invalidate every outstanding code. A wrong, expired or used
+  code answers 401 `pairing_rejected` (not `unauthorized`). The name given when the code was issued
+  wins over the one in the request. `kind: "browser"` works only from the daemon's own `https://`
+  page on a remote host (the response carries `Set-Cookie`, no token); on this machine the page
+  needs no pairing.
+- **Revoking** (`DELETE /api/devices/:id`, Settings, or `revoke`) stops the credential at once and
+  closes that device's WebSockets with 1008 `Device revoked`; a browser revoking itself also gets
+  its cookie cleared. `GET /api/devices` marks the caller with `current: true`.
+- **Pages on a remote host** say `ddl-auth` `cookie` when the browser holds a working cookie, else
+  `pairing`. A link followed from another site arrives without the cookie (`SameSite=Strict`), so
+  the page's first same-origin request, which carries it, is the real answer.
+- Codes, tokens and cookies are never logged; the log names device ids and kinds.
+
+## Command line
+
+The entry point doubles as a small CLI for headless machines. Run it as the daemon's user, since
+it reads `daemon-token` and calls the running daemon on its configured port (`DDL_PORT` or
+`config.json`); without a command it starts the daemon.
+
+```sh
+sudo -u ddl -H node /opt/ddl/current/daemon/dist/main.js pair --name "Phone"
+# Pairing code: ABCD-EFGH
+# Valid once, until 11:42 (5 minutes).
+# On the new device, open https://vm-name.tailnet-name.ts.net (…) and type the code.
+
+node dist/main.js devices             # NAME  KIND  PAIRED  LAST SEEN  ID
+node dist/main.js revoke pd_abc123    # revokes a device; its connections close at once
+node dist/main.js help
+```
+
+Exit codes: 0 done, 1 the daemon refused or couldn't be reached (the message says why), 2 bad
+arguments. The token is never printed.
+
 ## REST API
 
 All paths come from `API_ROUTES` in `@ddl/core` (`packages/core/src/protocol.ts`). Errors are
 `{ "error": "<code>", "message": "…" }` (`ApiErrorBody`). Common codes: `invalid_request` and
-`invalid_json` (400), `invalid_path` (400), `unauthorized` (401), `forbidden_host` and
-`forbidden_origin` (403), `not_found` (404), `conflict` (409), `payload_too_large` (413),
-`agent_unavailable` (503), `agent_error` (500).
+`invalid_json` (400), `invalid_path` (400), `unauthorized` (401), `pairing_rejected` (401, a bad
+pairing code), `forbidden_host` and `forbidden_origin` (403), `not_found` (404), `conflict` (409),
+`payload_too_large` (413), `rate_limited` (429), `agent_unavailable` (503), `agent_error` (500).
 
 | Method | Path | Body → Response |
 | --- | --- | --- |
@@ -176,7 +272,19 @@ All paths come from `API_ROUTES` in `@ddl/core` (`packages/core/src/protocol.ts`
 | POST | `/api/routines/<id>/resume` | → `RoutineResponse` (sets `paused: false`; same codes as pause) |
 | GET | `/api/connectors` | → `{ connectors: ConnectorStatus[] }` |
 | GET | `/api/sync/status` | → `SyncStatusResponse` (state, target, last sync, pending, conflicts; with the sync service also `remoteHost`, `deviceName`) |
+| GET | `/api/device` | → `DeviceSettingsResponse` (this device's id and name, placement, remote hosts, sync setup with `hasToken`, `lockedByEnv`) |
+| PATCH | `/api/device` | `DeviceSettingsPatch` (`name`, `placement`, `remoteHosts`) → `DeviceSettingsResponse` (400 invalid, 409 `locked_by_env`) |
+| PUT | `/api/device/sync` | `DeviceSyncSetupRequest` (`url`, `vault`, optional `token`) → `DeviceSettingsResponse` (400 invalid or no token saved yet, 409 `locked_by_env`) |
+| DELETE | `/api/device/sync` | → `DeviceSettingsResponse` (sync off, token deleted; 409 `locked_by_env`) |
+| GET | `/api/machine` | → `MachineStatusResponse` (the always-on machine, this device's pairing, the last check) |
+| POST | `/api/machine/pair` | `MachinePairRequest` (`url`, `code`, optional `name`) → `MachineStatusResponse` (400, 401 `pairing_rejected`, 429 `rate_limited`, 502 `machine_unreachable`) |
+| POST | `/api/machine/check` | → `MachineStatusResponse` (checked now) |
+| DELETE | `/api/machine/pairing` | → `MachineStatusResponse` (credential deleted; revoked on the machine when it answers) |
 | POST | `/api/computer/permissions/open` | `ComputerPermissionsOpenRequest` (`{ pane: "accessibility" \| "screenRecording" }`) → `{ ok: true }` (404 off macOS, 500 if it didn't open) |
+| POST | `/api/pairing-codes` | `PairingCodeRequest` (`{ name? }`) → 201 `PairingCodeResponse` (429 with 3 codes outstanding or 50 devices paired) |
+| POST | `/api/pair` | **No bearer.** `PairRequest` (`{ code, name, kind }`) → 201 `PairResponse` (token for `app`/`daemon`, `Set-Cookie` for `browser`; 400, 401 `pairing_rejected`, 413 over 1 KB, 429 `rate_limited`) |
+| GET | `/api/devices` | → `PairedDevicesResponse` (`current: true` on the caller) |
+| DELETE | `/api/devices/<id>` | → 204 (400 malformed id, 404 unknown); closes that device's WebSockets |
 
 Notes:
 
@@ -212,13 +320,31 @@ Notes:
   pane, then Privacy & Security); nothing from the request reaches the command. `AgentStatusResponse`
   reports `execution.computerAccess`: both permissions, whether app control is available, and the
   app macOS attributes the daemon's permissions to (found by walking the parent process chain).
+- `agent/status` also reports `placement` (the stored placement, `heldHere` when the agent is held on
+  this device, `runsOn`, the relay state and a handover `note`) and this daemon's `readiness`
+  (harness ready or its problem, a model credential present, browser, desktop control, connectors),
+  booleans and counts only. `agent.status` fires when either changes.
+- `device`: a new placement applies live. Switching away from `this_device` stops the agent, syncs
+  and releases the lease; switching to it asks for the lease and takes it over from the always-on
+  machine (the note says so while it happens).
+- `device/sync` answers once the new setup runs: a held lease is released after the agent stopped
+  and synced, the old engine stops, and the new one starts (no restart needed).
+- `machine/*`: outbound calls to the machine are https only (plain http only to loopback), time out
+  after 5 s, don't follow redirects and send the token only in `Authorization`. `pair` calls the
+  machine's `POST /api/pair` as kind `daemon` with this device's name, and sets
+  `remote.alwaysOnMachine` in the (synced) app settings. `GET /api/machine` checks again in the
+  background when the last check is older than 30 s; nothing polls while nobody asks.
 - Everything outside `/api/*` and `/ws` serves the built UI with SPA fallback. Hashed files under
   `/assets/` are cached immutably. If there is no build, a short page explains how to create one.
 
 ## WebSocket (`/ws`)
 
-Connect to `ws://127.0.0.1:<port>/ws?token=<token>` (or send the `Authorization` header). The upgrade
-is refused with 401/403/404 on a bad token, Host, Origin or path. The server sends `hello` first.
+Connect to `ws://127.0.0.1:<port>/ws` with `Authorization: Bearer <token>` (or `?token=<token>`,
+which works on loopback Hosts only; on a remote host it is refused even when valid). A paired browser
+on a remote host sends its cookie and its page's `Origin` instead. Every credential presented must be
+valid, and at most one `?token=`. The upgrade is refused with 401/403/404 on a bad credential, Host,
+Origin or path. The server sends `hello` first. Revoking a device closes its sockets with 1008
+(`Device revoked`); reconnecting then gets 401.
 
 Server → client (`ServerEvent`):
 
@@ -231,7 +357,7 @@ Server → client (`ServerEvent`):
 | `approval.upsert` | An approval was created or decided. |
 | `agent.status` | `AgentStatusResponse` changed. |
 | `surface.frame` | Live browser/computer frame, only to clients subscribed to that thread's surface. |
-| `settings.changed` | Settings were saved. |
+| `settings.changed` | Settings were saved here, or a change synced from another device was reloaded. |
 | `routines.changed` | Every routine (as `GET /api/routines` lists them), whenever one changed: its file, its next run, its last run's status. Also sent when the agent lease moves to or from this device. |
 | `routine.notification` | A routine's run finished and its `notify` says to tell the user (`RoutineNotification`: routine, title, one or two lines, thread, status). |
 | `error` | A client message was rejected. |
@@ -250,17 +376,24 @@ must reconnect and resync.
 
 | Module | Role |
 | --- | --- |
-| `src/main.ts` | Entry: start, banner, signal handling. |
+| `src/main.ts`, `cli.ts` | Entry: start, banner, signal handling; the `pair`/`devices`/`revoke` subcommands. |
 | `src/server.ts` | Composition root and ordered shutdown. |
 | `src/wiring.ts` | Creates storage, connectors, execution, LLM client, runtime and sync. |
 | `src/config.ts`, `env-file.ts`, `token.ts` | Configuration, env files, bearer token. |
-| `src/app.ts`, `security.ts`, `errors.ts` | Hono app, Host/Origin/token guard, error mapping. |
+| `src/app.ts`, `security.ts`, `errors.ts` | Hono app, Host/Origin/credential guard (loopback vs remote Hosts, device cookie), error mapping. |
+| `src/remote-hosts.ts` | The live list of remote hosts the security policy reads. |
+| `src/paired-devices.ts`, `pairing.ts`, `routes/pairing.ts` | Device tokens (`devices.json`), pairing codes and their limits, the pairing routes. |
 | `src/routes/*` | REST routes and the static web app. |
-| `src/ws.ts`, `vault-events.ts`, `write-tracker.ts` | WebSocket hub and change attribution. |
+| `src/ws.ts`, `vault-events.ts`, `write-tracker.ts` | WebSocket hub (upgrade auth, closing revoked devices' sockets) and change attribution. |
 | `src/settings-store.ts`, `settings-schema.ts`, `obsidian-import.ts` | Vault-backed settings. |
 | `src/null-runtime.ts`, `null-execution.ts` | Fallbacks when agents are unavailable (routine files stay editable through `@ddl/agent/routines`). |
-| `src/sync-setup.ts` | Sync service target: device identity, token, lease client. |
-| `src/agent-lease.ts`, `leased-runtime.ts` | The agent lease, and the runtime that exists only while holding it. |
+| `src/sync-setup.ts`, `sync-controller.ts` | Sync service target (device identity, token), and the sync engine, replaceable while running. |
+| `src/agent-supervisor.ts` | Whether and how this daemon runs the agent: standalone, under the lease (by placement and priority), or watching the always-on machine run it. |
+| `src/agent-lease.ts`, `leased-runtime.ts` | The agent lease (priorities, takeover, yielding), and the runtime that exists only while holding it. |
+| `src/agent-location.ts` | Read-only views for the relay: the placement and the machine credential. |
+| `src/device-settings.ts`, `home-files.ts`, `remote-hosts.ts` | Device-local settings, atomic writes in `$DDL_HOME`, the remote hosts registry. |
+| `src/machine-link.ts` | Pairing with and checking the always-on machine. |
+| `src/readiness.ts` | This daemon's readiness to run the agent. |
 | `build.mjs` | esbuild bundle (workspace packages inlined, third-party dependencies external). |
 
 Tests are colocated (`*.test.ts`). They use in-memory vaults and temp directories and never touch the

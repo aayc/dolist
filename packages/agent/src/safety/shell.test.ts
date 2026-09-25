@@ -46,6 +46,13 @@ describe("parseShell: splitting", () => {
     expect(cmd.dynamicArgs).toEqual([false, true, false]);
   });
 
+  it("reads $DDL_HOME at the start of a word as the app's home", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion, not a template
+    expect(argvs('cat $DDL_HOME/devices.json "${DDL_HOME}/daemon-token" x$DDL_HOME')).toEqual([
+      ["cat", "~/.daily-do-list/devices.json", "~/.daily-do-list/daemon-token", "x$DDL_HOME"],
+    ]);
+  });
+
   it("parses redirections with file descriptors", () => {
     const cmd = find("git push 2>&1 >log.txt &>>all.log", "git")!;
     expect(cmd.redirects).toEqual([

@@ -5,9 +5,12 @@
  *  - REST/JSON under `/api/*` for request/response.
  *  - One WebSocket at `/ws` for server push (`ServerEvent`) and light client signals (`ClientEvent`).
  *
- * Auth: every request carries `Authorization: Bearer <token>`; the WebSocket passes `?token=`.
- * The exception is `POST /api/pair`, where the pairing code in the body is the credential.
- * The daemon binds to 127.0.0.1 and rejects foreign `Host`/`Origin` headers (DNS-rebinding/CSRF).
+ * Auth: every request carries `Authorization: Bearer <token>` (the daemon's own token, or a paired
+ * device's); the WebSocket takes the same header, or `?token=` on loopback Hosts only. A browser
+ * on a remote host uses the HttpOnly device cookie it got when pairing instead. The exception is
+ * `POST /api/pair`, where the pairing code in the body is the credential. The daemon binds to
+ * 127.0.0.1 and rejects foreign `Host`/`Origin` headers (DNS-rebinding/CSRF); remote hosts are
+ * configured names reached through a private-network proxy.
  *
  * Runtime schemas for every shape here live in `@ddl/contract` (kept in lockstep by type tests);
  * the generated reference is `docs/PROTOCOL.md`.
