@@ -87,7 +87,7 @@ budgets.
 | --- | --- | --- |
 | Initial JS (entry + static imports) | 320 kB | ~256 kB |
 | Initial CSS | 40 kB | ~7 kB |
-| Total JS | 1 200 kB | ~815 kB |
+| Total JS | 1 200 kB | ~825 kB |
 
 The initial JS is dominated by CodeMirror core and React. `@codemirror/lang-markdown` would embed
 `@codemirror/lang-html` and with it the JS and CSS parsers (~60 kB gz); our `pnpm patch`
@@ -113,7 +113,14 @@ layer (~1.3 kB gz) is installed from `App` for that reason; the size check catch
   transactions and re-resolved at most every ~150 ms.
 - One editor instance, one cached `EditorState` per open note: tab switches don't re-parse.
 - Live preview decorates only the visible ranges with a single syntax-tree pass.
-- Streaming agent text is appended to the DOM directly, not re-rendered through React per token.
+- Agent text types out without React: a store subscription feeds each message's view, one
+  `requestAnimationFrame` loop serves every message that is typing out (and stops when none is),
+  and each frame re-renders only the markdown block that changed. An idle chat requests no frames
+  and runs no animations (`e2e/chat.spec.ts` checks it). Chat animations are opacity and
+  transform only.
+- Measure before adding to a view that opens often: the chat bar's keycap hint is laid out only
+  while you type, because the first layout of the ↩ and ⇧ glyphs looks up fallback fonts (~12 ms,
+  which had doubled `thread:open`).
 - Secondary UI is code-split and prefetched on idle; a small "preloadable lazy" helper renders
   already-loaded chunks synchronously (plain `React.lazy` suspends even when prefetched).
 - Startup fetches the tree, today's note, settings and agent status in parallel.

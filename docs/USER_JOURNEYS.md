@@ -123,3 +123,26 @@ polling, polling that stops, Next, the relaunch's order and the setup resuming a
 banner's rules and its dismissal (`ComputerAccessBannerTests`), the command
 (`ComputerAccessAppTests`), and the snapshots `settings-computer-use-*`,
 `computer-access-guide-*` and `computer-access-banner-*`.
+
+## J10. Watching the agent work
+
+1. You open a task's thread while its agent works. The agent's replies type out at a steady pace
+   with a soft caret at the end, markdown forming as it goes; text that was already there when you
+   opened the thread is simply there.
+2. At the end of the chat a small row says what's happening now: *Searching the web for
+   “espresso grinders”…*, *Opening Safari…*, *Thinking…*, with the step's time after a few
+   seconds. Finished tool calls fold into *Used 4 tools*, which opens to show each one.
+3. When the agent needs you, the row reads *Waiting for your approval*; clicking it brings the
+   approval card into view, and the reply box suggests *Approve above, or reply to change
+   course…*.
+4. You reply from the chat bar: Enter sends (Shift+Enter adds a line), your message shows at once,
+   and a failed send offers Retry. **Stop** beside Send stops the agent (on the web, ⌘. too).
+5. Scrolled up to reread something, nothing pulls you down; a *Jump to latest* pill counts what
+   arrived and glides you back. With Reduce Motion on, text appears as it arrives and nothing
+   bounces or blinks.
+
+The pace of the typing and the wording of the activity row are the same on the web and the Mac
+(`apps/web/README.md`, "The agent chat").
+
+Tests: `apps/web/e2e/chat.spec.ts`, the table tests `reveal.test.ts` and `activity.test.ts` (and
+their Mac counterparts), `Composer.test.tsx`, `agent-text-view.test.ts`.

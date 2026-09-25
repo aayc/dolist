@@ -117,7 +117,8 @@ Docs index: `README.md` (product + quick start), `docs/ARCHITECTURE.md`, `docs/A
 `docs/PERFORMANCE.md`, `docs/CROSS_PLATFORM.md`, `docs/SYNC.md` (devices sharing a vault, the
 agent lease), `docs/CI.md`, `SECURITY.md`, `CONTRIBUTING.md`, and package READMEs
 (`packages/storage`, `packages/connectors`, `packages/editor`, `packages/agent/src/safety`,
-`packages/agent/src/execution`, `apps/daemon`, `apps/sync`, `apps/macos`).
+`packages/agent/src/execution`, `apps/web` (the agent chat, whose pacing and activity wording the
+Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
 
 ## Invariants (do not break these)
 
