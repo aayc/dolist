@@ -155,6 +155,12 @@ struct RESTTransport: Sendable {
         throw .pairingRejected(body.message)
       }
       throw .unauthorized
+    case 429:
+      let retryAfter = response.value(forHTTPHeaderField: "Retry-After").flatMap {
+        Int($0.trimmingCharacters(in: .whitespaces))
+      }
+      throw .rateLimited(
+        retryAfter: retryAfter, body: try? decoder.decode(ApiErrorBody.self, from: payload))
     case 409 where conflict == .note:
       // Only note conflicts carry `current`; a folder rename conflict is a plain ApiErrorBody.
       if (try? decoder.decode(ConflictProbe.self, from: payload))?.hasCurrent == true,

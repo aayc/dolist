@@ -29,6 +29,7 @@ struct ProtocolFaithfulnessTests {
         case .http(_, let body?): try record(body, as: "ApiErrorBody")
         case .pairingRejected(let message):
           try record(ApiErrorBody(error: .pairingRejected, message: message), as: "ApiErrorBody")
+        case .rateLimited(_, let body?): try record(body, as: "ApiErrorBody")
         default: Issue.record("unexpected error \(error)")
         }
       }
