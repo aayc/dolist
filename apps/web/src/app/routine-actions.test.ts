@@ -85,15 +85,20 @@ describe("RoutineActions", () => {
     expect(findRoutine(routines(), result.routine.id)?.scheduleText).toBe("Every 2 hours");
   });
 
-  it("returns where a failed create belongs: the name for 409, the schedule for 400", async () => {
+  it("returns the daemon's error for a failed create: 409 for a taken name, 400 otherwise", async () => {
     const { actions } = setup();
     await actions.create(REQUEST);
-    expect(await actions.create(REQUEST)).toEqual({
-      ok: false,
-      problem: { field: "name", message: "A routine named “Kettle watch” already exists." },
+    const taken = await actions.create(REQUEST);
+    expect(taken.ok).toBe(false);
+    if (taken.ok) return;
+    expect(taken.error).toBeInstanceOf(HttpError);
+    expect(taken.error).toMatchObject({
+      status: 409,
+      message: "A routine named “Kettle watch” already exists.",
     });
     const bad = await actions.create({ ...REQUEST, name: "Other", schedule: "whenever" });
-    expect(bad).toMatchObject({ ok: false, problem: { field: "schedule" } });
+    expect(bad).toMatchObject({ ok: false, error: { status: 400 } });
+    expect(routines().routines.map((r) => r.name)).toEqual(["Kettle watch"]);
   });
 
   it("runs a routine now and returns the run's thread", async () => {

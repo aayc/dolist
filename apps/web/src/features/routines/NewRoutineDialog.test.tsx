@@ -3,6 +3,7 @@ import { ROUTINE_TEMPLATES } from "@ddl/core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HttpError, NetworkError } from "../../api/errors";
 import type { CreateResult } from "../../app/routine-actions";
 import type { Services } from "../../app/services";
 import { ServicesContext } from "../../app/services";
@@ -19,6 +20,10 @@ import { repeatDraft } from "./repeat";
 import { routineFixture } from "./testing";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+function daemonError(status: number, error: string, message: string): HttpError {
+  return new HttpError(status, message, { error, message });
+}
 
 let root: Root | null = null;
 const LOADED = applyRoutineList(initialRoutinesState, {
@@ -140,7 +145,7 @@ describe("New routine", () => {
     const { actions, one } = render();
     actions.create.mockResolvedValueOnce({
       ok: false,
-      problem: { field: "schedule", message: "Routines run at most every 15 minutes." },
+      error: daemonError(400, "invalid_request", "Routines run at most every 15 minutes."),
     });
     fill(one, { name: "Ping", schedule: "every 5 minutes", instructions: "Ping it." });
     await submit(one("routine-create"));
@@ -161,11 +166,11 @@ describe("New routine", () => {
     actions.create
       .mockResolvedValueOnce({
         ok: false,
-        problem: { field: "name", message: "A routine named “Ping” already exists." },
+        error: daemonError(409, "conflict", "A routine named “Ping” already exists."),
       })
       .mockResolvedValueOnce({
         ok: false,
-        problem: { field: null, message: "Could not reach the Daily Do List daemon" },
+        error: new NetworkError("Could not reach the Daily Do List daemon"),
       });
     fill(one, { name: "Ping", schedule: "every hour", instructions: "Ping it." });
     await submit(one("routine-create"));

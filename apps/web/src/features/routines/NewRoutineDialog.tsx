@@ -18,7 +18,7 @@ import { IS_MAC } from "../../lib/platform";
 import { useRoutinesStore } from "../../state/routines-store";
 import { type RoutineDraft, ui } from "../../state/ui-store";
 import { Modal } from "../overlays/Modal";
-import type { CreateProblem, RoutineField } from "./routine-errors";
+import { type CreateProblem, createProblem, type RoutineField } from "./create-problem";
 import { NOTIFY_LABELS } from "./routine-format";
 import "../../styles/routines.css";
 
@@ -105,8 +105,9 @@ export function NewRoutineDialog({ draft }: { draft?: RoutineDraft }) {
     const result = await actions.create(request);
     setSaving(false);
     if (!result.ok) {
-      setProblem(result.problem);
-      const field = result.problem.field;
+      const failed = createProblem(result.error, request);
+      setProblem(failed);
+      const field = failed.field;
       if (field === "name") nameRef.current?.focus();
       else if (field === "schedule") scheduleRef.current?.focus();
       else if (field === "instructions") instructionsRef.current?.focus();

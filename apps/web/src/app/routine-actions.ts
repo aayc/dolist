@@ -1,12 +1,7 @@
 import type { CreateRoutineRequest, Routine } from "@ddl/core";
 import type { DaemonClient } from "../api/client";
 import { errorMessage } from "../api/errors";
-import {
-  type CreateProblem,
-  createProblem,
-  type Notice,
-  runProblem,
-} from "../features/routines/routine-errors";
+import { type Notice, runProblem } from "../features/routines/routine-errors";
 import { mergeThreadSummaries } from "../state/agent-reducer";
 import { updateAgentState } from "../state/agent-store";
 import {
@@ -19,7 +14,8 @@ import {
 import { toast } from "../state/toast-store";
 
 export type RunResult = { ok: true; threadId: string } | { ok: false; problem: Notice };
-export type CreateResult = { ok: true; routine: Routine } | { ok: false; problem: CreateProblem };
+/** A failed create keeps the daemon's error: the dialog shows it under the field it's about. */
+export type CreateResult = { ok: true; routine: Routine } | { ok: false; error: unknown };
 
 export interface RoutineNavigator {
   openNote(path: string, options?: { focus?: boolean }): Promise<boolean>;
@@ -117,7 +113,7 @@ export class RoutineActions {
       updateRoutines((s) => applyRoutine(s, routine));
       return { ok: true, routine };
     } catch (error) {
-      return { ok: false, problem: createProblem(error, request) };
+      return { ok: false, error };
     }
   }
 
