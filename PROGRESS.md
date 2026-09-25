@@ -57,8 +57,8 @@ Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md). Spec, with the exact wire contra
 | Stream | Branch | State |
 | --- | --- | --- |
 | S0 wire contract | `feat/always-on` | done at `45a7cd1` (incl. `heldHere` and the fencing types); `main` (routines) merged in at `a0a924f` |
-| S6 VM setup kit (Linux bundle, systemd, Azure guide, CI smoke) | `feat/always-on-kit` | done (`395902c`); bundle smoke-tested on the Mac; validating `setup.sh` under systemd in a throwaway OrbStack Linux machine (the `Linux bundle` workflow can only be dispatched once it's on `main`) |
-| S1 remote access and pairing | `feat/always-on-remote` | in progress |
+| S6 VM setup kit (Linux bundle, systemd, Azure guide, CI smoke) | `feat/always-on-kit` | done (`fa54df1`); `setup.sh` under real systemd passed in OrbStack on Ubuntu 24.04 and 26.04 arm64 (with the sandbox checked from inside each service); now switching the Azure guide to a public IP with inbound closed and `Standard_D4ps_v6` |
+| S1 remote access and pairing | `feat/always-on-remote` | done (`48d4ec7`), merged into `feat/always-on` at `0501be1` |
 | S2 placement, lease priorities, fencing, machine link | `feat/always-on-placement` | in progress |
 | S3 relay | `feat/always-on-relay` (from `a0a924f`) | in progress |
 | S4 web Settings, the orchestrator toggle, pairing screen | `feat/always-on-web` (from `a0a924f`) | in progress; stops at "ready for backend" before its fullstack e2e |
@@ -70,6 +70,10 @@ implementation wins at merge) and `config.ts` (S1 loads `remote.hosts`, S2 loads
 `agent.placement` and writes the file).
 
 The spec's "As built by S0" section records S0's names and extra error codes; S1–S5 follow it.
+
+To verify on the real VM (S1): `tailscale serve` must keep the original `Host`; the daemon
+refuses loopback-Host requests that carry proxy forwarding headers (so a Host-rewriting proxy
+fails closed instead of getting the master token).
 
 Kit follow-ups at merge time (marked `FOLLOW-UP` in the code): the pairing step of
 `deploy/linux/smoke-check.mjs`; drop the `config.json` override in `deploy/linux/setup-test.sh`
@@ -107,6 +111,10 @@ state and client ids for idempotent mutations.
 
 ## Next up (not started)
 
+- **Security (priority):** recursive reads of the whole home folder (`grep -r … ~`, `tar … ~`)
+  still pass the safety rules, which exposes `~/.ssh` and other secrets (pre-existing; found by
+  S1, which closed the `DDL_HOME` token-file hole). Deny or ask, with eval cases.
+
 - **iPhone app:** deferred; the web app covers mobile for now. Plan in
   [apps/mobile/PLAN.md](apps/mobile/PLAN.md); needs full Xcode and remote access (S1) first.
 - **Editor merge race:** an open editor re-saved lines that were deleted outside it about 10 s
@@ -124,7 +132,8 @@ state and client ids for idempotent mutations.
   alone; make it robust to load without loosening it.
 - **Flaky under load:** storage's file-watcher tests (`local-fs.watch.test.ts`,
   `internal/directory-tree-watcher.test.ts`) fail now and then when the machine is saturated and
-  pass alone; make them robust without loosening them.
+  pass alone; make them robust without loosening them. Same for the agent's subprocess tests
+  (for example `app-control/client.test.ts`, "stops waiting when the call is aborted").
 - **Known mock-eval misses** (pre-existing on `main`, the suites still pass): safety
   `coding-npm-test`, `coding-run-analysis-script`; triage `renew-passport`.
 
