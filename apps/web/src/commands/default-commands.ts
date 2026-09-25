@@ -88,6 +88,12 @@ export function createDefaultCommands(services: Services): Command[] {
       run: () => ui.openOverlay({ kind: "settings", section: "general" }),
     },
     {
+      id: "settings:computer",
+      name: "Set up computer use",
+      label: "Computer use settings",
+      run: () => ui.openOverlay({ kind: "settings", section: "computer" }),
+    },
+    {
       id: "search:open",
       name: "Search vault",
       hotkeys: [hk("Mod+Shift+F")],

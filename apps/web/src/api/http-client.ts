@@ -7,6 +7,8 @@ import {
   type ApprovalRequest,
   CLIENT_ID_HEADER,
   type ClientEvent,
+  type ComputerPermissionPane,
+  type ComputerPermissionsOpenRequest,
   type ConnectorStatus,
   type CreateFolderRequest,
   createId,
@@ -352,6 +354,11 @@ export class HttpDaemonClient implements DaemonClient {
       return data.approval as unknown as ApprovalRequest;
     if (isObject(data) && typeof data.id === "string") return data as unknown as ApprovalRequest;
     return null;
+  }
+
+  async openComputerPermissions(pane: ComputerPermissionPane): Promise<void> {
+    const body: ComputerPermissionsOpenRequest = { pane };
+    await this.request("POST", API_ROUTES.computerPermissionsOpen, body);
   }
 
   async getArtifact(threadId: string, artifactId: string): Promise<ArtifactContent> {

@@ -10,9 +10,15 @@ export function isMockMode(): boolean {
 /** The mock (and its seed data/agent simulation) is a separate chunk that never loads in normal mode. */
 export async function createDaemonClient(): Promise<DaemonClient> {
   if (isMockMode()) {
-    const { MockDaemonClient } = await import("./mock/mock-client");
+    const [{ MockDaemonClient }, { parseMockComputerMode }] = await Promise.all([
+      import("./mock/mock-client"),
+      import("./mock/mock-computer"),
+    ]);
     const speed = Number(searchParam("mockSpeed"));
-    return new MockDaemonClient({ speed: Number.isFinite(speed) && speed > 0 ? speed : 1 });
+    return new MockDaemonClient({
+      speed: Number.isFinite(speed) && speed > 0 ? speed : 1,
+      computer: parseMockComputerMode(searchParam("mockComputer")),
+    });
   }
   return new HttpDaemonClient({ token: readInjectedToken() });
 }

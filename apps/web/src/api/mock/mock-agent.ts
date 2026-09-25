@@ -5,6 +5,7 @@ import {
   type AppSettings,
   type ArtifactMeta,
   agentModel,
+  type ComputerAccess,
   type ConnectorStatus,
   createId,
   type Deferred,
@@ -56,6 +57,8 @@ import {
 export interface MockAgentHost {
   emit(event: ServerEvent): void;
   settings(): AppSettings;
+  /** The simulated Mac's computer access (absent: no computer use). */
+  computerAccess?(): ComputerAccess | undefined;
 }
 
 export const MOCK_CONNECTORS: ConnectorStatus[] = [
@@ -677,6 +680,7 @@ export class MockAgent {
     let pendingApprovals = 0;
     for (const approval of this.approvals.values())
       if (approval.status === "pending") pendingApprovals++;
+    const computerAccess = this.host.computerAccess?.();
     return {
       mode: "mock",
       enabled: this.enabled,
@@ -688,8 +692,14 @@ export class MockAgent {
       execution: {
         provider: "mock",
         capabilities: { shell: false, browser: true, computer: true },
+        ...(computerAccess ? { computerAccess } : {}),
       },
     };
+  }
+
+  /** Pushes the current status (e.g. after computer access changed). */
+  publishStatus(): void {
+    this.emitStatus();
   }
 
   // ── Queries & commands (REST) ──────────────────────────────────────────

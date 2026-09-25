@@ -311,6 +311,14 @@ const CASES: Array<Case<unknown>> = [
     },
     result: (body) => (body as { approval: unknown }).approval,
   }),
+  withCase({
+    name: "computerPermissionsOpen",
+    method: "POST",
+    input: arb.computerPermissionPane(),
+    invoke: (c, pane) => c.openComputerPermissions(pane),
+    expectSent: (pane, sent) => expect(sent.body).toStrictEqual({ pane }),
+    result: nothing,
+  }),
 ];
 
 describe("HttpDaemonClient ⇄ contract", () => {

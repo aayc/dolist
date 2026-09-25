@@ -7,6 +7,7 @@ import {
   type ApprovalRequest,
   type AppSettings,
   type ClientEvent,
+  type ComputerPermissionPane,
   type ConnectorStatus,
   createId,
   type DailyNoteResponse,
@@ -37,6 +38,7 @@ import { readJson, STORAGE_KEYS, writeJson } from "../../lib/storage";
 import type { ArtifactContent, ConnectionChange, ConnectionState, DaemonClient } from "../client";
 import { ConflictError, HttpError } from "../errors";
 import { MOCK_CONNECTORS, MockAgent, MockNotFoundError } from "./mock-agent";
+import { MockComputer, type MockComputerMode } from "./mock-computer";
 import { MockVault } from "./mock-vault";
 import { renderDailyContent, seedVault } from "./seed";
 
@@ -49,6 +51,8 @@ export interface MockDaemonClientOptions {
   persistSettings?: boolean;
   /** Install `window.__ddlMock` test hooks. */
   installHooks?: boolean;
+  /** The simulated Mac's computer access. Default `ready`. */
+  computer?: MockComputerMode;
 }
 
 export interface MockTestHooks {
@@ -128,6 +132,7 @@ export class MockDaemonClient implements DaemonClient {
   readonly endpoint = "in-browser mock";
   readonly vault = new MockVault();
   readonly agent: MockAgent;
+  private readonly computer: MockComputer;
   private settings: AppSettings;
   private readonly latencyMs: number;
   private readonly persistSettings: boolean;
@@ -140,8 +145,13 @@ export class MockDaemonClient implements DaemonClient {
     this.persistSettings = options.persistSettings ?? typeof localStorage !== "undefined";
     const stored = this.persistSettings ? readJson<AppSettings>(STORAGE_KEYS.mockSettings) : null;
     this.settings = mergeSettings(MOCK_DEFAULTS, stored ?? undefined);
+    this.computer = new MockComputer(options.computer ?? "ready", () => this.agent.publishStatus());
     this.agent = new MockAgent(
-      { emit: (event) => this.emit(event), settings: () => this.settings },
+      {
+        emit: (event) => this.emit(event),
+        settings: () => this.settings,
+        computerAccess: () => this.computer.status(),
+      },
       { speed: options.speed ?? 1 },
     );
     seedVault(this.vault, this.agent, this.settings);
@@ -424,6 +434,15 @@ export class MockDaemonClient implements DaemonClient {
         throw new HttpError(409, message, { error: "conflict", message, approval: current });
       }
       return this.agent.decide(id, decision);
+    });
+  }
+
+  openComputerPermissions(pane: ComputerPermissionPane): Promise<void> {
+    return this.respond(() => {
+      if (this.computer.open(pane) === "unsupported") {
+        const message = "System Settings exists only on macOS";
+        throw new HttpError(404, message, { error: "not_found", message });
+      }
     });
   }
 

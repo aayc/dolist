@@ -80,6 +80,10 @@ button.status-item:active {
   font-weight: 600;
 }
 
+.status-computer {
+  color: var(--ddl-warning);
+}
+
 .status-save.is-conflict {
   color: var(--ddl-warning);
 }

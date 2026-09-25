@@ -70,6 +70,25 @@
   font-size: 13px;
 }
 
+.settings-subheading {
+  margin: 20px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.computer-permission-control {
+  align-items: center;
+  gap: 10px;
+}
+
+.computer-guardrails {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ddl-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .settings-problem {
   margin-bottom: 12px;
   padding: 8px 10px;

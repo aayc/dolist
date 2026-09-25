@@ -3,7 +3,14 @@ import { readJson, STORAGE_KEYS, writeJson } from "../lib/storage";
 
 export type LeftView = "files" | "search";
 export type ThreadTab = "chat" | "artifacts" | "browser" | "computer";
-export type SettingsSection = "general" | "editor" | "daily" | "agent" | "connectors" | "about";
+export type SettingsSection =
+  | "general"
+  | "editor"
+  | "daily"
+  | "agent"
+  | "computer"
+  | "connectors"
+  | "about";
 
 export type RightView =
   | { kind: "inbox" }

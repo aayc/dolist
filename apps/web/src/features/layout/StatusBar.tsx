@@ -1,5 +1,5 @@
 import type { VimModeName } from "@ddl/editor";
-import { Bot, CircleAlert, LoaderCircle, ShieldAlert, TriangleAlert } from "lucide-react";
+import { Bot, CircleAlert, LoaderCircle, MonitorX, ShieldAlert, TriangleAlert } from "lucide-react";
 import { useServices } from "../../app/services";
 import { commandTooltip } from "../../commands/labels";
 import { Count } from "../../components/Count";
@@ -15,6 +15,7 @@ import { useVimStore } from "../../state/vim-store";
 import {
   agentItem,
   agentModeLabel,
+  computerItem,
   connectionItem,
   runningItem,
   type SaveProblem,
@@ -49,9 +50,11 @@ function AgentItems() {
   const running = useAgentStore((s) => s.status?.running ?? 0);
   const queued = useAgentStore((s) => s.status?.queued ?? 0);
   const problem = useAgentStore((s) => s.status?.problem?.trim() || null);
+  const access = useAgentStore((s) => s.status?.execution.computerAccess);
   const pending = usePendingApprovalCount();
   const item = agentItem(enabled, rawMode === "off", problem);
   const work = runningItem(running, queued);
+  const computer = computerItem(access, item.state === "on");
   return (
     <>
       <button
@@ -90,6 +93,18 @@ function AgentItems() {
         >
           <ShieldAlert size={13} aria-hidden="true" />
           <Count value={pending} className="status-count" /> to approve
+        </button>
+      ) : null}
+      {computer ? (
+        <button
+          type="button"
+          className="status-item status-computer"
+          onClick={() => commands.run("settings:computer")}
+          {...commandTooltip(commands, "settings:computer", computer.title)}
+          data-testid="status-computer"
+        >
+          <MonitorX size={13} aria-hidden="true" />
+          {computer.label}
         </button>
       ) : null}
     </>
