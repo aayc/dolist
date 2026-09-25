@@ -1,5 +1,6 @@
 import { createAgentRuntime, type ExecutionProvider } from "@ddl/agent";
 import {
+  type AgentPlacementStatus,
   type AgentStatusResponse,
   type AppSettings,
   DEFAULT_SETTINGS,
@@ -148,6 +149,32 @@ describe("LeasedAgentRuntime", () => {
     expect(created[0]!.execution.dispose).toHaveBeenCalledOnce();
     await leased.activate();
     expect(created).toHaveLength(1);
+  });
+
+  it("adds the placement to every status and status event, the runtime's own included", async () => {
+    let placement: AgentPlacementStatus = { placement: "this_device", runsOn: null, relay: "off" };
+    const runtime = new FakeAgentRuntime();
+    const leased = new LeasedAgentRuntime({
+      mode: "live",
+      settings: DEFAULT_SETTINGS,
+      problem: "Checking…",
+      createStack: async () => ({ runtime, execution: null }),
+      statusExtras: () => ({ placement }),
+      logger: silentLogger,
+    });
+    const statuses: AgentStatusResponse[] = [];
+    leased.on("status", (status) => statuses.push(status));
+    expect(leased.status().placement).toEqual(placement);
+    placement = { ...placement, note: "Taking over from vm-1…" };
+    leased.refreshStatus();
+    expect(statuses.at(-1)?.placement?.note).toBe("Taking over from vm-1…");
+
+    await leased.activate();
+    expect(leased.status()).toMatchObject({ execution: { provider: "fake" }, placement });
+    statuses.length = 0;
+    runtime.emit("status", runtime.status());
+    expect(statuses).toHaveLength(1);
+    expect(statuses[0]).toMatchObject({ execution: { provider: "fake" }, placement });
   });
 
   it("keeps routine files editable while the agent runs elsewhere, but can't run them", async () => {

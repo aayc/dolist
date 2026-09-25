@@ -31,6 +31,7 @@ export class ApiError extends Error {
 const NAMED_ERRORS = new Map<string, { status: ContentfulStatusCode; code: ApiErrorCode }>([
   ["InvalidPathError", { status: 400, code: "invalid_path" }],
   ["RoutineInputError", { status: 400, code: "invalid_request" }],
+  ["InvalidRemoteHostsError", { status: 400, code: "invalid_request" }],
   ["NotFoundError", { status: 404, code: "not_found" }],
   ["UnknownThreadError", { status: 404, code: "not_found" }],
   ["UnknownRoutineError", { status: 404, code: "not_found" }],

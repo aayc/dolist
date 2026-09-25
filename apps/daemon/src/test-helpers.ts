@@ -31,6 +31,11 @@ import {
 import { MemoryStorageProvider, type StorageProvider } from "@ddl/storage";
 import type { Hono, MiddlewareHandler } from "hono";
 import { createApp } from "./app";
+import type { DeviceSettings } from "./device-settings";
+import type { MachineLink } from "./machine-link";
+import { PairedDeviceStore } from "./paired-devices";
+import { PairingCodes } from "./pairing";
+import { createRemoteHosts, type RemoteHostRegistry } from "./remote-hosts";
 import { createSettingsStore, type SettingsStore } from "./settings-store";
 import type { SystemSettingsOpener } from "./system-settings";
 import { WriteTracker } from "./write-tracker";
@@ -328,10 +333,15 @@ export interface TestAppOptions<S extends StorageProvider = MemoryStorageProvide
   settings?: SettingsStore;
   webDist?: string | null;
   allowedOrigins?: string[];
+  remoteHosts?: RemoteHostRegistry;
+  devices?: PairedDeviceStore;
+  pairing?: PairingCodes;
   syncStatus?: () => SyncStatusResponse;
   now?: () => Date;
   logger?: Logger;
   systemSettings?: FakeSystemSettings;
+  device?: DeviceSettings;
+  machine?: MachineLink;
   relay?: { middleware(): MiddlewareHandler };
 }
 
@@ -340,6 +350,9 @@ export interface TestApp<S extends StorageProvider = MemoryStorageProvider> {
   storage: S;
   runtime: AgentRuntime;
   settings: SettingsStore;
+  remoteHosts: RemoteHostRegistry;
+  devices: PairedDeviceStore;
+  pairing: PairingCodes;
   token: string;
   writes: WriteTracker;
   systemSettings: FakeSystemSettings;
@@ -359,16 +372,24 @@ export async function createTestApp<S extends StorageProvider = MemoryStoragePro
   const token = testToken();
   const writes = new WriteTracker();
   const systemSettings = options.systemSettings ?? new FakeSystemSettings();
+  const remoteHosts = options.remoteHosts ?? createRemoteHosts();
+  const devices = options.devices ?? new PairedDeviceStore({ path: null, logger: silentLogger });
+  const pairing = options.pairing ?? new PairingCodes();
   const app = createApp({
     storage,
     runtime,
     settings,
     config: { port: TEST_PORT, allowedOrigins: options.allowedOrigins ?? [] },
     token,
+    remoteHosts,
+    devices,
+    pairing,
     logger: options.logger ?? silentLogger,
     webDist: options.webDist ?? null,
     writes,
     ...(options.syncStatus ? { syncStatus: options.syncStatus } : {}),
+    ...(options.device ? { device: options.device } : {}),
+    ...(options.machine ? { machine: options.machine } : {}),
     systemSettings,
     ...(options.now ? { now: options.now } : {}),
     ...(options.relay ? { relay: options.relay } : {}),
@@ -394,5 +415,17 @@ export async function createTestApp<S extends StorageProvider = MemoryStoragePro
     );
   };
 
-  return { app, storage, runtime, settings, token, writes, systemSettings, request };
+  return {
+    app,
+    storage,
+    runtime,
+    settings,
+    remoteHosts,
+    devices,
+    pairing,
+    token,
+    writes,
+    systemSettings,
+    request,
+  };
 }

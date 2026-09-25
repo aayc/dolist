@@ -18,7 +18,7 @@ export const CREDENTIAL_STORE_READ = info(
   "credentials",
   "deny",
   "critical",
-  "Reads a password store, keychain, browser credential database or the app's API keys",
+  "Reads a password store, keychain, browser credential database or the app's API keys and tokens",
 );
 export const SENSITIVE_FILE_READ = info(
   "credentials.sensitive-file",

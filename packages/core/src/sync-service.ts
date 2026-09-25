@@ -123,7 +123,8 @@ export const SYNC_ROUTES = {
   stream: (vault: string) => vaultRoute(vault, "/stream"),
   /**
    * GET → SyncLeaseStatusResponse · POST SyncLeaseRequest → SyncLeaseResponse or 409
-   * SyncLeaseConflictBody · DELETE (`?device=&session=`) → 204 or 409 SyncLeaseConflictBody
+   * SyncLeaseConflictBody · DELETE (`?device=&session=`) → 204 or 409 SyncLeaseConflictBody. A
+   * DELETE from the device whose takeover is pending withdraws it (204).
    */
   lease: (vault: string, name: SyncLeaseName) =>
     vaultRoute(vault, `/leases/${encodeURIComponent(name)}`),
@@ -236,6 +237,21 @@ export type SyncStreamMessage =
 export type SyncLeasePriority = "host" | "interactive";
 
 export const SYNC_LEASE_PRIORITIES: readonly SyncLeasePriority[] = ["host", "interactive"];
+
+/** True when a request with priority `a` outranks a holder with priority `b`. */
+export function outranks(a: SyncLeasePriority, b: SyncLeasePriority): boolean {
+  return a === "interactive" && b === "host";
+}
+
+/** Timings of a takeover (a request that outranks the holder). */
+export const SYNC_LEASE_TAKEOVER = {
+  /** After the holder lets go, only the requester (or an equal or higher priority) may take it. */
+  graceMs: 30_000,
+  /** A pending takeover lapses when its requester hasn't asked for this long. */
+  expiresAfterMs: 60_000,
+  /** How often a requester asks while its takeover is pending. */
+  pollMs: 3_000,
+} as const;
 
 export interface SyncLeaseRequest {
   /** Must equal the `X-DDL-Device` header. */

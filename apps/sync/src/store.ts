@@ -3,6 +3,8 @@ import type { DatabaseSync, SQLInputValue, StatementSync } from "node:sqlite";
 import {
   ancestorFolders,
   createId,
+  outranks,
+  SYNC_LEASE_TAKEOVER,
   type SyncChange,
   type SyncChangesResponse,
   type SyncErrorCode,
@@ -15,7 +17,7 @@ import {
 import { generateToken, hashToken, sameHash } from "./tokens";
 
 /** Bumped with every schema change; `migrate` upgrades older databases in place. */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const MAX_VAULT_NAME_LENGTH = 100;
 
 const SCHEMA = `
@@ -66,6 +68,10 @@ CREATE TABLE leases (
   expires_at INTEGER NOT NULL,
   priority TEXT NOT NULL DEFAULT 'interactive',
   epoch INTEGER NOT NULL DEFAULT 1,
+  pending_device TEXT,
+  pending_device_name TEXT,
+  pending_priority TEXT,
+  pending_asked_at INTEGER,
   PRIMARY KEY (vault, name)
 ) STRICT, WITHOUT ROWID;
 `;
@@ -75,6 +81,10 @@ const MIGRATIONS = [
   "ALTER TABLE leases ADD COLUMN priority TEXT NOT NULL DEFAULT 'interactive'",
   // A lease held during the upgrade becomes grant 1.
   "ALTER TABLE leases ADD COLUMN epoch INTEGER NOT NULL DEFAULT 1",
+  `ALTER TABLE leases ADD COLUMN pending_device TEXT;
+   ALTER TABLE leases ADD COLUMN pending_device_name TEXT;
+   ALTER TABLE leases ADD COLUMN pending_priority TEXT;
+   ALTER TABLE leases ADD COLUMN pending_asked_at INTEGER`,
 ] as const;
 
 export interface VaultInfo {
@@ -100,7 +110,8 @@ export interface WriteOutcome {
 
 export type LeaseOutcome =
   | { ok: true; holder: SyncLeaseHolder }
-  | { ok: false; holder: SyncLeaseHolder };
+  /** `takeoverPending`: this request outranks the holder and waits for it to yield. */
+  | { ok: false; holder: SyncLeaseHolder; takeoverPending?: boolean };
 
 /** An operation that the vault's current state refuses (a precondition, a file in the way, …). */
 export class VaultStateError extends Error {
@@ -460,28 +471,73 @@ export class SyncStore {
   /**
    * Grants the lease when it is free, expired, or already held by this device and session. A
    * renewal keeps the grant's epoch; any other grant takes the next one.
+   *
+   * Priorities: a request that outranks a live holder (`interactive` over `host`) records a pending
+   * takeover, and the holder's renewals answer `yieldRequested` until it releases. Among requests
+   * of equal priority the first one keeps the pending slot. For `SYNC_LEASE_TAKEOVER.graceMs` after
+   * the holder lets go, only the pending requester or an equal or higher priority may take the
+   * lease. A takeover whose requester stops asking lapses after `expiresAfterMs`.
    */
   acquireLease(vault: string, name: SyncLeaseName, request: SyncLeaseRequest): LeaseOutcome {
     return this.#transaction(() => {
       const now = this.#now();
       const current = this.#leaseRow(vault, name);
+      const priority = request.priority ?? "interactive";
       const live = current !== null && current.expiresAt > now;
+      const pending = current ? livePending(current, now) : null;
       const renewal =
         live && current.device === request.device && current.session === request.session;
-      if (live && !renewal) return { ok: false, holder: holderOf(current) };
+      if (live && !renewal) {
+        const takesOver =
+          outranks(priority, current.priority) &&
+          (!pending || pending.device === request.device || outranks(priority, pending.priority));
+        if (!takesOver) return { ok: false, holder: holderOf(current, now) };
+        this.#run(
+          `UPDATE leases SET pending_device = ?, pending_device_name = ?, pending_priority = ?,
+             pending_asked_at = ? WHERE vault = ? AND name = ?`,
+          request.device,
+          request.deviceName,
+          priority,
+          now,
+          vault,
+          name,
+        );
+        const updated: LeaseRow = {
+          ...current,
+          pending: {
+            device: request.device,
+            deviceName: request.deviceName,
+            priority,
+            askedAt: now,
+          },
+        };
+        return { ok: false, holder: holderOf(updated, now), takeoverPending: true };
+      }
+      if (!live && pending && pending.device !== request.device) {
+        if (outranks(pending.priority, priority)) {
+          return { ok: false, holder: reservationOf(current!, pending) };
+        }
+      }
       const holder: SyncLeaseHolder = {
         device: request.device,
         deviceName: request.deviceName,
         expiresAt: now + request.ttlMs,
         epoch: renewal ? current.epoch : (current?.epoch ?? 0) + 1,
-        priority: request.priority ?? "interactive",
+        priority,
       };
+      // A new grant ends any pending takeover; a renewal keeps it (the holder is asked to yield).
+      const kept = renewal ? pending : null;
       this.#run(
-        `INSERT INTO leases (vault, name, device, device_name, session, expires_at, priority, epoch)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO leases (vault, name, device, device_name, session, expires_at, priority, epoch,
+           pending_device, pending_device_name, pending_priority, pending_asked_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (vault, name) DO UPDATE SET device = excluded.device,
            device_name = excluded.device_name, session = excluded.session,
-           expires_at = excluded.expires_at, priority = excluded.priority, epoch = excluded.epoch`,
+           expires_at = excluded.expires_at, priority = excluded.priority, epoch = excluded.epoch,
+           pending_device = excluded.pending_device,
+           pending_device_name = excluded.pending_device_name,
+           pending_priority = excluded.pending_priority,
+           pending_asked_at = excluded.pending_asked_at`,
         vault,
         name,
         holder.device,
@@ -490,14 +546,20 @@ export class SyncStore {
         holder.expiresAt,
         holder.priority,
         holder.epoch,
+        kept?.device ?? null,
+        kept?.deviceName ?? null,
+        kept?.priority ?? null,
+        kept?.askedAt ?? null,
       );
+      if (kept && outranks(kept.priority, priority)) holder.yieldRequested = true;
       return { ok: true, holder };
     });
   }
 
   /**
    * Releases the lease if this device and session hold it; a free or expired lease is fine too.
-   * The row stays (expired) so the next grant continues its epoch.
+   * The row stays (expired) so the next grant continues its epoch. From the device whose takeover
+   * is pending, it withdraws the takeover instead.
    */
   releaseLease(
     vault: string,
@@ -508,9 +570,18 @@ export class SyncStore {
     return this.#transaction(() => {
       const now = this.#now();
       const current = this.#leaseRow(vault, name);
+      if (current && livePending(current, now)?.device === device) {
+        this.#run(
+          `UPDATE leases SET pending_device = NULL, pending_device_name = NULL,
+             pending_priority = NULL, pending_asked_at = NULL WHERE vault = ? AND name = ?`,
+          vault,
+          name,
+        );
+        if (current.expiresAt <= now || current.device !== device) return { ok: true };
+      }
       if (!current || current.expiresAt <= now) return { ok: true };
       if (current.device !== device || current.session !== session) {
-        return { ok: false, holder: holderOf(current) };
+        return { ok: false, holder: holderOf(current, now) };
       }
       this.#run("UPDATE leases SET expires_at = ? WHERE vault = ? AND name = ?", now, vault, name);
       return { ok: true };
@@ -518,8 +589,9 @@ export class SyncStore {
   }
 
   leaseHolder(vault: string, name: SyncLeaseName): SyncLeaseHolder | null {
+    const now = this.#now();
     const current = this.#leaseRow(vault, name);
-    return current && current.expiresAt > this.#now() ? holderOf(current) : null;
+    return current && current.expiresAt > now ? holderOf(current, now) : null;
   }
 
   // ── Internals ────────────────────────────────────────────────────────────
@@ -651,21 +723,30 @@ export class SyncStore {
 
   #leaseRow(vault: string, name: string): LeaseRow | null {
     const row = this.#get(
-      `SELECT device, device_name, session, expires_at, priority, epoch FROM leases
+      `SELECT device, device_name, session, expires_at, priority, epoch, pending_device,
+         pending_device_name, pending_priority, pending_asked_at FROM leases
        WHERE vault = ? AND name = ?`,
       vault,
       name,
     );
-    return row
-      ? {
-          device: String(row.device),
-          deviceName: String(row.device_name),
-          session: String(row.session),
-          expiresAt: Number(row.expires_at),
-          priority: row.priority === "host" ? "host" : "interactive",
-          epoch: Number(row.epoch),
-        }
-      : null;
+    if (!row) return null;
+    return {
+      device: String(row.device),
+      deviceName: String(row.device_name),
+      session: String(row.session),
+      expiresAt: Number(row.expires_at),
+      priority: toPriority(row.priority),
+      epoch: Number(row.epoch),
+      pending:
+        row.pending_device === null
+          ? null
+          : {
+              device: String(row.pending_device),
+              deviceName: String(row.pending_device_name),
+              priority: toPriority(row.pending_priority),
+              askedAt: Number(row.pending_asked_at),
+            },
+    };
   }
 }
 
@@ -734,6 +815,14 @@ function toChange(row: Row): SyncChange {
   };
 }
 
+interface PendingTakeover {
+  device: string;
+  deviceName: string;
+  priority: SyncLeasePriority;
+  /** When its requester last asked. */
+  askedAt: number;
+}
+
 interface LeaseRow {
   device: string;
   deviceName: string;
@@ -741,14 +830,44 @@ interface LeaseRow {
   expiresAt: number;
   priority: SyncLeasePriority;
   epoch: number;
+  pending: PendingTakeover | null;
 }
 
-function holderOf(row: LeaseRow): SyncLeaseHolder {
-  return {
+function toPriority(value: unknown): SyncLeasePriority {
+  return value === "host" ? "host" : "interactive";
+}
+
+/**
+ * The row's takeover while it still counts: its requester asked recently, and the lease is held
+ * or was let go less than the grace period ago.
+ */
+function livePending(row: LeaseRow, now: number): PendingTakeover | null {
+  const { pending } = row;
+  if (!pending || now - pending.askedAt >= SYNC_LEASE_TAKEOVER.expiresAfterMs) return null;
+  if (row.expiresAt <= now && now - row.expiresAt >= SYNC_LEASE_TAKEOVER.graceMs) return null;
+  return pending;
+}
+
+function holderOf(row: LeaseRow, now: number): SyncLeaseHolder {
+  const holder: SyncLeaseHolder = {
     device: row.device,
     deviceName: row.deviceName,
     expiresAt: row.expiresAt,
     epoch: row.epoch,
     priority: row.priority,
+  };
+  const pending = livePending(row, now);
+  if (pending && outranks(pending.priority, row.priority)) holder.yieldRequested = true;
+  return holder;
+}
+
+/** Who a released lease is kept for during a takeover's grace period (its next grant). */
+function reservationOf(row: LeaseRow, pending: PendingTakeover): SyncLeaseHolder {
+  return {
+    device: pending.device,
+    deviceName: pending.deviceName,
+    expiresAt: row.expiresAt + SYNC_LEASE_TAKEOVER.graceMs,
+    epoch: row.epoch + 1,
+    priority: pending.priority,
   };
 }
