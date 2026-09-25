@@ -125,6 +125,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
             settings: settings.get(),
             connectors,
             createStack,
+            storage: agentStorage,
             problem: prepared.remote.problem ?? LEASE_CHECKING_PROBLEM,
             logger: logger.child({ component: "agent" }),
           })

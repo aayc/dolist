@@ -49,10 +49,11 @@ export function registerAgentRoutes(app: Hono, ctx: AppContext): void {
   });
 
   app.get(API_ROUTES.threads, (c) => {
-    const { notePath, taskId } = readQuery(c, API_CONTRACT.threads.methods.GET.query);
+    const { notePath, taskId, routineId } = readQuery(c, API_CONTRACT.threads.methods.GET.query);
     const filter = {
       ...(notePath ? { notePath: resolveNotePath(notePath) } : {}),
       ...(taskId ? { taskId } : {}),
+      ...(routineId ? { routineId } : {}),
     };
     const body: ThreadListResponse = {
       threads: runtime.listThreads(Object.keys(filter).length > 0 ? filter : undefined),

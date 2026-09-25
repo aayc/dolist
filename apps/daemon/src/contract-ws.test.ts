@@ -212,6 +212,25 @@ describe("server events", () => {
     },
   );
 
+  test.prop([arb.routinesChangedEvent(), arb.routineNotificationEvent()], { numRuns })(
+    "routine lists and notifications carry the payload unchanged",
+    async ({ routines }, { notification }) => {
+      const from = client.messages.length;
+      runtime.emit("routines.changed", routines);
+      runtime.emit("routine.notification", notification);
+      const changed = await client.next((e) => e.type === "routines.changed", from);
+      expect(changed).toStrictEqual(
+        JSON.parse(JSON.stringify({ type: "routines.changed", routines })),
+      );
+      const notified = await client.next((e) => e.type === "routine.notification", from);
+      expect(notified).toStrictEqual(
+        JSON.parse(JSON.stringify({ type: "routine.notification", notification })),
+      );
+      expectServerEvent(changed);
+      expectServerEvent(notified);
+    },
+  );
+
   test.prop([arb.surfaceFrame()], { numRuns })(
     "frames reach subscribers as conformant surface.frame events",
     async (frame) => {
