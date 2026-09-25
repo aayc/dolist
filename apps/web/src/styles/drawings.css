@@ -1,0 +1,148 @@
+/*
+ * Drawings: the static render inside an embed's box (the box itself is @ddl/editor's), Excalidraw
+ * over the note while a drawing is edited in place, and an opened drawing file.
+ */
+
+.editor-host[hidden] {
+  display: none;
+}
+
+.drawing-embed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.drawing-embed .drawing-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* Links inside a drawing never navigate the app; the box handles the pointer. */
+  pointer-events: none;
+}
+
+/* The dark theme inverts the drawing as Excalidraw's own dark mode does, images excepted. */
+[data-theme="dark"] .drawing-embed .drawing-svg {
+  filter: invert(93%) hue-rotate(180deg);
+}
+
+[data-theme="dark"] .drawing-embed .drawing-svg image {
+  filter: invert(100%) hue-rotate(180deg) saturate(1.25);
+}
+
+.drawing-embed.is-rendering,
+.drawing-embed.is-empty,
+.drawing-embed.is-message {
+  border: 1px dashed var(--ddl-border);
+  background: var(--ddl-bg-secondary);
+}
+
+.drawing-embed-hint {
+  padding: 12px;
+  color: var(--ddl-text-faint);
+  font-family: var(--ddl-font-ui);
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* In place: Excalidraw in a card over the note, lined up with the drawing's box. */
+.drawing-overlay {
+  position: absolute;
+  z-index: 20;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid var(--ddl-border);
+  border-radius: var(--radius-l);
+  background: var(--ddl-bg);
+  box-shadow: var(--ddl-shadow);
+  font-family: var(--ddl-font-ui);
+  line-height: normal;
+  animation: drawing-overlay-in 140ms ease-out;
+}
+
+@keyframes drawing-overlay-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.drawing-overlay-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.drawing-overlay.is-loading .drawing-overlay-canvas::after {
+  content: "Loading the drawing editor…";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ddl-text-faint);
+  font-size: 13px;
+}
+
+.drawing-overlay-done {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--ddl-border);
+  border-radius: var(--radius-m);
+  background: var(--ddl-bg-elevated);
+  color: var(--ddl-text);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.drawing-overlay-done:hover {
+  background: var(--ddl-bg-hover);
+}
+
+.drawing-overlay-done:active {
+  background: var(--ddl-bg-active);
+}
+
+/* Excalidraw's library button would sit under Done; libraries aren't part of drawings yet. */
+.drawing-overlay .default-sidebar-trigger,
+.drawing-pane .default-sidebar-trigger {
+  display: none;
+}
+
+/* An opened drawing file: Excalidraw over the whole pane. */
+.drawing-pane {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 12px;
+  border-top: 1px solid var(--ddl-border);
+}
+
+.drawing-pane-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.drawing-pane-canvas[hidden] {
+  display: none;
+}
+
+.drawing-pane-problem {
+  margin: 24px;
+  color: var(--ddl-text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawing-overlay {
+    animation: none;
+  }
+}

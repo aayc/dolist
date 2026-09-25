@@ -11,7 +11,7 @@ export interface RenderedDrawing {
   height: number;
 }
 
-export type RenderDrawing = (scene: DrawingScene, theme: DrawingTheme) => Promise<RenderedDrawing>;
+export type RenderDrawing = (scene: DrawingScene) => Promise<RenderedDrawing>;
 
 interface Entry {
   promise: Promise<RenderedDrawing>;
@@ -19,8 +19,9 @@ interface Entry {
 }
 
 /**
- * Static renders by content hash and theme: a drawing renders once per version, however many
- * embeds show it and however often they scroll into view.
+ * Static renders by content hash: a drawing renders once per version, however many embeds show
+ * it and however often they scroll into view. (The dark theme is a CSS filter, so a theme switch
+ * renders nothing.)
  */
 export class DrawingRenders {
   private readonly render: RenderDrawing;
@@ -32,26 +33,25 @@ export class DrawingRenders {
   }
 
   /** The render, if it's ready (so an embed scrolling back into view paints at once). */
-  peek(hash: string, theme: DrawingTheme): RenderedDrawing | null {
-    return this.cache.get(`${hash}:${theme}`)?.value ?? null;
+  peek(hash: string): RenderedDrawing | null {
+    return this.cache.get(hash)?.value ?? null;
   }
 
-  get(hash: string, scene: DrawingScene, theme: DrawingTheme): Promise<RenderedDrawing> {
-    const key = `${hash}:${theme}`;
-    const cached = this.cache.get(key);
+  get(hash: string, scene: DrawingScene): Promise<RenderedDrawing> {
+    const cached = this.cache.get(hash);
     if (cached) return cached.promise;
-    const promise = this.render(scene, theme).then(
+    const promise = this.render(scene).then(
       (value) => {
         entry.value = value;
         return value;
       },
       (error: unknown) => {
-        if (this.cache.peek(key) === entry) this.cache.delete(key);
+        if (this.cache.peek(hash) === entry) this.cache.delete(hash);
         throw error;
       },
     );
     const entry: Entry = { promise, value: null };
-    this.cache.set(key, entry);
+    this.cache.set(hash, entry);
     return promise;
   }
 }

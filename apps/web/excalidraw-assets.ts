@@ -7,8 +7,9 @@
  * - Parts of the package we don't ship are replaced with small modules: font subsetting
  *   (HarfBuzz and WOFF2 compiled to WebAssembly, ~740 kB gzip, used only when exporting from
  *   Excalidraw's menus; exports embed whole fonts instead), the Mermaid importer (Mermaid is
- *   several MB), the image downscaler and the translations (the app is English only). None of
- *   them needs WebAssembly, so the daemon's CSP stays without `wasm-unsafe-eval`.
+ *   several MB), the image downscaler, the compressor of scenes embedded in exported images, and
+ *   the translations (the app is English only). None of them needs WebAssembly, so the daemon's
+ *   CSP stays without `wasm-unsafe-eval`.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -103,6 +104,17 @@ export default function imageBlobReduce({ pica }) {
   };
 }
 `,
+  // pako (~14 kB gzip) only compresses the scene Excalidraw embeds in exported images; without it
+  // Excalidraw embeds the scene uncompressed (its own fallback). Images whose embedded scene is
+  // compressed can't be opened as a scene.
+  pako: `
+export function deflate() {
+  throw new Error("Compression isn't available");
+}
+export function inflate() {
+  throw new Error("This image's drawing data is compressed, which Daily Do List can't read yet.");
+}
+`,
   locale: "export default {};\n",
 };
 
@@ -113,7 +125,7 @@ function isInsidePackage(importer: string | undefined): boolean {
 function stubFor(source: string, importer: string | undefined): string | null {
   if (!isInsidePackage(importer)) return null;
   if (source === "@excalidraw/mermaid-to-excalidraw") return "mermaid";
-  if (source === "pica" || source === "image-blob-reduce") return source;
+  if (source === "pica" || source === "image-blob-reduce" || source === "pako") return source;
   if (/(?:^|\/)subset-shared\.chunk\.js$/.test(source)) return "subset-shared";
   if (/(?:^|\/)subset-worker\.chunk\.js$/.test(source)) return "subset-worker";
   if (/(?:^|\/)locales\/(?!en-)[^/]+\.js$/.test(source)) return "locale";

@@ -179,17 +179,16 @@ describe("sceneForFile", () => {
 });
 
 describe("DrawingRenders: static renders by content hash", () => {
-  it("renders once per hash and theme, and peeks at finished renders", async () => {
+  it("renders once per hash, and peeks at finished renders", async () => {
     const render = vi.fn(async () => ({ svg: null, width: 10, height: 5 }));
     const renders = new DrawingRenders(render);
     const scene = emptyDrawingScene();
-    expect(renders.peek("h1", "light")).toBeNull();
-    await Promise.all([renders.get("h1", scene, "light"), renders.get("h1", scene, "light")]);
+    expect(renders.peek("h1")).toBeNull();
+    await Promise.all([renders.get("h1", scene), renders.get("h1", scene)]);
     expect(render).toHaveBeenCalledTimes(1);
-    expect(renders.peek("h1", "light")).toEqual({ svg: null, width: 10, height: 5 });
-    await renders.get("h1", scene, "dark");
-    await renders.get("h2", scene, "light");
-    expect(render).toHaveBeenCalledTimes(3);
+    expect(renders.peek("h1")).toEqual({ svg: null, width: 10, height: 5 });
+    await renders.get("h2", scene);
+    expect(render).toHaveBeenCalledTimes(2);
   });
 
   it("doesn't keep a failed render", async () => {
@@ -198,18 +197,16 @@ describe("DrawingRenders: static renders by content hash", () => {
       .mockRejectedValueOnce(new Error("no fonts"))
       .mockResolvedValue({ svg: null, width: 1, height: 1 });
     const renders = new DrawingRenders(render);
-    await expect(renders.get("h", emptyDrawingScene(), "light")).rejects.toThrow("no fonts");
-    await expect(renders.get("h", emptyDrawingScene(), "light")).resolves.toMatchObject({
-      width: 1,
-    });
+    await expect(renders.get("h", emptyDrawingScene())).rejects.toThrow("no fonts");
+    await expect(renders.get("h", emptyDrawingScene())).resolves.toMatchObject({ width: 1 });
   });
 
   it("evicts the least recently used", async () => {
     const render = vi.fn(async () => ({ svg: null, width: 1, height: 1 }));
     const renders = new DrawingRenders(render, 2);
-    for (const hash of ["a", "b", "c"]) await renders.get(hash, emptyDrawingScene(), "light");
-    expect(renders.peek("a", "light")).toBeNull();
-    expect(renders.peek("c", "light")).not.toBeNull();
+    for (const hash of ["a", "b", "c"]) await renders.get(hash, emptyDrawingScene());
+    expect(renders.peek("a")).toBeNull();
+    expect(renders.peek("c")).not.toBeNull();
   });
 });
 
