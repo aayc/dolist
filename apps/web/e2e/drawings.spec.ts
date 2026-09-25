@@ -205,6 +205,27 @@ test.describe("drawings", () => {
     expect(paths).toContain(`Excalidraw/${DEMO}.md`);
   });
 
+  test("in vim mode, a selected drawing still takes Enter, Escape and Delete", async ({ page }) => {
+    const embed = `![[${DEMO}|300|right-wrap]]`;
+    await openNote(page, noteWith([embed, PARAGRAPH]));
+    await page.evaluate(() => window.__ddlDebug!.runCommand("editor:vim"));
+    await expect(page.getByTestId("status-vim")).toHaveAttribute("data-mode", "normal");
+    const box = drawing(page);
+    await expect(box.locator("svg")).toBeVisible();
+    await box.click();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("drawing-editor")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("drawing-editor")).toBeHidden();
+    await expect(box).toHaveClass(/is-selected/);
+    await page.keyboard.press("Delete");
+    await expect(box).toHaveCount(0);
+    await expect.poll(() => savedNote(page)).toBe(noteWith([PARAGRAPH]));
+    // Back in the note, in normal mode: vim's undo restores the line.
+    await page.keyboard.press("u");
+    await expect.poll(() => savedNote(page)).toBe(noteWith([embed, PARAGRAPH]));
+  });
+
   test("it's saved: a reload shows it, and the file opens full size", async ({ page }) => {
     await openNote(page, noteWith([PARAGRAPH]), "mockSpeed=4&mockPersist=1");
     await page.locator(".cm-line", { hasText: WORDS }).first().click();
