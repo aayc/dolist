@@ -87,6 +87,8 @@ function toServerEvent<K extends keyof AgentRuntimeEvents>(key: K, payload: Agen
       return { type: key, approval: payload };
     case "status":
       return { type: "agent.status", status: payload };
+    case "orchestrator.activity":
+      return { type: key, activity: payload };
     default:
       return { type: key, ...(payload as object) };
   }
@@ -100,6 +102,7 @@ const EVENT_KEYS: Array<keyof AgentRuntimeEvents> = [
   "thread.delta",
   "approval.upsert",
   "status",
+  "orchestrator.activity",
   "surface.frame",
 ];
 
@@ -217,6 +220,7 @@ describe("mock runtime ⇄ wire contract", () => {
         `- [ ] ${EMAIL}`,
         "- [x] Paid rent",
         "- [ ] ",
+        "What's the tallest building in NYC?",
       ].join("\n"),
     );
     await t.waitFor(RESEARCH, "done");
@@ -262,6 +266,7 @@ describe("mock runtime ⇄ wire contract", () => {
       "thread.delta",
       "approval.upsert",
       "agent.status",
+      "orchestrator.activity",
       "surface.frame",
     ] as const) {
       expect(t.seen.get(type) ?? 0, `${type} events`).toBeGreaterThan(0);

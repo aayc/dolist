@@ -311,6 +311,22 @@ test.describe("cursor audit", () => {
     await audit(page, "search");
   });
 
+  test("orchestrator activity: chips on lines, the note's indicator", async ({ page }) => {
+    test.setTimeout(60_000);
+    // Slow enough that the dot and the indicator stay long enough to audit.
+    await openApp(page, "mockSpeed=0.5");
+    await page.locator(".cm-content").click();
+    await page.keyboard.press("ControlOrMeta+A");
+    await page.keyboard.type("Find a plumber for Saturday", { delay: 5 });
+    const chip = page.locator(".cm-ddl-activity-chip");
+    await expect(chip).toHaveAttribute("data-kind", "noticed");
+    await audit(page, "activity: noticed");
+    await expect(page.getByTestId("note-orchestrator")).toBeVisible({ timeout: 15_000 });
+    await audit(page, "activity: the note's indicator");
+    await expect(chip).toHaveText("Started a task ↗", { timeout: 15_000 });
+    await audit(page, "activity: outcome");
+  });
+
   test("agent panel: a task waiting for approval, its inbox, toast and thread", async ({
     page,
   }) => {

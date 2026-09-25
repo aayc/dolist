@@ -2,12 +2,15 @@ import {
   type ApprovalDecisionRequest,
   type ApprovalRequest,
   type CitedSource,
+  ORCHESTRATOR_THREAD_ID,
   resolveLineAnchors,
   resolveTaskAnchors,
 } from "@ddl/core";
 import type { DaemonClient } from "../api/client";
 import { errorMessage, HttpError } from "../api/errors";
+import { chipTarget } from "../features/editor/activity-chips";
 import { perfCancel, perfStart } from "../perf/perf";
+import { activityEventCount, seedActivity, useActivityStore } from "../state/activity-store";
 import {
   applyApprovalList,
   applyRecordsSnapshot,
@@ -56,11 +59,13 @@ export class AgentActions {
   }
 
   async loadOverview(): Promise<void> {
+    const eventsBefore = activityEventCount();
     const [status, threads, approvals] = await Promise.allSettled([
       this.client.getAgentStatus(),
       this.client.listThreads(),
       this.client.listApprovals(),
     ]);
+    if (status.status === "fulfilled") seedActivity(status.value.orchestrator, eventsBefore);
     updateAgentState((state) => {
       let next = state;
       if (status.status === "fulfilled") next = { ...next, status: status.value };
@@ -128,6 +133,20 @@ export class AgentActions {
     ui.showThread(threadId, tab);
     void this.loadThread(threadId);
     this.markRead(threadId);
+  }
+
+  /** The orchestrator's chat, scrolled to the turn that `turnId` (its opening line) starts. */
+  openTurn(turnId: string | null): void {
+    ui.set({ chatFocus: turnId ? { messageId: turnId, at: Date.now() } : null });
+    this.openThread(ORCHESTRATOR_THREAD_ID);
+  }
+
+  /** An activity chip: the thread its outcome acted in, else the orchestrator's chat at its turn. */
+  openActivityChip(key: string): void {
+    const chip = useActivityStore.getState().chips.find((c) => c.key === key);
+    const target = chip ? chipTarget(chip) : { turnId: null };
+    if ("threadId" in target) this.openThread(target.threadId);
+    else this.openTurn(target.turnId);
   }
 
   /** Badge click: open the task's thread (or a pending view until the orchestrator creates one). */

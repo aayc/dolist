@@ -22,6 +22,32 @@ export interface LineAnnotation {
   lineAnchor?: boolean;
 }
 
+/**
+ * A chip at the end of a line saying what the orchestrator is doing about it (the host decides
+ * the wording and when it goes; see the web app's README).
+ */
+export interface ActivityChip {
+  /** Stable while the chip lives, so updates keep its DOM (and don't replay its entrance). */
+  id: string;
+  /**
+   * 0-based line. The editor maps it through later edits until chips are set again, and drops the
+   * chip once its line is edited beyond recognition.
+   */
+  line: number;
+  /** Pill text; empty for a quiet dot. */
+  label: string;
+  /** What it means: its tooltip and accessible name. */
+  tooltip: string;
+  /** Weight, as for badges: `needs-you` is loud, `working` a neutral pill, `quiet` plain text. */
+  tone: "needs-you" | "working" | "quiet";
+  /** Its dot pulses (never under reduced motion). */
+  pulse?: boolean;
+  /** On its way out: it fades (and is simply gone under reduced motion). */
+  fading?: boolean;
+  /** For styling and tests (`data-kind`), e.g. `noticed`, `looking`, `outcome`. */
+  kind?: string;
+}
+
 /** What hovering a link shows. Built from data the host already has; never by fetching the link. */
 export type LinkPreview =
   | {
@@ -65,6 +91,8 @@ export interface EditorCallbacks {
   /** Every document change. Keep it cheap; the host debounces persistence. */
   onDocChange?(doc: string, meta: { userEvent: boolean }): void;
   onAnnotationClick?(annotation: LineAnnotation): void;
+  /** An activity chip (click, Enter or Space). */
+  onActivityChipClick?(chip: ActivityChip): void;
   /** The agent glyph ✦ at the end of a line the agent wrote (only lines naming their thread). */
   onAgentLineClick?(threadId: string): void;
   /**
@@ -133,6 +161,8 @@ export interface MarkdownEditor {
   /** Swap the whole state (instant note switching with per-note undo history). */
   setState(state: EditorState): void;
   setAnnotations(annotations: readonly LineAnnotation[]): void;
+  /** Replaces the activity chips (lines refer to the current document). */
+  setActivityChips(chips: readonly ActivityChip[]): void;
   configure(config: Partial<EditorConfig>): void;
   focus(): void;
   scrollToLine(line: number): void;

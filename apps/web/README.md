@@ -142,6 +142,81 @@ tool groups, chat bar, Stop and its shortcut, optimistic send and retry, jump to
 reduced motion, an idle chat asking for no frames). In mock mode, `__ddlDebug.holdReplies({ ms,
 fail })` delays or fails chat replies.
 
+## What the orchestrator is doing while you write
+
+`orchestrator.activity` events (see `docs/AGENT_SYSTEM.md`) become three things in the note view.
+This section is the contract for the macOS editor too: the wording, the timings and the rules below
+must stay the same on both platforms. The pure logic is `src/features/editor/activity-chips.ts`,
+with its tables in `activity-chips.test.ts`; `state/activity-store.ts` holds the chips and
+`features/editor/activity-sync.ts` hands them to the editor (`setActivityChips`).
+
+### Chips on lines
+
+A chip at the end of each line that woke the orchestrator, after the line's badge when it has one,
+styled like the task triage badge (`cm-ddl-badge` tones, `data-kind` for styling and tests):
+
+| Activity | Label | Tone | Fades |
+| --- | --- | --- | --- |
+| `noticed` | (a quiet dot) | quiet, pulsing | after 60 s without its turn |
+| `reading`, `thinking` | Orchestrator is looking… | working, pulsing | — |
+| `acting` | Working… | working, pulsing | — |
+| `acting` with outcome `asked_approval` | Needs your approval ↗ | needs you | — |
+| `idle`, `tasks_added` | Added a task ↗ / Added 3 tasks ↗ | quiet | after 6 s |
+| `idle`, `replied` | Replied ↗ | quiet | after 6 s |
+| `idle`, `delegated` | Started a task ↗ / Started 2 tasks ↗ | quiet | after 6 s |
+| `idle`, `routine_created` | Made a routine ↗ | quiet | after 6 s |
+| `idle`, `note_edited` | Edited the note ↗ | quiet | after 6 s |
+| `idle`, `asked_approval` | Needs your approval ↗ | needs you | after 6 s |
+| `idle`, `no_action` | Nothing to do | quiet | after 2.5 s |
+
+Fading takes 600 ms. The tooltip (and accessible name) is the outcome's line when it has one
+("Started a task: Find a plumber available on Saturday"), else a sentence ("The orchestrator
+noticed this line", "The orchestrator is looking at this line", "The orchestrator is working on
+this line", "Nothing for the orchestrator to do here"…). Clicking (or Enter/Space) opens the
+outcome's thread when it acted in one (not the orchestrator's own), else the orchestrator's chat
+scrolled to the turn (`turnId`, whose opening line flashes); a noticed dot opens the chat.
+
+Rules, applied per event, keyed by the trigger's `notePath` and `lines`:
+
+- `noticed` replaces the note's earlier dots with its lines (a dot whose line is still being typed
+  keeps its chip).
+- A turn's `reading`/`thinking`/`acting` puts its phase on the chips of its lines, taking over a
+  dot or an earlier outcome on the same line; its `idle` gives them its outcome, or removes them
+  when it has none (the turn failed or was stopped).
+- An `idle` without a `turnId` withdraws the note's dots (all of them when `lines` is empty); a
+  bare `{ phase: "idle" }` clears everything in progress (outcomes finish fading).
+- A chip is matched to a line by line number and text: the reported line while it still reads as
+  that text, else the nearest line with that exact text, else the nearest similar one
+  (`findEditedLine`: a prefix while typing, or Dice similarity ≥ 0.5, the task tracker's rule).
+  Task lines get no chip: their badge already shows triage.
+- In the editor, chips are anchored at their line's start and mapped through every edit (typing,
+  Enter, lines added above, undo); a chip is dropped once its line is edited beyond recognition
+  (`isSameLineEdited` against the line as it was when the chip was set) or deleted. Nothing runs
+  on the keystroke path: chips are recomputed on the next frame after an event or a fade, never
+  after an edit.
+- A client joining mid-turn seeds from `AgentStatusResponse.orchestrator` (at startup and after a
+  reconnect), unless an event arrived meanwhile.
+
+### The note header and the status bar
+
+While a turn's trigger is about the open note, the note header shows "Orchestrator: reading this
+note…", "Orchestrator: thinking…" or "Orchestrator: working…" ("Orchestrator: needs your approval"
+while it waits for one), floating at the header's bottom right so it never moves the text. While it
+works on anything else, the status bar says "Orchestrator: working on 2026-09-24" (the note's name)
+or "Orchestrator: working on your message" (the trigger's summary). Both open the orchestrator's
+chat at the turn.
+
+With `prefers-reduced-motion` nothing pulses or fades: chips and indicators change in place.
+
+### Tests
+
+Unit: `features/editor/activity-chips.test.ts` (rules, wording table, fading, anchoring,
+indicators), `packages/editor/src/activity/field.test.ts` (mapping through edits, dropping).
+E2E: `e2e/orchestrator-activity.spec.ts` (real keyboard: a request line's dot before it settles,
+then its outcome and thread; plain prose; "Nothing to do" fading; editing beyond recognition; the
+status bar; reduced motion) and the chips in `e2e/polish.spec.ts`'s cursor audit. The mock daemon
+simulates the daemon's activity for prose lines (`api/mock/mock-agent.ts`).
+
 ## Routines
 
 `src/features/routines/`, in the agent panel: the ribbon's Routines button, the "Show routines"

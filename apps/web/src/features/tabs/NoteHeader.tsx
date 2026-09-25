@@ -1,5 +1,6 @@
 import { useSettingsStore } from "../../state/settings-store";
 import { useTabsStore } from "../../state/tabs-store";
+import { NoteOrchestratorIndicator } from "../agent/OrchestratorIndicators";
 import { DailyHeader } from "../daily/DailyHeader";
 import { dailyDateOf } from "../daily/daily-nav";
 import { NoteTitle } from "./NoteTitle";
@@ -13,6 +14,7 @@ export function NoteHeader() {
     <header className="note-header" data-tooltip-placement="bottom">
       <div className="note-header-inner">
         {date ? <DailyHeader date={date} /> : <NoteTitle key={active} path={active} />}
+        <NoteOrchestratorIndicator path={active} />
       </div>
     </header>
   );

@@ -140,7 +140,84 @@ body.is-resizing .resize-handle:active {
 }
 
 .note-header-inner {
+  position: relative;
   width: 100%;
+}
+
+/*
+ * "Orchestrator: thinking…" while it works on this note. It floats at the header's bottom right
+ * (beside a daily note's nav row) so appearing never moves the text you're typing.
+ */
+.note-orchestrator {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 50%;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--ddl-border);
+  border-radius: 11px;
+  background: var(--ddl-bg);
+  color: var(--ddl-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  animation: ddl-orchestrator-enter 160ms ease-out backwards;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.note-orchestrator:hover {
+  background: var(--ddl-bg-hover);
+  color: var(--ddl-text);
+}
+
+.note-orchestrator:active {
+  background: var(--ddl-bg-active);
+}
+
+.note-orchestrator-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ddl-accent);
+  animation: ddl-orchestrator-pulse 1.2s ease-in-out infinite;
+}
+
+.note-orchestrator[data-phase="acting"] .note-orchestrator-dot {
+  background: var(--ddl-info);
+}
+
+@keyframes ddl-orchestrator-enter {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes ddl-orchestrator-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note-orchestrator,
+  .note-orchestrator-dot {
+    animation: none;
+    transition: none;
+  }
 }
 
 .readable-line-length .note-header-inner {

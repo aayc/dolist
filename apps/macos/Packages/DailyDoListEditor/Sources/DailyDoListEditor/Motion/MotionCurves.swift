@@ -60,7 +60,9 @@ enum MotionTimeline {
   static let appearDistance: CGFloat = 2
   /// A badge whose status (or label) changes crossfades from its old look.
   static let crossfadeDuration: TimeInterval = 0.16
-  /// A triaging badge's dot breathes 1 → 0.35 → 1.
+  /// A badge told to fade (an orchestrator chip whose outcome was shown) fades out.
+  static let fadeOutDuration: TimeInterval = 0.4
+  /// A pulsing badge's dot breathes 1 → 0.35 → 1.
   static let pulsePeriod: TimeInterval = 1.2
   static let pulseLowOpacity: CGFloat = 0.35
   /// A checkbox toggled to done: the checkmark scales 0.8 → 1 while fading in.
@@ -71,6 +73,11 @@ enum MotionTimeline {
   static func appear(after elapsed: TimeInterval) -> (opacity: CGFloat, offsetY: CGFloat) {
     let eased = CGFloat(CubicBezier.easeOut(progress(elapsed, over: appearDuration)))
     return (eased, appearDistance * (1 - eased))
+  }
+
+  /// Opacity of a badge fading out (ease-out, 1 → 0).
+  static func fadeOut(after elapsed: TimeInterval) -> CGFloat {
+    1 - CGFloat(CubicBezier.easeOut(progress(elapsed, over: fadeOutDuration)))
   }
 
   /// Weight of the new look in a crossfade (the old look is drawn with `1 - weight`).

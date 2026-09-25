@@ -344,6 +344,21 @@ const scenarios: Record<string, Scenario> = {
   "GET agentStatus": async (observed) => {
     const { api } = await setup(observed);
     expect((await api.call("agentStatus", "GET")).status).toBe(200);
+    const runtime = new FakeAgentRuntime();
+    runtime.orchestrator = {
+      phase: "acting",
+      turnId: "msg_1",
+      trigger: {
+        kind: "note",
+        notePath: "Daily/2026-09-23.md",
+        lines: [{ line: 2, text: "What's the tallest building in NYC?" }],
+        summary: "“What's the tallest building in NYC?”",
+      },
+      startedAt: 1,
+    };
+    const joining = await setup(observed, { runtime });
+    const status = await joining.api.call("agentStatus", "GET");
+    expect(status.body).toMatchObject({ orchestrator: runtime.orchestrator });
   },
 
   "PUT agentEnabled": (observed) => agentEnabled(observed, "PUT"),

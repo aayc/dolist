@@ -277,6 +277,86 @@ export const OrchestratorThreadIdSchema = named(
   z.literal(ORCHESTRATOR_THREAD_ID),
 );
 
+// ── What the orchestrator is doing ───────────────────────────────────────
+
+export const OrchestratorPhaseSchema = named(
+  "OrchestratorPhase",
+  "`noticed`: the watcher saw lines that may be requests (before they settle, before any turn); `reading`: a turn builds its digest; `thinking`: the model works on it; `acting`: its tools run; `idle`: nothing going on (right after a turn, with its outcome).",
+  z.enum(["idle", "noticed", "reading", "thinking", "acting"]),
+);
+
+export const OrchestratorTriggerKindSchema = named(
+  "OrchestratorTriggerKind",
+  "What woke the orchestrator: lines of a note, tasks, a message (in its chat or a task's thread), a routine run, an approval, or something else (a subagent's report).",
+  z.enum(["note", "task", "message", "routine", "approval", "other"]),
+);
+
+export const OrchestratorTriggerSchema = named(
+  "OrchestratorTrigger",
+  "What woke the orchestrator.",
+  z.looseObject({
+    kind: OrchestratorTriggerKindSchema,
+    notePath: VaultPathSchema.optional(),
+    lines: z
+      .array(z.looseObject({ line: CountSchema, text: z.string() }))
+      .optional()
+      .describe(
+        "The lines that woke it (0-based, as they were: trimmed text), for anchoring chips in the editor. At most 20, each at most 300 characters.",
+      ),
+    summary: z
+      .string()
+      .describe(
+        "Short and human (at most 80 characters), e.g. `your note` or `“call mom tomorrow”`.",
+      ),
+  }),
+);
+
+export const OrchestratorOutcomeKindSchema = named(
+  "OrchestratorOutcomeKind",
+  "What a turn did: nothing, added tasks, edited the note, replied, started subagents, made a routine, or asked for approval.",
+  z.enum([
+    "no_action",
+    "tasks_added",
+    "note_edited",
+    "replied",
+    "delegated",
+    "routine_created",
+    "asked_approval",
+  ]),
+);
+
+export const OrchestratorOutcomeSchema = named(
+  "OrchestratorOutcome",
+  "The result of a turn, for the chip shown briefly after it.",
+  z.looseObject({
+    kind: OrchestratorOutcomeKindSchema,
+    count: CountSchema.optional(),
+    threadId: RuntimeIdSchema.optional().describe(
+      "The thread it created or acted in, when there is one.",
+    ),
+    text: z
+      .string()
+      .optional()
+      .describe("One short line for the chip's tooltip (at most 160 characters)."),
+  }),
+);
+
+export const OrchestratorActivitySchema = named(
+  "OrchestratorActivity",
+  "What the orchestrator is doing: noticed lines, a turn's phase, or idle with the outcome of the turn that just ended.",
+  z.looseObject({
+    phase: OrchestratorPhaseSchema,
+    turnId: IdSchema.optional().describe(
+      "The orchestrator chat message that starts this turn (to open it).",
+    ),
+    trigger: OrchestratorTriggerSchema.optional(),
+    startedAt: EpochMsSchema.optional(),
+    outcome: OrchestratorOutcomeSchema.optional().describe(
+      "Present right after a turn ends (phase `idle`), shown briefly; also while the turn waits for the user's approval (phase `acting`, kind `asked_approval`).",
+    ),
+  }),
+);
+
 export const ThreadSchema = named(
   "Thread",
   "A task's full conversation: messages, artifacts and live surfaces. The orchestrator's own chat is a thread too (see `OrchestratorThreadId`).",

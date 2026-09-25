@@ -34,6 +34,8 @@ final class Workspace {
   let settings: SettingsStore
   let ui: UIState
   let search: SearchModel
+  /// What the orchestrator is doing (chips on the lines that woke it, header, status bar).
+  let orchestrator: OrchestratorActivityStore
   @ObservationIgnored let toasts: ToastStore
   @ObservationIgnored weak var agent: AgentStore?
   @ObservationIgnored let scheduler: AppScheduler
@@ -48,6 +50,8 @@ final class Workspace {
   @ObservationIgnored var onTabsChanged: (@MainActor () -> Void)?
   /// Runs an app command by id (vim's `:obcommand`); false when there's no such command.
   @ObservationIgnored var commandRunner: (@MainActor (String) -> Bool)?
+  /// Opens the orchestrator's chat at a turn (its first message's id; nil: at the end).
+  @ObservationIgnored var openOrchestratorTurn: (@MainActor (String?) -> Void)?
 
   @ObservationIgnored var navToken = 0
   /// Where the latest navigation is going while its note loads.
@@ -76,6 +80,7 @@ final class Workspace {
     notes = NotesStore(client: client, scheduler: scheduler)
     tabs = TabsStore()
     search = SearchModel(client: client, scheduler: scheduler)
+    orchestrator = OrchestratorActivityStore(scheduler: scheduler)
     editor = EditorCoordinator(controller: editorController, scheduler: scheduler)
     treeRefresh = IdleTimer(scheduler: scheduler, delay: 0.3) { [weak self] in
       guard let self else { return }
@@ -96,6 +101,7 @@ final class Workspace {
       if state == .saved { self?.errorToasted.remove(path) }
     }
     editor.host = self
+    orchestrator.onChipsChanged = { [weak self] notes in self?.editor.chipsDidChange(for: notes) }
     editor.controller.vim = vim
     editor.configure(settings.settings.editor)
   }

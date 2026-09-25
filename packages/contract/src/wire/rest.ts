@@ -4,6 +4,7 @@ import {
   ApprovalDecisionSchema,
   ApprovalRequestSchema,
   ApprovalScopeSchema,
+  OrchestratorActivitySchema,
   RoutineNotifySchema,
   RoutineSchema,
   RoutineTemplateSchema,
@@ -274,6 +275,9 @@ export const AgentStatusResponseSchema = named(
     ),
     readiness: AgentReadinessSchema.optional().describe(
       "This daemon's own readiness to run the agent.",
+    ),
+    orchestrator: OrchestratorActivitySchema.optional().describe(
+      "What the orchestrator is doing now, for a client joining mid-turn (then `orchestrator.activity` events).",
     ),
   }),
 );

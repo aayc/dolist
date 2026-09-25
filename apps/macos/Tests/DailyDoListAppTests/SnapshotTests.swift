@@ -557,7 +557,7 @@ struct SnapshotTests {
   }
 
   @discardableResult
-  private func render<V: View>(
+  func render<V: View>(
     _ view: V, size: CGSize, dark: Bool, name: String, afterDisplay: (() -> Void)? = nil,
     tooltip: (@MainActor (NSView) -> TooltipSnapshot?)? = nil
   ) async throws -> URL {

@@ -591,6 +591,124 @@
       "const": "thr_orchestrator",
       "description": "The id of the orchestrator's own chat: a thread with `taskId` and `notePath` null that records each orchestrator turn (a `status` line saying what woke it, its streamed text, its tool calls, whose inputs carry the `taskId` they act on) and takes the user's direct messages (`POST /api/threads/:id/messages`). Its status is `working` during a turn, `idle` otherwise."
     },
+    "OrchestratorPhase": {
+      "type": "string",
+      "enum": ["idle", "noticed", "reading", "thinking", "acting"],
+      "description": "`noticed`: the watcher saw lines that may be requests (before they settle, before any turn); `reading`: a turn builds its digest; `thinking`: the model works on it; `acting`: its tools run; `idle`: nothing going on (right after a turn, with its outcome)."
+    },
+    "OrchestratorTriggerKind": {
+      "type": "string",
+      "enum": ["note", "task", "message", "routine", "approval", "other"],
+      "description": "What woke the orchestrator: lines of a note, tasks, a message (in its chat or a task's thread), a routine run, an approval, or something else (a subagent's report)."
+    },
+    "OrchestratorTrigger": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/OrchestratorTriggerKind"
+        },
+        "notePath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments)."
+        },
+        "lines": {
+          "description": "The lines that woke it (0-based, as they were: trimmed text), for anchoring chips in the editor. At most 20, each at most 300 characters.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "line": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": ["line", "text"],
+            "additionalProperties": {}
+          }
+        },
+        "summary": {
+          "type": "string",
+          "description": "Short and human (at most 80 characters), e.g. `your note` or `“call mom tomorrow”`."
+        }
+      },
+      "required": ["kind", "summary"],
+      "additionalProperties": {},
+      "description": "What woke the orchestrator."
+    },
+    "OrchestratorOutcomeKind": {
+      "type": "string",
+      "enum": [
+        "no_action",
+        "tasks_added",
+        "note_edited",
+        "replied",
+        "delegated",
+        "routine_created",
+        "asked_approval"
+      ],
+      "description": "What a turn did: nothing, added tasks, edited the note, replied, started subagents, made a routine, or asked for approval."
+    },
+    "OrchestratorOutcome": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/OrchestratorOutcomeKind"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "threadId": {
+          "description": "The thread it created or acted in, when there is one.",
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$"
+        },
+        "text": {
+          "description": "One short line for the chip's tooltip (at most 160 characters).",
+          "type": "string"
+        }
+      },
+      "required": ["kind"],
+      "additionalProperties": {},
+      "description": "The result of a turn, for the chip shown briefly after it."
+    },
+    "OrchestratorActivity": {
+      "type": "object",
+      "properties": {
+        "phase": {
+          "$ref": "#/$defs/OrchestratorPhase"
+        },
+        "turnId": {
+          "description": "The orchestrator chat message that starts this turn (to open it).",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "trigger": {
+          "$ref": "#/$defs/OrchestratorTrigger"
+        },
+        "startedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "outcome": {
+          "description": "Present right after a turn ends (phase `idle`), shown briefly; also while the turn waits for the user's approval (phase `acting`, kind `asked_approval`).",
+          "$ref": "#/$defs/OrchestratorOutcome"
+        }
+      },
+      "required": ["phase"],
+      "additionalProperties": {},
+      "description": "What the orchestrator is doing: noticed lines, a turn's phase, or idle with the outcome of the turn that just ended."
+    },
     "Thread": {
       "type": "object",
       "properties": {
@@ -2574,6 +2692,10 @@
         "readiness": {
           "description": "This daemon's own readiness to run the agent.",
           "$ref": "#/$defs/AgentReadiness"
+        },
+        "orchestrator": {
+          "description": "What the orchestrator is doing now, for a client joining mid-turn (then `orchestrator.activity` events).",
+          "$ref": "#/$defs/OrchestratorActivity"
         }
       },
       "required": [
@@ -3189,6 +3311,21 @@
       "additionalProperties": {},
       "description": "The agent status changed."
     },
+    "OrchestratorActivityEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "orchestrator.activity"
+        },
+        "activity": {
+          "$ref": "#/$defs/OrchestratorActivity"
+        }
+      },
+      "required": ["type", "activity"],
+      "additionalProperties": {},
+      "description": "What the orchestrator is doing changed (coalesced; never per keystroke). `noticed` events name lines before any turn; a turn goes `reading` → `thinking` ⇄ `acting` → `idle` with its outcome, all with the same `turnId`."
+    },
     "SurfaceFrameEvent": {
       "type": "object",
       "properties": {
@@ -3342,6 +3479,9 @@
         },
         {
           "$ref": "#/$defs/AgentStatusEvent"
+        },
+        {
+          "$ref": "#/$defs/OrchestratorActivityEvent"
         },
         {
           "$ref": "#/$defs/SurfaceFrameEvent"

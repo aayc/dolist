@@ -280,6 +280,9 @@ export function attachWebSocketHub(options: WebSocketHubOptions): WebSocketHub {
     ),
     runtime.on("approval.upsert", (approval) => broadcast({ type: "approval.upsert", approval })),
     runtime.on("status", (status) => broadcast({ type: "agent.status", status })),
+    runtime.on("orchestrator.activity", (activity) =>
+      broadcast({ type: "orchestrator.activity", activity }),
+    ),
     runtime.on("surface.frame", sendFrame),
     runtime.on("routines.changed", (routines) => broadcast({ type: "routines.changed", routines })),
     runtime.on("routine.notification", (notification) =>

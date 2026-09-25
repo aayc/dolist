@@ -71,6 +71,8 @@ export interface UiState {
   searchFocus: number;
   /** Note whose inline title should take focus (and select its text) once shown. */
   titleFocus: string | null;
+  /** A message the orchestrator's chat should scroll to and flash once it shows it. */
+  chatFocus: { messageId: string; at: number } | null;
 }
 
 interface PersistedLayout {
@@ -100,6 +102,7 @@ export const useUiStore = create<UiState>(() => ({
   renaming: null,
   searchFocus: 0,
   titleFocus: null,
+  chatFocus: null,
 }));
 
 let persistTimer: ReturnType<typeof setTimeout> | undefined;
