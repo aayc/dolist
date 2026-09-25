@@ -34,6 +34,7 @@ const SECTIONS: ReadonlyArray<{ key: SettingsSection; label: string }> = [
   { key: "agent", label: "Agent" },
   { key: "location", label: "Agent location" },
   { key: "machine", label: "Always-on machine" },
+  { key: "sync", label: "Sync" },
   { key: "computer", label: "Computer use" },
   { key: "connectors", label: "Connectors" },
   { key: "about", label: "About" },
@@ -46,6 +47,7 @@ const RemoteSection = preloadable(() =>
 const REMOTE_SECTIONS: ReadonlySet<SettingsSection> = new Set<RemoteSectionKey>([
   "location",
   "machine",
+  "sync",
 ]);
 
 function isRemoteSection(section: SettingsSection): section is RemoteSectionKey {
