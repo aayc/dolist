@@ -26,16 +26,17 @@ struct ChatActivityTests {
       "computer_press", ["app": "Mail", "id": "e3", "element": "Send"], nil,
       "Pressing “Send” in Mail…"
     ),
-    ("computer_press", ["app": "Mail", "id": "e3"], nil, "Pressing a button in Mail…"),
+    ("computer_press", ["app": "Mail", "id": "e3"], nil, "Pressing a control in Mail…"),
     (
       "computer_set_value", ["app": "Notes", "id": "e1", "value": "hunter2"], nil,
       "Typing in Notes…"
     ),
     ("computer_type", ["text": "hello"], nil, "Typing…"),
     ("computer_key", ["combo": "cmd+s", "app": "TextEdit"], nil, "Pressing cmd+s in TextEdit…"),
-    ("computer_key", ["app": "TextEdit"], nil, "Pressing keys in TextEdit…"),
+    ("computer_key", ["app": "TextEdit"], nil, "Pressing a key in TextEdit…"),
     ("computer_click", ["app": "Finder", "element": "Downloads"], nil, "Clicking in Finder…"),
-    ("computer_click", ["x": 10, "y": 20, "element": "OK"], nil, "Clicking…"),
+    ("computer_click", ["x": 10, "y": 20, "element": "OK"], nil, "Clicking on the screen…"),
+    ("computer_scroll", ["dx": 0, "dy": 3], nil, "Scrolling on the screen…"),
     ("computer_scroll", ["app": "Safari", "dx": 0, "dy": 5], nil, "Scrolling in Safari…"),
     (
       "browser_navigate", ["url": "https://www.Example.com/menu?day=fri"], nil,
@@ -60,7 +61,7 @@ struct ChatActivityTests {
       "web_fetch", ["url": "https://news.example/story/4"], "Fetch web page",
       "Reading news.example…"
     ),
-    ("web_fetch", [:], nil, "Reading a web page…"),
+    ("web_fetch", [:], nil, "Reading a page…"),
     ("read_note", ["path": "Daily/2026-09-24.md"], nil, "Reading your notes…"),
     ("search_notes", ["query": "passport"], nil, "Reading your notes…"),
     ("edit_note", ["path": "Daily/2026-09-24.md"], nil, "Editing your note…"),

@@ -96,15 +96,15 @@ struct ChatActivity: Hashable, Sendable {
     case "computer_app_state", "computer_screenshot":
       return app.map { "Looking at \($0)…" } ?? "Looking at the screen…"
     case "computer_press":
-      return field("element").map { "Pressing “\($0)”\(inApp)…" } ?? "Pressing a button\(inApp)…"
+      return field("element").map { "Pressing “\($0)”\(inApp)…" } ?? "Pressing a control\(inApp)…"
     case "computer_set_value", "computer_type":
       return "Typing\(inApp)…"
     case "computer_key":
-      return field("combo").map { "Pressing \($0)\(inApp)…" } ?? "Pressing keys\(inApp)…"
+      return field("combo").map { "Pressing \($0)\(inApp)…" } ?? "Pressing a key\(inApp)…"
     case "computer_click":
-      return "Clicking\(inApp)…"
+      return "Clicking\(app.map { " in \($0)" } ?? " on the screen")…"
     case "computer_scroll":
-      return "Scrolling\(inApp)…"
+      return "Scrolling\(app.map { " in \($0)" } ?? " on the screen")…"
     case "browser_navigate":
       return host(of: call.input["url"]?.stringValue).map { "Opening \($0)…" } ?? "Opening a page…"
     case "browser_snapshot", "browser_extract_text":
@@ -113,7 +113,7 @@ struct ChatActivity: Hashable, Sendable {
       return field("query").map { "Searching the web for “\($0)”…" } ?? "Searching the web…"
     case "web_fetch":
       return host(of: call.input["url"]?.stringValue).map { "Reading \($0)…" }
-        ?? "Reading a web page…"
+        ?? "Reading a page…"
     case "read_note", "search_notes":
       return "Reading your notes…"
     case "edit_note":
