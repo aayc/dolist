@@ -28,7 +28,8 @@ actor FakeDaemon {
   let mode: SimulationClock.Mode
   let calendar: FakeCalendar
   let simulation: AgentSimulation
-  let vaultName: String
+  /// The folder name of the vault it serves (a switch opens another).
+  var vaultName: String { String(imports.vaultPath.split(separator: "/").last ?? "") }
 
   // Time & scheduling
   var nowMillis: EpochMillis
@@ -82,7 +83,6 @@ actor FakeDaemon {
     self.simulation = simulation
     mode = clock.mode
     calendar = FakeCalendar(timeZone: clock.timeZone)
-    vaultName = seed.vaultName
     let start = (clock.start.timeIntervalSince1970 * 1000).rounded(.down)
     nowMillis = start
     virtualAnchor = start

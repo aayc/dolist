@@ -93,6 +93,7 @@ struct InMemoryImportTests {
       switched
         == DeviceVaultResponse(path: job.destination, lockedByEnv: false, restart: .supervisor))
     #expect(try await client.deviceVault().path == job.destination)
+    #expect(try await client.health().vaultName == "Obsidian Notebook (Daily Do List)")
     let status = try await client.obsidianImportStatus()
     #expect(status.job == nil)
     #expect(

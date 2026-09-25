@@ -37,8 +37,12 @@ extension AppModel {
 
   func route(_ event: ServerEvent) {
     switch event {
-    case .hello, .importProgress:
+    case .hello:
       break
+    case .importProgress(let job):
+      let ended = imports.job?.state == .running && job.state != .running
+      imports.apply(job)
+      if ended { announceImportEnd(job) }
     case .vaultChanged(let change):
       // Our own writes come back tagged with our client id: already applied locally.
       if let origin = change.clientId, origin == client?.clientId { return }
