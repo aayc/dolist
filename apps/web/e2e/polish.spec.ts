@@ -208,6 +208,21 @@ test.describe("tooltips", () => {
     await expect(tooltip(page)).not.toHaveClass(/\bis-visible\b/);
   });
 
+  test("a control that can't be used says why", async ({ page }) => {
+    await openApp(page, "mockRemote=none");
+    await page.keyboard.press("ControlOrMeta+Shift+A");
+    await hover(page, page.getByTestId("placement-toggle-always_on_machine"));
+    await shownTooltip(page, "This device doesn't sync");
+
+    await openApp(page, "mockRemote=elsewhere");
+    if ((await page.getByTestId("right-panel").count()) === 0) {
+      await page.keyboard.press("ControlOrMeta+Shift+A");
+    }
+    await page.getByTestId("inbox-orchestrator").click();
+    await hover(page, page.getByTestId("composer-send"));
+    await shownTooltip(page, "The agent is running on Work laptop");
+  });
+
   test("the command palette shows shortcuts as the same keycaps", async ({ page }) => {
     await openApp(page);
     await page.keyboard.press("ControlOrMeta+P");
@@ -224,59 +239,62 @@ test.describe("tooltips", () => {
  * ones the arrow, editor text the I-beam; nothing else points; icon-only buttons have tooltips; and
  * no tooltip or name spells out a shortcut. It reads the DOM, so new controls are covered too.
  */
-async function audit(page: Page, screen: string): Promise<void> {
-  const problems = await page.evaluate((where) => {
-    const CONTROLS = [
-      "button",
-      "a[href]",
-      "summary",
-      "select",
-      "label:has(> input:is([type=radio], [type=checkbox]))",
-      ...["button", "tab", "menuitem", "option", "switch", "checkbox", "treeitem"].map(
-        (role) => `[role=${role}]`,
-      ),
-      // Links the live preview renders: a plain click follows them.
-      ".cm-ddl-link",
-      ".cm-ddl-wikilink",
-    ].join(", ");
-    const SHORTCUT_TEXT = /[⌘⇧⌥⌃⎋↩⇥]|\b(?:Ctrl|Cmd|Alt|Shift|Meta)\+\S/;
-    const shown = (el: Element) =>
-      el.checkVisibility({ visibilityProperty: true }) &&
-      el.getBoundingClientRect().width > 0 &&
-      !el.closest("[aria-hidden=true]:not(.cm-gutters)");
-    const name = (el: Element) =>
-      `<${el.tagName.toLowerCase()}${el.getAttribute("data-testid") ? ` ${el.getAttribute("data-testid")}` : ""} "${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 40)}">`;
-    const found: string[] = [];
-    const controls = [...document.querySelectorAll(CONTROLS)].filter(shown);
-    for (const el of controls) {
-      const cursor = getComputedStyle(el).cursor;
-      const disabled = el.matches(":disabled, [aria-disabled=true]");
-      if (cursor !== (disabled ? "default" : "pointer")) {
-        found.push(`${where}: ${name(el)} has cursor ${cursor}`);
+async function audit(page: Page, screen: string, minControls = 5): Promise<void> {
+  const problems = await page.evaluate(
+    ([where, least]) => {
+      const CONTROLS = [
+        "button",
+        "a[href]",
+        "summary",
+        "select",
+        "label:has(> input:is([type=radio], [type=checkbox]))",
+        ...["button", "tab", "menuitem", "option", "switch", "checkbox", "treeitem"].map(
+          (role) => `[role=${role}]`,
+        ),
+        // Links the live preview renders: a plain click follows them.
+        ".cm-ddl-link",
+        ".cm-ddl-wikilink",
+      ].join(", ");
+      const SHORTCUT_TEXT = /[⌘⇧⌥⌃⎋↩⇥]|\b(?:Ctrl|Cmd|Alt|Shift|Meta)\+\S/;
+      const shown = (el: Element) =>
+        el.checkVisibility({ visibilityProperty: true }) &&
+        el.getBoundingClientRect().width > 0 &&
+        !el.closest("[aria-hidden=true]:not(.cm-gutters)");
+      const name = (el: Element) =>
+        `<${el.tagName.toLowerCase()}${el.getAttribute("data-testid") ? ` ${el.getAttribute("data-testid")}` : ""} "${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 40)}">`;
+      const found: string[] = [];
+      const controls = [...document.querySelectorAll(CONTROLS)].filter(shown);
+      for (const el of controls) {
+        const cursor = getComputedStyle(el).cursor;
+        const disabled = el.matches(":disabled, [aria-disabled=true]");
+        if (cursor !== (disabled ? "default" : "pointer")) {
+          found.push(`${where}: ${name(el)} has cursor ${cursor}`);
+        }
+        // Buttons only: a switch is named by its setting, a tab or option by its text.
+        const iconOnly =
+          el.matches("button:not([role]), [role=button]") &&
+          !/[\p{L}\p{N}]/u.test((el as HTMLElement).innerText ?? "");
+        if (iconOnly && !disabled && !(el as HTMLElement).dataset.tooltip) {
+          found.push(`${where}: icon-only ${name(el)} has no tooltip`);
+        }
       }
-      // Buttons only: a switch is named by its setting, a tab or option by its text.
-      const iconOnly =
-        el.matches("button:not([role]), [role=button]") &&
-        !/[\p{L}\p{N}]/u.test((el as HTMLElement).innerText ?? "");
-      if (iconOnly && !disabled && !(el as HTMLElement).dataset.tooltip) {
-        found.push(`${where}: icon-only ${name(el)} has no tooltip`);
+      for (const el of document.querySelectorAll("body *")) {
+        if (!shown(el) || getComputedStyle(el).cursor !== "pointer") continue;
+        if (!el.closest(CONTROLS)) found.push(`${where}: ${name(el)} points but isn't a control`);
       }
-    }
-    for (const el of document.querySelectorAll("body *")) {
-      if (!shown(el) || getComputedStyle(el).cursor !== "pointer") continue;
-      if (!el.closest(CONTROLS)) found.push(`${where}: ${name(el)} points but isn't a control`);
-    }
-    for (const el of document.querySelectorAll(".cm-content, .cm-line")) {
-      const cursor = getComputedStyle(el).cursor;
-      if (cursor !== "text") found.push(`${where}: editor text has cursor ${cursor}`);
-    }
-    for (const el of document.querySelectorAll("[data-tooltip], [aria-label]")) {
-      const text = `${el.getAttribute("data-tooltip") ?? ""} ${el.getAttribute("aria-label") ?? ""}`;
-      if (SHORTCUT_TEXT.test(text)) found.push(`${where}: ${name(el)} spells out a shortcut`);
-    }
-    if (controls.length < 5) found.push(`${where}: only ${controls.length} controls found`);
-    return found;
-  }, screen);
+      for (const el of document.querySelectorAll(".cm-content, .cm-line")) {
+        const cursor = getComputedStyle(el).cursor;
+        if (cursor !== "text") found.push(`${where}: editor text has cursor ${cursor}`);
+      }
+      for (const el of document.querySelectorAll("[data-tooltip], [aria-label]")) {
+        const text = `${el.getAttribute("data-tooltip") ?? ""} ${el.getAttribute("aria-label") ?? ""}`;
+        if (SHORTCUT_TEXT.test(text)) found.push(`${where}: ${name(el)} spells out a shortcut`);
+      }
+      if (controls.length < least) found.push(`${where}: only ${controls.length} controls found`);
+      return found;
+    },
+    [screen, minControls] as const,
+  );
   expect(problems).toEqual([]);
 }
 
@@ -383,6 +401,11 @@ test.describe("cursor audit", () => {
       "editor",
       "daily",
       "agent",
+      "location",
+      "machine",
+      "sync",
+      "devices",
+      "remote",
       "computer",
       "connectors",
       "about",
@@ -390,6 +413,78 @@ test.describe("cursor audit", () => {
       await page.getByTestId(`settings-nav-${section}`).click();
       await audit(page, `settings/${section}`);
     }
+  });
+
+  test("where the agent runs: the toggle, held here, read-only, and their settings", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    // The panel stays open across reloads: open it only when it's closed.
+    const panel = async (query: string) => {
+      await openApp(page, query);
+      if ((await page.getByTestId("right-panel").count()) === 0) {
+        await page.keyboard.press("ControlOrMeta+Shift+A");
+      }
+      await expect(page.getByTestId("agent-location")).toBeVisible();
+    };
+    const settings = async (section: string) => {
+      await page.keyboard.press("ControlOrMeta+,");
+      await page.getByTestId(`settings-nav-${section}`).click();
+      await expect(page.getByTestId(`settings-${section}`)).toBeVisible();
+    };
+
+    await panel("mockRemote=none");
+    await expect(page.getByTestId("placement-toggle")).toHaveAttribute("data-disabled", "true");
+    await audit(page, "agent location, held here");
+    await panel("mockSpeed=1&mockRemote=ready");
+    await audit(page, "agent location");
+    await page.getByTestId("placement-toggle-always_on_machine").click();
+    await expect(page.getByTestId("agent-location-line")).toHaveAttribute("data-kind", "note");
+    await audit(page, "agent location, handing over");
+    await panel("mockRemote=host");
+    await expect(page.getByTestId("placement-host")).toBeVisible();
+    await audit(page, "agent location, the always-on machine");
+    await panel("mockRemote=unreachable");
+    await expect(page.getByTestId("agent-banner")).toBeVisible();
+    await audit(page, "read-only, the machine can't be reached");
+    await panel("mockRemote=elsewhere");
+    await page.getByTestId("inbox-orchestrator").click();
+    await expect(page.getByTestId("composer-input")).toBeDisabled();
+    await audit(page, "read-only, another device runs the agent");
+
+    await openApp(page, "mockRemote=unready");
+    await settings("location");
+    await expect(page.getByTestId("readiness-here")).toBeVisible();
+    await audit(page, "settings/location, not ready");
+    await page.keyboard.press("Escape");
+    await openApp(page, "mockRemote=no_machine");
+    await settings("machine");
+    await page.getByTestId("machine-pair").click();
+    await expect(page.getByTestId("machine-url-problem")).toBeVisible();
+    await audit(page, "settings/machine, pairing");
+    await openApp(page, "mockRemote=ready");
+    await settings("machine");
+    await expect(page.getByTestId("machine-status")).toBeVisible();
+    await audit(page, "settings/machine, paired");
+    await page.getByTestId("settings-nav-sync").click();
+    await expect(page.getByTestId("sync-token-saved")).toBeVisible();
+    await audit(page, "settings/sync, on");
+    await openApp(page, "mockRemote=host");
+    await settings("devices");
+    await page.getByTestId("pairing-code-create").click();
+    await expect(page.getByTestId("pairing-code-panel")).toBeVisible();
+    await audit(page, "settings/devices, a code");
+    await page.getByTestId("settings-nav-remote").click();
+    await expect(page.getByTestId("remote-host")).toHaveCount(1);
+    await audit(page, "settings/remote, a host");
+    await openApp(page, "mockRemote=locked");
+    await settings("remote");
+    await expect(page.getByTestId("remote-locked")).toBeVisible();
+    await audit(page, "settings/remote, locked");
+
+    await page.goto("/?mock=1&mockAuth=pairing");
+    await expect(page.getByTestId("pairing-screen")).toBeVisible();
+    await audit(page, "pairing screen", 1);
   });
 
   test("palette and quick switcher", async ({ page }) => {
