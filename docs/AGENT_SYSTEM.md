@@ -48,9 +48,11 @@ harness's), instead of every judge call and search failing with a 401.
   Blank template tasks are ignored until they have text.
 - Emits `added`, `updated`, `completed`, `reopened`, `removed` events.
 - The rest of the note settles too: new or edited lines that aren't tasks become one `note` event
-  per pause, but only when a line could be addressed to the agent (`orchestrator/prose.ts`: a
-  question, `@agent`, `TODO`, a line opening with a request verb). Journaling never wakes the
-  orchestrator by itself; it still sees those lines in the whole-note view of its next digest.
+  per pause, but only when a line could be addressed to the agent (`mayBeRequest` in `@ddl/core`,
+  `markdown/prose.ts`: a question, `@agent`, `TODO`, a line opening with a request verb).
+  Journaling never wakes the orchestrator by itself; it still sees those lines in the whole-note
+  view of its next digest. Before they settle, a `noticed` event names such lines as soon as a
+  change shows them (see [What it is doing](#what-it-is-doing-orchestrator-activity)).
 - The agent's own lines (ending in `%%agent:<thread>%%`) never count: its tasks aren't announced,
   its prose isn't news. Deleting the marker makes a task the user's, and it is triaged then.
 - Keeps each note's latest content for the orchestrator (`getContent`) and tells the agent's edits
@@ -120,6 +122,51 @@ digest. Every call goes through the safety gate as always. `POST …/cancel` sto
 progress: its pending approvals are denied, the session is aborted and dropped (the next turn starts
 fresh), subagents it started keep working, and tasks it was still triaging go back to their earlier
 outcome or become *Stopped*.
+
+### What it is doing (orchestrator activity)
+
+So the editor can show when the orchestrator notices, works on and settles what you write, on any
+line and not only tasks, the runtime emits `orchestrator.activity` events (`OrchestratorActivity`
+in `@ddl/core`; `src/orchestrator/activity.ts`), and `AgentStatusResponse.orchestrator` carries the
+current one for a client joining mid-turn.
+
+- **`noticed`**: the watcher's `noticed` event, the moment a change shows new or edited lines that
+  may be requests (`mayBeRequest`), before the settle delay and before any model turn. It is sent
+  again only when *which* lines they are changes (their numbers), never while you keep typing the
+  same line. When they go away before settling (deleted, rewritten as plain prose, the note gone,
+  the agent paused), an `idle` without a `turnId` withdraws them (`trigger.lines: []`). At settle
+  they're handed to the orchestrator silently: the turn that takes them says so.
+- **A turn** (`turnId` = the id of the `status` line that opens it in the chat): `reading` while it
+  starts its session and builds the digest, `thinking` during the model turn, `acting` while its
+  tools run, then `idle` with an `outcome`. Tool calls in a row read as one stretch of `acting`
+  (300 ms linger before `thinking`), and repeats are dropped. While one of its tool calls waits for
+  your approval, `acting` carries `outcome: { kind: "asked_approval", threadId: "thr_orchestrator",
+  text: <the card's summary> }`. A failed, stopped or interrupted turn ends with `idle` and no
+  outcome.
+- **The trigger**: the most telling kind among the turn's events: `note` (settled lines, with the
+  task lines of the same note), else `task`, `message` (your message in its chat, or a reply in a
+  task's thread), `routine` (a run it triages), `other` (a subagent's report). `approval` is
+  reserved. Notes carry `notePath` and `lines` (0-based, trimmed, as they were); the `summary` is
+  short and human (“call mom tomorrow”, "2 lines in your note", "your message", routine “Morning
+  briefing”). Limits (`ORCHESTRATOR_ACTIVITY_LIMITS`): summary 80 characters, 20 lines of at most
+  300 characters, outcome text 160.
+- **The outcome**, from the turn's tool calls that succeeded, most telling first: `asked_approval`
+  (an approval it still waits for), `delegated` (`spawn_subagent`; count of tasks, the first one's
+  thread and goal), `routine_created` (`create_routine`), `tasks_added` (new `- [ ]` lines written
+  with `edit_note`, counted), `replied` (`post_comment` or `ask_user`, with that task's thread; or
+  the text answering a message in its chat, with `thr_orchestrator`), `note_edited` (other
+  `edit_note` changes), else `no_action` (with its last words as the text, when it said anything).
+- `status().orchestrator` is the running turn, else the latest lines waiting to settle, else the
+  last turn's `idle` for 8 s after it ended, else `{ phase: "idle" }`. The relay forwards the
+  always-on machine's activity while it relays, pushes the machine's current one on every
+  (re)connection and this device's own when it stops relaying; the leased runtime pushes the new
+  runtime's activity on every swap. A bare `{ phase: "idle" }` event means nothing is in progress.
+
+The web and Mac editors turn this into chips on lines, a note-level indicator and a status bar item
+with the same wording and timings (`apps/web/README.md`). Tests: `src/orchestrator/activity.test.ts`
+(publisher, triggers, outcomes), `test/scenarios/activity.test.ts` (each trigger kind end to end,
+`noticed` before the settle delay, bounds, approvals, a client joining mid-turn),
+`test/task-watcher.test.ts` (noticed once per line, withdrawn, handed over).
 
 ## 3. Doing (SubagentManager)
 
