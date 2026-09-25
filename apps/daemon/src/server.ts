@@ -272,6 +272,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       runtime,
       settings,
       writes,
+      imports,
       logger: logger.child({ component: "ws" }),
     });
 

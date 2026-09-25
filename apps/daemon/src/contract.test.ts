@@ -3,6 +3,9 @@
  * app, every declared status is reached, and every answer parses (strictly) with the schema the
  * contract declares for that status.
  */
+
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { RoutineConflictError, RoutineInputError } from "@ddl/agent/routines";
 import { API_CONTRACT, listOperations } from "@ddl/contract";
 import {
@@ -25,7 +28,15 @@ import {
 } from "./contract-test-helpers";
 import { memoryDeviceSettings } from "./device-settings";
 import { type FakeMachine, startFakeMachine } from "./fake-machine";
-import { memorySecretFile } from "./home-files";
+import { memoryJsonObjectFile, memorySecretFile } from "./home-files";
+import { ObsidianImporter } from "./import/importer";
+import {
+  currentSettings,
+  makeTestbed,
+  OBSIDIAN_FILES,
+  type Testbed,
+  TODAY,
+} from "./import/test-vaults";
 import { MachineLink } from "./machine-link";
 import { createRemoteHosts } from "./remote-hosts";
 import { createSettingsStore, type SettingsStore } from "./settings-store";
@@ -38,6 +49,7 @@ import {
   type TestApp,
   type TestAppOptions,
 } from "./test-helpers";
+import { VaultSwitch } from "./vault-switch";
 
 const TOO_BIG = JSON.stringify({ content: "x".repeat(5 * 1024 * 1024 + 16) });
 
@@ -170,6 +182,65 @@ function hiddenDailyFolderSettings(): SettingsStore {
     reload: async () => null,
     onChange: () => () => {},
   };
+}
+
+interface ImportEnv extends Env {
+  bed: Testbed;
+  imports: ObsidianImporter;
+  restarts: string[];
+  /** A paired app's token: routes that reach this machine's folders refuse it. */
+  paired: string;
+}
+
+/** An app whose importer and vault switch work on a fresh testbed (removed afterwards). */
+async function withImports(
+  observed: Observed,
+  run: (env: ImportEnv) => Promise<void>,
+  options: {
+    lockedByEnv?: boolean;
+    /** Runs first; its answer is the vault the app serves (default: the testbed's current vault). */
+    prepare?: (bed: Testbed) => Promise<string>;
+  } = {},
+): Promise<void> {
+  const bed = await makeTestbed();
+  const vaultPath = (await options.prepare?.(bed)) ?? bed.vault;
+  const imports = new ObsidianImporter({
+    places: { home: bed.home, vault: vaultPath, homedir: bed.dir },
+    settings: () => currentSettings(),
+    now: () => TODAY,
+  });
+  const restarts: string[] = [];
+  const vault = new VaultSwitch({
+    vaultPath,
+    lockedByEnv: options.lockedByEnv ?? false,
+    supervised: true,
+    config: memoryJsonObjectFile(),
+    home: bed.home,
+    homedir: bed.dir,
+    blocked: () => (imports.busy ? "An import from Obsidian is running" : null),
+    restart: (path) => restarts.push(path),
+    logger: silentLogger,
+  });
+  try {
+    const env = await setup(observed, { imports, vault });
+    const { token: paired } = await env.app.devices.add("Phone", "app");
+    await run({ ...env, bed, imports, restarts, paired });
+    await imports.close();
+  } finally {
+    await bed.cleanup();
+  }
+}
+
+/** Imports `bed`'s Obsidian vault with a separate importer; the new vault's folder. */
+async function importedVault(bed: Testbed): Promise<string> {
+  const importer = new ObsidianImporter({
+    places: { home: bed.home, vault: bed.vault, homedir: bed.dir },
+    settings: () => currentSettings(),
+    now: () => TODAY,
+  });
+  await importer.startImport({ source: bed.source, destination: join(bed.dir, "Imported") });
+  await importer.settled();
+  return importer.status()!.destination;
 }
 
 type Scenario = (observed: Observed) => Promise<void>;
@@ -826,6 +897,161 @@ const scenarios: Record<string, Scenario> = {
       });
       expect(fake.revoked).toHaveLength(1);
     });
+  },
+
+  "GET deviceVault": async (observed) => {
+    await withImports(observed, async ({ api, bed, paired }) => {
+      expect((await api.call("deviceVault", "GET")).body).toEqual({
+        path: bed.vault,
+        lockedByEnv: false,
+      });
+      expect((await api.call("deviceVault", "GET", { token: paired })).body).toMatchObject({
+        error: "forbidden_device",
+      });
+    });
+  },
+
+  "PUT deviceVault": async (observed) => {
+    await withImports(observed, async ({ api, bed, restarts, paired }) => {
+      const next = join(bed.dir, "Next vault");
+      await mkdir(next);
+      const put = (json: unknown, init = {}) => api.call("deviceVault", "PUT", { json, ...init });
+      expect((await put({ path: bed.vault })).body).toEqual({
+        path: bed.vault,
+        lockedByEnv: false,
+      });
+      expect((await put({ path: "Next vault" })).body).toMatchObject({ error: "invalid_request" });
+      expect((await put({ path: bed.home })).body).toMatchObject({ error: "invalid_request" });
+      expect((await put({ path: next, restart: true })).status).toBe(400);
+      expect((await put(undefined, { body: "{" })).body).toMatchObject({ error: "invalid_json" });
+      expect((await put(undefined, { body: TOO_BIG })).status).toBe(413);
+      expect((await put({ path: next }, { token: paired })).body).toMatchObject({
+        error: "forbidden_device",
+      });
+      expect((await put({ path: ` ${next} ` })).body).toEqual({
+        path: next,
+        lockedByEnv: false,
+        restart: "supervisor",
+      });
+      expect((await put({ path: bed.source })).body).toMatchObject({ error: "conflict" });
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(restarts).toEqual([next]);
+    });
+    await withImports(
+      observed,
+      async ({ api, bed }) => {
+        expect(
+          (await api.call("deviceVault", "PUT", { json: { path: bed.source } })).body,
+        ).toMatchObject({ error: "locked_by_env" });
+      },
+      { lockedByEnv: true },
+    );
+  },
+
+  "POST importObsidianPreview": async (observed) => {
+    await withImports(observed, async ({ api, bed, paired }) => {
+      const preview = (json: unknown, init = {}) =>
+        api.call("importObsidianPreview", "POST", { json, ...init });
+      expect((await preview({ source: bed.source })).body).toMatchObject({
+        source: bed.source,
+        isObsidianVault: true,
+        carryOver: { daily: { count: 3, merged: 1 }, collisions: { count: 1 } },
+      });
+      expect((await preview({ source: bed.home })).body).toMatchObject({
+        error: "invalid_request",
+        message: expect.stringMatching(/Daily Do List's own folder/),
+      });
+      expect((await preview({})).body).toMatchObject({ error: "invalid_request" });
+      expect((await preview(undefined, { body: "{" })).body).toMatchObject({
+        error: "invalid_json",
+      });
+      expect((await preview(undefined, { body: TOO_BIG })).status).toBe(413);
+      expect((await preview({ source: bed.source }, { token: paired })).body).toMatchObject({
+        error: "forbidden_device",
+      });
+    });
+  },
+
+  "GET importObsidian": async (observed) => {
+    await withImports(observed, async ({ api, bed, imports, paired }) => {
+      expect((await api.call("importObsidian", "GET")).body).toEqual({ job: null });
+      await imports.startImport({ source: bed.source });
+      await imports.settled();
+      expect((await api.call("importObsidian", "GET")).body).toMatchObject({
+        job: {
+          kind: "import",
+          state: "done",
+          result: { copied: { files: Object.keys(OBSIDIAN_FILES).length } },
+        },
+      });
+      expect((await api.call("importObsidian", "GET", { token: paired })).status).toBe(403);
+    });
+  },
+
+  "POST importObsidian": async (observed) => {
+    await withImports(observed, async ({ api, bed, imports, paired }) => {
+      const start = (json: unknown, init = {}) =>
+        api.call("importObsidian", "POST", { json, ...init });
+      const started = await start({ source: bed.source });
+      expect(started.status).toBe(202);
+      expect(started.body).toMatchObject({ job: { kind: "import", state: "running" } });
+      expect(
+        (await start({ source: bed.source, destination: join(bed.dir, "Other") })).body,
+      ).toMatchObject({ error: "conflict" });
+      await imports.settled();
+      expect((await start({ source: bed.source, destination: bed.vault })).body).toMatchObject({
+        error: "invalid_request",
+      });
+      expect((await start({ source: bed.source, overwrite: true })).status).toBe(400);
+      expect((await start(undefined, { body: "{" })).body).toMatchObject({ error: "invalid_json" });
+      expect((await start(undefined, { body: TOO_BIG })).status).toBe(413);
+      expect((await start({ source: bed.source }, { token: paired })).body).toMatchObject({
+        error: "forbidden_device",
+      });
+    });
+  },
+
+  "POST importObsidianCancel": async (observed) => {
+    await withImports(observed, async ({ api, bed, imports, paired }) => {
+      expect((await api.call("importObsidianCancel", "POST")).body).toMatchObject({
+        error: "not_found",
+      });
+      await imports.startImport({ source: bed.source });
+      expect((await api.call("importObsidianCancel", "POST")).body).toMatchObject({
+        job: { state: "cancelled" },
+      });
+      expect((await api.call("importObsidianCancel", "POST", { token: paired })).status).toBe(403);
+    });
+  },
+
+  "POST importObsidianUpdate": async (observed) => {
+    await withImports(observed, async ({ api, paired }) => {
+      expect((await api.call("importObsidianUpdate", "POST")).body).toMatchObject({
+        error: "not_found",
+        message: "This vault wasn't imported from Obsidian",
+      });
+      expect((await api.call("importObsidianUpdate", "POST", { token: paired })).status).toBe(403);
+    });
+    await withImports(
+      observed,
+      async ({ api, imports }) => {
+        const started = await api.call("importObsidianUpdate", "POST");
+        expect(started.status).toBe(202);
+        expect(started.body).toMatchObject({ job: { kind: "update", state: "running" } });
+        expect((await api.call("importObsidianUpdate", "POST")).body).toMatchObject({
+          error: "conflict",
+        });
+        await imports.settled();
+        expect((await api.call("importObsidian", "GET")).body).toMatchObject({
+          job: {
+            kind: "update",
+            state: "done",
+            update: { unchanged: Object.keys(OBSIDIAN_FILES).length },
+          },
+        });
+      },
+      { prepare: importedVault },
+    );
   },
 
   "GET ws": async (observed) => {

@@ -1108,6 +1108,241 @@ const machinePairRequest = (): Arb<core.MachinePairRequest> =>
     { requiredKeys: ["url", "code"] },
   );
 
+// ── Switching vaults, importing from Obsidian ─────────────────────────────
+
+const folder = () =>
+  fc.oneof(
+    {
+      weight: 4,
+      arbitrary: fc.constantFrom("/Users/me/DailyDoList", "/Volumes/Notes/Café ☕ vault"),
+    },
+    { weight: 1, arbitrary: p.folderPath().map((path) => `/${path}`) },
+    { weight: 1, arbitrary: fc.constant(`/${"v".repeat(WIRE_LIMITS.responsePathLength - 1)}`) },
+  );
+const folderInput = () =>
+  fc.oneof(
+    fc.constantFrom("/Users/me/Obsidian/Notebook", "~/Obsidian/Notebook", "~/Documents/Vault ☕"),
+    p.folderPath().map((path) => `/${path}`),
+    fc.constant(`/${"v".repeat(WIRE_LIMITS.requestPathLength - 1)}`),
+  );
+const reportPath = () =>
+  fc.oneof(
+    { weight: 4, arbitrary: p.vaultPath() },
+    { weight: 1, arbitrary: fc.constantFrom(".obsidian/app.json", "back\\slash.md", "__proto__") },
+  );
+const bounded = <T>(item: Arb<T>) =>
+  fc.oneof(
+    { weight: 4, arbitrary: fc.array(item, { maxLength: 4 }) },
+    { weight: 1, arbitrary: fc.array(item, { minLength: 200, maxLength: 200 }) },
+  );
+const listCount = <T>(items: T[]) =>
+  fc.integer({ min: items.length, max: items.length + 10_000 }).map((count) => ({ count, items }));
+
+const daemonRestart = () => enumOf<core.DaemonRestart>("supervisor", "manual");
+
+const deviceVaultRequest = (): Arb<core.DeviceVaultRequest> => fc.record({ path: folderInput() });
+
+const deviceVaultResponse = (): Arb<core.DeviceVaultResponse> =>
+  fc.record(
+    { path: folder(), lockedByEnv: fc.boolean(), restart: daemonRestart() },
+    { requiredKeys: ["path", "lockedByEnv"] },
+  );
+
+const importPathList = (): Arb<core.ImportPathList> =>
+  bounded(reportPath())
+    .chain(listCount)
+    .map(({ count, items }) => ({ count, paths: items }));
+
+const importMove = (): Arb<core.ImportMove> => fc.record({ from: reportPath(), to: reportPath() });
+
+const importMoveList = (): Arb<core.ImportMoveList> => bounded(importMove()).chain(listCount);
+
+const importSkipReason = () =>
+  enumOf<core.ImportSkipReason>(
+    "symlink_outside",
+    "symlink_folder",
+    "special_file",
+    "unreadable",
+    "sidecar",
+  );
+
+const importSkippedList = (): Arb<core.ImportSkippedList> =>
+  bounded(fc.record({ path: reportPath(), reason: importSkipReason() })).chain(listCount);
+
+const attachmentType = () => enumOf<core.AttachmentType>("image", "pdf", "audio", "video", "other");
+
+const attachmentSummary = (): Arb<core.AttachmentSummary> =>
+  fc.record({
+    count: p.count(),
+    bytes: fc.oneof(p.count(), fc.constant(Number.MAX_SAFE_INTEGER)),
+    byType: fc.uniqueArray(
+      fc.record({ type: attachmentType(), count: p.count(), bytes: p.count() }),
+      { selector: (entry) => entry.type, maxLength: 5 },
+    ),
+  });
+
+const obsidianPluginSupport = () =>
+  enumOf<core.ObsidianPluginSupport>("supported", "partial", "unsupported", "unknown");
+
+const obsidianPlugin = (): Arb<core.ObsidianPlugin> =>
+  fc.record(
+    {
+      id: fc.constantFrom("dataview", "obsidian-excalidraw-plugin", "x", "p".repeat(100)),
+      name: fc.constantFrom("Dataview", "Café ☕ widgets", "n".repeat(200)),
+      support: obsidianPluginSupport(),
+      note: fc.constantFrom("Queries show as text.", "n".repeat(500)),
+    },
+    { requiredKeys: ["id", "support", "note"] },
+  );
+
+const obsidianSettingsFound = (): Arb<core.ObsidianSettingsFound> =>
+  fc.record(
+    {
+      files: fc.subarray([
+        ".obsidian/daily-notes.json",
+        ".obsidian/app.json",
+        ".obsidian/appearance.json",
+        ".obsidian.vimrc",
+      ]),
+      dailyNotes: maybe(dailyNoteSettings()),
+      editor: fc.record(
+        {
+          vimMode: fc.boolean(),
+          livePreview: fc.boolean(),
+          readableLineLength: fc.boolean(),
+          showLineNumbers: fc.boolean(),
+          spellcheck: fc.boolean(),
+        },
+        { requiredKeys: [] },
+      ),
+      vimrc: fc.boolean(),
+      theme: themePreference(),
+    },
+    { requiredKeys: ["files", "dailyNotes", "editor", "vimrc"] },
+  );
+
+const dailyNotesSource = () =>
+  enumOf<core.DailyNotesSource>("obsidian", "obsidian_defaults", "daily_do_list");
+
+const carryOverPlan = (): Arb<core.CarryOverPlan> =>
+  fc.record({
+    vault: folder(),
+    dailyNotes: dailyNoteSettings(),
+    dailyNotesFrom: dailyNotesSource(),
+    notes: importMoveList(),
+    daily: bounded(
+      fc.record({ date: p.isoDate(), from: reportPath(), to: reportPath(), merged: fc.boolean() }),
+    )
+      .chain(listCount)
+      .chain(({ count, items }) =>
+        fc.integer({ min: 0, max: count }).map((merged) => ({ count, merged, items })),
+      ),
+    collisions: importMoveList(),
+    routines: p.count(),
+    drawings: p.count(),
+    agent: fc.record({
+      threads: p.count(),
+      detached: p.count(),
+      records: p.count(),
+      approvals: p.count(),
+      routines: p.count(),
+      trackedNotes: p.count(),
+      journal: p.count(),
+    }),
+    watchedOpenTasks: p.count(),
+    actOnExistingTasks: fc.boolean(),
+    leftBehind: importPathList(),
+  });
+
+const obsidianImportPreviewRequest = (): Arb<core.ObsidianImportPreviewRequest> =>
+  fc.record({ source: folderInput() });
+
+const obsidianImportPreview = (): Arb<core.ObsidianImportPreview> =>
+  fc.record({
+    source: folder(),
+    defaultDestination: folder(),
+    isObsidianVault: fc.boolean(),
+    files: p.count(),
+    bytes: p.count(),
+    notes: p.count(),
+    folders: p.count(),
+    attachments: attachmentSummary(),
+    settings: obsidianSettingsFound(),
+    templates: fc.record({ folder: maybe(reportPath()), count: p.count() }),
+    plugins: fc.array(obsidianPlugin(), { maxLength: 4 }),
+    canvases: importPathList(),
+    drawings: importPathList(),
+    skipped: importSkippedList(),
+    carryOver: carryOverPlan(),
+    warnings: fc.array(p.trimmedText(300), { maxLength: 3 }),
+  });
+
+const obsidianImportRequest = (): Arb<core.ObsidianImportRequest> =>
+  fc.record({ source: folderInput(), destination: folderInput() }, { requiredKeys: ["source"] });
+
+const obsidianImportResult = (): Arb<core.ObsidianImportResult> =>
+  fc.record({
+    copied: fc.record({ files: p.count(), bytes: p.count() }),
+    skipped: importSkippedList(),
+    carryOver: carryOverPlan(),
+    manifest: fc.constant(".daily-do-list/import/obsidian.json"),
+  });
+
+const obsidianUpdateReport = (): Arb<core.ObsidianUpdateReport> =>
+  fc.record({
+    added: importPathList(),
+    updated: importPathList(),
+    restored: importPathList(),
+    conflicts: importMoveList(),
+    deletedInSource: importPathList(),
+    unchanged: p.count(),
+    skipped: importSkippedList(),
+  });
+
+const obsidianImportJob = (): Arb<core.ObsidianImportJob> =>
+  fc.record(
+    {
+      id: p.runtimeId("imp"),
+      kind: enumOf<core.ObsidianImportJobKind>("import", "update"),
+      state: enumOf<core.ObsidianImportJobState>("running", "done", "failed", "cancelled"),
+      phase: enumOf<core.ObsidianImportPhase>("checking", "copying", "carrying_over", "finishing"),
+      source: folder(),
+      destination: folder(),
+      startedAt: p.epochMs(),
+      finishedAt: p.epochMs(),
+      progress: fc.record({
+        files: p.count(),
+        totalFiles: p.count(),
+        bytes: p.count(),
+        totalBytes: p.count(),
+      }),
+      error: fc.constantFrom("The disk is full", "Notes/a.md in the current vault can't be read"),
+      result: obsidianImportResult(),
+      update: obsidianUpdateReport(),
+    },
+    {
+      requiredKeys: [
+        "id",
+        "kind",
+        "state",
+        "phase",
+        "source",
+        "destination",
+        "startedAt",
+        "progress",
+      ],
+    },
+  );
+
+const obsidianImportJobResponse = (): Arb<core.ObsidianImportJobResponse> =>
+  fc.record({ job: obsidianImportJob() });
+
+const obsidianImportStatusResponse = (): Arb<core.ObsidianImportStatusResponse> =>
+  fc.record({ job: maybe(obsidianImportJob()) });
+
+const importProgressEvent = (): Arb<core.ServerEventOf<"import.progress">> =>
+  fc.record({ type: fc.constant("import.progress" as const), job: obsidianImportJob() });
+
 // ── Errors ────────────────────────────────────────────────────────────────
 
 const apiErrorCode = () => enumOf<core.ApiErrorCode>(...API_ERROR_CODES);
@@ -1238,6 +1473,7 @@ const serverEvent = (): Arb<core.ServerEvent> =>
     settingsChangedEvent(),
     routinesChangedEvent(),
     routineNotificationEvent(),
+    importProgressEvent(),
     serverErrorEvent(),
   );
 
@@ -1422,6 +1658,29 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   PairedDevicesResponse: pairedDevicesResponse,
   MachineStatusResponse: machineStatusResponse,
   MachinePairRequest: machinePairRequest,
+  DaemonRestart: daemonRestart,
+  DeviceVaultRequest: deviceVaultRequest,
+  DeviceVaultResponse: deviceVaultResponse,
+  ImportPathList: importPathList,
+  ImportMove: importMove,
+  ImportMoveList: importMoveList,
+  ImportSkipReason: importSkipReason,
+  ImportSkippedList: importSkippedList,
+  AttachmentType: attachmentType,
+  AttachmentSummary: attachmentSummary,
+  ObsidianPluginSupport: obsidianPluginSupport,
+  ObsidianPlugin: obsidianPlugin,
+  ObsidianSettingsFound: obsidianSettingsFound,
+  DailyNotesSource: dailyNotesSource,
+  CarryOverPlan: carryOverPlan,
+  ObsidianImportPreviewRequest: obsidianImportPreviewRequest,
+  ObsidianImportPreview: obsidianImportPreview,
+  ObsidianImportRequest: obsidianImportRequest,
+  ObsidianImportResult: obsidianImportResult,
+  ObsidianUpdateReport: obsidianUpdateReport,
+  ObsidianImportJob: obsidianImportJob,
+  ObsidianImportJobResponse: obsidianImportJobResponse,
+  ObsidianImportStatusResponse: obsidianImportStatusResponse,
   ApiErrorCode: apiErrorCode,
   ApiErrorBody: apiErrorBody,
   ConflictResponse: conflictResponse,
@@ -1442,6 +1701,7 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   SettingsChangedEvent: settingsChangedEvent,
   RoutinesChangedEvent: routinesChangedEvent,
   RoutineNotificationEvent: routineNotificationEvent,
+  ImportProgressEvent: importProgressEvent,
   ServerErrorEvent: serverErrorEvent,
   ServerEvent: serverEvent,
   ClientHelloEvent: clientHelloEvent,
@@ -1575,6 +1835,13 @@ export const arb = plainFactories({
   settingsChangedEvent,
   routinesChangedEvent,
   routineNotificationEvent,
+  deviceVaultRequest,
+  deviceVaultResponse,
+  obsidianImportPreview,
+  obsidianImportJob,
+  obsidianImportJobResponse,
+  obsidianImportStatusResponse,
+  importProgressEvent,
   serverErrorEvent,
   serverEvent,
   clientHelloEvent,

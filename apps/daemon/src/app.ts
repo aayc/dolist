@@ -22,6 +22,7 @@ import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerComputerRoutes } from "./routes/computer";
 import { registerDailyRoutes } from "./routes/daily";
 import { registerDeviceRoutes } from "./routes/device";
+import { registerImportRoutes } from "./routes/import";
 import { registerMachineRoutes } from "./routes/machine";
 import { registerNoteRoutes } from "./routes/notes";
 import { registerPairingRoutes } from "./routes/pairing";
@@ -161,6 +162,7 @@ export function createApp(deps: AppDeps): Hono {
   registerArtifactRoutes(app, ctx);
   registerSyncRoutes(app, ctx);
   registerDeviceRoutes(app, ctx);
+  registerImportRoutes(app, ctx);
   registerMachineRoutes(app, ctx);
   registerComputerRoutes(app, ctx);
   registerPairingRoutes(app, ctx);

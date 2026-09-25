@@ -129,10 +129,25 @@ struct InvalidFixtureTests {
       "blank token": .tolerated(constraint),
       "extra key": .tolerated(unknownKey),
     ],
+    "DeviceVaultRequest": [
+      "blank": .tolerated(constraint),
+      "missing": .rejected,
+      "extra key": .tolerated(unknownKey),
+    ],
     "HealthResponse": [
       "ok false": .tolerated("`ok` is a plain Bool"),
       "string apiVersion": .rejected,
       "unknown agent mode": .tolerated(openEnum),
+    ],
+    "ObsidianImportPreviewRequest": [
+      "missing source": .rejected,
+      "too long": .tolerated(constraint),
+      "extra key": .tolerated(unknownKey),
+    ],
+    "ObsidianImportRequest": [
+      "blank destination": .tolerated(constraint),
+      "source not a string": .rejected,
+      "extra key": .tolerated(unknownKey),
     ],
     "MachinePairRequest": [
       "plain http to the tailnet": .tolerated(constraint),

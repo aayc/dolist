@@ -138,6 +138,23 @@ export const API_ROUTES = {
   device: "/api/device",
   /** PUT DeviceSyncSetupRequest → DeviceSettingsResponse · DELETE → DeviceSettingsResponse (sync off) */
   deviceSync: "/api/device/sync",
+  /**
+   * GET → DeviceVaultResponse · PUT DeviceVaultRequest → DeviceVaultResponse, then the daemon
+   * restarts on that vault (409 when `DDL_VAULT` sets it, an import runs or the vault syncs).
+   * This machine only (403 for paired devices).
+   */
+  deviceVault: "/api/device/vault",
+  /** POST ObsidianImportPreviewRequest → ObsidianImportPreview (reads the folder, writes nothing) */
+  importObsidianPreview: "/api/import/obsidian/preview",
+  /**
+   * GET → ObsidianImportStatusResponse · POST ObsidianImportRequest → 202
+   * ObsidianImportJobResponse (progress arrives as `import.progress` events; 409 while a job runs)
+   */
+  importObsidian: "/api/import/obsidian",
+  /** POST → ObsidianImportJobResponse: the stopped job, once its partial work is removed (404 when none runs) */
+  importObsidianCancel: "/api/import/obsidian/cancel",
+  /** POST → 202 ObsidianImportJobResponse: copies what changed in Obsidian since the import (404 when there's nothing to update from) */
+  importObsidianUpdate: "/api/import/obsidian/update",
   /** POST PairingCodeRequest → 201 PairingCodeResponse (429 when too many are outstanding) */
   pairingCodes: "/api/pairing-codes",
   /** POST PairRequest → 201 PairResponse. No bearer token: the pairing code is the credential. */
@@ -881,6 +898,8 @@ export type ApiErrorCode =
   | "forbidden_host"
   /** 403: the Origin header is not allowed (CSRF). */
   | "forbidden_origin"
+  /** 403: only this machine may do this (importing a folder, switching vaults), not a paired device. */
+  | "forbidden_device"
   /** 404: unknown route, or the addressed note/folder/thread/approval/artifact doesn't exist. */
   | "not_found"
   /** 409: optimistic-concurrency conflict, existing target, or an approval already decided. */
@@ -967,6 +986,8 @@ export type ServerEvent =
   | { type: "routines.changed"; routines: Routine[] }
   /** A run finished and its routine's `notify` says to tell the user. */
   | { type: "routine.notification"; notification: RoutineNotification }
+  /** An import or update from Obsidian progressed, changed phase, or ended (`job.state`). */
+  | { type: "import.progress"; job: ObsidianImportJob }
   | { type: "error"; message: string; code?: WsErrorCode };
 
 export type ClientEvent =

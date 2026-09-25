@@ -1,0 +1,258 @@
+[
+  {
+    "name": "an Obsidian vault with plugins, a date in both vaults and a collision",
+    "value": {
+      "source": "/Users/me/Obsidian/Notebook",
+      "defaultDestination": "/Users/me/Notebook",
+      "isObsidianVault": true,
+      "files": 31,
+      "bytes": 2484,
+      "notes": 9,
+      "folders": 14,
+      "attachments": {
+        "count": 4,
+        "bytes": 1144,
+        "byType": [
+          {
+            "type": "image",
+            "count": 1,
+            "bytes": 70
+          },
+          {
+            "type": "pdf",
+            "count": 1,
+            "bytes": 50
+          },
+          {
+            "type": "audio",
+            "count": 1,
+            "bytes": 512
+          },
+          {
+            "type": "other",
+            "count": 1,
+            "bytes": 512
+          }
+        ]
+      },
+      "settings": {
+        "files": [
+          ".obsidian/daily-notes.json",
+          ".obsidian/app.json",
+          ".obsidian/appearance.json",
+          ".obsidian.vimrc"
+        ],
+        "dailyNotes": {
+          "folder": "Journal/Daily",
+          "format": "YYYY/MM/YYYY-MM-DD",
+          "template": "Templates/Daily note"
+        },
+        "editor": {
+          "vimMode": true,
+          "livePreview": true,
+          "showLineNumbers": true,
+          "spellcheck": false
+        },
+        "vimrc": true,
+        "theme": "dark"
+      },
+      "templates": {
+        "folder": "Templates",
+        "count": 2
+      },
+      "plugins": [
+        {
+          "id": "dataview",
+          "name": "Dataview",
+          "support": "partial",
+          "note": "Queries show as text."
+        },
+        {
+          "id": "obsidian-excalidraw-plugin",
+          "name": "Excalidraw",
+          "support": "supported",
+          "note": "Drawings open and edit here."
+        },
+        {
+          "id": "homemade-widget",
+          "support": "unknown",
+          "note": "Doesn't run here; its files are kept and it still works in Obsidian."
+        }
+      ],
+      "canvases": {
+        "count": 1,
+        "paths": ["Boards/Plan.canvas"]
+      },
+      "drawings": {
+        "count": 1,
+        "paths": ["Excalidraw/Sketch.excalidraw.md"]
+      },
+      "skipped": {
+        "count": 2,
+        "items": [
+          {
+            "path": ".daily-do-list",
+            "reason": "sidecar"
+          },
+          {
+            "path": "Links/outside.md",
+            "reason": "symlink_outside"
+          }
+        ]
+      },
+      "carryOver": {
+        "vault": "/Users/me/DailyDoList",
+        "dailyNotes": {
+          "folder": "Journal/Daily",
+          "format": "YYYY/MM/YYYY-MM-DD",
+          "template": "Templates/Daily note"
+        },
+        "dailyNotesFrom": "obsidian",
+        "notes": {
+          "count": 3,
+          "items": [
+            {
+              "from": "Excalidraw/Flow.excalidraw.md",
+              "to": "Excalidraw/Flow.excalidraw.md"
+            },
+            {
+              "from": "Routines/Morning briefing.md",
+              "to": "Routines/Morning briefing.md"
+            },
+            {
+              "from": "ideas.md",
+              "to": "ideas (Daily Do List).md"
+            }
+          ]
+        },
+        "daily": {
+          "count": 2,
+          "merged": 1,
+          "items": [
+            {
+              "date": "2026-09-23",
+              "from": "Daily/2026-09-23.md",
+              "to": "Journal/Daily/2026/09/2026-09-23.md",
+              "merged": false
+            },
+            {
+              "date": "2026-09-24",
+              "from": "Daily/2026-09-24.md",
+              "to": "Journal/Daily/2026/09/2026-09-24.md",
+              "merged": true
+            }
+          ]
+        },
+        "collisions": {
+          "count": 1,
+          "items": [
+            {
+              "from": "ideas.md",
+              "to": "ideas (Daily Do List).md"
+            }
+          ]
+        },
+        "routines": 1,
+        "drawings": 1,
+        "agent": {
+          "threads": 5,
+          "detached": 1,
+          "records": 4,
+          "approvals": 1,
+          "routines": 1,
+          "trackedNotes": 2,
+          "journal": 0
+        },
+        "watchedOpenTasks": 2,
+        "actOnExistingTasks": false,
+        "leftBehind": {
+          "count": 1,
+          "paths": [".obsidian"]
+        }
+      },
+      "warnings": [
+        "1 file has the same name as one in the Obsidian vault and gets \"(Daily Do List)\" added; links to it lead to the Obsidian one."
+      ]
+    }
+  },
+  {
+    "name": "a plain folder and an empty current vault",
+    "value": {
+      "source": "/Volumes/Notes/Plain folder",
+      "defaultDestination": "/Volumes/Notes/Plain folder (Daily Do List)",
+      "isObsidianVault": false,
+      "files": 0,
+      "bytes": 0,
+      "notes": 0,
+      "folders": 0,
+      "attachments": {
+        "count": 0,
+        "bytes": 0,
+        "byType": []
+      },
+      "settings": {
+        "files": [],
+        "dailyNotes": null,
+        "editor": {},
+        "vimrc": false
+      },
+      "templates": {
+        "folder": null,
+        "count": 0
+      },
+      "plugins": [],
+      "canvases": {
+        "count": 0,
+        "paths": []
+      },
+      "drawings": {
+        "count": 0,
+        "paths": []
+      },
+      "skipped": {
+        "count": 0,
+        "items": []
+      },
+      "carryOver": {
+        "vault": "/Users/me/DailyDoList",
+        "dailyNotes": {
+          "folder": "Daily",
+          "format": "YYYY-MM-DD",
+          "template": ""
+        },
+        "dailyNotesFrom": "daily_do_list",
+        "notes": {
+          "count": 0,
+          "items": []
+        },
+        "daily": {
+          "count": 0,
+          "merged": 0,
+          "items": []
+        },
+        "collisions": {
+          "count": 0,
+          "items": []
+        },
+        "routines": 0,
+        "drawings": 0,
+        "agent": {
+          "threads": 0,
+          "detached": 0,
+          "records": 0,
+          "approvals": 0,
+          "routines": 0,
+          "trackedNotes": 0,
+          "journal": 0
+        },
+        "watchedOpenTasks": 0,
+        "actOnExistingTasks": true,
+        "leftBehind": {
+          "count": 0,
+          "paths": []
+        }
+      },
+      "warnings": ["This folder has no .obsidian folder: it's copied as a plain folder of notes."]
+    }
+  }
+]

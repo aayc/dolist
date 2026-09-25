@@ -2898,6 +2898,7 @@
         "pairing_rejected",
         "forbidden_host",
         "forbidden_origin",
+        "forbidden_device",
         "not_found",
         "conflict",
         "locked_by_env",
@@ -2969,6 +2970,825 @@
       "required": ["error", "approval"],
       "additionalProperties": {},
       "description": "409 of an approval decision when the approval is no longer pending."
+    },
+    "DaemonRestart": {
+      "type": "string",
+      "enum": ["supervisor", "manual"],
+      "description": "How a daemon that exits to apply a change comes back: `supervisor` (the Mac app starts it again) or `manual` (the user does)."
+    },
+    "DeviceVaultRequest": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "An absolute path, or one starting with `~/` (the daemon user's home)."
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": false,
+      "description": "Body of `PUT /api/device/vault`: the vault this daemon should open."
+    },
+    "DeviceVaultResponse": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "The vault's folder (absolute)."
+        },
+        "lockedByEnv": {
+          "type": "boolean",
+          "description": "`DDL_VAULT` sets it: switching answers 409."
+        },
+        "restart": {
+          "description": "Set when switching: the daemon exits with `RESTART_EXIT_CODE` (75) right after answering and opens the new vault when it starts again.",
+          "$ref": "#/$defs/DaemonRestart"
+        }
+      },
+      "required": ["path", "lockedByEnv"],
+      "additionalProperties": {},
+      "description": "The vault this daemon opens."
+    },
+    "ImportPathList": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "paths": {
+          "maxItems": 200,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "Vault-relative, `/`-separated."
+          }
+        }
+      },
+      "required": ["count", "paths"],
+      "additionalProperties": {},
+      "description": "Paths, sorted, at most 200; `count` is the full number."
+    },
+    "ImportMove": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Vault-relative, `/`-separated."
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Vault-relative, `/`-separated."
+        }
+      },
+      "required": ["from", "to"],
+      "additionalProperties": {},
+      "description": "A file and where it goes."
+    },
+    "ImportMoveList": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "items": {
+          "maxItems": 200,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ImportMove"
+          }
+        }
+      },
+      "required": ["count", "items"],
+      "additionalProperties": {},
+      "description": "Moves sorted by `from`, at most 200; `count` is the full number."
+    },
+    "ImportSkipReason": {
+      "type": "string",
+      "enum": ["symlink_outside", "symlink_folder", "special_file", "unreadable", "sidecar"],
+      "description": "Why a file isn't copied: a link leading outside the vault (`symlink_outside`) or to a folder (`symlink_folder`), not a regular file (`special_file`), unreadable, or the vault's own `.daily-do-list/` (`sidecar`)."
+    },
+    "ImportSkippedList": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "items": {
+          "maxItems": 200,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "description": "Vault-relative, `/`-separated."
+              },
+              "reason": {
+                "$ref": "#/$defs/ImportSkipReason"
+              }
+            },
+            "required": ["path", "reason"],
+            "additionalProperties": {}
+          }
+        }
+      },
+      "required": ["count", "items"],
+      "additionalProperties": {},
+      "description": "Files not copied, sorted by path, at most 200; `count` is the full number."
+    },
+    "AttachmentType": {
+      "type": "string",
+      "enum": ["image", "pdf", "audio", "video", "other"],
+      "description": "Kind of attachment, by file extension."
+    },
+    "AttachmentSummary": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "byType": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "$ref": "#/$defs/AttachmentType"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": ["type", "count", "bytes"],
+            "additionalProperties": {}
+          }
+        }
+      },
+      "required": ["count", "bytes", "byType"],
+      "additionalProperties": {},
+      "description": "Attachments (files other than notes, canvases and drawings), by type."
+    },
+    "ObsidianPluginSupport": {
+      "type": "string",
+      "enum": ["supported", "partial", "unsupported", "unknown"],
+      "description": "How an Obsidian community plugin fares here."
+    },
+    "ObsidianPlugin": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "name": {
+          "description": "From its manifest, when readable.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "support": {
+          "$ref": "#/$defs/ObsidianPluginSupport"
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "How it fares here, one sentence."
+        }
+      },
+      "required": ["id", "support", "note"],
+      "additionalProperties": {},
+      "description": "An enabled community plugin."
+    },
+    "ObsidianSettingsFound": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "Vault-relative, `/`-separated."
+          },
+          "description": "Config files found."
+        },
+        "dailyNotes": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DailyNoteSettings"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Obsidian's daily notes (its defaults when the plugin is on without a config); null when it keeps none."
+        },
+        "editor": {
+          "type": "object",
+          "properties": {
+            "vimMode": {
+              "type": "boolean"
+            },
+            "livePreview": {
+              "type": "boolean"
+            },
+            "readableLineLength": {
+              "type": "boolean"
+            },
+            "showLineNumbers": {
+              "type": "boolean"
+            },
+            "spellcheck": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": {}
+        },
+        "vimrc": {
+          "type": "boolean",
+          "description": "A vimrc is imported with the editor settings."
+        },
+        "theme": {
+          "$ref": "#/$defs/ThemePreference"
+        }
+      },
+      "required": ["files", "dailyNotes", "editor", "vimrc"],
+      "additionalProperties": {},
+      "description": "The settings found in the Obsidian vault's config, and what is imported from them."
+    },
+    "DailyNotesSource": {
+      "type": "string",
+      "enum": ["obsidian", "obsidian_defaults", "daily_do_list"],
+      "description": "Where the new vault's daily-note settings come from: Obsidian's config, Obsidian's defaults, or this vault's (Obsidian keeps no daily notes, or its format can't be read here)."
+    },
+    "CarryOverPlan": {
+      "type": "object",
+      "properties": {
+        "vault": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "The current vault: left untouched (it's the backup)."
+        },
+        "dailyNotes": {
+          "description": "The new vault's daily-note settings.",
+          "$ref": "#/$defs/DailyNoteSettings"
+        },
+        "dailyNotesFrom": {
+          "$ref": "#/$defs/DailyNotesSource"
+        },
+        "notes": {
+          "description": "Every other file: at the same path unless it collides (see `collisions`).",
+          "$ref": "#/$defs/ImportMoveList"
+        },
+        "daily": {
+          "type": "object",
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "merged": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Dates Obsidian also has."
+            },
+            "items": {
+              "maxItems": 200,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "date": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                    "description": "Local calendar date YYYY-MM-DD."
+                  },
+                  "from": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "description": "Vault-relative, `/`-separated."
+                  },
+                  "to": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "description": "Vault-relative, `/`-separated."
+                  },
+                  "merged": {
+                    "type": "boolean",
+                    "description": "Obsidian has a note for this date: it's kept and this one appended under `## From Daily Do List`."
+                  }
+                },
+                "required": ["date", "from", "to", "merged"],
+                "additionalProperties": {}
+              }
+            }
+          },
+          "required": ["count", "merged", "items"],
+          "additionalProperties": {}
+        },
+        "collisions": {
+          "description": "Files renamed because the Obsidian vault has one at that path: `Name (Daily Do List).md`.",
+          "$ref": "#/$defs/ImportMoveList"
+        },
+        "routines": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "drawings": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "agent": {
+          "type": "object",
+          "properties": {
+            "threads": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "detached": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Threads whose task isn't in its note in the new vault: kept, marked detached."
+            },
+            "records": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "approvals": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "routines": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "trackedNotes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Daily notes whose task identities carry over."
+            },
+            "journal": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Agent journal files, copied as they are."
+            }
+          },
+          "required": [
+            "threads",
+            "detached",
+            "records",
+            "approvals",
+            "routines",
+            "trackedNotes",
+            "journal"
+          ],
+          "additionalProperties": {}
+        },
+        "watchedOpenTasks": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Open tasks in Obsidian's daily notes inside the agent's watch window; the agent acts on them after the switch only when `actOnExistingTasks` is on."
+        },
+        "actOnExistingTasks": {
+          "type": "boolean"
+        },
+        "leftBehind": {
+          "description": "Files and folders of the current vault that stay behind: hidden ones (other than the sidecar and `.trash/`) and links leading out of it.",
+          "$ref": "#/$defs/ImportPathList"
+        }
+      },
+      "required": [
+        "vault",
+        "dailyNotes",
+        "dailyNotesFrom",
+        "notes",
+        "daily",
+        "collisions",
+        "routines",
+        "drawings",
+        "agent",
+        "watchedOpenTasks",
+        "actOnExistingTasks",
+        "leftBehind"
+      ],
+      "additionalProperties": {},
+      "description": "What happens to the current vault's notes, routines, drawings and agent history in the new vault."
+    },
+    "ObsidianImportPreviewRequest": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "The Obsidian vault's folder: absolute or `~/…`. Only ever read."
+        }
+      },
+      "required": ["source"],
+      "additionalProperties": false,
+      "description": "Body of `POST /api/import/obsidian/preview`."
+    },
+    "ObsidianImportPreview": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "The resolved source folder."
+        },
+        "defaultDestination": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "The suggested new vault: next to the current one, never inside the source."
+        },
+        "isObsidianVault": {
+          "type": "boolean",
+          "description": "It has an `.obsidian/` folder."
+        },
+        "files": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Everything copied, `.obsidian/` and attachments included."
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "notes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Markdown notes outside hidden folders (drawings not included)."
+        },
+        "folders": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "attachments": {
+          "$ref": "#/$defs/AttachmentSummary"
+        },
+        "settings": {
+          "$ref": "#/$defs/ObsidianSettingsFound"
+        },
+        "templates": {
+          "type": "object",
+          "properties": {
+            "folder": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096,
+                  "description": "Vault-relative, `/`-separated."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Core Templates' folder, else Templater's; null when none is set."
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["folder", "count"],
+          "additionalProperties": {}
+        },
+        "plugins": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ObsidianPlugin"
+          },
+          "description": "Enabled community plugins."
+        },
+        "canvases": {
+          "description": "Canvas files: copied, not viewable here yet.",
+          "$ref": "#/$defs/ImportPathList"
+        },
+        "drawings": {
+          "description": "Excalidraw drawings (`*.excalidraw.md`).",
+          "$ref": "#/$defs/ImportPathList"
+        },
+        "skipped": {
+          "$ref": "#/$defs/ImportSkippedList"
+        },
+        "carryOver": {
+          "$ref": "#/$defs/CarryOverPlan"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Things to know first, one sentence each."
+        }
+      },
+      "required": [
+        "source",
+        "defaultDestination",
+        "isObsidianVault",
+        "files",
+        "bytes",
+        "notes",
+        "folders",
+        "attachments",
+        "settings",
+        "templates",
+        "plugins",
+        "canvases",
+        "drawings",
+        "skipped",
+        "carryOver",
+        "warnings"
+      ],
+      "additionalProperties": {},
+      "description": "What importing the Obsidian vault would do, computed without writing anything."
+    },
+    "ObsidianImportRequest": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "The Obsidian vault's folder."
+        },
+        "destination": {
+          "description": "A new or empty folder, never inside the source; default: the preview's `defaultDestination`.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": ["source"],
+      "additionalProperties": false,
+      "description": "Body of `POST /api/import/obsidian`."
+    },
+    "ObsidianImportResult": {
+      "type": "object",
+      "properties": {
+        "copied": {
+          "type": "object",
+          "properties": {
+            "files": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["files", "bytes"],
+          "additionalProperties": {}
+        },
+        "skipped": {
+          "$ref": "#/$defs/ImportSkippedList"
+        },
+        "carryOver": {
+          "$ref": "#/$defs/CarryOverPlan"
+        },
+        "manifest": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "The manifest (`.daily-do-list/import/obsidian.json`)."
+        }
+      },
+      "required": ["copied", "skipped", "carryOver", "manifest"],
+      "additionalProperties": {},
+      "description": "What an import did."
+    },
+    "ObsidianUpdateReport": {
+      "type": "object",
+      "properties": {
+        "added": {
+          "description": "New in Obsidian: copied.",
+          "$ref": "#/$defs/ImportPathList"
+        },
+        "updated": {
+          "description": "Changed in Obsidian, unchanged here: replaced.",
+          "$ref": "#/$defs/ImportPathList"
+        },
+        "restored": {
+          "description": "Changed in Obsidian after being deleted here: written back.",
+          "$ref": "#/$defs/ImportPathList"
+        },
+        "conflicts": {
+          "description": "Changed on both sides: `from` is kept, the Obsidian version saved as `to`.",
+          "$ref": "#/$defs/ImportMoveList"
+        },
+        "deletedInSource": {
+          "description": "Deleted in Obsidian: kept here.",
+          "$ref": "#/$defs/ImportPathList"
+        },
+        "unchanged": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "skipped": {
+          "$ref": "#/$defs/ImportSkippedList"
+        }
+      },
+      "required": [
+        "added",
+        "updated",
+        "restored",
+        "conflicts",
+        "deletedInSource",
+        "unchanged",
+        "skipped"
+      ],
+      "additionalProperties": {},
+      "description": "What an update from Obsidian did. It never deletes."
+    },
+    "ObsidianImportJob": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["import", "update"]
+        },
+        "state": {
+          "type": "string",
+          "enum": ["running", "done", "failed", "cancelled"]
+        },
+        "phase": {
+          "type": "string",
+          "enum": ["checking", "copying", "carrying_over", "finishing"],
+          "description": "The current phase, or the last one reached."
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "destination": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "The new vault (`import`), or the vault being updated (`update`)."
+        },
+        "startedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "finishedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "progress": {
+          "type": "object",
+          "properties": {
+            "files": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "totalFiles": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "totalBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["files", "totalFiles", "bytes", "totalBytes"],
+          "additionalProperties": {}
+        },
+        "error": {
+          "description": "Why it failed.",
+          "type": "string",
+          "minLength": 1
+        },
+        "result": {
+          "description": "What an import did (`done`).",
+          "$ref": "#/$defs/ObsidianImportResult"
+        },
+        "update": {
+          "description": "What an update did (`done`).",
+          "$ref": "#/$defs/ObsidianUpdateReport"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "state",
+        "phase",
+        "source",
+        "destination",
+        "startedAt",
+        "progress"
+      ],
+      "additionalProperties": {},
+      "description": "An import or update from Obsidian: its phase, progress and outcome."
+    },
+    "ObsidianImportJobResponse": {
+      "type": "object",
+      "properties": {
+        "job": {
+          "$ref": "#/$defs/ObsidianImportJob"
+        }
+      },
+      "required": ["job"],
+      "additionalProperties": {},
+      "description": "A job, as it stands."
+    },
+    "ObsidianImportStatusResponse": {
+      "type": "object",
+      "properties": {
+        "job": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ObsidianImportJob"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null: none since the daemon started."
+        }
+      },
+      "required": ["job"],
+      "additionalProperties": {},
+      "description": "The running job, or the last one since the daemon started."
     },
     "VaultChangeOrigin": {
       "type": "string",
@@ -3296,6 +4116,21 @@
       "additionalProperties": {},
       "description": "A routine's run finished and its `notify` says to tell the user (clients show a notification)."
     },
+    "ImportProgressEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "import.progress"
+        },
+        "job": {
+          "$ref": "#/$defs/ObsidianImportJob"
+        }
+      },
+      "required": ["type", "job"],
+      "additionalProperties": {},
+      "description": "An import or update from Obsidian progressed (at most every 200 ms), changed phase, or ended (`job.state`)."
+    },
     "ServerErrorEvent": {
       "type": "object",
       "properties": {
@@ -3354,6 +4189,9 @@
         },
         {
           "$ref": "#/$defs/RoutineNotificationEvent"
+        },
+        {
+          "$ref": "#/$defs/ImportProgressEvent"
         },
         {
           "$ref": "#/$defs/ServerErrorEvent"

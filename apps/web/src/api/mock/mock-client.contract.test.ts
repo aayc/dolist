@@ -94,6 +94,12 @@ async function checkQueries(client: MockDaemonClient, notePath: string) {
   }
 }
 
+/**
+ * Event types of flows the mock doesn't have yet. A stream adding a flow to the mock removes its
+ * events here (the import from Obsidian comes with its web flow).
+ */
+const NOT_MOCKED_YET = new Set<string>(["import.progress"]);
+
 describe("MockDaemonClient ⇄ wire contract", () => {
   it("runs a full scenario emitting only conformant events and results", async () => {
     const { client, events } = create();
@@ -204,7 +210,7 @@ describe("MockDaemonClient ⇄ wire contract", () => {
       ).toEqual([]);
     }
     const seen = new Set(events.map((event) => event.type));
-    for (const type of SERVER_EVENT_TYPES.filter((t) => t !== "error")) {
+    for (const type of SERVER_EVENT_TYPES.filter((t) => t !== "error" && !NOT_MOCKED_YET.has(t))) {
       expect(seen, `a ${type} event`).toContain(type);
     }
   });

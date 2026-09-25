@@ -9,6 +9,8 @@ import { readRegularFile, writeFileAtomic } from "./files";
 
 /** Vault path of the manifest (`.daily-do-list/import/obsidian.json`). */
 export const MANIFEST_PATH = PERSISTED_PATHS.importManifest;
+/** The folder holding it, which the sync engine never syncs. */
+export const IMPORT_DIR = MANIFEST_PATH.slice(0, MANIFEST_PATH.lastIndexOf("/"));
 
 const MAX_MANIFEST_BYTES = 256 * 1024 * 1024;
 

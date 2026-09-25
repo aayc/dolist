@@ -313,7 +313,7 @@ struct ProtocolFaithfulnessTests {
     "UpdateSettingsRequest/blank Cursor model",
     "UpdateSettingsRequest/blank always-on machine name", "DeviceSettingsPatch/blank name",
     "DeviceSyncSetupRequest/blank token",
-    "CreateRoutineRequest/blank instructions (trimmed to empty)",
+    "CreateRoutineRequest/blank instructions (trimmed to empty)", "DeviceVaultRequest/blank",
   ]
 
   /// The validator is strict enough to matter: it rejects every invalid fixture except the

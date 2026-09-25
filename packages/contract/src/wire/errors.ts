@@ -12,6 +12,7 @@ export const API_ERROR_CODES = [
   "pairing_rejected",
   "forbidden_host",
   "forbidden_origin",
+  "forbidden_device",
   "not_found",
   "conflict",
   "locked_by_env",
@@ -36,6 +37,8 @@ export const API_ERROR_CODE_DESCRIPTIONS: Record<(typeof API_ERROR_CODES)[number
     "The pairing code is wrong, expired or already used (checked here, or by the always-on machine).",
   forbidden_host: "The Host header is not a loopback address of this daemon (DNS rebinding).",
   forbidden_origin: "The Origin header is not allowed (CSRF).",
+  forbidden_device:
+    "Only this machine may do this (importing a folder, switching vaults), not a paired device.",
   not_found: "Unknown route (or method), or the addressed item doesn't exist.",
   conflict: "Stale `baseVersion`, existing target, or an approval that is no longer pending.",
   locked_by_env:

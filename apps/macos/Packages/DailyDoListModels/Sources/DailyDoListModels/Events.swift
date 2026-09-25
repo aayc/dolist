@@ -116,6 +116,8 @@ public enum ServerEvent: Hashable, Sendable {
   case routinesChanged([Routine])
   /// A run finished and its routine's `notify` says to tell the user.
   case routineNotification(RoutineNotification)
+  /// An import or update from Obsidian progressed, changed phase, or ended (`job.state`).
+  case importProgress(ObsidianImportJob)
   case error(ServerErrorEvent)
   /// A type this client doesn't know (from a newer daemon): ignore it.
   case unknown(type: String, raw: JSONValue)
@@ -135,6 +137,7 @@ public enum ServerEvent: Hashable, Sendable {
     case .settingsChanged: "settings.changed"
     case .routinesChanged: "routines.changed"
     case .routineNotification: "routine.notification"
+    case .importProgress: "import.progress"
     case .error: "error"
     case .unknown(let type, _): type
     }
@@ -143,7 +146,7 @@ public enum ServerEvent: Hashable, Sendable {
 
 extension ServerEvent: Codable {
   private enum Keys: String, CodingKey {
-    case type, record, thread, approval, status, settings, routines, notification
+    case type, record, thread, approval, status, settings, routines, notification, job
   }
 
   public init(from decoder: Decoder) throws {
@@ -169,6 +172,8 @@ extension ServerEvent: Codable {
     case "routine.notification":
       self = .routineNotification(
         try c.decode(RoutineNotification.self, forKey: .notification))
+    case "import.progress":
+      self = .importProgress(try c.decode(ObsidianImportJob.self, forKey: .job))
     case "error": self = .error(try ServerErrorEvent(from: decoder))
     default: self = .unknown(type: type, raw: try JSONValue(from: decoder))
     }
@@ -199,6 +204,8 @@ extension ServerEvent: Codable {
     case .routineNotification(let notification):
       try encodeWrapped(
         notification, key: .notification, type: "routine.notification", to: encoder)
+    case .importProgress(let job):
+      try encodeWrapped(job, key: .job, type: "import.progress", to: encoder)
     case .error(let e): try encodeTagged(e, kind: "error", key: "type", to: encoder)
     case .unknown(_, let raw): try raw.encode(to: encoder)
     }

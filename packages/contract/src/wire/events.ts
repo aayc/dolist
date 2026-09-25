@@ -13,6 +13,7 @@ import {
   ThreadMessageSchema,
   ThreadSummarySchema,
 } from "./domain";
+import { ObsidianImportJobSchema } from "./imports";
 import {
   ClientIdSchema,
   ContentVersionSchema,
@@ -160,6 +161,12 @@ export const RoutineNotificationEventSchema = named(
   }),
 );
 
+export const ImportProgressEventSchema = named(
+  "ImportProgressEvent",
+  "An import or update from Obsidian progressed (at most every 200 ms), changed phase, or ended (`job.state`).",
+  z.looseObject({ type: z.literal("import.progress"), job: ObsidianImportJobSchema }),
+);
+
 export const ServerErrorEventSchema = named(
   "ServerErrorEvent",
   "Something the client sent was rejected (or the connection is about to close).",
@@ -187,6 +194,7 @@ export const ServerEventSchema = named(
     SettingsChangedEventSchema,
     RoutinesChangedEventSchema,
     RoutineNotificationEventSchema,
+    ImportProgressEventSchema,
     ServerErrorEventSchema,
   ]),
 );

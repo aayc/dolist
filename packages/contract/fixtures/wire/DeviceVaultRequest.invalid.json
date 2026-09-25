@@ -1,0 +1,25 @@
+[
+  {
+    "name": "blank",
+    "value": {
+      "path": "   "
+    },
+    "path": ["path"],
+    "code": "too_small"
+  },
+  {
+    "name": "missing",
+    "value": {},
+    "path": ["path"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "extra key",
+    "value": {
+      "path": "/Users/me/Notebook",
+      "restart": true
+    },
+    "path": [],
+    "code": "unrecognized_keys"
+  }
+]

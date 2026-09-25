@@ -1,0 +1,115 @@
+[
+  {
+    "name": "nothing since the daemon started",
+    "value": {
+      "job": null
+    }
+  },
+  {
+    "name": "the last import",
+    "value": {
+      "job": {
+        "id": "imp_k3j9x0q2m1ab",
+        "kind": "import",
+        "state": "done",
+        "phase": "finishing",
+        "source": "/Users/me/Obsidian/Notebook",
+        "destination": "/Users/me/Notebook",
+        "startedAt": 1790362800000,
+        "progress": {
+          "files": 40,
+          "totalFiles": 40,
+          "bytes": 3600,
+          "totalBytes": 3600
+        },
+        "finishedAt": 1790362804000,
+        "result": {
+          "copied": {
+            "files": 31,
+            "bytes": 2484
+          },
+          "skipped": {
+            "count": 1,
+            "items": [
+              {
+                "path": ".daily-do-list",
+                "reason": "sidecar"
+              }
+            ]
+          },
+          "carryOver": {
+            "vault": "/Users/me/DailyDoList",
+            "dailyNotes": {
+              "folder": "Journal/Daily",
+              "format": "YYYY/MM/YYYY-MM-DD",
+              "template": "Templates/Daily note"
+            },
+            "dailyNotesFrom": "obsidian",
+            "notes": {
+              "count": 3,
+              "items": [
+                {
+                  "from": "Excalidraw/Flow.excalidraw.md",
+                  "to": "Excalidraw/Flow.excalidraw.md"
+                },
+                {
+                  "from": "Routines/Morning briefing.md",
+                  "to": "Routines/Morning briefing.md"
+                },
+                {
+                  "from": "ideas.md",
+                  "to": "ideas (Daily Do List).md"
+                }
+              ]
+            },
+            "daily": {
+              "count": 2,
+              "merged": 1,
+              "items": [
+                {
+                  "date": "2026-09-23",
+                  "from": "Daily/2026-09-23.md",
+                  "to": "Journal/Daily/2026/09/2026-09-23.md",
+                  "merged": false
+                },
+                {
+                  "date": "2026-09-24",
+                  "from": "Daily/2026-09-24.md",
+                  "to": "Journal/Daily/2026/09/2026-09-24.md",
+                  "merged": true
+                }
+              ]
+            },
+            "collisions": {
+              "count": 1,
+              "items": [
+                {
+                  "from": "ideas.md",
+                  "to": "ideas (Daily Do List).md"
+                }
+              ]
+            },
+            "routines": 1,
+            "drawings": 1,
+            "agent": {
+              "threads": 5,
+              "detached": 1,
+              "records": 4,
+              "approvals": 1,
+              "routines": 1,
+              "trackedNotes": 2,
+              "journal": 0
+            },
+            "watchedOpenTasks": 2,
+            "actOnExistingTasks": false,
+            "leftBehind": {
+              "count": 1,
+              "paths": [".obsidian"]
+            }
+          },
+          "manifest": ".daily-do-list/import/obsidian.json"
+        }
+      }
+    }
+  }
+]

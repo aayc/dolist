@@ -1314,6 +1314,248 @@
         }
       }
     },
+    "deviceVault": {
+      "path": "/api/device/vault",
+      "auth": "bearer",
+      "methods": {
+        "GET": {
+          "summary": "The vault this daemon opens (this machine only).",
+          "responses": {
+            "200": {
+              "description": "The vault.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/DeviceVaultResponse"
+              }
+            },
+            "403": {
+              "description": "Foreign Host or Origin header, or a paired device (only this machine may do this).",
+              "codes": ["forbidden_host", "forbidden_origin", "forbidden_device"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        },
+        "PUT": {
+          "summary": "Open another vault: writes `vaultPath` to `$DDL_HOME/config.json`, answers, then exits with `RESTART_EXIT_CODE` (75) to start again on it (the Mac app restarts it; a daemon started by hand is started again by the user).",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/DeviceVaultRequest"
+          },
+          "responses": {
+            "200": {
+              "description": "Switching (`restart` says who starts the daemon again), or already that vault (no `restart`).",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/DeviceVaultResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "403": {
+              "description": "Foreign Host or Origin header, or a paired device (only this machine may do this).",
+              "codes": ["forbidden_host", "forbidden_origin", "forbidden_device"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "409": {
+              "description": "`DDL_VAULT` sets the vault (`locked_by_env`), or it can't change now: an import runs, the vault syncs, or the daemon is already restarting (`conflict`).",
+              "codes": ["locked_by_env", "conflict"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "importObsidianPreview": {
+      "path": "/api/import/obsidian/preview",
+      "auth": "bearer",
+      "methods": {
+        "POST": {
+          "summary": "What importing an Obsidian vault would do: its notes, attachments, settings, plugins, canvases and drawings, and the carry-over plan for the current vault. Reads the folder, writes nothing.",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/ObsidianImportPreviewRequest"
+          },
+          "responses": {
+            "200": {
+              "description": "The report.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ObsidianImportPreview"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "403": {
+              "description": "Foreign Host or Origin header, or a paired device (only this machine may do this).",
+              "codes": ["forbidden_host", "forbidden_origin", "forbidden_device"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "importObsidian": {
+      "path": "/api/import/obsidian",
+      "auth": "bearer",
+      "methods": {
+        "GET": {
+          "summary": "The running import or update, or the last one since the daemon started.",
+          "responses": {
+            "200": {
+              "description": "The job, or null.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ObsidianImportStatusResponse"
+              }
+            },
+            "403": {
+              "description": "Foreign Host or Origin header, or a paired device (only this machine may do this).",
+              "codes": ["forbidden_host", "forbidden_origin", "forbidden_device"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        },
+        "POST": {
+          "summary": "Import an Obsidian vault into a new vault and carry the current vault over; `import.progress` events follow the job.",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/ObsidianImportRequest"
+          },
+          "responses": {
+            "202": {
+              "description": "Started.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ObsidianImportJobResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "403": {
+              "description": "Foreign Host or Origin header, or a paired device (only this machine may do this).",
+              "codes": ["forbidden_host", "forbidden_origin", "forbidden_device"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "409": {
+              "description": "An import or update is already running.",
+              "codes": ["conflict"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "importObsidianCancel": {
+      "path": "/api/import/obsidian/cancel",
+      "auth": "bearer",
+      "methods": {
+        "POST": {
+          "summary": "Stop the running import or update; answers once what it wrote is removed (an update keeps the files it already copied).",
+          "responses": {
+            "200": {
+              "description": "The stopped job.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ObsidianImportJobResponse"
+              }
+            },
+            "403": {
+              "description": "Foreign Host or Origin header, or a paired device (only this machine may do this).",
+              "codes": ["forbidden_host", "forbidden_origin", "forbidden_device"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "Nothing is running.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "importObsidianUpdate": {
+      "path": "/api/import/obsidian/update",
+      "auth": "bearer",
+      "methods": {
+        "POST": {
+          "summary": "Copy what changed in the Obsidian vault since the import into this vault, keeping both versions of a file changed on both sides; never deletes.",
+          "responses": {
+            "202": {
+              "description": "Started.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ObsidianImportJobResponse"
+              }
+            },
+            "403": {
+              "description": "Foreign Host or Origin header, or a paired device (only this machine may do this).",
+              "codes": ["forbidden_host", "forbidden_origin", "forbidden_device"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "This vault wasn't imported from Obsidian, or the Obsidian vault isn't where it was.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "409": {
+              "description": "An import or update is already running.",
+              "codes": ["conflict"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
     "pairingCodes": {
       "path": "/api/pairing-codes",
       "auth": "bearer",

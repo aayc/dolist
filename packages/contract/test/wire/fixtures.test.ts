@@ -88,6 +88,9 @@ describe("fixture coverage", () => {
       "PairingCodeRequest",
       "PairRequest",
       "MachinePairRequest",
+      "DeviceVaultRequest",
+      "ObsidianImportPreviewRequest",
+      "ObsidianImportRequest",
       "ServerEvent",
       "ClientEvent",
     ]) {

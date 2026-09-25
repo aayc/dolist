@@ -1,0 +1,32 @@
+[
+  {
+    "name": "the vault from config.json",
+    "value": {
+      "path": "/Users/me/DailyDoList",
+      "lockedByEnv": false
+    }
+  },
+  {
+    "name": "set by DDL_VAULT",
+    "value": {
+      "path": "/Volumes/Notes/Vault",
+      "lockedByEnv": true
+    }
+  },
+  {
+    "name": "switching, the Mac app restarts the daemon",
+    "value": {
+      "path": "/Users/me/Notebook",
+      "lockedByEnv": false,
+      "restart": "supervisor"
+    }
+  },
+  {
+    "name": "switching, started by hand",
+    "value": {
+      "path": "/Users/me/Notebook",
+      "lockedByEnv": false,
+      "restart": "manual"
+    }
+  }
+]

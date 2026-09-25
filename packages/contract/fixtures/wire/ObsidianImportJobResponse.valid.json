@@ -1,0 +1,225 @@
+[
+  {
+    "name": "an import copying",
+    "value": {
+      "job": {
+        "id": "imp_k3j9x0q2m1ab",
+        "kind": "import",
+        "state": "running",
+        "phase": "copying",
+        "source": "/Users/me/Obsidian/Notebook",
+        "destination": "/Users/me/Notebook",
+        "startedAt": 1790362800000,
+        "progress": {
+          "files": 12,
+          "totalFiles": 40,
+          "bytes": 1200,
+          "totalBytes": 3600
+        }
+      }
+    }
+  },
+  {
+    "name": "a finished import",
+    "value": {
+      "job": {
+        "id": "imp_k3j9x0q2m1ab",
+        "kind": "import",
+        "state": "done",
+        "phase": "finishing",
+        "source": "/Users/me/Obsidian/Notebook",
+        "destination": "/Users/me/Notebook",
+        "startedAt": 1790362800000,
+        "progress": {
+          "files": 40,
+          "totalFiles": 40,
+          "bytes": 3600,
+          "totalBytes": 3600
+        },
+        "finishedAt": 1790362804000,
+        "result": {
+          "copied": {
+            "files": 31,
+            "bytes": 2484
+          },
+          "skipped": {
+            "count": 1,
+            "items": [
+              {
+                "path": ".daily-do-list",
+                "reason": "sidecar"
+              }
+            ]
+          },
+          "carryOver": {
+            "vault": "/Users/me/DailyDoList",
+            "dailyNotes": {
+              "folder": "Journal/Daily",
+              "format": "YYYY/MM/YYYY-MM-DD",
+              "template": "Templates/Daily note"
+            },
+            "dailyNotesFrom": "obsidian",
+            "notes": {
+              "count": 3,
+              "items": [
+                {
+                  "from": "Excalidraw/Flow.excalidraw.md",
+                  "to": "Excalidraw/Flow.excalidraw.md"
+                },
+                {
+                  "from": "Routines/Morning briefing.md",
+                  "to": "Routines/Morning briefing.md"
+                },
+                {
+                  "from": "ideas.md",
+                  "to": "ideas (Daily Do List).md"
+                }
+              ]
+            },
+            "daily": {
+              "count": 2,
+              "merged": 1,
+              "items": [
+                {
+                  "date": "2026-09-23",
+                  "from": "Daily/2026-09-23.md",
+                  "to": "Journal/Daily/2026/09/2026-09-23.md",
+                  "merged": false
+                },
+                {
+                  "date": "2026-09-24",
+                  "from": "Daily/2026-09-24.md",
+                  "to": "Journal/Daily/2026/09/2026-09-24.md",
+                  "merged": true
+                }
+              ]
+            },
+            "collisions": {
+              "count": 1,
+              "items": [
+                {
+                  "from": "ideas.md",
+                  "to": "ideas (Daily Do List).md"
+                }
+              ]
+            },
+            "routines": 1,
+            "drawings": 1,
+            "agent": {
+              "threads": 5,
+              "detached": 1,
+              "records": 4,
+              "approvals": 1,
+              "routines": 1,
+              "trackedNotes": 2,
+              "journal": 0
+            },
+            "watchedOpenTasks": 2,
+            "actOnExistingTasks": false,
+            "leftBehind": {
+              "count": 1,
+              "paths": [".obsidian"]
+            }
+          },
+          "manifest": ".daily-do-list/import/obsidian.json"
+        }
+      }
+    }
+  },
+  {
+    "name": "a failed import",
+    "value": {
+      "job": {
+        "id": "imp_k3j9x0q2m1ab",
+        "kind": "import",
+        "state": "failed",
+        "phase": "carrying_over",
+        "source": "/Users/me/Obsidian/Notebook",
+        "destination": "/Users/me/Notebook",
+        "startedAt": 1790362800000,
+        "progress": {
+          "files": 12,
+          "totalFiles": 40,
+          "bytes": 1200,
+          "totalBytes": 3600
+        },
+        "finishedAt": 1790362803000,
+        "error": "Notes/Groceries.md in the current vault can't be read"
+      }
+    }
+  },
+  {
+    "name": "a cancelled import",
+    "value": {
+      "job": {
+        "id": "imp_k3j9x0q2m1ab",
+        "kind": "import",
+        "state": "cancelled",
+        "phase": "copying",
+        "source": "/Users/me/Obsidian/Notebook",
+        "destination": "/Users/me/Notebook",
+        "startedAt": 1790362800000,
+        "progress": {
+          "files": 12,
+          "totalFiles": 40,
+          "bytes": 1200,
+          "totalBytes": 3600
+        },
+        "finishedAt": 1790362801000
+      }
+    }
+  },
+  {
+    "name": "a finished update from Obsidian",
+    "value": {
+      "job": {
+        "id": "imp_u2p9x0q2m1cd",
+        "kind": "update",
+        "state": "done",
+        "phase": "finishing",
+        "source": "/Users/me/Obsidian/Notebook",
+        "destination": "/Users/me/Notebook",
+        "startedAt": 1790449200000,
+        "finishedAt": 1790449201000,
+        "progress": {
+          "files": 3,
+          "totalFiles": 3,
+          "bytes": 90,
+          "totalBytes": 90
+        },
+        "update": {
+          "added": {
+            "count": 1,
+            "paths": ["Inbox/From the phone.md"]
+          },
+          "updated": {
+            "count": 1,
+            "paths": ["Ideas.md"]
+          },
+          "restored": {
+            "count": 0,
+            "paths": []
+          },
+          "conflicts": {
+            "count": 1,
+            "items": [
+              {
+                "from": "Projects/Roadmap.md",
+                "to": "Projects/Roadmap (Obsidian).md"
+              }
+            ]
+          },
+          "deletedInSource": {
+            "count": 1,
+            "paths": ["Projects/Café ☕/Idées d’été.md"]
+          },
+          "unchanged": 28,
+          "skipped": {
+            "count": 0,
+            "items": []
+          }
+        }
+      }
+    }
+  }
+]

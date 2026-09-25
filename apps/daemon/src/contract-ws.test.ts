@@ -7,7 +7,14 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { ClientEventSchema, exact, ServerEventSchema } from "@ddl/contract";
 import { arb, invalidFor } from "@ddl/contract/testing";
-import { API_ROUTES, API_VERSION, type ServerEvent, silentLogger, WS_CLOSE_CODES } from "@ddl/core";
+import {
+  API_ROUTES,
+  API_VERSION,
+  type ObsidianImportJob,
+  type ServerEvent,
+  silentLogger,
+  WS_CLOSE_CODES,
+} from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
 import { fc, test } from "@fast-check/vitest";
 import { getRequestListener } from "@hono/node-server";
@@ -89,6 +96,13 @@ function isJsonError(event: ServerEvent): boolean {
 let server: Server;
 let hub: WebSocketHub;
 let runtime: FakeAgentRuntime;
+const importListeners = new Set<(job: ObsidianImportJob) => void>();
+const imports = {
+  onProgress(listener: (job: ObsidianImportJob) => void) {
+    importListeners.add(listener);
+    return () => importListeners.delete(listener);
+  },
+};
 let url: string;
 const sockets: WebSocket[] = [];
 
@@ -130,6 +144,7 @@ beforeAll(async () => {
     runtime,
     settings,
     writes,
+    imports,
     logger: silentLogger,
     coalesceMs: 1,
   });
@@ -228,6 +243,17 @@ describe("server events", () => {
       );
       expectServerEvent(changed);
       expectServerEvent(notified);
+    },
+  );
+
+  test.prop([arb.obsidianImportJob()], { numRuns })(
+    "import progress reaches clients as conformant import.progress events",
+    async (job) => {
+      const from = client.messages.length;
+      for (const listener of importListeners) listener(job);
+      const event = await client.next((e) => e.type === "import.progress", from);
+      expect(event).toStrictEqual(JSON.parse(JSON.stringify({ type: "import.progress", job })));
+      expectServerEvent(event);
     },
   );
 

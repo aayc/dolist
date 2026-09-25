@@ -37,7 +37,7 @@ extension AppModel {
 
   func route(_ event: ServerEvent) {
     switch event {
-    case .hello:
+    case .hello, .importProgress:
       break
     case .vaultChanged(let change):
       // Our own writes come back tagged with our client id: already applied locally.
