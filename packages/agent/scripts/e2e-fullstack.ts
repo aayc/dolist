@@ -8,6 +8,9 @@
  * The fake agent is sandboxed (web/files only, no browser/shell/computer/connectors, no web_fetch);
  * irreversible steps use the simulated `mock_irreversible_action`, so approvals are real but nothing
  * leaves the machine.
+ *
+ * For the import spec, `<tmpdir>/ddl-e2e-obsidian-<port>/Obsidian Notebook` holds a synthetic
+ * Obsidian vault (the daemon's own test vault); new vaults imported next to it go with it on exit.
  */
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -40,6 +43,10 @@ async function main(): Promise<void> {
     DDL_AGENT_MOCK_ACTIONS: "1",
   });
   // Loaded after the environment is set: the daemon and the agent runtime read it at startup.
+  const imports = join(tmpdir(), `ddl-e2e-obsidian-${port}`);
+  await rm(imports, { recursive: true, force: true });
+  const { buildObsidianVault } = await import("../../../apps/daemon/src/import/test-vaults");
+  await buildObsidianVault(join(imports, "Obsidian Notebook"));
   const { startDaemon } = await import("../../../apps/daemon/src/server");
   const daemon = await startDaemon();
   process.stdout.write(`fullstack e2e: daemon ${daemon.url}, fake OpenRouter ${fake.baseUrl}\n`);
@@ -53,6 +60,7 @@ async function main(): Promise<void> {
       await fake.close();
       await rm(home, { recursive: true, force: true });
       await rm(vault, { recursive: true, force: true });
+      await rm(imports, { recursive: true, force: true });
       process.exit(0);
     })();
   };
