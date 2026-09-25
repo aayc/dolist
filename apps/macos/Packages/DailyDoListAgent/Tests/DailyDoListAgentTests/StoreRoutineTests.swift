@@ -315,13 +315,14 @@ struct StoreRoutineTests {
     #expect(fromTemplate.isComplete && fromTemplate.templateId == "price-watch")
 
     let repeated = RoutineDraft(
-      repeating: "Check the price of [[Kettle]]: under $80? #shopping", result: "Still $89")
+      repeating: " Check the price of [[Kettle]]: under $80? #shopping ", threadId: "thr_1")
     #expect(repeated.name == "Check the price of Kettle under $80 shopping")
     #expect(repeated.schedule.isEmpty && !repeated.isComplete, "the user picks the schedule")
-    #expect(repeated.instructions.hasPrefix("Check the price of [[Kettle]]: under $80? #shopping"))
-    #expect(repeated.instructions.hasSuffix("Last time's result, for comparison:\nStill $89"))
-    #expect(RoutineDraft(repeating: "..hidden").name == "hidden")
-    #expect(RoutineDraft(repeating: String(repeating: "a", count: 80)).name.count == 60)
+    #expect(repeated.instructions == "Check the price of [[Kettle]]: under $80? #shopping")
+    #expect(repeated.repeatsThreadId == "thr_1" && repeated.templateId == nil)
+    #expect(RoutineDraft(repeating: "..hidden", threadId: "t").name == "hidden")
+    #expect(
+      RoutineDraft(repeating: String(repeating: "a", count: 80), threadId: "t").name.count == 60)
   }
 }
 

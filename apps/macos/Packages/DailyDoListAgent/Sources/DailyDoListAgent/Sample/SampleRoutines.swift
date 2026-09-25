@@ -49,10 +49,43 @@ enum SampleRoutines {
       instructions: "Go through my new email since the last run and draft replies (never send)."),
   ]
 
+  /// The latest weekday 7:30 slots at or before `now`, newest first, and the next one after it.
+  static func briefingSlots(now: Date, count: Int, calendar: Calendar = .current) -> (
+    past: [EpochMillis], next: EpochMillis
+  ) {
+    func slot(daysFrom offset: Int) -> Date? {
+      calendar.date(byAdding: .day, value: offset, to: now).flatMap {
+        calendar.date(bySettingHour: 7, minute: 30, second: 0, of: $0)
+      }
+    }
+    func isWeekday(_ date: Date) -> Bool { !calendar.isDateInWeekend(date) }
+    var past: [EpochMillis] = []
+    var offset = 0
+    while past.count < count, offset > -14, let date = slot(daysFrom: offset) {
+      if date <= now, isWeekday(date) { past.append(date.epochMillis) }
+      offset -= 1
+    }
+    offset = 0
+    var next = now.addingTimeInterval(86_400)
+    while offset < 14, let date = slot(daysFrom: offset) {
+      if date > now, isWeekday(date) {
+        next = date
+        break
+      }
+      offset += 1
+    }
+    return (past, next.epochMillis)
+  }
+
   static func add(to snapshot: inout SampleData.Snapshot) {
     let now = snapshot.now.epochMillis
     let hour: EpochMillis = 3_600_000
     let day: EpochMillis = 24 * hour
+    let briefingSlots = Self.briefingSlots(now: snapshot.now, count: 3)
+    let sundayEvening =
+      Calendar.current.nextDate(
+        after: snapshot.now, matching: DateComponents(hour: 18, minute: 0, weekday: 1),
+        matchingPolicy: .nextTime)?.epochMillis ?? now + 3 * day
     var threads: [AgentThread] = []
 
     func run(
@@ -89,12 +122,11 @@ enum SampleRoutines {
       "**2 meetings** today, light rain after 4 PM. Nothing carried over.",
       "A quiet day: no meetings, 72°F. One new post from your news sources.",
     ]
-    for (index, report) in briefingReports.enumerated() {
+    for (index, (report, at)) in zip(briefingReports, briefingSlots.past).enumerated() {
       threads.append(
         run(
-          "thr_run_briefing_\(index)", routine: briefingId, name: "Morning briefing",
-          at: now - 2 * hour - Double(index) * day, status: .done, report: report,
-          trigger: "Scheduled run · Every weekday at 7:30 AM"))
+          "thr_run_briefing_\(index)", routine: briefingId, name: "Morning briefing", at: at,
+          status: .done, report: report, trigger: "Scheduled run · Every weekday at 7:30 AM"))
     }
     threads.append(
       run(
@@ -112,7 +144,7 @@ enum SampleRoutines {
         id: briefingId, path: "Routines/Morning briefing.md", name: "Morning briefing",
         schedule: "every weekday at 7:30", scheduleText: "Every weekday at 7:30 AM",
         notify: .always, uses: [.web, .connectors],
-        instructions: templates[0].instructions, nextRunAt: now + 22 * hour,
+        instructions: templates[0].instructions, nextRunAt: briefingSlots.next,
         lastRun: RoutineRun(
           threadId: briefing.id, trigger: .schedule, status: .done, startedAt: briefing.createdAt,
           finishedAt: briefing.updatedAt, summary: "3 meetings · 68°F sunny", changed: true),
@@ -136,7 +168,7 @@ enum SampleRoutines {
       Routine(
         id: reviewId, path: "Routines/Weekly review.md", name: "Weekly review",
         schedule: "every sunday at 18:00", scheduleText: "Every Sunday at 6:00 PM",
-        instructions: templates[1].instructions, nextRunAt: now + 3 * day,
+        instructions: templates[1].instructions, nextRunAt: sundayEvening,
         lastRun: RoutineRun(
           threadId: reviewRunId, trigger: .manual, status: .working, startedAt: now - 4 * 60_000),
         runCount: 1, extraRunsLeft: 4),

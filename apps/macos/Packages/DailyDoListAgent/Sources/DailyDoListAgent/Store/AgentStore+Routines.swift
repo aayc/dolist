@@ -167,10 +167,13 @@ public struct RoutineDraft: Hashable, Sendable {
   public var uses: [RoutineUse]
   /// The template it came from, if any.
   public var templateId: String?
+  /// The finished task's thread it repeats ("Repeat this"), if any.
+  public var repeatsThreadId: String?
 
   public init(
     name: String = "", schedule: String = "", instructions: String = "",
-    notify: RoutineNotify = .always, uses: [RoutineUse] = [], templateId: String? = nil
+    notify: RoutineNotify = .always, uses: [RoutineUse] = [], templateId: String? = nil,
+    repeatsThreadId: String? = nil
   ) {
     self.name = name
     self.schedule = schedule
@@ -178,6 +181,7 @@ public struct RoutineDraft: Hashable, Sendable {
     self.notify = notify
     self.uses = uses
     self.templateId = templateId
+    self.repeatsThreadId = repeatsThreadId
   }
 
   public init(template: RoutineTemplate) {
@@ -186,15 +190,11 @@ public struct RoutineDraft: Hashable, Sendable {
       notify: template.notify, uses: template.uses, templateId: template.id)
   }
 
-  /// "Repeat this" on a finished task: its text becomes the instructions and the name; the
+  /// "Repeat this" on a finished task: its text becomes the name and the instructions; the
   /// schedule is left for the user to choose.
-  public init(repeating title: String, result: String? = nil) {
+  public init(repeating title: String, threadId: String) {
     let task = title.trimmingCharacters(in: .whitespacesAndNewlines)
-    var instructions = task
-    if let result = result?.trimmingCharacters(in: .whitespacesAndNewlines), !result.isEmpty {
-      instructions += "\n\nLast time's result, for comparison:\n\(result)"
-    }
-    self.init(name: Self.name(from: task), instructions: instructions)
+    self.init(name: Self.name(from: task), instructions: task, repeatsThreadId: threadId)
   }
 
   /// A file name from a task's text: the first line, without characters a routine name can't
