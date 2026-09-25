@@ -146,7 +146,11 @@ extension MarkdownEditorController {
       layoutManager.allowsNonContiguousLayout = !contiguous
     }
     for _ in 0..<8 {
-      let floats = computeFloats(through: limit)
+      var floats = computeFloats(through: limit)
+      // Floats below what's laid out stay until they scroll into view (recomputing them would
+      // lay out everything above them; dropping them would re-lay out the text for nothing).
+      let limitLine = highlighter.lineIndex.line(containing: limit)
+      floats += embeds.floats.filter { $0.line > limitLine }
       guard floats != embeds.floats else { return }
       embeds.floats = floats
       embeds.exclusionUpdates += 1

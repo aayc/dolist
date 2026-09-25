@@ -159,6 +159,17 @@ struct DrawingEditingTests {
     #expect(editor.controller.isEditingDrawing)
   }
 
+  @Test func editingEndsWhenTheEmbedsLineGoesAway() async throws {
+    let editor = DrawingEditorHarness(text: Self.text, drawings: DrawingEmbedTests.plan)
+    #expect(editor.controller.beginEditingDrawing(atLine: 1))
+    let line = (Self.text as NSString).range(of: "![[Plan.excalidraw|240|right-wrap]]\n")
+    editor.controller.applyRemoteChanges([EditorTextChange(range: line, text: "")])
+    editor.layout()
+    for _ in 0..<5 where editor.controller.isEditingDrawing { await Task.yield() }
+    #expect(!editor.controller.isEditingDrawing)
+    #expect(editor.delegate.endedEditing == ["Excalidraw/Plan.excalidraw.md"])
+  }
+
   @Test func switchingNotesEndsEditing() throws {
     let editor = DrawingEditorHarness(text: Self.text, drawings: DrawingEmbedTests.plan)
     #expect(editor.controller.beginEditingDrawing(atLine: 1))

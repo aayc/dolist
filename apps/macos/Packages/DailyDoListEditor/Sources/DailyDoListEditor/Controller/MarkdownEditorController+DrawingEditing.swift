@@ -149,6 +149,13 @@ extension MarkdownEditorController {
     else {
       session.canvas.isHidden = true
       session.toolbar?.isHidden = true
+      if embedLine(line)?.lineStart != session.lineStart {
+        // The embed's line went away (an undo, a change from elsewhere): so does editing.
+        Task { @MainActor [weak self, weak session] in
+          guard let self, let session, self.embeds.session === session else { return }
+          self.endEditingDrawing()
+        }
+      }
       return
     }
     session.canvas.isHidden = false
