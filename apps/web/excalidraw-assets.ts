@@ -115,8 +115,48 @@ export function inflate() {
   throw new Error("This image's drawing data is compressed, which Daily Do List can't read yet.");
 }
 `,
+  // browser-fs-access (~2 kB gzip) opens and saves files; Excalidraw only opens images here (its
+  // load, save and export menus are off). This is the input-element fallback the library itself
+  // uses where the File System Access API isn't available.
+  "browser-fs-access": `
+export const supported = false;
+export function fileOpen(options = {}) {
+  return new Promise((resolve, reject) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = [...(options.mimeTypes ?? []), ...(options.extensions ?? [])].join(",");
+    input.multiple = Boolean(options.multiple);
+    input.addEventListener("change", () => {
+      const files = [...(input.files ?? [])];
+      resolve(options.multiple ? files : files[0]);
+    });
+    input.addEventListener("cancel", () =>
+      reject(new DOMException("The user aborted a request.", "AbortError")),
+    );
+    input.click();
+  });
+}
+export async function fileSave(blob, options = {}) {
+  const link = document.createElement("a");
+  link.download = options.fileName ?? "Untitled";
+  link.href = URL.createObjectURL(await blob);
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 30_000);
+  return null;
+}
+`,
+  // Loaded only where canvas lacks roundRect (Safari before 16), which the app doesn't run on.
+  "canvas-roundrect-polyfill": "export {};\n",
   locale: "export default {};\n",
 };
+
+const REPLACED_PACKAGES = new Set([
+  "pica",
+  "image-blob-reduce",
+  "pako",
+  "browser-fs-access",
+  "canvas-roundrect-polyfill",
+]);
 
 function isInsidePackage(importer: string | undefined): boolean {
   return importer !== undefined && resolve(importer).startsWith(`${DIST_DIR}${sep}`);
@@ -125,7 +165,7 @@ function isInsidePackage(importer: string | undefined): boolean {
 function stubFor(source: string, importer: string | undefined): string | null {
   if (!isInsidePackage(importer)) return null;
   if (source === "@excalidraw/mermaid-to-excalidraw") return "mermaid";
-  if (source === "pica" || source === "image-blob-reduce" || source === "pako") return source;
+  if (REPLACED_PACKAGES.has(source)) return source;
   if (/(?:^|\/)subset-shared\.chunk\.js$/.test(source)) return "subset-shared";
   if (/(?:^|\/)subset-worker\.chunk\.js$/.test(source)) return "subset-worker";
   if (/(?:^|\/)locales\/(?!en-)[^/]+\.js$/.test(source)) return "locale";

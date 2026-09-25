@@ -229,6 +229,53 @@ test.describe("drawings", () => {
     await expect(page.getByTestId("tab").last()).toHaveAttribute("data-path", path);
   });
 
+  test("an image goes into a drawing through the file picker, shrunk and saved", async ({
+    page,
+  }) => {
+    await openNote(page, noteWith([PARAGRAPH]));
+    await page.locator(".cm-line", { hasText: WORDS }).first().click();
+    await page.keyboard.press("ControlOrMeta+Shift+X");
+    const overlay = page.getByTestId("drawing-editor");
+    await expect(overlay.locator(".excalidraw canvas").first()).toBeVisible({ timeout: 20_000 });
+    // A 3000 × 20 PNG, drawn in the page: Excalidraw shrinks images wider than 1440 px.
+    const png = await page.evaluate(async () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 3000;
+      canvas.height = 20;
+      const context = canvas.getContext("2d")!;
+      context.fillStyle = "#e03131";
+      context.fillRect(0, 0, 3000, 20);
+      const blob = await new Promise<Blob>((resolve) =>
+        canvas.toBlob((b) => resolve(b!), "image/png"),
+      );
+      return [...new Uint8Array(await blob.arrayBuffer())];
+    });
+    const chooser = page.waitForEvent("filechooser");
+    await page.keyboard.press("9");
+    await (await chooser).setFiles({
+      name: "stripe.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(png),
+    });
+    const box = (await overlay.boundingBox())!;
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await page.getByTestId("drawing-done").click();
+    await expect(overlay).toBeHidden();
+    const path = await newDrawingPath(page);
+    await expect.poll(() => drawingFile(page, path)).toContain('"type": "image"');
+    const file = (await drawingFile(page, path))!;
+    expect(file).toContain('"mimeType": "image/png"');
+    const dataURL = /"dataURL": "(data:image\/png;base64,[^"]+)"/.exec(file)![1]!;
+    const width = await page.evaluate(async (src) => {
+      const image = new Image();
+      image.src = src;
+      await image.decode();
+      return image.naturalWidth;
+    }, dataURL);
+    expect(width).toBeLessThanOrEqual(1440);
+    await expect(drawing(page).locator("svg image")).toHaveCount(1);
+  });
+
   test("a change made elsewhere shows at once, and Insert drawing is in the palette and menu", async ({
     page,
   }) => {
