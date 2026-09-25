@@ -13,6 +13,7 @@ import {
   type AppSettings,
   agentModel,
   DEFAULT_SETTINGS,
+  isAgentOwnedPath,
   type Logger,
   mergeSettings,
 } from "@ddl/core";
@@ -191,15 +192,24 @@ export interface SyncHandle {
   target: StorageProvider;
 }
 
-/** A sync engine for the configured target, or null when sync is off. */
+/**
+ * A sync engine for the configured target, or null when sync is off. With the sync service the
+ * agent's files are fenced: only the agent lease holder (`leaseEpoch` non-null) changes them.
+ */
 export async function createSync(options: {
   target: SyncTargetConfig;
   primary: StorageProvider;
   logger: Logger;
+  leaseEpoch?: () => number | null;
 }): Promise<SyncHandle | null> {
   if (options.target.kind === "none") return null;
   const logger = options.logger.child({ component: "sync" });
-  const target = await createSyncTarget(options.target, { logger });
+  const leaseEpoch = options.leaseEpoch ?? (() => null);
+  const fenced = options.target.kind === "remote";
+  const target = await createSyncTarget(options.target, {
+    logger,
+    ...(fenced ? { leaseEpoch } : {}),
+  });
   if (!target) return null;
   return {
     engine: new SyncEngine({
@@ -208,6 +218,7 @@ export async function createSync(options: {
       logger,
       // Machine-local agent scratch data must never leave this machine.
       exclude: [".daily-do-list/state/tasks"],
+      ...(fenced ? { fence: { covers: isAgentOwnedPath, epoch: leaseEpoch } } : {}),
     }),
     target,
   };

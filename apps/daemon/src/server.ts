@@ -122,6 +122,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       device,
       syncTokenPath: config.syncTokenPath,
       env,
+      leaseEpoch: () => supervisor?.heldEpoch ?? null,
       logger,
     });
     resources.sync = sync;

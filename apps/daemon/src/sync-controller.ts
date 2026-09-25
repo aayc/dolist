@@ -19,6 +19,8 @@ export interface SyncControllerOptions {
   device: DeviceIdentity;
   syncTokenPath: string;
   env: Record<string, string | undefined>;
+  /** The agent lease epoch this device holds, or null: fences the agent's files. */
+  leaseEpoch?: () => number | null;
   logger: Logger;
 }
 
@@ -48,7 +50,10 @@ export class SyncController {
     const log = logger.child({ component: "sync" });
     this.#prepared = await prepareSync({ sync, syncTokenPath, device, env, logger: log });
     const target = this.#prepared.target;
-    this.#handle = target ? await createSync({ target, primary, logger }) : null;
+    const leaseEpoch = this.#options.leaseEpoch;
+    this.#handle = target
+      ? await createSync({ target, primary, logger, ...(leaseEpoch ? { leaseEpoch } : {}) })
+      : null;
     if (this.#handle) {
       this.#unsubscribe = this.#handle.engine.onStatus((status) => {
         if (status.state === "error") log.warn("Sync failed", { error: status.lastError });

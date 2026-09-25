@@ -91,6 +91,10 @@ export class AgentSupervisor implements PlacementSource {
   readonly #listeners = new Set<(snapshot: PlacementSnapshot) => void>();
   readonly #unsubscribes: Unsubscribe[] = [];
   #arrangement: Arrangement = { kind: "idle" };
+  /** A lease being let go (see `heldEpoch`). */
+  #releasing: AgentLease | undefined;
+  /** The grant the agent was last started under. */
+  #startedUnder: number | null = null;
   #relay: RelayState | null = null;
   #handingTo: { name: string; until: number; timer: ReturnType<typeof setTimeout> } | null = null;
   #machineKey: string;
@@ -107,6 +111,18 @@ export class AgentSupervisor implements PlacementSource {
   /** The lease this daemon keeps while it asks for the agent. */
   get lease(): AgentLease | undefined {
     return this.#arrangement.kind === "lease" ? this.#arrangement.lease : undefined;
+  }
+
+  /**
+   * The epoch the sync engine may change the agent's files under (its fence): the grant this
+   * device holds, once the agent started under it, and until it is released (so the agent's last
+   * state still goes out while it winds down). Before the agent starts, the pass that pulls the
+   * previous holder's state runs without it: local agent changes from an earlier grant lose to
+   * the service's versions instead of being pushed under the new one.
+   */
+  get heldEpoch(): number | null {
+    const held = (this.lease ?? this.#releasing)?.heldEpoch ?? null;
+    return held !== null && held === this.#startedUnder ? held : null;
   }
 
   /** Sets up the agent for the current sync and placement, and follows their changes. */
@@ -240,7 +256,7 @@ export class AgentSupervisor implements PlacementSource {
         const client = sync.remote?.client;
         if (!client) return;
         await runtime.deactivate(LEASE_CHECKING_PROBLEM);
-        const lease = new AgentLease({
+        const lease: AgentLease = new AgentLease({
           client: agentLeaseClient(client),
           device,
           priority: desired.priority,
@@ -248,6 +264,7 @@ export class AgentSupervisor implements PlacementSource {
           // Pull what the previous device's agent wrote before loading it.
           onAcquired: async () => {
             await sync.syncPass();
+            this.#startedUnder = lease.heldEpoch;
             await runtime.activate();
           },
           // Push the stopped agent's last state for whichever device takes over.
@@ -306,10 +323,15 @@ export class AgentSupervisor implements PlacementSource {
     const current = this.#arrangement;
     this.#arrangement = { kind: "idle" };
     if (current.kind === "lease") {
-      await current.lease.stop(async () => {
-        await runtime.deactivate(problem);
-        await sync.syncPass();
-      });
+      this.#releasing = current.lease;
+      try {
+        await current.lease.stop(async () => {
+          await runtime.deactivate(problem);
+          await sync.syncPass();
+        });
+      } finally {
+        this.#releasing = undefined;
+      }
     } else if (current.kind === "relayed") {
       current.watcher.stop();
     }
