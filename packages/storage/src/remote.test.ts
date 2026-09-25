@@ -11,11 +11,16 @@ import { describeStorageContract } from "./contract-suite";
 import { RemoteStorageProvider, reconnectDelay, type WebSocketWithHeaders } from "./remote";
 import { SyncRequestError } from "./remote-client";
 import { startTestSyncServer, type TestSyncServer } from "./testing/sync-server";
-import { StorageError, type StorageEvent } from "./types";
+import { StaleLeaseError, StorageError, type StorageEvent } from "./types";
 
 describeStorageContract("RemoteStorageProvider", async () => {
   const sync = await startTestSyncServer();
-  return { provider: sync.provider("dev_contract"), cleanup: () => sync.close() };
+  // The suite writes the agent's files too, which only the agent lease holder may do.
+  const { epoch } = sync.holdAgentLease("dev_contract");
+  return {
+    provider: sync.provider("dev_contract", { leaseEpoch: () => epoch }),
+    cleanup: () => sync.close(),
+  };
 });
 
 /** A WebSocket stand-in the test drives by hand (HTTP still goes to the real server). */
@@ -225,7 +230,8 @@ describe("RemoteStorageProvider", () => {
       }
       return fetch(input, init);
     };
-    let epoch: number | null = 7;
+    const grant = sync.holdAgentLease("dev_a");
+    let epoch: number | null = grant.epoch;
     const a = sync.provider("dev_a", { fetch: recording, leaseEpoch: () => epoch });
     await a.write(".daily-do-list/threads/t.json", "{}");
     await a.write(".daily-do-list/settings.json", "{}");
@@ -233,13 +239,15 @@ describe("RemoteStorageProvider", () => {
     await a.rename("Daily/a.md", ".daily-do-list/state/a.md");
     await a.deleteFolder(".daily-do-list/state");
     epoch = null;
-    await a.delete(".daily-do-list/threads/t.json");
+    const refused = await a.delete(".daily-do-list/threads/t.json").catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(StaleLeaseError);
+    expect(refused).toMatchObject({ path: ".daily-do-list/threads/t.json", currentEpoch: 1 });
     expect(sent).toEqual([
-      { method: "PUT", path: "/files/.daily-do-list/threads/t.json", epoch: "7" },
+      { method: "PUT", path: "/files/.daily-do-list/threads/t.json", epoch: "1" },
       { method: "PUT", path: "/files/.daily-do-list/settings.json", epoch: null },
       { method: "PUT", path: "/files/Daily/a.md", epoch: null },
-      { method: "POST", path: "/rename", epoch: "7" },
-      { method: "DELETE", path: "/folders", epoch: "7" },
+      { method: "POST", path: "/rename", epoch: "1" },
+      { method: "DELETE", path: "/folders", epoch: "1" },
       { method: "DELETE", path: "/files/.daily-do-list/threads/t.json", epoch: null },
     ]);
   });

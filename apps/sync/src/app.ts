@@ -1,4 +1,7 @@
 import {
+  folderHoldsAgentOwnedPaths,
+  isAgentOwnedPath,
+  LEASE_EPOCH_HEADER,
   type Logger,
   SYNC_API_VERSION,
   SYNC_DEVICE_HEADER,
@@ -24,7 +27,7 @@ import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { getPath } from "hono/utils/url";
 import { z } from "zod";
-import { createErrorHandler, errorBody, SyncApiError } from "./errors";
+import { createErrorHandler, errorBody, StaleLeaseRefusal, SyncApiError } from "./errors";
 import { filePathFromUrl, requirePath, requirePrefix } from "./paths";
 import type { RateLimiter } from "./rate-limit";
 import type { SyncStore } from "./store";
@@ -68,6 +71,10 @@ const LeaseRequestSchema = z.strictObject({
 const SeqSchema = z
   .string()
   .regex(/^\d{1,15}$/, "must be a non-negative integer")
+  .transform(Number);
+const EpochSchema = z
+  .string()
+  .regex(/^[1-9]\d{0,14}$/, "must be a positive integer")
   .transform(Number);
 const ChangesQuerySchema = z.object({
   since: SeqSchema.optional(),
@@ -127,6 +134,7 @@ export function createSyncApp(options: SyncAppOptions): Hono<Env> {
       throw new SyncApiError(413, "payload_too_large", "File too large");
     }
     const vault = c.get("vault");
+    requireLeaseEpoch(c, store, device, isAgentOwnedPath(path));
     const outcome = store.write(vault, path, content, ifMatch, device);
     if (outcome.change) hub.publish(vault, [outcome.change]);
     const body: SyncWriteResponse = {
@@ -143,6 +151,7 @@ export function createSyncApp(options: SyncAppOptions): Hono<Env> {
     const rawIfMatch = c.req.query("ifMatch");
     const ifMatch = rawIfMatch === undefined ? undefined : parse(RevSchema, rawIfMatch, "ifMatch");
     const vault = c.get("vault");
+    requireLeaseEpoch(c, store, device, isAgentOwnedPath(path));
     hub.publish(vault, [store.delete(vault, path, ifMatch, device)]);
     return c.body(null, 204);
   });
@@ -151,12 +160,10 @@ export function createSyncApp(options: SyncAppOptions): Hono<Env> {
     const device = requireDevice(c);
     const body = await readJson(c, RenameSchema);
     const vault = c.get("vault");
-    const { entry, changes } = store.rename(
-      vault,
-      requirePath(body.from),
-      requirePath(body.to),
-      device,
-    );
+    const from = requirePath(body.from);
+    const to = requirePath(body.to);
+    requireLeaseEpoch(c, store, device, isAgentOwnedPath(from) || isAgentOwnedPath(to));
+    const { entry, changes } = store.rename(vault, from, to, device);
     hub.publish(vault, changes);
     const response: SyncWriteResponse = {
       ...entry,
@@ -185,6 +192,7 @@ export function createSyncApp(options: SyncAppOptions): Hono<Env> {
     const device = requireDevice(c);
     const path = requirePath(c.req.query("path") ?? "");
     const vault = c.get("vault");
+    requireLeaseEpoch(c, store, device, folderHoldsAgentOwnedPaths(path));
     const { deleted, changes } = store.deleteFolder(vault, path, device);
     hub.publish(vault, changes);
     const body: SyncDeleteFolderResponse = { deleted };
@@ -291,6 +299,25 @@ function requireDevice(c: Context<Env>): string {
     throw new SyncApiError(400, "invalid_request", `Missing or invalid ${SYNC_DEVICE_HEADER}`);
   }
   return device;
+}
+
+/**
+ * Fencing: a change touching the agent's files needs the current agent grant's epoch
+ * (`LEASE_EPOCH_HEADER`) from the device holding it. Checked right before the change, in the same
+ * synchronous step, so no lease change can slip in between.
+ */
+function requireLeaseEpoch(
+  c: Context<Env>,
+  store: SyncStore,
+  device: string,
+  touchesAgentFiles: boolean,
+): void {
+  const raw = c.req.header(LEASE_EPOCH_HEADER);
+  const epoch = raw === undefined ? null : parse(EpochSchema, raw, LEASE_EPOCH_HEADER);
+  if (!touchesAgentFiles) return;
+  const holder = store.leaseHolder(c.get("vault"), "agent");
+  if (holder && epoch === holder.epoch && device === holder.device) return;
+  throw new StaleLeaseRefusal(holder);
 }
 
 function leaseName(c: Context<Env>): SyncLeaseName {
