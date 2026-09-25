@@ -82,7 +82,11 @@ private struct DrawingCanvasRepresentable: NSViewRepresentable {
       coordinator.reportedHash = DrawingContentHash.hash(scene)
       onChange(scene)
     }
-    DispatchQueue.main.async { canvas.window?.makeFirstResponder(canvas) }
+    // Once the pane has sized it: the whole drawing in view, and the keyboard.
+    DispatchQueue.main.async {
+      canvas.zoomToFit()
+      canvas.window?.makeFirstResponder(canvas)
+    }
     return canvas
   }
 
