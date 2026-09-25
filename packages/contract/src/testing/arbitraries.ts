@@ -725,6 +725,28 @@ const approvalDecisionRequest = (): Arb<core.ApprovalDecisionRequest> =>
 const connectorsResponse = (): Arb<core.ConnectorsResponse> =>
   fc.record({ connectors: fc.array(connectorStatus(), { maxLength: 4 }) });
 
+// ── Sync ──────────────────────────────────────────────────────────────────
+
+const syncState = () => enumOf<core.SyncState>("idle", "syncing", "error", "disabled");
+const syncTargetKind = () => enumOf<core.SyncTargetKind>("none", "local", "s3", "remote");
+const syncStatusResponse = (): Arb<core.SyncStatusResponse> =>
+  fc.record(
+    {
+      state: syncState(),
+      target: syncTargetKind(),
+      lastSyncedAt: maybe(p.epochMs()),
+      pendingChanges: p.count(10_000),
+      conflicts: fc.array(
+        p.notePath().map((path) => path.replace(/(\.[^./]+)?$/, " (conflict 2026-09-24 0915)$1")),
+        { maxLength: 3 },
+      ),
+      lastError: p.text(300),
+      remoteHost: enumOf("sync.example.com", "127.0.0.1:7332", "[::1]:8443", "notes.example.org"),
+      deviceName: p.lengthWithin(p.label(), 1, 100),
+    },
+    { requiredKeys: ["state", "target", "lastSyncedAt", "pendingChanges", "conflicts"] },
+  );
+
 // ── Errors ────────────────────────────────────────────────────────────────
 
 const apiErrorCode = () => enumOf<core.ApiErrorCode>(...API_ERROR_CODES);
@@ -987,6 +1009,9 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   ApprovalResponse: approvalResponse,
   ApprovalDecisionRequest: approvalDecisionRequest,
   ConnectorsResponse: connectorsResponse,
+  SyncState: syncState,
+  SyncTargetKind: syncTargetKind,
+  SyncStatusResponse: syncStatusResponse,
   ApiErrorCode: apiErrorCode,
   ApiErrorBody: apiErrorBody,
   ConflictResponse: conflictResponse,

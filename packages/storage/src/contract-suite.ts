@@ -32,7 +32,7 @@ export function describeStorageContract(name: string, factory: StorageContractFa
     });
 
     it("exposes identity and capabilities", () => {
-      expect(["local", "memory", "s3"]).toContain(s.kind);
+      expect(["local", "memory", "s3", "remote"]).toContain(s.kind);
       expect(s.id).toMatch(/\S/);
       expect(typeof s.displayName).toBe("string");
       expect(typeof s.capabilities.watch).toBe("boolean");

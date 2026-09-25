@@ -16,11 +16,12 @@ apps/web ──REST + WebSocket──▶ apps/daemon ──▶ @ddl/storage (vau
 | Package | Role | Runs in |
 | --- | --- | --- |
 | `@ddl/core` | Vault paths, Obsidian-compatible dates & daily notes, markdown task parsing, task identity tracking, agent/thread types, the daemon↔client protocol, settings. **No dependencies.** | Browser, daemon, future native shells |
-| `@ddl/storage` | `StorageProvider` contract; local filesystem, memory and (stub) S3 providers; provider registry; 3-way `SyncEngine`; vault search | Daemon |
+| `@ddl/storage` | `StorageProvider` contract; local filesystem, memory, remote (the sync service) and (stub) S3 providers; provider registry; 3-way `SyncEngine`; vault search | Daemon |
 | `@ddl/editor` | CodeMirror 6 editor: live preview, task checkboxes, agent badges, vim, keymaps | Browser |
 | `@ddl/agent` | `AgentRuntime`: task watcher, orchestrator, subagents, Pi harness, safety evaluator, approvals, execution providers, threads/artifacts, tools, OpenRouter client | Daemon |
 | `@ddl/connectors` | MCP client: `mcpServers` config → harness-agnostic `ToolSpec`s | Daemon |
 | `apps/daemon` | Hono HTTP API + WebSocket hub, auth, config, settings, static UI; composes everything | Node 24 |
+| `apps/sync` | Sync service: per-vault change log in SQLite, HTTP API with conditional writes, live WebSocket push, the agent lease ([SYNC.md](SYNC.md)) | Node 24 (self-hosted) |
 | `apps/web` | React 19 UI; `DaemonClient` with HTTP and in-browser mock implementations | Browser / WebView |
 | `evals` | Agent eval suites (safety verdicts, triage) with mock (CI) and live modes | Node |
 
@@ -45,9 +46,12 @@ packages and the daemon bundle are pinned once in the pnpm catalog (`pnpm-worksp
 
 `createStorageProvider(config)` is the only place a backend is chosen (`local`, `memory`, `s3`).
 `SyncEngine` replicates the vault to any other provider (`createSyncTarget`: a local folder such as
-iCloud Drive today, S3 next) using a persisted base snapshot and a line-based 3-way merge; true
-conflicts keep your version and save theirs as a `(conflict …)` copy. A mass-deletion guard refuses
-to mirror an empty side (unmounted drive) into deletions.
+iCloud Drive, or the sync service shared by several devices, S3 next) using a persisted base
+snapshot and a line-based 3-way merge; true conflicts keep your version and save theirs as a
+`(conflict …)` copy. It runs a pass after vault changes, after changes the target reports from
+elsewhere (the sync service pushes them live), and every 30 s. A mass-deletion guard refuses to
+mirror an empty side (unmounted drive) into deletions. Devices, the sync service and the agent
+lease (one device runs the agent): [SYNC.md](SYNC.md).
 
 ## The daemon
 
@@ -107,7 +111,7 @@ threads and artifacts persisted in the sidecar.
 | Concern | Interface | Implementations | Registry |
 | --- | --- | --- | --- |
 | Vault storage | `StorageProvider` | local fs, memory, S3 (stub) | `createStorageProvider` |
-| Sync target | `StorageProvider` + `SyncEngine` | none, local folder, S3 (stub) | `createSyncTarget` |
+| Sync target | `StorageProvider` + `SyncEngine` | none, local folder, sync service (remote), S3 (stub) | `createSyncTarget` |
 | Agent harness | `Harness` / `HarnessSession` | Pi, scripted (mock/tests) | runtime options |
 | Execution | `ExecutionProvider` | local (shell, Chrome, macOS desktop), cloud (stub) | `createExecutionProvider` |
 | Tools from services | `ConnectorToolSource` | MCP (stdio, streamable HTTP, SSE) | `createConnectorManager` |

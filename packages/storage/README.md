@@ -19,6 +19,7 @@ const hits = await searchVault(vault, "groceries", { limit: 20 });
 | -------- | ------------------------- | -------------------------------------------------------- |
 | `local`  | `LocalFsStorageProvider`  | A folder on disk; the default vault. Obsidian-compatible. |
 | `memory` | `MemoryStorageProvider`   | Reference model for tests and fixtures; acts like a disk. |
+| `remote` | `RemoteStorageProvider`   | A vault on the sync service (`apps/sync`), for syncing devices. Sync target only. |
 | `s3`     | `S3StorageProvider`       | **Stub**: every call throws `NotImplementedError`. The planned design is documented in `src/s3.ts`. |
 
 Config shapes (`StorageConfig` / `SyncTargetConfig` in `src/types.ts`):
@@ -28,7 +29,25 @@ Config shapes (`StorageConfig` / `SyncTargetConfig` in `src/types.ts`):
 { kind: "memory", id?: "fixture", initialFiles?: { "a.md": "…" } }
 { kind: "s3", bucket: "notes", prefix?: "vaults/personal/", region?, endpoint?, profile?, forcePathStyle? }
 // sync targets: { kind: "none" } | { kind: "local", root } | { kind: "s3", …same as above }
+//   | { kind: "remote", url, vault, token, deviceId, deviceName }
 ```
+
+### Remote (the sync service)
+
+- Talks to the sync service's HTTP API (`packages/core/src/sync-service.ts`) through
+  `SyncServiceClient` (`src/remote-client.ts`): bearer token, the device id on every change, a
+  timeout on every request, `Retry-After` on 429, typed errors. The token is never logged or put in
+  an error message.
+- Versions are the server's revs (identical content keeps its rev; a rename carries it along).
+  `ifMatch` maps to the server's conditional writes and deletes; a stale one is a `ConflictError`
+  with the current rev. Semantics match `MemoryStorageProvider`, which `remote.model.test.ts`
+  checks command by command against a real in-process server, besides the shared contract suite.
+- `watch()` holds a WebSocket to the vault's change stream while anyone listens: other devices'
+  changes arrive as `self: false` events; this device's own changes were reported when it made
+  them and aren't repeated. It reconnects with capped exponential backoff (0.5 s → 30 s, jitter)
+  and then replays the net effect of what it missed from the change log.
+- Created only through `createSyncTarget`. The design, the server and the agent lease are in
+  [docs/SYNC.md](../../docs/SYNC.md).
 
 ### Local filesystem
 
@@ -60,10 +79,13 @@ Config shapes (`StorageConfig` / `SyncTargetConfig` in `src/types.ts`):
 `SyncEngine` syncs a primary provider (the vault) with a target provider in both directions.
 
 - `syncOnce()` runs a full pass. Runs never overlap: calls made during a run share one follow-up
-  run. `start({ intervalMs = 30000, debounceMs = 1500 })` syncs immediately, then after vault
-  changes (debounced) and on the interval. `stop()` waits for an in-flight run. `status()` and
-  `onStatus()` report `idle | syncing | error`, `lastSyncedAt`, `pendingChanges` and open conflict
-  copies. Use `disabledSyncStatus()` when no target is configured.
+  run. `start({ intervalMs = 30000, debounceMs = 1500, targetDebounceMs = 250 })` syncs
+  immediately, then after vault changes (debounced), after changes the target reports that it
+  didn't make itself (another device, another app; its own `self` echoes are ignored), and on the
+  interval. `stop()` waits for an in-flight run. `status()` and `onStatus()` report
+  `idle | syncing | error`, `lastSyncedAt`, `pendingChanges` and open conflict copies (including
+  ones another device made and this one pulled). Use `disabledSyncStatus()` when no target is
+  configured.
 - The last synced state is stored in the vault at `.daily-do-list/sync/<target.id>.json`. For each
   path it records both sides' versions, plus the content of text files up to 256 KiB as the merge
   base. Each device keeps its own snapshot, and the snapshot itself is never synced.

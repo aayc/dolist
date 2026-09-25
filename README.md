@@ -47,6 +47,10 @@ It's a *do* list, not a *to-do* list: the point is that things get done.
   per-task workspace, and — on macOS — the desktop via screenshots and mouse/keyboard.
 - **Connectors via MCP.** Add any MCP server (Google Workspace, Playwright, GitHub, Notion, …) with
   the same `mcpServers` JSON you'd use in Claude Desktop or Cursor.
+- **One vault on all your devices.** A small self-hostable sync service keeps each device's vault
+  folder in sync within a couple of seconds (edits to different lines merge; true conflicts keep
+  both versions), and makes sure the agent runs on exactly one device — see
+  [docs/SYNC.md](docs/SYNC.md).
 - **Providers everywhere.** Storage (local folder today, S3 next), sync targets, execution (local
   today, cloud next), agent harness ([Pi](https://github.com/badlogic/pi-mono) on OpenRouter, or the
   [Cursor CLI](https://cursor.com/cli) with your Cursor account) and connectors sit behind
@@ -162,7 +166,8 @@ flowchart LR
 
 Deep dives: [Architecture](docs/ARCHITECTURE.md) · [Agent system](docs/AGENT_SYSTEM.md) ·
 [Safety rules](packages/agent/src/safety/README.md) · [Connectors](packages/connectors/README.md) ·
-[Execution providers](packages/agent/src/execution/README.md) · [Daemon & API](apps/daemon/README.md).
+[Execution providers](packages/agent/src/execution/README.md) · [Daemon & API](apps/daemon/README.md) ·
+[Sync between devices](docs/SYNC.md).
 
 ## Configuration
 
@@ -171,8 +176,9 @@ Deep dives: [Architecture](docs/ARCHITECTURE.md) · [Agent system](docs/AGENT_SY
 | `~/.daily-do-list/.env` | Secrets (`OPENROUTER_API_KEY`) — never inside the repo |
 | `~/.daily-do-list/config.json` | Daemon config: vault path, port, agent mode, sync target, execution provider |
 | `~/.daily-do-list/mcp.json` | MCP connectors (`{ "mcpServers": { … } }`) |
+| `~/.daily-do-list/sync-token`, `device.json` | The sync service's vault token (0600) and this device's id and name ([docs/SYNC.md](docs/SYNC.md)) |
 | `<vault>/.daily-do-list/settings.json` | App settings (theme, editor, daily notes, agent), editable in the UI |
-| Env vars | `DDL_HOME`, `DDL_VAULT`, `DDL_PORT`, `DDL_AGENT_MODE` (`live`/`mock`/`off`), `DDL_MODEL`, `DDL_CURSOR_CLI` (path to the Cursor CLI, if not on PATH or in `~/.local/bin`) |
+| Env vars | `DDL_HOME`, `DDL_VAULT`, `DDL_PORT`, `DDL_AGENT_MODE` (`live`/`mock`/`off`), `DDL_MODEL`, `DDL_CURSOR_CLI` (path to the Cursor CLI, if not on PATH or in `~/.local/bin`), `DDL_SYNC_URL` + `DDL_SYNC_VAULT` + `DDL_SYNC_TOKEN` (the sync service) |
 
 Agent threads, artifacts and state live in the vault's hidden `.daily-do-list/` folder, so they
 travel with your notes. Deleted notes go to the vault's `.trash/` folder.
@@ -223,7 +229,9 @@ CI details: [docs/CI.md](docs/CI.md).
 
 - iPhone app (native Swift, reusing the macOS app's packages; talking to your Mac or a cloud
   daemon) — [plan](docs/CROSS_PLATFORM.md)
-- S3 storage + sync provider; cloud execution provider (remote sandbox for browser/computer use)
+- Sync, phase 2: attachments in S3/R2, end-to-end encryption, a Cloudflare Durable Object host,
+  sync status in the apps ([docs/SYNC.md](docs/SYNC.md))
+- S3 storage provider; cloud execution provider (remote sandbox for browser/computer use)
 - Watching more than daily notes (projects, weekly notes); scheduled check-ins
 - Memory / user profile so the assistant gets more personal over time
 

@@ -48,6 +48,14 @@ to that session's CLI process. Requests with any `Origin` header or a `Host` oth
 still goes through the safety gate. The CLI runs with a private config that denies its own file,
 shell and fetch tools, and a minimal environment without API keys.
 
+**Sync service.** The optional, self-hosted sync service (`apps/sync`) is the one component meant
+to be reachable from other devices, behind a TLS-terminating proxy. Each vault has its own random
+32-byte token, stored only as a SHA-256 hash and compared in constant time; wrong tokens, other
+vaults' tokens and unknown vaults all get the same 401. Paths are validated, bodies, files and vaults
+are size-limited, each vault is rate-limited, and logs never contain tokens, contents or paths.
+Vaults are administered with its CLI only. There is no end-to-end encryption yet, so whoever runs
+the server can read the notes. Details: [docs/SYNC.md](docs/SYNC.md#security).
+
 **Agent safety gate.** Every tool call from every agent passes the safety gate before it executes.
 That includes built-in tools, the harness's shell and file tools, browser and computer control,
 MCP connector tools, and the Cursor CLI's web search and fetch. The gate evaluates each call with policy, then rules, then an independent LLM
@@ -77,6 +85,8 @@ Examples:
 - prompt injection that leads to a risky action without approval;
 - getting past the daemon's (or the Cursor harness MCP bridge's) token, `Host` or `Origin` checks,
   or reading the vault or agent state from a web page;
+- reading or changing a vault on the sync service without its token, telling whether a vault id
+  exists, or getting two devices to run the agent at once;
 - getting the Cursor CLI to run one of its own tools (files, shell, fetch) under the Cursor harness;
 - secrets leaking into logs, threads, artifacts or the repository;
 - path traversal outside the vault or agent workspaces;
@@ -95,4 +105,7 @@ Examples:
 - Keep the daemon on localhost. Don't expose its port through tunnels or reverse proxies.
 - Read approval cards before approving, especially payments and outgoing messages.
 - Only configure MCP servers you trust, and give connectors least-privilege tokens.
-- Keep `~/.daily-do-list` private. It holds the daemon token, your API keys and agent state.
+- Keep `~/.daily-do-list` private. It holds the daemon token, your API keys, the sync token and
+  agent state.
+- If you run the sync service, serve it over HTTPS only, keep its database and backups private (it
+  holds your notes), and rotate a vault's token (`vault rotate-token`) if a device is lost.

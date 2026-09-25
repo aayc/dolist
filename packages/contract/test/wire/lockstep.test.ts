@@ -81,6 +81,9 @@ interface Lockstep {
   ApprovalResponse: core.ApprovalResponse;
   ApprovalDecisionRequest: core.ApprovalDecisionRequest;
   ConnectorsResponse: core.ConnectorsResponse;
+  SyncState: core.SyncState;
+  SyncTargetKind: core.SyncTargetKind;
+  SyncStatusResponse: core.SyncStatusResponse;
   ApiErrorCode: core.ApiErrorCode;
   ApiErrorBody: core.ApiErrorBody;
   ConflictResponse: core.ConflictResponse;

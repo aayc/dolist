@@ -27,6 +27,7 @@ public enum APIRoute {
   public static let threads = "/api/threads"
   public static let approvals = "/api/approvals"
   public static let connectors = "/api/connectors"
+  public static let syncStatus = "/api/sync/status"
   public static let webSocket = "/ws"
 
   public static func note(_ path: String) -> String { "/api/notes/\(encodeVaultPath(path))" }
@@ -523,6 +524,77 @@ public struct ApprovalDecisionRequest: Codable, Hashable, Sendable {
     self.decision = decision
     self.scope = scope
     self.note = note
+  }
+}
+
+// MARK: - Sync
+
+public struct SyncState: WireEnum {
+  public let rawValue: String
+  public init(rawValue: String) { self.rawValue = rawValue }
+  public static let idle: Self = "idle"
+  public static let syncing: Self = "syncing"
+  public static let error: Self = "error"
+  /// No sync target is configured.
+  public static let disabled: Self = "disabled"
+}
+
+/// Where the vault syncs: nowhere, another folder, S3, or the sync service (other devices).
+public struct SyncTargetKind: WireEnum {
+  public let rawValue: String
+  public init(rawValue: String) { self.rawValue = rawValue }
+  public static let none: Self = "none"
+  public static let local: Self = "local"
+  public static let s3: Self = "s3"
+  public static let remote: Self = "remote"
+}
+
+/// `GET /api/sync/status`.
+public struct SyncStatusResponse: Codable, Hashable, Sendable {
+  public var state: SyncState
+  public var target: SyncTargetKind
+  /// When the last pass finished; nil before the first one.
+  public var lastSyncedAt: EpochMillis?
+  /// Files changed on either side and not synced yet.
+  public var pendingChanges: Int
+  /// Conflict copies (vault paths) waiting to be resolved.
+  public var conflicts: [String]
+  public var lastError: String?
+  /// `host[:port]` of the sync server (`remote` only).
+  public var remoteHost: String?
+  /// This device's name as other devices see it (`remote` only).
+  public var deviceName: String?
+
+  public init(
+    state: SyncState, target: SyncTargetKind, lastSyncedAt: EpochMillis?, pendingChanges: Int,
+    conflicts: [String], lastError: String? = nil, remoteHost: String? = nil,
+    deviceName: String? = nil
+  ) {
+    self.state = state
+    self.target = target
+    self.lastSyncedAt = lastSyncedAt
+    self.pendingChanges = pendingChanges
+    self.conflicts = conflicts
+    self.lastError = lastError
+    self.remoteHost = remoteHost
+    self.deviceName = deviceName
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case state, target, lastSyncedAt, pendingChanges, conflicts, lastError, remoteHost, deviceName
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(state, forKey: .state)
+    try c.encode(target, forKey: .target)
+    // Required on the wire: null before the first pass.
+    try c.encode(lastSyncedAt, forKey: .lastSyncedAt)
+    try c.encode(pendingChanges, forKey: .pendingChanges)
+    try c.encode(conflicts, forKey: .conflicts)
+    try c.encodeIfPresent(lastError, forKey: .lastError)
+    try c.encodeIfPresent(remoteHost, forKey: .remoteHost)
+    try c.encodeIfPresent(deviceName, forKey: .deviceName)
   }
 }
 

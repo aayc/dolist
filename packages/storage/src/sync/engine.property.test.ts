@@ -1,6 +1,6 @@
 import { fc, test } from "@fast-check/vitest";
-import { describe, expect, it } from "vitest";
-import { isMergeablePath } from "../file-types";
+import { describe, expect, it, vi } from "vitest";
+import { isBinaryPath, isMergeablePath } from "../file-types";
 import { MemoryStorageProvider } from "../memory";
 import type { StorageProvider, SyncReport } from "../types";
 import { mergeText } from "./diff3";
@@ -225,6 +225,80 @@ describe("SyncEngine (memory ↔ memory) under divergent edits", () => {
         expect(await snapshotOf(primary)).toEqual(after);
         expect(engine.status()).toMatchObject({ state: "idle", pendingChanges: 0 });
         base = after;
+      }
+    },
+  );
+});
+
+describe("SyncEngine reacting to the target's change reports", () => {
+  const TARGET_DEBOUNCE_MS = 100;
+  const reportArb = fc.record({
+    /** Written through the target provider (its own change) rather than by someone else. */
+    self: fc.boolean(),
+    path: fc.constantFrom(
+      "a.md",
+      "Daily/2026-09-24.md",
+      ".daily-do-list/threads/t.json",
+      `${SYNC_STATE_DIR}/other-device.json`,
+      "photo.png",
+      "Notes/a.md~",
+    ),
+    content: fc.constantFrom("one", "two\n", "- [ ] three\n"),
+    /** Reported together with the next one, within the quiet period. */
+    burst: fc.boolean(),
+  });
+
+  test.prop([fc.array(reportArb, { minLength: 1, maxLength: 12 })], { numRuns: RUNS })(
+    "runs once per quiet period with a foreign syncable change, never for its own or unsyncable ones",
+    async (reports) => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+      const primary = new MemoryStorageProvider({ id: "vault" });
+      const target = new MemoryStorageProvider({ id: "mirror" });
+      const engine = new SyncEngine({ primary, target, now: () => NOW });
+      let runs = 0;
+      engine.onStatus((status) => {
+        if (status.state === "syncing") runs++;
+      });
+      try {
+        engine.start({
+          debounceMs: 60_000,
+          intervalMs: 3_600_000,
+          targetDebounceMs: TARGET_DEBOUNCE_MS,
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(runs).toBe(1);
+
+        let expected = 1;
+        let pendingForeign = false;
+        for (const report of reports) {
+          if (report.self) await target.write(report.path, report.content);
+          else target.simulateExternalChange(report.path, report.content);
+          const syncable =
+            !report.path.startsWith(`${SYNC_STATE_DIR}/`) &&
+            !isBinaryPath(report.path) &&
+            !report.path.endsWith("~");
+          pendingForeign ||= !report.self && syncable;
+          if (report.burst) {
+            // Short enough that even 12 reports in a row stay within one quiet period.
+            await vi.advanceTimersByTimeAsync(TARGET_DEBOUNCE_MS / 16);
+            continue;
+          }
+          await vi.advanceTimersByTimeAsync(TARGET_DEBOUNCE_MS * 2);
+          if (pendingForeign) expected++;
+          pendingForeign = false;
+          expect(runs).toBe(expected);
+        }
+        await vi.advanceTimersByTimeAsync(TARGET_DEBOUNCE_MS * 2);
+        if (pendingForeign) expected++;
+        expect(runs).toBe(expected);
+
+        await engine.syncOnce();
+        const synced = async (provider: StorageProvider) =>
+          [...(await snapshotOf(provider))].filter(([path]) => !isBinaryPath(path));
+        expect(await synced(primary)).toEqual(await synced(target));
+      } finally {
+        await engine.stop();
+        vi.useRealTimers();
       }
     },
   );

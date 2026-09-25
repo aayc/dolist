@@ -1,0 +1,61 @@
+[
+  {
+    "name": "unknown state",
+    "value": {
+      "state": "paused",
+      "target": "remote",
+      "lastSyncedAt": null,
+      "pendingChanges": 0,
+      "conflicts": []
+    },
+    "path": ["state"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "string lastSyncedAt",
+    "value": {
+      "state": "idle",
+      "target": "local",
+      "lastSyncedAt": "yesterday",
+      "pendingChanges": 0,
+      "conflicts": []
+    },
+    "path": ["lastSyncedAt"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "missing conflicts",
+    "value": {
+      "state": "idle",
+      "target": "local",
+      "lastSyncedAt": null,
+      "pendingChanges": 0
+    },
+    "path": ["conflicts"],
+    "code": "invalid_type"
+  },
+  {
+    "name": "negative pendingChanges",
+    "value": {
+      "state": "idle",
+      "target": "none",
+      "lastSyncedAt": null,
+      "pendingChanges": -1,
+      "conflicts": []
+    },
+    "path": ["pendingChanges"],
+    "code": "too_small"
+  },
+  {
+    "name": "conflict copy outside the vault",
+    "value": {
+      "state": "idle",
+      "target": "remote",
+      "lastSyncedAt": null,
+      "pendingChanges": 0,
+      "conflicts": ["../outside.md"]
+    },
+    "path": ["conflicts", 0],
+    "code": "custom"
+  }
+]

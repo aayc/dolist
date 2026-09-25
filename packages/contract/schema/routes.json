@@ -917,6 +917,23 @@
         }
       }
     },
+    "syncStatus": {
+      "path": "/api/sync/status",
+      "auth": "bearer",
+      "methods": {
+        "GET": {
+          "summary": "The vault's sync state (and, with the sync service, this device's name).",
+          "responses": {
+            "200": {
+              "description": "Sync status.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/SyncStatusResponse"
+              }
+            }
+          }
+        }
+      }
+    },
     "ws": {
       "path": "/ws",
       "auth": "upgrade",

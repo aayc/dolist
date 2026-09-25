@@ -3,7 +3,7 @@ import { homedir as osHomedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExecutionConfig } from "@ddl/agent";
-import { type AgentMode, DEFAULT_MODEL, type LogLevel } from "@ddl/core";
+import { type AgentMode, DEFAULT_MODEL, type LogLevel, SYNC_ID_PATTERN } from "@ddl/core";
 import type { SyncTargetConfig } from "@ddl/storage";
 import { z } from "zod";
 import { loadEnvFiles } from "./env-file";
@@ -13,6 +13,19 @@ export const DEFAULT_PORT = 7331;
 export const CONFIG_FILE = "config.json";
 export const MCP_CONFIG_FILE = "mcp.json";
 export const TOKEN_FILE = "daemon-token";
+/** The sync service's vault token (mode 0600). Never in config.json, never in the vault. */
+export const SYNC_TOKEN_FILE = "sync-token";
+/** This device's id and name, created on first use. */
+export const DEVICE_FILE = "device.json";
+
+/** Where the vault syncs with the sync service; the token and device identity are loaded apart. */
+export interface RemoteSyncConfig {
+  kind: "remote";
+  url: string;
+  vault: string;
+}
+
+export type DaemonSyncConfig = Exclude<SyncTargetConfig, { kind: "remote" }> | RemoteSyncConfig;
 
 const DEFAULT_HOME = "~/.daily-do-list";
 const DEFAULT_VAULT = "~/DailyDoList";
@@ -29,7 +42,7 @@ export interface DaemonConfig {
   agentMode: AgentMode;
   /** Default model for the LLM client and for `agent.model` unless the vault's settings override it. */
   model: string;
-  sync: SyncTargetConfig;
+  sync: DaemonSyncConfig;
   execution: ExecutionConfig;
   /** Extra browser origins allowed to call the API and WebSocket (e.g. a native shell). */
   allowedOrigins: string[];
@@ -38,6 +51,8 @@ export interface DaemonConfig {
   configPath: string;
   mcpConfigPath: string;
   tokenPath: string;
+  syncTokenPath: string;
+  devicePath: string;
   /** Env files that were read (paths only, never values). */
   envFiles: string[];
 }
@@ -54,6 +69,30 @@ const LOG_LEVELS = ["debug", "info", "warn", "error"] as const satisfies readonl
 
 const PathSchema = z.string().trim().min(1);
 
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/** Tokens and notes must not cross a network in the clear: plain http only to this machine. */
+function isSafeSyncUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" || (url.protocol === "http:" && LOOPBACK_HOSTS.has(url.hostname))
+    );
+  } catch {
+    return false;
+  }
+}
+
+const RemoteSyncSchema = z.strictObject({
+  kind: z.literal("remote"),
+  url: z
+    .url({ protocol: /^https?$/ })
+    .refine(isSafeSyncUrl, "must use https (plain http is only allowed for localhost)"),
+  vault: z
+    .string()
+    .regex(SYNC_ID_PATTERN, "must be the vault id printed by `ddl-sync vault create`"),
+});
+
 const SyncSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("none") }),
   z.strictObject({ kind: z.literal("local"), root: PathSchema }),
@@ -66,6 +105,7 @@ const SyncSchema = z.discriminatedUnion("kind", [
     profile: z.string().optional(),
     forcePathStyle: z.boolean().optional(),
   }),
+  RemoteSyncSchema,
 ]);
 
 const ExecutionSchema = z.discriminatedUnion("kind", [
@@ -162,7 +202,7 @@ export function loadConfig(options: LoadConfigOptions = {}): DaemonConfig {
     agentMode:
       parseEnumEnv("DDL_AGENT_MODE", env.DDL_AGENT_MODE, AGENT_MODES) ?? file.agentMode ?? "live",
     model: nonEmpty(env.DDL_MODEL) ?? file.model ?? DEFAULT_MODEL,
-    sync: resolveSync(file.sync, fromHome),
+    sync: remoteSyncFromEnv(env) ?? resolveSync(file.sync, fromHome),
     execution: resolveExecution(file.execution, home, platform, fromHome),
     allowedOrigins: file.allowedOrigins ?? [],
     webDist: webDistEnv
@@ -175,6 +215,8 @@ export function loadConfig(options: LoadConfigOptions = {}): DaemonConfig {
     configPath,
     mcpConfigPath: join(home, MCP_CONFIG_FILE),
     tokenPath: join(home, TOKEN_FILE),
+    syncTokenPath: join(home, SYNC_TOKEN_FILE),
+    devicePath: join(home, DEVICE_FILE),
     envFiles,
   };
 }
@@ -191,7 +233,8 @@ export function summarizeConfig(
     port: config.port,
     agentMode: config.agentMode,
     model: config.model,
-    sync: config.sync.kind,
+    sync:
+      config.sync.kind === "remote" ? `remote (${safeHost(config.sync.url)})` : config.sync.kind,
     execution:
       execution.kind === "local"
         ? `local (browser ${execution.browser?.headless === false ? "headed" : "headless"}, computer use ${execution.computer?.enabled ? "on" : "off"})`
@@ -218,6 +261,11 @@ function readConfigFile(path: string, homedir: string): ConfigFile {
       `${displayPath(path, homedir)} is not valid JSON: ${errorMessage(error)}`,
     );
   }
+  if (isRecord(raw) && isRecord(raw.sync) && "token" in raw.sync) {
+    throw new ConfigError(
+      `The sync token doesn't belong in ${displayPath(path, homedir)}: remove it there and save it in ~/.daily-do-list/${SYNC_TOKEN_FILE} (chmod 600) or DDL_SYNC_TOKEN.`,
+    );
+  }
   const parsed = ConfigFileSchema.safeParse(raw);
   if (!parsed.success) {
     throw new ConfigError(
@@ -230,10 +278,29 @@ function readConfigFile(path: string, homedir: string): ConfigFile {
 function resolveSync(
   sync: ConfigFile["sync"],
   paths: { homedir: string; base: string },
-): SyncTargetConfig {
+): DaemonSyncConfig {
   if (!sync) return { kind: "none" };
   if (sync.kind === "local") return { kind: "local", root: resolveUserPath(sync.root, paths) };
   return sync;
+}
+
+/** `DDL_SYNC_URL` + `DDL_SYNC_VAULT` (both or neither) point the vault at a sync server. */
+function remoteSyncFromEnv(env: Record<string, string | undefined>): RemoteSyncConfig | undefined {
+  const url = nonEmpty(env.DDL_SYNC_URL);
+  const vault = nonEmpty(env.DDL_SYNC_VAULT);
+  if (url === undefined && vault === undefined) return undefined;
+  if (url === undefined || vault === undefined) {
+    throw new ConfigError("Set both DDL_SYNC_URL and DDL_SYNC_VAULT (or neither)");
+  }
+  const parsed = RemoteSyncSchema.safeParse({ kind: "remote", url, vault });
+  if (!parsed.success) {
+    throw new ConfigError(`Invalid DDL_SYNC_URL/DDL_SYNC_VAULT:\n${z.prettifyError(parsed.error)}`);
+  }
+  return parsed.data;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function resolveExecution(

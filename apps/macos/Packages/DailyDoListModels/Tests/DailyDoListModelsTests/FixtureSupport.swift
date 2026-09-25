@@ -49,6 +49,7 @@ enum Fixtures {
     "RenameRequest": RenameRequest.self,
     "ServerEvent": ServerEvent.self,
     "SetAgentEnabledRequest": SetAgentEnabledRequest.self,
+    "SyncStatusResponse": SyncStatusResponse.self,
     "TaskAgentRecord": TaskAgentRecord.self,
     "ThreadActionResponse": ThreadActionResponse.self,
     "ThreadResponse": ThreadResponse.self,

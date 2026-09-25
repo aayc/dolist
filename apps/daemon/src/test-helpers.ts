@@ -15,6 +15,7 @@ import {
   Emitter,
   type Logger,
   type SurfaceKind,
+  type SyncStatusResponse,
   silentLogger,
   summarizeThread,
   type TaskAgentRecord,
@@ -252,6 +253,7 @@ export interface TestAppOptions<S extends StorageProvider = MemoryStorageProvide
   settings?: SettingsStore;
   webDist?: string | null;
   allowedOrigins?: string[];
+  syncStatus?: () => SyncStatusResponse;
   now?: () => Date;
   logger?: Logger;
 }
@@ -287,6 +289,7 @@ export async function createTestApp<S extends StorageProvider = MemoryStoragePro
     logger: options.logger ?? silentLogger,
     webDist: options.webDist ?? null,
     writes,
+    ...(options.syncStatus ? { syncStatus: options.syncStatus } : {}),
     ...(options.now ? { now: options.now } : {}),
   });
 

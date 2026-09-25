@@ -16,5 +16,8 @@
   },
   "dependencies": {
     "@ddl/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@ddl/sync": "workspace:*"
   }
 }

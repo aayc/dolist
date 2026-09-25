@@ -14,6 +14,7 @@ export * from "./merge";
 export * from "./paths";
 export * from "./protocol";
 export * from "./settings";
+export * from "./sync-service";
 export * from "./template";
 export * from "./text";
 export * from "./tools";

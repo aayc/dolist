@@ -73,6 +73,9 @@ export const WIRE_SCHEMAS = {
   ApprovalResponse: rest.ApprovalResponseSchema,
   ApprovalDecisionRequest: rest.ApprovalDecisionRequestSchema,
   ConnectorsResponse: rest.ConnectorsResponseSchema,
+  SyncState: rest.SyncStateSchema,
+  SyncTargetKind: rest.SyncTargetKindSchema,
+  SyncStatusResponse: rest.SyncStatusResponseSchema,
   // Errors
   ApiErrorCode: errors.ApiErrorCodeSchema,
   ApiErrorBody: errors.ApiErrorBodySchema,

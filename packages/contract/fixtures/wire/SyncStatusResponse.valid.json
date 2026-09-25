@@ -1,0 +1,47 @@
+[
+  {
+    "name": "no sync target",
+    "value": {
+      "state": "disabled",
+      "target": "none",
+      "lastSyncedAt": null,
+      "pendingChanges": 0,
+      "conflicts": []
+    }
+  },
+  {
+    "name": "a local folder, first pass running",
+    "value": {
+      "state": "syncing",
+      "target": "local",
+      "lastSyncedAt": null,
+      "pendingChanges": 1,
+      "conflicts": []
+    }
+  },
+  {
+    "name": "the sync service, in sync",
+    "value": {
+      "state": "idle",
+      "target": "remote",
+      "lastSyncedAt": 1790213400000,
+      "pendingChanges": 0,
+      "conflicts": [],
+      "remoteHost": "sync.example.com",
+      "deviceName": "Studio Mac"
+    }
+  },
+  {
+    "name": "the sync service unreachable, with a conflict copy to resolve",
+    "value": {
+      "state": "error",
+      "target": "remote",
+      "lastSyncedAt": 1790213400000,
+      "pendingChanges": 3,
+      "conflicts": ["Daily/2026-09-24 (conflict 2026-09-24 0915).md"],
+      "lastError": "Could not reach the sync server at sync.example.com:8443: timed out",
+      "remoteHost": "sync.example.com:8443",
+      "deviceName": "Laptop"
+    }
+  }
+]

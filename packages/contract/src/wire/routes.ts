@@ -30,6 +30,7 @@ import {
   SetAgentEnabledRequestSchema,
   SetAgentEnabledResponseSchema,
   SettingsResponseSchema,
+  SyncStatusResponseSchema,
   TaskRecordsResponseSchema,
   ThreadActionResponseSchema,
   ThreadListResponseSchema,
@@ -487,6 +488,16 @@ export const API_CONTRACT = {
       GET: {
         summary: "MCP connector states.",
         responses: { 200: json(ConnectorsResponseSchema, "Connectors.") },
+      },
+    },
+  },
+  syncStatus: {
+    path: "/api/sync/status",
+    auth: "bearer",
+    methods: {
+      GET: {
+        summary: "The vault's sync state (and, with the sync service, this device's name).",
+        responses: { 200: json(SyncStatusResponseSchema, "Sync status.") },
       },
     },
   },

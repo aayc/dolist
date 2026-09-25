@@ -40,9 +40,15 @@ vaults/
 .vault/
 browser-profile/
 workspaces/
+sync-token
 *.sqlite
 *.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
 
 # ── Shell / editor / OS noise ───────────────────────────────
 .bash_history

@@ -33,6 +33,8 @@ const FORBIDDEN_FILES = [
   { re: /(^|\/)(credentials|service-account)[^/]*\.json$/i, why: "cloud credentials" },
   { re: /(^|\/)\.daily-do-list\//, why: "local agent state (threads, approvals, workspaces)" },
   { re: /(^|\/)daemon-token$/, why: "local daemon bearer token" },
+  { re: /(^|\/)sync-token$/, why: "sync service vault token" },
+  { re: /\.(sqlite3?|db)(-wal|-shm|-journal)?$/i, why: "database (may hold vault contents)" },
   { re: /(^|\/)(auth|secrets?)\.json$/i, why: "auth/secrets file" },
 ];
 

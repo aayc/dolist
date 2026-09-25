@@ -2,7 +2,7 @@ import { basename, dirname, extname, formatDate, isHiddenPath } from "@ddl/core"
 import { fc, test } from "@fast-check/vitest";
 import { describe, expect, it } from "vitest";
 import type { FileEntry } from "../types";
-import { conflictCopyPath } from "./conflict-path";
+import { conflictCopyPath, isConflictCopyPath } from "./conflict-path";
 import { decideSync, type SyncDecision } from "./decide";
 import {
   emptySnapshot,
@@ -176,5 +176,23 @@ describe("conflictCopyPath", () => {
   test.prop([pathArb, dateArb])("different attempts never collide", (path, at) => {
     const names = Array.from({ length: 50 }, (_, i) => conflictCopyPath(path, at, i + 1));
     expect(new Set(names).size).toBe(50);
+  });
+
+  test.prop([pathArb, dateArb, fc.integer({ min: 1, max: 60 })])(
+    "copies are recognizable by name, on any device",
+    (path, at, attempt) => {
+      expect(isConflictCopyPath(conflictCopyPath(path, at, attempt))).toBe(true);
+      expect(isConflictCopyPath(path)).toBe(false);
+    },
+  );
+
+  it("doesn't mistake ordinary names for copies", () => {
+    for (const path of [
+      "notes (conflicted).md",
+      "Meeting (conflict).md",
+      "conflict 2026-09-23 1830.md",
+    ]) {
+      expect(isConflictCopyPath(path)).toBe(false);
+    }
   });
 });

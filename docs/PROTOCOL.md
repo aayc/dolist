@@ -114,6 +114,7 @@ API version: **1**. Machine-readable: `packages/contract/schema/wire.schema.json
 | `approval` | POST | `/api/approvals/:id` | [`ApprovalDecisionRequest`](#approvaldecisionrequest) | 200 [`ApprovalResponse`](#approvalresponse) |
 | `artifact` | GET | `/api/artifacts/:threadId/:artifactId` | — | 200 bytes |
 | `connectors` | GET | `/api/connectors` | — | 200 [`ConnectorsResponse`](#connectorsresponse) |
+| `syncStatus` | GET | `/api/sync/status` | — | 200 [`SyncStatusResponse`](#syncstatusresponse) |
 | `ws` | GET | `/ws` | — | — |
 
 Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`, `forbidden_origin`), 500 (`internal_error`). Methods a route doesn't list answer 404 `not_found`.
@@ -385,6 +386,13 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
 
 - Responses:
   - `200` [`ConnectorsResponse`](#connectorsresponse) — Connectors.
+
+#### `syncStatus` — `/api/sync/status`
+
+**GET** — The vault's sync state (and, with the sync service, this device's name).
+
+- Responses:
+  - `200` [`SyncStatusResponse`](#syncstatusresponse) — Sync status.
 
 #### `ws` — `/ws`
 
@@ -1192,6 +1200,35 @@ Every configured MCP connector.
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `connectors` | [`ConnectorStatus`](#connectorstatus)[] | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### SyncState
+
+`idle`, `syncing`, `error` (see `lastError`) or `disabled` (no sync target).
+
+Type: `"idle"` | `"syncing"` | `"error"` | `"disabled"`
+
+#### SyncTargetKind
+
+`none`, `local` (another folder), `s3`, or `remote` (the sync service shared with other devices).
+
+Type: `"none"` | `"local"` | `"s3"` | `"remote"`
+
+#### SyncStatusResponse
+
+The vault's sync state.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `state` | [`SyncState`](#syncstate) | yes |  |
+| `target` | [`SyncTargetKind`](#synctargetkind) | yes |  |
+| `lastSyncedAt` | integer (≥ 0) \| `null` | yes | When the last pass finished; null before it. |
+| `pendingChanges` | integer (≥ 0) | yes | Files changed on either side and not synced yet. |
+| `conflicts` | string (1–4096 chars)[] | yes | Conflict copies waiting to be resolved. |
+| `lastError` | string | no |  |
+| `remoteHost` | string (1–300 chars) | no | The sync server (`remote` only). |
+| `deviceName` | string (1–100 chars) | no | This device's name as other devices see it (`remote` only). |
 
 _Tolerant: clients must ignore keys they don't know._
 

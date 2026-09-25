@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DEFAULT_MODEL } from "@ddl/core";
@@ -143,6 +144,60 @@ describe("loadConfig", () => {
       }),
     );
     expect(() => load()).toThrow(/NAME of an environment variable/);
+  });
+
+  it("reads a sync service target from config.json or DDL_SYNC_URL + DDL_SYNC_VAULT", () => {
+    mkdirSync(ddlHome, { recursive: true });
+    const file = join(ddlHome, "config.json");
+    writeFileSync(
+      file,
+      JSON.stringify({ sync: { kind: "remote", url: "https://sync.example.com", vault: "v_abc" } }),
+    );
+    const fromFile = load();
+    expect(fromFile.sync).toEqual({
+      kind: "remote",
+      url: "https://sync.example.com",
+      vault: "v_abc",
+    });
+    expect(fromFile).toMatchObject({
+      syncTokenPath: join(ddlHome, "sync-token"),
+      devicePath: join(ddlHome, "device.json"),
+    });
+    expect(summarizeConfig(fromFile, homedir).sync).toBe("remote (sync.example.com)");
+
+    const fromEnv = load({ DDL_SYNC_URL: "http://127.0.0.1:7332", DDL_SYNC_VAULT: "v_env" });
+    expect(fromEnv.sync).toEqual({ kind: "remote", url: "http://127.0.0.1:7332", vault: "v_env" });
+    expect(() => load({ DDL_SYNC_URL: "https://sync.example.com" })).toThrow(
+      /DDL_SYNC_URL and DDL_SYNC_VAULT/,
+    );
+    expect(() => load({ DDL_SYNC_URL: "http://sync.example.com", DDL_SYNC_VAULT: "v" })).toThrow(
+      /must use https/,
+    );
+    expect(() => load({ DDL_SYNC_URL: "ftp://sync.example.com", DDL_SYNC_VAULT: "v" })).toThrow(
+      ConfigError,
+    );
+    expect(() => load({ DDL_SYNC_URL: "https://sync.example.com", DDL_SYNC_VAULT: "a b" })).toThrow(
+      /vault id/,
+    );
+  });
+
+  it("refuses a sync token in config.json without repeating it", () => {
+    mkdirSync(ddlHome, { recursive: true });
+    const token = randomBytes(32).toString("base64url");
+    writeFileSync(
+      join(ddlHome, "config.json"),
+      JSON.stringify({
+        sync: { kind: "remote", url: "https://sync.example.com", vault: "v", token },
+      }),
+    );
+    let message = "";
+    try {
+      load();
+    } catch (error) {
+      message = String(error);
+    }
+    expect(message).toMatch(/doesn't belong in .*config\.json.*sync-token/);
+    expect(message).not.toContain(token);
   });
 
   it("summarizes without secrets or the username", () => {

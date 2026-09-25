@@ -110,6 +110,37 @@ importers:
         specifier: 'catalog:'
         version: 4.6.5
     devDependencies:
+      '@ddl/sync':
+        specifier: workspace:*
+        version: link:../sync
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+
+  apps/sync:
+    dependencies:
+      '@ddl/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@hono/node-server':
+        specifier: ^2.1.1
+        version: 2.1.1(hono@4.13.8)
+      hono:
+        specifier: ^4.13.8
+        version: 4.13.8
+      ws:
+        specifier: ^8.21.3
+        version: 8.21.3
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.5
+    devDependencies:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
@@ -308,6 +339,10 @@ importers:
       '@ddl/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      '@ddl/sync':
+        specifier: workspace:*
+        version: link:../../apps/sync
 
 packages:
 

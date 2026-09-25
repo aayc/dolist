@@ -1,6 +1,6 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LocalFsStorageProvider } from "../local-fs";
 import { MemoryStorageProvider } from "../memory";
@@ -17,17 +17,26 @@ import { SYNC_STATE_DIR, snapshotPath } from "./snapshot";
 interface Pair {
   primary: StorageProvider;
   target: StorageProvider;
+  /** Changes a file in the target the way another app (or device) would. */
+  externalTargetWrite(path: string, content: string): Promise<void>;
+  /** Resolves once the target reports external changes (after the engine started watching). */
+  targetWatchReady(): Promise<void>;
   cleanup(): Promise<void>;
 }
 
 const PAIRS: Array<[string, () => Promise<Pair>]> = [
   [
     "memory ↔ memory",
-    async () => ({
-      primary: new MemoryStorageProvider({ id: "vault" }),
-      target: new MemoryStorageProvider({ id: "mirror" }),
-      cleanup: async () => {},
-    }),
+    async () => {
+      const target = new MemoryStorageProvider({ id: "mirror" });
+      return {
+        primary: new MemoryStorageProvider({ id: "vault" }),
+        target,
+        externalTargetWrite: async (path, content) => target.simulateExternalChange(path, content),
+        targetWatchReady: async () => {},
+        cleanup: async () => {},
+      };
+    },
   ],
   [
     "local ↔ local",
@@ -38,6 +47,12 @@ const PAIRS: Array<[string, () => Promise<Pair>]> = [
       return {
         primary,
         target,
+        externalTargetWrite: async (path, content) => {
+          const file = join(dir, "mirror", path);
+          await mkdir(dirname(file), { recursive: true });
+          await writeFile(file, content);
+        },
+        targetWatchReady: () => target.whenWatchReady(),
         cleanup: async () => {
           await primary.dispose();
           await target.dispose();
@@ -182,6 +197,19 @@ describe.each(PAIRS)("SyncEngine (%s)", (_name, makePair) => {
     // Resolving (deleting the copy) propagates and clears the status.
     await primary.delete(conflictPath);
     expect(await engine.syncOnce()).toMatchObject({ deletedRemote: [conflictPath] });
+    expect(engine.status().conflicts).toEqual([]);
+  });
+
+  it("reports conflict copies another device made until they are resolved", async () => {
+    await seed(target, {
+      "note (conflict 2026-09-22 0915).md": "their copy",
+      "notes (conflicted).md": "just a name",
+    });
+    await engine.syncOnce();
+    expect(engine.status().conflicts).toEqual(["note (conflict 2026-09-22 0915).md"]);
+
+    await primary.delete("note (conflict 2026-09-22 0915).md");
+    await engine.syncOnce();
     expect(engine.status().conflicts).toEqual([]);
   });
 
@@ -458,7 +486,65 @@ describe.each(PAIRS)("SyncEngine (%s)", (_name, makePair) => {
     expect(await target.read("after-stop.md")).toBeNull();
   });
 
+  it("syncs changes the target reports from elsewhere without waiting for the interval", async () => {
+    engine.start({ debounceMs: 60_000, intervalMs: 60_000, targetDebounceMs: 30 });
+    await vi.waitFor(() => expect(engine.status().lastSyncedAt).not.toBeNull(), { timeout: 5_000 });
+    await pair.targetWatchReady();
+
+    await pair.externalTargetWrite("Daily/from-elsewhere.md", "- [ ] made on another device");
+    await vi.waitFor(
+      async () =>
+        expect((await primary.read("Daily/from-elsewhere.md"))?.content).toBe(
+          "- [ ] made on another device",
+        ),
+      { timeout: 5_000, interval: 20 },
+    );
+  });
+
+  it("does not run for the target's own writes or for changes it never syncs", async () => {
+    let runs = 0;
+    engine.onStatus((status) => {
+      if (status.state === "syncing") runs++;
+    });
+    engine.start({ debounceMs: 60_000, intervalMs: 60_000, targetDebounceMs: 20 });
+    await vi.waitFor(() => expect(engine.status().lastSyncedAt).not.toBeNull(), { timeout: 5_000 });
+    await pair.targetWatchReady();
+    const runsAfterStart = runs;
+
+    await target.write("written-through-the-provider.md", "self");
+    await pair.externalTargetWrite(`${SYNC_STATE_DIR}/elsewhere.json`, "{}");
+    await pair.externalTargetWrite("photo.png", "not synced");
+    await sleep(300);
+    expect(runs).toBe(runsAfterStart);
+    expect(await primary.read("written-through-the-provider.md")).toBeNull();
+  });
+
   it("refuses to sync a storage with itself", () => {
     expect(() => new SyncEngine({ primary, target: primary })).toThrow(StorageError);
+  });
+});
+
+describe("SyncEngine with a target that can't be watched", () => {
+  it("keeps syncing on the interval", async () => {
+    const primary = new MemoryStorageProvider({ id: "vault" });
+    const inner = new MemoryStorageProvider({ id: "mirror" });
+    const target = new Proxy(inner, {
+      get(obj, prop, receiver) {
+        if (prop === "capabilities") return { ...obj.capabilities, watch: false };
+        if (prop === "watch") return () => expect.unreachable("an unwatchable target was watched");
+        const value = Reflect.get(obj, prop, receiver);
+        return typeof value === "function" ? value.bind(obj) : value;
+      },
+    });
+    const engine = new SyncEngine({ primary, target, now: () => NOW });
+    engine.start({ debounceMs: 60_000, intervalMs: 50 });
+    try {
+      inner.simulateExternalChange("a.md", "polled");
+      await vi.waitFor(async () => expect((await primary.read("a.md"))?.content).toBe("polled"), {
+        timeout: 5_000,
+      });
+    } finally {
+      await engine.stop();
+    }
   });
 });

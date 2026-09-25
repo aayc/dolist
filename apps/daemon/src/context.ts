@@ -1,6 +1,6 @@
 import type { AgentRuntime } from "@ddl/agent";
 import type { ConnectorToolSource } from "@ddl/connectors";
-import type { Logger } from "@ddl/core";
+import type { Logger, SyncStatusResponse } from "@ddl/core";
 import type { StorageProvider } from "@ddl/storage";
 import type { VaultSearch } from "./search";
 import type { SecurityPolicy } from "./security";
@@ -20,6 +20,7 @@ export interface AppContext {
   connectors: Pick<ConnectorToolSource, "status"> | undefined;
   writes: WriteTracker;
   search: VaultSearch;
+  syncStatus: () => SyncStatusResponse;
   now: () => Date;
   version: string;
 }

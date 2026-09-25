@@ -14,3 +14,10 @@ export function conflictCopyPath(path: string, at: Date, attempt = 1): string {
   const file = `${stemName} (conflict ${formatDate(at, "YYYY-MM-DD HHmm")}${counter})${ext}`;
   return folder ? `${folder}/${file}` : file;
 }
+
+const CONFLICT_COPY_NAME = / \(conflict \d{4}-\d{2}-\d{2} \d{4}(?: \d+)?\)(?:\.[^./]*)?$/;
+
+/** True for names `conflictCopyPath` produces (on this device or another one). */
+export function isConflictCopyPath(path: string): boolean {
+  return CONFLICT_COPY_NAME.test(basename(path));
+}

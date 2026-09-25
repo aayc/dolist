@@ -8,6 +8,8 @@ export {
 export * from "./local-fs";
 export * from "./memory";
 export * from "./registry";
+export * from "./remote";
+export * from "./remote-client";
 export * from "./s3";
 export * from "./search";
 export * from "./sync";

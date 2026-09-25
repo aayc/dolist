@@ -290,3 +290,37 @@ export const ConnectorsResponseSchema = named(
   "Every configured MCP connector.",
   z.looseObject({ connectors: z.array(ConnectorStatusSchema) }),
 );
+
+// ── Sync ──────────────────────────────────────────────────────────────────
+
+export const SyncStateSchema = named(
+  "SyncState",
+  "`idle`, `syncing`, `error` (see `lastError`) or `disabled` (no sync target).",
+  z.enum(["idle", "syncing", "error", "disabled"]),
+);
+
+export const SyncTargetKindSchema = named(
+  "SyncTargetKind",
+  "`none`, `local` (another folder), `s3`, or `remote` (the sync service shared with other devices).",
+  z.enum(["none", "local", "s3", "remote"]),
+);
+
+export const SyncStatusResponseSchema = named(
+  "SyncStatusResponse",
+  "The vault's sync state.",
+  z.looseObject({
+    state: SyncStateSchema,
+    target: SyncTargetKindSchema,
+    lastSyncedAt: EpochMsSchema.nullable().describe("When the last pass finished; null before it."),
+    pendingChanges: CountSchema.describe("Files changed on either side and not synced yet."),
+    conflicts: z.array(VaultPathSchema).describe("Conflict copies waiting to be resolved."),
+    lastError: z.string().optional(),
+    remoteHost: z.string().min(1).max(300).optional().describe("The sync server (`remote` only)."),
+    deviceName: z
+      .string()
+      .min(1)
+      .max(100)
+      .optional()
+      .describe("This device's name as other devices see it (`remote` only)."),
+  }),
+);

@@ -92,6 +92,8 @@ export const API_ROUTES = {
     `/api/artifacts/${encodeURIComponent(threadId)}/${encodeURIComponent(artifactId)}`,
   /** GET → ConnectorsResponse */
   connectors: "/api/connectors",
+  /** GET → SyncStatusResponse */
+  syncStatus: "/api/sync/status",
   /** WebSocket: ServerEvent ⇄ ClientEvent */
   ws: "/ws",
 } as const;
@@ -287,6 +289,29 @@ export interface ApprovalDecisionRequest {
   decision: ApprovalDecision;
   scope?: ApprovalScope;
   note?: string;
+}
+
+/** `disabled` = no sync target configured. */
+export type SyncState = "idle" | "syncing" | "error" | "disabled";
+
+/** Where the vault syncs: nowhere, another folder, S3, or the sync service (other devices). */
+export type SyncTargetKind = "none" | "local" | "s3" | "remote";
+
+export interface SyncStatusResponse {
+  state: SyncState;
+  target: SyncTargetKind;
+  /** When the last pass finished (epoch ms), or null before the first one. */
+  lastSyncedAt: number | null;
+  /** Files changed on either side and not synced yet (retried ones included). */
+  pendingChanges: number;
+  /** Conflict copies (vault paths) waiting for the user to resolve them. */
+  conflicts: string[];
+  /** Why the last pass failed, or which files it couldn't sync. */
+  lastError?: string;
+  /** `host[:port]` of the sync server (`remote` only). */
+  remoteHost?: string;
+  /** This device's name as other devices see it (`remote` only). */
+  deviceName?: string;
 }
 
 // ── Errors ────────────────────────────────────────────────────────────────

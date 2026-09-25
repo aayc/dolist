@@ -422,6 +422,34 @@ const scenarios: Record<string, Scenario> = {
     expect((await api.call("connectors", "GET")).body).toEqual({ connectors: [] });
   },
 
+  "GET syncStatus": async (observed) => {
+    const off = await setup(observed);
+    expect((await off.api.call("syncStatus", "GET")).body).toEqual({
+      state: "disabled",
+      target: "none",
+      lastSyncedAt: null,
+      pendingChanges: 0,
+      conflicts: [],
+    });
+    const remote = await setup(observed, {
+      syncStatus: () => ({
+        state: "error",
+        target: "remote",
+        lastSyncedAt: 1_790_213_400_000,
+        pendingChanges: 2,
+        conflicts: ["Daily/2026-09-24 (conflict 2026-09-24 0915).md"],
+        lastError: "Could not reach the sync server at sync.example.com: timed out",
+        remoteHost: "sync.example.com",
+        deviceName: "Laptop",
+      }),
+    });
+    expect((await remote.api.call("syncStatus", "GET")).body).toMatchObject({
+      target: "remote",
+      remoteHost: "sync.example.com",
+      deviceName: "Laptop",
+    });
+  },
+
   "GET ws": async (observed) => {
     const { api } = await setup(observed);
     expect((await api.call("ws", "GET")).status).toBe(426);

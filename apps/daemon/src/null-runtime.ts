@@ -13,6 +13,8 @@ import {
 } from "@ddl/core";
 
 export interface NullAgentRuntimeOptions {
+  /** What `status().mode` reports. Default `off`. */
+  mode?: AgentMode;
   model?: string;
   enabled?: boolean;
   /** Why agents are unavailable; surfaced as `AgentStatusResponse.problem`. */
@@ -32,17 +34,22 @@ export class AgentUnavailableError extends Error {
  * be created: no tasks, threads or approvals, and it never emits events. Notes keep working.
  */
 export class NullAgentRuntime implements AgentRuntime {
-  readonly mode: AgentMode = "off";
+  readonly mode: AgentMode;
   private enabled: boolean;
   private model: string;
-  private readonly problem: string | undefined;
+  private problem: string | undefined;
   private readonly connectors: Pick<ConnectorToolSource, "status"> | undefined;
 
   constructor(options: NullAgentRuntimeOptions = {}) {
+    this.mode = options.mode ?? "off";
     this.enabled = options.enabled ?? true;
     this.model = options.model ?? DEFAULT_MODEL;
     this.problem = options.problem;
     this.connectors = options.connectors;
+  }
+
+  setProblem(problem: string | undefined): void {
+    this.problem = problem;
   }
 
   async start(): Promise<void> {}
@@ -98,19 +105,19 @@ export class NullAgentRuntime implements AgentRuntime {
   }
 
   async postUserMessage(): Promise<void> {
-    throw new AgentUnavailableError();
+    throw this.unavailable();
   }
 
   async decideApproval(): Promise<ApprovalRequest> {
-    throw new AgentUnavailableError();
+    throw this.unavailable();
   }
 
   async cancelThread(): Promise<void> {
-    throw new AgentUnavailableError();
+    throw this.unavailable();
   }
 
   async retryThread(): Promise<void> {
-    throw new AgentUnavailableError();
+    throw this.unavailable();
   }
 
   markThreadRead(): void {}
@@ -121,5 +128,9 @@ export class NullAgentRuntime implements AgentRuntime {
 
   on(): Unsubscribe {
     return () => {};
+  }
+
+  private unavailable(): AgentUnavailableError {
+    return this.problem ? new AgentUnavailableError(this.problem) : new AgentUnavailableError();
   }
 }

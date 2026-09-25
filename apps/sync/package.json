@@ -1,0 +1,29 @@
+{
+  "name": "@ddl/sync",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sync service: a per-vault change log in SQLite behind an HTTP API with live WebSocket push, so several devices can share one vault. Also the agent lease.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/main.ts",
+    "build": "node build.mjs",
+    "start": "node dist/main.js serve",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@ddl/core": "workspace:*",
+    "@hono/node-server": "^2.1.1",
+    "hono": "^4.13.8",
+    "ws": "^8.21.3",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15"
+  }
+}

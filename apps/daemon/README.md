@@ -34,6 +34,8 @@ Precedence: environment variable → `$DDL_HOME/config.json` → default.
 | `DDL_WEB_DIST` | `apps/web/dist` | Built web UI to serve. |
 | `DDL_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. |
 | `OPENROUTER_API_KEY` | — | Required for `live` agents. Without it the agent reports a problem; notes keep working. |
+| `DDL_SYNC_URL`, `DDL_SYNC_VAULT` | — | Sync with the sync service (both, or neither; they override `sync` in `config.json`). |
+| `DDL_SYNC_TOKEN` | — | The sync service's vault token (else `$DDL_HOME/sync-token`). Never logged. |
 
 Env files fill in variables that are not already set, in this order: `$DDL_HOME/.env` (preferred:
 it lives outside the repo), then `.env.local` in the working directory, then `.env.local` at the root
@@ -47,6 +49,8 @@ of this repository. Values are never logged.
 | `config.json` | Optional daemon config (below). Unknown keys are rejected so typos surface. |
 | `mcp.json` | MCP connectors in the `mcpServers` format (see `packages/connectors`). |
 | `.env` | Secrets such as `OPENROUTER_API_KEY`. |
+| `sync-token` | The sync service's vault token (one line; tightened to `0600` when looser). |
+| `device.json` | `{ "id", "name" }` of this device for the sync service, created on first use (the name comes from the host name; edit it freely, never copy the file to another machine). |
 | `workspaces/`, browser profile | Agent scratch space, managed by the execution provider. |
 
 `config.json` (all keys optional; relative paths resolve against `$DDL_HOME`, `~` is expanded):
@@ -69,8 +73,13 @@ of this repository. Values are never logged.
 }
 ```
 
-- `sync`: `{ "kind": "none" }`, `{ "kind": "local", "root": "~/Library/Mobile Documents/…" }` or
-  `{ "kind": "s3", "bucket": "…", "prefix": "…", "region": "…" }`.
+- `sync`: `{ "kind": "none" }`, `{ "kind": "local", "root": "~/Library/Mobile Documents/…" }`,
+  `{ "kind": "s3", "bucket": "…", "prefix": "…", "region": "…" }` (stub) or
+  `{ "kind": "remote", "url": "https://sync.example.com", "vault": "<vault id>" }` for the sync
+  service ([docs/SYNC.md](../../docs/SYNC.md)); `url` must be `https` unless it is this machine.
+  The token goes in `sync-token`, never here. With `remote` sync and an agent mode other than `off`,
+  the agent runs only while this device holds the vault's agent lease (`src/agent-lease.ts`,
+  `src/leased-runtime.ts`); otherwise its status says which device runs it.
 - `execution`: `local` (browser headless by default; computer use defaults to on for macOS only) or
   `{ "kind": "cloud", "endpoint": "https://…", "apiKeyEnv": "NAME_OF_ENV_VAR" }`.
 - `allowedOrigins`: extra exact origins (`scheme://host[:port]`) for other clients, for example a
@@ -152,6 +161,7 @@ All paths come from `API_ROUTES` in `@ddl/core` (`packages/core/src/protocol.ts`
 | POST | `/api/approvals/<id>` | `ApprovalDecisionRequest` → `{ approval }` (404 unknown, 409 already decided with `approval`) |
 | GET | `/api/artifacts/<threadId>/<artifactId>[?download=1]` | → artifact bytes |
 | GET | `/api/connectors` | → `{ connectors: ConnectorStatus[] }` |
+| GET | `/api/sync/status` | → `SyncStatusResponse` (state, target, last sync, pending, conflicts; with the sync service also `remoteHost`, `deviceName`) |
 
 Notes:
 
@@ -209,6 +219,8 @@ must reconnect and resync.
 | `src/ws.ts`, `vault-events.ts`, `write-tracker.ts` | WebSocket hub and change attribution. |
 | `src/settings-store.ts`, `settings-schema.ts`, `obsidian-import.ts` | Vault-backed settings. |
 | `src/null-runtime.ts`, `null-execution.ts` | Fallbacks when agents are unavailable. |
+| `src/sync-setup.ts` | Sync service target: device identity, token, lease client. |
+| `src/agent-lease.ts`, `leased-runtime.ts` | The agent lease, and the runtime that exists only while holding it. |
 | `build.mjs` | esbuild bundle (workspace packages inlined, third-party dependencies external). |
 
 Tests are colocated (`*.test.ts`). They use in-memory vaults and temp directories and never touch the

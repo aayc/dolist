@@ -44,11 +44,13 @@ Product principles, in priority order:
 apps/
   web/            React 19 + Vite UI (the browser client)
   daemon/         Node 24 local server: REST + WebSocket API, vault owner, runs the agent runtime
+  sync/           Sync service: per-vault change log (SQLite) + HTTP API + live push; agent lease
   macos/          Native macOS app (SwiftUI/AppKit): app shell + Swift packages; supervises the daemon
   mobile/         (planned) native iOS app reusing the Swift packages — docs only for now
 packages/
   core/           Pure, isomorphic domain logic + wire protocol types (no dependencies!)
-  storage/        StorageProvider interface; local-fs, memory, s3 (stub); SyncEngine; search
+  storage/        StorageProvider interface; local-fs, memory, remote (sync service), s3 (stub);
+                  SyncEngine; search
   editor/         CodeMirror 6 markdown editor: live preview, tasks, vim, agent badges
   agent/          Agent runtime: watcher, orchestrator, subagents, harnesses (Pi │ Cursor CLI),
                   safety, approvals, execution providers (local/cloud), threads/artifacts, tools,
@@ -76,6 +78,7 @@ docs/             Architecture, agent system, performance, security model, cross
 | Pre-commit essentials | `pnpm check` (lint + typecheck + unit tests + secret scan) |
 | Build / bundle budget | `pnpm build && pnpm size:check` |
 | Build / run production | `pnpm build && pnpm start` → http://127.0.0.1:7331 |
+| Sync server (self-hosted) | `pnpm --filter @ddl/sync build`, then `node apps/sync/dist/main.js vault create --name … --db <file>` and `… serve --db <file>` (see `docs/SYNC.md`) |
 | Smoke-test the real model | `pnpm --filter @ddl/agent exec tsx scripts/smoke-pi.ts` (also `smoke-llm.ts`) |
 | Smoke-test the Cursor CLI harness | `pnpm --filter @ddl/agent exec tsx scripts/smoke-cursor.ts [--model=…]` (your CLI login, a little usage) |
 
@@ -87,7 +90,7 @@ Scope commands to the package you are working in while iterating. Before you fin
 ## Architecture in one screen
 
 ```
- Editor (web) ──REST/WS──▶ Daemon ──▶ StorageProvider (vault: local fs │ s3) ◀──▶ SyncEngine ──▶ sync target
+ Editor (web) ──REST/WS──▶ Daemon ──▶ StorageProvider (vault: local fs │ s3) ◀──▶ SyncEngine ──▶ sync target (folder │ sync service)
                               │
                               └──▶ AgentRuntime
                                      TaskWatcher  (storage events → parse → track identities → settle)
@@ -110,9 +113,10 @@ Key flows are documented in `docs/ARCHITECTURE.md` and `docs/AGENT_SYSTEM.md`.
 
 Docs index: `README.md` (product + quick start), `docs/ARCHITECTURE.md`, `docs/AGENT_SYSTEM.md`,
 `docs/USER_JOURNEYS.md` (the living-list journeys and their tests),
-`docs/PERFORMANCE.md`, `docs/CROSS_PLATFORM.md`, `docs/CI.md`, `SECURITY.md`, `CONTRIBUTING.md`,
-and package READMEs (`packages/storage`, `packages/connectors`, `packages/editor`,
-`packages/agent/src/safety`, `packages/agent/src/execution`, `apps/daemon`, `apps/macos`).
+`docs/PERFORMANCE.md`, `docs/CROSS_PLATFORM.md`, `docs/SYNC.md` (devices sharing a vault, the
+agent lease), `docs/CI.md`, `SECURITY.md`, `CONTRIBUTING.md`, and package READMEs
+(`packages/storage`, `packages/connectors`, `packages/editor`, `packages/agent/src/safety`,
+`packages/agent/src/execution`, `apps/daemon`, `apps/sync`, `apps/macos`).
 
 ## Invariants (do not break these)
 
@@ -248,6 +252,10 @@ and real-keyboard e2e tests in `apps/web/e2e/vim.spec.ts`.
   nicely in the thread UI if it's user-visible.
 - **Add a connector:** add an entry to `~/.daily-do-list/mcp.json` (`mcpServers` format, same as
   Claude Desktop/Cursor). See `packages/connectors/README.md`.
+- **Change the sync protocol:** edit `packages/core/src/sync-service.ts` (additive within
+  `SYNC_API_VERSION`), then the server (`apps/sync`) and `RemoteStorageProvider`
+  (`packages/storage/src/remote.ts`) in the same change, and update `docs/SYNC.md`. Tests start
+  the server in process (`createSyncServer({ db: ":memory:", port: 0 })`), never a real one.
 - **Add a setting:** extend `AppSettings` + `DEFAULT_SETTINGS` in `packages/core/src/settings.ts`,
   surface it in the settings UI, and handle it in `AgentRuntime.updateSettings` if agent-related.
 - **Add a control (web):** give it a tooltip with `data-tooltip` (never `title`), and if it runs a

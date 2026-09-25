@@ -116,6 +116,13 @@ struct InvalidFixtureTests {
       "missing": .rejected,
       "extra key": .tolerated(unknownKey),
     ],
+    "SyncStatusResponse": [
+      "unknown state": .tolerated(openEnum),
+      "string lastSyncedAt": .rejected,
+      "missing conflicts": .rejected,
+      "negative pendingChanges": .tolerated(constraint),
+      "conflict copy outside the vault": .tolerated(constraint),
+    ],
     "TaskAgentRecord": [
       "impossible date": .tolerated(constraint),
       "date in the wrong format": .tolerated(constraint),

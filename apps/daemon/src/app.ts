@@ -1,7 +1,7 @@
 import type { AgentRuntime } from "@ddl/agent";
 import type { ConnectorToolSource } from "@ddl/connectors";
 import { WIRE_LIMITS } from "@ddl/contract";
-import type { Logger } from "@ddl/core";
+import type { Logger, SyncStatusResponse } from "@ddl/core";
 import { type StorageProvider, searchVault } from "@ddl/storage";
 import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -14,6 +14,7 @@ import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerDailyRoutes } from "./routes/daily";
 import { registerNoteRoutes } from "./routes/notes";
 import { registerSettingsRoutes } from "./routes/settings";
+import { disabledSyncStatusResponse, registerSyncRoutes } from "./routes/sync";
 import { registerVaultRoutes } from "./routes/vault";
 import { registerWebRoutes } from "./routes/web";
 import type { VaultSearch } from "./search";
@@ -38,6 +39,8 @@ export interface AppDeps {
   /** Shared with the WebSocket hub so it can attribute changes to the client that made them. */
   writes?: WriteTracker;
   search?: VaultSearch;
+  /** The sync engine's status; absent = sync is off. */
+  syncStatus?: () => SyncStatusResponse;
   now?: () => Date;
   version?: string;
 }
@@ -58,6 +61,7 @@ export function createApp(deps: AppDeps): Hono {
     connectors: deps.connectors,
     writes: deps.writes ?? new WriteTracker(),
     search: deps.search ?? ((query, limit) => searchVault(deps.storage, query, { limit })),
+    syncStatus: deps.syncStatus ?? disabledSyncStatusResponse,
     now: deps.now ?? (() => new Date()),
     version: deps.version ?? DAEMON_VERSION,
   };
@@ -87,6 +91,7 @@ export function createApp(deps: AppDeps): Hono {
   registerSettingsRoutes(app, ctx);
   registerAgentRoutes(app, ctx);
   registerArtifactRoutes(app, ctx);
+  registerSyncRoutes(app, ctx);
   app.all("/api/*", (c) => c.json(errorBody("not_found", "Unknown API route"), 404));
   app.all("/ws", (c) => c.json(errorBody("upgrade_required", "Use a WebSocket upgrade"), 426));
   registerWebRoutes(app, ctx);

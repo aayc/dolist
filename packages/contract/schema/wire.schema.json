@@ -1832,6 +1832,75 @@
       "additionalProperties": {},
       "description": "Every configured MCP connector."
     },
+    "SyncState": {
+      "type": "string",
+      "enum": ["idle", "syncing", "error", "disabled"],
+      "description": "`idle`, `syncing`, `error` (see `lastError`) or `disabled` (no sync target)."
+    },
+    "SyncTargetKind": {
+      "type": "string",
+      "enum": ["none", "local", "s3", "remote"],
+      "description": "`none`, `local` (another folder), `s3`, or `remote` (the sync service shared with other devices)."
+    },
+    "SyncStatusResponse": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/SyncState"
+        },
+        "target": {
+          "$ref": "#/$defs/SyncTargetKind"
+        },
+        "lastSyncedAt": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Epoch milliseconds."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "When the last pass finished; null before it."
+        },
+        "pendingChanges": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Files changed on either side and not synced yet."
+        },
+        "conflicts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments)."
+          },
+          "description": "Conflict copies waiting to be resolved."
+        },
+        "lastError": {
+          "type": "string"
+        },
+        "remoteHost": {
+          "description": "The sync server (`remote` only).",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "deviceName": {
+          "description": "This device's name as other devices see it (`remote` only).",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        }
+      },
+      "required": ["state", "target", "lastSyncedAt", "pendingChanges", "conflicts"],
+      "additionalProperties": {},
+      "description": "The vault's sync state."
+    },
     "ApiErrorCode": {
       "type": "string",
       "enum": [

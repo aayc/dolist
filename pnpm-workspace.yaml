@@ -1,6 +1,7 @@
 packages:
   - apps/web
   - apps/daemon
+  - apps/sync
   - packages/*
   - evals
 

@@ -1,4 +1,4 @@
-export { conflictCopyPath } from "./conflict-path";
+export { conflictCopyPath, isConflictCopyPath } from "./conflict-path";
 export { decideSync, type SyncDecision } from "./decide";
 export {
   type DiffHunk,

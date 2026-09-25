@@ -9,7 +9,7 @@
  */
 import type { Unsubscribe } from "@ddl/core";
 
-export type StorageProviderKind = "local" | "memory" | "s3";
+export type StorageProviderKind = "local" | "memory" | "s3" | "remote";
 
 export interface FileEntry {
   path: string;
@@ -159,13 +159,30 @@ export interface S3StorageConfig {
 
 export type StorageConfig = LocalStorageConfig | MemoryStorageConfig | S3StorageConfig;
 
+/** A vault on the sync service (`apps/sync`). Only ever a sync target, never the vault itself. */
+export interface RemoteStorageConfig {
+  kind: "remote";
+  /** Base URL of the sync server, e.g. `https://sync.example.com`. */
+  url: string;
+  /** Vault id on that server. */
+  vault: string;
+  /** The vault's bearer token. Never logged. */
+  token: string;
+  /** Stable id of this device, recorded on every change it makes. */
+  deviceId: string;
+  /** Shown to other devices (e.g. which one runs the agent). */
+  deviceName: string;
+}
+
 // ── Sync ───────────────────────────────────────────────────────────────────
 
 export type SyncTargetConfig =
   | { kind: "none" }
   /** Mirror to another local folder (e.g. an iCloud Drive/Dropbox folder for cross-device sync). */
   | { kind: "local"; root: string }
-  | ({ kind: "s3" } & Omit<S3StorageConfig, "kind">);
+  | ({ kind: "s3" } & Omit<S3StorageConfig, "kind">)
+  /** The sync service: live push between devices and the agent lease. */
+  | RemoteStorageConfig;
 
 export type SyncState = "idle" | "syncing" | "error" | "disabled";
 

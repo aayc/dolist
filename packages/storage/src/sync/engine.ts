@@ -14,7 +14,7 @@ import {
   type SyncTargetConfig,
   type WriteResult,
 } from "../types";
-import { conflictCopyPath } from "./conflict-path";
+import { conflictCopyPath, isConflictCopyPath } from "./conflict-path";
 import { decideSync } from "./decide";
 import { mergeText } from "./diff3";
 import {
@@ -40,10 +40,15 @@ export interface SyncEngineOptions {
 }
 
 export interface SyncStartOptions {
-  /** Full sync at least this often (catches target-side changes). Default 30 s. */
+  /** Full sync at least this often (catches target-side changes nobody reported). Default 30 s. */
   intervalMs?: number;
   /** Quiet period after a vault change before syncing. Default 1.5 s. */
   debounceMs?: number;
+  /**
+   * Quiet period after the target reports a change it didn't make itself (another device, another
+   * app) before syncing. Short: such changes arrive already batched. Default 250 ms.
+   */
+  targetDebounceMs?: number;
 }
 
 /** A run refused to proceed because it would likely destroy data (e.g. the target looks wiped). */
@@ -115,7 +120,12 @@ export class SyncEngine {
   private running: Promise<SyncReport> | null = null;
   private queued: Promise<SyncReport> | null = null;
   private started:
-    | { unwatch: Unsubscribe; interval: ReturnType<typeof setInterval>; trigger: Debounced<[]> }
+    | {
+        unwatch: Unsubscribe[];
+        interval: ReturnType<typeof setInterval>;
+        trigger: Debounced<[]>;
+        targetTrigger: Debounced<[]>;
+      }
     | undefined;
 
   constructor(options: SyncEngineOptions) {
@@ -152,13 +162,26 @@ export class SyncEngine {
     return this.queued;
   }
 
-  /** Syncs now, then after vault changes (debounced) and on an interval, until `stop()`. */
+  /**
+   * Syncs now, then after vault changes and changes the target reports from elsewhere (each
+   * debounced), and on an interval, until `stop()`.
+   */
   start(options: SyncStartOptions = {}): void {
     if (this.started) return;
     const trigger = debounce(() => this.syncInBackground(), options.debounceMs ?? 1_500);
+    const targetTrigger = debounce(() => this.syncInBackground(), options.targetDebounceMs ?? 250);
     const interval = setInterval(() => this.syncInBackground(), options.intervalMs ?? 30_000);
-    const unwatch = this.primary.watch((event) => this.onPrimaryChange(event));
-    this.started = { unwatch, interval, trigger };
+    const unwatch = [this.primary.watch((event) => this.onPrimaryChange(event))];
+    this.started = { unwatch, interval, trigger, targetTrigger };
+    if (this.target.capabilities.watch) {
+      try {
+        unwatch.push(this.target.watch((event) => this.onTargetChange(event)));
+      } catch (error) {
+        this.logger.warn("cannot watch the sync target; relying on the interval", {
+          error: errorMessage(error),
+        });
+      }
+    }
     this.syncInBackground();
   }
 
@@ -168,8 +191,9 @@ export class SyncEngine {
     this.started = undefined;
     if (started) {
       started.trigger.cancel();
+      started.targetTrigger.cancel();
       clearInterval(started.interval);
-      started.unwatch();
+      for (const unwatch of started.unwatch) unwatch();
     }
     while (this.queued || this.running) {
       await (this.queued ?? this.running)?.catch(() => undefined);
@@ -208,6 +232,14 @@ export class SyncEngine {
     this.dirty.add(event.path);
     this.setStatus({ pendingChanges: this.pendingCount() });
     this.started?.trigger();
+  }
+
+  /** Our own writes to the target (`self`) are already in the snapshot; nothing to do for them. */
+  private onTargetChange(event: StorageEvent): void {
+    if (event.self || !this.isSyncable(event.path)) return;
+    this.dirty.add(event.path);
+    this.setStatus({ pendingChanges: this.pendingCount() });
+    this.started?.targetTrigger();
   }
 
   private async run(): Promise<SyncReport> {
@@ -295,6 +327,7 @@ export class SyncEngine {
     for (const conflict of snapshot.conflicts) {
       if (
         !primary.files.has(conflict) &&
+        !ctx.report.pulled.includes(conflict) &&
         !ctx.report.conflicts.some((c) => c.conflictPath === conflict)
       ) {
         snapshot.conflicts.delete(conflict);
@@ -350,6 +383,8 @@ export class SyncEngine {
         );
         this.record(ctx, path, written.version, source.version, source.content);
         ctx.report.pulled.push(path);
+        // Another device resolved a conflict: its copy is this device's to review too.
+        if (!decision.primary && isConflictCopyPath(path)) ctx.snapshot.conflicts.add(path);
         return;
       }
       case "delete-target":
@@ -608,7 +643,7 @@ function doomedBy(
 }
 
 function targetKind(target: StorageProvider): SyncTargetConfig["kind"] {
-  return target.kind === "s3" ? "s3" : "local";
+  return target.kind === "s3" || target.kind === "remote" ? target.kind : "local";
 }
 
 /** `Daily/.note.md.icloud` (an evicted iCloud Drive file) → `Daily/note.md`. */
