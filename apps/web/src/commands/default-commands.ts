@@ -130,6 +130,11 @@ export function createDefaultCommands(services: Services): Command[] {
       run: () => agent.openThread(ORCHESTRATOR_THREAD_ID),
     },
     {
+      id: "routines:show",
+      name: "Show routines",
+      run: () => ui.showRoutines(),
+    },
+    {
       id: "agent:toggle",
       name: "Toggle agent on/off",
       run: () => agent.setEnabled(!(useAgentStore.getState().status?.enabled ?? true)),
