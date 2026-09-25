@@ -5,7 +5,7 @@ import {
   type ThreadMessage,
 } from "@ddl/core";
 import { ArrowLeft, Brain, CornerDownRight, Square, X } from "lucide-react";
-import { memo, useEffect, useLayoutEffect, useRef } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/shallow";
 import { useServices } from "../../app/services";
 import { IconButton } from "../../components/IconButton";
@@ -32,9 +32,17 @@ const PIN_THRESHOLD_PX = 48;
 export function OrchestratorView() {
   const { agent } = useServices();
   const loaded = useAgentStore((s) => THREAD_ID in s.details);
+  const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
-    void agent.loadThread(THREAD_ID);
+    let current = true;
+    // Quiet: a daemon without an agent runtime has no such thread; it's explained in place.
+    void agent.loadThread(THREAD_ID, false, true).then(() => {
+      if (current) setUnavailable(!(THREAD_ID in useAgentStore.getState().details));
+    });
+    return () => {
+      current = false;
+    };
   }, [agent]);
 
   useLayoutEffect(() => {
@@ -45,7 +53,15 @@ export function OrchestratorView() {
     <div className="thread-view orchestrator-view" data-testid="orchestrator-view">
       <OrchestratorHeader />
       <div className="thread-body">
-        {loaded ? <OrchestratorChat /> : <div className="thread-loading" aria-busy="true" />}
+        {loaded ? (
+          <OrchestratorChat />
+        ) : unavailable ? (
+          <p className="thread-pending">
+            The orchestrator's chat isn't available: the agent runtime isn't running.
+          </p>
+        ) : (
+          <div className="thread-loading" aria-busy="true" />
+        )}
       </div>
     </div>
   );

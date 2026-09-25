@@ -55,7 +55,7 @@ extension AgentStore {
     if let failure { report(failure, title: "Couldn't refresh the agent's state") }
 
     // The orchestrator's chat is pinned in the inbox whatever the list's filter, so it's always
-    // loaded; a daemon whose agent is off has none, which isn't worth a toast.
+    // loaded; a daemon without an agent runtime has none, which isn't worth a toast.
     let loaded = Set(state.loadedThreads.keys).union([OrchestratorThread.id]).sorted()
     await withTaskGroup(of: Void.self) { group in
       for id in loaded {

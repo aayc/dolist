@@ -3,8 +3,8 @@ import Foundation
 
 /// The orchestrator's own chat, like the daemon's: a thread with a well-known id that records each
 /// simulated decision (a status line saying what woke it, the tool call it made with the task it
-/// acts on) and answers the user's messages with a streamed reply. Only while the agent runs (a
-/// daemon whose agent is off has no threads at all).
+/// acts on) and answers the user's messages with a streamed reply. Only with the simulated agent:
+/// the disabled simulation, like the daemon's null runtime, has no threads at all.
 extension FakeDaemon {
   func seedOrchestratorChat() {
     guard simulation == .enabled, threads[OrchestratorThread.id] == nil else { return }

@@ -87,7 +87,7 @@ struct InMemoryOrchestratorTests {
       })
   }
 
-  @Test func aDaemonWhoseAgentIsOffHasNone() async throws {
+  @Test func aDaemonWithoutAnAgentRuntimeHasNone() async throws {
     let client = InMemoryDaemonClient(seed: .demo, clock: .immediate(), agent: .disabled)
     await #expect(throws: DaemonClientError.self) {
       _ = try await client.thread(OrchestratorThread.id)

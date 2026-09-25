@@ -181,7 +181,9 @@ Notes:
   the other threads (without `notePath`, so a `?notePath=` filter leaves it out) and records every
   orchestrator turn. `POST …/messages` on it is a direct message the orchestrator answers in the
   chat, `POST …/cancel` stops the turn in progress (a no-op when idle), and `…/retry` answers 503
-  `agent_unavailable`. With the agent off (`DDL_AGENT_MODE=off`) it doesn't exist.
+  `agent_unavailable`. While the agent can't run (`DDL_AGENT_MODE=off`, no harness) it stays idle
+  and a message gets a note saying why; only when the agent runtime couldn't load at all (the null
+  runtime) is there no such thread.
 - `computer/permissions/open` runs `open` on a fixed System Settings deep link for the pane (the
   pane, then Privacy & Security); nothing from the request reaches the command. `AgentStatusResponse`
   reports `execution.computerAccess`: both permissions, whether app control is available, and the
