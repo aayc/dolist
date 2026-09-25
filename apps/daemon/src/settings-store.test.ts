@@ -85,11 +85,30 @@ describe("settings store", () => {
     });
   });
 
+  it("writes nothing on first run with nothing to import, so a joining device takes the vault's settings", async () => {
+    const storage = vault();
+    const store = await open(storage);
+    expect(await storage.read(SETTINGS_PATH)).toBeNull();
+    // Sync brings the vault's settings in from the other devices.
+    const machine = { name: "vm-1", url: "https://vm-1.tailnet-name.ts.net" };
+    await storage.write(
+      SETTINGS_PATH,
+      JSON.stringify({ version: 1, theme: "dark", remote: { alwaysOnMachine: machine } }),
+    );
+    expect((await store.reload())?.remote.alwaysOnMachine).toEqual(machine);
+    await store.update({ editor: { vimMode: true } });
+    expect(await storedOverrides(storage)).toEqual({
+      theme: "dark",
+      remote: { alwaysOnMachine: machine },
+      editor: { vimMode: true },
+    });
+  });
+
   it("starts from defaults and persists only explicit overrides", async () => {
     const storage = vault();
     const store = await open(storage);
     expect(store.get()).toEqual(DEFAULT_SETTINGS);
-    expect(await storedOverrides(storage)).toEqual({});
+    expect(await storedOverrides(storage)).toBeNull();
 
     const next = await store.update({
       editor: { fontSize: 18 },
@@ -145,7 +164,7 @@ describe("settings store", () => {
     const store = await open(storage);
     await expect(store.update({ editor: { fontSize: 999 } })).rejects.toThrow("editor.fontSize");
     await expect(store.update({ bogus: true } as never)).rejects.toThrow("bogus");
-    expect(await storedOverrides(storage)).toEqual({});
+    expect(await storedOverrides(storage)).toBeNull();
   });
 
   it("switches the agent harness and keeps each harness's model", async () => {
@@ -184,7 +203,7 @@ describe("settings store", () => {
       );
     }
     expect(store.get()).toEqual(DEFAULT_SETTINGS);
-    expect(await storedOverrides(storage)).toEqual({});
+    expect(await storedOverrides(storage)).toBeNull();
   });
 
   it("defaults to asking for risky actions and persists every approval policy", async () => {
@@ -213,7 +232,7 @@ describe("settings store", () => {
       );
     }
     expect(store.get().agent.approvalPolicy).toBe("ask_risky");
-    expect(await storedOverrides(storage)).toEqual({});
+    expect(await storedOverrides(storage)).toBeNull();
   });
 
   it("asks for risky actions when the file holds a policy from a newer app, and keeps it", async () => {
@@ -574,7 +593,7 @@ describe("persisted settings validation matches PUT /api/settings", () => {
 
 describe("settings writer", () => {
   test.prop([fc.array(settingsOverridesArb, { minLength: 1, maxLength: 4 })])(
-    "always writes a schema-valid file that loads back to the same settings",
+    "writes only schema-valid files that load back to the same settings",
     async (patches) => {
       const storage = vault();
       const store = await open(storage);
@@ -585,12 +604,16 @@ describe("settings writer", () => {
           expect(error).toBeInstanceOf(SettingsValidationError);
         }
       }
-      const raw = JSON.parse((await storage.read(SETTINGS_PATH))!.content);
-      expect(PersistedSettingsFileSchema.safeParse(raw).success).toBe(true);
-      expect(decodePersistedSettings(JSON.stringify(raw))).toMatchObject({
-        ok: true,
-        fromVersion: 1,
-      });
+      // Nothing is written until an update succeeds.
+      const file = await storage.read(SETTINGS_PATH);
+      if (file) {
+        const raw = JSON.parse(file.content);
+        expect(PersistedSettingsFileSchema.safeParse(raw).success).toBe(true);
+        expect(decodePersistedSettings(JSON.stringify(raw))).toMatchObject({
+          ok: true,
+          fromVersion: 1,
+        });
+      }
       const reloaded = await open(storage);
       expect(reloaded.get()).toEqual(store.get());
     },

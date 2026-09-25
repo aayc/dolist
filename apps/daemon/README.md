@@ -126,6 +126,8 @@ overrides, merged over the defaults (with `DDL_MODEL` as the default model). On 
 daemon imports what it can from an existing Obsidian vault: `.obsidian/daily-notes.json` (folder,
 format, template; Obsidian's own defaults fill missing keys), `.obsidian/app.json` (vim mode, live
 preview, readable line length, line numbers, spellcheck) and `.obsidian/appearance.json` (theme).
+With nothing to import it writes no file, so a new device joining a synced vault takes the vault's
+settings instead of resetting them with its own empty file.
 
 `agent.harness` picks what runs the agent: `pi` on the OpenRouter model `agent.model`, or `cursor`
 (the Cursor CLI, signed in with your Cursor account) on `agent.cursorModel`. The safety judge's
