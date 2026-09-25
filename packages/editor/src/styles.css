@@ -632,6 +632,11 @@
   vertical-align: top;
   margin: 4px 0;
 }
+/* A floated embed's line takes no room, so the text beside it starts level with its top. */
+.cm-ddl-editor .cm-line.cm-ddl-embed-line-left-wrap,
+.cm-ddl-editor .cm-line.cm-ddl-embed-line-right-wrap {
+  height: 0;
+}
 .cm-ddl-editor .cm-line.cm-ddl-embed-line-center {
   text-align: center;
 }

@@ -128,6 +128,7 @@ class Mounted implements MountedEmbed {
         this.natural = size && size.width > 0 && size.height > 0 ? size : null;
         this.layout();
       },
+      select: () => this.select(),
     };
     this.content = this.mountContent(host);
     this.listen();
@@ -189,6 +190,8 @@ class Mounted implements MountedEmbed {
       body.height = `${PLACEHOLDER_HEIGHT}px`;
       body.aspectRatio = "";
     }
+    // CodeMirror doesn't watch widgets' styles: tell it line heights may have changed.
+    if (this.frame.isConnected) this.view.requestMeasure();
   }
 
   position(): number | null {
@@ -288,7 +291,7 @@ class Mounted implements MountedEmbed {
     if (drag.mode === "move") {
       this.frame.style.transform = `translate(${dx}px, ${dy}px)`;
       this.autoscroll(event.clientY);
-      this.showDropTarget(drag, event.clientX, event.clientY);
+      this.showDropTarget(drag);
       return;
     }
     const factor = this.embed.spec.placement === "center" ? 2 : 1;
@@ -436,7 +439,11 @@ class Mounted implements MountedEmbed {
     );
   }
 
-  private showDropTarget(drag: Drag, clientX: number, clientY: number): void {
+  /**
+   * Where the dragged box (following the pointer) would land: its top edge picks the line, its
+   * center the side, so a small move never jumps far and dropping in place changes nothing.
+   */
+  private showDropTarget(drag: Drag): void {
     const view = this.view;
     const content = view.contentDOM;
     const rect = content.getBoundingClientRect();
@@ -444,8 +451,9 @@ class Mounted implements MountedEmbed {
     const left = rect.left + Number.parseFloat(style.paddingLeft || "0");
     const right = rect.right - Number.parseFloat(style.paddingRight || "0");
     const doc = view.state.doc;
+    const ghost = this.frame.getBoundingClientRect();
     const target = dropTarget(
-      { x: clientX, y: clientY - view.documentTop },
+      { x: ghost.left + ghost.width / 2, y: ghost.top - view.documentTop },
       {
         lineAt: (y) => {
           const block = view.lineBlockAtHeight(Math.max(0, y));
@@ -469,8 +477,7 @@ class Mounted implements MountedEmbed {
       drag.indicator = indicator;
     }
     const columnWidth = right - left;
-    const frame = this.frame.getBoundingClientRect();
-    const width = target.placement === "full" ? columnWidth : Math.min(frame.width, columnWidth);
+    const width = target.placement === "full" ? columnWidth : Math.min(ghost.width, columnWidth);
     const x = target.placement === "right-wrap" ? right - width : left;
     indicator.dataset.placement = target.placement;
     Object.assign(indicator.style, {
@@ -482,7 +489,7 @@ class Mounted implements MountedEmbed {
     Object.assign(preview.style, {
       left: `${x - left}px`,
       width: `${width}px`,
-      height: `${target.placement === "full" ? (frame.height * columnWidth) / frame.width : frame.height}px`,
+      height: `${target.placement === "full" ? (ghost.height * columnWidth) / ghost.width : ghost.height}px`,
     });
   }
 

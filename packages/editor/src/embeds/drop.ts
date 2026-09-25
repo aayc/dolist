@@ -23,8 +23,9 @@ export interface DropTarget extends EmbedMove {
 }
 
 /**
- * Where an embed dragged to `point` lands: between the two lines nearest the pointer, floating
- * left in the column's left third, right in its right third, full width in between.
+ * Where a dragged embed lands, given its box's top edge (`y`) and center (`x`): between the two
+ * lines nearest that edge, floating left in the column's left third, right in its right third,
+ * full width in between.
  */
 export function dropTarget(point: { x: number; y: number }, geometry: DropGeometry): DropTarget {
   const line = geometry.lineAt(point.y);

@@ -49,6 +49,8 @@ export interface EmbedHost {
    * the content arrives, and its width is the box's width when the embed names none.
    */
   setNaturalSize(size: { width: number; height: number } | null): void;
+  /** Selects the embed and gives it the keyboard (e.g. when editing it ends with Escape). */
+  select(): void;
 }
 
 export interface EmbedContent {
