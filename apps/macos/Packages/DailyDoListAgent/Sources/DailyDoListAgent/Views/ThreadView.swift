@@ -41,15 +41,17 @@ enum ThreadTab: String, CaseIterable, Hashable, Identifiable {
   }
 }
 
-/// One task's thread: header with Stop / Retry / Show in Note / Close, and Chat, Artifacts,
-/// Browser and Computer tabs. Loads the thread and marks it read while on screen. In the Chat tab,
-/// Stop sits beside Send in the chat bar instead of the header.
+/// One task's thread: header with Stop / Retry / Repeat This / Show in Note / Close, and Chat,
+/// Artifacts, Browser and Computer tabs. Loads the thread and marks it read while on screen. In
+/// the Chat tab, Stop sits beside Send in the chat bar instead of the header. A routine's run has
+/// no Show in Note or Repeat This (it already repeats).
 public struct ThreadView: View {
   let store: AgentStore
   let threadId: String
   let onShowInNote: ((TaskLocation) -> Void)?
   let onClose: (() -> Void)?
   let stop: AgentPanelShortcuts.Command
+  let onRepeat: ((RoutineDraft) -> Void)?
   @State private var tab: ThreadTab
   @State private var openArtifact: ArtifactSelection?
   /// Inactive while the app is in the background: messages aren't "read" then.
@@ -61,26 +63,31 @@ public struct ThreadView: View {
     var id: String { "\(threadId)/\(artifactId)" }
   }
 
-  /// - Parameter stop: the host's Stop command (its shortcut shows in the Stop buttons' tooltips).
+  /// - Parameters:
+  ///   - stop: the host's Stop command (its shortcut shows in the Stop buttons' tooltips).
+  ///   - onRepeat: opens the New Routine sheet with a finished task as the draft ("Repeat this").
   public init(
     store: AgentStore, threadId: String, onShowInNote: ((TaskLocation) -> Void)? = nil,
-    onClose: (() -> Void)? = nil, stop: AgentPanelShortcuts.Command = .init()
+    onClose: (() -> Void)? = nil, stop: AgentPanelShortcuts.Command = .init(),
+    onRepeat: ((RoutineDraft) -> Void)? = nil
   ) {
     self.init(
       store: store, threadId: threadId, tab: .chat, onShowInNote: onShowInNote, onClose: onClose,
-      stop: stop)
+      stop: stop, onRepeat: onRepeat)
   }
 
   init(
     store: AgentStore, threadId: String, tab: ThreadTab,
     onShowInNote: ((TaskLocation) -> Void)? = nil,
-    onClose: (() -> Void)? = nil, stop: AgentPanelShortcuts.Command = .init()
+    onClose: (() -> Void)? = nil, stop: AgentPanelShortcuts.Command = .init(),
+    onRepeat: ((RoutineDraft) -> Void)? = nil
   ) {
     self.store = store
     self.threadId = threadId
     self.onShowInNote = onShowInNote
     self.onClose = onClose
     self.stop = stop
+    self.onRepeat = onRepeat
     self._tab = State(initialValue: tab)
   }
 
@@ -118,27 +125,34 @@ public struct ThreadView: View {
 
   private func header(thread: AgentThread?, summary: ThreadSummary?, showsStop: Bool) -> some View {
     let status = thread?.status ?? summary?.status ?? .idle
+    let isRoutineRun = (thread?.routineId ?? summary?.routineId) != nil
     let notePath = thread?.notePath ?? summary?.notePath
     let taskId = thread?.taskId ?? summary?.taskId
+    let title = thread?.title ?? summary?.title ?? "Task"
     return ThreadHeader(
-      title: thread?.title ?? summary?.title ?? "Task",
+      title: title,
       status: status,
-      notePath: notePath,
+      notePath: isRoutineRun ? nil : notePath,
       stop: stop,
       onStop: status.isActive && showsStop
         ? { Task { await store.cancelThread(threadId) } } : nil,
       onRetry: [.failed, .cancelled, .done].contains(status)
         ? { Task { await store.retryThread(threadId) } } : nil,
-      onShowInNote: notePath.flatMap { path in
-        onShowInNote.map { show in
-          {
-            show(
-              TaskLocation(
-                threadId: threadId, taskId: taskId, notePath: path,
-                record: store.record(forThread: threadId)))
+      onRepeat: status == .done && !isRoutineRun && taskId != nil
+        ? onRepeat.map { open in { open(RoutineDraft(repeating: title, threadId: threadId)) } }
+        : nil,
+      onShowInNote: isRoutineRun
+        ? nil
+        : notePath.flatMap { path in
+          onShowInNote.map { show in
+            {
+              show(
+                TaskLocation(
+                  threadId: threadId, taskId: taskId, notePath: path,
+                  record: store.record(forThread: threadId)))
+            }
           }
-        }
-      },
+        },
       onClose: onClose)
   }
 
@@ -182,6 +196,7 @@ struct ThreadHeader: View {
   var stop = AgentPanelShortcuts.Command()
   let onStop: (() -> Void)?
   let onRetry: (() -> Void)?
+  var onRepeat: (() -> Void)?
   let onShowInNote: (() -> Void)?
   let onClose: (() -> Void)?
 
@@ -217,6 +232,11 @@ struct ThreadHeader: View {
             "stop.circle", label: "Stop", keys: stop.keys, command: stop.id, action: onStop)
         }
         if let onRetry { IconButton("arrow.clockwise", label: "Retry", action: onRetry) }
+        if let onRepeat {
+          IconButton(
+            "clock.arrow.circlepath", label: "Repeat this", detail: "Make it a routine",
+            action: onRepeat)
+        }
         if let onShowInNote {
           IconButton("arrow.up.forward.square", label: "Show task in note", action: onShowInNote)
         }

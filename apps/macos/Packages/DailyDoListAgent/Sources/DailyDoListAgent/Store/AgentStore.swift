@@ -53,6 +53,12 @@ public final class AgentStore {
     return state.approvals
   }
 
+  /// Every routine, sorted by name (see `AgentStore+Routines`).
+  public var routines: [Routine] {
+    access(keyPath: \.routines)
+    return state.routines
+  }
+
   /// The latest failed action, for a non-blocking toast; cleared by `dismissError()`.
   public internal(set) var lastError: AgentAlert?
   /// Approvals whose decision is being sent.
@@ -74,6 +80,19 @@ public final class AgentStore {
   public internal(set) var surfaceActions: [SurfaceKey: [SurfaceAction]] = [:]
   /// Today's daily note, used by `refresh()` to fetch its threads and records. Nil = every thread.
   public var todayNotePath: String?
+  /// Starter routines for "New Routine…" (from `GET /api/routines`).
+  public internal(set) var routineTemplates: [RoutineTemplate] = []
+  /// Whether the routine list was fetched at least once.
+  public internal(set) var routinesLoaded = false
+  /// Why the routine list couldn't be fetched (the Routines view offers a retry).
+  public internal(set) var routinesLoadError: String?
+  /// The latest failed action of each routine (Run Now, Pause, Resume), shown on the routine.
+  public internal(set) var routineAlerts: [String: RoutineAlert] = [:]
+  /// Routines with an action on its way to the daemon.
+  public internal(set) var busyRoutineIds: Set<String> = []
+  /// Finished runs to tell the user about (`routine.notification`), oldest first; the notifier
+  /// posts the ones it hasn't seen. Only the latest `routineNotificationLimit` are kept.
+  public internal(set) var routineNotifications: [RoutineNotification] = []
 
   // MARK: Bookkeeping
 
@@ -84,6 +103,7 @@ public final class AgentStore {
   /// live events touched while they were in flight.
   @ObservationIgnored var eventSeq: UInt64 = 0
   @ObservationIgnored var statusTouch: UInt64 = 0
+  @ObservationIgnored var routinesTouch: UInt64 = 0
   @ObservationIgnored var recordTouches: [String: UInt64] = [:]
   @ObservationIgnored var noteTouches: [String: UInt64] = [:]
   @ObservationIgnored var threadTouches: [String: UInt64] = [:]
@@ -92,6 +112,8 @@ public final class AgentStore {
   /// `thread.message` events received while a thread is being fetched, replayed on the response.
   @ObservationIgnored var loadBuffers: [String: [ThreadMessageEvent]] = [:]
   @ObservationIgnored var trackedNotes: Set<String> = []
+  /// Routines whose runs were loaded (`refresh()` refetches them).
+  @ObservationIgnored var trackedRoutines: Set<String> = []
   @ObservationIgnored var subscriptionCounts: [SurfaceKey: Int] = [:]
   @ObservationIgnored var decodedFrames: [SurfaceKey: (ts: EpochMillis, image: NSImage)] = [:]
   @ObservationIgnored var artifactRefetches: [String: Task<Void, Never>] = [:]
@@ -133,6 +155,11 @@ public final class AgentStore {
       statusTouch = eventSeq
     case .threadMessage(let event):
       loadBuffers[event.threadId]?.append(event)
+    case .routinesChanged:
+      routinesTouch = eventSeq
+    case .routineNotification(let notification):
+      receive(notification)
+      return
     default:
       break
     }
@@ -175,6 +202,7 @@ public final class AgentStore {
     if changes.contains(.threads) { withMutation(keyPath: \.threads) {} }
     if changes.contains(.loadedThreads) { withMutation(keyPath: \.loadedThreads) {} }
     if changes.contains(.approvals) { withMutation(keyPath: \.approvals) {} }
+    if changes.contains(.routines) { withMutation(keyPath: \.routines) {} }
     return changes
   }
 
@@ -251,11 +279,12 @@ public final class AgentStore {
   }
 
   /// The inbox: today's threads plus anything still waiting or running, grouped. The
-  /// orchestrator's own chat isn't one of them (the inbox pins it above).
+  /// orchestrator's own chat isn't one of them (the inbox pins it above), and routines' runs live
+  /// under their routine unless they wait on the user.
   public func inboxSections(now: Date = Date(), calendar: Calendar = .current) -> [InboxSection] {
     _ = approvals
     return InboxGrouping.sections(
-      for: threads.values.filter { !$0.isOrchestrator },
+      for: threads.values.filter { state.isInInbox($0) },
       pendingApprovalThreadIds: state.threadIdsWithPendingApprovals, now: now, calendar: calendar)
   }
 

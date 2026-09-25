@@ -156,6 +156,22 @@ struct EventRoutingTests {
     try await eventually { model.phase == .failed(.incompatibleApiVersion(server: 9)) }
   }
 
+  @Test func routineEventsReachTheAgentStore() async throws {
+    let routine = Routine(
+      id: "rtn_1", path: "Routines/Morning briefing.md", name: "Morning briefing",
+      schedule: "every weekday at 7:30", instructions: "Brief me.")
+    client.emit(.routinesChanged([routine]))
+    try await eventually("routines routed") { model.agent?.routines == [routine] }
+    client.emit(
+      .routineNotification(
+        RoutineNotification(
+          routineId: "rtn_1", title: "Morning briefing", body: "3 meetings", threadId: "thr_r1",
+          status: .done, at: 1)))
+    try await eventually("notification routed") {
+      model.agent?.routineNotifications.map(\.threadId) == ["thr_r1"]
+    }
+  }
+
   @Test func unknownEventsAreIgnored() async throws {
     client.emit(.unknown(type: "future.event", raw: ["type": "future.event"]))
     client.emit(.error(ServerErrorEvent(message: "bad frame", code: .invalidMessage)))

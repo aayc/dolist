@@ -21,19 +21,38 @@ public struct AgentPanelShortcuts: Hashable, Sendable {
   public var inbox: KeyShortcut?
   /// Stops the open thread's agent (the chat bar's Stop button).
   public var stop: Command
+  /// Shows the routines (the Routines tab).
+  public var routines: Command
+  /// Opens the New Routine sheet (the Routines tab's New Routine button).
+  public var newRoutine: Command
 
-  public init(hidePanel: KeyShortcut? = nil, inbox: KeyShortcut? = nil, stop: Command = Command()) {
+  public init(
+    hidePanel: KeyShortcut? = nil, inbox: KeyShortcut? = nil, stop: Command = Command(),
+    routines: Command = Command(), newRoutine: Command = Command()
+  ) {
     self.hidePanel = hidePanel
     self.inbox = inbox
     self.stop = stop
+    self.routines = routines
+    self.newRoutine = newRoutine
   }
 }
 
-/// Right-hand agent panel: the inbox, or one thread when `selectedThreadId` is set. Failed
-/// actions show as a dismissible toast at the bottom.
+/// The agent panel's two lists: the task inbox and the routines.
+public enum AgentPanelSection: String, Hashable, Sendable {
+  case inbox, routines
+}
+
+/// Right-hand agent panel: the inbox or the routines (a routine's own inbox of runs when
+/// `selectedRoutineId` is set), or one thread when `selectedThreadId` is set. Leaving a thread
+/// goes back to where it was opened from. Failed actions show as a dismissible toast at the
+/// bottom.
 public struct AgentPanel: View {
   let store: AgentStore
   @Binding var selectedThreadId: String?
+  @Binding var section: AgentPanelSection
+  @Binding var selectedRoutineId: String?
+  let routineActions: AgentRoutineActions
   let onShowInNote: ((TaskLocation) -> Void)?
   let onClose: (() -> Void)?
   let headerHeight: CGFloat
@@ -41,6 +60,8 @@ public struct AgentPanel: View {
   let noteLinks: AgentNoteLinks
   let shortcuts: AgentPanelShortcuts
   let onOpenOrchestratorWindow: (() -> Void)?
+  /// The host keeps the section: the header shows the Inbox and Routines tabs.
+  let showsSections: Bool
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   /// - Parameters:
@@ -53,16 +74,26 @@ public struct AgentPanel: View {
   ///   - shortcuts: the host's shortcuts for hiding the panel and showing the inbox.
   ///   - onOpenOrchestratorWindow: opens the orchestrator's chat in a window of its own (a button
   ///     in its header).
+  ///   - section: the inbox or the routines (constant: the inbox only, without the tabs).
+  ///   - selectedRoutineId: the routine whose runs show in the routines section.
+  ///   - routineActions: New Routine (also "Repeat this" on finished tasks) and Edit File.
   public init(
     store: AgentStore, selectedThreadId: Binding<String?>,
     onShowInNote: ((TaskLocation) -> Void)? = nil, onClose: (() -> Void)? = nil,
     headerHeight: CGFloat = 40, onHide: (() -> Void)? = nil, noteLinks: AgentNoteLinks = .none,
     shortcuts: AgentPanelShortcuts = AgentPanelShortcuts(),
-    onOpenOrchestratorWindow: (() -> Void)? = nil
+    onOpenOrchestratorWindow: (() -> Void)? = nil,
+    section: Binding<AgentPanelSection>? = nil,
+    selectedRoutineId: Binding<String?> = .constant(nil),
+    routineActions: AgentRoutineActions = .none
   ) {
     self.onOpenOrchestratorWindow = onOpenOrchestratorWindow
     self.store = store
     self._selectedThreadId = selectedThreadId
+    self._section = section ?? .constant(.inbox)
+    self.showsSections = section != nil
+    self._selectedRoutineId = selectedRoutineId
+    self.routineActions = routineActions
     self.onShowInNote = onShowInNote
     self.onClose = onClose
     self.headerHeight = headerHeight
@@ -84,9 +115,19 @@ public struct AgentPanel: View {
           ThreadView(
             store: store, threadId: threadId, onShowInNote: onShowInNote,
             onClose: onHide == nil ? onClose ?? { selectedThreadId = nil } : nil,
-            stop: shortcuts.stop
+            stop: shortcuts.stop, onRepeat: routineActions.newRoutine
           )
           .id(threadId)
+        } else if section == .routines, let routineId = selectedRoutineId {
+          RoutineDetailView(
+            store: store, routineId: routineId, actions: routineActions,
+            onOpenRun: { selectedThreadId = $0 }
+          )
+          .id(routineId)
+        } else if section == .routines {
+          RoutinesView(
+            store: store, actions: routineActions, shortcuts: shortcuts,
+            onSelect: { selectedRoutineId = $0 })
         } else {
           InboxView(store: store) { selectedThreadId = $0 }
         }
@@ -116,16 +157,13 @@ public struct AgentPanel: View {
     let pending = store.pendingApprovalCount
     return HStack(spacing: 8) {
       if selectedThreadId != nil {
-        Button {
-          selectedThreadId = nil
-        } label: {
-          Label("Inbox", systemImage: "chevron.left")
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(AgentTheme.accent)
+        backButton
+      } else if section == .routines, let routineId = selectedRoutineId {
+        BackButton(title: "Routines", tooltip: "Back to routines", keys: shortcuts.routines.keys) {
+          if selectedRoutineId == routineId { selectedRoutineId = nil }
         }
-        .buttonStyle(ChromeButtonStyle(horizontalPadding: 6, verticalPadding: 3))
-        .padding(.leading, -6)
-        .tooltip("Back to inbox", keys: shortcuts.inbox, accessibility: .keysOnly)
+      } else if showsSections {
+        SectionTabs(section: $section, shortcuts: shortcuts)
       } else {
         Label("Inbox", systemImage: "tray")
           .font(.system(size: 13, weight: .semibold))
@@ -147,5 +185,76 @@ public struct AgentPanel: View {
     .padding(.trailing, onHide == nil ? 12 : 6)
     .frame(height: headerHeight)
     .overlay(alignment: .bottom) { AgentHairline() }
+  }
+
+  /// A thread's way back: to its routine's runs when it was opened there, else the list it came
+  /// from.
+  @ViewBuilder private var backButton: some View {
+    if section == .routines {
+      let routine = selectedRoutineId.flatMap { store.routine($0) }
+      BackButton(
+        title: routine?.name ?? "Routines",
+        tooltip: routine.map { "Back to “\($0.name)”" } ?? "Back to routines", keys: nil
+      ) { selectedThreadId = nil }
+    } else {
+      BackButton(title: "Inbox", tooltip: "Back to inbox", keys: shortcuts.inbox) {
+        selectedThreadId = nil
+      }
+    }
+  }
+}
+
+/// "‹ Inbox" in the panel header.
+private struct BackButton: View {
+  let title: String
+  let tooltip: String
+  let keys: KeyShortcut?
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      Label(title, systemImage: "chevron.left")
+        .font(.system(size: 13, weight: .medium))
+        .foregroundStyle(AgentTheme.accent)
+        .lineLimit(1)
+    }
+    .buttonStyle(ChromeButtonStyle(horizontalPadding: 6, verticalPadding: 3))
+    .padding(.leading, -6)
+    .tooltip(tooltip, keys: keys, accessibility: .keysOnly)
+  }
+}
+
+/// Inbox | Routines in the panel header.
+private struct SectionTabs: View {
+  @Binding var section: AgentPanelSection
+  let shortcuts: AgentPanelShortcuts
+
+  var body: some View {
+    HStack(spacing: 2) {
+      tab(.inbox, "Inbox", systemImage: "tray", tooltip: "Agent inbox", keys: shortcuts.inbox)
+      tab(
+        .routines, "Routines", systemImage: "clock.arrow.circlepath", tooltip: "Routines",
+        keys: shortcuts.routines.keys, command: shortcuts.routines.id)
+    }
+    .padding(.leading, -6)
+  }
+
+  private func tab(
+    _ value: AgentPanelSection, _ title: String, systemImage: String, tooltip: String,
+    keys: KeyShortcut?, command: String? = nil
+  ) -> some View {
+    let isSelected = section == value
+    return Button {
+      section = value
+    } label: {
+      Label(title, systemImage: systemImage)
+        .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+        .foregroundStyle(isSelected ? AgentTheme.text : AgentTheme.mutedText)
+    }
+    .buttonStyle(
+      ChromeButtonStyle(horizontalPadding: 6, verticalPadding: 3, isSelected: isSelected)
+    )
+    .tooltip(tooltip, keys: keys, command: command, accessibility: .keysOnly)
+    .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
   }
 }

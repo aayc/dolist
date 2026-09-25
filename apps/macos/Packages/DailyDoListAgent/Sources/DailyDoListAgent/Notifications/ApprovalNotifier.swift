@@ -5,7 +5,8 @@ import Observation
 
 /// Posts a system notification for every new pending approval ("Approve Once" / "Deny" right
 /// from the banner; clicking it opens the thread), removes it as soon as the approval is decided
-/// anywhere, and optionally announces finished tasks.
+/// anywhere, and optionally announces finished tasks. Finished routine runs the daemon announces
+/// (`routine.notification`, per the routine's `notify`) get one too; clicking it opens the run.
 ///
 /// Permission is requested lazily, when the first approval needs a notification. Approvals that
 /// were already waiting when the notifier started (older than `start()`) don't banner: the app's
@@ -14,6 +15,7 @@ import Observation
 public final class ApprovalNotifier {
   public static let approvalCategory = "ddl.approval"
   public static let taskDoneCategory = "ddl.task-done"
+  public static let routineRunCategory = "ddl.routine-run"
   public static let approveOnceAction = "ddl.approve-once"
   public static let denyAction = "ddl.deny"
 
@@ -24,6 +26,9 @@ public final class ApprovalNotifier {
   public var isThreadOnScreen: @MainActor (String) -> Bool = { _ in false }
   /// Called when the user clicks a notification (nil thread: open the inbox).
   public var onOpenThread: @MainActor (String?) -> Void
+  /// Called when the user clicks a routine run's notification: the routine's id and the run's
+  /// thread (by default the thread opens like any other).
+  public var onOpenRoutineRun: (@MainActor (_ routineId: String, _ threadId: String) -> Void)?
   /// Brings the app to the front before `onOpenThread`.
   public var activateApp: @MainActor () -> Void = { NSApp?.activate() }
 
@@ -37,6 +42,8 @@ public final class ApprovalNotifier {
   /// Pending approvals with a posted notification.
   private var postedApprovals: Set<String> = []
   private var knownStatuses: [String: TaskAgentStatus] = [:]
+  /// Routine notifications already handled (posted, or older than `start()`).
+  private var handledRoutineRuns: Set<String> = []
   private var deliveries: [Task<Void, Never>] = []
 
   private enum Authorization {
@@ -78,6 +85,7 @@ public final class ApprovalNotifier {
       }
     }
     knownStatuses = store.threads.mapValues(\.status)
+    handledRoutineRuns.formUnion(store.routineNotifications.map(Self.key))
     sync()
     observe()
   }
@@ -96,16 +104,25 @@ public final class ApprovalNotifier {
         AgentNotificationAction(identifier: denyAction, title: "Deny", isDestructive: true),
       ]),
     AgentNotificationCategory(identifier: taskDoneCategory, actions: []),
+    AgentNotificationCategory(identifier: routineRunCategory, actions: []),
   ]
 
   static func notificationId(approvalId: String) -> String { "ddl.approval.\(approvalId)" }
   static func notificationId(doneThreadId: String) -> String { "ddl.done.\(doneThreadId)" }
+  static func notificationId(routineRunThreadId: String) -> String {
+    "ddl.routine.\(routineRunThreadId)"
+  }
+
+  private static func key(_ notification: RoutineNotification) -> String {
+    "\(notification.threadId)@\(notification.at)"
+  }
 
   private func observe() {
     guard isRunning else { return }
     withObservationTracking {
       _ = store.approvals
       _ = store.threads
+      _ = store.routineNotifications
     } onChange: { [weak self] in
       Task { @MainActor [weak self] in
         guard let self, self.isRunning else { return }
@@ -144,10 +161,30 @@ public final class ApprovalNotifier {
       let previous = knownStatuses[id]
       knownStatuses[id] = summary.status
       guard notifiesTaskCompletion, let previous, previous.isActive, summary.status == .done,
-        !isThreadOnScreen(id)
+        !summary.isRoutineRun, !isThreadOnScreen(id)
       else { continue }
       deliver(doneNotification(for: summary), approvalId: nil)
     }
+
+    for routineRun in store.routineNotifications
+    where handledRoutineRuns.insert(Self.key(routineRun)).inserted {
+      if isThreadOnScreen(routineRun.threadId) { continue }
+      deliver(notification(for: routineRun), approvalId: nil)
+    }
+  }
+
+  private func notification(for run: RoutineNotification) -> AgentNotification {
+    let subtitle: String? =
+      switch run.status {
+      case .failed: "Run failed"
+      case .waitingUser, .waitingApproval: "Needs you"
+      default: nil
+      }
+    return AgentNotification(
+      id: Self.notificationId(routineRunThreadId: run.threadId), title: run.title,
+      subtitle: subtitle, body: run.body.isEmpty ? "Done." : run.body,
+      categoryIdentifier: Self.routineRunCategory, threadIdentifier: "routine.\(run.routineId)",
+      userInfo: ["threadId": run.threadId, "routineId": run.routineId])
   }
 
   private func notification(for approval: ApprovalRequest) -> AgentNotification {
@@ -215,7 +252,13 @@ public final class ApprovalNotifier {
       if let approvalId { await store.decide(approvalId, .deny) }
     case AgentNotificationResponse.defaultAction:
       activateApp()
-      onOpenThread(threadId)
+      if let routineId = response.userInfo["routineId"], let threadId,
+        let onOpenRoutineRun
+      {
+        onOpenRoutineRun(routineId, threadId)
+      } else {
+        onOpenThread(threadId)
+      }
     default:
       break
     }

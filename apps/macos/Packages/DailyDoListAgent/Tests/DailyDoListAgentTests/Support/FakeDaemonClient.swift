@@ -51,6 +51,19 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
     var artifact: @Sendable (String, String) async throws -> ArtifactPayload = { _, _ in
       throw UnscriptedCall(name: "artifact")
     }
+    var routines: @Sendable () async throws -> RoutineListResponse = {
+      RoutineListResponse(routines: [], templates: [])
+    }
+    var createRoutine: @Sendable (CreateRoutineRequest) async throws -> Routine = { _ in
+      throw UnscriptedCall(name: "createRoutine")
+    }
+    var runRoutine: @Sendable (String) async throws -> RoutineRunResponse = { _ in
+      throw UnscriptedCall(name: "runRoutine")
+    }
+    var pauseRoutine: @Sendable (String, Bool) async throws -> Routine = { _, _ in
+      throw UnscriptedCall(name: "pauseRoutine")
+    }
+    var routineRuns: @Sendable (String) async throws -> [ThreadSummary] = { _ in [] }
   }
 
   let clientId = "test-client"
@@ -144,6 +157,46 @@ final class FakeDaemonClient: DaemonClient, @unchecked Sendable {
   func artifact(threadId: String, artifactId: String) async throws -> ArtifactPayload {
     log("artifact:\(threadId)/\(artifactId)")
     return try await current.artifact(threadId, artifactId)
+  }
+
+  // Routines
+  func routines() async throws -> RoutineListResponse {
+    log("routines")
+    return try await current.routines()
+  }
+
+  func routine(_ id: String) async throws -> Routine {
+    log("routine:\(id)")
+    guard let routine = try await current.routines().routines.first(where: { $0.id == id }) else {
+      throw DaemonClientError.http(
+        status: 404, body: ApiErrorBody(error: .notFound, message: "Routine not found"))
+    }
+    return routine
+  }
+
+  func createRoutine(_ request: CreateRoutineRequest) async throws -> Routine {
+    log("createRoutine:\(request.name)")
+    return try await current.createRoutine(request)
+  }
+
+  func runRoutine(_ id: String) async throws -> RoutineRunResponse {
+    log("runRoutine:\(id)")
+    return try await current.runRoutine(id)
+  }
+
+  func pauseRoutine(_ id: String) async throws -> Routine {
+    log("pauseRoutine:\(id)")
+    return try await current.pauseRoutine(id, true)
+  }
+
+  func resumeRoutine(_ id: String) async throws -> Routine {
+    log("resumeRoutine:\(id)")
+    return try await current.pauseRoutine(id, false)
+  }
+
+  func threads(routineId: String) async throws -> [ThreadSummary] {
+    log("threads:routine:\(routineId)")
+    return try await current.routineRuns(routineId)
   }
 
   // Events
