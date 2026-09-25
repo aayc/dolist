@@ -101,7 +101,8 @@ function PairForm({
   const { client } = useServices();
   const [url, setUrl] = useState(machine?.url ?? "");
   const [code, setCode] = useState("");
-  const [name, setName] = useState("");
+  // Pairing with the vault's machine again keeps the name every device knows it by.
+  const [name, setName] = useState(machine?.name ?? "");
   const [shown, setShown] = useState({ url: false, code: false });
   const [pairing, setPairing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -238,6 +239,7 @@ function MachineStatus({
   const thisDevice = useDeviceStore((s) => s.device?.device.id);
   const [busy, setBusy] = useState<"check" | "forget" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pairing, setPairing] = useState(false);
   const [confirm, dialog] = useConfirm();
   const now = useNow(15_000);
   const machine = status.machine as AlwaysOnMachine;
@@ -333,6 +335,18 @@ function MachineStatus({
         <p className="muted">Known once the machine answers.</p>
       )}
       <InlineError message={error} testId="machine-action-error" />
+      {pairing ? (
+        <>
+          <h3 className="settings-subheading">Pair again</h3>
+          <PairForm
+            machine={machine}
+            onPaired={(next) => {
+              setPairing(false);
+              onChange(next);
+            }}
+          />
+        </>
+      ) : null}
       <div className="remote-actions machine-actions">
         <button
           type="button"
@@ -343,6 +357,18 @@ function MachineStatus({
         >
           {busy === "check" ? "Checking…" : "Check now"}
         </button>
+        {pairing ? null : (
+          <button
+            type="button"
+            className="button"
+            disabled={busy !== null}
+            onClick={() => setPairing(true)}
+            data-tooltip="Pair with a new code, for when the machine no longer accepts this device"
+            data-testid="machine-pair-again"
+          >
+            Pair again…
+          </button>
+        )}
         <button
           type="button"
           className="button is-danger-ghost"
