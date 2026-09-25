@@ -51,6 +51,51 @@ describe("AgentRuntime status", () => {
     await expect(t.runtime.setEnabled(true)).resolves.toBeUndefined();
   });
 
+  it("reports computer access and gives the orchestrator the desktop apps", async () => {
+    const execution = {
+      ...createFakeExecution({ computer: true }),
+      apps: {
+        runningApps: async () => [{ name: "Grok Bot", pid: 7, active: true, hidden: false }],
+        installedApps: async () => [
+          { name: "WhatsApp", path: "/Applications/WhatsApp.app" },
+          { name: "1Password", path: "/Applications/1Password.app" },
+        ],
+      },
+      computerAccess: async () => ({
+        accessibility: false,
+        screenRecording: false,
+        appControl: true,
+        hostApp: { name: "Terminal" },
+      }),
+    } as unknown as ReturnType<typeof createFakeExecution>;
+    const digests: string[] = [];
+    const t = await runtime({
+      execution,
+      scriptFor: () => async (ctx) => {
+        if (ctx.role !== "orchestrator") return;
+        digests.push(ctx.message);
+        const id = /\] (\S+):/.exec(ctx.message)?.[1];
+        await ctx.callTool("set_task_status", { taskId: id, status: "waiting_user" });
+      },
+    });
+    await vi.waitFor(() => {
+      expect(t.runtime.status().execution.computerAccess).toEqual({
+        accessibility: false,
+        screenRecording: false,
+        appControl: true,
+        hostApp: { name: "Terminal" },
+      });
+    }, WAIT);
+    await t.storage.write(TODAY, "- [ ] Ask Grok Bot for a packing list\n");
+    await t.waitForStatus("Ask Grok Bot for a packing list", "waiting_user");
+    const digest = digests.at(-1)!;
+    expect(digest).toContain("Desktop apps (computer): Grok Bot, WhatsApp.");
+    expect(digest).toContain(
+      "Computer access: missing — Accessibility and Screen Recording not allowed for “Terminal”.",
+    );
+    expect(digest).not.toContain("1Password");
+  });
+
   it("mock mode: healthy and reports the mock model", async () => {
     const t = await runtime();
     expect(t.runtime.mode).toBe("mock");

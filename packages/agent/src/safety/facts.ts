@@ -1,13 +1,15 @@
 /**
  * Normalizes a tool call into the facts the rules inspect: which family of tool it is, the element
- * being clicked or typed into, typed text, URLs, paths, shell command, MCP server/tool words and
- * every string in the input. Rules never look at raw inputs directly.
+ * being clicked or typed into, typed text, URLs, paths, shell command, MCP server/tool words, the
+ * app a computer action targets and every string in the input. Rules never look at raw inputs
+ * directly.
  */
+import type { ToolSubject } from "@ddl/core";
 import { MCP_TOOL_PREFIX, TOOL } from "../tools/contracts";
 import { INTERNAL_TOOLS, KNOWLEDGE_TOOLS } from "./policy";
 import { parseShell, type ShellAnalysis } from "./shell";
 import type { ActionContext } from "./types";
-import { normalizePhrase } from "./vocab";
+import { normalizePhrase, READINGS_SEPARATOR } from "./vocab";
 
 export type ToolFamily =
   | "internal"
@@ -48,6 +50,16 @@ export interface McpFacts {
   words: readonly string[];
 }
 
+/** The app a computer action targets. */
+export interface AppFacts {
+  /** The model's `app` text and, once the subject is added, the app's real name. */
+  readonly names: readonly string[];
+  /** How evidence names the app: its real name when known. */
+  readonly label: string;
+  /** The normalized real name (else the model's text): what standing grants are scoped to. */
+  readonly target: string;
+}
+
 export interface ActionFacts {
   readonly ctx: ActionContext;
   readonly family: ToolFamily;
@@ -74,7 +86,22 @@ export interface ActionFacts {
   /** Normalized task text + rationale, for intent heuristics. */
   readonly intent: string;
   readonly shell?: ShellAnalysis;
+  /** What the tool knows about the real target (`ToolSafetyHints.subject`), sanitized. */
+  readonly subject?: ToolSubject;
+  readonly app?: AppFacts;
 }
+
+/** Computer tools that only look: screenshots, the app list, an app's accessibility tree. */
+export const COMPUTER_READ_RE = /(?:^|_)(?:screenshot|apps|app_state)$/;
+
+/** App control operations and the UI action the rules treat them as. */
+const COMPUTER_ACTIONS: Readonly<Record<string, UiAction>> = {
+  press: "click",
+  set_value: "type",
+  apps: "read",
+  app_state: "read",
+  open_app: "other",
+};
 
 const FILE_READ_TOOLS: ReadonlySet<string> = new Set([TOOL.read, TOOL.grep, TOOL.find, TOOL.ls]);
 const FILE_WRITE_TOOLS: ReadonlySet<string> = new Set([TOOL.write, TOOL.edit]);
@@ -138,7 +165,8 @@ function uiFacts(operation: string): UiFacts | undefined {
   const m = /^(browser|computer)_(.+)$/.exec(operation);
   if (!m) return undefined;
   const surface = m[1] as "browser" | "computer";
-  const action = UI_ACTIONS.find(([re]) => re.test(m[2]!))?.[1] ?? "other";
+  const special = surface === "computer" ? COMPUTER_ACTIONS[m[2]!] : undefined;
+  const action = special ?? UI_ACTIONS.find(([re]) => re.test(m[2]!))?.[1] ?? "other";
   return { surface, action };
 }
 
@@ -238,6 +266,64 @@ function typedValuesOf(input: Record<string, unknown>, ui: UiFacts | undefined):
   return parts.filter((p): p is string => p !== undefined);
 }
 
+const MAX_SUBJECT_CHARS = 200;
+
+/** The tool's `subject` hint, if it gave a usable one. A broken hint is ignored, never trusted. */
+function subjectOf(ctx: ActionContext): ToolSubject | undefined {
+  let raw: unknown;
+  try {
+    raw = ctx.hints?.subject?.(ctx.input);
+  } catch {
+    return undefined;
+  }
+  if (!isRecord(raw)) return undefined;
+  const clean = (value: unknown) =>
+    typeof value === "string" && value.trim()
+      ? value.replace(/\s+/g, " ").trim().slice(0, MAX_SUBJECT_CHARS)
+      : undefined;
+  const app = clean(raw.app);
+  const element = clean(raw.element);
+  if (!app && !element) return undefined;
+  return { ...(app ? { app } : {}), ...(element ? { element } : {}) };
+}
+
+function appNameKey(name: string): string {
+  return name
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/\.app\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function appFacts(names: readonly string[]): AppFacts | undefined {
+  const usable = names.map((n) => n.trim()).filter((n) => n.length > 0);
+  if (usable.length === 0) return undefined;
+  const real = usable.at(-1)!;
+  return { names: usable, label: real.slice(0, 80), target: appNameKey(real).slice(0, 200) };
+}
+
+/**
+ * The facts with the subject's real target added to the model's words: its element label joins
+ * the element text and its app name joins the app names. The evaluator only takes risky rule hits
+ * from these (see `analyzeAction`), so a subject can make a verdict stricter, never looser.
+ */
+export function withSubject(facts: ActionFacts): ActionFacts {
+  const subject = facts.subject;
+  if (!subject) return facts;
+  const element = [facts.element, subject.element ? normalizePhrase(subject.element) : ""]
+    .filter(Boolean)
+    .join(READINGS_SEPARATOR);
+  const names = [...(facts.app?.names ?? []), ...(subject.app ? [subject.app] : [])];
+  const app = appFacts(names);
+  return {
+    ...facts,
+    element,
+    elementLabel: (subject.element ?? facts.elementLabel).slice(0, 120),
+    ...(app ? { app } : {}),
+  };
+}
+
 export function buildFacts(ctx: ActionContext): ActionFacts {
   const input = isRecord(ctx.input) ? ctx.input : {};
   const mcpName = parseMcpToolName(ctx.toolName);
@@ -250,6 +336,10 @@ export function buildFacts(ctx: ActionContext): ActionFacts {
   const rawElement = elementText(input, ui?.action);
   const strings: string[] = [];
   collectStrings(ctx.input, strings, { chars: 50_000 });
+  const subject = ui?.surface === "computer" ? subjectOf(ctx) : undefined;
+  const app = ui?.surface === "computer" ? appFacts([str(input.app) ?? ""]) : undefined;
+  // Setting a value inserts line breaks as text; only keyboard typing turns them into Return.
+  const setsValue = ui?.surface === "computer" && /(?:^|_)set_value$/.test(operation);
 
   const urls = fieldStrings(input, URL_KEYS_RE);
   const paths = family === "shell" ? [] : fieldStrings(input, PATH_KEYS_RE);
@@ -272,7 +362,7 @@ export function buildFacts(ctx: ActionContext): ActionFacts {
     element: normalizePhrase(rawElement),
     elementLabel: rawElement.trim().slice(0, 120),
     ...(typedValues.length > 0 ? { typedText: typedValues.join("\n") } : {}),
-    typedLineBreak: typedValues.some((value) => /[\r\n]/.test(value)),
+    typedLineBreak: !setsValue && typedValues.some((value) => /[\r\n]/.test(value)),
     submit: input.submit === true,
     ...(rawKey ? { key: normalizeKey(rawKey) } : {}),
     urls,
@@ -284,5 +374,7 @@ export function buildFacts(ctx: ActionContext): ActionFacts {
     ...(command === undefined
       ? {}
       : { shell: parseShell(command, ctx.workspaceDir ? { workspaceDir: ctx.workspaceDir } : {}) }),
+    ...(subject ? { subject } : {}),
+    ...(app ? { app } : {}),
   };
 }

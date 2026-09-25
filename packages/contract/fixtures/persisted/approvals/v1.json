@@ -16,6 +16,15 @@
       "createdAt": 1790150000000,
       "categories": ["booking"],
       "risk": "high"
+    },
+    {
+      "toolName": "computer_set_value",
+      "scope": "task",
+      "taskId": "tsk_7fq2m9x0ab",
+      "createdAt": 1790154005000,
+      "categories": ["computer_control"],
+      "risk": "medium",
+      "target": "grok bot"
     }
   ],
   "approvals": [

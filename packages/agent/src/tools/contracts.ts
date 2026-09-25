@@ -44,6 +44,12 @@ export const TOOL = {
   computerType: "computer_type",
   computerKey: "computer_key",
   computerScroll: "computer_scroll",
+  // App control (computer use through the helper: one app at a time, in the background)
+  computerApps: "computer_apps",
+  computerOpenApp: "computer_open_app",
+  computerAppState: "computer_app_state",
+  computerPress: "computer_press",
+  computerSetValue: "computer_set_value",
   // Harness built-ins (Pi coding tools, bound to the task workspace)
   bash: "bash",
   read: "read",
@@ -101,9 +107,23 @@ export interface BrowserExtractTextInput {
   maxChars?: number;
 }
 
-export interface ComputerClickInput {
-  x: number;
-  y: number;
+/**
+ * App control targets: `app` is the app's name (or bundle id) as the model knows it, `id` an
+ * element id from that app's latest `computer_app_state`. Tools resolve both to the real app and
+ * element, which approval cards and the safety rules see alongside the model's words.
+ */
+export interface AppTargetInput {
+  app?: string;
+  id?: string;
+}
+
+export interface ComputerScreenshotInput {
+  app?: string;
+}
+/** Screen-level: `x`/`y` required. With `app`: `id`, or `x`/`y` in that app's last screenshot. */
+export interface ComputerClickInput extends AppTargetInput {
+  x?: number;
+  y?: number;
   button?: "left" | "right";
   double?: boolean;
   element: string;
@@ -112,15 +132,52 @@ export interface ComputerMoveInput {
   x: number;
   y: number;
 }
-export interface ComputerTypeInput {
+export interface ComputerTypeInput extends AppTargetInput {
   text: string;
 }
 export interface ComputerKeyInput {
   combo: string;
+  app?: string;
 }
-export interface ComputerScrollInput {
+export interface ComputerScrollInput extends AppTargetInput {
   dx: number;
   dy: number;
+  x?: number;
+  y?: number;
+}
+export interface ComputerAppsInput {
+  installed?: boolean;
+}
+export interface ComputerOpenAppInput {
+  app: string;
+}
+export interface ComputerAppStateInput {
+  app: string;
+  /** An element whose omitted descendants to read. */
+  expand?: string;
+  maxNodes?: number;
+}
+export interface ComputerPressInput {
+  app: string;
+  id: string;
+  action?:
+    | "press"
+    | "show-menu"
+    | "confirm"
+    | "cancel"
+    | "increment"
+    | "decrement"
+    | "raise"
+    | "pick"
+    | "scroll-to-visible";
+  /** What the model thinks it presses (the real label comes from the snapshot). */
+  element?: string;
+}
+export interface ComputerSetValueInput {
+  app: string;
+  id: string;
+  value: string;
+  element?: string;
 }
 
 export interface WebFetchInput {

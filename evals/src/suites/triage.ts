@@ -60,6 +60,8 @@ interface TriageCase {
   capabilities?: Capability[];
   /** Other decisions that are also fine for this task. */
   acceptable?: Decision[];
+  /** The digest says computer access isn't allowed (default: allowed). */
+  computerAccess?: "missing";
 }
 
 interface RecordedCall {
@@ -88,6 +90,14 @@ const FILLER_TASKS = [
   },
 ];
 const KNOWN_TASK_IDS = new Set([CASE_TASK_ID, ...FILLER_TASKS.map((t) => t.taskId)]);
+
+/** The Mac's apps as the digest lists them (running ones first); the fake brain's tests read it too. */
+const DESKTOP_APPS: string[] = JSON.parse(
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "../../datasets/triage-desktop-apps.json"),
+    "utf8",
+  ),
+);
 
 // ── Dataset ─────────────────────────────────────────────────────────────────
 
@@ -131,6 +141,9 @@ function loadDataset(): { cases: TriageCase[]; problems: string[] } {
     }
     if (c.acceptable !== undefined && !c.acceptable.every((d) => DECISIONS.includes(d))) {
       problems.push(`${where}: bad acceptable decision`);
+    }
+    if (c.computerAccess !== undefined && c.computerAccess !== "missing") {
+      problems.push(`${where}: computerAccess can only be "missing"`);
     }
     cases.push(c as TriageCase);
   });
@@ -181,12 +194,22 @@ function digestFor(c: TriageCase, now: number): string {
       },
     ],
     capabilities: {
-      available: ["web", "browser", "files", "shell", "connectors"],
-      unavailable: ["computer"],
+      available: ["web", "browser", "computer", "files", "shell", "connectors"],
+      unavailable: [],
       connectors: [
         { name: "gmail", state: "connected", toolCount: 12 },
         { name: "google-calendar", state: "connected", toolCount: 6 },
       ],
+      computer: {
+        apps: DESKTOP_APPS,
+        moreApps: 23,
+        access: {
+          accessibility: c.computerAccess !== "missing",
+          screenRecording: c.computerAccess !== "missing",
+          appControl: true,
+          host: "Daily Do List",
+        },
+      },
     },
   });
 }
@@ -343,11 +366,26 @@ const ONLINE_ERRAND = /\b(membership|online|subscription)\b/;
 const QUESTION_START =
   /^(what|what's|how|when|which|who|where|why|calculate|convert|define|speed of|capital of)\b/;
 
+/** A desktop app from the digest's list that the task names. */
+function namesDesktopApp(text: string): boolean {
+  const words = ` ${text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ")} `;
+  return DESKTOP_APPS.some((app) => words.includes(` ${app.toLowerCase()} `));
+}
+
 /** Keyword triage used as the deterministic "model" in mock mode. */
-export function baselineTriage(text: string): { decision: Decision; capabilities: Capability[] } {
+export function baselineTriage(
+  text: string,
+  computerAccess: "allowed" | "missing" = "allowed",
+): { decision: Decision; capabilities: Capability[] } {
   const t = text.toLowerCase().trim();
   const words = t.split(/\s+/).filter(Boolean);
   if (/\[\[daily\/\d{4}-\d{2}-\d{2}\]\]/.test(t)) return { decision: "ignore", capabilities: [] };
+  // A task for a desktop app goes to that app; without access, the user is asked to allow it.
+  if (namesDesktopApp(text)) {
+    return computerAccess === "missing"
+      ? { decision: "comment", capabilities: [] }
+      : { decision: "delegate", capabilities: ["computer"] };
+  }
   if (words.length <= 5 && VAGUE.test(t) && !/https?:/.test(t)) {
     return { decision: "ask_user", capabilities: [] };
   }
@@ -371,8 +409,9 @@ export function baselineTriage(text: string): { decision: Decision; capabilities
 }
 
 const baselineScript: AgentScript = async (ctx) => {
+  const access = /\nComputer access: missing/.test(ctx.message) ? "missing" : "allowed";
   for (const item of parseDigestItems(ctx.message)) {
-    const { decision, capabilities } = baselineTriage(item.text);
+    const { decision, capabilities } = baselineTriage(item.text, access);
     const taskId = item.taskId;
     switch (decision) {
       case "delegate":
@@ -380,6 +419,14 @@ const baselineScript: AgentScript = async (ctx) => {
         await ctx.callTool(TOOL.spawnSubagent, { taskId, goal: item.text, capabilities });
         break;
       case "comment":
+        if (access === "missing" && namesDesktopApp(item.text)) {
+          await ctx.callTool(TOOL.postComment, {
+            taskId,
+            text: "This needs access to your Mac's apps: open Settings → Computer Use in Daily Do List and allow it.",
+          });
+          await ctx.callTool(TOOL.setTaskStatus, { taskId, status: "waiting_user" });
+          break;
+        }
         await ctx.callTool(TOOL.postComment, { taskId, text: "Here's the answer." });
         await ctx.callTool(TOOL.setTaskStatus, { taskId, status: "done", summary: "Answered" });
         break;

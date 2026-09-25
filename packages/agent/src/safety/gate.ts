@@ -73,6 +73,7 @@ export function createSafetyGate(options: SafetyGateOptions): SafetyGate {
         taskId: ctx.taskId,
         categories: verdict.categories,
         risk: verdict.risk,
+        ...(verdict.target ? { target: verdict.target } : {}),
       });
       if (grant) {
         observe(call, {
@@ -101,6 +102,7 @@ export function createSafetyGate(options: SafetyGateOptions): SafetyGate {
         ...(options.approvalTimeoutMs === undefined
           ? {}
           : { timeoutMs: options.approvalTimeoutMs }),
+        ...(verdict.target ? { target: verdict.target } : {}),
       });
       return outcome.approved ? { allow: true } : { allow: false, reason: denialReason(outcome) };
     } catch (error) {

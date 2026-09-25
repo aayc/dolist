@@ -17,12 +17,14 @@ import {
   ApprovalDecisionRequestSchema,
   ApprovalListResponseSchema,
   ApprovalResponseSchema,
+  ComputerPermissionsOpenRequestSchema,
   ConnectorsResponseSchema,
   CreateFolderRequestSchema,
   CreateFolderResponseSchema,
   DailyNoteResponseSchema,
   HealthResponseSchema,
   NoteResponseSchema,
+  OkResponseSchema,
   PostMessageRequestSchema,
   RenameRequestSchema,
   RenameResponseSchema,
@@ -498,6 +500,24 @@ export const API_CONTRACT = {
       GET: {
         summary: "The vault's sync state (and, with the sync service, this device's name).",
         responses: { 200: json(SyncStatusResponseSchema, "Sync status.") },
+      },
+    },
+  },
+  computerPermissionsOpen: {
+    path: "/api/computer/permissions/open",
+    auth: "bearer",
+    methods: {
+      POST: {
+        summary:
+          "Open System Settings at a privacy pane computer use needs (Accessibility or Screen Recording).",
+        body: ComputerPermissionsOpenRequestSchema,
+        responses: {
+          200: json(OkResponseSchema, "System Settings opened."),
+          400: invalidBody(),
+          404: error(["not_found"], "Not a Mac: there is no System Settings to open."),
+          500: error(["internal_error"], "System Settings didn't open."),
+          ...BODY_ERRORS,
+        },
       },
     },
   },

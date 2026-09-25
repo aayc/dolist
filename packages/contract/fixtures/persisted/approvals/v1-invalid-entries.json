@@ -6,6 +6,8 @@
     { "toolName": "browser_click", "scope": "task", "taskId": "tsk_1", "createdAt": 1790150000000, "categories": "payment" },
     { "toolName": "browser_click", "scope": "task", "taskId": "tsk_1", "createdAt": 1790150000000, "categories": ["payment", "teleport"] },
     { "toolName": "browser_type", "scope": "task", "taskId": null, "createdAt": 1790150000000 },
+    { "toolName": "computer_press", "scope": "always", "taskId": null, "createdAt": 1790150000000, "target": "" },
+    { "toolName": "computer_press", "scope": "always", "taskId": null, "createdAt": 1790150000000, "target": 7 },
     { "toolName": 42 }
   ],
   "approvals": [

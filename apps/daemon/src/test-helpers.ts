@@ -12,6 +12,7 @@ import {
   type AppSettings,
   type ArtifactMeta,
   CLIENT_ID_HEADER,
+  type ComputerPermissionPane,
   Emitter,
   type Logger,
   type SurfaceKind,
@@ -27,6 +28,7 @@ import { MemoryStorageProvider, type StorageProvider } from "@ddl/storage";
 import type { Hono } from "hono";
 import { createApp } from "./app";
 import { createSettingsStore, type SettingsStore } from "./settings-store";
+import type { SystemSettingsOpener } from "./system-settings";
 import { WriteTracker } from "./write-tracker";
 
 export const TEST_PORT = 7331;
@@ -247,6 +249,18 @@ export interface TestRequestInit {
   clientId?: string;
 }
 
+/** Records the panes it was asked to open (and opens nothing). */
+export class FakeSystemSettings implements SystemSettingsOpener {
+  readonly opened: ComputerPermissionPane[] = [];
+  outcome: "opened" | "unsupported" | Error = "opened";
+
+  async open(pane: ComputerPermissionPane): Promise<"opened" | "unsupported"> {
+    if (this.outcome instanceof Error) throw this.outcome;
+    if (this.outcome === "opened") this.opened.push(pane);
+    return this.outcome;
+  }
+}
+
 export interface TestAppOptions<S extends StorageProvider = MemoryStorageProvider> {
   storage?: S;
   runtime?: AgentRuntime;
@@ -256,6 +270,7 @@ export interface TestAppOptions<S extends StorageProvider = MemoryStorageProvide
   syncStatus?: () => SyncStatusResponse;
   now?: () => Date;
   logger?: Logger;
+  systemSettings?: FakeSystemSettings;
 }
 
 export interface TestApp<S extends StorageProvider = MemoryStorageProvider> {
@@ -265,6 +280,7 @@ export interface TestApp<S extends StorageProvider = MemoryStorageProvider> {
   settings: SettingsStore;
   token: string;
   writes: WriteTracker;
+  systemSettings: FakeSystemSettings;
   request(path: string, init?: TestRequestInit): Promise<Response>;
 }
 
@@ -280,6 +296,7 @@ export async function createTestApp<S extends StorageProvider = MemoryStoragePro
   const settings = options.settings ?? (await createSettingsStore({ storage }));
   const token = testToken();
   const writes = new WriteTracker();
+  const systemSettings = options.systemSettings ?? new FakeSystemSettings();
   const app = createApp({
     storage,
     runtime,
@@ -290,6 +307,7 @@ export async function createTestApp<S extends StorageProvider = MemoryStoragePro
     webDist: options.webDist ?? null,
     writes,
     ...(options.syncStatus ? { syncStatus: options.syncStatus } : {}),
+    systemSettings,
     ...(options.now ? { now: options.now } : {}),
   });
 
@@ -313,5 +331,5 @@ export async function createTestApp<S extends StorageProvider = MemoryStoragePro
     );
   };
 
-  return { app, storage, runtime, settings, token, writes, request };
+  return { app, storage, runtime, settings, token, writes, systemSettings, request };
 }

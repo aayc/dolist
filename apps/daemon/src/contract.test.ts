@@ -24,6 +24,7 @@ import type { SettingsStore } from "./settings-store";
 import {
   createTestApp,
   FakeAgentRuntime,
+  FakeSystemSettings,
   makeApproval,
   makeThread,
   type TestAppOptions,
@@ -454,6 +455,30 @@ const scenarios: Record<string, Scenario> = {
     const { api } = await setup(observed);
     expect((await api.call("ws", "GET")).status).toBe(426);
     expect((await api.call("ws", "GET", { host: "evil.example:7331" })).status).toBe(403);
+  },
+
+  "POST computerPermissionsOpen": async (observed) => {
+    const systemSettings = new FakeSystemSettings();
+    const { api } = await setup(observed, { systemSettings });
+    const open = (json: unknown, init = {}) =>
+      api.call("computerPermissionsOpen", "POST", { json, ...init });
+    expect((await open({ pane: "accessibility" })).body).toEqual({ ok: true });
+    expect((await open({ pane: "screenRecording" })).status).toBe(200);
+    expect(systemSettings.opened).toEqual(["accessibility", "screenRecording"]);
+    expect((await open({ pane: "fullDiskAccess" })).body).toMatchObject({
+      error: "invalid_request",
+    });
+    expect((await open({ pane: "accessibility", url: "file:///etc/passwd" })).status).toBe(400);
+    expect((await open(undefined, { body: "{" })).body).toMatchObject({ error: "invalid_json" });
+    expect((await open(undefined, { body: TOO_BIG })).status).toBe(413);
+    systemSettings.outcome = "unsupported";
+    expect((await open({ pane: "accessibility" })).body).toMatchObject({ error: "not_found" });
+    systemSettings.outcome = new Error("open failed");
+    expect((await open({ pane: "accessibility" })).body).toEqual({
+      error: "internal_error",
+      message: "System Settings didn't open",
+    });
+    expect(systemSettings.opened).toHaveLength(2);
   },
 };
 

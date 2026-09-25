@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   agentItem,
   agentModeLabel,
+  computerItem,
   connectionItem,
   runningItem,
   visibleSaveState,
@@ -67,5 +68,27 @@ describe("status bar items", () => {
     for (const state of ["connecting", "reconnecting", "offline"] as const) {
       expect(connectionItem(state, "http")?.title).toMatch(/daemon[^.]*$/);
     }
+  });
+
+  it("warns about missing computer access only while the agent is on", () => {
+    const missing = {
+      accessibility: false,
+      screenRecording: false,
+      appControl: true,
+      hostApp: { name: "Terminal" },
+    };
+    expect(computerItem(missing, true)).toEqual({
+      label: "Computer access",
+      title:
+        "Agents can't use your Mac's apps yet: allow Accessibility and Screen Recording for “Terminal”",
+    });
+    expect(computerItem({ ...missing, accessibility: true, hostApp: undefined }, true)?.title).toBe(
+      "Agents can't use your Mac's apps yet: allow Screen Recording for the app running Daily Do List",
+    );
+    expect(computerItem(missing, false)).toBeNull();
+    expect(
+      computerItem({ ...missing, accessibility: true, screenRecording: true }, true),
+    ).toBeNull();
+    expect(computerItem(undefined, true)).toBeNull();
   });
 });

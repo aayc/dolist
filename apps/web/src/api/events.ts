@@ -130,6 +130,14 @@ const agentStatus = shape({
   execution: shape({
     provider: str,
     capabilities: shape({ shell: bool, browser: bool, computer: bool }),
+    computerAccess: optional(
+      shape({
+        accessibility: bool,
+        screenRecording: bool,
+        appControl: bool,
+        hostApp: optional(shape({ name: str, path: optional(str), bundleId: optional(str) })),
+      }),
+    ),
   }),
   problem: optional(str),
 });

@@ -666,11 +666,52 @@ const connectorStatus = (): Arb<core.ConnectorStatus> =>
     { requiredKeys: ["name", "transport", "state", "toolCount"] },
   );
 
+const computerHostApp = (): Arb<core.ComputerHostApp> =>
+  fc.record(
+    {
+      name: fc.oneof(
+        enumOf("Daily Do List", "Terminal", "iTerm", "Cursor"),
+        p.lengthWithin(p.label(), 1, WIRE_LIMITS.nameLength),
+      ),
+      path: enumOf(
+        "/Applications/Daily Do List.app",
+        "/System/Applications/Utilities/Terminal.app",
+        "/Applications/Cursor.app",
+      ),
+      bundleId: enumOf("app.dailydolist.mac", "com.apple.Terminal", "com.example.editor"),
+    },
+    { requiredKeys: ["name"] },
+  );
+
+const computerAccess = (): Arb<core.ComputerAccess> =>
+  fc.record(
+    {
+      accessibility: fc.boolean(),
+      screenRecording: fc.boolean(),
+      appControl: fc.boolean(),
+      hostApp: computerHostApp(),
+    },
+    { requiredKeys: ["accessibility", "screenRecording", "appControl"] },
+  );
+
 const executionStatus = (): Arb<core.ExecutionStatus> =>
-  fc.record({
-    provider: enumOf("local", "cloud", "none", "fake", "mock"),
-    capabilities: fc.record({ shell: fc.boolean(), browser: fc.boolean(), computer: fc.boolean() }),
-  });
+  fc.record(
+    {
+      provider: enumOf("local", "cloud", "none", "fake", "mock"),
+      capabilities: fc.record({
+        shell: fc.boolean(),
+        browser: fc.boolean(),
+        computer: fc.boolean(),
+      }),
+      computerAccess: computerAccess(),
+    },
+    { requiredKeys: ["provider", "capabilities"] },
+  );
+
+const computerPermissionPane = () =>
+  enumOf<core.ComputerPermissionPane>("accessibility", "screenRecording");
+const computerPermissionsOpenRequest = (): Arb<core.ComputerPermissionsOpenRequest> =>
+  fc.record({ pane: computerPermissionPane() });
 
 const agentStatusResponse = (): Arb<core.AgentStatusResponse> =>
   fc.record(
@@ -998,6 +1039,8 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   SearchResponse: searchResponse,
   SettingsResponse: settingsResponse,
   ConnectorStatus: connectorStatus,
+  ComputerHostApp: computerHostApp,
+  ComputerAccess: computerAccess,
   ExecutionStatus: executionStatus,
   AgentStatusResponse: agentStatusResponse,
   SetAgentEnabledRequest: setAgentEnabledRequest,
@@ -1012,6 +1055,8 @@ export const wireArbitraries: { [K in WireSchemaName]: () => Arb<WireType<K>> } 
   SyncState: syncState,
   SyncTargetKind: syncTargetKind,
   SyncStatusResponse: syncStatusResponse,
+  ComputerPermissionPane: computerPermissionPane,
+  ComputerPermissionsOpenRequest: computerPermissionsOpenRequest,
   ApiErrorCode: apiErrorCode,
   ApiErrorBody: apiErrorBody,
   ConflictResponse: conflictResponse,
@@ -1095,6 +1140,8 @@ export const arb = plainFactories({
   searchResponse,
   settingsResponse,
   connectorStatus,
+  computerHostApp,
+  computerAccess,
   executionStatus,
   agentStatusResponse,
   setAgentEnabledRequest,
@@ -1106,6 +1153,8 @@ export const arb = plainFactories({
   approvalResponse,
   approvalDecisionRequest,
   connectorsResponse,
+  computerPermissionPane,
+  computerPermissionsOpenRequest,
   apiErrorCode,
   apiErrorBody,
   conflictResponse,

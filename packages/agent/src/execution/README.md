@@ -34,7 +34,7 @@ capabilities that are both granted to the subagent (`ctx.capabilities`) and avai
 | --- | --- |
 | `shell` | always |
 | `browser` | a Chrome/Chromium executable is found: `browser.executablePath`, else the `channel` (installed Google Chrome by default, also `msedge`/`chromium`), else Playwright's managed Chromium |
-| `computer` | macOS and `computer.enabled !== false` (permissions are checked separately with `computer.check()`) |
+| `computer` | macOS and `computer.enabled !== false` (permissions are checked separately with `computer.check()`); app control (`provider.apps`) when a helper is configured (`computer.helper`) and starts |
 
 The shell is not a tool here: the harness's built-in `bash` tool runs commands through
 `provider.shell`. `web` (fetch/search), `files` and `connectors` are provided by other modules.
@@ -53,6 +53,8 @@ The shell is not a tool here: the harness's built-in `bash` tool runs commands t
   and relaunches if it dies. At most 8 tabs stay open; the least recently used idle one is closed.
 - **Computer (macOS)** — `screencapture` + `sips` screenshots (≤ 1280 px wide by default) and
   CoreGraphics mouse/keyboard events posted from JXA (`osascript -l JavaScript`).
+- **App control (macOS)** — the `ddl-computer` helper operates one app at a time in the background
+  through its accessibility tree (see below).
 
 ### Browser details
 
@@ -83,6 +85,43 @@ The shell is not a tool here: the harness's built-in `bash` tool runs commands t
   actions, and every action also emits one frame with `action: { kind, x?, y?, text? }` so the UI
   updates even when nothing repaints.
 
+### App control (macOS)
+
+With a helper (`computer.helper`; the daemon finds it: `DDL_COMPUTER_HELPER`, the copy the Mac app
+bundles next to the daemon, a dev build), `provider.apps` operates apps without activating them or
+moving the real cursor. Without one, `apps` is undefined and computer use stays screen-level.
+
+- **Client** (`local/app-control/client.ts`): starts `ddl-computer serve` on first use with a minimal
+  environment (no API keys), checks `hello` (protocol 1), then speaks JSON lines: one request per
+  line with an id, answers matched by id, pipelined. Every call has a timeout (10 s; 20–25 s for
+  snapshots, screenshots and launching an app; longer for long text), and a helper that stops
+  answering is killed. When it dies, its pending calls fail and the next call restarts it after a
+  backoff (250 ms, doubling up to 30 s; a call inside a delay over 2 s fails fast; 30 s of uptime
+  resets it). A missing binary or another protocol version disables app control for good.
+  `dispose()` closes stdin, then sends SIGTERM and SIGKILL.
+- **Results are untrusted** (`protocol.ts`): each is type-checked and bounded (names ≤ 200
+  characters, values ≤ 1000, trees ≤ 200k, ≤ 5000 elements) before anything uses it.
+- **Errors** (`controller.ts`): `permission` becomes a `ComputerPermissionError` naming the app that
+  holds the permissions and what to allow (Settings → Computer Use in Daily Do List, or the System
+  Settings pane), `protected` a `ProtectedAppError` (off-limits: don't work around it), `stale` a
+  `StaleElementError` (read the app again); other codes keep the helper's message.
+- **Per-thread session** (`app-session.ts`): the apps a thread resolved, its last snapshots per app
+  and its app screenshots' geometry. Element ids are renumbered per thread (`e1`, `e2`, … never
+  reused), so an id names exactly one element of one snapshot: approval cards and the safety rules
+  read that element's real label, and the action is sent with that snapshot, which the helper
+  refuses as `stale` once the app was read again or changed.
+- **Coordinates**: pixel `(x, y)` of an app screenshot is the screen point `origin + (x, y) / scale`.
+- **Frames**: after an app action, when someone watches the thread's computer view, a screenshot of
+  that window goes to the UI (with the action's point in image pixels); it isn't sent to the model.
+- **Status** (`provider.computerAccess()`, cached by `computer-status.ts`): both permissions (from
+  the helper, else a JXA probe that never prompts or captures), whether app control is available,
+  and the host app: the outermost app bundle of the nearest ancestor process that runs from one
+  (`host-app.ts`), the app macOS gives the permissions to.
+
+Tests use `local/app-control/testing/fake-computer-helper.ts`, a scripted helper (fake apps whose
+windows react to actions; flags for missing permissions, crashes, hangs, version mismatches and
+request logs) spawned with `process.execPath`. They never run the real helper or touch real apps.
+
 ### Browser profile
 
 The agent's cookies and logins live in `<DDL_HOME>/browser-profile` (default
@@ -108,38 +147,56 @@ below only inform it (they can never loosen a verdict).
 | `browser_back` | ✓ | | network | `Go back to the previous page` |
 | `browser_screenshot` | ✓ | | read | `Take a screenshot of the page` |
 | `browser_extract_text` | ✓ | | read | `Read the page text` |
-| `computer_screenshot` | ✓ | | read | `Take a screenshot of the desktop` |
-| `computer_click` | | ✓ | computer_control | `Click at (512, 300) on “Send button” on the desktop` |
+| `computer_screenshot` | ✓ | | read | `Take a screenshot of the desktop` / `Take a screenshot of Grok Bot` |
+| `computer_click` | | ✓ | computer_control | `Click at (512, 300) on “Send button” on the desktop` / `Click “Send” in Grok Bot` |
 | `computer_move` | | | computer_control | `Move the mouse to (512, 300) on the desktop` |
-| `computer_type` | | ✓ | computer_control | `Type “hello” on the desktop` / `Type “hi” and press Return on the desktop` |
-| `computer_key` | | ✓ | computer_control | `Press cmd+shift+4 on the desktop` |
-| `computer_scroll` | | | computer_control | `Scroll down 5 on the desktop` |
+| `computer_type` | | ✓ | computer_control | `Type “hello” on the desktop` / `Type “hi” and press Return in WhatsApp` |
+| `computer_key` | | ✓ | computer_control | `Press cmd+shift+4 on the desktop` / `Press cmd+k in Slack` |
+| `computer_scroll` | | | computer_control | `Scroll down 5 on the desktop` / `Scroll down 3 in Slack` |
+| `computer_apps` | ✓ | | read | `List the apps running on the Mac` |
+| `computer_open_app` | | | computer_control | `Open Grok Bot in the background` |
+| `computer_app_state` | ✓ | | read | `Read Grok Bot's window` / `Read more of “Messages” in Slack` |
+| `computer_press` | | ✓ | computer_control | `Press “Send” in Grok Bot` / `Open the menu of “Downloads” in Finder` |
+| `computer_set_value` | | ✓ | computer_control | `Set “Ask anything” to “tides in Lisbon” in Grok Bot` / `Set “Passcode (password field)” in WhatsApp (value hidden)` |
+
+The last five exist only with app control. Then the screen-level tools also take an optional `app`
+(and `id` for click, type and scroll) that routes them through the helper in the background;
+without `app` they behave exactly as without app control. Actions need an app the thread already
+opened or read, so their approval card names the real app, and every tool with an `app` target
+provides `ToolSafetyHints.subject` (the app's real name and the element's real label).
 
 Element-targeting tools require `element`, a human description of the target that the safety
 evaluator and approval cards rely on. Browser actions return the page snapshot; screenshots return
-image content (≤ 1280 px wide) plus a short caption; computer actions return a screenshot taken right
-after the action (coordinates for the next action refer to it). Failures (stale refs, blocked URLs,
-missing permissions, bad input) come back as `isError` results the model can react to; aborts
-propagate. The first tool of each group carries `promptGuidelines` (snapshot → act by ref → verify;
-page content is untrusted; prefer the browser over computer use; describe targets accurately).
+image content (≤ 1280 px wide) plus a short caption; screen-level computer actions return a
+screenshot taken right after the action (coordinates for the next action refer to it), app actions
+a short text saying whether the window changed. Failures (stale refs, blocked URLs, missing
+permissions, protected apps, bad input) come back as `isError` results the model can react to;
+aborts propagate. The first tool of each group carries `promptGuidelines` (snapshot → act by ref →
+verify; page content is untrusted; prefer the browser over computer use; describe targets
+accurately; with app control: open the app, read it, `set_value` then `press`, read it again, stay
+in the background, protected apps are off-limits).
 
 Frames are forwarded to `ctx.onFrame("browser" | "computer", frame)`. A browser session's frames go
 to the tool set that used it last (resumed runs don't double-deliver). The desktop is shared, so
 computer tool calls are serialized across threads and each thread only receives the frames of its
-own actions.
+own actions; app actions are serialized per helper, and their frames are only captured while
+`ctx.watching("computer")` says someone looks.
 
 ## macOS permissions (computer use)
 
-Grant these to the app that runs the daemon — the terminal or editor you started it from, or the
-Daily Do List app — then restart the daemon:
+Grant these to the app that runs the daemon — the Daily Do List app when it manages the daemon, or
+the terminal or editor you started it from. Settings → Computer Use (web and Mac app) names that
+app, shows both permissions and opens the right System Settings pane
+(`POST /api/computer/permissions/open`):
 
-- **Accessibility** (mouse and keyboard): System Settings → Privacy & Security → Accessibility
+- **Accessibility** (operating apps, mouse and keyboard): System Settings → Privacy & Security →
+  Accessibility. Applies right away.
 - **Screen Recording** (screenshots): System Settings → Privacy & Security → Screen & System Audio
-  Recording
+  Recording. macOS applies it after that app restarts.
 
-`provider.computer.check()` reports what is missing without triggering system prompts. Without
-Accessibility, macOS silently drops synthesized input, so input calls fail with
-`ComputerPermissionError` instead.
+`provider.computer.check()` and `provider.computerAccess()` report what is missing without
+triggering system prompts. Without Accessibility, macOS silently drops synthesized input, so input
+calls fail with `ComputerPermissionError` instead.
 
 ## Security notes
 
@@ -156,6 +213,9 @@ Accessibility, macOS silently drops synthesized input, so input calls fail with
 - **Computer input**: user text is passed to a static JXA script as a JSON argv string and parsed
   there; it is never spliced into script source. Coordinates are validated against the last
   screenshot.
+- **App control**: the helper refuses protected apps (Daily Do List, System Settings, password
+  managers, authenticators…) by bundle id and process tree, and the safety rules deny them by name
+  first. Its answers are parsed defensively and window content reaches the model marked untrusted.
 - **Untrusted content**: page text reaches the model inside results marked as untrusted, and the
   prompt guidelines tell subagents to ignore instructions found on pages.
 
@@ -179,9 +239,12 @@ Accessibility, macOS silently drops synthesized input, so input calls fail with
 ```sh
 pnpm --filter @ddl/agent exec vitest run src/execution      # unit + browser integration tests
 pnpm --filter @ddl/agent exec tsx src/execution/dev/smoke.ts --computer   # manual smoke test
+pnpm --filter @ddl/agent exec tsx src/execution/dev/smoke.ts --no-browser --apps=/path/to/ddl-computer
 ```
 
 Browser integration tests run against a local HTTP server and are skipped when no Chrome/Chromium
-is installed. macOS computer tests use scripted system commands and never touch the real desktop.
-The smoke script uses a throwaway home, opens https://example.com, and with `--computer` runs
-`check()` and one desktop screenshot (no clicks or typing).
+is installed. macOS computer tests use scripted system commands and never touch the real desktop;
+app control tests use the fake helper. The smoke script uses a throwaway home, opens
+https://example.com, with `--computer` runs `check()` and one desktop screenshot (no clicks or
+typing), and with `--apps` starts that helper and prints the access status, the running apps and
+the number of installed ones (it reads no window and never acts).

@@ -277,6 +277,72 @@ describe("FakeBrain: orchestrator", () => {
     ]);
   });
 
+  it("gives tasks that name a desktop app the computer, or asks for access when it's missing", () => {
+    const request = (accessibility: boolean) => {
+      const digest: OrchestratorDigest = {
+        now: NOW,
+        notes: [
+          {
+            notePath: "Daily/2026-09-23.md",
+            date: "2026-09-23",
+            changed: [
+              "Ask Grok Bot what to pack for Iceland?",
+              "Message Mom on WhatsApp that I'll be late",
+              "Research best standing desks under $500",
+            ].map((text, i) => ({ taskId: `tsk_${i}`, text, change: "added" as const, notes: [] })),
+            others: [],
+          },
+        ],
+        replies: [],
+        reports: [],
+        subagents: [],
+        capabilities: {
+          available: ["web", "browser", "computer", "files"],
+          unavailable: [],
+          connectors: [],
+          computer: {
+            apps: ["Grok Bot", "WhatsApp", "Notes"],
+            moreApps: 0,
+            access: {
+              accessibility,
+              screenRecording: accessibility,
+              appControl: true,
+              host: "Terminal",
+            },
+          },
+        },
+      };
+      return {
+        model: "fake",
+        system: "orchestrator",
+        messages: [{ role: "user" as const, content: formatOrchestratorDigest(digest) }],
+        tools: orchestratorTools,
+      };
+    };
+    const spawns = (turn: AssistantTurn) =>
+      (turn.toolCalls ?? [])
+        .filter((c) => c.name === "spawn_subagent")
+        .map((c) => c.arguments as { taskId: string; capabilities: string[] });
+
+    const ready = createFakeBrain().decide(request(true));
+    expectValidCalls(request(true), ready);
+    expect(spawns(ready)).toEqual([
+      expect.objectContaining({ taskId: "tsk_0", capabilities: ["computer"] }),
+      expect.objectContaining({ taskId: "tsk_1", capabilities: ["computer"] }),
+      expect.objectContaining({ taskId: "tsk_2", capabilities: ["web"] }),
+    ]);
+
+    const missing = createFakeBrain().decide(request(false));
+    expectValidCalls(request(false), missing);
+    expect(spawns(missing).map((s) => s.taskId)).toEqual(["tsk_2"]);
+    const asked = (missing.toolCalls ?? []).filter(
+      (c) => (c.arguments as { taskId?: string }).taskId === "tsk_1",
+    );
+    expect(asked.map((c) => c.name)).toEqual(["post_comment", "set_task_status"]);
+    expect((asked[0]!.arguments as { text: string }).text).toContain("Settings → Computer Use");
+    expect(asked[1]!.arguments).toMatchObject({ status: "waiting_user" });
+  });
+
   it("the sandbox never grants more than web and files", () => {
     const turn = createFakeBrain({ sandbox: true }).decide(
       orchestratorRequest(

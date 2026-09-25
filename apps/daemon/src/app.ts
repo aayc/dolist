@@ -11,6 +11,7 @@ import type { AppContext } from "./context";
 import { createErrorHandler, errorBody } from "./errors";
 import { registerAgentRoutes } from "./routes/agent";
 import { registerArtifactRoutes } from "./routes/artifacts";
+import { registerComputerRoutes } from "./routes/computer";
 import { registerDailyRoutes } from "./routes/daily";
 import { registerNoteRoutes } from "./routes/notes";
 import { registerSettingsRoutes } from "./routes/settings";
@@ -20,6 +21,7 @@ import { registerWebRoutes } from "./routes/web";
 import type { VaultSearch } from "./search";
 import { createSecurityPolicy, isApiPath, requestGuard, securityHeaders } from "./security";
 import type { SettingsStore } from "./settings-store";
+import { NO_SYSTEM_SETTINGS, type SystemSettingsOpener } from "./system-settings";
 import { DAEMON_VERSION } from "./version";
 import { WriteTracker } from "./write-tracker";
 
@@ -41,6 +43,8 @@ export interface AppDeps {
   search?: VaultSearch;
   /** The sync engine's status; absent = sync is off. */
   syncStatus?: () => SyncStatusResponse;
+  /** Opens System Settings for computer use permissions. Default: opens nothing (tests). */
+  systemSettings?: SystemSettingsOpener;
   now?: () => Date;
   version?: string;
 }
@@ -62,6 +66,7 @@ export function createApp(deps: AppDeps): Hono {
     writes: deps.writes ?? new WriteTracker(),
     search: deps.search ?? ((query, limit) => searchVault(deps.storage, query, { limit })),
     syncStatus: deps.syncStatus ?? disabledSyncStatusResponse,
+    systemSettings: deps.systemSettings ?? NO_SYSTEM_SETTINGS,
     now: deps.now ?? (() => new Date()),
     version: deps.version ?? DAEMON_VERSION,
   };
@@ -92,6 +97,7 @@ export function createApp(deps: AppDeps): Hono {
   registerAgentRoutes(app, ctx);
   registerArtifactRoutes(app, ctx);
   registerSyncRoutes(app, ctx);
+  registerComputerRoutes(app, ctx);
   app.all("/api/*", (c) => c.json(errorBody("not_found", "Unknown API route"), 404));
   app.all("/ws", (c) => c.json(errorBody("upgrade_required", "Use a WebSocket upgrade"), 426));
   registerWebRoutes(app, ctx);

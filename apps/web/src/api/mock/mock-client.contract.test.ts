@@ -226,4 +226,41 @@ describe("MockDaemonClient ⇄ wire contract", () => {
     expectWire("ApprovalConflictResponse", error.body);
     expect(error.body).toMatchObject({ approval: { id: approval.id, status: "denied" } });
   });
+
+  it("simulates computer access: missing, then granted a moment after System Settings opens", async () => {
+    const client = new MockDaemonClient({
+      speed: 10,
+      installHooks: false,
+      persistSettings: false,
+      computer: "missing",
+    });
+    const events: ServerEvent[] = [];
+    client.onEvent((event) => events.push(event));
+    client.connect();
+    const before = await call(client.getAgentStatus());
+    expectWire("AgentStatusResponse", before);
+    expect(before.execution.computerAccess).toMatchObject({
+      accessibility: false,
+      screenRecording: false,
+      hostApp: { name: "Daily Do List" },
+    });
+    await call(client.openComputerPermissions("accessibility"));
+    await vi.advanceTimersByTimeAsync(1_300);
+    const pushed = ofType(events, "agent.status").at(-1)!.status;
+    expectWire("AgentStatusResponse", pushed);
+    expect(pushed.execution.computerAccess).toMatchObject({
+      accessibility: true,
+      screenRecording: false,
+    });
+
+    const none = new MockDaemonClient({
+      installHooks: false,
+      persistSettings: false,
+      computer: "none",
+    });
+    expect((await call(none.getAgentStatus())).execution.computerAccess).toBeUndefined();
+    const error = await failure(none.openComputerPermissions("screenRecording"));
+    expect(error.status).toBe(404);
+    expectWire("ApiErrorBody", error.body);
+  });
 });

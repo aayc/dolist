@@ -29,6 +29,7 @@ import { disabledSyncStatusResponse, toSyncStatusResponse } from "./routes/sync"
 import { createSecurityPolicy } from "./security";
 import { createSettingsStore } from "./settings-store";
 import { type PreparedSync, prepareSync } from "./sync-setup";
+import { createSystemSettingsOpener } from "./system-settings";
 import { loadOrCreateToken } from "./token";
 import { DAEMON_VERSION } from "./version";
 import {
@@ -169,6 +170,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       writes,
       search: resolveVaultSearch(storage),
       syncStatus: () => syncStatusOf(sync, prepared),
+      systemSettings: createSystemSettingsOpener(),
     });
     handler = app.fetch;
 

@@ -109,6 +109,7 @@ const BODY_CASES: BodyCase[] = [
   { name: "agentEnabled", method: "POST", schema: "SetAgentEnabledRequest" },
   { name: "threadMessages", method: "POST", schema: "PostMessageRequest", params: { id: "thr_1" } },
   { name: "approval", method: "POST", schema: "ApprovalDecisionRequest", params: { id: "apr_1" } },
+  { name: "computerPermissionsOpen", method: "POST", schema: "ComputerPermissionsOpenRequest" },
 ];
 
 describe.each(BODY_CASES)("$method $name body", ({ name, method, schema, params }) => {

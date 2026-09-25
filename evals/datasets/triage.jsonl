@@ -52,3 +52,12 @@
 {"id":"dentist-in-person","task":"Dentist appointment at 3pm","expected":"ignore","acceptable":["comment"]}
 {"id":"gratitude","task":"Notice three good things today","expected":"ignore"}
 {"id":"deferred-to-next-week","task":"Call the bank about the card [[Daily/{{+7d}}]]","expected":"ignore"}
+{"id":"ask-grok-bot-packing","task":"Ask Grok Bot for a packing list for a week in Iceland","expected":"delegate","capabilities":["computer"]}
+{"id":"ask-grok-bot-question","task":"Ask Grok Bot what the best time to see the northern lights is?","expected":"delegate","capabilities":["computer"]}
+{"id":"whatsapp-mom-late","task":"Message Mom on WhatsApp that I'll be late for dinner","expected":"delegate","capabilities":["computer"]}
+{"id":"slack-standup","task":"Post my standup update in the #team channel on Slack","notes":["yesterday: shipped the export fix","today: review Priya's PR"],"expected":"delegate","capabilities":["computer"]}
+{"id":"teams-reply-alex","task":"Reply to Alex on Microsoft Teams that the deck is ready","expected":"delegate","capabilities":["computer"]}
+{"id":"chatgpt-second-opinion","task":"Ask ChatGPT to review the draft intro I pasted in the thread","expected":"delegate","capabilities":["computer"],"acceptable":["ask_user"]}
+{"id":"notion-launch-notes","task":"Add today's launch checklist to the Launch page in Notion","expected":"delegate","capabilities":["computer"],"acceptable":["ask_user"]}
+{"id":"grok-without-computer-access","task":"Ask Grok Bot to suggest three names for the new puppy","computerAccess":"missing","expected":"comment","acceptable":["ask_user"]}
+{"id":"whatsapp-without-computer-access","task":"Message Sam on WhatsApp that I'm running late","computerAccess":"missing","expected":"comment","acceptable":["ask_user"]}

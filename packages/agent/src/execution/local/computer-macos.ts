@@ -8,7 +8,12 @@ import {
   ExecutionError,
   errorMessage,
 } from "../errors";
-import type { ComputerController, ComputerScreenshot, FrameListener } from "../types";
+import type {
+  ComputerController,
+  ComputerPermissions,
+  ComputerScreenshot,
+  FrameListener,
+} from "../types";
 import { type FrameAction, FrameHub } from "../util/frame-hub";
 import { jpegSize } from "../util/jpeg";
 import { Mutex } from "../util/mutex";
@@ -21,6 +26,7 @@ import {
   toScreenPoint,
 } from "./computer-geometry";
 import { formatKeyCombo, keyComboEvents, parseKeyCombo, typingSteps } from "./computer-keys";
+import { type ComputerPermission, permissionHelp } from "./computer-permissions";
 import {
   ACCESSIBILITY_DENIED,
   type CommandRunner,
@@ -31,30 +37,11 @@ import {
   SCREEN_SIZE_SCRIPT,
 } from "./jxa";
 
+export { permissionHelp } from "./computer-permissions";
+
 export const DEFAULT_SCREENSHOT_MAX_WIDTH = 1280;
 const MAX_TYPE_CHARS = 10_000;
 const JPEG_QUALITY = "70";
-
-type Permission = "accessibility" | "screen";
-
-/** Actionable instructions for missing macOS privacy permissions. */
-export function permissionHelp(missing: readonly Permission[]): string {
-  const lines = [
-    "Computer use needs macOS privacy permissions for the app that runs the Daily Do List daemon (the terminal or editor it was started from, e.g. Terminal or iTerm, or the Daily Do List app):",
-  ];
-  if (missing.includes("accessibility")) {
-    lines.push(
-      "• Accessibility (to move the mouse and type): System Settings → Privacy & Security → Accessibility",
-    );
-  }
-  if (missing.includes("screen")) {
-    lines.push(
-      "• Screen Recording (to take screenshots): System Settings → Privacy & Security → Screen & System Audio Recording",
-    );
-  }
-  lines.push("Turn the app on in each list, then restart the daemon.");
-  return lines.join("\n");
-}
 
 export interface MacComputerOptions {
   logger?: Logger;
@@ -64,6 +51,8 @@ export interface MacComputerOptions {
   settleMs?: number;
   runner?: CommandRunner;
   tmpDir?: string;
+  /** Name of the app that holds the permissions, for help texts. */
+  hostName?: () => Promise<string | undefined>;
 }
 
 /**
@@ -80,6 +69,7 @@ export class MacComputerController implements ComputerController {
   private readonly tmpDir: string;
   private readonly mutex = new Mutex();
   private readonly frames: FrameHub;
+  private readonly hostName: () => Promise<string | undefined>;
   private last: ScreenshotGeometry | undefined;
 
   constructor(options: MacComputerOptions = {}) {
@@ -88,6 +78,7 @@ export class MacComputerController implements ComputerController {
     this.settleMs = options.settleMs ?? 300;
     this.runner = options.runner ?? execFileRunner;
     this.tmpDir = options.tmpDir ?? tmpdir();
+    this.hostName = options.hostName ?? (async () => undefined);
     this.frames = new FrameHub({ logger: this.logger });
   }
 
@@ -102,10 +93,23 @@ export class MacComputerController implements ComputerController {
       typeof status.screenRecording === "boolean"
         ? status.screenRecording
         : await this.canCapture();
-    const missing: Permission[] = [];
+    const missing: ComputerPermission[] = [];
     if (status.accessibility !== true) missing.push("accessibility");
     if (!screenOk) missing.push("screen");
-    return missing.length === 0 ? { ok: true } : { ok: false, problem: permissionHelp(missing) };
+    return missing.length === 0
+      ? { ok: true }
+      : { ok: false, problem: permissionHelp(missing, await this.host()) };
+  }
+
+  /** Never prompts and never captures: an unknown Screen Recording status counts as missing. */
+  async permissions(): Promise<ComputerPermissions> {
+    const status: { accessibility?: unknown; screenRecording?: unknown } = JSON.parse(
+      await runJxa(this.runner, PERMISSIONS_SCRIPT),
+    );
+    return {
+      accessibility: status.accessibility === true,
+      screenRecording: status.screenRecording === true,
+    };
   }
 
   screenshot(options: { maxWidth?: number } = {}): Promise<ComputerScreenshot> {
@@ -194,7 +198,9 @@ export class MacComputerController implements ComputerController {
     } catch (error) {
       const detail = `${errorMessage(error)} ${(error as { stderr?: unknown }).stderr ?? ""}`;
       if (detail.includes(ACCESSIBILITY_DENIED)) {
-        throw new ComputerPermissionError(permissionHelp(["accessibility"]), { cause: error });
+        throw new ComputerPermissionError(permissionHelp(["accessibility"], await this.host()), {
+          cause: error,
+        });
       }
       throw new ExecutionError(`Desktop input failed: ${errorMessage(error)}`, { cause: error });
     }
@@ -240,9 +246,9 @@ export class MacComputerController implements ComputerController {
       const raw = join(dir, "raw.jpg");
       const [, screen] = await Promise.all([
         this.runner("screencapture", ["-x", "-m", "-C", "-t", "jpg", raw]).catch(
-          (error: unknown) => {
+          async (error: unknown) => {
             throw new ComputerPermissionError(
-              `Screenshot failed (${errorMessage(error)}).\n${permissionHelp(["screen"])}`,
+              `Screenshot failed (${errorMessage(error)}).\n${permissionHelp(["screen"], await this.host())}`,
               { cause: error },
             );
           },
@@ -299,6 +305,14 @@ export class MacComputerController implements ComputerController {
       return false;
     }
   }
+
+  private async host(): Promise<string | undefined> {
+    try {
+      return await this.hostName();
+    } catch {
+      return undefined;
+    }
+  }
 }
 
 /** Stand-in on platforms without computer use: `check()` explains, everything else throws. */
@@ -312,6 +326,10 @@ export class UnsupportedComputerController implements ComputerController {
 
   async check(): Promise<{ ok: boolean; problem?: string }> {
     return { ok: false, problem: this.reason };
+  }
+
+  async permissions(): Promise<ComputerPermissions> {
+    return { accessibility: false, screenRecording: false };
   }
 
   screenshot(): Promise<ComputerScreenshot> {

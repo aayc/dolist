@@ -18,6 +18,7 @@ import { useVaultStore } from "../../state/vault-store";
 import { useVimStore } from "../../state/vim-store";
 import { Modal } from "../overlays/Modal";
 import { HARNESS_OPTIONS, shownHarness } from "./agent-harness";
+import { ComputerUseSection } from "./ComputerUseSection";
 import { dailyPreview } from "./daily-preview";
 import { draftToCommit } from "./draft";
 import "../../styles/settings.css";
@@ -27,6 +28,7 @@ const SECTIONS: ReadonlyArray<{ key: SettingsSection; label: string }> = [
   { key: "editor", label: "Editor" },
   { key: "daily", label: "Daily notes" },
   { key: "agent", label: "Agent" },
+  { key: "computer", label: "Computer use" },
   { key: "connectors", label: "Connectors" },
   { key: "about", label: "About" },
 ];
@@ -62,6 +64,7 @@ export function SettingsModal({ section }: { section: SettingsSection }) {
         {active === "editor" ? <EditorSection /> : null}
         {active === "daily" ? <DailySection /> : null}
         {active === "agent" ? <AgentSection /> : null}
+        {active === "computer" ? <ComputerUseSection /> : null}
         {active === "connectors" ? <ConnectorsSection /> : null}
         {active === "about" ? <AboutSection /> : null}
       </div>

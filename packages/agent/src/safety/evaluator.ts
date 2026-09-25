@@ -268,7 +268,13 @@ export function createSafetyEvaluator(options: SafetyEvaluatorOptions = {}): Saf
         const analysis = analyzeAction(ctx);
         const summary = describeAction(ctx, analysis.facts);
         const draft = await decide(ctx, analysis, internals, summary, signal);
-        return { ...draft, summary, latencyMs: performance.now() - started };
+        const target = analysis.facts.app?.target;
+        return {
+          ...draft,
+          summary,
+          latencyMs: performance.now() - started,
+          ...(target ? { target } : {}),
+        };
       } catch (error) {
         logger.error("safety evaluation failed", {
           tool: ctx.toolName,

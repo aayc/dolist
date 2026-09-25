@@ -100,6 +100,23 @@ describe("parseServerEvent", () => {
       { type: "thread.message", threadId: "t", message: { id: "m", kind: "image" } },
       { type: "approval.upsert", approval: { id: "a" } },
       { type: "agent.status", status: { mode: "mock", enabled: true } },
+      {
+        type: "agent.status",
+        status: {
+          mode: "live",
+          enabled: true,
+          model: "m",
+          running: 0,
+          queued: 0,
+          pendingApprovals: 0,
+          connectors: [],
+          execution: {
+            provider: "local",
+            capabilities: { shell: true, browser: true, computer: true },
+            computerAccess: { accessibility: "yes", screenRecording: false, appControl: true },
+          },
+        },
+      },
       { type: "surface.frame", threadId: "t", surface: "screen", data: "", ts: 1 },
       { type: "settings.changed", settings: { theme: "dark" } },
       {

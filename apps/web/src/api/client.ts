@@ -4,6 +4,7 @@ import type {
   ApprovalListResponse,
   ApprovalRequest,
   ClientEvent,
+  ComputerPermissionPane,
   ConnectorStatus,
   DailyNoteResponse,
   HealthResponse,
@@ -99,4 +100,6 @@ export interface DaemonClient {
   /** Returns the updated approval when the daemon includes it (it is also pushed as an event). */
   decideApproval(id: string, decision: ApprovalDecisionRequest): Promise<ApprovalRequest | null>;
   getArtifact(threadId: string, artifactId: string): Promise<ArtifactContent>;
+  /** Opens System Settings (on the daemon's Mac) at a privacy pane computer use needs. */
+  openComputerPermissions(pane: ComputerPermissionPane): Promise<void>;
 }

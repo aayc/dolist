@@ -328,7 +328,15 @@ test.describe("cursor audit", () => {
   test("settings, every section", async ({ page }) => {
     await openApp(page);
     await page.getByTestId("ribbon-settings").click();
-    for (const section of ["general", "editor", "daily", "agent", "connectors", "about"]) {
+    for (const section of [
+      "general",
+      "editor",
+      "daily",
+      "agent",
+      "computer",
+      "connectors",
+      "about",
+    ]) {
       await page.getByTestId(`settings-nav-${section}`).click();
       await audit(page, `settings/${section}`);
     }

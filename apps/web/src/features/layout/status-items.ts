@@ -1,4 +1,4 @@
-import type { AgentMode } from "@ddl/core";
+import type { AgentMode, ComputerAccess } from "@ddl/core";
 import type { ClientKind, ConnectionState } from "../../api/client";
 import type { SaveState } from "../../state/notes-store";
 
@@ -70,6 +70,28 @@ export function agentItem(
         title: "The agent is watching your daily notes — click to pause",
       }
     : { state: "paused", label: "Agent paused", title: "The agent is paused — click to resume" };
+}
+
+/**
+ * A warning while agents can't use the Mac's apps because a permission is missing; nothing when
+ * they can, when there's no computer use, or while the agent isn't on.
+ */
+export function computerItem(
+  access: ComputerAccess | undefined,
+  agentOn: boolean,
+): ConnectionItem | null {
+  if (!access || !agentOn || (access.accessibility && access.screenRecording)) return null;
+  const missing = [
+    access.accessibility ? "" : "Accessibility",
+    access.screenRecording ? "" : "Screen Recording",
+  ]
+    .filter(Boolean)
+    .join(" and ");
+  const host = access.hostApp ? `“${access.hostApp.name}”` : "the app running Daily Do List";
+  return {
+    label: "Computer access",
+    title: `Agents can't use your Mac's apps yet: allow ${missing} for ${host}`,
+  };
 }
 
 /** "2 running", or "3 queued" while nothing runs yet; the tooltip counts both. */

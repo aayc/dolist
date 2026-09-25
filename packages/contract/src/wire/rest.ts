@@ -202,6 +202,38 @@ export const ConnectorStatusSchema = named(
   }),
 );
 
+export const ComputerHostAppSchema = named(
+  "ComputerHostApp",
+  "The app macOS attributes the daemon's privacy permissions to (the Daily Do List app, or the terminal or editor it runs from).",
+  z.looseObject({
+    name: z.string().min(1).max(WIRE_LIMITS.nameLength).describe("As listed in System Settings."),
+    path: z
+      .string()
+      .min(1)
+      .max(WIRE_LIMITS.requestPathLength)
+      .optional()
+      .describe("The `.app` bundle."),
+    bundleId: z.string().min(1).max(WIRE_LIMITS.nameLength).optional(),
+  }),
+);
+
+export const ComputerAccessSchema = named(
+  "ComputerAccess",
+  "Computer use on this Mac: its two privacy permissions and whether agents can operate apps in the background.",
+  z.looseObject({
+    accessibility: z.boolean().describe("Input and reading other apps' UI."),
+    screenRecording: z
+      .boolean()
+      .describe("Screenshots. macOS applies a new grant after the host app restarts."),
+    appControl: z
+      .boolean()
+      .describe(
+        "The `ddl-computer` helper is available; otherwise computer use is screen-level only.",
+      ),
+    hostApp: ComputerHostAppSchema.optional().describe("Absent when it can't be determined."),
+  }),
+);
+
 export const ExecutionStatusSchema = named(
   "ExecutionStatus",
   "The execution provider and what it can do.",
@@ -212,6 +244,9 @@ export const ExecutionStatusSchema = named(
       browser: z.boolean(),
       computer: z.boolean(),
     }),
+    computerAccess: ComputerAccessSchema.optional().describe(
+      "Present where computer use exists (macOS with computer use enabled).",
+    ),
   }),
 );
 
@@ -323,4 +358,18 @@ export const SyncStatusResponseSchema = named(
       .optional()
       .describe("This device's name as other devices see it (`remote` only)."),
   }),
+);
+
+// ── Computer use ──────────────────────────────────────────────────────────
+
+export const ComputerPermissionPaneSchema = named(
+  "ComputerPermissionPane",
+  "A System Settings privacy pane computer use needs.",
+  z.enum(["accessibility", "screenRecording"]),
+);
+
+export const ComputerPermissionsOpenRequestSchema = named(
+  "ComputerPermissionsOpenRequest",
+  "Body of `POST /api/computer/permissions/open`.",
+  z.strictObject({ pane: ComputerPermissionPaneSchema }),
 );

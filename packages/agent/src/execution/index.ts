@@ -16,6 +16,8 @@ export {
   ExecutionError,
   NavigationBlockedError,
   NotImplementedError,
+  ProtectedAppError,
+  StaleElementError,
   StaleRefError,
 } from "./errors";
 export { LocalExecutionProvider } from "./local/provider";
@@ -33,7 +35,13 @@ export async function createExecutionProvider(
         provider: provider.id,
         ...provider.capabilities,
         browserSource: provider.browserExecutable?.source ?? null,
+        appControl: provider.computerHelper !== undefined,
       });
+      if (provider.capabilities.computer && provider.computerHelper === undefined) {
+        logger.info(
+          "App control is off: the ddl-computer helper wasn't found, so computer use stays screen-level",
+        );
+      }
       return provider;
     }
     case "cloud":

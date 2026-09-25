@@ -21,6 +21,14 @@ export interface ToolResult<D = unknown> {
   isError?: boolean;
 }
 
+/** What a tool knows about the real target of a call, independently of the model's words. */
+export interface ToolSubject {
+  /** The real name of the app the call acts on (e.g. the running app it resolves to). */
+  app?: string;
+  /** The real label of the element it acts on (e.g. from the latest snapshot of that app). */
+  element?: string;
+}
+
 /**
  * Declarative safety metadata. The safety evaluator combines these hints with pattern rules and an
  * LLM judge; hints can only make a call *more* restricted, never bypass the rules.
@@ -38,6 +46,13 @@ export interface ToolSafetyHints {
   alwaysRequireApproval?: boolean;
   /** Human-readable one-liner for approval cards, e.g. `Send email to sam@example.com`. */
   describe?(input: unknown): string;
+  /**
+   * The real target of a call, when the tool knows more than the model said (the app's real name,
+   * the element's real accessibility label). The evaluator adds it to the model's own text, never
+   * replacing it, so rules match either; it can only make a verdict stricter. Must be synchronous
+   * and must not throw.
+   */
+  subject?(input: unknown): ToolSubject | undefined;
 }
 
 export interface ToolExecutionContext {

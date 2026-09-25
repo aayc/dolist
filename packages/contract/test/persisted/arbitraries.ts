@@ -230,6 +230,7 @@ export const grantArb: fc.Arbitrary<PersistedApprovalGrant> = fc
     createdAt: timestamp,
     categories: fc.option(categories, { nil: undefined }),
     risk: fc.option(risk, { nil: undefined }),
+    target: fc.option(nonEmptyText(40), { nil: undefined }),
   })
   .map((grant) => compact({ ...grant, taskId: grant.scope === "task" ? grant.taskId : null }));
 

@@ -5,6 +5,7 @@ import type { StorageProvider } from "@ddl/storage";
 import type { VaultSearch } from "./search";
 import type { SecurityPolicy } from "./security";
 import type { SettingsStore } from "./settings-store";
+import type { SystemSettingsOpener } from "./system-settings";
 import type { WriteTracker } from "./write-tracker";
 
 /** Resolved dependencies shared by the route modules. */
@@ -21,6 +22,7 @@ export interface AppContext {
   writes: WriteTracker;
   search: VaultSearch;
   syncStatus: () => SyncStatusResponse;
+  systemSettings: SystemSettingsOpener;
   now: () => Date;
   version: string;
 }

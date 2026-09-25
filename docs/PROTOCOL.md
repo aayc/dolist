@@ -115,6 +115,7 @@ API version: **1**. Machine-readable: `packages/contract/schema/wire.schema.json
 | `artifact` | GET | `/api/artifacts/:threadId/:artifactId` | — | 200 bytes |
 | `connectors` | GET | `/api/connectors` | — | 200 [`ConnectorsResponse`](#connectorsresponse) |
 | `syncStatus` | GET | `/api/sync/status` | — | 200 [`SyncStatusResponse`](#syncstatusresponse) |
+| `computerPermissionsOpen` | POST | `/api/computer/permissions/open` | [`ComputerPermissionsOpenRequest`](#computerpermissionsopenrequest) | 200 [`OkResponse`](#okresponse) |
 | `ws` | GET | `/ws` | — | — |
 
 Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`, `forbidden_origin`), 500 (`internal_error`). Methods a route doesn't list answer 404 `not_found`.
@@ -393,6 +394,18 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
 
 - Responses:
   - `200` [`SyncStatusResponse`](#syncstatusresponse) — Sync status.
+
+#### `computerPermissionsOpen` — `/api/computer/permissions/open`
+
+**POST** — Open System Settings at a privacy pane computer use needs (Accessibility or Screen Recording).
+
+- Body: [`ComputerPermissionsOpenRequest`](#computerpermissionsopenrequest)
+- Responses:
+  - `200` [`OkResponse`](#okresponse) — System Settings opened.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_json`, `invalid_request` — Malformed JSON or failed validation.
+  - `404` [`ApiErrorBody`](#apierrorbody) `not_found` — Not a Mac: there is no System Settings to open.
+  - `413` [`ApiErrorBody`](#apierrorbody) `payload_too_large` — Body over 5 MB.
+  - `500` [`ApiErrorBody`](#apierrorbody) `internal_error` — System Settings didn't open.
 
 #### `ws` — `/ws`
 
@@ -1081,6 +1094,31 @@ State of one MCP connector.
 
 _Tolerant: clients must ignore keys they don't know._
 
+#### ComputerHostApp
+
+The app macOS attributes the daemon's privacy permissions to (the Daily Do List app, or the terminal or editor it runs from).
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | string (1–200 chars) | yes | As listed in System Settings. |
+| `path` | string (1–1024 chars) | no | The `.app` bundle. |
+| `bundleId` | string (1–200 chars) | no |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
+#### ComputerAccess
+
+Computer use on this Mac: its two privacy permissions and whether agents can operate apps in the background.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `accessibility` | boolean | yes | Input and reading other apps' UI. |
+| `screenRecording` | boolean | yes | Screenshots. macOS applies a new grant after the host app restarts. |
+| `appControl` | boolean | yes | The `ddl-computer` helper is available; otherwise computer use is screen-level only. |
+| `hostApp` | [`ComputerHostApp`](#computerhostapp) | no | Absent when it can't be determined. |
+
+_Tolerant: clients must ignore keys they don't know._
+
 #### ExecutionStatus
 
 The execution provider and what it can do.
@@ -1089,6 +1127,7 @@ The execution provider and what it can do.
 | --- | --- | --- | --- |
 | `provider` | string (1–200 chars) | yes |  |
 | `capabilities` | object | yes |  |
+| `computerAccess` | [`ComputerAccess`](#computeraccess) | no | Present where computer use exists (macOS with computer use enabled). |
 
 _Tolerant: clients must ignore keys they don't know._
 
@@ -1231,6 +1270,22 @@ The vault's sync state.
 | `deviceName` | string (1–100 chars) | no | This device's name as other devices see it (`remote` only). |
 
 _Tolerant: clients must ignore keys they don't know._
+
+#### ComputerPermissionPane
+
+A System Settings privacy pane computer use needs.
+
+Type: `"accessibility"` | `"screenRecording"`
+
+#### ComputerPermissionsOpenRequest
+
+Body of `POST /api/computer/permissions/open`.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `pane` | [`ComputerPermissionPane`](#computerpermissionpane) | yes |  |
+
+_Strict: unknown keys are rejected._
 
 #### ApiErrorCode
 
