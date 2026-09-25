@@ -329,7 +329,7 @@ function upgradeRejection(req: IncomingMessage, policy: SecurityPolicy): 401 | 4
   if (origin !== undefined && !policy.isOriginAllowed(origin)) return 403;
   if (headerCount(req.rawHeaders, "authorization") > 1) return 401;
   const token = target.url.searchParams.get("token") ?? parseBearer(req.headers.authorization);
-  return policy.verifyToken(token) ? null : 401;
+  return policy.authenticateBearer(token)?.kind === "master" ? null : 401;
 }
 
 /** Origin-form targets are paths even when they start with `//`; absolute-form ones name a host. */

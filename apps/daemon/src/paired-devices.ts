@@ -92,10 +92,9 @@ export class PairedDeviceStore {
     return this.#devices.size >= MAX_PAIRED_DEVICES;
   }
 
+  /** In pairing order. */
   list(): PairedDevice[] {
-    return [...this.#devices.values()]
-      .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
-      .map(publicDevice);
+    return [...this.#devices.values()].map(publicDevice);
   }
 
   get(id: string): PairedDevice | undefined {

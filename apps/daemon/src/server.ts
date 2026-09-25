@@ -25,6 +25,7 @@ import { type DaemonConfig, loadConfig, summarizeConfig } from "./config";
 import { errorMessage } from "./errors";
 import { displayPath } from "./home-paths";
 import { LeasedAgentRuntime } from "./leased-runtime";
+import { PairedDeviceStore } from "./paired-devices";
 import { createRemoteHosts } from "./remote-hosts";
 import { disabledSyncStatusResponse, toSyncStatusResponse } from "./routes/sync";
 import { createSecurityPolicy } from "./security";
@@ -82,6 +83,7 @@ interface Resources {
   sync?: SyncHandle | null;
   server?: Server;
   hub?: WebSocketHub;
+  devices?: PairedDeviceStore;
   unsubscribes: Unsubscribe[];
 }
 
@@ -94,6 +96,11 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
   const resources: Resources = { unsubscribes: [] };
   try {
     const token = await loadOrCreateToken(config.tokenPath, logger);
+    const devices = await PairedDeviceStore.open({
+      path: config.pairedDevicesPath,
+      logger: logger.child({ component: "pairing" }),
+    });
+    resources.devices = devices;
     const writes = new WriteTracker();
 
     const storage = await createVaultStorage(config, logger);
@@ -170,6 +177,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       config: { port, allowedOrigins: config.allowedOrigins },
       token,
       remoteHosts,
+      devices,
       logger: logger.child({ component: "http" }),
       webDist: config.webDist,
       connectors,
@@ -187,6 +195,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
         token,
         extraOrigins: config.allowedOrigins,
         remoteHosts,
+        devices,
       }),
       storage,
       runtime,
@@ -274,8 +283,18 @@ async function shutdown(resources: Resources, logger: Logger): Promise<void> {
     }
   };
   for (const unsubscribe of resources.unsubscribes) unsubscribe();
-  const { lease, leasedRuntime, runtime, sync, hub, server, execution, connectors, storage } =
-    resources;
+  const {
+    lease,
+    leasedRuntime,
+    runtime,
+    sync,
+    hub,
+    server,
+    devices,
+    execution,
+    connectors,
+    storage,
+  } = resources;
   if (lease) {
     await step("agent lease", () =>
       lease.stop(async () => {
@@ -291,6 +310,7 @@ async function shutdown(resources: Resources, logger: Logger): Promise<void> {
   }
   if (hub) await step("websockets", () => hub.close());
   if (server) await step("http", () => closeServer(server));
+  if (devices) await step("paired devices", () => devices.flush());
   if (execution) await step("execution", () => execution.dispose());
   if (connectors) await step("connectors", () => connectors.dispose());
   if (storage) await step("storage", () => storage.dispose());

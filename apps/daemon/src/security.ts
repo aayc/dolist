@@ -1,6 +1,7 @@
-import { isLoopbackHostname } from "@ddl/core";
-import type { MiddlewareHandler } from "hono";
+import { API_ROUTES, isLoopbackHostname, type PairedDevice } from "@ddl/core";
+import type { Context, MiddlewareHandler } from "hono";
 import { errorBody } from "./errors";
+import { BEARER_DEVICE_KINDS, type PairedDeviceStore } from "./paired-devices";
 import type { RemoteHosts } from "./remote-hosts";
 import { createTokenVerifier, parseBearer } from "./token";
 
@@ -13,6 +14,9 @@ export const DEV_SERVER_PORT = 5173;
  * only, never the master token in a page).
  */
 export type HostKind = "loopback" | "remote";
+
+/** Who an authenticated request acts for: this machine (the master token) or a paired device. */
+export type Principal = { kind: "master" } | { kind: "device"; device: PairedDevice };
 
 /**
  * DNS-rebinding and CSRF defense shared by HTTP and the WebSocket upgrade: only loopback Host
@@ -33,7 +37,8 @@ export interface SecurityPolicy {
   remoteOrigin(host: string | null | undefined): string | null;
   /** `wss://` sources of the remote hosts, for the page's `connect-src`. */
   remoteSocketSources(): string[];
-  verifyToken(candidate: string | null | undefined): boolean;
+  /** A bearer token: the master token, or the token of a paired app or daemon. */
+  authenticateBearer(candidate: string | null | undefined): Principal | null;
 }
 
 export interface SecurityPolicyOptions {
@@ -43,6 +48,8 @@ export interface SecurityPolicyOptions {
   extraOrigins?: readonly string[];
   /** Read on every request, so changes apply at once. Default: none. */
   remoteHosts?: Pick<RemoteHosts, "list">;
+  /** Paired devices' credentials. Default: none (the master token only). */
+  devices?: Pick<PairedDeviceStore, "authenticate">;
 }
 
 interface RemoteView {
@@ -94,7 +101,8 @@ export function createSecurityPolicy(options: SecurityPolicyOptions): SecurityPo
     const normalized = normalizeOrigin(origin);
     return origins.has(normalized) || remote().origins.has(normalized);
   };
-  const verifyToken = createTokenVerifier(options.token);
+  const verifyMaster = createTokenVerifier(options.token);
+  const devices = options.devices;
   return {
     port: options.port,
     allowedHosts: hosts,
@@ -108,8 +116,23 @@ export function createSecurityPolicy(options: SecurityPolicyOptions): SecurityPo
       return isOriginAllowed(origin) ? origin : null;
     },
     remoteSocketSources: () => [...remote().sockets],
-    verifyToken,
+    authenticateBearer: (candidate) => {
+      if (verifyMaster(candidate)) return { kind: "master" };
+      const device = devices?.authenticate(candidate, BEARER_DEVICE_KINDS);
+      return device ? { kind: "device", device } : null;
+    },
   };
+}
+
+declare module "hono" {
+  interface ContextVariableMap {
+    principal: Principal;
+  }
+}
+
+/** Who the request acts for; set by `requestGuard` on every authenticated `/api/*` request. */
+export function principalOf(c: Context): Principal | undefined {
+  return c.get("principal");
 }
 
 function remoteView(source: readonly string[]): RemoteView {
@@ -172,8 +195,10 @@ export function isApiPath(path: string): boolean {
 
 /**
  * Host allowlist on every request (the web app's index.html carries the token), then Origin
- * allowlist and bearer auth on `/api/*`. Requests without an Origin (curl, native clients) are
- * accepted when the token is valid; a present-but-unknown Origin, including `null`, never is.
+ * allowlist and authentication on `/api/*`. Requests without an Origin (curl, native clients) are
+ * accepted with a valid credential; a present-but-unknown Origin, including `null`, never is.
+ * `POST /api/pair` is the one route without a credential: its pairing code is checked (and
+ * rate-limited) by the route itself.
  */
 export function requestGuard(policy: SecurityPolicy): MiddlewareHandler {
   return async (c, next) => {
@@ -193,10 +218,13 @@ export function requestGuard(policy: SecurityPolicy): MiddlewareHandler {
       if (origin !== undefined && !policy.isOriginAllowed(origin)) {
         return c.json(errorBody("forbidden_origin", "Origin not allowed"), 403);
       }
-      if (!policy.verifyToken(parseBearer(c.req.header("authorization")))) {
+      if (c.req.method === "POST" && c.req.path === API_ROUTES.pair) return next();
+      const principal = policy.authenticateBearer(parseBearer(c.req.header("authorization")));
+      if (!principal) {
         c.header("WWW-Authenticate", "Bearer");
         return c.json(errorBody("unauthorized", "Missing or invalid bearer token"), 401);
       }
+      c.set("principal", principal);
     }
     await next();
   };
