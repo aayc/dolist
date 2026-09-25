@@ -150,7 +150,11 @@ test.describe("import from Obsidian", () => {
 
     await mockHook(page, "setSyncing", false);
     await mockHook(page, "setVaultLockedByEnv", true);
-    await page.getByRole("button", { name: "Check again" }).click();
+    // Settings asks the daemon again when it opens.
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("settings-modal")).toBeHidden();
+    await openImport(page);
+    await expect(page.getByTestId("switch-syncing")).toHaveCount(0);
     await expect(page.getByTestId("switch-locked")).toContainText("set DDL_VAULT to");
     await expect(page.getByTestId("switch-vault")).toBeDisabled();
   });
