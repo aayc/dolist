@@ -27,6 +27,8 @@ struct ProtocolFaithfulnessTests {
         case .conflict(let conflict): try record(conflict, as: "ConflictResponse")
         case .approvalConflict(let conflict): try record(conflict, as: "ApprovalConflictResponse")
         case .http(_, let body?): try record(body, as: "ApiErrorBody")
+        case .pairingRejected(let message):
+          try record(ApiErrorBody(error: .pairingRejected, message: message), as: "ApiErrorBody")
         default: Issue.record("unexpected error \(error)")
         }
       }
@@ -152,6 +154,50 @@ struct ProtocolFaithfulnessTests {
     try session.record(
       ConnectorsResponse(connectors: try await client.connectors()), as: "ConnectorsResponse")
     try session.record(try await client.agentStatus(), as: "AgentStatusResponse")
+
+    // This device, pairing and the always-on machine.
+    try session.record(try await client.syncStatus(), as: "SyncStatusResponse")
+    try session.record(try await client.deviceSettings(), as: "DeviceSettingsResponse")
+    try session.record(
+      try await client.updateDeviceSettings(
+        DeviceSettingsPatch(name: "Studio Mac", remoteHosts: ["studio.tailnet-name.ts.net"])),
+      as: "DeviceSettingsResponse")
+    try await session.recordError {
+      _ = try await client.updateDeviceSettings(DeviceSettingsPatch(remoteHosts: ["10.0.0.1"]))
+    }
+    try session.record(
+      try await client.setUpSync(
+        DeviceSyncSetupRequest(url: "https://sync.example.com", vault: "vault_1", token: "t0k3n")),
+      as: "DeviceSettingsResponse")
+    try session.record(try await client.syncStatus(), as: "SyncStatusResponse")
+    try session.record(try await client.machineStatus(), as: "MachineStatusResponse")
+    try session.record(
+      try await client.pairMachine(
+        MachinePairRequest(url: "https://vm-name.tailnet-name.ts.net", code: "ABCD2345")),
+      as: "MachineStatusResponse")
+    try session.record(try await client.checkMachine(), as: "MachineStatusResponse")
+    _ = try await client.updateDeviceSettings(DeviceSettingsPatch(placement: .alwaysOnMachine))
+    try session.record(try await client.agentStatus(), as: "AgentStatusResponse")
+    await client.advance(by: .seconds(3))
+    try session.record(try await client.agentStatus(), as: "AgentStatusResponse")
+    await client.simulateMachine(reachable: false)
+    try session.record(try await client.checkMachine(), as: "MachineStatusResponse")
+    try await session.recordError { _ = try await client.retryThread(threadId) }
+    await client.simulateMachine(reachable: true)
+    let code = try await client.createPairingCode(PairingCodeRequest(name: "Phone"))
+    try session.record(code, as: "PairingCodeResponse")
+    try session.record(
+      try await client.pair(PairRequest(code: code.code, name: "Phone", kind: .app)),
+      as: "PairResponse")
+    try await session.recordError {
+      _ = try await client.pair(PairRequest(code: code.code, name: "Phone", kind: .app))
+    }
+    try session.record(
+      PairedDevicesResponse(devices: try await client.pairedDevices()), as: "PairedDevicesResponse"
+    )
+    try await session.recordError { try await client.revokeDevice("pdv_missing") }
+    try session.record(try await client.forgetMachine(), as: "MachineStatusResponse")
+    try session.record(try await client.turnOffSync(), as: "DeviceSettingsResponse")
 
     await client.disconnect()
     try await recorder.waitForFinish()
