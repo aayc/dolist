@@ -106,18 +106,62 @@ extension DomainTests {
             text: note("# Thursday", "\t- ask about the 3 missing ones", "Notes"), conflict: false))
     }
 
-    @Test func keepsTheOtherSidesLinesAddedInsideABlockTheUserRewroteAfterIt() {
-      let local = note("# Thursday", "- [x] Book a table", "- [x] Renew passport", "Notes")
-      let remote = note(
+    var withAgentLine: String {
+      note(
         "# Thursday", "- [ ] Book a table", "  - Sole at 7 %%agent:thr_1%%", "- [ ] Renew passport",
+        "Notes")
+    }
+
+    @Test func keepsTheOtherSidesLineWhereItAddedItBetweenLinesTheUserEdited() {
+      let local = note("# Thursday", "- [x] Book a table", "- [x] Renew passport", "Notes")
+      #expect(
+        TextMerge.merge(base: base, local: local, remote: withAgentLine)
+          == MergeResult(
+            text: note(
+              "# Thursday", "- [x] Book a table", "  - Sole at 7 %%agent:thr_1%%",
+              "- [x] Renew passport", "Notes"),
+            conflict: false))
+    }
+
+    @Test func keepsTheOtherSidesLinesAddedInsideABlockTheUserRewroteAfterIt() {
+      let local = note("# Thursday", "- [ ] Call the dentist", "- [ ] Water the plants", "Notes")
+      #expect(
+        TextMerge.merge(base: base, local: local, remote: withAgentLine)
+          == MergeResult(
+            text: note(
+              "# Thursday", "- [ ] Call the dentist", "- [ ] Water the plants",
+              "  - Sole at 7 %%agent:thr_1%%", "Notes"),
+            conflict: false))
+    }
+
+    // A diff reports "line edited, line added under it" as one replaced block; the web fuzz
+    // test's shrunk counterexamples (two tabs, the agent adding a line) are these two merges.
+    @Test func takesTheSameEditOnceAndKeepsTheLineTheOtherSideAddedUnderIt() {
+      #expect(
+        TextMerge.merge(base: "- [ ] start", local: "- [ ]", remote: "- [ ]\n- a3 %%agent%%")
+          == MergeResult(text: "- [ ]\n- a3 %%agent%%", conflict: false))
+    }
+
+    @Test func keepsTheLineTheOtherSideAddedUnderALineBothEdited() {
+      #expect(
+        TextMerge.merge(
+          base: "- [ ] start", local: "- [ ] start c1e1",
+          remote: "- [ ] start c0e0\n- a3 %%agent%%")
+          == MergeResult(text: "- [ ] start c1e1\n- a3 %%agent%%", conflict: true))
+    }
+
+    @Test func keepsTheOtherSidesNewLinesInsideABlockBothChangedAfterTheUsersLines() {
+      let local = note("# Thursday", "- [ ] Book a table for 4", "- [ ] Renew it", "Notes")
+      let remote = note(
+        "# Thursday", "- [x] Book a table", "  - Sole at 7 %%agent:thr_1%%", "- [ ] Renew passport",
         "Notes")
       #expect(
         TextMerge.merge(base: base, local: local, remote: remote)
           == MergeResult(
             text: note(
-              "# Thursday", "- [x] Book a table", "- [x] Renew passport",
-              "  - Sole at 7 %%agent:thr_1%%", "Notes"),
-            conflict: false))
+              "# Thursday", "- [ ] Book a table for 4", "  - Sole at 7 %%agent:thr_1%%",
+              "- [ ] Renew it", "Notes"),
+            conflict: true))
     }
 
     @Test func doesntBringBackLinesDeletedElsewhereWhenTheSameLineConflicts() {
@@ -201,7 +245,8 @@ extension DomainTests {
     }
 
     /// Same answer as @ddl/core: the local side deleted one of four identical lines and the diff
-    /// takes it to be the last, which the remote side rewrote.
+    /// takes it to be the last, which the remote side turned into three lines: one edit of it (the
+    /// deletion wins, a conflict) and two added lines, which stay.
     @Test func aDeletionAmongIdenticalLinesCanAlignWithTheOtherSidesEdit() {
       let base = note(
         "  - note", "- [ ] b", "- [ ] b", "- [ ] b", "- [ ] b", "", "## h", "- [ ] b", "- [ ] a")
@@ -212,7 +257,11 @@ extension DomainTests {
         "- [ ] b", "- [ ] a")
       #expect(
         TextMerge.merge(base: base, local: local, remote: remote)
-          == MergeResult(text: local, conflict: true))
+          == MergeResult(
+            text: note(
+              "  - note", "- [ ] b", "- [ ] b", "- [ ] b", "- [ ] a", "text", "", "## h", "- [ ] b",
+              "- [ ] a"),
+            conflict: true))
     }
 
     @Test func largeRewritesStayLinearPastTheEditDistanceCap() {
@@ -244,7 +293,8 @@ extension DomainTests {
       static func content(_ lines: [String]) -> Set<String> { Set(lines.filter { !$0.isEmpty }) }
     }
 
-    private func randomTriples(seed: UInt64, count: Int = 500) -> [Triple] {
+    /// `adding`: the other side (the agent, say) only adds lines and types on existing ones.
+    private func randomTriples(seed: UInt64, count: Int = 500, adding: Bool = false) -> [Triple] {
       var generator = SeededGenerator(seed: seed)
       return (0..<count).map { _ in
         let base = (0..<Int.random(in: 0...14, using: &generator)).map { i in
@@ -252,12 +302,15 @@ extension DomainTests {
         }
         return Triple(
           base: base, local: randomlyEdited(base, side: "mine", using: &generator),
-          remote: randomlyEdited(base, side: "theirs", using: &generator))
+          remote: randomlyEdited(base, side: "theirs", onlyAdding: adding, using: &generator))
       }
     }
 
+    /// Inserts, deletes, replaces (new lines in place of old ones) or edits (a word appended to
+    /// lines, still similar to what they were).
     private func randomlyEdited(
-      _ base: [String], side: String, using generator: inout SeededGenerator
+      _ base: [String], side: String, onlyAdding: Bool = false,
+      using generator: inout SeededGenerator
     ) -> [String] {
       var lines = base
       var n = 0
@@ -269,10 +322,20 @@ extension DomainTests {
           return "\(side) \(n)"
         }
         let removed = at..<min(lines.count, at + count)
-        switch Int.random(in: 0..<3, using: &generator) {
+        let kind =
+          onlyAdding
+          ? [0, 3][Int.random(in: 0..<2, using: &generator)]
+          : Int.random(
+            in: 0..<4, using: &generator)
+        switch kind {
         case 0: lines.insert(contentsOf: added, at: at)
         case 1: lines.removeSubrange(removed)
-        default: lines.replaceSubrange(removed, with: added)
+        case 2: lines.replaceSubrange(removed, with: added)
+        default:
+          for k in removed where !lines[k].isEmpty {
+            lines[k] += " \(side) \(n)"
+            n += 1
+          }
         }
       }
       return lines
@@ -309,6 +372,15 @@ extension DomainTests {
         guard !merged.conflict else { continue }
         for line in Triple.content(triple.remote.filter { !triple.base.contains($0) }) {
           #expect(out.contains(line), "dropped \(line)")
+        }
+      }
+    }
+
+    @Test func keepsEveryLineTheOtherSideAddedNextToLinesItTypedOnWhateverTheUserDid() {
+      for triple in randomTriples(seed: 24, adding: true) {
+        let out = Triple.content(TextMerge.lines(triple.merged.text))
+        for line in triple.remote where line.hasPrefix("theirs") {
+          #expect(out.contains(line), "dropped \(line): \(triple.base) / \(triple.local)")
         }
       }
     }

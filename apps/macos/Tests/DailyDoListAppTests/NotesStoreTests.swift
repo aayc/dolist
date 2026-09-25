@@ -233,6 +233,21 @@ struct NotesStoreTests {
     #expect(store.isDirty(day) == false)
   }
 
+  /// The web fuzz test's shrunk counterexample: both cut "start", then the agent added a line.
+  @Test func aSaveMeetingTheSameEditAndTheAgentsLineUnderItKeepsThatLine() async throws {
+    let day = "Daily/2026-09-25.md"
+    client.setNote(day, "- [ ] start")
+    try await store.load(day)
+    delegate.live[day] = "- [ ]"
+    store.markDirty(day)
+    client.setNote(day, "- [ ]\n- a3 %%agent%%")
+    scheduler.advance(by: 0.3)
+    try await eventually("resolved") { store.saveStates[day] == .saved }
+    #expect(client.note(day)?.content == "- [ ]\n- a3 %%agent%%")
+    #expect(delegate.live[day] == "- [ ]\n- a3 %%agent%%")
+    #expect(delegate.conflictCopies.isEmpty)
+  }
+
   @Test func theSameChangeOnBothSidesNeedsNoSave() async throws {
     let day = try await loadDay()
     let both = Self.day.replacingOccurrences(of: "- [ ] Book", with: "- [x] Book")

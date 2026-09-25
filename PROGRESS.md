@@ -23,6 +23,9 @@ them, so work can continue on any machine at any point. Read it before starting;
 
 ## Shipped on `main` (newest first)
 
+- `d657518` Merge fix follow-up: a line edit and the lines added next to it merge separately (an
+  agent's line under an edited task no longer ends up in a conflict copy; TypeScript and Swift);
+  the notes model tests fail properly instead of via unhandled rejections. CI and macOS green.
 - `6750f36` The editor merge race: an open editor never brings back lines deleted elsewhere
   (root cause: the Mac `NotesStore.save()` kept a stale "unsaved" copy of a clean note); conflicts
   save the merge, not the whole local text (web and Mac); remounted web editors keep unsaved
@@ -74,7 +77,7 @@ Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md). Spec, with the exact wire contra
 | S2 placement, lease priorities, fencing, machine link | `feat/always-on-placement` | done (`bb18e4b`), merged into `feat/always-on` at `394a6dd` (with S1: daemon 1061, sync 63, storage 303, contract 1123 tests green) |
 | S3 relay | `feat/always-on-relay` | done (`34e4d4c`), merged into `feat/always-on` at `8197988`: the relay reads only S2's supervisor and machine link (test-only overrides removed); tests pair for real. Also fixed: a device joining a synced vault no longer resets everyone's settings (first run writes `settings.json` only when it imported Obsidian settings) |
 | S4 web Settings, the orchestrator toggle, pairing screen | `feat/always-on-web` | done (`575beba`), merged into `feat/always-on` at `f5373a2`: fullstack e2e 14 passed with the relay (acting through it; the machine stopped then back), "Pair again…", 675 unit tests, bundle 261.8/320 kB. Browser pairing over https stays fixme (no TLS proxy in the harness) |
-| S5 macOS Settings and the orchestrator toggle | `feat/always-on-mac` | built and verified against real S1/S2 daemons (8 integration tests, 25 total; fake, client and UI aligned: held-here order, `runsOn`, handover `problem`, pairing names, `Retry-After`), merged into `feat/always-on` at `e5f9184`; now testing the relay states against real daemons. The rename bug it found is fixed (`4bd4b12`) |
+| S5 macOS Settings and the orchestrator toggle | `feat/always-on-mac` | done (`4fda925`), merged into `feat/always-on` at `77e0026`: 27 integration tests against real daemons incl. the relay (connected, unreachable and back, revoked and re-paired, forgotten, events), the web's read-only rules and wording, "Pair Again…" for a revoked device. The rename bug it found is fixed (`4bd4b12`) |
 
 S1 and S2 branch from `45a7cd1` (before routines), S3–S5 from `a0a924f` (after). S1 and S2 share
 two seams: `apps/daemon/src/remote-hosts.ts` (`RemoteHosts`: S1's
@@ -103,9 +106,10 @@ agent file through the sync service (a holder whose target copy changed too push
 and the daemon stamps journal events with the lease epoch. The journal's two-device tests were
 rewritten for fencing.
 
-Before `main`: S4's fullstack e2e with the relay (merge `feat/always-on` into
-`feat/always-on-web` when S4 reports), S5's integration tests (running), then the full
-verification, merge, push, CI (CI, macOS app, Security, Linux bundle) and install.
+**All streams are in `feat/always-on` (`31c9519`, with `main`'s merge-race fix).** Lint,
+typecheck, daemon 1091 and web 689 tests green locally; CI, macOS app and Security dispatched on
+the branch. Next: when green, merge to `main`, push (the `Linux bundle` workflow runs on the push),
+install the Mac app.
 
 Earlier notes, now unblocked by S1+S2 on `feat/always-on`: S4's fullstack e2e (merge `feat/always-on` into
 `feat/always-on-web` when S4 reports "ready for backend", then resume it), the kit's follow-ups
@@ -124,9 +128,12 @@ Spec: [docs/specs/drawings.md](docs/specs/drawings.md).
 | --- | --- | --- |
 | X0 format and description (core, shared fixtures) | `feat/drawings` | done (`048dbed`): plugin-exact files (verified against plugin 2.27.3 source), embeds, `describeDrawing`, 11 shared fixtures, the watcher ignores drawings |
 | X2 Mac drawing engine (`DailyDoListDrawing`) | `feat/drawings-mac-engine` | done (`06d8d1c`, 13 commits; X0 merged in at `178a7f5`, all 11 shared fixtures replay byte for byte in Swift): Rough.js port matching Rough.js 4.6.4 within 1e-7, Excalidraw-like rendering light and dark, the core tools, 2–3 ms frames at 2,000 elements (release). Deferred: images, rotation handle, elbow arrows, frames, z-order, copy/paste, snapping |
-| X1 web editor (generic embed layer, floats, move/resize, in-place Excalidraw) | `feat/drawings-web` (from `048dbed`) | in progress |
+| X1 web editor (generic embed layer, floats, move/resize, in-place Excalidraw) | `feat/drawings-web` | done (`d471e8e`, 14 commits): the embed layer (`packages/editor/src/embeds/`, ready for images), the real Excalidraw lazy-loaded with self-hosted fonts, insert (⌘⇧X), move/resize/delete, element-level merges (`mergeDrawingElements` in core), drawing files open full size; typing beside six drawings p95 1.7 ms. **Merged with X4 into `feat/drawings`** (lint, typecheck, core 584, daemon 598, web 556, agent tests, evals green). ⚠ Total web JS is at 1,190 of 1,200 kB: the images stream will need budget headroom (lazy chunks or a reviewed budget) |
 | X4 the agent sees drawings (descriptions, `read_drawing`, renderer) | `feat/drawings-agent` | done (`3655c0b`, 8 commits): descriptions in the digest, `read_note` and subagent kickoffs (bounded, cached, marked as data), `read_drawing` with a PNG for vision models (Pi from its catalog, Cursor from ACP's image capability), its own headless Chromium (no profile, network blocked, closes idle), cache in `$DDL_HOME/cache/drawings`; drawings never re-triage tasks and agents never write in them. Evals: safety 287/289, triage 80/81, no new misses. Merges into `feat/drawings` with X1 |
-| X3 Mac editor integration (exclusion paths, in-place canvas) | `feat/drawings-mac-editor` (from `178a7f5`) | in progress |
+| X3 Mac editor integration (exclusion paths, in-place canvas) | `feat/drawings-mac-editor` (from `178a7f5`) | done (`8ace18d`, 7 commits): floats with TextKit exclusion paths, move/resize, the native canvas in place, Insert Drawing (⇧⌘X), `.excalidraw.md` files open full size, element-level merges (`SceneMerge`, same rules as `mergeDrawingElements`; shared merge vectors are a follow-up); a keystroke beside a float 0.48 ms average / 0.75 ms p95 in a 2,000-line note with six drawings (release). **Merged with X2 into `feat/drawings` at `cddf779`**: lint, typecheck, core 584, web 556, editor 276, Swift Drawing 97, Editor 294 (vim replays 100%), app 258 green |
+
+**All drawings streams are in `feat/drawings` (`cddf779`).** Next: merge `main` in once the
+always-on work has landed, run CI, merge to `main`.
 
 ### Moving from Obsidian
 
@@ -134,9 +141,9 @@ Spec: [docs/specs/obsidian-migration.md](docs/specs/obsidian-migration.md).
 
 | Stream | Branch | State |
 | --- | --- | --- |
-| M the editor merge race (data safety) | `fix/editor-merge-race` | `4d3ef06` merged to `main` (`6750f36`). Follow-up done (`361f8ac`): the fuzz seed was a real merge bug (an edit plus a line added under it were one block, so an agent's line ended up in a conflict copy); `mergeText` and the Swift port now split replaced blocks; the model tests fail properly instead of via unhandled rejections; two oracle fixes. CI and macOS dispatched on the branch; merge to `main` when green. Fixed (`4d3ef06`): root cause in the Mac `NotesStore.save()` (a clean save kept a stale "unsaved" copy, shown again later and saved with a valid version); also conflicts no longer restore deleted lines (web and Mac, `mergeText` and its Swift port), and remounted web editors keep unsaved typing; guarantee in invariant 7. CI and macOS dispatched on the branch; merge to `main` when green. Now investigating the fuzz seed below and making model-check failures fail the property instead of becoming unhandled rejections. Left as is: on the Mac a remote change is an undoable step (⌘Z right after an external delete restores the lines) |
+| M the editor merge race (data safety) | `fix/editor-merge-race` | **all on `main`** (`6750f36`, `d657518`). Follow-up (`361f8ac`): the fuzz seed was a real merge bug (an edit plus a line added under it were one block, so an agent's line ended up in a conflict copy); `mergeText` and the Swift port now split replaced blocks; the model tests fail properly instead of via unhandled rejections; two oracle fixes. CI and macOS dispatched on the branch; merge to `main` when green. Fixed (`4d3ef06`): root cause in the Mac `NotesStore.save()` (a clean save kept a stale "unsaved" copy, shown again later and saved with a valid version); also conflicts no longer restore deleted lines (web and Mac, `mergeText` and its Swift port), and remounted web editors keep unsaved typing; guarantee in invariant 7. CI and macOS dispatched on the branch; merge to `main` when green. Now investigating the fuzz seed below and making model-check failures fail the property instead of becoming unhandled rejections. Left as is: on the Mac a remote change is an undoable step (⌘Z right after an external delete restores the lines) |
 | I0 Import from Obsidian: engine, carry-over, vault switch, update | `feat/obsidian-import` | done (`9ebd1cd`, 12 commits); `feat/always-on` merged in at `f0ced02` (daemon 1205, contract 1284 tests green). After an import the real watcher finds no new work (every carried task keeps its id, thread and badge). Vault switch exits 75 (the Mac supervisor relaunches at once). Paired devices get 403 `forbidden_device`; switching is refused while sync is on. Journal files copied unchanged (`remapJournalFile` hook) |
-| I1 Import from Obsidian: web and Mac flows | `feat/obsidian-import-ui` (from `f0ced02`) | in progress |
+| I1 Import from Obsidian: web and Mac flows | `feat/obsidian-import-ui` (from `f0ced02`) | in progress (web Settings → Vault with its e2e, and the Mac Settings pane committed at `fa408e6`) |
 | B0 binary files, attachment sync, file serving | from `feat/always-on` or `main` | queued (after the always-on work lands; S2 changed the same sync code) |
 | P images, tables, callouts, backlinks (web and Mac) | after the drawings' embed layer | queued (images share the drawings' embed layer) |
 
@@ -144,13 +151,12 @@ Spec: [docs/specs/obsidian-migration.md](docs/specs/obsidian-migration.md).
 
 Spec: [docs/specs/orchestrator-activity.md](docs/specs/orchestrator-activity.md) (user request:
 see it notice, work and conclude on any line, not only checkbox tasks). Branches from
-`feat/always-on` (so the relay forwards the new event): `feat/orchestrator-activity` (wire,
-agent, daemon, web; wire committed at `6c1bfce`): in progress. `feat/orchestrator-activity-mac`:
-done (`226aeee`, 7 commits; Models 46, Client 122, Editor 254, Agent 314, app 292). At merge: apply
-`/tmp/ddl-orchestrator-activity-merge.patch` (the Swift fixture-test entries, also listed in the
-Mac stream's report), and line the web up with the Mac's choices or vice versa: no chip on a line
-that has a task badge; "Edited the note ↗", "Started N tasks ↗"; outcomes fade after 6 s ("Nothing
-to do" after 3 s); a dot nothing follows expires after 60 s.
+`feat/always-on` (so the relay forwards the new event). **Built and integrated** on
+`feat/orchestrator-activity` (`0eef27d`): the web side (wire `6c1bfce`, agent phases and
+outcomes, the relay forwards it, chips, header and status bar; a dot 300 ms after the last
+keystroke; a watcher race fixed) with the Mac side merged in; both platforms use the same
+wording and timings (the table in `apps/web/README.md`). Next: after `feat/always-on` lands on
+`main`, merge `main` in, run CI, merge to `main`.
 
 ### Agent journal
 

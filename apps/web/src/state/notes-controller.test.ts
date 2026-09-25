@@ -265,6 +265,18 @@ describe("NotesController remote changes", () => {
     expect(hooks.onConflictCopy).not.toHaveBeenCalled();
   });
 
+  it("a save meeting the same edit plus the agent's line under it keeps that line (no copy)", async () => {
+    // The fuzz test's shrunk counterexample: both tabs cut "start", then the agent added a line.
+    const { client, edit, hooks, live, path } = setup("- [ ] start");
+    edit("- [ ]");
+    client.seed(path, "- [ ]\n- a3 %%agent%%");
+    await vi.advanceTimersByTimeAsync(300);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(client.notes.get(path)?.content).toBe("- [ ]\n- a3 %%agent%%");
+    expect(live.get(path)).toBe("- [ ]\n- a3 %%agent%%");
+    expect(hooks.onConflictCopy).not.toHaveBeenCalled();
+  });
+
   it("keeps typing that happens while the merge is being saved", async () => {
     const { client, notes, edit, live, path } = setup("- [ ] a\n- [ ] b");
     edit("- [ ] a1\n- [ ] b");
