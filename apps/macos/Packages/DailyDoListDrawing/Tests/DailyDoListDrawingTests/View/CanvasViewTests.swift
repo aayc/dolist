@@ -2,6 +2,7 @@ import AppKit
 import DailyDoListDrawingModel
 import DailyDoListUI
 import Foundation
+import SwiftUI
 import Testing
 
 @testable import DailyDoListDrawing
@@ -180,5 +181,47 @@ struct CanvasTextEditingTests {
     #expect(harness.canvas.textEditor == nil)
     #expect(textView.superview == nil)
     #expect(harness.editor.editingTextId == nil)
+  }
+}
+
+@MainActor
+@Suite("Properties panel")
+struct PropertiesPanelTests {
+  @Test(arguments: DrawingTheme.allCases)
+  func rendersEveryControl(theme: DrawingTheme) throws {
+    let editor = DrawingEditor(
+      scene: ExcalidrawScene(elements: [TestScenes.element(.rectangle, id: "r", x: 0, y: 0)]),
+      environment: DeterministicDrawingEnvironment())
+    editor.select(["r"])
+    let host = NSHostingView(
+      rootView: DrawingPropertiesPanel(editor: editor)
+        .background(Color(nsColor: theme == .dark ? .windowBackgroundColor : .white))
+        .environment(\.colorScheme, theme == .dark ? .dark : .light))
+    host.frame = CGRect(origin: .zero, size: host.fittingSize)
+    let window = NSWindow(
+      contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.appearance = NSAppearance(named: theme == .dark ? .darkAqua : .aqua)
+    window.contentView = host
+    window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
+    window.orderFrontRegardless()
+    defer { window.close() }
+    for _ in 0..<4 {
+      host.layoutSubtreeIfNeeded()
+      window.displayIfNeeded()
+      RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+    }
+    let rep = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+    host.cacheDisplay(in: host.bounds, to: rep)
+    let data = try #require(rep.representation(using: .png, properties: [:]))
+    try FileManager.default.createDirectory(
+      at: Fixtures.snapshotDirectory, withIntermediateDirectories: true)
+    try data.write(
+      to: Fixtures.snapshotDirectory.appendingPathComponent("properties-\(theme.rawValue).png"))
+    #expect(host.frame.height > 300, "every section shows")
+    #expect(!editor.style.roundEdges, "the panel shows the selection's sharp edges")
+    // Picking a color from the panel's palette restyles the selection.
+    editor.applyStyle { $0.strokeColor = ExcalidrawPalette.strokePicks[1] }
+    #expect(editor.element("r")?.strokeColor == "#e03131")
   }
 }

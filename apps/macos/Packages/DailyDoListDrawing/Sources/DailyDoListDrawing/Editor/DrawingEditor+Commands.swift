@@ -240,6 +240,9 @@ extension DrawingEditor {
       style.roughness = first.roughness
     }
     style.opacity = first.opacity
+    if [.rectangle, .diamond, .line, .arrow].contains(first.type) {
+      style.roundEdges = first.roundness != nil
+    }
     if first.type == .arrow {
       style.startArrowhead = first.startArrowhead
       style.endArrowhead = first.endArrowhead
