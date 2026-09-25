@@ -53,7 +53,7 @@ extension AppModel {
       agent?.apply(event)
       workspace?.editor.recordsDidChange(for: nil)
     case .threadUpsert, .threadMessage, .threadDelta, .approvalUpsert, .agentStatus, .surfaceFrame,
-      .routinesChanged, .routineNotification:
+      .routinesChanged, .routineNotification, .orchestratorActivity:
       agent?.apply(event)
     case .error(let error):
       Self.log.warning("daemon error event: \(error.message, privacy: .public)")
