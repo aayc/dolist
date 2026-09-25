@@ -93,9 +93,10 @@ jobs:
           node-version-file: .nvmrc
 
       - name: Put Node.js where systemd finds it
-        # setup.sh and the units use the node on systemd's default PATH, as on a real machine.
+        # setup.sh and the units use the node on systemd's default PATH, as on a real machine. A
+        # copy, so the service user doesn't depend on the tool cache's permissions.
         run: |
-          sudo ln -sf "$(command -v node)" /usr/local/bin/node
+          sudo install -m 0755 "$(command -v node)" /usr/local/bin/node
           /usr/local/bin/node --version
 
       - name: Download the bundle

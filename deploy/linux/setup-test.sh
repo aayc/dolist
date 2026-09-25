@@ -89,7 +89,9 @@ writable="$(find "/opt/ddl/$release" ! -type l -perm /022 | head -n 3)"
 if as_ddl test -w /opt/ddl/current/daemon/dist/main.js; then fail "ddl can modify the bundle"; fi
 pass "bundle in /opt/ddl/$release, read-only for ddl"
 
-systemd-analyze verify /etc/systemd/system/ddl-sync.service /etc/systemd/system/ddl-daemon.service
+# Without --recursive-errors, verify exits 0 whatever it finds; "no" fails on our units' warnings.
+systemd-analyze verify --recursive-errors=no /etc/systemd/system/ddl-sync.service \
+  /etc/systemd/system/ddl-daemon.service
 [ "$(systemctl is-enabled ddl-sync ddl-daemon | sort -u)" = enabled ] || fail "units not enabled"
 pass "units verified and enabled"
 
