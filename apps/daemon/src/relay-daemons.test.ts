@@ -342,12 +342,15 @@ describe("the agent relay between daemons", { timeout: 120_000 * TIME_SCALE }, (
     );
     await socket.next("agent.status", (e) => e.status.placement?.relay === "unreachable", WAIT_MS);
     expect((await status(laptop)).problem).toBe(RELAY_PROBLEMS.unreachable);
-    const threads = await call<ThreadListResponse>(laptop, "GET", "threads");
-    expect(threads.body.threads.map((t) => t.id)).toContain(ORCHESTRATOR_THREAD_ID);
-    const chat = await call<ThreadResponse>(laptop, "GET", "thread", {
-      params: { id: ORCHESTRATOR_THREAD_ID },
+    // The read-only view follows the synced files a moment after sync writes them.
+    await eventually(async () => {
+      const threads = await call<ThreadListResponse>(laptop, "GET", "threads");
+      expect(threads.body.threads.map((t) => t.id)).toContain(ORCHESTRATOR_THREAD_ID);
+      const chat = await call<ThreadResponse>(laptop, "GET", "thread", {
+        params: { id: ORCHESTRATOR_THREAD_ID },
+      });
+      expect(threadText(chat.body.thread)).toContain("Remember the plants");
     });
-    expect(threadText(chat.body.thread)).toContain("Remember the plants");
     expect((await sayToOrchestrator(laptop, "Are you there?")).body).toEqual({
       error: "agent_unavailable",
       message: RELAY_PROBLEMS.unreachable,
@@ -361,6 +364,38 @@ describe("the agent relay between daemons", { timeout: 120_000 * TIME_SCALE }, (
     await eventually(async () => expect((await status(laptop)).placement?.relay).toBe("connected"));
     await socket.next("agent.status", (e) => e.status.placement?.relay === "connected", WAIT_MS);
     expect([200, 202]).toContain((await sayToOrchestrator(laptop, "Back again")).status);
+  });
+
+  it("switches live: pairing, running here, relaying again", async () => {
+    const machine = await startMachine();
+    const laptop = await startDevice("Laptop", { placement: "always_on_machine", machine: null });
+    expect((await status(laptop)).placement?.relay).toBe("not_paired");
+
+    laptop.machine.set(credentialFor(machine));
+    await eventually(async () => expect((await status(laptop)).placement?.relay).toBe("connected"));
+    expect([200, 202]).toContain((await sayToOrchestrator(laptop, "Paired now")).status);
+
+    // This device's own agent: here that means asking for the lease, which the machine holds.
+    laptop.placement.set("this_device");
+    const elsewhere = "The agent is running on Machine.";
+    await eventually(async () => expect((await status(laptop)).problem).toBe(elsewhere));
+    expect((await status(laptop)).placement).toBeUndefined();
+    await chatSyncedTo(laptop, "Paired now");
+    await eventually(async () => {
+      const chat = await call<ThreadResponse>(laptop, "GET", "thread", {
+        params: { id: ORCHESTRATOR_THREAD_ID },
+      });
+      expect(threadText(chat.body.thread)).toContain("Paired now");
+    });
+    expect((await sayToOrchestrator(laptop, "Still there?")).body).toEqual({
+      error: "agent_unavailable",
+      message: elsewhere,
+    });
+
+    laptop.placement.set("always_on_machine");
+    await eventually(async () => expect((await status(laptop)).placement?.relay).toBe("connected"));
+    expect([200, 202]).toContain((await sayToOrchestrator(laptop, "And back")).status);
+    expect(server.store.leaseHolder(vault.id, "agent")?.deviceName).toBe("Machine");
   });
 
   it("shows the synced work read-only where the machine's agent can't be reached", async () => {

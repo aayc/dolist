@@ -114,6 +114,7 @@ export class AgentRelay implements AgentRuntime {
   readonly #pushed = new Set<string>();
   #resyncs = 0;
   #started = false;
+  #stopped = false;
 
   constructor(options: AgentRelayOptions) {
     this.#options = options;
@@ -125,6 +126,10 @@ export class AgentRelay implements AgentRuntime {
         this.#local.on(event, (payload) => this.#fromLocal(event, payload as never)),
       );
     }
+    this.#unsubscribes.push(
+      options.placement.onChange(() => this.#apply()),
+      options.machine.onChange(() => this.#apply()),
+    );
     this.#apply();
   }
 
@@ -141,6 +146,7 @@ export class AgentRelay implements AgentRuntime {
 
   async stop(): Promise<void> {
     this.#started = false;
+    this.#stopped = true;
     for (const unsubscribe of this.#unsubscribes.splice(0)) unsubscribe();
     this.#link?.close();
     this.#link = null;
@@ -300,18 +306,18 @@ export class AgentRelay implements AgentRuntime {
     );
   }
 
+  /** Follows the placement and the credential: relay or not, and to which machine. */
   #apply(): void {
+    if (this.#stopped) return;
     if (this.#options.placement.current().effective !== "always_on_machine") {
-      this.#useLink(null);
-      this.#setState("off", undefined);
+      this.#transition(null, "off", undefined);
       return;
     }
     const stored = this.#options.machine.current();
     const credential = validCredential(stored);
     if (!credential) {
       if (stored) this.#logger.warn("The always-on machine's address isn't valid; not relaying");
-      this.#useLink(null);
-      this.#setState("not_paired", RELAY_PROBLEMS.notPaired);
+      this.#transition(null, "not_paired", RELAY_PROBLEMS.notPaired);
       return;
     }
     const link = this.#link;
@@ -329,9 +335,26 @@ export class AgentRelay implements AgentRuntime {
       logger: this.#logger,
       ...(this.#options.linkTimings ? { timings: this.#options.linkTimings } : {}),
     });
-    this.#useLink(next);
-    this.#setState("connecting", undefined);
+    this.#transition(next, "connecting", undefined);
     if (this.#started) next.connect();
+  }
+
+  /**
+   * Moves to `state` with `link` (the current one when undefined). When requests and events stop
+   * going to the machine, this device's routines are pushed to clients again (they're files); the
+   * `relay` change in `agent.status` tells clients to fetch the rest again.
+   */
+  #transition(
+    link: MachineLink | null | undefined,
+    state: RelayState,
+    problem: string | undefined,
+  ): void {
+    const wasForwarding = this.#forwarding;
+    if (link !== undefined && link !== this.#link) this.#useLink(link);
+    this.#setState(state, problem);
+    if (wasForwarding && !this.#forwarding) {
+      this.#events.emit("routines.changed", this.#local.listRoutines());
+    }
   }
 
   #useLink(link: MachineLink | null): void {
@@ -355,18 +378,16 @@ export class AgentRelay implements AgentRuntime {
       case "connecting":
         return;
       case "connected":
-        this.#setState("connected", undefined);
+        this.#transition(undefined, "connected", undefined);
         void this.#resync(link);
         return;
       case "unreachable":
+        this.#remote = null;
+        this.#transition(undefined, "unreachable", RELAY_PROBLEMS.unreachable);
+        return;
       case "rejected":
         this.#remote = null;
-        this.#setState(
-          state === "rejected" ? "not_paired" : "unreachable",
-          state === "rejected" ? RELAY_PROBLEMS.rejected : RELAY_PROBLEMS.unreachable,
-        );
-        // Routines come from this device's files again; clients refetch the rest on `relay`.
-        this.#events.emit("routines.changed", this.#local.listRoutines());
+        this.#transition(undefined, "not_paired", RELAY_PROBLEMS.rejected);
         return;
     }
   }

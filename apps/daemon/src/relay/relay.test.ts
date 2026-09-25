@@ -682,6 +682,56 @@ describe("the agent relay over WebSocket", { timeout: 30_000 * TIME_SCALE }, () 
   });
 });
 
+describe("switching where the agent runs", { timeout: 30_000 * TIME_SCALE }, () => {
+  it("follows the placement live, surface watches included", async () => {
+    const { client, relay, local, placement } = await liveDevice({ placement: "this_device" });
+    client.send({ type: "surface.subscribe", threadId: "thr_1", surface: "browser" });
+    await waitFor(() => local.activeSurfaces.get("thr_1:browser") === 1, WAIT_MS);
+    expect(relay.listThreads().map((t) => t.id)).toEqual(["thr_local"]);
+
+    placement.set("always_on_machine");
+    await connected(relay);
+    await client.next("agent.status", (e) => e.status.placement?.relay === "connected", WAIT_MS);
+    await client.next("thread.upsert", (e) => e.thread.id === "thr_1", WAIT_MS);
+    expect(local.activeSurfaces.get("thr_1:browser")).toBe(0);
+    await waitFor(() => machineRuntime.activeSurfaces.get("thr_1:browser") === 1, WAIT_MS);
+    await expect(relay.postUserMessage("thr_local", "Hi")).rejects.toThrow(
+      RELAY_PROBLEMS.unreachable,
+    );
+
+    placement.set("this_device");
+    expect(relay.state).toBe("off");
+    await client.next("agent.status", (e) => e.status.placement === undefined, WAIT_MS);
+    await client.next("routines.changed", undefined, WAIT_MS);
+    await waitFor(() => machineRuntime.activeSurfaces.get("thr_1:browser") === 0, WAIT_MS);
+    expect(local.activeSurfaces.get("thr_1:browser")).toBe(1);
+    await waitFor(() => machine.hub.clientCount === 0, WAIT_MS);
+    await relay.postUserMessage("thr_local", "Hi");
+    expect(local.callsTo("postUserMessage")).toEqual([["thr_local", "Hi"]]);
+  });
+
+  it("follows the credential live: pairing, a new token, forgetting the machine", async () => {
+    const { api, relay, machineSource } = await device({ credential: null });
+    expect(relay.state).toBe("not_paired");
+
+    machineSource.set({ ...machineCredential(), token: "old" });
+    await waitFor(
+      () => relay.state === "not_paired" && relay.status().problem === RELAY_PROBLEMS.rejected,
+      WAIT_MS,
+    );
+    machineSource.set(machineCredential());
+    await connected(relay);
+    expect(threadIds((await api.call("threads", "GET")).body)).toEqual(["thr_1"]);
+    await waitFor(() => machine.hub.clientCount === 1, WAIT_MS);
+
+    machineSource.set(null);
+    expect(relay.state).toBe("not_paired");
+    expect(relay.status().problem).toBe(RELAY_PROBLEMS.notPaired);
+    expect(threadIds((await api.call("threads", "GET")).body)).toEqual(["thr_local"]);
+    await waitFor(() => machine.hub.clientCount === 0, WAIT_MS);
+  });
+});
+
 describe("calls to the machine", () => {
   it("refuse answers that are too large, aren't the daemon's, redirect or come late", async () => {
     const elsewhere = await startRecorder();
