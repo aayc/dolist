@@ -560,6 +560,17 @@ public struct SurfaceKind: WireEnum {
   public static let computer: Self = "computer"
 }
 
+/// The orchestrator's own chat: one thread with this id (`taskId` and `notePath` nil) records
+/// each of its turns (what woke it, its text, its tool calls) and takes the user's direct
+/// messages. Mirrors `ORCHESTRATOR_THREAD_ID` in `@ddl/core` (the contract's
+/// `OrchestratorThreadId`).
+public enum OrchestratorThread {
+  public static let id = "thr_orchestrator"
+  public static let title = "Orchestrator"
+
+  public static func isOrchestrator(_ threadId: String) -> Bool { threadId == id }
+}
+
 public struct AgentThread: Codable, Hashable, Sendable, Identifiable {
   public var id: String
   public var taskId: String?
@@ -613,6 +624,9 @@ public struct AgentThread: Codable, Hashable, Sendable, Identifiable {
     try c.encode(surfaces, forKey: .surfaces)
     try c.encodeIfPresent(sources, forKey: .sources)
   }
+
+  /// The orchestrator's own chat (``OrchestratorThread``).
+  public var isOrchestrator: Bool { OrchestratorThread.isOrchestrator(id) }
 }
 
 /// A web page an agent found or read, as a citation preview.
@@ -683,6 +697,9 @@ public struct ThreadSummary: Codable, Hashable, Sendable, Identifiable {
     try c.encode(surfaces, forKey: .surfaces)
     try c.encode(pendingApprovals, forKey: .pendingApprovals)
   }
+
+  /// The orchestrator's own chat (``OrchestratorThread``).
+  public var isOrchestrator: Bool { OrchestratorThread.isOrchestrator(id) }
 }
 
 // MARK: - Surfaces

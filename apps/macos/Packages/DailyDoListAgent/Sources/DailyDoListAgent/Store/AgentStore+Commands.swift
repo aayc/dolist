@@ -8,19 +8,19 @@ extension AgentStore {
   // MARK: Threads
 
   /// Fetches a thread once (`force` refetches) and keeps it live from then on. Concurrent calls
-  /// share one request.
-  public func loadThread(_ id: String, force: Bool = false) async {
+  /// share one request. `quiet` doesn't report a failure (the thread view still offers a retry).
+  public func loadThread(_ id: String, force: Bool = false, quiet: Bool = false) async {
     if !force, state.loadedThreads[id] != nil { return }
     if let inFlight = threadLoads[id] {
       await inFlight.value
       return
     }
-    let task = Task { await self.performLoad(id) }
+    let task = Task { await self.performLoad(id, quiet: quiet) }
     threadLoads[id] = task
     await task.value
   }
 
-  private func performLoad(_ id: String) async {
+  private func performLoad(_ id: String, quiet: Bool) async {
     loadBuffers[id] = []
     loadingThreadIds.insert(id)
     defer {
@@ -43,7 +43,7 @@ extension AgentStore {
       forgetDeliveredUnsentMessages()
     } catch {
       failedThreadIds.insert(id)
-      report(error, title: "Couldn't load the thread")
+      if !quiet { report(error, title: "Couldn't load the thread") }
     }
   }
 

@@ -3,7 +3,7 @@ import DailyDoListUI
 import SwiftUI
 
 /// The app's scenes, exposed so the executable stays a one-liner: the single main window, the
-/// Settings window and the menu bar extra.
+/// orchestrator's chat window, the Settings window and the menu bar extra.
 public struct DailyDoListScenes: Scene {
   @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
   @State private var model: AppModel = .shared
@@ -17,6 +17,12 @@ public struct DailyDoListScenes: Scene {
     .defaultSize(width: 1180, height: 780)
     .windowStyle(.hiddenTitleBar)
     .commands { AppMenuCommands(model: model) }
+
+    Window("Orchestrator", id: OrchestratorWindowID.value) {
+      OrchestratorWindowView(model: model)
+    }
+    .defaultSize(width: 460, height: 720)
+    .windowResizability(.contentMinSize)
 
     Settings {
       SettingsView(model: model)
@@ -82,6 +88,7 @@ struct MenuBarContent: View {
     .onAppear {
       WindowHandles.shared.openMainWindow = { openWindow(id: MainWindowID.value) }
       WindowHandles.shared.openSettings = { openSettings() }
+      WindowHandles.shared.openOrchestratorWindow = { openWindow(id: OrchestratorWindowID.value) }
     }
   }
 

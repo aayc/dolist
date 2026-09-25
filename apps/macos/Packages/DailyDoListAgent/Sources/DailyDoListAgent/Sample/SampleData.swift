@@ -147,7 +147,10 @@ private struct Builder {
   func ago(_ minutes: Double) -> EpochMillis { now.addingTimeInterval(-minutes * 60).epochMillis }
 
   func build() -> SampleData.Snapshot {
-    let threads = [booking(), email(), desks(), coffee(), question()]
+    let threads = [
+      booking(), email(), desks(), coffee(), question(),
+      SampleData.orchestratorThread(now: now, notePath: notePath),
+    ]
     let approvals = self.approvals()
     var summaries = threads.map { thread in
       AgentState.summarize(

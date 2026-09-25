@@ -89,8 +89,10 @@ describe("mock mode (the runtime's built-in brain script)", () => {
       await t.waitForStatus("Book dentist appointment next week", "done");
       await t.waitForStatus("Research best standing desks under $500", "done");
       await t.idle();
+      // Task threads; the orchestrator's chat depends on how reports happen to batch.
       return t.runtime
         .listThreads()
+        .filter((summary) => summary.taskId !== null)
         .map((summary) => normalize(t.runtime.getThread(summary.id)!.thread))
         .sort((a, b) => a.title.localeCompare(b.title));
     };

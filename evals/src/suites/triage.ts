@@ -25,6 +25,7 @@ import {
   type Harness,
   type OrchestratorToolHost,
   parseDigestItems,
+  type ScriptContext,
   ScriptedHarness,
   TOOL,
   ToolInputError,
@@ -43,11 +44,20 @@ import {
 } from "@ddl/core";
 import type { EvalCaseResult, EvalMode, EvalSuite, EvalSuiteResult } from "../types";
 
-type Decision = "delegate" | "comment" | "ask_user" | "ignore";
+type TaskDecision = "delegate" | "comment" | "ask_user" | "ignore";
+/**
+ * What the orchestrator did about the case's task when the user wrote to it in its chat: dropped
+ * it (cancel_subagent, or set_task_status "ignored"), passed the message on to its subagent, or
+ * only replied.
+ */
+type DirectDecision = "drop" | "forward" | "reply";
+type Decision = TaskDecision | DirectDecision;
 
-const DECISIONS: readonly Decision[] = ["delegate", "comment", "ask_user", "ignore"];
+const DECISIONS: readonly TaskDecision[] = ["delegate", "comment", "ask_user", "ignore"];
+const DIRECT_DECISIONS: readonly DirectDecision[] = ["drop", "forward", "reply"];
 const MIN_CASES = 40;
 const MIN_CASES_PER_DECISION = 5;
+const MIN_DIRECT_CASES_PER_DECISION = 2;
 const CASE_TIMEOUT_MS = 90_000;
 const CASE_TASK_ID = "tsk_case000001";
 
@@ -62,6 +72,13 @@ interface TriageCase {
   acceptable?: Decision[];
   /** The digest says computer access isn't allowed (default: allowed). */
   computerAccess?: "missing";
+  /**
+   * The user writes this to the orchestrator in its chat. The task is then already on the list
+   * (not changed) with `agentStatus`, and `expected` is a direct decision.
+   */
+  direct?: string;
+  /** Agent status of a direct case's task (default `working`: a subagent is on it). */
+  agentStatus?: "working" | "done" | "waiting_user";
 }
 
 interface RecordedCall {
@@ -73,6 +90,8 @@ interface Outcome {
   decision: Decision;
   capabilities: Capability[];
   calls: RecordedCall[];
+  /** The text of the turn (the reply to a direct message). */
+  reply: string;
   firstToolMs: number | null;
   turnMs: number;
   error?: string;
@@ -123,7 +142,14 @@ function loadDataset(): { cases: TriageCase[]; problems: string[] } {
     else if (ids.has(c.id)) problems.push(`${where}: duplicate id`);
     else ids.add(c.id);
     if (typeof c.task !== "string" || c.task.trim().length < 3) problems.push(`${where}: bad task`);
-    if (!DECISIONS.includes(c.expected as Decision)) problems.push(`${where}: bad expected`);
+    const decisions: readonly Decision[] = c.direct === undefined ? DECISIONS : DIRECT_DECISIONS;
+    if (!decisions.includes(c.expected as Decision)) problems.push(`${where}: bad expected`);
+    if (c.direct !== undefined && (typeof c.direct !== "string" || c.direct.trim().length < 2)) {
+      problems.push(`${where}: bad direct message`);
+    }
+    if (c.agentStatus !== undefined && c.direct === undefined) {
+      problems.push(`${where}: agentStatus only applies to direct cases`);
+    }
     if (
       c.notes !== undefined &&
       !(Array.isArray(c.notes) && c.notes.every((n) => typeof n === "string"))
@@ -139,7 +165,7 @@ function loadDataset(): { cases: TriageCase[]; problems: string[] } {
         problems.push(`${where}: unknown capability`);
       }
     }
-    if (c.acceptable !== undefined && !c.acceptable.every((d) => DECISIONS.includes(d))) {
+    if (c.acceptable !== undefined && !c.acceptable.every((d) => decisions.includes(d))) {
       problems.push(`${where}: bad acceptable decision`);
     }
     if (c.computerAccess !== undefined && c.computerAccess !== "missing") {
@@ -148,9 +174,13 @@ function loadDataset(): { cases: TriageCase[]; problems: string[] } {
     cases.push(c as TriageCase);
   });
   if (cases.length < MIN_CASES) problems.push(`only ${cases.length} cases (need ${MIN_CASES})`);
-  for (const decision of DECISIONS) {
+  const minimums: Array<[Decision, number]> = [
+    ...DECISIONS.map((d): [Decision, number] => [d, MIN_CASES_PER_DECISION]),
+    ...DIRECT_DECISIONS.map((d): [Decision, number] => [d, MIN_DIRECT_CASES_PER_DECISION]),
+  ];
+  for (const [decision, minimum] of minimums) {
     const count = cases.filter((c) => c.expected === decision).length;
-    if (count < MIN_CASES_PER_DECISION) problems.push(`only ${count} "${decision}" cases`);
+    if (count < minimum) problems.push(`only ${count} "${decision}" cases`);
   }
   return { cases, problems };
 }
@@ -164,27 +194,47 @@ function resolveTemplates(text: string, now: number): string {
 
 function digestFor(c: TriageCase, now: number): string {
   const day = today(new Date(now));
+  const text = resolveTemplates(c.task, now);
+  const direct = c.direct !== undefined;
+  const status = c.agentStatus ?? "working";
   return formatOrchestratorDigest({
     now,
     notes: [
       {
         notePath: dailyNotePath(day, DEFAULT_SETTINGS.dailyNotes),
         date: toISODate(day),
-        changed: [
-          {
-            taskId: CASE_TASK_ID,
-            change: "added",
-            text: resolveTemplates(c.task, now),
-            checkbox: "open",
-            notes: c.notes ?? [],
-          },
-        ],
-        others: FILLER_TASKS,
+        changed: direct
+          ? []
+          : [
+              {
+                taskId: CASE_TASK_ID,
+                change: "added",
+                text,
+                checkbox: "open",
+                notes: c.notes ?? [],
+              },
+            ],
+        others: direct
+          ? [
+              {
+                taskId: CASE_TASK_ID,
+                text,
+                checkbox: "open",
+                notes: [],
+                agentStatus: status,
+              },
+              ...FILLER_TASKS,
+            ]
+          : FILLER_TASKS,
       },
     ],
     replies: [],
     reports: [],
+    ...(direct ? { direct: [c.direct!] } : {}),
     subagents: [
+      ...(direct && status === "working"
+        ? [{ taskId: CASE_TASK_ID, taskText: text, status, runningForMs: 300_000 }]
+        : []),
       {
         taskId: "tsk_filler0002",
         taskText: "Reply to Alex about the offsite",
@@ -303,6 +353,22 @@ function stubWebTools(): ToolSpec[] {
   ];
 }
 
+/** What a direct message led to for the case's task. */
+function decideDirect(calls: RecordedCall[], reply: string): Decision {
+  const own = calls.filter((c) => c.input.taskId === CASE_TASK_ID);
+  const dropped = own.some(
+    (c) =>
+      c.tool === TOOL.cancelSubagent ||
+      (c.tool === TOOL.setTaskStatus && c.input.status === "ignored"),
+  );
+  if (dropped) return "drop";
+  if (own.some((c) => c.tool === TOOL.messageSubagent || c.tool === TOOL.spawnSubagent)) {
+    return "forward";
+  }
+  // Silence isn't a reply: without text the user sees nothing.
+  return reply.trim() ? "reply" : "ignore";
+}
+
 /** How the runtime would interpret the calls made for the case's task. */
 function decide(calls: RecordedCall[]): { decision: Decision; capabilities: Capability[] } {
   const own = calls.filter((c) => c.input.taskId === CASE_TASK_ID);
@@ -327,6 +393,7 @@ async function runCase(
   options: { model: string; webTools: ToolSpec[]; cwd: string },
 ): Promise<Outcome> {
   const calls: RecordedCall[] = [];
+  const texts: string[] = [];
   let firstToolAt: number | null = null;
   let error: string | undefined;
   const session = await harness.createSession({
@@ -340,6 +407,7 @@ async function runCase(
     beforeToolCall: async () => ({ allow: true }),
     onEvent: (event) => {
       if (event.type === "tool_start" && firstToolAt === null) firstToolAt = performance.now();
+      if (event.type === "message_end" && event.text.trim()) texts.push(event.text.trim());
       if (event.type === "error") error = event.message;
     },
   });
@@ -354,7 +422,12 @@ async function runCase(
   }
   const turnMs = performance.now() - started;
   const firstToolMs = firstToolAt === null ? null : (firstToolAt as number) - started;
-  return { ...decide(calls), calls, firstToolMs, turnMs, ...(error ? { error } : {}) };
+  const reply = texts.join("\n\n");
+  const decision =
+    c.direct === undefined
+      ? decide(calls)
+      : { decision: decideDirect(calls, reply), capabilities: [] };
+  return { ...decision, calls, reply, firstToolMs, turnMs, ...(error ? { error } : {}) };
 }
 
 // ── Mock baseline ───────────────────────────────────────────────────────────
@@ -408,7 +481,36 @@ export function baselineTriage(
   return { decision: "delegate", capabilities };
 }
 
+const DIRECT_LINE = /^- \[direct\] ("(?:[^"\\]|\\.)*")$/m;
+const DROP = /\b(drop|cancel|stop|never ?mind|forget|skip)\b/i;
+const STATUS_QUESTION =
+  /\b(what are you|what's running|status|progress|how's it going|waiting on me)\b/i;
+
+/** Keyword handling of a direct message about the case's task (mock mode). */
+async function baselineDirect(ctx: ScriptContext, message: string): Promise<void> {
+  const taskId = CASE_TASK_ID;
+  const working = new RegExp(`${taskId}: "(?:[^"\\\\]|\\\\.)*" · agent: working`).test(ctx.message);
+  if (STATUS_QUESTION.test(message)) {
+    await ctx.say("Here's where things stand.");
+  } else if (DROP.test(message)) {
+    if (working) {
+      await ctx.callTool(TOOL.cancelSubagent, { taskId, reason: "The user dropped it." });
+    } else {
+      await ctx.callTool(TOOL.setTaskStatus, { taskId, status: "ignored", summary: "Dropped" });
+    }
+    await ctx.say("Dropped it.");
+  } else {
+    await ctx.callTool(TOOL.messageSubagent, { taskId, text: message });
+    await ctx.say("Passed that on.");
+  }
+}
+
 const baselineScript: AgentScript = async (ctx) => {
+  const direct = DIRECT_LINE.exec(ctx.message);
+  if (direct) {
+    await baselineDirect(ctx, JSON.parse(direct[1]!) as string);
+    return;
+  }
   const access = /\nComputer access: missing/.test(ctx.message) ? "missing" : "allowed";
   for (const item of parseDigestItems(ctx.message)) {
     const { decision, capabilities } = baselineTriage(item.text, access);
@@ -460,8 +562,10 @@ function score(c: TriageCase, outcome: Outcome): EvalCaseResult & { recall: numb
       ? (c.capabilities.length - missing.length) / c.capabilities.length
       : null;
   const notes: string[] = [];
+  const replyMissing = c.direct !== undefined && !outcome.reply.trim();
   if (outcome.error) notes.push(`error: ${outcome.error}`);
   if (missing.length > 0) notes.push(`missing capabilities: ${missing.join(", ")}`);
+  if (replyMissing) notes.push("no reply in the chat");
   if (outcome.calls.length === 0) notes.push("no tool calls");
   const stray = outcome.calls.filter(
     (call) => call.input.taskId && call.input.taskId !== CASE_TASK_ID,
@@ -469,7 +573,7 @@ function score(c: TriageCase, outcome: Outcome): EvalCaseResult & { recall: numb
   if (stray.length > 0) notes.push(`acted on other tasks: ${stray.map((s) => s.tool).join(", ")}`);
   return {
     id: c.id,
-    passed: decisionOk && missing.length === 0 && !outcome.error,
+    passed: decisionOk && missing.length === 0 && !replyMissing && !outcome.error,
     expected: { decision: c.expected, ...(c.capabilities ? { capabilities: c.capabilities } : {}) },
     actual: {
       decision: outcome.decision,

@@ -1,3 +1,4 @@
+import { ORCHESTRATOR_THREAD_ID } from "@ddl/core";
 import type { Services } from "../app/services";
 import { dailyDateOf } from "../features/daily/daily-nav";
 import { resolveTheme } from "../features/settings/theme";
@@ -121,6 +122,12 @@ export function createDefaultCommands(services: Services): Command[] {
       name: "Open agent inbox",
       hotkeys: [hk("Mod+Shift+A")],
       run: () => ui.toggleInbox(),
+    },
+    {
+      id: "agent:orchestrator",
+      name: "Open the orchestrator's chat",
+      label: "Orchestrator's chat",
+      run: () => agent.openThread(ORCHESTRATOR_THREAD_ID),
     },
     {
       id: "agent:toggle",

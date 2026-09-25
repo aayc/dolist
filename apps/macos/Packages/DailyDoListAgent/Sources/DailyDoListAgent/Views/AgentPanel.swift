@@ -40,6 +40,7 @@ public struct AgentPanel: View {
   let onHide: (() -> Void)?
   let noteLinks: AgentNoteLinks
   let shortcuts: AgentPanelShortcuts
+  let onOpenOrchestratorWindow: (() -> Void)?
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   /// - Parameters:
@@ -50,12 +51,16 @@ public struct AgentPanel: View {
   ///     its own: the header already goes back to the inbox and hides the panel.
   ///   - noteLinks: how `[[wikilinks]]` in agent text open and preview notes.
   ///   - shortcuts: the host's shortcuts for hiding the panel and showing the inbox.
+  ///   - onOpenOrchestratorWindow: opens the orchestrator's chat in a window of its own (a button
+  ///     in its header).
   public init(
     store: AgentStore, selectedThreadId: Binding<String?>,
     onShowInNote: ((TaskLocation) -> Void)? = nil, onClose: (() -> Void)? = nil,
     headerHeight: CGFloat = 40, onHide: (() -> Void)? = nil, noteLinks: AgentNoteLinks = .none,
-    shortcuts: AgentPanelShortcuts = AgentPanelShortcuts()
+    shortcuts: AgentPanelShortcuts = AgentPanelShortcuts(),
+    onOpenOrchestratorWindow: (() -> Void)? = nil
   ) {
+    self.onOpenOrchestratorWindow = onOpenOrchestratorWindow
     self.store = store
     self._selectedThreadId = selectedThreadId
     self.onShowInNote = onShowInNote
@@ -70,7 +75,12 @@ public struct AgentPanel: View {
     VStack(spacing: 0) {
       header
       Group {
-        if let threadId = selectedThreadId {
+        if let threadId = selectedThreadId, OrchestratorThread.isOrchestrator(threadId) {
+          OrchestratorChatView(
+            store: store, onOpenTask: { selectedThreadId = $0 },
+            onOpenWindow: onOpenOrchestratorWindow,
+            onClose: onHide == nil ? onClose ?? { selectedThreadId = nil } : nil)
+        } else if let threadId = selectedThreadId {
           ThreadView(
             store: store, threadId: threadId, onShowInNote: onShowInNote,
             onClose: onHide == nil ? onClose ?? { selectedThreadId = nil } : nil,

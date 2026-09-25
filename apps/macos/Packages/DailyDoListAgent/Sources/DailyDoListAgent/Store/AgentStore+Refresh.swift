@@ -5,8 +5,8 @@ import Foundation
 extension AgentStore {
   /// Refetches everything events would have kept current: the status, pending approvals, the
   /// thread list (`todayNotePath`'s threads, or every thread when it's nil), the records of every
-  /// note loaded with `loadRecords(for:)` (and today's), and every loaded thread. (Surface
-  /// subscriptions survive reconnects: the client re-sends them.)
+  /// note loaded with `loadRecords(for:)` (and today's), every loaded thread, and the
+  /// orchestrator's chat. (Surface subscriptions survive reconnects: the client re-sends them.)
   ///
   /// Call it at launch and after every reconnect. Events that arrive while it runs are newer than
   /// its snapshots and are never overwritten; overlapping refreshes only apply the latest.
@@ -54,10 +54,13 @@ extension AgentStore {
     }
     if let failure { report(failure, title: "Couldn't refresh the agent's state") }
 
-    let loaded = state.loadedThreads.keys.sorted()
+    // The orchestrator's chat is pinned in the inbox whatever the list's filter, so it's always
+    // loaded; a daemon without an agent runtime has none, which isn't worth a toast.
+    let loaded = Set(state.loadedThreads.keys).union([OrchestratorThread.id]).sorted()
     await withTaskGroup(of: Void.self) { group in
       for id in loaded {
-        group.addTask { await self.loadThread(id, force: true) }
+        let quiet = OrchestratorThread.isOrchestrator(id)
+        group.addTask { await self.loadThread(id, force: true, quiet: quiet) }
       }
     }
   }

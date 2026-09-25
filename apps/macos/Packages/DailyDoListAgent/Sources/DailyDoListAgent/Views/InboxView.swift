@@ -2,7 +2,8 @@ import DailyDoListModels
 import DailyDoListUI
 import SwiftUI
 
-/// Today's threads grouped by what they need: Needs you, Working, Done, Other.
+/// The orchestrator's chat pinned on top, then today's threads grouped by what they need: Needs
+/// you, Working, Done, Other.
 struct InboxView: View {
   let store: AgentStore
   let onSelect: (String) -> Void
@@ -11,35 +12,48 @@ struct InboxView: View {
   var body: some View {
     TimelineView(.periodic(from: .now, by: 60)) { context in
       let now = referenceDate ?? context.date
-      let sections = store.inboxSections(now: now)
-      if sections.isEmpty {
-        ContentUnavailableView {
-          Label("Nothing here yet today", systemImage: "tray")
-        } description: {
-          Text("Write a task in today's daily note and the agent will pick it up.")
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-      } else {
-        ScrollView {
-          LazyVStack(alignment: .leading, spacing: 2, pinnedViews: [.sectionHeaders]) {
-            ForEach(sections) { section in
-              Section {
-                // Keyed by the whole summary: a LazyVStack keeps showing a stale row when a
-                // thread moves to another section under the same id.
-                ForEach(section.threads, id: \.self) { thread in
-                  InboxRow(
-                    thread: thread, unread: store.unreadCount(forThread: thread.id),
-                    pendingApprovals: pendingCount(for: thread), now: now
-                  ) { onSelect(thread.id) }
-                }
-              } header: {
-                InboxSectionHeader(group: section.group, count: section.threads.count)
+      VStack(spacing: 0) {
+        OrchestratorInboxRow(
+          summary: store.orchestratorSummary,
+          pendingApprovals: store.pendingApprovals(forThread: OrchestratorThread.id).count,
+          now: now
+        ) { onSelect(OrchestratorThread.id) }
+        .padding(.horizontal, 6)
+        .padding(.top, 8)
+        sections(now: now)
+      }
+    }
+  }
+
+  @ViewBuilder private func sections(now: Date) -> some View {
+    let sections = store.inboxSections(now: now)
+    if sections.isEmpty {
+      ContentUnavailableView {
+        Label("Nothing here yet today", systemImage: "tray")
+      } description: {
+        Text("Write a task in today's daily note and the agent will pick it up.")
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+    } else {
+      ScrollView {
+        LazyVStack(alignment: .leading, spacing: 2, pinnedViews: [.sectionHeaders]) {
+          ForEach(sections) { section in
+            Section {
+              // Keyed by the whole summary: a LazyVStack keeps showing a stale row when a
+              // thread moves to another section under the same id.
+              ForEach(section.threads, id: \.self) { thread in
+                InboxRow(
+                  thread: thread, unread: store.unreadCount(forThread: thread.id),
+                  pendingApprovals: pendingCount(for: thread), now: now
+                ) { onSelect(thread.id) }
               }
+            } header: {
+              InboxSectionHeader(group: section.group, count: section.threads.count)
             }
           }
-          .padding(.horizontal, 6)
-          .padding(.bottom, 10)
         }
+        .padding(.horizontal, 6)
+        .padding(.bottom, 10)
       }
     }
   }

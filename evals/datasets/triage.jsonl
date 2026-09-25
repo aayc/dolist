@@ -61,3 +61,9 @@
 {"id":"notion-launch-notes","task":"Add today's launch checklist to the Launch page in Notion","expected":"delegate","capabilities":["computer"],"acceptable":["ask_user"]}
 {"id":"grok-without-computer-access","task":"Ask Grok Bot to suggest three names for the new puppy","computerAccess":"missing","expected":"comment","acceptable":["ask_user"]}
 {"id":"whatsapp-without-computer-access","task":"Message Sam on WhatsApp that I'm running late","computerAccess":"missing","expected":"comment","acceptable":["ask_user"]}
+{"id":"direct-drop-working","task":"Research standing desks under $500","direct":"Drop the standing desk research, I already bought one","expected":"drop"}
+{"id":"direct-drop-finished","task":"Find a birthday gift for Sam","agentStatus":"done","direct":"Never mind the gift for Sam, Jo is handling it","expected":"drop"}
+{"id":"direct-forward-detail","task":"Plan a weekend trip to Portland","direct":"For the Portland trip: we'd rather take the train than fly","expected":"forward"}
+{"id":"direct-forward-extra-check","task":"Compare flights to Denver for Thanksgiving","direct":"Also check Southwest for the Denver flights","expected":"forward"}
+{"id":"direct-status-question","task":"Research standing desks under $500","direct":"What are you working on right now?","expected":"reply"}
+{"id":"direct-status-waiting","task":"Book a table for Friday dinner","agentStatus":"waiting_user","direct":"Is anything waiting on me?","expected":"reply"}

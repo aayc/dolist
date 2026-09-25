@@ -22,7 +22,8 @@ struct InspectorPanel: View {
           noteLinks: workspace.agentNoteLinks,
           shortcuts: AgentPanelShortcuts(
             hidePanel: CommandID.toggleAgentPanel.shortcut, inbox: CommandID.agentInbox.shortcut,
-            stop: .init(id: CommandID.stopTask.rawValue, keys: CommandID.stopTask.shortcut)))
+            stop: .init(id: CommandID.stopTask.rawValue, keys: CommandID.stopTask.shortcut)),
+          onOpenOrchestratorWindow: { model.showOrchestratorWindow() })
       } else {
         ContentUnavailableView(
           "Agent unavailable", systemImage: "sparkles",

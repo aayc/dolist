@@ -87,6 +87,14 @@ export interface ParsedCapabilities {
   computerAccess?: "ready" | "limited" | "missing";
 }
 
+/** A message of the user's earlier chat with the orchestrator. */
+export interface ParsedChatLine {
+  author: "you" | "orchestrator";
+  /** "3m", "<1m"… */
+  ago: string;
+  text: string;
+}
+
 export interface ParsedDigest {
   /** The `Now:` line as written. */
   now: string;
@@ -95,6 +103,9 @@ export interface ParsedDigest {
   notes: ParsedNote[];
   replies: ParsedReply[];
   reports: ParsedReport[];
+  /** What the user wrote to the orchestrator in its chat. */
+  direct: string[];
+  chat: ParsedChatLine[];
   subagents: ParsedSubagent[];
   capabilities: ParsedCapabilities;
 }
@@ -116,7 +127,15 @@ const MONTHS = [
 
 const RELATIVE_DAY = /^(today|tomorrow|yesterday|in \d+ days|\d+ days ago)$/;
 
-type Section = "note" | "replies" | "reports" | "subagents" | "capabilities" | null;
+type Section =
+  | "note"
+  | "replies"
+  | "reports"
+  | "direct"
+  | "chat"
+  | "subagents"
+  | "capabilities"
+  | null;
 
 /** True for a message that looks like an orchestrator digest. */
 export function isDigest(text: string): boolean {
@@ -132,6 +151,8 @@ export function parseDigest(text: string): ParsedDigest {
     notes: [],
     replies: [],
     reports: [],
+    direct: [],
+    chat: [],
     subagents: [],
     capabilities: { available: [], unavailable: [], connectors: [], desktopApps: [] },
   };
@@ -150,6 +171,8 @@ export function parseDigest(text: string): ParsedDigest {
       const heading = line.slice(3);
       if (heading === "Replies in task threads") section = "replies";
       else if (heading === "Subagent reports") section = "reports";
+      else if (heading.startsWith("Messages to you")) section = "direct";
+      else if (heading === "Your recent chat with the user") section = "chat";
       else if (heading === "Running subagents") section = "subagents";
       else if (heading === "Capabilities you can grant") section = "capabilities";
       else {
@@ -219,6 +242,23 @@ export function parseDigest(text: string): ParsedDigest {
     if (section === "reports" && line.startsWith("- [report] ")) {
       const report = parseReportLine(line);
       if (report) digest.reports.push(report);
+      continue;
+    }
+    if (section === "direct" && line.startsWith("- [direct] ")) {
+      const text = readJsonString(line, "- [direct] ".length);
+      if (text) digest.direct.push(text.value);
+      continue;
+    }
+    if (section === "chat") {
+      const head = /^- \[(you|orchestrator), (\S+) ago\] /.exec(line);
+      const text = head ? readJsonString(line, head[0].length) : null;
+      if (head && text) {
+        digest.chat.push({
+          author: head[1] as ParsedChatLine["author"],
+          ago: head[2]!,
+          text: text.value,
+        });
+      }
       continue;
     }
     if (section === "subagents" && line.startsWith("- ")) {

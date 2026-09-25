@@ -3,7 +3,8 @@
  * evaluator + gate + approval broker, threads, records) driven by the FakeBrain, either in-process
  * (`via: "scripted"`) or through the real Pi harness and OpenRouter client against the HTTP fake
  * (`via: "pi-http"`). Returns event-driven helpers for writing notes, waiting for statuses,
- * deciding approvals and replying, plus an audit proving every executed tool passed the gate.
+ * deciding approvals, replying and writing to the orchestrator, plus an audit proving every
+ * executed tool passed the gate.
  *
  * Timeouts use real timers captured at load, so tests on fake timers still fail fast; pass
  * `advanceTimers` to make `advance()` drive fake time.
@@ -23,6 +24,7 @@ import {
   dailyNotePath,
   type Logger,
   mergeSettings,
+  ORCHESTRATOR_THREAD_ID,
   type TaskAgentRecord,
   type TaskAgentStatus,
   type TextMessage,
@@ -201,6 +203,10 @@ export interface FakeAgentRuntime {
   ): Promise<ApprovalRequest>;
   denyNext(note?: string, options?: WaitOptions & { task?: string }): Promise<ApprovalRequest>;
   replyInThread(text: string, message: string): Promise<void>;
+  /** The orchestrator's own chat (`ORCHESTRATOR_THREAD_ID`). */
+  chat(): Thread;
+  /** Writes to the orchestrator in its chat. */
+  writeToOrchestrator(message: string): Promise<void>;
   /** Orchestrator digests the brain received, in order (one per orchestrator turn). */
   digests(): string[];
   /** Subagent kickoff prompts the brain received, in order. */
@@ -579,6 +585,14 @@ export async function createFakeAgentRuntime(
     },
     async replyInThread(text, message) {
       await runtime.postUserMessage(thread(text).id, message);
+    },
+    chat() {
+      const found = runtime.getThread(ORCHESTRATOR_THREAD_ID)?.thread;
+      if (!found) throw new Error("The orchestrator's chat doesn't exist");
+      return found;
+    },
+    async writeToOrchestrator(message) {
+      await runtime.postUserMessage(ORCHESTRATOR_THREAD_ID, message);
     },
     digests: () => distinctPrompts(brain, "orchestrator", isDigest),
     kickoffs: () => distinctPrompts(brain, "subagent", isKickoff),

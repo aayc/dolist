@@ -46,7 +46,7 @@ future iPhone app too.
 | `Packages/DailyDoListDomain` (iOS) | Pure domain logic ported from `@ddl/core`: dates and daily notes, task parsing and tracking, line anchors, agent-line markers, three-way merges, wikilinks, paths, fuzzy matching. |
 | `Packages/DailyDoListEditor` | The TextKit markdown editor: live preview, clickable checkboxes, agent badges, and vim mode (it hosts `DailyDoListVim`). |
 | `Packages/DailyDoListVim` (iOS) | Vim mode: a port of the web editor's vim.js and its CodeMirror 6 adapter, checked against the web app's vim vectors; hosts implement `VimEditor` ([README](Packages/DailyDoListVim/README.md)). |
-| `Packages/DailyDoListAgent` | Agent state and UI: inbox, threads (the live chat: [The agent chat](#the-agent-chat)), approval cards, artifacts, notifications, menu bar, Dock badge. |
+| `Packages/DailyDoListAgent` | Agent state and UI: inbox, threads (the live chat: [The agent chat](#the-agent-chat)), the orchestrator's chat ([The orchestrator's chat](#the-orchestrators-chat)), approval cards, artifacts, notifications, menu bar, Dock badge. |
 | `Packages/DailyDoListUI` | What the shell, the agent UI and the editor share: the app's one tooltip (`TooltipCenter`, `.tooltip(…)`), keycaps (`KeyShortcut`, `Keycaps`), `.pointingHandCursor()`, `IconButton`, and the chrome and accent button styles. `DailyDoListUITestSupport` finds tooltips in tests and draws them into snapshots. |
 | `Packages/DailyDoListDaemon` | `DaemonSupervisor`: finds Node and the daemon, attaches or launches, health-checks, restarts, stops. |
 | `Packages/DailyDoListComputer` | `ddl-computer`, the helper the daemon spawns so agents can operate other apps through their accessibility tree ([The computer use helper](#the-computer-use-helper-ddl-computer)). Not linked into the app. |
@@ -163,6 +163,21 @@ Tests: `RevealTests` (the pacing table, grapheme cuts, the reveal with a manual 
 Reduce Motion), `ChatActivityTests` (labels, the live row, rows of tool calls, scrolling),
 `MarkdownChunkTests` (every prefix renders the same in chunks), `ComposerTests`, `ChatViewTests`,
 `MotionTests`, and the `chat-*` and `composer-states` snapshots.
+
+## The orchestrator's chat
+
+The inbox pins **Orchestrator** above the task threads: the orchestrator's own chat
+(`OrchestratorThread.id`, loaded on every refresh whatever the inbox's note filter), with its live
+status and latest message. It opens in the agent panel, or in a window of its own from
+**Agent → Orchestrator Chat**, the palette's "Open the orchestrator's chat", `:obcommand
+agent.orchestrator` (or the web app's `agent:orchestrator`), or the panel header's window button.
+That window is a single `Window` scene: choosing the command again brings it forward.
+
+`OrchestratorChatView` (in `DailyDoListAgent`) composes the thread's `MessageRow`s and `Composer`:
+each turn's status line, *Thought for N s*, the decisions as tool calls with a link to their task's
+thread under each (it opens in the main window's agent panel), the user's messages and the
+streamed replies. **Stop** in its header ends a turn in progress. The in-memory daemon of demo mode
+simulates it: a turn per delegated task and finished report, and a streamed reply when you write.
 
 ## Vim mode
 

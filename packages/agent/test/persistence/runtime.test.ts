@@ -2,7 +2,7 @@
  * Persisted state as the whole runtime sees it at startup (mock mode, real stores).
  */
 import { encodePersistedRecords, encodePersistedThread } from "@ddl/contract";
-import type { TextMessage, Thread } from "@ddl/core";
+import { ORCHESTRATOR_THREAD_ID, type TextMessage, type Thread } from "@ddl/core";
 import { describe, expect, it } from "vitest";
 import { RECORDS_PATH } from "../../src/orchestrator/records";
 import { threadPath } from "../../src/threads/store";
@@ -27,7 +27,10 @@ describe("runtime startup with persisted state", () => {
     const storage = vault({ [threadPath("thr_orphan")]: encodePersistedThread(orphan) });
     const t = await createTestRuntime({ storage });
     try {
-      expect(t.runtime.listThreads().map((s) => s.id)).toEqual(["thr_orphan"]);
+      expect(t.runtime.listThreads().map((s) => s.id)).toEqual([
+        ORCHESTRATOR_THREAD_ID,
+        "thr_orphan",
+      ]);
       await t.runtime.postUserMessage("thr_orphan", "Are you still on it?");
       const texts = t.runtime
         .getThread("thr_orphan")!
@@ -77,7 +80,10 @@ describe("runtime startup with persisted state", () => {
     const t = await createTestRuntime({ storage });
     try {
       expect(t.runtime.status().problem).toBeUndefined();
-      expect(t.runtime.listThreads().map((s) => s.id)).toEqual(["thr_minimal0001"]);
+      expect(t.runtime.listThreads().map((s) => s.id)).toEqual([
+        ORCHESTRATOR_THREAD_ID,
+        "thr_minimal0001",
+      ]);
       const moved = (await paths(storage, ".daily-do-list/corrupt")).map((p) =>
         p.replace(/\.\d{8}T\d{9}Z/, ""),
       );

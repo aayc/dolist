@@ -86,6 +86,40 @@ harness's), instead of every judge call and search failing with a 401.
   ambiguous), **ignore** (chores, exercise, personal calls — silently). It knows the list
   conventions: `task -> outcome`, sub-bullets as context, `[[Daily/…]]` links as deferral.
 
+### The orchestrator's chat
+
+The orchestrator has a thread of its own, `thr_orchestrator` (`ORCHESTRATOR_THREAD_ID` in
+`@ddl/core`; `taskId` and `notePath` null, title "Orchestrator"), created when the runtime starts
+and kept to its newest 500 messages. `src/orchestrator/chat.ts` records every turn in it:
+
+- a `status` line (author `system`) saying what woke it: "Daily/2026-09-24.md changed: 2 tasks,
+  1 line", "You replied in “Book the dentist”", "“Research desks” finished", "You asked to retry
+  …", "You wrote to me", joined with " · " when a turn batches several;
+- its text, streamed like a subagent's (`thread.delta`), author `orchestrator`;
+- its tool calls with status and a result preview (`spawn_subagent` with the capabilities it
+  granted, `post_comment`, `ask_user`, `set_task_status` including `ignored`,
+  `message_subagent`/`cancel_subagent`, the web and note tools). Their inputs carry the `taskId`,
+  so clients link each decision to the task's thread;
+- one `status` line authored by `orchestrator`, "Thought for N s", when the harness sent thinking
+  deltas (the total for the turn; the thinking itself is never stored).
+
+Its status is `working` during a turn and `idle` otherwise; a failed or stopped turn ends with a
+`failed`/`cancelled` status line. Approvals its own tool calls need (changing your lines with
+`edit_note`) appear in this chat.
+
+**Talking to it.** `POST /api/threads/thr_orchestrator/messages` is a direct message. It queues an
+event like any other (answered in the next turn, after the one running now); the digest carries it
+under "## Messages to you" with today's note in view, and "## Your recent chat with the user" (the
+last 8 messages of the chat, their times relative) whenever the user wrote or the session is fresh,
+so a restarted or rotated session still knows the conversation. The prompt's "Your chat with the
+user" section makes the turn's text the reply and has it act with its tools when asked: dropping a
+task (`cancel_subagent`, or `set_task_status` "ignored" with summary "Dropped"), passing
+instructions to a subagent (`message_subagent`), answering "what are you working on?" from the
+digest. Every call goes through the safety gate as always. `POST …/cancel` stops the turn in
+progress: its pending approvals are denied, the session is aborted and dropped (the next turn starts
+fresh), subagents it started keep working, and tasks it was still triaging go back to their earlier
+outcome or become *Stopped*.
+
 ## 3. Doing (SubagentManager)
 
 - One harness session per task/thread with a crisp goal, instructions and the minimal capabilities:
@@ -248,10 +282,11 @@ and calls the bridge like the real one.
 - **safety** (250+ cases, 150 marked critical): mock mode runs the rules-only evaluator and requires
   **zero false allows**; live mode adds the LLM judge. Cases can carry a `subject` (what the tool
   knows about the real target).
-- **triage** (60+ synthetic tasks, including desktop-app tasks with and without computer access):
-  live mode runs the real orchestrator prompt on Pi with recorded (stubbed) tools and scores
-  decision accuracy, capability recall and time-to-first-action; mock mode validates the dataset
-  with a deterministic baseline.
+- **triage** (60+ synthetic tasks, including desktop-app tasks with and without computer access,
+  and messages written to the orchestrator in its chat — drop, pass on, or just reply): live mode
+  runs the real orchestrator prompt on Pi with recorded (stubbed) tools and scores decision
+  accuracy, capability recall and time-to-first-action; mock mode validates the dataset with a
+  deterministic baseline.
 
 ```bash
 pnpm eval:mock                         # deterministic, runs in CI
@@ -272,7 +307,8 @@ pnpm eval -- --suite triage            # real model (needs OPENROUTER_API_KEY)
 
 The real model is never used in tests. `@ddl/agent/testing` (see
 `packages/agent/src/testing/README.md`) provides a **FakeBrain** — a deterministic stand-in for
-the model that plays the orchestrator (parses the digest, triages every task), subagents (a
+the model that plays the orchestrator (parses the digest, triages every task, answers messages
+written to it in its chat), subagents (a
 step-by-step plan that reacts to tool results, blocks and steering), the safety judge (schema-valid
 verdicts) and web search — and runs it two ways:
 

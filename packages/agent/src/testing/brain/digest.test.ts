@@ -130,6 +130,15 @@ const digest: fc.Arbitrary<OrchestratorDigest> = fc.record({
     ),
     { maxLength: 3 },
   ),
+  direct: fc.array(text, { maxLength: 3 }),
+  chat: fc.array(
+    fc.record({
+      author: fc.constantFrom<"you" | "orchestrator">("you", "orchestrator"),
+      text,
+      createdAt: fc.integer({ min: NOW - 5 * 3_600_000, max: NOW }),
+    }),
+    { maxLength: 4 },
+  ),
   subagents: fc.array(
     fc.record(
       {
@@ -223,6 +232,10 @@ describe("parseDigest ⇄ formatOrchestratorDigest", () => {
         taskText: r.taskText,
         ...(r.summary ? { summary: r.summary } : {}),
       })),
+    );
+    expect(parsed.direct).toEqual(input.direct ?? []);
+    expect(parsed.chat.map((line) => [line.author, line.text])).toEqual(
+      (input.chat ?? []).map((line) => [line.author, line.text]),
     );
     expect(parsed.subagents.map((s) => [s.taskId, s.taskText, s.status, s.summary])).toEqual(
       input.subagents.map((s) => [s.taskId, s.taskText, s.status, s.summary]),

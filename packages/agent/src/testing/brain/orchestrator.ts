@@ -1,6 +1,7 @@
 /**
  * Fake orchestrator: parses the event digest and triages every changed task and reply the way the
- * orchestrator prompt asks (delegate / answer / ask / ignore), all first calls in one response.
+ * orchestrator prompt asks (delegate / answer / ask / ignore), all first calls in one response,
+ * and answers what the user wrote to it directly (`./direct`) in text.
  * It is a pure function of the conversation: tool results since the digest decide the next step
  * (a failed spawn is retried with the capabilities the error lists, a failed message_subagent
  * falls back to spawning), and once everything is handled the turn ends without further calls.
@@ -14,6 +15,7 @@ import {
   type ParsedReply,
   parseDigest,
 } from "./digest";
+import { planDirect } from "./direct";
 import {
   desiredCapabilities,
   grantableCapabilities,
@@ -82,7 +84,15 @@ export function orchestratorTurn(
   for (const note of ctx.digest.notes) {
     for (const line of note.changedLines) calls.push(...planLine(note, line, ctx));
   }
-  return calls.length > 0 ? { toolCalls: calls } : {};
+  const replied = request.messages
+    .slice(index + 1)
+    .some((m) => m.role === "assistant" && m.content.trim() !== "");
+  const direct = planDirect(ctx.digest, ctx.calls, replied);
+  calls.push(...direct.calls);
+  return {
+    ...(calls.length > 0 ? { toolCalls: calls } : {}),
+    ...(direct.reply ? { text: direct.reply } : {}),
+  };
 }
 
 /** A changed line addressed to the agent: anchor a thread to it, then triage it like a task. */

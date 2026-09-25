@@ -3,6 +3,7 @@ import {
   type AgentHarnessKind,
   APPROVAL_POLICIES,
   type ApprovalPolicy,
+  ORCHESTRATOR_THREAD_ID,
   type ServerEvent,
   type ServerEventOf,
   today,
@@ -28,6 +29,13 @@ async function call<T>(promise: Promise<T>): Promise<T> {
 
 function ofType<T extends ServerEvent["type"]>(events: ServerEvent[], type: T): ServerEventOf<T>[] {
   return events.filter((e): e is ServerEventOf<T> => e.type === type);
+}
+
+/** The latest task thread an event announced (the orchestrator's chat has no task). */
+function taskThreadId(events: ServerEvent[]): string {
+  return ofType(events, "thread.upsert")
+    .filter((e) => e.thread.taskId !== null)
+    .at(-1)!.thread.id;
 }
 
 async function writeTodayTask(client: MockDaemonClient, text: string) {
@@ -159,7 +167,7 @@ describe("MockDaemonClient living-list demo", () => {
     const { client, events } = create();
     await writeTodayTask(client, "Compare three robot vacuums");
     await vi.advanceTimersByTimeAsync(4000);
-    const threadId = ofType(events, "thread.upsert").at(-1)!.thread.id;
+    const threadId = taskThreadId(events);
     const { thread } = await call(client.getThread(threadId));
     const answer = thread.messages.filter((m) => m.kind === "text").at(-1);
     const cited = answer?.kind === "text" ? [...answer.text.matchAll(/\]\((https:[^)]+)\)/g)] : [];
@@ -334,7 +342,7 @@ describe("MockDaemonClient agent simulation", () => {
     const { client, events } = create();
     await writeTodayTask(client, "Compare three robot vacuums");
     await vi.advanceTimersByTimeAsync(300);
-    const threadId = ofType(events, "thread.upsert").at(-1)!.thread.id;
+    const threadId = taskThreadId(events);
     client.send({ type: "surface.subscribe", threadId, surface: "browser" });
     await vi.advanceTimersByTimeAsync(3000);
     expect(ofType(events, "surface.frame").length).toBeGreaterThan(0);
@@ -382,11 +390,67 @@ describe("MockDaemonClient agent simulation", () => {
     expect(ofType(events, "task.record").length).toBeGreaterThan(0);
   });
 
+  it("keeps the orchestrator's chat: its decisions, and replies when written to", async () => {
+    const { client, events } = create();
+    const { thread: empty } = await call(client.getThread(ORCHESTRATOR_THREAD_ID));
+    expect(empty).toMatchObject({ taskId: null, title: "Orchestrator", status: "idle" });
+
+    const path = await writeTodayTask(client, "Research standing desks");
+    await vi.advanceTimersByTimeAsync(600);
+    const taskId = ofType(events, "task.record").at(-1)!.record.taskId;
+    let { thread } = await call(client.getThread(ORCHESTRATOR_THREAD_ID));
+    expect(thread.messages.find((m) => m.kind === "status")).toMatchObject({
+      author: "system",
+      status: "working",
+      text: `${path} changed: 1 task`,
+    });
+    const calls = thread.messages.filter((m) => m.kind === "tool_call");
+    expect(calls.map((m) => [m.toolName, (m.input as { taskId: string }).taskId])).toEqual([
+      ["post_comment", taskId],
+      ["spawn_subagent", taskId],
+    ]);
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(ofType(events, "task.record").at(-1)?.record.status).toBe("done");
+    await call(client.postMessage(ORCHESTRATOR_THREAD_ID, "What are you working on?"));
+    await vi.advanceTimersByTimeAsync(1_000);
+    ({ thread } = await call(client.getThread(ORCHESTRATOR_THREAD_ID)));
+    const asked = thread.messages.findIndex((m) => m.kind === "text" && m.author === "you");
+    expect(thread.messages[asked + 1]).toMatchObject({ kind: "status", text: "You wrote to me" });
+    const reply = thread.messages.find((m) => m.kind === "text" && m.author === "orchestrator");
+    expect(reply).toMatchObject({ role: "agent", streaming: false });
+    expect(reply?.kind === "text" && reply.text).toBe(
+      "Nothing is running right now. Done today: 1.",
+    );
+    expect(thread.messages.some((m) => m.kind === "status" && m.text?.endsWith("finished"))).toBe(
+      true,
+    );
+    expect(ofType(events, "thread.delta").some((e) => e.threadId === ORCHESTRATOR_THREAD_ID)).toBe(
+      true,
+    );
+  });
+
+  it("stops the orchestrator's turn in progress", async () => {
+    const { client } = create();
+    await call(client.postMessage(ORCHESTRATOR_THREAD_ID, "Anything new?"));
+    await call(client.cancelThread(ORCHESTRATOR_THREAD_ID));
+    await vi.advanceTimersByTimeAsync(400);
+    const { thread } = await call(client.getThread(ORCHESTRATOR_THREAD_ID));
+    expect(thread.status).toBe("idle");
+    expect(thread.messages.at(-1)).toMatchObject({
+      status: "cancelled",
+      text: "You stopped this run",
+    });
+    expect(thread.messages.some((m) => m.kind === "text" && m.author === "orchestrator")).toBe(
+      false,
+    );
+  });
+
   it("cancel stops a running task and marks it cancelled", async () => {
     const { client, events } = create();
     await writeTodayTask(client, "Research standing desks");
     await vi.advanceTimersByTimeAsync(250);
-    const threadId = ofType(events, "thread.upsert").at(-1)!.thread.id;
+    const threadId = taskThreadId(events);
     await call(client.cancelThread(threadId));
     await vi.advanceTimersByTimeAsync(2000);
     expect(ofType(events, "task.record").at(-1)?.record.status).toBe("cancelled");

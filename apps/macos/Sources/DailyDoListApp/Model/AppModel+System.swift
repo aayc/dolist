@@ -14,6 +14,10 @@ final class WindowHandles {
   var openMainWindow: (@MainActor () -> Void)?
   /// SwiftUI's `openSettings()`, registered by a view (macOS offers no other way).
   var openSettings: (@MainActor () -> Void)?
+  /// The orchestrator's chat window once it exists.
+  weak var orchestratorWindow: NSWindow?
+  /// SwiftUI's `openWindow(id: "orchestrator")`, registered by a view.
+  var openOrchestratorWindow: (@MainActor () -> Void)?
   let fullScreen = FullScreenObserver()
 }
 

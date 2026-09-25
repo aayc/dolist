@@ -64,6 +64,7 @@ struct AppMenuCommands: Commands {
       item(.toggleAgent)
       item(.stopTask)
       item(.openInbox)
+      item(.orchestratorChat)
       Divider()
       item(.approvalPolicy)
       item(.setUpComputerUse)

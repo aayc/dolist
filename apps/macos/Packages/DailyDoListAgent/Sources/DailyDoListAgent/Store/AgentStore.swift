@@ -250,18 +250,19 @@ public final class AgentStore {
     pendingApprovals.filter { $0.threadId == threadId }
   }
 
-  /// The inbox: today's threads plus anything still waiting or running, grouped.
+  /// The inbox: today's threads plus anything still waiting or running, grouped. The
+  /// orchestrator's own chat isn't one of them (the inbox pins it above).
   public func inboxSections(now: Date = Date(), calendar: Calendar = .current) -> [InboxSection] {
     _ = approvals
     return InboxGrouping.sections(
-      for: threads.values, pendingApprovalThreadIds: state.threadIdsWithPendingApprovals,
-      now: now, calendar: calendar)
+      for: threads.values.filter { !$0.isOrchestrator },
+      pendingApprovalThreadIds: state.threadIdsWithPendingApprovals, now: now, calendar: calendar)
   }
 
   /// Running subagents (the daemon's count; derived from thread statuses until it's known).
   public var runningCount: Int {
     if let status { return status.running }
-    return threads.values.reduce(0) { $0 + ($1.status == .working ? 1 : 0) }
+    return threads.values.reduce(0) { $0 + ($1.status == .working && !$1.isOrchestrator ? 1 : 0) }
   }
 
   /// Why the agent can't act right now (off, paused, missing key…); nil when it can.

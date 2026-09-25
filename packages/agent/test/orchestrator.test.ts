@@ -1,5 +1,6 @@
 import {
   type ArtifactMessage,
+  ORCHESTRATOR_THREAD_ID,
   type TextMessage,
   type ToolCallMessage,
   textResult,
@@ -142,7 +143,7 @@ describe("orchestrator (default mock script)", () => {
     await t.storage.write(TODAY, "- [ ] Go to the gym\n");
     const record = await t.waitForStatus("Go to the gym", "ignored");
     expect(record.threadId).toBeNull();
-    expect(t.runtime.listThreads()).toEqual([]);
+    expect(t.runtime.listThreads().map((s) => s.id)).toEqual([ORCHESTRATOR_THREAD_ID]);
   });
 
   it("cancels pending approvals and work when the task is checked off", async () => {

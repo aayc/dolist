@@ -50,6 +50,7 @@ enum CommandID: String, CaseIterable, Sendable {
   case toggleAgent = "agent.toggle"
   case stopTask = "agent.stop"
   case openInbox = "agent.openInbox"
+  case orchestratorChat = "agent.orchestrator"
   case setUpComputerUse = "computerUse.setUp"
   case approvalPolicy = "settings.approvals"
   case restartDaemon = "daemon.restart"
@@ -120,7 +121,7 @@ enum CommandID: String, CaseIterable, Sendable {
     case .tab9: Shortcut("9")
     case .newFolder, .tomorrowsNote, .renameNote, .deleteNote, .revealNote, .toggleLivePreview,
       .toggleReadableWidth, .toggleLineNumbers, .toggleVim, .toggleTheme, .toggleAgent, .openInbox,
-      .setUpComputerUse, .approvalPolicy, .restartDaemon:
+      .orchestratorChat, .setUpComputerUse, .approvalPolicy, .restartDaemon:
       nil
     }
   }

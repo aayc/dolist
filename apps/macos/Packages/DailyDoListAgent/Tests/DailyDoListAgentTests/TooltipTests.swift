@@ -98,6 +98,30 @@ struct TooltipTests {
     #expect(found["Copy code"] != nil)
   }
 
+  @Test func theOrchestratorsChatNamesItsControlsAndLinks() {
+    let inbox = tooltips(
+      anchors(
+        AgentPanel(store: store, selectedThreadId: .constant(nil)).agentReferenceDate(
+          SnapshotTests.now), size: CGSize(width: 400, height: 820)))
+    #expect(inbox["Open the orchestrator's chat"] != nil)
+
+    var summary = store.orchestratorSummary!
+    summary.status = .working
+    store.apply(.threadUpsert(summary))
+    let chat = tooltips(
+      anchors(
+        AgentPanel(
+          store: store, selectedThreadId: .constant(OrchestratorThread.id), onHide: {},
+          onOpenOrchestratorWindow: {}
+        ).agentReferenceDate(SnapshotTests.now), size: CGSize(width: 440, height: 1_300)))
+    for name in ["Stop this run", "Open in a separate window", "Open this task's thread"] {
+      #expect(chat[name] != nil, "\(name) has a tooltip")
+    }
+    for content in chat.values {
+      #expect(!content.plainText.contains { "⌘⌥⌃⇧".contains($0) }, "\(content.plainText)")
+    }
+  }
+
   @Test func sendExplainsReturnAndShiftReturn() {
     #expect(
       Composer.sendTooltip.lines == [

@@ -395,6 +395,21 @@ struct SnapshotTests {
     await model.teardown()
   }
 
+  /// Agent → Orchestrator Chat: the chat in its own window, and the window without an agent.
+  @Test func orchestratorWindow() async throws {
+    let (model, _) = try await bootedModel()
+    let offline = AppModel(environment: makeEnvironment(client: FakeDaemonClient()))
+    for dark in [false, true] {
+      try await render(
+        OrchestratorWindowView(model: model), size: CGSize(width: 460, height: 720), dark: dark,
+        name: "orchestrator-window")
+      try await render(
+        OrchestratorWindowView(model: offline), size: CGSize(width: 460, height: 420), dark: dark,
+        name: "orchestrator-window-offline")
+    }
+    await model.teardown()
+  }
+
   @Test func statusBarAndBootScreen() async throws {
     let (model, workspace) = try await bootedModel()
     let failed = AppModel(environment: makeEnvironment(client: FakeDaemonClient()))

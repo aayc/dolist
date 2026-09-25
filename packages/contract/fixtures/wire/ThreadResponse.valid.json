@@ -115,6 +115,96 @@
     }
   },
   {
+    "name": "the orchestrator's chat",
+    "value": {
+      "thread": {
+        "id": "thr_orchestrator",
+        "taskId": null,
+        "notePath": null,
+        "title": "Orchestrator",
+        "status": "working",
+        "createdAt": 1790000000000,
+        "updatedAt": 1790000012000,
+        "messages": [
+          {
+            "id": "msg_o1",
+            "author": "system",
+            "createdAt": 1790000000000,
+            "kind": "status",
+            "status": "working",
+            "text": "Daily/2026-09-23.md changed: 2 tasks"
+          },
+          {
+            "id": "msg_o2",
+            "author": "orchestrator",
+            "createdAt": 1790000001000,
+            "kind": "tool_call",
+            "toolCallId": "call_o1",
+            "toolName": "spawn_subagent",
+            "label": "Delegate to subagent",
+            "input": {
+              "taskId": "tsk_a1b2c3d4e5",
+              "goal": "Find three dentist appointments next week",
+              "capabilities": ["web"]
+            },
+            "status": "ok",
+            "resultPreview": "Subagent started for tsk_a1b2c3d4e5.",
+            "endedAt": 1790000001200
+          },
+          {
+            "id": "msg_o3",
+            "author": "orchestrator",
+            "createdAt": 1790000001300,
+            "kind": "tool_call",
+            "toolCallId": "call_o2",
+            "toolName": "set_task_status",
+            "label": "Set task status",
+            "input": { "taskId": "tsk_b2c3d4e5f6", "status": "ignored" },
+            "status": "ok",
+            "resultPreview": "Status set to ignored.",
+            "endedAt": 1790000001310
+          },
+          {
+            "id": "msg_o4",
+            "author": "you",
+            "createdAt": 1790000010000,
+            "kind": "text",
+            "role": "user",
+            "text": "What are you working on?"
+          },
+          {
+            "id": "msg_o5",
+            "author": "system",
+            "createdAt": 1790000010200,
+            "kind": "status",
+            "status": "working",
+            "text": "You wrote to me"
+          },
+          {
+            "id": "msg_o6",
+            "author": "orchestrator",
+            "createdAt": 1790000011000,
+            "kind": "status",
+            "status": "working",
+            "text": "Thought for 2 s"
+          },
+          {
+            "id": "msg_o7",
+            "author": "orchestrator",
+            "createdAt": 1790000011500,
+            "kind": "text",
+            "role": "agent",
+            "text": "A researcher is finding dentist appointments for next week.",
+            "streaming": true
+          }
+        ],
+        "artifacts": [],
+        "surfaces": []
+      },
+      "approvals": []
+    }
+  },
+  {
     "name": "a thread not attached to a task",
     "value": {
       "thread": {

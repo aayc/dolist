@@ -168,6 +168,9 @@ flowchart LR
 4. The **safety evaluator** checks every single tool call. Risky ones pause the agent and show an
    approval card; nothing irreversible happens without you, unless you choose an approval policy
    that runs it.
+5. The orchestrator's own **chat**, pinned at the top of the inbox (and a window of its own on the
+   Mac), shows every decision it makes and why it woke up. Write to it there: ask what it's doing,
+   drop a task, or pass new instructions to the agent working on one.
 
 Deep dives: [Architecture](docs/ARCHITECTURE.md) · [Agent system](docs/AGENT_SYSTEM.md) ·
 [Safety rules](packages/agent/src/safety/README.md) · [Connectors](packages/connectors/README.md) ·

@@ -28,6 +28,7 @@ struct MainWindowView: View {
     .onAppear {
       WindowHandles.shared.openMainWindow = { openWindow(id: MainWindowID.value) }
       WindowHandles.shared.openSettings = { openSettings() }
+      WindowHandles.shared.openOrchestratorWindow = { openWindow(id: OrchestratorWindowID.value) }
       model.start()
       model.resumeComputerAccessSetup()
     }

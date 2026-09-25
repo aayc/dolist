@@ -36,6 +36,7 @@ interface Lockstep {
   StatusMessage: core.StatusMessage;
   ThreadMessage: core.ThreadMessage;
   SurfaceKind: core.SurfaceKind;
+  OrchestratorThreadId: core.OrchestratorThreadId;
   Thread: core.Thread;
   CitedSource: core.CitedSource;
   ThreadSummary: core.ThreadSummary;
