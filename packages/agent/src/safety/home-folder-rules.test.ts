@@ -97,6 +97,37 @@ describe("reading folders that hold credentials (never allowed)", () => {
   });
 });
 
+describe("shell histories and .env files", () => {
+  it.each<Case>([
+    ["cat ~/.zsh_history", "secrets.shell-history"],
+    ["tail -100 /Users/me/.bash_history", "secrets.shell-history"],
+    ["cat ~/.psql_history", "secrets.shell-history"],
+    ["cat ~/.zsh_sessions/ABC.history", "secrets.shell-history"],
+    ["cat ~/Projects/app/.env", "secrets.env-file"],
+    ["cat ../task-2/.env.local", "secrets.env-file"],
+    ["source ~/Projects/app/.envrc", "secrets.env-file"],
+  ])("%s", async (command, ruleId) => {
+    await expectShell(command, "deny", ruleId);
+  });
+
+  it("reads them freely in the workspace and the temp area", async () => {
+    await expectShell("cat .env", "allow");
+    await expectShell("cat /tmp/ddl-scratch/.env", "allow");
+    await expectShell("cat ~/Projects/app/.env.example", "allow");
+  });
+
+  it("asks for a .env whose folder a connector decides", async () => {
+    const hints = { readOnly: true };
+    const verdict = await evaluateRules("mcp__fs__read_file", { path: ".env" }, { hints });
+    expect(verdict.decision).toBe("require_approval");
+    expect(verdict.matchedRules).toContain("credentials.sensitive-file");
+  });
+
+  it("asks for a history file the agent keeps in its workspace", async () => {
+    await expectShell("cat .bash_history", "require_approval", "credentials.sensitive-file");
+  });
+});
+
 describe("evasions", () => {
   it.each<Case>([
     // Quoting and variables the parser resolves

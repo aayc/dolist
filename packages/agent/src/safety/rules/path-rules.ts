@@ -34,6 +34,20 @@ export const CREDENTIAL_FOLDER_READ = info(
   "critical",
   "Reads a whole folder that holds saved logins and private data (~/Library, ~/.config, …)",
 );
+export const SHELL_HISTORY_READ = info(
+  "secrets.shell-history",
+  "credentials",
+  "deny",
+  "critical",
+  "Reads your shell history (commands you typed, often with passwords and tokens in them)",
+);
+export const ENV_FILE_READ = info(
+  "secrets.env-file",
+  "credentials",
+  "deny",
+  "critical",
+  "Reads a .env file outside the task workspace (it holds API keys and passwords)",
+);
 export const PERSONAL_FOLDER_READ = info(
   "privacy.personal-folder",
   "privacy",
@@ -150,6 +164,10 @@ export function readPathHits(
   if (kinds.has("credential-store") || kinds.has("app-secret"))
     return [{ rule: CREDENTIAL_STORE_READ, evidence }];
   const outside = !inScratch(target);
+  if (outside && kinds.has("history")) return [{ rule: SHELL_HISTORY_READ, evidence }];
+  // Only where the path is known: a relative `.env` for a connector may be its own project's.
+  if (target.location === "outside" && kinds.has("env-file"))
+    return [{ rule: ENV_FILE_READ, evidence }];
   const home = outside && !listing ? homeReadRisk(target.path) : null;
   if (home === "home") return [{ rule: HOME_FOLDER_READ, evidence }];
   if (home === "secrets") return [{ rule: CREDENTIAL_FOLDER_READ, evidence }];
@@ -201,6 +219,8 @@ export const PATH_RULES = [
   CREDENTIAL_STORE_READ,
   HOME_FOLDER_READ,
   CREDENTIAL_FOLDER_READ,
+  SHELL_HISTORY_READ,
+  ENV_FILE_READ,
   SENSITIVE_FILE_READ,
   PERSONAL_DATA_READ,
   PERSONAL_FOLDER_READ,

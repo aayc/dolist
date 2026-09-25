@@ -141,7 +141,10 @@ Then per family:
   `~/.kube`, `~/.config/{gh,gcloud,op}`, the Cursor CLI's `~/.local/share/cursor-agent`, browser
   profiles, `~/Library/Keychains`), and the login files among others (`~/.docker/config.json`,
   `~/.cursor/mcp.json`, `~/.netrc`, …); home paths match in any case and through
-  `/System/Volumes/Data`. A read of a folder or a glob counts as reading all it contains
+  `/System/Volumes/Data`. Shell histories (`secrets.shell-history`) and `.env` files
+  (`secrets.env-file`) outside the workspace and the temp area are hard denies too; a `.env`
+  whose folder isn't known (a connector's relative path) needs approval.
+  A read of a folder or a glob counts as reading all it contains
   (recursive searches, archives, copies, syncs, `find` feeding a reader): the home folder itself, a
   folder above it or a glob at its top (`~/.*`, `~/*`) is a hard deny (`secrets.home-folder`), and
   so is a folder that holds logins among other things (`~/Library`, `~/Library/Application Support`,
@@ -176,7 +179,7 @@ Then per family:
 
 ## Rules
 
-Stable ids, grouped by decision (generated from `SAFETY_RULES`; 150 rules).
+Stable ids, grouped by decision (generated from `SAFETY_RULES`; 152 rules).
 
 | Rule id | Category | Decision | Risk | Matches |
 | --- | --- | --- | --- | --- |
@@ -187,10 +190,12 @@ Stable ids, grouped by decision (generated from `SAFETY_RULES`; 150 rules).
 | `secrets.credential-folder` | credentials | deny | critical | Reads a whole folder that holds saved logins and private data (~/Library, ~/.config, …) |
 | `secrets.credential-store` | credentials | deny | critical | Reads saved logins: a password store, keychain, browser credential database, cloud, cluster, Docker or Cursor credentials, or the app's API keys and tokens |
 | `secrets.embedded-access` | credentials | deny | critical | Reads private keys, keychains or credential stores from code or typed text |
+| `secrets.env-file` | credentials | deny | critical | Reads a .env file outside the task workspace (it holds API keys and passwords) |
 | `secrets.exfiltration` | credentials | deny | critical | Sends secrets (keys, .env files, credentials, environment variables) over the network |
 | `secrets.gpg-export` | credentials | deny | critical | Exports GPG secret keys |
 | `secrets.home-folder` | credentials | deny | critical | Reads your whole home folder, including SSH keys and cloud credentials |
 | `secrets.keychain-dump` | credentials | deny | critical | Dumps passwords from the macOS keychain |
+| `secrets.shell-history` | credentials | deny | critical | Reads your shell history (commands you typed, often with passwords and tokens in them) |
 | `secrets.ssh-private-key` | credentials | deny | critical | Reads a private SSH key |
 | `shell.hardline.embedded` | destructive | deny | critical | Runs a catastrophic command hidden inside code or typed text |
 | `shell.hardline.fork-bomb` | system | deny | critical | Runs a fork bomb |
