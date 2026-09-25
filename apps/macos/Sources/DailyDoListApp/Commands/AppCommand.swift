@@ -51,6 +51,8 @@ enum CommandID: String, CaseIterable, Sendable {
   case stopTask = "agent.stop"
   case openInbox = "agent.openInbox"
   case orchestratorChat = "agent.orchestrator"
+  case showRoutines = "routines.show"
+  case newRoutine = "routine.new"
   case setUpComputerUse = "computerUse.setUp"
   case approvalPolicy = "settings.approvals"
   case restartDaemon = "daemon.restart"
@@ -104,6 +106,8 @@ enum CommandID: String, CaseIterable, Sendable {
     case .toggleSidebar: Shortcut("s", [.command, .control])
     case .toggleAgentPanel: Shortcut("\\")
     case .agentInbox: Shortcut("a", [.command, .shift])
+    case .showRoutines: Shortcut("r", [.command, .shift])
+    case .newRoutine: Shortcut("n", [.command, .option])
     case .stopTask: Shortcut(".")
     case .search: Shortcut("f", [.command, .shift])
     case .commandPalette: Shortcut("p")
