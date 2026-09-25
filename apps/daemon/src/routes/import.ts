@@ -52,9 +52,13 @@ export function registerImportRoutes(app: Hono, ctx: AppContext): void {
     return c.json(body);
   });
 
-  app.get(API_ROUTES.importObsidian, (c) => {
+  app.get(API_ROUTES.importObsidian, async (c) => {
     thisMachineOnly(c);
-    const body: ObsidianImportStatusResponse = { job: ctx.imports.status() };
+    const imported = await ctx.imports.origin();
+    const body: ObsidianImportStatusResponse = {
+      job: ctx.imports.status(),
+      ...(imported ? { imported } : {}),
+    };
     return c.json(body);
   });
 

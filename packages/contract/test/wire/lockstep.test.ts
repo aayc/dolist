@@ -143,6 +143,7 @@ interface Lockstep {
   ObsidianUpdateReport: core.ObsidianUpdateReport;
   ObsidianImportJob: core.ObsidianImportJob;
   ObsidianImportJobResponse: core.ObsidianImportJobResponse;
+  ObsidianImportOrigin: core.ObsidianImportOrigin;
   ObsidianImportStatusResponse: core.ObsidianImportStatusResponse;
   ApiErrorCode: core.ApiErrorCode;
   ApiErrorBody: core.ApiErrorBody;

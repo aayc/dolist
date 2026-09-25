@@ -4,8 +4,8 @@
  * the daemon's importer (apps/daemon/src/import/manifest.ts), compact JSON with a trailing newline.
  * `source` is a folder on this machine, so the sync engine never syncs the file.
  *
- * v1: `{ version, source, importedAt, updatedAt?, files: { <vault path>: entry } }`. The format
- * was versioned from the start: a file without `version` is corrupt.
+ * v1: `{ version, source, importedAt, updatedAt?, previousVault?, files: { <vault path>: entry } }`.
+ * The format was versioned from the start: a file without `version` is corrupt.
  */
 import { z } from "zod";
 import {
@@ -45,6 +45,8 @@ export const PersistedImportManifestFileSchema = z.object({
   importedAt: PersistedTimestampSchema,
   /** The last "Update from Obsidian". */
   updatedAt: PersistedTimestampSchema.optional(),
+  /** The vault that was current at the import (absolute), left untouched; added later in v1. */
+  previousVault: z.string().min(1).optional(),
   /** Keyed by vault path. */
   files: z.record(z.string(), PersistedImportFileSchema),
 });
@@ -55,6 +57,7 @@ export interface PersistedImportManifest {
   source: string;
   importedAt: number;
   updatedAt?: number;
+  previousVault?: string;
   files: Map<string, PersistedImportFile>;
 }
 
@@ -62,6 +65,7 @@ const ManifestEnvelopeSchema = z.object({
   source: z.string().min(1),
   importedAt: PersistedTimestampSchema,
   updatedAt: PersistedTimestampSchema.optional(),
+  previousVault: z.string().min(1).optional(),
   files: PersistedMapSchema,
 });
 
@@ -81,6 +85,7 @@ const manifestSpec: PersistedFormatSpec<PersistedImportManifest> = {
       source: envelope.source,
       importedAt: envelope.importedAt,
       ...(envelope.updatedAt === undefined ? {} : { updatedAt: envelope.updatedAt }),
+      ...(envelope.previousVault === undefined ? {} : { previousVault: envelope.previousVault }),
       files,
     };
   },
@@ -100,6 +105,7 @@ export function encodePersistedImportManifest(manifest: PersistedImportManifest)
     source: manifest.source,
     importedAt: manifest.importedAt,
     ...(manifest.updatedAt === undefined ? {} : { updatedAt: manifest.updatedAt }),
+    ...(manifest.previousVault === undefined ? {} : { previousVault: manifest.previousVault }),
     files: Object.fromEntries(paths.map((path) => [path, manifest.files.get(path)!])),
   };
   return `${JSON.stringify(file)}\n`;

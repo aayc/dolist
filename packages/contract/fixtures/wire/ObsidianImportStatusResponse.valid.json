@@ -111,5 +111,27 @@
         }
       }
     }
+  },
+  {
+    "name": "after switching to the imported vault",
+    "value": {
+      "job": null,
+      "imported": {
+        "source": "/Users/me/Obsidian/Notebook",
+        "importedAt": 1790362800000,
+        "updatedAt": 1790449200000,
+        "previousVault": "/Users/me/DailyDoList"
+      }
+    }
+  },
+  {
+    "name": "imported before the previous vault was recorded",
+    "value": {
+      "job": null,
+      "imported": {
+        "source": "/Users/me/Obsidian/Notebook",
+        "importedAt": 1790362800000
+      }
+    }
   }
 ]

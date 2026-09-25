@@ -104,7 +104,11 @@ describe("importing copies the Obsidian vault", () => {
     const manifest = decodePersistedImportManifest(text);
     expect(manifest.ok).toBe(true);
     if (!manifest.ok) return;
-    expect(manifest.value).toMatchObject({ source: bed.source, importedAt: TODAY.getTime() });
+    expect(manifest.value).toMatchObject({
+      source: bed.source,
+      importedAt: TODAY.getTime(),
+      previousVault: bed.vault,
+    });
     for (const [path, content] of Object.entries(OBSIDIAN_FILES)) {
       expect(manifest.value.files.get(path), path).toMatchObject({
         sha256: sha256(Buffer.from(content)),

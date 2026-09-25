@@ -321,10 +321,26 @@ export const ObsidianImportJobResponseSchema = named(
   z.looseObject({ job: ObsidianImportJobSchema }),
 );
 
+export const ObsidianImportOriginSchema = named(
+  "ObsidianImportOrigin",
+  "Where the vault this daemon serves was imported from (its import manifest).",
+  z.looseObject({
+    source: FolderSchema.describe("The Obsidian vault it was copied from."),
+    importedAt: EpochMsSchema,
+    updatedAt: EpochMsSchema.optional().describe('The last "Update from Obsidian".'),
+    previousVault: FolderSchema.optional().describe(
+      "The vault that was current at the import, left untouched: the backup.",
+    ),
+  }),
+);
+
 export const ObsidianImportStatusResponseSchema = named(
   "ObsidianImportStatusResponse",
-  "The running job, or the last one since the daemon started.",
+  "The running job, or the last one since the daemon started, and where this vault was imported from.",
   z.looseObject({
     job: ObsidianImportJobSchema.nullable().describe("null: none since the daemon started."),
+    imported: ObsidianImportOriginSchema.optional().describe(
+      "Set when this vault was imported from Obsidian (so it can be updated from there).",
+    ),
   }),
 );

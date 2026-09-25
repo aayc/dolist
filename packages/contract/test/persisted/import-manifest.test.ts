@@ -59,4 +59,17 @@ describe("import manifest", () => {
     const decoded = decodePersistedImportManifest(text);
     expect(decoded.ok && decoded.value).toEqual(manifest);
   });
+
+  it("keeps the previous vault when there is one; older v1 files have none", () => {
+    const manifest: PersistedImportManifest = {
+      source: "/Volumes/Notes/Vault",
+      importedAt: 1,
+      previousVault: "/Volumes/Notes/DailyDoList",
+      files: new Map(),
+    };
+    const decoded = decodePersistedImportManifest(encodePersistedImportManifest(manifest));
+    expect(decoded.ok && decoded.value).toEqual(manifest);
+    const golden = decodePersistedImportManifest(readFixture("import-manifest", "v1.json"));
+    expect(golden.ok && golden.value.previousVault).toBeUndefined();
+  });
 });

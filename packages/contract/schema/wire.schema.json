@@ -3771,6 +3771,38 @@
       "additionalProperties": {},
       "description": "A job, as it stands."
     },
+    "ObsidianImportOrigin": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "The Obsidian vault it was copied from."
+        },
+        "importedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "updatedAt": {
+          "description": "The last \"Update from Obsidian\".",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "previousVault": {
+          "description": "The vault that was current at the import, left untouched: the backup.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        }
+      },
+      "required": ["source", "importedAt"],
+      "additionalProperties": {},
+      "description": "Where the vault this daemon serves was imported from (its import manifest)."
+    },
     "ObsidianImportStatusResponse": {
       "type": "object",
       "properties": {
@@ -3784,11 +3816,15 @@
             }
           ],
           "description": "null: none since the daemon started."
+        },
+        "imported": {
+          "description": "Set when this vault was imported from Obsidian (so it can be updated from there).",
+          "$ref": "#/$defs/ObsidianImportOrigin"
         }
       },
       "required": ["job"],
       "additionalProperties": {},
-      "description": "The running job, or the last one since the daemon started."
+      "description": "The running job, or the last one since the daemon started, and where this vault was imported from."
     },
     "VaultChangeOrigin": {
       "type": "string",

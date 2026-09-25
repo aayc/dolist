@@ -2259,13 +2259,27 @@ A job, as it stands.
 
 _Tolerant: clients must ignore keys they don't know._
 
+#### ObsidianImportOrigin
+
+Where the vault this daemon serves was imported from (its import manifest).
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `source` | string (1–4096 chars) | yes | The Obsidian vault it was copied from. |
+| `importedAt` | integer (≥ 0) | yes | Epoch milliseconds. |
+| `updatedAt` | integer (≥ 0) | no | The last "Update from Obsidian". |
+| `previousVault` | string (1–4096 chars) | no | The vault that was current at the import, left untouched: the backup. |
+
+_Tolerant: clients must ignore keys they don't know._
+
 #### ObsidianImportStatusResponse
 
-The running job, or the last one since the daemon started.
+The running job, or the last one since the daemon started, and where this vault was imported from.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `job` | [`ObsidianImportJob`](#obsidianimportjob) \| `null` | yes | null: none since the daemon started. |
+| `imported` | [`ObsidianImportOrigin`](#obsidianimportorigin) | no | Set when this vault was imported from Obsidian (so it can be updated from there). |
 
 _Tolerant: clients must ignore keys they don't know._
 

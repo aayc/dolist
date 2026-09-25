@@ -804,9 +804,22 @@ export interface ObsidianImportJobResponse {
   job: ObsidianImportJob;
 }
 
+/** Where the vault this daemon serves was imported from (its import manifest). */
+export interface ObsidianImportOrigin {
+  /** The Obsidian vault it was copied from (absolute). */
+  source: string;
+  importedAt: number;
+  /** The last "Update from Obsidian". */
+  updatedAt?: number;
+  /** The vault that was current at the import, left untouched: the backup. */
+  previousVault?: string;
+}
+
 export interface ObsidianImportStatusResponse {
   /** The running job, or the last one since the daemon started; null when there was none. */
   job: ObsidianImportJob | null;
+  /** Set when this vault was imported from Obsidian (so it can be updated from there). */
+  imported?: ObsidianImportOrigin;
 }
 
 // ── Pairing (this daemon issuing device credentials) ───────────────────────
