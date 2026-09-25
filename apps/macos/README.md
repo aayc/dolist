@@ -46,6 +46,7 @@ future iPhone app too.
 | `Packages/DailyDoListDomain` (iOS) | Pure domain logic ported from `@ddl/core`: dates and daily notes, task parsing and tracking, line anchors, agent-line markers, three-way merges, wikilinks, paths, fuzzy matching. |
 | `Packages/DailyDoListEditor` | The TextKit markdown editor: live preview, clickable checkboxes, agent badges, and vim mode (it hosts `DailyDoListVim`). |
 | `Packages/DailyDoListVim` (iOS) | Vim mode: a port of the web editor's vim.js and its CodeMirror 6 adapter, checked against the web app's vim vectors; hosts implement `VimEditor` ([README](Packages/DailyDoListVim/README.md)). |
+| `Packages/DailyDoListDrawing` (model: iOS) | The native drawing engine: Excalidraw scenes in Obsidian's `.excalidraw.md` files (`DailyDoListDrawingModel`, Foundation only, checked against `@ddl/core`'s shared fixtures), a Rough.js port, the CoreGraphics renderer, Excalidraw's tools and shortcuts, and `DrawingCanvasView`, the canvas the editor embeds ([README](Packages/DailyDoListDrawing/README.md)). |
 | `Packages/DailyDoListAgent` | Agent state and UI: inbox, threads (the live chat: [The agent chat](#the-agent-chat)), the orchestrator's chat ([The orchestrator's chat](#the-orchestrators-chat)), routines ([Routines](#routines)), approval cards, artifacts, notifications, menu bar, Dock badge. |
 | `Packages/DailyDoListUI` | What the shell, the agent UI and the editor share: the app's one tooltip (`TooltipCenter`, `.tooltip(…)`), keycaps (`KeyShortcut`, `Keycaps`), `.pointingHandCursor()`, `IconButton`, and the chrome and accent button styles. `DailyDoListUITestSupport` finds tooltips in tests and draws them into snapshots. |
 | `Packages/DailyDoListDaemon` | `DaemonSupervisor`: finds Node and the daemon, attaches or launches, health-checks, restarts, stops. |
@@ -521,6 +522,11 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   Computer Use tab, the guide and the banner (`app-snapshots/settings-computer-use-*`,
   `computer-access-guide-*`, `computer-access-banner-*`). Nothing in the tests prompts, opens
   System Settings or relaunches.
+- **Drawings**: `DailyDoListDrawing` replays `@ddl/core`'s shared drawing fixtures (when they're
+  in the checkout), checks its Rough.js port against samples from Rough.js itself, drives its
+  editor and canvas with pointer sequences and real `NSEvent`s, renders snapshots of every element
+  type in both themes (`.build/drawing-snapshots/`), and holds 2,000-element drawings to 60 fps
+  budgets ([README](Packages/DailyDoListDrawing/README.md#testing)).
 - **Computer use helper**: `DailyDoListComputer`'s tests run the helper against fakes for
   accessibility (a fake tree that records every read and action), apps, windows, input, capture,
   permissions, parent processes and time: the codec and every error code, strict params, the tree
