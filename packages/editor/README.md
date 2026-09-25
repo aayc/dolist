@@ -2,8 +2,9 @@
 
 Framework-agnostic CodeMirror 6 markdown editor for Daily Do List: Obsidian-style live preview,
 task checkboxes, vim mode, agent status badges on task lines (and on lines a thread is anchored
-to), text the agent wrote drawn as agent text, and link previews. The web app wraps it in a React
-component; the desktop/mobile shells reuse the web app unchanged.
+to), text the agent wrote drawn as agent text, link previews, and `![[…]]` embeds (drawings) that
+float with the text wrapping around them. The web app wraps it in a React component; the
+desktop/mobile shells reuse the web app unchanged.
 
 ```ts
 import { createMarkdownEditor } from "@ddl/editor";
@@ -113,6 +114,11 @@ citations and bare URLs), host and full URL, and note links show nothing. The ed
 a link. Editing, moving the caret, scrolling or pressing a key hides the card. `LinkPopover`,
 `renderLinkPreview` and `webLinkPreview` are exported so hosts can show the same card elsewhere.
 
+**Embeds** (live preview). An `![[target|…]]` alone on its line (whitespace around it allowed) is
+drawn by the first host renderer whose `matches(target)` accepts it; other embeds stay wikilink
+syntax. See [Embeds](#embeds) for the contract; the web app registers drawings, and images plug in
+the same way.
+
 **Obsidian syntax** as `@lezer/markdown` extensions, so none of it is ever detected inside code:
 `[[target]]`, `[[target#heading|alias]]`, `![[embed]]`, `#tags` (not `#123`, not mid-word),
 `==highlight==`. Indented code blocks are disabled so an indented task always stays a task
@@ -150,6 +156,86 @@ links, as in Obsidian.
 | Mod-f | search panel (plus CodeMirror's default and history keymaps) |
 
 Mod-e is deliberately unbound so the host can use it (for example to toggle reading view).
+
+## Embeds
+
+The embed layer ([`src/embeds/`](src/embeds)) draws `![[…]]` embeds in the live preview. It owns
+the box (placement, size, selection, moving, resizing, deleting); a renderer the host registers
+owns what's inside. Drawings are the first renderer (`apps/web/src/features/drawings`); images
+are next, through the same layer.
+
+```ts
+const images: EmbedRenderer = {
+  kind: "image", // the box gets `cm-ddl-embed-image`
+  matches: (target) => /\.(png|jpe?g|gif|webp|svg)$/i.test(target),
+  mount(host) {
+    const img = document.createElement("img");
+    img.src = urlFor(host.spec.target);
+    img.onload = () => host.setNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
+    host.dom.append(img);
+    return {
+      update: () => true, // new size or placement, same target: the box follows, keep the img
+      activate: () => (openLightbox(host.spec.target), true), // double-click or Enter
+      destroy: () => img.remove(),
+    };
+  },
+};
+createMarkdownEditor(parent, { doc, callbacks: { embedRenderers: [images] } });
+```
+
+**Modifiers** are the Obsidian Excalidraw plugin's (`parseDrawingEmbed` in `@ddl/core`): an
+optional alias, a size (`360`, `360x240`, `x240`, `50%`) and a placement (`left`, `right`,
+`center`, `left-wrap`, `right-wrap`); none is full width.
+
+- `left-wrap` / `right-wrap` float inside the embed's line with CSS floats, and the lines after it
+  wrap around the box, as in Obsidian's live preview. The float's line takes no height, so the
+  text beside it starts level with its top. `.cm-content` is a flow root, so a float at the end of
+  the note stays inside it.
+- `left`, `right`, `center` and full width sit on their line as an inline block (the line gets
+  `cm-ddl-embed-line-<placement>` to align it).
+- Width: the modifier, else 100% for full width, else the content's natural width
+  (`host.setNaturalSize`), else 360 px; never wider than the column. Height: a given height, else
+  the natural aspect ratio (reserved before the content arrives), else a 160 px placeholder.
+- The syntax shows in full while the selection is on the embed's line; source mode always shows
+  it. Nothing is revealed while the editor is unfocused.
+
+**Using it** (all ordinary, undoable edits):
+
+| Action | Result | User event |
+| --- | --- | --- |
+| Click | selects it (`is-selected`, handles) without moving the caret; the box takes the keyboard | |
+| Drag (the box or its grip) | the box follows the pointer and an indicator shows where it lands: between the two lines nearest its top edge, left in the column's left third, right in its right third, full width between; dropping moves its line and sets `left-wrap`/`right-wrap`/full width (full width drops the size) | `move.embed`, or `input.embed` for a side change on the same line |
+| Drag a corner | resizes live; dropping sets the width (a given height scales with it). A right float grows from its left corner, a left one from its right corner, a centered one from both | `input.embed` |
+| Delete, Backspace | removes the embed's line (the embedded file stays, so undo brings it back) | `delete.embed` |
+| Enter, double-click | `content.activate()` (drawings: edit in place) | |
+| Escape / arrows | deselects / puts the caret on the line before or after | |
+| Mod-z, Shift-Mod-z | undo / redo | |
+| Escape while dragging | cancels the drag | |
+
+Typing a character while an embed is selected deselects it and types at the caret. Hosts can
+select an embed (`host.select()`, `selectEmbed(view, from)`), insert one on its own line at the
+caret's line (`editor.insertEmbed(text)`: on the line when it's blank, else above it, the caret
+staying off the embed's line), and activate a drawn one (`editor.activateEmbed(from)`).
+
+**The contract** ([`src/embeds/types.ts`](src/embeds/types.ts)):
+
+- `EmbedRenderer`: `kind`, `matches(target)`, `mount(host) → EmbedContent`. `mount` is called
+  when the embed's line is drawn (it scrolled into view) and `destroy` when it isn't anymore
+  (scrolled away, the caret revealed its syntax, the note was switched). Keep both cheap: cache
+  by content, as drawings do.
+- `EmbedHost`: `dom` (render into it), `view`, `spec` (as mounted), `embed()` (current position),
+  `setNaturalSize(size)`, `select()`.
+- `EmbedContent`: `update?(spec)` (same target, new modifiers; return false to be remounted),
+  `activate?()`, `destroy()`.
+- The pure edits behind the gestures are exported for tests and other hosts: `embedOfLine`,
+  `embedAt`, `moveEmbed`, `resizeEmbed`, `removeEmbed`, `insertEmbed`, `formatEmbed`,
+  `dropTarget`.
+
+**Performance.** Embeds come from the live preview's one pass over the visible ranges: the
+builder checks a `WikiLink` node that starts with `!` and parses its line (O(line)). The widget
+compares by embed text, selection and read-only state, so typing elsewhere reuses the box and its
+content. Renderers mount only for drawn lines, never per keystroke. Size changes call
+`requestMeasure` (CodeMirror doesn't watch widget styles).
 
 ## Vim mode
 
@@ -320,6 +406,10 @@ Additions to the contract: `EditorCallbacks.onWikiLinkClick` options gained an o
 - link previews: `linkPreviews`, `linkPreviewAt`, `LinkPopover`, `renderLinkPreview`,
   `webLinkPreview`, `hostnameOf`;
 - live preview: `buildLivePreviewDecorations`, `livePreview`, `livePreviewEnabled`;
+- embeds: the types (`EmbedRenderer`, `EmbedHost`, `EmbedContent`, `BlockEmbed`, `EmbedSpec`,
+  `EmbedPlacement`), `EmbedWidget`, the edits above, `embedSelection`, `selectEmbedEffect`,
+  `selectEmbed`, `selectedEmbed`, `activateEmbed`, `insertEmbedAtCursor`; on `MarkdownEditor`,
+  `insertEmbed(text)` and `activateEmbed(from)`; `EditorCallbacks.embedRenderers`;
 - building blocks: `markdownSupport`, `ddlTags`, `splitWikiLink`, `editorTheme`,
   `markdownHighlightStyle`, `editorKeymap`, `minimalChange`, `documentChanges`.
 
@@ -340,7 +430,11 @@ CodeMirror base-theme overrides are in [`src/theme.ts`](src/theme.ts); component
 `cm-ddl-wikilink`, `cm-ddl-badge` (+ `cm-ddl-badge-<status>`, `cm-ddl-badge-tone-<tone>` with tones
 `needs-you`, `failed`, `working` and `quiet`, and `cm-ddl-badge-enter` while it animates in),
 `cm-ddl-annotated-<status>`, `cm-ddl-anchored`, `cm-ddl-agent-line`, `cm-ddl-agent-marker`,
-`cm-ddl-agent-sparkle`, `cm-ddl-link-popover` and `cm-ddl-link-preview-*`.
+`cm-ddl-agent-sparkle`, `cm-ddl-link-popover`, `cm-ddl-link-preview-*`, and for embeds
+`cm-ddl-embed` (+ `cm-ddl-embed-<kind>`, `cm-ddl-embed-<placement>`, `is-selected`,
+`is-dragging`, `is-resizing`, `is-readonly`), `cm-ddl-embed-content`, `cm-ddl-embed-grip`,
+`cm-ddl-embed-resize(-start|-end)`, `cm-ddl-embed-drop` (the drop indicator) and
+`cm-ddl-embed-line(-<placement>)`.
 
 ## Performance
 
@@ -397,6 +491,10 @@ pnpm exec biome check --write packages/editor
 
 - No hanging indent for wrapped list items yet (wrapped lines start at the line's left edge).
 - Tables and images are shown as source; callouts (`> [!note]`) render as plain quotes.
+- Embeds are drawn only alone on their line; an embed among other text (or in a list item or a
+  quote) stays wikilink syntax. With `left-wrap`/`right-wrap`, a float taller than CodeMirror's
+  rendering margin (1 000 px) above the viewport can stop wrapping the lines at its bottom while
+  its own line is out of the rendered range.
 - Ordered-list continuation of tasks (`1. [ ] a` + Enter) doesn't add a checkbox, nor does Enter
   on a task with an alternate status inside a blockquote (`> - [/] a`); items after an inserted one
   are not renumbered by the tab-indentation Enter fallback.

@@ -21,6 +21,7 @@ import {
   vimEffect,
 } from "./config";
 import { documentChanges, normalizeLineEndings, type TextChange } from "./diff";
+import { activateEmbed, insertEmbedAtCursor } from "./embeds/layer";
 import { editorExtensions } from "./extensions";
 import { cursorLine } from "./listeners";
 import type { CreateEditorOptions, EditorConfig, MarkdownEditor } from "./types";
@@ -155,6 +156,10 @@ export function createMarkdownEditor(
     setAnnotations(annotations) {
       view.dispatch({ effects: setAnnotationsEffect.of(annotations) });
     },
+
+    insertEmbed: (text) => insertEmbedAtCursor(view, text),
+
+    activateEmbed: (from) => activateEmbed(view, from),
 
     configure(partial) {
       const next = resolveConfig(partial, config);

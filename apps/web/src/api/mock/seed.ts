@@ -11,6 +11,7 @@ import {
 } from "@ddl/core";
 import type { MockAgent } from "./mock-agent";
 import { LIVING_LIST_LINES, RESTAURANTS_NOTE } from "./mock-demo";
+import { DEMO_DRAWING_PATH, demoDrawing, SKETCHES_NOTE } from "./mock-drawings";
 import type { MockVault } from "./mock-vault";
 
 /**
@@ -107,6 +108,7 @@ const STATIC_NOTES: Record<string, string> = {
     "3. A field guide to local birds",
   ].join("\n"),
   "Restaurants.md": RESTAURANTS_NOTE,
+  "Sketches.md": SKETCHES_NOTE,
 };
 
 export function renderDailyContent(
@@ -129,6 +131,7 @@ export function seedVault(vault: MockVault, agent: MockAgent, settings: AppSetti
   for (const [path, content] of Object.entries(STATIC_NOTES)) {
     vault.write(path, content, now.getTime() - 7 * 86_400_000);
   }
+  vault.write(DEMO_DRAWING_PATH, demoDrawing(), now.getTime() - 7 * 86_400_000);
   const current = today(now);
   for (const day of PAST_DAYS) {
     const date = addDays(current, day.offset);

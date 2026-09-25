@@ -25,6 +25,10 @@ export const SearchView = preloadable(() =>
 export const NewRoutineDialog = preloadable(() =>
   import("../features/routines/NewRoutineDialog").then((m) => m.NewRoutineDialog),
 );
+/** An opened drawing file (Excalidraw itself loads with it). Not prefetched. */
+export const DrawingPane = preloadable(() =>
+  import("../features/drawings/DrawingPane").then((m) => m.DrawingPane),
+);
 
 export async function prefetchLazyChunks(): Promise<void> {
   await Promise.allSettled([

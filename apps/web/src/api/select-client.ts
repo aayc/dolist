@@ -18,6 +18,7 @@ export async function createDaemonClient(): Promise<DaemonClient> {
     return new MockDaemonClient({
       speed: Number.isFinite(speed) && speed > 0 ? speed : 1,
       computer: parseMockComputerMode(searchParam("mockComputer")),
+      persistVault: searchParam("mockPersist") === "1",
     });
   }
   return new HttpDaemonClient({ token: readInjectedToken() });

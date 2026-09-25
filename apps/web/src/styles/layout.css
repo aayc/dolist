@@ -140,7 +140,22 @@ body.is-resizing .resize-handle:active {
 }
 
 .note-header-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   width: 100%;
+}
+
+.note-header-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.note-actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding-top: 2px;
 }
 
 .readable-line-length .note-header-inner {

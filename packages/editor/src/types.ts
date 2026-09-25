@@ -5,6 +5,7 @@
 import type { EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import type { TaskAgentStatus } from "@ddl/core";
+import type { EmbedRenderer } from "./embeds/types";
 import type { LinkTarget } from "./links";
 
 /** An agent badge rendered at the end of a task line (or of a line a thread is anchored to). */
@@ -98,6 +99,11 @@ export interface EditorCallbacks {
   onVimStatus?(status: VimStatus | null): void;
   /** The vimrc was (re)applied; lines vim rejected, with its message. */
   onVimrcApplied?(problems: readonly VimrcProblem[]): void;
+  /**
+   * Draw `![[…]]` embeds alone on their line in the live preview (drawings; images next). The
+   * first renderer whose `matches` accepts the target draws it; others stay as syntax.
+   */
+  embedRenderers?: readonly EmbedRenderer[];
 }
 
 export type VimModeName =
@@ -133,6 +139,10 @@ export interface MarkdownEditor {
   /** Swap the whole state (instant note switching with per-note undo history). */
   setState(state: EditorState): void;
   setAnnotations(annotations: readonly LineAnnotation[]): void;
+  /** Inserts an embed (`![[…]]`) on its own line at the caret's line; returns where it starts. */
+  insertEmbed(text: string): number;
+  /** Activates the embed at `from` (as a double-click would) if it's drawn; false otherwise. */
+  activateEmbed(from: number): boolean;
   configure(config: Partial<EditorConfig>): void;
   focus(): void;
   scrollToLine(line: number): void;

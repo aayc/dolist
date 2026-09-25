@@ -17,13 +17,18 @@ spec writes `apps/web/perf-results.json`.
 | `thread:open` | badge click → thread rendered | 100 ms |
 | `keystroke` (p95) | keydown → next frame after the DOM update, 2 000-line note | 16 ms |
 | `keystroke (vim)` (p95) | the same with vim mode on: insert-mode typing, then normal-mode motions, `x` and `u` | 16 ms |
-| long tasks | tasks > 50 ms while typing (both modes) | 0 |
+| `keystroke (beside drawings)` (p95) | typing beside the first of six embedded drawings (floats the text wraps around) | 16 ms |
+| long tasks | tasks > 50 ms while typing (all three) | 0 |
 
 CI multiplies budgets by `PERF_BUDGET_MULTIPLIER=2` (slower shared runners). The perf run disables
 Chrome's frame-rate limiter so "→ next frame" measures work, not vsync alignment.
 
-Latest local run (Apple Silicon): keystroke p95 1.6 ms (vim mode 1.8 ms), daily open ~4–5 ms, tab
-switch 14 ms, thread open 9 ms, first load 106 ms, zero long tasks.
+Latest local run (Apple Silicon): keystroke p95 1.6 ms (vim mode 1.8 ms, beside drawings 1.7 ms),
+daily open ~4–5 ms, tab switch 14 ms, thread open 9 ms, first load 106 ms, zero long tasks.
+
+Drawings stay off the keystroke path: an embed's box is a widget from the live preview's
+visible-range pass (reused while its `![[…]]` doesn't change), static renders are cached by the
+file's content hash and made off the keystroke path, and the dark theme is a CSS filter.
 
 Vim mode adds one handler to the keystroke path. The mode indicator and pending-keys display in the
 status bar update from one coalesced callback per keystroke, and only when the value changes, so
@@ -87,9 +92,9 @@ budgets.
 
 | Bundle | Budget (gzip) | Current |
 | --- | --- | --- |
-| Initial JS (entry + static imports) | 320 kB | ~256 kB |
-| Initial CSS | 40 kB | ~7 kB |
-| Total JS | 1 200 kB | ~825 kB |
+| Initial JS (entry + static imports) | 320 kB | ~276 kB |
+| Initial CSS | 40 kB | ~8 kB |
+| Total JS | 1 200 kB | ~1 190 kB |
 
 The initial JS is dominated by CodeMirror core and React. `@codemirror/lang-markdown` would embed
 `@codemirror/lang-html` and with it the JS and CSS parsers (~60 kB gz); our `pnpm patch`
@@ -99,6 +104,14 @@ fenced block that needs them. Vim is loaded on demand — in parallel with start
 on: `@ddl/editor`'s `vim.ts` is a tiny loader in the main bundle, and `vim-integration.ts` (the
 engine plus ex commands, clipboard registers, vimrc and the status plugin) is one lazy chunk of
 ~42 kB gz. Don't import `vim-integration` or `@replit/codemirror-vim` statically.
+
+Excalidraw (drawings) is one lazy chunk of ~325 kB gz, loaded the first time a note shows a
+drawing. `apps/web/excalidraw-assets.ts` keeps its heaviest optional parts out of the build with
+small replacements: font subsetting (HarfBuzz and WOFF2 in WebAssembly, ~740 kB gz; exports embed
+whole fonts instead), the Mermaid importer (several MB), pica and image-blob-reduce (~29 kB gz; a
+canvas downscales pasted images), pako (~14 kB gz; Excalidraw embeds scenes in exported images
+uncompressed without it), browser-fs-access (a file input opens images) and the translations. Total JS is close to its budget: a new dependency
+of that size needs a look at what else can go.
 
 Gzip sizes differ a little between machines for the same bytes (Node's zlib on CI's x86 runners
 compresses ~0.5% worse than on Apple Silicon), so keep some headroom under the budget.

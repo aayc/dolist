@@ -13,6 +13,8 @@ import {
   type Deferred,
   deferred,
   isBlankTaskText,
+  isDrawingMarkdown,
+  isDrawingPath,
   isOrchestratorThread,
   isWithinWindow,
   type MessageAuthor,
@@ -226,7 +228,9 @@ export class MockAgent {
       return;
     }
     const previous = this.tracked.get(path) ?? [];
-    const { tasks, diff } = trackTasks(previous, parseTasks(content));
+    // A drawing's text elements are lines of its file, but labels, not a task list.
+    const drawing = isDrawingPath(path) || isDrawingMarkdown(content);
+    const { tasks, diff } = trackTasks(previous, drawing ? [] : parseTasks(content));
     this.tracked.set(path, tasks);
 
     let changed = false;
