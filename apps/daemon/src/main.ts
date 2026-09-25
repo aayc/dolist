@@ -1,4 +1,5 @@
 import { withTimeout } from "@ddl/core";
+import { runCli } from "./cli";
 import { type RunningDaemon, startDaemon } from "./server";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -25,13 +26,24 @@ function installSignalHandlers(daemon: RunningDaemon): void {
   process.on("SIGHUP", stop);
 }
 
-try {
-  const daemon = await startDaemon();
-  installSignalHandlers(daemon);
-  process.stdout.write(`\n  Daily Do List is running at ${daemon.url}\n\n`);
-} catch (error) {
-  process.stderr.write(
-    `Daily Do List daemon failed to start: ${error instanceof Error ? error.message : String(error)}\n`,
-  );
-  process.exit(1);
+const args = process.argv.slice(2);
+if (args.length > 0) {
+  const code = await runCli(args, {
+    env: process.env,
+    stdout: (text) => process.stdout.write(text),
+    stderr: (text) => process.stderr.write(text),
+  });
+  // Exit once the output is flushed (pipes are asynchronous on macOS).
+  process.stdout.write("", () => process.stderr.write("", () => process.exit(code)));
+} else {
+  try {
+    const daemon = await startDaemon();
+    installSignalHandlers(daemon);
+    process.stdout.write(`\n  Daily Do List is running at ${daemon.url}\n\n`);
+  } catch (error) {
+    process.stderr.write(
+      `Daily Do List daemon failed to start: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    process.exit(1);
+  }
 }
