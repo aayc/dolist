@@ -90,10 +90,14 @@ export async function createSettingsStore(options: SettingsStoreOptions): Promis
 
   if (firstRun) {
     stored = seedFrom(defaults, await readObsidianSettings(options.storage, logger));
-    try {
-      await file.save(() => encodePersistedSettings(stored));
-    } catch (error) {
-      logger.warn("Could not save initial settings", { error: errorMessage(error) });
+    // Only what was imported: a device joining a synced vault would otherwise win the first sync
+    // with an empty file (text conflicts keep this side) and reset every device's settings.
+    if (Object.keys(stored).length > 0) {
+      try {
+        await file.save(() => encodePersistedSettings(stored));
+      } catch (error) {
+        logger.warn("Could not save initial settings", { error: errorMessage(error) });
+      }
     }
   }
 

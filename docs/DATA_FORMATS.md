@@ -288,7 +288,8 @@ include `DDL_MODEL` from the daemon config).
   `PUT /api/settings` (a test compares both).
 - Corrupt → quarantined, and settings start over as on first run (seeded from the vault's Obsidian
   config: `.obsidian/daily-notes.json`, `app.json`, `appearance.json`, BOM tolerated; only values
-  this app can use are seeded). Newer → defaults apply and updates are refused with an explanation
+  this app can use are seeded). A first run with nothing to seed writes no file, so a device
+  joining a synced vault pulls the vault's settings rather than replacing them. Newer → defaults apply and updates are refused with an explanation
   until the app is updated. A read error at startup no longer stops the daemon: defaults apply and
   the first update re-reads the file.
 - External edits otherwise apply on the next start (the store does not watch the file).

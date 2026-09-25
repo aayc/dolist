@@ -221,8 +221,9 @@ with `DDL_AGENT_MODE` `live` or `mock`) starts its agent only while it holds the
   device holds it, it asks again every 15 s and takes over as soon as that device releases it
   (it does when its daemon stops) or stops renewing (it crashed or went offline: at most 60 s).
 - Until then this daemon serves notes and syncs as usual, but its agent is off: its agent status
-  says `problem: "The agent is running on <device name>."`, it lists no threads or approvals of
-  its own, and it writes nothing into the agent's sidecar files.
+  says `problem: "The agent is running on <device name>."`, it shows the other device's threads,
+  approvals and task records read-only as sync brings them in (agent actions answer 503 with that
+  problem), and it writes nothing into the agent's sidecar files.
 - On takeover it first runs a sync pass, then creates the agent runtime from the vault as it is now
   (threads, records and approvals written by the previous device's agent included). On release it
   stops the runtime (which flushes its state) and runs a sync pass before letting go.
@@ -310,8 +311,9 @@ Phase 1 limitations:
 - File names that differ only in case or Unicode normalization across file systems aren't
   reconciled (as with any sync target).
 - Devices notice a released lease by asking every 15 s (3 s while taking over), not by push.
-- Only the device that runs the agent shows agent threads and records; the others show notes
-  (including the agent's lines in them) and say where the agent runs.
+- Only the device that runs the agent acts on agent threads and approvals; the others show them
+  read-only and say where the agent runs (a device relaying to the always-on machine acts through
+  it, see [ALWAYS_ON.md](./ALWAYS_ON.md#the-agent-relay)).
 - Settings UI is being built (docs/ALWAYS_ON.md); the data is in `GET /api/sync/status`,
   `GET /api/device` and the agent status.
 
@@ -320,6 +322,6 @@ Phase 2:
 - Attachments in S3/R2 (content-addressed, referenced from the change log).
 - A Cloudflare Durable Object host (one object per vault with its own SQLite, same protocol).
 - End-to-end encryption of content and paths.
-- Lease changes pushed on the stream; read-only agent threads on the other devices.
+- Lease changes pushed on the stream.
 - Change-log compaction, per-vault quotas, and the sync status in the web and Mac apps; the iOS
   client (the Swift models already decode the sync status).
