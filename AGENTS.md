@@ -39,6 +39,23 @@ Product principles, in priority order:
 - Test fixtures and examples must be synthetic (no real names, emails, addresses or notes).
 - Before committing, run `git status` and review every staged file.
 
+## Handoff log: `PROGRESS.md`
+
+Work moves between machines and agents, so `PROGRESS.md` (repo root) always holds the current
+state: what shipped, what's in flight (branch, spec, status, next step), what's next, and the
+user's decisions.
+
+- **Read it before starting.** Don't re-ask a question its decisions already answer.
+- **Keep it current.** Update it whenever work starts, lands, stalls or changes direction, or the
+  user decides something. Commit it on `main` and push, so another machine can pick up at any
+  moment.
+- **In-flight work lives on pushed branches.** Push a stream's branch whenever `PROGRESS.md`
+  mentions it. Specs for work split across streams go in `docs/specs/`, not in temp files.
+- **Only the integrator edits it.** Parallel streams on feature branches report back instead of
+  editing it, so it never conflicts; the lead records their state.
+- **It's public too.** No secrets, tokens, machine or network names, IP addresses or absolute
+  paths; describe machines generically ("the main development Mac").
+
 ## Repository map
 
 ```
@@ -113,7 +130,9 @@ Scope commands to the package you are working in while iterating. Before you fin
 
 Key flows are documented in `docs/ARCHITECTURE.md` and `docs/AGENT_SYSTEM.md`.
 
-Docs index: `README.md` (product + quick start), `docs/ARCHITECTURE.md`, `docs/AGENT_SYSTEM.md`,
+Docs index: `PROGRESS.md` (the handoff log: current state and decisions), `docs/specs/`
+(multi-stream specs), `README.md` (product + quick start), `docs/ARCHITECTURE.md`,
+`docs/AGENT_SYSTEM.md`,
 `docs/USER_JOURNEYS.md` (the living-list journeys and their tests),
 `docs/PERFORMANCE.md`, `docs/CROSS_PLATFORM.md`, `docs/SYNC.md` (devices sharing a vault, the
 agent lease), `docs/ALWAYS_ON.md` (design: the agent on an always-on machine), `docs/CI.md`, `SECURITY.md`, `CONTRIBUTING.md`, and package READMEs
