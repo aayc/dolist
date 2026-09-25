@@ -4,7 +4,8 @@ The running handoff log: what shipped, what's in flight, what's next, and the de
 them, so work can continue on any machine at any point. Read it before starting; keep it current
 (the rules are in `AGENTS.md`, "Handoff log").
 
-**Last updated:** 2026-09-25 · `main` at `83be988` · in-flight branches pushed to `origin`.
+**Last updated:** 2026-09-25 · `main` at `a42bcf3` (routines) · in-flight branches pushed to
+`origin`.
 
 ## Picking this up on another machine
 
@@ -22,6 +23,9 @@ them, so work can continue on any machine at any point. Read it before starting;
 
 ## Shipped on `main` (newest first)
 
+- `a42bcf3` Routines: standing jobs the agent runs on a schedule, one markdown file each in
+  `Routines/`, each run a chat thread in the routine's own inbox, with notifications; on the web
+  and the Mac ([docs/specs/routines.md](docs/specs/routines.md), journeys J12 and J13).
 - `83be988`, `cbba701` Design: the agent anywhere ([docs/ALWAYS_ON.md](docs/ALWAYS_ON.md)).
 - `2a7bb5a` Plan: the native iPhone app ([apps/mobile/PLAN.md](apps/mobile/PLAN.md)).
 - `9e97dda` The orchestrator's chat: pinned in the inbox, its own window on the Mac, and
@@ -36,24 +40,12 @@ them, so work can continue on any machine at any point. Read it before starting;
 - `e5cf22d` The sync service (`apps/sync`) and the agent lease.
 - `a31cd6e` A line break typed on the desktop counts as pressing Return (needs its own approval).
 
-State at `9e97dda`: CI, macOS app and Security workflows green; that build is installed on the main
-development Mac.
+State at `a42bcf3`: verified before merging (`pnpm check`, build and bundle budget, benchmarks,
+mock evals, fullstack, functional, polish and perf e2e, every Swift package, the app and the
+integration tests); CI, macOS app and Security workflows dispatched on `main`. That build is
+installed on the main development Mac (permissions kept).
 
 ## In flight
-
-### Routines — standing jobs on a schedule
-
-Spec: [docs/specs/routines.md](docs/specs/routines.md).
-
-| Branch | What | State |
-| --- | --- | --- |
-| `feat/routines` | core, agent, daemon routes and events, tests, evals, docs; the Mac UI merged in (`1677aba`) | done; Swift packages, app and integration tests green (vim passed alone after a load flake) |
-| `feat/routines-web` | web: Routines section, a routine's runs, New routine, Repeat this | `feat/routines` merged in (`f1ebc4c`); fullstack e2e run and fixes in progress |
-| `feat/routines-mac` | macOS: Routines section, commands (⇧⌘R, ⌥⌘N), notifications, Swift client | done, merged into `feat/routines` |
-
-Next: when the web e2e is green, merge `feat/routines-web` into `feat/routines`; full verification (`pnpm check`, `pnpm build && pnpm size:check`, bench,
-`pnpm e2e`, `pnpm e2e:perf`, `pnpm eval:mock`, `pnpm vim:check`, `apps/macos/scripts/test.sh`,
-`test.sh app`, `test.sh integration`); merge to `main`; push; dispatch CI; install the Mac app.
 
 ### The agent anywhere — always-on machine, placement per device, pairing, relay, Settings
 
@@ -62,16 +54,16 @@ Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md). Spec, with the exact wire contra
 
 | Stream | Branch | State |
 | --- | --- | --- |
-| S0 wire contract | `feat/always-on` | done at `45a7cd1` (incl. `heldHere` and the fencing types) |
+| S0 wire contract | `feat/always-on` | done at `45a7cd1` (incl. `heldHere` and the fencing types); `main` (routines) merged in at `a0a924f` |
 | S6 VM setup kit (Linux bundle, systemd, Azure guide, CI smoke) | `feat/always-on-kit` | done (`395902c`); bundle smoke-tested on the Mac; validating `setup.sh` under systemd in a throwaway OrbStack Linux machine (the `Linux bundle` workflow can only be dispatched once it's on `main`) |
 | S1 remote access and pairing | `feat/always-on-remote` | in progress |
 | S2 placement, lease priorities, fencing, machine link | `feat/always-on-placement` | in progress |
-| S3 relay | from `feat/always-on` | waits for routines on `main` (then merge `main` into `feat/always-on`) |
-| S4 web Settings, the orchestrator toggle, pairing screen | from `feat/always-on` | waits for routines on `main` |
-| S5 macOS Settings and the orchestrator toggle | from `feat/always-on` | waits for routines on `main` |
+| S3 relay | `feat/always-on-relay` (from `a0a924f`) | in progress |
+| S4 web Settings, the orchestrator toggle, pairing screen | `feat/always-on-web` (from `a0a924f`) | in progress; stops at "ready for backend" before its fullstack e2e |
+| S5 macOS Settings and the orchestrator toggle | `feat/always-on-mac` (from `a0a924f`) | in progress |
 
-S3–S5 wait for routines because they touch the same agent panel, daemon runtime and fallback
-code. S1 and S2 share two seams: `apps/daemon/src/remote-hosts.ts` (`RemoteHosts`: S1's
+S1 and S2 branch from `45a7cd1` (before routines), S3–S5 from `a0a924f` (after). S1 and S2 share
+two seams: `apps/daemon/src/remote-hosts.ts` (`RemoteHosts`: S1's
 implementation wins at merge) and `config.ts` (S1 loads `remote.hosts`, S2 loads
 `agent.placement` and writes the file).
 
@@ -84,15 +76,21 @@ the kit (those keys, `DDL_AGENT_PLACEMENT`, `DDL_REMOTE_HOSTS`, the `pair` CLI c
 guide adds a NAT gateway (outbound internet without a public IP), which bills even while the VM is
 deallocated.
 
-Next: when S0 lands, start S1–S5; merge S1, S2, S3, then S4 and S5 into `feat/always-on`; add the
-pairing step to S6's CI smoke test; merge the kit; full verification; `main`; push; CI. After
-that, set up the VM with the kit.
+Next: merge S1, S2, S3, then S4 and S5 into `feat/always-on` (resume S4 for its fullstack e2e
+after S1/S2 are in); add the pairing step to S6's CI smoke test; merge the kit; full
+verification; `main`; push; CI; install. After that, set up the VM with the kit.
+
+### Agent journal — phase 1 (threads)
+
+Spec: [docs/specs/agent-journal.md](docs/specs/agent-journal.md). Branch `feat/agent-journal`
+from `main` at `a42bcf3`: in progress. Phase 1: the journal is the source of truth for threads
+(append-only JSONL, union merge in the sync engine), today's thread JSON is still written as a
+derived snapshot (so the relay's read-only view, older daemons and the clients keep working),
+write-ahead around tool calls with "interrupted" instead of re-running, resume after a restart,
+migration of existing threads. Phase 2, after the always-on work merges: approvals, routines
+state and client ids for idempotent mutations.
 
 ## Next up (not started)
-
-- **Agent journal** (starts right after routines lands on `main`): append-only agent state,
-  write-ahead for side effects, resuming runs after a handover, idempotent relay mutations.
-  Draft spec: [docs/specs/agent-journal.md](docs/specs/agent-journal.md).
 
 - **iPhone app:** deferred; the web app covers mobile for now. Plan in
   [apps/mobile/PLAN.md](apps/mobile/PLAN.md); needs full Xcode and remote access (S1) first.
@@ -109,6 +107,9 @@ that, set up the VM with the kit.
   `OrchestratorChatView`, as on the web.
 - **Flaky guard:** core's `trackTasks` performance guard fails under machine load and passes
   alone; make it robust to load without loosening it.
+- **Flaky under load:** storage's file-watcher tests (`local-fs.watch.test.ts`,
+  `internal/directory-tree-watcher.test.ts`) fail now and then when the machine is saturated and
+  pass alone; make them robust without loosening them.
 - **Known mock-eval misses** (pre-existing on `main`, the suites still pass): safety
   `coding-npm-test`, `coding-run-analysis-script`; triage `renew-passport`.
 

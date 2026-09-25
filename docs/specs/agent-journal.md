@@ -37,6 +37,25 @@ as an activity, while our agent loop lives inside the harness.
 - **Migration:** existing thread files are read once and converted; the old files stay readable
   until every device runs the journal.
 
+## Phases
+
+**Phase 1 (threads), now**, from `main` after routines, in parallel with the always-on streams:
+
+- The journal is the source of truth for threads; `ThreadStore`'s public API stays the same, so
+  the orchestrator, subagents, routes and clients don't change.
+- **Today's thread file (`.daily-do-list/threads/<id>.json`) is still written, as a snapshot
+  derived from the journal.** The relay's read-only view (always-on S3), older daemons and every
+  client keep reading it unchanged; readers never parse the journal.
+- The sync engine merges journal files as a union of lines by event id (never a conflict copy);
+  the snapshot stays last-writer-wins, and fencing (always-on S2) keeps former holders out.
+- Write-ahead around tool calls; an unfinished side effect becomes "Interrupted during: …" and is
+  never re-run automatically.
+- Resume after a restart of the agent runtime (the same code path a handover will use).
+- Migration: existing thread files become journals on first load; nothing is lost.
+
+**Phase 2, after the always-on work merges:** approvals and routines state on the journal, and
+client-generated ids for idempotent mutations through the relay (an additive wire change).
+
 ## Open questions
 
 - Snapshot cadence and journal compaction.
