@@ -249,6 +249,19 @@ const READ_VERBS: ReadonlySet<string> = new Set([
   "quote",
 ]);
 const DRAFT_WORDS: ReadonlySet<string> = new Set(["draft", "drafts", "compose"]);
+
+/** Tool names that only list or describe files (`list_directory`, `get_file_info`), like `ls`. */
+export function mcpListsOnly(words: readonly string[]): boolean {
+  return (
+    words.some((w) => /^(?:list|ls|tree|info|stat|stats|metadata|exists)$/.test(w)) &&
+    !words.some((w) =>
+      /^(?:read|contents?|cat|search|grep|query|download|export|copy|move|zip|archive|dump|extract)$/.test(
+        w,
+      ),
+    )
+  );
+}
+
 /** Verbs that change something; the object noun decides the category (`create_event` → booking). */
 const CREATE_VERBS: ReadonlySet<string> = new Set([
   "create",

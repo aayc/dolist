@@ -140,7 +140,7 @@ describe("shell commands that need approval", () => {
     ["sqlite3 ~/data/app.db 'UPDATE users SET plan = 1'", "file_write.outside-workspace"],
     ["touch /usr/local/bin/tool", "system.system-path-write"],
     ["cd ~/project && git commit -am wip", "file_write.outside-workspace"],
-    ["ln -s ~ home", "file_write.symlink-outside"],
+    ["ln -s ~/Projects/app app", "file_write.symlink-outside"],
     ["sudo ls /var/root", "system.privilege-escalation"],
     ["brew install jq", "system.software-install"],
     ["npm install -g typescript", "system.software-install"],

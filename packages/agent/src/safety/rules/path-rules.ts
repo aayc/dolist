@@ -3,7 +3,7 @@
  * keys and credential stores, reading other sensitive files, and writing outside the workspace
  * (with stricter outcomes for app state, startup files, credentials and system paths).
  */
-import { type ResolvedPath, sensitiveKinds } from "../paths";
+import { homeReadRisk, type ResolvedPath, sensitiveKinds } from "../paths";
 import { info, type RuleHit } from "./types";
 
 export const SSH_KEY_READ = info(
@@ -18,7 +18,28 @@ export const CREDENTIAL_STORE_READ = info(
   "credentials",
   "deny",
   "critical",
-  "Reads a password store, keychain, browser credential database or the app's API keys and tokens",
+  "Reads saved logins: a password store, keychain, browser credential database, cloud, cluster, Docker or Cursor credentials, or the app's API keys and tokens",
+);
+export const HOME_FOLDER_READ = info(
+  "secrets.home-folder",
+  "credentials",
+  "deny",
+  "critical",
+  "Reads your whole home folder, including SSH keys and cloud credentials",
+);
+export const CREDENTIAL_FOLDER_READ = info(
+  "secrets.credential-folder",
+  "credentials",
+  "deny",
+  "critical",
+  "Reads a whole folder that holds saved logins and private data (~/Library, ~/.config, …)",
+);
+export const PERSONAL_FOLDER_READ = info(
+  "privacy.personal-folder",
+  "privacy",
+  "require_approval",
+  "medium",
+  "Reads a whole folder of your personal files (Documents, Desktop, Downloads, …)",
 );
 export const SENSITIVE_FILE_READ = info(
   "credentials.sensitive-file",
@@ -113,14 +134,26 @@ export function appStateHits(target: ResolvedPath, evidence: string): RuleHit[] 
   return isAppState(target) ? [{ rule: APP_CONFIG_WRITE, evidence }] : [];
 }
 
-/** Hits for reading `target`'s contents. */
-export function readPathHits(target: ResolvedPath, evidence: string): RuleHit[] {
+/**
+ * Hits for reading `target`'s contents: the file itself, or everything under it for recursive,
+ * archiving and copying readers (a folder or a glob stands for all it contains). Links count as
+ * reads: what goes through them later looks like a workspace path. `listing` is for tools that
+ * only list or describe files (a connector's `list_directory`): a folder's names aren't its files.
+ */
+export function readPathHits(
+  target: ResolvedPath,
+  evidence: string,
+  { listing = false }: { listing?: boolean } = {},
+): RuleHit[] {
   const kinds = kindsOf(target);
   if (kinds.has("ssh-private-key")) return [{ rule: SSH_KEY_READ, evidence }];
   if (kinds.has("credential-store") || kinds.has("app-secret"))
     return [{ rule: CREDENTIAL_STORE_READ, evidence }];
-  const hits: RuleHit[] = [];
   const outside = !inScratch(target);
+  const home = outside && !listing ? homeReadRisk(target.path) : null;
+  if (home === "home") return [{ rule: HOME_FOLDER_READ, evidence }];
+  if (home === "secrets") return [{ rule: CREDENTIAL_FOLDER_READ, evidence }];
+  const hits: RuleHit[] = [];
   if (
     kinds.has("credential-config") ||
     kinds.has("history") ||
@@ -129,6 +162,7 @@ export function readPathHits(target: ResolvedPath, evidence: string): RuleHit[] 
     hits.push({ rule: SENSITIVE_FILE_READ, evidence });
   }
   if (kinds.has("personal-data")) hits.push({ rule: PERSONAL_DATA_READ, evidence });
+  if (home === "personal") hits.push({ rule: PERSONAL_FOLDER_READ, evidence });
   return hits;
 }
 
@@ -165,8 +199,11 @@ export function writePathHits(target: ResolvedPath, evidence: string): RuleHit[]
 export const PATH_RULES = [
   SSH_KEY_READ,
   CREDENTIAL_STORE_READ,
+  HOME_FOLDER_READ,
+  CREDENTIAL_FOLDER_READ,
   SENSITIVE_FILE_READ,
   PERSONAL_DATA_READ,
+  PERSONAL_FOLDER_READ,
   APP_CONFIG_WRITE,
   PERSISTENCE_WRITE,
   CREDENTIAL_FILE_WRITE,
