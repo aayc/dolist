@@ -177,6 +177,7 @@ extension AppModel {
       vim: vim, now: environment.now)
     workspace.agent = agent
     workspace.commandRunner = { [weak self] id in self?.runCommand(id: id) ?? false }
+    workspace.openOrchestratorTurn = { [weak self] turnId in self?.showOrchestratorTurn(turnId) }
     workspace.localVaultURL = localVaultURL()
     workspace.onTabsChanged = { [weak self] in self?.scheduleTabsPersist() }
     self.agent = agent
@@ -214,10 +215,7 @@ extension AppModel {
     case .failure(let error):
       toasts.error("Couldn't open today's note", error)
     }
-    Task {
-      await agent.refresh(todayNotePath: todayNotePath)
-      workspace.editor.recordsDidChange(for: nil)
-    }
+    Task { await refreshAgent() }
   }
 
   /// Stops the event loop and drops per-connection state (after flushing unsaved notes).

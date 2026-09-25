@@ -86,6 +86,20 @@ struct OrchestratorChatTests {
     #expect(store.lastError == nil)
   }
 
+  @Test func aTurnToShowStaysAskedForUntilTheChatShowsIt() {
+    #expect(store.orchestratorFocus == nil)
+    store.focusOrchestratorMessage("msg_1")
+    let first = store.orchestratorFocus
+    #expect(first?.messageId == "msg_1")
+    store.focusOrchestratorMessage("msg_2")
+    let second = store.orchestratorFocus
+    #expect(second?.messageId == "msg_2" && second?.serial != first?.serial)
+    store.orchestratorFocusShown(first?.serial ?? 0)
+    #expect(store.orchestratorFocus == second, "an older request's showing doesn't end a newer one")
+    store.orchestratorFocusShown(second?.serial ?? 0)
+    #expect(store.orchestratorFocus == nil)
+  }
+
   @Test func writingAndStoppingGoThroughTheThreadRoutes() async {
     #expect(await store.postMessage(threadId: OrchestratorThread.id, text: "What are you doing?"))
     #expect(await store.cancelThread(OrchestratorThread.id))
