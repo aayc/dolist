@@ -20,10 +20,10 @@ const DOT_TONE: Record<LocationTone, string> = {
 
 /** Under the agent panel's header: the orchestrator toggle and where the agent runs now. */
 export function AgentLocation() {
-  const shown = useAgentStore((s) => s.status?.placement !== undefined);
-  if (!shown) return null;
+  const relay = useAgentStore((s) => s.status?.placement?.relay);
+  if (!relay) return null;
   return (
-    <div className="agent-location" data-testid="agent-location">
+    <div className="agent-location" data-testid="agent-location" data-relay={relay}>
       <PlacementToggle />
       <LocationStatus />
     </div>
