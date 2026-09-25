@@ -62,13 +62,18 @@ Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md). Spec, with the exact wire contra
 
 | Stream | Branch | State |
 | --- | --- | --- |
-| S0 wire contract | `feat/always-on` | done at `72a9ee8`; adding `heldHere` and the fencing types now; S1–S5 branch from its final commit |
+| S0 wire contract | `feat/always-on` | done at `45a7cd1` (incl. `heldHere` and the fencing types) |
 | S6 VM setup kit (Linux bundle, systemd, Azure guide, CI smoke) | `feat/always-on-kit` | done (`395902c`); bundle smoke-tested on the Mac; validating `setup.sh` under systemd in a throwaway OrbStack Linux machine (the `Linux bundle` workflow can only be dispatched once it's on `main`) |
-| S1 remote access and pairing | from `feat/always-on` | not started (waits for S0) |
-| S2 placement, lease priorities, machine link | from `feat/always-on` | not started (waits for S0) |
-| S3 relay | from `feat/always-on` | not started (waits for S0) |
-| S4 web Settings and pairing screen | from `feat/always-on` | not started (waits for S0) |
-| S5 macOS Settings | from `feat/always-on` | not started (waits for S0) |
+| S1 remote access and pairing | `feat/always-on-remote` | in progress |
+| S2 placement, lease priorities, fencing, machine link | `feat/always-on-placement` | in progress |
+| S3 relay | from `feat/always-on` | waits for routines on `main` (then merge `main` into `feat/always-on`) |
+| S4 web Settings, the orchestrator toggle, pairing screen | from `feat/always-on` | waits for routines on `main` |
+| S5 macOS Settings and the orchestrator toggle | from `feat/always-on` | waits for routines on `main` |
+
+S3–S5 wait for routines because they touch the same agent panel, daemon runtime and fallback
+code. S1 and S2 share two seams: `apps/daemon/src/remote-hosts.ts` (`RemoteHosts`: S1's
+implementation wins at merge) and `config.ts` (S1 loads `remote.hosts`, S2 loads
+`agent.placement` and writes the file).
 
 The spec's "As built by S0" section records S0's names and extra error codes; S1–S5 follow it.
 
