@@ -67,7 +67,10 @@ lease (one device runs the agent): [SYNC.md](SYNC.md).
 Security: bearer token (`$DDL_HOME/daemon-token`, 0600) checked in constant time on every API and
 WebSocket request, `Host` allowlist (DNS-rebinding defense), `Origin` allowlist (CSRF defense), no
 CORS, zod validation, body limits, sandboxed artifact responses. The Vite dev proxy injects the
-token only for requests that originate from the dev UI itself.
+token only for requests that originate from the dev UI itself. Other devices reach the daemon only
+through a private-network proxy under a configured remote host, with a paired device's token (or a
+paired browser's HttpOnly cookie); see [SECURITY.md](../SECURITY.md#threat-model-summary) and
+[apps/daemon/README.md](../apps/daemon/README.md#remote-access-and-pairing).
 
 Change attribution: writes made through the API carry the tab's client id; writes by the agent go
 through an `AttributedStorage` view. The WebSocket hub tags each `vault.changed` as `client`,

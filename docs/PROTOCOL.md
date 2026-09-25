@@ -11,10 +11,18 @@ runtime schemas, route table, test arbitraries and fixtures live in `@ddl/contra
   JSON (`Content-Type: application/json`), at most 5 MB.
 - **WebSocket** at `/ws`: the server pushes `ServerEvent`s; the client sends small `ClientEvent`s.
   All messages are JSON text frames (binary frames are rejected).
-- **Auth**: every `/api/*` request carries `Authorization: Bearer <token>`; the WebSocket passes
-  the token as `?token=`. The daemon only binds to loopback and rejects foreign `Host` headers
-  (DNS rebinding) and unknown `Origin` headers (CSRF). Requests without an `Origin` (native
-  clients) are fine. Rejected WebSocket upgrades answer a bare HTTP 401/403/404.
+- **Auth**: every `/api/*` request carries `Authorization: Bearer <token>`: the daemon's own token
+  (clients on the same machine) or a paired device's. The WebSocket takes the same header;
+  `?token=` works on loopback Hosts only and is refused on remote hosts. A browser on a remote
+  host pairs once and then sends the HttpOnly cookie it got (no header, no token in script). The
+  daemon only binds to loopback (other devices come through a private-network proxy under a
+  configured remote host) and rejects foreign `Host` headers (DNS rebinding) and unknown `Origin`
+  headers (CSRF). Requests without an `Origin` (native clients) are fine. Rejected WebSocket
+  upgrades answer a bare HTTP 401/403/404; revoking a device closes its sockets with 1008.
+- **Pairing**: an authenticated client gets a single-use code from `POST /api/pairing-codes`; the
+  new device sends it to `POST /api/pair` (no bearer token) and gets its token (`app`, `daemon`)
+  or cookie (`browser`). A bad code answers 401 `pairing_rejected`, not `unauthorized`, so clients
+  mustn't treat it as a rejected token; too many attempts answer 429 `rate_limited`.
 - `X-DDL-Client-Id: <clientId>` on writes lets the daemon attribute the change; the resulting
   `vault.changed` event carries that `clientId` so the writer can ignore its own echo.
 
