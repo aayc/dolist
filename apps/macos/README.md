@@ -44,8 +44,9 @@ future iPhone app too.
 | `Packages/DailyDoListModels` (iOS) | Swift mirror of the wire protocol (`packages/core/src/protocol.ts`), checked against the `@ddl/contract` fixtures. |
 | `Packages/DailyDoListClient` (iOS) | `DaemonClient`: `HTTPDaemonClient` (REST + WebSocket, reconnects and resyncs) and `InMemoryDaemonClient` (the demo and test fake). |
 | `Packages/DailyDoListDomain` (iOS) | Pure domain logic ported from `@ddl/core`: dates and daily notes, task parsing and tracking, line anchors, agent-line markers, three-way merges, wikilinks, paths, fuzzy matching, and the remote access validators. |
-| `Packages/DailyDoListEditor` | The TextKit markdown editor: live preview, clickable checkboxes, agent badges, and vim mode (it hosts `DailyDoListVim`). |
+| `Packages/DailyDoListEditor` | The TextKit markdown editor: live preview, clickable checkboxes, agent badges, drawings embedded in notes (floats the text wraps around, edited in place with `DailyDoListDrawing`'s canvas), and vim mode (it hosts `DailyDoListVim`). |
 | `Packages/DailyDoListVim` (iOS) | Vim mode: a port of the web editor's vim.js and its CodeMirror 6 adapter, checked against the web app's vim vectors; hosts implement `VimEditor` ([README](Packages/DailyDoListVim/README.md)). |
+| `Packages/DailyDoListDrawing` (model: iOS) | The native drawing engine: Excalidraw scenes in Obsidian's `.excalidraw.md` files (`DailyDoListDrawingModel`, Foundation only, checked against `@ddl/core`'s shared fixtures), a Rough.js port, the CoreGraphics renderer, Excalidraw's tools and shortcuts, and `DrawingCanvasView`, the canvas the editor embeds ([README](Packages/DailyDoListDrawing/README.md)). |
 | `Packages/DailyDoListAgent` | Agent state and UI: inbox, threads (the live chat: [The agent chat](#the-agent-chat)), the orchestrator's chat ([The orchestrator's chat](#the-orchestrators-chat)), routines ([Routines](#routines)), approval cards, artifacts, notifications, menu bar, Dock badge. |
 | `Packages/DailyDoListUI` | What the shell, the agent UI and the editor share: the app's one tooltip (`TooltipCenter`, `.tooltip(…)`), keycaps (`KeyShortcut`, `Keycaps`), `.pointingHandCursor()`, `IconButton`, and the chrome and accent button styles. `DailyDoListUITestSupport` finds tooltips in tests and draws them into snapshots. |
 | `Packages/DailyDoListDaemon` | `DaemonSupervisor`: finds Node and the daemon, attaches or launches, health-checks, restarts, stops. |
@@ -124,6 +125,34 @@ future iPhone app too.
   save theirs as a conflict copy. Lines deleted elsewhere stay deleted: a note with no unsaved
   typing never writes, and a merge never brings a deleted line back unless you typed it (see
   "Saving and merging" in the editor's README).
+
+## Drawings in notes
+
+Excalidraw drawings, in the Obsidian Excalidraw plugin's files (`Excalidraw/<Name>.excalidraw.md`),
+drawn and edited by the native engine (`DailyDoListDrawing`) and embedded with the plugin's syntax
+([spec](../../docs/specs/drawings.md)); the web app does the same with the real Excalidraw.
+
+- **In a note**, a line that is one `![[Plan.excalidraw|360|right-wrap]]` (also `left-wrap`,
+  `left`, `right`, `center`, `WxH`, `50%`; none is full width) shows the drawing, unless the
+  caret is on it (then its syntax shows, as in source mode). A float's text wraps around it. See
+  the [editor README](Packages/DailyDoListEditor/README.md#drawings).
+- **Select, move, resize**: click a drawing to select it; drag it to another line (the left or
+  right third of the column floats it there, the middle makes it full width), drag its corner to
+  resize it, press Delete to remove the embed (the file stays). Each is one undoable edit.
+- **Edit in place**: double-click, or Return while selected. The drawing's box becomes the canvas,
+  with its tool bar next to it (Excalidraw's tools and shortcuts), and grows while you draw.
+  Escape or a click outside ends editing. Vim and the note's shortcuts don't see its keys.
+- **Insert Drawing** (⇧⌘X; the palette, the Edit menu, the editor's context menu, vim's
+  `:obcommand editor:insert-drawing`) creates `Excalidraw/Drawing <date time>.excalidraw.md`
+  through the daemon, embeds it at the caret's line floating right, 360 wide, and starts editing.
+- **Saving** (`Stores/DrawingStore.swift`): edits save debounced through the daemon with the
+  version they were read at. When the file changed elsewhere (a 409, or a change announced while
+  edits are unsaved), the two scenes are merged element by element (newer versions win, both
+  sides' new elements stay) and the merge is saved on top of theirs. Changes from the web app,
+  Obsidian or sync update the drawing on screen, in place too. A file that can't be read is
+  never written over.
+- **Opening a `.excalidraw.md`** shows the drawing full size in the pane, edited in the canvas;
+  the button at its top right shows the Markdown source (and back).
 
 ## What the orchestrator is doing while you write
 
@@ -673,6 +702,15 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   Computer Use tab, the guide and the banner (`app-snapshots/settings-computer-use-*`,
   `computer-access-guide-*`, `computer-access-banner-*`). Nothing in the tests prompts, opens
   System Settings or relaunches.
+- **Drawings**: `DailyDoListDrawing` replays `@ddl/core`'s shared drawing fixtures (when they're
+  in the checkout), checks its Rough.js port against samples from Rough.js itself, drives its
+  editor and canvas with pointer sequences and real `NSEvent`s, renders snapshots of every element
+  type in both themes (`.build/drawing-snapshots/`), and holds 2,000-element drawings to 60 fps
+  budgets ([README](Packages/DailyDoListDrawing/README.md#testing)). `DailyDoListEditor` drives
+  embeds with real `NSEvent`s in an offscreen window (wrapping, select, move, resize, insert,
+  editing in place, vim), renders them light and dark (`editor-snapshots/drawings-*`) and times
+  typing in a note with six drawings; the app's `DrawingTests` cover saving, the 409 merge,
+  changes from elsewhere and Insert Drawing against the fake daemon.
 - **Computer use helper**: `DailyDoListComputer`'s tests run the helper against fakes for
   accessibility (a fake tree that records every read and action), apps, windows, input, capture,
   permissions, parent processes and time: the codec and every error code, strict params, the tree

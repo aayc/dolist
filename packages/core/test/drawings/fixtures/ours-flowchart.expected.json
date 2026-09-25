@@ -1,0 +1,107 @@
+{
+  "about": "Written by serializeDrawingFile: labeled shapes, bound arrows (one labeled), free text, a frame.",
+  "title": "ours-flowchart",
+  "parse": {
+    "readable": true,
+    "compressed": false,
+    "problems": [],
+    "frontmatter": {
+      "excalidraw-plugin": "parsed",
+      "tags": "[excalidraw]"
+    },
+    "sections": ["", "# Excalidraw Data", "## Text Elements", "## Drawing"],
+    "textElements": [
+      {
+        "id": "tBrowser",
+        "text": "Browser"
+      },
+      {
+        "id": "tApiNode",
+        "text": "API"
+      },
+      {
+        "id": "tDbStore",
+        "text": "Database"
+      },
+      {
+        "id": "tHttpsLb",
+        "text": "HTTPS"
+      },
+      {
+        "id": "tCaption",
+        "text": "Request path"
+      }
+    ],
+    "elements": [
+      {
+        "id": "client",
+        "type": "rectangle"
+      },
+      {
+        "id": "tBrowser",
+        "type": "text"
+      },
+      {
+        "id": "api",
+        "type": "rectangle"
+      },
+      {
+        "id": "tApiNode",
+        "type": "text"
+      },
+      {
+        "id": "db",
+        "type": "ellipse"
+      },
+      {
+        "id": "tDbStore",
+        "type": "text"
+      },
+      {
+        "id": "toApi",
+        "type": "arrow"
+      },
+      {
+        "id": "tHttpsLb",
+        "type": "text"
+      },
+      {
+        "id": "toDb",
+        "type": "arrow"
+      },
+      {
+        "id": "tCaption",
+        "type": "text"
+      },
+      {
+        "id": "backend",
+        "type": "frame"
+      }
+    ],
+    "texts": [
+      {
+        "id": "tBrowser",
+        "text": "Browser"
+      },
+      {
+        "id": "tApiNode",
+        "text": "API"
+      },
+      {
+        "id": "tDbStore",
+        "text": "Database"
+      },
+      {
+        "id": "tHttpsLb",
+        "text": "HTTPS"
+      },
+      {
+        "id": "tCaption",
+        "text": "Request path"
+      }
+    ],
+    "files": []
+  },
+  "description": "Drawing “ours-flowchart” (520×365 px, 11 elements)\nText: “Request path”\nShapes: rectangle “Browser”, rectangle “API”, ellipse “Database”\nArrows: “Browser” → “API” labeled “HTTPS”, “API” → “Database”\nFrames: frame “Backend” with rectangle “API”, ellipse “Database”, 1 arrow",
+  "roundTrip": "ours-flowchart.excalidraw.md"
+}

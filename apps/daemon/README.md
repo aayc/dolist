@@ -36,6 +36,7 @@ Precedence: environment variable → `$DDL_HOME/config.json` → default.
 | `DDL_WEB_DIST` | `apps/web/dist` | Built web UI to serve. |
 | `DDL_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. |
 | `DDL_COMPUTER_HELPER` | found automatically | The `ddl-computer` helper for app control (macOS), or `off`. Otherwise: `<entry script dir>/../bin/ddl-computer` (the app bundle's copy), then a dev build in `apps/macos/Packages/DailyDoListComputer/.build/{release,debug}/`. Without one, computer use stays screen-level. |
+| `DDL_DRAWING_RENDERER` | found automatically | The page agents render drawings with (for `read_drawing`'s images), or `off`. Otherwise: `<entry script dir>/drawing-renderer`, then `apps/daemon/dist/drawing-renderer`; `build` and `dev` build it. Without it, or without a browser, agents get drawings as text descriptions only (the startup summary's `drawingRenderer` says which). |
 | `OPENROUTER_API_KEY` | — | Required for `live` agents. Without it the agent reports a problem; notes keep working. |
 | `DDL_SYNC_URL`, `DDL_SYNC_VAULT` | — | Sync with the sync service (both, or neither; they override `sync` in `config.json`). |
 | `DDL_SYNC_TOKEN` | — | The sync service's vault token (else `$DDL_HOME/sync-token`). Never logged. |
@@ -63,6 +64,7 @@ of this repository. Values are never logged.
 | `devices.json` | Devices paired with this daemon: name, kind, pairing time, last use and the SHA-256 of each token (never the token). Mode `0600`, created on the first pairing. An unreadable file is moved aside to `devices.json.invalid` and every device pairs again. |
 | `machine-token` | This device's credential for the always-on machine, `{ "url", "deviceId", "token" }`, mode `0600`, written by `POST /api/machine/pair`. Used only while `url` is the vault's always-on machine. |
 | `workspaces/`, browser profile | Agent scratch space, managed by the execution provider. |
+| `cache/drawings/` | Drawings rendered for agents (PNG by content hash, at most 64 MB, least recently used removed first). Safe to delete. |
 
 `config.json` (all keys optional; relative paths resolve against `$DDL_HOME`, `~` is expanded):
 
@@ -473,7 +475,8 @@ records again.
 | `src/readiness.ts` | This daemon's readiness to run the agent. |
 | `src/sidecar-view.ts` | The agent's work read-only from the synced sidecar, for a device that doesn't run it. |
 | `src/relay/*` | The agent relay: allowlist, calls to the machine, its WebSocket link, the relaying runtime. |
-| `build.mjs` | esbuild bundle (workspace packages inlined, third-party dependencies external). |
+| `src/computer-helper.ts`, `drawing-renderer.ts` | Finding the `ddl-computer` helper and the drawing render page. |
+| `build.mjs` | esbuild bundle (workspace packages inlined, third-party dependencies external), then the drawing render page in `dist/drawing-renderer` (`packages/agent/scripts/build-drawing-renderer.mjs`: Excalidraw's export bundled for the browser at build time, so the daemon has no runtime dependency on it). |
 
 Tests are colocated (`*.test.ts`). They use in-memory vaults and temp directories and never touch the
 real home directory or the network.

@@ -65,7 +65,7 @@ import { MockComputer, type MockComputerMode } from "./mock-computer";
 import { MockPairing } from "./mock-pairing";
 import { MockRemote, type MockRemoteScenario } from "./mock-remote";
 import { MockRoutines } from "./mock-routines";
-import { MockVault } from "./mock-vault";
+import { MockVault, type MockVaultSnapshot } from "./mock-vault";
 import { renderDailyContent, seedVault } from "./seed";
 
 export interface MockDaemonClientOptions {
@@ -79,6 +79,8 @@ export interface MockDaemonClientOptions {
   installHooks?: boolean;
   /** The simulated Mac's computer access. Default `ready`. */
   computer?: MockComputerMode;
+  /** Keep the vault in sessionStorage, so a reload of the tab finds what it had (tests). */
+  persistVault?: boolean;
   /** A starting point for the device side (placement, sync, the machine); null keeps the stored one. */
   remote?: MockRemoteScenario | null;
   /**
@@ -112,6 +114,8 @@ declare global {
 const MOCK_DEFAULTS: AppSettings = mergeSettings(DEFAULT_SETTINGS, {
   agent: { settleMs: 1200, model: "mock/scripted-agent", judgeModel: "mock/scripted-judge" },
 });
+
+const VAULT_SNAPSHOT_KEY = "ddl-mock-vault";
 
 function clone<T>(value: T): T {
   return structuredClone(value);
@@ -249,6 +253,7 @@ export class MockDaemonClient implements DaemonClient {
       agentEnabled: () => this.agent.status().enabled,
     });
     seedVault(this.vault, this.agent, this.settings);
+    if (options.persistVault) this.persistVault();
     if ((options.installHooks ?? true) && typeof window !== "undefined") {
       window.__ddlMock = this.testHooks();
     }
@@ -256,6 +261,29 @@ export class MockDaemonClient implements DaemonClient {
 
   get connectionState(): ConnectionState {
     return this.state;
+  }
+
+  /** Restores the vault this tab saved before a reload, then saves it after every change. */
+  private persistVault(): void {
+    try {
+      const saved = sessionStorage.getItem(VAULT_SNAPSHOT_KEY);
+      if (saved) this.vault.restore(JSON.parse(saved) as MockVaultSnapshot);
+    } catch {
+      // A broken snapshot: start from the seed.
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const save = () => {
+      try {
+        sessionStorage.setItem(VAULT_SNAPSHOT_KEY, JSON.stringify(this.vault.snapshot()));
+      } catch {
+        // Persistence is best-effort.
+      }
+    };
+    this.vault.onChange = () => {
+      clearTimeout(timer);
+      timer = setTimeout(save, 50);
+    };
+    addEventListener("pagehide", save);
   }
 
   // ── Event stream ───────────────────────────────────────────────────────

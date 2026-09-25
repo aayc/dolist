@@ -27,6 +27,10 @@ final class MarkdownHighlighter {
   private(set) var lastRestyledLineCount = 0
   /// Characters (whole lines) whose attributes the most recent restyle rewrote.
   private(set) var lastRestyledRange = NSRange(location: 0, length: 0)
+  /// Lines that are one drawing embed, ascending. Kept up to date by the same incremental passes.
+  private(set) var embedLines: [Int] = []
+  /// Whether the most recent edit or restyle added, removed or moved an embed line.
+  private(set) var embedLinesChanged = false
 
   init(storage: NSTextStorage, theme: EditorTheme) {
     self.storage = storage
@@ -42,6 +46,8 @@ final class MarkdownHighlighter {
     lineIndex.rebuild(text)
     lines = Array(repeating: LineState(entry: .normal, kind: .blank), count: lineIndex.count)
     frontmatterEnd = computeFrontmatterEnd(text)
+    embedLines.removeAll()
+    embedLinesChanged = true
     storage.beginEditing()
     restyle(from: 0, through: lines.count - 1, text: text)
     storage.endEditing()
@@ -60,6 +66,19 @@ final class MarkdownHighlighter {
     lines.replaceSubrange(
       (change.firstLine + 1)..<(change.oldLastLine + 1),
       with: repeatElement(LineState(entry: .normal, kind: .blank), count: inserted))
+    embedLinesChanged = false
+    if !embedLines.isEmpty, let last = embedLines.last, last >= change.firstLine {
+      let shift = change.newLastLine - change.oldLastLine
+      embedLines = embedLines.compactMap { line in
+        if line < change.firstLine { return line }
+        if line <= change.oldLastLine {
+          embedLinesChanged = true
+          return nil
+        }
+        if shift != 0 { embedLinesChanged = true }
+        return line + shift
+      }
+    }
     var from = change.firstLine
     var through = change.newLastLine
     if change.firstLine < MarkdownTokenizer.frontmatterMaxLines {
@@ -100,6 +119,7 @@ final class MarkdownHighlighter {
         units, state: state, frontmatter: frontmatterRole(ofLine: line))
       apply(tokens, units: units, content: content, hasNewline: line + 1 < lines.count)
       lines[line] = LineState(entry: state, kind: tokens.kind)
+      setEmbed(line, tokens.embed != nil)
       count += 1
       line += 1
       if line < lines.count {
@@ -138,6 +158,33 @@ final class MarkdownHighlighter {
         .ddlLink, value: LinkAttribute(link.target), range: link.range.shifted(by: content.location)
       )
     }
+  }
+
+  private func setEmbed(_ line: Int, _ isEmbed: Bool) {
+    var low = 0
+    var high = embedLines.count
+    while low < high {
+      let mid = (low + high) / 2
+      if embedLines[mid] < line { low = mid + 1 } else { high = mid }
+    }
+    let present = low < embedLines.count && embedLines[low] == line
+    if isEmbed, !present {
+      embedLines.insert(line, at: low)
+      embedLinesChanged = true
+    } else if !isEmbed, present {
+      embedLines.remove(at: low)
+      embedLinesChanged = true
+    }
+  }
+
+  func isEmbedLine(_ line: Int) -> Bool {
+    var low = 0
+    var high = embedLines.count
+    while low < high {
+      let mid = (low + high) / 2
+      if embedLines[mid] < line { low = mid + 1 } else { high = mid }
+    }
+    return low < embedLines.count && embedLines[low] == line
   }
 
   private func frontmatterRole(ofLine line: Int) -> FrontmatterRole? {

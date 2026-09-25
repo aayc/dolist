@@ -64,6 +64,26 @@ describe("web app", () => {
     expect(icon.headers.get("cache-control")).toBe("no-cache");
   });
 
+  it("serves the drawing fonts from the build, which the CSP allows without any CDN", async () => {
+    const fonts = join(dist.path, "assets", "excalidraw-0.18.1", "fonts", "Excalifont");
+    mkdirSync(fonts, { recursive: true });
+    writeFileSync(join(fonts, "Excalifont-Regular-a88b72a2.woff2"), "wOF2");
+    const { request } = await createTestApp({ webDist: dist.path });
+    const font = await request(
+      "/assets/excalidraw-0.18.1/fonts/Excalifont/Excalifont-Regular-a88b72a2.woff2",
+      { token: null },
+    );
+    expect(font.status).toBe(200);
+    expect(font.headers.get("content-type")).toBe("font/woff2");
+    expect(font.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+    const csp = (await request("/", { token: null })).headers.get("content-security-policy") ?? "";
+    expect(csp).toContain("font-src 'self' data:");
+    expect(csp).toContain("img-src 'self' data: blob:");
+    expect(csp).toContain("worker-src 'self' blob:");
+    expect(csp).not.toMatch(/https?:/);
+    expect(csp).not.toContain("wasm-unsafe-eval");
+  });
+
   it("falls back to index.html for app routes but 404s missing assets", async () => {
     const { request, token } = await createTestApp({ webDist: dist.path });
     const route = await request("/notes/Daily/2026-09-23.md", { token: null });

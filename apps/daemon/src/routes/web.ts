@@ -155,8 +155,10 @@ export function appContentSecurityPolicy(scriptHashes: string[], policy: Securit
     ["script-src 'self'", ...scriptHashes].join(" "),
     // CodeMirror injects <style> elements at runtime.
     "style-src 'self' 'unsafe-inline'",
-    // data: for live surface frames, blob: for artifacts fetched with the bearer token.
+    // data: for live surface frames and images inside drawings, blob: for artifacts fetched with
+    // the bearer token.
     "img-src 'self' data: blob:",
+    // The drawing fonts are served from the build (assets/excalidraw-<version>/), never a CDN.
     "font-src 'self' data:",
     ["connect-src 'self'", ...sockets].join(" "),
     "frame-src 'self' blob:",

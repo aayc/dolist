@@ -38,6 +38,8 @@ export interface ToolRunnerOptions {
   beforeToolCall: (call: ToolCallRequest) => Promise<ToolCallDecision>;
   emit: (event: HarnessEvent) => void;
   detachAfterMs: number;
+  /** Whether the CLI's model sees images in tool results. */
+  images?: () => boolean;
   logger: Logger;
 }
 
@@ -257,10 +259,12 @@ export class ToolRunner implements McpSessionHandler {
       result = errorResult("The tool call was cancelled");
     } else {
       try {
+        const images = this.options.images?.();
         result = await spec.execute(input, {
           toolCallId,
           signal,
           onUpdate: (partial) => emit({ type: "tool_update", toolCallId, partial }),
+          ...(images !== undefined ? { images } : {}),
         });
       } catch (error) {
         result = errorResult(error instanceof Error ? error.message : String(error));

@@ -13,6 +13,9 @@ final class LivePreviewState {
   private(set) var revealedLines: NSRange?
   /// Selection used for replacement markers (empty while unfocused).
   private(set) var selection: [NSRange] = []
+  /// Whether the drawing embed on the line starting at an offset is drawn (the host shows
+  /// drawings); an embed that isn't stays text.
+  var drawsEmbed: (Int) -> Bool = { _ in false }
 
   init(isEnabled: Bool) {
     self.isEnabled = isEnabled
@@ -21,6 +24,7 @@ final class LivePreviewState {
   /// Whether a marker of `kind` spanning `range` is currently hidden (or replaced).
   func isHidden(_ kind: MarkerKind, range: NSRange) -> Bool {
     guard isEnabled else { return false }
+    if kind == .embed, !drawsEmbed(range.location) { return false }
     if kind.revealsOnTouch {
       return !selection.contains { $0.touches(range) }
     }

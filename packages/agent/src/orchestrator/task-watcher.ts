@@ -12,6 +12,8 @@ import {
   isAgentLine,
   isBlankTaskText,
   isClosedStatus,
+  isDrawingMarkdown,
+  isDrawingPath,
   isTaskLine,
   isWithinWindow,
   type LocalDate,
@@ -81,9 +83,18 @@ export interface TaskLookup {
   getContent(notePath: string): string | null;
 }
 
+/**
+ * The note's tasks. A drawing (the Excalidraw plugin can turn any note into one) has none: its
+ * text elements are lines of the file, but they're labels, not a task list.
+ */
+function noteTasks(content: string): ParsedTask[] {
+  return isDrawingMarkdown(content) ? [] : parseTasks(content);
+}
+
 /** The user's non-task lines (no blank, task or agent-written lines), trimmed, in note order. */
 function userProse(content: string): Array<{ line: number; text: string }> {
   const out: Array<{ line: number; text: string }> = [];
+  if (isDrawingMarkdown(content)) return out;
   const lines = content.split("\n");
   for (let line = 0; line < lines.length; line++) {
     const raw = lines[line]!.replace(/\r$/, "");
@@ -448,7 +459,7 @@ export class TaskWatcher implements TaskLookup {
     const created = state.content === null && cause === "event";
     state.content = file.content;
     if (file.version !== state.contentVersion) {
-      const parsed = parseTasks(file.content);
+      const parsed = noteTasks(file.content);
       if (!state.tracked) {
         this.firstSight(state, parsed, file.version, at, cause);
         this.trackProse(state, at, created);
@@ -780,6 +791,7 @@ export class TaskWatcher implements TaskLookup {
   // ── State ─────────────────────────────────────────────────────────────────
 
   private isInWindow(path: string): boolean {
+    if (isDrawingPath(path)) return false;
     const date = parseDailyNotePath(path, this.settings.dailyNotes);
     if (!date) return false;
     const { pastDays, futureDays } = this.settings.agent.watch;
@@ -847,7 +859,7 @@ export class TaskWatcher implements TaskLookup {
   private async baselineExisting(state: NoteState): Promise<void> {
     const file = await this.storage.read(state.notePath);
     if (!file) return;
-    const { tasks } = trackTasks([], parseTasks(file.content), this.trackOptions(this.now()));
+    const { tasks } = trackTasks([], noteTasks(file.content), this.trackOptions(this.now()));
     state.tasks = tasks;
     state.contentVersion = file.version;
     state.settled = new Map(

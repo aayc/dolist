@@ -22,6 +22,13 @@ protocol EditorCoordinatorHost: AnyObject {
   func editorDidRequestSave(_ path: String)
   /// An app command from vim (`:q`, `:e note`, `gt`, `:obcommand id`).
   func editorPerform(_ request: EditorVimRequest) -> EditorVimRequestResult
+  /// The drawing an embed names (nil: drawings aren't shown).
+  func editorDrawing(for target: String) -> EditorDrawingState?
+  /// A drawing edited in place changed (save it, debounced).
+  func editorDidEditDrawing(_ drawing: EditorDrawing)
+  func editorDidEndEditingDrawing(_ path: String)
+  /// The editor's context menu is about to open.
+  func editorWillShowContextMenu(_ menu: NSMenu)
 }
 
 /// Owns the window's single ``MarkdownEditorController``: switches documents with per-note
@@ -248,5 +255,23 @@ extension EditorCoordinator: MarkdownEditorDelegate {
     -> EditorVimRequestResult
   {
     host?.editorPerform(request) ?? .unavailable
+  }
+
+  func editor(_ editor: MarkdownEditorController, drawingFor target: String)
+    -> EditorDrawingState?
+  {
+    host?.editorDrawing(for: target)
+  }
+
+  func editor(_ editor: MarkdownEditorController, didEditDrawing drawing: EditorDrawing) {
+    host?.editorDidEditDrawing(drawing)
+  }
+
+  func editor(_ editor: MarkdownEditorController, didEndEditingDrawing path: String) {
+    host?.editorDidEndEditingDrawing(path)
+  }
+
+  func editor(_ editor: MarkdownEditorController, willShowContextMenu menu: NSMenu) {
+    host?.editorWillShowContextMenu(menu)
   }
 }

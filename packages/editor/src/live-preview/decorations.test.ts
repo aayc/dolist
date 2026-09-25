@@ -1,5 +1,8 @@
 import type { Decoration } from "@codemirror/view";
 import { describe, expect, it } from "vitest";
+import { selectEmbedEffect } from "../embeds/layer";
+import type { EmbedRenderer } from "../embeds/types";
+import { EmbedWidget } from "../embeds/widget";
 import type { HeadlessStateOptions } from "../extensions";
 import { parsedState } from "../test-helpers";
 import { buildLivePreviewDecorations, frontmatterEnd, type VisibleRange } from "./decorations";
@@ -274,5 +277,66 @@ describe("live preview: viewport", () => {
       "<https://j.example>",
     ].join("\n");
     for (const text of preview(doc).hidden) expect(text).not.toContain("\n");
+  });
+});
+
+describe("live preview: embeds", () => {
+  const drawings: EmbedRenderer = {
+    kind: "drawing",
+    matches: (target) => target.endsWith(".excalidraw"),
+    mount: () => ({ destroy() {} }),
+  };
+  const callbacks = { embedRenderers: [drawings] };
+  const doc = "Intro\n![[Plan.excalidraw|360|right-wrap]]\nText next to it";
+
+  function widgetOf(s: Summary): EmbedWidget | null {
+    const found = s.decorations.find((d) => d.deco.spec.widget instanceof EmbedWidget);
+    return (found?.deco.spec.widget as EmbedWidget | undefined) ?? null;
+  }
+
+  it("draws an embed a renderer matches as a box, and marks its line with the placement", () => {
+    const s = preview(doc, { callbacks, cursor: 0 });
+    expect(s.widgets).toEqual([["![[Plan.excalidraw|360|right-wrap]]", "EmbedWidget"]]);
+    expect(s.lines).toContainEqual([2, "cm-ddl-embed-line cm-ddl-embed-line-right-wrap"]);
+    const widget = widgetOf(s)!;
+    expect(widget.renderer).toBe(drawings);
+    expect(widget.embed.spec).toMatchObject({ width: 360, placement: "right-wrap" });
+    expect(widget.selected).toBe(false);
+  });
+
+  it("shows the whole syntax while the caret is on its line, and draws it without focus", () => {
+    const onLine = preview(doc, { callbacks, cursor: 10 });
+    expect(onLine.widgets).toEqual([]);
+    expect(onLine.hidden).toEqual([]);
+    expect(preview(doc, { callbacks, cursor: 10, focused: false }).widgets).toHaveLength(1);
+  });
+
+  it("leaves embeds no renderer matches, and embeds among text, to the wikilink rules", () => {
+    expect(preview("![[photo.png|300]]\nx", { callbacks, cursor: 20 }).widgets).toEqual([]);
+    const inline = preview("See ![[Plan.excalidraw]] here\nx", { callbacks, cursor: 30 });
+    expect(inline.widgets).toEqual([]);
+    expect(inline.marks).toContainEqual(["cm-ddl-wikilink", "Plan.excalidraw"]);
+    expect(preview(doc, { cursor: 0 }).widgets).toEqual([]);
+  });
+
+  it("never draws an embed in code", () => {
+    const code = "```\n![[Plan.excalidraw]]\n```\nx";
+    expect(preview(code, { callbacks, cursor: code.length }).widgets).toEqual([]);
+  });
+
+  it("marks the selected embed, which moving the caret deselects", () => {
+    const state = parsedState(doc, { callbacks, selection: { anchor: 0 } });
+    const selected = state.update({ effects: selectEmbedEffect.of(6) }).state;
+    const ranges = [{ from: 0, to: doc.length }];
+    const find = (set: ReturnType<typeof buildLivePreviewDecorations>) => {
+      let widget: EmbedWidget | null = null;
+      set.between(0, doc.length, (_from, _to, deco) => {
+        if (deco.spec.widget instanceof EmbedWidget) widget = deco.spec.widget;
+      });
+      return widget as EmbedWidget | null;
+    };
+    expect(find(buildLivePreviewDecorations(selected, ranges, true))?.selected).toBe(true);
+    const moved = selected.update({ selection: { anchor: doc.length } }).state;
+    expect(find(buildLivePreviewDecorations(moved, ranges, true))?.selected).toBe(false);
   });
 });

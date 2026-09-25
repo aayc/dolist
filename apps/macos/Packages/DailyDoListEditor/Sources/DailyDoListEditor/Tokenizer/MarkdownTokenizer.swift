@@ -36,7 +36,14 @@ enum MarkdownTokenizer {
       return (LineTokens(kind: .codeFenceOpen), .fence(marker: fence.marker, length: fence.length))
     }
     if MarkdownBlockRules.isBlank(s) { return (LineTokens(kind: .blank), .normal) }
-    guard let agent = AgentMarker.scan(s) else { return (tokenizeContent(s), .normal) }
+    guard let agent = AgentMarker.scan(s) else {
+      var tokens = tokenizeContent(s)
+      if let embed = drawingEmbed(s, tokens) {
+        tokens.embed = embed
+        tokens.markers = [SyntaxMarker(range: NSRange(0, s.count), kind: .embed)]
+      }
+      return (tokens, .normal)
+    }
     // The text before the marker is styled like any line; the whole text is the agent's.
     let body = agent.range.location
     var tokens = tokenizeContent(Array(s[..<body]))
@@ -105,6 +112,23 @@ enum MarkdownTokenizer {
     }
     appendInline(s, bodyStart, s.count, to: &tokens)
     return tokens
+  }
+
+  /// The `![[…]]` of a line that is one embed of a drawing (`Plan.excalidraw`,
+  /// `Plan.excalidraw.md`) and nothing else but spaces, like the web editor's `embedOfLine`.
+  static func drawingEmbed(_ s: [UInt16], _ tokens: LineTokens) -> NSRange? {
+    guard tokens.kind == .paragraph, tokens.quoteDepth == 0, tokens.links.count == 1,
+      let link = tokens.links.first, case .wiki(let target, _, _, true) = link.target,
+      isDrawingTarget(target)
+    else { return nil }
+    for index in 0..<link.range.location where !CharClass.isSpaceOrTab(s[index]) { return nil }
+    for index in link.range.end..<s.count where !CharClass.isSpaceOrTab(s[index]) { return nil }
+    return link.range
+  }
+
+  static func isDrawingTarget(_ target: String) -> Bool {
+    let lower = target.trimmingCharacters(in: .whitespaces).lowercased()
+    return lower.hasSuffix(".excalidraw") || lower.hasSuffix(".excalidraw.md")
   }
 
   /// ATX heading at `from`: up to three spaces, 1–6 `#`, then whitespace or the end of the line;

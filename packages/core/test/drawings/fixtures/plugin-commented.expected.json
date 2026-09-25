@@ -1,0 +1,51 @@
+{
+  "about": "Text elements commented out with %% (and no %% before Drawing), raw text mode, the plugin's dummy entry, a multi-line text.",
+  "title": "plugin-commented",
+  "parse": {
+    "readable": true,
+    "compressed": false,
+    "problems": [],
+    "frontmatter": {
+      "excalidraw-plugin": "raw",
+      "tags": "[excalidraw]"
+    },
+    "sections": ["", "# Excalidraw Data", "## Text Elements", "## Drawing"],
+    "textElements": [
+      {
+        "id": "Wt7bQ2nK",
+        "text": "Water the beds\nevery morning"
+      },
+      {
+        "id": "Cp9xL4sM",
+        "text": "Compost"
+      }
+    ],
+    "elements": [
+      {
+        "id": "Bx4nT8qW",
+        "type": "rectangle"
+      },
+      {
+        "id": "Wt7bQ2nK",
+        "type": "text"
+      },
+      {
+        "id": "Cp9xL4sM",
+        "type": "text"
+      }
+    ],
+    "texts": [
+      {
+        "id": "Wt7bQ2nK",
+        "text": "Water the beds\nevery morning"
+      },
+      {
+        "id": "Cp9xL4sM",
+        "text": "Compost"
+      }
+    ],
+    "files": []
+  },
+  "description": "Drawing “plugin-commented” (260×160 px, 3 elements)\nText: “Water the beds every morning”, “Compost”\nShapes: 1 unlabeled rectangle",
+  "roundTrip": "plugin-commented.roundtrip.excalidraw.md"
+}

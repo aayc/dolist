@@ -1,6 +1,7 @@
 import AppKit
 import DailyDoListAgent
 import DailyDoListClient
+import DailyDoListDrawing
 import DailyDoListModels
 import DailyDoListUI
 import DailyDoListUITestSupport
@@ -543,6 +544,58 @@ struct SnapshotTests {
           ).background(Theme.background),
           size: CGSize(width: 760, height: 90), dark: dark, name: name)
       }
+    }
+    await model.teardown()
+  }
+
+  /// A note with a floated drawing the text wraps around, and the drawing opened on its own.
+  @Test func drawings() async throws {
+    var box = DrawingFiles.element("box", x: 0)
+    box.width = 180
+    box.height = 110
+    box.backgroundColor = "#b2f2bb"
+    box.fillStyle = .solid
+    var oval = ExcalidrawElement(id: "oval", type: .ellipse)
+    oval.x = 240
+    oval.y = 0
+    oval.width = 160
+    oval.height = 110
+    oval.seed = 3
+    oval.strokeColor = "#1971c2"
+    let plan = ExcalidrawMarkdown.newFile(for: ExcalidrawScene(elements: [box, oval]))
+    let note = """
+      # Kitchen remodel
+      ![[Plan.excalidraw|300|right-wrap]]
+      The plan floats on the right and this paragraph wraps around it, line after line, the way \
+      Obsidian's live preview does it. Typing here never runs into the drawing.
+
+      - [ ] Measure the counter
+      - [ ] Pick tiles
+      """
+    let client = FakeDaemonClient(notes: [
+      "Kitchen.md": note, "Excalidraw/Plan.excalidraw.md": plan, "Templates/Daily.md": "- [ ] ",
+    ])
+    let scheduler = ManualScheduler()
+    let model = AppModel(environment: makeEnvironment(client: client, scheduler: scheduler))
+    await model.boot()
+    let workspace = try #require(model.workspace)
+    await workspace.openNote("Kitchen.md")
+    _ = workspace.drawingState(forDocument: "Excalidraw/Plan.excalidraw.md", revision: 0)
+    try await eventually { workspace.drawings.has("Excalidraw/Plan.excalidraw.md") }
+    scheduler.advance(by: 0)
+    let controller = workspace.editor.controller
+    controller.moveCaretToEnd()
+    for dark in [false, true] {
+      model.ui.inspectorPresented = false
+      try await render(
+        MainWindowView(model: model), size: CGSize(width: 1200, height: 760), dark: dark,
+        name: "main-window-drawing")
+    }
+    await workspace.openNote("Excalidraw/Plan.excalidraw.md")
+    for dark in [false, true] {
+      try await render(
+        MainWindowView(model: model), size: CGSize(width: 1200, height: 760), dark: dark,
+        name: "main-window-drawing-document")
     }
     await model.teardown()
   }

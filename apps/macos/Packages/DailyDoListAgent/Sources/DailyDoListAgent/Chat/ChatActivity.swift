@@ -116,6 +116,9 @@ struct ChatActivity: Hashable, Sendable {
         ?? "Reading a page…"
     case "read_note", "search_notes":
       return "Reading your notes…"
+    case "read_drawing":
+      let title = drawingTitle(call.input["path"]?.stringValue)
+      return title.isEmpty ? "Looking at a drawing…" : "Looking at “\(clip(title))”…"
     case "edit_note":
       return "Editing your note…"
     case "bash":
@@ -131,6 +134,21 @@ struct ChatActivity: Hashable, Sendable {
       let base = label.flatMap { $0.isEmpty ? nil : $0 } ?? humanize(call.toolName)
       return base.hasSuffix("…") ? base : "\(base)…"
     }
+  }
+
+  /// A drawing's name from its path or embed target: `![[Excalidraw/Flow.excalidraw|360]]` → "Flow".
+  static func drawingTitle(_ path: String?) -> String {
+    var target = path ?? ""
+    if target.hasPrefix("!") { target.removeFirst() }
+    if target.hasPrefix("[[") { target.removeFirst(2) }
+    if target.hasSuffix("]]") { target.removeLast(2) }
+    let name =
+      target.split(whereSeparator: { $0 == "|" || $0 == "#" }).first.map(String.init) ?? ""
+    var title = name.split(whereSeparator: { $0 == "/" || $0 == "\\" }).last.map(String.init) ?? ""
+    for suffix in [".md", ".excalidraw"] where title.lowercased().hasSuffix(suffix) {
+      title.removeLast(suffix.count)
+    }
+    return title.split(whereSeparator: \.isWhitespace).joined(separator: " ")
   }
 
   /// At most `clipLength` characters, the last one an ellipsis when cut.

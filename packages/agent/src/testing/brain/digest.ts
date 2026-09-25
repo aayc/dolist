@@ -35,6 +35,17 @@ export interface ParsedViewLine {
   agentSummary?: string;
   /** The agent wrote it. */
   agent?: boolean;
+  /** Drawings the line embeds, as the digest describes them under it. */
+  drawings?: ParsedDrawing[];
+}
+
+/** A `⟪drawing⟫` block: the drawing's path (or the embed, when no file matches) and its text. */
+export interface ParsedDrawing {
+  path: string;
+  /** The block's first line after the path: placement, then the description header or a note. */
+  about: string;
+  /** The description, one line per section ("Shapes: …", "Arrows: …"). */
+  description: string[];
 }
 
 export interface ParsedNote {
@@ -233,6 +244,7 @@ export function parseDigest(text: string): ParsedDigest {
       if (noteBlock === "view") {
         const viewLine = parseViewLine(line);
         if (viewLine) note.view.push(viewLine);
+        else addDrawingLine(note.view.at(-1), line);
         continue;
       }
       if (line.startsWith("    - ") && lastChanged) {
@@ -388,6 +400,27 @@ function parseViewLine(line: string): ParsedViewLine | null {
   }
   if (tail === "yours") out.agent = true;
   return out;
+}
+
+const DRAWING_MARKER = "⟪drawing⟫ ";
+
+/** Unnumbered lines under a view line: a `⟪drawing⟫` head, then its indented description. */
+function addDrawingLine(owner: ParsedViewLine | undefined, line: string): void {
+  if (!owner) return;
+  const trimmed = line.trimStart();
+  if (trimmed.startsWith(DRAWING_MARKER)) {
+    const rest = trimmed.slice(DRAWING_MARKER.length);
+    const split = rest.indexOf(" · ");
+    const drawing: ParsedDrawing = {
+      path: split < 0 ? rest : rest.slice(0, split),
+      about: split < 0 ? "" : rest.slice(split + 3),
+      description: [],
+    };
+    owner.drawings = [...(owner.drawings ?? []), drawing];
+    return;
+  }
+  const last = owner.drawings?.at(-1);
+  if (last && /^\s{2,}\S/.test(line)) last.description.push(trimmed);
 }
 
 function parseChangedLine(line: string): ParsedChangedTask | null {

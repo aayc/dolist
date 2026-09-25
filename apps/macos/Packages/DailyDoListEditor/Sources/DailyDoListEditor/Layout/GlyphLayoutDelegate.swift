@@ -16,6 +16,9 @@ final class GlyphLayoutDelegate: NSObject {
   private weak var storage: NSTextStorage?
   private let livePreview: LivePreviewState
   var theme: EditorTheme
+  /// The line fragment of a drawn embed's line, given the character at its start and the
+  /// proposed fragment (the controller sizes it for the drawing).
+  var embedFragment: ((Int, NSRect) -> NSRect?)?
 
   init(storage: NSTextStorage, livePreview: LivePreviewState, theme: EditorTheme) {
     self.storage = storage
@@ -113,6 +116,16 @@ extension GlyphLayoutDelegate: @preconcurrency NSLayoutManagerDelegate {
   ) -> Bool {
     guard let storage, glyphRange.length > 0 else { return false }
     let index = layoutManager.characterIndexForGlyph(at: glyphRange.location)
+    if let marker = hiddenMarker(at: index), marker.kind == .embed,
+      let rect = embedFragment?(index, lineFragmentRect.pointee)
+    {
+      lineFragmentRect.pointee = rect
+      lineFragmentUsedRect.pointee = NSRect(
+        x: rect.minX, y: rect.minY, width: min(rect.width, lineFragmentUsedRect.pointee.width),
+        height: rect.height)
+      baselineOffset.pointee = min(baselineOffset.pointee, rect.height)
+      return true
+    }
     guard index < storage.length,
       let baseline = storage.attribute(.ddlBaseline, at: index, effectiveRange: nil) as? NSNumber
     else { return false }

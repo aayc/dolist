@@ -120,10 +120,26 @@ struct CommandCatalogTests {
       .agentInbox: "⇧⌘A",
       .search: "⇧⌘F", .commandPalette: "⌘P", .back: "⌘[", .forward: "⌘]", .increaseFontSize: "⌘+",
       .decreaseFontSize: "⌘-", .resetFontSize: "⌘0", .tab1: "⌘1", .tab9: "⌘9",
+      .insertDrawing: "⇧⌘X",
     ]
     for (id, display) in expected {
       #expect(catalog.command(id)?.shortcut?.display == display, "\(id)")
     }
+  }
+
+  @Test func insertDrawingIsInThePaletteWhenANoteIsOpen() async throws {
+    let client = FakeDaemonClient(notes: ["Ideas.md": "ideas"])
+    let model = AppModel(environment: makeEnvironment(client: client))
+    let catalog = CommandCatalog(model: model)
+    #expect(catalog.command(.insertDrawing)?.isEnabled() == false, "nothing open before boot")
+    await model.boot()
+    let workspace = try #require(model.workspace)
+    await workspace.openNote("Ideas.md")
+    let command = try #require(catalog.paletteCommands.first { $0.id == .insertDrawing })
+    #expect(command.paletteTitle == "Insert drawing")
+    #expect(command.title == "Insert Drawing")
+    #expect(CommandID(vimCommandID: "editor:insert-drawing") == .insertDrawing)
+    await model.teardown()
   }
 
   @Test func availabilityFollowsTheWorkspaceState() async throws {

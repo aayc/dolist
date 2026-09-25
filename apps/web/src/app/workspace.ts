@@ -4,13 +4,16 @@ import {
   basename,
   type DailyNoteResponse,
   dirname,
+  emptyDrawingScene,
   ensureMarkdownExtension,
   isDailyNotePath,
+  isDrawingPath,
   isHiddenPath,
   type LocalDate,
   normalizePath,
   resolveWikiLink,
   type ServerEventOf,
+  serializeDrawingFile,
   stem,
   today,
   toISODate,
@@ -19,6 +22,8 @@ import {
 import type { DaemonClient } from "../api/client";
 import { ConflictError, errorMessage } from "../api/errors";
 import { adjacentDailyTarget, dailyPathFor } from "../features/daily/daily-nav";
+import type { DrawingEditing } from "../features/drawings/drawing-editing";
+import { DrawingFeature } from "../features/drawings/drawing-feature";
 import { ActivitySync } from "../features/editor/activity-sync";
 import { AnnotationSync } from "../features/editor/annotation-sync";
 import { EditorController } from "../features/editor/editor-controller";
@@ -41,7 +46,7 @@ import { getSettings } from "../state/settings-store";
 import { placeInTabs, removeFromTabs, renameInTabs, useTabsStore } from "../state/tabs-store";
 import { toast } from "../state/toast-store";
 import { ui } from "../state/ui-store";
-import { vaultActions } from "../state/vault-store";
+import { useVaultStore, vaultActions } from "../state/vault-store";
 import { setVimrcProblems, setVimStatus } from "../state/vim-store";
 import type { AgentActions } from "./agent-actions";
 
@@ -81,6 +86,10 @@ export class Workspace {
   readonly activity: ActivitySync;
   /** Hover previews of links, in the editor and in threads. */
   readonly previews: LinkPreviews;
+  /** Drawings: embeds in notes, in-place editing, opened drawing files. */
+  readonly drawingFeature: DrawingFeature;
+  /** The drawing file shown in the center pane, if one is. */
+  private openDrawing: DrawingEditing | null = null;
   private readonly agent: AgentActions;
   private readonly presence: PresenceReporter;
   private readonly words: WordCounter;
@@ -97,6 +106,15 @@ export class Workspace {
   constructor(client: DaemonClient, agent: AgentActions) {
     this.client = client;
     this.agent = agent;
+    this.drawingFeature = new DrawingFeature({
+      client,
+      files: () => vaultActions.files(),
+      onFilesChanged: (listener) =>
+        useVaultStore.subscribe((state, previous) => {
+          if (state.files !== previous.files) listener();
+        }),
+      onError: (title, error) => this.toastOnce(title, error),
+    });
     this.notes = new NotesController({
       client,
       hooks: {
@@ -150,6 +168,7 @@ export class Workspace {
         beforeDeactivate: (path) => void this.notes.flush(path),
         canEvict: (path) =>
           !useTabsStore.getState().tabs.includes(path) && !this.notes.isBusy(path),
+        embedRenderers: [this.drawingFeature.renderer],
       },
       editorConfigFrom(getSettings()),
     );
@@ -201,9 +220,11 @@ export class Workspace {
 
   async openNote(path: string, options: OpenOptions = {}): Promise<boolean> {
     const token = this.beginNavigation(path);
-    if (!this.notes.has(path)) {
+    const drawing = isDrawingPath(path);
+    if (drawing ? !this.drawingFeature.drawings.get(path) : !this.notes.has(path)) {
       try {
-        await this.notes.load(path);
+        if (drawing) await this.drawingFeature.drawings.load(path);
+        else await this.notes.load(path);
       } catch (error) {
         if (options.metric) perfCancel(options.metric);
         if (token === this.navToken) {
@@ -230,7 +251,7 @@ export class Workspace {
   activate(path: string, options: OpenOptions = {}): void {
     const state = useTabsStore.getState();
     const next = placeInTabs(state, path, options.newTab ?? false);
-    this.editor.show(path);
+    this.showInEditor(path);
     if (next.tabs !== state.tabs || next.active !== state.active) useTabsStore.setState(next);
     this.afterActivate(path, options);
   }
@@ -249,7 +270,7 @@ export class Workspace {
     if (next === state) return;
     void this.notes.flush(path);
     const wasActive = state.active === path;
-    if (wasActive) this.editor.show(next.active);
+    if (wasActive) this.showInEditor(next.active);
     useTabsStore.setState(next);
     if (!wasActive) return;
     if (next.active) this.afterActivate(next.active, {});
@@ -276,7 +297,19 @@ export class Workspace {
     if (path !== undefined) this.activateTab(path);
   }
 
+  /** A drawing file shows in its own pane; the editor has no note meanwhile. */
+  private showInEditor(path: string | null): void {
+    this.editor.show(path !== null && isDrawingPath(path) ? null : path);
+  }
+
   private afterActivate(path: string, options: OpenOptions): void {
+    if (isDrawingPath(path)) {
+      this.annotations.setActive(null);
+      setWordCount(null);
+      this.touch(path);
+      if (options.metric) perfEndAfterPaint(options.metric);
+      return;
+    }
     if (options.line !== undefined) this.editor.scrollToLine(options.line);
     if (options.focus !== false) this.editor.focus();
     this.annotations.setActive(path);
@@ -456,6 +489,7 @@ export class Workspace {
       await this.openNote(path, { newTab: options.newTab });
       return path;
     }
+    if (isDrawingPath(path)) return this.createDrawingAt(path, options.newTab);
     try {
       const response = await this.client.writeNote(path, { content: "", baseVersion: null });
       vaultActions.addFile(response.path, response.version);
@@ -476,6 +510,23 @@ export class Workspace {
         return path;
       }
       toast({ kind: "error", title: "Couldn't create the note", body: errorMessage(error) });
+      return null;
+    }
+  }
+
+  /** Following a link to a drawing that doesn't exist creates it, as the Obsidian plugin does. */
+  private async createDrawingAt(path: string, newTab: boolean): Promise<string | null> {
+    try {
+      const doc = await this.drawingFeature.drawings.write(
+        path,
+        serializeDrawingFile(emptyDrawingScene()),
+        null,
+      );
+      vaultActions.addFile(doc.path, doc.version);
+      await this.openNote(doc.path, { newTab });
+      return doc.path;
+    } catch (error) {
+      toast({ kind: "error", title: "Couldn't create the drawing", body: errorMessage(error) });
       return null;
     }
   }
@@ -535,6 +586,7 @@ export class Workspace {
     }
     vaultActions.rename(from, to);
     this.notes.rename(from, to);
+    this.drawingFeature.drawings.rename(from, to);
     this.editor.rename(from, to);
     useTabsStore.setState(renameInTabs(useTabsStore.getState(), from, to));
     for (let i = 0; i < this.recent.length; i++) {
@@ -602,6 +654,7 @@ export class Workspace {
     for (const change of event.changes) {
       if (isHiddenPath(change.path)) continue;
       this.previews.invalidate(change.path);
+      this.drawingFeature.handleVaultChange(change);
       if (change.kind === "deleted") {
         const nested = this.notes.paths().filter((p) => p.startsWith(`${change.path}/`));
         for (const p of [change.path, ...nested]) this.notes.handleRemoteDelete(p);
@@ -680,12 +733,63 @@ export class Workspace {
     });
   }
 
+  // ── Drawings ───────────────────────────────────────────────────────────
+
+  /**
+   * Insert drawing: a new drawing file, embedded at the caret's line (floated right, 360 px) and
+   * opened for editing in place.
+   */
+  async insertDrawing(): Promise<boolean> {
+    const path = this.activePath;
+    if (!path || isDrawingPath(path) || this.editor.active !== path) return false;
+    let created: { path: string; embed: string };
+    try {
+      created = await this.drawingFeature.create();
+    } catch (error) {
+      toast({ kind: "error", title: "Couldn't create the drawing", body: errorMessage(error) });
+      return false;
+    }
+    vaultActions.addFile(created.path, this.drawingFeature.drawings.get(created.path)?.version);
+    if (this.editor.active !== path) return false;
+    const from = this.editor.insertEmbed(created.embed);
+    if (from === null) return false;
+    this.editor.activateEmbed(from);
+    return true;
+  }
+
+  /** Saves what drawings have pending: the one edited in place and the opened one. */
+  async flushDrawings(): Promise<void> {
+    await Promise.all([this.drawingFeature.flush(), this.openDrawing?.flush()]);
+  }
+
+  setOpenDrawing(editing: DrawingEditing | null): void {
+    this.openDrawing = editing;
+  }
+
+  reportDrawingError(error: unknown): void {
+    this.toastOnce("Couldn't save the drawing", error);
+  }
+
+  private toastOnce(title: string, error: unknown): void {
+    const key = `${title}\u0000${errorMessage(error)}`;
+    if (this.errorToasted.has(key)) return;
+    this.errorToasted.add(key);
+    toast({ kind: "error", title, body: errorMessage(error) });
+    setTimeout(() => this.errorToasted.delete(key), 10_000);
+  }
+
   // ── Lifecycle ──────────────────────────────────────────────────────────
 
   /** Flushes pending edits when the window loses focus, is hidden or unloads. */
   installLifecycle(): () => void {
-    const flush = () => void this.notes.flushAll();
-    const flushKeepalive = () => void this.notes.flushAll({ keepalive: true });
+    const flush = () => {
+      void this.notes.flushAll();
+      void this.flushDrawings();
+    };
+    const flushKeepalive = () => {
+      void this.notes.flushAll({ keepalive: true });
+      void this.flushDrawings();
+    };
     const onVisibility = () => {
       if (document.visibilityState === "hidden") flushKeepalive();
     };

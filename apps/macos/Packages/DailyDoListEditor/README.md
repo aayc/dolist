@@ -4,8 +4,10 @@ Native markdown editor for the Daily Do List macOS app: an `NSTextView` on an ex
 stack (`NSTextStorage` → `NSLayoutManager` → `NSTextContainer`) that edits plain markdown with
 Obsidian-style live preview, clickable task checkboxes, agent status badges, lines the agent
 wrote (a sparkle opens their thread), lines a thread is anchored to, link previews, Obsidian's
-list and formatting commands, and vim mode. Its only dependency is `DailyDoListVim` (the vim
-engine); `packages/editor` (the web CodeMirror editor) is its behavioral reference.
+list and formatting commands, drawings embedded in notes (floats the text wraps around, moved,
+resized and edited in place), and vim mode. It depends on `DailyDoListVim` (the vim engine),
+`DailyDoListDrawing` (the drawing engine and its canvas) and `DailyDoListUI` (tooltips);
+`packages/editor` (the web CodeMirror editor) is its behavioral reference.
 
 ```swift
 let editor = MarkdownEditorController(configuration: EditorConfiguration(fontSize: 16))
@@ -39,7 +41,9 @@ editor.configure(EditorConfiguration(fontSize: 16, vimMode: true))
 | `EditorVimIntegration(vim:pasteboard:)`, `applyVimrc(_:)`, `vimrcProblems` | Install once per app on the shared `Vim`: the app's ex commands, `gt`/`gT`, the clipboard registers and the vimrc (see [Vim mode](#vim-mode)). `VimPasteboard` puts the pasteboard behind a protocol for tests. |
 | `focus()`, `moveCaretToEnd()`, `scrollToLine(_:)` | `focus()` before the editor is in a window applies once it is (the first note at launch). `moveCaretToEnd` puts the caret after the last line and scrolls to it. `scrollToLine` puts the caret at the line start and centers it (0-based, clamped). |
 | `snapshot()`, `restore(_:)` | Text, selection, scroll offset and the note's own `UndoManager` for instant tab switches. `restore` and `setText(_:resetUndo: true)` start a new document: badges are cleared and the caret line is always reported. |
-| `delegate` | `editorTextDidChange` (user edits only, including undo), `didClickBadge` (with its current line), `didClickAgentThread` (a sparkle), `didClickWikiLink(target:newWindow:)`, `didClickLink(url:)`, `previewFor(_: EditorLinkPreview)` (a link's tooltip: asked when hovering starts and when the tooltip shows; nil = `fallbackText`), `cursorDidMoveToLine` (only when the line changes), `editorDidRequestSave` (also `:w`), `vimStatusDidChange` (only when it changes; nil when vim mode ends), `perform(_: EditorVimRequest)` (vim's app commands; the default answers `.unavailable`). |
+| `delegate` | `editorTextDidChange` (user edits only, including undo), `didClickBadge` (with its current line), `didClickAgentThread` (a sparkle), `didClickWikiLink(target:newWindow:)`, `didClickLink(url:)`, `previewFor(_: EditorLinkPreview)` (a link's tooltip: asked when hovering starts and when the tooltip shows; nil = `fallbackText`), `cursorDidMoveToLine` (only when the line changes), `editorDidRequestSave` (also `:w`), `vimStatusDidChange` (only when it changes; nil when vim mode ends), `perform(_: EditorVimRequest)` (vim's app commands; the default answers `.unavailable`), `drawingFor(target)`, `didEditDrawing`, `didEndEditingDrawing`, `willShowContextMenu` (see [Drawings](#drawings)). |
+| `drawingsDidChange()` | The host's drawings loaded or changed: embeds ask again (`drawingFor`), re-lay out the ones whose drawing changed, and a drawing being edited in place takes a version that came from elsewhere. |
+| `insertDrawingEmbed(_:)`, `beginEditingDrawing(atLine:)`, `endEditingDrawing(select:)` | Insert Drawing: the embed on a line of its own at the caret's line (returns its line), then edit it in place. Also `isEditingDrawing`, `editingDrawingPath`, `drawingCanvas`, `selectedDrawingLine`, `selectDrawing(atLine:)`. |
 
 Additions to the original contract (all source-compatible):
 
@@ -166,6 +170,63 @@ follows any link. Wikilinks and scheme-less markdown destinations (`[x](Notes/Pl
 `mailto`, `tel`, `www.` and email addresses go to `didClickLink`. Other schemes (`javascript:`,
 `file:`, `data:`, …) are never passed on. The pointer becomes a hand over clickable things.
 
+### Drawings
+
+Like the web editor's embed layer (`packages/editor/src/embeds`), with the Obsidian Excalidraw
+plugin's syntax ([spec](../../../../docs/specs/drawings.md)):
+
+- **Embeds.** A line that is one embed of a drawing (`![[Plan.excalidraw|360|right-wrap]]`, spaces
+  around it allowed; not in a list, quote or heading, not the agent's) is drawn as the drawing
+  while live preview is on and the selection isn't on its line; then, and in source mode, its
+  syntax shows. The host answers `drawingFor(target)` with `.loading`, `.missing`, `.unreadable`
+  or `.ready(EditorDrawing)` (path, scene, content hash); nil keeps embeds as text. A placeholder
+  shows while loading, and the web's words otherwise (“Plan” doesn't exist, "This drawing can't be
+  read", "Empty drawing · double-click to draw"), wrapped to the box.
+- **Sizes and places** (`EmbedGeometry`, the web's CSS): the width from the modifier (`360`,
+  `50%`), else the drawing's own width, else 360, full width with no placement; never wider than
+  the column; the height from `WxH` or the drawing's proportions (160 while unknown). Rows
+  (`left`, `right`, `center`, full) are on a line of their own the drawing's height (4 pt above and
+  below); floats (`left-wrap`, `right-wrap`) sit 3 pt below their line's top with 20 pt between
+  them and the text and 10 pt below.
+- **Wrapping.** A float's line takes no height; its box (with the margins, to the column's edge)
+  is an exclusion path of the text container, so the lines after it wrap around it. Floats are
+  laid out top to bottom from their line's position (one that would overlap an earlier float goes
+  below it; a row goes below floats above it by growing its line), and only recomputed before a
+  draw when something may have moved them: an edit above the last embed line, a reveal, a drawing
+  or the column changing. The exclusion paths change only when a float actually moved. While a
+  note has floats, layout is contiguous (non-contiguous layout places a line at an estimate
+  before the text above it is laid out, and a float's position comes from its line).
+- **Select, move, resize, delete** (`MarkdownEditorController+EmbedInteraction`, `EmbedEdits`):
+  a click selects a drawing (2 pt accent outline, the caret stays and hides); the pointer hovering
+  one outlines it. Dragging past 4 pt shows where it will land (a line between two lines and a box
+  on that side) and dropping moves its line there, with the placement from where it was dropped:
+  the column's left third floats it left, the right third right, the middle full width (which
+  drops the size); next to its own line only the placement changes. The selected drawing has a
+  grip ("Drag to move") and the corner that moves ("Drag to resize"; a right float grows to the
+  left, a left one to the right, a centered one both ways), which sets the width modifier
+  (scaling a given height; at least 48). Delete or Backspace removes the embed's line (the file
+  stays), Return edits it, Escape deselects, the arrows put the caret on the line before or after
+  it, and typing deselects it and types at the caret. Each edit is one undoable step; the pure
+  edits are ported from the web's `edits.ts`/`drop.ts` with their test cases.
+- **Editing in place** (`MarkdownEditorController+DrawingEditing`): double-click, or Return while
+  selected, puts a `DrawingCanvasView` in editing mode on the box, framed like the preview, at
+  least 240 tall, growing with the drawing; its tool bar floats next to it (above, or below when
+  there's no room). The canvas is first responder: keys it doesn't handle are swallowed rather
+  than passed up to the text view, so vim and typing never act on the note meanwhile. Every
+  committed change goes to `didEditDrawing` (the host saves, debounced) and shows in the other
+  embeds of the drawing; a new version from the host (merged with a change from elsewhere)
+  replaces the canvas's scene, keeping its history. Escape with nothing selected in the drawing
+  ends editing and leaves it selected; a click outside it, the focus leaving it, a note switch, a
+  read-only editor or source mode end it too (`didEndEditingDrawing`).
+- **Insert Drawing** is the host's (it creates the file); `insertDrawingEmbed` puts the embed on
+  the caret's line when it's blank (the caret on a new line after it) or above it, keeping the
+  caret off the embed so the drawing shows, then `beginEditingDrawing(atLine:)`. The context menu
+  asks the host for items (`willShowContextMenu`).
+- **Performance.** Nothing on the keystroke path renders or measures a drawing: previews are
+  rendered when drawn and cached by content hash, width and theme (`DrawingPreviewCache`); a
+  drawing's size is measured once per version; the embed lines are tracked by the highlighter's
+  incremental passes.
+
 ### Keyboard
 
 | Keys | Action |
@@ -278,6 +339,7 @@ matches in the visible lines with temporary attributes.
 | `Motion/` | `MotionTimeline`, `CubicBezier` (pure curves of elapsed time), `MotionState` (what moves, with explicit times), `EditorMotion` (clock, Reduce Motion, frames through a `FrameTicker`: the display link; all injectable via `MotionEnvironment`). |
 | `Controller/` | `MarkdownEditorController` (composition, public API) and its hooks (drawing, motion frames); `TextSystemBridge` (AppKit delegates). |
 | `Vim/` | `TextViewVimHost` (the `VimEditor`: text, selection, edits, keys, layout, one file each), `VimUndoRecorder`, `VimKeyEvents`, `VimCtrlKeys`, `VimCursorRenderer`, `VimPanelView`, `VimSearchHighlighter`, `VimClipboard`, `Vimrc`, `EditorVimIntegration`. |
+| `Drawings/`, `Controller/…+Embeds`, `…+EmbedInteraction`, `…+DrawingEditing`, `API/EditorDrawing` | Drawing embeds: `EmbedState` (the host's drawings, sizes, floats, previews, selection), `EmbedGeometry` (sizes and places), `EmbedEdits` (move, resize, remove, insert, drop targets), `EmbedInteraction`/`EmbedHandle` (a press becoming a move or a resize), `DrawingEditSession` (the canvas in place). The tokenizer marks an embed line with one `.embed` marker; the highlighter keeps the embed lines; the layout delegate sizes their line fragments (`embedFragment`). |
 | `View/EditorContainerView`, `API/EditorVim` | The embeddable view (scroll view + command line); vim's status and app requests. |
 
 TextKit 1 techniques worth knowing before changing things (each verified experimentally):
@@ -301,7 +363,12 @@ TextKit 1 techniques worth knowing before changing things (each verified experim
   whole paragraph and widens every keystroke's edit.
 - Selection changes only regenerate glyphs for lines entering or leaving the revealed set (or whose
   checkbox touch state changed); layout is non-contiguous, so line geometry far from what's laid out
-  is an estimate (`scrollToLine` scrolls the range visible first).
+  is an estimate (`scrollToLine` scrolls the range visible first). Not while a note has drawn
+  floats: see [Drawings](#drawings).
+- **Line fragments** can be resized from `shouldSetLineFragmentRect` (an embed row's height, a
+  float's zero height) and TextKit lays the next line after the new rect. Moving a fragment's
+  origin there confuses layout, so a row that must clear a float grows instead. Exclusion paths
+  keep non-contiguous layout on, but only contiguous layout gives a float's line its real position.
 
 ## Performance
 
@@ -316,6 +383,16 @@ TextKit 1 techniques worth knowing before changing things (each verified experim
 | … plus relayout of the revealed lines, p95 | | 0.13 ms | 0.17 ms |
 | Pure tokenizer, whole note | | 2.4 ms | 15 ms |
 | Before each draw: badge layouts and sparkles (every tenth line the agent's) | | | 0.05 ms avg |
+
+The same note with six drawings (floats on both sides, rows; `DrawingPerformanceTests`, same
+budgets as the keystroke test). A sample is the keystroke, the layout of its line and the pre-draw
+pass that checks floats; no exclusion path changes while typing:
+
+| Measurement | Release | Debug |
+| --- | --- | --- |
+| Keystroke next to a float (avg / p95) | 0.48 / 0.75 ms | 0.74 / 1.06 ms |
+| Keystroke above every drawing (floats checked each time) | 0.42 / 0.64 ms | 0.65 / 0.84 ms |
+| Load + style + visible layout, median | 18.9 ms | 64 ms |
 
 Motion adds nothing to these paths: typing and selection changes only check that nothing moves.
 Assertions use generous debug budgets scaled by `EDITOR_PERF_BUDGET_MULTIPLIER`. Release numbers:
@@ -343,7 +420,7 @@ apps/macos/scripts/test.sh DailyDoListEditor -- --filter Vim         # vim mode,
 VIM_VECTORS_FILTER=viewport/ VIM_VECTORS_VERBOSE=1 apps/macos/scripts/test.sh DailyDoListEditor -- --filter VimVectorReplayTests
 ```
 
-Swift Testing, 240 tests (plus parameterized cases): tokenizer tables (unicode offsets, nesting,
+Swift Testing, 294 tests (plus parameterized cases): tokenizer tables (unicode offsets, nesting,
 unterminated constructs, code spans, URLs with underscores, tags vs headings vs URLs), an
 incremental-vs-full equivalence property test (3 seeds × 500 random edits including fence and
 frontmatter toggles, comparing line states and every attribute run), command tables ported from
@@ -361,6 +438,28 @@ changes (caret, badges and undo), performance, and offscreen PNG renders written
 mode with line numbers), badges in every status (light, dark), narrow-window badges, agent lines
 with an anchored line (light, dark, source mode), tooltips over a badge and the sparkle (light,
 dark), and a frame in the middle of every kind of motion.
+
+Drawings have 54 of these tests, driving an editor in an offscreen window with real `NSEvent`s
+and a delegate that serves synthetic drawings (`Support/DrawingTestSupport.swift`):
+
+- **Embeds** (`DrawingEmbedTests`): which lines are embeds, the embed lines through edits, sizes
+  and placements, the syntax on the caret's line and in source mode, hosts without drawings,
+  loading, missing and unreadable drawings.
+- **Wrapping**: glyph rects stay out of a float's box on both sides, typing next to a float
+  never overlaps it and never recomputes it, a line added above moves it, stacked floats, rows
+  below floats.
+- **Edits** (`EmbedEditTests`): the web's `embeds.test.ts` cases for move, resize, remove, insert
+  and drop targets.
+- **Interaction** (`DrawingInteractionTests`): click, Escape, clicking text, Delete and its undo,
+  arrows, typing, dragging to another line and side (the drop target while dragging), full width,
+  resizing from the corner (the box follows), handles' tooltips, read-only, inserting, the
+  context menu.
+- **Editing in place** (`DrawingEditingTests`): Return and double-click, drawing (changes reported,
+  the note untouched), Escape twice, a click outside, vim not taking keys, the box growing,
+  versions from the host, the embed's line going away, switching notes.
+- **Snapshots** (`drawings-{light,dark}.png`, `drawings-selected.png`,
+  `drawings-editing-{light,dark}.png`), with pixel checks inside the boxes.
+- **Performance** (`DrawingPerformanceTests`): the numbers below.
 
 Vim mode has 65 of these tests (`Tests/DailyDoListEditorTests/Vim/`), all driving the editor with
 real `NSEvent`s through `keyDown`:
@@ -437,6 +536,14 @@ edit, and saves the result.
 - Badges that go away disappear without a fade.
 - A revealed list line keeps the wrap indent of its rendered form (slightly off while editing it).
 - `[[#Heading]]` links (same note, no target) aren't reported; the delegate has no subpath.
+- Drawings:
+  - The drawing and its handles are drawn, not accessibility elements.
+  - Two floats on the same side stack below each other (CSS would put the second beside the
+    first when there's room).
+  - Undoing the removal of an embed selects its line, so its syntax shows until the caret moves.
+  - Moving the caret down with ↓ skips a float's line (it has no height); ← from the next line
+    reaches it and shows its syntax.
+  - Image embeds (`![[photo.png]]`) still show as syntax.
 - Enter doesn't continue plain indented continuation lines of list items; loose lists continue tight.
 - With line numbers and readable line length, the gutter stays at the left edge.
 - Vim mode:

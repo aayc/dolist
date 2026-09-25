@@ -1,3 +1,4 @@
+import AppKit
 import DailyDoListAgent
 import DailyDoListClient
 import DailyDoListDomain
@@ -13,6 +14,7 @@ extension Workspace {
   /// no pending local edits. Our own echoes are ignored.
   func handleVaultChanged(_ event: VaultChangedEvent) {
     if let origin = event.clientId, origin == client.clientId { return }
+    handleDrawingChanges(event)
     for change in event.changes where !VaultPath.isHidden(change.path) {
       notePreviews.invalidate(change.path)
       switch change.kind {
@@ -209,7 +211,10 @@ extension Workspace: EditorCoordinatorHost {
   func editorPerform(_ request: EditorVimRequest) -> EditorVimRequestResult {
     switch request {
     case .saveAll:
-      Task { await notes.flushAll() }
+      Task {
+        await notes.flushAll()
+        await drawings.flushAll()
+      }
     case .close(let all):
       if all { closeAllTabs() } else { closeActiveTab() }
     case .openNote(let target, let newTab):
@@ -224,5 +229,21 @@ extension Workspace: EditorCoordinatorHost {
       return commandRunner?(id) == true ? .done : .failed
     }
     return .done
+  }
+
+  func editorDrawing(for target: String) -> EditorDrawingState? {
+    drawingState(for: target)
+  }
+
+  func editorDidEditDrawing(_ drawing: EditorDrawing) {
+    drawingWasEdited(drawing)
+  }
+
+  func editorDidEndEditingDrawing(_ path: String) {
+    drawingEditingEnded(path)
+  }
+
+  func editorWillShowContextMenu(_ menu: NSMenu) {
+    addDrawingItems(to: menu)
   }
 }

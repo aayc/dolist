@@ -34,6 +34,7 @@ function load(
     platform,
     entryScript: join(root.path, "daemon", "dist", "main.js"),
     isExecutable: (path) => executables.includes(path),
+    drawingRendererBuilds: [],
   });
 }
 
@@ -87,6 +88,16 @@ describe("loadConfig", () => {
     expect(
       (load({}, "darwin", [bundled]).execution as { computer?: object }).computer,
     ).not.toHaveProperty("helper");
+  });
+
+  it("gives the agent the drawing render page built next to the daemon", () => {
+    expect(load().execution).not.toHaveProperty("drawingRenderer");
+    expect(summarizeConfig(load(), homedir).drawingRenderer).toMatch(/not built/);
+    const page = join(root.path, "daemon", "dist", "drawing-renderer");
+    mkdirSync(page, { recursive: true });
+    writeFileSync(join(page, "index.html"), "<!doctype html>");
+    expect(load().execution).toMatchObject({ drawingRenderer: page });
+    expect(summarizeConfig(load(), homedir).drawingRenderer).toBe(page);
   });
 
   it("defaults DDL_HOME to ~/.daily-do-list and disables computer use off macOS", () => {

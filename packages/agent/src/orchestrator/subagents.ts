@@ -15,6 +15,7 @@ import {
   toolResultText,
   truncate,
 } from "@ddl/core";
+import { type DrawingDescriptions, drawingBudget } from "../drawings/descriptions";
 import type {
   Capability,
   ExecutionProvider,
@@ -113,6 +114,8 @@ export interface SubagentManagerOptions {
   maxIdleSessions?: number;
   /** The routine a task is a run of (its kickoff and `finish_task` change accordingly). */
   routineBrief?: (taskId: string) => RoutineBrief | undefined;
+  /** Describes the drawings a task or its notes embed, for the kickoff. */
+  drawings?: Pick<DrawingDescriptions, "blocks">;
 }
 
 type RunState = "queued" | "starting" | "running" | "idle";
@@ -468,7 +471,8 @@ export class SubagentManager {
         run.needsHistory = false;
       }
       if (run.closed || !run.session) return;
-      const prompt = this.buildPrompt(run, fresh, history || undefined);
+      const prompt = await this.buildPrompt(run, fresh, history || undefined);
+      if (run.closed || !run.session) return;
       run.state = "running";
       this.options.onChange();
       await this.prompt(run, run.session, prompt);
@@ -639,7 +643,11 @@ export class SubagentManager {
     return id;
   }
 
-  private buildPrompt(run: Run, fresh: boolean, history: string | undefined): string {
+  private async buildPrompt(
+    run: Run,
+    fresh: boolean,
+    history: string | undefined,
+  ): Promise<string> {
     const pending = run.pending;
     run.pending = undefined;
     const inbox = run.inbox.splice(0);
@@ -650,6 +658,9 @@ export class SubagentManager {
       const task = this.options.board.describe(run.taskId);
       const record = this.options.records.get(run.taskId);
       const routine = this.options.routineBrief?.(run.taskId);
+      const text = task?.text ?? record?.text ?? run.spec.goal;
+      const notes = task?.notes ?? [];
+      const drawings = routine ? [] : await this.describeDrawings([text, ...notes].join("\n"));
       const uncertain = (this.options.journal?.interruptedCalls(run.threadId) ?? [])
         .filter((call) => call.effectful)
         .map((call) => call.target);
@@ -658,11 +669,12 @@ export class SubagentManager {
         now: this.now(),
         ...(routine ? { routine } : {}),
         task: {
-          text: task?.text ?? record?.text ?? run.spec.goal,
-          notes: task?.notes ?? [],
+          text,
+          notes,
           notePath: task?.notePath ?? record?.notePath ?? "",
           date: task?.date ?? record?.date ?? null,
         },
+        ...(drawings.length > 0 ? { drawings } : {}),
         goal: run.spec.goal,
         ...(run.spec.instructions ? { instructions: run.spec.instructions } : {}),
         ...(history ? { history } : {}),
@@ -675,6 +687,17 @@ export class SubagentManager {
     return [pending?.kind === "message" ? pending.text : "", ...inbox]
       .filter((part) => part.length > 0)
       .join("\n\n");
+  }
+
+  private async describeDrawings(text: string): Promise<string[]> {
+    const drawings = this.options.drawings;
+    if (!drawings) return [];
+    try {
+      return (await drawings.blocks(text, drawingBudget())).flatMap((block) => block.lines);
+    } catch (error) {
+      this.logger.warn("Could not describe the task's drawings", { error: errorText(error) });
+      return [];
+    }
   }
 
   private async buildTools(run: Run, task: TaskRef | undefined): Promise<ToolSpec[]> {

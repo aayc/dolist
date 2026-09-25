@@ -6,6 +6,7 @@ import "./styles/explorer.css";
 import "./styles/tabs.css";
 import "./styles/statusbar.css";
 import "./styles/overlays.css";
+import "./styles/drawings.css";
 import { startApp } from "./app/bootstrap";
 
 const root = document.getElementById("root");

@@ -3,6 +3,7 @@ import {
   createMarkdownEditor,
   DEFAULT_EDITOR_CONFIG,
   type EditorConfig,
+  type EmbedRenderer,
   getActivityChips,
   type LineAnnotation,
   type LinkPreview,
@@ -55,6 +56,8 @@ export interface EditorControllerDeps {
   /** Called synchronously before the active note is swapped out (flush unsaved edits). */
   beforeDeactivate(path: string): void;
   canEvict(path: string): boolean;
+  /** Draw `![[…]]` embeds (drawings). */
+  embedRenderers?: readonly EmbedRenderer[];
 }
 
 /**
@@ -120,6 +123,7 @@ export class EditorController {
         onRunCommand: (id) => this.deps.runCommand(id),
         onVimStatus: (status) => this.deps.onVimStatus(status),
         onVimrcApplied: (problems) => this.deps.onVimrcApplied(problems),
+        ...(this.deps.embedRenderers ? { embedRenderers: this.deps.embedRenderers } : {}),
       },
     });
     this.activePath = null;
@@ -246,6 +250,32 @@ export class EditorController {
 
   focus(): void {
     this.editor?.focus();
+  }
+
+  /** Inserts an embed on its own line at the caret's line; null without an active note. */
+  insertEmbed(text: string): number | null {
+    if (!this.editor || this.activePath === null) return null;
+    return this.editor.insertEmbed(text);
+  }
+
+  activateEmbed(from: number): boolean {
+    return this.editor?.activateEmbed(from) ?? false;
+  }
+
+  /** The main selection's text, for the context menu's Cut and Copy. */
+  selectedText(): string {
+    const state = this.editor?.view.state;
+    if (!state) return "";
+    const { from, to } = state.selection.main;
+    return state.sliceDoc(from, to);
+  }
+
+  /** Replaces the main selection as the user would (Cut, Paste). */
+  replaceSelection(text: string, userEvent: "input.paste" | "delete.cut"): void {
+    const view = this.editor?.view;
+    if (!view || this.activePath === null) return;
+    view.dispatch(view.state.replaceSelection(text), { userEvent, scrollIntoView: true });
+    view.focus();
   }
 
   scrollToLine(line: number): void {

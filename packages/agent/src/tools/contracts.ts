@@ -29,6 +29,7 @@ export const TOOL = {
   // Knowledge (read-only)
   readNote: "read_note",
   searchNotes: "search_notes",
+  readDrawing: "read_drawing",
   webFetch: "web_fetch",
   webSearch: "web_search",
   // Browser (execution provider)
@@ -200,6 +201,10 @@ export interface ReadNoteInput {
 export interface SearchNotesInput {
   query: string;
   limit?: number;
+}
+export interface ReadDrawingInput {
+  /** The drawing's vault path, or its embed target as a note writes it (`Flow.excalidraw`). */
+  path: string;
 }
 
 export interface PostUpdateInput {

@@ -47,6 +47,8 @@ public final class MarkdownEditorController {
   let badgeRenderer: BadgeRenderer
   /// Badges fading in and crossfading, the triaging pulse, checkmarks popping in.
   let motion: EditorMotion
+  /// Drawing embeds: the host's drawings, floats, previews, selection and editing in place.
+  let embeds = EmbedState()
   private(set) var badgeStore = BadgeStore()
   private let bridge = TextSystemBridge()
   private var lineNumberRuler: LineNumberRulerView?
@@ -108,6 +110,10 @@ public final class MarkdownEditorController {
     bridge.controller = self
     markdownTextView.delegate = bridge
     markdownTextView.hooks = self
+    livePreview.drawsEmbed = { [weak self] offset in self?.drawsEmbed(at: offset) ?? false }
+    glyphDelegate.embedFragment = { [weak self] index, proposed in
+      self?.embedFragment(at: index, proposed: proposed)
+    }
     configureTextView()
     configureScrollView()
     applyConfiguration(configuration, previous: nil)
@@ -242,6 +248,7 @@ public final class MarkdownEditorController {
     markdownTextView.breakUndoCoalescing()
     dropHoveredTooltip()
     badgeStore.removeAll()
+    resetEmbeds()
     motion.documentReplaced()
     replacingDocument = true
     replacingText = true
@@ -354,9 +361,12 @@ public final class MarkdownEditorController {
     }
     if previous?.livePreview != configuration.livePreview {
       livePreview.isEnabled = configuration.livePreview
+      if !configuration.livePreview { endEditingDrawing() }
       invalidateGlyphs(in: [NSRange(location: 0, length: storage.length)])
       refreshLivePreview()
     }
+    if !configuration.isEditable { endEditingDrawing() }
+    embedsNeedLayout()
     markdownTextView.isEditable = configuration.isEditable
     markdownTextView.isContinuousSpellCheckingEnabled = configuration.spellcheck
     if previous?.showLineNumbers != configuration.showLineNumbers {
@@ -481,6 +491,7 @@ public final class MarkdownEditorController {
     noteUndoManager = snapshot.undoManager ?? UndoManager()
     dropHoveredTooltip()
     badgeStore.removeAll()
+    resetEmbeds()
     motion.documentReplaced()
     replacingDocument = true
     let next = TextDiff.normalizeLineEndings(snapshot.text)
@@ -546,6 +557,8 @@ public final class MarkdownEditorController {
       location: editedRange.location, oldLength: oldLength, newLength: editedRange.length)
     livePreview.textDidChange(
       location: editedRange.location, oldLength: oldLength, newLength: editedRange.length)
+    embedsDidEdit(
+      location: editedRange.location, oldLength: oldLength, newLength: editedRange.length)
     if let ruler = lineNumberRuler {
       if highlighter.lineIndex.count != linesBefore { ruler.updateThickness() }
       ruler.needsDisplay = true
@@ -610,6 +623,9 @@ public final class MarkdownEditorController {
       selection: textView.selectedRanges.map(\.rangeValue),
       focused: markdownTextView.isEditorFocused,
       lineIndex: highlighter.lineIndex, storage: storage)
-    if !ranges.isEmpty { invalidateGlyphs(in: ranges) }
+    if !ranges.isEmpty {
+      invalidateGlyphs(in: ranges)
+      embedsNeedLayout()
+    }
   }
 }

@@ -60,6 +60,13 @@ export function hostOf(url: string | undefined): string | undefined {
   return undefined;
 }
 
+/** A drawing's name from its path or embed target: `![[Excalidraw/Flow.excalidraw|360]]` → "Flow". */
+export function drawingTitle(path: string | undefined): string {
+  const target = (path ?? "").replace(/^!?\[\[|\]\]$/g, "").split(/[|#]/)[0] ?? "";
+  const name = target.split(/[\\/]/).pop() ?? "";
+  return name.replace(/(\.excalidraw)?(\.md)?$/i, "").trim();
+}
+
 /** "post_update" → "Post update". */
 export function humanizeToolName(name: string): string {
   const words = name.replace(/[_-]+/g, " ").trim();
@@ -115,6 +122,10 @@ function activityPhrase(call: ToolCallLike): string {
     case "read_note":
     case "search_notes":
       return "Reading your notes";
+    case "read_drawing": {
+      const title = clipText(drawingTitle(raw(input, "path")));
+      return title ? `Looking at ${quoted(title)}` : "Looking at a drawing";
+    }
     case "edit_note":
       return "Editing your note";
     case "bash":

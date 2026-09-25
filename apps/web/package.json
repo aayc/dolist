@@ -17,6 +17,7 @@
   "dependencies": {
     "@ddl/core": "workspace:*",
     "@ddl/editor": "workspace:*",
+    "@excalidraw/excalidraw": "catalog:",
     "dompurify": "^3.4.16",
     "lucide-react": "^1.47.0",
     "marked": "^18.0.14",

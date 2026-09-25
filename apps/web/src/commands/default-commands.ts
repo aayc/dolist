@@ -1,4 +1,4 @@
-import { ORCHESTRATOR_THREAD_ID } from "@ddl/core";
+import { isDrawingPath, ORCHESTRATOR_THREAD_ID } from "@ddl/core";
 import type { Services } from "../app/services";
 import { dailyDateOf } from "../features/daily/daily-nav";
 import { resolveTheme } from "../features/settings/theme";
@@ -161,7 +161,18 @@ export function createDefaultCommands(services: Services): Command[] {
       run: () => {
         const path = activeNote();
         if (path) void workspace.notes.flush(path);
+        void workspace.flushDrawings();
       },
+    },
+    {
+      id: "drawing:insert",
+      name: "Insert drawing",
+      hotkeys: [hk("Mod+Shift+X")],
+      when: () => {
+        const path = activeNote();
+        return path !== null && !isDrawingPath(path) && !workspace.drawingFeature.isEditing;
+      },
+      run: () => void workspace.insertDrawing(),
     },
     {
       id: "note:rename",

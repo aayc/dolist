@@ -140,13 +140,29 @@ body.is-resizing .resize-handle:active {
 }
 
 .note-header-inner {
-  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   width: 100%;
 }
 
+.note-header-main {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.note-actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding-top: 2px;
+}
+
 /*
- * "Orchestrator: thinking…" while it works on this note. It floats at the header's bottom right
- * (beside a daily note's nav row) so appearing never moves the text you're typing.
+ * "Orchestrator: thinking…" while it works on this note. It floats at the title area's bottom
+ * right (beside a daily note's nav row, left of the note's buttons) so appearing never moves the
+ * text you're typing.
  */
 .note-orchestrator {
   position: absolute;

@@ -64,7 +64,8 @@ apps/
   daemon/         Node 24 local server: REST + WebSocket API, vault owner, runs the agent runtime
   sync/           Sync service: per-vault change log (SQLite) + HTTP API + live push; agent lease
   macos/          Native macOS app (SwiftUI/AppKit): app shell + Swift packages; supervises the daemon
-                  and bundles ddl-computer, the helper the daemon spawns to operate other apps
+                  and bundles ddl-computer, the helper the daemon spawns to operate other apps;
+                  DailyDoListDrawing is its native Excalidraw drawing engine
   mobile/         (planned) native iOS app reusing the Swift packages — plan in PLAN.md
 packages/
   core/           Pure, isomorphic domain logic + wire protocol types (no dependencies!)
@@ -239,6 +240,10 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
  statically elsewhere: `apps/daemon/build.mjs` fails the build if they would load before the
  daemon answers. The one static agent import is `@ddl/agent/routines` (routine files, editable
  while no agent runs here): keep that entry free of harness, execution and model code.
+- **Drawing renderer:** the daemon's `build` and `dev` scripts build the page agents render
+ drawings with (`packages/agent/scripts/build-drawing-renderer.mjs` → `apps/daemon/dist/drawing-renderer`).
+ `@excalidraw/excalidraw` is a build-time dependency of `@ddl/agent` for that page only: no Node
+ code imports it, and the daemon ships the built page, not the package.
 - **Pi harness:** sessions are hermetic (isolated `agentDir` under `$DDL_HOME/pi`, no discovered
   extensions/skills/context files) and refuse to start if the safety-gate extension didn't load.
 - **Cursor harness:** set `agent.harness` to `cursor` in Settings (the other settings keep working;
@@ -256,6 +261,11 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
   real helper, take real screenshots or send real input: use
   `src/execution/local/app-control/testing/fake-computer-helper.ts` (see `client.test.ts`), and the
   daemon's `FakeSystemSettings` for the System Settings route (`createApp` opens nothing by default).
+- **Excalidraw (web drawings)** is one lazy chunk: import `@excalidraw/excalidraw` only from
+ `apps/web/src/features/drawings/excalidraw-module.ts` (and the components it loads), through
+ `loadExcalidraw()`. `apps/web/excalidraw-assets.ts` serves its fonts from the build and replaces
+ its optional heavy parts; it's a quarter of Total JS, so check `pnpm size:check` after touching
+ it.
 - **E2E typing:** use Playwright's real keyboard (`page.keyboard.type`). Automation "fill"-style
   typing into CodeMirror rebuilds text from the DOM (including badge widgets) and corrupts notes.
 
@@ -328,9 +338,19 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
   `@ddl/core` logic), `DailyDoListEditor`, `DailyDoListAgent`, `DailyDoListVim` (the port of the
   web editor's vim mode), `DailyDoListDaemon` (`DaemonSupervisor`), `DailyDoListUI` (what the
   shell, the agent UI and the editor share: tooltips, keycaps, the pointing hand, `IconButton`),
-  and `DailyDoListComputer` (`ddl-computer`, the helper the daemon spawns to operate other apps
-  through their accessibility tree; not linked into the app). `IntegrationTests/` is a separate
-  package that runs against the real daemon.
+  `DailyDoListDrawing` (the native drawing engine: Excalidraw scenes in `.excalidraw.md` files, a
+  Rough.js port, the renderer, the tools and `DrawingCanvasView`; its `DailyDoListDrawingModel`
+  library is Foundation only), and `DailyDoListComputer` (`ddl-computer`, the helper the daemon
+  spawns to operate other apps through their accessibility tree; not linked into the app).
+  `IntegrationTests/` is a separate package that runs against the real daemon.
+- **Drawings:** `@ddl/core`'s drawing format and description are the reference, as vim.js is
+  for vim: `DailyDoListDrawing` replays `packages/core/test/drawings/fixtures` byte for byte, so
+  a format change updates both sides and adds a fixture. Its Rough.js port is checked against
+  samples from Rough.js itself (`fixtures/rough-parity.jsonl`); see its README. In notes,
+  `DailyDoListEditor` draws embeds with it (floats are text-container exclusion paths, recomputed
+  only when something moved them) and hosts its canvas to edit in place; the web's embed layer
+  (`packages/editor/src/embeds`) is the behavioral reference, and its edit tests are ported. The
+  app's `DrawingStore` saves drawings with `baseVersion` and merges a 409 element by element.
 - **Commands:** `apps/macos/scripts/test.sh [Package|app|integration] [-- swift test args]`,
   `apps/macos/scripts/run-app.sh [--demo]`, and
   `apps/macos/scripts/build-app.sh [--release] [--with-daemon] [--zip]` (writes to

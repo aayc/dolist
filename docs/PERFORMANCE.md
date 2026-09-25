@@ -17,13 +17,18 @@ spec writes `apps/web/perf-results.json`.
 | `thread:open` | badge click → thread rendered | 100 ms |
 | `keystroke` (p95) | keydown → next frame after the DOM update, 2 000-line note | 16 ms |
 | `keystroke (vim)` (p95) | the same with vim mode on: insert-mode typing, then normal-mode motions, `x` and `u` | 16 ms |
-| long tasks | tasks > 50 ms while typing (both modes) | 0 |
+| `keystroke (beside drawings)` (p95) | typing beside the first of six embedded drawings (floats the text wraps around) | 16 ms |
+| long tasks | tasks > 50 ms while typing (all three) | 0 |
 
 CI multiplies budgets by `PERF_BUDGET_MULTIPLIER=2` (slower shared runners). The perf run disables
 Chrome's frame-rate limiter so "→ next frame" measures work, not vsync alignment.
 
-Latest local run (Apple Silicon): keystroke p95 1.6 ms (vim mode 1.8 ms), daily open ~4–5 ms, tab
-switch 14 ms, thread open 9 ms, first load 106 ms, zero long tasks.
+Latest local run (Apple Silicon): keystroke p95 1.6 ms (vim mode 1.8 ms, beside drawings 1.7 ms),
+daily open ~4–5 ms, tab switch 14 ms, thread open 9 ms, first load 106 ms, zero long tasks.
+
+Drawings stay off the keystroke path: an embed's box is a widget from the live preview's
+visible-range pass (reused while its `![[…]]` doesn't change), static renders are cached by the
+file's content hash and made off the keystroke path, and the dark theme is a CSS filter.
 
 Vim mode adds one handler to the keystroke path. The mode indicator and pending-keys display in the
 status bar update from one coalesced callback per keystroke, and only when the value changes, so
@@ -74,6 +79,8 @@ Vitest 5 benchmarks (`*.bench.ts`) assert p99 budgets inside the test and write
 | Editor: 500 single-char inserts, 2 000 lines, 30 badges | 500 ms |
 | Live preview decorations, 60 / 150-line viewport | 2 / 4 ms |
 | Agent-line decorations (agent text, markers), 150-line viewport | 1 ms |
+| Drawing file, 2 000 elements: parse `json` / `compressed-json` | 25 / 80 ms |
+| Drawing file, 2 000 elements: write back with the previous file / describe | 40 / 15 ms |
 | Vault listing / search, 2 000 notes (warm) | see `packages/storage/src/storage.bench.ts` |
 | 3-way merge, 2 000-line note | see `packages/storage/src/storage.bench.ts` |
 | Agent journal: one flushed append to a 5 000-event journal | 50 ms |
@@ -94,9 +101,9 @@ budgets.
 
 | Bundle | Budget (gzip) | Current |
 | --- | --- | --- |
-| Initial JS (entry + static imports) | 320 kB | ~256 kB |
-| Initial CSS | 40 kB | ~7 kB |
-| Total JS | 1 200 kB | ~825 kB |
+| Initial JS (entry + static imports) | 320 kB | ~279 kB |
+| Initial CSS | 40 kB | ~8 kB |
+| Total JS | 1 300 kB | ~1 217 kB |
 
 The initial JS is dominated by CodeMirror core and React. `@codemirror/lang-markdown` would embed
 `@codemirror/lang-html` and with it the JS and CSS parsers (~60 kB gz); our `pnpm patch`
@@ -106,6 +113,19 @@ fenced block that needs them. Vim is loaded on demand — in parallel with start
 on: `@ddl/editor`'s `vim.ts` is a tiny loader in the main bundle, and `vim-integration.ts` (the
 engine plus ex commands, clipboard registers, vimrc and the status plugin) is one lazy chunk of
 ~42 kB gz. Don't import `vim-integration` or `@replit/codemirror-vim` statically.
+
+Excalidraw (drawings) is one lazy chunk of ~325 kB gz, loaded the first time a note shows a
+drawing. `apps/web/excalidraw-assets.ts` keeps its heaviest optional parts out of the build with
+small replacements: font subsetting (HarfBuzz and WOFF2 in WebAssembly, ~740 kB gz; exports embed
+whole fonts instead), the Mermaid importer (several MB), pica and image-blob-reduce (~29 kB gz; a
+canvas downscales pasted images), pako (~14 kB gz; Excalidraw embeds scenes in exported images
+uncompressed without it), browser-fs-access (a file input opens images) and the translations.
+
+Total JS counts every chunk, including the lazy ones: the code block languages (~400 kB gz, each
+loaded for a fenced block in that language), Excalidraw (~327 kB gz) and the mock the e2e tests
+run against the production build (~27 kB gz). It was raised from 1 200 to 1 300 kB when drawings
+and the always-on work landed together; startup is guarded by the initial JS budget, which
+didn't change. A new dependency of Excalidraw's size still needs a look at what else can go.
 
 Gzip sizes differ a little between machines for the same bytes (Node's zlib on CI's x86 runners
 compresses ~0.5% worse than on Apple Silicon), so keep some headroom under the budget.
