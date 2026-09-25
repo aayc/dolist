@@ -21,6 +21,7 @@ import { useSettingsStore } from "../../state/settings-store";
 import { useTabsStore } from "../../state/tabs-store";
 import { ui } from "../../state/ui-store";
 import { useVimStore } from "../../state/vim-store";
+import { StatusOrchestratorItem } from "../agent/OrchestratorIndicators";
 import { approvalPolicyItem } from "../settings/approval-policy";
 import {
   agentItem,
@@ -43,6 +44,7 @@ export function StatusBar() {
       data-save-state={saveState ?? undefined}
     >
       <AgentItems />
+      <StatusOrchestratorItem path={active} />
       <div className="status-spacer" />
       {visibleSave ? <SaveIndicator state={visibleSave} /> : null}
       <VimIndicator />
