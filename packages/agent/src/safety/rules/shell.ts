@@ -19,14 +19,18 @@ import {
   httpRequestOf,
   interpreterCall,
   isNetworkDevice,
+  looksLikePath,
   operands,
   optionValues,
   type PathRole,
   pathTargets,
+  readsFolderTrees,
   riskyCodeReason,
+  searchesRecursively,
   withScheme,
 } from "../shell-commands";
 import { DESTRUCTIVE_SQL_RULE, destructiveSqlInText, executedTextHits } from "./content";
+import { SECRET_SEARCH, SECRET_WORDS_RE } from "./files";
 import { appStateHits, readPathHits, writePathHits } from "./path-rules";
 import {
   info,
@@ -340,19 +344,139 @@ function deletionRoots(cmd: ShellCommand, env: ShellEnv): Target[] {
   return [];
 }
 
-function findRoots(cmd: ShellCommand, env: ShellEnv): Target[] {
+function findRoots(cmd: ShellCommand, env: ShellEnv, role: PathRole = "delete"): Target[] {
   const roots: Target[] = [];
   for (let i = 1; i < cmd.argv.length; i++) {
     const arg = cmd.argv[i]!;
     if (arg.startsWith("-") || arg === "(" || arg === "!") break;
     roots.push({
       raw: arg,
-      role: "delete",
+      role,
       resolved: cmd.dynamicArgs[i] ? { location: "unknown", path: arg } : env.resolve(arg, cmd),
     });
   }
-  if (roots.length === 0) roots.push({ raw: ".", role: "delete", resolved: env.resolve(".", cmd) });
+  if (roots.length === 0) roots.push({ raw: ".", role, resolved: env.resolve(".", cmd) });
   return roots;
+}
+
+/** Commands that emit or copy the contents of the files they are given (not counts or hashes). */
+const CONTENT_READERS: ReadonlySet<string> = new Set([
+  "cat",
+  "bat",
+  "head",
+  "tail",
+  "less",
+  "more",
+  "nl",
+  "tac",
+  "rev",
+  "strings",
+  "od",
+  "xxd",
+  "hexdump",
+  "base64",
+  "base32",
+  "grep",
+  "egrep",
+  "fgrep",
+  "rg",
+  "ag",
+  "ack",
+  "awk",
+  "gawk",
+  "mawk",
+  "nawk",
+  "cut",
+  "sort",
+  "uniq",
+  "cp",
+  "rsync",
+  "tar",
+  "zip",
+]);
+
+/** True when `cmd`'s output becomes `ancestor`'s arguments through `$(…)` (not `<(…)`, which is a file of names). */
+function substitutedInto(cmd: ShellCommand, ancestor: ShellCommand): boolean {
+  for (let c: ShellCommand | undefined = cmd; c?.parent; c = c.parent) {
+    if (c.via !== "substitution") return false;
+    if (c.parent === ancestor) return true;
+  }
+  return false;
+}
+
+/**
+ * The paths a command prints for another to open: `find`/`fd` roots (standing for everything under
+ * them), the whole disk for `locate`/`mdfind`, or the paths `echo` and `printf` are given. (`ls`
+ * prints names relative to the folder it lists, so its operands aren't what gets opened.)
+ */
+function listedPaths(cmd: ShellCommand, env: ShellEnv): Target[] {
+  const read = (raw: string, dynamic = false): Target => ({
+    raw,
+    role: "read",
+    resolved: dynamic ? { location: "unknown", path: raw } : env.resolve(raw, cmd),
+  });
+  const pathOperands = (skip: number) =>
+    operands(cmd)
+      .slice(skip)
+      .filter((o) => looksLikePath(o.value))
+      .map((o) => read(o.value, o.dynamic));
+  switch (cmd.name) {
+    case "find":
+      return findRoots(cmd, env, "read");
+    case "fd":
+    case "fdfind": {
+      const roots = operands(cmd).slice(1);
+      return roots.length > 0 ? roots.map((o) => read(o.value, o.dynamic)) : [read(".")];
+    }
+    case "mdfind": {
+      const dirs = optionValues(cmd, null, ["-onlyin"]);
+      return (dirs.length > 0 ? dirs : ["/"]).map((dir) => read(dir));
+    }
+    case "locate":
+    case "plocate":
+      return [read("/")];
+    case "echo":
+      return pathOperands(0);
+    case "printf":
+      return pathOperands(1);
+    default:
+      return [];
+  }
+}
+
+/**
+ * The paths a reader gets as arguments from another command, whose files it then reads:
+ * `find … -exec cat {} +`, `find … | xargs grep`, `cat $(find …)`, `echo ~/.* | xargs cat`, also
+ * inside `sh -c`. A reader that only gets a listing on stdin reads names, not files.
+ */
+function fedReadTargets(
+  cmd: ShellCommand,
+  env: ShellEnv,
+): Array<{ target: Target; evidence: string }> {
+  if (!CONTENT_READERS.has(cmd.name)) return [];
+  const sources = new Set<ShellCommand>();
+  const out: Array<{ target: Target; evidence: string }> = [];
+  for (let c: ShellCommand | undefined = cmd; c; c = c.parent) {
+    if (c.via === "find-exec" && c.parent?.name === "find") sources.add(c.parent);
+    const xargs = c.wrappers.includes("xargs");
+    for (const other of env.analysis.commands) {
+      if (other === c) continue;
+      const piped = xargs && other.pipeline === c.pipeline && other.position < c.position;
+      if (piped || substitutedInto(other, c)) sources.add(other);
+    }
+    if (xargs && c.stdinText !== undefined) {
+      for (const word of c.stdinText.split(/\s+/).filter(looksLikePath)) {
+        const target: Target = { raw: word, role: "read", resolved: env.resolve(word, c) };
+        out.push({ target, evidence: `${code(word)} → ${cmd.name}` });
+      }
+    }
+    if (c.via !== "shell-c" && c.via !== "eval") break;
+  }
+  for (const source of sources) {
+    for (const target of listedPaths(source, env))
+      out.push({ target, evidence: `${display(source)} → ${cmd.name}` });
+  }
+  return out;
 }
 
 export const SHELL_HARDLINE_RULES: readonly ShellRule[] = [
@@ -1331,6 +1455,23 @@ export const SHELL_APPROVAL_RULES: readonly ShellRule[] = [
 
   rule(
     info(
+      "credentials.runtime-folder-read",
+      "credentials",
+      "require_approval",
+      "high",
+      "Reads a whole folder chosen when the command runs, which could be your home folder",
+    ),
+    (cmd, env) => {
+      // Files handed over by `find` or `xargs` are checked against where they come from.
+      if (cmd.argsFromStdin || !readsFolderTrees(cmd)) return null;
+      const runtime = targets(cmd, env).find(
+        (t) => t.role === "read" && t.resolved.location === "unknown" && /[$`]/.test(t.raw),
+      );
+      return runtime ? `${display(cmd)} (${runtime.raw})` : null;
+    },
+  ),
+  rule(
+    info(
       "credentials.env-dump",
       "credentials",
       "require_approval",
@@ -1567,9 +1708,28 @@ export const SHELL_APPROVAL_RULES: readonly ShellRule[] = [
 
 const DEVICE_RE = /^\/dev\//;
 
+/** A recursive search for passwords, keys or tokens in folders outside the workspace, like the grep tool's. */
+function secretSearchOutside(cmd: ShellCommand, env: ShellEnv): string | undefined {
+  if (!searchesRecursively(cmd)) return undefined;
+  const patterns = [
+    ...optionValues(cmd, "e", ["--regexp"]),
+    ...(hasFlag(cmd, "ef", ["--regexp", "--file"]) ? [] : [operands(cmd)[0]?.value ?? ""]),
+  ];
+  const pattern = patterns.find((p) => SECRET_WORDS_RE.test(p));
+  if (pattern === undefined) return undefined;
+  const outside = targets(cmd, env).find(
+    (t) => t.role === "read" && t.resolved.location !== "workspace",
+  );
+  return outside ? `${code(pattern, 40)} in ${outside.raw}` : undefined;
+}
+
 /** Rules that look at paths (read secrets / write outside) reuse the shared path rules. */
 function pathHits(cmd: ShellCommand, env: ShellEnv): RuleHit[] {
   const hits: RuleHit[] = [];
+  for (const { target, evidence } of fedReadTargets(cmd, env))
+    hits.push(...readPathHits(target.resolved, evidence));
+  const secretSearch = secretSearchOutside(cmd, env);
+  if (secretSearch) hits.push({ rule: SECRET_SEARCH, evidence: secretSearch });
   for (const t of targets(cmd, env)) {
     const evidence = display(cmd);
     if (t.role === "read" || t.role === "link-target")

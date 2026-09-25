@@ -3,6 +3,7 @@ import {
   catastrophicTarget,
   cleanPathInput,
   expandBraces,
+  homeReadRisk,
   inferHome,
   initialCwd,
   isUserDataPath,
@@ -109,6 +110,112 @@ describe("sensitiveKinds", () => {
     expect(sensitiveKinds("~/.ssh/id_ed25519.pub").has("ssh-private-key")).toBe(false);
     expect(sensitiveKinds("/work/app/.env.example").size).toBe(0);
     expect(sensitiveKinds("/Users/me/Documents/report.pdf").size).toBe(0);
+  });
+
+  it.each([
+    "~/.kube",
+    "~/.kube/config",
+    "~/.kube/*",
+    "~/.aws/config",
+    "~/.azure/*",
+    "~/.gnupg/pubring.kbx",
+    "~/.config/gh",
+    "~/.config/gcloud/configurations/config_default",
+    "~/.local/share/cursor-agent/auth.json",
+    "~/.docker",
+    "~/.docker/*",
+    "~/.docker/config.json",
+    "~/.cursor",
+    "~/.cursor/*",
+    "~/.cursor/mcp.json",
+    "~/Library/Application Support/Google/Chrome/Default/Preferences",
+    "~/Library/Application Support/Firefox/Profiles/x.default/places.sqlite",
+    "~/.config/google-chrome/Default/History",
+    "~/.mozilla/firefox/x.default/logins.json",
+    "~/Library/Cookies/Cookies.binarycookies",
+    // Other spellings of a home directory
+    "/users/me/.aws/credentials",
+    "/USERS/ME/.kube/config",
+    "/System/Volumes/Data/Users/me/.azure/accessTokens.json",
+    "/Volumes/Macintosh HD/Users/me/.netrc",
+  ])("%s holds logins", (path) => {
+    expect(sensitiveKinds(path).has("credential-store")).toBe(true);
+  });
+
+  it("keeps ordinary files next to logins readable", () => {
+    for (const path of [
+      "~/.docker/contexts/meta/x/meta.json",
+      "~/.cursor/skills/example/SKILL.md",
+      "~/.config/nvim/init.lua",
+      "~/.local/share/fonts/x.ttf",
+    ]) {
+      expect(sensitiveKinds(path).has("credential-store"), path).toBe(false);
+    }
+  });
+});
+
+describe("homeReadRisk", () => {
+  it.each([
+    // The home folder, spelled every way
+    ["~", "home"],
+    ["~/", "home"],
+    ["/Users/me", "home"],
+    ["/Users/me/", "home"],
+    ["/users/me", "home"],
+    ["/home/user", "home"],
+    ["/root", "home"],
+    ["/System/Volumes/Data/Users/me", "home"],
+    // Folders above it
+    ["/", "home"],
+    ["/*", "home"],
+    ["/Users", "home"],
+    ["/Users/*", "home"],
+    ["/home", "home"],
+    ["~/..", "home"],
+    ["/System/Volumes/Data", "home"],
+    // Globs at its top that reach its dot folders
+    ["~/.*", "home"],
+    ["~/.*/*", "home"],
+    ["~/.[a-z]*", "home"],
+    ["~/*", "home"],
+    ["~/**", "home"],
+    // Folders that hold logins among other things
+    ["~/Library", "secrets"],
+    ["~/Library/*", "secrets"],
+    ["~/Library/Application Support", "secrets"],
+    ["~/Library/Containers", "secrets"],
+    ["~/.config", "secrets"],
+    ["~/.config/*/*", "secrets"],
+    ["~/.local", "secrets"],
+    ["~/.local/share/*", "secrets"],
+    // Whole folders of personal files
+    ["~/Documents", "personal"],
+    ["~/Documents/", "personal"],
+    ["~/Documents/*", "personal"],
+    ["~/Documents/**/*.pdf", "personal"],
+    ["/Users/me/Desktop", "personal"],
+    ["~/Downloads", "personal"],
+    ["~/*.txt", "personal"],
+  ])("%s → %s", (path, risk) => {
+    expect(homeReadRisk(path)).toBe(risk);
+  });
+
+  it.each([
+    "~/Documents/report.txt",
+    "~/Documents/taxes",
+    "~/Projects",
+    "~/Projects/app",
+    "~/code",
+    "~/Library/Preferences/com.example.plist",
+    "~/Library/Messages/chat.db",
+    "~/.config/nvim/init.lua",
+    "~/.gitconfig",
+    "~/.daily-do-list/workspaces/task-1",
+    "/tmp/x",
+    "/etc/hosts",
+    "/usr/local",
+  ])("%s is not a sweep", (path) => {
+    expect(homeReadRisk(path)).toBeNull();
   });
 });
 
