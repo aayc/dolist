@@ -426,7 +426,9 @@ thread summaries to local clients.
 
 **Relay state** (`agent.status` → `placement.relay`): `off` (not relaying), `connecting` (the
 first connection; requests are already forwarded), `connected`, `unreachable` (the link is down;
-retrying) or `not_paired` (no credential, or the machine refused it).
+retrying) or `not_paired` (no credential, or the machine refused it). While `unreachable` or
+`not_paired`, `problem` says why this device can't act on the agent (the messages below) and
+`placement.runsOn` still says where it runs.
 
 **Fallback.** While `unreachable` or `not_paired`, and on any device that doesn't hold the agent
 (another device runs it), the daemon serves the agent read-only from the synced sidecar: threads
