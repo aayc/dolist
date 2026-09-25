@@ -37,6 +37,7 @@ import {
   formatSteerMessage,
   type SteerSource,
 } from "../prompts/subagent";
+import type { RoutineBrief } from "../routines/scheduler";
 import type { ApprovalBroker, GateContext } from "../safety/types";
 import { defaultMimeType } from "../threads/artifacts";
 import type { ThreadStore } from "../threads/types";
@@ -54,6 +55,8 @@ export interface SubagentReport {
   threadId: string;
   status: TaskAgentStatus;
   summary?: string;
+  /** A routine's run: whether it found something new (its `finish_task`). */
+  changed?: boolean;
 }
 
 export interface SubagentSnapshot {
@@ -104,6 +107,8 @@ export interface SubagentManagerOptions {
   logger?: Logger;
   /** Finished sessions kept warm for follow-ups; older ones are disposed (and re-primed later). */
   maxIdleSessions?: number;
+  /** The routine a task is a run of (its kickoff and `finish_task` change accordingly). */
+  routineBrief?: (taskId: string) => RoutineBrief | undefined;
 }
 
 type RunState = "queued" | "starting" | "running" | "idle";
@@ -114,6 +119,8 @@ type PendingPrompt =
 
 interface TurnState {
   finishStatus?: TaskAgentStatus;
+  /** A routine run's `finish_task` said whether anything changed. */
+  changed?: boolean;
   askedUser: boolean;
   error?: string;
   /** Text of the turn's final assistant message ("" when it ended with tool calls only). */
@@ -473,6 +480,7 @@ export class SubagentManager {
         threadId: run.threadId,
         status,
         ...(summary ? { summary } : {}),
+        ...(turn.changed !== undefined ? { changed: turn.changed } : {}),
       });
     } catch (error) {
       this.logger.error("onFinished listener failed", { error: errorText(error) });
@@ -583,8 +591,10 @@ export class SubagentManager {
     if (fresh || pending?.kind === "kickoff") {
       const task = this.options.board.describe(run.taskId);
       const record = this.options.records.get(run.taskId);
+      const routine = this.options.routineBrief?.(run.taskId);
       return buildSubagentKickoff({
         now: this.now(),
+        ...(routine ? { routine } : {}),
         task: {
           text: task?.text ?? record?.text ?? run.spec.goal,
           notes: task?.notes ?? [],
@@ -606,8 +616,9 @@ export class SubagentManager {
 
   private async buildTools(run: Run, task: TaskRef | undefined): Promise<ToolSpec[]> {
     const capabilities = run.spec.capabilities;
+    const routine = this.options.routineBrief?.(run.taskId);
     const tools: ToolSpec[] = [
-      ...createThreadTools(this.threadHost(run)),
+      ...createThreadTools(this.threadHost(run), routine ? { routineRun: true } : {}),
       ...(this.options.taskTools?.(run.taskId) ?? []),
       ...this.options.knowledgeTools(),
     ];
@@ -674,10 +685,11 @@ export class SubagentManager {
         records.bumpUnread(run.taskId);
         return meta;
       },
-      finish: ({ status, summary, shortSummary }) => {
+      finish: ({ status, summary, shortSummary, changed }) => {
         board.postAgentText(run.taskId, run.author, summary);
         const mapped: TaskAgentStatus = status === "needs_user" ? "waiting_user" : status;
         run.turn.finishStatus = mapped;
+        if (changed !== undefined) run.turn.changed = changed;
         board.setStatus(run.taskId, mapped, {
           summary: shortSummary ?? (badgeFrom(summary) || null),
         });

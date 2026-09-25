@@ -3,6 +3,7 @@ import { FILES_READ, FILES_WORKSPACE_WRITE, NOTES_READ, SECRET_SEARCH } from "./
 import { MCP_RULES } from "./mcp";
 import { NOTE_EDIT_RULES } from "./notes";
 import { PATH_RULES } from "./path-rules";
+import { ROUTINE_RULES } from "./routines";
 import {
   SHELL_BENIGN,
   SHELL_FORK_BOMB,
@@ -43,6 +44,7 @@ export const SAFETY_RULES: readonly SafetyRuleInfo[] = Object.freeze(
     FILES_READ,
     NOTES_READ,
     ...NOTE_EDIT_RULES,
+    ...ROUTINE_RULES,
     FILES_WORKSPACE_WRITE,
     SECRET_SEARCH,
   ]),

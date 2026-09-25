@@ -231,6 +231,8 @@ function describeFromFacts(f: ActionFacts): string {
       const edits = Array.isArray(input.edits) ? input.edits.length : 0;
       return `Edit note ${str(input.notePath) ?? "(the task's note)"}: ${edits} change${edits === 1 ? "" : "s"}`;
     }
+    case "routine":
+      return `${humanize(f.operation)}${str(input.name) ? ` “${clip(str(input.name)!, 80)}”` : ""}`;
     case "browser":
     case "computer":
       return describeUi(f) ?? humanize(f.operation);
