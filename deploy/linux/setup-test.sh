@@ -57,8 +57,11 @@ expect_config() {
   got="$(helper read-config --file "$CONFIG" --key "$1")"
   [ "$got" = "$2" ] || fail "config.json $1 is '$got', expected '$2'"
 }
-fingerprint() {
+settings_fingerprint() {
   sha256sum "$CONFIG" "$DDL_HOME_DIR/sync-token" /etc/ddl/ddl.env /etc/ddl/sync.env
+}
+fingerprint() {
+  settings_fingerprint
   readlink /opt/ddl/current
 }
 
@@ -118,6 +121,30 @@ vaults="$(as_ddl node /opt/ddl/current/sync/dist/main.js vault list --db "$STATE
   node -e 'process.stdout.write(String(JSON.parse(require("node:fs").readFileSync(0, "utf8")).length))')"
 [ "$vaults" = 1 ] || fail "expected one sync vault, found $vaults"
 pass "second run: idempotent"
+
+# The installed copy reconfigures in place, without a bundle.
+/opt/ddl/current/deploy/setup.sh "${SETUP_ARGS[@]}" >"$WORK/setup-3.log"
+fingerprint >"$WORK/after-installed"
+diff "$WORK/before" "$WORK/after-installed" || fail "the installed setup.sh changed something"
+pass "installed setup.sh: runs in place, changes nothing"
+
+# An upgrade through --bundle: this bundle again, under another release id.
+mkdir -p "$WORK/next"
+tar -xzf "$BUNDLE_FILE" -C "$WORK/next"
+next_dir="$(find "$WORK/next" -mindepth 1 -maxdepth 1 -type d -name 'ddl-linux-*')"
+node -e '
+const fs = require("node:fs");
+const info = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+fs.writeFileSync(process.argv[1], JSON.stringify({ ...info, release: info.release + "-next" }));
+' "$next_dir/bundle.json"
+tar -czf "$WORK/next.tar.gz" -C "$WORK/next" "$(basename "$next_dir")"
+previous="$(readlink /opt/ddl/current)"
+/opt/ddl/current/deploy/setup.sh --bundle "$WORK/next.tar.gz" "${SETUP_ARGS[@]}" >"$WORK/setup-4.log"
+[ "$(readlink /opt/ddl/current)" = "$previous-next" ] || fail "--bundle didn't switch releases"
+[ -d "/opt/ddl/$previous" ] || fail "the previous release wasn't kept for a rollback"
+settings_fingerprint | diff <(head -n 4 "$WORK/before") - ||
+  fail "the upgrade changed the config or a token"
+pass "upgrade through --bundle: new release current, previous kept, settings unchanged"
 
 # 3. The services, under their hardened units ------------------------------------------------------
 systemctl start ddl-sync
@@ -186,7 +213,7 @@ pass "both stop cleanly"
 
 # 4. No token in setup.sh's output or the journal --------------------------------------------------
 for token in "$DDL_HOME_DIR/sync-token" "$daemon_home/daemon-token"; do
-  if grep -qF -f "$token" "$WORK/setup-1.log" "$WORK/setup-2.log"; then
+  if grep -qF -f "$token" "$WORK"/setup-*.log; then
     fail "setup.sh printed the token in $(basename "$token")"
   fi
   if journalctl -u ddl-daemon -u ddl-sync --no-pager | grep -qF -f "$token"; then

@@ -35,7 +35,8 @@ DEFAULT_PORT=7331
 DEFAULT_SYNC_PORT=7332
 KEEP_RELEASES=3
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Physical paths: run as /opt/ddl/current/deploy/setup.sh, the bundle is the release it points to.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 BUNDLE_FILE=""
 HOSTS=()
 VAULT_NAME=Personal
@@ -172,7 +173,7 @@ if [ -n "$BUNDLE_FILE" ]; then
   SOURCE="$(find "$INCOMING" -mindepth 1 -maxdepth 1 -type d -name 'ddl-linux-*' | head -n 1)"
   [ -n "$SOURCE" ] || fail "$BUNDLE_FILE is not a ddl-linux-<arch>.tar.gz bundle"
 else
-  SOURCE="$(cd "$SCRIPT_DIR/.." && pwd)"
+  SOURCE="$(cd "$SCRIPT_DIR/.." && pwd -P)"
   [ -f "$SOURCE/bundle.json" ] ||
     fail "pass --bundle ddl-linux-<arch>.tar.gz, or run the setup.sh inside an unpacked bundle"
 fi
@@ -185,7 +186,7 @@ RELEASE="${info% *}"
 BUNDLE_ARCH="${info#* }"
 [ "$BUNDLE_ARCH" = "$MACHINE_ARCH" ] ||
   fail "this is a linux-$BUNDLE_ARCH bundle; this machine needs linux-$MACHINE_ARCH"
-TARGET="$PREFIX/releases/$RELEASE"
+TARGET="$(cd "$PREFIX/releases" && pwd -P)/$RELEASE"
 if [ "$SOURCE" != "$TARGET" ]; then
   if [ -z "$BUNDLE_FILE" ]; then
     cp -a "$SOURCE" "$INCOMING/copy"
@@ -270,8 +271,11 @@ note "$SYNC_ENV_FILE: sync service port $SYNC_PORT"
 if [ "$SKIP_BROWSER" = 0 ]; then
   step "Chromium for the agent's browser"
   PLAYWRIGHT="$CURRENT/daemon/node_modules/playwright-core/cli.js"
-  "$NODE" "$PLAYWRIGHT" install-deps chromium
-  as_user "$NODE" "$PLAYWRIGHT" install --no-shell chromium
+  browser_hint="run this again, or pass --skip-browser to finish without the agent's browser"
+  "$NODE" "$PLAYWRIGHT" install-deps chromium ||
+    fail "couldn't install Chromium's system libraries (above): $browser_hint"
+  as_user "$NODE" "$PLAYWRIGHT" install --no-shell chromium ||
+    fail "couldn't download Chromium (above; see Troubleshooting in the README): $browser_hint"
 fi
 
 # 7. systemd units ------------------------------------------------------------------------------

@@ -22,8 +22,9 @@ write_files:
 
 runcmd:
   # Tailscale from its official repository; the machine's tailnet name is its host name (the VM's).
+  # The timeout lets the rest of the first boot finish when the key doesn't work.
   - [sh, -c, "curl -fsSL https://tailscale.com/install.sh | sh"]
-  - [tailscale, up, "--auth-key=file:/run/ddl-bootstrap/tailscale-auth-key", --ssh]
+  - [tailscale, up, "--auth-key=file:/run/ddl-bootstrap/tailscale-auth-key", --ssh, --timeout=5m]
   - [rm, -f, /run/ddl-bootstrap/tailscale-auth-key]
   - [tailscale, set, --auto-update]
   # Node.js 24 from NodeSource, system-wide, where the systemd units find it.

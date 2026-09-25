@@ -186,6 +186,18 @@ The services log to the journal, which journald rotates (`SystemMaxUse=` in
 `/etc/systemd/journald.conf` caps it). Neither service logs tokens or note contents. For more
 detail, add `DDL_LOG_LEVEL=debug` to `/etc/ddl/ddl.env` and restart.
 
+## Troubleshooting
+
+- **`setup.sh` can't download Chromium** (`Request to https://cdn.playwright.dev/… timed out`).
+  Check the machine's outbound access. If it has an IPv6 route that doesn't actually work (some
+  networks advertise one), Playwright's downloader times out instead of falling back to IPv4:
+  fix or disable IPv6 (`sysctl net.ipv6.conf.all.disable_ipv6=1`), then run `setup.sh` again. In
+  the meantime, `--skip-browser` finishes the rest; the agent's browser stays unavailable.
+- **A service doesn't start.** `journalctl -u ddl-daemon -n 50` (or `-u ddl-sync`); configuration
+  errors name the file and the key.
+- **The browser shows `forbidden_host`.** The name you used isn't in `remote.hosts`: run `setup.sh`
+  again with `--host`.
+
 ## Backup
 
 Your devices keep their own copies of the notes, but back up the machine too:
@@ -239,7 +251,7 @@ orb delete ddl-kit-test
 ```sh
 sudo tailscale serve reset
 sudo systemctl disable --now ddl-daemon ddl-sync
-sudo rm -f /etc/systemd/system/ddl-daemon.service /etc/systemd/system/ddl-sync.service
+sudo rm -rf /etc/systemd/system/ddl-daemon.service* /etc/systemd/system/ddl-sync.service*
 sudo systemctl daemon-reload
 sudo rm -rf /opt/ddl
 # The data too (back it up first): notes, sync database, tokens, browser profile, API keys.
