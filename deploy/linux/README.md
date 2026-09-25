@@ -229,8 +229,9 @@ installs system services, it runs only with `CI=true` or `DDL_SETUP_TEST_DISPOSA
 On a Mac, an [OrbStack](https://orbstack.dev) Linux machine works with two adjustments. OrbStack
 forwards the machine's loopback ports to the Mac's, where Daily Do List may already use 7331, so
 the test runs on other ports. And its machines are LXC containers that switch systemd's sandboxing
-off for every service with a drop-in, which the test would catch, so mask it in the throwaway
-machine:
+off with a `zzz-lxc-service.conf` drop-in (for every service, or per unit), which the test would
+catch, so mask it in the throwaway machine. Use the Mac's own architecture (`arm64` on Apple
+silicon): under Rosetta, systemd can't track the services' processes, and the stop checks fail.
 
 ```sh
 deploy/linux/build-bundle.sh --arch arm64          # the machine's CPU
@@ -238,8 +239,10 @@ orb create ubuntu:noble ddl-kit-test
 orb -m ddl-kit-test -u root -w /tmp bash -c '
   curl -fsSL https://deb.nodesource.com/setup_24.x -o /tmp/nodesource_setup.sh
   bash /tmp/nodesource_setup.sh && apt-get install -y nodejs
-  mkdir -p /etc/systemd/system/service.d
-  : >/etc/systemd/system/service.d/zzz-lxc-service.conf && systemctl daemon-reload'
+  for dir in service.d ddl-daemon.service.d ddl-sync.service.d; do
+    mkdir -p "/etc/systemd/system/$dir" && : >"/etc/systemd/system/$dir/zzz-lxc-service.conf"
+  done
+  systemctl daemon-reload'
 orb -m ddl-kit-test -u root -w /tmp env DDL_SETUP_TEST_DISPOSABLE=1 SETUP_TEST_PORT=17331 \
   SETUP_TEST_SYNC_PORT=17332 "$PWD/deploy/linux/setup-test.sh" \
   "$PWD/deploy/linux/build/ddl-linux-arm64.tar.gz"
