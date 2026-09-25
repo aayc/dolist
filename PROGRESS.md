@@ -23,6 +23,8 @@ fix; `7ce1e9f` installed) · in-flight branches pushed to `origin`.
 
 ## Shipped on `main` (newest first)
 
+- `b0897e8` A lease priority test waits for the supervisor's status, not only the sync
+  service's record (it failed under load).
 - `bbe8aff` Linux kit: `setup.sh` stops the daemon before the sync service. One `systemctl
   restart` of both stopped them together; when sync went first the daemon couldn't give the agent
   lease back, and its next run waited up to a minute (the arm64 kit job timed out on it after an
@@ -34,8 +36,7 @@ fix; `7ce1e9f` installed) · in-flight branches pushed to `origin`.
   `tailscale serve`, the relay, lease priorities and fencing (journals included), web and Mac
   Settings, the Linux kit (bundle, `setup.sh`, systemd, Azure guide), and the home-folder safety
   rules (`.env` outside the workspace follows the approval policy). Details in the design and
-  spec below. CI, Security and Linux bundle green on `main`; macOS app dispatched (green on the
-  branch). **Installed** on the main development Mac: agent live here (held here: no sync yet),
+  spec below. CI, Security, Linux bundle and macOS app green on `main`. **Installed** on the main development Mac: agent live here (held here: no sync yet),
   app control kept.
 - `d657518` Merge fix follow-up: a line edit and the lines added next to it merge separately (an
   agent's line under an edited task no longer ends up in a conflict copy; TypeScript and Swift);
@@ -106,7 +107,7 @@ Spec: [docs/specs/drawings.md](docs/specs/drawings.md).
 | X4 the agent sees drawings (descriptions, `read_drawing`, renderer) | `feat/drawings-agent` | done (`3655c0b`, 8 commits): descriptions in the digest, `read_note` and subagent kickoffs (bounded, cached, marked as data), `read_drawing` with a PNG for vision models (Pi from its catalog, Cursor from ACP's image capability), its own headless Chromium (no profile, network blocked, closes idle), cache in `$DDL_HOME/cache/drawings`; drawings never re-triage tasks and agents never write in them. Evals: safety 287/289, triage 80/81, no new misses. Merges into `feat/drawings` with X1 |
 | X3 Mac editor integration (exclusion paths, in-place canvas) | `feat/drawings-mac-editor` (from `178a7f5`) | done (`8ace18d`, 7 commits): floats with TextKit exclusion paths, move/resize, the native canvas in place, Insert Drawing (⇧⌘X), `.excalidraw.md` files open full size, element-level merges (`SceneMerge`, same rules as `mergeDrawingElements`; shared merge vectors are a follow-up); a keystroke beside a float 0.48 ms average / 0.75 ms p95 in a 2,000-line note with six drawings (release). **Merged with X2 into `feat/drawings` at `cddf779`**: lint, typecheck, core 584, web 556, editor 276, Swift Drawing 97, Editor 294 (vim replays 100%), app 258 green |
 
-**All drawings streams are in `feat/drawings` (`cddf779`).** `feat/always-on` merged in at
+**All drawings streams are in `feat/drawings` (`cddf779`).** The Mac placeholders now use the web's words and wrap inside the box (`73b887b`). `feat/always-on` merged in at
 `0174e2b` (12 conflicts: the orchestrator gets every knowledge tool, `search_notes` and
 `read_drawing`; a subagent's kickoff carries both the task's drawings and the journal's uncertain
 side effects; polish audits take `{ ignore, minControls }`; 153 safety rules), then `main` at
@@ -125,7 +126,7 @@ Spec: [docs/specs/obsidian-migration.md](docs/specs/obsidian-migration.md).
 | --- | --- | --- |
 | M the editor merge race (data safety) | `fix/editor-merge-race` | **all on `main`** (`6750f36`, `d657518`). Follow-up (`361f8ac`): the fuzz seed was a real merge bug (an edit plus a line added under it were one block, so an agent's line ended up in a conflict copy); `mergeText` and the Swift port now split replaced blocks; the model tests fail properly instead of via unhandled rejections; two oracle fixes. CI and macOS dispatched on the branch; merge to `main` when green. Fixed (`4d3ef06`): root cause in the Mac `NotesStore.save()` (a clean save kept a stale "unsaved" copy, shown again later and saved with a valid version); also conflicts no longer restore deleted lines (web and Mac, `mergeText` and its Swift port), and remounted web editors keep unsaved typing; guarantee in invariant 7. CI and macOS dispatched on the branch; merge to `main` when green. Now investigating the fuzz seed below and making model-check failures fail the property instead of becoming unhandled rejections. Left as is: on the Mac a remote change is an undoable step (⌘Z right after an external delete restores the lines) |
 | I0 Import from Obsidian: engine, carry-over, vault switch, update | `feat/obsidian-import` | done (`9ebd1cd`, 12 commits); `feat/always-on` merged in at `f0ced02` (daemon 1205, contract 1284 tests green). After an import the real watcher finds no new work (every carried task keeps its id, thread and badge). Vault switch exits 75 (the Mac supervisor relaunches at once). Paired devices get 403 `forbidden_device`; switching is refused while sync is on. Journal files copied unchanged (`remapJournalFile` hook) |
-| I1 Import from Obsidian: web and Mac flows | `feat/obsidian-import-ui` (from `f0ced02`) | in progress (web Settings → Vault with its e2e, and the Mac Settings pane committed at `fa408e6`) |
+| I1 Import from Obsidian: web and Mac flows | `feat/obsidian-import-ui` | done (`8e875b7`, 11 commits): web Settings → Vault and the palette command (the report, import with progress and Cancel, Switch to the new vault behind an overlay that waits for the daemon and reloads, Update from Obsidian); Mac Settings → General → Vault and File menu commands (folder picker, `.importProgress`, the switch through the app's vault preference or the daemon's own restart); README "Moving from Obsidian". Added to I0's contract (optional): `imported` in `GET /api/import/obsidian` and the previous vault in the manifest. **Merged into `feat/obsidian-import` with `main`** (`8ba35c6`): 10 conflicts; the vault section links to Settings → Sync; the web mock has one sync state. Verified: lint, typecheck, TS unit suites (the stdio connector flake passes alone), functional e2e 114 and fullstack 17 passed, Swift Models, Client, Agent, app; integration running. CI, macOS app and Security dispatched. Still to try for real: the Mac switch in the running app, the web switch against a restarting daemon, a real (large) Obsidian vault |
 | B0 binary files, attachment sync, file serving | from `main` | queued, unblocked (the always-on work, which changed the same sync code, is on `main`) |
 | P images, tables, callouts, backlinks (web and Mac) | after the drawings' embed layer | queued (images share the drawings' embed layer) |
 
