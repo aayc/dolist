@@ -3,7 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, join, resolve, sep } from "node:path";
 import type { Context, Hono } from "hono";
 import type { AppContext } from "../context";
-import type { SecurityPolicy } from "../security";
+import { requestHostKind, type SecurityPolicy } from "../security";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -35,17 +35,24 @@ const IMMUTABLE = "public, max-age=31536000, immutable";
 const INLINE_SCRIPT_RE = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
 const HEAD_TAG_RE = /<head(?:\s[^>]*)?>/i;
 
+/** How a page on a remote Host authenticates: the device cookie it carries, or pairing first. */
+export type RemoteAuthMode = "cookie" | "pairing";
+
 interface IndexDocument {
   mtimeMs: number;
   size: number;
-  html: string;
-  csp: string;
+  /** For loopback Hosts only: carries the master token. */
+  withToken: string;
+  remote: Record<RemoteAuthMode, string>;
+  scriptHashes: string[];
 }
 
 /**
- * Serves the built web UI with an SPA fallback. index.html is rendered per request with the bearer
- * token in `<meta name="ddl-token">`, so it is never cached and relies on the Host allowlist to stay
- * unreadable from other origins (DNS rebinding).
+ * Serves the built web UI with an SPA fallback. index.html is rendered per request: on a loopback
+ * Host with the bearer token in `<meta name="ddl-token">` (never cached, and unreadable from other
+ * origins thanks to the Host allowlist), on a remote Host with `<meta name="ddl-auth">` saying
+ * whether the browser's device cookie works or it must pair first. A remote page never holds a
+ * token.
  */
 export function registerWebRoutes(app: Hono, ctx: AppContext): void {
   if (ctx.webDist === null) return;
@@ -61,10 +68,24 @@ export function registerWebRoutes(app: Hono, ctx: AppContext): void {
     cached = {
       mtimeMs: info.mtimeMs,
       size: info.size,
-      html: injectToken(source, ctx.token),
-      csp: appContentSecurityPolicy(inlineScriptHashes(source), ctx.policy),
+      withToken: injectToken(source, ctx.token),
+      remote: {
+        cookie: injectAuthMode(source, "cookie"),
+        pairing: injectAuthMode(source, "pairing"),
+      },
+      scriptHashes: inlineScriptHashes(source),
     };
     return cached;
+  };
+  const serveIndex = (c: Context, index: IndexDocument): Response => {
+    const authority = new URL(c.req.url).host;
+    const kind = requestHostKind(ctx.policy, c.req.header("host") ?? authority, authority);
+    const html = kind === "loopback" ? index.withToken : index.remote.pairing;
+    return c.html(html, 200, {
+      // Remote hosts change live, so the CSP is built per request.
+      ...documentHeaders(appContentSecurityPolicy(index.scriptHashes, ctx.policy)),
+      "Cache-Control": "no-store",
+    });
   };
 
   app.get("*", async (c) => {
@@ -82,7 +103,14 @@ export function registerWebRoutes(app: Hono, ctx: AppContext): void {
 }
 
 export function injectToken(html: string, token: string): string {
-  const meta = `<meta name="ddl-token" content="${escapeAttribute(token)}">`;
+  return injectMeta(html, `<meta name="ddl-token" content="${escapeAttribute(token)}">`);
+}
+
+export function injectAuthMode(html: string, mode: RemoteAuthMode): string {
+  return injectMeta(html, `<meta name="ddl-auth" content="${mode}">`);
+}
+
+function injectMeta(html: string, meta: string): string {
   const head = HEAD_TAG_RE.exec(html);
   if (!head) return `${meta}${html}`;
   const at = head.index + head[0].length;
@@ -104,7 +132,11 @@ export function inlineScriptHashes(html: string): string[] {
 }
 
 export function appContentSecurityPolicy(scriptHashes: string[], policy: SecurityPolicy): string {
-  const sockets = [`ws://127.0.0.1:${policy.port}`, `ws://localhost:${policy.port}`];
+  const sockets = [
+    `ws://127.0.0.1:${policy.port}`,
+    `ws://localhost:${policy.port}`,
+    ...policy.remoteSocketSources(),
+  ];
   return [
     "default-src 'self'",
     ["script-src 'self'", ...scriptHashes].join(" "),
@@ -121,13 +153,6 @@ export function appContentSecurityPolicy(scriptHashes: string[], policy: Securit
     "form-action 'self'",
     "frame-ancestors 'none'",
   ].join("; ");
-}
-
-function serveIndex(c: Context, index: IndexDocument): Response {
-  return c.html(index.html, 200, {
-    ...documentHeaders(index.csp),
-    "Cache-Control": "no-store",
-  });
 }
 
 async function serveFile(c: Context, file: string, pathname: string): Promise<Response | null> {

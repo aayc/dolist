@@ -18,7 +18,7 @@ import { type RawData, WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
 import { errorMessage } from "./errors";
 import { isValidClientId } from "./http-utils";
-import type { SecurityPolicy } from "./security";
+import { forwardedByProxy, requestHostKind, type SecurityPolicy } from "./security";
 import type { SettingsStore } from "./settings-store";
 import { parseBearer } from "./token";
 import { VaultChangeBatcher } from "./vault-events";
@@ -321,10 +321,10 @@ function upgradeRejection(req: IncomingMessage, policy: SecurityPolicy): 401 | 4
   if (target?.url.pathname !== API_ROUTES.ws) return 404;
   // Node keeps only the first of repeated Host/Authorization headers while the HTTP guard sees them
   // joined (and refuses), so ambiguous upgrades are refused as well.
-  if (headerCount(req.rawHeaders, "host") !== 1 || !policy.isHostAllowed(req.headers.host)) {
-    return 403;
-  }
-  if (target.absolute && !policy.isHostAllowed(target.url.host)) return 403;
+  const host = req.headers.host;
+  const kind = requestHostKind(policy, host, target.absolute ? target.url.host : host);
+  if (headerCount(req.rawHeaders, "host") !== 1 || kind === null) return 403;
+  if (kind === "loopback" && forwardedByProxy((name) => headerValue(req, name))) return 403;
   const origin = req.headers.origin;
   if (origin !== undefined && !policy.isOriginAllowed(origin)) return 403;
   if (headerCount(req.rawHeaders, "authorization") > 1) return 401;
@@ -341,6 +341,11 @@ function parseRequestTarget(raw: string | undefined): { url: URL; absolute: bool
   } catch {
     return null;
   }
+}
+
+function headerValue(req: IncomingMessage, name: string): string | undefined {
+  const value = req.headers[name];
+  return Array.isArray(value) ? value.join(", ") : value;
 }
 
 function headerCount(rawHeaders: readonly string[], name: string): number {

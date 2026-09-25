@@ -27,6 +27,7 @@ import {
 import { MemoryStorageProvider, type StorageProvider } from "@ddl/storage";
 import type { Hono } from "hono";
 import { createApp } from "./app";
+import { createRemoteHosts, type RemoteHostRegistry } from "./remote-hosts";
 import { createSettingsStore, type SettingsStore } from "./settings-store";
 import type { SystemSettingsOpener } from "./system-settings";
 import { WriteTracker } from "./write-tracker";
@@ -267,6 +268,7 @@ export interface TestAppOptions<S extends StorageProvider = MemoryStorageProvide
   settings?: SettingsStore;
   webDist?: string | null;
   allowedOrigins?: string[];
+  remoteHosts?: RemoteHostRegistry;
   syncStatus?: () => SyncStatusResponse;
   now?: () => Date;
   logger?: Logger;
@@ -278,6 +280,7 @@ export interface TestApp<S extends StorageProvider = MemoryStorageProvider> {
   storage: S;
   runtime: AgentRuntime;
   settings: SettingsStore;
+  remoteHosts: RemoteHostRegistry;
   token: string;
   writes: WriteTracker;
   systemSettings: FakeSystemSettings;
@@ -297,12 +300,14 @@ export async function createTestApp<S extends StorageProvider = MemoryStoragePro
   const token = testToken();
   const writes = new WriteTracker();
   const systemSettings = options.systemSettings ?? new FakeSystemSettings();
+  const remoteHosts = options.remoteHosts ?? createRemoteHosts();
   const app = createApp({
     storage,
     runtime,
     settings,
     config: { port: TEST_PORT, allowedOrigins: options.allowedOrigins ?? [] },
     token,
+    remoteHosts,
     logger: options.logger ?? silentLogger,
     webDist: options.webDist ?? null,
     writes,
@@ -331,5 +336,5 @@ export async function createTestApp<S extends StorageProvider = MemoryStoragePro
     );
   };
 
-  return { app, storage, runtime, settings, token, writes, systemSettings, request };
+  return { app, storage, runtime, settings, remoteHosts, token, writes, systemSettings, request };
 }

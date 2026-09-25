@@ -9,6 +9,7 @@ import { getPath } from "hono/utils/url";
 import type { DaemonConfig } from "./config";
 import type { AppContext } from "./context";
 import { createErrorHandler, errorBody } from "./errors";
+import { createRemoteHosts, type RemoteHosts } from "./remote-hosts";
 import { registerAgentRoutes } from "./routes/agent";
 import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerComputerRoutes } from "./routes/computer";
@@ -34,6 +35,8 @@ export interface AppDeps {
   /** `port` must be the port actually listened on (it is part of the Host/Origin allowlists). */
   config: Pick<DaemonConfig, "port" | "allowedOrigins">;
   token: string;
+  /** Shared with the WebSocket hub's policy. Default: none (loopback only). */
+  remoteHosts?: RemoteHosts;
   logger: Logger;
   /** Built web UI directory; `null` or omitted disables static serving. */
   webDist?: string | null;
@@ -50,6 +53,7 @@ export interface AppDeps {
 }
 
 export function createApp(deps: AppDeps): Hono {
+  const remoteHosts = deps.remoteHosts ?? createRemoteHosts();
   const ctx: AppContext = {
     storage: deps.storage,
     runtime: deps.runtime,
@@ -58,7 +62,9 @@ export function createApp(deps: AppDeps): Hono {
       port: deps.config.port,
       token: deps.token,
       extraOrigins: deps.config.allowedOrigins,
+      remoteHosts,
     }),
+    remoteHosts,
     token: deps.token,
     logger: deps.logger,
     webDist: deps.webDist ?? null,

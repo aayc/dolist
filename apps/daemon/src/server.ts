@@ -25,6 +25,7 @@ import { type DaemonConfig, loadConfig, summarizeConfig } from "./config";
 import { errorMessage } from "./errors";
 import { displayPath } from "./home-paths";
 import { LeasedAgentRuntime } from "./leased-runtime";
+import { createRemoteHosts } from "./remote-hosts";
 import { disabledSyncStatusResponse, toSyncStatusResponse } from "./routes/sync";
 import { createSecurityPolicy } from "./security";
 import { createSettingsStore } from "./settings-store";
@@ -44,7 +45,10 @@ import {
 import { WriteTracker } from "./write-tracker";
 import { attachWebSocketHub, type WebSocketHub } from "./ws";
 
-/** Loopback only: agents can act on this machine, so the daemon is never reachable remotely. */
+/**
+ * Loopback only: agents can act on this machine. Other devices reach the daemon only through a
+ * private-network proxy on this machine (`tailscale serve`), under a configured remote host.
+ */
 export const BIND_HOST = "127.0.0.1";
 const HTTP_CLOSE_GRACE_MS = 2_000;
 /** A sync pass run around agent handovers (before starting, after stopping) is bounded by this. */
@@ -158,12 +162,14 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     const server = createServer(getRequestListener((request, env) => handler(request, env)));
     resources.server = server;
     const port = await listen(server, config.port);
+    const remoteHosts = createRemoteHosts(config.remoteHosts);
     const app = createApp({
       storage,
       runtime,
       settings,
       config: { port, allowedOrigins: config.allowedOrigins },
       token,
+      remoteHosts,
       logger: logger.child({ component: "http" }),
       webDist: config.webDist,
       connectors,
@@ -176,7 +182,12 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
 
     resources.hub = attachWebSocketHub({
       server,
-      policy: createSecurityPolicy({ port, token, extraOrigins: config.allowedOrigins }),
+      policy: createSecurityPolicy({
+        port,
+        token,
+        extraOrigins: config.allowedOrigins,
+        remoteHosts,
+      }),
       storage,
       runtime,
       settings,

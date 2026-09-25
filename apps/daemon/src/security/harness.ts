@@ -15,6 +15,7 @@ import { fc } from "@fast-check/vitest";
 import { getRequestListener } from "@hono/node-server";
 import { type ClientOptions, WebSocket } from "ws";
 import { createApp } from "../app";
+import { createRemoteHosts, type RemoteHostRegistry } from "../remote-hosts";
 import { createSecurityPolicy } from "../security";
 import { createSettingsStore, type SettingsStore } from "../settings-store";
 import { FakeAgentRuntime, tempDir, testToken } from "../test-helpers";
@@ -44,6 +45,7 @@ export interface LiveAppOptions<S extends StorageProvider> {
   runtime?: FakeAgentRuntime;
   webDist?: string | null;
   allowedOrigins?: string[];
+  remoteHosts?: RemoteHostRegistry;
   logger?: Logger;
   hub?: HubTuning;
 }
@@ -56,6 +58,7 @@ export interface LiveApp<S extends StorageProvider> {
   readonly storage: S;
   readonly runtime: FakeAgentRuntime;
   readonly settings: SettingsStore;
+  readonly remoteHosts: RemoteHostRegistry;
   readonly writes: WriteTracker;
   readonly hub: WebSocketHub;
   readonly server: Server;
@@ -82,19 +85,21 @@ export async function startLiveApp<S extends StorageProvider = MemoryStorageProv
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as AddressInfo).port;
   const allowedOrigins = options.allowedOrigins ?? [];
+  const remoteHosts = options.remoteHosts ?? createRemoteHosts();
   handler = createApp({
     storage,
     runtime,
     settings,
     config: { port, allowedOrigins },
     token,
+    remoteHosts,
     logger,
     webDist: options.webDist ?? null,
     writes,
   }).fetch;
   const hub = attachWebSocketHub({
     server,
-    policy: createSecurityPolicy({ port, token, extraOrigins: allowedOrigins }),
+    policy: createSecurityPolicy({ port, token, extraOrigins: allowedOrigins, remoteHosts }),
     storage,
     runtime,
     settings,
@@ -111,6 +116,7 @@ export async function startLiveApp<S extends StorageProvider = MemoryStorageProv
     storage,
     runtime,
     settings,
+    remoteHosts,
     writes,
     hub,
     server,
