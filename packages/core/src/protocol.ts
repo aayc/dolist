@@ -31,7 +31,14 @@ import type {
   ThreadMessage,
   ThreadSummary,
 } from "./agent-types";
-import type { AgentHarnessKind, AlwaysOnMachine, AppSettings, DeepPartial } from "./settings";
+import type { DailyNoteSettings } from "./daily-notes";
+import type {
+  AgentHarnessKind,
+  AlwaysOnMachine,
+  AppSettings,
+  DeepPartial,
+  ThemePreference,
+} from "./settings";
 
 /**
  * Major version of the protocol, bumped only for breaking changes (everything else is additive).
@@ -514,6 +521,275 @@ export interface DeviceSyncSetupRequest {
   vault: string;
   /** Omit to keep the saved token. Written 0600 to `$DDL_HOME/sync-token`. */
   token?: string;
+}
+
+/** How a daemon that exits to apply a change comes back: its supervisor (the Mac app) starts it again, or the user does. */
+export type DaemonRestart = "supervisor" | "manual";
+
+export interface DeviceVaultRequest {
+  /** An existing folder: absolute, or starting with `~/`. */
+  path: string;
+}
+
+export interface DeviceVaultResponse {
+  /** The vault this daemon serves (absolute). */
+  path: string;
+  /** `DDL_VAULT` sets it: switching answers 409 `locked_by_env`. */
+  lockedByEnv: boolean;
+  /**
+   * Set when switching: the daemon exits with `RESTART_EXIT_CODE` right after answering, and opens
+   * the new vault when it starts again.
+   */
+  restart?: DaemonRestart;
+}
+
+// ── Importing an Obsidian vault ────────────────────────────────────────────
+
+/** Lists in import reports hold at most this many entries (their `count` is the full number). */
+export const IMPORT_REPORT_LIMIT = 200;
+
+export interface ObsidianImportPreviewRequest {
+  /** The Obsidian vault folder: absolute, or starting with `~/`. Only ever read. */
+  source: string;
+}
+
+export interface ObsidianImportRequest {
+  source: string;
+  /** A new or empty folder, never inside the source. Default: the preview's `defaultDestination`. */
+  destination?: string;
+}
+
+export interface ImportPathList {
+  count: number;
+  /** Vault-relative, sorted; at most `IMPORT_REPORT_LIMIT`. */
+  paths: string[];
+}
+
+export interface ImportMove {
+  from: string;
+  to: string;
+}
+
+export interface ImportMoveList {
+  count: number;
+  /** At most `IMPORT_REPORT_LIMIT`, sorted by `from`. */
+  items: ImportMove[];
+}
+
+export type ImportSkipReason =
+  /** A symlink to something outside the vault (never followed). */
+  | "symlink_outside"
+  /** A symlink to a folder inside the vault (its target is copied where it is). */
+  | "symlink_folder"
+  /** Not a regular file (socket, pipe, device). */
+  | "special_file"
+  | "unreadable"
+  /** The vault's own `.daily-do-list/` folder: the carried-over agent history replaces it. */
+  | "sidecar";
+
+export interface ImportSkipped {
+  path: string;
+  reason: ImportSkipReason;
+}
+
+export interface ImportSkippedList {
+  count: number;
+  items: ImportSkipped[];
+}
+
+export type AttachmentType = "image" | "pdf" | "audio" | "video" | "other";
+
+export interface AttachmentTypeSummary {
+  type: AttachmentType;
+  count: number;
+  bytes: number;
+}
+
+export interface AttachmentSummary {
+  count: number;
+  bytes: number;
+  /** Types that occur, in `AttachmentType` order. */
+  byType: AttachmentTypeSummary[];
+}
+
+export type ObsidianPluginSupport = "supported" | "partial" | "unsupported" | "unknown";
+
+export interface ObsidianPlugin {
+  id: string;
+  /** From the plugin's manifest, when it could be read. */
+  name?: string;
+  support: ObsidianPluginSupport;
+  /** How it fares here, one sentence. */
+  note: string;
+}
+
+/** The editor preferences Obsidian's `app.json` holds that this app imports. */
+export interface ObsidianEditorSettings {
+  vimMode?: boolean;
+  livePreview?: boolean;
+  readableLineLength?: boolean;
+  showLineNumbers?: boolean;
+  spellcheck?: boolean;
+}
+
+export interface ObsidianSettingsFound {
+  /** Config files found, vault-relative (`.obsidian/daily-notes.json`, `.obsidian.vimrc`, …). */
+  files: string[];
+  /** The daily notes Obsidian keeps (its defaults when the plugin is on without a config); null when it keeps none. */
+  dailyNotes: DailyNoteSettings | null;
+  editor: ObsidianEditorSettings;
+  /** A vimrc will be imported with the editor settings. */
+  vimrc: boolean;
+  theme?: ThemePreference;
+}
+
+export interface ObsidianTemplates {
+  /** The templates folder (core Templates, else Templater), vault-relative; null when none is set. */
+  folder: string | null;
+  /** Notes in it. */
+  count: number;
+}
+
+/** Where the new vault's daily-note settings come from. */
+export type DailyNotesSource = "obsidian" | "obsidian_defaults" | "daily_do_list";
+
+export interface CarryOverDailyNote {
+  /** YYYY-MM-DD. */
+  date: string;
+  from: string;
+  to: string;
+  /** Obsidian has a note for this date: it is kept and this one appended under `## From Daily Do List`. */
+  merged: boolean;
+}
+
+export interface CarryOverAgent {
+  threads: number;
+  /** Threads whose task can't be found in the new vault: kept, and marked detached. */
+  detached: number;
+  records: number;
+  approvals: number;
+  /** Routines with scheduler state. */
+  routines: number;
+  /** Daily notes whose task identities carry over. */
+  trackedNotes: number;
+  /** Journal files, copied as they are (see the import README). */
+  journal: number;
+}
+
+/** What happens to the current vault's notes, routines, drawings and agent history. */
+export interface CarryOverPlan {
+  /** The current vault: left untouched (it's the backup). */
+  vault: string;
+  /** The new vault's daily-note settings. */
+  dailyNotes: DailyNoteSettings;
+  dailyNotesFrom: DailyNotesSource;
+  /** Every other file, at the same path unless it collides (`to` differs, see `collisions`). */
+  notes: ImportMoveList;
+  daily: { count: number; merged: number; items: CarryOverDailyNote[] };
+  /** Files renamed because the Obsidian vault has one at that path: `Name (Daily Do List).md`. */
+  collisions: ImportMoveList;
+  routines: number;
+  drawings: number;
+  agent: CarryOverAgent;
+  /**
+   * Open tasks in Obsidian's daily notes inside the agent's watch window. After the switch the
+   * agent treats them as existing tasks: it acts on them only when `actOnExistingTasks` is on.
+   */
+  watchedOpenTasks: number;
+  actOnExistingTasks: boolean;
+  /** Hidden files and folders of the current vault that stay behind (other than the sidecar and `.trash/`). */
+  leftBehind: ImportPathList;
+}
+
+export interface ObsidianImportPreview {
+  /** The resolved source folder. */
+  source: string;
+  /** Next to the current vault, never inside the source. */
+  defaultDestination: string;
+  /** It has an `.obsidian/` folder. */
+  isObsidianVault: boolean;
+  /** Everything that will be copied, `.obsidian/` and attachments included. */
+  files: number;
+  bytes: number;
+  /** Markdown notes outside hidden folders (drawings not included). */
+  notes: number;
+  folders: number;
+  attachments: AttachmentSummary;
+  settings: ObsidianSettingsFound;
+  templates: ObsidianTemplates;
+  /** Enabled community plugins. */
+  plugins: ObsidianPlugin[];
+  /** Canvas files: copied, not viewable here yet. */
+  canvases: ImportPathList;
+  /** Excalidraw drawings (`*.excalidraw.md`). */
+  drawings: ImportPathList;
+  skipped: ImportSkippedList;
+  carryOver: CarryOverPlan;
+  /** Things to know before importing, one sentence each. */
+  warnings: string[];
+}
+
+export type ObsidianImportJobKind = "import" | "update";
+export type ObsidianImportJobState = "running" | "done" | "failed" | "cancelled";
+export type ObsidianImportPhase = "checking" | "copying" | "carrying_over" | "finishing";
+
+export interface ObsidianImportProgress {
+  files: number;
+  totalFiles: number;
+  bytes: number;
+  totalBytes: number;
+}
+
+export interface ObsidianImportResult {
+  copied: { files: number; bytes: number };
+  skipped: ImportSkippedList;
+  carryOver: CarryOverPlan;
+  /** Vault path of the manifest (`.daily-do-list/import/obsidian.json`). */
+  manifest: string;
+}
+
+export interface ObsidianUpdateReport {
+  /** New in Obsidian: copied. */
+  added: ImportPathList;
+  /** Changed in Obsidian, unchanged here: replaced. */
+  updated: ImportPathList;
+  /** Changed in Obsidian after being deleted here: written back. */
+  restored: ImportPathList;
+  /** Changed on both sides: `from` is kept, the Obsidian version is saved as `to`. */
+  conflicts: ImportMoveList;
+  /** Deleted in Obsidian: kept here (an update never deletes). */
+  deletedInSource: ImportPathList;
+  unchanged: number;
+  skipped: ImportSkippedList;
+}
+
+export interface ObsidianImportJob {
+  id: string;
+  kind: ObsidianImportJobKind;
+  state: ObsidianImportJobState;
+  /** The current phase, or the last one reached. */
+  phase: ObsidianImportPhase;
+  source: string;
+  /** The new vault (`import`), or the vault being updated (`update`). */
+  destination: string;
+  startedAt: number;
+  finishedAt?: number;
+  progress: ObsidianImportProgress;
+  /** Why it failed. */
+  error?: string;
+  /** What an import did (`done`). */
+  result?: ObsidianImportResult;
+  /** What an update did (`done`). */
+  update?: ObsidianUpdateReport;
+}
+
+export interface ObsidianImportJobResponse {
+  job: ObsidianImportJob;
+}
+
+export interface ObsidianImportStatusResponse {
+  /** The running job, or the last one since the daemon started; null when there was none. */
+  job: ObsidianImportJob | null;
 }
 
 // ── Pairing (this daemon issuing device credentials) ───────────────────────

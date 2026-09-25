@@ -21,6 +21,8 @@ export const PERSISTED_PATHS = {
   corrupt: `${SIDECAR_DIR}/corrupt`,
   /** Owned by @ddl/storage's SyncEngine (machine-local, never synced). */
   sync: `${SIDECAR_DIR}/sync`,
+  /** What an import from Obsidian copied (machine-local, never synced). */
+  importManifest: `${SIDECAR_DIR}/import/obsidian.json`,
 } as const;
 
 /** Epoch milliseconds. Any finite number is accepted on read; writers produce integers. */

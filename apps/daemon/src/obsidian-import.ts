@@ -11,15 +11,18 @@ import {
 import type { StorageProvider } from "@ddl/storage";
 import { z } from "zod";
 
-const DAILY_NOTES_FILE = ".obsidian/daily-notes.json";
-const APP_FILE = ".obsidian/app.json";
-const APPEARANCE_FILE = ".obsidian/appearance.json";
+export const DAILY_NOTES_FILE = ".obsidian/daily-notes.json";
+export const APP_FILE = ".obsidian/app.json";
+export const APPEARANCE_FILE = ".obsidian/appearance.json";
 /** Where the Obsidian "Vimrc Support" plugin reads its vimrc from by default. */
-const VIMRC_FILE = ".obsidian.vimrc";
+export const VIMRC_FILE = ".obsidian.vimrc";
 const MAX_VIMRC_LENGTH = 16_384;
 
 /** Obsidian's daily-notes defaults, used for keys missing from its config file. */
-const OBSIDIAN_DAILY_FORMAT = "YYYY-MM-DD";
+export const OBSIDIAN_DAILY_FORMAT = "YYYY-MM-DD";
+
+/** Reads vault files; only `read` is needed, so a read-only view of another folder works too. */
+export type VaultReader = Pick<StorageProvider, "read">;
 
 const DailyNotesFileSchema = z.looseObject({
   folder: z.string().optional(),
@@ -48,7 +51,7 @@ const OBSIDIAN_THEMES: Record<string, ThemePreference> = {
  * preferences (vim mode, …) and the base theme. Missing or unreadable files are skipped.
  */
 export async function readObsidianSettings(
-  storage: StorageProvider,
+  storage: VaultReader,
   logger: Logger,
 ): Promise<DeepPartial<AppSettings>> {
   const patch: DeepPartial<AppSettings> = {};
@@ -88,8 +91,8 @@ export async function readObsidianSettings(
   return patch;
 }
 
-async function readConfig<S extends z.ZodType>(
-  storage: StorageProvider,
+export async function readConfig<S extends z.ZodType>(
+  storage: VaultReader,
   path: string,
   schema: S,
   logger: Logger,
@@ -114,7 +117,7 @@ async function readConfig<S extends z.ZodType>(
   return null;
 }
 
-async function readVimrc(storage: StorageProvider, logger: Logger): Promise<string | null> {
+async function readVimrc(storage: VaultReader, logger: Logger): Promise<string | null> {
   try {
     const file = await storage.read(VIMRC_FILE);
     if (!file || file.content.trim() === "") return null;
@@ -133,7 +136,7 @@ async function readVimrc(storage: StorageProvider, logger: Logger): Promise<stri
 }
 
 /** Vault-relative, trailing-slash-free path; invalid or hidden values fall back to the vault root. */
-function cleanPath(value: string | undefined, field: string, logger: Logger): string {
+export function cleanPath(value: string | undefined, field: string, logger: Logger): string {
   const trimmed = value?.trim();
   if (!trimmed) return "";
   const normalized = tryNormalize(trimmed);

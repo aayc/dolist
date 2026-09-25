@@ -1,4 +1,5 @@
 import { PERSISTED_APPROVALS_VERSION } from "./approvals";
+import { PERSISTED_IMPORT_MANIFEST_VERSION } from "./import-manifest";
 import { PERSISTED_PATHS } from "./primitives";
 import { PERSISTED_RECORDS_VERSION } from "./records";
 import { PERSISTED_ROUTINES_VERSION } from "./routines";
@@ -13,7 +14,8 @@ export type PersistedFormatName =
   | "records"
   | "approvals"
   | "routines"
-  | "settings";
+  | "settings"
+  | "import-manifest";
 
 export interface PersistedFormatInfo {
   name: PersistedFormatName;
@@ -77,5 +79,12 @@ export const PERSISTED_FORMATS: readonly PersistedFormatInfo[] = [
     version: PERSISTED_SETTINGS_VERSION,
     owner: "apps/daemon/src/settings-store.ts",
     syncs: true,
+  },
+  {
+    name: "import-manifest",
+    path: PERSISTED_PATHS.importManifest,
+    version: PERSISTED_IMPORT_MANIFEST_VERSION,
+    owner: "apps/daemon/src/import/manifest.ts",
+    syncs: false,
   },
 ];

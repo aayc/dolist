@@ -44,6 +44,16 @@ export {
   PersistedWriteConflictError,
 } from "./file";
 export {
+  decodePersistedImportManifest,
+  encodePersistedImportManifest,
+  PERSISTED_IMPORT_MANIFEST_VERSION,
+  type PersistedImportFile,
+  PersistedImportFileSchema,
+  type PersistedImportManifest,
+  type PersistedImportManifestFile,
+  PersistedImportManifestFileSchema,
+} from "./import-manifest";
+export {
   PERSISTED_FILE_ID_PATTERN,
   PERSISTED_PATHS,
   PersistedActionCategorySchema,
