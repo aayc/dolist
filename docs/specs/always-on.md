@@ -235,6 +235,32 @@ Swift: `DailyDoListModels` mirrors all of the above and decodes the new fixtures
 values decode leniently (follow the existing `WireEnum` pattern). Keep everything additive so
 older clients still decode.
 
+### As built by S0 (binding for S1–S5)
+
+- Core: types and `API_ROUTES` in `packages/core/src/protocol.ts`; `AlwaysOnMachine` and
+  `RemoteSettings` (`AppSettings.remote`) in `settings.ts`; lease priority, `epoch`,
+  `AGENT_OWNED_PREFIXES`, `LEASE_EPOCH_HEADER` and `stale_lease` in `sync-service.ts`; shared pure
+  validators (remote hosts, machine and sync URLs, device names, pairing codes) in
+  `packages/core/src/remote.ts` — use them, don't re-implement.
+- Contract: schemas in `packages/contract/src/wire/remote.ts` (machine and settings in
+  `wire/settings.ts` and `persisted/settings.ts`); the `pairing_code` auth kind; an empty (204)
+  response kind. Swift: `DailyDoListModels/Remote.swift`.
+- Route names: `device`, `deviceSync`, `pairingCodes`, `pair`, `devices`, `pairedDevice`, `machine`,
+  `machinePair`, `machineCheck`, `machinePairing`.
+- Error codes: `pairing_rejected` (401: a bad or expired code, distinct from `unauthorized`),
+  `locked_by_env` (409, also on `PUT`/`DELETE /api/device/sync`), `rate_limited` (429, also on
+  `POST /api/machine/pair`), `machine_unreachable` (502); 400 for a malformed id on
+  `DELETE /api/devices/:id`.
+- `AgentReadiness.harness.kind` is `AgentHarnessKind`. `alwaysOnMachine.url` in settings is stored
+  normalized (lowercase, no trailing slash); `MachinePairRequest` accepts any valid form.
+- The new routes aren't served yet: `apps/daemon/src/contract.test.ts` has a `NOT_SERVED_YET` list
+  (each entry checked to answer 404). Whoever implements a route replaces its entry with real
+  conformance scenarios covering every declared status.
+- The sync service already stores and reports the holder's `priority` and `epoch` (schema
+  upgraded in place); takeover, yielding and the stale-lease rule are S2's.
+- The Mac client's `RESTTransport` treats every 401 as "token rejected"; `/api/pair` and
+  `/api/machine/pair` must check for `pairing_rejected` (S5).
+
 ## Security requirements
 
 - Remote hosts are configured, never inferred. Each adds an allowed Host, the `https://` Origin

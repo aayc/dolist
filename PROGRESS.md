@@ -62,7 +62,7 @@ Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md). Spec, with the exact wire contra
 
 | Stream | Branch | State |
 | --- | --- | --- |
-| S0 wire contract | `feat/always-on` | in progress; S1–S5 branch from its final commit |
+| S0 wire contract | `feat/always-on` | done at `72a9ee8`; adding `heldHere` and the fencing types now; S1–S5 branch from its final commit |
 | S6 VM setup kit (Linux bundle, systemd, Azure guide, CI smoke) | `feat/always-on-kit` | in progress |
 | S1 remote access and pairing | from `feat/always-on` | not started (waits for S0) |
 | S2 placement, lease priorities, machine link | from `feat/always-on` | not started (waits for S0) |
@@ -70,9 +70,7 @@ Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md). Spec, with the exact wire contra
 | S4 web Settings and pairing screen | from `feat/always-on` | not started (waits for S0) |
 | S5 macOS Settings | from `feat/always-on` | not started (waits for S0) |
 
-Spec changes after S0 started: `AgentPlacementStatus.heldHere`, the orchestrator toggle, and
-fencing (lease `epoch`, `AGENT_OWNED_PREFIXES`, `X-DDL-Lease-Epoch`, the `stale_lease` error).
-When S0 reports, check its contract has them; add what's missing before S1–S5 fork.
+The spec's "As built by S0" section records S0's names and extra error codes; S1–S5 follow it.
 
 Next: when S0 lands, start S1–S5; merge S1, S2, S3, then S4 and S5 into `feat/always-on`; add the
 pairing step to S6's CI smoke test; merge the kit; full verification; `main`; push; CI. After
