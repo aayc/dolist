@@ -26,6 +26,7 @@ corpus (about 20,000 cases) and the Swift tests assert identical results.
 | `TextMerge` (`diffLines`, `merge`, `lines`), `LineHunk`, `MergeResult` | `merge.ts` (`diffLines`, `mergeText`) |
 | `WikiLinks` (`parse`, `resolve`) | `markdown/wikilinks.ts` |
 | `VaultTree` | `apps/web/src/features/explorer/tree.ts` |
+| `RemoteAccess` (remote hosts, machine and sync service URLs, device names, pairing codes, sync ids) | `remote.ts`, `SYNC_ID_PATTERN` of `sync-service.ts` |
 | `Fuzzy` | Swift-native, modeled on `apps/web/src/lib/fuzzy.ts` |
 
 What "exactly" takes, beyond the algorithms:
@@ -75,6 +76,10 @@ What "exactly" takes, beyond the algorithms:
   `node(at:)`, `ancestors(of:)` / `revealing(_:in:)` to expand to a file, `visibleRows` for a flat
   outline list. Folders implied by file paths are created; distinct Unicode spellings of a folder
   stay distinct.
+- `RemoteAccess` is checked against the core's own test cases (`RemoteAccessTests`), not
+  vectors. URLs are read like the WHATWG parser reads them (IPv4 shorthands such as `127.1`,
+  default ports, case), except that hosts must be ASCII (the core would convert an international
+  name to punycode) and credentials are refused even when empty: stricter, never looser.
 - `Fuzzy.match(_:in:)` / `Fuzzy.rank(query:candidates:limit:)` (and a keyed generic `rank`):
   case-insensitive subsequence matching with the web app's scoring (word starts after
   `space / \ - _ . : ( [ {`, camelCase humps and digits; first-character bonus; streaks; gap
