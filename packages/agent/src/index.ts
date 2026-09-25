@@ -62,6 +62,8 @@ export {
   createOrchestratorTools,
   SETTABLE_TASK_STATUSES,
 } from "./tools/orchestrator";
+export type { RoutineToolHost } from "./tools/routines";
+export { createRoutineTools } from "./tools/routines";
 export type { ThreadToolHost } from "./tools/thread";
 export { createThreadTools, THREAD_TOOL_NAMES } from "./tools/thread";
 export { createWebTools } from "./tools/web";
