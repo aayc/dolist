@@ -46,6 +46,14 @@ struct WireSchema: Sendable {
     return Set(properties.keys)
   }
 
+  /// Whether the `ServerEvent` union has a branch for events of `type`.
+  func declaresEvent(_ type: String) -> Bool {
+    guard case .array(let branches)? = definitions["ServerEvent"]?["oneOf"] else { return false }
+    return branches.map(resolve).contains {
+      $0["properties"]?["type"]?["const"] == .string(type)
+    }
+  }
+
   /// Required property names of an object definition.
   func required(of name: String) -> Set<String> {
     guard case .array(let keys)? = definitions[name]?["required"] else { return [] }
