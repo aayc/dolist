@@ -23,6 +23,7 @@ import {
   operationKey,
   routePath,
 } from "./contract-test-helpers";
+import { createRemoteHosts } from "./remote-hosts";
 import type { SettingsStore } from "./settings-store";
 import {
   createTestApp,
@@ -30,6 +31,7 @@ import {
   FakeSystemSettings,
   makeApproval,
   makeThread,
+  type TestApp,
   type TestAppOptions,
 } from "./test-helpers";
 
@@ -39,6 +41,7 @@ interface Env {
   api: ContractClient;
   storage: MemoryStorageProvider;
   runtime: FakeAgentRuntime;
+  app: TestApp;
 }
 
 async function setup(observed: Observed, options: TestAppOptions = {}): Promise<Env> {
@@ -46,7 +49,7 @@ async function setup(observed: Observed, options: TestAppOptions = {}): Promise<
   const runtime =
     (options.runtime as FakeAgentRuntime | undefined) ?? new FakeAgentRuntime({ storage });
   const app = await createTestApp({ ...options, storage, runtime });
-  return { api: contractClient(app, observed), storage: app.storage, runtime };
+  return { api: contractClient(app, observed), storage: app.storage, runtime, app };
 }
 
 function unavailable(message = "OPENROUTER_API_KEY is not set"): Error {
@@ -577,6 +580,98 @@ const scenarios: Record<string, Scenario> = {
     expect((await api.call("ws", "GET", { host: "evil.example:7331" })).status).toBe(403);
   },
 
+  "POST pairingCodes": async (observed) => {
+    const remoteHosts = createRemoteHosts();
+    const { api } = await setup(observed, { remoteHosts });
+    const issue = (json: unknown, init = {}) => api.call("pairingCodes", "POST", { json, ...init });
+    const first = await issue({});
+    expect(first.status).toBe(201);
+    expect(first.body).toMatchObject({ code: expect.stringMatching(/^[2-9A-Z]{8}$/), url: null });
+    remoteHosts.set(["vm-name.tailnet-name.ts.net:443", "other.example.com"]);
+    expect((await issue({ name: " Phone " })).body).toMatchObject({
+      url: "https://vm-name.tailnet-name.ts.net",
+    });
+    remoteHosts.set(["vm-name.tailnet-name.ts.net:8443"]);
+    expect((await issue({})).body).toMatchObject({
+      url: "https://vm-name.tailnet-name.ts.net:8443",
+    });
+    expect((await issue({})).body).toMatchObject({ error: "rate_limited" });
+    expect((await issue({ name: "   " })).body).toMatchObject({ error: "invalid_request" });
+    expect((await issue({ name: "Phone", expiresIn: 60 })).status).toBe(400);
+    expect((await issue(undefined, { body: "{" })).body).toMatchObject({ error: "invalid_json" });
+    expect((await issue(undefined, { body: TOO_BIG })).status).toBe(413);
+  },
+
+  "POST pair": async (observed) => {
+    const { api, app } = await setup(observed);
+    const issued = await api.call("pairingCodes", "POST", { json: { name: "Phone" } });
+    const { code } = issued.body as { code: string };
+    const pair = (json: unknown, init = {}) =>
+      api.call("pair", "POST", { json, token: null, ...init });
+    const typed = `${code.slice(0, 4).toLowerCase()} ${code.slice(4)}`;
+    const paired = await pair({ code: typed, name: "Tablet", kind: "app" });
+    expect(paired.status).toBe(201);
+    const { device, token } = paired.body as { device: { id: string }; token: string };
+    // The issuer's name wins over the one the new device picked.
+    expect(device).toMatchObject({ name: "Phone", kind: "app", lastSeenAt: null });
+    expect((await api.call("devices", "GET", { token })).status).toBe(200);
+    expect((await pair({ code, name: "Tablet", kind: "app" })).body).toMatchObject({
+      error: "pairing_rejected",
+    });
+    expect((await pair({ code: "0000-1111", name: "x", kind: "app" })).body).toMatchObject({
+      error: "invalid_request",
+    });
+    expect((await pair(undefined, { body: "x".repeat(2_048) })).status).toBe(413);
+    expect((await pair({ code: "ZZZZZZZZ", name: "x", kind: "daemon" })).status).toBe(401);
+    const limited = await pair({ code: "ZZZZZZZZ", name: "x", kind: "app" });
+    expect(limited.body).toMatchObject({ error: "rate_limited" });
+    expect(limited.response.headers.get("retry-after")).toMatch(/^[1-9]\d*$/);
+    expect(app.devices.size).toBe(1);
+
+    const host = "vm-name.tailnet-name.ts.net";
+    const remote = await setup(observed, { remoteHosts: createRemoteHosts([host]) });
+    const browserCode = (await remote.api.call("pairingCodes", "POST", { json: {} })).body as {
+      code: string;
+    };
+    const browser = await remote.api.call("pair", "POST", {
+      json: { code: browserCode.code, name: "Browser", kind: "browser" },
+      token: null,
+      host,
+      origin: `https://${host}`,
+    });
+    expect(browser.status).toBe(201);
+    expect(browser.body).toEqual({ device: expect.objectContaining({ kind: "browser" }) });
+    expect(browser.response.headers.get("set-cookie")).toMatch(/^__Host-ddl-device=/);
+  },
+
+  "GET devices": async (observed) => {
+    const { api, app } = await setup(observed);
+    expect((await api.call("devices", "GET")).body).toEqual({ devices: [] });
+    const phone = await app.devices.add("Phone", "app");
+    const laptop = await app.devices.add("Laptop", "daemon");
+    const asPhone = await api.call("devices", "GET", { token: phone.token });
+    expect(asPhone.body).toEqual({
+      devices: [{ ...phone.device, lastSeenAt: expect.any(Number), current: true }, laptop.device],
+    });
+    const asMaster = (await api.call("devices", "GET")).body as { devices: object[] };
+    expect(asMaster.devices.every((d) => !("current" in d))).toBe(true);
+    expect(JSON.stringify(asMaster)).not.toContain(phone.token);
+  },
+
+  "DELETE pairedDevice": async (observed) => {
+    const { api, app } = await setup(observed);
+    const phone = await app.devices.add("Phone", "app");
+    const revoke = (id: string, token?: string) =>
+      api.call("pairedDevice", "DELETE", { params: { id }, ...(token ? { token } : {}) });
+    expect((await revoke("bad id")).status).toBe(400);
+    expect((await revoke("pd_unknown")).body).toMatchObject({ error: "not_found" });
+    const done = await revoke(phone.device.id, phone.token);
+    expect(done.status).toBe(204);
+    expect(await done.response.text()).toBe("");
+    expect((await api.call("devices", "GET", { token: phone.token })).status).toBe(401);
+    expect((await revoke(phone.device.id)).status).toBe(404);
+  },
+
   "POST computerPermissionsOpen": async (observed) => {
     const systemSettings = new FakeSystemSettings();
     const { api } = await setup(observed, { systemSettings });
@@ -664,18 +759,13 @@ async function agentEnabled(observed: Observed, method: "PUT" | "POST") {
 
 /**
  * Operations the contract declares that the daemon doesn't serve yet: they answer 404 like any
- * unknown route. Remote access and pairing (S1) and device settings with the machine link (S2)
- * replace each entry with a scenario.
+ * unknown route. Device settings with the machine link (S2) replace each entry with a scenario.
  */
 const NOT_SERVED_YET = new Set([
   "GET device",
   "PATCH device",
   "PUT deviceSync",
   "DELETE deviceSync",
-  "POST pairingCodes",
-  "POST pair",
-  "GET devices",
-  "DELETE pairedDevice",
   "GET machine",
   "POST machinePair",
   "POST machineCheck",

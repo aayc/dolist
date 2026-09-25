@@ -181,9 +181,10 @@ export const SSN_VALUE_RULE = info(
 
 /**
  * The app's own folder (a vault's `.daily-do-list/` sidecar, or the default `$DDL_HOME`) named in
- * text, other than the agents' workspaces inside it.
+ * text, other than the agents' workspaces inside it, or the `DDL_HOME` variable that locates it
+ * wherever it is.
  */
-const APP_STATE_TEXT_RE = /\.daily-do-list(?![\w-])(?!\/workspaces\b)/i;
+const APP_STATE_TEXT_RE = /\.daily-do-list(?![\w-])(?!\/workspaces\b)|\bDDL_HOME\b/i;
 
 /**
  * Code that names the app's own settings or state, run now or staged to run later: code the agent

@@ -8,7 +8,7 @@
  * `cd` so relative paths can be placed inside or outside the task workspace. Whatever it cannot
  * follow is reported in `error` or marked `dynamic`, never guessed.
  */
-import { type Cwd, initialCwd, resolvePath } from "./paths";
+import { type Cwd, DEFAULT_APP_HOME, initialCwd, resolvePath } from "./paths";
 
 export const MAX_SHELL_COMMAND_CHARS = 64_000;
 const MAX_DEPTH = 6;
@@ -540,6 +540,8 @@ class Lexer {
   ): void {
     if (atStart && expr === "HOME") w.text += "~";
     else if (atStart && expr === "PWD") w.text += ".";
+    // Agents' shells inherit `$DDL_HOME`: read as the app's home, rules about its files apply.
+    else if (atStart && expr === "DDL_HOME") w.text += DEFAULT_APP_HOME;
     else {
       w.text += spelled;
       w.dynamic = true;

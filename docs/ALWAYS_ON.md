@@ -108,6 +108,23 @@ This is a deliberate change to invariant 6 ("the daemon is local-only"): it beco
 unless remote hosts are configured, and then only through a private network with device tokens".
 `AGENTS.md` changes with phase 1.
 
+### With Tailscale
+
+On the machine running the daemon (placeholders: `vm-name.tailnet-name.ts.net`, port 7331):
+
+1. `sudo tailscale serve --bg --https=443 http://127.0.0.1:7331`. Tailscale terminates TLS with the
+   tailnet's certificate and keeps the original `Host`. Never `tailscale funnel`: that publishes
+   the daemon on the internet.
+2. `"remote": { "hosts": ["vm-name.tailnet-name.ts.net"] }` in `$DDL_HOME/config.json` (or
+   `DDL_REMOTE_HOSTS`), then restart the daemon. Without it every request through the proxy gets
+   `forbidden_host`; a proxy that rewrote the `Host` to loopback would be refused too.
+3. `node dist/main.js pair` on that machine (as the daemon's user) prints a code; open
+   `https://vm-name.tailnet-name.ts.net` on the new device, or enter it as the always-on machine's
+   address, and type the code.
+
+Details (credentials per client, the cookie rules, limits): [apps/daemon/README.md](../apps/daemon/README.md#remote-access-and-pairing)
+and [SECURITY.md](../SECURITY.md).
+
 ## The agent relay
 
 Today a daemon that doesn't hold the agent lease shows no threads or approvals ("The agent is

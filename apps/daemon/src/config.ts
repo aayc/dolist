@@ -3,12 +3,20 @@ import { homedir as osHomedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExecutionConfig } from "@ddl/agent";
-import { type AgentMode, DEFAULT_MODEL, type LogLevel, SYNC_ID_PATTERN } from "@ddl/core";
+import {
+  type AgentMode,
+  DEFAULT_MODEL,
+  type LogLevel,
+  normalizeRemoteHost,
+  REMOTE_LIMITS,
+  SYNC_ID_PATTERN,
+} from "@ddl/core";
 import type { SyncTargetConfig } from "@ddl/storage";
 import { z } from "zod";
 import { type ComputerHelperDiscovery, discoverComputerHelper } from "./computer-helper";
 import { loadEnvFiles } from "./env-file";
 import { displayPath, resolveUserPath } from "./home-paths";
+import { InvalidRemoteHostsError, normalizeRemoteHosts } from "./remote-hosts";
 
 export const DEFAULT_PORT = 7331;
 export const CONFIG_FILE = "config.json";
@@ -18,6 +26,8 @@ export const TOKEN_FILE = "daemon-token";
 export const SYNC_TOKEN_FILE = "sync-token";
 /** This device's id and name, created on first use. */
 export const DEVICE_FILE = "device.json";
+/** Devices paired with this daemon: token hashes only (mode 0600). */
+export const PAIRED_DEVICES_FILE = "devices.json";
 
 /** Where the vault syncs with the sync service; the token and device identity are loaded apart. */
 export interface RemoteSyncConfig {
@@ -49,6 +59,13 @@ export interface DaemonConfig {
   computerHelper: ComputerHelperDiscovery;
   /** Extra browser origins allowed to call the API and WebSocket (e.g. a native shell). */
   allowedOrigins: string[];
+  /**
+   * Names this daemon answers to besides loopback (e.g. its tailnet name behind `tailscale serve`),
+   * normalized. Empty: loopback only.
+   */
+  remoteHosts: string[];
+  /** `DDL_REMOTE_HOSTS` set `remoteHosts` (clients show them read-only). */
+  remoteHostsFromEnv: boolean;
   webDist: string;
   logLevel: LogLevel;
   configPath: string;
@@ -56,6 +73,7 @@ export interface DaemonConfig {
   tokenPath: string;
   syncTokenPath: string;
   devicePath: string;
+  pairedDevicesPath: string;
   /** Env files that were read (paths only, never values). */
   envFiles: string[];
 }
@@ -146,6 +164,20 @@ const OriginSchema = z
       ),
   );
 
+const RemoteHostSchema = z.string().transform((host, ctx) => {
+  const normalized = normalizeRemoteHost(host);
+  if (normalized !== null) return normalized;
+  ctx.addIssue({
+    code: "custom",
+    message: `"${host}" must be a DNS name with an optional :port (no scheme, path, IP address or loopback name), e.g. vm-name.tailnet-name.ts.net`,
+  });
+  return z.NEVER;
+});
+
+const RemoteSchema = z.strictObject({
+  hosts: z.array(RemoteHostSchema).max(REMOTE_LIMITS.remoteHosts).optional(),
+});
+
 const ConfigFileSchema = z.strictObject({
   vaultPath: PathSchema.optional(),
   port: z.int().min(0).max(65535).optional(),
@@ -154,6 +186,7 @@ const ConfigFileSchema = z.strictObject({
   sync: SyncSchema.optional(),
   execution: ExecutionSchema.optional(),
   allowedOrigins: z.array(OriginSchema).optional(),
+  remote: RemoteSchema.optional(),
   webDist: PathSchema.optional(),
   logLevel: z.enum(LOG_LEVELS).optional(),
 });
@@ -199,6 +232,7 @@ export function loadConfig(options: LoadConfigOptions = {}): DaemonConfig {
   const fromHome = { homedir, base: home };
   const vaultEnv = nonEmpty(env.DDL_VAULT);
   const webDistEnv = nonEmpty(env.DDL_WEB_DIST);
+  const remoteHostsEnv = parseRemoteHostsEnv(env.DDL_REMOTE_HOSTS);
   const computerHelper = discoverComputerHelper({
     env,
     platform,
@@ -222,6 +256,8 @@ export function loadConfig(options: LoadConfigOptions = {}): DaemonConfig {
     execution: resolveExecution(file.execution, home, platform, fromHome, computerHelper.path),
     computerHelper,
     allowedOrigins: file.allowedOrigins ?? [],
+    remoteHosts: remoteHostsEnv ?? [...normalizeRemoteHosts(file.remote?.hosts ?? [])],
+    remoteHostsFromEnv: remoteHostsEnv !== undefined,
     webDist: webDistEnv
       ? resolveUserPath(webDistEnv, fromCwd)
       : file.webDist
@@ -234,6 +270,7 @@ export function loadConfig(options: LoadConfigOptions = {}): DaemonConfig {
     tokenPath: join(home, TOKEN_FILE),
     syncTokenPath: join(home, SYNC_TOKEN_FILE),
     devicePath: join(home, DEVICE_FILE),
+    pairedDevicesPath: join(home, PAIRED_DEVICES_FILE),
     envFiles,
   };
 }
@@ -260,6 +297,7 @@ export function summarizeConfig(
       ? `${displayPath(config.computerHelper.path, homedir)} (${config.computerHelper.source})`
       : (config.computerHelper.problem ?? "none"),
     allowedOrigins: config.allowedOrigins,
+    remoteHosts: config.remoteHosts,
     webDist: displayPath(config.webDist, homedir),
     envFiles: config.envFiles.map((path) => displayPath(path, homedir)),
   };
@@ -390,6 +428,22 @@ function parsePortEnv(value: string | undefined): number | undefined {
     throw new ConfigError(`DDL_PORT must be an integer between 0 and 65535 (got "${raw}")`);
   }
   return port;
+}
+
+/** `DDL_REMOTE_HOSTS`: comma-separated remote hosts (empty entries skipped); unset → undefined. */
+function parseRemoteHostsEnv(value: string | undefined): string[] | undefined {
+  const raw = nonEmpty(value);
+  if (raw === undefined) return undefined;
+  const entries = raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== "");
+  try {
+    return [...normalizeRemoteHosts(entries)];
+  } catch (error) {
+    if (!(error instanceof InvalidRemoteHostsError)) throw error;
+    throw new ConfigError(`Invalid DDL_REMOTE_HOSTS: ${error.message}`);
+  }
 }
 
 function parseEnumEnv<const T extends string>(

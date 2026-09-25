@@ -9,11 +9,15 @@ import { getPath } from "hono/utils/url";
 import type { DaemonConfig } from "./config";
 import type { AppContext } from "./context";
 import { createErrorHandler, errorBody } from "./errors";
+import { PairedDeviceStore } from "./paired-devices";
+import { PairingCodes } from "./pairing";
+import { createRemoteHosts, type RemoteHosts } from "./remote-hosts";
 import { registerAgentRoutes } from "./routes/agent";
 import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerComputerRoutes } from "./routes/computer";
 import { registerDailyRoutes } from "./routes/daily";
 import { registerNoteRoutes } from "./routes/notes";
+import { registerPairingRoutes } from "./routes/pairing";
 import { registerRoutineRoutes } from "./routes/routines";
 import { registerSettingsRoutes } from "./routes/settings";
 import { disabledSyncStatusResponse, registerSyncRoutes } from "./routes/sync";
@@ -35,6 +39,11 @@ export interface AppDeps {
   /** `port` must be the port actually listened on (it is part of the Host/Origin allowlists). */
   config: Pick<DaemonConfig, "port" | "allowedOrigins">;
   token: string;
+  /** Shared with the WebSocket hub's policy. Default: none (loopback only). */
+  remoteHosts?: RemoteHosts;
+  /** Shared with the WebSocket hub's policy. Default: in memory. */
+  devices?: PairedDeviceStore;
+  pairing?: PairingCodes;
   logger: Logger;
   /** Built web UI directory; `null` or omitted disables static serving. */
   webDist?: string | null;
@@ -51,6 +60,8 @@ export interface AppDeps {
 }
 
 export function createApp(deps: AppDeps): Hono {
+  const remoteHosts = deps.remoteHosts ?? createRemoteHosts();
+  const devices = deps.devices ?? new PairedDeviceStore({ path: null, logger: deps.logger });
   const ctx: AppContext = {
     storage: deps.storage,
     runtime: deps.runtime,
@@ -59,7 +70,12 @@ export function createApp(deps: AppDeps): Hono {
       port: deps.config.port,
       token: deps.token,
       extraOrigins: deps.config.allowedOrigins,
+      remoteHosts,
+      devices,
     }),
+    remoteHosts,
+    devices,
+    pairing: deps.pairing ?? new PairingCodes(),
     token: deps.token,
     logger: deps.logger,
     webDist: deps.webDist ?? null,
@@ -100,6 +116,7 @@ export function createApp(deps: AppDeps): Hono {
   registerArtifactRoutes(app, ctx);
   registerSyncRoutes(app, ctx);
   registerComputerRoutes(app, ctx);
+  registerPairingRoutes(app, ctx);
   app.all("/api/*", (c) => c.json(errorBody("not_found", "Unknown API route"), 404));
   app.all("/ws", (c) => c.json(errorBody("upgrade_required", "Use a WebSocket upgrade"), 426));
   registerWebRoutes(app, ctx);

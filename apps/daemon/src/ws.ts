@@ -18,7 +18,8 @@ import { type RawData, WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
 import { errorMessage } from "./errors";
 import { isValidClientId } from "./http-utils";
-import type { SecurityPolicy } from "./security";
+import type { PairedDeviceStore } from "./paired-devices";
+import { forwardedByProxy, type Principal, requestHostKind, type SecurityPolicy } from "./security";
 import type { SettingsStore } from "./settings-store";
 import { parseBearer } from "./token";
 import { VaultChangeBatcher } from "./vault-events";
@@ -34,6 +35,8 @@ const DEFAULT_MAX_BUFFERED_BYTES = 16 * 1024 * 1024;
 const MAX_MESSAGE_BYTES = 64 * 1024;
 const MAX_SURFACES_PER_CLIENT = 16;
 const CLOSE_GRACE_MS = 1_000;
+/** Policy violation: the device's credential was revoked (reconnecting gets 401). */
+export const REVOKED_CLOSE_CODE = 1008;
 
 const IdSchema = z.string().min(1).max(200);
 const SurfaceSchema = z.enum(["browser", "computer"]);
@@ -54,6 +57,8 @@ const ClientEventSchema = z.discriminatedUnion("type", [
 export interface WebSocketHubOptions {
   server: Server;
   policy: SecurityPolicy;
+  /** Revoking a device closes its sockets. */
+  devices?: Pick<PairedDeviceStore, "onRevoke">;
   storage: StorageProvider;
   runtime: AgentRuntime;
   settings: SettingsStore;
@@ -73,15 +78,17 @@ export interface WebSocketHub {
 
 interface Client {
   readonly ws: WebSocket;
+  /** The paired device it authenticated as (absent: the master token). */
+  readonly deviceId: string | undefined;
   clientId: string | undefined;
   readonly surfaces: Set<string>;
   alive: boolean;
 }
 
 /**
- * The `/ws` endpoint: authenticates the upgrade (Host, Origin, token via `?token=` or the dev
- * proxy's `Authorization` header), pushes vault/agent/settings events, and routes live surface
- * frames only to clients subscribed to that thread's surface.
+ * The `/ws` endpoint: authenticates the upgrade (Host, Origin, then a credential, see
+ * `authorizeUpgrade`), pushes vault/agent/settings events, routes live surface frames only to
+ * clients subscribed to that thread's surface, and closes a device's sockets when it's revoked.
  */
 export function attachWebSocketHub(options: WebSocketHubOptions): WebSocketHub {
   const { server, policy, runtime, logger } = options;
@@ -204,8 +211,8 @@ export function attachWebSocketHub(options: WebSocketHubOptions): WebSocketHub {
     handleEvent(client, parsed.data);
   };
 
-  const onConnection = (ws: WebSocket): void => {
-    const client: Client = { ws, clientId: undefined, surfaces: new Set(), alive: true };
+  const onConnection = (ws: WebSocket, deviceId: string | undefined): void => {
+    const client: Client = { ws, deviceId, clientId: undefined, surfaces: new Set(), alive: true };
     clients.add(client);
     ws.on("pong", () => {
       client.alive = true;
@@ -229,11 +236,26 @@ export function attachWebSocketHub(options: WebSocketHubOptions): WebSocketHub {
 
   const onUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer): void => {
     socket.on("error", () => socket.destroy());
-    const rejection = upgradeRejection(req, policy);
-    if (rejection === null) wss.handleUpgrade(req, socket, head, onConnection);
-    else rejectUpgrade(socket, rejection);
+    const decision = authorizeUpgrade(req, policy);
+    if ("status" in decision) {
+      rejectUpgrade(socket, decision.status);
+      return;
+    }
+    const { principal } = decision;
+    const deviceId = principal.kind === "device" ? principal.device.id : undefined;
+    wss.handleUpgrade(req, socket, head, (ws) => onConnection(ws, deviceId));
   };
   server.on("upgrade", onUpgrade);
+
+  /** A revoked device's sockets close now (1008) and stop receiving events at once. */
+  const closeDevice = (deviceId: string): void => {
+    for (const client of [...clients]) {
+      if (client.deviceId !== deviceId) continue;
+      clients.delete(client);
+      client.ws.close(REVOKED_CLOSE_CODE, "Device revoked");
+      setTimeout(() => client.ws.terminate(), CLOSE_GRACE_MS).unref();
+    }
+  };
 
   const batcher = new VaultChangeBatcher({
     writes: options.writes,
@@ -242,6 +264,7 @@ export function attachWebSocketHub(options: WebSocketHubOptions): WebSocketHub {
   });
 
   const subscriptions: Unsubscribe[] = [
+    ...(options.devices ? [options.devices.onRevoke(closeDevice)] : []),
     options.storage.watch((event) => batcher.push(event)),
     options.settings.onChange((settings) => broadcast({ type: "settings.changed", settings })),
     runtime.on("task.records", ({ notePath, records }) =>
@@ -319,21 +342,51 @@ function visiblePath(input: string): string | null {
   }
 }
 
-/** The HTTP status to refuse an upgrade with, or null when it is authorized. */
-function upgradeRejection(req: IncomingMessage, policy: SecurityPolicy): 401 | 403 | 404 | null {
+type UpgradeDecision = { status: 401 | 403 | 404 } | { principal: Principal };
+
+/**
+ * Whether an upgrade may proceed, and for whom. Credentials: a bearer token in the
+ * `Authorization` header (native clients, daemons, the dev proxy), `?token=` on loopback Hosts
+ * only (the local web page; refused on remote Hosts so it never lands in a proxy's logs), or on a
+ * remote Host a paired browser's cookie with the page's own Origin. Every credential presented
+ * must be valid.
+ */
+function authorizeUpgrade(req: IncomingMessage, policy: SecurityPolicy): UpgradeDecision {
   const target = parseRequestTarget(req.url);
-  if (target?.url.pathname !== API_ROUTES.ws) return 404;
+  if (target?.url.pathname !== API_ROUTES.ws) return { status: 404 };
   // Node keeps only the first of repeated Host/Authorization headers while the HTTP guard sees them
   // joined (and refuses), so ambiguous upgrades are refused as well.
-  if (headerCount(req.rawHeaders, "host") !== 1 || !policy.isHostAllowed(req.headers.host)) {
-    return 403;
+  const host = req.headers.host;
+  const kind = requestHostKind(policy, host, target.absolute ? target.url.host : host);
+  if (headerCount(req.rawHeaders, "host") !== 1 || kind === null) return { status: 403 };
+  if (kind === "loopback" && forwardedByProxy((name) => headerValue(req, name))) {
+    return { status: 403 };
   }
-  if (target.absolute && !policy.isHostAllowed(target.url.host)) return 403;
   const origin = req.headers.origin;
-  if (origin !== undefined && !policy.isOriginAllowed(origin)) return 403;
-  if (headerCount(req.rawHeaders, "authorization") > 1) return 401;
-  const token = target.url.searchParams.get("token") ?? parseBearer(req.headers.authorization);
-  return policy.verifyToken(token) ? null : 401;
+  if (origin !== undefined && !policy.isOriginAllowed(origin)) return { status: 403 };
+  if (headerCount(req.rawHeaders, "authorization") > 1) return { status: 401 };
+  const queryTokens = target.url.searchParams.getAll("token");
+  if (queryTokens.length > 1 || (queryTokens.length === 1 && kind !== "loopback")) {
+    return { status: 401 };
+  }
+  const header = req.headers.authorization;
+  const fromHeader =
+    header === undefined ? undefined : policy.authenticateBearer(parseBearer(header));
+  const fromQuery =
+    queryTokens[0] === undefined ? undefined : policy.authenticateBearer(queryTokens[0]);
+  if (fromHeader === null || fromQuery === null) return { status: 401 };
+  const principal =
+    fromHeader ??
+    fromQuery ??
+    policy.authenticateCookie({
+      kind,
+      host,
+      cookie: headerValue(req, "cookie"),
+      origin,
+      // Browsers always send an Origin with an upgrade: no fallback here.
+      fetchSite: undefined,
+    });
+  return principal ? { principal } : { status: 401 };
 }
 
 /** Origin-form targets are paths even when they start with `//`; absolute-form ones name a host. */
@@ -345,6 +398,11 @@ function parseRequestTarget(raw: string | undefined): { url: URL; absolute: bool
   } catch {
     return null;
   }
+}
+
+function headerValue(req: IncomingMessage, name: string): string | undefined {
+  const value = req.headers[name];
+  return Array.isArray(value) ? value.join(", ") : value;
 }
 
 function headerCount(rawHeaders: readonly string[], name: string): number {
