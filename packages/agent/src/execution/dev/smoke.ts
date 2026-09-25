@@ -2,11 +2,14 @@
  * Manual smoke test for the local execution provider (not part of CI; needs network):
  *
  *   pnpm --filter @ddl/agent exec tsx src/execution/dev/smoke.ts [--headed] [--computer] [--keep]
+ *     [--apps=/path/to/ddl-computer] [--no-browser]
  *
  * Uses a throwaway DDL home (never your real profile). Opens https://example.com in the agent
  * browser, prints the snapshot, takes a screenshot and counts screencast frames. With --computer
  * (macOS) it also runs the permission check and takes one desktop screenshot — it never clicks or
- * types. Images are only written (to the temp dir) with --keep.
+ * types. With --apps it starts that helper and prints what only looks: the computer access status,
+ * the running apps and the number of installed ones (it reads no app's window and never acts).
+ * Images are only written (to the temp dir) with --keep.
  */
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -17,15 +20,33 @@ import type { FrameListener } from "../types";
 
 const args = new Set(process.argv.slice(2));
 const keep = args.has("--keep");
+const helper = process.argv.find((arg) => arg.startsWith("--apps="))?.slice("--apps=".length);
 const home = await mkdtemp(join(tmpdir(), "ddl-smoke-"));
 const provider = await createExecutionProvider(
-  { kind: "local", home, browser: { headless: !args.has("--headed") } },
+  {
+    kind: "local",
+    home,
+    browser: { headless: !args.has("--headed") },
+    ...(helper ? { computer: { enabled: true, helper } } : {}),
+  },
   { logger: createConsoleLogger("info") },
 );
 console.log("capabilities", provider.capabilities);
 
 try {
-  if (provider.browser) {
+  if (helper) {
+    console.log("computerAccess()", await provider.computerAccess?.());
+    const apps = provider.apps;
+    if (!apps) {
+      console.log("app control: unavailable");
+    } else {
+      const running = await apps.runningApps();
+      console.log(`running apps (${running.length}):`, running.map((app) => app.name).join(", "));
+      console.log(`installed apps: ${(await apps.installedApps()).length}`);
+    }
+  }
+
+  if (provider.browser && !args.has("--no-browser")) {
     const session = await provider.browser.session("smoke");
     const frames: Parameters<FrameListener>[0][] = [];
     const unsubscribe = session.onFrame((frame) => frames.push(frame));
@@ -57,7 +78,7 @@ try {
     );
     const text = await session.extractText({ maxChars: 300 });
     console.log(`extractText: ${JSON.stringify(text)}`);
-  } else {
+  } else if (!args.has("--no-browser")) {
     console.log("browser: unavailable (no Chrome/Chromium found)");
   }
 

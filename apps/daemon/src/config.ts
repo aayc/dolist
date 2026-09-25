@@ -6,6 +6,7 @@ import type { ExecutionConfig } from "@ddl/agent";
 import { type AgentMode, DEFAULT_MODEL, type LogLevel } from "@ddl/core";
 import type { SyncTargetConfig } from "@ddl/storage";
 import { z } from "zod";
+import { type ComputerHelperDiscovery, discoverComputerHelper } from "./computer-helper";
 import { loadEnvFiles } from "./env-file";
 import { displayPath, resolveUserPath } from "./home-paths";
 
@@ -31,6 +32,8 @@ export interface DaemonConfig {
   model: string;
   sync: SyncTargetConfig;
   execution: ExecutionConfig;
+  /** Where the computer helper was found (its path is in `execution`), or why it wasn't. */
+  computerHelper: ComputerHelperDiscovery;
   /** Extra browser origins allowed to call the API and WebSocket (e.g. a native shell). */
   allowedOrigins: string[];
   webDist: string;
@@ -123,6 +126,10 @@ export interface LoadConfigOptions {
   cwd?: string;
   homedir?: string;
   platform?: NodeJS.Platform;
+  /** The daemon's entry script (default `process.argv[1]`), next to which a bundled helper lives. */
+  entryScript?: string;
+  /** Whether a path is an executable file (tests). */
+  isExecutable?: (path: string) => boolean;
 }
 
 /**
@@ -152,6 +159,15 @@ export function loadConfig(options: LoadConfigOptions = {}): DaemonConfig {
   const fromHome = { homedir, base: home };
   const vaultEnv = nonEmpty(env.DDL_VAULT);
   const webDistEnv = nonEmpty(env.DDL_WEB_DIST);
+  const computerHelper = discoverComputerHelper({
+    env,
+    platform,
+    cwd,
+    ...((options.entryScript ?? process.argv[1])
+      ? { entryScript: options.entryScript ?? process.argv[1] }
+      : {}),
+    ...(options.isExecutable ? { isExecutable: options.isExecutable } : {}),
+  });
 
   return {
     home,
@@ -163,7 +179,8 @@ export function loadConfig(options: LoadConfigOptions = {}): DaemonConfig {
       parseEnumEnv("DDL_AGENT_MODE", env.DDL_AGENT_MODE, AGENT_MODES) ?? file.agentMode ?? "live",
     model: nonEmpty(env.DDL_MODEL) ?? file.model ?? DEFAULT_MODEL,
     sync: resolveSync(file.sync, fromHome),
-    execution: resolveExecution(file.execution, home, platform, fromHome),
+    execution: resolveExecution(file.execution, home, platform, fromHome, computerHelper.path),
+    computerHelper,
     allowedOrigins: file.allowedOrigins ?? [],
     webDist: webDistEnv
       ? resolveUserPath(webDistEnv, fromCwd)
@@ -196,6 +213,9 @@ export function summarizeConfig(
       execution.kind === "local"
         ? `local (browser ${execution.browser?.headless === false ? "headed" : "headless"}, computer use ${execution.computer?.enabled ? "on" : "off"})`
         : `cloud (${safeHost(execution.endpoint)})`,
+    computerHelper: config.computerHelper.path
+      ? `${displayPath(config.computerHelper.path, homedir)} (${config.computerHelper.source})`
+      : (config.computerHelper.problem ?? "none"),
     allowedOrigins: config.allowedOrigins,
     webDist: displayPath(config.webDist, homedir),
     envFiles: config.envFiles.map((path) => displayPath(path, homedir)),
@@ -241,16 +261,18 @@ function resolveExecution(
   home: string,
   platform: NodeJS.Platform,
   paths: { homedir: string; base: string },
+  helper: string | undefined,
 ): ExecutionConfig {
   if (execution?.kind === "cloud") return execution;
   const browser = { headless: true, ...execution?.browser };
   if (browser.executablePath)
     browser.executablePath = resolveUserPath(browser.executablePath, paths);
+  const computer = execution?.computer ?? { enabled: platform === "darwin" };
   return {
     kind: "local",
     home,
     browser,
-    computer: execution?.computer ?? { enabled: platform === "darwin" },
+    computer: computer.enabled && helper ? { ...computer, helper } : computer,
   };
 }
 

@@ -21,8 +21,19 @@ beforeEach(() => {
 
 afterEach(() => root.cleanup());
 
-function load(env: Record<string, string | undefined> = {}, platform: NodeJS.Platform = "darwin") {
-  return loadConfig({ env: { DDL_HOME: ddlHome, ...env }, cwd, homedir, platform });
+function load(
+  env: Record<string, string | undefined> = {},
+  platform: NodeJS.Platform = "darwin",
+  executables: readonly string[] = [],
+) {
+  return loadConfig({
+    env: { DDL_HOME: ddlHome, ...env },
+    cwd,
+    homedir,
+    platform,
+    entryScript: join(root.path, "daemon", "dist", "main.js"),
+    isExecutable: (path) => executables.includes(path),
+  });
 }
 
 describe("loadConfig", () => {
@@ -48,6 +59,33 @@ describe("loadConfig", () => {
     });
     expect(config.webDist).toMatch(/web[/\\]dist$/);
     expect(statSync(ddlHome).mode & 0o777).toBe(0o700);
+  });
+
+  it("gives computer use the helper it finds, unless computer use is off", () => {
+    const bundled = join(root.path, "daemon", "bin", "ddl-computer");
+    const config = load({}, "darwin", [bundled]);
+    expect(config.execution).toMatchObject({ computer: { enabled: true, helper: bundled } });
+    expect(config.computerHelper).toEqual({ path: bundled, source: "bundled" });
+    expect(summarizeConfig(config, homedir).computerHelper).toBe(`${bundled} (bundled)`);
+
+    expect(load({}, "darwin").execution).toEqual(
+      expect.objectContaining({ computer: { enabled: true } }),
+    );
+    expect(summarizeConfig(load({ DDL_COMPUTER_HELPER: "/nope" }), homedir).computerHelper).toMatch(
+      /not an executable/,
+    );
+
+    mkdirSync(ddlHome, { recursive: true });
+    writeFileSync(
+      join(ddlHome, "config.json"),
+      JSON.stringify({ execution: { kind: "local", computer: { enabled: false } } }),
+    );
+    expect(load({}, "darwin", [bundled]).execution).toMatchObject({
+      computer: { enabled: false },
+    });
+    expect(
+      (load({}, "darwin", [bundled]).execution as { computer?: object }).computer,
+    ).not.toHaveProperty("helper");
   });
 
   it("defaults DDL_HOME to ~/.daily-do-list and disables computer use off macOS", () => {

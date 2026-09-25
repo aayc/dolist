@@ -42,6 +42,16 @@ export class ComputerPermissionError extends ExecutionError {
   override name = "ComputerPermissionError";
 }
 
+/** The app is off-limits to agents (Daily Do List, System Settings, password managers…). */
+export class ProtectedAppError extends ExecutionError {
+  override name = "ProtectedAppError";
+}
+
+/** An app element id is out of date: the app has to be read again. */
+export class StaleElementError extends ExecutionError {
+  override name = "StaleElementError";
+}
+
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }

@@ -24,6 +24,6 @@ export function createExecutionTools(
   if (browser) tools.push(...createBrowserTools(browser, ctx, logger));
   const computer =
     granted.has("computer") && provider.capabilities.computer ? provider.computer : undefined;
-  if (computer) tools.push(...createComputerTools(computer, ctx, logger));
+  if (computer) tools.push(...createComputerTools(computer, ctx, logger, provider.apps));
   return tools;
 }
