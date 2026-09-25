@@ -110,4 +110,9 @@ export interface AgentRuntimeOptions {
   logger?: Logger;
   /** Injectable clock for tests. */
   now?: () => number;
+  /**
+   * The agent lease's current epoch, stamped on every journal event (`(epoch, seq)` orders
+   * events across holders). Default 0, until leases carry an epoch.
+   */
+  leaseEpoch?: () => number;
 }

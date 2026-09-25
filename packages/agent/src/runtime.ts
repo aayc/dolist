@@ -252,6 +252,7 @@ class Runtime implements AgentRuntime {
     this.threads = createThreadStore({
       storage,
       now,
+      ...(options.leaseEpoch ? { epoch: options.leaseEpoch } : {}),
       logger: this.logger.child({ component: "threads" }),
       pendingApprovals: (threadId) =>
         this.safely(() => this.broker.list({ threadId, status: "pending" }).length, 0),
