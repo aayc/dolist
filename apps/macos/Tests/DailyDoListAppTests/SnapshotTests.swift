@@ -342,6 +342,76 @@ struct SnapshotTests {
     }
   }
 
+  /// Settings → General → Vault and the Import from Obsidian sheet against the in-memory daemon:
+  /// picking the vault, the report, the import running, done with the switch (and with sync on),
+  /// and the vault once imported, with an update's report.
+  @Test func importFromObsidian() async throws {
+    typealias Prepare = @MainActor (InMemoryDaemonClient, AppModel) async -> Void
+    func model(_ remote: InMemoryDaemonClient.Remote, _ prepare: Prepare) async throws -> AppModel {
+      let client = InMemoryDaemonClient(
+        seed: .demo, clock: .manual(start: referenceNow), agent: .disabled,
+        clientId: "macos_test", remote: remote)
+      let model = AppModel(environment: makeEnvironment(client: client))
+      await model.boot()
+      await model.imports.load()
+      await prepare(client, model)
+      return model
+    }
+    let obsidian = "/Users/me/Obsidian Notebook"
+    let nothing: Prepare = { _, _ in }
+    let report: Prepare = { _, model in await model.imports.readReport(source: obsidian) }
+    let running: Prepare = { client, model in
+      await model.imports.readReport(source: obsidian)
+      await model.imports.startImport()
+      await client.advance(by: .milliseconds(1_000))
+      await model.imports.refreshStatus()
+    }
+    let done: Prepare = { client, model in
+      await model.imports.readReport(source: obsidian)
+      await model.imports.startImport()
+      await client.runUntilIdle()
+      await model.imports.refreshStatus()
+    }
+    let imported: Prepare = { client, model in
+      await done(client, model)
+      if let destination = model.imports.currentImport?.destination {
+        _ = try? await client.switchVault(DeviceVaultRequest(path: destination))
+      }
+      await model.imports.load()
+      await model.imports.update()
+      await client.runUntilIdle()
+      await model.imports.refreshStatus()
+    }
+    let sheets: [(String, InMemoryDaemonClient.Remote, Prepare)] = [
+      ("obsidian-import-choose", .standalone, nothing),
+      ("obsidian-import-report", .standalone, report),
+      ("obsidian-import-running", .standalone, running),
+      ("obsidian-import-done", .standalone, done),
+      ("obsidian-import-done-sync-on", .alwaysOn, done),
+    ]
+    for (name, remote, prepare) in sheets {
+      let model = try await model(remote, prepare)
+      for dark in [false, true] {
+        try await render(
+          ObsidianImportSheet(model: model, imports: model.imports),
+          size: CGSize(width: 640, height: 660), dark: dark, name: name)
+      }
+      await model.teardown()
+    }
+    for (name, prepare) in [
+      ("settings-general-vault", nothing), ("settings-general-vault-imported", imported),
+    ] {
+      let model = try await model(.standalone, prepare)
+      for dark in [false, true] {
+        try await render(
+          Form { VaultSettingsSection(model: model, imports: model.imports) }
+            .formStyle(.grouped).frame(width: 600, height: 560),
+          size: CGSize(width: 600, height: 560), dark: dark, name: name)
+      }
+      await model.teardown()
+    }
+  }
+
   @Test func statusBarWithAnApprovalPolicy() async throws {
     let (model, workspace) = try await bootedModel()
     let bar = StatusBar(model: model, workspace: workspace)
@@ -652,7 +722,7 @@ struct SnapshotTests {
   }
 
   /// AppKit-backed content (grouped forms, lists) commits on run-loop turns.
-  private static func pumpRunLoop(_ interval: TimeInterval) {
+  static func pumpRunLoop(_ interval: TimeInterval) {
     RunLoop.main.run(until: Date().addingTimeInterval(interval))
   }
 
