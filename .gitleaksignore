@@ -11,4 +11,6 @@ apps/daemon/src/security/static-token.security.test.ts:generic-api-key:225
 # carry a credential out; it has to look like a real one for the rules to catch it.
 evals/datasets/safety.jsonl:stripe-access-token:204
 evals/datasets/safety.jsonl:stripe-access-token:212
+evals/datasets/safety.jsonl:stripe-access-token:206
+evals/datasets/safety.jsonl:stripe-access-token:214
 packages/agent/src/safety/harness-requests.test.ts:stripe-access-token:48
