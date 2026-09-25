@@ -37,11 +37,13 @@ enum Fixtures {
   /// The Swift model of every contract schema that has fixtures. A new fixture file fails
   /// `everyFixtureFileHasASwiftModel` until it is mapped here.
   static let models: [String: any (Codable & Equatable & Sendable).Type] = [
+    "AgentStatusResponse": AgentStatusResponse.self,
     "ApiErrorBody": ApiErrorBody.self,
     "AppSettings": AppSettings.self,
     "ApprovalDecisionRequest": ApprovalDecisionRequest.self,
     "ApprovalRequest": ApprovalRequest.self,
     "ClientEvent": ClientEvent.self,
+    "ComputerPermissionsOpenRequest": ComputerPermissionsOpenRequest.self,
     "ConflictResponse": ConflictResponse.self,
     "CreateFolderRequest": CreateFolderRequest.self,
     "HealthResponse": HealthResponse.self,

@@ -1620,6 +1620,55 @@
       "additionalProperties": {},
       "description": "State of one MCP connector."
     },
+    "ComputerHostApp": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "As listed in System Settings."
+        },
+        "path": {
+          "description": "The `.app` bundle.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "bundleId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "required": ["name"],
+      "additionalProperties": {},
+      "description": "The app macOS attributes the daemon's privacy permissions to (the Daily Do List app, or the terminal or editor it runs from)."
+    },
+    "ComputerAccess": {
+      "type": "object",
+      "properties": {
+        "accessibility": {
+          "type": "boolean",
+          "description": "Input and reading other apps' UI."
+        },
+        "screenRecording": {
+          "type": "boolean",
+          "description": "Screenshots. macOS applies a new grant after the host app restarts."
+        },
+        "appControl": {
+          "type": "boolean",
+          "description": "The `ddl-computer` helper is available; otherwise computer use is screen-level only."
+        },
+        "hostApp": {
+          "description": "Absent when it can't be determined.",
+          "$ref": "#/$defs/ComputerHostApp"
+        }
+      },
+      "required": ["accessibility", "screenRecording", "appControl"],
+      "additionalProperties": {},
+      "description": "Computer use on this Mac: its two privacy permissions and whether agents can operate apps in the background."
+    },
     "ExecutionStatus": {
       "type": "object",
       "properties": {
@@ -1643,6 +1692,10 @@
           },
           "required": ["shell", "browser", "computer"],
           "additionalProperties": {}
+        },
+        "computerAccess": {
+          "description": "Present where computer use exists (macOS with computer use enabled).",
+          "$ref": "#/$defs/ComputerAccess"
         }
       },
       "required": ["provider", "capabilities"],
@@ -1831,6 +1884,22 @@
       "required": ["connectors"],
       "additionalProperties": {},
       "description": "Every configured MCP connector."
+    },
+    "ComputerPermissionPane": {
+      "type": "string",
+      "enum": ["accessibility", "screenRecording"],
+      "description": "A System Settings privacy pane computer use needs."
+    },
+    "ComputerPermissionsOpenRequest": {
+      "type": "object",
+      "properties": {
+        "pane": {
+          "$ref": "#/$defs/ComputerPermissionPane"
+        }
+      },
+      "required": ["pane"],
+      "additionalProperties": false,
+      "description": "Body of `POST /api/computer/permissions/open`."
     },
     "ApiErrorCode": {
       "type": "string",

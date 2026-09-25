@@ -65,6 +65,12 @@ struct InvalidFixtureTests {
       "empty note path": .tolerated(constraint),
       "ping with a payload": .tolerated(unknownKey),
     ],
+    "ComputerPermissionsOpenRequest": [
+      "missing pane": .rejected,
+      "unknown pane": .rejected,
+      "a deep link instead of a pane": .rejected,
+      "extra key": .tolerated(unknownKey),
+    ],
     "ConflictResponse": [
       "another code": .tolerated("`error` is an open ApiErrorCode"),
       "missing current": .tolerated(
@@ -247,5 +253,6 @@ struct InvalidFixtureTests {
     #expect(!Self.decodes(ThemePreference.self, "neon"))
     #expect(!Self.decodes(VaultEntryKind.self, "symlink"))
     #expect(!Self.decodes(AgentHarnessKind.self, "claude"))
+    #expect(!Self.decodes(ComputerPermissionPane.self, "fullDiskAccess"))
   }
 }

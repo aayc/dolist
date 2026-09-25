@@ -1,0 +1,4 @@
+[
+  { "name": "accessibility", "value": { "pane": "accessibility" } },
+  { "name": "screen recording", "value": { "pane": "screenRecording" } }
+]

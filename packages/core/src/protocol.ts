@@ -92,6 +92,11 @@ export const API_ROUTES = {
     `/api/artifacts/${encodeURIComponent(threadId)}/${encodeURIComponent(artifactId)}`,
   /** GET → ConnectorsResponse */
   connectors: "/api/connectors",
+  /**
+   * POST ComputerPermissionsOpenRequest → OkResponse: opens System Settings at that privacy pane
+   * (macOS; 404 elsewhere).
+   */
+  computerPermissionsOpen: "/api/computer/permissions/open",
   /** WebSocket: ServerEvent ⇄ ClientEvent */
   ws: "/ws",
 } as const;
@@ -229,9 +234,35 @@ export interface ConnectorStatus {
   error?: string;
 }
 
+/** The app macOS attributes the daemon's privacy permissions to. */
+export interface ComputerHostApp {
+  /** As listed in System Settings, e.g. `Daily Do List`, `Terminal`. */
+  name: string;
+  /** The `.app` bundle. */
+  path?: string;
+  bundleId?: string;
+}
+
+/**
+ * Computer use on this Mac: the two privacy permissions it needs and whether agents can operate
+ * apps in the background (the `ddl-computer` helper).
+ */
+export interface ComputerAccess {
+  /** Input and reading other apps' UI. */
+  accessibility: boolean;
+  /** Screenshots. macOS applies a new grant only after the host app restarts. */
+  screenRecording: boolean;
+  /** App control (background, accessibility-based) is available; otherwise screen-level only. */
+  appControl: boolean;
+  /** Absent when it can't be determined. */
+  hostApp?: ComputerHostApp;
+}
+
 export interface ExecutionStatus {
   provider: string;
   capabilities: { shell: boolean; browser: boolean; computer: boolean };
+  /** Present where computer use exists (macOS with computer use enabled). */
+  computerAccess?: ComputerAccess;
 }
 
 export interface AgentStatusResponse {
@@ -287,6 +318,13 @@ export interface ApprovalDecisionRequest {
   decision: ApprovalDecision;
   scope?: ApprovalScope;
   note?: string;
+}
+
+/** The System Settings privacy panes computer use needs. */
+export type ComputerPermissionPane = "accessibility" | "screenRecording";
+
+export interface ComputerPermissionsOpenRequest {
+  pane: ComputerPermissionPane;
 }
 
 // ── Errors ────────────────────────────────────────────────────────────────

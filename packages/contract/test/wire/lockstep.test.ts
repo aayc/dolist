@@ -70,6 +70,8 @@ interface Lockstep {
   SearchResponse: core.SearchResponse;
   SettingsResponse: core.SettingsResponse;
   ConnectorStatus: core.ConnectorStatus;
+  ComputerHostApp: core.ComputerHostApp;
+  ComputerAccess: core.ComputerAccess;
   ExecutionStatus: core.ExecutionStatus;
   AgentStatusResponse: core.AgentStatusResponse;
   SetAgentEnabledRequest: core.SetAgentEnabledRequest;
@@ -81,6 +83,8 @@ interface Lockstep {
   ApprovalResponse: core.ApprovalResponse;
   ApprovalDecisionRequest: core.ApprovalDecisionRequest;
   ConnectorsResponse: core.ConnectorsResponse;
+  ComputerPermissionPane: core.ComputerPermissionPane;
+  ComputerPermissionsOpenRequest: core.ComputerPermissionsOpenRequest;
   ApiErrorCode: core.ApiErrorCode;
   ApiErrorBody: core.ApiErrorBody;
   ConflictResponse: core.ConflictResponse;

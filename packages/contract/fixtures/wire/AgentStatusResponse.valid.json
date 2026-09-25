@@ -1,0 +1,66 @@
+[
+  {
+    "name": "computer use ready, managed by the app",
+    "value": {
+      "mode": "live",
+      "enabled": true,
+      "model": "claude-opus-5-5",
+      "running": 1,
+      "queued": 0,
+      "pendingApprovals": 0,
+      "connectors": [],
+      "execution": {
+        "provider": "local",
+        "capabilities": { "shell": true, "browser": true, "computer": true },
+        "computerAccess": {
+          "accessibility": true,
+          "screenRecording": true,
+          "appControl": true,
+          "hostApp": {
+            "name": "Daily Do List",
+            "path": "/Applications/Daily Do List.app",
+            "bundleId": "app.dailydolist.mac"
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "access missing for a terminal, screen-level only",
+    "value": {
+      "mode": "live",
+      "enabled": true,
+      "model": "deepseek/deepseek-v4.1-flash",
+      "running": 0,
+      "queued": 0,
+      "pendingApprovals": 0,
+      "connectors": [],
+      "execution": {
+        "provider": "local",
+        "capabilities": { "shell": true, "browser": true, "computer": true },
+        "computerAccess": {
+          "accessibility": false,
+          "screenRecording": false,
+          "appControl": false,
+          "hostApp": { "name": "Terminal" }
+        }
+      }
+    }
+  },
+  {
+    "name": "no computer use (another platform)",
+    "value": {
+      "mode": "mock",
+      "enabled": false,
+      "model": "mock",
+      "running": 0,
+      "queued": 2,
+      "pendingApprovals": 1,
+      "connectors": [],
+      "execution": {
+        "provider": "local",
+        "capabilities": { "shell": true, "browser": false, "computer": false }
+      }
+    }
+  }
+]

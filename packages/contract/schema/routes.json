@@ -917,6 +917,54 @@
         }
       }
     },
+    "computerPermissionsOpen": {
+      "path": "/api/computer/permissions/open",
+      "auth": "bearer",
+      "methods": {
+        "POST": {
+          "summary": "Open System Settings at a privacy pane computer use needs (Accessibility or Screen Recording).",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/ComputerPermissionsOpenRequest"
+          },
+          "responses": {
+            "200": {
+              "description": "System Settings opened.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/OkResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "Not a Mac: there is no System Settings to open.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "500": {
+              "description": "System Settings didn't open.",
+              "codes": ["internal_error"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
     "ws": {
       "path": "/ws",
       "auth": "upgrade",

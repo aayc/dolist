@@ -27,6 +27,8 @@ public enum APIRoute {
   public static let threads = "/api/threads"
   public static let approvals = "/api/approvals"
   public static let connectors = "/api/connectors"
+  /// POST `ComputerPermissionsOpenRequest`: opens System Settings at that privacy pane.
+  public static let computerPermissionsOpen = "/api/computer/permissions/open"
   public static let webSocket = "/ws"
 
   public static func note(_ path: String) -> String { "/api/notes/\(encodeVaultPath(path))" }
@@ -430,13 +432,59 @@ public struct ExecutionCapabilities: Codable, Hashable, Sendable {
   }
 }
 
+/// The app macOS attributes the daemon's privacy permissions to (the Daily Do List app, or the
+/// terminal or editor the daemon was started from).
+public struct ComputerHostApp: Codable, Hashable, Sendable {
+  /// As listed in System Settings.
+  public var name: String
+  /// The `.app` bundle.
+  public var path: String?
+  public var bundleId: String?
+
+  public init(name: String, path: String? = nil, bundleId: String? = nil) {
+    self.name = name
+    self.path = path
+    self.bundleId = bundleId
+  }
+}
+
+/// Computer use on this Mac: its two privacy permissions and whether agents can operate apps in
+/// the background (the `ddl-computer` helper).
+public struct ComputerAccess: Codable, Hashable, Sendable {
+  /// Input and reading other apps' UI.
+  public var accessibility: Bool
+  /// Screenshots. macOS applies a new grant after the host app restarts.
+  public var screenRecording: Bool
+  /// App control is available; otherwise computer use is screen-level only.
+  public var appControl: Bool
+  /// Absent when it can't be determined.
+  public var hostApp: ComputerHostApp?
+
+  public init(
+    accessibility: Bool, screenRecording: Bool, appControl: Bool, hostApp: ComputerHostApp? = nil
+  ) {
+    self.accessibility = accessibility
+    self.screenRecording = screenRecording
+    self.appControl = appControl
+    self.hostApp = hostApp
+  }
+
+  /// Both permissions are granted.
+  public var isComplete: Bool { accessibility && screenRecording }
+}
+
 public struct ExecutionStatus: Codable, Hashable, Sendable {
   public var provider: String
   public var capabilities: ExecutionCapabilities
+  /// Present where computer use exists (macOS with computer use enabled).
+  public var computerAccess: ComputerAccess?
 
-  public init(provider: String, capabilities: ExecutionCapabilities) {
+  public init(
+    provider: String, capabilities: ExecutionCapabilities, computerAccess: ComputerAccess? = nil
+  ) {
     self.provider = provider
     self.capabilities = capabilities
+    self.computerAccess = computerAccess
   }
 }
 
@@ -524,6 +572,19 @@ public struct ApprovalDecisionRequest: Codable, Hashable, Sendable {
     self.scope = scope
     self.note = note
   }
+}
+
+/// A System Settings privacy pane computer use needs. Clients send it, so it is closed.
+public enum ComputerPermissionPane: String, Codable, Hashable, Sendable, CaseIterable {
+  case accessibility
+  case screenRecording
+}
+
+/// Body of `POST /api/computer/permissions/open`.
+public struct ComputerPermissionsOpenRequest: Codable, Hashable, Sendable {
+  public var pane: ComputerPermissionPane
+
+  public init(pane: ComputerPermissionPane) { self.pane = pane }
 }
 
 // MARK: - Errors

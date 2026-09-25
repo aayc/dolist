@@ -13,6 +13,7 @@ import { errorMessage } from "./errors";
 import { displayPath } from "./home-paths";
 import { createSecurityPolicy } from "./security";
 import { createSettingsStore } from "./settings-store";
+import { createSystemSettingsOpener } from "./system-settings";
 import { loadOrCreateToken } from "./token";
 import { DAEMON_VERSION } from "./version";
 import {
@@ -117,6 +118,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       connectors,
       writes,
       search: resolveVaultSearch(storage),
+      systemSettings: createSystemSettingsOpener(),
     });
     handler = app.fetch;
 

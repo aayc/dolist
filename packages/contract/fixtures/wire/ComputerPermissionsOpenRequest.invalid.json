@@ -1,0 +1,21 @@
+[
+  { "name": "missing pane", "value": {}, "path": ["pane"], "code": "invalid_value" },
+  {
+    "name": "unknown pane",
+    "value": { "pane": "fullDiskAccess" },
+    "path": ["pane"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "a deep link instead of a pane",
+    "value": { "pane": "x-apple.systempreferences:com.apple.preference.security" },
+    "path": ["pane"],
+    "code": "invalid_value"
+  },
+  {
+    "name": "extra key",
+    "value": { "pane": "accessibility", "url": "file:///etc/passwd" },
+    "path": [],
+    "code": "unrecognized_keys"
+  }
+]
