@@ -13,6 +13,7 @@ import {
   type PersistedDecodeResult,
   type PersistedDocument,
   type PersistedFormatSpec,
+  type PersistedIssue,
   PersistedListSchema,
   readEnvelope,
   salvageList,
@@ -187,8 +188,23 @@ const threadSpec: PersistedFormatSpec<PersistedThread> = {
 };
 
 /** A message persisted mid-stream was interrupted (the writer died): readers treat it as final. */
-function finishInterrupted(message: PersistedThreadMessage): PersistedThreadMessage {
+export function finishInterruptedPersistedMessage(
+  message: PersistedThreadMessage,
+): PersistedThreadMessage {
   return message.kind === "text" && message.streaming ? { ...message, streaming: false } : message;
+}
+const finishInterrupted = finishInterruptedPersistedMessage;
+
+/**
+ * Reads a thread object with the file's rules (invalid entries dropped into `issues`, messages
+ * saved mid-stream finished); `version` is not looked at. The journal's `thread.imported` events
+ * carry threads in this shape.
+ */
+export function readPersistedThreadObject(
+  doc: PersistedDocument,
+  issues: PersistedIssue[],
+): PersistedThread | PersistedCorruption {
+  return threadSpec.read(doc, issues);
 }
 
 /**
