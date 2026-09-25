@@ -26,7 +26,7 @@ class ScriptedClient implements LeaseClient {
   answer: () => Promise<LeaseAttempt> = async () => ({ granted: true, lease: this.holder("Me") });
 
   holder(deviceName: string, device = `dev_${deviceName}`): SyncLeaseHolder {
-    return { device, deviceName, expiresAt: Date.now() + 60_000 };
+    return { device, deviceName, expiresAt: Date.now() + 60_000, priority: "interactive" };
   }
 
   acquire(request: { deviceName: string; session: string; ttlMs: number }): Promise<LeaseAttempt> {

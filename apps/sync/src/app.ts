@@ -4,6 +4,7 @@ import {
   SYNC_DEVICE_HEADER,
   SYNC_ID_PATTERN,
   SYNC_LEASE_NAMES,
+  SYNC_LEASE_PRIORITIES,
   SYNC_LIMITS,
   SYNC_ROUTES,
   type SyncChangesResponse,
@@ -62,6 +63,7 @@ const LeaseRequestSchema = z.strictObject({
     .refine((name) => !/\p{Cc}/u.test(name), "must not contain control characters"),
   session: DeviceIdSchema,
   ttlMs: z.int().min(SYNC_LIMITS.leaseMinTtlMs).max(SYNC_LIMITS.leaseMaxTtlMs),
+  priority: z.enum(SYNC_LEASE_PRIORITIES).optional(),
 });
 const SeqSchema = z
   .string()

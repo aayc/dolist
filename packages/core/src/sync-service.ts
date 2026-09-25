@@ -188,6 +188,15 @@ export type SyncStreamMessage =
   /** Every `heartbeatMs`: a client that has seen fewer changes than `seq` missed some. */
   | { type: "heartbeat"; seq: number; at: number };
 
+/**
+ * Who asks for a lease. `interactive` (a device set to run the agent itself) outranks `host` (the
+ * always-on machine): a request that outranks the holder records a pending takeover, and the
+ * holder is asked to yield on its next renewal. Equal priorities: first come, first served.
+ */
+export type SyncLeasePriority = "host" | "interactive";
+
+export const SYNC_LEASE_PRIORITIES: readonly SyncLeasePriority[] = ["host", "interactive"];
+
 export interface SyncLeaseRequest {
   /** Must equal the `X-DDL-Device` header. */
   device: string;
@@ -200,6 +209,8 @@ export interface SyncLeaseRequest {
    */
   session: string;
   ttlMs: number;
+  /** Absent = `interactive`. */
+  priority?: SyncLeasePriority;
 }
 
 export interface SyncLeaseHolder {
@@ -207,6 +218,10 @@ export interface SyncLeaseHolder {
   deviceName: string;
   /** Epoch ms, server clock. */
   expiresAt: number;
+  /** The priority the holder requested the lease with. */
+  priority: SyncLeasePriority;
+  /** A higher-priority device is waiting: stop, sync and release (answered on renewal). */
+  yieldRequested?: boolean;
 }
 
 export interface SyncLeaseResponse {
@@ -266,4 +281,6 @@ export interface SyncConflictBody extends SyncErrorBody {
 export interface SyncLeaseConflictBody extends SyncErrorBody {
   error: "lease_held";
   holder: SyncLeaseHolder;
+  /** This request outranks the holder: a takeover is pending, ask again to get the lease. */
+  takeoverPending?: boolean;
 }

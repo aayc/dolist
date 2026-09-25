@@ -9,12 +9,13 @@ import {
   type SyncFileEntry,
   type SyncLeaseHolder,
   type SyncLeaseName,
+  type SyncLeasePriority,
   type SyncLeaseRequest,
 } from "@ddl/core";
 import { generateToken, hashToken, sameHash } from "./tokens";
 
 /** Bumped with every schema change; `migrate` upgrades older databases in place. */
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const MAX_VAULT_NAME_LENGTH = 100;
 
 const SCHEMA = `
@@ -63,9 +64,15 @@ CREATE TABLE leases (
   device_name TEXT NOT NULL,
   session TEXT NOT NULL,
   expires_at INTEGER NOT NULL,
+  priority TEXT NOT NULL DEFAULT 'interactive',
   PRIMARY KEY (vault, name)
 ) STRICT, WITHOUT ROWID;
 `;
+
+/** `MIGRATIONS[n - 1]` upgrades a schema `n` database to `n + 1`. */
+const MIGRATIONS = [
+  "ALTER TABLE leases ADD COLUMN priority TEXT NOT NULL DEFAULT 'interactive'",
+] as const;
 
 export interface VaultInfo {
   id: string;
@@ -463,19 +470,21 @@ export class SyncStore {
         device: request.device,
         deviceName: request.deviceName,
         expiresAt: now + request.ttlMs,
+        priority: request.priority ?? "interactive",
       };
       this.#run(
-        `INSERT INTO leases (vault, name, device, device_name, session, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?)
+        `INSERT INTO leases (vault, name, device, device_name, session, expires_at, priority)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (vault, name) DO UPDATE SET device = excluded.device,
            device_name = excluded.device_name, session = excluded.session,
-           expires_at = excluded.expires_at`,
+           expires_at = excluded.expires_at, priority = excluded.priority`,
         vault,
         name,
         holder.device,
         holder.deviceName,
         request.session,
         holder.expiresAt,
+        holder.priority,
       );
       return { ok: true, holder };
     });
@@ -518,7 +527,8 @@ export class SyncStore {
     }
     if (version === SCHEMA_VERSION) return;
     this.#transaction(() => {
-      this.#db.exec(SCHEMA);
+      if (version === 0) this.#db.exec(SCHEMA);
+      else for (const step of MIGRATIONS.slice(version - 1)) this.#db.exec(step);
       this.#db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     });
   }
@@ -633,12 +643,10 @@ export class SyncStore {
     }
   }
 
-  #leaseRow(
-    vault: string,
-    name: string,
-  ): { device: string; deviceName: string; session: string; expiresAt: number } | null {
+  #leaseRow(vault: string, name: string): LeaseRow | null {
     const row = this.#get(
-      "SELECT device, device_name, session, expires_at FROM leases WHERE vault = ? AND name = ?",
+      `SELECT device, device_name, session, expires_at, priority FROM leases
+       WHERE vault = ? AND name = ?`,
       vault,
       name,
     );
@@ -648,6 +656,7 @@ export class SyncStore {
           deviceName: String(row.device_name),
           session: String(row.session),
           expiresAt: Number(row.expires_at),
+          priority: row.priority === "host" ? "host" : "interactive",
         }
       : null;
   }
@@ -718,6 +727,19 @@ function toChange(row: Row): SyncChange {
   };
 }
 
-function holderOf(row: { device: string; deviceName: string; expiresAt: number }): SyncLeaseHolder {
-  return { device: row.device, deviceName: row.deviceName, expiresAt: row.expiresAt };
+interface LeaseRow {
+  device: string;
+  deviceName: string;
+  session: string;
+  expiresAt: number;
+  priority: SyncLeasePriority;
+}
+
+function holderOf(row: LeaseRow): SyncLeaseHolder {
+  return {
+    device: row.device,
+    deviceName: row.deviceName,
+    expiresAt: row.expiresAt,
+    priority: row.priority,
+  };
 }

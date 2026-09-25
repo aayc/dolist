@@ -1,4 +1,8 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { SyncStore } from "./store";
 import { startTestServer, type TestServer } from "./test-helpers";
 
 let clock = 1_000_000;
@@ -39,7 +43,27 @@ describe("agent lease", () => {
     clock += 20_000;
     expect((await acquire(laptop)).body.lease.expiresAt).toBe(clock + 60_000);
     expect((await t.api("GET", "/leases/agent")).body).toEqual({
-      holder: { device: "dev_laptop", deviceName: "Laptop", expiresAt: clock + 60_000 },
+      holder: {
+        device: "dev_laptop",
+        deviceName: "Laptop",
+        expiresAt: clock + 60_000,
+        priority: "interactive",
+      },
+    });
+  });
+
+  it("reports the priority its holder asked with (interactive when absent)", async () => {
+    expect((await acquire(laptop)).body.lease.priority).toBe("interactive");
+    await release(laptop);
+    const host = { ...desktop, priority: "host" };
+    expect((await acquire(host)).body.lease).toMatchObject({
+      device: "dev_desktop",
+      priority: "host",
+    });
+    expect((await t.api("GET", "/leases/agent")).body.holder.priority).toBe("host");
+    expect((await acquire(laptop)).body).toMatchObject({
+      error: "lease_held",
+      holder: { device: "dev_desktop", priority: "host" },
     });
   });
 
@@ -96,6 +120,8 @@ describe("agent lease", () => {
       { ...laptop, deviceName: "bad\u0007name" },
       { ...laptop, session: "has space" },
       { ...laptop, extra: 1 },
+      { ...laptop, priority: "urgent" },
+      { ...laptop, priority: null },
     ];
     for (const body of bad) {
       expect((await t.api("POST", "/leases/agent", { body, device: laptop.device })).status).toBe(
@@ -108,5 +134,44 @@ describe("agent lease", () => {
       (await t.api("POST", "/leases/nope", { body: laptop, device: laptop.device })).status,
     ).toBe(404);
     expect((await t.api("DELETE", "/leases/agent", { device: laptop.device })).status).toBe(400);
+  });
+});
+
+describe("lease priority in a database from before priorities (schema 1)", () => {
+  it("is added as interactive to the lease held during the upgrade", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ddl-sync-lease-"));
+    try {
+      const db = join(dir, "sync.db");
+      const created = new SyncStore(db, { now: () => clock });
+      const { vault } = created.createVault("Personal");
+      created.close();
+      const { DatabaseSync } = process.getBuiltinModule("node:sqlite");
+      const v1 = new DatabaseSync(db);
+      v1.exec("ALTER TABLE leases DROP COLUMN priority");
+      v1.prepare(
+        `INSERT INTO leases (vault, name, device, device_name, session, expires_at)
+         VALUES (?, 'agent', 'dev_laptop', 'Laptop', 's_laptop_1', ?)`,
+      ).run(vault.id, clock + 60_000);
+      v1.exec("PRAGMA user_version = 1");
+      v1.close();
+
+      const store = new SyncStore(db, { now: () => clock });
+      try {
+        expect(store.leaseHolder(vault.id, "agent")).toEqual({
+          device: "dev_laptop",
+          deviceName: "Laptop",
+          expiresAt: clock + 60_000,
+          priority: "interactive",
+        });
+        clock += 60_000;
+        expect(
+          store.acquireLease(vault.id, "agent", { ...desktop, priority: "host" }),
+        ).toMatchObject({ ok: true, holder: { device: "dev_desktop", priority: "host" } });
+      } finally {
+        store.close();
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
