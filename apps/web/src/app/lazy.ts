@@ -25,6 +25,10 @@ export const SearchView = preloadable(() =>
 export const NewRoutineDialog = preloadable(() =>
   import("../features/routines/NewRoutineDialog").then((m) => m.NewRoutineDialog),
 );
+/** Loaded before a vault switch asks the daemon to restart (it can't serve the chunk then). */
+export const VaultSwitchOverlay = preloadable(() =>
+  import("../features/obsidian-import/VaultSwitchOverlay").then((m) => m.VaultSwitchOverlay),
+);
 
 export async function prefetchLazyChunks(): Promise<void> {
   await Promise.allSettled([
