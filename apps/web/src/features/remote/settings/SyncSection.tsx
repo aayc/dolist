@@ -66,7 +66,6 @@ export function SyncSection() {
             </LockedNote>
           ) : null}
           <SyncForm
-            key={`${device.sync.url}\u0000${device.sync.vault}`}
             setup={device.sync}
             locked={device.lockedByEnv.includes("sync")}
             onSaved={loadStatus}
@@ -155,6 +154,11 @@ function SyncForm({
   const [saved, setSaved] = useState(false);
   const [confirm, dialog] = useConfirm();
   const ids = useId();
+  // Saved or turned off (here or by another client): the fields show the setup now.
+  useEffect(() => {
+    setUrl(setup.url ?? "");
+    setVault(setup.vault ?? "");
+  }, [setup.url, setup.vault]);
   useEffect(() => {
     if (!saved) return;
     const timer = setTimeout(() => setSaved(false), SAVED_MS);
