@@ -330,6 +330,13 @@ function SyncForm({
           ) : null}
         </div>
       )}
+      {busy ? (
+        // The daemon stops the agent and syncs its last state before switching.
+        <p className="remote-field-hint" role="status" data-testid="sync-busy">
+          {busy === "save" ? "Setting up sync" : "Turning sync off"}: the agent stops and syncs
+          first, which can take a few seconds.
+        </p>
+      ) : null}
       {dialog}
     </form>
   );

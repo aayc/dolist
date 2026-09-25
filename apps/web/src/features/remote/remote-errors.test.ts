@@ -40,10 +40,33 @@ describe("remote error messages", () => {
       "Environment variables (DDL_SYNC_URL, DDL_SYNC_VAULT, DDL_SYNC_TOKEN) set this device's sync, so it can't be turned off here.",
     ],
     [
-      "too many pairing attempts",
-      daemonError(429, "rate_limited", "Too many pairing attempts: try again in a minute"),
+      "too many pairing attempts, with Retry-After",
+      new HttpError(
+        429,
+        "Too many pairing attempts: try again in a minute",
+        { error: "rate_limited", message: "Too many pairing attempts: try again in a minute" },
+        40,
+      ),
       "pair",
-      "Too many pairing attempts. Wait a minute, then try again.",
+      "Too many pairing attempts. Try again in 40 seconds.",
+    ],
+    [
+      "too many pairing attempts for a few minutes",
+      new HttpError(429, "x", { error: "rate_limited" }, 125),
+      "pair",
+      "Too many pairing attempts. Try again in 3 minutes.",
+    ],
+    [
+      "no more devices (no Retry-After: the daemon says why)",
+      daemonError(429, "rate_limited", "At most 20 devices can be paired: revoke one first"),
+      "pair",
+      "At most 20 devices can be paired: revoke one first.",
+    ],
+    [
+      "the machine refusing more attempts",
+      daemonError(429, "rate_limited", "vm-1 refused more pairing attempts for now"),
+      "machinePair",
+      "The always-on machine refused more attempts for now. Wait a minute, then try again.",
     ],
     [
       "too many codes waiting",
@@ -102,6 +125,26 @@ describe("remote error messages", () => {
       daemonError(401, "unauthorized", "Missing or invalid bearer token"),
       "rename",
       "This device isn't allowed in anymore. Pair it again.",
+    ],
+    [
+      "a proxy forwarding with a loopback Host",
+      daemonError(
+        403,
+        "forbidden_host",
+        "A proxy forwarded this request with a loopback Host: make it keep the original Host and add that name to remote.hosts",
+      ),
+      "pair",
+      "Daily Do List refused this page's address. A proxy forwarded this request with a loopback Host: make it keep the original Host and add that name to remote.hosts.",
+    ],
+    [
+      "codes waiting (the daemon says how many)",
+      daemonError(
+        429,
+        "rate_limited",
+        "3 pairing codes are already waiting: use one, or wait until they expire",
+      ),
+      "pairingCode",
+      "3 pairing codes are already waiting: use one, or wait until they expire.",
     ],
     [
       "a refused page address",

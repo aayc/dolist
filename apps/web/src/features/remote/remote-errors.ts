@@ -26,11 +26,17 @@ const LOCKED: Partial<Record<RemoteAction, string>> = {
 };
 
 const RATE_LIMITED: Partial<Record<RemoteAction, string>> = {
-  pair: "Too many pairing attempts. Wait a minute, then try again.",
-  pairingCode: "Too many pairing codes are waiting. Use one, or wait until they expire.",
-  machinePair:
-    "The always-on machine refused more attempts for now. Wait a minute, then try again.",
+  pair: "Too many pairing attempts.",
+  machinePair: "The always-on machine refused more attempts for now.",
 };
+
+/** When to try again after a 429: "Try again in 40 seconds." (a minute without Retry-After). */
+function tryAgain(seconds: number | undefined): string {
+  if (seconds === undefined) return "Wait a minute, then try again.";
+  if (seconds < 60) return `Try again in ${seconds === 1 ? "a second" : `${seconds} seconds`}.`;
+  const minutes = Math.ceil(seconds / 60);
+  return `Try again in ${minutes === 1 ? "a minute" : `${minutes} minutes`}.`;
+}
 
 /**
  * A daemon message as a sentence: zod's validation report (`✖ reason\n  → at field`) becomes its
@@ -77,10 +83,19 @@ export function remoteErrorMessage(error: unknown, action: RemoteAction): string
         : "That code didn't work: it's wrong, expired or already used. Get a new one and try again.";
     case "locked_by_env":
       return LOCKED[action] ?? (daemon || "An environment variable sets this on this device.");
-    case "rate_limited":
-      return (
-        RATE_LIMITED[action] ?? (daemon || "Too many attempts. Wait a minute, then try again.")
-      );
+    case "rate_limited": {
+      // Too many attempts come with Retry-After; a full device list or waiting codes don't, and
+      // the daemon's message says which.
+      const retry = error.retryAfterSeconds;
+      const what = RATE_LIMITED[action];
+      if (what && (retry !== undefined || action === "machinePair" || !daemon)) {
+        return `${what} ${tryAgain(retry)}`;
+      }
+      if (action === "pairingCode" && !daemon) {
+        return "Too many pairing codes are waiting. Use one, or wait until they expire.";
+      }
+      return daemon || `Too many attempts. ${tryAgain(retry)}`;
+    }
     case "machine_unreachable":
       return `The always-on machine didn't answer. Check that it's running and that this device is on your private network (for example Tailscale).${daemon ? ` ${daemon}` : ""}`;
     case "agent_unavailable":
@@ -90,6 +105,8 @@ export function remoteErrorMessage(error: unknown, action: RemoteAction): string
         ? "Daily Do List refused this browser. Get a new code and try again."
         : "This device isn't allowed in anymore. Pair it again.";
     case "forbidden_host":
+      // A proxy in front of a loopback daemon is told how to fix it: pass that on.
+      return `Daily Do List refused this page's address.${daemon ? ` ${daemon}` : ""}`;
     case "forbidden_origin":
       return "Daily Do List refused this page's address. Open it at one of its remote hosts.";
     case "payload_too_large":

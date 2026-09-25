@@ -108,6 +108,20 @@ describe("HttpDaemonClient REST", () => {
     expect((error as HttpError).message).toBe("No such note");
   });
 
+  it("keeps a 429's Retry-After", async () => {
+    const { client } = setup(
+      () =>
+        new Response(JSON.stringify({ error: "rate_limited", message: "Too many" }), {
+          status: 429,
+          headers: { "content-type": "application/json", "retry-after": "12" },
+        }),
+    );
+    await expect(client.createPairingCode()).rejects.toMatchObject({
+      status: 429,
+      retryAfterSeconds: 12,
+    });
+  });
+
   it("uses the daily route with create and tolerates empty bodies", async () => {
     const { client, requests } = setup((url) =>
       url.includes("/api/daily/")

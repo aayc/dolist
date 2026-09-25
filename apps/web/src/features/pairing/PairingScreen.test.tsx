@@ -100,8 +100,8 @@ describe("the pairing screen", () => {
       "That code didn't work: it's wrong, expired or already used. Get a new one and try again.",
     ],
     [
-      new HttpError(429, "Too many", { error: "rate_limited", message: "Too many" }),
-      "Too many pairing attempts. Wait a minute, then try again.",
+      new HttpError(429, "Too many", { error: "rate_limited", message: "Too many" }, 30),
+      "Too many pairing attempts. Try again in 30 seconds.",
     ],
     [
       new NetworkError("fetch failed"),

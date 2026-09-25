@@ -99,7 +99,9 @@ export class MockPairing {
     const now = Date.now();
     while (this.attempts.length > 0 && now - this.attempts[0]! > 60_000) this.attempts.shift();
     if (this.attempts.length >= MOCK_PAIRING_LIMITS.attemptsPerMinute) {
-      throw failure(429, "rate_limited", "Too many pairing attempts: try again in a minute");
+      const message = "Too many pairing attempts: try again in a minute";
+      const retryAfter = Math.max(1, Math.ceil((this.attempts[0]! + 60_000 - now) / 1000));
+      throw new HttpError(429, message, { error: "rate_limited", message }, retryAfter);
     }
     this.attempts.push(now);
     const name = normalizeDeviceName(request.name);
