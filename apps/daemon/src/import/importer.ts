@@ -346,7 +346,7 @@ function describeFailure(error: unknown): string {
   const code = typeof error === "object" && error !== null && "code" in error ? error.code : null;
   if (code === "ENOSPC") return "The disk is full";
   if (code === "EACCES" || code === "EPERM") return `Permission denied: ${errorMessage(error)}`;
-  return errorMessage(error);
+  return errorMessage(error) || "The import stopped with an unexpected error";
 }
 
 function plural(n: number, noun: string): string {
