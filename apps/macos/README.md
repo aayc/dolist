@@ -121,7 +121,9 @@ future iPhone app too.
 - **Merging**: when the agent (or anyone) changes a note you have unsaved edits in, the two are
   merged line by line (`TextMerge`); the editor only receives their lines, your caret and undo
   stay, and the result is saved on top of their version. Changes to the same lines keep yours and
-  save theirs as a conflict copy, as before.
+  save theirs as a conflict copy. Lines deleted elsewhere stay deleted: a note with no unsaved
+  typing never writes, and a merge never brings a deleted line back unless you typed it (see
+  "Saving and merging" in the editor's README).
 
 ## The agent chat
 
