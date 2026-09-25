@@ -155,6 +155,7 @@ describe("devices.json", () => {
     expect(second.list().map((d) => d.id)).toEqual([phone.device.id]);
     expect(second.authenticate(phone.token, BEARER_DEVICE_KINDS)?.id).toBe(phone.device.id);
     expect(second.authenticate(laptop.token, BEARER_DEVICE_KINDS)).toBeNull();
+    await second.flush();
   });
 
   it("writes lastSeenAt at most once a minute", async () => {
@@ -192,6 +193,7 @@ describe("devices.json", () => {
     for (const { token, device } of paired) {
       expect(reopened.authenticate(token, BEARER_DEVICE_KINDS)?.id).toBe(device.id);
     }
+    await reopened.flush();
     expect(readdirSync(dir.path)).toEqual(["devices.json"]);
   });
 
