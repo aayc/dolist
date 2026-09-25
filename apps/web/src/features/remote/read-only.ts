@@ -6,5 +6,5 @@ import { readOnlyReason } from "./placement";
  * machine can't be used from here), or null: agent actions are disabled with it as their tooltip.
  */
 export function useReadOnlyReason(): string | null {
-  return useAgentStore((s) => readOnlyReason(s.status?.placement));
+  return useAgentStore((s) => readOnlyReason(s.status?.placement, s.status?.problem));
 }

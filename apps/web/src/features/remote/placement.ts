@@ -127,6 +127,8 @@ export function locationLine(
     /** The last placement change failed. */
     error?: string | null;
     locked?: boolean;
+    /** The agent status's `problem` (the relay's reason when it can't reach the machine). */
+    problem?: string;
   },
 ): LocationLine {
   const machine = context.machineName ?? "the always-on machine";
@@ -143,12 +145,19 @@ export function locationLine(
           : { action: { kind: "run_here", label: "Run it on this device instead" } }),
       };
     case "not_paired":
-      return {
-        kind: "not_paired",
-        text: "This device isn't paired with the always-on machine",
-        tone: "warning",
-        action: { kind: "settings", section: "machine", label: "Pair it" },
-      };
+      return rejectedByMachine(placement, context.problem)
+        ? {
+            kind: "not_paired",
+            text: REJECTED,
+            tone: "warning",
+            action: { kind: "settings", section: "machine", label: "Pair it again" },
+          }
+        : {
+            kind: "not_paired",
+            text: "This device isn't paired with the always-on machine",
+            tone: "warning",
+            action: { kind: "settings", section: "machine", label: "Pair it" },
+          };
     case "connecting":
       return { kind: "connecting", text: `Connecting to ${machine}…`, tone: "busy" };
     default:
@@ -179,26 +188,42 @@ export function locationLine(
   };
 }
 
+/** The relay's reason when the machine dropped this device's credential (relay `not_paired`). */
+export const REJECTED = "The always-on machine no longer accepts this device";
+
+/** The machine refused this device's credential ("…no longer accepts this device. Pair it again."). */
+export function rejectedByMachine(
+  placement: AgentPlacementStatus,
+  problem: string | undefined,
+): boolean {
+  return placement.relay === "not_paired" && problem?.includes("no longer accepts") === true;
+}
+
 /**
  * Why this device can't act on the agent right now (its agent actions are disabled with this as
  * the tooltip), or null. It can when it runs the agent, or relays to the always-on machine running
- * it; otherwise the daemon serves the synced state read-only.
+ * it (requests are forwarded while the relay is connecting too); otherwise the daemon serves the
+ * synced state read-only. `problem` is the agent status's, which words the relay's refusals.
  */
-export function readOnlyReason(placement: AgentPlacementStatus | undefined): string | null {
+export function readOnlyReason(
+  placement: AgentPlacementStatus | undefined,
+  problem?: string,
+): string | null {
   if (!placement || placement.runsOn?.thisDevice) return null;
   switch (placement.relay) {
     case "unreachable":
       return "The always-on machine can't be reached";
     case "not_paired":
-      return "This device isn't paired with the always-on machine";
-    case "connecting":
-      return "Connecting to the always-on machine…";
+      return rejectedByMachine(placement, problem)
+        ? REJECTED
+        : "This device isn't paired with the always-on machine";
     default:
       break;
   }
   const { runsOn } = placement;
   if (!runsOn) return machineIdle(placement) ? MACHINE_IDLE : null;
-  if (placement.relay === "connected" && runsOn.alwaysOnMachine) return null;
+  const relaying = placement.relay === "connected" || placement.relay === "connecting";
+  if (relaying && runsOn.alwaysOnMachine) return null;
   return `The agent is running on ${runsOn.name}`;
 }
 

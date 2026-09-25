@@ -107,6 +107,16 @@ describe("the read-only banner", () => {
     expect(availabilityBanner({ ...relayed, relay: "not_paired" })).toMatchObject({
       kind: "not_paired",
     });
+    expect(
+      availabilityBanner(
+        { ...relayed, relay: "not_paired" },
+        "The always-on machine no longer accepts this device. Pair it again.",
+      ),
+    ).toEqual({
+      kind: "rejected",
+      text: "The always-on machine no longer accepts this device — showing the last synced state",
+    });
+    expect(availabilityBanner({ ...relayed, relay: "connecting" })).toEqual({ kind: "none" });
     expect(availabilityBanner({ placement: "this_device", runsOn: OTHER, relay: "off" })).toEqual({
       kind: "elsewhere",
       text: "The agent is running on Work laptop — showing the last synced state",

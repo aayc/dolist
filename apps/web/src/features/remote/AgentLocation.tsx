@@ -38,8 +38,9 @@ export function LocationStatus({ testId = "agent-location-line" }: { testId?: st
   const machineName = useSettingsStore((s) => s.settings.remote?.alwaysOnMachine?.name);
   const error = useDeviceStore((s) => s.placementError);
   const locked = useDeviceStore((s) => s.device?.lockedByEnv.includes("placement") ?? false);
+  const problem = useAgentStore((s) => s.status?.problem);
   if (!placement) return null;
-  const line = locationLine(placement, { machineName, readiness, error, locked });
+  const line = locationLine(placement, { machineName, readiness, error, locked, problem });
   const { action } = line;
   return (
     <div

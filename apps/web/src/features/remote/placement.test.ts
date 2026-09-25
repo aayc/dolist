@@ -127,6 +127,17 @@ describe("where the agent runs", () => {
     expect(locationLine(down, { machineName: "vm-1", locked: true }).action).toBeUndefined();
   });
 
+  it("asks to pair again when the machine no longer accepts this device", () => {
+    const line = locationLine(
+      status({ placement: "always_on_machine", relay: "not_paired", runsOn: MACHINE }),
+      { problem: "The always-on machine no longer accepts this device. Pair it again." },
+    );
+    expect(line).toMatchObject({
+      text: "The always-on machine no longer accepts this device",
+      action: { kind: "settings", section: "machine", label: "Pair it again" },
+    });
+  });
+
   it("links to pairing when this device isn't paired with the machine", () => {
     const line = locationLine(
       status({ placement: "always_on_machine", relay: "not_paired", runsOn: MACHINE }),
@@ -187,9 +198,20 @@ describe("the read-only reason", () => {
     expect(readOnlyReason(status({ ...relayed, relay: "not_paired" }))).toBe(
       "This device isn't paired with the always-on machine",
     );
-    expect(readOnlyReason(status({ ...relayed, relay: "connecting" }))).toBe(
-      "Connecting to the always-on machine…",
-    );
+    // Requests are already forwarded while the relay connects.
+    expect(readOnlyReason(status({ ...relayed, relay: "connecting" }))).toBeNull();
+    expect(
+      readOnlyReason(
+        status({ ...relayed, relay: "not_paired" }),
+        "The always-on machine no longer accepts this device. Pair it again.",
+      ),
+    ).toBe("The always-on machine no longer accepts this device");
+    expect(
+      readOnlyReason(
+        status({ ...relayed, relay: "not_paired" }),
+        "This device isn't paired with the always-on machine.",
+      ),
+    ).toBe("This device isn't paired with the always-on machine");
     expect(readOnlyReason(status({ runsOn: OTHER }))).toBe("The agent is running on Work laptop");
     expect(readOnlyReason(status({ ...relayed, relay: "connected", runsOn: OTHER }))).toBe(
       "The agent is running on Work laptop",

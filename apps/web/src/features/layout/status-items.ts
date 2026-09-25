@@ -67,7 +67,7 @@ export function agentItem(
   placement?: AgentPlacementStatus,
 ): AgentItem {
   if (enabled === null) return { state: "unknown", label: "Agent", title: "Agent status unknown" };
-  const elsewhere = placement ? locationItem(placement, enabled) : null;
+  const elsewhere = placement ? locationItem(placement, enabled, problem) : null;
   if (elsewhere) return elsewhere;
   if (off) {
     return {
@@ -86,7 +86,11 @@ export function agentItem(
     : { state: "paused", label: "Agent paused", title: "The agent is paused — click to resume" };
 }
 
-function locationItem(placement: AgentPlacementStatus, enabled: boolean): AgentItem | null {
+function locationItem(
+  placement: AgentPlacementStatus,
+  enabled: boolean,
+  problem: string | null,
+): AgentItem | null {
   const { runsOn, relay } = placement;
   if (runsOn?.thisDevice) return null;
   if (relay === "unreachable") {
@@ -101,12 +105,12 @@ function locationItem(placement: AgentPlacementStatus, enabled: boolean): AgentI
     return {
       state: "unavailable",
       label: "Agent not paired",
-      title: "This device isn't paired with the always-on machine",
+      title: problem ?? "This device isn't paired with the always-on machine",
       location: true,
     };
   }
   if (!runsOn) return null;
-  if (relay === "connected" && runsOn.alwaysOnMachine) {
+  if ((relay === "connected" || relay === "connecting") && runsOn.alwaysOnMachine) {
     return enabled
       ? {
           state: "on",
