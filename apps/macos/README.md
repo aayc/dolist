@@ -133,7 +133,8 @@ app's.
 - **Chips** end each line that woke it, styled like the task badges: a quiet pulsing dot when it
   noticed the line, "Orchestrator is looking…" while it reads and thinks, "Working…" while it
   acts, then the outcome ("Added a task ↗", "Added 3 tasks ↗", "Replied ↗", "Started a task ↗",
-  "Made a routine ↗", "Needs your approval ↗", "Nothing to do"). An outcome fades after 6 s,
+  "Made a routine ↗", "Needs your approval ↗", "Nothing to do"). While a turn waits for your
+  approval its chips say "Needs your approval ↗" until it moves on. An outcome fades after 6 s,
   "Nothing to do" after 3 s. Clicking a chip opens the thread its turn started, or the
   orchestrator's chat window scrolled to the turn (its first message briefly highlighted). The
   tooltip says what it's doing or what it did. With Reduce Motion nothing pulses and outcomes just
@@ -154,7 +155,8 @@ app's.
   placement), `OrchestratorIndicators.swift` (header, status bar), `AgentStore.orchestratorFocus`
   (the turn the chat scrolls to). `AppModel` routes the events and adopts the status's activity
   after each refresh (unless an event came in meanwhile; nothing under way clears unfinished
-  chips).
+  chips). A pushed `agent.status` isn't adopted: it repeats the events and keeps a finished turn's
+  outcome for a while, and a turn's chips end only once.
 
 ## The agent chat
 
