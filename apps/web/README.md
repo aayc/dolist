@@ -183,8 +183,9 @@ own drawing engine).
   build serves under `assets/excalidraw-<version>/` with their license notices
   (`excalidraw-assets.ts`, `excalidraw-notice.txt`); nothing loads from a CDN, and the daemon's CSP
   (`font-src 'self'`) would block it anyway. The build also replaces parts of Excalidraw we don't
-  ship (font subsetting in WebAssembly, the Mermaid importer, pica, pako, translations): exports
-  from Excalidraw's menus embed whole fonts, and Mermaid import isn't available.
+  ship (font subsetting in WebAssembly, the Mermaid importer, pica, pako, browser-fs-access,
+  translations; see `docs/PERFORMANCE.md`): exports from Excalidraw's menus embed whole fonts,
+  images are picked with a file input, and Mermaid import isn't available.
 
 With `?mock=1`, the mock daemon keeps drawings like any note, never reads one as a task list, and
 seeds `Sketches.md` with a drawing; `&mockPersist=1` keeps the vault in the tab's sessionStorage
