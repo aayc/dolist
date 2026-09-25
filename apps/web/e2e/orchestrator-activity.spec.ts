@@ -3,7 +3,8 @@ import { focusEditorEnd, openApp } from "./helpers";
 
 /*
  * What the orchestrator is doing while you write, with the real keyboard against the in-browser
- * mock (mockSpeed=4: a line settles 625 ms after the last change).
+ * mock (mockSpeed=4: the editor saves 300 ms after the last key, and the mock's 1.2 s settle delay
+ * becomes 300 ms).
  */
 
 interface Seen {
@@ -103,12 +104,14 @@ test.describe("what the orchestrator is doing while you write", () => {
     expect(kinds).toContain("looking");
     expect(kinds.at(-1)).toBe("outcome");
     const dot = chips.find((s) => s.kind === "noticed")!;
+    const looking = chips.find((s) => s.kind === "looking")!;
     const outcome = chips.find((s) => s.kind === "outcome")!;
-    // The dot shows before the line settles (625 ms after typing stopped).
-    expect(dot.at - typed).toBeLessThan(625);
+    // The dot shows with the first save, a settle delay before the orchestrator's turn starts.
+    expect(dot.at - typed).toBeLessThan(1_000);
+    expect(looking.at - dot.at).toBeGreaterThanOrEqual(250);
     test.info().annotations.push({
       type: "timing",
-      description: `dot ${Math.round(dot.at - typed)} ms after the last key, outcome ${Math.round(outcome.at - dot.at)} ms after the dot; chips: ${kinds.join(" → ")}`,
+      description: `dot ${Math.round(dot.at - typed)} ms after the last key, turn ${Math.round(looking.at - dot.at)} ms after the dot, outcome ${Math.round(outcome.at - dot.at)} ms after the dot; chips: ${kinds.join(" → ")}`,
     });
 
     const headers = (await seen(page)).filter((s) => s.what === "note").map((s) => s.text);
