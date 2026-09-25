@@ -82,8 +82,12 @@ export function createSafetyGate(options: SafetyGateOptions): SafetyGate {
           source: "grant",
           reason:
             grant.scope === "always"
-              ? `You always allow this kind of ${ctx.toolName} action.`
-              : `You approved this kind of ${ctx.toolName} action for this task.`,
+              ? grant.target
+                ? "You always allow actions like this in this app."
+                : `You always allow this kind of ${ctx.toolName} action.`
+              : grant.target
+                ? "You approved actions like this in this app for this task."
+                : `You approved this kind of ${ctx.toolName} action for this task.`,
         });
         return { allow: true };
       }

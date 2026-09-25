@@ -139,7 +139,8 @@ serves every tool itself and gates each call before running it; see below for th
 Pipeline (details and the full rule table in `packages/agent/src/safety/README.md`):
 
 1. **Policy & grants** — always-deny/allow/require lists; standing grants from "approve for this
-   task" (narrowed by category, risk and, for computer actions, the app they target).
+   task" (narrowed by category and risk; a computer action's grant covers every computer action
+   in the app it targeted, and only that app).
 2. **Hints** — internal and read-only tools take a fast path unless a risky rule matches. A tool
    that knows the real target (`subject`: the app's real name, the element's real label) adds it to
    the model's words; it can only make the verdict stricter.

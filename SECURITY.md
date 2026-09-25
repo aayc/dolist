@@ -75,7 +75,9 @@ list) doesn't. Approval cards and the safety rules see what the tool knows about
 the app's real name and the element's label from the latest snapshot — alongside the model's own
 description, and the action runs against exactly that snapshot (a changed window makes it stale
 instead of hitting another element). Standing grants ("approve for this task") are scoped to one
-app. Return, typed line breaks and send buttons in messaging apps count as sending a message.
+app, where they cover any computer action no riskier than the approved one (a Return, a send or a
+payment asks again). Return, typed line breaks and send buttons in messaging apps count as
+sending a message.
 Some apps are off-limits even with approval, refused by the safety rules by name and by the helper
 by bundle id and process tree: Daily Do List itself (an agent could approve its own actions),
 System Settings, Keychain Access and Passwords, password managers, authenticators, the system's

@@ -412,6 +412,36 @@ describe("target-scoped grants", () => {
     await expect(whatsapp).resolves.toMatchObject({ allow: false });
   });
 
+  it("covers the app's other computer actions of the same kind, and asks again for more", async () => {
+    const { gate, approvals } = setup();
+    const pending = nextPending(approvals);
+    const first = gate(
+      call({ app: "Grok Bot", id: "e2", value: "tides" }, { app: "Grok Bot", element: "Prompt" }),
+    );
+    await approvals.decide((await pending).id, { decision: "approve", scope: "task" });
+    await expect(first).resolves.toEqual({ allow: true });
+
+    for (const [toolName, input] of [
+      [TOOL.computerPress, { app: "Grok Bot", id: "e3", element: "New chat" }],
+      [TOOL.computerType, { app: "Grok Bot", text: "tides in SF" }],
+      [TOOL.computerScroll, { app: "Grok Bot", dx: 0, dy: 3 }],
+    ] as const) {
+      await expect(gate({ ...call(input), toolName })).resolves.toEqual({ allow: true });
+    }
+    expect(approvals.list({ status: "pending" })).toEqual([]);
+
+    // Return submits, which the first approval didn't cover.
+    const more = nextPending(approvals);
+    const enter = gate({
+      ...call({ app: "Grok Bot", combo: "return" }),
+      toolName: TOOL.computerKey,
+    });
+    const asked = await more;
+    expect(asked.categories).toContain("form_submission");
+    await approvals.decide(asked.id, { decision: "deny" });
+    await expect(enter).resolves.toMatchObject({ allow: false });
+  });
+
   it("never lets an app grant cover screen-level calls, or the reverse", async () => {
     const { gate, approvals } = setup();
     const pending = nextPending(approvals);

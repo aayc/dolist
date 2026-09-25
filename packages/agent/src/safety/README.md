@@ -321,7 +321,10 @@ schema (`decision`, `risk`, `categories`, `reason`); `reasoning: "off"`, `temper
   real name, else the model's words; `SafetyVerdict.target`). A grant covers only calls with the
   same target, and one without a target (screen-level computer actions and every other tool) only
   calls without one: approving "Press “Send” in Grok Bot" for the task covers Grok Bot, not
-  WhatsApp, and not the whole screen.
+  WhatsApp, and not the whole screen. Within its app, a targeted grant covers every `computer_*`
+  tool, not just the approved one, so allowing a click in Grok Bot for the task lets the agent
+  type and scroll there too; the category and risk checks still apply, so a Return, a send or a
+  payment in that app asks again.
   Grants never override hard-deny rules or deny policies: the gate only consults them for
   `require_approval` verdicts.
 - Approval inputs are stored redacted (typed passwords/card numbers hidden, secrets masked).

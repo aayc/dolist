@@ -64,6 +64,20 @@ interface Waiter {
   cleanup(): void;
 }
 
+const isComputerTool = (toolName: string) => toolName.startsWith("computer_");
+
+/**
+ * A grant covers its own tool, and one made in an app covers every computer action in that app:
+ * allowing a click in Grok Bot for the task lets the agent type there too. The category and risk
+ * checks still apply, so a Return, a send or a payment asks again.
+ */
+function coversTool(grant: ApprovalGrant, query: GrantQuery): boolean {
+  if (grant.toolName === query.toolName) return true;
+  return (
+    grant.target !== undefined && isComputerTool(grant.toolName) && isComputerTool(query.toolName)
+  );
+}
+
 function sameGrant(a: ApprovalGrant, b: ApprovalGrant): boolean {
   return (
     a.toolName === b.toolName &&
@@ -320,7 +334,7 @@ export function createApprovalBroker(
     findGrant(query: GrantQuery): ApprovalGrant | undefined {
       for (let i = grants.length - 1; i >= 0; i--) {
         const grant = grants[i]!;
-        if (grant.toolName !== query.toolName) continue;
+        if (!coversTool(grant, query)) continue;
         if (grant.scope === "task" && (query.taskId === null || grant.taskId !== query.taskId))
           continue;
         // Approving "Press Send in Grok Bot" says nothing about WhatsApp, or the whole screen.
