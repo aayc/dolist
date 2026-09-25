@@ -142,6 +142,64 @@ tool groups, chat bar, Stop and its shortcut, optimistic send and retry, jump to
 reduced motion, an idle chat asking for no frames). In mock mode, `__ddlDebug.holdReplies({ ms,
 fail })` delays or fails chat replies.
 
+## Drawings
+
+`src/features/drawings/`: Excalidraw drawings on notes, as files the Obsidian Excalidraw plugin
+opens too (`Excalidraw/<name>.excalidraw.md`; the format is `@ddl/core`'s, see
+`docs/DATA_FORMATS.md`). What follows is also what the Mac editor mirrors (`apps/macos`, with its
+own drawing engine).
+
+- **In a note**, `![[Name.excalidraw|360|right-wrap]]` alone on its line is drawn by the editor's
+  embed layer (`packages/editor`, "Embeds"): floated left or right with the text wrapping around
+  it, or on a row of its own; click to select, drag to move (to another line or side), drag a
+  corner to resize, Delete to remove the line, double-click or Enter to edit. The box shows a
+  static SVG (`drawing-embed.ts`), rendered with Excalidraw's `exportToSvg` and cached by the
+  file's content hash (`render-cache.ts`), so it renders again only when the file changes. The
+  dark theme inverts it with a CSS filter, as Excalidraw's dark mode does (images excepted).
+- **Insert drawing** (`drawing:insert`, ⌘⇧X / Ctrl+Shift+X; the palette, the note header's
+  button and the editor's context menu) creates `Excalidraw/Drawing <date>.excalidraw.md` (a blank
+  scene, `uniqueDrawingPath`), embeds it on the caret's line floated right at 360 px, and starts
+  editing it. Following a link to a drawing that doesn't exist creates it too.
+- **Editing in place** (`drawing-overlay.ts`): the real Excalidraw in a card over the note, at
+  least 760 × 520 px when the pane allows (below that Excalidraw switches to its phone layout),
+  its canvas zoomed and scrolled so the drawing sits exactly where its preview was, the tool bar
+  above it. The card grows as the drawing nears its bottom. Escape (unless Excalidraw is using it:
+  a text being typed, a shape being drawn, a menu open), a click outside or Done ends it, after
+  saving and once the preview shows the new version; Escape selects the drawing again. Excalidraw
+  gets the keyboard; the app's own shortcuts keep working. Excalidraw's theme follows the app's.
+- **Opening the file** (from the explorer, a link, or "Open drawing" in the context menu) shows
+  Excalidraw over the pane (`DrawingPane.tsx`, a lazy chunk), not the markdown.
+- **Saving** (`drawing-session.ts`): edits save debounced (500 ms, and when editing ends, the
+  window loses focus or ⌘S) through the notes API with `baseVersion`, written with
+  `serializeDrawingFile(scene, previous)` so everything Excalidraw doesn't know survives. Only real
+  edits save: opening a file never rewrites it. On a 409, or a change pushed while editing
+  (Obsidian, another device, sync), the other version is merged into the editor element by element
+  (`mergeDrawingElements` in `@ddl/core`: the newer `version` wins, the previous file tells a
+  deletion from an addition, an element being typed in keeps its local copy), so neither side's
+  work is lost. Excalidraw's 21-character element ids become the plugin's 8-character ones in the
+  file (`element-ids.ts`). A file that can't be read is shown as such and never written over.
+- **Loading** (`excalidraw-loader.ts`): Excalidraw is its own chunk (~325 kB gz), imported the
+  first time something shows a drawing. `window.EXCALIDRAW_ASSET_PATH` points at the fonts our
+  build serves under `assets/excalidraw-<version>/` with their license notices
+  (`excalidraw-assets.ts`, `excalidraw-notice.txt`); nothing loads from a CDN, and the daemon's CSP
+  (`font-src 'self'`) would block it anyway. The build also replaces parts of Excalidraw we don't
+  ship (font subsetting in WebAssembly, the Mermaid importer, pica, pako, translations): exports
+  from Excalidraw's menus embed whole fonts, and Mermaid import isn't available.
+
+With `?mock=1`, the mock daemon keeps drawings like any note, never reads one as a task list, and
+seeds `Sketches.md` with a drawing; `&mockPersist=1` keeps the vault in the tab's sessionStorage
+so a reload finds it.
+
+### Tests
+
+Unit: `features/drawings/drawings.test.ts` (ids, the scene written, the render cache, the store,
+saving, 409 merges, changes from elsewhere, unreadable and deleted files), `@ddl/core`'s
+`drawings/merge.test.ts`, the editor's `embeds/*.test.ts`, and the mock's. E2E:
+`e2e/drawings.spec.ts` (insert, draw a rectangle and an arrow, wrapping and typing beside it,
+move, resize, delete and undo, reload, open the file, a change from elsewhere, the palette and the
+context menu, no request leaving the app), the drawing screens of the cursor audit in
+`e2e/polish.spec.ts`, and typing beside six drawings in the perf suite.
+
 ## Routines
 
 `src/features/routines/`, in the agent panel: the ribbon's Routines button, the "Show routines"

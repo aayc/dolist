@@ -346,6 +346,12 @@ Clients read and write them through the notes API like any note (`readNote`, `wr
 - **Embeds:** `![[Name.excalidraw|360|right-wrap]]` — alias, size (`360`, `360x240`, `x240`,
   `50%`) and style (`left`, `right`, `center`, `left-wrap`, `right-wrap`; none is full width), split
   the way the plugin does (`parseDrawingEmbed`, `formatDrawingEmbed`, `findDrawingEmbeds`).
+- **Concurrent edits:** `mergeDrawingElements(base, local, remote)` merges two edits of a drawing
+  by element id: the newer edit wins (higher `version`, then lower `versionNonce`, Excalidraw's
+  rule), and `base` (the file both started from) tells a deletion from an addition, so an element
+  one side dropped and the other didn't change is gone while one the other side changed survives.
+  Local additions go after the element before them locally; with fractional `index`es on every
+  element, the result is sorted by them. Clients save the merge over the newer version.
 - **Description:** `describeDrawing(scene, { title })` is the bounded (2 000 code points),
   deterministic text the agent sees for a drawing.
 - **Fixtures:** `packages/core/test/drawings/` holds drawings in both forms with their expected
