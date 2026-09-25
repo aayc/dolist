@@ -31,7 +31,8 @@ editor.configure(EditorConfiguration(fontSize: 16, vimMode: true))
 | --- | --- |
 | `MarkdownEditorController(configuration:)` | One editor. `view` is the view to embed: `scrollView` (with the `NSTextView`, `textView`, inside it) and vim's command line under it. |
 | `text`, `setText(_:resetUndo:)` | `setText` never notifies the delegate. Without `resetUndo` it applies one minimal replacement (common prefix/suffix, whole lines aligned), so selection, scroll and badge anchors survive; the change is undoable (read-only editors clear undo instead). With `resetUndo` it replaces the document, clears undo and badges, and puts the caret at the start. `\r\n`/`\r` become `\n`. |
-| `setBadges(_:)`, `badges` | Badges are anchored to their line and remapped through edits; `badges` returns them with current lines. `idle`/`ignored` are kept but not drawn. A badge with `highlightsLine` (a thread anchored to a line that isn't a task) also draws the line's band. |
+| `setBadges(_:)`, `badges` | Badges are anchored to their line and remapped through edits; `badges` returns them with current lines. `idle`/`ignored` are kept but not drawn. A badge with `highlightsLine` (a thread anchored to a line that isn't a task) also draws the line's band. The orchestrator's chips are badges too ("Orchestrator chips" under [Behavior](#behavior)): `tooltip`, `anchorText` and `isFading` are for them. |
+| `EditorLineMatch` | Whether a line is still the line a chip was placed on (`recognizes`, `similarity`, `normalize`); hosts place chips with the same rule. |
 | `applyRemoteChanges(_:)` | Someone else's changes (`EditorTextChange`s: non-overlapping UTF-16 ranges of the current text, applied in order at the same place), e.g. the remote side of a merge. Each is its own storage edit, so the caret, selection, badges and the user's undo history stay; together they're one undoable step. The delegate isn't notified. |
 | `configure(_:)`, `configuration` | Font size (restyles), live preview, readable line length, spellcheck, line numbers, editable, vim mode. |
 | `vim`, `vimSession`, `vimStatus` | The app's shared `Vim` (vim mode needs it and `configuration.vimMode`), the session attached to this editor, and its mode line. In a read-only editor vim moves, yanks and searches but doesn't edit. |
@@ -47,6 +48,8 @@ Additions to the original contract (all source-compatible):
 - Commands, returning `false` when nothing happened (read-only, not a task line): `toggleTask(atLine:)`,
   `toggleChecklist()`, `toggleBold()`, `toggleItalic()`, `toggleInlineCode()`,
   `toggleStrikethrough()`, `toggleHighlight()`, `insertLink()`.
+- `EditorBadge.tooltip`, `anchorText`, `isFading` and `EditorBadge.OrchestratorStatus` (all
+  defaulted), and `EditorLineMatch`.
 
 ## Behavior
 
@@ -127,11 +130,26 @@ has no room on its right (narrow window or no readable width), the text column n
 it, and a pill that still doesn't fit before the view's edge shortens its label (down to just the
 status and unread dots; the tooltip keeps the full label).
 
+**Orchestrator chips.** What the orchestrator is doing about a line that woke it, drawn like the
+badges with a status of `EditorBadge.OrchestratorStatus`: `orchestrator.noticed` is a quiet
+accent dot with no label (the pill's padding and dot only), `orchestrator.looking` and
+`orchestrator.acting` are neutral pills (accent and info dots), `orchestrator.done` and
+`orchestrator.nothing` quiet text (success and faint dots), `orchestrator.needs_you` a warning
+pill. A chip's `tooltip` replaces its label as the tooltip. Its `anchorText` is the line it
+belongs to: besides the badge rules below, an edit that leaves the line unrecognizable drops it
+(`EditorLineMatch`: texts compared trimmed, lowercased, blanks collapsed and without an agent
+marker; equal, one extending the other with at least 3 characters, or a Sørensen–Dice similarity
+over character bigrams of at least 0.5). The check runs only for the line an edit touches, O(line).
+A chip with `isFading` fades out (400 ms, ease-out; at once with Reduce Motion) and stays
+invisible, without clicks or a tooltip, keeping its room in the margin until the host removes it;
+one that arrives already fading never shows.
+
 **Motion** (paint only, nothing is laid out again; all of it off with Reduce Motion). A badge that
 appears after the note was drawn fades in while settling 2 pt upwards (160 ms, ease-out); the
 badges of a note being opened, badges set again with the same id and badges moved by typing don't.
-A change of status, label or unread dot crossfades from the old look (160 ms). A triaging badge's dot breathes
-1 → 0.35 → 1 (1.2 s, ease-in-out) while it's on screen. Checking a task (click, ⌘L, ⌘↩) pops its
+A change of status, label or unread dot crossfades from the old look (160 ms). A triaging badge's
+dot (and a noticed or looking chip's) breathes 1 → 0.35 → 1 (1.2 s, ease-in-out) while it's on
+screen; a chip going from noticed to looking keeps its pulse's phase. Checking a task (click, ⌘L, ⌘↩) pops its
 checkmark in over the open box: 0.8 → 1 scale with a fade (120 ms). The curves are CSS's
 `ease-out`/`ease-in-out`, solved like browsers solve them. Frames come from a display link
 (`NSView.displayLink`, up to 60 Hz) that runs only while a transition plays or a pulsing badge is
