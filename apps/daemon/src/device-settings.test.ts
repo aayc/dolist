@@ -32,9 +32,10 @@ function settingsFor(
   config: ReturnType<typeof load>,
   applied: DaemonSyncConfig[] = [],
   logger = silentLogger,
+  device = { id: "dev_laptop", name: "Laptop" },
 ) {
   return new DeviceSettings({
-    device: { id: "dev_laptop", name: "Laptop" },
+    device,
     placement: config.placement,
     sync: config.sync,
     lockedByEnv: config.lockedByEnv,
@@ -96,6 +97,13 @@ describe("device settings on disk", () => {
     expect(mode(config.devicePath)).toBe(0o600);
     expect(device.name).toBe("Work laptop");
     expect(settings.response().device).toEqual({ id: "dev_laptop", name: "Work laptop" });
+  });
+
+  it("rename the identity sync, the lease and the machine link hold, not a copy", async () => {
+    const shared = { id: "dev_laptop", name: "Laptop" };
+    const settings = settingsFor(load(), [], silentLogger, shared);
+    await settings.patch({ name: "Work laptop" });
+    expect(shared.name).toBe("Work laptop");
   });
 
   it("refuse fields set by environment variables, and say so", async () => {
