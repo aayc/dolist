@@ -4,8 +4,10 @@ The running handoff log: what shipped, what's in flight, what's next, and the de
 them, so work can continue on any machine at any point. Read it before starting; keep it current
 (the rules are in `AGENTS.md`, "Handoff log").
 
-**Last updated:** 2026-09-25 · `main` at `bbe8aff` (the always-on work and the Linux kit restart
-fix; `7ce1e9f` installed) · in-flight branches pushed to `origin`.
+**Last updated:** 2026-09-25 · `main` at `b220dd2`: everything built today is merged (always-on,
+orchestrator activity, drawings, import from Obsidian); CI, macOS app, Security and Linux bundle
+green on it, and it's the build installed on the main development Mac. No open branches; next is
+the Azure VM.
 
 ## Picking this up on another machine
 
@@ -23,6 +25,15 @@ fix; `7ce1e9f` installed) · in-flight branches pushed to `origin`.
 
 ## Shipped on `main` (newest first)
 
+- `b220dd2` Patched `nanoid` and `lodash-es` for Dependabot's 11 open alerts (they came with
+  Excalidraw and its Mermaid importer): pnpm overrides; the web bundle is unchanged. **Installed**
+  on the main development Mac (agent live, app control kept); Dependabot: 0 open alerts.
+- `e2fd3ce` Import from Obsidian: point it at your Obsidian vault (it copies it; the original and
+  Obsidian Sync stay untouched), read the report, import into a new folder with this vault's notes
+  and agent history carried over, switch to it, and later Update from Obsidian; web Settings →
+  Vault and Mac Settings → General → Vault and the File menu
+  ([spec](docs/specs/obsidian-migration.md), README "Moving from Obsidian"). Still to try for
+  real: the switch in the running Mac app, and a large real vault.
 - `052dcc8` Drawings in notes: Excalidraw-compatible drawings in the Obsidian Excalidraw plugin's
   format, embedded with its syntax, floated with text wrapping around them, movable and
   resizable; the real Excalidraw on the web (lazy-loaded), a native engine on the Mac; the agent
@@ -106,43 +117,26 @@ Host-rewriting proxy fails closed instead of getting the master token).
 
 Open: browser pairing over https stays fixme in the e2e harness (no TLS proxy there).
 
-### Moving from Obsidian
-
-Spec: [docs/specs/obsidian-migration.md](docs/specs/obsidian-migration.md).
-
-| Stream | Branch | State |
-| --- | --- | --- |
-| M the editor merge race (data safety) | `fix/editor-merge-race` | **all on `main`** (`6750f36`, `d657518`). Follow-up (`361f8ac`): the fuzz seed was a real merge bug (an edit plus a line added under it were one block, so an agent's line ended up in a conflict copy); `mergeText` and the Swift port now split replaced blocks; the model tests fail properly instead of via unhandled rejections; two oracle fixes. CI and macOS dispatched on the branch; merge to `main` when green. Fixed (`4d3ef06`): root cause in the Mac `NotesStore.save()` (a clean save kept a stale "unsaved" copy, shown again later and saved with a valid version); also conflicts no longer restore deleted lines (web and Mac, `mergeText` and its Swift port), and remounted web editors keep unsaved typing; guarantee in invariant 7. CI and macOS dispatched on the branch; merge to `main` when green. Now investigating the fuzz seed below and making model-check failures fail the property instead of becoming unhandled rejections. Left as is: on the Mac a remote change is an undoable step (⌘Z right after an external delete restores the lines) |
-| I0 Import from Obsidian: engine, carry-over, vault switch, update | `feat/obsidian-import` | done (`9ebd1cd`, 12 commits); `feat/always-on` merged in at `f0ced02` (daemon 1205, contract 1284 tests green). After an import the real watcher finds no new work (every carried task keeps its id, thread and badge). Vault switch exits 75 (the Mac supervisor relaunches at once). Paired devices get 403 `forbidden_device`; switching is refused while sync is on. Journal files copied unchanged (`remapJournalFile` hook) |
-| I1 Import from Obsidian: web and Mac flows | `feat/obsidian-import-ui` | done (`8e875b7`, 11 commits): web Settings → Vault and the palette command (the report, import with progress and Cancel, Switch to the new vault behind an overlay that waits for the daemon and reloads, Update from Obsidian); Mac Settings → General → Vault and File menu commands (folder picker, `.importProgress`, the switch through the app's vault preference or the daemon's own restart); README "Moving from Obsidian". Added to I0's contract (optional): `imported` in `GET /api/import/obsidian` and the previous vault in the manifest. **Merged into `feat/obsidian-import` with `main`** (`8ba35c6`): 10 conflicts; the vault section links to Settings → Sync; the web mock has one sync state. Verified: lint, typecheck, TS unit suites (the stdio connector flake passes alone), functional e2e 114 and fullstack 17 passed, Swift Models, Client, Agent, app, and integration (28 against real daemons, incl. the import and the relay suites). CI, macOS app and Security dispatched. Still to try for real: the Mac switch in the running app, the web switch against a restarting daemon, a real (large) Obsidian vault |
-| B0 binary files, attachment sync, file serving | from `main` | queued, unblocked (the always-on work, which changed the same sync code, is on `main`) |
-| P images, tables, callouts, backlinks (web and Mac) | after the drawings' embed layer | queued (images share the drawings' embed layer) |
-
-### Agent journal
-
-Phase 1 shipped (`dffdfdd`); the daemon passes the lease epoch as
-`AgentRuntimeOptions.leaseEpoch` (on `main` with the always-on work). Phase 2 (approvals and routines state on the journal,
-client ids for idempotent relay mutations, compaction, resuming the orchestrator's turn) after
-that. Spec: [docs/specs/agent-journal.md](docs/specs/agent-journal.md). Phase 1: the journal is the source of truth for threads
-(append-only JSONL, union merge in the sync engine), today's thread JSON is still written as a
-derived snapshot (so the relay's read-only view, older daemons and the clients keep working),
-write-ahead around tool calls with "interrupted" instead of re-running, resume after a restart,
-migration of existing threads. Phase 2 (unblocked): approvals, routines state and client ids
-for idempotent mutations.
-
 ## Next up (not started)
 
+- **The Azure VM** (above): the next step once the user is back.
+- **B0 binary files:** attachment sync and file serving ([spec](docs/specs/obsidian-migration.md)).
+- **P rendering parity:** images (on the drawings' embed layer), tables, callouts, backlinks, on
+  the web and the Mac.
+- **Agent journal, phase 2:** approvals and routines state on the journal, client ids for
+  idempotent relay mutations, compaction, resuming the orchestrator's turn
+  ([spec](docs/specs/agent-journal.md)). Phase 1 shipped (`dffdfdd`); the daemon passes the
+  lease epoch.
+- **The web app in the Mac app?** The Mac app's daemon doesn't serve the web UI (its root says
+  to run `pnpm build`); the Linux kit bundles it. Bundling `apps/web/dist` next to the daemon
+  would put the latest web app at http://127.0.0.1:7331 with every install. Ask first.
 - **Security, delete rules:** `rm -rf /users/<name>` in lowercase only asks instead of hitting
   the "deletes your home directory" hard deny (macOS paths are case-insensitive). Make the delete
   rules match home paths case-insensitively, with eval cases. Known remaining read gaps (from the
   home-folder fix): a single file held in a variable, a project folder's `.env` read recursively,
   subfolders of personal folders, `~/Library/Preferences`.
-
 - **iPhone app:** deferred; the web app covers mobile for now. Plan in
   [apps/mobile/PLAN.md](apps/mobile/PLAN.md); needs full Xcode and remote access (S1) first.
-- **Editor merge race:** an open editor re-saved lines that were deleted outside it about 10 s
-  after an agent edit (the deleted task came back and the orchestrator ran it again). Reproduce,
-  add a regression test, fix.
 - **Mac:** make sure the floating computer-access guide can't cover the app's controls and closes
   reliably once access is granted.
 - **App control:** long, virtualized lists only expose their visible rows (an app showed 11 of 14
@@ -151,13 +145,15 @@ for idempotent mutations.
   specificity).
 - **Mac orchestrator window:** bring the typing reveal, activity row and jump-to-latest pill to
   `OrchestratorChatView`, as on the web.
-- **Flaky guard:** core's `trackTasks` performance guard fails under machine load and passes
-  alone; make it robust to load without loosening it.
-- **Flaky under load:** storage's file-watcher tests (`local-fs.watch.test.ts`,
-  `internal/directory-tree-watcher.test.ts`) fail now and then when the machine is saturated and
-  pass alone; make them robust without loosening them. Same for the agent's subprocess tests
-  (for example `app-control/client.test.ts`, "stops waiting when the call is aborted").
-- **Known mock-eval misses** (pre-existing on `main`, the suites still pass): safety
+- **Drawings follow-ups:** shared merge vectors for `SceneMerge` (Swift) and
+  `mergeDrawingElements` (TypeScript); on the Mac, drawings as accessibility elements, image
+  embeds, the in-place tool bar covering a line of text.
+- **Flaky under load** (each passes alone; make them robust without loosening them): core's
+  `trackTasks` performance guard; storage's file-watcher tests (`local-fs.watch*.test.ts`,
+  `internal/directory-tree-watcher.test.ts`); connectors' `stdio.test.ts` restart test; the
+  agent's subprocess tests (`app-control/client.test.ts`, `controller.test.ts`, the fake Cursor
+  CLI in `cursor.test.ts`); the web's chat typing-reveal smoothness e2e.
+- **Known mock-eval misses** (pre-existing, the suites still pass): safety
   `coding-npm-test`, `coding-run-analysis-script`; triage `renew-passport`.
 
 ## Decisions (so nobody asks again)
