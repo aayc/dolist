@@ -127,6 +127,7 @@ extension Workspace {
       return false
     }
     notes.rename(from: from, to: to)
+    drawings.rename(from: from, to: to)
     editor.rename(from: from, to: to)
     tabs.rename(from: from, to: to)
     renameRecent(from: from, to: to)

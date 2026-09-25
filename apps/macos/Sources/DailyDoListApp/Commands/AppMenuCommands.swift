@@ -32,6 +32,10 @@ struct AppMenuCommands: Commands {
       item(.reopenTab)
     }
     CommandGroup(replacing: .printItem) {}
+    CommandGroup(after: .pasteboard) {
+      Divider()
+      item(.insertDrawing)
+    }
     TextEditingCommands()
     CommandGroup(before: .toolbar) {
       item(.toggleSidebar)

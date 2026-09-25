@@ -227,6 +227,7 @@ extension AppModel {
     if let workspace {
       persistTabs()
       await workspace.notes.flushAll()
+      await workspace.drawings.flushAll()
     }
     notifier?.stop()
     notifier = nil
