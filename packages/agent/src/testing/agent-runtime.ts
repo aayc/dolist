@@ -222,6 +222,20 @@ export interface FakeAgentRuntime {
 
 const DEFAULT_TEST_AGENT = { settleMs: 20, maxConcurrentSubagents: 3, actOnExistingTasks: true };
 
+/** Every runtime event, recorded in `events` (a new event fails to compile until it's listed). */
+const RUNTIME_EVENTS: Record<keyof AgentRuntimeEvents, true> = {
+  "task.record": true,
+  "task.records": true,
+  "thread.upsert": true,
+  "thread.message": true,
+  "thread.delta": true,
+  "approval.upsert": true,
+  status: true,
+  "surface.frame": true,
+  "routines.changed": true,
+  "routine.notification": true,
+};
+
 export async function createFakeAgentRuntime(
   options: FakeAgentRuntimeOptions = {},
 ): Promise<FakeAgentRuntime> {
@@ -371,17 +385,7 @@ export async function createFakeAgentRuntime(
       },
       overrides,
     );
-    const names: Array<keyof AgentRuntimeEvents> = [
-      "task.record",
-      "task.records",
-      "thread.upsert",
-      "thread.message",
-      "thread.delta",
-      "approval.upsert",
-      "status",
-      "surface.frame",
-    ];
-    for (const type of names) {
+    for (const type of Object.keys(RUNTIME_EVENTS) as Array<keyof AgentRuntimeEvents>) {
       runtime.on(type, (payload) => {
         if (type === "task.record") knownNotes.add((payload as TaskAgentRecord).notePath);
         events.push({ type, payload, at: now() } as RuntimeEvent);
