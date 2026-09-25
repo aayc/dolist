@@ -71,6 +71,13 @@ implementation wins at merge) and `config.ts` (S1 loads `remote.hosts`, S2 loads
 
 The spec's "As built by S0" section records S0's names and extra error codes; S1–S5 follow it.
 
+Also on `feat/always-on` (`087d15c`): the home-folder safety fix (`fix/home-folder-reads`):
+bulk reads of home, credential folders, login files, shell histories and `.env` files outside the
+workspace are denied (also through the harness's tools and connectors); whole personal folders
+ask; listing and single named files stay allowed. Safety evals 319/321, zero false allows. Note:
+`.env` outside the workspace is a hard deny (no approval can unlock it), and `ln -s ~ …` and
+`git -C ~ …` now deny.
+
 To verify on the real VM (S1): `tailscale serve` must keep the original `Host`; the daemon
 refuses loopback-Host requests that carry proxy forwarding headers (so a Host-rewriting proxy
 fails closed instead of getting the master token).
@@ -129,11 +136,11 @@ state and client ids for idempotent mutations.
 
 ## Next up (not started)
 
-- **Security (priority, in progress on `fix/home-folder-reads` from `feat/always-on`):**
-  recursive reads of the whole home folder (`grep -r … ~`, `tar … ~`) still pass the safety
-  rules, which exposes `~/.ssh` and other secrets (pre-existing; found by S1, which closed the
-  `DDL_HOME` token-file hole). Deny bulk and secret-path reads, ask for broad recursive ones, with
-  eval cases; merges into `feat/always-on`.
+- **Security, delete rules:** `rm -rf /users/<name>` in lowercase only asks instead of hitting
+  the "deletes your home directory" hard deny (macOS paths are case-insensitive). Make the delete
+  rules match home paths case-insensitively, with eval cases. Known remaining read gaps (from the
+  home-folder fix): a single file held in a variable, a project folder's `.env` read recursively,
+  subfolders of personal folders, `~/Library/Preferences`.
 
 - **iPhone app:** deferred; the web app covers mobile for now. Plan in
   [apps/mobile/PLAN.md](apps/mobile/PLAN.md); needs full Xcode and remote access (S1) first.
