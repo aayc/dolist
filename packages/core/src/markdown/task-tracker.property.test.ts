@@ -507,6 +507,31 @@ describe("duplicate texts (regressions)", () => {
   });
 });
 
+interface CpuUsage {
+  user: number;
+  system: number;
+}
+const nodeProcess = (globalThis as { process?: { threadCpuUsage?(previous?: CpuUsage): CpuUsage } })
+  .process;
+
+/**
+ * CPU time `fn` takes on this thread in ms, best of three. Unlike wall time it doesn't grow while
+ * the machine is busy with other work (waiting for a core isn't counted), and the best of three
+ * drops a run slowed down by an efficiency core or a GC pause. A budget on it catches an algorithm
+ * that got slower, not a loaded machine: that slows every run.
+ */
+function cpuMs(fn: () => void): number {
+  if (!nodeProcess?.threadCpuUsage) throw new Error("needs process.threadCpuUsage (Node 23.9+)");
+  let best = Number.POSITIVE_INFINITY;
+  for (let run = 0; run < 3; run++) {
+    const started = nodeProcess.threadCpuUsage();
+    fn();
+    const used = nodeProcess.threadCpuUsage(started);
+    best = Math.min(best, (used.user + used.system) / 1000);
+  }
+  return best;
+}
+
 describe("trackTasks performance guard", () => {
   const note = (n: number, label: (i: number) => string) =>
     Array.from({ length: n }, (_, i) => `- [ ] ${label(i)}`).join("\n");
@@ -523,9 +548,11 @@ describe("trackTasks performance guard", () => {
     ["every task duplicated", note(2_000, () => "same text")],
   ])("tracks a 2k-task note after %s quickly", (_name, doc) => {
     const parsed = parseTasks(doc);
-    const started = performance.now();
-    const { tasks } = trackTasks(tracked, parsed, { now: 1 });
-    expect(performance.now() - started).toBeLessThan(300 * TIME_SCALE);
+    let tasks: TrackedTask[] = [];
+    const ms = cpuMs(() => {
+      tasks = trackTasks(tracked, parsed, { now: 1 }).tasks;
+    });
+    expect(ms).toBeLessThan(300 * TIME_SCALE);
     expect(new Set(tasks.map((t) => t.id)).size).toBe(tasks.length);
   });
 
@@ -533,11 +560,13 @@ describe("trackTasks performance guard", () => {
     const same = note(2_000, () => "same text");
     const state = trackTasks([], parseTasks(same), { now: 0 }).tasks;
     const parsed = parseTasks(`${note(10, () => "same text")}\n${same}`);
-    const started = performance.now();
-    const { diff } = trackTasks(state, parsed, { now: 1 });
-    expect(performance.now() - started).toBeLessThan(300 * TIME_SCALE);
-    expect(diff.added).toHaveLength(10);
-    expect(diff.removed).toEqual([]);
+    let diff: TaskDiff | undefined;
+    const ms = cpuMs(() => {
+      diff = trackTasks(state, parsed, { now: 1 }).diff;
+    });
+    expect(ms).toBeLessThan(300 * TIME_SCALE);
+    expect(diff?.added).toHaveLength(10);
+    expect(diff?.removed).toEqual([]);
   });
 
   test.prop([fc.array(editArb, { minLength: 1, maxLength: 40 })], { numRuns: 10 })(
@@ -552,9 +581,8 @@ describe("trackTasks performance guard", () => {
       const ids = sequentialIds();
       const state = track([], render(items), ids).tasks;
       const parsed = parseTasks(render(edits.reduce(applyEdit, items)));
-      const started = performance.now();
-      trackTasks(state, parsed, { idFactory: ids, now: 2 });
-      expect(performance.now() - started).toBeLessThan(100 * TIME_SCALE);
+      const ms = cpuMs(() => trackTasks(state, parsed, { idFactory: ids, now: 2 }));
+      expect(ms).toBeLessThan(100 * TIME_SCALE);
     },
   );
 });
