@@ -74,7 +74,7 @@ Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md). Spec, with the exact wire contra
 | S2 placement, lease priorities, fencing, machine link | `feat/always-on-placement` | done (`bb18e4b`), merged into `feat/always-on` at `394a6dd` (with S1: daemon 1061, sync 63, storage 303, contract 1123 tests green) |
 | S3 relay | `feat/always-on-relay` | done (`34e4d4c`), merged into `feat/always-on` at `8197988`: the relay reads only S2's supervisor and machine link (test-only overrides removed); tests pair for real. Also fixed: a device joining a synced vault no longer resets everyone's settings (first run writes `settings.json` only when it imported Obsidian settings) |
 | S4 web Settings, the orchestrator toggle, pairing screen | `feat/always-on-web` | done (`575beba`), merged into `feat/always-on` at `f5373a2`: fullstack e2e 14 passed with the relay (acting through it; the machine stopped then back), "Pair again…", 675 unit tests, bundle 261.8/320 kB. Browser pairing over https stays fixme (no TLS proxy in the harness) |
-| S5 macOS Settings and the orchestrator toggle | `feat/always-on-mac` | built and verified against real S1/S2 daemons (8 integration tests, 25 total; fake, client and UI aligned: held-here order, `runsOn`, handover `problem`, pairing names, `Retry-After`), merged into `feat/always-on` at `e5f9184`; now testing the relay states against real daemons. The rename bug it found is fixed (`4bd4b12`) |
+| S5 macOS Settings and the orchestrator toggle | `feat/always-on-mac` | done (`4fda925`), merged into `feat/always-on` at `77e0026`: 27 integration tests against real daemons incl. the relay (connected, unreachable and back, revoked and re-paired, forgotten, events), the web's read-only rules and wording, "Pair Again…" for a revoked device. The rename bug it found is fixed (`4bd4b12`) |
 
 S1 and S2 branch from `45a7cd1` (before routines), S3–S5 from `a0a924f` (after). S1 and S2 share
 two seams: `apps/daemon/src/remote-hosts.ts` (`RemoteHosts`: S1's
@@ -103,9 +103,10 @@ agent file through the sync service (a holder whose target copy changed too push
 and the daemon stamps journal events with the lease epoch. The journal's two-device tests were
 rewritten for fencing.
 
-Before `main`: S4's fullstack e2e with the relay (merge `feat/always-on` into
-`feat/always-on-web` when S4 reports), S5's integration tests (running), then the full
-verification, merge, push, CI (CI, macOS app, Security, Linux bundle) and install.
+**All streams are in `feat/always-on` (`31c9519`, with `main`'s merge-race fix).** Lint,
+typecheck, daemon 1091 and web 689 tests green locally; CI, macOS app and Security dispatched on
+the branch. Next: when green, merge to `main`, push (the `Linux bundle` workflow runs on the push),
+install the Mac app.
 
 Earlier notes, now unblocked by S1+S2 on `feat/always-on`: S4's fullstack e2e (merge `feat/always-on` into
 `feat/always-on-web` when S4 reports "ready for backend", then resume it), the kit's follow-ups
