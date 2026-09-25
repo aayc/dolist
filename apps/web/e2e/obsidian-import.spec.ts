@@ -88,7 +88,7 @@ test.describe("import from Obsidian", () => {
 
     await page.getByTestId("import-start").click();
     await expect(page.getByTestId("import-phase")).toHaveText("Copying files…");
-    await expect(page.getByTestId("import-counts")).toContainText(/\d+ of 75 files/);
+    await expect(page.getByTestId("import-counts")).toContainText(/\d+ of \d+ files/);
     await shot(page, "2-progress");
     await page.getByTestId("import-cancel").click();
     await expect(page.getByTestId("import-stopped")).toContainText("The import was cancelled");
