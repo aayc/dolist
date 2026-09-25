@@ -2,6 +2,7 @@ export * from "./agent-types";
 export * from "./async";
 export * from "./daily-notes";
 export * from "./dates";
+export * from "./drawings/embed";
 export * from "./drawings/file";
 export * from "./drawings/types";
 export * from "./events";
