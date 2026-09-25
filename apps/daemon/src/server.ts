@@ -2,7 +2,13 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { homedir } from "node:os";
 import type { ConnectorToolSource } from "@ddl/connectors";
-import { type AppSettings, createConsoleLogger, type Logger, type Unsubscribe } from "@ddl/core";
+import {
+  type AppSettings,
+  createConsoleLogger,
+  debounce,
+  type Logger,
+  type Unsubscribe,
+} from "@ddl/core";
 import type { StorageProvider } from "@ddl/storage";
 import { getRequestListener } from "@hono/node-server";
 import { LEASE_CHECKING_PROBLEM, type LeaseTimings } from "./agent-lease";
@@ -17,7 +23,7 @@ import { displayPath } from "./home-paths";
 import { LeasedAgentRuntime } from "./leased-runtime";
 import { createRemoteHosts } from "./remote-hosts";
 import { createSecurityPolicy } from "./security";
-import { createSettingsStore } from "./settings-store";
+import { createSettingsStore, SETTINGS_PATH, type SettingsStore } from "./settings-store";
 import { SyncController } from "./sync-controller";
 import { loadOrCreateDevice } from "./sync-setup";
 import { createSystemSettingsOpener } from "./system-settings";
@@ -36,6 +42,7 @@ import { attachWebSocketHub, type WebSocketHub } from "./ws";
 /** Loopback only: agents can act on this machine, so the daemon is never reachable remotely. */
 export const BIND_HOST = "127.0.0.1";
 const HTTP_CLOSE_GRACE_MS = 2_000;
+const SETTINGS_RELOAD_DEBOUNCE_MS = 100;
 
 type FetchCallback = Parameters<typeof getRequestListener>[0];
 
@@ -89,6 +96,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     resources.connectors = connectors;
     const device = await loadOrCreateDevice(config.devicePath, logger);
     const agentStorage = new AttributedStorage(storage, writes, { origin: "agent" });
+    let supervisor: AgentSupervisor | undefined;
     // The real runtime exists only while this device runs the agent (see AgentSupervisor).
     const runtime = new LeasedAgentRuntime({
       mode: config.agentMode,
@@ -104,6 +112,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
           logger,
         }),
       problem: LEASE_CHECKING_PROBLEM,
+      statusExtras: () => (supervisor ? { placement: supervisor.status() } : {}),
       logger: logger.child({ component: "agent" }),
     });
     resources.runtime = runtime;
@@ -117,15 +126,6 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     });
     resources.sync = sync;
     await sync.configure(config.sync);
-    const supervisor = new AgentSupervisor({
-      runtime,
-      sync,
-      device,
-      agentMode: config.agentMode,
-      ...(options.leaseTimings ? { leaseTimings: options.leaseTimings } : {}),
-      logger,
-    });
-    resources.supervisor = supervisor;
     const deviceSettings = new DeviceSettings({
       device,
       placement: config.placement,
@@ -136,9 +136,21 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       hasToken:
         Boolean(env.DDL_SYNC_TOKEN?.trim()) ||
         (await secretFile(config.syncTokenPath).read()) !== null,
-      applySync: (next) => supervisor.applySync(next),
+      applySync: (next) => supervisor?.applySync(next) ?? Promise.resolve(),
       logger: logger.child({ component: "device" }),
     });
+    supervisor = new AgentSupervisor({
+      runtime,
+      sync,
+      device,
+      agentMode: config.agentMode,
+      placement: deviceSettings,
+      settings,
+      ...(options.leaseTimings ? { leaseTimings: options.leaseTimings } : {}),
+      logger,
+    });
+    resources.supervisor = supervisor;
+    resources.unsubscribes.push(followSyncedSettings(storage, settings, runtime, logger));
     await supervisor.start();
 
     // The app is built after listen() because the bound port is part of the Host/Origin allowlist.
@@ -237,6 +249,38 @@ async function shutdown(resources: Resources, logger: Logger): Promise<void> {
   if (server) await step("http", () => closeServer(server));
   if (connectors) await step("connectors", () => connectors.dispose());
   if (storage) await step("storage", () => storage.dispose());
+}
+
+/**
+ * Settings changed on another device arrive through sync: reload them so the agent, the clients
+ * (`settings.changed`) and the placement (the vault's always-on machine) follow at once. The
+ * store's own writes reload to what it already has, which changes nothing.
+ */
+function followSyncedSettings(
+  storage: StorageProvider,
+  settings: SettingsStore,
+  runtime: LeasedAgentRuntime,
+  logger: Logger,
+): Unsubscribe {
+  const reload = debounce(() => {
+    settings.reload().then(
+      (next) => {
+        if (next) runtime.updateSettings(next);
+      },
+      (error: unknown) => {
+        logger.warn("Could not reload settings synced from another device", {
+          error: errorMessage(error),
+        });
+      },
+    );
+  }, SETTINGS_RELOAD_DEBOUNCE_MS);
+  const unwatch = storage.watch((event) => {
+    if (event.path === SETTINGS_PATH) reload();
+  });
+  return () => {
+    unwatch();
+    reload.cancel();
+  };
 }
 
 function closeServer(server: Server): Promise<void> {

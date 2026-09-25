@@ -26,6 +26,11 @@ export interface SettingsStore {
   get(): AppSettings;
   /** Validates, merges and persists a partial update; rejects with SettingsValidationError. */
   update(patch: DeepPartial<AppSettings>): Promise<AppSettings>;
+  /**
+   * Re-reads the file (sync brought another device's change) and emits `change` when the
+   * effective settings differ. Resolves to the new settings, or null when nothing changed.
+   */
+  reload(): Promise<AppSettings | null>;
   onChange(listener: (settings: AppSettings) => void): Unsubscribe;
 }
 
@@ -52,7 +57,7 @@ const PATH_SECTIONS = ["dailyNotes", "weeklyNotes"] as const;
  *   (seeded from the vault's Obsidian config).
  * - A file from a newer app is never overwritten: defaults apply and updates are refused.
  * - Updates re-read the file (conditional writes), so a change synced from another device while
- *   the daemon runs is kept, not clobbered. External edits otherwise apply on the next start.
+ *   the daemon runs is kept, not clobbered; `reload()` applies such a change right away.
  */
 export async function createSettingsStore(options: SettingsStoreOptions): Promise<SettingsStore> {
   const defaults = options.defaults ?? DEFAULT_SETTINGS;
@@ -145,6 +150,20 @@ export async function createSettingsStore(options: SettingsStoreOptions): Promis
         }
         stored = next;
         current = resolveSettings(defaults, stored).settings;
+        events.emit("change", current);
+        return current;
+      });
+      queue = run.catch(() => undefined);
+      return run;
+    },
+    reload() {
+      const run = queue.then(async () => {
+        const result = await file.load();
+        if (result.status !== "loaded") return null;
+        stored = result.value;
+        const next = resolveSettings(defaults, stored).settings;
+        if (JSON.stringify(next) === JSON.stringify(current)) return null;
+        current = next;
         events.emit("change", current);
         return current;
       });

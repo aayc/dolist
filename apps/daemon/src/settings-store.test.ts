@@ -61,6 +61,30 @@ const open = (storage: MemoryStorageProvider, logger?: Logger, defaults?: AppSet
   });
 
 describe("settings store", () => {
+  it("reloads a change another device synced, and says so only when something changed", async () => {
+    const storage = vault();
+    const store = await open(storage);
+    const changes: AppSettings[] = [];
+    store.onChange((settings) => changes.push(settings));
+    expect(await store.reload()).toBeNull();
+    const machine = { name: "vm-1", url: "https://vm-1.tailnet-name.ts.net" };
+    await storage.write(
+      SETTINGS_PATH,
+      JSON.stringify({ version: 1, remote: { alwaysOnMachine: machine } }),
+    );
+    const reloaded = await store.reload();
+    expect(reloaded?.remote.alwaysOnMachine).toEqual(machine);
+    expect(store.get().remote.alwaysOnMachine).toEqual(machine);
+    expect(changes).toHaveLength(1);
+    expect(await store.reload()).toBeNull();
+    // Later updates build on what was reloaded.
+    await store.update({ theme: "dark" });
+    expect(await storedOverrides(storage)).toEqual({
+      remote: { alwaysOnMachine: machine },
+      theme: "dark",
+    });
+  });
+
   it("starts from defaults and persists only explicit overrides", async () => {
     const storage = vault();
     const store = await open(storage);

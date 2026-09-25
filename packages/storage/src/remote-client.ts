@@ -66,7 +66,8 @@ export interface SyncResponse<T> {
 
 export type LeaseAttempt =
   | { granted: true; lease: SyncLeaseHolder }
-  | { granted: false; holder: SyncLeaseHolder };
+  /** `takeoverPending`: this request outranks the holder, which was asked to yield. */
+  | { granted: false; holder: SyncLeaseHolder; takeoverPending?: boolean };
 
 /**
  * HTTP client of one vault on a sync server (`@ddl/core` `sync-service.ts`): authentication,
@@ -192,7 +193,11 @@ function leaseAttempt(
   status: number,
   body: SyncLeaseResponse | SyncLeaseConflictBody | undefined,
 ): LeaseAttempt {
-  if (status === 409 && body && "holder" in body) return { granted: false, holder: body.holder };
+  if (status === 409 && body && "holder" in body) {
+    return body.takeoverPending === true
+      ? { granted: false, holder: body.holder, takeoverPending: true }
+      : { granted: false, holder: body.holder };
+  }
   if (body && "lease" in body) return { granted: true, lease: body.lease };
   throw new SyncRequestError("The sync server sent an unexpected lease response", status);
 }

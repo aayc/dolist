@@ -29,6 +29,8 @@ export interface LeasedAgentRuntimeOptions {
   createStack(settings: AppSettings): Promise<AgentStack>;
   /** Why the agent isn't running here yet. */
   problem: string;
+  /** Added to every status (and `status` event): where the agent runs, this daemon's readiness. */
+  statusExtras?: () => Pick<AgentStatusResponse, "placement" | "readiness">;
   logger: Logger;
 }
 
@@ -131,7 +133,12 @@ export class LeasedAgentRuntime implements AgentRuntime {
   }
 
   status(): AgentStatusResponse {
-    return this.#current().status();
+    return this.#decorate(this.#current().status());
+  }
+
+  /** Emits `status` now (e.g. the placement or readiness changed). */
+  refreshStatus(): void {
+    this.#emitStatus();
   }
 
   async setEnabled(enabled: boolean): Promise<void> {
@@ -200,10 +207,17 @@ export class LeasedAgentRuntime implements AgentRuntime {
     event: K,
     listener: (payload: AgentRuntimeEvents[K]) => void,
   ): Unsubscribe {
+    // The inner runtime's own status events get the extras too.
+    const inner = (
+      event === "status"
+        ? (status: AgentStatusResponse) =>
+            (listener as (payload: AgentStatusResponse) => void)(this.#decorate(status))
+        : listener
+    ) as Listener;
     const subscription = {
       event,
-      listener: listener as Listener,
-      off: this.#current().on(event, listener),
+      listener: inner,
+      off: this.#current().on(event, inner as never),
     };
     this.#subscriptions.add(subscription);
     return () => {
@@ -224,8 +238,19 @@ export class LeasedAgentRuntime implements AgentRuntime {
     }
   }
 
+  #decorate(status: AgentStatusResponse): AgentStatusResponse {
+    const extras = this.#options.statusExtras?.();
+    if (!extras) return status;
+    return {
+      ...status,
+      ...(extras.placement ? { placement: extras.placement } : {}),
+      ...(extras.readiness ? { readiness: extras.readiness } : {}),
+    };
+  }
+
   #emitStatus(): void {
-    const status = this.status();
+    // Listeners decorate what they're given: pass the undecorated status.
+    const status = this.#current().status();
     for (const { event, listener } of [...this.#subscriptions]) {
       if (event !== "status") continue;
       try {

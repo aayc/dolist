@@ -102,7 +102,12 @@ function hiddenDailyFolderSettings(): SettingsStore {
   const settings: AppSettings = mergeSettings(DEFAULT_SETTINGS, {
     dailyNotes: { folder: ".hidden" },
   });
-  return { get: () => settings, update: async () => settings, onChange: () => () => {} };
+  return {
+    get: () => settings,
+    update: async () => settings,
+    reload: async () => null,
+    onChange: () => () => {},
+  };
 }
 
 type Scenario = (observed: Observed) => Promise<void>;

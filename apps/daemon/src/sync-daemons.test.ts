@@ -6,9 +6,11 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  type AgentPlacement,
   type AgentStatusResponse,
   API_ROUTES,
   type NoteResponse,
+  type SettingsResponse,
   type SyncStatusResponse,
 } from "@ddl/core";
 import { createSyncServer, type RunningSyncServer } from "@ddl/sync";
@@ -24,6 +26,7 @@ const LEASE: Partial<LeaseTimings> = {
   ttlMs: 5_000,
   renewEveryMs: 500,
   retryEveryMs: 200,
+  takeoverRetryMs: 100,
   maxBackoffMs: 1_000,
   marginMs: 1_000,
 };
@@ -54,14 +57,23 @@ afterEach(async () => {
   dir.cleanup();
 });
 
-async function startDevice(name: string, options: { sync?: boolean } = {}): Promise<Device> {
+async function startDevice(
+  name: string,
+  options: { sync?: boolean; placement?: AgentPlacement } = {},
+): Promise<Device> {
   const root = join(dir.path, name);
   const home = join(root, "home");
   mkdirSync(home, { recursive: true, mode: 0o700 });
   writeFileSync(
     join(home, "device.json"),
-    JSON.stringify({ id: `dev_${name.toLowerCase()}`, name }),
+    JSON.stringify({ id: `dev_${name.toLowerCase().replace(/\W/g, "_")}`, name }),
   );
+  if (options.placement) {
+    writeFileSync(
+      join(home, "config.json"),
+      JSON.stringify({ agent: { placement: options.placement } }),
+    );
+  }
   const env: Record<string, string> = {
     DDL_HOME: home,
     DDL_VAULT: join(root, "vault"),
@@ -93,8 +105,22 @@ async function get<T>(device: Device, route: string): Promise<{ status: number; 
   return { status: response.status, body: (await response.json()) as T };
 }
 
-const agentProblem = async (device: Device) =>
-  (await get<AgentStatusResponse>(device, API_ROUTES.agentStatus)).body.problem;
+async function send(device: Device, method: string, route: string, body?: unknown) {
+  const response = await fetch(`${device.daemon.url}${route}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${device.apiToken}`,
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  return { status: response.status, body: (await response.json()) as unknown };
+}
+
+const agentStatus = async (device: Device) =>
+  (await get<AgentStatusResponse>(device, API_ROUTES.agentStatus)).body;
+
+const agentProblem = async (device: Device) => (await agentStatus(device)).problem;
 
 const eventually = (assertion: () => Promise<void>) =>
   vi.waitFor(assertion, { timeout: 20_000 * TIME_SCALE, interval: 50 });
@@ -152,6 +178,92 @@ describe("two daemons sharing a vault through the sync service", {
     const lines = logger.lines.join("\n");
     expect(lines).toContain("This device runs the agent");
     expect(lines).not.toContain(vault.token);
+  });
+
+  it("hand the agent between the always-on machine and a device that runs it itself", async () => {
+    const vm = await startDevice("vm-1", { placement: "always_on_host" });
+    await eventually(async () =>
+      expect((await agentStatus(vm)).placement).toEqual({
+        placement: "always_on_host",
+        heldHere: "no_machine",
+        runsOn: { deviceId: "dev_vm_1", name: "vm-1", thisDevice: true, alwaysOnMachine: false },
+        relay: "off",
+      }),
+    );
+    const laptop = await startDevice("Laptop");
+    // Without an always-on machine both ask as `interactive`: the first one keeps it.
+    await eventually(async () =>
+      expect(await agentStatus(laptop)).toMatchObject({
+        problem: "The agent is running on vm-1.",
+        placement: { placement: "this_device", heldHere: "no_machine", runsOn: { name: "vm-1" } },
+      }),
+    );
+
+    const machine = { name: "vm-1", url: "https://vm-1.tailnet-name.ts.net" };
+    expect(
+      (await send(vm, "PUT", API_ROUTES.settings, { remote: { alwaysOnMachine: machine } })).status,
+    ).toBe(200);
+    // Now the machine asks as `host`, and the laptop takes the agent over. The machine's address
+    // reaches the laptop through sync.
+    await eventually(async () =>
+      expect(
+        (await get<SettingsResponse>(laptop, API_ROUTES.settings)).body.settings.remote,
+      ).toEqual({ alwaysOnMachine: machine }),
+    );
+    await eventually(async () =>
+      expect((await agentStatus(laptop)).placement).toEqual({
+        placement: "this_device",
+        runsOn: {
+          deviceId: "dev_laptop",
+          name: "Laptop",
+          thisDevice: true,
+          alwaysOnMachine: false,
+        },
+        relay: "off",
+      }),
+    );
+    expect(await agentProblem(laptop)).toBeUndefined();
+    await eventually(async () =>
+      expect(await agentStatus(vm)).toMatchObject({
+        problem: "The agent is running on Laptop.",
+        placement: { placement: "always_on_host", runsOn: { name: "Laptop", thisDevice: false } },
+      }),
+    );
+    expect((await agentStatus(vm)).placement?.heldHere).toBeUndefined();
+    expect(server.store.leaseHolder(vault.id, "agent")).toMatchObject({
+      device: "dev_laptop",
+      priority: "interactive",
+    });
+
+    const moved = await send(laptop, "PATCH", API_ROUTES.device, {
+      placement: "always_on_machine",
+    });
+    expect(moved.body).toMatchObject({ placement: "always_on_machine" });
+    await eventually(async () =>
+      expect(server.store.leaseHolder(vault.id, "agent")).toMatchObject({
+        device: "dev_vm_1",
+        priority: "host",
+      }),
+    );
+    await eventually(async () =>
+      expect(await agentStatus(laptop)).toMatchObject({
+        problem: "The agent is running on vm-1.",
+        placement: {
+          placement: "always_on_machine",
+          runsOn: { name: "vm-1", thisDevice: false, alwaysOnMachine: true },
+          relay: "not_paired",
+        },
+      }),
+    );
+    expect((await agentStatus(laptop)).placement?.note).toBeUndefined();
+    await eventually(async () => expect(await agentProblem(vm)).toBeUndefined());
+
+    // And back: this device again takes it over.
+    await send(laptop, "PATCH", API_ROUTES.device, { placement: "this_device" });
+    await eventually(async () =>
+      expect(server.store.leaseHolder(vault.id, "agent")?.device).toBe("dev_laptop"),
+    );
+    await eventually(async () => expect(await agentProblem(laptop)).toBeUndefined());
   });
 
   it("set up sync from Settings and turn it off again, live", async () => {
