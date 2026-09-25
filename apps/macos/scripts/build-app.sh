@@ -6,7 +6,8 @@
 #
 #   --release       optimized build (default: debug)
 #   --with-daemon   bundle a self-contained daemon (dist/ + production node_modules) in
-#                   Contents/Resources/daemon; it runs on the system Node.js (24.4+)
+#                   Contents/Resources/daemon, with the ddl-computer helper in its bin/; the
+#                   daemon runs on the system Node.js (24.4+)
 #   --output DIR    where to write the app (default: apps/macos/build, which is gitignored)
 #   --zip           also write "Daily Do List.zip" next to the app (ditto keeps the signature)
 #   --open          launch the app when done
@@ -20,6 +21,12 @@ MACOS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$MACOS_DIR/../.." && pwd)"
 APP_NAME="Daily Do List"
 EXECUTABLE="DailyDoList"
+# The computer-use helper the daemon spawns (Packages/DailyDoListComputer). The prefix makes its
+# code-signing identifier app.dailydolist.mac.ddl-computer.
+HELPER_NAME="ddl-computer"
+HELPER_PACKAGE="$MACOS_DIR/Packages/DailyDoListComputer"
+HELPER_PREFIX="app.dailydolist.mac."
+HELPER=""
 
 CONFIGURATION=debug
 WITH_DAEMON=0
@@ -29,7 +36,7 @@ OPEN=0
 SIGN_IDENTITY="${DDL_SIGN_IDENTITY:-}"
 LOCAL_IDENTITY="Daily Do List Local Signing"
 
-usage() { sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; }
 step() { printf '\n==> %s\n' "$*"; }
 fail() {
   echo "build-app: $*" >&2
@@ -80,6 +87,12 @@ step "Building $EXECUTABLE ($CONFIGURATION)"
 swift build --package-path "$MACOS_DIR" -c "$CONFIGURATION" --product "$EXECUTABLE"
 BIN_DIR="$(swift build --package-path "$MACOS_DIR" -c "$CONFIGURATION" --show-bin-path)"
 [ -x "$BIN_DIR/$EXECUTABLE" ] || fail "no executable at $BIN_DIR/$EXECUTABLE"
+if [ "$WITH_DAEMON" = 1 ]; then
+  step "Building $HELPER_NAME ($CONFIGURATION)"
+  swift build --package-path "$HELPER_PACKAGE" -c "$CONFIGURATION" --product "$HELPER_NAME"
+  HELPER_BIN_DIR="$(swift build --package-path "$HELPER_PACKAGE" -c "$CONFIGURATION" --show-bin-path)"
+  [ -x "$HELPER_BIN_DIR/$HELPER_NAME" ] || fail "no executable at $HELPER_BIN_DIR/$HELPER_NAME"
+fi
 
 # 2. Version: apps/macos/VERSION, else the root package.json; build number: commit count ---------
 VERSION=""
@@ -149,6 +162,11 @@ if [ "$WITH_DAEMON" = 1 ]; then
     fail "the daemon bundle contains absolute symlinks"
   fi
   [ -f "$DAEMON/dist/main.js" ] || fail "the daemon bundle has no dist/main.js"
+  # The daemon looks for the helper at <directory of dist/main.js>/../bin/ddl-computer.
+  HELPER="$DAEMON/bin/$HELPER_NAME"
+  mkdir -p "$DAEMON/bin"
+  cp "$HELPER_BIN_DIR/$HELPER_NAME" "$HELPER"
+  "$HELPER" --version >/dev/null || fail "the bundled $HELPER_NAME doesn't run"
   echo "Bundled daemon: $(du -sh "$DAEMON" | cut -f1) (runs on the system Node.js 24.4+)"
 fi
 
@@ -157,18 +175,22 @@ if [ -z "$SIGN_IDENTITY" ]; then
   SIGN_IDENTITY=-
   if has_identity "$LOCAL_IDENTITY"; then SIGN_IDENTITY="$LOCAL_IDENTITY"; fi
 fi
+# One codesign run, since each run can make macOS ask to use the identity's key. It signs its
+# arguments in order, so the app seals the helper's new signature.
 if [ "$SIGN_IDENTITY" = - ]; then
   step "Signing (ad hoc)"
   if [ -z "${CI:-}" ]; then
     echo "macOS treats each ad-hoc build as a new app and forgets the permissions granted to the"
     echo "last one. Run apps/macos/scripts/signing-identity.sh --create once to keep them."
   fi
-  codesign --force --deep --sign - "$APP"
+  codesign --force --deep --sign - --prefix "$HELPER_PREFIX" ${HELPER:+"$HELPER"} "$APP"
 else
   step "Signing ($SIGN_IDENTITY)"
-  codesign --force --deep --timestamp=none --sign "$SIGN_IDENTITY" "$APP"
+  codesign --force --deep --timestamp=none --sign "$SIGN_IDENTITY" --prefix "$HELPER_PREFIX" \
+    ${HELPER:+"$HELPER"} "$APP"
 fi
 codesign --verify --deep --strict "$APP"
+if [ -n "$HELPER" ]; then codesign --verify --strict "$HELPER"; fi
 echo "Signature OK"
 
 # 7. Archive (optional) ----------------------------------------------------------------------------
