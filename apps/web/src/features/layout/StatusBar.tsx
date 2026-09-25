@@ -1,5 +1,14 @@
 import type { VimModeName } from "@ddl/editor";
-import { Bot, CircleAlert, LoaderCircle, MonitorX, ShieldAlert, TriangleAlert } from "lucide-react";
+import {
+  Bot,
+  CircleAlert,
+  LoaderCircle,
+  MonitorX,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldOff,
+  TriangleAlert,
+} from "lucide-react";
 import { useServices } from "../../app/services";
 import { commandTooltip } from "../../commands/labels";
 import { Count } from "../../components/Count";
@@ -12,6 +21,7 @@ import { useSettingsStore } from "../../state/settings-store";
 import { useTabsStore } from "../../state/tabs-store";
 import { ui } from "../../state/ui-store";
 import { useVimStore } from "../../state/vim-store";
+import { approvalPolicyItem } from "../settings/approval-policy";
 import {
   agentItem,
   agentModeLabel,
@@ -107,7 +117,30 @@ function AgentItems() {
           {computer.label}
         </button>
       ) : null}
+      <ApprovalPolicyIndicator />
     </>
+  );
+}
+
+/** The approval policy while it isn't the default; opens Settings → Agent. */
+function ApprovalPolicyIndicator() {
+  const { commands } = useServices();
+  const approvalPolicy = useSettingsStore((s) => s.settings.agent.approvalPolicy);
+  const item = approvalPolicyItem({ approvalPolicy });
+  if (!item) return null;
+  const Icon = item.tone === "warning" ? ShieldOff : ShieldCheck;
+  return (
+    <button
+      type="button"
+      className={cx("status-item status-approval-policy", `is-${item.tone}`)}
+      onClick={() => commands.run("settings:approvals")}
+      {...commandTooltip(commands, "settings:approvals", item.title)}
+      data-testid="status-approval-policy"
+      data-tone={item.tone}
+    >
+      <Icon size={13} aria-hidden="true" />
+      {item.label}
+    </button>
   );
 }
 

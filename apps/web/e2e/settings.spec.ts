@@ -69,3 +69,83 @@ test.describe("agent settings", () => {
     await expect(cursorModel).toHaveValue("gpt-5.5[reasoning=high]");
   });
 });
+
+test.describe("approval policy", () => {
+  test("each policy can be picked, Run everything asks first, and the status bar shows it", async ({
+    page,
+  }) => {
+    await openApp(page);
+    const indicator = page.getByTestId("status-approval-policy");
+    await expect(indicator).toHaveCount(0);
+    await openAgentSettings(page);
+
+    const every = page.getByRole("radio", { name: "Ask before every action" });
+    const risky = page.getByRole("radio", { name: "Ask for risky actions (recommended)" });
+    const highRisk = page.getByRole("radio", { name: "Ask only for high-risk actions" });
+    const everything = page.getByRole("radio", { name: "Run everything" });
+    const dialog = page.getByTestId("confirm-dialog");
+    await expect(page.getByRole("group", { name: "Approvals" })).toBeVisible();
+    await expect(risky).toBeChecked();
+    await expect(everything).toHaveAccessibleDescription(/Agents never ask/);
+
+    // Stricter: saved at once, and named in the status bar.
+    await page.getByTestId("setting-approval-ask_every_action").click();
+    await expect(every).toBeChecked();
+    await expect(indicator).toHaveText("Asks before every action");
+    await expect(indicator).toHaveAttribute("data-tone", "neutral");
+
+    // It's a radio group: the arrow keys move through the policies.
+    await expect(every).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(risky).toBeChecked();
+    await expect(indicator).toHaveCount(0);
+    await page.keyboard.press("ArrowDown");
+    await expect(highRisk).toBeChecked();
+    await expect(indicator).toHaveText("Asks only for high-risk");
+
+    // Run everything asks first; Escape keeps the current policy and the settings open.
+    await page.keyboard.press("ArrowDown");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("heading")).toHaveText("Run everything without asking?");
+    await expect(dialog).toContainText("Agents will act without asking you first");
+    await expect(dialog).toContainText("reading passwords or keychains");
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByTestId("settings-modal")).toBeVisible();
+    await expect(highRisk).toBeChecked();
+    await expect(everything).not.toBeChecked();
+
+    // Cancel with the mouse keeps it too.
+    await page.getByTestId("setting-approval-run_everything").click();
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(highRisk).toBeChecked();
+    await expect(indicator).toHaveText("Asks only for high-risk");
+
+    // Confirming (Return on the focused "Run everything" button) switches.
+    await page.getByTestId("setting-approval-run_everything").click();
+    await expect(dialog.getByRole("button", { name: "Run everything" })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(dialog).toHaveCount(0);
+    await expect(everything).toBeChecked();
+    await expect(indicator).toHaveText("Runs everything");
+    await expect(indicator).toHaveAttribute("data-tone", "warning");
+    await expect(indicator).toHaveAttribute("data-command", "settings:approvals");
+    await expect(indicator).toHaveAttribute("data-tooltip", /run everything without asking/);
+
+    // It persists, and the status bar item opens Settings → Agent.
+    await reloadApp(page);
+    await expect(indicator).toHaveText("Runs everything");
+    await indicator.click();
+    await expect(page.getByTestId("settings-modal")).toBeVisible();
+    await expect(page.getByTestId("settings-nav-agent")).toHaveAttribute("aria-current", "page");
+    await expect(everything).toBeChecked();
+
+    // Back to the default: no confirmation, and the status bar is quiet again.
+    await page.getByTestId("setting-approval-ask_risky").click();
+    await expect(dialog).toHaveCount(0);
+    await expect(risky).toBeChecked();
+    await expect(indicator).toHaveCount(0);
+  });
+});

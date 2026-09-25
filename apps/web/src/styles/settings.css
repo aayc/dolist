@@ -277,6 +277,70 @@ label.segmented-item:has(:focus-visible) {
   outline-offset: -2px;
 }
 
+/* Settings → Agent → Approvals: one radio card per approval policy, its description underneath. */
+.approval-policies {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.approval-policy {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--ddl-border);
+  border-radius: var(--radius-m);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.approval-policy:hover {
+  background: var(--ddl-bg-hover);
+}
+
+.approval-policy.is-active {
+  border-color: var(--ddl-accent);
+  background: color-mix(in srgb, var(--ddl-accent) 8%, transparent);
+}
+
+.approval-policy > input {
+  flex: none;
+  margin: 2px 0 0;
+  accent-color: var(--ddl-accent);
+}
+
+.approval-policy:has(:focus-visible) {
+  outline: 2px solid var(--ddl-accent);
+  outline-offset: 1px;
+}
+
+.approval-policy > input:focus-visible {
+  outline: none;
+}
+
+.approval-policy-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.approval-policy-label {
+  color: var(--ddl-text);
+  font-size: 13px;
+}
+
+.approval-policy-description {
+  color: var(--ddl-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .daily-preview {
   margin-top: 8px;
   padding: 10px 12px;

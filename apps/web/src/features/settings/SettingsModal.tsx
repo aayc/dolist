@@ -17,6 +17,7 @@ import { type SettingsSection, ui } from "../../state/ui-store";
 import { useVaultStore } from "../../state/vault-store";
 import { useVimStore } from "../../state/vim-store";
 import { Modal } from "../overlays/Modal";
+import { ApprovalPolicySetting } from "./ApprovalPolicySetting";
 import { HARNESS_OPTIONS, shownHarness } from "./agent-harness";
 import { ComputerUseSection } from "./ComputerUseSection";
 import { dailyPreview } from "./daily-preview";
@@ -430,6 +431,7 @@ function AgentSection() {
           testId="setting-agent-enabled"
         />
       </Setting>
+      <ApprovalPolicySetting />
       <Setting name="Agent" description="What runs the orchestrator and its subagents.">
         <fieldset className="segmented" data-testid="setting-harness">
           <legend className="sr-only">Agent</legend>

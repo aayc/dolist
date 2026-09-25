@@ -94,6 +94,12 @@ export function createDefaultCommands(services: Services): Command[] {
       run: () => ui.openOverlay({ kind: "settings", section: "computer" }),
     },
     {
+      id: "settings:approvals",
+      name: "Change approval policy",
+      label: "Approval policy settings",
+      run: () => ui.openOverlay({ kind: "settings", section: "agent" }),
+    },
+    {
       id: "search:open",
       name: "Search vault",
       hotkeys: [hk("Mod+Shift+F")],

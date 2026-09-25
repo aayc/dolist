@@ -106,6 +106,9 @@ useUiStore.subscribe((state, previous) => {
   }, 250);
 });
 
+/** Dialogs open on top of the overlay (a confirmation inside settings), innermost last. */
+const stackedDialogs: Array<() => void> = [];
+
 export const ui = {
   set: useUiStore.setState,
   get: useUiStore.getState,
@@ -114,8 +117,20 @@ export const ui = {
     useUiStore.setState({ overlay });
   },
 
+  /** Closes the innermost dialog stacked on the overlay, else the overlay itself (Escape). */
   closeOverlay(): void {
-    if (useUiStore.getState().overlay) useUiStore.setState({ overlay: null });
+    const stacked = stackedDialogs.at(-1);
+    if (stacked) stacked();
+    else if (useUiStore.getState().overlay) useUiStore.setState({ overlay: null });
+  },
+
+  /** Registers a dialog shown on top of the overlay; returns its unregister. */
+  stackDialog(close: () => void): () => void {
+    stackedDialogs.push(close);
+    return () => {
+      const index = stackedDialogs.lastIndexOf(close);
+      if (index !== -1) stackedDialogs.splice(index, 1);
+    };
   },
 
   confirm(request: ConfirmRequest): void {
