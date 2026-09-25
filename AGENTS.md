@@ -254,6 +254,9 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
   real helper, take real screenshots or send real input: use
   `src/execution/local/app-control/testing/fake-computer-helper.ts` (see `client.test.ts`), and the
   daemon's `FakeSystemSettings` for the System Settings route (`createApp` opens nothing by default).
+- **Ignored folder names:** `.gitignore` ignores every folder named `vault/` (and, with macOS's
+ case-insensitive git, `Vault/`) to keep vault content out of the repo: don't name a source folder
+ that (the import UI lives in `obsidian-import/` and `ObsidianImport/`).
 - **E2E typing:** use Playwright's real keyboard (`page.keyboard.type`). Automation "fill"-style
   typing into CodeMirror rebuilds text from the DOM (including badge widgets) and corrupts notes.
 
