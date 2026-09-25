@@ -322,7 +322,64 @@ describe("parseDigest ⇄ formatOrchestratorDigest", () => {
     const parsed = parseDigest(text);
     expect(parsed.notes[0]!.others).toHaveLength(40);
     expect(parsed.notes[0]!.moreOthers).toBe(5);
-    expect(parsed.capabilities).toEqual({ available: [], unavailable: [], connectors: [] });
+    expect(parsed.capabilities).toEqual({
+      available: [],
+      unavailable: [],
+      connectors: [],
+      desktopApps: [],
+    });
     expect(isDigest('Task: "x"\nGoal: y\n\nStart now.')).toBe(false);
+  });
+
+  it("reads the desktop apps and computer access", () => {
+    const digest = (access?: {
+      accessibility: boolean;
+      screenRecording: boolean;
+      appControl: boolean;
+      host?: string;
+    }) =>
+      formatOrchestratorDigest({
+        now: NOW,
+        notes: [],
+        replies: [],
+        reports: [],
+        subagents: [],
+        capabilities: {
+          available: ["web", "computer"],
+          unavailable: [],
+          connectors: [],
+          computer: {
+            apps: ["Grok Bot", "WhatsApp", "Microsoft Teams"],
+            moreApps: 7,
+            ...(access ? { access } : {}),
+          },
+        },
+      });
+    const missing = digest({
+      accessibility: false,
+      screenRecording: false,
+      appControl: true,
+      host: "Terminal",
+    });
+    expect(missing).toContain(
+      "Desktop apps (computer): Grok Bot, WhatsApp, Microsoft Teams (+7 more).",
+    );
+    expect(missing).toContain(
+      "Computer access: missing — Accessibility and Screen Recording not allowed for “Terminal”.",
+    );
+    expect(missing).toContain("Settings → Computer Use in Daily Do List");
+    expect(parseDigest(missing).capabilities).toMatchObject({
+      available: ["web", "computer"],
+      desktopApps: ["Grok Bot", "WhatsApp", "Microsoft Teams"],
+      computerAccess: "missing",
+    });
+    const ready = digest({ accessibility: true, screenRecording: true, appControl: true });
+    expect(ready).toContain("Computer access: ready — agents operate apps in the background.");
+    expect(parseDigest(ready).capabilities.computerAccess).toBe("ready");
+    const limited = digest({ accessibility: true, screenRecording: false, appControl: true });
+    expect(limited).toContain("no Screen Recording for the app that runs Daily Do List");
+    expect(parseDigest(limited).capabilities.computerAccess).toBe("limited");
+    expect(digest()).not.toContain("Computer access:");
+    expect(parseDigest(digest()).capabilities.computerAccess).toBeUndefined();
   });
 });

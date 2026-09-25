@@ -12,9 +12,17 @@ interface TriageCase {
   expected: "delegate" | "comment" | "ask_user" | "ignore";
   acceptable?: string[];
   capabilities?: Capability[];
+  computerAccess?: "missing";
 }
 
 const DATASET = new URL("../../../../../evals/datasets/triage.jsonl", import.meta.url);
+/** The desktop apps the eval's digest lists. */
+const DESKTOP_APPS: string[] = JSON.parse(
+  readFileSync(
+    new URL("../../../../../evals/datasets/triage-desktop-apps.json", import.meta.url),
+    "utf8",
+  ),
+);
 const OUTCOME = {
   delegate: "delegate",
   answer: "comment",
@@ -35,8 +43,18 @@ describe("triage against the eval dataset", () => {
       const text = c.task.replace(/\{\{\+(\d+)d\}\}/g, (_, days: string) =>
         toISODate(addDays(today(), Number(days))),
       );
-      const decision = triage({ text, notes: c.notes ?? [], today: todayIso });
-      const outcome = OUTCOME[decision.kind];
+      const decision = triage({
+        text,
+        notes: c.notes ?? [],
+        today: todayIso,
+        desktopApps: DESKTOP_APPS,
+      });
+      // Without computer access the orchestrator asks the user to allow it instead (a comment).
+      const needsAccess =
+        decision.kind === "delegate" &&
+        decision.capabilities.includes("computer") &&
+        c.computerAccess === "missing";
+      const outcome = needsAccess ? "comment" : OUTCOME[decision.kind];
       if (![c.expected, ...(c.acceptable ?? [])].includes(outcome)) {
         misses.push(`${c.id}: got ${outcome}, expected ${c.expected}`);
         continue;

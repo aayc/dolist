@@ -23,6 +23,7 @@ import {
   type Unsubscribe,
 } from "@ddl/core";
 import { createExecutionTools } from "./execution";
+import { ComputerStatusMonitor } from "./execution/computer-status";
 import type { Capability, ExecutionToolFactory, FrameListener } from "./execution/types";
 import type { CursorCliStatus } from "./harness/cursor/cli";
 import { type HarnessSetupContext, setupHarness } from "./harness/registry";
@@ -150,6 +151,8 @@ class Runtime implements AgentRuntime {
   /** `edit_note`, shared by the orchestrator and every subagent. */
   private readonly noteEditTool: ToolSpec;
   private readonly sourceCatalog = new SourceCatalog();
+  /** Computer permissions (for the status) and desktop apps (for the digest), cached. */
+  private readonly computerStatus: ComputerStatusMonitor;
   /** Anchors whose line is gone, removed unless it comes back (an edit in progress) in time. */
   private readonly missingAnchors = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly surfaceSubscribers = new Map<string, number>();
@@ -196,6 +199,11 @@ class Runtime implements AgentRuntime {
     const now = this.now;
 
     this.broker = this.createBroker();
+    this.computerStatus = new ComputerStatusMonitor(options.execution, {
+      now,
+      onChange: () => this.queueStatus(),
+      logger: this.logger.child({ component: "computer-status" }),
+    });
     this.threads = createThreadStore({
       storage,
       now,
@@ -266,6 +274,7 @@ class Runtime implements AgentRuntime {
         : {}),
       getSettings: () => this.settings,
       onFrame: (threadId, surface, frame) => this.onFrame(threadId, surface, frame),
+      isWatched: (threadId, surface) => this.surfaceSubscribers.has(surfaceKey(threadId, surface)),
       onFinished: (report) => this.orchestrator.notifySubagentFinished(report),
       onChange: () => this.queueStatus(),
       now,
@@ -333,6 +342,7 @@ class Runtime implements AgentRuntime {
   async start(): Promise<void> {
     if (this.started || this.stopped) return;
     this.started = true;
+    if (this.mode !== "off") void this.computerStatus.refresh();
     await this.harnessReady;
     if (this.stopped) return;
     if (this.canRun() && this.enabled) await this.startWatching();
@@ -342,6 +352,7 @@ class Runtime implements AgentRuntime {
   async stop(): Promise<void> {
     if (this.stopped) return;
     this.stopped = true;
+    this.computerStatus.stop();
     for (const timer of this.missingAnchors.values()) clearTimeout(timer);
     this.missingAnchors.clear();
     await this.watcher.stop().catch((error: unknown) => this.logError("watcher.stop", error));
@@ -369,7 +380,7 @@ class Runtime implements AgentRuntime {
 
   status(): AgentStatusResponse {
     const problem = this.problem ?? this.harnessProblem ?? this.turnProblem;
-    const { execution, connectors } = this.options;
+    const { connectors } = this.options;
     return {
       mode: this.mode,
       enabled: this.mode !== "off" && this.enabled,
@@ -378,8 +389,18 @@ class Runtime implements AgentRuntime {
       queued: this.subagents.queuedCount(),
       pendingApprovals: this.safely(() => this.broker.list({ status: "pending" }).length, 0),
       connectors: this.safely(() => connectors?.status() ?? [], []),
-      execution: { provider: execution.id, capabilities: { ...execution.capabilities } },
+      execution: this.executionStatus(),
       ...(problem ? { problem } : {}),
+    };
+  }
+
+  private executionStatus(): AgentStatusResponse["execution"] {
+    const { execution } = this.options;
+    const access = this.mode === "off" ? undefined : this.computerStatus.current().access;
+    return {
+      provider: execution.id,
+      capabilities: { ...execution.capabilities },
+      ...(access ? { computerAccess: access } : {}),
     };
   }
 
@@ -948,6 +969,25 @@ class Runtime implements AgentRuntime {
       available: flags.filter(([, ok]) => ok).map(([c]) => c),
       unavailable: flags.filter(([, ok]) => !ok).map(([c]) => c),
       connectors: connectors.map((c) => ({ name: c.name, state: c.state, toolCount: c.toolCount })),
+      ...(exec.computer ? { computer: this.digestComputer() } : {}),
+    };
+  }
+
+  private digestComputer(): NonNullable<DigestCapabilities["computer"]> {
+    const { access, apps, moreApps } = this.computerStatus.current();
+    return {
+      apps,
+      moreApps,
+      ...(access
+        ? {
+            access: {
+              accessibility: access.accessibility,
+              screenRecording: access.screenRecording,
+              appControl: access.appControl,
+              ...(access.hostApp ? { host: access.hostApp.name } : {}),
+            },
+          }
+        : {}),
     };
   }
 

@@ -77,6 +77,16 @@ export interface ParsedConnector {
   toolCount: number;
 }
 
+export interface ParsedCapabilities {
+  available: string[];
+  unavailable: string[];
+  connectors: ParsedConnector[];
+  /** The Mac's apps the computer capability can operate. */
+  desktopApps: string[];
+  /** `missing` when computer tasks can't run until the user allows access. */
+  computerAccess?: "ready" | "limited" | "missing";
+}
+
 export interface ParsedDigest {
   /** The `Now:` line as written. */
   now: string;
@@ -86,7 +96,7 @@ export interface ParsedDigest {
   replies: ParsedReply[];
   reports: ParsedReport[];
   subagents: ParsedSubagent[];
-  capabilities: { available: string[]; unavailable: string[]; connectors: ParsedConnector[] };
+  capabilities: ParsedCapabilities;
 }
 
 const MONTHS = [
@@ -123,7 +133,7 @@ export function parseDigest(text: string): ParsedDigest {
     replies: [],
     reports: [],
     subagents: [],
-    capabilities: { available: [], unavailable: [], connectors: [] },
+    capabilities: { available: [], unavailable: [], connectors: [], desktopApps: [] },
   };
   const today = isoFromNow(now);
   if (today) digest.today = today;
@@ -217,7 +227,24 @@ export function parseDigest(text: string): ParsedDigest {
       continue;
     }
     if (section === "capabilities" && line.startsWith("Available: ")) {
-      digest.capabilities = parseCapabilities(line);
+      digest.capabilities = { ...digest.capabilities, ...parseCapabilities(line) };
+      continue;
+    }
+    if (section === "capabilities" && line.startsWith("Desktop apps (computer): ")) {
+      digest.capabilities.desktopApps = line
+        .slice("Desktop apps (computer): ".length)
+        .replace(/(?: \(\+\d+ more\))?\.$/, "")
+        .split(", ")
+        .filter(Boolean);
+      continue;
+    }
+    if (section === "capabilities" && line.startsWith("Computer access: ")) {
+      const state = line.slice("Computer access: ".length);
+      digest.capabilities.computerAccess = state.startsWith("missing")
+        ? "missing"
+        : state.startsWith("ready")
+          ? "ready"
+          : "limited";
     }
   }
   return digest;
@@ -381,7 +408,9 @@ function parseSubagentLine(line: string): ParsedSubagent | null {
   return agent;
 }
 
-function parseCapabilities(line: string): ParsedDigest["capabilities"] {
+function parseCapabilities(
+  line: string,
+): Pick<ParsedCapabilities, "available" | "unavailable" | "connectors"> {
   const match = /^Available: (.*?)\. Unavailable: (.*?)\. Connectors: (.*)\.$/.exec(line);
   if (!match) return { available: [], unavailable: [], connectors: [] };
   const list = (value: string) =>

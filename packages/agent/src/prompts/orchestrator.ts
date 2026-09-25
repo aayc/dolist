@@ -12,7 +12,7 @@ Each user message is an event digest written by the system (not typed by the use
 - the other tasks on the same note with their checkbox and agent status (context only — act on them only if an event is about them);
 - the whole note, numbered (\`<n>| <line>\`), with ⟪…⟫ after lines you know: the task or anchor id, its agent status and badge, and "yours" for lines you wrote;
 - user replies in task threads and reports from subagents that finished;
-- the running subagents and the capabilities you can grant.
+- the running subagents and the capabilities you can grant, with the Mac's desktop apps and whether computer access is allowed.
 Always refer to tasks by their exact taskId.
 
 # Triage: pick exactly one outcome per changed task
@@ -26,11 +26,14 @@ Always refer to tasks by their exact taskId.
      - connectors: the user's connected apps (e.g. email, calendar) — only when listed as available and needed.
      - files: create or edit documents, spreadsheets or code in its workspace.
      - shell: run commands (code, data processing).
-     - computer: control the Mac's apps — only when nothing else can do it.
+     - computer: operate the user's Mac apps in the background — for tasks that name a desktop app no connector covers ("ask Grok Bot…", "message Mom on WhatsApp…", "post it in Slack"; the digest lists the Mac's apps), or that only a native app can do. Prefer a connector for that app when there is one, and the browser for websites.
    Only grant capabilities listed as available.
 2. Answer — a quick question or lookup you can answer in one step: facts, definitions, conversions, simple calculations, one piece of current information (use web_search or web_fetch at most once or twice). Call post_comment with the answer up front plus a key detail or source, then set_task_status "done" with a short summary.
 3. Ask — only when the task is genuinely ambiguous AND no sensible attempt is possible without the answer ("Figure out the thing", "Handle it"). Call ask_user with one short, specific question. Never ask for details a subagent could find out or reasonably assume.
 4. Ignore — nothing digital to do: chores, errands, exercise, meals, personal calls or visits, appointments the user attends in person, reminders to self, reflections. Call set_task_status "ignored" with no comment. Comment only when you have a genuinely useful, specific tip (rare).
+
+# Computer access
+When the digest says computer access is missing, a task that needs the computer can't run: don't delegate it and don't fail it silently. Call post_comment asking the user to allow it — "open Settings → Computer Use in Daily Do List" and turn on the app the digest names — then set_task_status "waiting_user". Delegate once they say it's done. A task that doesn't need the computer is unaffected.
 
 # Reading the list
 - "- [ ]" is open, "- [x]" done, "- [-]" cancelled, "- [>]" deferred. Never act on closed tasks.
@@ -140,10 +143,27 @@ export interface DigestSubagent {
   summary?: string;
 }
 
+/** Computer use on this Mac, when the computer capability exists. */
+export interface DigestComputer {
+  /** Apps agents could operate (running ones first), capped. */
+  apps: string[];
+  /** Apps left out by the cap. */
+  moreApps: number;
+  /** Absent while it isn't known yet. */
+  access?: {
+    accessibility: boolean;
+    screenRecording: boolean;
+    appControl: boolean;
+    /** The app the permissions belong to (the one to turn on in System Settings). */
+    host?: string;
+  };
+}
+
 export interface DigestCapabilities {
   available: Capability[];
   unavailable: Capability[];
   connectors: Array<{ name: string; state: string; toolCount: number }>;
+  computer?: DigestComputer;
 }
 
 export interface OrchestratorDigest {
@@ -232,7 +252,43 @@ export function formatOrchestratorDigest(digest: OrchestratorDigest): string {
     "## Capabilities you can grant",
     `Available: ${caps.available.join(", ") || "none"}. Unavailable: ${caps.unavailable.join(", ") || "none"}. Connectors: ${connectors}.`,
   );
+  if (caps.computer && caps.available.includes("computer")) {
+    lines.push(...formatComputer(caps.computer));
+  }
   return lines.join("\n");
+}
+
+const MAX_APP_NAME_CHARS = 60;
+
+function formatComputer(computer: DigestComputer): string[] {
+  const lines: string[] = [];
+  if (computer.apps.length > 0) {
+    const names = computer.apps.map((name) => name.slice(0, MAX_APP_NAME_CHARS)).join(", ");
+    const more = computer.moreApps > 0 ? ` (+${computer.moreApps} more)` : "";
+    lines.push(`Desktop apps (computer): ${names}${more}.`);
+  }
+  const access = computer.access;
+  if (!access) return lines;
+  const host = access.host
+    ? `“${access.host.slice(0, MAX_APP_NAME_CHARS)}”`
+    : "the app that runs Daily Do List";
+  if (!access.accessibility) {
+    const missing = access.screenRecording ? "Accessibility" : "Accessibility and Screen Recording";
+    lines.push(
+      `Computer access: missing — ${missing} not allowed for ${host}. Computer tasks can't run until the user allows it in Settings → Computer Use in Daily Do List.`,
+    );
+  } else if (!access.screenRecording) {
+    lines.push(
+      `Computer access: no Screen Recording for ${host} — agents can operate apps but can't take screenshots.`,
+    );
+  } else {
+    lines.push(
+      access.appControl
+        ? "Computer access: ready — agents operate apps in the background."
+        : "Computer access: ready, screen-level only — agents use the real mouse and keyboard.",
+    );
+  }
+  return lines;
 }
 
 /**

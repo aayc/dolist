@@ -67,7 +67,11 @@ harness's), instead of every judge call and search failing with a 401.
   it), the rest of the list, **the whole note** numbered (`12| line  ⟪tsk_… · working — "badge" ·
   yours⟫`: ids, agent status and badge, and which lines the agent wrote), thread replies, subagent
   reports, running work and the capabilities available. Replies and reports bring their note's
-  view along.
+  view along. With computer use it also lists the Mac's desktop apps (running ones first, at most
+  80, never protected ones; cached) and whether computer access is allowed, and for which app.
+- A task that names a desktop app no connector covers ("ask Grok Bot…", "message Mom on
+  WhatsApp…") gets the `computer` capability. When computer access is missing, the orchestrator
+  doesn't delegate it: it asks the user to allow access in Settings → Computer Use and waits.
 - The orchestrator's tools: `spawn_subagent`, `post_comment`, `ask_user`, `set_task_status`,
   `message_subagent`, `cancel_subagent`, `list_tasks`, `anchor_line`, `edit_note`, `read_note`,
   `web_search`, `web_fetch`.
@@ -93,6 +97,11 @@ harness's), instead of every judge call and search failing with a 401.
   (`browser_*`, `computer_*`), MCP connector tools (`mcp__server__tool`),
   and built-in file/shell tools bound to the task's workspace (`$DDL_HOME/workspaces/<thread>`):
   Pi's own, or our equivalents with the same names and inputs (`src/harness/builtin-tools.ts`).
+- **Computer use** (macOS): with the `ddl-computer` helper, agents operate one app at a time in
+  the background through its accessibility tree: `computer_open_app` → `computer_app_state` (a
+  tree with element ids) → `computer_set_value` / `computer_press` → read it again. The
+  screen-level tools (screenshots, clicks, keys on the real desktop) remain as the fallback, and
+  also take an `app` target. Details in `packages/agent/src/execution/README.md`.
 - Harness events stream into the thread: text deltas, tool calls (running/ok/error/blocked), live
   browser/computer frames (only while someone is watching), artifacts.
 - Finished sessions stay warm so your reply resumes them with full context; *Retry* starts fresh
@@ -130,12 +139,15 @@ serves every tool itself and gates each call before running it; see below for th
 Pipeline (details and the full rule table in `packages/agent/src/safety/README.md`):
 
 1. **Policy & grants** — always-deny/allow/require lists; standing grants from "approve for this
-   task" (narrowed by category and risk).
-2. **Hints** — internal and read-only tools take a fast path unless a risky rule matches.
-3. **Rules** — ~130 rules across payment, booking, communication, publishing, account,
+   task" (narrowed by category, risk and, for computer actions, the app they target).
+2. **Hints** — internal and read-only tools take a fast path unless a risky rule matches. A tool
+   that knows the real target (`subject`: the app's real name, the element's real label) adds it to
+   the model's words; it can only make the verdict stricter.
+3. **Rules** — 140 rules across payment, booking, communication, publishing, account,
    credentials, privacy, destructive, system, computer control, forms, file writes and network,
    including a real shell parser (pipelines, subshells, `bash -c`, heredocs…). Catastrophic
-   commands are **hard-denied** even with approval.
+   commands, and operating Daily Do List itself, System Settings, password managers or
+   authenticators, are **hard-denied** even with approval.
 4. **LLM judge** — for uncertain effectful actions: a separate, tool-less model call with a strict
    JSON schema and prompt-injection defenses; it can only escalate, and falls back to
    `require_approval` on timeout or bad output.
@@ -216,11 +228,13 @@ and calls the bridge like the real one.
 
 `evals/` holds datasets and suites:
 
-- **safety** (170+ cases, 90 marked critical): mock mode runs the rules-only evaluator and requires
-  **zero false allows**; live mode adds the LLM judge.
-- **triage** (50+ synthetic tasks): live mode runs the real orchestrator prompt on Pi with recorded
-  (stubbed) tools and scores decision accuracy, capability recall and time-to-first-action;
-  mock mode validates the dataset with a deterministic baseline.
+- **safety** (250+ cases, 150 marked critical): mock mode runs the rules-only evaluator and requires
+  **zero false allows**; live mode adds the LLM judge. Cases can carry a `subject` (what the tool
+  knows about the real target).
+- **triage** (60+ synthetic tasks, including desktop-app tasks with and without computer access):
+  live mode runs the real orchestrator prompt on Pi with recorded (stubbed) tools and scores
+  decision accuracy, capability recall and time-to-first-action; mock mode validates the dataset
+  with a deterministic baseline.
 
 ```bash
 pnpm eval:mock                         # deterministic, runs in CI
@@ -230,7 +244,8 @@ pnpm eval -- --suite triage            # real model (needs OPENROUTER_API_KEY)
 ## Extending
 
 - New tool: name it in `src/tools/contracts.ts`, implement a `ToolSpec` with honest safety hints
-  and a `describe()`, add safety eval cases.
+  and a `describe()` (plus a `subject()` when it knows the real target better than the model's
+  words), add safety eval cases.
 - New execution backend: implement `ExecutionProvider` and register it in `createExecutionProvider`.
 - New harness: implement `Harness` in `src/harness/<name>/` (only that directory may import its
   SDK or know its CLI), add an entry to `src/harness/registry.ts` that checks its requirements and

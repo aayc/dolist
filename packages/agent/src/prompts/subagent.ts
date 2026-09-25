@@ -7,7 +7,7 @@ const CAPABILITY_TEXT: Record<Capability, string> = {
   browser:
     "browser — operate websites in a real browser (browser_* tools): navigate, read the accessibility snapshot, click, type, select, submit",
   computer:
-    "computer — control the user's Mac (computer_* tools) with screenshots, clicks and keystrokes; slow, use only when no other path exists",
+    "computer — operate the user's Mac apps (computer_* tools): native apps without a connector, such as chat and AI apps; in the background through their accessibility tree when app control is available, otherwise with screenshots, clicks and keystrokes",
   shell: "shell — run commands in your workspace (bash)",
   files: "files — read, write and edit files in your workspace",
   connectors: "connectors — the user's connected apps (mcp__* tools), e.g. email or calendar",

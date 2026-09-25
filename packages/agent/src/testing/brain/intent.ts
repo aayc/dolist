@@ -19,6 +19,8 @@ export interface TriageInput {
   notes?: readonly string[];
   /** Today's local ISO date (for deferral links). */
   today?: string;
+  /** The Mac's apps the computer capability can operate (from the digest). */
+  desktopApps?: readonly string[];
 }
 
 const DAILY_LINK = /\[\[(?:[^\]|#]*\/)?(\d{4}-\d{2}-\d{2})(?:[|#][^\]]*)?\]\]/g;
@@ -52,6 +54,14 @@ export function triage(input: TriageInput): TriageDecision {
     return { kind: "ignore", reason: "deferred" };
   const text = raw.replace(DAILY_LINK, "").trim();
   if (HARMFUL.test(text)) return { kind: "ignore", reason: "harmful" };
+  const desktopApps = input.desktopApps ?? [];
+  // "Ask Grok Bot…?" is work for Grok Bot, not a question to answer here.
+  if (namedDesktopApp(text, desktopApps)) {
+    return {
+      kind: "delegate",
+      capabilities: desiredCapabilities(text, input.notes ?? [], desktopApps),
+    };
+  }
   if (PHYSICAL.test(text) && !ONLINE.test(text)) return { kind: "ignore", reason: "chore" };
   if (isVague(text)) return { kind: "ask", question: clarifyingQuestion(text) };
   if (isQuickQuestion(text)) {
@@ -93,15 +103,32 @@ function isQuickQuestion(text: string): boolean {
   return question && !RESEARCHY.test(text) && wordCount(text) <= 16;
 }
 
+/** A desktop app the task names ("ask Grok Bot…", "on WhatsApp"), if any. */
+export function namedDesktopApp(text: string, apps: readonly string[]): string | undefined {
+  const lower = ` ${text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ")} `;
+  return apps.find((app) => {
+    const name = app
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim();
+    return name.length > 1 && lower.includes(` ${name} `);
+  });
+}
+
 /** The minimal capabilities for a delegated task, before filtering by availability. */
-export function desiredCapabilities(text: string, notes: readonly string[] = []): Capability[] {
+export function desiredCapabilities(
+  text: string,
+  notes: readonly string[] = [],
+  desktopApps: readonly string[] = [],
+): Capability[] {
   const all = [text, ...notes].join(" ");
   const caps: Capability[] = [];
-  if (COMMUNICATION.test(text)) caps.push("connectors");
+  if (namedDesktopApp(text, desktopApps)) caps.push("computer");
+  else if (COMMUNICATION.test(text)) caps.push("connectors");
   else if (TRANSACTION.test(text) && !/\bpassport\b/i.test(text)) caps.push("browser");
   if (CODE.test(text)) caps.push("shell");
   if (DOCUMENTS.test(all)) caps.push("files");
-  if (RESEARCH.test(text) || caps.length === 0) caps.push("web");
+  if ((RESEARCH.test(text) && !caps.includes("computer")) || caps.length === 0) caps.push("web");
   return caps;
 }
 

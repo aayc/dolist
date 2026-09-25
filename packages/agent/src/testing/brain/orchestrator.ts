@@ -98,6 +98,7 @@ function planLine(
     text: request,
     notes: [],
     ...(ctx.digest.today ? { today: ctx.digest.today } : {}),
+    desktopApps: ctx.digest.capabilities.desktopApps,
   });
   if (decision.kind === "ignore") return [];
   const anchor = ctx.calls.find(
@@ -145,6 +146,7 @@ function planTask(task: ParsedChangedTask, ctx: Context): TurnToolCall[] {
     text: task.text,
     notes: task.notes,
     ...(ctx.digest.today ? { today: ctx.digest.today } : {}),
+    desktopApps: ctx.digest.capabilities.desktopApps,
   });
   if (task.change !== "updated") return planOutcome(work, decision, ctx);
 
@@ -197,7 +199,10 @@ function planReply(reply: ParsedReply, ctx: Context): TurnToolCall[] {
   const combined = `${reply.taskText ?? ""} ${text}`.trim();
   return planOutcome(
     workFor(taskId, reply, ctx),
-    { kind: "delegate", capabilities: desiredCapabilities(combined) },
+    {
+      kind: "delegate",
+      capabilities: desiredCapabilities(combined, [], ctx.digest.capabilities.desktopApps),
+    },
     ctx,
   );
 }
@@ -295,6 +300,13 @@ function planDelegate(work: Work, wanted: readonly Capability[], ctx: Context): 
   const spawns = mine.filter((call) => call.name === "spawn_subagent");
   const allowed = ctx.options.allowedCapabilities;
   const last = spawns.at(-1);
+  if (
+    !last &&
+    desired.includes("computer") &&
+    ctx.digest.capabilities.computerAccess === "missing"
+  ) {
+    return planAccessRequest(work, ctx);
+  }
   if (!last) {
     const capabilities = grantableCapabilities(desired, ctx.digest.capabilities.available, allowed);
     const calls: TurnToolCall[] = [];
@@ -318,6 +330,30 @@ function planDelegate(work: Work, wanted: readonly Capability[], ctx: Context): 
     if (capabilities.length > 0) return [spawnCall(work, capabilities)];
   }
   return [];
+}
+
+/** The computer is needed but not allowed: ask the user to allow it instead of failing silently. */
+function planAccessRequest(work: Work, ctx: Context): TurnToolCall[] {
+  const { taskId } = work;
+  const mine = callsFor(taskId, ctx);
+  const calls: TurnToolCall[] = [];
+  if (!mine.some((call) => call.name === "post_comment")) {
+    calls.push({
+      name: "post_comment",
+      arguments: {
+        taskId,
+        text: "This needs access to your Mac's apps. Open Settings → Computer Use in Daily Do List, allow it, then reply here and I'll get going.",
+        summary: "Needs computer access",
+      },
+    });
+  }
+  if (!mine.some((call) => call.name === "set_task_status")) {
+    calls.push({
+      name: "set_task_status",
+      arguments: { taskId, status: "waiting_user", summary: "Needs computer access" },
+    });
+  }
+  return calls;
 }
 
 function spawnCall(work: Work, capabilities: Capability[]): TurnToolCall {

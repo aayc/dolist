@@ -94,6 +94,8 @@ export interface SubagentManagerOptions {
   extraTools?: (spec: SubagentSpec, task: TaskRef) => ToolSpec[];
   getSettings: () => AppSettings;
   onFrame: (threadId: string, surface: SurfaceKind, frame: FrameData) => void;
+  /** Someone watches the thread's surface (tools skip capturing frames nobody sees). */
+  isWatched?: (threadId: string, surface: SurfaceKind) => boolean;
   /** A subagent finished a turn (done, failed, needs the user…). */
   onFinished: (report: SubagentReport) => void;
   /** Running/queued counts changed. */
@@ -618,6 +620,9 @@ export class SubagentManager {
           workspace: run.workspace!,
           capabilities,
           onFrame: (surface, frame) => this.options.onFrame(run.threadId, surface, frame),
+          ...(this.options.isWatched
+            ? { watching: (surface) => this.options.isWatched!(run.threadId, surface) }
+            : {}),
         }),
       );
     } catch (error) {
