@@ -1,6 +1,7 @@
 import {
   AGENT_HARNESS_KINDS,
   type AgentStatusResponse,
+  type AlwaysOnMachine,
   API_VERSION,
   APPROVAL_POLICIES,
   type ApprovalDecisionRequest,
@@ -14,12 +15,22 @@ import {
   createId,
   type DailyNoteResponse,
   DEFAULT_SETTINGS,
+  type DeviceSettingsPatch,
+  type DeviceSettingsResponse,
+  type DeviceSyncSetupRequest,
   dailyNotePath,
   type HealthResponse,
   isHiddenPath,
+  isMachineUrl,
+  type MachinePairRequest,
+  type MachineStatusResponse,
   mergeSettings,
   type NoteResponse,
+  normalizeDeviceName,
   normalizePath,
+  type PairedDevicesResponse,
+  type PairingCodeRequest,
+  type PairingCodeResponse,
   parseISODate,
   type RoutineListResponse,
   type RoutineResponse,
@@ -27,6 +38,7 @@ import {
   type SearchResponse,
   type ServerEvent,
   type SettingsResponse,
+  type SyncStatusResponse,
   type TaskRecordsResponse,
   type ThreadListResponse,
   type ThreadResponse,
@@ -50,6 +62,8 @@ import type {
 import { ConflictError, HttpError } from "../errors";
 import { MOCK_CONNECTORS, MockAgent, MockNotFoundError } from "./mock-agent";
 import { MockComputer, type MockComputerMode } from "./mock-computer";
+import { MockPairing } from "./mock-pairing";
+import { MockRemote, type MockRemoteScenario } from "./mock-remote";
 import { MockRoutines } from "./mock-routines";
 import { MockVault } from "./mock-vault";
 import { renderDailyContent, seedVault } from "./seed";
@@ -65,6 +79,16 @@ export interface MockDaemonClientOptions {
   installHooks?: boolean;
   /** The simulated Mac's computer access. Default `ready`. */
   computer?: MockComputerMode;
+  /** A starting point for the device side (placement, sync, the machine); null keeps the stored one. */
+  remote?: MockRemoteScenario | null;
+  /**
+   * Cookie auth: the paired device this browser is. Once it's revoked, requests answer 401 and
+   * `onUnauthorized` is called, like the real daemon.
+   */
+  deviceId?: string | null;
+  onUnauthorized?: () => void;
+  /** The pairing codes and devices (default: this browser's, when persisting). */
+  pairing?: MockPairing;
 }
 
 export interface MockTestHooks {
@@ -73,6 +97,10 @@ export interface MockTestHooks {
   deleteNote(path: string): void;
   readNote(path: string): string | null;
   listPaths(): string[];
+  /** The always-on machine stops (or starts) answering. */
+  setMachineReachable(reachable: boolean): void;
+  /** The always-on machine revokes (or accepts again) this device. */
+  setMachineRejects(rejected: boolean): void;
 }
 
 declare global {
@@ -93,6 +121,13 @@ function notFound(what: string): HttpError {
   const message = `${what} not found`;
   return new HttpError(404, message, { error: "not_found", message });
 }
+
+function unavailable(message: string): HttpError {
+  return new HttpError(503, message, { error: "agent_unavailable", message });
+}
+
+/** The contract's `RUNTIME_ID_PATTERN` (zod stays out of the bundle). */
+const RUNTIME_ID = /^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$/;
 
 /** The daemon's path rules: canonical, inside the vault, never hidden (dot-files, the sidecar). */
 function vaultPath(input: string): string {
@@ -143,6 +178,15 @@ function checkedSettingsPatch(patch: UpdateSettingsRequest): UpdateSettingsReque
   return { ...patch, agent: { ...agent, ...trimmed } };
 }
 
+/** The daemon's check on the vault's always-on machine: a normalized address and a name. */
+function checkMachine(machine: AlwaysOnMachine | null | undefined): void {
+  if (!machine) return;
+  if (isMachineUrl(machine.url) && normalizeDeviceName(machine.name) === machine.name) return;
+  const message =
+    "Invalid settings: remote.alwaysOnMachine needs a name and an https://<host>[:port] address";
+  throw new HttpError(400, message, { error: "invalid_request", message });
+}
+
 /** Fully in-browser daemon: in-memory vault + simulated agent speaking the real protocol. */
 export class MockDaemonClient implements DaemonClient {
   readonly kind = "mock" as const;
@@ -152,9 +196,13 @@ export class MockDaemonClient implements DaemonClient {
   readonly agent: MockAgent;
   private readonly routines: MockRoutines;
   private readonly computer: MockComputer;
+  private readonly pairing: MockPairing;
+  private readonly remote: MockRemote;
   private settings: AppSettings;
   private readonly latencyMs: number;
   private readonly persistSettings: boolean;
+  private readonly deviceId: string | null;
+  private onUnauthorized: (() => void) | null;
   private state: ConnectionState = "offline";
   private readonly listeners = new Set<(event: ServerEvent) => void>();
   private readonly connectionListeners = new Set<(change: ConnectionChange) => void>();
@@ -162,14 +210,34 @@ export class MockDaemonClient implements DaemonClient {
   constructor(options: MockDaemonClientOptions = {}) {
     this.latencyMs = options.latencyMs ?? 0;
     this.persistSettings = options.persistSettings ?? typeof localStorage !== "undefined";
+    this.deviceId = options.deviceId ?? null;
+    this.onUnauthorized = options.onUnauthorized ?? null;
     const stored = this.persistSettings ? readJson<AppSettings>(STORAGE_KEYS.mockSettings) : null;
     this.settings = mergeSettings(MOCK_DEFAULTS, stored ?? undefined);
     this.computer = new MockComputer(options.computer ?? "ready", () => this.agent.publishStatus());
+    this.pairing = options.pairing ?? new MockPairing({ persist: this.persistSettings });
+    this.remote = new MockRemote(
+      {
+        settings: () => this.settings,
+        setMachine: (machine) => this.setMachine(machine),
+        computerAccess: () => this.computer.status(),
+        statusChanged: () => this.agent.publishStatus(),
+        pairing: this.pairing,
+        speed: options.speed ?? 1,
+        persist: this.persistSettings,
+      },
+      options.remote ?? null,
+    );
     this.agent = new MockAgent(
       {
         emit: (event) => this.emit(event),
         settings: () => this.settings,
         computerAccess: () => this.computer.status(),
+        location: () => ({
+          placement: this.remote.placementStatus(),
+          readiness: this.remote.readiness(),
+          problem: this.remote.problem(),
+        }),
       },
       { speed: options.speed ?? 1 },
     );
@@ -255,6 +323,12 @@ export class MockDaemonClient implements DaemonClient {
   private respond<T>(produce: () => T): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       setTimeout(() => {
+        if (this.deviceId !== null && !this.pairing.has(this.deviceId)) {
+          const message = "Missing or invalid bearer token";
+          reject(new HttpError(401, message, { error: "unauthorized", message }));
+          this.revoked();
+          return;
+        }
         try {
           resolve(clone(produce()));
         } catch (error) {
@@ -262,6 +336,30 @@ export class MockDaemonClient implements DaemonClient {
         }
       }, this.latencyMs);
     });
+  }
+
+  /** An agent action: 503 while this device can't act on the agent (read-only, like the daemon). */
+  private act<T>(produce: () => T): Promise<T> {
+    return this.respond(() => {
+      const problem = this.remote.problem();
+      if (problem) throw unavailable(problem);
+      return produce();
+    });
+  }
+
+  /** This browser's device was revoked: its socket closes and the page goes back to pairing. */
+  private revoked(): void {
+    const onUnauthorized = this.onUnauthorized;
+    if (!onUnauthorized) return;
+    this.onUnauthorized = null;
+    this.disconnect();
+    onUnauthorized();
+  }
+
+  private setMachine(machine: AlwaysOnMachine | null): void {
+    this.settings = mergeSettings(this.settings, { remote: { alwaysOnMachine: machine } });
+    if (this.persistSettings) writeJson(STORAGE_KEYS.mockSettings, this.settings);
+    this.emit({ type: "settings.changed", settings: this.settings });
   }
 
   private vaultChanged(changes: VaultChange[], origin: "client" | "external" | "agent"): void {
@@ -400,6 +498,7 @@ export class MockDaemonClient implements DaemonClient {
     let checked: UpdateSettingsRequest;
     try {
       checked = checkedSettingsPatch(patch);
+      checkMachine(patch.remote?.alwaysOnMachine as AlwaysOnMachine | null | undefined);
     } catch (error) {
       return this.respond(() => {
         throw error;
@@ -410,6 +509,7 @@ export class MockDaemonClient implements DaemonClient {
     if (this.persistSettings) writeJson(STORAGE_KEYS.mockSettings, this.settings);
     this.emit({ type: "settings.changed", settings: this.settings });
     this.agent.applyApprovalPolicy(previousPolicy, this.settings.agent.approvalPolicy);
+    if (checked.remote) this.remote.settingsChanged();
     this.emit({ type: "agent.status", status: this.agent.status() });
     const settings = this.settings;
     return this.respond(() => ({ settings }));
@@ -443,15 +543,15 @@ export class MockDaemonClient implements DaemonClient {
   }
 
   postMessage(threadId: string, text: string): Promise<void> {
-    return this.respond(() => this.agent.postUserMessage(threadId, text));
+    return this.act(() => this.agent.postUserMessage(threadId, text));
   }
 
   cancelThread(threadId: string): Promise<void> {
-    return this.respond(() => this.agent.cancel(threadId));
+    return this.act(() => this.agent.cancel(threadId));
   }
 
   retryThread(threadId: string): Promise<void> {
-    return this.respond(() => this.agent.retry(threadId));
+    return this.act(() => this.agent.retry(threadId));
   }
 
   listApprovals(): Promise<ApprovalListResponse> {
@@ -459,7 +559,7 @@ export class MockDaemonClient implements DaemonClient {
   }
 
   decideApproval(id: string, decision: ApprovalDecisionRequest): Promise<ApprovalRequest> {
-    return this.respond(() => {
+    return this.act(() => {
       const current = this.agent.listApprovals().find((approval) => approval.id === id);
       if (current && current.status !== "pending") {
         const message = `Approval is already ${current.status}`;
@@ -495,24 +595,85 @@ export class MockDaemonClient implements DaemonClient {
   }
 
   createRoutine(request: CreateRoutineRequest): Promise<RoutineResponse> {
-    return this.respond(() => ({ routine: this.routines.create(request) }));
+    return this.act(() => ({ routine: this.routines.create(request) }));
   }
 
   runRoutine(id: string): Promise<RoutineRunResponse> {
-    return this.respond(() => this.routines.run(id));
+    return this.act(() => this.routines.run(id));
   }
 
   pauseRoutine(id: string): Promise<RoutineResponse> {
-    return this.respond(() => ({ routine: this.routines.setPaused(id, true) }));
+    return this.act(() => ({ routine: this.routines.setPaused(id, true) }));
   }
 
   resumeRoutine(id: string): Promise<RoutineResponse> {
-    return this.respond(() => ({ routine: this.routines.setPaused(id, false) }));
+    return this.act(() => ({ routine: this.routines.setPaused(id, false) }));
+  }
+
+  // ── This device, pairing, the always-on machine ────────────────────────
+
+  getSyncStatus(): Promise<SyncStatusResponse> {
+    return this.respond(() => this.remote.syncStatus());
+  }
+
+  getDevice(): Promise<DeviceSettingsResponse> {
+    return this.respond(() => this.remote.deviceResponse());
+  }
+
+  updateDevice(patch: DeviceSettingsPatch): Promise<DeviceSettingsResponse> {
+    return this.respond(() => this.remote.patchDevice(patch));
+  }
+
+  setupSync(request: DeviceSyncSetupRequest): Promise<DeviceSettingsResponse> {
+    return this.respond(() => this.remote.setupSync(request));
+  }
+
+  removeSync(): Promise<DeviceSettingsResponse> {
+    return this.respond(() => this.remote.removeSync());
+  }
+
+  createPairingCode(request: PairingCodeRequest = {}): Promise<PairingCodeResponse> {
+    return this.respond(() => this.remote.createPairingCode(request));
+  }
+
+  listDevices(): Promise<PairedDevicesResponse> {
+    return this.respond(() => this.remote.listDevices(this.deviceId));
+  }
+
+  revokeDevice(id: string): Promise<void> {
+    return this.respond(() => {
+      if (!RUNTIME_ID.test(id)) {
+        throw new HttpError(400, "Invalid device id", {
+          error: "invalid_request",
+          message: "Invalid device id",
+        });
+      }
+      if (!this.pairing.revoke(id)) throw notFound("Device");
+      // The daemon closes a revoked device's sockets; a browser revoking itself is cut off next.
+      if (id === this.deviceId) setTimeout(() => this.revoked(), 0);
+    });
+  }
+
+  getMachine(): Promise<MachineStatusResponse> {
+    return this.respond(() => this.remote.machineStatus());
+  }
+
+  pairMachine(request: MachinePairRequest): Promise<MachineStatusResponse> {
+    return this.respond(() => this.remote.pairMachine(request));
+  }
+
+  checkMachine(): Promise<MachineStatusResponse> {
+    return this.respond(() => this.remote.checkMachine());
+  }
+
+  forgetMachine(): Promise<MachineStatusResponse> {
+    return this.respond(() => this.remote.forgetMachine());
   }
 
   // ── Test hooks ─────────────────────────────────────────────────────────
 
-  private testHooks(): MockTestHooks {
+  /** What `window.__ddlMock` offers the e2e tests. */
+  testHooks(): MockTestHooks {
     const externalWrite = (path: string, content: string) => {
       const target = normalizePath(path);
       const existed = this.vault.has(target);
@@ -535,6 +696,8 @@ export class MockDaemonClient implements DaemonClient {
       },
       readNote: (path) => this.vault.get(path)?.content ?? null,
       listPaths: () => this.vault.paths(),
+      setMachineReachable: (reachable) => this.remote.setMachineReachable(reachable),
+      setMachineRejects: (rejected) => this.remote.setMachineRejects(rejected),
     };
   }
 }

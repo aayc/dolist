@@ -3,6 +3,7 @@ import { ArrowLeft, FilePen, Pause, Play, ShieldAlert, TriangleAlert, X } from "
 import { memo, useEffect, useMemo, useState } from "react";
 import { useServices } from "../../app/services";
 import { Count } from "../../components/Count";
+import { DisabledReason } from "../../components/DisabledReason";
 import { IconButton } from "../../components/IconButton";
 import { perfStart } from "../../perf/perf";
 import { routineRuns } from "../../state/agent-reducer";
@@ -21,6 +22,7 @@ import {
   scheduleLabel,
 } from "./routine-format";
 import "../../styles/routines.css";
+import { useReadOnlyReason } from "../remote/read-only";
 
 /** One routine in the agent panel: what it does and when, its actions, and its own inbox of runs. */
 export function RoutineView({ routineId }: { routineId: string }) {
@@ -102,6 +104,7 @@ function RoutineHeader({ title, routine }: { title: string; routine?: Routine })
 
 function RoutineDetails({ routine }: { routine: Routine }) {
   const { routines: actions } = useServices();
+  const readOnly = useReadOnlyReason();
   const threads = useAgentStore((s) => s.threads);
   const runs = useMemo(() => routineRuns(threads, routine.id), [threads, routine.id]);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -127,35 +130,40 @@ function RoutineDetails({ routine }: { routine: Routine }) {
     <>
       <RoutineHeader title={routine.name} routine={routine} />
       <div className="routine-toolbar">
-        <button
-          type="button"
-          className="button is-primary"
-          data-testid="routine-run"
-          data-tooltip={`Run it once now, besides its schedule · ${extraRunsLabel(routine.extraRunsLeft)}`}
-          disabled={starting}
-          onClick={() => void runNow()}
-        >
-          <Play size={13} strokeWidth={2} aria-hidden="true" />
-          {starting ? "Starting…" : "Run now"}
-        </button>
-        <button
-          type="button"
-          className="button"
-          data-testid="routine-pause"
-          data-tooltip={
-            routine.paused
-              ? "Run it on its schedule again"
-              : "Stop running it on its schedule until you resume it"
-          }
-          onClick={() => void actions.setPaused(routine, !routine.paused)}
-        >
-          {routine.paused ? (
+        <DisabledReason reason={readOnly}>
+          <button
+            type="button"
+            className="button is-primary"
+            data-testid="routine-run"
+            data-tooltip={`Run it once now, besides its schedule · ${extraRunsLabel(routine.extraRunsLeft)}`}
+            disabled={starting || readOnly !== null}
+            onClick={() => void runNow()}
+          >
             <Play size={13} strokeWidth={2} aria-hidden="true" />
-          ) : (
-            <Pause size={13} strokeWidth={2} aria-hidden="true" />
-          )}
-          {routine.paused ? "Resume" : "Pause"}
-        </button>
+            {starting ? "Starting…" : "Run now"}
+          </button>
+        </DisabledReason>
+        <DisabledReason reason={readOnly}>
+          <button
+            type="button"
+            className="button"
+            data-testid="routine-pause"
+            data-tooltip={
+              routine.paused
+                ? "Run it on its schedule again"
+                : "Stop running it on its schedule until you resume it"
+            }
+            disabled={readOnly !== null}
+            onClick={() => void actions.setPaused(routine, !routine.paused)}
+          >
+            {routine.paused ? (
+              <Play size={13} strokeWidth={2} aria-hidden="true" />
+            ) : (
+              <Pause size={13} strokeWidth={2} aria-hidden="true" />
+            )}
+            {routine.paused ? "Resume" : "Pause"}
+          </button>
+        </DisabledReason>
         <button
           type="button"
           className="button"

@@ -23,6 +23,8 @@ declare global {
       deleteNote(path: string): void;
       readNote(path: string): string | null;
       listPaths(): string[];
+      setMachineReachable(reachable: boolean): void;
+      setMachineRejects(rejected: boolean): void;
     };
     __ddlDebug?: {
       evictNote(path: string): void;

@@ -9,6 +9,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { useShallow } from "zustand/shallow";
 import { useServices } from "../../app/services";
 import { Count } from "../../components/Count";
+import { DisabledReason } from "../../components/DisabledReason";
 import { IconButton } from "../../components/IconButton";
 import { cx } from "../../lib/cx";
 import { formatTimestamp } from "../../lib/format";
@@ -24,6 +25,7 @@ import {
   useOutboxStore,
 } from "../../state/outbox-store";
 import { ui } from "../../state/ui-store";
+import { useReadOnlyReason } from "../remote/read-only";
 import { ActivityRow } from "./ActivityRow";
 import { Composer } from "./Composer";
 import { installCodeCopy } from "./code-copy";
@@ -82,6 +84,7 @@ export function OrchestratorView() {
 
 function OrchestratorHeader() {
   const { agent } = useServices();
+  const readOnly = useReadOnlyReason();
   const status = useAgentStore(
     (s) => s.details[THREAD_ID]?.status ?? s.threads[THREAD_ID]?.status ?? "idle",
   );
@@ -104,12 +107,15 @@ function OrchestratorHeader() {
       </div>
       <div className="thread-actions">
         {status === "working" ? (
-          <IconButton
-            icon={Square}
-            label="Stop this run"
-            onClick={() => void agent.cancel(THREAD_ID)}
-            data-testid="thread-stop"
-          />
+          <DisabledReason reason={readOnly}>
+            <IconButton
+              icon={Square}
+              label="Stop this run"
+              disabled={readOnly !== null}
+              onClick={() => void agent.cancel(THREAD_ID)}
+              data-testid="thread-stop"
+            />
+          </DisabledReason>
         ) : null}
         <IconButton
           icon={X}

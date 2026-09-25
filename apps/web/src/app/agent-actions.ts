@@ -6,7 +6,7 @@ import {
   resolveTaskAnchors,
 } from "@ddl/core";
 import type { DaemonClient } from "../api/client";
-import { errorMessage } from "../api/errors";
+import { errorMessage, HttpError } from "../api/errors";
 import { perfCancel, perfStart } from "../perf/perf";
 import {
   applyApprovalList,
@@ -22,6 +22,16 @@ import {
 } from "../state/agent-store";
 import { toast } from "../state/toast-store";
 import { type ThreadTab, ui } from "../state/ui-store";
+
+/**
+ * A 503 means the agent can't act from here right now (another device runs it, the always-on
+ * machine can't be reached, or it's off); the daemon's message says which.
+ */
+export function failureTitle(error: unknown, title: string): string {
+  return error instanceof HttpError && error.status === 503
+    ? "The agent can't act right now"
+    : title;
+}
 
 export interface NoteNavigator {
   openNote(path: string, options?: { focus?: boolean }): Promise<boolean>;
@@ -150,7 +160,11 @@ export class AgentActions {
       if (updated) dispatchAgentEvent({ type: "approval.upsert", approval: updated });
     } catch (error) {
       dispatchAgentEvent({ type: "approval.upsert", approval });
-      toast({ kind: "error", title: "Couldn't send your decision", body: errorMessage(error) });
+      toast({
+        kind: "error",
+        title: failureTitle(error, "Couldn't send your decision"),
+        body: errorMessage(error),
+      });
     }
   }
 
@@ -211,7 +225,7 @@ export class AgentActions {
       await run();
       return true;
     } catch (error) {
-      toast({ kind: "error", title, body: errorMessage(error) });
+      toast({ kind: "error", title: failureTitle(error, title), body: errorMessage(error) });
       return false;
     }
   }

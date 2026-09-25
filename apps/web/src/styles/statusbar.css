@@ -75,6 +75,10 @@ button.status-item:active {
   color: var(--ddl-danger);
 }
 
+.status-agent.is-elsewhere svg {
+  color: var(--ddl-info);
+}
+
 .status-approvals {
   color: var(--ddl-warning);
   font-weight: 600;

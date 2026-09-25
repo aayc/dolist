@@ -4,18 +4,21 @@ import { memo, useEffect } from "react";
 import { useShallow } from "zustand/shallow";
 import { useServices } from "../../app/services";
 import { commandLabel, commandTooltip } from "../../commands/labels";
+import { DisabledReason } from "../../components/DisabledReason";
 import { IconButton } from "../../components/IconButton";
 import { cx } from "../../lib/cx";
 import { formatTimestamp } from "../../lib/format";
 import { useRoutinesStore } from "../../state/routines-store";
 import { ui } from "../../state/ui-store";
 import { StatusChip } from "../agent/StatusChip";
+import { useReadOnlyReason } from "../remote/read-only";
 import { nextRunLabel, scheduleLabel } from "./routine-format";
 import "../../styles/routines.css";
 
 /** The Routines section in the agent panel: every routine, by name. */
 export function RoutinesView() {
   const { routines: actions, commands } = useServices();
+  const readOnly = useReadOnlyReason();
   const { routines, status, error } = useRoutinesStore(
     useShallow((s) => ({ routines: s.routines, status: s.status, error: s.error })),
   );
@@ -34,12 +37,15 @@ export function RoutinesView() {
           data-testid="routines-back"
         />
         <span className="panel-title">Routines</span>
-        <IconButton
-          icon={Plus}
-          command="routine:new"
-          onClick={() => ui.newRoutine()}
-          data-testid="routines-new"
-        />
+        <DisabledReason reason={readOnly}>
+          <IconButton
+            icon={Plus}
+            command="routine:new"
+            disabled={readOnly !== null}
+            onClick={() => ui.newRoutine()}
+            data-testid="routines-new"
+          />
+        </DisabledReason>
         <IconButton
           icon={X}
           label="Close agent panel"
@@ -68,16 +74,19 @@ export function RoutinesView() {
               A routine is a job the agent does on a schedule: a morning briefing, a weekly review,
               a price watch. Each one is a note in the Routines folder.
             </p>
-            <button
-              type="button"
-              className="button is-primary"
-              {...commandTooltip(commands, "routine:new")}
-              onClick={() => ui.newRoutine()}
-              data-testid="routines-empty-new"
-            >
-              <Plus size={14} strokeWidth={2} aria-hidden="true" />
-              {commandLabel(commands, "routine:new")}
-            </button>
+            <DisabledReason reason={readOnly}>
+              <button
+                type="button"
+                className="button is-primary"
+                {...commandTooltip(commands, "routine:new")}
+                disabled={readOnly !== null}
+                onClick={() => ui.newRoutine()}
+                data-testid="routines-empty-new"
+              >
+                <Plus size={14} strokeWidth={2} aria-hidden="true" />
+                {commandLabel(commands, "routine:new")}
+              </button>
+            </DisabledReason>
           </div>
         ) : (
           routines.map((routine) => <RoutineRow key={routine.id} routine={routine} />)
