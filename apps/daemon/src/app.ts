@@ -44,6 +44,8 @@ export interface AppDeps {
   search?: VaultSearch;
   /** The sync engine's status; absent = sync is off. */
   syncStatus?: () => SyncStatusResponse;
+  /** Forwards agent routes to the always-on machine while this device relays (see `relay/`). */
+  relay?: { middleware(): MiddlewareHandler };
   /** Opens System Settings for computer use permissions. Default: opens nothing (tests). */
   systemSettings?: SystemSettingsOpener;
   now?: () => Date;
@@ -90,6 +92,7 @@ export function createApp(deps: AppDeps): Hono {
     }),
   );
   app.use("/api/*", requestLogger(ctx.logger));
+  if (deps.relay) app.use("/api/*", deps.relay.middleware());
 
   registerVaultRoutes(app, ctx);
   registerNoteRoutes(app, ctx);

@@ -25,6 +25,14 @@ import { type DaemonConfig, loadConfig, summarizeConfig } from "./config";
 import { errorMessage } from "./errors";
 import { displayPath } from "./home-paths";
 import { LeasedAgentRuntime } from "./leased-runtime";
+import { PlacementLease, RELAYED_PROBLEM } from "./placement-lease";
+import { AgentRelay } from "./relay/relay";
+import {
+  type MachineCredentialSource,
+  type PlacementSource,
+  SettableMachineCredential,
+  SettablePlacement,
+} from "./relay/sources";
 import { disabledSyncStatusResponse, toSyncStatusResponse } from "./routes/sync";
 import { createSecurityPolicy } from "./security";
 import { createSettingsStore } from "./settings-store";
@@ -59,6 +67,10 @@ export interface StartDaemonOptions {
   logger?: Logger;
   /** Agent lease timings (tests shorten them). */
   leaseTimings?: Partial<LeaseTimings>;
+  /** Where this device's agent runs. Default: this device. */
+  placement?: PlacementSource;
+  /** This device's credential for the always-on machine. Default: none. */
+  machine?: MachineCredentialSource;
 }
 
 export interface RunningDaemon {
@@ -73,8 +85,7 @@ interface Resources {
   connectors?: ConnectorToolSource;
   execution?: ExecutionProvider | null;
   runtime?: AgentRuntime;
-  leasedRuntime?: LeasedAgentRuntime;
-  lease?: AgentLease;
+  lease?: PlacementLease;
   sync?: SyncHandle | null;
   server?: Server;
   hub?: WebSocketHub;
@@ -130,15 +141,22 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
             logger: logger.child({ component: "agent" }),
           })
         : undefined;
-    let runtime: AgentRuntime;
+    let local: AgentRuntime;
     if (leasedRuntime) {
-      runtime = leasedRuntime;
-      resources.leasedRuntime = leasedRuntime;
+      local = leasedRuntime;
     } else {
       const agent = await createStack(settings.get());
-      runtime = agent.runtime;
+      local = agent.runtime;
       resources.execution = agent.execution;
     }
+    const placement = options.placement ?? new SettablePlacement();
+    const relay = new AgentRelay({
+      local,
+      placement,
+      machine: options.machine ?? new SettableMachineCredential(),
+      logger: logger.child({ component: "relay" }),
+    });
+    const runtime: AgentRuntime = relay;
     resources.runtime = runtime;
 
     const sync = prepared.target
@@ -172,6 +190,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       search: resolveVaultSearch(storage),
       syncStatus: () => syncStatusOf(sync, prepared),
       systemSettings: createSystemSettingsOpener(),
+      relay,
     });
     handler = app.fetch;
 
@@ -194,22 +213,33 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     }
 
     const leaseClient = prepared.remote?.client;
-    if (leasedRuntime && prepared.remote && leaseClient) {
-      const lease = new AgentLease({
-        client: agentLeaseClient(leaseClient),
-        device: prepared.remote.device,
-        ...(options.leaseTimings ? { timings: options.leaseTimings } : {}),
-        // Pull what the previous device's agent wrote before loading it.
-        onAcquired: async () => {
-          await syncPass(sync, logger);
-          await leasedRuntime.activate();
-        },
-        // Push the stopped agent's last state for whichever device takes over.
-        onUnavailable: async (problem) => {
-          const wasRunning = leasedRuntime.active;
+    const remote = prepared.remote;
+    if (leasedRuntime && remote && leaseClient) {
+      const lease = new PlacementLease({
+        placement,
+        createLease: () =>
+          new AgentLease({
+            client: agentLeaseClient(leaseClient),
+            device: remote.device,
+            ...(options.leaseTimings ? { timings: options.leaseTimings } : {}),
+            // Pull what the previous device's agent wrote before loading it.
+            onAcquired: async () => {
+              await syncPass(sync, logger);
+              await leasedRuntime.activate();
+            },
+            // Push the stopped agent's last state for whichever device takes over.
+            onUnavailable: async (problem) => {
+              const wasRunning = leasedRuntime.active;
+              await leasedRuntime.deactivate(problem);
+              if (wasRunning) void syncPass(sync, logger);
+            },
+            logger: logger.child({ component: "lease" }),
+          }),
+        beforeRelease: async (problem) => {
           await leasedRuntime.deactivate(problem);
-          if (wasRunning) void syncPass(sync, logger);
+          await syncPass(sync, logger);
         },
+        onRelayed: () => leasedRuntime.deactivate(RELAYED_PROBLEM),
         logger: logger.child({ component: "lease" }),
       });
       resources.lease = lease;
@@ -264,16 +294,8 @@ async function shutdown(resources: Resources, logger: Logger): Promise<void> {
     }
   };
   for (const unsubscribe of resources.unsubscribes) unsubscribe();
-  const { lease, leasedRuntime, runtime, sync, hub, server, execution, connectors, storage } =
-    resources;
-  if (lease) {
-    await step("agent lease", () =>
-      lease.stop(async () => {
-        await leasedRuntime?.deactivate("The daemon is shutting down.");
-        await syncPass(sync ?? null, logger);
-      }),
-    );
-  }
+  const { lease, runtime, sync, hub, server, execution, connectors, storage } = resources;
+  if (lease) await step("agent lease", () => lease.stop("The daemon is shutting down."));
   if (runtime) await step("agent runtime", () => runtime.stop());
   if (sync) {
     await step("sync", () => sync.engine.stop());

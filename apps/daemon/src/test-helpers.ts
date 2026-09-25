@@ -29,7 +29,7 @@ import {
   type Unsubscribe,
 } from "@ddl/core";
 import { MemoryStorageProvider, type StorageProvider } from "@ddl/storage";
-import type { Hono } from "hono";
+import type { Hono, MiddlewareHandler } from "hono";
 import { createApp } from "./app";
 import { createSettingsStore, type SettingsStore } from "./settings-store";
 import type { SystemSettingsOpener } from "./system-settings";
@@ -332,6 +332,7 @@ export interface TestAppOptions<S extends StorageProvider = MemoryStorageProvide
   now?: () => Date;
   logger?: Logger;
   systemSettings?: FakeSystemSettings;
+  relay?: { middleware(): MiddlewareHandler };
 }
 
 export interface TestApp<S extends StorageProvider = MemoryStorageProvider> {
@@ -370,6 +371,7 @@ export async function createTestApp<S extends StorageProvider = MemoryStoragePro
     ...(options.syncStatus ? { syncStatus: options.syncStatus } : {}),
     systemSettings,
     ...(options.now ? { now: options.now } : {}),
+    ...(options.relay ? { relay: options.relay } : {}),
   });
 
   const request = (path: string, init: TestRequestInit = {}): Promise<Response> => {
