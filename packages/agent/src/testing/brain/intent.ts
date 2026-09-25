@@ -166,6 +166,10 @@ export function triage(input: TriageInput): TriageDecision {
     return { kind: "ignore", reason: "deferred" };
   const text = raw.replace(DAILY_LINK, "").trim();
   if (HARMFUL.test(text)) return { kind: "ignore", reason: "harmful" };
+  const chore = PHYSICAL.test(text) && !ONLINE.test(text);
+  // Recurring work is a routine, even when it names an app ("brief me on my calendar").
+  const routine = chore ? undefined : routineRequest(text);
+  if (routine) return { kind: "routine", routine };
   const desktopApps = input.desktopApps ?? [];
   // "Ask Grok Bot…?" is work for Grok Bot, not a question to answer here.
   if (namedDesktopApp(text, desktopApps)) {
@@ -174,9 +178,7 @@ export function triage(input: TriageInput): TriageDecision {
       capabilities: desiredCapabilities(text, input.notes ?? [], desktopApps),
     };
   }
-  if (PHYSICAL.test(text) && !ONLINE.test(text)) return { kind: "ignore", reason: "chore" };
-  const routine = routineRequest(text);
-  if (routine) return { kind: "routine", routine };
+  if (chore) return { kind: "ignore", reason: "chore" };
   if (isVague(text)) return { kind: "ask", question: clarifyingQuestion(text) };
   if (isQuickQuestion(text)) {
     const known = quickAnswer(text);
