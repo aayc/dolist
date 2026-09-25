@@ -22,6 +22,10 @@ struct InvalidFixtureTests {
   static let requiredNullable = "required-but-nullable fields decode a missing key as nil"
 
   static let expectations: [String: [String: Expectation]] = [
+    "AgentStatusResponse": [
+      "unknown reason for holding the agent here": .tolerated(openEnum),
+      "placement without its relay state": .rejected,
+    ],
     "ApiErrorBody": [
       "unknown code": .tolerated("ApiErrorCode is open: unknown codes are handled by HTTP status"),
       "missing code": .rejected,
@@ -322,6 +326,7 @@ struct InvalidFixtureTests {
     #expect(try Fixtures.decode(AgentMode.self, "auto").rawValue == "auto")
     #expect(try Fixtures.decode(AgentPlacement.self, "cloud").rawValue == "cloud")
     #expect(try Fixtures.decode(RelayState.self, "degraded").rawValue == "degraded")
+    #expect(try Fixtures.decode(HeldHereReason.self, "machine_asleep") == "machine_asleep")
     #expect(try Fixtures.decode(PairedDeviceKind.self, "watch").rawValue == "watch")
     #expect(try Fixtures.decode(ComputerReadiness.self, "virtual_display") == "virtual_display")
     #expect(try Fixtures.decode(DeviceSettingField.self, "name").rawValue == "name")

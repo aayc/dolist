@@ -27,6 +27,24 @@ struct RemoteModelTests {
     #expect(status.readiness?.computer == .unsupported)
   }
 
+  @Test func theAgentIsHeldHereWithoutAMachineOrSync() throws {
+    let held = try Fixtures.cases("AgentStatusResponse").filter { $0.name.contains("held here") }
+    let reasons = try held.map {
+      try Fixtures.decode(AgentStatusResponse.self, $0.value).placement?.heldHere
+    }
+    #expect(reasons == [.noMachine, .noSync])
+    let stored = try Fixtures.decode(AgentStatusResponse.self, try #require(held.first).value)
+    #expect(stored.placement?.placement == .alwaysOnMachine, "the stored choice is kept")
+
+    let unknown = try #require(Fixtures.cases("AgentStatusResponse", .invalid).first)
+    let status = try Fixtures.decode(AgentStatusResponse.self, unknown.value)
+    #expect(status.placement?.heldHere?.rawValue == "machine_asleep")
+    #expect(try Self.json(status.placement) == unknown.value["placement"])
+
+    let applies = AgentPlacementStatus(placement: .thisDevice, runsOn: nil, relay: .off)
+    #expect(try Self.json(applies) == ["placement": "this_device", "runsOn": nil, "relay": "off"])
+  }
+
   @Test func aHarnessFromANewerDaemonKeepsItsName() throws {
     let harness = try Fixtures.decode(
       AgentReadiness.Harness.self, ["kind": "claude", "ready": false, "problem": "Not signed in"])

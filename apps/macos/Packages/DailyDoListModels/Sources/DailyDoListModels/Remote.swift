@@ -43,9 +43,21 @@ public struct RelayState: WireEnum {
   public static let notPaired: Self = "not_paired"
 }
 
+/// Why the agent is held on this device despite the stored placement: no always-on machine is set
+/// up, or this device doesn't sync.
+public struct HeldHereReason: WireEnum {
+  public let rawValue: String
+  public init(rawValue: String) { self.rawValue = rawValue }
+  public static let noMachine: Self = "no_machine"
+  public static let noSync: Self = "no_sync"
+}
+
 /// This device's placement and who runs the agent now.
 public struct AgentPlacementStatus: Codable, Hashable, Sendable {
+  /// The stored choice (see `heldHere` for when it can't apply).
   public var placement: AgentPlacement
+  /// Why the agent runs on this device anyway; nil when the stored choice applies.
+  public var heldHere: HeldHereReason?
   /// Who runs the agent now (nil: nobody, or unknown without sync).
   public var runsOn: AgentRunsOn?
   public var relay: RelayState
@@ -53,19 +65,22 @@ public struct AgentPlacementStatus: Codable, Hashable, Sendable {
   public var note: String?
 
   public init(
-    placement: AgentPlacement, runsOn: AgentRunsOn?, relay: RelayState, note: String? = nil
+    placement: AgentPlacement, heldHere: HeldHereReason? = nil, runsOn: AgentRunsOn?,
+    relay: RelayState, note: String? = nil
   ) {
     self.placement = placement
+    self.heldHere = heldHere
     self.runsOn = runsOn
     self.relay = relay
     self.note = note
   }
 
-  enum CodingKeys: String, CodingKey { case placement, runsOn, relay, note }
+  enum CodingKeys: String, CodingKey { case placement, heldHere, runsOn, relay, note }
 
   public func encode(to encoder: Encoder) throws {
     var c = encoder.container(keyedBy: CodingKeys.self)
     try c.encode(placement, forKey: .placement)
+    try c.encodeIfPresent(heldHere, forKey: .heldHere)
     // Required on the wire: null when nobody runs the agent.
     try c.encode(runsOn, forKey: .runsOn)
     try c.encode(relay, forKey: .relay)
