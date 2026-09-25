@@ -527,6 +527,73 @@ const scenarios: Record<string, Scenario> = {
     });
   },
 
+  "PUT deviceSync": async (observed) => {
+    const applied: unknown[] = [];
+    const device = memoryDeviceSettings({ applySync: async (sync) => void applied.push(sync) });
+    const { api } = await setup(observed, { device });
+    const put = (json: unknown, init = {}) => api.call("deviceSync", "PUT", { json, ...init });
+    const token = "t".repeat(43);
+    const saved = await put({ url: "https://sync.example.com", vault: "v_1", token: ` ${token} ` });
+    expect(saved.body).toMatchObject({
+      sync: { url: "https://sync.example.com", vault: "v_1", hasToken: true },
+    });
+    expect(JSON.stringify(saved.body)).not.toContain(token);
+    expect(applied).toEqual([{ kind: "remote", url: "https://sync.example.com", vault: "v_1" }]);
+    expect((await put({ url: "http://127.0.0.1:7332", vault: "v_2" })).body).toMatchObject({
+      sync: { url: "http://127.0.0.1:7332", vault: "v_2", hasToken: true },
+    });
+    for (const bad of [
+      { url: "http://sync.example.com", vault: "v_1" },
+      { url: "https://user:pw@sync.example.com", vault: "v_1" },
+      { url: "https://sync.example.com", vault: "not a vault" },
+      { url: "https://sync.example.com", vault: "v_1", token: "two words" },
+      { url: "https://sync.example.com", vault: "v_1", extra: true },
+    ]) {
+      expect((await put(bad)).body).toMatchObject({ error: "invalid_request" });
+    }
+    const fresh = await setup(observed);
+    expect(
+      (
+        await fresh.api.call("deviceSync", "PUT", {
+          json: { url: "https://s.example", vault: "v" },
+        })
+      ).body,
+    ).toMatchObject({ error: "invalid_request", message: expect.stringMatching(/token/) });
+    expect((await put(undefined, { body: "{" })).body).toMatchObject({ error: "invalid_json" });
+    expect((await put(undefined, { body: TOO_BIG })).status).toBe(413);
+    const locked = await setup(observed, {
+      device: memoryDeviceSettings({ lockedByEnv: ["sync"] }),
+    });
+    expect(
+      (
+        await locked.api.call("deviceSync", "PUT", {
+          json: { url: "https://sync.example.com", vault: "v_1", token },
+        })
+      ).body,
+    ).toMatchObject({ error: "locked_by_env" });
+    expect(applied).toHaveLength(2);
+  },
+
+  "DELETE deviceSync": async (observed) => {
+    const applied: unknown[] = [];
+    const device = memoryDeviceSettings({
+      sync: { kind: "remote", url: "https://sync.example.com", vault: "v_1" },
+      hasToken: true,
+      applySync: async (sync) => void applied.push(sync),
+    });
+    const { api } = await setup(observed, { device });
+    expect((await api.call("deviceSync", "DELETE")).body).toMatchObject({
+      sync: { url: null, vault: null, hasToken: false },
+    });
+    expect(applied).toEqual([{ kind: "none" }]);
+    const locked = await setup(observed, {
+      device: memoryDeviceSettings({ lockedByEnv: ["sync"] }),
+    });
+    expect((await locked.api.call("deviceSync", "DELETE")).body).toMatchObject({
+      error: "locked_by_env",
+    });
+  },
+
   "GET ws": async (observed) => {
     const { api } = await setup(observed);
     expect((await api.call("ws", "GET")).status).toBe(426);
@@ -624,8 +691,6 @@ async function agentEnabled(observed: Observed, method: "PUT" | "POST") {
  * replace each entry with a scenario.
  */
 const NOT_SERVED_YET = new Set([
-  "PUT deviceSync",
-  "DELETE deviceSync",
   "POST pairingCodes",
   "POST pair",
   "GET devices",

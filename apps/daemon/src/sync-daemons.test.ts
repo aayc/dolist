@@ -54,25 +54,27 @@ afterEach(async () => {
   dir.cleanup();
 });
 
-async function startDevice(name: string): Promise<Device> {
+async function startDevice(name: string, options: { sync?: boolean } = {}): Promise<Device> {
   const root = join(dir.path, name);
   const home = join(root, "home");
   mkdirSync(home, { recursive: true, mode: 0o700 });
-  writeFileSync(join(home, "sync-token"), `${vault.token}\n`, { mode: 0o600 });
   writeFileSync(
     join(home, "device.json"),
     JSON.stringify({ id: `dev_${name.toLowerCase()}`, name }),
   );
-  const env = {
+  const env: Record<string, string> = {
     DDL_HOME: home,
     DDL_VAULT: join(root, "vault"),
     DDL_WEB_DIST: join(root, "no-web-build"),
     DDL_AGENT_MODE: "mock",
     DDL_PORT: "0",
     DDL_LOG_LEVEL: "debug",
-    DDL_SYNC_URL: server.url,
-    DDL_SYNC_VAULT: vault.id,
   };
+  if (options.sync !== false) {
+    writeFileSync(join(home, "sync-token"), `${vault.token}\n`, { mode: 0o600 });
+    env.DDL_SYNC_URL = server.url;
+    env.DDL_SYNC_VAULT = vault.id;
+  }
   const config = loadConfig({ env, cwd: root, homedir: root, platform: "linux" });
   const daemon = await startDaemon({
     config,
@@ -150,6 +152,46 @@ describe("two daemons sharing a vault through the sync service", {
     const lines = logger.lines.join("\n");
     expect(lines).toContain("This device runs the agent");
     expect(lines).not.toContain(vault.token);
+  });
+
+  it("set up sync from Settings and turn it off again, live", async () => {
+    const laptop = await startDevice("Laptop", { sync: false });
+    await eventually(async () => expect(await agentProblem(laptop)).toBeUndefined());
+    expect((await get<SyncStatusResponse>(laptop, API_ROUTES.syncStatus)).body.target).toBe("none");
+    const call = (method: string, body?: unknown) =>
+      fetch(`${laptop.daemon.url}${API_ROUTES.deviceSync}`, {
+        method,
+        headers: {
+          authorization: `Bearer ${laptop.apiToken}`,
+          ...(body ? { "content-type": "application/json" } : {}),
+        },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+
+    const put = await call("PUT", { url: server.url, vault: vault.id, token: vault.token });
+    expect(put.status).toBe(200);
+    expect(JSON.stringify(await put.json())).not.toContain(vault.token);
+    await eventually(async () =>
+      expect(server.store.leaseHolder(vault.id, "agent")?.deviceName).toBe("Laptop"),
+    );
+    await eventually(async () => expect(await agentProblem(laptop)).toBeUndefined());
+    const written = await fetch(`${laptop.daemon.url}${API_ROUTES.note("Inbox/synced.md")}`, {
+      method: "PUT",
+      headers: { authorization: `Bearer ${laptop.apiToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ content: "- [ ] reaches the server\n" }),
+    });
+    expect(written.status).toBe(201);
+    await eventually(async () =>
+      expect(server.store.read(vault.id, "Inbox/synced.md")?.content).toBe(
+        "- [ ] reaches the server\n",
+      ),
+    );
+
+    expect((await call("DELETE")).status).toBe(200);
+    expect(server.store.leaseHolder(vault.id, "agent")).toBeNull();
+    expect((await get<SyncStatusResponse>(laptop, API_ROUTES.syncStatus)).body.target).toBe("none");
+    await eventually(async () => expect(await agentProblem(laptop)).toBeUndefined());
+    expect(logger.lines.join("\n")).not.toContain(vault.token);
   });
 
   it("keep the agent off while the sync server can't vouch for them", async () => {
