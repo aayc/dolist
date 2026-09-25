@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListModels
 import DailyDoListUI
 import DailyDoListUITestSupport
 import SwiftUI
@@ -62,6 +63,39 @@ struct TooltipTests {
     for content in found.values {
       #expect(!content.plainText.contains { "⌘⌥⌃⇧".contains($0) }, "\(content.plainText)")
     }
+  }
+
+  @Test func stopShowsTheHostsCommandBesideSendAndInTheHeaderElsewhere() throws {
+    let stop = AgentPanelShortcuts.Command(id: "agent.stop", keys: KeyShortcut("."))
+    func stops(tab: ThreadTab) -> [TooltipAnchorView] {
+      anchors(
+        ThreadView(store: store, threadId: SampleData.coffeeThreadId, tab: tab, stop: stop)
+          .agentReferenceDate(SnapshotTests.now),
+        size: CGSize(width: 440, height: 700)
+      ).filter { $0.tooltipContent()?.lines.first?.text == "Stop" }
+    }
+    let inChat = stops(tab: .chat)
+    #expect(inChat.count == 1, "only the chat bar's")
+    let button = try #require(inChat.first)
+    #expect(button.command == "agent.stop")
+    #expect(button.tooltipContent()?.lines.first?.keys == KeyShortcut("."))
+    let inArtifacts = stops(tab: .artifacts)
+    #expect(inArtifacts.count == 1, "the header's")
+    #expect(inArtifacts.first?.command == "agent.stop")
+  }
+
+  @Test func messagesAndCodeBlocksOfferCopy() {
+    let found = tooltips(
+      anchors(
+        VStack {
+          TextMessageView(
+            message: TextMessage(
+              id: "m", author: "orchestrator", createdAt: 0, role: .agent,
+              text: "Run this:\n\n```sh\nls -la\n```"),
+            now: SnapshotTests.now)
+        }, size: CGSize(width: 400, height: 240)))
+    #expect(found["Copy message"] != nil)
+    #expect(found["Copy code"] != nil)
   }
 
   @Test func sendExplainsReturnAndShiftReturn() {

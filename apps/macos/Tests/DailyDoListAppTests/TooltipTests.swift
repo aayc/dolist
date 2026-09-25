@@ -75,7 +75,7 @@ struct TooltipTests {
       "Show sidebar": .toggleSidebar, "Previous daily note": .previousDaily,
       "Close tab": .closeTab, "Open agent inbox": .agentInbox,
       "Hide agent panel": .toggleAgentPanel, "Back to inbox": .agentInbox,
-      "Show agent panel": .toggleAgentPanel,
+      "Show agent panel": .toggleAgentPanel, "Stop": .stopTask,
     ]
     if workspace.tabs.canGoBack { expected["Back"] = .back }
     for (label, id) in expected {

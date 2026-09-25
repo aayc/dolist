@@ -4,14 +4,28 @@ import SwiftUI
 
 /// The host's keyboard shortcuts for what the agent panel's buttons do (their tooltips show them).
 public struct AgentPanelShortcuts: Hashable, Sendable {
+  /// A command of the host: its id (tests match the keys against the host's catalog) and keys.
+  public struct Command: Hashable, Sendable {
+    public var id: String?
+    public var keys: KeyShortcut?
+
+    public init(id: String? = nil, keys: KeyShortcut? = nil) {
+      self.id = id
+      self.keys = keys
+    }
+  }
+
   /// Hides the panel (the header's hide button).
   public var hidePanel: KeyShortcut?
   /// Shows the inbox (a thread's back button).
   public var inbox: KeyShortcut?
+  /// Stops the open thread's agent (the chat bar's Stop button).
+  public var stop: Command
 
-  public init(hidePanel: KeyShortcut? = nil, inbox: KeyShortcut? = nil) {
+  public init(hidePanel: KeyShortcut? = nil, inbox: KeyShortcut? = nil, stop: Command = Command()) {
     self.hidePanel = hidePanel
     self.inbox = inbox
+    self.stop = stop
   }
 }
 
@@ -59,7 +73,8 @@ public struct AgentPanel: View {
         if let threadId = selectedThreadId {
           ThreadView(
             store: store, threadId: threadId, onShowInNote: onShowInNote,
-            onClose: onHide == nil ? onClose ?? { selectedThreadId = nil } : nil
+            onClose: onHide == nil ? onClose ?? { selectedThreadId = nil } : nil,
+            stop: shortcuts.stop
           )
           .id(threadId)
         } else {

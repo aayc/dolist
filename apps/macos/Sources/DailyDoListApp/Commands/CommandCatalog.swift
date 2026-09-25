@@ -189,6 +189,15 @@ struct CommandCatalog {
           Task { await model.setAgentEnabled(!status.enabled) }
         }),
       AppCommand(
+        .stopTask, "Stop Task", palette: "Stop the agent's work on the open task",
+        enabled: { Self.stoppableThread(model: model) != nil },
+        perform: {
+          guard let agent = model.agent, let threadId = Self.stoppableThread(model: model) else {
+            return
+          }
+          Task { await agent.cancelThread(threadId) }
+        }),
+      AppCommand(
         .openInbox, "Open Inbox", palette: "Show agent inbox", inPalette: false, enabled: ready
       ) {
         ui.showInbox()
@@ -216,6 +225,15 @@ struct CommandCatalog {
   }
 
   // MARK: - Helpers
+
+  /// The thread open in the agent panel, while its agent is at work.
+  static func stoppableThread(model: AppModel) -> String? {
+    guard model.phase == .ready, model.ui.inspectorPresented,
+      let threadId = model.ui.selectedThreadId,
+      model.agent?.threadStatus(threadId)?.isActive == true
+    else { return nil }
+    return threadId
+  }
 
   /// ⌘W: closes the active tab in the main window, else the key window (Settings, a closed tab
   /// strip).

@@ -59,6 +59,9 @@ public final class AgentStore {
   public internal(set) var decidingApprovalIds: Set<String> = []
   /// Optimistic user messages whose request hasn't finished.
   public internal(set) var sendingMessageIds: Set<String> = []
+  /// Optimistic user messages the daemon didn't take, with why; they stay in their thread with a
+  /// retry.
+  public internal(set) var unsentMessages: [String: String] = [:]
   /// Threads being fetched.
   public internal(set) var loadingThreadIds: Set<String> = []
   /// Threads whose last fetch failed (the thread view offers a retry).
@@ -134,8 +137,22 @@ public final class AgentStore {
       break
     }
     mutate { $0.apply(event, now: now().epochMillis) }
-    if case .threadMessage(let event) = event, case .artifact(let message) = event.message {
-      refetchIfArtifactMissing(threadId: event.threadId, artifactId: message.artifactId)
+    if case .threadMessage(let event) = event {
+      if case .artifact(let message) = event.message {
+        refetchIfArtifactMissing(threadId: event.threadId, artifactId: message.artifactId)
+      }
+      if case .text(let text) = event.message, text.role == .user {
+        forgetDeliveredUnsentMessages()
+      }
+    }
+  }
+
+  /// Forgets unsent messages the daemon's copy replaced (the request failed after reaching it).
+  func forgetDeliveredUnsentMessages() {
+    guard !unsentMessages.isEmpty else { return }
+    let waiting = Set(state.optimisticMessages.values.joined())
+    for id in unsentMessages.keys where !waiting.contains(id) {
+      unsentMessages[id] = nil
     }
   }
 
@@ -199,6 +216,13 @@ public final class AgentStore {
   /// The loaded thread, if it was fetched.
   public func thread(_ id: String) -> AgentThread? {
     loadedThreads[id]
+  }
+
+  /// Daemon ids of the user's messages → the optimistic ids they replaced (chat rows keep their
+  /// identity when the daemon's copy arrives).
+  var messageAliases: [String: String] {
+    _ = loadedThreads
+    return state.optimisticReplacements
   }
 
   /// The best known title of a thread.

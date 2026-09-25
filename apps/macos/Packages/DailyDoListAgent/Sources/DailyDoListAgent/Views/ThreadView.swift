@@ -42,12 +42,14 @@ enum ThreadTab: String, CaseIterable, Hashable, Identifiable {
 }
 
 /// One task's thread: header with Stop / Retry / Show in Note / Close, and Chat, Artifacts,
-/// Browser and Computer tabs. Loads the thread and marks it read while on screen.
+/// Browser and Computer tabs. Loads the thread and marks it read while on screen. In the Chat tab,
+/// Stop sits beside Send in the chat bar instead of the header.
 public struct ThreadView: View {
   let store: AgentStore
   let threadId: String
   let onShowInNote: ((TaskLocation) -> Void)?
   let onClose: (() -> Void)?
+  let stop: AgentPanelShortcuts.Command
   @State private var tab: ThreadTab
   @State private var openArtifact: ArtifactSelection?
   /// Inactive while the app is in the background: messages aren't "read" then.
@@ -59,23 +61,26 @@ public struct ThreadView: View {
     var id: String { "\(threadId)/\(artifactId)" }
   }
 
+  /// - Parameter stop: the host's Stop command (its shortcut shows in the Stop buttons' tooltips).
   public init(
     store: AgentStore, threadId: String, onShowInNote: ((TaskLocation) -> Void)? = nil,
-    onClose: (() -> Void)? = nil
+    onClose: (() -> Void)? = nil, stop: AgentPanelShortcuts.Command = .init()
   ) {
     self.init(
-      store: store, threadId: threadId, tab: .chat, onShowInNote: onShowInNote, onClose: onClose)
+      store: store, threadId: threadId, tab: .chat, onShowInNote: onShowInNote, onClose: onClose,
+      stop: stop)
   }
 
   init(
     store: AgentStore, threadId: String, tab: ThreadTab,
     onShowInNote: ((TaskLocation) -> Void)? = nil,
-    onClose: (() -> Void)? = nil
+    onClose: (() -> Void)? = nil, stop: AgentPanelShortcuts.Command = .init()
   ) {
     self.store = store
     self.threadId = threadId
     self.onShowInNote = onShowInNote
     self.onClose = onClose
+    self.stop = stop
     self._tab = State(initialValue: tab)
   }
 
@@ -87,7 +92,7 @@ public struct ThreadView: View {
     let selected = tabs.contains(tab) ? tab : .chat
     let artifactCount = thread?.artifacts.count ?? summary?.artifactCount ?? 0
     VStack(spacing: 0) {
-      header(thread: thread, summary: summary)
+      header(thread: thread, summary: summary, showsStop: thread == nil || selected != .chat)
       ThreadTabBar(tabs: tabs, selection: $tab, artifactCount: artifactCount)
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
@@ -111,7 +116,7 @@ public struct ThreadView: View {
     }
   }
 
-  private func header(thread: AgentThread?, summary: ThreadSummary?) -> some View {
+  private func header(thread: AgentThread?, summary: ThreadSummary?, showsStop: Bool) -> some View {
     let status = thread?.status ?? summary?.status ?? .idle
     let notePath = thread?.notePath ?? summary?.notePath
     let taskId = thread?.taskId ?? summary?.taskId
@@ -119,7 +124,9 @@ public struct ThreadView: View {
       title: thread?.title ?? summary?.title ?? "Task",
       status: status,
       notePath: notePath,
-      onStop: status.isActive ? { Task { await store.cancelThread(threadId) } } : nil,
+      stop: stop,
+      onStop: status.isActive && showsStop
+        ? { Task { await store.cancelThread(threadId) } } : nil,
       onRetry: [.failed, .cancelled, .done].contains(status)
         ? { Task { await store.retryThread(threadId) } } : nil,
       onShowInNote: notePath.flatMap { path in
@@ -140,7 +147,7 @@ public struct ThreadView: View {
     if let thread {
       switch tab {
       case .chat:
-        ChatView(store: store, thread: thread) { artifactId in
+        ChatView(store: store, thread: thread, stop: stop) { artifactId in
           openArtifact = ArtifactSelection(threadId: thread.id, artifactId: artifactId)
         }
       case .artifacts:
@@ -172,6 +179,7 @@ struct ThreadHeader: View {
   let title: String
   let status: TaskAgentStatus
   let notePath: String?
+  var stop = AgentPanelShortcuts.Command()
   let onStop: (() -> Void)?
   let onRetry: (() -> Void)?
   let onShowInNote: (() -> Void)?
@@ -187,7 +195,7 @@ struct ThreadHeader: View {
           .tooltip(
             ifTruncated: title, font: .systemFont(ofSize: 15, weight: .semibold), lineLimit: 2)
         HStack(spacing: 8) {
-          StatusChip(status: status)
+          StatusChip(status: status, pulses: status.isRunning)
           if let notePath {
             HStack(spacing: 4) {
               Image(systemName: "doc.text")
@@ -204,7 +212,10 @@ struct ThreadHeader: View {
       }
       Spacer(minLength: 8)
       HStack(spacing: 0) {
-        if let onStop { IconButton("stop.circle", label: "Stop", action: onStop) }
+        if let onStop {
+          IconButton(
+            "stop.circle", label: "Stop", keys: stop.keys, command: stop.id, action: onStop)
+        }
         if let onRetry { IconButton("arrow.clockwise", label: "Retry", action: onRetry) }
         if let onShowInNote {
           IconButton("arrow.up.forward.square", label: "Show task in note", action: onShowInNote)

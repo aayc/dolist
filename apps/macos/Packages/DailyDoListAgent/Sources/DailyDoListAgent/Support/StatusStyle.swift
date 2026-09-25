@@ -35,6 +35,9 @@ extension TaskAgentStatus {
   /// The orchestrator is thinking: the badge pulses.
   public var pulses: Bool { self == .triaging }
 
+  /// An agent is at work (the thread header's status chip pulses).
+  public var isRunning: Bool { self == .triaging || self == .working }
+
   /// SF Symbol for the status.
   public var systemImage: String {
     switch self {

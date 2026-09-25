@@ -16,6 +16,18 @@ public enum Tone: String, CaseIterable, Hashable, Sendable {
     }
   }
 
+  /// The tone for AppKit and Core Animation.
+  var nsColor: NSColor {
+    switch self {
+    case .accent: AgentPalette.accent
+    case .faint: AgentPalette.faintText
+    case .info: AgentPalette.info
+    case .warning: AgentPalette.warning
+    case .success: AgentPalette.success
+    case .danger: AgentPalette.danger
+    }
+  }
+
   /// Text and icons drawn on a fill of this tone: the dark palette's status tones are too light
   /// for white.
   public var onFillColor: Color {
@@ -31,10 +43,10 @@ public enum AgentTheme {
   public static let accent = Color(nsColor: AgentPalette.accent)
   public static let accentStrong = Color(nsColor: AgentPalette.accentStrong)
   public static let accentSoft = Color(nsColor: AgentPalette.accentSoft)
-  public static let success = Color(light: 0x0F9D58, dark: 0x34D399)
-  public static let warning = Color(light: 0xB7791F, dark: 0xFBBF24)
-  public static let danger = Color(light: 0xD92D20, dark: 0xF87171)
-  public static let info = Color(light: 0x0891B2, dark: 0x22D3EE)
+  public static let success = Color(nsColor: AgentPalette.success)
+  public static let warning = Color(nsColor: AgentPalette.warning)
+  public static let danger = Color(nsColor: AgentPalette.danger)
+  public static let info = Color(nsColor: AgentPalette.info)
   public static let faint = Color(nsColor: AgentPalette.faintText)
   static let text = Color(nsColor: AgentPalette.text)
   static let mutedText = Color(nsColor: AgentPalette.mutedText)
@@ -60,6 +72,10 @@ enum AgentPalette {
   static let text = NSColor(light: 0x0B1220, dark: 0xF2F5F9)
   static let mutedText = NSColor(light: 0x475467, dark: 0xB4BDC9)
   static let faintText = NSColor(light: 0x8492A6, dark: 0x7A8594)
+  static let success = NSColor(light: 0x0F9D58, dark: 0x34D399)
+  static let warning = NSColor(light: 0xB7791F, dark: 0xFBBF24)
+  static let danger = NSColor(light: 0xD92D20, dark: 0xF87171)
+  static let info = NSColor(light: 0x0891B2, dark: 0x22D3EE)
 }
 
 extension Color {

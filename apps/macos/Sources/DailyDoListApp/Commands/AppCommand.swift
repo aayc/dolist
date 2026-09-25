@@ -48,6 +48,7 @@ enum CommandID: String, CaseIterable, Sendable {
   case resetFontSize = "font.reset"
   case toggleTheme = "theme.toggle"
   case toggleAgent = "agent.toggle"
+  case stopTask = "agent.stop"
   case openInbox = "agent.openInbox"
   case setUpComputerUse = "computerUse.setUp"
   case restartDaemon = "daemon.restart"
@@ -101,6 +102,7 @@ enum CommandID: String, CaseIterable, Sendable {
     case .toggleSidebar: Shortcut("s", [.command, .control])
     case .toggleAgentPanel: Shortcut("\\")
     case .agentInbox: Shortcut("a", [.command, .shift])
+    case .stopTask: Shortcut(".")
     case .search: Shortcut("f", [.command, .shift])
     case .commandPalette: Shortcut("p")
     case .increaseFontSize: Shortcut("+")

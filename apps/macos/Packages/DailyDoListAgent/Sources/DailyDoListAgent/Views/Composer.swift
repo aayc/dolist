@@ -2,51 +2,80 @@ import DailyDoListModels
 import DailyDoListUI
 import SwiftUI
 
-/// Reply box at the bottom of the chat. Disabled, with the reason, while the agent can't act.
+/// The chat bar: an input that grows from one line to eight (then scrolls), Send, and Stop while
+/// the agent works. A sent message shows in the thread at once and the input clears, keeping the
+/// focus. The placeholder says what a reply does now. Disabled, with the reason, while the agent
+/// can't act.
 struct Composer: View {
-  let store: AgentStore
-  let threadId: String
-  @State private var text = ""
-  @State private var height: CGFloat = 22
-  @State private var sending = false
+  @State private var model: ComposerModel
+  let stop: AgentPanelShortcuts.Command
+  @State private var height = ComposerMetrics.minHeight
+  @State private var isFocused = false
+  @State private var focusRequest = 0
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  init(store: AgentStore, threadId: String, stop: AgentPanelShortcuts.Command = .init()) {
+    self.init(model: ComposerModel(store: store, threadId: threadId), stop: stop)
+  }
+
+  init(model: ComposerModel, stop: AgentPanelShortcuts.Command = .init()) {
+    self._model = State(initialValue: model)
+    self.stop = stop
+  }
 
   var body: some View {
-    let unavailable = store.unavailableReason
-    let canSend =
-      unavailable == nil && !sending
-      && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    VStack(alignment: .leading, spacing: 4) {
-      HStack(alignment: .bottom, spacing: 8) {
+    let unavailable = model.unavailableReason
+    VStack(alignment: .leading, spacing: 6) {
+      HStack(alignment: .bottom, spacing: 6) {
         ZStack(alignment: .topLeading) {
-          if text.isEmpty {
-            Text(
-              unavailable == nil
-                ? "Reply to the agent…" : "Replies are off while the agent can't act"
-            )
-            .foregroundStyle(AgentTheme.faint)
-            .padding(.leading, 7)
-            .padding(.top, 3)
-            .allowsHitTesting(false)
+          if model.text.isEmpty {
+            Text(verbatim: model.placeholder)
+              .font(Font(ComposerMetrics.font))
+              .foregroundStyle(AgentTheme.faint)
+              .lineLimit(1)
+              .padding(.leading, 7)
+              .padding(.top, ComposerMetrics.inset.height)
+              .allowsHitTesting(false)
+              .transition(.opacity)
+              .id(model.placeholder)
           }
           ComposerTextView(
-            text: $text, height: $height, isEditable: unavailable == nil, onSubmit: send
+            text: $model.text, height: $height, isFocused: $isFocused,
+            isEditable: unavailable == nil, focusRequest: focusRequest, onSubmit: { model.send() }
           )
           .frame(height: height)
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 5)
-        .background(RoundedRectangle(cornerRadius: 8).fill(AgentTheme.cardBackground))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(AgentTheme.border))
-        Button(action: send) {
-          Image(systemName: "arrow.up.circle.fill")
-            .font(.system(size: 22))
+        .padding(.vertical, 3)
+        HStack(spacing: 6) {
+          if model.canStop {
+            StopButton(isStopping: model.isStopping, command: stop) { model.stop() }
+              .transition(
+                reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
+          }
+          SendButton(isEnabled: model.canSend) { model.send() }
         }
-        .buttonStyle(SendButtonStyle())
-        .tooltip(Self.sendTooltip, accessibility: .keysOnly)
-        .accessibilityLabel("Send")
-        .disabled(!canSend)
-        .padding(.bottom, 3)
+        .padding(.bottom, 1)
       }
+      .padding(.leading, 6)
+      .padding(.trailing, 5)
+      .padding(.vertical, 4)
+      .background(
+        RoundedRectangle(cornerRadius: 12, style: .continuous).fill(AgentTheme.cardBackground)
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+          .strokeBorder(isFocused ? AgentTheme.accent.opacity(0.7) : AgentTheme.border)
+      )
+      .shadow(
+        color: isFocused ? AgentTheme.accent.opacity(0.28) : .black.opacity(0.12),
+        radius: isFocused ? 7 : 3, y: isFocused ? 0 : 1
+      )
+      .contentShape(Rectangle())
+      .onTapGesture { focusRequest += 1 }
+      .animation(.easeOut(duration: 0.14), value: isFocused)
+      .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: height)
+      .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: model.canStop)
+      .animation(.easeOut(duration: 0.15), value: model.placeholder)
       if let unavailable {
         Label(unavailable, systemImage: "pause.circle")
           .font(.caption)
@@ -62,43 +91,91 @@ struct Composer: View {
   static let sendTooltip = TooltipContent(lines: [
     .init("Send", keys: .returnKey), .init("New line", keys: .shiftReturn),
   ])
+}
 
-  private func send() {
-    let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !message.isEmpty, !sending, store.isAgentAvailable else { return }
-    sending = true
-    let draft = text
-    text = ""
-    Task {
-      let ok = await store.postMessage(threadId: threadId, text: message)
-      sending = false
-      if !ok && text.isEmpty { text = draft }
+/// The send arrow in an accent circle: a shade stronger under the pointer, a touch smaller while
+/// pressed, a quiet gray while there's nothing to send.
+private struct SendButton: View {
+  let isEnabled: Bool
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      Image(systemName: "arrow.up")
+        .font(.system(size: 13, weight: .bold))
     }
+    .buttonStyle(ComposerButtonStyle(kind: .send))
+    .tooltip(Composer.sendTooltip, accessibility: .keysOnly)
+    .accessibilityLabel("Send")
+    .disabled(!isEnabled)
   }
 }
 
-/// The send arrow: the accent, a shade stronger under the pointer, a touch smaller while pressed,
-/// 40% while there's nothing to send.
-private struct SendButtonStyle: ButtonStyle {
+/// Stops the agent: a square in a quiet circle, with the host's Stop shortcut.
+private struct StopButton: View {
+  let isStopping: Bool
+  let command: AgentPanelShortcuts.Command
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      if isStopping {
+        ProgressView().controlSize(.mini)
+      } else {
+        RoundedRectangle(cornerRadius: 2.5, style: .continuous).frame(width: 9, height: 9)
+      }
+    }
+    .buttonStyle(ComposerButtonStyle(kind: .stop))
+    .tooltip("Stop", keys: command.keys, command: command.id, accessibility: .keysOnly)
+    .accessibilityLabel("Stop")
+    .disabled(isStopping)
+  }
+}
+
+/// The composer's round buttons.
+private struct ComposerButtonStyle: ButtonStyle {
+  enum Kind { case send, stop }
+  let kind: Kind
+
   func makeBody(configuration: Configuration) -> some View {
-    Arrow(configuration: configuration)
+    Face(configuration: configuration, kind: kind)
   }
 
-  private struct Arrow: View {
+  private struct Face: View {
     let configuration: Configuration
+    let kind: Kind
     @State private var hovering = false
     @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
       configuration.label
-        .foregroundStyle(hovering && isEnabled ? AgentTheme.accentStrong : AgentTheme.accent)
-        .scaleEffect(configuration.isPressed && isEnabled ? 0.96 : 1)
-        .opacity(isEnabled ? 1 : 0.4)
+        .foregroundStyle(foreground)
+        .frame(width: 26, height: 26)
+        .background(Circle().fill(fill))
         .contentShape(Circle())
+        .scaleEffect(configuration.isPressed && isEnabled ? 0.92 : 1)
         .onHover { hovering = $0 }
         .pointingHandCursor()
         .animation(.easeOut(duration: 0.11), value: hovering)
         .animation(.easeOut(duration: 0.06), value: configuration.isPressed)
+        .animation(.easeOut(duration: 0.15), value: isEnabled)
+    }
+
+    private var fill: Color {
+      switch kind {
+      case .send:
+        guard isEnabled else { return AgentTheme.hoverFill }
+        return hovering || configuration.isPressed ? AgentTheme.accentStrong : AgentTheme.accent
+      case .stop:
+        return hovering || configuration.isPressed ? AgentTheme.selectedFill : AgentTheme.hoverFill
+      }
+    }
+
+    private var foreground: Color {
+      switch kind {
+      case .send: isEnabled ? .white : AgentTheme.faint
+      case .stop: AgentTheme.text
+      }
     }
   }
 }

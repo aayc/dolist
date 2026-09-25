@@ -3,20 +3,34 @@ import DailyDoListUI
 import SwiftUI
 
 /// What a message row needs besides the message (resolved by the chat, compared for updates).
-struct MessageContext: Equatable, Sendable {
+struct MessageContext: Equatable {
   var approval: ApprovalRequest?
   var isDeciding = false
   var artifact: ArtifactMeta?
   var isSending = false
+  /// Why the user's message didn't go out (it offers a retry).
+  var unsent: String?
+  /// How agent text shows: whole, or typing out.
+  var reveal: ChatReveal.Presentation = .whole
+  /// A pending approval that just arrived (it draws attention once).
+  var announces = false
   var now: Date
+}
+
+/// What a message row can do.
+struct MessageActions {
+  var decide: (String, ApprovalDecision, ApprovalScope?, String?) -> Void = { _, _, _, _ in }
+  var openArtifact: (String) -> Void = { _ in }
+  var retry: (String) -> Void = { _ in }
+  var discard: (String) -> Void = { _ in }
+  var announced: (String) -> Void = { _ in }
 }
 
 /// One entry of a thread. Equatable so streaming into one message doesn't re-render the others.
 struct MessageRow: View, Equatable {
   let message: ThreadMessage
   let context: MessageContext
-  let onDecide: (String, ApprovalDecision, ApprovalScope?, String?) -> Void
-  let onOpenArtifact: (String) -> Void
+  var actions = MessageActions()
 
   nonisolated static func == (a: MessageRow, b: MessageRow) -> Bool {
     a.message == b.message && a.context == b.context
@@ -25,19 +39,25 @@ struct MessageRow: View, Equatable {
   var body: some View {
     switch message {
     case .text(let text):
-      TextMessageView(message: text, isSending: context.isSending, now: context.now)
+      TextMessageView(
+        message: text, isSending: context.isSending, unsent: context.unsent,
+        reveal: context.reveal, now: context.now,
+        onRetry: { actions.retry(text.id) }, onDiscard: { actions.discard(text.id) })
     case .toolCall(let call):
       ToolCallRow(call: call)
     case .approval(let item):
       if let approval = context.approval {
-        ApprovalCard(approval: approval, isDeciding: context.isDeciding) { decision, scope, note in
-          onDecide(item.approvalId, decision, scope, note)
-        }
+        ApprovalCard(
+          approval: approval, isDeciding: context.isDeciding, announces: context.announces,
+          onAnnounced: { actions.announced(item.id) },
+          onDecide: { decision, scope, note in
+            actions.decide(item.approvalId, decision, scope, note)
+          })
       } else {
         ApprovalPlaceholder()
       }
     case .artifact(let item):
-      ArtifactRow(meta: context.artifact) { onOpenArtifact(item.artifactId) }
+      ArtifactRow(meta: context.artifact) { actions.openArtifact(item.artifactId) }
     case .status(let status):
       StatusDivider(message: status, now: context.now)
     case .unknown(let kind, _, _):
@@ -48,11 +68,17 @@ struct MessageRow: View, Equatable {
   }
 }
 
-/// Agent text (markdown, author and time), the user's own replies (bubbles), system notes.
+/// Agent text (markdown, typing out when it arrives live), the user's own replies (bubbles),
+/// system notes. Under the pointer, a message shows its time and a copy button.
 struct TextMessageView: View {
   let message: TextMessage
   var isSending = false
+  var unsent: String?
+  var reveal: ChatReveal.Presentation = .whole
   let now: Date
+  var onRetry: () -> Void = {}
+  var onDiscard: () -> Void = {}
+  @State private var hovering = false
 
   var body: some View {
     switch message.role {
@@ -71,14 +97,19 @@ struct TextMessageView: View {
           .font(.caption.weight(.semibold))
           .foregroundStyle(AgentTheme.mutedText)
         Text(verbatim: time).font(.caption).foregroundStyle(AgentTheme.faint)
+          .opacity(hovering ? 1 : 0)
       }
-      if message.streaming == true {
-        StreamingText(text: message.text)
-      } else {
-        MarkdownView(source: message.text)
-      }
+      AgentText(message: message, reveal: reveal)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+    .overlay(alignment: .topTrailing) {
+      CopyButton(text: message.text, label: "Copy message")
+        .offset(y: -5)
+        .opacity(hovering ? 1 : 0)
+    }
+    .contentShape(Rectangle())
+    .onHover { hovering = $0 }
+    .animation(.easeOut(duration: 0.12), value: hovering)
     .accessibilityElement(children: .combine)
   }
 
@@ -88,8 +119,8 @@ struct TextMessageView: View {
         if isSending {
           ProgressView().controlSize(.mini)
           Text("Sending…")
-        } else {
-          Text(verbatim: time).foregroundStyle(AgentTheme.faint)
+        } else if unsent == nil {
+          Text(verbatim: time).foregroundStyle(AgentTheme.faint).opacity(hovering ? 1 : 0)
         }
         Text("You").fontWeight(.semibold)
       }
@@ -101,11 +132,28 @@ struct TextMessageView: View {
         .padding(.horizontal, 11)
         .padding(.vertical, 7)
         .background(RoundedRectangle(cornerRadius: 12).fill(AgentTheme.accent.opacity(0.15)))
+        .overlay(
+          RoundedRectangle(cornerRadius: 12)
+            .strokeBorder(AgentTheme.danger.opacity(unsent == nil ? 0 : 0.6))
+        )
+        .overlay(alignment: .leading) {
+          CopyButton(text: message.text, label: "Copy message")
+            .offset(x: -30)
+            .opacity(hovering && !isSending ? 1 : 0)
+        }
+        .opacity(isSending ? 0.7 : 1)
+      if let unsent {
+        UnsentBar(reason: unsent, onRetry: onRetry, onDiscard: onDiscard)
+          .transition(.opacity)
+      }
     }
     .frame(maxWidth: .infinity, alignment: .trailing)
     .padding(.leading, 36)
-    .opacity(isSending ? 0.7 : 1)
-    .accessibilityElement(children: .combine)
+    .contentShape(Rectangle())
+    .onHover { hovering = $0 }
+    .animation(.easeOut(duration: 0.12), value: hovering)
+    .animation(.easeOut(duration: 0.15), value: unsent)
+    .accessibilityElement(children: .contain)
   }
 
   private var systemNote: some View {
@@ -120,21 +168,53 @@ struct TextMessageView: View {
   }
 }
 
-/// Text still streaming in: inline markdown only (partial blocks render badly) and a caret.
-private struct StreamingText: View {
-  let text: String
+/// An agent message's body. Typing out, it re-renders on every frame of the reveal: only this
+/// view reads the revealed prefix, so the message's header and the rest of the chat stay put.
+private struct AgentText: View {
+  let message: TextMessage
+  let reveal: ChatReveal.Presentation
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
-    TimelineView(.periodic(from: .now, by: 0.55)) { context in
-      let caretOn = Int(context.date.timeIntervalSinceReferenceDate / 0.55) % 2 == 0
-      (Text(MarkdownRenderer.inline(text))
-        + Text(verbatim: " ▍").foregroundStyle(AgentTheme.accent.opacity(caretOn ? 1 : 0.25)))
-        .fixedSize(horizontal: false, vertical: true)
-        .textSelection(.enabled)
+    let (source, typing): (String, Bool) =
+      switch reveal {
+      case .whole: (message.text, message.streaming == true)
+      case .pending: ("", true)
+      case .revealing(let entry): (entry.visible, entry.isActive)
+      }
+    MarkdownView(source: source, caret: typing ? CaretMode(reduceMotion: reduceMotion) : nil)
+      .accessibilityValue(typing ? "Still writing" : "")
+  }
+}
+
+/// Under a message that didn't go out: why (in the tooltip), Retry and Remove.
+private struct UnsentBar: View {
+  let reason: String
+  let onRetry: () -> Void
+  let onDiscard: () -> Void
+
+  var body: some View {
+    HStack(spacing: 4) {
+      Label("Not sent", systemImage: "exclamationmark.circle.fill")
+        .labelStyle(UnsentLabelStyle())
+        .tooltip("Couldn't send your message", detail: TooltipContent.sentence(reason))
+      Button("Retry", action: onRetry)
+        .buttonStyle(ChromeButtonStyle(horizontalPadding: 6, verticalPadding: 2))
+        .foregroundStyle(AgentTheme.accent)
+      Button("Remove", action: onDiscard)
+        .buttonStyle(ChromeButtonStyle(horizontalPadding: 6, verticalPadding: 2))
+        .foregroundStyle(AgentTheme.mutedText)
     }
-    .environment(\.openURL, LinkPolicy.openURLAction)
-    .accessibilityLabel(text)
-    .accessibilityValue("Still writing")
+    .font(.caption.weight(.medium))
+  }
+
+  private struct UnsentLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+      HStack(spacing: 4) {
+        configuration.icon.foregroundStyle(AgentTheme.danger)
+        configuration.title.foregroundStyle(AgentTheme.danger)
+      }
+    }
   }
 }
 

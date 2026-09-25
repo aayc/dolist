@@ -25,6 +25,9 @@ struct AgentState: Equatable, Sendable {
   var deltaPlaceholders: Set<MessageKey> = []
   /// Ids of optimistic user messages awaiting the daemon's copy, oldest first, by thread.
   var optimisticMessages: [String: [String]] = [:]
+  /// The optimistic message each daemon copy replaced (daemon id → local id), so the chat keeps
+  /// showing the same row.
+  var optimisticReplacements: [String: String] = [:]
 
   /// Which published fields a mutation touched (so the store only notifies those observers).
   struct Changes: OptionSet, Sendable {

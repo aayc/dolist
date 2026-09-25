@@ -32,7 +32,7 @@ extension AgentStore {
       let response = try await client.thread(id)
       failedThreadIds.remove(id)
       let buffered = loadBuffers[id] ?? []
-      let inFlight = sendingMessageIds
+      let inFlight = sendingMessageIds.union(unsentMessages.keys)
       mutate { state in
         var changes = state.applyThreadResponse(response, inFlight: inFlight)
         for event in buffered {
@@ -40,6 +40,7 @@ extension AgentStore {
         }
         return changes
       }
+      forgetDeliveredUnsentMessages()
     } catch {
       failedThreadIds.insert(id)
       report(error, title: "Couldn't load the thread")
@@ -95,24 +96,64 @@ extension AgentStore {
   // MARK: Messages
 
   /// Sends a reply. The message shows immediately (author "you") and is replaced by the
-  /// daemon's copy when it arrives; it's removed again if the request fails.
-  /// - Returns: whether the daemon accepted it (keep the composer text when it didn't).
+  /// daemon's copy when it arrives. If the request fails it stays, marked unsent
+  /// (`unsentMessages`), for `retryMessage` or `discardMessage`; a thread that isn't open gets a
+  /// toast instead.
+  /// - Returns: whether the daemon accepted it.
   @discardableResult
   public func postMessage(threadId: String, text: String) async -> Bool {
+    await enqueueMessage(threadId: threadId, text: text)?.value ?? false
+  }
+
+  /// `postMessage`, with the message in the thread by the time this returns (the composer clears
+  /// its input in the same update). Nil for a blank message.
+  func enqueueMessage(threadId: String, text: String) -> Task<Bool, Never>? {
     let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !body.isEmpty else { return false }
+    guard !body.isEmpty else { return nil }
     let localId = "local-\(UUID().uuidString.lowercased())"
     let message = TextMessage(
       id: localId, author: "you", createdAt: now().epochMillis, role: .user, text: body)
-    mutate { $0.insertOptimisticMessage(message, threadId: threadId) }
+    let shown = !mutate { $0.insertOptimisticMessage(message, threadId: threadId) }.isEmpty
     sendingMessageIds.insert(localId)
-    defer { sendingMessageIds.remove(localId) }
+    return Task { await self.deliver(body, id: localId, threadId: threadId, shown: shown) }
+  }
+
+  /// Sends an unsent message again.
+  @discardableResult
+  public func retryMessage(_ id: String, threadId: String) async -> Bool {
+    guard unsentMessages[id] != nil, !sendingMessageIds.contains(id),
+      case .text(let message)? = state.loadedThreads[threadId]?.messages.first(where: {
+        $0.id == id
+      })
+    else { return false }
+    unsentMessages[id] = nil
+    sendingMessageIds.insert(id)
+    return await deliver(message.text, id: id, threadId: threadId, shown: true)
+  }
+
+  /// Removes an unsent message.
+  public func discardMessage(_ id: String, threadId: String) {
+    guard unsentMessages[id] != nil, !sendingMessageIds.contains(id) else { return }
+    unsentMessages[id] = nil
+    mutate { $0.removeOptimisticMessage(id: id, threadId: threadId) }
+  }
+
+  /// Posts a message already marked sending.
+  private func deliver(_ text: String, id: String, threadId: String, shown: Bool) async -> Bool {
+    defer { sendingMessageIds.remove(id) }
     do {
-      _ = try await client.postMessage(threadId: threadId, text: body)
+      _ = try await client.postMessage(threadId: threadId, text: text)
       return true
     } catch {
-      mutate { $0.removeOptimisticMessage(id: localId, threadId: threadId) }
-      report(error, title: "Couldn't send your message")
+      let cancelled: Bool =
+        if case DaemonClientError.cancelled = error { true } else { error is CancellationError }
+      if cancelled {
+        mutate { $0.removeOptimisticMessage(id: id, threadId: threadId) }
+      } else if shown, state.optimisticMessages[threadId]?.contains(id) == true {
+        unsentMessages[id] = AgentAlert.describe(error)
+      } else if !shown {
+        report(error, title: "Couldn't send your message")
+      }
       return false
     }
   }
