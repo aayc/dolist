@@ -76,6 +76,7 @@ Vitest 5 benchmarks (`*.bench.ts`) assert p99 budgets inside the test and write
 | Agent-line decorations (agent text, markers), 150-line viewport | 1 ms |
 | Vault listing / search, 2 000 notes (warm) | see `packages/storage/src/storage.bench.ts` |
 | 3-way merge, 2 000-line note | see `packages/storage/src/storage.bench.ts` |
+| Obsidian import preview, 10 000-note vault (warm; its report stays under 256 KB) | 1 500 ms |
 
 Note: Vitest warns that module export getters add overhead inside benchmarks (Vite's module
 transform). That makes the numbers slightly pessimistic relative to production, which is fine for
