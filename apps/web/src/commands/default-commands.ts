@@ -135,6 +135,12 @@ export function createDefaultCommands(services: Services): Command[] {
       run: () => ui.showRoutines(),
     },
     {
+      id: "routine:new",
+      name: "New routine…",
+      label: "New routine",
+      run: () => ui.newRoutine(),
+    },
+    {
       id: "agent:toggle",
       name: "Toggle agent on/off",
       run: () => agent.setEnabled(!(useAgentStore.getState().status?.enabled ?? true)),

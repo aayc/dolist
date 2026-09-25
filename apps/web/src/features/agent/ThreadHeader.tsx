@@ -1,9 +1,10 @@
-import { isActiveTaskStatus, stem } from "@ddl/core";
-import { ArrowLeft, NotebookPen, RotateCcw, Square, X } from "lucide-react";
+import { isActiveTaskStatus, isOrchestratorThread, stem } from "@ddl/core";
+import { ArrowLeft, NotebookPen, Repeat, RotateCcw, Square, X } from "lucide-react";
 import { useServices } from "../../app/services";
 import { IconButton } from "../../components/IconButton";
 import { useAgentStore } from "../../state/agent-store";
 import { ui } from "../../state/ui-store";
+import { repeatDraft } from "../routines/repeat";
 import { StatusChip } from "./StatusChip";
 
 export function ThreadHeader({ threadId }: { threadId: string }) {
@@ -20,10 +21,15 @@ export function ThreadHeader({ threadId }: { threadId: string }) {
   const routineId = useAgentStore(
     (s) => s.details[threadId]?.routineId ?? s.threads[threadId]?.routineId,
   );
+  const taskId = useAgentStore(
+    (s) => s.details[threadId]?.taskId ?? s.threads[threadId]?.taskId ?? null,
+  );
   const active = isActiveTaskStatus(status);
   // A routine runs again with its Run now, which counts against its extra runs for the day.
   const canRetry =
     !routineId && (status === "failed" || status === "cancelled" || status === "done");
+  const canRepeat =
+    status === "done" && taskId !== null && !routineId && !isOrchestratorThread(threadId);
 
   return (
     <header className="thread-header" data-tooltip-placement="bottom">
@@ -63,6 +69,14 @@ export function ThreadHeader({ threadId }: { threadId: string }) {
             command="agent:stop"
             onClick={() => void agent.cancel(threadId)}
             data-testid="thread-stop"
+          />
+        ) : null}
+        {canRepeat ? (
+          <IconButton
+            icon={Repeat}
+            label="Repeat this on a schedule"
+            onClick={() => ui.newRoutine(repeatDraft({ id: threadId, title }))}
+            data-testid="thread-repeat"
           />
         ) : null}
         {canRetry ? (

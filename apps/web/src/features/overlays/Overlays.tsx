@@ -1,5 +1,11 @@
 import { type ReactNode, Suspense } from "react";
-import { ArtifactViewer, CommandPalette, QuickSwitcher, SettingsModal } from "../../app/lazy";
+import {
+  ArtifactViewer,
+  CommandPalette,
+  NewRoutineDialog,
+  QuickSwitcher,
+  SettingsModal,
+} from "../../app/lazy";
 import { useUiStore } from "../../state/ui-store";
 import { ConfirmDialog } from "./ConfirmDialog";
 
@@ -22,6 +28,9 @@ export function Overlays() {
       break;
     case "confirm":
       content = <ConfirmDialog request={overlay.request} />;
+      break;
+    case "new-routine":
+      content = <NewRoutineDialog {...(overlay.draft ? { draft: overlay.draft } : {})} />;
       break;
   }
   return <Suspense fallback={null}>{content}</Suspense>;

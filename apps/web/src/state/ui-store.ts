@@ -1,3 +1,4 @@
+import type { RoutineNotify, RoutineUse } from "@ddl/core";
 import { create } from "zustand";
 import { readJson, STORAGE_KEYS, writeJson } from "../lib/storage";
 
@@ -22,6 +23,17 @@ export type RightView =
   /** One routine and its own inbox of runs. */
   | { kind: "routine"; routineId: string };
 
+/** What the "New routine" dialog starts from (a finished task, for "Repeat this"). */
+export interface RoutineDraft {
+  name?: string;
+  schedule?: string;
+  instructions?: string;
+  notify?: RoutineNotify;
+  uses?: RoutineUse[];
+  /** From "Repeat this": the task's thread. The user still gives the schedule. */
+  fromThreadId?: string;
+}
+
 export interface ConfirmRequest {
   title: string;
   message: string;
@@ -35,7 +47,8 @@ export type Overlay =
   | { kind: "switcher" }
   | { kind: "settings"; section: SettingsSection }
   | { kind: "artifact"; threadId: string; artifactId: string }
-  | { kind: "confirm"; request: ConfirmRequest };
+  | { kind: "confirm"; request: ConfirmRequest }
+  | { kind: "new-routine"; draft?: RoutineDraft };
 
 export interface UiState {
   leftOpen: boolean;
@@ -197,6 +210,10 @@ export const ui = {
 
   showRoutine(routineId: string): void {
     useUiStore.setState({ rightOpen: true, rightView: { kind: "routine", routineId } });
+  },
+
+  newRoutine(draft?: RoutineDraft): void {
+    useUiStore.setState({ overlay: { kind: "new-routine", ...(draft ? { draft } : {}) } });
   },
 
   setExpanded(path: string, expanded: boolean): void {

@@ -22,6 +22,9 @@ export const SettingsModal = preloadable(() =>
 export const SearchView = preloadable(() =>
   import("../features/search/SearchView").then((m) => m.SearchView),
 );
+export const NewRoutineDialog = preloadable(() =>
+  import("../features/routines/NewRoutineDialog").then((m) => m.NewRoutineDialog),
+);
 
 export async function prefetchLazyChunks(): Promise<void> {
   await Promise.allSettled([
@@ -31,5 +34,6 @@ export async function prefetchLazyChunks(): Promise<void> {
     SearchView.preload(),
     SettingsModal.preload(),
     ArtifactViewer.preload(),
+    NewRoutineDialog.preload(),
   ]);
 }

@@ -253,3 +253,41 @@ describe("a run's thread header", () => {
     expect(ui.get().rightView).toEqual({ kind: "inbox" });
   });
 });
+
+describe("Repeat this", () => {
+  const task = (patch: Partial<ThreadSummary> = {}) => ({
+    ...run("thr_task", Date.now()),
+    routineId: undefined,
+    taskId: "tsk_1",
+    notePath: "Daily/2026-09-25.md",
+    title: "Check the weather in SF",
+    ...patch,
+  });
+
+  afterEach(() => ui.set({ overlay: null }));
+
+  it("offers a finished task to repeat, opening New routine from it", async () => {
+    const { one } = render(<ThreadHeader threadId="thr_task" />, { threads: [task()] });
+    const repeat = one("thread-repeat")!;
+    expect(repeat.getAttribute("aria-label")).toBe("Repeat this on a schedule");
+    await click(repeat);
+    expect(ui.get().overlay).toEqual({
+      kind: "new-routine",
+      draft: {
+        name: "Check the weather in SF",
+        instructions: "Check the weather in SF",
+        notify: "always",
+        fromThreadId: "thr_task",
+      },
+    });
+  });
+
+  it.each([
+    ["a task still working", task({ status: "working" })],
+    ["a failed task", task({ status: "failed" })],
+    ["a routine's run", run("thr_task", Date.now())],
+  ])("doesn't offer it for %s", (_label, thread) => {
+    const { one } = render(<ThreadHeader threadId="thr_task" />, { threads: [thread] });
+    expect(one("thread-repeat")).toBeUndefined();
+  });
+});
