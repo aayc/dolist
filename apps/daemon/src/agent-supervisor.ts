@@ -228,9 +228,8 @@ export class AgentSupervisor implements PlacementSource {
       (desired.kind === "unavailable" && current.kind === "unavailable")
     ) {
       const machine = this.#machine();
-      if (desired.kind === "relayed" && machine && current.kind === "lease") {
-        this.#setHandingTo(machine.name);
-      }
+      const held = current.kind === "lease" && current.lease.state.kind === "held";
+      if (desired.kind === "relayed" && machine && held) this.#setHandingTo(machine.name);
       await this.#leave(
         desired.kind === "relayed" && machine
           ? `Handing the agent to ${machine.name}…`
