@@ -1,0 +1,36 @@
+import type { NoteResponse } from "@ddl/core";
+import { ConflictError, HttpError } from "./errors";
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * A daemon answer's JSON body (undefined for an empty one), or the matching client error: a
+ * `ConflictError` for a note conflict, else an `HttpError` carrying the daemon's message and body.
+ */
+export async function readResponse<T>(response: Response): Promise<T> {
+  const text = response.status === 204 ? "" : await response.text();
+  let data: unknown;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+  }
+  if (!response.ok) {
+    // Only note conflicts carry `current`; other 409s (e.g. an approval already decided) don't.
+    if (response.status === 409 && isObject(data) && "current" in data) {
+      const current = isObject(data.current) ? (data.current as unknown as NoteResponse) : null;
+      throw new ConflictError(current, data);
+    }
+    const message =
+      (isObject(data) && typeof data.message === "string" && data.message) ||
+      (isObject(data) && typeof data.error === "string" && data.error) ||
+      response.statusText ||
+      `HTTP ${response.status}`;
+    throw new HttpError(response.status, message, data);
+  }
+  return data as T;
+}
