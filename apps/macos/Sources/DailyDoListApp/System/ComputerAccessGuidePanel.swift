@@ -34,7 +34,7 @@ final class ComputerAccessGuidePanelPresenter: ComputerAccessGuidePresenting {
   /// Bumped by every show and hide, so a finished fade can't order out a newer panel.
   private var generation = 0
 
-  func show(_ access: ComputerAccess) {
+  func show(_ access: ComputerAccessSetup) {
     generation += 1
     let panel = self.panel ?? Self.makePanel()
     self.panel = panel

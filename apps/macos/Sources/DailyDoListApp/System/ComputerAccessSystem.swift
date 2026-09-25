@@ -30,7 +30,7 @@ protocol SystemSettingsWatching: AnyObject {
 @MainActor
 protocol ComputerAccessGuidePresenting: AnyObject {
   /// Shows the panel, which follows `access.guide` until ``hide()``.
-  func show(_ access: ComputerAccess)
+  func show(_ access: ComputerAccessSetup)
   func hide()
 }
 
@@ -45,7 +45,7 @@ protocol AppRelaunching: AnyObject {
   func terminate()
 }
 
-/// Everything ``ComputerAccess`` needs from the OS, injectable so tests never touch it.
+/// Everything ``ComputerAccessSetup`` needs from the OS, injectable so tests never touch it.
 @MainActor
 struct ComputerAccessSystem {
   var probe: ComputerAccessProbing
@@ -84,7 +84,7 @@ private final class InertComputerAccess: ComputerAccessProbing, URLOpening, Syst
   func open(_ url: URL) -> Bool { false }
   var isFrontmost: Bool { false }
   var isRunning: Bool { false }
-  func show(_ access: ComputerAccess) {}
+  func show(_ access: ComputerAccessSetup) {}
   func hide() {}
   var unavailableReason: String? { "Not available in this build." }
   func openNewInstance() async throws {}

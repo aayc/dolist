@@ -17,8 +17,10 @@ struct ComputerAccessTests {
   static let screenRecordingLink =
     "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
 
-  private func make(_ fakes: ComputerAccessFakes, _ scheduler: ManualScheduler) -> ComputerAccess {
-    ComputerAccess(system: fakes.system(), scheduler: scheduler)
+  private func make(_ fakes: ComputerAccessFakes, _ scheduler: ManualScheduler)
+    -> ComputerAccessSetup
+  {
+    ComputerAccessSetup(system: fakes.system(), scheduler: scheduler)
   }
 
   @Test func readsBothPermissions() {
@@ -61,7 +63,7 @@ struct ComputerAccessTests {
   @Test func whenNoLinkOpensItSaysWhereToGo() {
     let fakes = ComputerAccessFakes()
     fakes.opener.rejected = Set(ComputerPermission.screenRecording.settingsURLs)
-    let access = ComputerAccess(
+    let access = ComputerAccessSetup(
       system: fakes.system(macOSMajorVersion: 15), scheduler: ManualScheduler())
     access.request(.screenRecording)
     #expect(fakes.opener.attempts == ComputerPermission.screenRecording.settingsURLs)
@@ -80,11 +82,11 @@ struct ComputerAccessTests {
     let scheduler = ManualScheduler()
     let access = make(fakes, scheduler)
     access.request(.accessibility)
-    scheduler.advance(by: ComputerAccess.pollInterval)
+    scheduler.advance(by: ComputerAccessSetup.pollInterval)
     #expect(access.guide?.phase == .waiting)
 
     fakes.probe.granted.insert(.accessibility)
-    scheduler.advance(by: ComputerAccess.pollInterval)
+    scheduler.advance(by: ComputerAccessSetup.pollInterval)
     #expect(access.accessibility == .granted)
     #expect(access.guide?.phase == .granted)
     #expect(access.nextPermission == .screenRecording)
@@ -94,7 +96,7 @@ struct ComputerAccessTests {
     #expect(access.guide == nil)
     #expect(fakes.presenter.hideCount == 1)
     #expect(fakes.activations == 1, "Later brings Daily Do List back")
-    scheduler.advance(by: ComputerAccess.pollInterval)
+    scheduler.advance(by: ComputerAccessSetup.pollInterval)
     #expect(!access.isPolling, "nothing shows anymore")
     #expect(scheduler.pendingCount == 0)
   }
@@ -108,12 +110,12 @@ struct ComputerAccessTests {
     #expect(access.guide?.stepLabel == nil)
 
     fakes.probe.granted.insert(.accessibility)
-    scheduler.advance(by: ComputerAccess.pollInterval)
+    scheduler.advance(by: ComputerAccessSetup.pollInterval)
     #expect(access.isComplete)
     #expect(access.guide?.phase == .allSet)
     #expect(!access.isPolling, "everything is granted")
 
-    scheduler.advance(by: ComputerAccess.allSetDuration - 0.1)
+    scheduler.advance(by: ComputerAccessSetup.allSetDuration - 0.1)
     #expect(access.guide?.phase == .allSet)
     #expect(fakes.activations == 0)
     scheduler.advance(by: 0.1)
@@ -176,7 +178,7 @@ struct ComputerAccessTests {
     let access = make(fakes, scheduler)
     access.request(.accessibility)
     fakes.probe.granted.insert(.accessibility)
-    scheduler.advance(by: ComputerAccess.pollInterval)
+    scheduler.advance(by: ComputerAccessSetup.pollInterval)
     access.continueGuide()
     #expect(fakes.probe.prompts == [.accessibility, .screenRecording])
     #expect(fakes.opener.attempts.last?.absoluteString == Self.screenRecordingLink)
@@ -211,20 +213,20 @@ struct ComputerAccessTests {
     let access = make(fakes, scheduler)
     access.settingsPaneAppeared()
     #expect(access.isPolling)
-    scheduler.advance(by: ComputerAccess.pollInterval * 3)
+    scheduler.advance(by: ComputerAccessSetup.pollInterval * 3)
     #expect(access.isPolling)
     access.settingsPaneDisappeared()
-    scheduler.advance(by: ComputerAccess.pollInterval)
+    scheduler.advance(by: ComputerAccessSetup.pollInterval)
     #expect(!access.isPolling)
     #expect(scheduler.pendingCount == 0)
 
     fakes.systemSettings.isFrontmost = true
     access.settingsPaneAppeared()
     access.settingsPaneDisappeared()
-    scheduler.advance(by: ComputerAccess.pollInterval * 3)
+    scheduler.advance(by: ComputerAccessSetup.pollInterval * 3)
     #expect(access.isPolling, "System Settings is in front")
     fakes.systemSettings.isFrontmost = false
-    scheduler.advance(by: ComputerAccess.pollInterval)
+    scheduler.advance(by: ComputerAccessSetup.pollInterval)
     #expect(!access.isPolling)
   }
 
@@ -234,7 +236,7 @@ struct ComputerAccessTests {
     let access = make(fakes, scheduler)
     access.settingsPaneAppeared()
     fakes.probe.granted = [.accessibility, .screenRecording]
-    scheduler.advance(by: ComputerAccess.pollInterval)
+    scheduler.advance(by: ComputerAccessSetup.pollInterval)
     #expect(access.isComplete)
     #expect(!access.isPolling, "the pane still shows, but there's nothing left to wait for")
     #expect(scheduler.pendingCount == 0)
@@ -245,13 +247,13 @@ struct ComputerAccessTests {
     let scheduler = ManualScheduler()
     let access = make(fakes, scheduler)
     access.request(.accessibility)
-    scheduler.advance(by: ComputerAccess.pollInterval)
+    scheduler.advance(by: ComputerAccessSetup.pollInterval)
     #expect(access.guide != nil, "System Settings may still be launching")
     fakes.systemSettings.isRunning = true
-    scheduler.advance(by: ComputerAccess.pollInterval)
+    scheduler.advance(by: ComputerAccessSetup.pollInterval)
     #expect(access.guide != nil)
     fakes.systemSettings.isRunning = false
-    scheduler.advance(by: ComputerAccess.pollInterval)
+    scheduler.advance(by: ComputerAccessSetup.pollInterval)
     #expect(access.guide == nil)
     #expect(fakes.presenter.hideCount == 1)
     #expect(fakes.activations == 0, "the user left System Settings for somewhere else")
@@ -304,7 +306,7 @@ struct ComputerAccessTests {
       checks.value += 1
       return true
     }
-    let access = ComputerAccess(system: system, scheduler: ManualScheduler())
+    let access = ComputerAccessSetup(system: system, scheduler: ManualScheduler())
     #expect(checks.value == 0)
     #expect(access.isSignedAdHoc)
     #expect(access.isSignedAdHoc)

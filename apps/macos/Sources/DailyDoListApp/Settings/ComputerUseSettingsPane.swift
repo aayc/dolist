@@ -6,7 +6,7 @@ import SwiftUI
 /// live while the pane shows.
 struct ComputerUseSettingsPane: View {
   let model: AppModel
-  let access: ComputerAccess
+  let access: ComputerAccessSetup
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
@@ -198,7 +198,7 @@ private struct PermissionRow: View {
 
 /// Screen Recording applies after a relaunch.
 private struct RelaunchRow: View {
-  let access: ComputerAccess
+  let access: ComputerAccessSetup
   let isNextStep: Bool
 
   var body: some View {

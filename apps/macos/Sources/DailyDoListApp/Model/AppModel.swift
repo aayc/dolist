@@ -37,7 +37,7 @@ public final class AppModel {
   let toasts: ToastStore
   let ui: UIState
   /// The macOS permissions computer use needs, and the setup that gets them.
-  let computerAccess: ComputerAccess
+  let computerAccess: ComputerAccessSetup
   var client: DaemonClient?
   /// Where `client` points (nil in demo mode).
   @ObservationIgnored var clientEndpoint: DaemonEndpoint?
@@ -78,7 +78,7 @@ public final class AppModel {
     preferences = environment.preferences
     toasts = ToastStore(scheduler: environment.scheduler)
     ui = UIState(preferences: environment.preferences)
-    computerAccess = ComputerAccess(
+    computerAccess = ComputerAccessSetup(
       system: environment.computerAccess, scheduler: environment.scheduler)
     vim = Vim()
     vimIntegration = EditorVimIntegration(vim: vim, pasteboard: environment.vimPasteboard())

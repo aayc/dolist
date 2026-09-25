@@ -7,7 +7,7 @@ import SwiftUI
 /// through. Its buttons are drawn by the app (not AppKit), so they look the same while System
 /// Settings has the focus.
 struct ComputerAccessGuideView: View {
-  let access: ComputerAccess
+  let access: ComputerAccessSetup
   /// The guide as last shown, so the card stays while the panel fades out.
   @State private var lastGuide: ComputerAccessGuide?
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -84,7 +84,7 @@ struct ComputerAccessGuideView: View {
 
 /// Switch Daily Do List on in the list (then relaunch, for Screen Recording).
 private struct GuideWaiting: View {
-  let access: ComputerAccess
+  let access: ComputerAccessSetup
   let guide: ComputerAccessGuide
 
   var body: some View {
@@ -153,7 +153,7 @@ private struct GuideWaiting: View {
 
 /// The permission is on; the next one is a click away.
 private struct GuideGranted: View {
-  let access: ComputerAccess
+  let access: ComputerAccessSetup
   let permission: ComputerPermission
 
   var body: some View {

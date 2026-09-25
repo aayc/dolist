@@ -312,7 +312,7 @@ struct SnapshotTests {
         name: "computer-access-guide-accessibility")
     }
     fakes.probe.granted.insert(.accessibility)
-    scheduler.advance(by: ComputerAccess.pollInterval)
+    scheduler.advance(by: ComputerAccessSetup.pollInterval)
     for dark in [false, true] {
       try await render(
         guide(dark), size: ComputerAccessGuideLayout.panelSize, dark: dark,
@@ -329,7 +329,7 @@ struct SnapshotTests {
         name: "computer-access-banner-relaunch")
     }
     fakes.probe.granted.insert(.screenRecording)
-    scheduler.advance(by: ComputerAccess.pollInterval)
+    scheduler.advance(by: ComputerAccessSetup.pollInterval)
     #expect(access.guide?.phase == .allSet)
     for dark in [false, true] {
       try await render(

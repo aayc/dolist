@@ -11,7 +11,7 @@ import Observation
 /// everything is granted. The app also refreshes it whenever it becomes active.
 @MainActor
 @Observable
-final class ComputerAccess {
+final class ComputerAccessSetup {
   static let pollInterval: TimeInterval = 0.5
   /// How long "All set" shows before the guide closes and Daily Do List comes back.
   static let allSetDuration: TimeInterval = 1.5

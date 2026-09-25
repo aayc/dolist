@@ -96,7 +96,7 @@ final class FakeGuidePresenter: ComputerAccessGuidePresenting {
   private(set) var hideCount = 0
   var isShowing: Bool { showCount > hideCount }
 
-  func show(_ access: ComputerAccess) { showCount += 1 }
+  func show(_ access: ComputerAccessSetup) { showCount += 1 }
   func hide() { hideCount += 1 }
 }
 
