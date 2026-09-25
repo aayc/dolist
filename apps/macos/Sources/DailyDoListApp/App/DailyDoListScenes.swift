@@ -56,6 +56,7 @@ struct MenuBarLabel: View {
 struct MenuBarContent: View {
   let model: AppModel
   @Environment(\.openWindow) private var openWindow
+  @Environment(\.openSettings) private var openSettings
 
   var body: some View {
     Group {
@@ -80,6 +81,7 @@ struct MenuBarContent: View {
     }
     .onAppear {
       WindowHandles.shared.openMainWindow = { openWindow(id: MainWindowID.value) }
+      WindowHandles.shared.openSettings = { openSettings() }
     }
   }
 

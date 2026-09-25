@@ -77,6 +77,16 @@ final class AppPreferences {
   var expandedFolders: Set<String> {
     didSet { defaults.set(expandedFolders.sorted(), forKey: Key.expandedFolders) }
   }
+  /// The main window's banner about computer use was dismissed (for good).
+  var computerAccessBannerDismissed: Bool {
+    didSet {
+      defaults.set(computerAccessBannerDismissed, forKey: Key.computerAccessBannerDismissed)
+    }
+  }
+  /// When Screen Recording was last requested: a launch soon after continues the setup.
+  var computerAccessRequestedAt: Date? {
+    didSet { defaults.set(computerAccessRequestedAt, forKey: Key.computerAccessRequestedAt) }
+  }
 
   init(
     defaults: UserDefaults = .standard,
@@ -110,6 +120,8 @@ final class AppPreferences {
     sidebarMode =
       defaults.string(forKey: Key.sidebarMode).flatMap(SidebarMode.init(rawValue:)) ?? .files
     expandedFolders = Set(defaults.stringArray(forKey: Key.expandedFolders) ?? ["Daily"])
+    computerAccessBannerDismissed = defaults.bool(forKey: Key.computerAccessBannerDismissed)
+    computerAccessRequestedAt = defaults.object(forKey: Key.computerAccessRequestedAt) as? Date
   }
 
   /// The supervisor configuration: the standard (terminal-equivalent) one plus overrides.
@@ -161,5 +173,7 @@ final class AppPreferences {
     static let inspectorWidth = "ddl.inspectorWidth"
     static let sidebarMode = "ddl.sidebarMode"
     static let expandedFolders = "ddl.expandedFolders"
+    static let computerAccessBannerDismissed = "ddl.computerAccessBannerDismissed"
+    static let computerAccessRequestedAt = "ddl.computerAccessRequestedAt"
   }
 }

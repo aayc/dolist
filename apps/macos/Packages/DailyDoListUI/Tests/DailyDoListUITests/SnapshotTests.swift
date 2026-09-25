@@ -134,9 +134,19 @@ struct SnapshotTests {
             .opacity(state.isEnabled ? 1 : ControlState.disabledOpacity)
         }
       }
+      HStack(spacing: 10) {
+        ForEach(states, id: \.0) { name, state in
+          AccentButtonFace(
+            style: AccentButtonStyle(horizontalPadding: 10, verticalPadding: 4), state: state
+          ) {
+            Text("Set Up…").font(.system(size: 12, weight: .medium))
+          }
+          .fixedSize()
+        }
+      }
     }
     .padding(20)
-    try Self.render(view, name: "control-states", size: CGSize(width: 380, height: 150), dark: dark)
+    try Self.render(view, name: "control-states", size: CGSize(width: 460, height: 190), dark: dark)
   }
 
   /// The real presenter's bubble view, the way the panel shows it.

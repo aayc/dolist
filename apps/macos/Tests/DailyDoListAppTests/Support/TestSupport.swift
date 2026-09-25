@@ -117,7 +117,9 @@ func makeEnvironment(
   demoClient: (@MainActor () -> DaemonClient)? = nil,
   scheduler: AppScheduler = ManualScheduler(),
   defaults: UserDefaults = testDefaults(),
-  discover: (@MainActor (URL, Int?) throws -> DaemonEndpoint)? = nil
+  discover: (@MainActor (URL, Int?) throws -> DaemonEndpoint)? = nil,
+  computerAccess: ComputerAccessSystem = .inert,
+  now: @escaping @Sendable () -> Date = { referenceNow }
 ) -> AppEnvironment {
   let preferences = AppPreferences(defaults: defaults, environment: [:])
   preferences.daemonMode = mode
@@ -132,9 +134,10 @@ func makeEnvironment(
       DaemonEndpoint(baseURL: URL(string: "http://127.0.0.1:7331")!, token: "test-token")
     },
     systemIntegration: UnavailableSystemIntegration(),
-    now: { referenceNow },
+    now: now,
     enablesSystemServices: false,
-    vimPasteboard: { SystemVimPasteboard(privatePasteboard()) })
+    vimPasteboard: { SystemVimPasteboard(privatePasteboard()) },
+    computerAccess: computerAccess)
 }
 
 /// A pasteboard of its own for one test (vim's clipboard registers never touch the user's).

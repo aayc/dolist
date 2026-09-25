@@ -5,6 +5,7 @@ import SwiftUI
 struct MainWindowView: View {
   let model: AppModel
   @Environment(\.openWindow) private var openWindow
+  @Environment(\.openSettings) private var openSettings
 
   var body: some View {
     Group {
@@ -26,7 +27,9 @@ struct MainWindowView: View {
     )
     .onAppear {
       WindowHandles.shared.openMainWindow = { openWindow(id: MainWindowID.value) }
+      WindowHandles.shared.openSettings = { openSettings() }
       model.start()
+      model.resumeComputerAccessSetup()
     }
   }
 }
@@ -178,6 +181,10 @@ struct DetailColumn: View {
       if model.connection.showsOfflineBanner {
         OfflineBanner(model: model)
       }
+      if let banner = model.computerAccessBanner {
+        ComputerAccessBanner(model: model, kind: banner)
+          .transition(.move(edge: .top).combined(with: .opacity))
+      }
       ZStack {
         VStack(spacing: 0) {
           if let path = workspace.tabs.active {
@@ -194,6 +201,7 @@ struct DetailColumn: View {
       StatusBar(model: model, workspace: workspace)
     }
     .background(Theme.background)
+    .animation(.snappy(duration: 0.22), value: model.computerAccessBanner)
   }
 }
 

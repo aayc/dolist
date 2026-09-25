@@ -49,6 +49,7 @@ enum CommandID: String, CaseIterable, Sendable {
   case toggleTheme = "theme.toggle"
   case toggleAgent = "agent.toggle"
   case openInbox = "agent.openInbox"
+  case setUpComputerUse = "computerUse.setUp"
   case restartDaemon = "daemon.restart"
 
   static let tabs: [CommandID] = [.tab1, .tab2, .tab3, .tab4, .tab5, .tab6, .tab7, .tab8, .tab9]
@@ -116,7 +117,7 @@ enum CommandID: String, CaseIterable, Sendable {
     case .tab9: Shortcut("9")
     case .newFolder, .tomorrowsNote, .renameNote, .deleteNote, .revealNote, .toggleLivePreview,
       .toggleReadableWidth, .toggleLineNumbers, .toggleVim, .toggleTheme, .toggleAgent, .openInbox,
-      .restartDaemon:
+      .setUpComputerUse, .restartDaemon:
       nil
     }
   }

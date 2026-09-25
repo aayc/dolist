@@ -12,6 +12,8 @@ final class WindowHandles {
   weak var mainWindow: NSWindow?
   /// SwiftUI's `openWindow(id: "main")`, registered by a view.
   var openMainWindow: (@MainActor () -> Void)?
+  /// SwiftUI's `openSettings()`, registered by a view (macOS offers no other way).
+  var openSettings: (@MainActor () -> Void)?
   let fullScreen = FullScreenObserver()
 }
 
@@ -45,7 +47,10 @@ extension AppModel {
       center.addObserver(
         forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
       ) { [weak self] _ in
-        Task { @MainActor in self?.systemIntegration.refresh() }
+        Task { @MainActor in
+          self?.systemIntegration.refresh()
+          self?.computerAccess.refresh()
+        }
       })
     // The menu's ⌘+ only matches ⇧⌘=; accept plain ⌘= too, like most Mac apps.
     keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in

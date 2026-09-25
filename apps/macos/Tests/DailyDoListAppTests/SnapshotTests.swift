@@ -73,8 +73,11 @@ struct SnapshotTests {
     await model.teardown()
   }
 
-  /// The sample workspace: notes, records and the sample agent store, today's note active.
-  func bootedModel() async throws -> (AppModel, Workspace) {
+  /// The sample workspace: notes, records and the sample agent store, today's note active. With a
+  /// supervisor, the app manages the daemon.
+  func bootedModel(
+    supervisor: FakeSupervisor? = nil, computerAccess: ComputerAccessSystem = .inert
+  ) async throws -> (AppModel, Workspace) {
     let client = FakeDaemonClient(notes: Self.sampleNotes)
     let daily = "Daily/2026-09-23.md"
     var question = TaskAgentRecord.sample(
@@ -97,7 +100,9 @@ struct SnapshotTests {
       ]
       $0.agentStatus.running = 1
     }
-    let environment = makeEnvironment(client: client)
+    let environment = makeEnvironment(
+      client: client, supervisor: supervisor ?? FakeSupervisor(),
+      mode: supervisor == nil ? .external : .managed, computerAccess: computerAccess)
     environment.preferences.expandedFolders = ["Daily", "Projects"]
     let model = AppModel(environment: environment)
     await model.boot()
@@ -267,6 +272,102 @@ struct SnapshotTests {
       try await render(
         AgentSettingsPane(model: model, settings: model.settings).frame(width: 600, height: 1_000),
         size: CGSize(width: 600, height: 1_000), dark: dark, name: "settings-agent-cursor")
+    }
+    await model.teardown()
+  }
+
+  /// Settings → Computer Use in its states, the guide beside System Settings in each phase, and the
+  /// main window's banner.
+  @Test func computerUse() async throws {
+    let fakes = ComputerAccessFakes()
+    let scheduler = ManualScheduler()
+    let supervisor = FakeSupervisor()
+    let model = AppModel(
+      environment: makeEnvironment(
+        client: FakeDaemonClient(), supervisor: supervisor, mode: .managed, scheduler: scheduler,
+        computerAccess: fakes.system()))
+    await model.boot()
+    supervisor.state = .running(pid: 42, connection: ComputerAccessAppTests.connection)
+    let access = model.computerAccess
+    let paneSize = CGSize(width: 600, height: 620)
+    let pane = {
+      ComputerUseSettingsPane(model: model, access: access).frame(width: 600, height: 620)
+    }
+    let guide = { (dark: Bool) in
+      ComputerAccessGuideView(access: access)
+        .background(Color(white: dark ? 0.16 : 0.9))
+    }
+    let bannerSize = CGSize(width: 900, height: 34)
+    for dark in [false, true] {
+      try await render(pane(), size: paneSize, dark: dark, name: "settings-computer-use")
+      try await render(
+        ComputerAccessBanner(model: model, kind: .setUp), size: bannerSize, dark: dark,
+        name: "computer-access-banner")
+    }
+
+    access.request(.accessibility)
+    for dark in [false, true] {
+      try await render(
+        guide(dark), size: ComputerAccessGuideLayout.panelSize, dark: dark,
+        name: "computer-access-guide-accessibility")
+    }
+    fakes.probe.granted.insert(.accessibility)
+    scheduler.advance(by: ComputerAccess.pollInterval)
+    for dark in [false, true] {
+      try await render(
+        guide(dark), size: ComputerAccessGuideLayout.panelSize, dark: dark,
+        name: "computer-access-guide-granted")
+    }
+    access.continueGuide()
+    for dark in [false, true] {
+      try await render(
+        guide(dark), size: ComputerAccessGuideLayout.panelSize, dark: dark,
+        name: "computer-access-guide-screen-recording")
+      try await render(pane(), size: paneSize, dark: dark, name: "settings-computer-use-relaunch")
+      try await render(
+        ComputerAccessBanner(model: model, kind: .relaunch), size: bannerSize, dark: dark,
+        name: "computer-access-banner-relaunch")
+    }
+    fakes.probe.granted.insert(.screenRecording)
+    scheduler.advance(by: ComputerAccess.pollInterval)
+    #expect(access.guide?.phase == .allSet)
+    for dark in [false, true] {
+      try await render(
+        guide(dark), size: ComputerAccessGuideLayout.panelSize, dark: dark,
+        name: "computer-access-guide-all-set")
+      try await render(pane(), size: paneSize, dark: dark, name: "settings-computer-use-granted")
+    }
+    await model.teardown()
+
+    // A daemon the app didn't start, in a copy signed ad hoc.
+    let adHoc = ComputerAccessFakes(granted: [.accessibility])
+    let other = AppModel(
+      environment: makeEnvironment(
+        client: FakeDaemonClient(), mode: .managed, computerAccess: adHoc.system(adHoc: true)))
+    await other.boot()
+    #expect(other.daemonHost == .otherApp)
+    for dark in [false, true] {
+      try await render(
+        ComputerUseSettingsPane(model: other, access: other.computerAccess)
+          .frame(width: 600, height: 720), size: CGSize(width: 600, height: 720), dark: dark,
+        name: "settings-computer-use-other-daemon")
+    }
+    await other.teardown()
+  }
+
+  /// The banner where it shows: under the tabs, above the note.
+  @Test func mainWindowWithTheComputerUseBanner() async throws {
+    let supervisor = FakeSupervisor()
+    let (model, workspace) = try await bootedModel(
+      supervisor: supervisor, computerAccess: ComputerAccessFakes().system())
+    supervisor.state = .running(pid: 42, connection: ComputerAccessAppTests.connection)
+    try await eventually { model.computerAccessBanner == .setUp }
+    let controller = workspace.editor.controller
+    let repaintBadges = { controller.setBadges(controller.badges) }
+    for dark in [false, true] {
+      try await render(
+        MainWindowView(model: model), size: CGSize(width: 1200, height: 760), dark: dark,
+        name: "main-window-computer-use-banner", afterDisplay: repaintBadges)
     }
     await model.teardown()
   }

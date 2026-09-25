@@ -27,6 +27,9 @@ struct AppEnvironment {
   var enablesSystemServices: Bool
   /// The pasteboard behind vim's `+` and `*` registers (tests pass a private one).
   var vimPasteboard: @MainActor () -> VimPasteboard = { SystemVimPasteboard() }
+  /// Permission checks and prompts, System Settings, the guide panel and relaunching for computer
+  /// use (tests pass fakes; the default touches nothing and reports access as granted).
+  var computerAccess: ComputerAccessSystem = .inert
 
   /// The real app. Demo mode keeps its own preferences so demo tabs never replace real ones.
   static func live() -> AppEnvironment {
@@ -43,6 +46,7 @@ struct AppEnvironment {
       discoverEndpoint: { home, port in try DaemonEndpoint.discover(home: home, port: port) },
       systemIntegration: SystemIntegrationFactory.make(),
       now: { Date() },
-      enablesSystemServices: true)
+      enablesSystemServices: true,
+      computerAccess: .live())
   }
 }

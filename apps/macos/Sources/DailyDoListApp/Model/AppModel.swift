@@ -36,6 +36,8 @@ public final class AppModel {
   let settings = SettingsStore()
   let toasts: ToastStore
   let ui: UIState
+  /// The macOS permissions computer use needs, and the setup that gets them.
+  let computerAccess: ComputerAccess
   var client: DaemonClient?
   /// Where `client` points (nil in demo mode).
   @ObservationIgnored var clientEndpoint: DaemonEndpoint?
@@ -76,8 +78,11 @@ public final class AppModel {
     preferences = environment.preferences
     toasts = ToastStore(scheduler: environment.scheduler)
     ui = UIState(preferences: environment.preferences)
+    computerAccess = ComputerAccess(
+      system: environment.computerAccess, scheduler: environment.scheduler)
     vim = Vim()
     vimIntegration = EditorVimIntegration(vim: vim, pasteboard: environment.vimPasteboard())
+    connectComputerAccess()
     settings.onChange = { [weak self] old, new in self?.settingsDidChange(from: old, to: new) }
     settings.onError = { [weak self] error in self?.toasts.error("Couldn't save settings", error) }
     tabsPersistTimer = IdleTimer(scheduler: environment.scheduler, delay: 0.5) { [weak self] in
