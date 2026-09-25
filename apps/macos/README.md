@@ -356,9 +356,12 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   they read.
   Input checks every window of the app, since keys and clicks can land in any of them, and a
   window that can't be checked in time is refused.
-- **Limits:** input goes to one process (`CGEventPostToPid`), so the app stays in the background
-  and the cursor doesn't move, but some apps ignore events that don't come from the keyboard and
-  mouse, or hit-test with the real cursor: use `press` and `setValue`, or `activate` first. Typed
+- **Limits:** `press` and `setValue` work with the app in the background. Keys, clicks and
+  scrolls only reach the app in front (macOS routes them to the key window, and an inactive app
+  has none), so `typeText`, `key`, `click` and `scroll` bring the app to the front first and send
+  nothing if it doesn't come. Their events still go to that one process (`CGEventPostToPid`), so
+  they never land in another app and the cursor doesn't move, but some apps ignore events that
+  don't come from the keyboard and mouse, or hit-test with the real cursor. Typed
   text travels in key events with keycode 0, which apps that read keycodes see as "a". Electron
   apps only show their content to accessibility clients that ask (`AXManualAccessibility`, set on
   the first read, which then waits 0.5 s), and setting a web text field's value may not reach the

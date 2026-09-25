@@ -160,4 +160,23 @@ extension ComputerService {
     }
     return ["ok": true]
   }
+
+  /// Keys, clicks and scrolls only reach the app in front: macOS routes them to the key window,
+  /// and an inactive app has none, so events posted to it vanish without an error.
+  func bringToFrontForInput(_ app: RunningApp) async throws {
+    if await system.workspace.runningApplication(pid: app.pid)?.isActive == true { return }
+    guard await system.workspace.activate(pid: app.pid) else {
+      throw ComputerError.failed(
+        "macOS didn't bring \(app.name) to the front, so no input was sent.")
+    }
+    let deadline = system.clock.now + configuration.activationTimeout
+    while await system.workspace.runningApplication(pid: app.pid)?.isActive != true {
+      guard system.clock.now < deadline else {
+        throw ComputerError.failed(
+          "\(app.name) didn't come to the front, so no input was sent.")
+      }
+      try await pause(configuration.launchPollInterval)
+    }
+    try await pause(configuration.activationSettle)
+  }
 }

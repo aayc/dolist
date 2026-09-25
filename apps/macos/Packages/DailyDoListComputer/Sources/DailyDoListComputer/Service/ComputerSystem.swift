@@ -44,8 +44,10 @@ public struct ComputerConfiguration: Sendable {
   public var scrollInterval: Duration = .milliseconds(20)
   /// Pause after focusing an element, before typing into it.
   public var focusSettle: Duration = .milliseconds(50)
-  /// How long `activate` waits for the app to come to the front.
+  /// How long `activate` and input wait for the app to come to the front.
   public var activationTimeout: Duration = .seconds(2)
+  /// Pause after bringing an app to the front for input, while its window becomes key.
+  public var activationSettle: Duration = .milliseconds(150)
 
   public init(protectedTargets: ProtectedTargets = .standard()) {
     self.protectedTargets = protectedTargets

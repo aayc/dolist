@@ -288,7 +288,7 @@ struct InputTests {
     #expect(harness.events.posted.isEmpty)
   }
 
-  @Test func activateBringsTheAppForwardOnlyWhenAsked() async throws {
+  @Test func activateBringsTheAppForward() async throws {
     let harness = Harness()
     harness.runChat()
     let service = harness.makeService()
@@ -297,6 +297,40 @@ struct InputTests {
 
     harness.workspace.activationWorks = false
     #expect(await service.failure("activate", ["pid": 42])?.code == .failed)
+  }
+
+  private static let inputMethods: [(String, JSONObject)] = [
+    ("typeText", ["pid": 42, "text": "hi"]),
+    ("key", ["pid": 42, "combo": "return"]),
+    ("click", ["pid": 42, "x": 150, "y": 200]),
+    ("scroll", ["pid": 42, "x": 150, "y": 200, "dx": 0, "dy": 3]),
+  ]
+
+  @Test(arguments: inputMethods)
+  func inputBringsTheAppToTheFrontFirst(method: String, params: JSONObject) async throws {
+    let harness = Harness()
+    harness.runChat()
+    #expect(try await harness.makeService().result(method, params)["ok"] == true)
+    #expect(harness.workspace.activated == [42])
+    #expect(!harness.events.posted.isEmpty)
+  }
+
+  @Test func inputLeavesAnAppAlreadyInFrontAsItIs() async throws {
+    let harness = Harness()
+    harness.runChat()
+    _ = await harness.workspace.activate(pid: 42)
+    _ = try await harness.makeService().result("key", ["pid": 42, "combo": "return"])
+    #expect(harness.workspace.activated == [42], "no second activation")
+  }
+
+  @Test(arguments: inputMethods)
+  func inputSendsNothingWhenTheAppWontComeToTheFront(method: String, params: JSONObject) async {
+    let harness = Harness()
+    harness.runChat()
+    harness.workspace.activationWorks = false
+    let error = await harness.makeService().failure(method, params)
+    #expect(error == .failed("macOS didn't bring Chat to the front, so no input was sent."))
+    #expect(harness.events.posted.isEmpty)
   }
 }
 

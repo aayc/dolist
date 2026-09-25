@@ -67,8 +67,8 @@ extension ComputerService {
     return ["ok": true, "value": readBack, "stale": .bool(snapshots.invalidate(pid: pid))]
   }
 
-  /// `typeText` `{pid, text, snapshotId?, elementId?}` → `{"ok": true, "stale": bool}`: focuses
-  /// the element when given, then posts the text to the app as key events.
+  /// `typeText` `{pid, text, snapshotId?, elementId?}` → `{"ok": true, "stale": bool}`: brings
+  /// the app to the front, focuses the element when given, then posts the text as key events.
   func typeText(_ params: Params) async throws -> JSONValue {
     let pid = try params.pid()
     let text = try params.requiredString("text", maxLength: Self.maxTextLength)
@@ -85,6 +85,9 @@ extension ComputerService {
     try await refuseIfShowingDailyDoList(app)
     if let entry, let elementId = reference?.elementId {
       try verifyUnchanged(entry, id: elementId, app: app)
+    }
+    try await bringToFrontForInput(app)
+    if let entry, let elementId = reference?.elementId {
       do {
         try system.accessibility.setAttribute(AX.focused, to: .bool(true), on: entry.element)
       } catch {
@@ -119,6 +122,7 @@ extension ComputerService {
     let app = try await targetApp(pid)
     try requireAccessibility()
     try await refuseIfShowingDailyDoList(app)
+    try await bringToFrontForInput(app)
     for step in combo.events {
       try post(.key(code: step.code, down: step.down, flags: step.flags), to: pid)
       try await pause(configuration.keyInterval)
@@ -126,8 +130,9 @@ extension ComputerService {
     return ["ok": true, "stale": .bool(snapshots.invalidate(pid: pid))]
   }
 
-  /// `click` `{pid, x, y, button? = "left", count? = 1}` → `{"ok": true, "stale": bool}`: mouse
-  /// events posted to the app at a point inside one of its windows, without moving the cursor.
+  /// `click` `{pid, x, y, button? = "left", count? = 1}` → `{"ok": true, "stale": bool}`: brings
+  /// the app to the front and posts mouse events to it at a point inside one of its windows,
+  /// without moving the cursor.
   func click(_ params: Params) async throws -> JSONValue {
     let pid = try params.pid()
     let point = try self.point(params)
@@ -139,6 +144,7 @@ extension ComputerService {
     try requireAccessibility()
     try await refuseIfShowingDailyDoList(app)
     let window = try window(at: point, of: app)
+    try await bringToFrontForInput(app)
     for click in 1...count {
       try post(
         .mouse(button: button, down: true, at: point, clickCount: click, windowID: window.id),
@@ -162,6 +168,7 @@ extension ComputerService {
     try requireAccessibility()
     try await refuseIfShowingDailyDoList(app)
     let window = try window(at: point, of: app)
+    try await bringToFrontForInput(app)
     for step in ScrollPlan.steps(dx: Int(dx.rounded()), dy: Int(dy.rounded())) {
       try post(.scroll(dx: step.dx, dy: step.dy, at: point, windowID: window.id), to: pid)
       try await pause(configuration.scrollInterval)
