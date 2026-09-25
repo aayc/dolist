@@ -32,8 +32,6 @@
   "devDependencies": {
     "@excalidraw/excalidraw": "catalog:",
     "esbuild": "^0.28.2",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
     "tsx": "^4.23.15"
   }
 }
