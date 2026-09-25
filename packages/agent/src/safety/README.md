@@ -142,9 +142,13 @@ Then per family:
   re-permissioning or linking to anything in a `.daily-do-list/` folder (the vault's sidecar with
   the settings and approval state, and the default `$DDL_HOME`) except the agents' `workspaces/`,
   or in the configured `$DDL_HOME` (`ActionContext.appHome`, from the runtime), temp area included.
+  Reading `$DDL_HOME`'s credentials is a hard deny too (`secrets.credential-store`): `.env`, the
+  token files (`daemon-token`, `sync-token`, `machine-token`), the paired devices' `devices.json`,
+  and `$DDL_HOME` itself or a glob right inside it (recursive, archiving and wildcard readers).
+  Agents' shells inherit `$DDL_HOME`, so the shell parser reads it as the app's home.
   Written content is scanned so a dangerous script cannot be staged in the workspace and run later,
   and a written file or inline code (`python3 -c`, `node -e`, typed terminal text) that names the
-  app's own files is a hard deny too. Paths code builds at runtime can't be seen.
+  app's own files or `DDL_HOME` is a hard deny too. Paths code builds at runtime can't be seen.
 - **Note edits** (`rules/notes.ts`, the `edit_note` tool): the agent's own text goes into the
   user's note directly — new lines, and lines it wrote before (marked `%%agent:<thread>%%`).
   Changing or deleting the user's lines or checking their boxes needs approval; writing the app's
@@ -166,7 +170,7 @@ Stable ids, grouped by decision (generated from `SAFETY_RULES`; 140 rules).
 | `network.app-self-access` | system | deny | critical | Operates the Daily Do List app itself (an agent could approve its own actions or change its settings) |
 | `notes.edit.hidden-path` | system | deny | critical | Writes to the app's hidden state instead of a note |
 | `secrets.app-config-write` | system | deny | critical | Changes the app's own settings, keys, connector config or approval state (an agent could change its approval policy or grant itself permissions) |
-| `secrets.credential-store` | credentials | deny | critical | Reads a password store, keychain, browser credential database or the app's API keys |
+| `secrets.credential-store` | credentials | deny | critical | Reads a password store, keychain, browser credential database or the app's API keys and tokens |
 | `secrets.embedded-access` | credentials | deny | critical | Reads private keys, keychains or credential stores from code or typed text |
 | `secrets.exfiltration` | credentials | deny | critical | Sends secrets (keys, .env files, credentials, environment variables) over the network |
 | `secrets.gpg-export` | credentials | deny | critical | Exports GPG secret keys |
