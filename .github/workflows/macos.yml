@@ -88,6 +88,7 @@ jobs:
 
       - name: Shared packages build for iOS
         # The Foundation-only packages the planned iPhone app reuses must not pick up AppKit.
+        # DailyDoListComputer (the ddl-computer helper) is macOS-only, so it isn't listed.
         run: |
           for pkg in DailyDoListModels DailyDoListClient DailyDoListDomain DailyDoListVim; do
             echo "::group::$pkg"
@@ -101,6 +102,17 @@ jobs:
 
       - name: Build the app (release, bundled daemon)
         run: apps/macos/scripts/build-app.sh --release --with-daemon --zip
+
+      - name: Smoke-test the bundled ddl-computer
+        # Where the daemon looks for it, signed, and answering; passive methods only (no prompts).
+        run: |
+          helper="apps/macos/build/Daily Do List.app/Contents/Resources/daemon/bin/ddl-computer"
+          codesign --verify --strict "$helper"
+          out="$(printf '%s\n' '{"id":1,"method":"hello"}' '{"id":2,"method":"permissions"}' \
+            | "$helper" serve)"
+          echo "$out"
+          echo "$out" | grep -q '^{"id":1,"result":{"version":1,'
+          echo "$out" | grep -q '^{"id":2,"result":{"accessibility":'
 
       - name: Upload the app
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
