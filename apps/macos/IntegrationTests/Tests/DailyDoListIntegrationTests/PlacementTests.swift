@@ -100,7 +100,8 @@ extension RealDaemonTests {
       #expect(!machineSees.thisDevice)
 
       // Handing it to the machine: a re-fetch right away shows the choice and the note, then the
-      // machine (asking as the always-on machine now) picks it up. No relay yet: `off`.
+      // machine (asking as the always-on machine now) picks it up. The relay starts once the
+      // laptop has let go of the lease: `off` until then, then connected to the machine.
       let handMark = log.mark
       _ = try await client.updateDeviceSettings(DeviceSettingsPatch(placement: .alwaysOnMachine))
       let status = try await client.agentStatus()
@@ -108,12 +109,13 @@ extension RealDaemonTests {
       #expect(placement.placement == .alwaysOnMachine && placement.heldHere == nil)
       #expect(placement.note == "Handing the agent to vm-name…")
       #expect(placement.runsOn == nil, "let go, not yet picked up")
-      #expect(placement.relay == .off, "paired, and no relay reports anything else yet")
-      #expect(status.problem != nil, "the laptop's own agent is off")
+      #expect(placement.relay == .off, "still letting go of the lease")
+      #expect(status.problem == "Handing the agent to vm-name…", "the laptop's own agent is off")
       let there = try await log.placement(
         from: handMark, timeout: Self.handoverTimeout, "the machine runs the agent"
       ) { $0.runsOn?.deviceId == machineDevice.device.id && $0.note == nil }
       #expect(there.runsOn?.alwaysOnMachine == true && there.runsOn?.thisDevice == false)
+      #expect(there.relay == .connected)
       let onItself = try #require(try await onMachine.agentStatus().placement?.runsOn)
       #expect(onItself.thisDevice && onItself.alwaysOnMachine)
 

@@ -17,38 +17,6 @@ extension RealDaemonTests {
       return (client, log)
     }
 
-    /// Appends `- [ ] task` to today's daily note (created if needed); returns the note's path.
-    func addTask(_ task: String, with client: HTTPDaemonClient) async throws -> String {
-      let note = try await client.dailyNote("today", create: true)
-      for _ in 0..<5 {
-        let current = try await client.readNote(note.path)
-        let body =
-          current.content.isEmpty || current.content.hasSuffix("\n")
-          ? current.content : current.content + "\n"
-        do {
-          _ = try await client.writeNote(
-            note.path, content: body + "- [ ] \(task)\n", baseVersion: .match(current.version))
-          return note.path
-        } catch DaemonClientError.conflict {
-          continue
-        }
-      }
-      throw FixtureError("couldn't append “\(task)” to \(note.path)")
-    }
-
-    /// Waits for the task's pending approval.
-    func pendingApproval(for record: TaskAgentRecord, in log: EventLog, from: Int) async throws
-      -> ApprovalRequest
-    {
-      try await log.event(from: from, "a pending approval for “\(record.text)”") {
-        event -> ApprovalRequest? in
-        guard case .approvalUpsert(let approval) = event, approval.taskId == record.taskId,
-          approval.status == .pending
-        else { return nil }
-        return approval
-      }
-    }
-
     @Test func theAgentRunsInMockMode() async throws {
       let (client, _) = try await start()
 
@@ -112,7 +80,7 @@ extension RealDaemonTests {
 
       _ = try await addTask(task, with: client)
       let record = try await log.record(from: mark, text: task)
-      let approval = try await pendingApproval(for: record, in: log, from: mark)
+      let approval = try await log.pendingApproval(for: record, from: mark)
       _ = try await log.record(from: mark, text: task, status: .waitingApproval)
 
       #expect(approval.toolName == "mock_irreversible_action")
@@ -145,7 +113,7 @@ extension RealDaemonTests {
 
       _ = try await addTask(task, with: client)
       let record = try await log.record(from: mark, text: task)
-      let approval = try await pendingApproval(for: record, in: log, from: mark)
+      let approval = try await log.pendingApproval(for: record, from: mark)
       let denied = try await client.decideApproval(
         approval.id, ApprovalDecisionRequest(decision: .deny, note: "Friday is fully booked for me")
       )
@@ -181,7 +149,7 @@ extension RealDaemonTests {
 
       _ = try await addTask(task, with: client)
       let record = try await log.record(from: mark, text: task)
-      let approval = try await pendingApproval(for: record, in: log, from: mark)
+      let approval = try await log.pendingApproval(for: record, from: mark)
       let waiting = try await log.record(from: mark, text: task, status: .waitingApproval)
       let threadId = try #require(waiting.threadId)
       let cancelMark = log.mark
