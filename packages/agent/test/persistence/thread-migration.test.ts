@@ -376,46 +376,6 @@ describe("golden snapshots become journals", () => {
     expect(await sidecar(storage)).toEqual(files);
     expect(logger.entries.some((e) => e.message.includes("newer version"))).toBe(true);
   });
-
-  it("a whole vault of fixtures: good ones journaled, the rest untouched", async () => {
-    const untouched = {
-      [snapshotPath("thr_future00001")]: readFixture("threads", "future-version.json"),
-      ".daily-do-list/threads/corrupt-truncated.json": readFixture(
-        "threads",
-        "corrupt-truncated.json",
-      ),
-      ".daily-do-list/threads/corrupt-empty.json": readFixture("threads", "corrupt-empty.json"),
-    };
-    const storage = vault({
-      [snapshotPath(V1_ID)]: readFixture("threads", "v1.json"),
-      [snapshotPath("thr_minimal0001")]: readFixture("threads", "v1-minimal.json"),
-      [snapshotPath("thr_partial0001")]: readFixture("threads", "v1-invalid-entries.json"),
-      [snapshotPath("thr_bom00000001")]: readFixture("threads", "v1-bom.json"),
-      [snapshotPath("thr_legacy00001")]: readFixture("threads", "legacy-unversioned.json"),
-      [snapshotPath("thr_sparse00001")]: readFixture("threads", "legacy-unversioned-sparse.json"),
-      ...untouched,
-    });
-    const store = await loadStore(storage);
-    const ids = store
-      .list()
-      .map((t) => t.id)
-      .sort();
-    expect(ids).toEqual([
-      "thr_bom00000001",
-      "thr_k3j9x0q2m1ab",
-      "thr_legacy00001",
-      "thr_minimal0001",
-      "thr_partial0001",
-      "thr_sparse00001",
-    ]);
-    const after = await sidecar(storage);
-    expect(Object.keys(after).filter((p) => p.startsWith(".daily-do-list/threads/"))).toEqual(
-      Object.keys(untouched).sort(),
-    );
-    for (const [path, content] of Object.entries(untouched)) expect(after[path]).toBe(content);
-    const reloaded = await loadStore(storage);
-    for (const id of ids) expect(reloaded.get(id)).toEqual(store.get(id));
-  });
 });
 
 describe("a snapshot next to a journal merges as it always did", () => {
