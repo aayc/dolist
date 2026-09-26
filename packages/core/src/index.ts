@@ -7,6 +7,7 @@ export * from "./drawings/embed";
 export * from "./drawings/file";
 export * from "./drawings/merge";
 export * from "./drawings/types";
+export * from "./env-file";
 export * from "./events";
 export * from "./guards";
 export * from "./ids";
