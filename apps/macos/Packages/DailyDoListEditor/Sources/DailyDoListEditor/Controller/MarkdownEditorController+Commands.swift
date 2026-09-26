@@ -42,12 +42,6 @@ extension MarkdownEditorController {
   @discardableResult
   public func toggleInlineCode() -> Bool { toggle(.inlineCode, actionName: "Code") }
 
-  @discardableResult
-  public func toggleStrikethrough() -> Bool { toggle(.strikethrough, actionName: "Strikethrough") }
-
-  @discardableResult
-  public func toggleHighlight() -> Bool { toggle(.highlight, actionName: "Highlight") }
-
   /// ⌘K: `[text](|)` for selected text, `[|](url)` for a selected URL, `[|]()` otherwise.
   @discardableResult
   public func insertLink() -> Bool {

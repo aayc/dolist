@@ -29,7 +29,4 @@ extension DrawingEditor {
     }
     return ids
   }
-
-  /// Whether a pointer gesture is in progress.
-  public var isInteracting: Bool { gesture != nil || multiPointElementId != nil }
 }

@@ -43,15 +43,14 @@ editor.configure(EditorConfiguration(fontSize: 16, vimMode: true))
 | `snapshot()`, `restore(_:)` | Text, selection, scroll offset and the note's own `UndoManager` for instant tab switches. `restore` and `setText(_:resetUndo: true)` start a new document: badges are cleared and the caret line is always reported. |
 | `delegate` | `editorTextDidChange` (user edits only, including undo), `didClickBadge` (with its current line), `didClickAgentThread` (a sparkle), `didClickWikiLink(target:newWindow:)`, `didClickLink(url:)`, `previewFor(_: EditorLinkPreview)` (a link's tooltip: asked when hovering starts and when the tooltip shows; nil = `fallbackText`), `cursorDidMoveToLine` (only when the line changes), `editorDidRequestSave` (also `:w`), `vimStatusDidChange` (only when it changes; nil when vim mode ends), `perform(_: EditorVimRequest)` (vim's app commands; the default answers `.unavailable`), `drawingFor(target)`, `didEditDrawing`, `didEndEditingDrawing`, `willShowContextMenu` (see [Drawings](#drawings)). |
 | `drawingsDidChange()` | The host's drawings loaded or changed: embeds ask again (`drawingFor`), re-lay out the ones whose drawing changed, and a drawing being edited in place takes a version that came from elsewhere. |
-| `insertDrawingEmbed(_:)`, `beginEditingDrawing(atLine:)`, `endEditingDrawing(select:)` | Insert Drawing: the embed on a line of its own at the caret's line (returns its line), then edit it in place. Also `isEditingDrawing`, `editingDrawingPath`, `drawingCanvas`, `selectedDrawingLine`, `selectDrawing(atLine:)`. |
+| `insertDrawingEmbed(_:)`, `beginEditingDrawing(atLine:)`, `endEditingDrawing(select:)` | Insert Drawing: the embed on a line of its own at the caret's line (returns its line), then edit it in place. Also `isEditingDrawing`, `editingDrawingPath`, `drawingCanvas`, `selectedDrawingLine`. |
 
 Additions to the original contract (all source-compatible):
 
 - `EditorSnapshot.undoManager` (and an `undoManager:` init parameter, default `nil` = fresh history).
 - `badges` is computed (current lines) instead of a stored copy of what was set.
 - Commands, returning `false` when nothing happened (read-only, not a task line): `toggleTask(atLine:)`,
-  `toggleChecklist()`, `toggleBold()`, `toggleItalic()`, `toggleInlineCode()`,
-  `toggleStrikethrough()`, `toggleHighlight()`, `insertLink()`.
+  `toggleChecklist()`, `toggleBold()`, `toggleItalic()`, `toggleInlineCode()`, `insertLink()`.
 - `EditorBadge.tooltip`, `anchorText`, `isFading` and `EditorBadge.OrchestratorStatus` (all
   defaulted), and `EditorLineMatch`.
 

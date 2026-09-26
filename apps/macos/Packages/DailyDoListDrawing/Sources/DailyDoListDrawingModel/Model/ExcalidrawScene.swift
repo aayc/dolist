@@ -45,11 +45,4 @@ public struct ExcalidrawScene: Hashable, Sendable {
   public func element(id: String) -> ExcalidrawElement? {
     elements.first { $0.id == id }
   }
-
-  /// The scene without deleted elements (for exports; merges want the tombstones).
-  public func withoutDeletedElements() -> ExcalidrawScene {
-    var copy = self
-    copy.elements = visibleElements
-    return copy
-  }
 }

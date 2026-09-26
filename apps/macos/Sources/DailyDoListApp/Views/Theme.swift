@@ -20,8 +20,6 @@ enum Theme {
   /// The sidebar.
   static let secondaryBackground = Color(lightHex: 0xF3F5F8, darkHex: 0x151A21)
   static let hover = Color(lightHex: 0xE9EDF2, darkHex: 0x1E2530)
-  /// Selected rows, the active tab.
-  static let activeBackground = Color(lightHex: 0xDDE4EE, darkHex: 0x242D3A)
   static let border = Color(lightHex: 0xD5DCE5, darkHex: 0x283140)
   /// Every line between and inside the panes, opaque so it reads the same on any background.
   static let separator = Color(lightHex: 0xD5DCE5, darkHex: 0x283140)
@@ -30,8 +28,6 @@ enum Theme {
   static let faintText = Color(lightHex: 0x8492A6, darkHex: 0x7A8594)
   /// Cards, popovers, toasts, code.
   static let elevated = Color(lightHex: 0xFFFFFF, darkHex: 0x1A2029)
-  /// The open tab, on the header's background.
-  static let selectedTab = Color(lightHex: 0xDDE4EE, darkHex: 0x242D3A)
 
   /// Every pane's top row (sidebar, tabs, agent panel), so their bottom lines meet.
   static let headerHeight: CGFloat = 40

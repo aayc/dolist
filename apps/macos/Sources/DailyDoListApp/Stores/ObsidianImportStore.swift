@@ -149,14 +149,6 @@ final class ObsidianImportStore {
     errors[.switchVault] = nil
   }
 
-  /// Picks another Obsidian vault.
-  func clearSource() {
-    source = nil
-    preview = nil
-    errors[.preview] = nil
-    errors[.start] = nil
-  }
-
   // MARK: - Update from Obsidian
 
   @discardableResult

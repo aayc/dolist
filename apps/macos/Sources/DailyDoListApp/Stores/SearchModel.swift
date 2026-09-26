@@ -12,8 +12,6 @@ struct SearchGroup: Identifiable, Equatable {
   var id: String { path }
   var title: String { VaultPath.stem(path) }
   var folder: String { VaultPath.dirname(path) }
-  var nameHits: [SearchHit] { hits.filter { $0.kind == .name } }
-  var contentHits: [SearchHit] { hits.filter { $0.kind == .content } }
 
   /// "·" for a name hit, else the 1-based line number.
   static func lineLabel(for hit: SearchHit) -> String {

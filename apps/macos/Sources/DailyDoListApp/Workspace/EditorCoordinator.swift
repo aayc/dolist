@@ -101,8 +101,6 @@ final class EditorCoordinator {
     path == activePath ? controller.text : snapshots[path]?.text
   }
 
-  func hasSnapshot(_ path: String) -> Bool { snapshots[path] != nil }
-
   /// A newer server version (no local edits): minimal-diff update of the active note; inactive
   /// notes drop their snapshot and reload from the store when shown again.
   func applyRemote(_ content: String, to path: String) {
