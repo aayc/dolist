@@ -25,6 +25,13 @@ the Azure VM.
 
 ## Shipped on `main` (newest first)
 
+- `aa70f6a` Performance, web and daemon: vault event bursts published once per frame (300 new files
+  on a 5,000-note vault: 4.2 s to 21 ms), the explorer and chats render only the rows in view (a
+  1,000-message thread opens in 18 ms instead of 120), one render per palette key; daemon restarts
+  about twice as fast (file versions kept in `$DDL_HOME/cache/vault-versions.json`, keyed on mtime
+  and size like the in-memory cache), tree 6x and search 14x faster at 10,000 notes, the MCP SDK
+  loads only when `mcp.json` names servers, and a request-like line starts a turn about 0.9 s after
+  the cursor leaves it (was 2.7 s). New budgets in `docs/PERFORMANCE.md`.
 - `b220dd2` Patched `nanoid` and `lodash-es` for Dependabot's 11 open alerts (they came with
   Excalidraw and its Mermaid importer): pnpm overrides; the web bundle is unchanged. **Installed**
   on the main development Mac (agent live, app control kept); Dependabot: 0 open alerts.
