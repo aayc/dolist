@@ -4,7 +4,7 @@
  * discovered, nothing is persisted, and the only extension loaded is our safety gate.
  */
 import { join } from "node:path";
-import { type Logger, silentLogger, TOOL_NAME_RE, type ToolSpec } from "@ddl/core";
+import { type Logger, silentLogger, type ToolSpec, validateToolNames } from "@ddl/core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import {
   createAgentSession,
@@ -219,15 +219,6 @@ export class PiHarness implements Harness {
       ...(this.options.appUrl ? { appUrl: this.options.appUrl } : {}),
       ...(this.options.baseUrl ? { baseUrl: this.options.baseUrl } : {}),
     });
-}
-
-function validateToolNames(tools: readonly ToolSpec[]): void {
-  const seen = new Set<string>();
-  for (const tool of tools) {
-    if (!TOOL_NAME_RE.test(tool.name)) throw new Error(`Invalid tool name "${tool.name}"`);
-    if (seen.has(tool.name)) throw new Error(`Duplicate tool name "${tool.name}"`);
-    seen.add(tool.name);
-  }
 }
 
 /** Pi drops tool prompt guidelines when the system prompt is overridden, so we append them. */

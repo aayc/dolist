@@ -83,6 +83,16 @@ export interface ToolSpec<I = unknown, D = unknown> {
 
 export const TOOL_NAME_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 
+/** Throws unless every tool has a valid, unique name. */
+export function validateToolNames(tools: readonly ToolSpec[]): void {
+  const seen = new Set<string>();
+  for (const tool of tools) {
+    if (!TOOL_NAME_RE.test(tool.name)) throw new Error(`Invalid tool name "${tool.name}"`);
+    if (seen.has(tool.name)) throw new Error(`Duplicate tool name "${tool.name}"`);
+    seen.add(tool.name);
+  }
+}
+
 export function textResult<D = unknown>(text: string, details?: D): ToolResult<D> {
   return details === undefined
     ? { content: [{ type: "text", text }] }
