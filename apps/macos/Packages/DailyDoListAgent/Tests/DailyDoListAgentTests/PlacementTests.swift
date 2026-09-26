@@ -34,10 +34,10 @@ struct PlacementTests {
     #expect(tooltip.lines.first?.text == "No always-on machine is set up")
     #expect(tooltip.detail == "Set one up to run the orchestrator there.")
 
-    // The stored choice waits: the control shows where it runs now.
+    // The stored choice waits, and the control shows it (like the web's).
     let chosen = try #require(
       Location(status: Fixture.placement(.alwaysOnMachine, heldHere: .noMachine)))
-    #expect(chosen.selection == .thisDevice && !chosen.canSwitch)
+    #expect(chosen.selection == .alwaysOnMachine && !chosen.canSwitch)
     #expect(
       chosen.heldTooltip?.detail
         == "Set one up to run the orchestrator there. It moves there, as you chose, once that's done."

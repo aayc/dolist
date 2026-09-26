@@ -28,7 +28,8 @@ public struct OrchestratorLocation: Equatable, Sendable {
 
   /// This is the always-on machine: there's nothing to choose.
   public var isHost: Bool
-  /// Where the switch says it runs: `.alwaysOnMachine` (on) or `.thisDevice` (off).
+  /// The choice the switch shows (the stored one, or the one being saved, like the web's):
+  /// `.alwaysOnMachine` (on) or `.thisDevice` (off), even while the agent is held here.
   public var selection: AgentPlacement
   /// The switch can be flipped (not held here, not switching, not the host).
   public var canSwitch: Bool
@@ -61,7 +62,7 @@ public struct OrchestratorLocation: Equatable, Sendable {
     heldHere = isHost ? nil : status.heldHere
     let stored: AgentPlacement =
       status.placement == .alwaysOnMachine ? .alwaysOnMachine : .thisDevice
-    selection = pending ?? (heldHere == nil ? stored : .thisDevice)
+    selection = pending ?? stored
     isSwitching = pending != nil
     canSwitch = !isHost && heldHere == nil && pending == nil
     offersRunHere = false

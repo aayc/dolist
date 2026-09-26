@@ -297,8 +297,9 @@ this device's choice, who runs the agent now and the relay to the machine in the
   command that does it (below). Flipping it shows the handover's note as it happens ("Handing the
   agent to vm-name…", "Taking over from vm-name…"; "Moving the orchestrator…" while the change is
   on its way). While the agent is held on this device (no always-on machine set up, or no sync)
-  the switch is disabled: its tooltip says why, a line under it says what it's waiting for, and
-  **Set Up…** opens the right section of Settings. When the machine can't be reached, **Run It
+  the switch is disabled but still shows the stored choice (as on the web): its tooltip says why,
+  a line under it says what it's waiting for, and **Set Up…** opens the right section of
+  Settings. When the machine can't be reached, **Run It
   on This Device Instead** takes it back; when this device isn't paired, **Pair…** opens
   Settings, and **Pair Again…** when the machine no longer accepts it. "Connecting to vm-name…"
   shows while the relay connects. On the always-on machine itself the row just says "This is the
