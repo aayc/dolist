@@ -94,23 +94,51 @@ describe("the agent panel's location header", () => {
 
   it("flips where the orchestrator runs with PATCH /api/device", async () => {
     const { updateDevice } = render({ placement: "this_device", runsOn: HERE, relay: "off" });
-    const toggle = q("placement-toggle")!;
-    expect(toggle.dataset.selected).toBe("this_device");
+    const remote = q<HTMLButtonElement>("placement-toggle")!;
+    expect(container.querySelector(".placement-row")!.textContent).toBe("OrchestratorRemote");
+    expect(remote.getAttribute("role")).toBe("switch");
+    expect(remote.getAttribute("aria-label")).toBe("Remote");
+    expect(remote.getAttribute("aria-checked")).toBe("false");
+    expect(remote.dataset.tooltip).toBe("Run the orchestrator on your always-on machine");
     expect(q("agent-location-line-text")?.textContent).toBe("Running on this device");
-    await act(async () => q<HTMLButtonElement>("placement-toggle-always_on_machine")!.click());
+    await act(async () => remote.click());
     expect(updateDevice).toHaveBeenCalledWith({ placement: "always_on_machine" });
-    expect(q("placement-toggle")!.dataset.selected).toBe("always_on_machine");
+    expect(q("placement-toggle")).toBe(remote);
+    expect(remote.getAttribute("aria-checked")).toBe("true");
+    expect(remote.dataset.tooltip).toBe("Run the orchestrator on this device");
     expect(useAgentStore.getState().status?.placement?.placement).toBe("always_on_machine");
-    // Clicking the chosen side again does nothing.
-    await act(async () => q<HTMLButtonElement>("placement-toggle-always_on_machine")!.click());
-    expect(updateDevice).toHaveBeenCalledTimes(1);
+    await act(async () => remote.click());
+    expect(updateDevice).toHaveBeenLastCalledWith({ placement: "this_device" });
+    expect(remote.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("is disabled while the change is on its way, saying so", async () => {
+    let answer = () => {};
+    render(
+      { placement: "this_device", runsOn: HERE, relay: "off" },
+      {
+        update: (patch) =>
+          new Promise((resolve) => {
+            answer = () => resolve({ ...DEVICE, ...patch } as DeviceSettingsResponse);
+          }),
+      },
+    );
+    const remote = q<HTMLButtonElement>("placement-toggle")!;
+    act(() => remote.click());
+    expect(remote.disabled).toBe(true);
+    expect(remote.getAttribute("aria-checked")).toBe("true");
+    expect(remote.parentElement!.dataset.tooltip).toBe("Moving the orchestrator…");
+    await act(async () => answer());
+    expect(q("placement-toggle")).toBe(remote);
+    expect(remote.disabled).toBe(false);
+    expect(remote.parentElement!.dataset.tooltip).toBeUndefined();
   });
 
   it("is disabled while held here, with a tooltip saying why and a link to the fix", () => {
     render({ placement: "this_device", heldHere: "no_machine", runsOn: HERE, relay: "off" });
-    const toggle = q("placement-toggle")!;
-    expect(toggle.dataset.tooltip).toBe("Set up an always-on machine in Settings");
-    for (const button of toggle.querySelectorAll("button")) expect(button.disabled).toBe(true);
+    const remote = q<HTMLButtonElement>("placement-toggle")!;
+    expect(remote.disabled).toBe(true);
+    expect(remote.parentElement!.dataset.tooltip).toBe("Set up an always-on machine in Settings");
     const link = q<HTMLButtonElement>("agent-location-line-action")!;
     expect(link.textContent).toBe("Set up an always-on machine");
     act(() => link.click());
@@ -161,8 +189,8 @@ describe("the agent panel's location header", () => {
         },
       },
     );
-    await act(async () => q<HTMLButtonElement>("placement-toggle-always_on_machine")!.click());
-    expect(q("placement-toggle")!.dataset.selected).toBe("this_device");
+    await act(async () => q<HTMLButtonElement>("placement-toggle")!.click());
+    expect(q("placement-toggle")!.getAttribute("aria-checked")).toBe("false");
     expect(q("agent-location-line")!.dataset.kind).toBe("error");
     expect(q("agent-location-line-text")!.textContent).toContain("DDL_AGENT_PLACEMENT");
   });
@@ -172,6 +200,6 @@ describe("the agent panel's location header", () => {
       { placement: "this_device", runsOn: HERE, relay: "off" },
       { device: { ...DEVICE, lockedByEnv: ["placement"] } },
     );
-    expect(q("placement-toggle")!.dataset.tooltip).toContain("DDL_AGENT_PLACEMENT");
+    expect(q("placement-toggle")!.parentElement!.dataset.tooltip).toContain("DDL_AGENT_PLACEMENT");
   });
 });

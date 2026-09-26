@@ -342,16 +342,18 @@ audit of every routines screen in `e2e/polish.spec.ts`.
 `src/features/remote/`, per [docs/ALWAYS_ON.md](../../docs/ALWAYS_ON.md) ("Where the agent runs",
 "Settings"). The wording is meant to match the Mac app's.
 
-- **The orchestrator toggle**, under the inbox's header: "where the orchestrator runs", This
-  device or Always-on machine (`PATCH /api/device { placement }`). The line under it says what's
+- **The orchestrator toggle**, under the inbox's header: "Orchestrator … Remote" and a switch
+  (`components/Switch`, the one Settings uses), on for the always-on machine and off for this
+  device (`PATCH /api/device { placement }`). Its tooltip says what flipping it does ("Run the
+  orchestrator on your always-on machine", "… on this device"). The line under it says what's
   happening from the agent status's `placement`: the handover note (`note`) while the agent moves,
   where it runs (`runsOn`), "Run it on this device instead" when the relay is `unreachable`,
   "Pair it" when it's `not_paired`, and a warning when this device runs the agent but its
-  `readiness` says it can't. While `heldHere` is set the toggle is disabled, its tooltip says why
+  `readiness` says it can't. While `heldHere` is set the switch is disabled, its tooltip says why
   ("Set up an always-on machine in Settings", "This device doesn't sync") and the line links to
-  that Settings section; `lockedByEnv` disables it too. On the always-on machine
-  (`always_on_host`) it says "This is the always-on machine". A daemon that doesn't report
-  placement shows no toggle.
+  that Settings section; `lockedByEnv` disables it too, and so does a change on its way ("Moving
+  the orchestrator…"). On the always-on machine (`always_on_host`) it says "This is the always-on
+  machine". A daemon that doesn't report placement shows no toggle.
 - **Read-only**: while this device can't act on the agent (`readOnlyReason`: the machine can't be
   reached, this device isn't paired with it, or another device runs the agent), a banner above the
   agent panel says so ("The always-on machine can't be reached — showing the last synced state",
@@ -366,7 +368,7 @@ audit of every routines screen in `e2e/polish.spec.ts`.
   routines, but not thread details or records. When the machine no longer accepts this device,
   Settings → Always-on machine offers "Pair again…".
 - **Settings** (a chunk of its own, `features/remote/settings`, prefetched with Settings): Agent
-  location (the toggle, where it runs, this device's name, its readiness with fix-it hints),
+  location (the Remote switch, where it runs, this device's name, its readiness with fix-it hints),
   Always-on machine (pair with an address and a code, then its status, readiness, Check now,
   Forget, and a link to its web app), Sync (address, vault, a write-only token shown as "Saved",
   the sync status, turning it off), Devices (paired devices, revoke, "Pair a new device" with the
@@ -403,7 +405,7 @@ accepts this device. Pair it again." otherwise.
 
 ### Tests
 
-Unit: `placement.test.ts` (the toggle's states, the status line, the read-only reason),
+Unit: `placement.test.ts` (the switch's states, the status line, the read-only reason),
 `remote-errors.test.ts` (every error code's message), `inputs.test.ts` (validation, readiness
 hints), `pairing-code.test.ts` (formatting and the caret, times), `AgentLocation.test.tsx`,
 `read-only.test.tsx` (the banner, disabled actions), `PairingScreen.test.tsx` (the form, the

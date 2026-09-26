@@ -1,4 +1,4 @@
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle, Server } from "lucide-react";
 import { useServices } from "../../app/services";
 import { cx } from "../../lib/cx";
 import { useAgentStore } from "../../state/agent-store";
@@ -7,6 +7,7 @@ import { ui } from "../../state/ui-store";
 import { setPlacement, useDeviceStore } from "./device-store";
 import { PlacementToggle } from "./PlacementToggle";
 import { type LocationTone, locationLine } from "./placement";
+import "../../styles/remote.css";
 
 const DOT_TONE: Record<LocationTone, string> = {
   here: "tone-success",
@@ -18,13 +19,30 @@ const DOT_TONE: Record<LocationTone, string> = {
   danger: "tone-danger",
 };
 
-/** Under the agent panel's header: the orchestrator toggle and where the agent runs now. */
+/**
+ * Under the agent panel's header: "Orchestrator … Remote" and its switch (on the always-on machine
+ * itself, that it is), and where the agent runs now.
+ */
 export function AgentLocation() {
   const relay = useAgentStore((s) => s.status?.placement?.relay);
+  const host = useAgentStore((s) => s.status?.placement?.placement === "always_on_host");
   if (!relay) return null;
   return (
     <div className="agent-location" data-testid="agent-location" data-relay={relay}>
-      <PlacementToggle />
+      {host ? (
+        <div className="placement-host" data-testid="placement-host">
+          <Server size={14} aria-hidden="true" />
+          This is the always-on machine
+        </div>
+      ) : (
+        <div className="placement-row">
+          Orchestrator
+          <span className="placement-remote" aria-hidden="true">
+            Remote
+          </span>
+          <PlacementToggle />
+        </div>
+      )}
       <LocationStatus />
     </div>
   );

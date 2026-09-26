@@ -1,16 +1,14 @@
-import { Server } from "lucide-react";
 import { useEffect } from "react";
 import { useServices } from "../../app/services";
-import { cx } from "../../lib/cx";
+import { Switch } from "../../components/Switch";
 import { useAgentStore } from "../../state/agent-store";
 import { loadDevice, setPlacement, useDeviceStore } from "./device-store";
-import { PLACEMENT_CHOICES, toggleState } from "./placement";
-import "../../styles/remote.css";
+import { toggleState } from "./placement";
 
 /**
- * "Where the orchestrator runs": This device or the always-on machine, one click away. While it
- * can't be switched (held here, or set by an environment variable) it's disabled and its tooltip
- * says why; on the always-on machine itself it says so instead.
+ * The Remote switch: on, the orchestrator runs on the always-on machine; off, on this device.
+ * While it can't be flipped (held here, set by an environment variable, or moving) it's disabled
+ * and its wrapper's tooltip says why. Nothing on the always-on machine itself.
  */
 export function PlacementToggle({ testId = "placement-toggle" }: { testId?: string }) {
   const { client } = useServices();
@@ -23,44 +21,24 @@ export function PlacementToggle({ testId = "placement-toggle" }: { testId?: stri
   }, [client, shown]);
 
   const state = toggleState(placement, { locked, pending });
-  if (state.kind === "hidden") return null;
-  if (state.kind === "host") {
-    return (
-      <div className="placement-host" data-testid="placement-host">
-        <Server size={14} aria-hidden="true" />
-        This is the always-on machine
-      </div>
-    );
-  }
+  if (!state) return null;
+  // Always wrapped (not DisabledReason), so disabling it doesn't remount it mid-slide.
   return (
-    <div
-      className={cx("placement-toggle", state.disabled && "is-held")}
-      data-tooltip={state.disabled ?? undefined}
-      data-testid={testId}
-      data-selected={state.selected}
-      data-disabled={state.disabled ? "true" : undefined}
-    >
-      <fieldset className="segmented">
-        <legend className="sr-only">Where the orchestrator runs</legend>
-        {PLACEMENT_CHOICES.map(({ value, label }) => {
-          const active = state.selected === value;
-          return (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={active}
-              className={cx("segmented-item", active && "is-active")}
-              disabled={state.disabled !== null || state.saving}
-              onClick={() => {
-                if (!active) void setPlacement(client, value);
-              }}
-              data-testid={`${testId}-${value}`}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </fieldset>
-    </div>
+    <span className="disabled-reason" data-tooltip={state.disabled ?? undefined}>
+      <Switch
+        checked={state.remote}
+        onChange={(remote) =>
+          void setPlacement(client, remote ? "always_on_machine" : "this_device")
+        }
+        label="Remote"
+        disabled={state.disabled !== null}
+        tooltip={
+          state.remote
+            ? "Run the orchestrator on this device"
+            : "Run the orchestrator on your always-on machine"
+        }
+        testId={testId}
+      />
+    </span>
   );
 }

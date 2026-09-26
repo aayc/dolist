@@ -46,19 +46,21 @@ test.describe("the orchestrator toggle", () => {
   }) => {
     await openApp(page, "mockSpeed=1&mockRemote=ready");
     await openPanel(page);
-    const toggle = page.getByTestId("placement-toggle");
-    await expect(toggle).toHaveAttribute("data-selected", "this_device");
+    const remote = page.getByRole("switch", { name: "Remote" });
+    await expect(remote).toHaveAttribute("aria-checked", "false");
     await expect(line(page)).toHaveText("Running on this device");
 
-    await page.getByTestId("placement-toggle-always_on_machine").click();
-    await expect(toggle).toHaveAttribute("data-selected", "always_on_machine");
+    await remote.click();
+    await expect(remote).toHaveAttribute("aria-checked", "true");
     await expect(line(page)).toHaveText("Handing the agent to vm-1…");
     await expect(line(page)).toHaveText("Running on vm-1", { timeout: 5_000 });
     expect(await (await tooltipOf(page, line(page))).textContent()).toBe(
       "vm-1 is the always-on machine",
     );
+    await expect(await tooltipOf(page, remote)).toHaveText("Run the orchestrator on this device");
 
-    await page.getByTestId("placement-toggle-this_device").click();
+    await remote.click();
+    await expect(remote).toHaveAttribute("aria-checked", "false");
     await expect(line(page)).toHaveText("Taking over from vm-1…");
     await expect(line(page)).toHaveText("Running on this device", { timeout: 5_000 });
     await expect(page.getByTestId("agent-banner")).toHaveCount(0);
@@ -70,8 +72,7 @@ test.describe("the orchestrator toggle", () => {
     await openApp(page, "mockRemote=none");
     await openPanel(page);
     const toggle = page.getByTestId("placement-toggle");
-    await expect(toggle).toHaveAttribute("data-disabled", "true");
-    await expect(page.getByTestId("placement-toggle-always_on_machine")).toBeDisabled();
+    await expect(toggle).toBeDisabled();
     await expect(await tooltipOf(page, toggle)).toHaveText("This device doesn't sync");
 
     await page.getByTestId("agent-location-line-action").click();
@@ -104,10 +105,7 @@ test.describe("the orchestrator toggle", () => {
     );
     await page.getByTestId("agent-banner-run-here").click();
     await expect(line(page)).toHaveText("Running on this device", { timeout: 5_000 });
-    await expect(page.getByTestId("placement-toggle")).toHaveAttribute(
-      "data-selected",
-      "this_device",
-    );
+    await expect(page.getByTestId("placement-toggle")).toHaveAttribute("aria-checked", "false");
     await expect(page.getByTestId("agent-banner")).toHaveCount(0);
   });
 
@@ -185,9 +183,12 @@ test.describe("settings", () => {
   }) => {
     await openApp(page, "mockRemote=unready");
     await openSettings(page, "location");
+    await expect(page.getByTestId("setting-placement")).toContainText(
+      "RemoteRun the orchestrator on your always-on machine",
+    );
     await expect(page.getByTestId("settings-placement-toggle")).toHaveAttribute(
-      "data-selected",
-      "this_device",
+      "aria-checked",
+      "false",
     );
     await expect(page.getByTestId("settings-location-line-text")).toHaveText(
       "Running on this device, which isn't ready",
@@ -246,7 +247,7 @@ test.describe("settings", () => {
     // Now the toggle can hand the agent over.
     await page.keyboard.press("Escape");
     await openPanel(page);
-    await expect(page.getByTestId("placement-toggle-always_on_machine")).toBeEnabled();
+    await expect(page.getByTestId("placement-toggle")).toBeEnabled();
 
     await openSettings(page, "machine");
     await page.getByTestId("machine-forget").click();

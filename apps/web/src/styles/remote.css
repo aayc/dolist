@@ -9,69 +9,23 @@
   border-bottom: 1px solid var(--ddl-border);
 }
 
-/* The segmented control, as in Settings (whose stylesheet the agent panel doesn't load). */
-.placement-toggle .segmented {
+.placement-row {
   display: flex;
-  margin: 0;
-  padding: 2px;
-  border: 0;
-  border-radius: var(--radius-m);
-  background: var(--ddl-bg-hover);
-}
-
-.placement-toggle .segmented-item {
-  flex: 1;
-  min-width: 0;
-  height: 26px;
-  padding: 0 12px;
-  overflow: hidden;
-  border: 0;
-  border-radius: var(--radius-s);
-  background: transparent;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
   color: var(--ddl-text-muted);
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition:
-    background-color var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.placement-toggle .segmented-item:hover:not(:disabled) {
-  color: var(--ddl-text);
-}
-
-.placement-toggle .segmented-item:active:not(.is-active, :disabled) {
-  background: color-mix(in srgb, var(--ddl-bg) 50%, transparent);
-}
-
-.placement-toggle .segmented-item.is-active {
-  background: var(--ddl-bg);
-  color: var(--ddl-text);
-  box-shadow: var(--ddl-shadow-small);
-}
-
-.placement-toggle .segmented-item:focus-visible {
-  outline-offset: -2px;
-}
-
-.agent-location .segmented-item {
-  height: 24px;
-  padding: 0 8px;
   font-size: 12px;
 }
 
-/* Disabled with a reason: the wrapper takes the pointer so its tooltip shows. */
-.placement-toggle.is-held .segmented-item {
-  pointer-events: none;
+.placement-remote {
+  margin-left: auto;
+  color: var(--ddl-text);
 }
 
-.placement-toggle .segmented-item:disabled:not(.is-active) {
-  color: var(--ddl-text-faint);
-}
-
-.placement-toggle .segmented-item.is-active:disabled {
-  color: var(--ddl-text-muted);
+.placement-row .switch {
+  --switch-width: 28px;
+  --switch-height: 16px;
 }
 
 .placement-host {
@@ -124,11 +78,6 @@
 }
 
 /* ── Settings: Agent location, Always-on machine, Sync, Devices, Remote access ── */
-
-.settings-content .placement-toggle {
-  width: 100%;
-  max-width: 380px;
-}
 
 .settings-content .agent-location-line {
   margin: 4px 0 8px;

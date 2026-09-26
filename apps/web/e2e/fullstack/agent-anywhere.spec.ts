@@ -92,7 +92,7 @@ test("without sync, the agent is held on this device, and the toggle says why", 
   await openApp(page);
   await openPanel(page);
   const toggle = page.getByTestId("placement-toggle");
-  await expect(toggle).toHaveAttribute("data-disabled", "true");
+  await expect(toggle).toBeDisabled();
   await expect(await tooltipOf(page, toggle)).toHaveText("This device doesn't sync");
   await expect(line(page)).toHaveText("Running on this device");
   await expect(page.getByTestId("agent-location-line-action")).toHaveText("Set up sync");
@@ -154,7 +154,7 @@ test("Settings → Always-on machine pairs with a code printed on the machine", 
   // With sync and a machine, the toggle can hand the agent over.
   await page.keyboard.press("Escape");
   await openPanel(page);
-  await expect(page.getByTestId("placement-toggle-always_on_machine")).toBeEnabled();
+  await expect(page.getByTestId("placement-toggle")).toBeEnabled();
 });
 
 test("the toggle hands the agent to the machine and takes it back", async ({ page }) => {
@@ -164,16 +164,14 @@ test("the toggle hands the agent to the machine and takes it back", async ({ pag
   // Set to this device, it took the agent over from the machine once sync came on.
   await expect(line(page)).toHaveText("Running on this device", { timeout: HANDOVER_MS });
 
-  await page.getByTestId("placement-toggle-always_on_machine").click();
-  await expect(page.getByTestId("placement-toggle")).toHaveAttribute(
-    "data-selected",
-    "always_on_machine",
-  );
+  const remote = page.getByTestId("placement-toggle");
+  await remote.click();
+  await expect(remote).toHaveAttribute("aria-checked", "true");
   await expect(line(page)).toHaveText(`Running on ${alwaysOn.machine.name}`, {
     timeout: HANDOVER_MS,
   });
 
-  await page.getByTestId("placement-toggle-this_device").click();
+  await remote.click();
   await expect(line(page)).toHaveText(`Taking over from ${alwaysOn.machine.name}…`, {
     timeout: 10_000,
   });
@@ -185,7 +183,7 @@ test("relayed to the machine, this device acts on its agent", async ({ page }) =
   await openApp(page);
   await openPanel(page);
   await expect(line(page)).toHaveText("Running on this device", { timeout: HANDOVER_MS });
-  await page.getByTestId("placement-toggle-always_on_machine").click();
+  await page.getByTestId("placement-toggle").click();
   await expect(page.getByTestId("agent-location")).toHaveAttribute("data-relay", "connected", {
     timeout: HANDOVER_MS,
   });
@@ -249,7 +247,7 @@ test("when the machine goes away, this device shows its work read-only until it'
   await expect(page.getByTestId("agent-banner")).toHaveCount(0);
 
   // Back to this device for what follows.
-  await page.getByTestId("placement-toggle-this_device").click();
+  await page.getByTestId("placement-toggle").click();
   await expect(line(page)).toHaveText("Running on this device", { timeout: 2 * HANDOVER_MS });
 });
 

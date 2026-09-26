@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useServices } from "../../../app/services";
 import { updateAgentState, useAgentStore } from "../../../state/agent-store";
+import { Setting } from "../../settings/Setting";
 import { LocationStatus } from "../AgentLocation";
 import { applyDevice, loadDevice, useDeviceStore } from "../device-store";
 import { deviceNameProblem } from "../inputs";
@@ -51,18 +52,13 @@ export function AgentLocationSection({ go }: { go: GoToSection }) {
               </div>
             </div>
           ) : (
-            <div className="setting setting-stacked" data-testid="setting-placement">
-              <div className="setting-info">
-                <div className="setting-name">Where the orchestrator runs</div>
-                <div className="setting-description">
-                  <strong>This device</strong>: the agent runs here, and takes over from the
-                  always-on machine while this device is on. <strong>Always-on machine</strong>: it
-                  runs there, even while this device sleeps, and this device shows and approves its
-                  work.
-                </div>
-              </div>
+            <Setting
+              name="Remote"
+              description="Run the orchestrator on your always-on machine, even while this device sleeps."
+              testId="setting-placement"
+            >
               <PlacementToggle testId="settings-placement-toggle" />
-            </div>
+            </Setting>
           )}
           <LocationStatus testId="settings-location-line" />
           {locked ? (
