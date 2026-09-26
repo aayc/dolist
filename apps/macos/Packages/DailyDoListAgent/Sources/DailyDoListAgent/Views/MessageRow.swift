@@ -189,7 +189,7 @@ private struct AgentText: View {
   }
 }
 
-/// Under a message that didn't go out: why (in the tooltip), Retry and Remove.
+/// Under a message that didn't go out: why (in the tooltip), Retry and Discard.
 private struct UnsentBar: View {
   let reason: String
   let onRetry: () -> Void
@@ -203,7 +203,7 @@ private struct UnsentBar: View {
       Button("Retry", action: onRetry)
         .buttonStyle(ChromeButtonStyle(horizontalPadding: 6, verticalPadding: 2))
         .foregroundStyle(AgentTheme.accent)
-      Button("Remove", action: onDiscard)
+      Button("Discard", action: onDiscard)
         .buttonStyle(ChromeButtonStyle(horizontalPadding: 6, verticalPadding: 2))
         .foregroundStyle(AgentTheme.mutedText)
     }

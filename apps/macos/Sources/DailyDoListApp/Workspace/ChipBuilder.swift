@@ -7,10 +7,6 @@ import Foundation
 enum ChipBuilder {
   typealias Status = EditorBadge.OrchestratorStatus
 
-  /// How far from the line it saw the orchestrator's line can have moved and still be found by a
-  /// similar (not identical) text.
-  static let searchWindow = 20
-
   struct Presentation: Equatable {
     var status: String
     /// Empty for the noticed dot.
@@ -106,37 +102,35 @@ enum ChipBuilder {
     return byLine.values.sorted { ($0.line, $0.id) < ($1.line, $1.id) }
   }
 
-  /// Where a line the orchestrator saw (`line`, `text`) is now: that line if it still has the
-  /// text, else the nearest line with it, else the most similar line the editor would recognize
-  /// as it within ``searchWindow`` lines (the nearest on ties). Nil when it's gone.
+  /// Where a line the orchestrator saw (`line`, `text`) is now, like the web's `findEditedLine`:
+  /// that line while the editor still recognizes it, else the nearest line with that text, else
+  /// the nearest line the editor would recognize as it, anywhere in the note (the earlier on
+  /// ties). Nil when it's gone.
   static func resolve(_ line: Int, text: String, in lines: [String], normalized: [String]? = nil)
     -> Int?
   {
     let keys = normalized ?? lines.map(EditorLineMatch.normalize)
     let wanted = EditorLineMatch.normalize(text)
     guard !wanted.isEmpty, !lines.isEmpty else { return nil }
-    if keys.indices.contains(line), keys[line] == wanted { return line }
-    if let exact = keys.indices.filter({ keys[$0] == wanted }).min(by: {
-      abs($0 - line) < abs($1 - line)
-    }) {
-      return exact
+    if lines.indices.contains(line), EditorLineMatch.recognizes(text, lines[line]) { return line }
+    return nearest(to: line, in: lines.indices) { keys[$0] == wanted }
+      ?? nearest(to: line, in: lines.indices) { EditorLineMatch.recognizes(text, lines[$0]) }
+  }
+
+  /// The index in `indices` nearest to `line` that matches (the earlier on ties), looking outward
+  /// so the first match found is the answer.
+  private static func nearest(
+    to line: Int, in indices: Range<Int>, where matches: (Int) -> Bool
+  ) -> Int? {
+    guard !indices.isEmpty else { return nil }
+    let origin = min(max(line, indices.lowerBound), indices.upperBound - 1)
+    let reach = max(origin - indices.lowerBound, indices.upperBound - 1 - origin)
+    for distance in 0...reach {
+      let before = origin - distance
+      if before >= indices.lowerBound, matches(before) { return before }
+      let after = origin + distance
+      if distance > 0, after < indices.upperBound, matches(after) { return after }
     }
-    let low = max(0, line - searchWindow)
-    let high = min(lines.count - 1, line + searchWindow)
-    guard low <= high else { return nil }
-    var best: (index: Int, similarity: Double)?
-    for index in low...high where EditorLineMatch.recognizes(text, lines[index]) {
-      let similarity = EditorLineMatch.similarity(text, lines[index])
-      guard let current = best else {
-        best = (index, similarity)
-        continue
-      }
-      if similarity > current.similarity
-        || (similarity == current.similarity && abs(index - line) < abs(current.index - line))
-      {
-        best = (index, similarity)
-      }
-    }
-    return best?.index
+    return nil
   }
 }
