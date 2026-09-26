@@ -23,6 +23,8 @@ export interface LocalBrowserOptions {
   snapshotMaxChars?: number;
   actionTimeoutMs?: number;
   navigationTimeoutMs?: number;
+  /** How long Chrome may take to start. Default 30 s. */
+  launchTimeoutMs?: number;
   settleMaxMs?: number;
   screencast?: Partial<ScreencastOptions>;
   screencastIdleMs?: number;
@@ -173,7 +175,7 @@ export class LocalBrowserController implements BrowserController {
         handleSIGINT: false,
         handleSIGTERM: false,
         handleSIGHUP: false,
-        timeout: 30_000,
+        timeout: this.options.launchTimeoutMs ?? 30_000,
       });
     } catch (error) {
       throw new BrowserUnavailableError(launchFailureMessage(error, profileDir), { cause: error });

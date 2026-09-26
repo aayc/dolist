@@ -112,9 +112,15 @@ describe.skipIf(!resolved)("LocalBrowserController (real Chrome)", () => {
     base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     profileDir = await mkdtemp(join(tmpdir(), "ddl-browser-profile-"));
     if (!resolved) throw new Error("unreachable");
-    controller = new LocalBrowserController({ profileDir, browser: resolved, settleMaxMs: 1_500 });
+    controller = new LocalBrowserController({
+      profileDir,
+      browser: resolved,
+      settleMaxMs: 1_500,
+      // CI runners sometimes take over 30 s to start Chrome; a longer bound only delays a failure.
+      launchTimeoutMs: 120_000,
+    });
     session = await controller.session("thread-1");
-  }, 60_000);
+  }, 150_000);
 
   afterAll(async () => {
     await controller?.dispose();
