@@ -1,5 +1,7 @@
 import AppKit
 
+@testable import DailyDoListAgent
+
 /// Synthetic surface frames (a restaurant booking page, a desktop), drawn in code so no real
 /// screenshots ship with the repo. Base64 PNG, like `SurfaceFrame.data`.
 enum SampleImages {

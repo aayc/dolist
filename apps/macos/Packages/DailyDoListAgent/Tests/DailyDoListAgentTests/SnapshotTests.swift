@@ -1,5 +1,7 @@
 import AppKit
+import DailyDoListAgentTestSupport
 import DailyDoListClient
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import SwiftUI
 import Testing
@@ -112,7 +114,7 @@ struct SnapshotTests {
   /// A thread moving to another inbox section redraws its row (LazyVStack used to keep the old
   /// one: a Done thread still showed "Idle").
   @Test func inboxRowsFollowStatusChanges() throws {
-    let store = AgentStore(client: SampleDaemonClient())
+    let store = AgentStore(client: FakeDaemonClient())
     let now = Self.now.epochMillis
     store.apply(
       .threadUpsert(
