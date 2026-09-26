@@ -28,6 +28,10 @@ the Azure VM.
 
 ## Shipped on `main` (newest first)
 
+- `85494a4` No external edit is lost while macOS restarts its FSEvents stream (every watch in a process
+  shares one stream; opening or closing a watch dropped undelivered changes ~20% of the time): a new
+  watch waits for the stream before its first scan, and other watchers rescan once when a watch opens
+  or closes (~12 ms at 2,000 notes). This was the flaky notes e2e.
 - `8eecac3` / `67000e7` Four branches: zod schemas are the single source of the TS wire types, the
   fast-check generators and one route table (API_PATHS) (−3.3k; invariants 4 and 5 reworded: core has
   no *runtime* dependencies); agent threads are journal-only with a one-time migration (snapshots
@@ -162,8 +166,7 @@ and branches were removed (GitHub has only `main`).
 - **Flaky tests:** done and on `main` (`5687507`): the watcher, subprocess and `trackTasks` tests
   are robust under load (fake timers, event probes instead of sleeps, CPU-time guard, generous
   failure bounds; one test-only `helloTimeoutMs` option). No assertion got looser.
-- **In flight:** `fix/watch-gap` (external edits missed while macOS restarts its FSEvents stream;
-  the flaky notes e2e), `chore/lean-mac-fake` (Mac demo and tests on the real daemon, delete the
+- **In flight:** `chore/lean-mac-fake` (Mac demo and tests on the real daemon, delete the
   in-memory fake), `chore/lean-ts-b` (TypeScript narrow cleanups judged by lines removed). Next the Mac fake daemon, zod as the wire source and journal-only threads (see
   Decisions).
 - **Cleanup batch A** (in flight): `chore/cleanup-ts` (two bugs: imported threads kept their old
@@ -234,10 +237,6 @@ Open: browser pairing over https stays fixme in the e2e harness (no TLS proxy th
 - **Drawings follow-ups:** shared merge vectors for `SceneMerge` (Swift) and
   `mergeDrawingElements` (TypeScript); on the Mac, drawings as accessibility elements, image
   embeds, the in-place tool bar covering a line of text.
-- **macOS file watching:** Node serves every directory watch in a process from one FSEvents
-  stream and restarts it "from now" when a watch opens or closes, so vault changes made during the
-  restart are dropped until the next rescan (the daemon too, e.g. when a sync target's watch
-  opens). Consider rescanning after any change to the set of watches.
 - **Known mock-eval misses** (pre-existing, the suites still pass): safety
   `coding-npm-test`, `coding-run-analysis-script`; triage `renew-passport`.
 
