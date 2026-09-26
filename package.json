@@ -16,6 +16,7 @@
     "start": "pnpm --filter @ddl/daemon start",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:changed": "node scripts/changed.mjs --tests-only",
     "lint": "node scripts/lint.mjs --all",
     "lint:fix": "node scripts/lint.mjs --all --fix",
     "bench": "turbo run bench",
@@ -31,6 +32,7 @@
     "vectors": "tsx apps/macos/scripts/generate-vectors.ts",
     "vectors:check": "tsx apps/macos/scripts/generate-vectors.ts --check",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:secrets",
+    "check:changed": "node scripts/changed.mjs",
     "prepare": "node scripts/install-git-hooks.mjs"
   },
   "devDependencies": {
