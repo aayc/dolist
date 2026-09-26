@@ -198,6 +198,23 @@ describe("LocalFsStorageProvider.watch", () => {
     expect(eventsFor("ignored-while-unwatched.md")).toEqual([]);
   });
 
+  it("lists the vault once while watching, and again after each change", async () => {
+    await s.write("a.md", "one");
+    await startWatching();
+    const first = await s.list();
+    expect((await s.list())[0]).toBe(first[0]);
+    await s.write("b.md", "two");
+    const again = await s.list();
+    expect(again.map((f) => f.path)).toEqual(["a.md", "b.md"]);
+    expect(again[0]).not.toBe(first[0]);
+    await s.write(".daily-do-list/state.json", "{}");
+    expect((await s.list())[0]).toBe(again[0]);
+    await writeFile(join(root, "c.md"), "three");
+    await vi.waitFor(async () => {
+      expect((await s.list()).map((f) => f.path)).toEqual(["a.md", "b.md", "c.md"]);
+    }, EVENT_TIMEOUT);
+  });
+
   it("isolates listener failures", async () => {
     s.watch(() => {
       throw new Error("bad listener");

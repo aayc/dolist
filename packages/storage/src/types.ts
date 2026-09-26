@@ -168,6 +168,8 @@ export interface LocalStorageConfig {
   root: string;
   /** Extra glob-free path prefixes to ignore when watching/listing (e.g. `.trash`). */
   ignore?: string[];
+  /** Where the version memo is kept between runs (see `LocalFsStorageOptions.versionCache`). */
+  versionCache?: string;
 }
 
 export interface MemoryStorageConfig {

@@ -62,12 +62,13 @@ Config shapes (`StorageConfig` / `SyncTargetConfig` in `src/types.ts`):
   longer than the file system allows throw `InvalidPathError`. Files that can't be read are
   skipped when listing; symlink loops behave like dangling links (missing).
 - Versions are content hashes (`contentVersion`), memoized by (path, mtime, size), so listing an
-  unchanged vault doesn't re-read files. Binary formats (images, PDFs, …) and files over 16 MiB are
+  unchanged vault doesn't re-read files. With `versionCache` (a file outside the vault) the memo
+  is saved at `dispose` and survives restarts. Binary formats (images, PDFs, …) and files over 16 MiB are
   versioned by stat instead.
 - `.git`, `node_modules`, `.trash`, `.DS_Store`, editor temp files (`*~`, `*.swp`, …) and the
   provider's own `.ddl-tmp-*` files are never listed or watched. `ignore` adds path prefixes.
 - `watch()` starts a recursive `fs.watch` on first subscription and stops it after the last
-  unsubscribe. Own writes, deletes and renames emit `self: true` events synchronously, and their
+  unsubscribe. While it runs, a `list()` of the visible files is reused until one of them changes. Own writes, deletes and renames emit `self: true` events synchronously, and their
   echo from the OS is suppressed. External changes emit `self: false` after a per-path debounce
   (`watchDebounceMs`, default 50 ms). Touches that don't change content emit nothing, and an
   editor's save-via-temp-file becomes a single `modified`. A folder that is deleted or moved in

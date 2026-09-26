@@ -77,6 +77,7 @@ of this repository. Values are never logged.
 | `devices.json` | Devices paired with this daemon: name, kind, pairing time, last use and the SHA-256 of each token (never the token). Mode `0600`, created on the first pairing. An unreadable file is moved aside to `devices.json.invalid` and every device pairs again. |
 | `machine-token` | This device's credential for the always-on machine, `{ "url", "deviceId", "token" }`, mode `0600`, written by `POST /api/machine/pair`. Used only while `url` is the vault's always-on machine. |
 | `workspaces/`, browser profile | Agent scratch space, managed by the execution provider. |
+| `cache/vault-versions.json` | The vault's file versions by path, mtime and size, saved at shutdown so a restart doesn't re-read every note. Safe to delete. |
 | `cache/drawings/` | Drawings rendered for agents (PNG by content hash, at most 64 MB, least recently used removed first). Safe to delete. |
 
 `config.json` (all keys optional; relative paths resolve against `$DDL_HOME`, `~` is expanded):

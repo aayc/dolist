@@ -1,5 +1,5 @@
 import type { Logger } from "@ddl/core";
-import { LocalFsStorageProvider } from "./local-fs";
+import { type LocalFsStorageOptions, LocalFsStorageProvider } from "./local-fs";
 import { MemoryStorageProvider } from "./memory";
 import { RemoteStorageProvider } from "./remote";
 import { S3StorageProvider } from "./s3";
@@ -26,7 +26,7 @@ export async function createStorageProvider(
         ...(config.initialFiles ? { initialFiles: config.initialFiles } : {}),
       });
     case "local":
-      return openLocal(config.root, config.ignore, deps);
+      return openLocal(config, deps);
     case "s3":
       return new S3StorageProvider(config);
   }
@@ -41,7 +41,7 @@ export async function createSyncTarget(
     case "none":
       return null;
     case "local":
-      return openLocal(config.root, undefined, deps);
+      return openLocal({ root: config.root }, deps);
     case "s3":
       return new S3StorageProvider(config);
     case "remote": {
@@ -56,13 +56,11 @@ export async function createSyncTarget(
 }
 
 async function openLocal(
-  root: string,
-  ignore: string[] | undefined,
+  options: LocalFsStorageOptions,
   deps: ProviderDeps,
 ): Promise<LocalFsStorageProvider> {
   const provider = new LocalFsStorageProvider({
-    root,
-    ...(ignore ? { ignore } : {}),
+    ...options,
     ...(deps.logger ? { logger: deps.logger } : {}),
   });
   await provider.init();

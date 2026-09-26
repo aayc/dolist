@@ -2,6 +2,7 @@
  * Glue to the packages the daemon composes: storage, connectors, the agent stack and sync.
  */
 import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import type { AgentRuntime, ExecutionProvider, LlmClient } from "@ddl/agent";
 import {
   type ConnectorToolSource,
@@ -42,12 +43,16 @@ export function settingsDefaults(config: Pick<DaemonConfig, "model">): AppSettin
 }
 
 export async function createVaultStorage(
-  config: Pick<DaemonConfig, "vaultPath">,
+  config: Pick<DaemonConfig, "vaultPath" | "home">,
   logger: Logger,
 ): Promise<StorageProvider> {
   await mkdir(config.vaultPath, { recursive: true });
   return createStorageProvider(
-    { kind: "local", root: config.vaultPath },
+    {
+      kind: "local",
+      root: config.vaultPath,
+      versionCache: join(config.home, "cache", "vault-versions.json"),
+    },
     { logger: logger.child({ component: "storage" }) },
   );
 }

@@ -134,15 +134,11 @@ export class ChangeTracker {
   private async process(path: string): Promise<void> {
     await this.primed;
     if (this.stopped) return;
-    const probe = await this.host.probe(path);
-    if (probe.type === "directory") {
-      if (this.known.has(path)) await this.settle(path);
+    const probe = await this.settle(path);
+    // A folder that appeared, or disappeared (deleted or moved away), only reports itself.
+    if (probe?.type === "directory" || (probe?.type === "missing" && this.hasKnownBelow(path))) {
       await this.rescan(path);
-      return;
     }
-    await this.settle(path);
-    // A folder that disappeared (deleted or moved away) only produces an event for itself.
-    if (probe.type === "missing" && this.hasKnownBelow(path)) await this.rescan(path);
   }
 
   /** Settles every file below `prefix` whose on-disk state differs from what was reported. */
@@ -159,30 +155,26 @@ export class ChangeTracker {
     for (const path of candidates) await this.settle(path);
   }
 
-  private settle(path: string): Promise<void> {
+  /** The path's state, and an event when it differs from what was reported. */
+  private settle(path: string): Promise<PathProbe | undefined> {
     return this.host.withLock(path, async () => {
-      if (this.stopped) return;
+      if (this.stopped) return undefined;
       const probe = await this.host.probe(path);
       const previous = this.known.get(path);
       if (probe.type === "file") {
         this.cancelDeleteConfirmation(path);
-        if (previous === probe.version) return;
-        this.known.set(path, probe.version);
-        this.host.emit({
-          kind: previous === undefined ? "created" : "modified",
-          path,
-          version: probe.version,
-          self: false,
-        });
-        return;
-      }
-      if (previous === undefined) return;
-      if (probe.type === "directory") {
+        if (previous !== probe.version) {
+          this.known.set(path, probe.version);
+          const kind = previous === undefined ? "created" : "modified";
+          this.host.emit({ kind, path, version: probe.version, self: false });
+        }
+      } else if (previous !== undefined && probe.type === "directory") {
         this.known.delete(path);
         this.host.emit({ kind: "deleted", path, self: false });
-        return;
+      } else if (previous !== undefined) {
+        this.scheduleDeleteConfirmation(path);
       }
-      this.scheduleDeleteConfirmation(path);
+      return probe;
     });
   }
 
