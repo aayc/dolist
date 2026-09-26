@@ -44,9 +44,7 @@ struct OrchestratorInboxRow: View {
               CountBadge(
                 count: pendingApprovals, tone: .warning, systemImage: "exclamationmark.shield.fill"
               )
-              .tooltip(
-                pendingApprovals == 1
-                  ? "1 approval waiting" : "\(pendingApprovals) approvals waiting")
+              .tooltip(AgentFormat.approvalsWaiting(pendingApprovals))
             }
           }
         }

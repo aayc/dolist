@@ -147,32 +147,6 @@ struct JSONBlock: View {
   }
 }
 
-/// Copies `text` (a message, a code block); a check confirms it for a moment.
-struct CopyButton: View {
-  let text: String
-  let label: String
-  @State private var copies = 0
-  @State private var copied = false
-  @Environment(\.agentClipboard) private var clipboard
-
-  var body: some View {
-    IconButton(
-      copied ? "checkmark" : "doc.on.doc", label: copied ? "Copied" : label, size: .compact
-    ) {
-      clipboard.copy(text)
-      copied = true
-      copies += 1
-    }
-    .contentTransition(.symbolEffect(.replace))
-    .task(id: copies) {
-      guard copies > 0 else { return }
-      try? await Task.sleep(for: .seconds(1.2))
-      guard !Task.isCancelled else { return }
-      copied = false
-    }
-  }
-}
-
 /// Toast for `AgentStore.lastError`.
 struct AgentErrorBanner: View {
   let alert: AgentAlert

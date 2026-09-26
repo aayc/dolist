@@ -13,6 +13,7 @@ let package = Package(
   ],
   dependencies: [
     .package(path: "../DailyDoListModels"),
+    .package(path: "../DailyDoListDomain"),
     .package(path: "../DailyDoListClient"),
     .package(path: "../DailyDoListUI"),
   ],
@@ -21,6 +22,7 @@ let package = Package(
       name: "DailyDoListAgent",
       dependencies: [
         .product(name: "DailyDoListModels", package: "DailyDoListModels"),
+        .product(name: "DailyDoListDomain", package: "DailyDoListDomain"),
         .product(name: "DailyDoListClient", package: "DailyDoListClient"),
         .product(name: "DailyDoListUI", package: "DailyDoListUI"),
       ]

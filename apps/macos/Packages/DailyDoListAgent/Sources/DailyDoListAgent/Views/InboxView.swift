@@ -1,3 +1,4 @@
+import DailyDoListDomain
 import DailyDoListModels
 import DailyDoListUI
 import SwiftUI
@@ -123,7 +124,7 @@ struct InboxRow: View {
           HStack(spacing: 6) {
             StatusChip(status: thread.status)
             if let notePath = thread.notePath {
-              Text(verbatim: AgentFormat.noteName(notePath))
+              Text(verbatim: VaultPath.stem(notePath))
                 .font(.caption)
                 .foregroundStyle(Theme.faintText)
                 .lineLimit(1)
@@ -133,9 +134,7 @@ struct InboxRow: View {
               CountBadge(
                 count: pendingApprovals, tone: .warning, systemImage: "exclamationmark.shield.fill"
               )
-              .tooltip(
-                pendingApprovals == 1
-                  ? "1 approval waiting" : "\(pendingApprovals) approvals waiting")
+              .tooltip(AgentFormat.approvalsWaiting(pendingApprovals))
             }
             if unread > 0 {
               CountBadge(count: unread, tone: .accent).tooltip("\(unread) unread")

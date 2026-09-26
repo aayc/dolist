@@ -75,10 +75,7 @@ struct FileExplorerView: View {
       Button("Rename…") { ui.renamingPath = path }
       Button("Delete…", role: .destructive) { workspace.requestDelete(path) }
       Divider()
-      Button("Copy Path") {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(path, forType: .string)
-      }
+      Button("Copy Path") { Clipboard.copy(path) }
       if workspace.localVaultURL != nil {
         Button("Reveal in Finder") { workspace.revealInFinder(path) }
       }

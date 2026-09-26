@@ -41,7 +41,7 @@ struct ImportReportView: View {
         ReportStat(label: "Canvases", value: "\(preview.canvases.count)")
         ReportStat(label: "Drawings", value: "\(preview.drawings.count)")
         ReportStat(
-          label: "In all", value: ImportText.count(preview.files, "file"),
+          label: "In all", value: TextMetrics.pluralize(preview.files, "file"),
           detail: ImportText.bytes(preview.bytes))
       }
     }
@@ -58,7 +58,7 @@ struct ImportReportView: View {
     ReportFact(
       "Templates",
       preview.templates.folder.map {
-        "\(ImportText.count(preview.templates.count, "template")) in \($0)"
+        "\(TextMetrics.pluralize(preview.templates.count, "template")) in \($0)"
       } ?? "no templates folder")
   }
 
@@ -86,13 +86,13 @@ struct ImportReportView: View {
   @ViewBuilder private var canvases: some View {
     if preview.canvases.count > 0 {
       Text(
-        "\(ImportText.count(preview.canvases.count, "canvas", "canvases")): copied, but they don't open here yet (they still open in Obsidian)."
+        "\(TextMetrics.pluralize(preview.canvases.count, "canvas", "canvases")): copied, but they don't open here yet (they still open in Obsidian)."
       )
       PathFold(title: "Show the canvases", list: preview.canvases)
     }
     if preview.drawings.count > 0 {
       Text(
-        "\(ImportText.count(preview.drawings.count, "Excalidraw drawing")): they open and edit here."
+        "\(TextMetrics.pluralize(preview.drawings.count, "Excalidraw drawing")): they open and edit here."
       )
       PathFold(title: "Show the drawings", list: preview.drawings)
     }
@@ -116,7 +116,7 @@ struct CarryOverView: View {
       if plan.collisions.count > 0 {
         ReportFact(
           "Same names",
-          "\(ImportText.count(plan.collisions.count, "file")) \(plan.collisions.count == 1 ? "has" : "have") the name of an Obsidian file, so “(Daily Do List)” is added."
+          "\(TextMetrics.pluralize(plan.collisions.count, "file")) \(plan.collisions.count == 1 ? "has" : "have") the name of an Obsidian file, so “(Daily Do List)” is added."
         )
       }
       ReportFact("Agent history", historyText)
@@ -156,31 +156,32 @@ struct CarryOverView: View {
       default: "as this vault keeps them"
       }
     var text =
-      "\(ImportText.count(plan.daily.count, "note")) move to \(ImportText.dailyPlace(plan.dailyNotes)), \(from)."
+      "\(TextMetrics.pluralize(plan.daily.count, "note")) move to \(ImportText.dailyPlace(plan.dailyNotes)), \(from)."
     if plan.daily.merged > 0 {
       text +=
-        " \(ImportText.count(plan.daily.merged, "date is", "dates are")) in both vaults: Obsidian's note is kept, and yours is added at its end under “From Daily Do List”."
+        " \(TextMetrics.pluralize(plan.daily.merged, "date is", "dates are")) in both vaults: Obsidian's note is kept, and yours is added at its end under “From Daily Do List”."
     }
     return text
   }
 
   private var otherText: String {
     let others = plan.notes.count - plan.collisions.count
-    return others > 0 ? "\(ImportText.count(others, "file")) keep their paths." : "none."
+    return others > 0 ? "\(TextMetrics.pluralize(others, "file")) keep their paths." : "none."
   }
 
   private var historyText: String {
     let agent = plan.agent
     let parts = [
-      agent.threads > 0 ? ImportText.count(agent.threads, "thread") : nil,
-      agent.records > 0 ? ImportText.count(agent.records, "task record") : nil,
-      agent.approvals > 0 ? ImportText.count(agent.approvals, "approval") : nil,
-      agent.routines > 0 ? "the schedules of \(ImportText.count(agent.routines, "routine"))" : nil,
+      agent.threads > 0 ? TextMetrics.pluralize(agent.threads, "thread") : nil,
+      agent.records > 0 ? TextMetrics.pluralize(agent.records, "task record") : nil,
+      agent.approvals > 0 ? TextMetrics.pluralize(agent.approvals, "approval") : nil,
+      agent.routines > 0
+        ? "the schedules of \(TextMetrics.pluralize(agent.routines, "routine"))" : nil,
     ].compactMap { $0 }
     var text = parts.isEmpty ? "nothing to carry over." : "\(ImportText.join(parts)) come along."
     if agent.detached > 0 {
       text +=
-        " \(ImportText.count(agent.detached, "thread")) whose task isn't in its note any more \(agent.detached == 1 ? "is" : "are") kept, marked detached."
+        " \(TextMetrics.pluralize(agent.detached, "thread")) whose task isn't in its note any more \(agent.detached == 1 ? "is" : "are") kept, marked detached."
     }
     return text
   }
@@ -358,7 +359,7 @@ private struct SkippedList: View {
 
   var body: some View {
     DisclosureGroup(
-      "\(ImportText.count(list.count, "file")) \(list.count == 1 ? "isn't" : "aren't") copied"
+      "\(TextMetrics.pluralize(list.count, "file")) \(list.count == 1 ? "isn't" : "aren't") copied"
     ) {
       VStack(alignment: .leading, spacing: 2) {
         ForEach(list.items, id: \.path) { item in

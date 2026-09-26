@@ -90,7 +90,7 @@ public struct AgentMenuBarContent: View {
         .padding(.vertical, 4)
     } else {
       VStack(alignment: .leading, spacing: 2) {
-        Text(pending.count == 1 ? "1 approval waiting" : "\(pending.count) approvals waiting")
+        Text(AgentFormat.approvalsWaiting(pending.count))
           .font(.caption.weight(.semibold))
           .foregroundStyle(Theme.warning)
           .padding(.horizontal, 12)

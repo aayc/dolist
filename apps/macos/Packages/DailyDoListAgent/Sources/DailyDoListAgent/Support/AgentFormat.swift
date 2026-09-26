@@ -144,17 +144,15 @@ public enum AgentFormat {
 
   // MARK: Misc
 
+  /// "1 approval waiting", "3 approvals waiting".
+  public static func approvalsWaiting(_ count: Int) -> String {
+    count == 1 ? "1 approval waiting" : "\(count) approvals waiting"
+  }
+
   /// "12 B", "3.4 KB", "1.2 MB"
   public static func bytes(_ count: Int) -> String {
     if count < 1024 { return "\(count) B" }
     if count < 1024 * 1024 { return String(format: "%.1f KB", Double(count) / 1024) }
     return String(format: "%.1f MB", Double(count) / (1024 * 1024))
-  }
-
-  /// The note's name without folders and extension ("Daily/2026-09-23.md" → "2026-09-23").
-  public static func noteName(_ path: String) -> String {
-    let base = path.split(separator: "/").last.map(String.init) ?? path
-    guard let dot = base.lastIndex(of: "."), dot != base.startIndex else { return base }
-    return String(base[..<dot])
   }
 }

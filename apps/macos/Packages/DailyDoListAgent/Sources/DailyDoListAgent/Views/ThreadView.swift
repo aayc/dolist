@@ -1,3 +1,4 @@
+import DailyDoListDomain
 import DailyDoListModels
 import DailyDoListUI
 import SwiftUI
@@ -216,10 +217,10 @@ struct ThreadHeader: View {
           if let notePath {
             HStack(spacing: 4) {
               Image(systemName: "doc.text")
-              Text(verbatim: AgentFormat.noteName(notePath))
+              Text(verbatim: VaultPath.stem(notePath))
                 .lineLimit(1)
                 .tooltip(
-                  ifTruncated: AgentFormat.noteName(notePath),
+                  ifTruncated: VaultPath.stem(notePath),
                   font: .preferredFont(forTextStyle: .caption1), showing: .path(notePath))
             }
             .font(.caption)

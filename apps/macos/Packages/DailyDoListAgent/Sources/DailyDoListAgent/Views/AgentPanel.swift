@@ -191,7 +191,7 @@ public struct AgentPanel: View {
       }
       if pending > 0 {
         CountBadge(count: pending, tone: .warning, systemImage: "exclamationmark.shield.fill")
-          .tooltip(pending == 1 ? "1 approval waiting" : "\(pending) approvals waiting")
+          .tooltip(AgentFormat.approvalsWaiting(pending))
           .countTransition()
       }
       Spacer(minLength: 8)

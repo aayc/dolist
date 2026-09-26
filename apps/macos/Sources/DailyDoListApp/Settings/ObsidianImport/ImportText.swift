@@ -25,16 +25,11 @@ enum ImportText {
     let p = job.progress
     guard p.totalFiles > 0 else { return "" }
     return
-      "\(p.files) of \(count(p.totalFiles, "file")) · \(bytes(p.bytes)) of \(bytes(p.totalBytes))"
+      "\(p.files) of \(TextMetrics.pluralize(p.totalFiles, "file")) · \(bytes(p.bytes)) of \(bytes(p.totalBytes))"
   }
 
   static func bytes(_ count: Int) -> String {
     ByteCountFormatter.string(fromByteCount: Int64(count), countStyle: .file)
-  }
-
-  /// "1 file", "3 files".
-  static func count(_ count: Int, _ one: String, _ many: String? = nil) -> String {
-    "\(count) \(count == 1 ? one : many ?? one + "s")"
   }
 
   /// "a, b and c".
@@ -67,11 +62,11 @@ enum ImportText {
     join(
       summary.byType.map { item in
         switch item.type {
-        case .image: count(item.count, "image")
-        case .pdf: count(item.count, "PDF")
-        case .audio: count(item.count, "audio file")
-        case .video: count(item.count, "video")
-        default: count(item.count, "other file")
+        case .image: TextMetrics.pluralize(item.count, "image")
+        case .pdf: TextMetrics.pluralize(item.count, "PDF")
+        case .audio: TextMetrics.pluralize(item.count, "audio file")
+        case .video: TextMetrics.pluralize(item.count, "video")
+        default: TextMetrics.pluralize(item.count, "other file")
         }
       })
   }
@@ -105,7 +100,7 @@ enum ImportText {
 
   /// What the agent does with Obsidian's open tasks after the switch.
   static func watchedTasks(_ plan: CarryOverPlan) -> String {
-    "Obsidian's daily notes have \(count(plan.watchedOpenTasks, "open task")) in the days the agent "
+    "Obsidian's daily notes have \(TextMetrics.pluralize(plan.watchedOpenTasks, "open task")) in the days the agent "
       + "watches. The agent treats them as tasks that were already there, so "
       + (plan.actOnExistingTasks
         ? "it works on them: “Act on existing tasks” is on in Settings → Agent."
@@ -122,6 +117,6 @@ enum ImportText {
         ? "\(report.conflicts.count) changed in both places (both kept)" : nil,
     ].compactMap { $0 }
     if parts.isEmpty { return "Nothing changed in Obsidian since the last time." }
-    return "\(join(parts)). \(count(report.unchanged, "file")) unchanged."
+    return "\(join(parts)). \(TextMetrics.pluralize(report.unchanged, "file")) unchanged."
   }
 }
