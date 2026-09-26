@@ -9,9 +9,9 @@ import Foundation
 extension Workspace {
   // MARK: - Remote vault changes
 
-  /// Applies a `vault.changed` from someone else: the tree updates at once (and is re-fetched,
-  /// debounced, for consistency) and open notes refetch — applied to the editor only when they have
-  /// no pending local edits. Our own echoes are ignored.
+  /// Applies a `vault.changed` from someone else: the tree updates at once (a folder it doesn't
+  /// know yet re-fetches it, debounced) and open notes refetch — applied to the editor only when
+  /// they have no pending local edits. Our own echoes are ignored.
   func handleVaultChanged(_ event: VaultChangedEvent) {
     if let origin = event.clientId, origin == client.clientId { return }
     handleDrawingChanges(event)
@@ -23,8 +23,12 @@ extension Workspace {
         for path in [change.path] + nested { notes.handleRemoteDelete(path) }
         vault.remove(change.path)
       case .created, .modified:
-        if !vault.has(change.path), !VaultPath.extname(change.path).isEmpty {
-          vault.addFile(change.path, version: change.version)
+        if !vault.has(change.path) {
+          if VaultPath.extname(change.path).isEmpty {
+            treeRefresh.poke()
+          } else {
+            vault.addFile(change.path, version: change.version)
+          }
         }
         if notes.has(change.path) {
           let path = change.path
@@ -33,7 +37,6 @@ extension Workspace {
         }
       }
     }
-    treeRefresh.poke()
   }
 
   func refreshTree() async {
