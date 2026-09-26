@@ -1,8 +1,7 @@
-import { ROUTINE_TEMPLATES } from "@ddl/core";
+import { ROUTINE_TEMPLATES, type Routine, type ThreadSummary } from "@ddl/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DaemonClient } from "../api/client";
 import { HttpError } from "../api/errors";
-import { MockDaemonClient } from "../api/mock/mock-client";
 import { routineFixture } from "../features/routines/testing";
 import { initialAgentState } from "../state/agent-reducer";
 import { useAgentStore } from "../state/agent-store";
@@ -16,22 +15,20 @@ import {
 import { useToastStore } from "../state/toast-store";
 import { RoutineActions } from "./routine-actions";
 
-const REQUEST = {
-  name: "Kettle watch",
-  schedule: "every 2 hours",
-  instructions: "Check the kettle's price.",
-  notify: "when_changed" as const,
-};
+/** What the daemon answers (its own behavior is covered by e2e/routines.spec.ts). */
+function stubClient(overrides: Partial<DaemonClient> = {}): DaemonClient {
+  return {
+    listRoutines: vi.fn(async () => ({ routines: [], templates: ROUTINE_TEMPLATES })),
+    listThreads: vi.fn(async () => ({ threads: [] })),
+    ...overrides,
+  } as unknown as DaemonClient;
+}
 
-function setup(client: DaemonClient = new MockDaemonClient(options())) {
+function setup(client: DaemonClient = stubClient()) {
   const actions = new RoutineActions(client);
   const openNote = vi.fn(async () => true);
   actions.attach({ openNote });
   return { actions, client, openNote };
-}
-
-function options() {
-  return { speed: 50, installHooks: false, persistSettings: false };
 }
 
 function routines() {
@@ -47,22 +44,21 @@ beforeEach(() => {
 describe("RoutineActions", () => {
   it("loads the list and the templates once; events keep it current after that", async () => {
     const { actions, client } = setup();
-    const list = vi.spyOn(client, "listRoutines");
     const loading = actions.ensureLoaded();
     expect(routines().status).toBe("loading");
     await loading;
     expect(routines()).toMatchObject({ status: "loaded", templatesLoaded: true, routines: [] });
     expect(routines().templates.map((t) => t.id)).toEqual(ROUTINE_TEMPLATES.map((t) => t.id));
     await actions.ensureLoaded();
-    expect(list).toHaveBeenCalledTimes(1);
+    expect(client.listRoutines).toHaveBeenCalledTimes(1);
   });
 
   it("says why the list couldn't load, unless an event already brought it", async () => {
-    const failing = {
+    const failing = stubClient({
       listRoutines: vi.fn(async () => {
         throw new HttpError(500, "The daemon broke");
       }),
-    } as unknown as DaemonClient;
+    });
     const { actions } = setup(failing);
     await actions.load();
     expect(routines()).toMatchObject({ status: "error", error: "The daemon broke" });
@@ -73,58 +69,33 @@ describe("RoutineActions", () => {
     expect(routines().routines).toHaveLength(1);
   });
 
-  it("creates a routine and adds it to the list", async () => {
-    const { actions } = setup();
-    const result = await actions.create(REQUEST);
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.routine).toMatchObject({
-      name: "Kettle watch",
-      path: "Routines/Kettle watch.md",
-    });
-    expect(findRoutine(routines(), result.routine.id)?.scheduleText).toBe("Every 2 hours");
+  it("adds a created routine to the list, and keeps the daemon's error for a refused one", async () => {
+    const routine = routineFixture({ name: "Kettle watch" });
+    const taken = new HttpError(409, "A routine named “Kettle watch” already exists.");
+    const createRoutine = vi.fn().mockResolvedValueOnce({ routine }).mockRejectedValueOnce(taken);
+    const { actions } = setup(stubClient({ createRoutine }));
+    const request = { name: "Kettle watch", schedule: "every 2 hours", instructions: "Check." };
+    expect(await actions.create(request)).toEqual({ ok: true, routine });
+    expect(findRoutine(routines(), routine.id)).toEqual(routine);
+    expect(await actions.create(request)).toEqual({ ok: false, error: taken });
+    expect(routines().routines).toEqual([routine]);
   });
 
-  it("returns the daemon's error for a failed create: 409 for a taken name, 400 otherwise", async () => {
-    const { actions } = setup();
-    await actions.create(REQUEST);
-    const taken = await actions.create(REQUEST);
-    expect(taken.ok).toBe(false);
-    if (taken.ok) return;
-    expect(taken.error).toBeInstanceOf(HttpError);
-    expect(taken.error).toMatchObject({
-      status: 409,
-      message: "A routine named “Kettle watch” already exists.",
+  it("runs a routine now and returns the run's thread, or explains a refusal", async () => {
+    const lastRun = { threadId: "thr_run", trigger: "manual", status: "working", startedAt: 1 };
+    const routine = routineFixture({ lastRun } as Partial<Routine>);
+    const paused = new HttpError(503, "The agent is paused: switch it on to run routines.", {
+      error: "agent_unavailable",
+      message: "The agent is paused: switch it on to run routines.",
     });
-    const bad = await actions.create({ ...REQUEST, name: "Other", schedule: "whenever" });
-    expect(bad).toMatchObject({ ok: false, error: { status: 400 } });
-    expect(routines().routines.map((r) => r.name)).toEqual(["Kettle watch"]);
-  });
-
-  it("runs a routine now and returns the run's thread", async () => {
-    const { actions } = setup();
-    const created = await actions.create(REQUEST);
-    if (!created.ok) throw new Error("create failed");
-    const run = await actions.runNow(created.routine);
-    expect(run.ok).toBe(true);
-    if (!run.ok) return;
-    expect(findRoutine(routines(), created.routine.id)?.lastRun).toMatchObject({
-      threadId: run.threadId,
-      trigger: "manual",
-    });
-  });
-
-  it("explains a refused run: the agent is off (503), a run is going (409)", async () => {
-    const { actions, client } = setup();
-    const created = await actions.create(REQUEST);
-    if (!created.ok) throw new Error("create failed");
-    await actions.runNow(created.routine);
-    expect(await actions.runNow(created.routine)).toEqual({
-      ok: false,
-      problem: { title: "It can't run right now", body: "“Kettle watch” is running right now." },
-    });
-    await client.setAgentEnabled(false);
-    expect(await actions.runNow(created.routine)).toEqual({
+    const runRoutine = vi
+      .fn()
+      .mockResolvedValueOnce({ routine, threadId: "thr_run" })
+      .mockRejectedValueOnce(paused);
+    const { actions } = setup(stubClient({ runRoutine }));
+    expect(await actions.runNow(routine)).toEqual({ ok: true, threadId: "thr_run" });
+    expect(findRoutine(routines(), routine.id)?.lastRun).toEqual(lastRun);
+    expect(await actions.runNow(routine)).toEqual({
       ok: false,
       problem: {
         title: "The agent can't run here",
@@ -134,41 +105,35 @@ describe("RoutineActions", () => {
   });
 
   it("fetches a routine's runs into the thread list", async () => {
-    const { actions } = setup();
-    const created = await actions.create(REQUEST);
-    if (!created.ok) throw new Error("create failed");
-    const run = await actions.runNow(created.routine);
-    if (!run.ok) throw new Error("run failed");
-    await actions.loadRuns(created.routine.id);
-    expect(useAgentStore.getState().threads[run.threadId]).toMatchObject({
-      routineId: created.routine.id,
-      title: "Kettle watch",
-    });
+    const run = { id: "thr_run", routineId: "rtn_1", title: "Morning briefing" } as ThreadSummary;
+    const { actions } = setup(stubClient({ listThreads: vi.fn(async () => ({ threads: [run] })) }));
+    await actions.loadRuns("rtn_1");
+    expect(useAgentStore.getState().threads.thr_run).toMatchObject({ routineId: "rtn_1" });
   });
 
   it("pauses at once, then takes the daemon's answer", async () => {
-    const { actions } = setup();
-    const created = await actions.create(REQUEST);
-    if (!created.ok) throw new Error("create failed");
-    expect(created.routine.nextRunAt).toBeDefined();
-    const pausing = actions.setPaused(created.routine, true);
-    expect(findRoutine(routines(), created.routine.id)).toMatchObject({ paused: true });
-    expect(findRoutine(routines(), created.routine.id)?.nextRunAt).toBeUndefined();
+    const routine = routineFixture({ nextRunAt: Date.now() + 60_000 });
+    updateRoutines((s) => applyRoutinesChanged(s, [routine]));
+    let answer: (value: { routine: Routine }) => void = () => {};
+    const pauseRoutine = vi.fn(() => new Promise<{ routine: Routine }>((r) => (answer = r)));
+    const { actions } = setup(stubClient({ pauseRoutine }));
+    const pausing = actions.setPaused(routine, true);
+    expect(findRoutine(routines(), routine.id)).toMatchObject({ paused: true });
+    expect(findRoutine(routines(), routine.id)?.nextRunAt).toBeUndefined();
+    const { nextRunAt: _next, ...unscheduled } = routine;
+    answer({ routine: { ...unscheduled, paused: true, extraRunsLeft: 4 } });
     await pausing;
-    expect(findRoutine(routines(), created.routine.id)?.paused).toBe(true);
-    await actions.setPaused(created.routine, false);
-    expect(findRoutine(routines(), created.routine.id)).toMatchObject({ paused: false });
-    expect(findRoutine(routines(), created.routine.id)?.nextRunAt).toBeGreaterThan(Date.now());
+    expect(findRoutine(routines(), routine.id)).toMatchObject({ paused: true, extraRunsLeft: 4 });
   });
 
   it("puts a routine back and says why when pausing fails", async () => {
     const routine = routineFixture();
     updateRoutines((s) => applyRoutinesChanged(s, [routine]));
-    const failing = {
+    const failing = stubClient({
       pauseRoutine: vi.fn(async () => {
         throw new HttpError(404, "Routine not found");
       }),
-    } as unknown as DaemonClient;
+    });
     const { actions } = setup(failing);
     await actions.setPaused(routine, true);
     expect(findRoutine(routines(), routine.id)).toEqual(routine);
@@ -185,14 +150,12 @@ describe("RoutineActions", () => {
 
   it("resyncs only what was loaded: the list, and the runs it fetched", async () => {
     const { actions, client } = setup();
-    const list = vi.spyOn(client, "listRoutines");
-    const threads = vi.spyOn(client, "listThreads");
     await actions.resync();
-    expect(list).not.toHaveBeenCalled();
+    expect(client.listRoutines).not.toHaveBeenCalled();
     await actions.ensureLoaded();
     await actions.loadRuns("rtn_x");
     await actions.resync();
-    expect(list).toHaveBeenCalledTimes(2);
-    expect(threads).toHaveBeenLastCalledWith({ routineId: "rtn_x" });
+    expect(client.listRoutines).toHaveBeenCalledTimes(2);
+    expect(client.listThreads).toHaveBeenLastCalledWith({ routineId: "rtn_x" });
   });
 });

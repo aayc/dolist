@@ -196,7 +196,6 @@ export async function startApp(container: HTMLElement): Promise<void> {
   };
 
   useConnectionStore.setState({
-    kind: client.kind,
     endpoint: client.endpoint,
     state: client.connectionState,
   });

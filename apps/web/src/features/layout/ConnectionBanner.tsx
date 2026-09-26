@@ -10,7 +10,7 @@ export function ConnectionBanner() {
       <WifiOff size={14} aria-hidden="true" />
       <span>
         Can't reach the Daily Do List daemon at <code>{endpoint}</code>. Retrying… Start it with{" "}
-        <code>pnpm dev</code>, or open <a href="?mock=1">the in-browser demo</a>.
+        <code>pnpm dev</code>, or <code>pnpm dev:mock</code> for the demo.
       </span>
     </div>
   );

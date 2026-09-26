@@ -221,12 +221,11 @@ function WordCount() {
 
 function ConnectionIndicator() {
   const state = useConnectionStore((s) => s.state);
-  const kind = useConnectionStore((s) => s.kind);
-  const item = connectionItem(state, kind);
+  const item = connectionItem(state);
   if (!item) return null;
   return (
     <span
-      className={cx("status-item status-connection", `is-${state}`, kind === "mock" && "is-mock")}
+      className={cx("status-item status-connection", `is-${state}`)}
       data-testid="status-connection"
       data-state={state}
       data-tooltip={item.title}

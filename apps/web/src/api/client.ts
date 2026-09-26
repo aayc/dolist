@@ -40,8 +40,6 @@ import type {
   WriteNoteResponse,
 } from "@ddl/core";
 
-export type ClientKind = "http" | "mock";
-
 /**
  * `connecting`: first attempt; `online`: event stream open; `reconnecting`: dropped, retrying with
  * backoff; `offline`: stopped (disconnect() or the browser reports no network).
@@ -71,13 +69,12 @@ export interface ThreadFilter {
 
 /**
  * Everything the UI needs from the daemon: REST calls (`/api/*`), the server event stream (`/ws`)
- * and light client signals. Implemented by `HttpDaemonClient` and the in-browser `MockDaemonClient`.
+ * and light client signals. Implemented by `HttpDaemonClient`.
  * Writes are tagged with `clientId` so the UI can ignore the echo of its own `vault.changed` events.
  * A client authenticating with a device cookie reports a 401 (the device was revoked) through its
  * `onUnauthorized` option: the page goes back to pairing.
  */
 export interface DaemonClient {
-  readonly kind: ClientKind;
   readonly clientId: string;
   /** Human-readable endpoint for Settings → About. */
   readonly endpoint: string;
