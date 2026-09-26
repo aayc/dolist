@@ -22,6 +22,8 @@ export interface SyncControllerOptions {
   /** The agent lease epoch this device holds, or null: fences the agent's files. */
   leaseEpoch?: () => number | null;
   logger: Logger;
+  /** Sync's wait for local changes to settle (`SyncStartOptions.debounceMs`). */
+  debounceMs?: number;
 }
 
 export class SyncController {
@@ -50,7 +52,7 @@ export class SyncController {
     const log = logger.child({ component: "sync" });
     this.#prepared = await prepareSync({ sync, syncTokenPath, device, env, logger: log });
     const target = this.#prepared.target;
-    const leaseEpoch = this.#options.leaseEpoch;
+    const { leaseEpoch, debounceMs } = this.#options;
     this.#handle = target
       ? await createSync({ target, primary, logger, ...(leaseEpoch ? { leaseEpoch } : {}) })
       : null;
@@ -59,7 +61,7 @@ export class SyncController {
         if (status.state === "error") log.warn("Sync failed", { error: status.lastError });
         else log.debug("Sync status", { state: status.state });
       });
-      this.#handle.engine.start();
+      this.#handle.engine.start(debounceMs === undefined ? {} : { debounceMs });
     }
   }
 

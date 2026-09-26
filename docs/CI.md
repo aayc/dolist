@@ -7,7 +7,7 @@ cache, then `pnpm install --frozen-lockfile`.
 
 | Workflow | Declared triggers | Jobs |
 | --- | --- | --- |
-| CI (`ci.yml`) | push to `main`, pull requests, merge queue, manual | `check`, `test-macos`, `bench`, `e2e`, `evals-mock` |
+| CI (`ci.yml`) | push to `main`, pull requests, merge queue, manual | `check`, `test` (3 shards), `test-macos` (2), `bench`, `e2e` (4), `perf`, `vim`, `evals-mock` |
 | Security (`security.yml`) | push to `main`, pull requests, merge queue, weekly (Mon 05:27 UTC), manual | `gitleaks`, `codeql` (JS/TS + Actions), `dependency-review` (PRs) |
 | macOS app (`macos.yml`) | push to `main` and pull requests touching the app, the daemon, the sync service, what they bundle or the vim vectors; manual | `app` |
 | Linux bundle (`linux-bundle.yml`) | push to `main` and pull requests touching `deploy/linux`, the daemon, the sync service, the web app or what they bundle; manual | `bundle`, `setup` |
@@ -53,10 +53,41 @@ Support, citing a push commit that has other apps' check suites and none from Ac
 
 ## CI (`ci.yml`)
 
-### `check`: lint, typecheck, test, build (Ubuntu)
+Every job runs on its own runner, all at once; the longest ones are split into shards. A cold run
+(nothing cached) takes about 2 minutes, a run where nothing it tests changed about 40 seconds.
 
-Runs `pnpm lint`, `pnpm typecheck`, `pnpm test`, `node scripts/check-secrets.mjs --all`,
-`pnpm build`, then `node scripts/bundle-size-check.mjs`.
+### Caching: what runs
+
+Every suite is a turbo task (`test`, `typecheck`, `build`, `bench`, `e2e`, `e2e:perf`,
+`vim:check`, `eval:mock`), and turbo keys each task by everything it reads: its package's files,
+the packages it depends on (the `transit` task), the lockfile entries it uses, the declared env
+vars, the files in `globalDependencies` (`.nvmrc`, `tsconfig.base.json`, `scripts/vitest/**`),
+and extra `inputs` in a package's `turbo.json` where a task reads further (the e2e tasks read the
+daemon, the sync service and the packages they bundle; the agent's tests read
+`evals/datasets`). A task whose key is unchanged replays its logs and outputs (`dist/`,
+`bench-results.json`, `perf-results.json`, `eval-results/`) instead of running.
+
+- Each job restores `.turbo/cache` with `.github/actions/turbo-cache` (actions/cache, one entry
+  per job and shard, the latest from this branch or `main`) and saves it at the end, pruned to
+  the tasks the job ran (`.github/scripts/prune-turbo-cache.mjs`, from turbo's run summaries).
+- Runs on `main` set `TURBO_FORCE=true`: everything runs, and refreshes the cache that branches
+  start from. A mistake in a task's key can't hide there.
+- The Playwright jobs ask turbo first (`.github/scripts/turbo-hit.mjs`) and skip installing
+  Chromium when their task will replay.
+- Caches are scoped by GitHub: a branch reads its own and `main`'s, never another branch's, so a
+  pull request can't feed results to `main`.
+
+Locally the same cache lives in the main checkout's `.turbo/cache` (worktrees share it): a second
+`pnpm check` replays whatever didn't change. `pnpm test:changed` runs only the tests that import a
+file changed since `main`, across packages (Vitest's `--changed` over the projects in the root
+`vitest.config.ts`); `pnpm check:changed` adds lint and the secret scan on the changed files and
+the typecheck. Both take another base as an argument (`pnpm test:changed HEAD`).
+
+### `check`: lint, typecheck, build (Ubuntu)
+
+Runs `pnpm lint`, `node scripts/check-secrets.mjs --all`, `pnpm typecheck`, `pnpm build`, then
+`node scripts/bundle-size-check.mjs`. The lint checks run in parallel; locally, `pnpm lint` skips
+swift-format while no Swift file changed since it last passed.
 
 `pnpm lint` is `scripts/lint.mjs --all`, the same checks the pre-commit hook runs on staged files:
 file hygiene (`scripts/check-hygiene.mjs`: conflict markers, LF endings, final newlines, trailing
@@ -69,15 +100,6 @@ job installs actionlint and shellcheck from their releases, pinned by version an
 gitleaks, because versions disagree on rules (the runner image's shellcheck 0.9 rejects `test -nt`,
 which 0.11 accepts as POSIX). Keep the pins at the versions Homebrew installs.
 
-Unit tests run one package at a time (`pnpm test --concurrency=1 --continue`, also on macOS):
-every package's Vitest starts a worker per core, so running them together on a 3–4 vCPU runner makes
-timing-sensitive tests many times slower than on a dev machine. `--continue` reports every failing
-package instead of stopping at the first. `TEST_TIME_SCALE=5` stretches Vitest's default timeouts
-(`scripts/vitest/setup-fast-check.ts`) and the budgets of tests that assert an algorithm stays fast
-(each such test multiplies its budget by it). Tests that race a timeout against a delay (retry
-backoff, a killed process, a drained connection) keep fixed bounds: scaling them could hide the bug
-they guard against.
-
 `pnpm vectors:check` regenerates the macOS app's test vectors (`apps/macos/Packages/DailyDoListDomain`)
 from `@ddl/core` in memory and fails if the committed JSON differs, so a change to dates, paths,
 tasks or wiki links that would make the Swift port disagree is caught on Linux, before the macOS
@@ -85,23 +107,42 @@ workflow runs. After an intended change, run `pnpm vectors` (or `pnpm lint:fix`)
 updated files.
 
 ```sh
-pnpm lint && pnpm typecheck && pnpm test && pnpm check:secrets
+pnpm lint && pnpm typecheck && pnpm check:secrets
 pnpm build && pnpm size:check
 ```
 
-### `test-macos`: unit tests on macOS
+### `test`: unit tests (Ubuntu, 3 shards)
 
-`pnpm test` on `macos-latest`. Some tests only exercise their real code path on macOS: the local
-filesystem watcher (FSEvents-backed recursive `fs.watch`), the macOS computer-use helpers, and the
-Chrome-based browser tests. Reproduce with `pnpm test` on a Mac.
+`pnpm turbo run test --concurrency=1 --continue`, sharded by package: `agent`, `daemon`, and
+`rest` (everything else). On a runner, packages run one at a time: every package's Vitest starts a
+worker per core, so running them together on a 4 vCPU runner makes timing-sensitive tests many
+times slower than on a dev machine. `--continue` reports every failing package instead of stopping
+at the first. `TEST_TIME_SCALE=5` stretches Vitest's default timeouts
+(`scripts/vitest/setup-fast-check.ts`) and the budgets of tests that assert an algorithm stays fast
+(each such test multiplies its budget by it). Tests that race a timeout against a delay (retry
+backoff, a killed process, a drained connection) keep fixed bounds: scaling them could hide the bug
+they guard against.
+
+```sh
+pnpm test                 # every package (turbo replays unchanged ones)
+pnpm test:changed         # only the tests that import what changed since main
+```
+
+### `test-macos`: unit tests on macOS (2 shards)
+
+What touches the OS, on `macos-latest`: the agent's `src/execution`, `src/harness`,
+`test/persistence` and `test/journal.test.ts` (processes, shells, the macOS computer-use helpers,
+Chrome, files), and every test of storage (the FSEvents-backed recursive `fs.watch`), connectors
+(stdio servers), sync (sockets) and the daemon (case-insensitive paths, the Trash), in two shards:
+`daemon`, and `agent and storage`. The rest is platform-independent logic that runs on Linux
+only. Reproduce with `pnpm test` on a Mac.
 
 ### `bench`: benchmarks
 
-1. `pnpm bench --concurrency=1 --env-mode=loose` with `BENCH_BUDGET_MULTIPLIER=2`. Every package with
-   a `bench` script runs `vitest bench --run` and writes `bench-results.json`. Packages run one at a
-   time so suites don't compete for CPU. `--env-mode=loose` is needed because Turbo's default strict
-   env mode strips variables that `turbo.json` doesn't declare for the task, so the multiplier would
-   otherwise never reach Vitest.
+1. `pnpm bench --concurrency=1` with `BENCH_BUDGET_MULTIPLIER=2` (declared in the task's `env`, so
+   it reaches Vitest and is part of the cache key). Every package with a `bench` script runs
+   `vitest bench --run` and writes `bench-results.json`. Packages run one at a time so suites don't
+   compete for CPU; a package whose inputs didn't change replays its results.
 2. `node scripts/bench-check.mjs` prints a table (package, benchmark, p50, p99, samples, status) to
    the log and the job summary. It fails if any benchmark test failed or if no results were found.
 3. The results are uploaded as the `bench-results` artifact.
@@ -118,60 +159,77 @@ test("parseTasks: 2k-line note", async ({ bench }) => {
 });
 ```
 
+tinybench takes at least 64 samples over at least a second. A benchmark whose run takes hundreds of
+milliseconds passes `run({ iterations: 24, time: 0, … })` instead (the typing and import-preview
+benchmarks): p99 of either is the worst sample, so the budget means the same.
+
 A package opts in with
 `"bench": "vitest bench --run --reporter=default --reporter=json --outputFile.json=bench-results.json"`.
 
 ```sh
-BENCH_BUDGET_MULTIPLIER=2 pnpm bench --concurrency=1 --env-mode=loose
+BENCH_BUDGET_MULTIPLIER=2 pnpm bench --concurrency=1
 pnpm bench:check                      # or: node scripts/bench-check.mjs packages/core
 ```
 
-### `e2e`: Playwright functional and perf tests
+### `e2e`: Playwright functional tests (4 shards)
 
-1. Restores `~/.cache/ms-playwright`, keyed by the `@playwright/test` version in `pnpm-lock.yaml`.
-2. `pnpm --filter @ddl/web exec playwright install --with-deps chromium`. System packages aren't
-   cached, so this always runs; the browser download is skipped on a cache hit.
-3. `pnpm vim:check` (~25 s), the vim-mode gate, in one Chromium session (see
-   `packages/editor/test/vim/README.md`):
-   - regenerates `packages/editor/test/vim/vectors.jsonl` (the vim behavior contract the Swift port
-     replays too) and fails with a per-case diff if the committed file differs, if a catalog case
-     throws, or if a `defaultKeymap` entry or ex command lost its catalog coverage;
-   - runs vim.js's own test suite against plain CodeMirror 6 (upstream's setup; all must pass) and
-     against the Daily Do List editor (only the listed, deliberate differences may fail);
-   - replays every vector against the Daily Do List editor (only listed skips may differ).
-   After an intended change (a dependency upgrade, a new catalog case) run `pnpm vim:vectors` and
-   commit the regenerated file after reviewing its diff.
-4. `pnpm e2e` (project `functional`). Playwright's web server builds the web app (`vite build`)
-   and starts `packages/agent/scripts/e2e-daemons.ts`, which starts a real daemon per test (from
-   source, with `tsx`: nothing else to build), each on a temporary `DDL_HOME` and demo vault, plus
-   a fake OpenRouter and a sync service in the same process; nothing reaches the network. The report
-   and traces are uploaded as `playwright-report-functional`.
-5. `pnpm e2e:perf` (project `perf`, the same web server) with `PERF_BUDGET_MULTIPLIER=2`. The
-   perf specs write
-   `apps/web/perf-results.json` and fail when a metric exceeds budget × multiplier.
-   `.github/scripts/perf-summary.mjs` renders the numbers into the job summary. The report and
-   `perf-results.json` are uploaded as `playwright-report-perf`.
+1. Restores `~/.cache/ms-playwright`, keyed by the `@playwright/test` version in `pnpm-lock.yaml`,
+   and installs Chromium (`.github/actions/playwright`). GitHub's Ubuntu images ship Google Chrome
+   and the libraries Chromium needs, so the slow `--with-deps` (apt) runs only when `ldd` finds one
+   missing. Skipped when the job's turbo task will replay.
+2. `pnpm turbo run e2e --filter=@ddl/web -- --shard=N/4` (project `functional`, a quarter of the
+   tests on each runner). Playwright's web server builds the web app (`vite build`) and starts
+   `packages/agent/scripts/e2e-daemons.ts`, which starts a real daemon per test (from source, with
+   `tsx`: nothing else to build), each on a temporary `DDL_HOME` and demo vault, plus a fake
+   OpenRouter and a sync service in the same process; nothing reaches the network. On failure the
+   report and traces are uploaded as `playwright-report-functional-N`.
 
-The perf step runs even when functional tests fail, so perf numbers are always available. In CI
-(`CI=true`) Playwright uses its bundled Chromium; locally it can use installed Chrome. Locally the
-harness's control port is `DDL_E2E_PORT` (default 4173), so two checkouts can run side by side;
-`DDL_E2E_LOG_LEVEL=debug` shows the daemons' logs. The perf
-summary understands `{ "multiplier": 2, "results": [{ "name": "tab:switch", "value": 12.3,
-"unit": "ms", "budget": 30, "passed": true }] }`, and falls back to showing raw JSON for other shapes.
+### `perf`: Playwright perf tests
+
+`pnpm turbo run e2e:perf --filter=@ddl/web` (project `perf`, the same web server) with
+`PERF_BUDGET_MULTIPLIER=2`, on a runner of its own so nothing competes with the measurements. The
+perf specs write `apps/web/perf-results.json` (restored on a cache hit) and fail when a metric
+exceeds budget × multiplier. `.github/scripts/perf-summary.mjs` renders the numbers into the job
+summary. The report and `perf-results.json` are uploaded as `playwright-report-perf`.
+
+In CI (`CI=true`) Playwright uses its bundled Chromium; locally it can use installed Chrome.
+Locally the harness's control port is `DDL_E2E_PORT` (default 4173), so two checkouts can run side
+by side; `DDL_E2E_LOG_LEVEL=debug` shows the daemons' logs. The perf summary understands
+`{ "multiplier": 2, "results": [{ "name": "tab:switch", "value": 12.3, "unit": "ms", "budget": 30,
+"passed": true }] }`, and falls back to showing raw JSON for other shapes.
 
 ```sh
 pnpm --filter @ddl/web exec playwright install chromium   # once
-pnpm vim:check
-pnpm e2e
+pnpm e2e                                                   # or: pnpm e2e -- --shard=1/4
 PERF_BUDGET_MULTIPLIER=2 pnpm e2e:perf && node .github/scripts/perf-summary.mjs
 ```
 
-The vim scripts prefer Playwright's bundled Chromium (what CI uses) and fall back to the installed
-Google Chrome; `VIM_CHROMIUM_CHANNEL=chrome` forces Chrome.
+### `vim`: vim mode
+
+`pnpm turbo run vim:check --filter=@ddl/editor`, the vim-mode gate, in one Chromium (see
+`packages/editor/test/vim/README.md`). Its four parts run at once, the long ones on a pool of pages
+(one per core but one, at most 6; `VIM_PAGES` overrides): it
+
+- regenerates `packages/editor/test/vim/vectors.jsonl` (the vim behavior contract the Swift port
+  replays too) and fails with a per-case diff if the committed file differs, if a catalog case
+  throws, or if a `defaultKeymap` entry or ex command lost its catalog coverage;
+- runs vim.js's own test suite against plain CodeMirror 6 (upstream's setup; all must pass) and
+  against the Daily Do List editor (only the listed, deliberate differences may fail);
+- replays every vector against the Daily Do List editor (only listed skips may differ).
+
+After an intended change (a dependency upgrade, a new catalog case) run `pnpm vim:vectors` and
+commit the regenerated file after reviewing its diff. The vim scripts prefer Playwright's bundled
+Chromium (what CI uses) and fall back to the installed Google Chrome; `VIM_CHROMIUM_CHANNEL=chrome`
+forces Chrome.
+
+```sh
+pnpm vim:check
+```
 
 ### `evals-mock`: deterministic agent evals
 
-`pnpm eval:mock` runs every suite in `evals/src/suites/` in mock mode (no network, no real model).
+`pnpm eval:mock` (in CI through turbo, so unchanged agent code replays the last results) runs every
+suite in `evals/src/suites/` in mock mode (no network, no real model).
 It fails when any suite misses its thresholds. Safety-critical rule: the rules layer must never
 "allow" a case whose expected verdict is `require_approval` or `deny`.
 `.github/scripts/eval-summary.mjs` renders suites, pass counts, critical failures, metrics and failed
@@ -302,6 +360,11 @@ excessive permissions, …) with the `security-extended` queries. Findings appea
 Code scanning. This is CodeQL's *advanced setup*, so keep "default setup" disabled in the
 repository settings, or the uploads conflict. Only this job gets `security-events: write`.
 
+The JavaScript/TypeScript analysis takes about two minutes and is the workflow's longest job. It
+analyzes the test code too (about 40% of the TypeScript); a `paths-ignore` for `**/*.test.ts`,
+`**/*.bench.ts`, `apps/web/e2e/**` and `packages/*/test/**` in a CodeQL config file would roughly
+halve it, at the cost of findings in code that never ships. That trade is deliberately not made.
+
 ### `dependency-review`: new vulnerable dependencies (pull requests)
 
 Fails a PR that introduces a dependency with a known high or critical vulnerability. It relies on
@@ -376,10 +439,12 @@ dispatched on the branch and on `main` (see [How runs start today](#how-runs-sta
 The ruleset to enable once work lands through pull requests:
 
 - Require a pull request with at least one approval. Block force pushes and deletions.
-- Required status checks: `Lint, typecheck, test, build`, `Unit tests (macOS)`, `Benchmarks`,
-  `E2E and perf (Playwright)`, `Evals (mock)`, `Secret scan (gitleaks)`,
-  `CodeQL (javascript-typescript)`, `CodeQL (actions)`, `Dependency review`. Job names are the
-  check names, so rename jobs deliberately.
+- Required status checks: `Lint, typecheck, build`, `Unit tests (Linux, agent)`,
+  `Unit tests (Linux, daemon)`, `Unit tests (Linux, rest)`, `Unit tests (macOS, daemon)`,
+  `Unit tests (macOS, agent and storage)`, `Benchmarks`, `E2E (Playwright, 1/4)` … `4/4`,
+  `Perf (Playwright)`, `Vim mode (vectors, vim.js suite, replay)`, `Evals (mock)`,
+  `Secret scan (gitleaks)`, `CodeQL (javascript-typescript)`, `CodeQL (actions)`,
+  `Dependency review`. Job names are the check names, so rename jobs deliberately.
 - Either require branches to be up to date or use a merge queue; both workflows also run on
   `merge_group`. A job skipped by its condition (e.g. dependency review in the queue) counts as
   passing.

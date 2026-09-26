@@ -73,6 +73,8 @@ export interface StartDaemonOptions {
   onRestart?: (vaultPath: string) => void;
   /** The relay's link to the machine (tests shorten its backoff). */
   relayLinkTimings?: Partial<LinkTimings>;
+  /** How long sync waits for local changes to settle before a pass (tests shorten it). */
+  syncDebounceMs?: number;
 }
 
 export interface RunningDaemon {
@@ -175,6 +177,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       env,
       leaseEpoch: () => supervisor?.heldEpoch ?? null,
       logger,
+      ...(options.syncDebounceMs === undefined ? {} : { debounceMs: options.syncDebounceMs }),
     });
     resources.sync = sync;
     await sync.configure(config.sync);

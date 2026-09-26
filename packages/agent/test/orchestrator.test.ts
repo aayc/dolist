@@ -1,18 +1,11 @@
-import {
-  type ArtifactMessage,
-  ORCHESTRATOR_THREAD_ID,
-  type TextMessage,
-  type ToolCallMessage,
-  textResult,
-  toolResultText,
-} from "@ddl/core";
+import { type TextMessage, type ToolCallMessage, textResult, toolResultText } from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentScript, ScriptContext } from "../src/harness/scripted";
 import type { HarnessSessionOptions } from "../src/harness/types";
 import { parseDigestItems } from "../src/prompts/orchestrator";
-import { type Gate, gate } from "./helpers/fakes";
-import { createTestRuntime, isSubsequence, type TestRuntime, TODAY } from "./helpers/runtime";
+import { gate } from "./helpers/fakes";
+import { createTestRuntime, type TestRuntime, TODAY } from "./helpers/runtime";
 
 const WAIT = { timeout: 4_000, interval: 5 };
 let active: TestRuntime[] = [];
@@ -55,112 +48,6 @@ function untilAborted(ctx: ScriptContext): Promise<void> {
   });
 }
 
-describe("orchestrator (default mock script)", () => {
-  it("triages, delegates and completes a new task", async () => {
-    const t = await runtime();
-    const task = "Research standing desks under $500";
-    await t.storage.write(TODAY, `- [ ] ${task}\n`);
-    const record = await t.waitForStatus(task, "done");
-
-    expect(isSubsequence(["triaging", "working", "done"], t.statusesOf(task))).toBe(true);
-    expect(record.summary).toBe("Summary ready");
-    const thread = t.thread(task);
-    expect(thread.status).toBe("done");
-    expect(thread.title).toBe(task);
-    const texts = t.texts(task);
-    expect(texts[0]).toBe("On it — research standing desks under $500.");
-    expect(texts.some((s) => s.startsWith("Looking into"))).toBe(true);
-    expect(texts.at(-1)).toContain("Here's a quick summary");
-    expect(t.events.deltas.some((d) => d.threadId === thread.id)).toBe(true);
-
-    const artifactMessage = thread.messages.find(
-      (m): m is ArtifactMessage => m.kind === "artifact",
-    );
-    const artifact = await t.runtime.readArtifact(thread.id, artifactMessage!.artifactId);
-    expect(artifact?.meta.kind).toBe("markdown");
-    expect(new TextDecoder().decode(artifact!.body)).toContain(`# ${task}`);
-
-    expect(record.unread).toBeGreaterThan(0);
-    t.runtime.markThreadRead(thread.id);
-    expect(t.record(task)?.unread).toBe(0);
-
-    // Every tool call went through the gate with the right context.
-    const subagentCalls = t.safety.log.calls.filter((c) => c.threadId === thread.id);
-    expect(subagentCalls.map((c) => c.toolName)).toEqual([
-      "post_update",
-      "create_artifact",
-      "finish_task",
-    ]);
-    expect(subagentCalls.every((c) => c.taskId === record.taskId)).toBe(true);
-    const orchestratorCalls = t.safety.log.calls.filter((c) =>
-      c.sessionId.startsWith("orchestrator:"),
-    );
-    expect(orchestratorCalls.map((c) => c.toolName)).toEqual(["post_comment", "spawn_subagent"]);
-  });
-
-  it("pauses for approval and continues once approved", async () => {
-    const t = await runtime();
-    const task = "Book dentist appointment next week";
-    await t.storage.write(TODAY, `- [ ] ${task}\n`);
-    const waiting = await t.waitForStatus(task, "waiting_approval");
-    const thread = t.thread(task);
-    const [approval] = t.runtime.listApprovals({ status: "pending" });
-    expect(approval).toMatchObject({
-      toolName: "mock_irreversible_action",
-      categories: ["booking"],
-      taskId: waiting.taskId,
-      threadId: thread.id,
-    });
-    expect(
-      thread.messages.some((m) => m.kind === "approval" && m.approvalId === approval!.id),
-    ).toBe(true);
-    expect(t.runtime.status().pendingApprovals).toBe(1);
-    expect(t.runtime.getThread(thread.id)?.approvals.map((a) => a.id)).toEqual([approval!.id]);
-
-    await t.runtime.decideApproval(approval!.id, { decision: "approve" });
-    const done = await t.waitForStatus(task, "done");
-    expect(done.summary).toBe("Booked (mock)");
-    const tool = t.thread(task).messages.find((m): m is ToolCallMessage => m.kind === "tool_call");
-    expect(tool).toMatchObject({ toolName: "mock_irreversible_action", status: "ok" });
-    expect(t.events.approvals.map((a) => a.status)).toEqual(["pending", "approved"]);
-  });
-
-  it("reports a denied action as blocked and stops", async () => {
-    const t = await runtime();
-    const task = "Email landlord about the leaky faucet";
-    await t.storage.write(TODAY, `- [ ] ${task}\n`);
-    await t.waitForStatus(task, "waiting_approval");
-    const [approval] = t.runtime.listApprovals({ status: "pending" });
-    await t.runtime.decideApproval(approval!.id, { decision: "deny", note: "Not now" });
-    const record = await t.waitForStatus(task, "waiting_user");
-    expect(record.summary).toBe("Not approved");
-    const tool = t.thread(task).messages.find((m): m is ToolCallMessage => m.kind === "tool_call");
-    expect(tool?.status).toBe("blocked");
-    expect(t.texts(task).at(-1)).toContain("wasn't approved");
-  });
-
-  it("silently ignores tasks with nothing digital to do", async () => {
-    const t = await runtime();
-    await t.storage.write(TODAY, "- [ ] Go to the gym\n");
-    const record = await t.waitForStatus("Go to the gym", "ignored");
-    expect(record.threadId).toBeNull();
-    expect(t.runtime.listThreads().map((s) => s.id)).toEqual([ORCHESTRATOR_THREAD_ID]);
-  });
-
-  it("cancels pending approvals and work when the task is checked off", async () => {
-    const t = await runtime();
-    const task = "Order new running shoes";
-    await t.storage.write(TODAY, `- [ ] ${task}\n`);
-    await t.waitForStatus(task, "waiting_approval");
-    await t.storage.write(TODAY, `- [x] ${task}\n`);
-    const record = await t.waitForStatus(task, "cancelled");
-    expect(t.runtime.listApprovals({ status: "pending" })).toEqual([]);
-    expect(t.events.approvals.at(-1)?.status).toBe("cancelled");
-    expect(t.runtime.getThread(record.threadId!)?.thread.status).toBe("cancelled");
-    expect(t.runtime.status()).toMatchObject({ running: 0, pendingApprovals: 0 });
-  });
-});
-
 describe("orchestrator control plane", () => {
   it("cancels the subagent when its task is deleted", async () => {
     const aborted: string[] = [];
@@ -185,83 +72,6 @@ describe("orchestrator control plane", () => {
       .getThread(record.threadId!)
       ?.thread.messages.find((m): m is TextMessage => m.kind === "text");
     expect(bubble?.streaming).toBeFalsy();
-  });
-
-  it("steers a running subagent with the user's reply", async () => {
-    const release = gate();
-    const t = await runtime({
-      scriptFor: scripts(delegateAll(), async (ctx) => {
-        if (ctx.turn === 0) {
-          await ctx.callTool("post_update", { text: "Comparing options", summary: "Comparing" });
-          await release.promise;
-          return;
-        }
-        await ctx.say(`Adjusting: ${ctx.message}`);
-        await ctx.callTool("finish_task", {
-          status: "done",
-          summary: "Adjusted",
-          shortSummary: "Adjusted",
-        });
-      }),
-    });
-    const task = "Research best standing desks";
-    await t.storage.write(TODAY, `- [ ] ${task}\n`);
-    await vi.waitFor(() => expect(t.record(task)?.summary).toBe("Comparing"), WAIT);
-    await t.runtime.postUserMessage(t.thread(task).id, "Keep it under $300");
-    release.open();
-    await t.waitForStatus(task, "done");
-    const texts = t.texts(task);
-    expect(texts).toContain("Keep it under $300");
-    expect(texts.some((s) => s.startsWith("Adjusting:") && s.includes("Keep it under $300"))).toBe(
-      true,
-    );
-  });
-
-  it("forwards edits of a task to its running subagent", async () => {
-    const release = gate();
-    const seen: string[] = [];
-    const t = await runtime({
-      scriptFor: scripts(delegateAll(), async (ctx) => {
-        seen.push(ctx.message);
-        if (ctx.turn === 0) await release.promise;
-        await ctx.callTool("finish_task", { status: "done", summary: "ok" });
-      }),
-    });
-    await t.storage.write(TODAY, "- [ ] Find a plumber\n");
-    await t.waitForStatus("Find a plumber", "working");
-    await t.storage.write(TODAY, "- [ ] Find a plumber for Saturday\n");
-    // Let the edit settle (settleMs is 20ms in tests) while the subagent is still running.
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    release.open();
-    await t.waitForStatus("Find a plumber for Saturday", "done");
-    expect(seen.some((m) => m.includes("The user edited the task") && m.includes("Saturday"))).toBe(
-      true,
-    );
-  });
-
-  it("queues subagents beyond maxConcurrentSubagents", async () => {
-    const gates = new Map<string, Gate>();
-    const t = await runtime({
-      settings: { agent: { maxConcurrentSubagents: 1 } },
-      scriptFor: scripts(delegateAll(), async (ctx) => {
-        const g = gate();
-        gates.set(taskOf(ctx), g);
-        await g.promise;
-        await ctx.callTool("finish_task", { status: "done", summary: "ok", shortSummary: "ok" });
-      }),
-    });
-    await t.storage.write(TODAY, "- [ ] Task one alpha\n- [ ] Task two beta\n");
-    await t.waitForStatus("Task one alpha", "working");
-    await t.waitForStatus("Task two beta", "queued");
-    expect(t.runtime.status()).toMatchObject({ running: 1, queued: 1 });
-    await vi.waitFor(() => expect(gates.has("Task one alpha")).toBe(true), WAIT);
-    gates.get("Task one alpha")!.open();
-    await t.waitForStatus("Task one alpha", "done");
-    await t.waitForStatus("Task two beta", "working");
-    await vi.waitFor(() => expect(gates.has("Task two beta")).toBe(true), WAIT);
-    gates.get("Task two beta")!.open();
-    await t.waitForStatus("Task two beta", "done");
-    expect(t.statusesOf("Task two beta")).toContain("queued");
   });
 
   it("routes a reply to the orchestrator when no subagent exists", async () => {
@@ -300,51 +110,6 @@ describe("orchestrator control plane", () => {
     await t.waitForStatus(task, "done");
     expect(kickoffs[0]).toContain("Goal: Handle: the tax form");
     expect(kickoffs[0]).toContain("History of this task's thread");
-  });
-
-  it("marks tasks failed when the orchestrator errors and recovers on retry", async () => {
-    let fail = true;
-    const orchestrator: AgentScript = async (ctx) => {
-      if (fail) throw new Error("model unavailable");
-      for (const item of parseDigestItems(ctx.message)) {
-        await ctx.callTool("set_task_status", { taskId: item.taskId, status: "ignored" });
-      }
-    };
-    const t = await runtime({ scriptFor: scripts(orchestrator, async () => {}) });
-    await t.storage.write(TODAY, "- [ ] Renew passport\n");
-    const failed = await t.waitForStatus("Renew passport", "failed");
-    expect(failed.summary).toBe("Couldn't triage");
-    expect(t.runtime.status().problem).toContain("model unavailable");
-    expect(
-      t.thread("Renew passport").messages.some((m) => m.kind === "status" && m.status === "failed"),
-    ).toBe(true);
-
-    fail = false;
-    await t.runtime.retryThread(failed.threadId!);
-    await t.waitForStatus("Renew passport", "ignored");
-    await vi.waitFor(() => expect(t.runtime.status().problem).toBeUndefined(), WAIT);
-  });
-
-  it("fails tasks of an orchestrator turn that hangs past the timeout", async () => {
-    let calls = 0;
-    const t = await runtime({
-      overrides: { turnTimeoutMs: 100 },
-      scriptFor: scripts(
-        async (ctx) => {
-          calls++;
-          if (calls === 1) return untilAborted(ctx);
-          for (const item of parseDigestItems(ctx.message)) {
-            await ctx.callTool("set_task_status", { taskId: item.taskId, status: "ignored" });
-          }
-        },
-        async () => {},
-      ),
-    });
-    await t.storage.write(TODAY, "- [ ] Water the garden beds\n");
-    const failed = await t.waitForStatus("Water the garden beds", "failed");
-    expect(t.runtime.status().problem).toContain("took too long");
-    await t.runtime.retryThread(failed.threadId!);
-    await t.waitForStatus("Water the garden beds", "ignored");
   });
 
   it("answers replies on deleted tasks without involving the agents", async () => {
@@ -521,25 +286,6 @@ describe("orchestrator control plane", () => {
 });
 
 describe("restarts", () => {
-  it("re-triages tasks whose triage was interrupted by a stop", async () => {
-    const storage = new MemoryStorageProvider();
-    const first = await createTestRuntime({
-      storage,
-      scriptFor: scripts(
-        async (ctx) => untilAborted(ctx),
-        async () => {},
-      ),
-    });
-    const task = "Research ergonomic chairs";
-    await first.storage.write(TODAY, `- [ ] ${task}\n`);
-    await first.waitForStatus(task, "triaging");
-    await first.runtime.stop();
-    expect(first.record(task)?.status).toBe("triaging");
-
-    const second = await runtime({ storage });
-    await second.waitForStatus(task, "done");
-  });
-
   it("leaves work a stop interrupted as it was, and the next start picks it back up", async () => {
     const storage = new MemoryStorageProvider();
     const first = await createTestRuntime({

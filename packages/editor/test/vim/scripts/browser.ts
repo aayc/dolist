@@ -3,6 +3,7 @@
  * otherwise the local Google Chrome. `VIM_CHROMIUM_CHANNEL=chrome` forces Chrome.
  */
 import { existsSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import { type Browser, chromium, type Page } from "playwright-core";
 import { VIEWPORT } from "../format";
 import { buildOracleFont, ORACLE_FONT_FAMILY, ORACLE_FONT_SIZE } from "./oracle-font";
@@ -73,4 +74,58 @@ export async function openScriptPage(browser: Browser, script: string): Promise<
     );
   }
   return Object.assign(page, { errors });
+}
+
+/** Pages a pool opens: `VIM_PAGES`, else one per core but one, at most 6. */
+export function poolSize(): number {
+  const requested = Number(process.env.VIM_PAGES);
+  if (Number.isInteger(requested) && requested > 0) return requested;
+  return Math.max(1, Math.min(6, availableParallelism() - 1));
+}
+
+/**
+ * Pages running the same script that share out chunks of cases: each page takes the next chunk
+ * when it's done, and results come back in chunk order. Cases are independent (the harness resets
+ * vim's global state before each), so the split doesn't show in the results.
+ */
+export class PagePool {
+  readonly pages: Array<Page & PageErrors>;
+
+  private constructor(pages: Array<Page & PageErrors>) {
+    this.pages = pages;
+  }
+
+  static async open(browser: Browser, script: string, size = poolSize()): Promise<PagePool> {
+    return new PagePool(
+      await Promise.all(Array.from({ length: size }, () => openScriptPage(browser, script))),
+    );
+  }
+
+  async map<T, R>(
+    items: readonly T[],
+    chunk: number,
+    work: (page: Page, chunk: T[]) => Promise<R>,
+  ) {
+    const chunks: T[][] = [];
+    for (let i = 0; i < items.length; i += chunk) chunks.push(items.slice(i, i + chunk));
+    const results: R[] = new Array(chunks.length);
+    let next = 0;
+    await Promise.all(
+      this.pages.map(async (page) => {
+        while (next < chunks.length) {
+          const index = next++;
+          results[index] = await work(page, chunks[index] as T[]);
+        }
+      }),
+    );
+    return results;
+  }
+
+  get errors(): string[] {
+    return this.pages.flatMap((page) => page.errors);
+  }
+
+  async close(): Promise<void> {
+    await Promise.all(this.pages.map((page) => page.close()));
+  }
 }

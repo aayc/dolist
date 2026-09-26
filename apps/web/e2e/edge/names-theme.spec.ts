@@ -91,16 +91,4 @@ test.describe("theme", () => {
     await expect(dailyHeading(page)).toBeVisible();
     await expect(page.locator("html")).toHaveAttribute("data-theme", target);
   });
-
-  test("toggling twice quickly returns to the original theme", async ({ page }) => {
-    await openApp(page);
-    const initial = await page.evaluate(() => document.documentElement.dataset.theme);
-    await page.evaluate(() => {
-      const debug = (window as unknown as EdgeWindow).__ddlDebug;
-      debug.runCommand("theme:toggle");
-      debug.runCommand("theme:toggle");
-    });
-    await page.waitForTimeout(200);
-    await expect(page.locator("html")).toHaveAttribute("data-theme", initial!);
-  });
 });

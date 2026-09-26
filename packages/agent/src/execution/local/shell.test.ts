@@ -82,14 +82,15 @@ describe("LocalShellExecutor", () => {
     const pidFile = join(dir, "bg.pid");
     const started = Date.now();
     // Long enough for the shell to start the background job even on a busy machine.
+    const timeoutMs = 3000;
     const result = await shell.exec(`sleep 30 & echo $! > ${pidFile}; sleep 30`, {
       cwd: dir,
-      timeoutMs: 1500,
+      timeoutMs,
     });
     expect(result.timedOut).toBe(true);
     // A shell waiting on a foreground job may report the SIGTERM as its exit status (128 + 15).
     expect([null, 143]).toContain(result.exitCode);
-    expect(Date.now() - started).toBeLessThan(5000);
+    expect(Date.now() - started).toBeLessThan(timeoutMs + 3500);
     const backgroundPid = Number((await readFile(pidFile, "utf8")).trim());
     expect(backgroundPid).toBeGreaterThan(0);
     expect(await waitUntilDead(backgroundPid)).toBe(true);

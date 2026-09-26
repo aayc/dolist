@@ -97,7 +97,7 @@ async function main(): Promise<void> {
   const fake = await startFakeOpenRouter({
     brain: createFakeBrain({ sandbox: true }),
     // Small, spaced chunks keep streaming visible in the UI.
-    chunkChars: 6,
+    chunkChars: 24,
     chunkDelayMs: 25,
   });
   // Loaded lazily: the sync service and the daemon read their environment when they start.

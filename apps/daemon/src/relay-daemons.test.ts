@@ -46,6 +46,8 @@ const LEASE: Partial<LeaseTimings> = {
   marginMs: 1_000,
 };
 const LINK: Partial<LinkTimings> = { pingEveryMs: 500, minBackoffMs: 50, maxBackoffMs: 500 };
+/** Local changes reach the sync service this long after they settle (1.5 s in the app). */
+const SYNC_DEBOUNCE_MS = 100;
 const TASK = "Order a replacement water filter";
 
 interface Device {
@@ -111,6 +113,7 @@ async function startDevice(
     logger: logger.child({ device: name }),
     leaseTimings: LEASE,
     relayLinkTimings: LINK,
+    syncDebounceMs: SYNC_DEBOUNCE_MS,
   });
   running.push(daemon);
   const apiToken = readFileSync(config.tokenPath, "utf8").trim();
@@ -422,12 +425,14 @@ describe("the agent relay between daemons", { timeout: 120_000 * TIME_SCALE }, (
     // Running it on this device: it outranks the always-on machine and takes the agent over.
     await call(laptop, "PATCH", "device", { json: { placement: "this_device" } });
     await eventually(async () => expect(leaseHolder()?.device).toBe("dev_laptop"));
-    await eventually(async () =>
-      expect(await status(laptop)).toMatchObject({
+    // The placement and the problem come from different sources and can take a moment to agree.
+    await eventually(async () => {
+      const current = await status(laptop);
+      expect(current).toMatchObject({
         placement: { placement: "this_device", relay: "off", runsOn: { thisDevice: true } },
-      }),
-    );
-    expect((await status(laptop)).problem).toBeUndefined();
+      });
+      expect(current.problem).toBeUndefined();
+    });
     await chatShows(laptop, "Paired now");
     expect([200, 202]).toContain((await sayToOrchestrator(laptop, "Now here")).status);
     await eventually(async () =>

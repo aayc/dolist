@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import type { Browser, Page } from "playwright-core";
+import type { Browser } from "playwright-core";
 import { type CoverageReport, checkCoverage } from "../catalog/coverage";
 import { buildCatalog } from "../catalog/index";
 import {
@@ -17,7 +17,7 @@ import {
 } from "../format";
 import type { OracleApi, OracleRun } from "../pages/oracle";
 import type { RecordRun } from "../pages/upstream-record";
-import { openScriptPage } from "./browser";
+import { openScriptPage, PagePool } from "./browser";
 import { bundlePage } from "./bundle";
 
 const require = createRequire(import.meta.url);
@@ -44,7 +44,7 @@ export function engineDescription(): string {
   return `@replit/codemirror-vim@${adapter} (@replit/codemirror-vim-core@${core})`;
 }
 
-const CHUNK = 400;
+const CHUNK = 250;
 
 export interface UpstreamStats {
   recorded: number;
@@ -80,33 +80,34 @@ function firstDifference(expected: ExpectedState[], actual: VectorCase): string 
   return null;
 }
 
-async function runChunked(page: Page, cases: readonly CaseSpec[]): Promise<OracleRun> {
-  const total: OracleRun = { vectors: [], coverage: [], errors: [] };
-  for (let i = 0; i < cases.length; i += CHUNK) {
-    const run = await page.evaluate(
+async function runChunked(pool: PagePool, cases: readonly CaseSpec[]): Promise<OracleRun> {
+  const runs = await pool.map(cases, CHUNK, (page, chunk) =>
+    page.evaluate(
       (chunk) => (window as unknown as { __vimOracle: OracleApi }).__vimOracle.runCases(chunk),
-      cases.slice(i, i + CHUNK),
-    );
-    total.vectors.push(...run.vectors);
-    total.coverage.push(...run.coverage);
-    total.errors.push(...run.errors);
-  }
-  return total;
+      chunk,
+    ),
+  );
+  return {
+    vectors: runs.flatMap((run) => run.vectors),
+    coverage: runs.flatMap((run) => run.coverage),
+    errors: runs.flatMap((run) => run.errors),
+  };
 }
 
 export async function generateVectors(browser: Browser): Promise<Generated> {
   const catalog = buildCatalog();
-  const recorded = await recordUpstream(browser);
-  const page = await openScriptPage(
-    browser,
-    await bundlePage("oracle.ts", { instrumentVim: true }),
-  );
+  const [recorded, pool] = await Promise.all([
+    recordUpstream(browser),
+    bundlePage("oracle.ts", { instrumentVim: true }).then((script) =>
+      PagePool.open(browser, script),
+    ),
+  ]);
   try {
-    const tables = await page.evaluate(() => window.__vimOracle.engineTables());
-    const run = await runChunked(page, catalog.cases);
+    const tables = await pool.pages[0]!.evaluate(() => window.__vimOracle.engineTables());
+    const run = await runChunked(pool, catalog.cases);
     const errors = [...run.errors];
     const throwing = await runChunked(
-      page,
+      pool,
       catalog.throwing.map((c) => c.spec),
     );
     for (const vector of throwing.vectors) {
@@ -118,7 +119,7 @@ export async function generateVectors(browser: Browser): Promise<Generated> {
 
     const upstream: UpstreamStats = { recorded: 0, skipped: [...recorded.skipped] };
     const replays = await runChunked(
-      page,
+      pool,
       recorded.recordings.map((r) => r.spec),
     );
     const replayed = new Map(replays.vectors.map((v) => [v.name, v]));
@@ -140,8 +141,7 @@ export async function generateVectors(browser: Browser): Promise<Generated> {
       upstream.recorded++;
     }
 
-    if (page.errors.length > 0)
-      errors.push(...page.errors.map((error) => ({ name: "(page)", error })));
+    errors.push(...pool.errors.map((error) => ({ name: "(page)", error })));
     return {
       text: serializeVectors(createHeader(engineDescription()), vectors),
       vectors,
@@ -152,6 +152,6 @@ export async function generateVectors(browser: Browser): Promise<Generated> {
       upstream,
     };
   } finally {
-    await page.close();
+    await pool.close();
   }
 }

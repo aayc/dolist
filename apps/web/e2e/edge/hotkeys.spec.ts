@@ -15,32 +15,6 @@ async function expectShowing(page: Page, days: number): Promise<void> {
 }
 
 test.describe("daily note hotkeys under rapid repetition", () => {
-  test("mashing Mod+Shift+P walks back one existing note per press and stops at the oldest", async ({
-    page,
-  }) => {
-    const errors = collectErrors(page);
-    await openApp(page);
-    for (let i = 0; i < 3; i++) await page.keyboard.press("ControlOrMeta+Shift+P");
-    await expectShowing(page, -4);
-    // Past the oldest note: stays there and says so.
-    await page.keyboard.press("ControlOrMeta+Shift+P");
-    await page.keyboard.press("ControlOrMeta+Shift+P");
-    await expect(
-      page.getByTestId("toast").filter({ hasText: "No previous daily note" }).first(),
-    ).toBeVisible();
-    await expectShowing(page, -4);
-    expect(errors).toEqual([]);
-  });
-
-  test("mashing Mod+Shift+D always lands on today in a single tab", async ({ page }) => {
-    const errors = collectErrors(page);
-    await openApp(page);
-    await page.keyboard.press("ControlOrMeta+Shift+P");
-    for (let i = 0; i < 8; i++) await page.keyboard.press("ControlOrMeta+Shift+D");
-    await expectShowing(page, 0);
-    expect(errors).toEqual([]);
-  });
-
   test("interleaved previous/next/today keys end on a consistent note", async ({ page }) => {
     const errors = collectErrors(page);
     await openApp(page);

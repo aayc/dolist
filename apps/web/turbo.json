@@ -1,0 +1,45 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "e2e": {
+      "dependsOn": ["transit"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/daemon/**",
+        "$TURBO_ROOT$/apps/sync/**",
+        "$TURBO_ROOT$/packages/agent/**",
+        "$TURBO_ROOT$/packages/connectors/**",
+        "$TURBO_ROOT$/packages/storage/**",
+        "!$TURBO_ROOT$/**/node_modules/**",
+        "!$TURBO_ROOT$/**/.turbo/**",
+        "!$TURBO_ROOT$/**/dist/**",
+        "!$TURBO_ROOT$/**/build/**",
+        "!$TURBO_ROOT$/**/coverage/**",
+        "!$TURBO_ROOT$/**/bench-results.json"
+      ],
+      "passThroughEnv": ["HOME", "TMPDIR", "PLAYWRIGHT_BROWSERS_PATH", "DDL_E2E_*"],
+      "outputs": []
+    },
+    "e2e:perf": {
+      "dependsOn": ["transit"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/daemon/**",
+        "$TURBO_ROOT$/apps/sync/**",
+        "$TURBO_ROOT$/packages/agent/**",
+        "$TURBO_ROOT$/packages/connectors/**",
+        "$TURBO_ROOT$/packages/storage/**",
+        "!$TURBO_ROOT$/**/node_modules/**",
+        "!$TURBO_ROOT$/**/.turbo/**",
+        "!$TURBO_ROOT$/**/dist/**",
+        "!$TURBO_ROOT$/**/build/**",
+        "!$TURBO_ROOT$/**/coverage/**",
+        "!$TURBO_ROOT$/**/bench-results.json"
+      ],
+      "env": ["PERF_BUDGET_MULTIPLIER"],
+      "passThroughEnv": ["HOME", "TMPDIR", "PLAYWRIGHT_BROWSERS_PATH", "DDL_E2E_*"],
+      "outputs": ["perf-results.json"]
+    }
+  }
+}

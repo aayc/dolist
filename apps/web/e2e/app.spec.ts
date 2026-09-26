@@ -36,6 +36,12 @@ test.describe("startup and daily notes", () => {
     await page.keyboard.press("ControlOrMeta+Shift+P");
     await expectDailyNote(page, -4);
     await expect(page.getByTestId("daily-today")).toBeVisible();
+    // Past the oldest note: stays there and says so.
+    await page.keyboard.press("ControlOrMeta+Shift+P");
+    await expect(
+      page.getByTestId("toast").filter({ hasText: "No previous daily note" }).first(),
+    ).toBeVisible();
+    await expectDailyNote(page, -4);
 
     await page.keyboard.press("ControlOrMeta+Shift+D");
     await expectDailyNote(page);

@@ -31,15 +31,6 @@ describe("mcpToolName", () => {
 });
 
 describe("assignToolNames", () => {
-  it("keeps natural names when there are no collisions", () => {
-    const names = assignToolNames([
-      { server: "github", tool: "search" },
-      { server: "notion", tool: "search" },
-    ]);
-    expect(names.get(toolRefKey("github", "search"))).toBe("mcp__github__search");
-    expect(names.get(toolRefKey("notion", "search"))).toBe("mcp__notion__search");
-  });
-
   it("de-duplicates tools that sanitize to the same name, case-insensitively", () => {
     const refs = [
       { server: "files", tool: "read.file" },

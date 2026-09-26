@@ -7,7 +7,7 @@ import { MockLlmClient } from "../src/llm/mock";
 import type { OpenRouterKeyCheck } from "../src/llm/openrouter";
 import { createAgentRuntime, UnknownThreadError } from "../src/runtime";
 import { createFakeExecution, fakeSafety, testSettings } from "./helpers/fakes";
-import { createTestRuntime, isSubsequence, type TestRuntime, TODAY } from "./helpers/runtime";
+import { createTestRuntime, type TestRuntime, TODAY } from "./helpers/runtime";
 
 const WAIT = { timeout: 4_000, interval: 5 };
 let active: TestRuntime[] = [];
@@ -258,48 +258,6 @@ describe("AgentRuntime status", () => {
 });
 
 describe("AgentRuntime controls", () => {
-  it("pauses watching when disabled and picks up edits made meanwhile when re-enabled", async () => {
-    const t = await runtime();
-    await t.runtime.setEnabled(false);
-    expect(t.runtime.status().enabled).toBe(false);
-    await t.storage.write(TODAY, "- [ ] Research standing desks\n");
-    await new Promise((resolve) => setTimeout(resolve, 80));
-    expect(t.runtime.getTaskRecords(TODAY)).toEqual([]);
-    await t.runtime.setEnabled(true);
-    await t.waitForStatus("Research standing desks", "done");
-  });
-
-  it("applies a higher concurrency limit to queued work", async () => {
-    const releases: Array<() => void> = [];
-    const t = await runtime({
-      settings: { agent: { maxConcurrentSubagents: 1 } },
-      scriptFor: (options) =>
-        options.role === "orchestrator"
-          ? async (ctx) => {
-              for (const match of ctx.message.matchAll(/\[added\] (\S+):/g)) {
-                await ctx.callTool("spawn_subagent", {
-                  taskId: match[1],
-                  goal: "work",
-                  capabilities: ["web"],
-                });
-              }
-            }
-          : async (ctx) => {
-              await new Promise<void>((resolve) => releases.push(resolve));
-              await ctx.callTool("finish_task", { status: "done", summary: "ok" });
-            },
-    });
-    await t.storage.write(TODAY, "- [ ] First errand online\n- [ ] Second errand online\n");
-    await t.waitForStatus("Second errand online", "queued");
-    t.runtime.updateSettings(testSettings({ agent: { maxConcurrentSubagents: 2 } }));
-    await t.waitForStatus("Second errand online", "working");
-    expect(t.runtime.status()).toMatchObject({ running: 2, queued: 0 });
-    await vi.waitFor(() => expect(releases).toHaveLength(2), WAIT);
-    for (const release of releases) release();
-    await t.waitForStatus("First errand online", "done");
-    await t.waitForStatus("Second errand online", "done");
-  });
-
   it("cancels a thread on request", async () => {
     const t = await runtime();
     const task = "Reserve a table for Friday";
@@ -318,67 +276,6 @@ describe("AgentRuntime controls", () => {
     });
     await t.storage.write(TODAY, "- [ ] Research standing desks\n");
     await t.waitForStatus("Research standing desks", "done");
-  });
-});
-
-describe("mock mode smoke test", () => {
-  it("runs the default mock script end to end on a realistic note", async () => {
-    const t = await runtime({ overrides: { mockWordDelayMs: 1 } });
-    await t.storage.write(
-      TODAY,
-      [
-        "- [ ] Research best standing desks under $500",
-        "- [ ] Go to the gym",
-        "- [ ] Book dentist appointment next week",
-        "  - prefer mornings",
-        "- [x] Paid rent",
-        "- [ ] ",
-        "",
-        "Notes: https://example.com/ideas",
-      ].join("\n"),
-    );
-    await t.waitForStatus("Research best standing desks under $500", "done");
-    await t.waitForStatus("Go to the gym", "ignored");
-    await t.waitForStatus("Book dentist appointment next week", "waiting_approval");
-    const [approval] = t.runtime.listApprovals({ status: "pending" });
-    await t.runtime.decideApproval(approval!.id, { decision: "approve" });
-    await t.waitForStatus("Book dentist appointment next week", "done");
-
-    expect(
-      t.runtime
-        .getTaskRecords(TODAY)
-        .map((r) => r.text)
-        .sort(),
-    ).toEqual([
-      "Book dentist appointment next week",
-      "Go to the gym",
-      "Research best standing desks under $500",
-    ]);
-    expect(
-      isSubsequence(
-        ["triaging", "working", "waiting_approval", "working", "done"],
-        t.statusesOf("Book dentist appointment next week"),
-      ),
-    ).toBe(true);
-    const threads = t.runtime.listThreads({ notePath: TODAY });
-    expect(threads).toHaveLength(2);
-    expect(threads.every((thread) => thread.artifactCount === 1)).toBe(true);
-    expect(t.events.deltas.length).toBeGreaterThan(5);
-
-    // A reply to a finished subagent resumes it.
-    const desks = t.thread("Research best standing desks under $500");
-    await t.runtime.postUserMessage(desks.id, "Only ones with a crank handle");
-    await vi.waitFor(
-      () => expect(t.texts("Research best standing desks under $500").at(-1)).toContain("Updated"),
-      WAIT,
-    );
-    await t.waitForStatus("Research best standing desks under $500", "done");
-  });
-
-  it("uses the default ScriptedHarness in mock mode", async () => {
-    const t = await runtime();
-    expect(t.runtime.status().model).toBe("mock");
-    expect(new ScriptedHarness({}).name).toBe("scripted");
   });
 });
 

@@ -8,11 +8,11 @@ import type { Browser } from "playwright-core";
 import { parseVectors } from "../format";
 import type { ReplayRun } from "../pages/web";
 import { REPLAY_SKIPS, skipReason } from "../upstream/expected-failures";
-import { launchChromium, openScriptPage } from "./browser";
+import { launchChromium, PagePool } from "./browser";
 import { bundlePage } from "./bundle";
 import { VECTORS_PATH } from "./vectors";
 
-const CHUNK = 500;
+const CHUNK = 250;
 
 export interface ReplayReport {
   total: number;
@@ -27,20 +27,19 @@ export async function replayVectors(
   filter = "",
 ): Promise<ReplayReport> {
   const cases = parseVectors(text).cases.filter((c) => c.name.startsWith(filter));
-  const page = await openScriptPage(browser, await bundlePage("web.ts"));
+  const pool = await PagePool.open(browser, await bundlePage("web.ts"));
   const total: ReplayRun = { passed: 0, mismatches: [], errors: [] };
   try {
-    for (let i = 0; i < cases.length; i += CHUNK) {
-      const run = await page.evaluate(
-        (chunk) => window.__vimWeb.replay(chunk),
-        cases.slice(i, i + CHUNK),
-      );
+    const runs = await pool.map(cases, CHUNK, (page, chunk) =>
+      page.evaluate((chunk) => window.__vimWeb.replay(chunk), chunk),
+    );
+    for (const run of runs) {
       total.passed += run.passed;
       total.mismatches.push(...run.mismatches);
       total.errors.push(...run.errors);
     }
   } finally {
-    await page.close();
+    await pool.close();
   }
   const problems: string[] = [];
   let skipped = 0;

@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
 import { expect, it, vi } from "vitest";
-import { createMarkdownEditor } from "./editor";
-import { isVimLoaded, preloadVim } from "./vim";
 
 const chunk = vi.hoisted(() => ({ failures: 1 }));
 
@@ -12,6 +10,11 @@ vi.mock("./vim-integration", async (importOriginal) => {
   }
   return importOriginal();
 });
+
+// A module graph where vim hasn't loaded yet (other files in the worker may have loaded it).
+vi.resetModules();
+const { createMarkdownEditor } = await import("./editor");
+const { isVimLoaded, preloadVim } = await import("./vim");
 
 it("a failed vim chunk load is not an unhandled rejection and is retried later", async () => {
   const parent = document.createElement("div");
