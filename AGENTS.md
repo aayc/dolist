@@ -376,15 +376,28 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
   only when something moved them) and hosts its canvas to edit in place; the web's embed layer
   (`packages/editor/src/embeds`) is the behavioral reference, and its edit tests are ported. The
   app's `DrawingStore` saves drawings with `baseVersion` and merges a 409 element by element.
-- **Commands:** `apps/macos/scripts/test.sh [Package|app|integration] [-- swift test args]`,
+- **Commands:** `apps/macos/scripts/test.sh --changed` while iterating (only the packages your
+  changes since `main` can affect, from the `Package.swift` dependency graph; `--list` shows
+  them), `apps/macos/scripts/test.sh [Package|app|integration] [-- swift test args]`,
   `apps/macos/scripts/run-app.sh [--demo]`, and
   `apps/macos/scripts/build-app.sh [--release] [--with-daemon] [--zip]` (writes to
-  `apps/macos/build/`, gitignored). Integration tests need
+  `apps/macos/build/`, gitignored). Tests share one build directory (`apps/macos/.build/tests`),
+  so a module compiles once for every package. Integration tests need
   `pnpm --filter @ddl/daemon --filter @ddl/sync build` first.
 - **Toolchain:** Swift 6 language mode with strict concurrency, macOS 14+. It builds with only the
   Command Line Tools: there's no XCTest, so tests use Swift Testing, and plain `swift test` can't
   find `Testing.framework`. Always go through `scripts/test.sh`, which adds the flags only when
   `xcode-select` points at the CLT.
+- **Tests stay lean:** one solid test per behavior at the cheapest level that protects it (a pure
+  function before a store, a store before a hosted view, a view before a snapshot). Don't
+  re-assert what the contract fixtures or the Domain and vim vectors pin, don't test labels,
+  getters or design constants, and don't test a fake for its own sake. Snapshots are a few key
+  screens for eyes (`.build/app-snapshots/`); a pixel test checks something specific. No real
+  sleeps: manual clocks and schedulers. Fuzz, model-based and performance tests run a slice by
+  default and everything with `DDL_TEST_THOROUGH=1` (`test.sh --thorough`, CI on main). Always
+  kept: the vim vector replays at 100%, the wire fixture tests, the integration tests,
+  `ddl-computer`'s protected targets and protocol, the editor's data safety, the perf budgets and
+  regression tests of real bugs. See "Testing" in `apps/macos/README.md`.
 - **Conventions:** every package builds and tests on its own. Models, Client, Domain, Vim and
   `DailyDoListDrawingModel` (the drawing package's model library) stay Foundation-only (they also
   build for iOS). Use small files with doc comments. Anything touching
@@ -403,7 +416,7 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
   `VimVectorReplayTests` replay every vector through the real editor (via the
   `DailyDoListVimTestSupport` library), with live preview off and on, and must stay at 100% too.
   Vim-mode tests send real `NSEvent`s through `VimEditorHarness`. After a vim change, run
-  `test.sh DailyDoListVim`, `test.sh DailyDoListEditor` and `test.sh app`. The design (key
+  `test.sh --changed` (the engine, the editor and the app). The design (key
   routing, undo grouping, switching notes) is in the editor's README.
 - **Controls:** tooltips are `.tooltip(…)` from `DailyDoListUI` (never `.help`: late, unanimated,
   no keycaps), with the same rules, wording and timings as the web app's. A control that runs a
@@ -437,9 +450,12 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
   its `bin/` (where the daemon looks: `<directory of dist/main.js>/../bin/ddl-computer`), signed
   with the app's identity before the app. Don't rely on SwiftPM's `Bundle.module` in app code: it
   looks next to the `.app`.
-- **CI:** `.github/workflows/macos.yml` (package tests, an iOS build of the Foundation-only
-  packages, integration tests, release build, a smoke test of the bundled `ddl-computer`, zipped
-  app artifact).
+- **CI:** `.github/workflows/macos.yml`, parallel jobs that each restore their SwiftPM build
+  directory from a cache (`scripts/ci-mtimes.mjs` keeps unchanged sources' times so only changes
+  rebuild): package tests in three groups (the app, the editor's packages, the rest, with a smoke
+  test of `ddl-computer`), integration tests with the swift-format check, an iOS build of the
+  Foundation-only packages, and on main (or a manual run with `release`) the release app with
+  the bundled daemon, its `ddl-computer` smoke test and the zipped artifact (`docs/CI.md`).
 
 ## Commits & PRs
 

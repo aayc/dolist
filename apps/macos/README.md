@@ -61,9 +61,11 @@ future iPhone app too.
 | --- | --- |
 | Build (debug) | `swift build --package-path apps/macos` |
 | Run | `apps/macos/scripts/run-app.sh [--demo] [--release] [--with-daemon] [--env VAR=value]` |
+| Test what your changes affect (the everyday loop) | `apps/macos/scripts/test.sh --changed` (`--list` shows the selection, `--since REF` another base) |
 | Test every package and the shell | `apps/macos/scripts/test.sh` |
 | Test one package | `apps/macos/scripts/test.sh DailyDoListDaemon` (or `app`) |
 | Filter tests | `apps/macos/scripts/test.sh DailyDoListModels -- --filter ContractFixture` |
+| Every fuzz seed and performance sample | `apps/macos/scripts/test.sh --thorough` (or `DDL_TEST_THOROUGH=1`) |
 | Integration tests | `pnpm --filter @ddl/daemon --filter @ddl/sync build && apps/macos/scripts/test.sh integration` |
 | Format / lint Swift (swift-format, `.swift-format`) | `pnpm lint:fix` / `node scripts/lint.mjs --all --only swift` |
 | Package the app | `apps/macos/scripts/build-app.sh [--release] [--with-daemon] [--zip] [--output DIR] [--open]` |
@@ -228,8 +230,8 @@ extra protocol. The web app's chat follows the same rules and wording.
 
 Tests: `RevealTests` (the pacing table, grapheme cuts, the reveal with a manual frame clock and
 Reduce Motion), `ChatActivityTests` (labels, the live row, rows of tool calls, scrolling),
-`MarkdownChunkTests` (every prefix renders the same in chunks), `ComposerTests`, `ChatViewTests`,
-`MotionTests`, and the `chat-*` and `composer-states` snapshots.
+`MarkdownChunkTests` (every prefix renders the same in chunks), `ComposerTests`, `ChatViewTests`
+and `MotionTests`.
 
 ## The orchestrator's chat
 
@@ -685,6 +687,29 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   them. With only the Command Line Tools there's no XCTest and plain `swift test` can't find
   `Testing.framework`, so the script adds the framework and rpath flags. With Xcode selected it
   adds nothing.
+- **The loop**: `scripts/test.sh --changed` runs only the packages your changes (committed since
+  `main`, staged, unstaged or untracked) can affect: a package whose sources or manifest changed
+  and every package that depends on it, a package whose `Tests/` changed, and the packages that
+  read a changed file outside `apps/macos` (the vim vectors, the contract fixtures,
+  `computer-keys.ts`, the drawing fixtures, the daemon for `integration`). `--list` shows the
+  selection without running it. Every package builds into one scratch path, `apps/macos/.build`
+  (also `build-app.sh`'s), so a module compiles once for all the packages that use it, and an
+  unchanged package's build is a no-op. After a change to one editor file, `--changed` rebuilds
+  that module and the app, and runs the editor's and the app's tests.
+- **Lean by design.** One solid test per behavior, at the cheapest level that really protects it:
+  a pure function before a store, a store before a hosted view, a hosted view before a snapshot.
+  Don't re-assert what the shared vectors and fixtures already pin (the contract fixtures, the
+  Domain and vim vectors), don't test labels, getters or design constants, and don't add tests
+  only to keep a fake honest. Snapshots are for eyes: a few key screens (the main window, the
+  agent panel with a thread, settings, a note with a drawing), light and dark, in
+  `.build/app-snapshots/`; a test that looks at pixels checks something specific (a badge is
+  tinted, a drawing is drawn, a placeholder's words stay in its box). Fuzz, model-based and
+  performance tests run a slice by default (the first seeds, a third of the samples) and
+  everything with `DDL_TEST_THOROUGH=1` (`test.sh --thorough`; CI on main). What always stays: the
+  vim vector replays at 100% (engine and editor) and the vim.js tests a vector can't express, the
+  wire fixture tests, the integration tests, `ddl-computer`'s protected targets and protocol, the
+  editor's data safety (merges, never losing typing, no layout while the storage edits), the
+  typing and drawing performance budgets, and regression tests of real bugs.
 - **Fakes first.** Supervisor logic runs against injected fakes (process launcher, health
   checker, files, commands, and a clock whose sleeps finish instantly), so crash loops, backoff,
   timeouts and stop escalation are tested in milliseconds. A few tests start real processes: a
@@ -717,55 +742,48 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   prompts, the block cursor's pixels, mouse selections, paste, badges, switching notes), and
   `VimAppTests` cover ex commands, the status bar, the vimrc and the clipboard in the app. See the
   [editor README](Packages/DailyDoListEditor/README.md#vim-mode).
-- **CI**: `.github/workflows/macos.yml` builds the daemon, runs every package's tests and the
-  integration tests, builds a release app with the bundled daemon, and uploads the zip.
+- **CI**: `.github/workflows/macos.yml` runs the packages' tests in three parallel groups, the
+  integration tests and the iOS build alongside, each restoring its build directory from a cache;
+  main (or a manual run with `release`) also builds the release app with the bundled daemon and
+  uploads the zip ([docs/CI.md](../../docs/CI.md#macos-app-macosyml)).
 - **Tooltips**: the timing runs on a manual clock with fake event monitors and a recording
   presenter (`DailyDoListUI`), the real panel's placement and animations are checked without
   sleeping, and the app's tests lay the workspace out and check every tooltip: controls that run a
-  command show the catalog's keys, and no string in the sources spells a shortcut out. Snapshots
-  draw the real bubble where it would show (`app-snapshots/tooltip-*`, `editor-snapshots/tooltip-*`,
-  `ui-snapshots/`).
+  command show the catalog's keys, and no string in the sources spells a shortcut out.
 - **Routines**: `StoreRoutineTests` (the list and its events, runs kept out of the inbox, Run
   Now's 409/503 alerts, optimistic pause, form errors, drafts), `RoutineNotifierTests`,
-  `RoutineViewTests` (what each screen offers, and the `routines-*` snapshots), the client's
-  `InMemoryRoutineTests` and REST cases, and in the app `RoutineCommandTests`, the tooltip checks
-  and the `main-window-routine*` snapshots.
-- **Where the agent runs**: the client's `InMemoryRemoteTests` (placement, handovers, the relay's
-  states and 503s, a revoked device, device settings, sync, pairing, the machine) and REST cases
-  (`pairing_rejected`, the WebSocket's header auth), the agent package's `PlacementTests` (what
-  the switch shows in each state, moving the orchestrator, its tooltips, the `orchestrator-*`
-  snapshots) and `ReadOnlyTests` (the web's rules: when there's a banner, disabled actions and
-  their reasons, `thread-read-only`), and in the app `AlwaysOnCommandTests`,
-  `RemoteSettingsTests` (every action and error message) and the `settings-always-on-*`
-  snapshots.
-- **Importing from Obsidian**: the client's `InMemoryImportTests` and REST cases (and the
-  faithfulness test, which checks the fake's reports, jobs and events against the wire schema),
-  and in the app `ObsidianImportTests`: the store (report, progress, cancel, 409, a paired device,
+  `RoutineViewTests` (what each screen offers), the client's REST cases, and in the app
+  `RoutineCommandTests` and the tooltip checks.
+- **Where the agent runs**: the client's REST cases (`pairing_rejected`, the WebSocket's header
+  auth), the agent package's `PlacementTests` (what the switch shows in each state, moving the
+  orchestrator, its tooltips) and `ReadOnlyTests` (the web's rules: when there's a banner,
+  disabled actions and their reasons), in the app `AlwaysOnCommandTests` and
+  `RemoteSettingsTests` (every action and error message), and the integration tests' placement
+  and relay suites.
+- **Importing from Obsidian**: the client's REST cases, the integration test against the real
+  daemon, and in the app `ObsidianImportTests`: the store (report, progress, cancel, 409, a paired device,
   an older daemon), `.importProgress` routing and the toast, the commands (Reveal through a fake
   Finder), the Vault section's tooltips, and the switch (the preference and a restart, the daemon's
   own switch under the app's supervisor and from an external daemon, sync, DDL_VAULT and the demo
-  blocking it). Snapshots: `app-snapshots/obsidian-import-*` and `settings-general-vault*`.
-- **The orchestrator's activity**: the models' `OrchestratorActivityTests` (spec-shaped JSON,
-  lenient kinds), the client's `InMemoryActivityTests` (the fake's sequences, checked against the
-  contract schema once it declares them), the editor's `OrchestratorChipTests` (matching lines,
-  mapping and dropping, look, pulse and fade) and `chips-*` snapshots, and in the app
+  blocking it).
+- **The orchestrator's activity**: the contract fixtures and the models' `OrchestratorActivityTests`
+  (every phase and kind, lenient decoding), the editor's `OrchestratorChipTests` (matching lines,
+  mapping and dropping, look, pulse and fade) and its pixel checks of the chips, and in the app
   `OrchestratorChipTests` (the board, the store's timers, snapshots, placement and wording),
   `OrchestratorActivityRoutingTests` (events and status through `AppModel`, chips in the editor,
-  clicks, a demo turn end to end), the tooltip checks and the `orchestrator-*` snapshots.
+  clicks) and the tooltip checks.
 - **Computer use access**: `ComputerAccessTests` run the permission flow against fakes (the
   prompt before the System Settings link, the links' fallbacks, the guide's steps, polling that
-  stops, the relaunch's order, the banner's rules and its dismissal), and the snapshots draw the
-  Computer Use tab, the guide and the banner (`app-snapshots/settings-computer-use-*`,
-  `computer-access-guide-*`, `computer-access-banner-*`). Nothing in the tests prompts, opens
-  System Settings or relaunches.
+  stops, the relaunch's order, the banner's rules and its dismissal). Nothing in the tests
+  prompts, opens System Settings or relaunches.
 - **Drawings**: `DailyDoListDrawing` replays `@ddl/core`'s shared drawing fixtures (when they're
   in the checkout), checks its Rough.js port against samples from Rough.js itself, drives its
-  editor and canvas with pointer sequences and real `NSEvent`s, renders snapshots of every element
-  type in both themes (`.build/drawing-snapshots/`), and holds 2,000-element drawings to 60 fps
-  budgets ([README](Packages/DailyDoListDrawing/README.md#testing)). `DailyDoListEditor` drives
-  embeds with real `NSEvent`s in an offscreen window (wrapping, select, move, resize, insert,
-  editing in place, vim), renders them light and dark (`editor-snapshots/drawings-*`) and times
-  typing in a note with six drawings; the app's `DrawingTests` cover saving, the 409 merge,
+  editor and canvas with pointer sequences and real `NSEvent`s, checks the renderer's pixels
+  (fills, dark mode, determinism), and holds 2,000-element drawings to 60 fps budgets
+  ([README](Packages/DailyDoListDrawing/README.md#testing)). `DailyDoListEditor` drives embeds
+  with real `NSEvent`s in an offscreen window (wrapping, select, move, resize, insert, editing in
+  place, vim), checks that they're drawn in their boxes and times typing in a note with six
+  drawings; the app's `DrawingTests` cover saving, the 409 merge,
   changes from elsewhere and Insert Drawing against the fake daemon.
 - **Computer use helper**: `DailyDoListComputer`'s tests run the helper against fakes for
   accessibility (a fake tree that records every read and action), apps, windows, input, capture,
