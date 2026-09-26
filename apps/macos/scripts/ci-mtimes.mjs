@@ -9,7 +9,8 @@
 //   node apps/macos/scripts/ci-mtimes.mjs restore <build dir>   # after restoring the cache
 //   node apps/macos/scripts/ci-mtimes.mjs save <build dir>      # after building, before saving it
 //
-// Times are whole seconds, so they survive any archive format exactly.
+// Times are whole seconds, so they survive any archive format exactly. Run `restore` before
+// every build, a cold one included: the times the build records must be the ones `save` keeps.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
