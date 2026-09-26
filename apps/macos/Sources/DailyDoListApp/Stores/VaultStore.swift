@@ -4,9 +4,10 @@ import DailyDoListModels
 import Foundation
 import Observation
 
-/// The vault's file/folder tree. Structural changes rebuild the sorted file list and explorer tree
-/// (never per keystroke). Server operations are optimistic: the tree changes immediately and is
-/// rolled back if the daemon refuses.
+/// The vault's file/folder tree. A new file in known folders is inserted in place; other
+/// structural changes rebuild the sorted file list and explorer tree (never per keystroke). Server
+/// operations are optimistic: the tree changes immediately and is rolled back if the daemon
+/// refuses.
 @MainActor
 @Observable
 final class VaultStore {
@@ -57,8 +58,15 @@ final class VaultStore {
 
   func addFile(_ path: String, version: String? = nil) {
     guard !VaultPath.isHidden(path), entries[path]?.kind != .file else { return }
+    let entry = VaultEntry(path: path, kind: .file, version: version)
+    if entries[path] == nil, let tree = VaultTree.inserting(file: path, into: tree) {
+      entries[path] = entry
+      files.insert(path, at: files.firstIndex { $0 > path } ?? files.count)
+      self.tree = tree
+      return
+    }
     var next = entries
-    next[path] = VaultEntry(path: path, kind: .file, version: version)
+    next[path] = entry
     Self.addAncestors(of: path, to: &next)
     commit(next)
   }

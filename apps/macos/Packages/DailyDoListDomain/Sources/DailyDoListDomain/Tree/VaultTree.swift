@@ -74,6 +74,32 @@ public enum VaultTree {
     return nodes(in: "")
   }
 
+  /// `nodes` (built by `build`) with the file `path` added where `build` would put it, in a few
+  /// comparisons instead of a rebuild; nil when a folder it goes in isn't in the tree.
+  public static func inserting(
+    file path: String, into nodes: [VaultTreeNode], locale: Locale = .current
+  ) -> [VaultTreeNode]? {
+    let node = VaultTreeNode(path: path, name: displayName(path: path, kind: .file), kind: .file)
+    func insert(into level: inout [VaultTreeNode], folders: ArraySlice<String>) -> Bool {
+      guard let folder = folders.first else {
+        var low = 0
+        var high = level.count
+        while low < high {
+          let mid = (low + high) / 2
+          if compare(level[mid], node, locale: locale) < 0 { low = mid + 1 } else { high = mid }
+        }
+        level.insert(node, at: low)
+        return true
+      }
+      guard let i = level.firstIndex(where: { $0.isFolder && $0.path.jsEquals(folder) }) else {
+        return false
+      }
+      return insert(into: &level[i].children, folders: folders.dropFirst())
+    }
+    var nodes = nodes
+    return insert(into: &nodes, folders: VaultPath.ancestorFolders(path)[...]) ? nodes : nil
+  }
+
   /// A note's stem, or the base name of anything else.
   public static func displayName(path: String, kind: VaultEntryKind) -> String {
     kind == .file && VaultPath.isMarkdown(path) ? VaultPath.stem(path) : VaultPath.basename(path)

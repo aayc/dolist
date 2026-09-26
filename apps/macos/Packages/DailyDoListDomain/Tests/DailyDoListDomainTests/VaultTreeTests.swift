@@ -48,6 +48,14 @@ extension DomainTests {
         var generator = SeededGenerator(seed: UInt64(seed))
         #expect(shape(VaultTree.build(entries.shuffled(using: &generator), locale: en)) == expected)
       }
+      for (i, entry) in entries.enumerated() where entry.kind == .file {
+        var others = entries
+        others.remove(at: i)
+        let tree = VaultTree.inserting(
+          file: entry.path, into: VaultTree.build(others, locale: en), locale: en)
+        #expect(shape(tree ?? []) == expected, "inserting \(entry.path)")
+      }
+      #expect(VaultTree.inserting(file: "new/a.md", into: [], locale: en) == nil)
       // Names equal to the collator fall back to code units, so the order is total.
       #expect(expected.prefix(2) == ["x|folder", "x/sub|folder"])
       #expect(
