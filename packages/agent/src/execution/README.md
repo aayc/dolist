@@ -159,33 +159,17 @@ the session persists. Delete the folder to sign the agent out of everything.
 
 Built by `createExecutionTools(provider, ctx)`; names and input shapes come from
 [`../tools/contracts.ts`](../tools/contracts.ts). Every call still passes the safety gate; the hints
-below only inform it (they can never loosen a verdict).
+only inform it (they can never loosen a verdict).
 
-| Tool | readOnly | openWorld | category | Approval card (`describe`) |
-| --- | --- | --- | --- | --- |
-| `browser_navigate` | ✓ | ✓ | network | `Navigate to example.com/path` |
-| `browser_snapshot` | ✓ | | read | `Read the current page` |
-| `browser_click` | | ✓ | browser_input | `Click “Place order” in the browser` |
-| `browser_type` | | ✓ | browser_input | `Type “cats” into “Search box”` / `Type into “Card number” (value hidden)` |
-| `browser_select_option` | | ✓ | browser_input | `Select “Green” in “Color”` |
-| `browser_press_key` | | ✓ | browser_input | `Press Enter in the browser` |
-| `browser_scroll` | ✓ | | read | `Scroll the page down 600px` |
-| `browser_back` | ✓ | | network | `Go back to the previous page` |
-| `browser_screenshot` | ✓ | | read | `Take a screenshot of the page` |
-| `browser_extract_text` | ✓ | | read | `Read the page text` |
-| `computer_screenshot` | ✓ | | read | `Take a screenshot of the desktop` / `Take a screenshot of Grok Bot` |
-| `computer_click` | | ✓ | computer_control | `Click at (512, 300) on “Send button” on the desktop` / `Click “Send” in Grok Bot` |
-| `computer_move` | | | computer_control | `Move the mouse to (512, 300) on the desktop` |
-| `computer_type` | | ✓ | computer_control | `Type “hello” on the desktop` / `Type “hi” and press Return in WhatsApp` |
-| `computer_key` | | ✓ | computer_control | `Press cmd+shift+4 on the desktop` / `Press cmd+k in Slack` |
-| `computer_scroll` | | | computer_control | `Scroll down 5 on the desktop` / `Scroll down 3 in Slack` |
-| `computer_apps` | ✓ | | read | `List the apps running on the Mac` |
-| `computer_open_app` | | | computer_control | `Open Grok Bot in the background` |
-| `computer_app_state` | ✓ | | read | `Read Grok Bot's window` / `Read more of “Messages” in Slack` |
-| `computer_press` | | ✓ | computer_control | `Press “Send” in Grok Bot` / `Open the menu of “Downloads” in Finder` |
-| `computer_set_value` | | ✓ | computer_control | `Set “Ask anything” to “tides in Lisbon” in Grok Bot` / `Set “Passcode (password field)” in WhatsApp (value hidden)` |
+The browser tools (`browser_navigate`, `_snapshot`, `_click`, `_type`, `_select_option`,
+`_press_key`, `_scroll`, `_back`, `_screenshot`, `_extract_text`), the screen-level computer tools
+(`computer_screenshot`, `_click`, `_move`, `_type`, `_key`, `_scroll`) and the app control tools
+(`computer_apps`, `_open_app`, `_app_state`, `_press`, `_set_value`) declare their hints and approval
+card wording in `browser-tools.ts`, `computer-tools.ts` and `app-tools.ts` (pinned by `tools.test.ts`
+and `app-tools.test.ts`), e.g. `Click “Place order” in the browser` or
+`Set “Passcode (password field)” in WhatsApp (value hidden)`.
 
-The last five exist only with app control. Then the screen-level tools also take an optional `app`
+The app control tools exist only with a helper. Then the screen-level tools also take an optional `app`
 (and `id` for click, type and scroll) that routes them through the helper in the background;
 without `app` they behave exactly as without app control. Actions need an app the thread already
 opened or read, so their approval card names the real app, and every tool with an `app` target
