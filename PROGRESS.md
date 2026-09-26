@@ -28,6 +28,11 @@ the Azure VM.
 
 ## Shipped on `main` (newest first)
 
+- `e1a2f6e` Editor crash fixed (it was the intermittent macOS CI crash): with legacy scroll bars
+  (a mouse, or "always show scroll bars"), an edit that showed or hid the scroller resized the text
+  view mid-edit and AppKit raised; also the line-number gutter widening at line 100/1,000 mid-edit.
+  Nothing lays out while the text storage is editing now. **Installed** on the main development Mac
+  (threads and approvals intact).
 - `7f1f796` Cleanup batch A (TypeScript): imported threads keep their new note paths (the import
   now remaps journals at `state/journal/`), the approval broker persists through the shared state
   file (moves a corrupt file aside, never overwrites a newer one), dead code and dependency/config
@@ -213,8 +218,6 @@ Open: browser pairing over https stays fixme in the e2e harness (no TLS proxy th
 - **Drawings follow-ups:** shared merge vectors for `SceneMerge` (Swift) and
   `mergeDrawingElements` (TypeScript); on the Mac, drawings as accessibility elements, image
   embeds, the in-place tool bar covering a line of text.
-- **Swift editor tests crash intermittently on CI** (uncaught NSException, 2 of 3 runs): under
-  investigation on `fix/editor-test-crash` (an exception handler to name it, then the root cause).
 - **macOS file watching:** Node serves every directory watch in a process from one FSEvents
   stream and restarts it "from now" when a watch opens or closes, so vault changes made during the
   restart are dropped until the next rescan (the daemon too, e.g. when a sync target's watch
