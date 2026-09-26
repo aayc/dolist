@@ -370,8 +370,9 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
 - **Vim:** `DailyDoListVim` ports vim.js and its CodeMirror 6 adapter file by file, keeping their
   structure and names; the web engine (not the vim editor) decides what is correct. Its
   `VectorReplayTests` replay `packages/editor/test/vim/vectors.jsonl` and must stay at 100% (an
-  exclusion needs a reason in the test file); `Tests/.../Upstream` holds vim.js's own tests. Hosts
-  implement `VimEditor`; see `apps/macos/Packages/DailyDoListVim/README.md`.
+  exclusion needs a reason in the test file). vim.js's own tests are recorded as `upstream/`
+  vectors; `Tests/.../Upstream` ports only the few a vector can't express. Hosts implement
+  `VimEditor`; see `apps/macos/Packages/DailyDoListVim/README.md`.
 - **Vim in the editor:** `DailyDoListEditor` hosts the engine (`Vim/TextViewVimHost*.swift`), and
   `EditorVimIntegration` ports `vim-integration.ts` (the app's ex commands, `gt`, the clipboard
   registers, the vimrc). The app owns one `Vim` and one integration for every editor. Its

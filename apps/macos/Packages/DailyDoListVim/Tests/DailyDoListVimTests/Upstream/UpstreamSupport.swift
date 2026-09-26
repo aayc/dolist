@@ -14,9 +14,6 @@ let upstreamCode =
   + "    n = read(0, buf, sizeof buf);\n" + "    bufp = buf;\n" + "  }\n" + "\n"
   + "  return (--n >= 0) ? (unsigned char) *bufp++ : EOF;\n" + " \n" + "}\n"
 
-/// `jumplistScene` in vim_test.js.
-let upstreamJumplistScene = "word\n(word)\n{word\nword.\n\nword search\n}word\nword\nword\n"
-
 /// One upstream `testVim` run: an editor with vim attached, fresh global state, and the helpers
 /// the tests use (`cm`, `vim` and `helpers` in vim_test.js).
 @MainActor
@@ -26,16 +23,11 @@ final class UpstreamVim {
   let session: VimSession
   var cm: EditorAdapter { session.cm }
 
-  /// The options of `testVim(name, run, opts)`; the editor is built like upstream's CodeMirror 6
-  /// runner (`tabSize: opts.tabSize || opts.indentUnit || 4`, `indentUnit` spaces or a tab).
-  init(
-    value: String = upstreamCode, indentUnit: Int? = nil, tabSize: Int? = nil,
-    indentWithTabs: Bool = false
-  ) {
+  /// `testVim(name, run, {value})`: the editor upstream's CodeMirror 6 runner builds when no indent
+  /// options are given (tab size 4, a two-space indent unit).
+  init(value: String = upstreamCode) {
     vim = Vim(scheduler: ManualVimScheduler(), isMac: false)
-    buffer = VimTextBuffer(
-      value, tabSize: tabSize ?? indentUnit ?? 4,
-      indentUnit: indentWithTabs ? "\t" : String(repeating: " ", count: indentUnit ?? 2))
+    buffer = VimTextBuffer(value, tabSize: 4, indentUnit: "  ")
     buffer.clock = { 1_700_000_000_000 }
     session = buffer.attach(to: vim)
   }
@@ -44,30 +36,13 @@ final class UpstreamVim {
 
   var value: String { buffer.text }
 
-  func setValue(_ text: String) { cm.setValue(VimText(text)) }
-
   var cursor: VimPosition { cm.getCursor() }
 
   func setCursor(_ line: Int, _ ch: Int) { cm.setCursor(line, ch) }
 
-  func setCursor(_ pos: VimPosition) { cm.setCursor(pos) }
-
-  /// `cm.getSelection()`: the text of the main selection.
-  var selection: String { cm.getSelection().string }
-
-  var selections: [VimRange] { cm.listSelections() }
-
-  func getLine(_ line: Int) -> String { cm.getLine(line).string }
-
   var lineCount: Int { cm.lineCount() }
 
   func getRange(_ from: VimPosition, _ to: VimPosition) -> String { cm.getRange(from, to).string }
-
-  /// `cm.getOption(name)` as a string ("vim", "vim-insert" for `keyMap`).
-  func option(_ name: String) -> String { cm.getOption(name)?.description ?? "" }
-
-  /// `cm.state.overwrite`.
-  var overwrite: Bool { cm.overwrite }
 
   var state: VimState { vim.maybeInitVimState(cm) }
 
@@ -132,14 +107,7 @@ final class UpstreamVim {
     #expect(cursor == VimPosition(line: line, ch: ch), sourceLocation: sourceLocation)
   }
 
-  func assertCursorAt(_ pos: VimPosition, sourceLocation: SourceLocation = #_sourceLocation) {
-    #expect(cursor == pos, sourceLocation: sourceLocation)
-  }
-
   var registerController: RegisterController { vim.globalState.registerController }
-
-  /// A register's text (`getRegister(name).toString()`).
-  func register(_ name: String) -> String { registerController.getRegister(name).text.string }
 
   /// `helpers.getNotificationText()`: the message on display (a notification, or the
   /// "recording @q" status).
@@ -147,11 +115,6 @@ final class UpstreamVim {
     guard let panel = buffer.panel, panel.kind != .prompt else { return nil }
     return panel.text
   }
-
-  var mode: VimSession.Mode { session.mode }
-
-  /// `cm.getSelections()`: the text of every selection.
-  func getSelections() -> [String] { cm.getSelections().map(\.string) }
 
   /// `cm.replaceRange(text, from, to)`.
   func replaceRange(_ text: String, _ from: VimPosition, _ to: VimPosition? = nil) {
@@ -166,24 +129,11 @@ final class UpstreamVim {
     guard let searchState = state.searchState else { return false }
     return searchState.overlay != nil || searchState.highlightTimeout != nil
   }
-
-  /// `/pattern/flags.test(text)` (JavaScript's `test` coerces nil to "null").
-  func matches(_ pattern: String, _ flags: String, _ text: String?) -> Bool {
-    guard let regex = try? JSRegExp(VimText(pattern), flags: flags) else { return false }
-    return regex.test(VimText(text ?? "null"))
-  }
 }
 
 /// `dvorakLangmap` in vim_test.js.
 let upstreamDvorakLangmap =
   "'q,\\,w,.e,pr,yt,fy,gu,ci,ro,lp,/[,=],aa,os,ed,uf,ig,dh,hj,tk,nl,s\\;,-',\\;z,qx,jc,kv,xb,bn,mm,w\\,,v.,z/,[-,]=,\"Q,<W,>E,PR,YT,FY,GU,CI,RO,LP,?{,+},AA,OS,ED,UF,IG,DH,HJ,TK,NL,S:,_\",:Z,QX,JC,KV,XB,BN,MM,W<,V>,Z?"
-
-extension String {
-  /// JavaScript's `indexOf` (UTF-16 index, -1 when absent).
-  func jsIndexOf(_ search: String) -> Int { VimText(self).indexOf(VimText(search)) }
-
-  func jsRepeat(_ count: Int) -> String { String(repeating: self, count: count) }
-}
 
 extension VimPosition {
   init(_ line: Int, _ ch: Int) {

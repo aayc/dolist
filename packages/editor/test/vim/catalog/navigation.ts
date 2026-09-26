@@ -132,4 +132,22 @@ export function addNavigation(catalog: Catalog): void {
     at: [50, 0],
     steps: ["/line 02<CR>", "?line 55<CR>"],
   });
+  catalog.add({
+    name: "search/history-repeated-entry",
+    doc: "",
+    at: [0, 0],
+    steps: [
+      "/this<CR>",
+      "/checks<CR>",
+      "/search<CR>",
+      "/history<CR>",
+      "/checks<CR>",
+      "/",
+      "<Up>",
+      "<Up>",
+      "<Up>",
+      "<Up>",
+      "<Down>",
+    ],
+  });
 }

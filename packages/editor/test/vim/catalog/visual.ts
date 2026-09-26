@@ -184,6 +184,18 @@ export function addVisual(catalog: Catalog): void {
     catalog.add({ name: `visual/block/${id}`, doc: BLOCK, at: [0, 1], steps });
   }
   catalog.add({
+    name: "visual/block/o-O-o",
+    doc: "abcd\nefgh\nijkl\nmnop",
+    at: [0, 1],
+    steps: ["<C-v>3jll", "o", "O", "o"],
+  });
+  catalog.add({
+    name: "visual/gv/swap-block-twice",
+    doc: "123456\nfoo\nbar",
+    at: [1, 2],
+    steps: ["<C-v>kh<C-v>", "2j", "vlgv", "gv", "<Esc>"],
+  });
+  catalog.add({
     name: "visual/block/tabs",
     doc: "\tab\n\tcd\n  ef",
     at: [0, 0],
