@@ -72,6 +72,13 @@ Config shapes (`StorageConfig` / `SyncTargetConfig` in `src/types.ts`):
   editor's save-via-temp-file becomes a single `modified`. A folder that is deleted or moved in
   produces events for each file inside it. The watcher restarts with backoff after errors and then
   rescans the vault. `whenWatchReady()` resolves once the initial scan is done.
+- On macOS, libuv serves every directory watch of a process from one FSEvents stream and recreates
+  it, starting from "now", whenever a watch opens or closes, so what changes meanwhile is never
+  reported. Watches open and close when a vault or a local sync mirror starts or stops being
+  watched (the e2e harness runs all its daemons in one process). A watcher that opens waits for
+  the new stream before its initial scan, and after any watch this package opens or closes, every
+  other one rescans its vault once (one walked listing). Watches opened elsewhere in the process go
+  unnoticed.
 
 ## Sync
 

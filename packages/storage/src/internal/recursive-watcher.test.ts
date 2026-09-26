@@ -55,6 +55,16 @@ describe("RecursiveWatcher", () => {
     expect(watchers[0]!.closed).toBe(true);
   });
 
+  it("rescans when its stream restarts, until it is closed", () => {
+    const { watcher, watchers, onRescan } = setup();
+    watcher.start();
+    watchers[0]!.emit("restart");
+    expect(onRescan).toHaveBeenCalledTimes(1);
+    watcher.close();
+    watchers[0]!.emit("restart");
+    expect(onRescan).toHaveBeenCalledTimes(1);
+  });
+
   it("restarts after an error and rescans for missed changes", async () => {
     const { watcher, watchers, onRescan } = setup();
     watcher.start();

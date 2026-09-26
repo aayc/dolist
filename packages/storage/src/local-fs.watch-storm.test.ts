@@ -149,6 +149,25 @@ describe("LocalFsStorageProvider.watch under bursts", { timeout: 60_000 }, () =>
     expect(replay().get("mix.md")).toBe(contentVersion("external 11"));
   });
 
+  it("keeps up while other watchers of the process open and close", async () => {
+    // On macOS each one restarts the process's FSEvents stream, losing what changed just before.
+    const other = new LocalFsStorageProvider({ root: join(dir, "other") });
+    await other.init();
+    try {
+      await startWatching();
+      let unwatch: (() => void) | undefined;
+      for (let i = 0; i < 40; i++) {
+        await writeFile(join(root, `f${i}.md`), `v${i}`);
+        if (i % 2 === 0) unwatch = other.watch(() => {});
+        else unwatch?.();
+        await other.whenWatchReady();
+      }
+      await expectConsistent();
+    } finally {
+      await other.dispose();
+    }
+  });
+
   it("reports every file of a folder created in one burst", async () => {
     await startWatching();
     await mkdir(join(root, "Burst", "Nested"), { recursive: true });

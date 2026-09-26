@@ -2,10 +2,15 @@ import { watch } from "node:fs";
 import { type Logger, normalizePath } from "@ddl/core";
 import { watchDirectoryTree } from "./directory-tree-watcher";
 import { errorMessage } from "./fs-errors";
+import { watchWithFsEvents } from "./fsevents-watch";
 
-/** What the watcher needs from an open watch (an `FSWatcher` or a `DirectoryTreeWatcher`). */
+/**
+ * What the watcher needs from an open watch (an `FSWatcher`, `DirectoryTreeWatcher` or
+ * `FsEventsWatch`). `restart`: events may have been lost, and it is live again.
+ */
 export interface WatchHandle {
   on(event: "error", listener: (error: unknown) => void): unknown;
+  on(event: "restart", listener: () => void): unknown;
   close(): void;
 }
 
@@ -15,14 +20,16 @@ export type WatchFactory = (
 ) => WatchHandle;
 
 /**
- * Node's recursive mode is native on macOS (FSEvents) and Windows. On Linux it watches each file's
- * inode and misses in-place edits after an atomic replace, so a tree of directory watches is used.
+ * Node's recursive mode is native on macOS (FSEvents, shared by the whole process) and Windows. On
+ * Linux it watches each file's inode and misses in-place edits after an atomic replace, so a tree
+ * of directory watches is used.
  */
 function defaultWatchFactory(skipDirectory?: (path: string) => boolean): WatchFactory {
   if (process.platform === "linux") {
     return (root, listener) =>
       watchDirectoryTree(root, listener, skipDirectory ? { skip: skipDirectory } : {});
   }
+  if (process.platform === "darwin") return watchWithFsEvents;
   return (root, listener) =>
     watch(root, { recursive: true, persistent: false, encoding: "utf8" }, listener);
 }
@@ -33,7 +40,10 @@ export interface RecursiveWatcherOptions {
   logger: Logger;
   /** Something changed at this vault-relative path (file or folder). */
   onChange(path: string): void;
-  /** Events may have been lost (no file name, or the watcher restarted): reconcile everything. */
+  /**
+   * Events may have been lost (no file name, the watcher or its stream restarted): reconcile
+   * everything.
+   */
   onRescan(): void;
   /** Directories not worth watching (ignored by the provider); honored where supported. */
   skipDirectory?(path: string): boolean;
@@ -97,6 +107,9 @@ export class RecursiveWatcher {
       return;
     }
     watcher.on("error", (error: unknown) => this.fail(watcher, error));
+    watcher.on("restart", () => {
+      if (watcher === this.watcher) this.options.onRescan();
+    });
     this.watcher = watcher;
     this.openedAt = Date.now();
     if (isRestart) {
