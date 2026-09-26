@@ -6,9 +6,9 @@
  *   path with core's task parser and tracker, so each task keeps its id (and its thread and
  *   badge). Obsidian's own tasks in a merged note count as existing tasks: settled unless
  *   `actOnExistingTasks` is on, exactly as when the agent first sees a note.
- * - Task records get the new note path and line; threads the new note path and routine id. A
- *   thread whose task can't be found in its moved note is kept and marked detached (a system
- *   message says so).
+ * - Task records get the new note path and line; threads (snapshots and journals) the new note
+ *   path and routine id. A thread whose task can't be found in its moved note is kept and marked
+ *   detached (a system message in its snapshot, which the thread store merges into its journal).
  * - Routines state follows renamed routines; approvals, artifacts and anything unknown are copied
  *   byte for byte, as is every file that needs no change. The sync engine's snapshots and an
  *   earlier import's manifest belong to the old vault and stay behind; `settings.json` is merged
@@ -18,6 +18,7 @@
  */
 import { join } from "node:path";
 import {
+  decodePersistedJournalLine,
   decodePersistedRecords,
   decodePersistedRoutines,
   decodePersistedTaskState,
@@ -29,6 +30,7 @@ import {
   type PersistedSettledTask,
   type PersistedTaskAgentRecord,
   type PersistedThread,
+  persistedThreadIdFromJournalPath,
 } from "@ddl/contract";
 import {
   type CarryOverAgent,
@@ -86,17 +88,43 @@ type Category =
   | "copy";
 
 /**
- * Hook for the agent journal (`journal/`, docs/specs/agent-journal.md), whose events will carry
- * note paths too. Its phase 1 still writes every thread's snapshot (`threads/<id>.json`), which
- * readers use and this import remaps, so journal files are copied as they are (null). Once readers
- * fold the journal, remap the paths and routine ids in its events here, with `remap`.
+ * The agent journal (`state/journal/`, docs/specs/agent-journal.md) with the new vault's
+ * references, or null to copy it as it is. A thread's journal is its source of truth: the thread
+ * store folds it first and keeps its routine id (and, on equal `updatedAt`, its note path) over
+ * the snapshot's, so its thread events (`thread.created`, `thread.imported`) are remapped like the
+ * snapshot. Every other line stays byte for byte, and a journal a newer app wrote is left alone.
  */
-export function remapJournalFile(
-  _path: string,
-  _text: string,
-  _remap: SidecarRemap,
-): string | null {
-  return null;
+export function remapJournalFile(path: string, text: string, remap: SidecarRemap): string | null {
+  const threadId = persistedThreadIdFromJournalPath(`${SIDECAR_DIR}/${path}`);
+  if (threadId === null) return null;
+  const bom = text.charCodeAt(0) === 0xfeff ? "\uFEFF" : "";
+  const lines = text.slice(bom.length).split("\n");
+  let changed = false;
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i]!;
+    const cr = raw.endsWith("\r") ? "\r" : "";
+    const line = cr ? raw.slice(0, -1) : raw;
+    if (line.trim() === "") continue;
+    const decoded = decodePersistedJournalLine(line);
+    if (!decoded.ok) {
+      if (decoded.kind === "newer") return null;
+      continue;
+    }
+    const { type } = decoded.event;
+    if (type !== "thread.created" && type !== "thread.imported") continue;
+    const event = JSON.parse(line) as { thread: Record<string, unknown> };
+    const { notePath, routineId } = event.thread;
+    const next = {
+      ...event.thread,
+      ...(typeof notePath === "string" ? { notePath: remap.notePath(notePath) } : {}),
+      ...(typeof routineId === "string" ? { routineId: remap.routineId(routineId) } : {}),
+    };
+    if (next.notePath === notePath && next.routineId === routineId) continue;
+    event.thread = next;
+    lines[i] = `${JSON.stringify(event)}${cr}`;
+    changed = true;
+  }
+  return changed ? bom + lines.join("\n") : null;
 }
 
 export async function carrySidecar(
@@ -290,7 +318,7 @@ function categorize(path: string): Category {
   if (path === "state/records.json") return "records";
   if (path === "state/routines.json") return "routines";
   if (path === "settings.json") return "settings";
-  if (path.startsWith("journal/")) return "journal";
+  if (path.startsWith("state/journal/")) return "journal";
   if (path.startsWith("sync/") || path.startsWith("import/")) return "stays";
   return "copy";
 }

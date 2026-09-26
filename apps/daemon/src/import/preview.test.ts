@@ -165,7 +165,7 @@ describe("the preview report", () => {
         approvals: 1,
         routines: 1,
         trackedNotes: 2,
-        journal: 1,
+        journal: 3,
       },
       watchedOpenTasks: 2,
       actOnExistingTasks: false,
@@ -174,7 +174,6 @@ describe("the preview report", () => {
     expect(defaultDestination).toBe(join(bed.dir, "Obsidian Notebook (Daily Do List)"));
     expect(warnings).toEqual([
       '1 file has the same name as one in the Obsidian vault and gets "(Daily Do List)" added; links to it lead to the Obsidian one.',
-      "1 agent journal file is copied unchanged: the note paths inside aren't updated yet.",
     ]);
   });
 
