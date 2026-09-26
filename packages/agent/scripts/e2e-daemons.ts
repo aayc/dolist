@@ -8,14 +8,15 @@
  * that tests call (apps/web/e2e/fixtures.ts) to start daemons in this process:
  *
  * - `POST /daemons` with a `DaemonSpec`: a daemon on a free port serving the built web app, its
- *   vault seeded with the demo vault (demo-vault.ts). Agents run in mock mode (the scripted brain,
- *   in process) unless the spec asks for live mode (the Pi harness against the fake OpenRouter).
+ *   vault seeded with the demo vault (demo-vault.ts). Agents run in mock mode (the daemon's
+ *   scripted mock agent) unless the spec asks for live mode (the Pi harness against the fake
+ *   OpenRouter, whose brain is sandboxed as below).
  *   Answers the daemon's URL, its master token and where its files are.
  * - `POST /daemons/:id/stop` and `/start`: the daemon goes down and comes back on the same port
  *   (a machine that stops); `DELETE /daemons/:id` removes it and its files.
  * - `POST /sync-vaults`: a new vault on the sync service, with its token.
  *
- * The fake agent is sandboxed (web/files only, no browser/shell/computer/connectors, no web_fetch);
+ * The fake brain is sandboxed (web/files only, no browser/shell/computer/connectors, no web_fetch);
  * irreversible steps use the simulated `mock_irreversible_action`, so approvals are real but nothing
  * leaves the machine. Leases and the relay use short timings so handovers take seconds.
  */
@@ -44,7 +45,7 @@ const LINK = { pingEveryMs: 500, minBackoffMs: 50, maxBackoffMs: 500 };
 const WEB_DIST = fileURLToPath(new URL("../../../apps/web/dist", import.meta.url));
 
 export interface DaemonSpec {
-  /** `mock` (default): the scripted brain in process; `live`: Pi against the fake OpenRouter. */
+  /** `mock` (default): the daemon's scripted mock agent; `live`: Pi against the fake OpenRouter. */
   agent?: "mock" | "live" | "off";
   /** Live mode without OPENROUTER_API_KEY in the daemon's environment. */
   noKey?: boolean;
