@@ -195,13 +195,6 @@ describe("loadConfig", () => {
     expect(() => load()).toThrow(/vaultpath/);
     writeFileSync(file, JSON.stringify({ allowedOrigins: ["http://localhost:5174/app"] }));
     expect(() => load()).toThrow(/allowedOrigins/);
-    writeFileSync(
-      file,
-      JSON.stringify({
-        execution: { kind: "cloud", endpoint: "https://x.example", apiKeyEnv: "sk-123" },
-      }),
-    );
-    expect(() => load()).toThrow(/NAME of an environment variable/);
   });
 
   it("reads a sync service target from config.json or DDL_SYNC_URL + DDL_SYNC_VAULT", () => {

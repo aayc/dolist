@@ -2931,8 +2931,8 @@
     },
     "SyncTargetKind": {
       "type": "string",
-      "enum": ["none", "local", "s3", "remote"],
-      "description": "`none`, `local` (another folder), `s3`, or `remote` (the sync service shared with other devices)."
+      "enum": ["none", "local", "remote"],
+      "description": "`none`, `local` (another folder), or `remote` (the sync service shared with other devices)."
     },
     "SyncStatusResponse": {
       "type": "object",

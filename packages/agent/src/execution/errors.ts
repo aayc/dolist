@@ -7,11 +7,6 @@ export class ExecutionError extends Error {
   override name = "ExecutionError";
 }
 
-/** The requested backend or operation exists in the contract but is not built yet. */
-export class NotImplementedError extends ExecutionError {
-  override name = "NotImplementedError";
-}
-
 /** No usable Chrome/Chromium executable, or the browser failed to launch. */
 export class BrowserUnavailableError extends ExecutionError {
   override name = "BrowserUnavailableError";

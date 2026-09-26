@@ -1,7 +1,7 @@
 /**
  * Execution Providers supply the agent's "hands": a shell, a browser and (on macOS) the desktop.
  * The agent loop itself always runs in the daemon; only effects are delegated. `local` uses this
- * machine; `cloud` (not implemented yet) will proxy the same interfaces to a remote sandbox/VM.
+ * machine.
  */
 import type { ComputerAccess, SurfaceFrame, SurfaceKind, ToolSpec, Unsubscribe } from "@ddl/core";
 import type { DrawingRenderer } from "../drawings/renderer";
@@ -301,32 +301,25 @@ export type ExecutionToolFactory = (
   ctx: ExecutionToolContext,
 ) => ToolSpec[];
 
-export type ExecutionConfig =
-  | {
-      kind: "local";
-      /** DDL_HOME: workspaces and the agent browser profile live under here. */
-      home: string;
-      browser?: {
-        /** Default true: frames are streamed into the thread's browser view. */
-        headless?: boolean;
-        /** Default "chrome" (the installed Google Chrome); falls back to Playwright chromium. */
-        channel?: "chrome" | "chromium" | "msedge";
-        executablePath?: string;
-      };
-      computer?: {
-        enabled: boolean;
-        /** The `ddl-computer` helper binary; without it computer use stays screen-level. */
-        helper?: string;
-      };
-      /**
-       * The built drawing render page (`scripts/build-drawing-renderer.mjs`); with a browser, it
-       * renders drawings for `read_drawing`. Without it drawings are described in text only.
-       */
-      drawingRenderer?: string;
-    }
-  | {
-      kind: "cloud";
-      endpoint: string;
-      /** Name of the env var holding the API key (never the key itself). */
-      apiKeyEnv: string;
-    };
+export interface ExecutionConfig {
+  kind: "local";
+  /** DDL_HOME: workspaces and the agent browser profile live under here. */
+  home: string;
+  browser?: {
+    /** Default true: frames are streamed into the thread's browser view. */
+    headless?: boolean;
+    /** Default "chrome" (the installed Google Chrome); falls back to Playwright chromium. */
+    channel?: "chrome" | "chromium" | "msedge";
+    executablePath?: string;
+  };
+  computer?: {
+    enabled: boolean;
+    /** The `ddl-computer` helper binary; without it computer use stays screen-level. */
+    helper?: string;
+  };
+  /**
+   * The built drawing render page (`scripts/build-drawing-renderer.mjs`); with a browser, it
+   * renders drawings for `read_drawing`. Without it drawings are described in text only.
+   */
+  drawingRenderer?: string;
+}

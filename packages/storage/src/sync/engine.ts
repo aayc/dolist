@@ -790,7 +790,7 @@ function doomedBy(
 }
 
 function targetKind(target: StorageProvider): SyncTargetConfig["kind"] {
-  return target.kind === "s3" || target.kind === "remote" ? target.kind : "local";
+  return target.kind === "remote" ? "remote" : "local";
 }
 
 /** `Daily/.note.md.icloud` (an evicted iCloud Drive file) → `Daily/note.md`. */

@@ -980,7 +980,7 @@ const routineRunResponse = (): Arb<core.RoutineRunResponse> =>
 // ── Sync ──────────────────────────────────────────────────────────────────
 
 const syncState = () => enumOf<core.SyncState>("idle", "syncing", "error", "disabled");
-const syncTargetKind = () => enumOf<core.SyncTargetKind>("none", "local", "s3", "remote");
+const syncTargetKind = () => enumOf<core.SyncTargetKind>("none", "local", "remote");
 const syncStatusResponse = (): Arb<core.SyncStatusResponse> =>
   fc.record(
     {

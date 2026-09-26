@@ -73,8 +73,8 @@ import with progress, switch. "Update from Obsidian" and "Reveal the old vault" 
 
 ### B0 — binary files and attachment sync (after the always-on work lands)
 
-`StorageProvider` gains binary reads and writes (local-fs, memory, remote; the s3 stub
-documents it) under the shared contract tests; the sync service stores attachments
+`StorageProvider` gains binary reads and writes (local-fs, memory, remote) under the shared
+contract tests; the sync service stores attachments
 (content-addressed, size-limited) and the sync engine syncs them (newest wins, the other kept as a
 conflict copy); the daemon serves vault files to clients (`GET /api/files/*`, bearer-authenticated,
 correct content type, never executable content inline — the artifact policy applies). This is

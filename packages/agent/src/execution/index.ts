@@ -3,11 +3,9 @@
  * Backend selection happens only here.
  */
 import { type Logger, silentLogger } from "@ddl/core";
-import { CloudExecutionProvider } from "./cloud/provider";
 import { LocalExecutionProvider } from "./local/provider";
 import type { ExecutionConfig, ExecutionProvider } from "./types";
 
-export { CloudExecutionProvider } from "./cloud/provider";
 export {
   BrowserUnavailableError,
   ComputerPermissionError,
@@ -15,7 +13,6 @@ export {
   ElementNotFoundError,
   ExecutionError,
   NavigationBlockedError,
-  NotImplementedError,
   ProtectedAppError,
   StaleElementError,
   StaleRefError,
@@ -44,11 +41,7 @@ export async function createExecutionProvider(
       }
       return provider;
     }
-    case "cloud":
-      return new CloudExecutionProvider(config, { logger });
-    default: {
-      const unknown: never = config;
-      throw new Error(`Unknown execution provider: ${JSON.stringify(unknown)}`);
-    }
+    default:
+      throw new Error(`Unknown execution provider: ${JSON.stringify(config)}`);
   }
 }

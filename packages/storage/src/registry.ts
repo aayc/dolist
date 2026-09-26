@@ -2,7 +2,6 @@ import type { Logger } from "@ddl/core";
 import { type LocalFsStorageOptions, LocalFsStorageProvider } from "./local-fs";
 import { MemoryStorageProvider } from "./memory";
 import { RemoteStorageProvider } from "./remote";
-import { S3StorageProvider } from "./s3";
 import type { StorageConfig, StorageProvider, SyncTargetConfig } from "./types";
 
 export interface ProviderDeps {
@@ -27,8 +26,6 @@ export async function createStorageProvider(
       });
     case "local":
       return openLocal(config, deps);
-    case "s3":
-      return new S3StorageProvider(config);
   }
 }
 
@@ -42,8 +39,6 @@ export async function createSyncTarget(
       return null;
     case "local":
       return openLocal({ root: config.root }, deps);
-    case "s3":
-      return new S3StorageProvider(config);
     case "remote": {
       const { kind: _kind, ...options } = config;
       return new RemoteStorageProvider({

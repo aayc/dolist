@@ -388,8 +388,8 @@ export const SyncStateSchema = named(
 
 export const SyncTargetKindSchema = named(
   "SyncTargetKind",
-  "`none`, `local` (another folder), `s3`, or `remote` (the sync service shared with other devices).",
-  z.enum(["none", "local", "s3", "remote"]),
+  "`none`, `local` (another folder), or `remote` (the sync service shared with other devices).",
+  z.enum(["none", "local", "remote"]),
 );
 
 export const SyncStatusResponseSchema = named(

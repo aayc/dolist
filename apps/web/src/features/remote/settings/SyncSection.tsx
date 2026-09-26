@@ -25,7 +25,6 @@ const STATE_CHIP: Record<
 const TARGETS: Record<SyncStatusResponse["target"], string> = {
   none: "Nowhere",
   local: "A folder (set in config.json)",
-  s3: "S3 (set in config.json)",
   remote: "The sync service",
 };
 

@@ -2,13 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  CloudExecutionProvider,
-  createExecutionProvider,
-  createExecutionTools,
-  LocalExecutionProvider,
-  NotImplementedError,
-} from "./index";
+import { createExecutionProvider, createExecutionTools, LocalExecutionProvider } from "./index";
 
 describe("createExecutionProvider", () => {
   it("builds the local provider", async () => {
@@ -35,16 +29,6 @@ describe("createExecutionProvider", () => {
     } finally {
       await rm(home, { recursive: true, force: true });
     }
-  });
-
-  it("builds the cloud stub", async () => {
-    const provider = await createExecutionProvider({
-      kind: "cloud",
-      endpoint: "https://sandbox.example.com",
-      apiKeyEnv: "DDL_CLOUD_API_KEY",
-    });
-    expect(provider).toBeInstanceOf(CloudExecutionProvider);
-    await expect(provider.prepareWorkspace("x")).rejects.toBeInstanceOf(NotImplementedError);
   });
 
   it("rejects unknown kinds", async () => {

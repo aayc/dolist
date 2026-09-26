@@ -154,7 +154,7 @@ describe("systemReadinessProbes", () => {
     const secret = randomBytes(24).toString("base64url");
     const probes = systemReadinessProbes({
       env: { OPENROUTER_API_KEY: secret },
-      execution: { kind: "cloud", endpoint: "https://exec.example", apiKeyEnv: "EXEC_KEY" },
+      execution: { kind: "local", home: "/nonexistent/ddl-test" },
     });
     const answer = await probes.harness("pi");
     expect(answer).toEqual({ ready: true, credential: true });
@@ -162,7 +162,7 @@ describe("systemReadinessProbes", () => {
     expect(
       await systemReadinessProbes({
         env: {},
-        execution: { kind: "cloud", endpoint: "https://exec.example", apiKeyEnv: "EXEC_KEY" },
+        execution: { kind: "local", home: "/nonexistent/ddl-test" },
       }).harness("pi"),
     ).toEqual({
       ready: false,
@@ -174,7 +174,7 @@ describe("systemReadinessProbes", () => {
   it("reports a Cursor CLI that isn't there without running anything", async () => {
     const probes = systemReadinessProbes({
       env: { DDL_CURSOR_CLI: "/nonexistent/ddl-test/agent", PATH: "" },
-      execution: { kind: "cloud", endpoint: "https://exec.example", apiKeyEnv: "EXEC_KEY" },
+      execution: { kind: "local", home: "/nonexistent/ddl-test" },
     });
     expect(await probes.harness("cursor")).toMatchObject({
       ready: false,

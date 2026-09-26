@@ -23,7 +23,6 @@ registries").
 | `kind` | Status | What it drives |
 | --- | --- | --- |
 | `local` | implemented | This machine: login shell, the agent's own Chrome profile, the macOS desktop |
-| `cloud` | stub | Planned remote sandbox VM; every method throws `NotImplementedError` |
 
 ### Capabilities
 
@@ -249,24 +248,6 @@ calls fail with `ComputerPermissionError` instead.
   first. Its answers are parsed defensively and window content reaches the model marked untrusted.
 - **Untrusted content**: page text reaches the model inside results marked as untrusted, and the
   prompt guidelines tell subagents to ignore instructions found on pages.
-
-## Implementing the cloud provider
-
-This provider gives a daemon remote hands; it is not how the agent becomes always-on. For that,
-the whole daemon runs on an always-on machine and other devices relay to it (see
-[docs/ALWAYS_ON.md](../../../../docs/ALWAYS_ON.md)). `cloud/provider.ts` documents the planned
-design. In short:
-
-1. Provision one sandbox VM/container per workspace through `endpoint`; authenticate with the key
-   read at runtime from `process.env[config.apiKeyEnv]` (never stored in config, never logged).
-2. **Shell**: implement `ShellExecutor` over an authenticated streaming API with the local
-   semantics (timeout, abort kills the process group, head+tail truncation, env hygiene).
-3. **Browser**: run Chrome in the VM and attach with `chromium.connectOverCDP(wsEndpoint)`; the
-   session logic (snapshots, refs, screencast) can then be shared with the local controller.
-4. **Computer**: stream the VM desktop VNC-style — frames out, mouse/keyboard messages in — behind
-   `ComputerController`, keeping coordinates in screenshot pixels.
-5. Report honest `capabilities`, release everything in `dispose()`, and register nothing else:
-   `createExecutionProvider` already routes `kind: "cloud"` here, and the tools work unchanged.
 
 ## Development
 

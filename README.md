@@ -58,8 +58,7 @@ It's a *do* list, not a *to-do* list: the point is that things get done.
   folder in sync within a couple of seconds (edits to different lines merge; true conflicts keep
   both versions), and makes sure the agent runs on exactly one device — see
   [docs/SYNC.md](docs/SYNC.md).
-- **Providers everywhere.** Storage (local folder today, S3 next), sync targets, execution (local
-  today, cloud next), agent harness ([Pi](https://github.com/badlogic/pi-mono) on OpenRouter, or the
+- **Providers everywhere.** Storage, sync targets, execution, agent harness ([Pi](https://github.com/badlogic/pi-mono) on OpenRouter, or the
   [Cursor CLI](https://cursor.com/cli) with your Cursor account) and connectors sit behind
   interfaces with a registry.
 
@@ -186,7 +185,7 @@ flowchart LR
     E[Editor + badges] --- T[Thread panel]
   end
   UI <-- REST + WebSocket --> D[Daemon 127.0.0.1]
-  D --> S[(StorageProvider<br/>vault on disk · S3 next)]
+  D --> S[(StorageProvider<br/>vault on disk)]
   D --> R[AgentRuntime]
   R --> W[TaskWatcher<br/>parse · track identity · settle]
   W --> O[Orchestrator agent]
@@ -283,7 +282,6 @@ CI details: [docs/CI.md](docs/CI.md).
   daemon) — [plan](docs/CROSS_PLATFORM.md)
 - Sync, phase 2: attachments in S3/R2, end-to-end encryption, a Cloudflare Durable Object host,
   sync status in the apps ([docs/SYNC.md](docs/SYNC.md))
-- S3 storage provider
 - Watching more than daily notes (projects, weekly notes); scheduled check-ins
 - Memory / user profile so the assistant gets more personal over time
 
