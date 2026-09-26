@@ -65,7 +65,7 @@ that looks for `Task: "<text>"` in its kickoff (see `subagentFor` in `test/scena
 | --- | --- | --- |
 | Harness | `ScriptedHarness` + `createFakeAgentScript(brain)` | the real Pi harness over HTTP |
 | Model | the brain, in-process | `startFakeOpenRouter()` answering with the brain |
-| One-shot LLM (judge, `web_search`) | `createFakeLlmClient(brain)` in live mode | the real `OpenRouterClient` against the fake |
+| One-shot LLM (judge, `web_search`) | `new MockLlmClient(brainResponder(brain))` in live mode | the real `OpenRouterClient` against the fake |
 | Speed | ~5–50 ms per scenario | ~50–250 ms per scenario |
 | Use for | breadth: the scenario matrix, UI/daemon tests | the wire: streaming, retries, validation, aborts |
 

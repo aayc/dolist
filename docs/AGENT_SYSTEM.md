@@ -518,7 +518,7 @@ and calls the bridge like the real one.
   them, "implement the flow in the diagram"): live mode runs the real orchestrator prompt on Pi
   with recorded (stubbed) tools and scores decision accuracy, capability recall (a routine's
   `uses`), a routine's schedule and `notify`, mention recall (a delegation passes on the drawing's
-  labels), and time-to-first-action; mock mode validates the dataset with a deterministic baseline.
+  labels), and time-to-first-action; mock mode validates the dataset with the fake brain.
 
 ```bash
 pnpm eval:mock                         # deterministic, runs in CI

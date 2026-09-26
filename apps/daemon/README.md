@@ -104,7 +104,6 @@ of this repository. Values are never logged.
 ```
 
 - `sync`: `{ "kind": "none" }`, `{ "kind": "local", "root": "~/Library/Mobile Documents/…" }`,
-  `{ "kind": "s3", "bucket": "…", "prefix": "…", "region": "…" }` (stub) or
   `{ "kind": "remote", "url": "https://sync.example.com", "vault": "<vault id>" }` for the sync
   service ([docs/SYNC.md](../../docs/SYNC.md)); `url` must be `https` unless it is this machine.
   The token goes in `sync-token`, never here. With `remote` sync and an agent mode other than `off`,
@@ -124,8 +123,7 @@ of this repository. Values are never logged.
 `PATCH /api/device` and `PUT`/`DELETE /api/device/sync` rewrite `config.json` in place (atomically,
 mode `0600`), keeping every key they don't own.
 - `execution`: `local` (browser headless by default; computer use defaults to on for macOS only,
-  with app control when the helper is found, see `DDL_COMPUTER_HELPER`) or
-  `{ "kind": "cloud", "endpoint": "https://…", "apiKeyEnv": "NAME_OF_ENV_VAR" }`.
+  with app control when the helper is found, see `DDL_COMPUTER_HELPER`).
 - `allowedOrigins`: extra exact origins (`scheme://host[:port]`) for other clients, for example a
   Vite dev server on another port or a native shell (`tauri://localhost`). HTTP(S) origins also allow
   their host in the `Host` allowlist; a host that isn't loopback is served like a remote host (never

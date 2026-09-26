@@ -258,11 +258,6 @@ describe("config.json errors", () => {
     ["an unknown sync kind", '{"sync":{"kind":"ftp"}}', /sync/],
     ["local sync without a root", '{"sync":{"kind":"local"}}', /root/],
     [
-      "a cloud endpoint that is not a URL",
-      '{"execution":{"kind":"cloud","endpoint":"x","apiKeyEnv":"K"}}',
-      /endpoint/,
-    ],
-    [
       "an unknown browser channel",
       '{"execution":{"kind":"local","browser":{"channel":"firefox"}}}',
       /channel/,
@@ -272,24 +267,6 @@ describe("config.json errors", () => {
     expect(run).toThrow(ConfigError);
     expect(run).toThrow(message);
     expect(run).toThrow(/~\/state\/config\.json/);
-  });
-
-  it("never echoes a secret pasted where an env var name belongs", () => {
-    const run = withConfig(
-      JSON.stringify({
-        execution: {
-          kind: "cloud",
-          endpoint: "https://x.example",
-          apiKeyEnv: "sk-or-v1-supersecretvalue",
-        },
-      }),
-    );
-    expect(run).toThrow(/NAME of an environment variable/);
-    try {
-      run();
-    } catch (error) {
-      expect(String(error)).not.toContain("supersecretvalue");
-    }
   });
 
   it("reports an unreadable config file as unreadable, not as invalid JSON", () => {

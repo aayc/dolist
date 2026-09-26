@@ -38,6 +38,7 @@ import { createExecutionTools } from "../execution";
 import { createPiHarness } from "../harness/pi";
 import { ScriptedHarness } from "../harness/scripted";
 import type { AgentRole, Harness, ToolCallDecision } from "../harness/types";
+import { MockLlmClient } from "../llm/mock";
 import { createOpenRouterClient } from "../llm/openrouter";
 import type { LlmClient } from "../llm/types";
 import { type AgentRuntimeOverrides, createAgentRuntime } from "../runtime";
@@ -54,6 +55,7 @@ import {
   startFakeOpenRouter,
 } from "./fake-openrouter";
 import {
+  brainResponder,
   createFakeConnectors,
   createFakeExecution,
   createFakeWeb,
@@ -63,7 +65,6 @@ import {
   type FakeExecutionOptions,
   type FakeWeb,
 } from "./fakes";
-import { createFakeLlmClient } from "./llm-client";
 import { createFakeAgentScript, type ScriptToolEvent } from "./script";
 
 const realSetTimeout = globalThis.setTimeout;
@@ -298,7 +299,7 @@ export async function createFakeAgentRuntime(
       maxRetries: 1,
     });
   } else if (mode === "live") {
-    llm = createFakeLlmClient(brain, { defaultModel: settings.agent.model });
+    llm = new MockLlmClient(brainResponder(brain), { defaultModel: settings.agent.model });
   }
 
   const userOverrides = options.overrides ?? {};

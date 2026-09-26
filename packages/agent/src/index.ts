@@ -1,5 +1,4 @@
 export {
-  DRAWING_MARKER,
   type DrawingBlock,
   type DrawingBudget,
   DrawingDescriptions,

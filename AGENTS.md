@@ -21,7 +21,7 @@ Product principles, in priority order:
    in CI (see `docs/PERFORMANCE.md`). Never put network or O(document) work on the keystroke path.
 3. **Local-first, plain files.** Notes are plain markdown in a folder (Obsidian-compatible vault).
    Agent state lives in the vault's hidden sidecar folder `.daily-do-list/`.
-4. **Providers everywhere.** Storage, sync, execution (local/cloud), agent harness and connectors
+4. **Providers everywhere.** Storage, sync, execution, agent harness and connectors
    sit behind interfaces with a registry, so backends can be swapped without touching callers.
 5. **Cross-platform by construction.** Every client talks to the daemon through one wire protocol:
    the web UI, the native macOS app (`apps/macos`, Swift), and later iOS, which will reuse the
@@ -69,11 +69,11 @@ apps/
   mobile/         (planned) native iOS app reusing the Swift packages — plan in PLAN.md
 packages/
   core/           Pure, isomorphic domain logic + wire protocol types (no dependencies!)
-  storage/        StorageProvider interface; local-fs, memory, remote (sync service), s3 (stub);
-                  SyncEngine; search
+  storage/        StorageProvider interface; local-fs, memory, remote (sync service); SyncEngine;
+                  search
   editor/         CodeMirror 6 markdown editor: live preview, tasks, vim, agent badges
   agent/          Agent runtime: watcher, orchestrator, subagents, harnesses (Pi │ Cursor CLI),
-                  safety, approvals, execution providers (local/cloud; computer use with app
+                  safety, approvals, execution providers (local; computer use with app
                   control through the ddl-computer helper), threads/artifacts, tools, LLM client
   connectors/     MCP client: mcpServers config → ToolSpecs (stdio / streamable HTTP / SSE)
 evals/            Agent evals (safety verdicts, triage, latency); mock mode runs in CI
@@ -111,7 +111,7 @@ Scope commands to the package you are working in while iterating. Before you fin
 ## Architecture in one screen
 
 ```
- Editor (web) ──REST/WS──▶ Daemon ──▶ StorageProvider (vault: local fs │ s3) ◀──▶ SyncEngine ──▶ sync target (folder │ sync service)
+ Editor (web) ──REST/WS──▶ Daemon ──▶ StorageProvider (vault: local fs) ◀──▶ SyncEngine ──▶ sync target (folder │ sync service)
                               │
                               └──▶ AgentRuntime
                                      TaskWatcher  (storage events → parse → track identities → settle)
@@ -126,7 +126,7 @@ Scope commands to the package you are working in while iterating. Before you fin
                                         │ require_approval                 │ allowed
                                         ▼                                  ▼
                                      ApprovalBroker ──WS──▶ UI card     journal: "about to run", then the result
-                                     ExecutionProvider (local │ cloud): shell, browser, computer
+                                     ExecutionProvider (local): shell, browser, computer
                                      ThreadStore: journal (state/journal/threads/*.jsonl, the source of truth)
                                                   + snapshots (threads/*.json), artifacts
 ```
@@ -169,7 +169,7 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
    its permission requests go through the gate, and a monitor stops sessions that break that.
 3. **Provider registries.** Backend selection happens only in registries
    (`createStorageProvider`, `createExecutionProvider`, `createSyncTarget`, …). No
-   `if (kind === "s3")` in callers.
+   `if (kind === "remote")` in callers.
 4. **`@ddl/core` is pure.** No dependencies, no `node:*` imports, no DOM access (timers, `crypto`
    via `globalThis` are fine). It runs in the browser, the daemon and future native shells.
 5. **Wire protocol lives in `packages/core/src/protocol.ts`.** Daemon and clients import the same
@@ -308,11 +308,11 @@ and real-keyboard e2e tests in `apps/web/e2e/vim.spec.ts`.
 ## How to…
 
 - **Add a storage backend:** implement `StorageProvider` (`packages/storage/src/types.ts`), add it to
-  `createStorageProvider`, run the shared contract tests against it, document config in
-  `docs/ARCHITECTURE.md`.
-- **Add an execution backend:** implement `ExecutionProvider` (`packages/agent/src/execution/types.ts`)
-  and register it in `createExecutionProvider`. Tools are built by `createExecutionTools` from the
-  provider's controllers, so they work unchanged.
+  `StorageConfig` and `createStorageProvider` (and `createSyncTarget` for a sync target), run the
+  shared contract tests against it, document config in `docs/ARCHITECTURE.md`.
+- **Add an execution backend:** implement `ExecutionProvider` (`packages/agent/src/execution/types.ts`),
+  add its config to `ExecutionConfig` and register it in `createExecutionProvider`. Tools are built
+  by `createExecutionTools` from the provider's controllers, so they work unchanged.
 - **Add a tool:** name it in `packages/agent/src/tools/contracts.ts`, implement a `ToolSpec` with
   honest safety hints and a `describe()` for approval cards (and a `subject()` when the tool knows
   the real target, see invariant 1), add safety eval cases (a `subject` field feeds the hint), and
@@ -346,8 +346,8 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
   library is Foundation only), and `DailyDoListComputer` (`ddl-computer`, the helper the daemon
   spawns to operate other apps through their accessibility tree; not linked into the app).
   `IntegrationTests/` is a separate package that runs against the real daemon.
-- **Drawings:** `@ddl/core`'s drawing format and description are the reference, as vim.js is
-  for vim: `DailyDoListDrawing` replays `packages/core/test/drawings/fixtures` byte for byte, so
+- **Drawings:** `@ddl/core`'s drawing format is the reference, as vim.js is for vim:
+  `DailyDoListDrawing` replays `packages/core/test/drawings/fixtures` byte for byte, so
   a format change updates both sides and adds a fixture. Its Rough.js port is checked against
   samples from Rough.js itself (`fixtures/rough-parity.jsonl`); see its README. In notes,
   `DailyDoListEditor` draws embeds with it (floats are text-container exclusion paths, recomputed

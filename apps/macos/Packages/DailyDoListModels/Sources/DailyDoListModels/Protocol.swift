@@ -645,13 +645,12 @@ public struct SyncState: WireEnum {
   public static let disabled: Self = "disabled"
 }
 
-/// Where the vault syncs: nowhere, another folder, S3, or the sync service (other devices).
+/// Where the vault syncs: nowhere, another folder, or the sync service (other devices).
 public struct SyncTargetKind: WireEnum {
   public let rawValue: String
   public init(rawValue: String) { self.rawValue = rawValue }
   public static let none: Self = "none"
   public static let local: Self = "local"
-  public static let s3: Self = "s3"
   public static let remote: Self = "remote"
 }
 

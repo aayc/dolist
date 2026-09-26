@@ -3,8 +3,8 @@ import Foundation
 import Testing
 
 /// The drawing fixtures shared with `@ddl/core` (`packages/core/test/drawings/`, see its
-/// README): every fixture is parsed, described and written back, and must give what the
-/// TypeScript reference gave, byte for byte. `DRAWING_FIXTURES_DIR` points elsewhere (a checkout
+/// README): every fixture is parsed and written back, and must give what the TypeScript
+/// reference gave, byte for byte (describing a drawing is TypeScript only). `DRAWING_FIXTURES_DIR` points elsewhere (a checkout
 /// of another branch's fixtures); without either, the suite has nothing to replay.
 @Suite("Shared drawing fixtures")
 struct SharedFixtureTests {
@@ -85,13 +85,7 @@ struct SharedFixtureTests {
     let files = (summary["files"]?.arrayValue ?? []).compactMap(\.stringValue)
     #expect((parsed.scene.files.objectValue?.keys ?? []) == files)
 
-    // 2. Describe.
-    let title = try #require(expected["title"]?.stringValue)
-    #expect(
-      DrawingDescription.describe(parsed.scene, title: title)
-        == expected["description"]?.stringValue)
-
-    // 3. Write it back.
+    // 2. Write it back.
     guard let roundTripName = expected["roundTrip"]?.stringValue else {
       #expect(throws: DrawingUnreadableError.self) { try parsed.serialized() }
       return
@@ -101,12 +95,12 @@ struct SharedFixtureTests {
     #expect(written == roundTrip, "writing \(name) back")
     if written != roundTrip { Self.showDifference(written, roundTrip) }
 
-    // 4. The round trip is stable and holds the same scene.
+    // 3. The round trip is stable and holds the same scene.
     let reparsed = ExcalidrawMarkdown.parse(roundTrip)
     #expect(try reparsed.serialized() == roundTrip)
     #expect(Self.sameJSON(reparsed.scene, parsed.scene))
 
-    // 5. Same scene as another fixture.
+    // 4. Same scene as another fixture.
     if let other = expected["sameSceneAs"]?.stringValue {
       let otherParsed = ExcalidrawMarkdown.parse(try Self.text(other))
       #expect(Self.sameJSON(parsed.scene, otherParsed.scene))

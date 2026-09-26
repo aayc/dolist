@@ -19,23 +19,15 @@ import {
   type ApprovalDecisionRequest,
   type ApprovalListResponse,
   type ApprovalRequest,
-  type ApprovalStatus,
-  type AppSettings,
-  type ArtifactMeta,
-  type CreateRoutineRequest,
   Emitter,
   type Logger,
   normalizeMachineUrl,
   type RelayState,
-  type Routine,
   type RoutineListResponse,
   type RoutineRunResponse,
   type ServerEvent,
   type SurfaceKind,
-  type TaskAgentRecord,
-  type Thread,
   type ThreadListResponse,
-  type ThreadSummary,
   type Unsubscribe,
 } from "@ddl/core";
 import type { Context, MiddlewareHandler } from "hono";
@@ -47,6 +39,7 @@ import type {
   PlacementSource,
 } from "../agent-location";
 import { errorBody, errorMessage } from "../errors";
+import { ForwardingAgentRuntime } from "../forwarding-runtime";
 import { readJson } from "../http-utils";
 import { AgentUnavailableError } from "../null-runtime";
 import { relayedArtifactHeaders } from "../routes/artifacts";
@@ -100,7 +93,7 @@ const RUNTIME_EVENTS = [
  * edits are made locally, and agent actions answer 503 `agent_unavailable` saying why. Notes,
  * search, settings, sync and device routes never go through the relay.
  */
-export class AgentRelay implements AgentRuntime {
+export class AgentRelay extends ForwardingAgentRuntime {
   readonly mode: AgentMode;
   readonly #local: AgentRuntime;
   readonly #options: AgentRelayOptions;
@@ -124,6 +117,7 @@ export class AgentRelay implements AgentRuntime {
   #stopped = false;
 
   constructor(options: AgentRelayOptions) {
+    super();
     this.#options = options;
     this.#local = options.local;
     this.mode = options.local.mode;
@@ -145,13 +139,13 @@ export class AgentRelay implements AgentRuntime {
     return this.#state;
   }
 
-  async start(): Promise<void> {
+  override async start(): Promise<void> {
     this.#started = true;
     this.#link?.connect();
     await this.#local.start();
   }
 
-  async stop(): Promise<void> {
+  override async stop(): Promise<void> {
     this.#started = false;
     this.#stopped = true;
     for (const unsubscribe of this.#unsubscribes.splice(0)) unsubscribe();
@@ -174,7 +168,7 @@ export class AgentRelay implements AgentRuntime {
     };
   }
 
-  status(): AgentStatusResponse {
+  override status(): AgentStatusResponse {
     const local = this.#local.status();
     if (this.#state === "off") return local;
     if (this.#forwarding && this.#remote) return this.#merge(this.#remote, local);
@@ -187,77 +181,50 @@ export class AgentRelay implements AgentRuntime {
     };
   }
 
-  setEnabled(enabled: boolean): Promise<void> {
-    return this.#local.setEnabled(enabled);
-  }
-
-  updateSettings(settings: AppSettings): void {
-    this.#local.updateSettings(settings);
-  }
-
   /** The machine's orchestrator holds off on a task the user is still typing, wherever it is. */
-  noteEditorActivity(notePath: string, line: number): void {
+  override noteEditorActivity(notePath: string, line: number): void {
     if (this.#forwarding) this.#link?.send({ type: "editor.activity", notePath, line });
     else this.#local.noteEditorActivity(notePath, line);
-  }
-
-  getTaskRecords(notePath: string): TaskAgentRecord[] {
-    return this.#local.getTaskRecords(notePath);
-  }
-
-  listThreads(filter?: {
-    notePath?: string;
-    taskId?: string;
-    routineId?: string;
-  }): ThreadSummary[] {
-    return this.#local.listThreads(filter);
-  }
-
-  getThread(id: string): { thread: Thread; approvals: ApprovalRequest[] } | undefined {
-    return this.#local.getThread(id);
-  }
-
-  listApprovals(filter?: { status?: ApprovalStatus }): ApprovalRequest[] {
-    return this.#local.listApprovals(filter);
-  }
-
-  readArtifact(
-    threadId: string,
-    artifactId: string,
-  ): Promise<{ meta: ArtifactMeta; body: Uint8Array } | null> {
-    return this.#local.readArtifact(threadId, artifactId);
   }
 
   // Agent actions reach these only when they weren't forwarded; while the agent is relayed, this
   // device's own runtime must not act.
 
-  async postUserMessage(threadId: string, text: string): Promise<void> {
+  override async postUserMessage(threadId: string, text: string): Promise<void> {
     this.#assertLocal();
     await this.#local.postUserMessage(threadId, text);
   }
 
-  async decideApproval(id: string, decision: ApprovalDecisionRequest): Promise<ApprovalRequest> {
+  override async decideApproval(
+    id: string,
+    decision: ApprovalDecisionRequest,
+  ): Promise<ApprovalRequest> {
     this.#assertLocal();
     return this.#local.decideApproval(id, decision);
   }
 
-  async cancelThread(threadId: string): Promise<void> {
+  override async cancelThread(threadId: string): Promise<void> {
     this.#assertLocal();
     await this.#local.cancelThread(threadId);
   }
 
-  async retryThread(threadId: string): Promise<void> {
+  override async retryThread(threadId: string): Promise<void> {
     this.#assertLocal();
     await this.#local.retryThread(threadId);
   }
 
-  markThreadRead(threadId: string): void {
+  override async runRoutine(id: string): Promise<RoutineRunResponse> {
+    this.#assertLocal();
+    return this.#local.runRoutine(id);
+  }
+
+  override markThreadRead(threadId: string): void {
     if (this.#forwarding) this.#link?.send({ type: "thread.read", threadId });
     else this.#local.markThreadRead(threadId);
   }
 
   /** Watched through the link while relaying (it subscribes again whenever it reconnects). */
-  subscribeSurface(threadId: string, surface: SurfaceKind): Unsubscribe {
+  override subscribeSurface(threadId: string, surface: SurfaceKind): Unsubscribe {
     const key = `${threadId}\u0000${surface}`;
     const entry = this.#surfaces.get(key);
     if (entry) entry.count++;
@@ -276,32 +243,16 @@ export class AgentRelay implements AgentRuntime {
     };
   }
 
-  listRoutines(): Routine[] {
-    return this.#local.listRoutines();
-  }
-
-  getRoutine(id: string): Routine | undefined {
-    return this.#local.getRoutine(id);
-  }
-
-  createRoutine(input: CreateRoutineRequest): Promise<Routine> {
-    return this.#local.createRoutine(input);
-  }
-
-  setRoutinePaused(id: string, paused: boolean): Promise<Routine> {
-    return this.#local.setRoutinePaused(id, paused);
-  }
-
-  async runRoutine(id: string): Promise<RoutineRunResponse> {
-    this.#assertLocal();
-    return this.#local.runRoutine(id);
-  }
-
-  on<K extends keyof AgentRuntimeEvents>(
+  override on<K extends keyof AgentRuntimeEvents>(
     event: K,
     listener: (payload: AgentRuntimeEvents[K]) => void,
   ): Unsubscribe {
     return this.#events.on(event, listener);
+  }
+
+  /** Reads, routine file edits and settings: this device's own runtime. */
+  protected override inner(): AgentRuntime {
+    return this.#local;
   }
 
   // ── State ─────────────────────────────────────────────────────────────

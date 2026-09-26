@@ -28,10 +28,10 @@ app's platform-neutral Swift packages.
   `DailyDoListVim` (a Foundation-only Swift port) natively; both replay the same recorded behavior
   vectors (`packages/editor/test/vim`), so a key sequence does the same thing on every surface.
 - **Hands are a provider.** The agent loop only needs an `ExecutionProvider`. On macOS it's the
-  local one; for iPhone-only use, a `cloud` provider (remote sandbox with browser/desktop) plugs in
+  local one; for iPhone-only use, a remote provider (a sandbox with browser/desktop) could plug in
   without touching the orchestrator.
-- **Storage and sync are providers.** A vault can live on disk, in S3 (next), or be mirrored to an
-  iCloud Drive folder via `SyncEngine`, which is how notes reach the phone.
+- **Storage and sync are providers.** A vault lives on disk and is mirrored to an iCloud Drive folder
+  or the sync service via `SyncEngine`, which is how notes reach the phone.
 
 ## macOS app (apps/macos)
 
@@ -74,5 +74,3 @@ The first two items are phase 1 of [ALWAYS_ON.md](./ALWAYS_ON.md).
 - [x] Remote access story (Tailscale/relay) with TLS; keep `127.0.0.1` binding the default
   (`tailscale serve` to the loopback port, `remote.hosts`; see [ALWAYS_ON.md](./ALWAYS_ON.md#remote-access)).
 - [ ] Compact iPhone layouts for the note, thread and approval views.
-- [ ] `S3StorageProvider` implementation (the stub documents the plan) or iCloud sync target docs.
-- [ ] `CloudExecutionProvider` implementation (the stub documents the interface).

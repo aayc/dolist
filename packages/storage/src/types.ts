@@ -3,13 +3,13 @@
  * (see `@ddl/core` paths) mapped to UTF-8 text files. Folders are implicit (derived from paths),
  * except that providers may report empty folders via `listFolders`.
  *
- * Every write returns an opaque `version` (content hash for local-fs, ETag for S3). Passing
+ * Every write returns an opaque `version` (a content hash for local-fs). Passing
  * `ifMatch` makes the write conditional (optimistic concurrency); `ifMatch: null` means
  * "create only if absent". Violations throw `ConflictError`.
  */
 import type { Unsubscribe } from "@ddl/core";
 
-export type StorageProviderKind = "local" | "memory" | "s3" | "remote";
+export type StorageProviderKind = "local" | "memory" | "remote";
 
 export interface FileEntry {
   path: string;
@@ -153,13 +153,6 @@ export interface LeaseFence {
   epoch(): number | null;
 }
 
-export class NotImplementedError extends StorageError {
-  constructor(feature: string) {
-    super(`Not implemented yet: ${feature}`);
-    this.name = "NotImplementedError";
-  }
-}
-
 // ── Provider configuration (discriminated by `kind`) ───────────────────────
 
 export interface LocalStorageConfig {
@@ -178,20 +171,7 @@ export interface MemoryStorageConfig {
   initialFiles?: Record<string, string>;
 }
 
-export interface S3StorageConfig {
-  kind: "s3";
-  bucket: string;
-  /** Key prefix acting as the vault root, e.g. `vaults/personal/`. */
-  prefix?: string;
-  region?: string;
-  /** Custom endpoint for S3-compatible stores (R2, MinIO, …). */
-  endpoint?: string;
-  /** Credentials come from the standard AWS provider chain unless a profile is given. */
-  profile?: string;
-  forcePathStyle?: boolean;
-}
-
-export type StorageConfig = LocalStorageConfig | MemoryStorageConfig | S3StorageConfig;
+export type StorageConfig = LocalStorageConfig | MemoryStorageConfig;
 
 /** A vault on the sync service (`apps/sync`). Only ever a sync target, never the vault itself. */
 export interface RemoteStorageConfig {
@@ -214,7 +194,6 @@ export type SyncTargetConfig =
   | { kind: "none" }
   /** Mirror to another local folder (e.g. an iCloud Drive/Dropbox folder for cross-device sync). */
   | { kind: "local"; root: string }
-  | ({ kind: "s3" } & Omit<S3StorageConfig, "kind">)
   /** The sync service: live push between devices and the agent lease. */
   | RemoteStorageConfig;
 

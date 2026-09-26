@@ -433,8 +433,8 @@ export interface ApprovalDecisionRequest {
 /** `disabled` = no sync target configured. */
 export type SyncState = "idle" | "syncing" | "error" | "disabled";
 
-/** Where the vault syncs: nowhere, another folder, S3, or the sync service (other devices). */
-export type SyncTargetKind = "none" | "local" | "s3" | "remote";
+/** Where the vault syncs: nowhere, another folder, or the sync service (other devices). */
+export type SyncTargetKind = "none" | "local" | "remote";
 
 export interface SyncStatusResponse {
   state: SyncState;

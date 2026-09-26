@@ -20,15 +20,13 @@ const hits = await searchVault(vault, "groceries", { limit: 20 });
 | `local`  | `LocalFsStorageProvider`  | A folder on disk; the default vault. Obsidian-compatible. |
 | `memory` | `MemoryStorageProvider`   | Reference model for tests and fixtures; acts like a disk. |
 | `remote` | `RemoteStorageProvider`   | A vault on the sync service (`apps/sync`), for syncing devices. Sync target only. |
-| `s3`     | `S3StorageProvider`       | **Stub**: every call throws `NotImplementedError`. The planned design is documented in `src/s3.ts`. |
 
 Config shapes (`StorageConfig` / `SyncTargetConfig` in `src/types.ts`):
 
 ```ts
 { kind: "local", root: "/absolute/vault/path", ignore?: ["Archive/Old"] }
 { kind: "memory", id?: "fixture", initialFiles?: { "a.md": "…" } }
-{ kind: "s3", bucket: "notes", prefix?: "vaults/personal/", region?, endpoint?, profile?, forcePathStyle? }
-// sync targets: { kind: "none" } | { kind: "local", root } | { kind: "s3", …same as above }
+// sync targets: { kind: "none" } | { kind: "local", root }
 //   | { kind: "remote", url, vault, token, deviceId, deviceName }
 ```
 
@@ -143,7 +141,7 @@ runs a case-insensitive substring search over markdown files. Note-name matches 
 (0-based `line`), most recently modified notes first, each with a ~160-character preview centred
 on the match.
 
-## Adding a provider (S3 is next)
+## Adding a provider
 
 1. Implement `StorageProvider` in `src/<name>.ts`. Keep the semantics of `MemoryStorageProvider`:
    normalized paths (empty ones are invalid), `ConflictError`/`NotFoundError`, opaque versions,
@@ -160,4 +158,4 @@ on the match.
    ```
 
 4. Add provider-specific tests (the `LocalFsStorageProvider` tests are a template) and document the
-   config above. For S3, the suite can run against MinIO in CI. Unit tests must not hit the network.
+   config above. Unit tests must not hit the network.

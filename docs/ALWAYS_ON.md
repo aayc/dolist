@@ -52,9 +52,8 @@ files, local-first editing or the safety model.
 
 ### Rejected alternatives
 
-- **Brain on the laptop, remote hands** (what the `cloud` execution provider stub describes): the
-  laptop still has to be awake, which is the problem this solves. The stub may later serve
-  disposable per-task sandboxes; it is not part of this plan.
+- **Brain on the laptop, remote hands** (a remote execution provider): the laptop still has to be
+  awake, which is the problem this solves.
 - **One cloud daemon, no local daemons:** loses offline editing and the plain folder on each
   device (principle 3).
 - **Clients talk to two daemons** (local for notes, remote for the agent): every client would need

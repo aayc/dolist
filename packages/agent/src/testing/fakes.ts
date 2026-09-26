@@ -24,8 +24,43 @@ import type {
   ShellResult,
   Workspace,
 } from "../execution/types";
-import type { LlmClient } from "../llm/types";
+import type { MockLlmResponder } from "../llm/mock";
+import { buildRequestBody } from "../llm/openrouter";
+import { type LlmClient, LlmError } from "../llm/types";
 import { createWebTools, type LookupAddresses } from "../tools/web";
+import type { FakeBrain } from "./brain/brain";
+import { brainRequestFromChat } from "./wire";
+
+// ── One-shot LLM ────────────────────────────────────────────────────────────
+
+/**
+ * The brain behind a `MockLlmClient` (the judge, `web_search`) without the HTTP fake: it sees the
+ * body the real OpenRouter client would send, and its failures read like that client's errors.
+ */
+export function brainResponder(brain: FakeBrain): MockLlmResponder {
+  return async (request) => {
+    const brainRequest = brainRequestFromChat(buildRequestBody(request.model ?? "", request));
+    const turn = brain.decide(brainRequest);
+    if (turn.hang) {
+      await new Promise<never>((_, reject) => {
+        const abort = () => reject(new LlmError("Request aborted", undefined, false));
+        request.signal?.addEventListener("abort", abort, { once: true });
+      });
+    }
+    if (turn.error) {
+      const status = turn.error.status ?? 500;
+      const message = `OpenRouter ${status}: ${turn.error.message}`;
+      return new LlmError(message, status, status === 429 || status >= 500);
+    }
+    const usage = brain.usage(brainRequest, turn);
+    return {
+      text: turn.text ?? "",
+      usage: { inputTokens: usage.promptTokens, outputTokens: usage.completionTokens, costUsd: 0 },
+      ...(turn.finishReason ? { finishReason: turn.finishReason } : {}),
+      ...(turn.citations?.length ? { citations: turn.citations } : {}),
+    };
+  };
+}
 
 // ── Web ─────────────────────────────────────────────────────────────────────
 

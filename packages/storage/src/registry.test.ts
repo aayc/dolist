@@ -5,8 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { LocalFsStorageProvider } from "./local-fs";
 import { MemoryStorageProvider } from "./memory";
 import { createStorageProvider, createSyncTarget } from "./registry";
-import { S3StorageProvider } from "./s3";
-import { NotImplementedError } from "./types";
 
 describe("storage registry", () => {
   let dir: string;
@@ -41,16 +39,6 @@ describe("storage registry", () => {
     await s.dispose();
   });
 
-  it("creates the S3 provider stub", async () => {
-    const s = await createStorageProvider({ kind: "s3", bucket: "notes", prefix: "/vaults//me" });
-    expect(s).toBeInstanceOf(S3StorageProvider);
-    expect(s.displayName).toBe("s3://notes/vaults/me/");
-    await expect(s.list()).rejects.toBeInstanceOf(NotImplementedError);
-    await expect(s.write("a.md", "x")).rejects.toBeInstanceOf(NotImplementedError);
-    expect(() => s.watch(() => {})).toThrow(NotImplementedError);
-    await expect(s.dispose()).resolves.toBeUndefined();
-  });
-
   it("creates sync targets", async () => {
     expect(await createSyncTarget({ kind: "none" })).toBeNull();
 
@@ -59,9 +47,5 @@ describe("storage registry", () => {
     expect(local).toBeInstanceOf(LocalFsStorageProvider);
     expect((await stat(root)).isDirectory()).toBe(true);
     await local?.dispose();
-
-    const s3 = await createSyncTarget({ kind: "s3", bucket: "notes", region: "eu-west-1" });
-    expect(s3).toBeInstanceOf(S3StorageProvider);
-    expect(s3?.id).toMatch(/^s3-/);
   });
 });

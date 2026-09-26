@@ -2,7 +2,7 @@
 
 Everything the app persists, where it lives, who owns it, and the rules that keep old, new and
 other devices' copies compatible. The files in the vault sidecar (`.daily-do-list/`) sync with the
-notes (a vault in iCloud Drive, the SyncEngine, S3 later) and the planned iPhone app will read
+notes (a vault in iCloud Drive, the SyncEngine, the sync service) and the planned iPhone app will read
 them, so their formats are a data contract: versioned, validated, backward compatible and robust to
 corruption.
 
@@ -90,8 +90,7 @@ never rewritten, only appended to.
    rewritten from their schema, so unknown fields are **dropped** on the next write.
    `settings.json` is patched in place and **keeps** unknown keys and values it cannot use.
 7. **Writes are atomic and conditional.** Owners always write whole files; atomicity is the
-   provider's job (LocalFs writes a temp file, fsyncs and renames; the memory provider is atomic;
-   S3 PUTs are atomic). Each write passes `ifMatch` with the content version last read or written.
+   provider's job (LocalFs writes a temp file, fsyncs and renames; the memory provider is atomic). Each write passes `ifMatch` with the content version last read or written.
    A conflict means someone else changed the file: it is re-read and classified again (newer →
    stop writing, corrupt → quarantine, valid → the owner merges or overwrites, see each format),
    then written again (up to 4 attempts; after that the save fails and the owner's usual retry

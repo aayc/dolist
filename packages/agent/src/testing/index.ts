@@ -1,7 +1,8 @@
 /**
  * Test utilities for the agent system (`@ddl/agent/testing`): the FakeBrain (a deterministic
- * stand-in for the model), the HTTP fake of OpenRouter, the in-process script and LLM client, fake
- * web/browser/execution/connectors, and `createFakeAgentRuntime`. Never imported by production
+ * stand-in for the model), the HTTP fake of OpenRouter, the in-process script, `brainResponder`
+ * (the brain behind a `MockLlmClient`), fake web/browser/execution/connectors, and
+ * `createFakeAgentRuntime`. Never imported by production
  * code, except the brain and script, which power `DDL_AGENT_MODE=mock`. See README.md.
  */
 export {
@@ -30,8 +31,6 @@ export {
   desiredCapabilities,
   grantableCapabilities,
   quickAnswer,
-  type RoutineRequest,
-  routineRequest,
   type TriageDecision,
   triage,
 } from "./brain/intent";
@@ -58,6 +57,7 @@ export {
 } from "./fake-openrouter";
 export {
   type BrowserEffect,
+  brainResponder,
   createFakeBrowser,
   createFakeConnectors,
   createFakeExecution,
@@ -73,7 +73,6 @@ export {
   type SentMessage,
 } from "./fakes";
 export { synthesizeJson, validateJson } from "./json-schema";
-export { createFakeLlmClient, type FakeLlmClient } from "./llm-client";
 export {
   createFakeAgentScript,
   type FakeAgentScriptOptions,

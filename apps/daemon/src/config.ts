@@ -143,38 +143,20 @@ const RemoteSyncSchema = z.strictObject({
 const SyncSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("none") }),
   z.strictObject({ kind: z.literal("local"), root: PathSchema }),
-  z.strictObject({
-    kind: z.literal("s3"),
-    bucket: z.string().trim().min(1),
-    prefix: z.string().optional(),
-    region: z.string().optional(),
-    endpoint: z.url().optional(),
-    profile: z.string().optional(),
-    forcePathStyle: z.boolean().optional(),
-  }),
   RemoteSyncSchema,
 ]);
 
-const ExecutionSchema = z.discriminatedUnion("kind", [
-  z.strictObject({
-    kind: z.literal("local"),
-    browser: z
-      .strictObject({
-        headless: z.boolean().optional(),
-        channel: z.enum(["chrome", "chromium", "msedge"]).optional(),
-        executablePath: PathSchema.optional(),
-      })
-      .optional(),
-    computer: z.strictObject({ enabled: z.boolean() }).optional(),
-  }),
-  z.strictObject({
-    kind: z.literal("cloud"),
-    endpoint: z.url(),
-    apiKeyEnv: z
-      .string()
-      .regex(/^[A-Z_][A-Z0-9_]*$/, "must be the NAME of an environment variable, not the key"),
-  }),
-]);
+const ExecutionSchema = z.strictObject({
+  kind: z.literal("local"),
+  browser: z
+    .strictObject({
+      headless: z.boolean().optional(),
+      channel: z.enum(["chrome", "chromium", "msedge"]).optional(),
+      executablePath: PathSchema.optional(),
+    })
+    .optional(),
+  computer: z.strictObject({ enabled: z.boolean() }).optional(),
+});
 
 const OriginSchema = z
   .string()
@@ -335,10 +317,7 @@ export function summarizeConfig(
     sync:
       config.sync.kind === "remote" ? `remote (${safeHost(config.sync.url)})` : config.sync.kind,
     placement: config.placement,
-    execution:
-      execution.kind === "local"
-        ? `local (browser ${execution.browser?.headless === false ? "headed" : "headless"}, computer use ${execution.computer?.enabled ? "on" : "off"})`
-        : `cloud (${safeHost(execution.endpoint)})`,
+    execution: `local (browser ${execution.browser?.headless === false ? "headed" : "headless"}, computer use ${execution.computer?.enabled ? "on" : "off"})`,
     computerHelper: config.computerHelper.path
       ? `${displayPath(config.computerHelper.path, homedir)} (${config.computerHelper.source})`
       : (config.computerHelper.problem ?? "none"),
@@ -436,7 +415,6 @@ function resolveExecution(
   paths: { homedir: string; base: string },
   found: { helper: string | undefined; drawingRenderer: string | undefined },
 ): ExecutionConfig {
-  if (execution?.kind === "cloud") return execution;
   const browser = { headless: true, ...execution?.browser };
   if (browser.executablePath)
     browser.executablePath = resolveUserPath(browser.executablePath, paths);

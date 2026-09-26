@@ -1979,9 +1979,9 @@ Type: `"idle"` | `"syncing"` | `"error"` | `"disabled"`
 
 #### SyncTargetKind
 
-`none`, `local` (another folder), `s3`, or `remote` (the sync service shared with other devices).
+`none`, `local` (another folder), or `remote` (the sync service shared with other devices).
 
-Type: `"none"` | `"local"` | `"s3"` | `"remote"`
+Type: `"none"` | `"local"` | `"remote"`
 
 #### SyncStatusResponse
 
