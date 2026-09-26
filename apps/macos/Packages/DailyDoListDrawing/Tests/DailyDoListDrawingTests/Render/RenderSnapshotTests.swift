@@ -1,5 +1,6 @@
 import CoreGraphics
 import DailyDoListDrawingModel
+import DailyDoListUITestSupport
 import Foundation
 import ImageIO
 import Testing
@@ -16,7 +17,7 @@ struct RenderSnapshotTests {
     let scene = TestScenes.gallery()
     let image = try #require(DrawingImage.render(scene, scale: 2, theme: theme))
     _ = try Pixels.writePNG(image, name: "gallery-\(theme.rawValue)")
-    #expect(Pixels.distinctColors(image) > 40, "the render looks blank")
+    #expect(distinctColors(image) > 40, "the render looks blank")
     let corner = Pixels.color(image, x: 2, y: 2)
     if theme == .light {
       #expect(corner.r == 255 && corner.g == 255 && corner.b == 255)
@@ -31,7 +32,7 @@ struct RenderSnapshotTests {
     for theme in DrawingTheme.allCases {
       let image = try #require(DrawingImage.render(document.scene, scale: 2, theme: theme))
       _ = try Pixels.writePNG(image, name: "plugin-fixture-\(theme.rawValue)")
-      #expect(Pixels.distinctColors(image) > 20)
+      #expect(distinctColors(image) > 20)
     }
   }
 
@@ -67,7 +68,7 @@ struct RenderSnapshotTests {
     let image = try #require(
       DrawingImage.render(ExcalidrawScene(elements: elements), scale: 2, theme: .light))
     _ = try Pixels.writePNG(image, name: "sloppiness")
-    #expect(Pixels.distinctColors(image) > 10)
+    #expect(distinctColors(image) > 10)
   }
 
   @Test func rendersStrokeStylesAndWidths() throws {
@@ -88,7 +89,7 @@ struct RenderSnapshotTests {
     let image = try #require(
       DrawingImage.render(ExcalidrawScene(elements: elements), scale: 2, theme: .light))
     _ = try Pixels.writePNG(image, name: "stroke-styles")
-    #expect(Pixels.distinctColors(image) > 4)
+    #expect(distinctColors(image) > 4)
   }
 
   @Test func rendersEveryArrowhead() throws {
@@ -109,7 +110,7 @@ struct RenderSnapshotTests {
       let image = try #require(
         DrawingImage.render(ExcalidrawScene(elements: elements), scale: 2, theme: theme))
       _ = try Pixels.writePNG(image, name: "arrowheads-\(theme.rawValue)")
-      #expect(Pixels.distinctColors(image) > 4)
+      #expect(distinctColors(image) > 4)
     }
   }
 
@@ -118,7 +119,7 @@ struct RenderSnapshotTests {
     let first = try #require(DrawingImage.render(scene, scale: 1, theme: .light))
     let second = try #require(
       DrawingImage.render(scene, scale: 1, theme: .light, renderer: SceneRenderer()))
-    #expect(Pixels.rgba(first) == Pixels.rgba(second))
+    #expect(rgbaBytes(first) == rgbaBytes(second))
   }
 
   @Test func solidFillsPaintTheBackgroundColor() throws {

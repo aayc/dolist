@@ -4,7 +4,8 @@ import PackageDescription
 // UI pieces every AppKit/SwiftUI package of the app shares: tooltips (one animated panel for the
 // whole app, with keycaps), the keycap view, the pointing-hand cursor, and the chrome button
 // styles. The app shell, the agent UI and the editor use it; it depends on nothing.
-// DailyDoListUITestSupport lets their tests find tooltips and draw them into snapshots.
+// DailyDoListUITestSupport lets their tests find tooltips, draw them into snapshots and tell a
+// snapshot from a blank one.
 let package = Package(
   name: "DailyDoListUI",
   platforms: [.macOS(.v14)],

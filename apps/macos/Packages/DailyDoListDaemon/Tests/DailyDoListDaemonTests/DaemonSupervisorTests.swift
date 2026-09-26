@@ -60,7 +60,7 @@ struct DaemonSupervisorTests {
     #expect(harness.supervisor.resolvedEntry?.source == .appBundle)
     #expect(harness.supervisor.logLines.contains { $0.hasPrefix("[supervisor] Launched") })
     #expect(
-      await harness.waitUntil { harness.supervisor.logLines.contains("listening") },
+      await waitUntil { harness.supervisor.logLines.contains("listening") },
       "output is pumped asynchronously")
   }
 
@@ -128,7 +128,7 @@ struct DaemonSupervisorTests {
     _ = try #require(await harness.supervisor.start())
 
     #expect(
-      await harness.waitUntil {
+      await waitUntil {
         harness.files.readString(at: cacheFile)?.contains("/opt/new/bin") == true
       })
   }
@@ -314,7 +314,7 @@ struct DaemonSupervisorTests {
     first.crash(status: 1)
 
     #expect(
-      await harness.waitUntil {
+      await waitUntil {
         harness.machine.processes.count == 2 && harness.supervisor.state.isRunning
       })
     await collector.value
@@ -326,7 +326,7 @@ struct DaemonSupervisorTests {
     #expect(harness.clock.sleeps.contains(.seconds(1)), "first backoff is 1 s")
     #expect(harness.supervisor.lastError == nil)
     #expect(
-      await harness.waitUntil { harness.supervisor.logLines.contains("fatal: something broke") })
+      await waitUntil { harness.supervisor.logLines.contains("fatal: something broke") })
     #expect(
       harness.commands.calls.filter { $0.arguments == ["--version"] }.count == 1,
       "restarts reuse the resolved Node")
@@ -349,7 +349,7 @@ struct DaemonSupervisorTests {
       status: DaemonSupervisor.restartExitStatus, output: ["Restarting to open ~/Imported…"])
 
     #expect(
-      await harness.waitUntil {
+      await waitUntil {
         harness.machine.processes.count == 2 && harness.supervisor.state.isRunning
       })
     await collector.value
@@ -365,7 +365,7 @@ struct DaemonSupervisorTests {
     for round in 1...6 {
       try #require(harness.lastProcess).crash(status: DaemonSupervisor.restartExitStatus)
       #expect(
-        await harness.waitUntil {
+        await waitUntil {
           harness.machine.processes.count == round + 1 && harness.supervisor.state.isRunning
         })
     }
@@ -373,7 +373,7 @@ struct DaemonSupervisorTests {
     try #require(harness.lastProcess).crash(status: 1)
 
     #expect(
-      await harness.waitUntil {
+      await waitUntil {
         harness.machine.processes.count == 8 && harness.supervisor.state.isRunning
       })
     #expect(
@@ -390,7 +390,7 @@ struct DaemonSupervisorTests {
 
     harness.lastProcess?.crash(status: 1)
 
-    #expect(await harness.waitUntil { harness.supervisor.state.isFailed })
+    #expect(await waitUntil { harness.supervisor.state.isFailed })
     let backoffs = harness.clock.sleeps.filter { $0 >= .seconds(1) }
     #expect(backoffs == [.seconds(1), .seconds(2), .seconds(4), .seconds(8)])
     #expect(harness.machine.requests.count == 5)
@@ -414,7 +414,7 @@ struct DaemonSupervisorTests {
       let process = try #require(harness.lastProcess)
       process.crash()
       #expect(
-        await harness.waitUntil {
+        await waitUntil {
           harness.machine.processes.count == round + 1 && harness.supervisor.state.isRunning
         })
       harness.clock.advance(by: .seconds(121))
@@ -431,13 +431,13 @@ struct DaemonSupervisorTests {
     #expect(harness.supervisor.state.isAttached)
 
     harness.machine.listener = .nobody
-    #expect(await harness.waitUntil { harness.clock.parkedCount == 1 })
+    #expect(await waitUntil { harness.clock.parkedCount == 1 })
     harness.clock.releaseParked()
-    #expect(await harness.waitUntil { harness.clock.parkedCount == 1 })
+    #expect(await waitUntil { harness.clock.parkedCount == 1 })
     #expect(harness.supervisor.state.isAttached, "one missed check is tolerated")
     harness.clock.releaseParked()
 
-    #expect(await harness.waitUntil { harness.supervisor.state.isRunning })
+    #expect(await waitUntil { harness.supervisor.state.isRunning })
     #expect(harness.machine.requests.count == 1)
     #expect(
       harness.supervisor.state.connection?.token == "ext", "the new daemon reuses the token file")
@@ -448,9 +448,9 @@ struct DaemonSupervisorTests {
     harness.machine.runExternalDaemon()
     _ = try #require(await harness.supervisor.start())
 
-    #expect(await harness.waitUntil { harness.clock.parkedCount == 1 })
+    #expect(await waitUntil { harness.clock.parkedCount == 1 })
     harness.clock.releaseParked()
-    #expect(await harness.waitUntil { harness.clock.parkedCount == 1 })
+    #expect(await waitUntil { harness.clock.parkedCount == 1 })
 
     #expect(harness.supervisor.state.isAttached)
     #expect(harness.machine.healthChecks == 2)
@@ -507,7 +507,7 @@ struct DaemonSupervisorTests {
         pollInterval: .seconds(90), attachedCheckInterval: .seconds(300)))
     harness.machine.script(.neverHealthy)
     let start = Task { await harness.supervisor.start() }
-    #expect(await harness.waitUntil { harness.clock.parkedCount == 1 })
+    #expect(await waitUntil { harness.clock.parkedCount == 1 })
     let process = try #require(harness.lastProcess)
 
     await harness.supervisor.stop()
@@ -523,7 +523,7 @@ struct DaemonSupervisorTests {
     _ = try #require(await harness.supervisor.start())
     harness.lastProcess?.crash()
     #expect(
-      await harness.waitUntil {
+      await waitUntil {
         harness.supervisor.state.restartAttempt == 1 && harness.clock.parkedCount == 1
       })
 
@@ -539,7 +539,7 @@ struct DaemonSupervisorTests {
       restartPolicy: DaemonRestartPolicy(initialDelay: .seconds(100), maxDelay: .seconds(100)))
     _ = try #require(await harness.supervisor.start())
     harness.lastProcess?.crash()
-    #expect(await harness.waitUntil { harness.clock.parkedCount == 1 })
+    #expect(await waitUntil { harness.clock.parkedCount == 1 })
 
     let connection = await harness.supervisor.start()
 
@@ -617,7 +617,7 @@ struct DaemonSupervisorTests {
 
     process.emit((1...1_500).map { "line \($0)" })
 
-    #expect(await harness.waitUntil { harness.supervisor.logLines.last == "line 1500" })
+    #expect(await waitUntil { harness.supervisor.logLines.last == "line 1500" })
     #expect(harness.supervisor.logLines.count == DaemonSupervisor.logCapacity)
     #expect(harness.supervisor.logLines.first == "line 501")
     harness.supervisor.clearLogs()
