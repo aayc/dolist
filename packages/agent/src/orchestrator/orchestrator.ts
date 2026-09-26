@@ -92,8 +92,6 @@ export interface OrchestratorOptions {
   batchWindowMs?: number;
   /** Subagent reports wait this long, to share a turn with other events. */
   reportDelayMs?: number;
-  /** A fresh session is started after this many turns to keep latency low. */
-  maxTurnsPerSession?: number;
   /** A turn that takes longer is aborted and its tasks marked failed. */
   turnTimeoutMs?: number;
   /** After each turn: the error, or null when it succeeded. */
@@ -106,8 +104,6 @@ export interface OrchestratorOptions {
   drawings?: Pick<DrawingDescriptions, "blocks" | "blockFor">;
   /** What it is doing (`orchestrator.activity`), whenever that changes. */
   onActivity?: (activity: OrchestratorActivity) => void;
-  /** See `ACTING_LINGER_MS`. */
-  actingLingerMs?: number;
 }
 
 type QueueItem =
@@ -170,6 +166,8 @@ const CHAT_CONTEXT_MESSAGES = 8;
 /** The note view of a note that is itself a drawing. */
 const DRAWING_NOTE_TEXT = "(This note is an Excalidraw drawing: its scene data isn't shown.)";
 const TRIGGER_TASK_CHARS = 60;
+/** A fresh session is started after this many turns to keep latency low. */
+const MAX_TURNS_PER_SESSION = 30;
 
 const CHANGE_PRIORITY: Record<DigestChange, number> = {
   updated: 0,
@@ -192,7 +190,6 @@ export class Orchestrator {
   private readonly logger: Logger;
   private readonly batchWindowMs: number;
   private readonly reportDelayMs: number;
-  private readonly maxTurnsPerSession: number;
   private readonly turnTimeoutMs: number;
   private readonly queue = new Map<string, QueueItem>();
   private readonly previousStatus = new Map<string, TaskAgentStatus>();
@@ -214,7 +211,6 @@ export class Orchestrator {
     this.logger = options.logger ?? silentLogger;
     this.batchWindowMs = options.batchWindowMs ?? 150;
     this.reportDelayMs = options.reportDelayMs ?? 1_500;
-    this.maxTurnsPerSession = options.maxTurnsPerSession ?? 30;
     this.turnTimeoutMs = options.turnTimeoutMs ?? 180_000;
     this.host = this.createHost();
     this.activity = new OrchestratorActivityPublisher({
@@ -228,7 +224,6 @@ export class Orchestrator {
         }
       },
       now: this.now,
-      ...(options.actingLingerMs !== undefined ? { lingerMs: options.actingLingerMs } : {}),
     });
   }
 
@@ -682,7 +677,7 @@ export class Orchestrator {
       current &&
       current.harness === harness &&
       current.date === date &&
-      current.turns < this.maxTurnsPerSession
+      current.turns < MAX_TURNS_PER_SESSION
     ) {
       return current;
     }

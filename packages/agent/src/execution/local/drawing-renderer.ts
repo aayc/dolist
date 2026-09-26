@@ -76,7 +76,6 @@ export interface ChromiumDrawingRendererOptions {
   idleMs?: number;
   /** One render, launching the browser included. Default 30 s. */
   timeoutMs?: number;
-  cacheMaxBytes?: number;
   logger?: Logger;
   /** Opens the page (tests: a fake). Default: headless Chromium through playwright-core. */
   openPage?: (options: OpenRenderPageOptions) => Promise<RenderPage>;
@@ -97,7 +96,6 @@ export class ChromiumDrawingRenderer implements DrawingRenderer {
     this.logger = options.logger ?? silentLogger;
     this.cache = new RenderCache({
       dir: options.cacheDir,
-      ...(options.cacheMaxBytes !== undefined ? { maxBytes: options.cacheMaxBytes } : {}),
       logger: this.logger,
     });
   }

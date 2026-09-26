@@ -9,6 +9,9 @@ import { DEFAULT_SCREENCAST, type ScreencastOptions } from "./browser-screencast
 import { type BrowserSessionOptions, LocalBrowserSession } from "./browser-session";
 import { DEFAULT_SNAPSHOT_MAX_CHARS } from "./browser-snapshot";
 
+/** Tabs kept open at once; the least recently used idle session is closed beyond this. */
+const MAX_SESSIONS = 8;
+
 export interface LocalBrowserOptions {
   /** Persistent profile directory (logins survive across tasks). */
   profileDir: string;
@@ -18,8 +21,6 @@ export interface LocalBrowserOptions {
   viewport?: { width: number; height: number };
   /** Chromium's OS sandbox. Default on, except Linux where CI containers usually can't provide it. */
   sandbox?: boolean;
-  /** Tabs kept open at once; the least recently used idle session is closed beyond this. */
-  maxSessions?: number;
   snapshotMaxChars?: number;
   actionTimeoutMs?: number;
   navigationTimeoutMs?: number;
@@ -133,9 +134,8 @@ export class LocalBrowserController implements BrowserController {
   }
 
   private evictIdleSessions(): void {
-    const limit = this.options.maxSessions ?? 8;
     for (const [key, session] of this.sessions) {
-      if (this.sessions.size < limit) return;
+      if (this.sessions.size < MAX_SESSIONS) return;
       if (session.busy) continue;
       this.sessions.delete(key);
       this.logger.debug("closing least recently used browser session", { session: key });

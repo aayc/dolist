@@ -36,7 +36,7 @@ export class AcpTimeoutError extends Error {
 export const METHOD_NOT_FOUND = -32601;
 const INTERNAL_ERROR = -32603;
 const STDERR_TAIL_BYTES = 8 * 1024;
-const DEFAULT_MAX_LINE_BYTES = 64 * 1024 * 1024;
+const MAX_LINE_BYTES = 64 * 1024 * 1024;
 
 export interface AcpExit {
   code: number | null;
@@ -58,7 +58,6 @@ export interface AcpConnectionOptions extends AcpHandlers {
   cwd: string;
   env: Record<string, string>;
   logger?: Logger;
-  maxLineBytes?: number;
 }
 
 interface PendingRequest {
@@ -70,7 +69,6 @@ interface PendingRequest {
 
 export class AcpConnection {
   private readonly child: ChildProcess;
-  private readonly options: AcpConnectionOptions;
   private handlers: AcpHandlers;
   private readonly logger: Logger;
   private readonly pending = new Map<number, PendingRequest>();
@@ -81,7 +79,6 @@ export class AcpConnection {
   private closedWith: AcpClosedError | undefined;
 
   private constructor(options: AcpConnectionOptions) {
-    this.options = options;
     this.handlers = options;
     this.logger = options.logger ?? silentLogger;
     this.child = spawn(options.command, [...options.args], {
@@ -192,7 +189,7 @@ export class AcpConnection {
       if (line) this.onLine(line);
       newline = this.buffer.indexOf("\n");
     }
-    if (this.buffer.length > (this.options.maxLineBytes ?? DEFAULT_MAX_LINE_BYTES)) {
+    if (this.buffer.length > MAX_LINE_BYTES) {
       this.logger.warn("ACP message too large; closing the connection");
       this.buffer = "";
       void this.close(0);

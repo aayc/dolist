@@ -37,24 +37,22 @@ import type { NoteEvent, TaskEvent } from "./types";
 
 export const TASK_STATE_DIR = PERSISTED_PATHS.taskState;
 
-const DEFAULT_ACTIVITY_WINDOW_MS = 1_500;
+/** Editor activity on a task's line within this window postpones its settle. */
+const ACTIVITY_WINDOW_MS = 1_500;
 const DEFAULT_QUICK_SETTLE_MS = 700;
-const DEFAULT_PERSIST_DELAY_MS = 300;
+const PERSIST_DELAY_MS = 300;
 
 export interface TaskWatcherOptions {
   storage: StorageProvider;
   settings: AppSettings;
   now?: () => number;
   logger?: Logger;
-  /** Editor activity on a task's line within this window postpones its settle. */
-  activityWindowMs?: number;
   /**
    * Settle delay used when the editor reports the cursor on another line than the task, or than the
    * request-like lines of the note (the user moved on, e.g. pressed Enter). Capped by
    * `settings.agent.settleMs`; set it to `Infinity` to always wait the full settle delay.
    */
   quickSettleMs?: number;
-  persistDelayMs?: number;
   idFactory?: () => string;
 }
 
@@ -177,9 +175,7 @@ export class TaskWatcher implements TaskLookup {
   private readonly storage: StorageProvider;
   private readonly now: () => number;
   private readonly logger: Logger;
-  private readonly activityWindowMs: number;
   private readonly quickSettleMs: number;
-  private readonly persistDelayMs: number;
   private readonly idFactory: (() => string) | undefined;
   private readonly emitter = new Emitter<TaskWatcherEvents>();
   private readonly notes = new Map<string, NoteState>();
@@ -199,9 +195,7 @@ export class TaskWatcher implements TaskLookup {
     this.settings = options.settings;
     this.now = options.now ?? Date.now;
     this.logger = options.logger ?? silentLogger;
-    this.activityWindowMs = options.activityWindowMs ?? DEFAULT_ACTIVITY_WINDOW_MS;
     this.quickSettleMs = options.quickSettleMs ?? DEFAULT_QUICK_SETTLE_MS;
-    this.persistDelayMs = options.persistDelayMs ?? DEFAULT_PERSIST_DELAY_MS;
     this.idFactory = options.idFactory;
   }
 
@@ -324,9 +318,9 @@ export class TaskWatcher implements TaskLookup {
       const activity = this.activity.get(path);
       const quietFor = activity ? this.now() - activity.at : Number.POSITIVE_INFINITY;
       const left = deadline - this.now();
-      if (quietFor >= this.activityWindowMs || left <= 0) return;
+      if (quietFor >= ACTIVITY_WINDOW_MS || left <= 0) return;
       await new Promise((resolve) =>
-        setTimeout(resolve, Math.max(10, Math.min(this.activityWindowMs - quietFor, left))),
+        setTimeout(resolve, Math.max(10, Math.min(ACTIVITY_WINDOW_MS - quietFor, left))),
       );
     }
   }
@@ -672,9 +666,9 @@ export class TaskWatcher implements TaskLookup {
     const settleMs = this.settings.agent.settleMs;
     const due = lastChangeAt + settleMs;
     const activity = this.activity.get(notePath);
-    if (!activity || this.now() - activity.at > this.activityWindowMs) return due;
+    if (!activity || this.now() - activity.at > ACTIVITY_WINDOW_MS) return due;
     return onLines(activity.line)
-      ? Math.max(due, activity.at + this.activityWindowMs)
+      ? Math.max(due, activity.at + ACTIVITY_WINDOW_MS)
       : Math.min(due, lastChangeAt + Math.min(this.quickSettleMs, settleMs));
   }
 
@@ -897,7 +891,7 @@ export class TaskWatcher implements TaskLookup {
     state.saveTimer = setTimeout(() => {
       state.saveTimer = undefined;
       void this.saveState(state);
-    }, this.persistDelayMs);
+    }, PERSIST_DELAY_MS);
   }
 
   private async saveState(state: NoteState): Promise<void> {

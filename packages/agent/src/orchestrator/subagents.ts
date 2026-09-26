@@ -109,8 +109,6 @@ export interface SubagentManagerOptions {
   onChange: () => void;
   now?: () => number;
   logger?: Logger;
-  /** Finished sessions kept warm for follow-ups; older ones are disposed (and re-primed later). */
-  maxIdleSessions?: number;
   /** The routine a task is a run of (its kickoff and `finish_task` change accordingly). */
   routineBrief?: (taskId: string) => RoutineBrief | undefined;
   /** Describes the drawings a task or its notes embed, for the kickoff. */
@@ -171,7 +169,8 @@ interface Run {
   lastActiveAt: number;
 }
 
-const DEFAULT_MAX_IDLE_SESSIONS = 8;
+/** Finished sessions kept warm for follow-ups; older ones are disposed (and re-primed later). */
+const MAX_IDLE_SESSIONS = 8;
 
 /**
  * Runs one harness session per task: concurrency-limited (FIFO queue), streaming into the task's
@@ -181,7 +180,6 @@ export class SubagentManager {
   private readonly options: SubagentManagerOptions;
   private readonly now: () => number;
   private readonly logger: Logger;
-  private readonly maxIdleSessions: number;
   private readonly runs = new Map<string, Run>();
   private readonly bySession = new Map<string, Run>();
   private readonly usedSessionIds = new Set<string>();
@@ -192,7 +190,6 @@ export class SubagentManager {
     this.options = options;
     this.now = options.now ?? Date.now;
     this.logger = options.logger ?? silentLogger;
-    this.maxIdleSessions = options.maxIdleSessions ?? DEFAULT_MAX_IDLE_SESSIONS;
   }
 
   runningCount(): number {
@@ -622,7 +619,7 @@ export class SubagentManager {
     const idle = [...this.runs.values()]
       .filter((run) => run.state === "idle" && run.session)
       .sort((a, b) => a.lastActiveAt - b.lastActiveAt);
-    while (idle.length > this.maxIdleSessions) {
+    while (idle.length > MAX_IDLE_SESSIONS) {
       const run = idle.shift()!;
       run.needsHistory = true;
       void this.disposeSession(run);

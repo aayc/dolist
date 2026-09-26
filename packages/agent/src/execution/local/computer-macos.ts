@@ -45,7 +45,6 @@ export interface MacComputerOptions {
   /** Pause between an action and the frame captured after it, so the UI has reacted. */
   settleMs?: number;
   runner?: CommandRunner;
-  tmpDir?: string;
   /** Name of the app that holds the permissions, for help texts. */
   hostName?: () => Promise<string | undefined>;
 }
@@ -61,7 +60,6 @@ export class MacComputerController implements ComputerController {
   private readonly maxWidth: number;
   private readonly settleMs: number;
   private readonly runner: CommandRunner;
-  private readonly tmpDir: string;
   private readonly mutex = new Mutex();
   private readonly frames: FrameHub;
   private readonly hostName: () => Promise<string | undefined>;
@@ -72,7 +70,6 @@ export class MacComputerController implements ComputerController {
     this.maxWidth = options.maxWidth ?? DEFAULT_SCREENSHOT_MAX_WIDTH;
     this.settleMs = options.settleMs ?? 300;
     this.runner = options.runner ?? execFileRunner;
-    this.tmpDir = options.tmpDir ?? tmpdir();
     this.hostName = options.hostName ?? (async () => undefined);
     this.frames = new FrameHub({ logger: this.logger });
   }
@@ -236,7 +233,7 @@ export class MacComputerController implements ComputerController {
   }
 
   private async grab(maxWidth: number): Promise<ComputerScreenshot> {
-    const dir = await mkdtemp(join(this.tmpDir, "ddl-screen-"));
+    const dir = await mkdtemp(join(tmpdir(), "ddl-screen-"));
     try {
       const raw = join(dir, "raw.jpg");
       const [, screen] = await Promise.all([
