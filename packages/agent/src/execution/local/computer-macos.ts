@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { errorMessage, type Logger, silentLogger, type Unsubscribe } from "@ddl/core";
+import { errorMessage, type Logger, silentLogger, sleep, type Unsubscribe } from "@ddl/core";
 import { ComputerPermissionError, ComputerUnavailableError, ExecutionError } from "../errors";
 import type {
   ComputerController,
@@ -205,7 +205,7 @@ export class MacComputerController implements ComputerController {
   /** Captures a frame showing the action's result, only when someone is watching. */
   private async afterAction(kind: string, point?: Point, text?: string): Promise<void> {
     if (this.frames.size === 0) return;
-    await new Promise((resolve) => setTimeout(resolve, this.settleMs));
+    await sleep(this.settleMs);
     try {
       await this.capture(this.maxWidth, (geometry) => ({
         kind,

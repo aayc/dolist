@@ -1,6 +1,6 @@
 import { fc, test } from "@fast-check/vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { debounce, deferred, sleep, TimeoutError, withTimeout } from "./async";
+import { debounce, deferred, raceAbort, sleep, TimeoutError, withTimeout } from "./async";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -206,5 +206,25 @@ describe("sleep", () => {
     await vi.advanceTimersByTimeAsync(10);
     await expect(ok).resolves.toBeUndefined();
     expect(() => later.abort()).not.toThrow();
+  });
+});
+
+describe("raceAbort", () => {
+  it("passes through results without a signal", async () => {
+    await expect(raceAbort(Promise.resolve(1), undefined)).resolves.toBe(1);
+  });
+
+  it("rejects as soon as the signal aborts", async () => {
+    const controller = new AbortController();
+    const never = new Promise<number>(() => {});
+    const raced = raceAbort(never, controller.signal);
+    controller.abort();
+    await expect(raced).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("rejects immediately for an aborted signal", async () => {
+    const controller = new AbortController();
+    controller.abort(new Error("stop"));
+    await expect(raceAbort(Promise.resolve(1), controller.signal)).rejects.toThrow("stop");
   });
 });

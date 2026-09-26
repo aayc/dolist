@@ -10,7 +10,7 @@
  * Adapted from OpenClaw (MIT): src/agents/mcp-client-lifecycle.ts (connect deadline race, disposal)
  * and Hermes Agent (MIT): tools/mcp_tool_common.py (`_jittered` backoff).
  */
-import { type Logger, silentLogger, truncate } from "@ddl/core";
+import { type Logger, raceAbort, silentLogger, truncate } from "@ddl/core";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SseError } from "@modelcontextprotocol/sdk/client/sse.js";
 import {
@@ -248,7 +248,7 @@ export class McpConnection {
     if (this.isClosed) return Promise.reject(this.closedError());
     if (this.session) return Promise.resolve(this.session);
     if (this.reconnecting) {
-      return abortable(this.reconnecting, signal).then(
+      return raceAbort(this.reconnecting, signal).then(
         () => this.session ?? Promise.reject(this.unavailableError()),
       );
     }
@@ -271,7 +271,7 @@ export class McpConnection {
       attempt.then(clear, clear);
       this.connecting = attempt;
     }
-    return abortable(this.connecting, signal);
+    return raceAbort(this.connecting, signal);
   }
 
   private adopt({ session, tools }: Opened): Session {
@@ -386,12 +386,12 @@ export class McpConnection {
     try {
       // Raced against the deadline: some transports (e.g. an SSE stream that never sends its
       // endpoint) ignore the request signal while starting.
-      await abortable(
+      await raceAbort(
         client.connect(handle.transport, { signal: deadline.signal, timeout: timeoutMs }),
         deadline.signal,
       );
       session.pid = handle.pid();
-      const tools = await abortable(this.fetchTools(client, deadline.signal), deadline.signal);
+      const tools = await raceAbort(this.fetchTools(client, deadline.signal), deadline.signal);
       return { session, tools };
     } catch (error) {
       await this.disposeSession(session);
@@ -696,25 +696,6 @@ export class McpConnection {
       { cause: this.failure },
     );
   }
-}
-
-function abortable<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
-  if (!signal) return promise;
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = () => reject(signal.reason);
-    if (signal.aborted) onAbort();
-    else signal.addEventListener("abort", onAbort, { once: true });
-    promise.then(
-      (value) => {
-        signal.removeEventListener("abort", onAbort);
-        resolve(value);
-      },
-      (error: unknown) => {
-        signal.removeEventListener("abort", onAbort);
-        reject(error);
-      },
-    );
-  });
 }
 
 /** Abortable sleep that never keeps the process alive on its own. */

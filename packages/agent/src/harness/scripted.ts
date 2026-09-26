@@ -3,7 +3,14 @@
  * model: it can stream text and call tools. Tool calls go through `beforeToolCall` exactly like the
  * real harness, so the safety gate and approval flow are exercised end to end.
  */
-import { createId, errorMessage, errorResult, type ToolResult, type ToolSpec } from "@ddl/core";
+import {
+  createId,
+  errorMessage,
+  errorResult,
+  sleep,
+  type ToolResult,
+  type ToolSpec,
+} from "@ddl/core";
 import type {
   AgentRole,
   Harness,
@@ -175,7 +182,7 @@ class ScriptedSession implements HarnessSession {
     for (const word of words) {
       if (signal.aborted) throw signal.reason;
       this.emit({ type: "text_delta", messageId, delta: word });
-      if (this.wordDelayMs > 0) await new Promise((r) => setTimeout(r, this.wordDelayMs));
+      if (this.wordDelayMs > 0) await sleep(this.wordDelayMs);
     }
     this.emit({ type: "message_end", messageId, text });
   }
@@ -185,7 +192,7 @@ class ScriptedSession implements HarnessSession {
     for (const word of text.split(/(?<=\s)/)) {
       if (signal.aborted) throw signal.reason;
       this.emit({ type: "thinking_delta", messageId, delta: word });
-      if (this.wordDelayMs > 0) await new Promise((r) => setTimeout(r, this.wordDelayMs));
+      if (this.wordDelayMs > 0) await sleep(this.wordDelayMs);
     }
   }
 

@@ -1,8 +1,7 @@
 import { type ChildProcess, spawn as nodeSpawn } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
-import { errorMessage, type Logger, silentLogger } from "@ddl/core";
+import { errorMessage, type Logger, silentLogger, sleep } from "@ddl/core";
 import { ComputerUnavailableError, ExecutionError } from "../../errors";
-import { abortReason } from "../../util/abort";
 import {
   HELPER_PROTOCOL_VERSION,
   HelperError,
@@ -112,7 +111,7 @@ export class HelperClient {
   }
 
   async call(method: HelperMethod, params: object, options: CallOptions = {}): Promise<unknown> {
-    if (options.signal?.aborted) throw abortReason(options.signal);
+    if (options.signal?.aborted) throw options.signal.reason;
     const running = await this.ensureRunning();
     return this.send(running, method, params, options);
   }
@@ -145,7 +144,7 @@ export class HelperClient {
         `The computer helper stopped unexpectedly; it restarts in ${Math.ceil(wait / 1000)} s. Try again then.`,
       );
     }
-    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    if (wait > 0) await sleep(wait);
     if (this.disposed) throw new ComputerUnavailableError("The computer helper was shut down.");
 
     const child = this.spawnHelper(this.options.command, this.options.args ?? ["serve"], {
@@ -283,10 +282,10 @@ export class HelperClient {
     const id = this.nextId++;
     const timeoutMs = options.timeoutMs ?? DEFAULT_HELPER_TIMEOUT_MS;
     const { signal } = options;
-    if (signal?.aborted) return Promise.reject(abortReason(signal));
+    if (signal?.aborted) return Promise.reject(signal.reason);
     return new Promise<unknown>((resolve, reject) => {
       let timer: ReturnType<typeof setTimeout> | undefined;
-      const onAbort = () => settle(() => reject(abortReason(signal!)));
+      const onAbort = () => settle(() => reject(signal!.reason));
       const settle = (done: () => void) => {
         if (!this.pending.delete(id)) return;
         clearTimeout(timer);

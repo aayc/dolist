@@ -2,13 +2,13 @@ import {
   errorMessage,
   errorResult,
   type Logger,
+  raceAbort,
   type ToolContent,
   type ToolExecutionContext,
   type ToolResult,
 } from "@ddl/core";
 import { ExecutionError } from "./errors";
 import type { BrowserSnapshot, Screenshot } from "./types";
-import { raceAbort } from "./util/abort";
 
 /** Malformed tool input: reported to the model, never thrown to the harness. */
 export class ToolInputError extends Error {

@@ -17,6 +17,7 @@ import {
   type DrawingScene,
   errorMessage,
   type Logger,
+  raceAbort,
   silentLogger,
 } from "@ddl/core";
 import { RenderCache } from "../../drawings/render-cache";
@@ -28,7 +29,6 @@ import {
   type RenderDrawingOptions,
   type RenderedDrawing,
 } from "../../drawings/renderer";
-import { raceAbort } from "../util/abort";
 import { Mutex } from "../util/mutex";
 
 /** The page's origin: never resolved, every request to it is answered from the page directory. */

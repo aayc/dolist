@@ -28,7 +28,7 @@ import {
 import path from "node:path";
 import { promisify } from "node:util";
 import type { Logger } from "@ddl/core";
-import { isRecord } from "@ddl/core";
+import { isRecord, sleep } from "@ddl/core";
 
 const execFileAsync = promisify(execFile);
 /** In a session's root: the pid of the CLI process it runs. */
@@ -274,7 +274,7 @@ async function exitsWithin(pid: number, ms: number): Promise<boolean> {
     } catch {
       return true;
     }
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await sleep(50);
   }
   return false;
 }
