@@ -1,5 +1,5 @@
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join, relative } from "node:path";
+import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { basename, dirname, join, relative } from "node:path";
 import { test as base, expect } from "@playwright/test";
 import { E2E_PORT } from "./ports";
 
@@ -81,10 +81,17 @@ export class Daemon {
     return readFile(join(this.vault, path), "utf8").catch(() => null);
   }
 
-  /** Writes a vault file on disk, as another app (or sync) would: the daemon sees it change. */
+  /**
+   * Writes a vault file on disk, as another app (or sync) would: the daemon sees it change. The
+   * write is atomic (a hidden temporary file renamed into place), so the daemon never reads it
+   * half-written.
+   */
   async write(path: string, content: string): Promise<void> {
-    await mkdir(dirname(join(this.vault, path)), { recursive: true });
-    await writeFile(join(this.vault, path), content);
+    const file = join(this.vault, path);
+    await mkdir(dirname(file), { recursive: true });
+    const temporary = join(dirname(file), `.${basename(file)}.${process.pid}.tmp`);
+    await writeFile(temporary, content);
+    await rename(temporary, file);
   }
 
   /** Deletes a vault file on disk, as another app would. */
