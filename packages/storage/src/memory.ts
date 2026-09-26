@@ -3,9 +3,9 @@ import {
   compareStrings,
   createId,
   hashString,
-  InvalidPathError,
   isHiddenPath,
   normalizePath,
+  toVaultPath,
   type Unsubscribe,
 } from "@ddl/core";
 import { toStorableText } from "./file-types";
@@ -102,34 +102,24 @@ export class MemoryStorageProvider implements StorageProvider {
   }
 
   async write(path: string, content: string, options: WriteOptions = {}): Promise<WriteResult> {
-    const p = toVaultPath(path);
-    if (this.folders.has(p)) throw new StorageError(`Not a file: "${p}"`, p);
-    const existing = this.files.get(p);
-    this.checkPrecondition(p, existing, options);
-    this.assertCanHoldFile(p);
-    const file = this.store(p, content);
-    this.emit({
-      kind: existing ? "modified" : "created",
-      path: p,
-      version: file.version,
-      self: true,
-    });
-    return {
-      path: p,
-      version: file.version,
-      mtime: file.mtime,
-      size: byteLength(file.content),
-      created: !existing,
-    };
+    return this.put(path, () => content, options);
   }
 
   async append(path: string, content: string, options: WriteOptions = {}): Promise<WriteResult> {
+    return this.put(path, (existing = "") => existing + content, options);
+  }
+
+  private put(
+    path: string,
+    contentFrom: (existing: string | undefined) => string,
+    options: WriteOptions,
+  ): WriteResult {
     const p = toVaultPath(path);
     if (this.folders.has(p)) throw new StorageError(`Not a file: "${p}"`, p);
     const existing = this.files.get(p);
     this.checkPrecondition(p, existing, options);
     this.assertCanHoldFile(p);
-    const file = this.store(p, (existing?.content ?? "") + content);
+    const file = this.store(p, contentFrom(existing?.content));
     this.emit({
       kind: existing ? "modified" : "created",
       path: p,
@@ -274,12 +264,6 @@ export class MemoryStorageProvider implements StorageProvider {
     if (this.rules.isIgnored(event.path)) return;
     for (const listener of [...this.listeners]) listener(event);
   }
-}
-
-function toVaultPath(input: string): string {
-  const p = normalizePath(input);
-  if (p === "") throw new InvalidPathError(input, "is empty");
-  return p;
 }
 
 function listPrefix(options: ListOptions): string {

@@ -24,6 +24,7 @@ import {
   type SyncWriteFileRequest,
   type SyncWriteResponse,
   silentLogger,
+  toVaultPath,
   type Unsubscribe,
 } from "@ddl/core";
 import { toStorableText } from "./file-types";
@@ -556,12 +557,6 @@ function toStorageError(error: SyncRequestError, path: string | undefined): Erro
     default:
       return error;
   }
-}
-
-function toVaultPath(input: string): string {
-  const p = normalizePath(input);
-  if (p === "") throw new InvalidPathError(input, "is empty");
-  return p;
 }
 
 function listPrefix(options: ListOptions): string {

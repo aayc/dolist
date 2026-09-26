@@ -33,6 +33,13 @@ export function normalizePath(input: string): string {
 }
 
 /** True when `input` normalizes cleanly and stays inside the vault. */
+/** `normalizePath`, refusing the vault root: the path of a file or folder in it. */
+export function toVaultPath(input: string): string {
+  const p = normalizePath(input);
+  if (p === "") throw new InvalidPathError(input, "is empty");
+  return p;
+}
+
 export function isSafeVaultPath(input: string): boolean {
   try {
     return normalizePath(input).length > 0;
