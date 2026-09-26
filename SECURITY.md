@@ -150,7 +150,11 @@ every route) only ever opens fixed System Settings deep links.
 
 **Secrets.** API keys live outside the repository, in `~/.daily-do-list/.env` or the process
 environment. They are read at runtime and never logged. This public repository is scanned on every
-commit and push: pre-commit and pre-push hooks, plus gitleaks and CodeQL in CI.
+commit and push by the pre-commit and pre-push hooks (the repository's secret scan and gitleaks;
+the pre-push hook checks every commit being pushed and refuses to run without gitleaks). Work
+lands on `main` from branches the maintainer merges, and CI's secret scan, gitleaks over the full
+history and CodeQL run on each branch before it merges and on `main` after (dispatched by hand for
+now; see [docs/CI.md](docs/CI.md)).
 
 **MCP servers and execution.** MCP servers you configure in `~/.daily-do-list/mcp.json` run with
 your user privileges; stdio servers are local processes. Their tools go through the safety gate, but

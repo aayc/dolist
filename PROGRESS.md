@@ -20,8 +20,11 @@ the Azure VM.
    keeps granted permissions across builds; on a new Mac, create it, build, then grant
    Accessibility and Screen Recording again (Settings → Computer Use guides you).
 4. In-flight work is on the pushed branches below: `git worktree add ../<name> <branch>`.
-5. CI doesn't run on push. Dispatch it on a branch or `main`:
-   `gh workflow run ci.yml --ref <branch>` (also `macos.yml`, `security.yml`).
+5. CI doesn't start on push or pull requests (the triggers are declared, but GitHub hasn't fired
+   them since the first push; see `docs/CI.md`, "How runs start today"). Dispatch it on each
+   branch before merging and on `main` after pushing:
+   `gh workflow run ci.yml --repo aayc/dolist --ref <branch>` (also `security.yml`, `macos.yml`,
+   `linux-bundle.yml`).
 
 ## Shipped on `main` (newest first)
 
@@ -137,6 +140,11 @@ Open: browser pairing over https stays fixme in the e2e harness (no TLS proxy th
 ## Next up (not started)
 
 - **The Azure VM** (above): the next step once the user is back.
+- **CI triggers** (the user, in the repository settings): pushes and pull requests start no
+  GitHub Actions runs, and nothing in the repository explains it (details in `docs/CI.md`). Turn
+  Actions off and on again for the repository, or disable and re-enable each workflow, then
+  check that the next push starts runs; if not, ask GitHub Support. Until then, CI is dispatched
+  by hand.
 - **B0 binary files:** attachment sync and file serving ([spec](docs/specs/obsidian-migration.md)).
 - **P rendering parity:** images (on the drawings' embed layer), tables, callouts, backlinks, on
   the web and the Mac.
@@ -153,7 +161,9 @@ Open: browser pairing over https stays fixme in the e2e harness (no TLS proxy th
   home-folder fix): a single file held in a variable, a project folder's `.env` read recursively,
   subfolders of personal folders, `~/Library/Preferences`.
 - **iPhone app:** deferred; the web app covers mobile for now. Plan in
-  [apps/mobile/PLAN.md](apps/mobile/PLAN.md); needs full Xcode and remote access (S1) first.
+  [apps/mobile/PLAN.md](apps/mobile/PLAN.md). Remote access, device tokens and pairing are built;
+  still needed first: full Xcode, a QR code on the pairing screens, and an atomic daily-note
+  append in the daemon.
 - **Mac:** make sure the floating computer-access guide can't cover the app's controls and closes
   reliably once access is granted.
 - **App control:** long, virtualized lists only expose their visible rows (an app showed 11 of 14
