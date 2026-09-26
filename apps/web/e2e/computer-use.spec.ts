@@ -1,11 +1,22 @@
-import { expect, test } from "./fixtures";
+import { expect, startDaemon, test } from "./fixtures";
 import { openApp } from "./helpers";
 
+/**
+ * Computer use exists only on a Mac, with the Mac's own permissions: the daemon's test hooks
+ * (DDL_TEST_HOOKS=1, apps/daemon/src/test-hooks.ts) simulate one, and opening a privacy pane allows
+ * its permission a moment later instead of opening System Settings.
+ */
+const mac = (access: "missing" | "allowed") => ({
+  daemonSpec: { env: { DDL_TEST_HOOKS: "1", DDL_TEST_COMPUTER: access } },
+});
+
 test.describe("computer use", () => {
+  test.use(mac("missing"));
+
   test("missing access shows in the status bar, and Settings walks through allowing it", async ({
     page,
   }) => {
-    await openApp(page, "mockSpeed=4&mockComputer=missing");
+    await openApp(page);
     const warning = page.getByTestId("status-computer");
     await expect(warning).toBeVisible();
     await expect(warning).toHaveAttribute(
@@ -25,7 +36,7 @@ test.describe("computer use", () => {
       "macOS asks to quit and reopen “Daily Do List”",
     );
 
-    // The mock Mac turns a permission on a moment after its pane opens; polling picks it up.
+    // The simulated Mac allows a permission a moment after its pane opens; polling picks it up.
     const openAccessibility = page.getByTestId("computer-open-accessibility");
     await expect(openAccessibility).toHaveAttribute(
       "data-tooltip",
@@ -42,6 +53,18 @@ test.describe("computer use", () => {
     await expect(warning).toHaveCount(0);
   });
 
+  test("the command palette opens the section", async ({ page }) => {
+    await openApp(page);
+    await page.keyboard.press("ControlOrMeta+P");
+    await page.keyboard.type("computer use", { delay: 5 });
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("settings-computer")).toBeVisible();
+  });
+});
+
+test.describe("computer use allowed", () => {
+  test.use(mac("allowed"));
+
   test("stays quiet when access is allowed, and explains a daemon without computer use", async ({
     page,
   }) => {
@@ -54,18 +77,16 @@ test.describe("computer use", () => {
     await expect(page.getByTestId("computer-open-accessibility")).toHaveCount(0);
     await expect(page.getByTestId("settings-computer")).toContainText("always off-limits");
 
-    await openApp(page, "mockSpeed=4&mockComputer=none");
-    await page.getByTestId("ribbon-settings").click();
-    await page.getByTestId("settings-nav-computer").click();
-    await expect(page.getByTestId("computer-unavailable")).toBeVisible();
-    await expect(page.getByTestId("status-computer")).toHaveCount(0);
-  });
-
-  test("the command palette opens the section", async ({ page }) => {
-    await openApp(page, "mockSpeed=4&mockComputer=missing");
-    await page.keyboard.press("ControlOrMeta+P");
-    await page.keyboard.type("computer use", { delay: 5 });
-    await page.keyboard.press("Enter");
-    await expect(page.getByTestId("settings-computer")).toBeVisible();
+    // A daemon without computer use (any machine but a Mac, or turned off).
+    const plain = await startDaemon();
+    try {
+      await openApp(page, `${plain.url}/?debug=1`);
+      await page.getByTestId("ribbon-settings").click();
+      await page.getByTestId("settings-nav-computer").click();
+      await expect(page.getByTestId("computer-unavailable")).toBeVisible();
+      await expect(page.getByTestId("status-computer")).toHaveCount(0);
+    } finally {
+      await plain.close();
+    }
   });
 });

@@ -34,6 +34,7 @@ import { createSettingsStore, SETTINGS_PATH, type SettingsStore } from "./settin
 import { SyncController } from "./sync-controller";
 import { loadOrCreateDevice } from "./sync-setup";
 import { createSystemSettingsOpener } from "./system-settings";
+import { testHooks } from "./test-hooks";
 import { loadOrCreateToken } from "./token";
 import { VaultSwitch } from "./vault-switch";
 import { DAEMON_VERSION } from "./version";
@@ -104,6 +105,8 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
   logger.info(`Daily Do List daemon ${DAEMON_VERSION}`, summarizeConfig(config));
 
   const resources: Resources = { unsubscribes: [] };
+  const hooks = testHooks(env);
+  if (hooks) logger.warn("Test hooks are on (DDL_TEST_HOOKS=1): computer access is simulated");
   try {
     const token = await loadOrCreateToken(config.tokenPath, logger);
     const devices = await PairedDeviceStore.open({
@@ -141,6 +144,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
           connectors,
           logger,
           leaseEpoch: () => supervisor?.heldEpoch ?? null,
+          ...(hooks ? { wrapExecution: hooks.execution } : {}),
         }),
       storage: agentStorage,
       problem: LEASE_CHECKING_PROBLEM,
@@ -269,7 +273,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       vault,
       imports,
       machine,
-      systemSettings: createSystemSettingsOpener(),
+      systemSettings: hooks?.systemSettings ?? createSystemSettingsOpener(),
       relay,
     });
     handler = app.fetch;

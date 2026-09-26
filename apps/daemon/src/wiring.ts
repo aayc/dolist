@@ -90,6 +90,8 @@ export interface AgentStackOptions {
   logger: Logger;
   /** The agent lease's current grant, stamped on journal events (null: no lease held). */
   leaseEpoch?: () => number | null;
+  /** Wraps the execution provider (the e2e test hooks' simulated Mac). */
+  wrapExecution?: (provider: ExecutionProvider) => ExecutionProvider;
 }
 
 export interface AgentStack {
@@ -125,10 +127,11 @@ export async function createAgentStack(options: AgentStackOptions): Promise<Agen
     return unavailable(`The agent runtime failed to load: ${errorMessage(error)}`);
   }
 
-  const execution =
+  const created =
     config.agentMode === "off"
       ? new NullExecutionProvider(config.home)
       : await createExecution(agent, config, logger);
+  const execution = options.wrapExecution?.(created) ?? created;
   const llm =
     config.agentMode === "live"
       ? createLlmClient(agent, options.env, config.model, logger)
