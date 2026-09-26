@@ -68,6 +68,7 @@ const unit = fc.constantFrom(
   " ",
   "😀",
   "😁",
+  "\u{10600}", // same low surrogate as 😀
   "👩‍💻",
   "é",
   "e\u0301",
@@ -184,13 +185,13 @@ describe("minimalChange (properties)", () => {
 
 describe("normalizeLineEndings (properties)", () => {
   test.prop([fc.array(fc.constantFrom("a", "\r\n", "\r", "\n", "😀"), { maxLength: 20 })])(
-    "only ever produces LF and is idempotent",
+    "keeps every line and ends each with LF, idempotently",
     (parts) => {
       const input = parts.join("");
       const normalized = normalizeLineEndings(input);
       expect(normalized).not.toContain("\r");
       expect(normalizeLineEndings(normalized)).toBe(normalized);
-      expect(normalized.split("\n").length).toBe(input.split(/\r\n|\r|\n/).length);
+      expect(normalized.split("\n")).toEqual(input.split(/\r\n|\r|\n/));
     },
   );
 });
