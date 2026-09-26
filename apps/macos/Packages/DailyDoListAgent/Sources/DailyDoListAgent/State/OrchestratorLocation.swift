@@ -92,7 +92,7 @@ public struct OrchestratorLocation: Equatable, Sendable {
     // sync on and no machine yet, another device asking with the same priority can hold the
     // agent while this one is "held here": say who runs it before what this one waits for.
     let other = status.runsOn.flatMap { $0.thisDevice || $0.alwaysOnMachine ? nil : $0.name }
-    if let note = status.note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+    if let note = status.note?.trimmedNonEmpty {
       line = Line(note, tone: .info, inProgress: true)
     } else if status.relay == .unreachable {
       line = Line("\(machineName ?? "The always-on machine") can't be reached", tone: .warning)

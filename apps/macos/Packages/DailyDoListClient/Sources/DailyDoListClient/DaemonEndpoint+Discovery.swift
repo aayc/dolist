@@ -44,7 +44,7 @@ extension DaemonEndpoint {
       }
       throw .tokenFileUnreadable(path: tokenURL.path, reason: error.localizedDescription)
     }
-    guard let token = DaemonHome.nonEmpty(String(decoding: data, as: UTF8.self)) else {
+    guard let token = String(decoding: data, as: UTF8.self).trimmedNonEmpty else {
       throw .tokenFileEmpty(path: tokenURL.path)
     }
     let resolved = port ?? DaemonHome.configuredPort(home: home) ?? DaemonHome.defaultPort

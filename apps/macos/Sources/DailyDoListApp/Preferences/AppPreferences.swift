@@ -132,10 +132,10 @@ final class AppPreferences {
   var launchConfiguration: DaemonLaunchConfiguration {
     var configuration = DaemonLaunchConfiguration.standard(environment: environment)
     let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
-    if let home = DaemonHome.nonEmpty(homeOverride) {
+    if let home = homeOverride?.trimmedNonEmpty {
       configuration.home = DaemonHome.expandingTilde(home, homeDirectory: homeDirectory)
     }
-    if let vault = DaemonHome.nonEmpty(vaultPath) {
+    if let vault = vaultPath?.trimmedNonEmpty {
       configuration.vaultPath = DaemonHome.expandingTilde(vault, homeDirectory: homeDirectory)
     }
     if let managedPortOverride { configuration.port = managedPortOverride }

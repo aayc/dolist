@@ -25,13 +25,13 @@ struct OrchestratorActivityPresentation: Equatable {
 
   private var subject: String {
     if let path = activity.trigger?.notePath { return VaultPath.stem(path) }
-    return activity.trigger?.summary.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+    return activity.trigger?.summary.trimmedNonEmpty
       ?? "something"
   }
 
   /// What woke it, and what clicking does.
   var tooltip: String {
-    guard let summary = activity.trigger?.summary.nilIfEmpty else {
+    guard let summary = activity.trigger?.summary.trimmedNonEmpty else {
       return "Open the orchestrator chat"
     }
     return "Woken by \(summary) — open the orchestrator chat"

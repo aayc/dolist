@@ -577,7 +577,7 @@ public final class DaemonSupervisor {
   }
 
   private func readToken(_ configuration: DaemonLaunchConfiguration) -> String? {
-    DaemonHome.nonEmpty(dependencies.fileSystem.readString(at: configuration.tokenFile))
+    dependencies.fileSystem.readString(at: configuration.tokenFile)?.trimmedNonEmpty
   }
 
   private func display(_ path: String) -> String {

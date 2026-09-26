@@ -80,13 +80,13 @@ public struct DaemonLaunchConfiguration: Hashable, Sendable {
   ) -> DaemonLaunchConfiguration {
     var configuration = DaemonLaunchConfiguration(
       home: DaemonHome.url(environment: environment, homeDirectory: homeDirectory))
-    if let vault = DaemonHome.nonEmpty(environment["DDL_VAULT"]) {
+    if let vault = environment["DDL_VAULT"]?.trimmedNonEmpty {
       configuration.vaultPath = DaemonHome.expandingTilde(vault, homeDirectory: homeDirectory)
     }
     configuration.port =
       DaemonHome.configuredPort(home: configuration.home, environment: environment)
       ?? DaemonHome.defaultPort
-    if let mode = DaemonHome.nonEmpty(environment["DDL_AGENT_MODE"]) {
+    if let mode = environment["DDL_AGENT_MODE"]?.trimmedNonEmpty {
       configuration.agentMode = mode.lowercased()
     }
     return configuration

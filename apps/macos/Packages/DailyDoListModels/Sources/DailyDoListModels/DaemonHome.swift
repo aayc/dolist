@@ -12,7 +12,9 @@ public enum DaemonHome {
     environment: [String: String] = ProcessInfo.processInfo.environment,
     homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
   ) -> URL {
-    nonEmpty(environment["DDL_HOME"]).map { expandingTilde($0, homeDirectory: homeDirectory) }
+    environment["DDL_HOME"]?.trimmedNonEmpty.map {
+      expandingTilde($0, homeDirectory: homeDirectory)
+    }
       ?? homeDirectory.appendingPathComponent(".daily-do-list", isDirectory: true)
   }
 
@@ -24,7 +26,9 @@ public enum DaemonHome {
   public static func configuredPort(
     home: URL, environment: [String: String] = ProcessInfo.processInfo.environment
   ) -> Int? {
-    if let port = nonEmpty(environment["DDL_PORT"]).flatMap(Int.init), (1...65_535).contains(port) {
+    if let port = environment["DDL_PORT"]?.trimmedNonEmpty.flatMap(Int.init),
+      (1...65_535).contains(port)
+    {
       return port
     }
     guard let data = try? Data(contentsOf: home.appendingPathComponent("config.json")),
@@ -44,14 +48,6 @@ public enum DaemonHome {
     return path.hasPrefix(prefix) ? "~/" + path.dropFirst(prefix.count) : path
   }
 
-  /// `value` without surrounding whitespace, or nil when that leaves nothing (the daemon's
-  /// `nonEmpty`).
-  public static func nonEmpty(_ value: String?) -> String? {
-    guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty
-    else { return nil }
-    return trimmed
-  }
-
   /// Expands a leading `~` (not `~user`, like the daemon) and standardizes the path.
   public static func expandingTilde(_ path: String, homeDirectory: URL) -> URL {
     if path == "~" { return homeDirectory }
@@ -59,5 +55,14 @@ public enum DaemonHome {
       return homeDirectory.appendingPathComponent(String(path.dropFirst(2))).standardizedFileURL
     }
     return URL(fileURLWithPath: path).standardizedFileURL
+  }
+}
+
+extension String {
+  /// The string without surrounding whitespace and newlines, or nil when that leaves nothing (the
+  /// daemon's `nonEmpty`).
+  public var trimmedNonEmpty: String? {
+    let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
   }
 }

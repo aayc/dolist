@@ -69,7 +69,7 @@ public struct DaemonEntryLocator: Sendable {
     if let configuredEntry {
       return try explicit(configuredEntry, source: .configuration)
     }
-    if let fromEnvironment = DaemonHome.nonEmpty(environment["DDL_DAEMON_ENTRY"]) {
+    if let fromEnvironment = environment["DDL_DAEMON_ENTRY"]?.trimmedNonEmpty {
       return try explicit(
         DaemonHome.expandingTilde(fromEnvironment, homeDirectory: homeDirectory),
         source: .environment)
@@ -93,7 +93,7 @@ public struct DaemonEntryLocator: Sendable {
     if let bundleResourceURL {
       result.append((bundleResourceURL.appendingPathComponent(Self.bundledEntryPath), .appBundle))
     }
-    if let root = DaemonHome.nonEmpty(environment["DDL_REPO_ROOT"]) {
+    if let root = environment["DDL_REPO_ROOT"]?.trimmedNonEmpty {
       let url = DaemonHome.expandingTilde(root, homeDirectory: homeDirectory)
       result.append((url.appendingPathComponent(Self.repositoryEntryPath), .repository))
     }

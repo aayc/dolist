@@ -29,9 +29,9 @@ public struct LinkPreview: Hashable, Sendable {
     let text = label?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     let meaningfulLabel = text.isEmpty || isCitationLabel(text) || text == url ? nil : text
     let title =
-      source?.title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
+      source?.title?.trimmedNonEmpty
       ?? meaningfulLabel ?? (host.isEmpty ? url : host)
-    let snippet = source?.snippet?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
+    let snippet = source?.snippet?.trimmedNonEmpty
     return LinkPreview(title: title, host: host, snippet: snippet, url: url)
   }
 
@@ -83,8 +83,4 @@ enum CitedSourceMatch {
     let query = components.percentEncodedQuery.map { "?\($0)" } ?? ""
     return (host.hasPrefix("www.") ? String(host.dropFirst(4)) : host) + path + query
   }
-}
-
-extension String {
-  var nilIfBlank: String? { isEmpty ? nil : self }
 }

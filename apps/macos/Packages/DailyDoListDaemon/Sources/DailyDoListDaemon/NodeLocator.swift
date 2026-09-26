@@ -120,7 +120,7 @@ public struct NodeLocator: Sendable {
     if let configuredPath {
       return try await verifyExplicit(configuredPath, source: .configuration)
     }
-    if let fromEnvironment = DaemonHome.nonEmpty(environment["DDL_NODE"]) {
+    if let fromEnvironment = environment["DDL_NODE"]?.trimmedNonEmpty {
       let url = DaemonHome.expandingTilde(fromEnvironment, homeDirectory: homeDirectory)
       return try await verifyExplicit(url, source: .environment)
     }
@@ -214,7 +214,7 @@ public struct NodeLocator: Sendable {
       url, arguments: ["--version"], environment: nil, timeout: timeout)
     if result.timedOut { return .failure("`node --version` timed out") }
     guard result.succeeded else {
-      let detail = DaemonHome.nonEmpty(result.standardError).map { ": \($0.prefix(200))" } ?? ""
+      let detail = result.standardError.trimmedNonEmpty.map { ": \($0.prefix(200))" } ?? ""
       return .failure("`node --version` failed with status \(result.status)\(detail)")
     }
     guard let version = NodeVersion(parsing: result.standardOutput) else {
@@ -239,7 +239,7 @@ public struct NodeLocator: Sendable {
     for rawLine in output.split(whereSeparator: \.isNewline) {
       let line = rawLine.trimmingCharacters(in: .whitespaces)
       if line.hasPrefix(pathMarker) {
-        path = DaemonHome.nonEmpty(String(line.dropFirst(pathMarker.count)))
+        path = String(line.dropFirst(pathMarker.count)).trimmedNonEmpty
       } else if path == nil, line.hasPrefix("/"), !line.contains(":") {
         nodes.append(URL(fileURLWithPath: line))
       }

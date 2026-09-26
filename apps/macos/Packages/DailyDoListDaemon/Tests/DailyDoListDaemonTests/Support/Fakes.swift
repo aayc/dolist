@@ -221,8 +221,7 @@ final class FakeMachine: @unchecked Sendable {
   /// Like the real daemon: reuse a valid token file or create one, then listen after `checks`
   /// health checks. A rotated token only lands in the file when it starts listening.
   func willListen(_ process: FakeProcess, afterChecks checks: Int, rotatesToken: Bool) {
-    let existing = files.readString(at: URL(fileURLWithPath: tokenPath)).flatMap(
-      DaemonHome.nonEmpty)
+    let existing = files.readString(at: URL(fileURLWithPath: tokenPath))?.trimmedNonEmpty
     let token = rotatesToken ? "rotated-\(process.pid)" : (existing ?? "token-\(process.pid)")
     if !rotatesToken { files.write("\(token)\n", to: tokenPath) }
     let listensNow: Bool = lock.withLock {
