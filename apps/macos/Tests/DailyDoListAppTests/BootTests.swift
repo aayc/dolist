@@ -211,7 +211,7 @@ struct BootTests {
     #expect(first.root.path.hasPrefix(FileManager.default.temporaryDirectory.path))
     #expect(first.configuration.home.path.hasPrefix(first.root.path))
     #expect(first.configuration.vaultPath?.path.hasPrefix(first.root.path) == true)
-    #expect(first.configuration.port != DaemonLaunchConfiguration.defaultPort)
+    #expect(first.configuration.port != DaemonHome.defaultPort)
     #expect(!FileManager.default.fileExists(atPath: first.root.path), "the daemon seeds it")
   }
 

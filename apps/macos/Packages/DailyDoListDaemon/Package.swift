@@ -8,11 +8,18 @@ let package = Package(
   products: [
     .library(name: "DailyDoListDaemon", targets: ["DailyDoListDaemon"])
   ],
+  dependencies: [
+    .package(path: "../DailyDoListModels")
+  ],
   targets: [
-    .target(name: "DailyDoListDaemon"),
+    .target(
+      name: "DailyDoListDaemon",
+      dependencies: [.product(name: "DailyDoListModels", package: "DailyDoListModels")]),
     .testTarget(
       name: "DailyDoListDaemonTests",
-      dependencies: ["DailyDoListDaemon"],
+      dependencies: [
+        "DailyDoListDaemon", .product(name: "DailyDoListModels", package: "DailyDoListModels"),
+      ],
       // Scripts run by the real-process tests, located through #filePath.
       exclude: ["Fixtures"]
     ),

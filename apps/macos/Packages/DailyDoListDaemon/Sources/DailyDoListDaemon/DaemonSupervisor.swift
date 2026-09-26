@@ -1,3 +1,4 @@
+import DailyDoListModels
 import Foundation
 import Observation
 
@@ -576,11 +577,11 @@ public final class DaemonSupervisor {
   }
 
   private func readToken(_ configuration: DaemonLaunchConfiguration) -> String? {
-    nonEmpty(dependencies.fileSystem.readString(at: configuration.tokenFile))
+    DaemonHome.nonEmpty(dependencies.fileSystem.readString(at: configuration.tokenFile))
   }
 
   private func display(_ path: String) -> String {
-    displayPath(path, homeDirectory: dependencies.host.homeDirectory.path)
+    DaemonHome.displayPath(path, homeDirectory: dependencies.host.homeDirectory.path)
   }
 }
 

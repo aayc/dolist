@@ -97,10 +97,3 @@ public enum DaemonSupervisorError: Error, Hashable, Sendable {
 extension DaemonSupervisorError: LocalizedError {
   public var errorDescription: String? { message }
 }
-
-/// `~`-abbreviates paths under the user's home folder for messages and logs.
-func displayPath(_ path: String, homeDirectory: String = NSHomeDirectory()) -> String {
-  if path == homeDirectory { return "~" }
-  let prefix = homeDirectory.hasSuffix("/") ? homeDirectory : homeDirectory + "/"
-  return path.hasPrefix(prefix) ? "~/" + path.dropFirst(prefix.count) : path
-}

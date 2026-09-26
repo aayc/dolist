@@ -1,3 +1,4 @@
+import DailyDoListModels
 import Foundation
 
 /// The daemon's `dist/main.js` and where it came from.
@@ -68,9 +69,10 @@ public struct DaemonEntryLocator: Sendable {
     if let configuredEntry {
       return try explicit(configuredEntry, source: .configuration)
     }
-    if let fromEnvironment = nonEmpty(environment["DDL_DAEMON_ENTRY"]) {
+    if let fromEnvironment = DaemonHome.nonEmpty(environment["DDL_DAEMON_ENTRY"]) {
       return try explicit(
-        expandingTilde(fromEnvironment, homeDirectory: homeDirectory), source: .environment)
+        DaemonHome.expandingTilde(fromEnvironment, homeDirectory: homeDirectory),
+        source: .environment)
     }
     var searched: [String] = []
     for (entry, source) in candidates() {
@@ -91,8 +93,8 @@ public struct DaemonEntryLocator: Sendable {
     if let bundleResourceURL {
       result.append((bundleResourceURL.appendingPathComponent(Self.bundledEntryPath), .appBundle))
     }
-    if let root = nonEmpty(environment["DDL_REPO_ROOT"]) {
-      let url = expandingTilde(root, homeDirectory: homeDirectory)
+    if let root = DaemonHome.nonEmpty(environment["DDL_REPO_ROOT"]) {
+      let url = DaemonHome.expandingTilde(root, homeDirectory: homeDirectory)
       result.append((url.appendingPathComponent(Self.repositoryEntryPath), .repository))
     }
     var starts: [URL] = []
@@ -127,6 +129,6 @@ public struct DaemonEntryLocator: Sendable {
   }
 
   private func display(_ path: String) -> String {
-    displayPath(path, homeDirectory: homeDirectory.path)
+    DaemonHome.displayPath(path, homeDirectory: homeDirectory.path)
   }
 }

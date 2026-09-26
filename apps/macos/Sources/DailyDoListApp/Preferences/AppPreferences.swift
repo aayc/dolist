@@ -102,7 +102,7 @@ final class AppPreferences {
       defaults.string(forKey: Key.daemonMode).flatMap(DaemonMode.init(rawValue:)) ?? .managed
     externalBaseURL =
       defaults.string(forKey: Key.externalBaseURL)
-      ?? "http://127.0.0.1:\(DaemonLaunchConfiguration.defaultPort)"
+      ?? "http://127.0.0.1:\(DaemonHome.defaultPort)"
     let port = defaults.integer(forKey: Key.managedPort)
     managedPortOverride = (1...65_535).contains(port) ? port : nil
     homeOverride = defaults.string(forKey: Key.home)
@@ -131,12 +131,12 @@ final class AppPreferences {
   /// The supervisor configuration: the standard (terminal-equivalent) one plus overrides.
   var launchConfiguration: DaemonLaunchConfiguration {
     var configuration = DaemonLaunchConfiguration.standard(environment: environment)
-    if let homeOverride = homeOverride?.trimmingCharacters(in: .whitespaces), !homeOverride.isEmpty
-    {
-      configuration.home = URL(fileURLWithPath: expandTilde(homeOverride), isDirectory: true)
+    let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
+    if let home = DaemonHome.nonEmpty(homeOverride) {
+      configuration.home = DaemonHome.expandingTilde(home, homeDirectory: homeDirectory)
     }
-    if let vaultPath = vaultPath?.trimmingCharacters(in: .whitespaces), !vaultPath.isEmpty {
-      configuration.vaultPath = URL(fileURLWithPath: expandTilde(vaultPath), isDirectory: true)
+    if let vault = DaemonHome.nonEmpty(vaultPath) {
+      configuration.vaultPath = DaemonHome.expandingTilde(vault, homeDirectory: homeDirectory)
     }
     if let managedPortOverride { configuration.port = managedPortOverride }
     if let agentMode { configuration.agentMode = agentMode.rawValue }
@@ -153,10 +153,6 @@ final class AppPreferences {
       let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https", url.host != nil
     else { return nil }
     return url
-  }
-
-  private func expandTilde(_ path: String) -> String {
-    (path as NSString).expandingTildeInPath
   }
 
   private enum Key {
