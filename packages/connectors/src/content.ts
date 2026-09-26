@@ -5,7 +5,9 @@
  *
  * Adapted from OpenClaw (MIT): src/agents/mcp-content.ts.
  */
+
 import type { ToolContent, ToolResult } from "@ddl/core";
+import { formatBytes } from "@ddl/core";
 import { isPlainObject, type PlainObject, typeName } from "./util";
 
 export const MAX_RESULT_TEXT_CHARS = 100_000;
@@ -218,10 +220,4 @@ function binaryInfo(mimeType: unknown, data: unknown): string {
 function base64Bytes(data: string): number {
   const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
   return Math.max(0, Math.floor((data.length * 3) / 4) - padding);
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

@@ -13,6 +13,7 @@ import {
   type PairedDevice,
   type PairedDevicesResponse,
   type PairingCodeResponse,
+  pluralize,
 } from "@ddl/core";
 import { ConfigError, type DaemonConfig, type LoadConfigOptions, loadConfig } from "./config";
 import { displayPath } from "./home-paths";
@@ -105,7 +106,7 @@ async function pair(args: readonly string[], io: CliIo): Promise<void> {
   const minutes = Math.max(1, Math.round((issued.expiresAt - now) / 60_000));
   const lines = [
     `Pairing code: ${formatPairingCode(issued.code)}`,
-    `Valid once, until ${clockTime(issued.expiresAt)} (${minutes} minute${minutes === 1 ? "" : "s"}).`,
+    `Valid once, until ${clockTime(issued.expiresAt)} (${pluralize(minutes, "minute")}).`,
   ];
   if (issued.url) {
     lines.push(

@@ -1,3 +1,4 @@
+import { pluralize } from "@ddl/core";
 import type { VimModeName } from "@ddl/editor";
 import {
   Bot,
@@ -13,7 +14,6 @@ import { useServices } from "../../app/services";
 import { commandTooltip } from "../../commands/labels";
 import { Count } from "../../components/Count";
 import { cx } from "../../lib/cx";
-import { pluralize } from "../../lib/format";
 import { useAgentStore, usePendingApprovalCount } from "../../state/agent-store";
 import { useConnectionStore } from "../../state/connection-store";
 import { useNotesStore } from "../../state/notes-store";

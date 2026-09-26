@@ -16,6 +16,7 @@ import {
   type OrchestratorTrigger,
   parseAgentLine,
   parseDailyNotePath,
+  pluralize,
   silentLogger,
   stripAgentMarker,
   type TaskAgentStatus,
@@ -795,8 +796,8 @@ export class Orchestrator {
     }
     const parts = [...notes].map(([notePath, { tasks, lines }]) => {
       const counts = [
-        ...(tasks > 0 ? [plural(tasks, "task")] : []),
-        ...(lines > 0 ? [plural(lines, "line")] : []),
+        ...(tasks > 0 ? [pluralize(tasks, "task")] : []),
+        ...(lines > 0 ? [pluralize(lines, "line")] : []),
       ];
       return `${notePath} changed: ${counts.join(", ")}`;
     });
@@ -1254,10 +1255,6 @@ export class Orchestrator {
       this.logger.error("Orchestrator background task failed", { error: errorMessage(error) });
     });
   }
-}
-
-function plural(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
 function describeReport(task: string, status: TaskAgentStatus): string {

@@ -8,6 +8,7 @@ import {
   isTaskLine,
   markAgentLine,
   normalizePath,
+  pluralize,
   setStatusCharOnLine,
   stripAgentMarker,
   type ToolSpec,
@@ -114,7 +115,7 @@ export function planNoteEdits(
         changes.push({ at: slot.at, remove: 0, insert, order });
         written.push(...insert);
         phrases.push(
-          `added ${count(insert.length, "line")} under ${quote(itemText(lines[target]!), 80)}`,
+          `added ${pluralize(insert.length, "line")} under ${quote(itemText(lines[target]!), 80)}`,
         );
         return;
       }
@@ -123,7 +124,7 @@ export function planNoteEdits(
         const insert = edit.lines!.map((line) => mark(line.replace(/\s+$/, "")));
         changes.push({ at, remove: 0, insert, order });
         written.push(...insert);
-        phrases.push(`added ${count(insert.length, "line")} after line ${at}`);
+        phrases.push(`added ${pluralize(insert.length, "line")} after line ${at}`);
         return;
       }
       case "append": {
@@ -132,7 +133,7 @@ export function planNoteEdits(
         const insert = edit.lines!.map((line) => mark(line.replace(/\s+$/, "")));
         changes.push({ at, remove: 0, insert, order });
         written.push(...insert);
-        phrases.push(`added ${count(insert.length, "line")} at the end`);
+        phrases.push(`added ${pluralize(insert.length, "line")} at the end`);
         return;
       }
       case "replace": {
@@ -290,10 +291,6 @@ function checkOwnership(line: string, mine: boolean | undefined, index: number):
   }
 }
 
-function count(n: number, noun: string): string {
-  return `${n} ${noun}${n === 1 ? "" : "s"}`;
-}
-
 /** Approval-card text for an `edit_note` call. */
 export function describeNoteEdit(input: unknown): string {
   const args =
@@ -311,7 +308,7 @@ export function describeNoteEdit(input: unknown): string {
         return `${edit.checked ? "check" : "uncheck"} ${String(edit.taskId ?? "a task")}`;
       default: {
         const n = Array.isArray(edit.lines) ? edit.lines.length : 0;
-        return `add ${count(n, "line")}`;
+        return `add ${pluralize(n, "line")}`;
       }
     }
   });

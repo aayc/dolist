@@ -8,9 +8,8 @@ import type {
   ObsidianImportPhase,
   ObsidianPluginSupport,
 } from "@ddl/core";
-import { errorMessage } from "@ddl/core";
+import { errorMessage, formatBytes, pluralize } from "@ddl/core";
 import { HttpError, NetworkError } from "../../api/errors";
-import { formatBytes, pluralize } from "../../lib/format";
 
 export const PHASE_LABEL: Record<ObsidianImportPhase, string> = {
   checking: "Reading the vault…",

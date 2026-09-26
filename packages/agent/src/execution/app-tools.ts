@@ -8,6 +8,7 @@
 import {
   type JsonSchema,
   type Logger,
+  pluralize,
   sleep,
   type ToolResult,
   type ToolSpec,
@@ -450,7 +451,7 @@ export class AppToolKit {
     );
     if (outcome.stale) this.session.markStale(app.pid);
     return textResult(
-      `Typed ${text.length} character${text.length === 1 ? "" : "s"} into ${app.name}.${staleNote(outcome.stale, app)}`,
+      `Typed ${pluralize(text.length, "character")} into ${app.name}.${staleNote(outcome.stale, app)}`,
     );
   }
 

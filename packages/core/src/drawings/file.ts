@@ -29,6 +29,7 @@
 import { formatDate } from "../dates";
 import { errorMessage, isRecord } from "../guards";
 import { basename } from "../paths";
+import { pluralize } from "../text";
 import { compressToBase64, decompressFromBase64 } from "./lz-string";
 import {
   DRAWING_PLUGIN_SOURCE_PREFIX,
@@ -409,7 +410,7 @@ function readScene(block: DrawingBlock, problems: DrawingProblem[]): DrawingScen
     problems.push({
       code: "invalid-element",
       severity: "warning",
-      message: `${dropped} element${dropped === 1 ? "" : "s"} without an id and a type were dropped.`,
+      message: `${pluralize(dropped, "element")} without an id and a type were dropped.`,
     });
   }
   return {

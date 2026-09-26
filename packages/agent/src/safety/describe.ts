@@ -3,7 +3,7 @@
  * e.g. `Click “Place order” in the browser` or `Type into “Card number” (value hidden)`.
  * Values typed into sensitive fields and anything secret-looking are always masked.
  */
-import { drawingTitleFromPath } from "@ddl/core";
+import { drawingTitleFromPath, pluralize } from "@ddl/core";
 import { TOOL } from "../tools/contracts";
 import { type ActionFacts, buildFacts } from "./facts";
 import { isSensitiveField } from "./rules/ui";
@@ -235,7 +235,7 @@ function describeFromFacts(f: ActionFacts): string {
     }
     case "note_edit": {
       const edits = Array.isArray(input.edits) ? input.edits.length : 0;
-      return `Edit note ${str(input.notePath) ?? "(the task's note)"}: ${edits} change${edits === 1 ? "" : "s"}`;
+      return `Edit note ${str(input.notePath) ?? "(the task's note)"}: ${pluralize(edits, "change")}`;
     }
     case "routine":
       return `${humanize(f.operation)}${str(input.name) ? ` “${clip(str(input.name)!, 80)}”` : ""}`;

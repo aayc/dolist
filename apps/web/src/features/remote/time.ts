@@ -1,4 +1,5 @@
-import { formatTimestamp, pluralize } from "../../lib/format";
+import { pluralize } from "@ddl/core";
+import { formatTimestamp } from "../../lib/format";
 
 /** "just now", "5 min ago", "3 hours ago", then the date and time. */
 export function timeAgo(ts: number, now: number = Date.now()): string {
