@@ -17,19 +17,16 @@ ToolCallRequest ─▶ SafetyGate ─▶ SafetyEvaluator ─▶ verdict
 
 ## Public API (`index.ts`)
 
-| Export | What it is |
-| --- | --- |
-| `createSafetyEvaluator({ policy?, llm?, judgeModel?, logger? })` | The evaluator. With `policy.llmJudge` and an `llm`, uncertain actions go to the LLM judge. |
-| `createApprovalBroker({ storage?, defaultTimeoutMs?, now?, logger? })` | Pending approvals, decisions, standing grants, persistence. Returns a `PersistentApprovalBroker` (adds `ready`, `flush()`, `dispose()`). |
-| `createSafetyGate(options)` | `beforeToolCall` for `HarnessSessionOptions`. Never throws. `options.approvalPolicy()` is read on every call. |
-| `policyAsks(policy, verdict)`, `effectivePolicy(value)`, `isLooserPolicy(next, previous)` | The approval policy as pure functions (`approval-policy.ts`), plus its reasons and `POLICY_APPROVAL_NOTE`. |
-| `DEFAULT_SAFETY_POLICY`, `resolvePolicy(partial)` | Default policy and safe merging of overrides (malformed values are ignored). |
-| `builtinToolHints(name)` | Hints for harness built-ins without a `ToolSpec`: `read/grep/find/ls` → read-only, `write/edit` → `file_write`, `bash` → `system` (its commands are analyzed by the shell rules). The Cursor harness sends its own versions of these, and the Cursor CLI's web search/fetch as `web_search {query}` / `web_fetch {url}`, all without a spec; they get the same verdicts (`harness-requests.test.ts`). |
-| `SAFETY_RULES` | Metadata of every rule (id, category, decision, risk, description), sorted by id. |
-| `describeAction(ctx)`, `redactActionInput(ctx)` | Approval-card summary and the input with secrets hidden. |
-| `maskSensitiveText`, `redactSensitiveInput`, `luhnValid` | Masking helpers (cards keep their last 4 digits; secrets and SSNs are hidden). |
-| `ApprovalNotFoundError`, `ApprovalStateError` | Thrown by `decide()` for unknown / already-decided approvals (map to 404 / 409). |
-| `APPROVALS_STATE_PATH` | `.daily-do-list/state/approvals.json`. |
+`createSafetyEvaluator` (with `policy.llmJudge` and an `llm`, uncertain actions go to the judge),
+`createApprovalBroker` (pending approvals, decisions, standing grants, persistence),
+`createSafetyGate` (`beforeToolCall` for harness sessions; never throws; reads
+`options.approvalPolicy()` on every call), the approval policy as pure functions
+(`approval-policy.ts`), `DEFAULT_SAFETY_POLICY`/`resolvePolicy`, `SAFETY_RULES`, and the
+describe and masking helpers. `builtinToolHints(name)` gives harness built-ins without a
+`ToolSpec` their hints (`read/grep/find/ls` read-only, `write/edit` `file_write`, `bash` `system`,
+its commands analyzed by the shell rules); the Cursor harness's versions of these and the Cursor
+CLI's web search/fetch (`web_search {query}`, `web_fetch {url}`) get the same verdicts
+(`harness-requests.test.ts`).
 
 ## The pipeline (`evaluator.ts`)
 

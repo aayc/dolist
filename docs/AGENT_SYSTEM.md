@@ -307,10 +307,8 @@ the drawing itself.
   `ScriptedHarness` from its `images` option. The image travels as image content in the tool result,
   like screenshots: Pi sends it to the model with the result, the Cursor harness through its MCP
   bridge. `read_drawing` doesn't render at all for a model that can't see images.
-- **Rendering**: the local execution provider renders drawings in a headless Chromium of its own
-  on a page built from Excalidraw's export, caches renders in `$DDL_HOME/cache/drawings`, and closes
-  the browser when idle (details in `packages/agent/src/execution/README.md`). The daemon's build
-  makes the page (`dist/drawing-renderer`); the startup summary says when it's missing.
+- **Rendering**: the local execution provider, in a headless Chromium of its own
+  ([its README](../packages/agent/src/execution/README.md#drawing-renderer)).
 - **Changes**: the task watcher ignores drawing files, so a drawing that changes under a watched
   note isn't an edit of that note: nothing is re-triaged and no turn starts; the next digest
   describes the new version.
@@ -331,17 +329,11 @@ Standing jobs the agent runs on a schedule: a morning briefing, a price watch, a
   hours or minutes (at least 15), monthly on a day, at listed times) with the next run computed
   in local time across DST changes. A phrase it can't read is an error on the routine, never a
   guess.
-- **Catalog and library.** `RoutineCatalog` reads `Routines/*.md` and follows edits made anywhere
-  (the app, Obsidian, sync) through storage events; invalid or unreadable files are listed with
-  their problems. `RoutineLibrary` joins each file with the scheduler's state into the wire
-  `Routine` (schedule in words, next run, last run, run count, extra runs left today), and writes
-  the files for create, pause and resume (`files.ts`: checks the name, schedule and instructions,
-  never overwrites a routine, and changes only the frontmatter lines it sets).
-- **State.** `.daily-do-list/state/routines.json` (`RoutineStateStore`, format in `@ddl/contract`):
-  per routine the planned next run and the schedule it was planned from, the last run (status,
-  compact result, `changed`, whether it notified), recent run threads and today's extra runs.
-  Nothing of it goes in the routine file. A corrupt file is moved to `.daily-do-list/corrupt/`, a
-  newer app's file is left alone, and concurrent saves (another device) merge per routine.
+- **Catalog, library and state.** `RoutineCatalog` follows `Routines/*.md` edited anywhere (the
+  app, Obsidian, sync), listing invalid files with their problems; `RoutineLibrary` joins each file
+  with the scheduler's state (`state/routines.json`, [DATA_FORMATS.md](./DATA_FORMATS.md); nothing
+  of it goes in the routine file) and writes the files for create, pause and resume, changing only
+  the frontmatter lines it sets and never overwriting a routine.
 - **Scheduler.** `RoutineScheduler` runs in the agent runtime and is active exactly while the agent
   can run here and is enabled. It looks at least once a minute, and at the next due slot. A slot
   found more than 2 minutes late (the Mac slept, the daemon was down) runs once, as a `catch_up`
@@ -382,9 +374,6 @@ Standing jobs the agent runs on a schedule: a morning briefing, a price watch, a
   one by one) and listing are allowed. A run editing a file in `Routines/` asks too. The
   scheduler's state is sidecar state: writing, moving or deleting it is a hard deny under every
   policy (`src/routines/state-protection.test.ts`).
-- **Wire.** `/api/routines` and its `run`, `pause` and `resume` actions, `?routineId=` on
-  `/api/threads`, and the `routines.changed` and `routine.notification` events
-  ([PROTOCOL.md](./PROTOCOL.md)).
 
 ## 4. Staying safe (SafetyGate)
 
