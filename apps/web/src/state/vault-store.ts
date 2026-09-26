@@ -22,7 +22,29 @@ function filesOf(entries: ReadonlyMap<string, VaultEntry>): string[] {
   return out.sort();
 }
 
-function commit(entries: Map<string, VaultEntry>): void {
+/**
+ * Changes not published yet. A burst of vault events (sync, an import) is published once, on the
+ * next frame, instead of rebuilding the file list and the explorer per event.
+ */
+let draft: Map<string, VaultEntry> | null = null;
+
+function current(): ReadonlyMap<string, VaultEntry> {
+  return draft ?? useVaultStore.getState().entries;
+}
+
+function edit(): Map<string, VaultEntry> {
+  if (!draft) {
+    draft = new Map(useVaultStore.getState().entries);
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(publish);
+    else setTimeout(publish, 0);
+  }
+  return draft;
+}
+
+function publish(): void {
+  if (!draft) return;
+  const entries = draft;
+  draft = null;
   useVaultStore.setState({ entries, files: filesOf(entries) });
 }
 
@@ -38,6 +60,7 @@ function isUnder(path: string, folder: string): boolean {
 
 export const vaultActions = {
   setTree(tree: VaultTreeResponse): void {
+    draft = null;
     const entries = new Map<string, VaultEntry>();
     for (const entry of tree.entries) {
       if (isHiddenPath(entry.path)) continue;
@@ -53,59 +76,51 @@ export const vaultActions = {
   },
 
   addFile(path: string, version?: string): void {
-    if (isHiddenPath(path)) return;
-    const current = useVaultStore.getState().entries;
-    if (current.get(path)?.kind === "file") return;
-    const entries = new Map(current);
+    if (isHiddenPath(path) || current().get(path)?.kind === "file") return;
+    const entries = edit();
     entries.set(path, { path, kind: "file", ...(version ? { version } : {}) });
     withAncestors(entries, path);
-    commit(entries);
   },
 
   addFolder(path: string): void {
-    const current = useVaultStore.getState().entries;
-    if (current.has(path)) return;
-    const entries = new Map(current);
+    if (current().has(path)) return;
+    const entries = edit();
     entries.set(path, { path, kind: "folder" });
     withAncestors(entries, path);
-    commit(entries);
   },
 
   remove(path: string): void {
-    const current = useVaultStore.getState().entries;
-    if (!current.has(path)) return;
-    const entries = new Map(current);
+    if (!current().has(path)) return;
+    const entries = edit();
     entries.delete(path);
-    for (const key of current.keys()) if (isUnder(key, path)) entries.delete(key);
-    commit(entries);
+    for (const key of [...entries.keys()]) if (isUnder(key, path)) entries.delete(key);
   },
 
   rename(from: string, to: string): void {
-    const current = useVaultStore.getState().entries;
-    const entry = current.get(from);
+    const entry = current().get(from);
     if (!entry) return;
-    const entries = new Map(current);
+    const entries = edit();
+    const moved = [...entries].filter(([key]) => isUnder(key, from));
     entries.delete(from);
     entries.set(to, { ...entry, path: to });
     withAncestors(entries, to);
-    for (const [key, value] of current) {
-      if (!isUnder(key, from)) continue;
+    for (const [key, value] of moved) {
       entries.delete(key);
-      const moved = `${to}${key.slice(from.length)}`;
-      entries.set(moved, { ...value, path: moved });
+      const target = `${to}${key.slice(from.length)}`;
+      entries.set(target, { ...value, path: target });
     }
-    commit(entries);
   },
 
   has(path: string): boolean {
-    return useVaultStore.getState().entries.has(path);
+    return current().has(path);
   },
 
   isFolder(path: string): boolean {
-    return useVaultStore.getState().entries.get(path)?.kind === "folder";
+    return current().get(path)?.kind === "folder";
   },
 
   files(): readonly string[] {
+    publish();
     return useVaultStore.getState().files;
   },
 };
