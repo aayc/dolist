@@ -350,9 +350,9 @@ and real-keyboard e2e tests in `apps/web/e2e/vim.spec.ts`.
 - **Add a setting:** extend its wire schema (`packages/contract/src/wire/settings.ts`: `AppSettings`
   is inferred from it, and the daemon validates updates with it), `DEFAULT_SETTINGS` in
   `packages/core/src/settings.ts`, its file schema (`packages/contract/src/persisted/settings.ts`;
-  see `docs/DATA_FORMATS.md`), the Swift model (`DailyDoListModels/Settings.swift`), surface it in the
-  web settings UI and the Mac settings pane (`apps/macos/Sources/DailyDoListApp/Settings/`), and
-  handle it in `AgentRuntime.updateSettings` if agent-related.
+  see `docs/DATA_FORMATS.md`), the Swift model (`DailyDoListModels/Settings.swift`), surface it in
+  the web settings UI and the Mac settings pane (`apps/macos/Sources/DailyDoListApp/Settings/`),
+  and handle it in `AgentRuntime.updateSettings` if agent-related.
 - **Add a control (web):** give it a tooltip with `data-tooltip` (never `title`), and if it runs a
   command, `data-command` (`IconButton command=…` or `commandTooltip()` do both): the keycaps and
   `aria-keyshortcuts` come from the registry, so never write a shortcut into text. A shorter
