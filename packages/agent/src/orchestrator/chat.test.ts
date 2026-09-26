@@ -1,8 +1,7 @@
-import { decodePersistedThread } from "@ddl/contract";
 import { ORCHESTRATOR_THREAD_ID, textResult } from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
 import { describe, expect, it } from "vitest";
-import { createThreadStore, threadPath } from "../threads/store";
+import { createThreadStore, threadJournalPath } from "../threads/store";
 import { OrchestratorChat } from "./chat";
 
 function setup(options: { maxMessages?: number } = {}) {
@@ -63,7 +62,7 @@ describe("OrchestratorChat", () => {
       resultPreview: "Status set to ignored.",
     });
     await s.threads.flush();
-    const file = (await s.storage.read(threadPath(ORCHESTRATOR_THREAD_ID)))!.content;
+    const file = (await s.storage.read(threadJournalPath(ORCHESTRATOR_THREAD_ID)))!.content;
     expect(file).not.toContain("secret");
     expect(file).not.toContain("The user wants");
   });
@@ -114,9 +113,9 @@ describe("OrchestratorChat", () => {
       "More 3.",
     ]);
     await s.threads.flush();
-    const file = await s.storage.read(threadPath(ORCHESTRATOR_THREAD_ID));
-    const decoded = decodePersistedThread(file!.content);
-    expect(decoded.ok && decoded.value.messages).toHaveLength(5);
+    const reloaded = createThreadStore({ storage: s.storage });
+    await reloaded.load();
+    expect(reloaded.get(ORCHESTRATOR_THREAD_ID)!.messages).toHaveLength(5);
   });
 
   it("settles a turn a crashed daemon left open", () => {

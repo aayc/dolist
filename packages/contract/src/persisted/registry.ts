@@ -37,7 +37,7 @@ export const PERSISTED_FORMATS: readonly PersistedFormatInfo[] = [
     name: "thread",
     path: `${PERSISTED_PATHS.threads}/<threadId>.json`,
     version: PERSISTED_THREAD_VERSION,
-    owner: "packages/agent/src/threads/store.ts",
+    owner: "packages/agent/src/threads/journal/migrate.ts",
     syncs: true,
   },
   {

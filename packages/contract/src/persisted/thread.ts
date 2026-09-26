@@ -1,7 +1,9 @@
 /**
  * `.daily-do-list/threads/<threadId>.json` — one agent thread (the conversation attached to a to-do
- * item): messages, artifact metadata and live surfaces. Written by the thread store
- * (packages/agent/src/threads/store.ts), compact JSON with a trailing newline.
+ * item): messages, artifact metadata and live surfaces, compact JSON with a trailing newline. Older
+ * apps wrote it; this one only reads it to move it into the thread's journal
+ * (packages/agent/src/threads/journal/migrate.ts). The shape lives on as the thread a journal's
+ * `thread.imported` events carry.
  *
  * v1: the unversioned shape written before formats were versioned, plus `version: 1`.
  */
@@ -255,8 +257,8 @@ export function encodePersistedThread(thread: PersistedThread): string {
 }
 
 /**
- * Merges two copies of the same thread without losing anything: another device's copy found at
- * write time, or a sync conflict copy found at load. Messages and artifacts are unioned by id
+ * Merges two copies of the same thread without losing anything (how a journal folds a
+ * `thread.imported` event into the thread so far). Messages and artifacts are unioned by id
  * (`ours` wins for an id present in both; entries only in `theirs` are interleaved by `createdAt`),
  * surfaces are unioned, and title/status/taskId/notePath come from the copy updated last (ties:
  * `ours`). Idempotent: merging the result with `theirs` again changes nothing.

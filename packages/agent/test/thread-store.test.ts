@@ -1,7 +1,12 @@
 import type { TextMessage, ThreadMessage } from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BINARY_ARTIFACT_SUFFIX, createThreadStore, threadPath } from "../src/threads/store";
+import {
+  BINARY_ARTIFACT_SUFFIX,
+  createThreadStore,
+  THREAD_JOURNALS_DIR,
+  threadJournalPath,
+} from "../src/threads/store";
 import type { ThreadStoreEvent } from "../src/threads/types";
 
 function text(id: string, body: string, extra: Partial<TextMessage> = {}): TextMessage {
@@ -16,9 +21,9 @@ function text(id: string, body: string, extra: Partial<TextMessage> = {}): TextM
   };
 }
 
-function threadWrites(storage: MemoryStorageProvider) {
-  const spy = vi.spyOn(storage, "write");
-  return () => spy.mock.calls.filter(([path]) => path.startsWith(".daily-do-list/threads/")).length;
+function journalAppends(storage: MemoryStorageProvider) {
+  const spy = vi.spyOn(storage, "append");
+  return () => spy.mock.calls.filter(([path]) => path.startsWith(THREAD_JOURNALS_DIR)).length;
 }
 
 afterEach(() => {
@@ -29,7 +34,7 @@ describe("ThreadStore", () => {
   it("creates threads, emits events and persists after the debounce", async () => {
     vi.useFakeTimers();
     const storage = new MemoryStorageProvider();
-    const writes = threadWrites(storage);
+    const appends = journalAppends(storage);
     const store = createThreadStore({ storage, flushDelayMs: 400, pendingApprovals: () => 2 });
     const events: ThreadStoreEvent[] = [];
     store.on((e) => events.push(e));
@@ -48,11 +53,16 @@ describe("ThreadStore", () => {
       pendingApprovals: 2,
     });
 
-    expect(writes()).toBe(0);
+    expect(appends()).toBe(0);
     await vi.advanceTimersByTimeAsync(400);
-    expect(writes()).toBe(1);
-    const file = await storage.read(threadPath(thread.id));
-    expect(JSON.parse(file!.content).messages).toHaveLength(1);
+    expect(appends()).toBe(1);
+    const file = await storage.read(threadJournalPath(thread.id));
+    expect(
+      file!.content
+        .trimEnd()
+        .split("\n")
+        .map((line) => JSON.parse(line).type),
+    ).toEqual(["thread.created", "message"]);
   });
 
   it("streams deltas without writing, then persists the finalized message", async () => {
@@ -61,7 +71,7 @@ describe("ThreadStore", () => {
     const store = createThreadStore({ storage, flushDelayMs: 100 });
     const thread = store.create({ taskId: null, notePath: null, title: "t" });
     await vi.advanceTimersByTimeAsync(100);
-    const writes = threadWrites(storage);
+    const appends = journalAppends(storage);
     const deltas: string[] = [];
     store.on((e) => {
       if (e.type === "thread.delta") deltas.push(e.delta);
@@ -72,11 +82,11 @@ describe("ThreadStore", () => {
     await vi.advanceTimersByTimeAsync(1_000);
     expect(deltas).toEqual(["Hello ", "there ", "friend"]);
     expect((store.get(thread.id)!.messages[0] as TextMessage).text).toBe("Hello there friend");
-    expect(writes()).toBe(0);
+    expect(appends()).toBe(0);
 
     store.upsertMessage(thread.id, text("s1", "Hello there friend"));
     await vi.advanceTimersByTimeAsync(100);
-    expect(writes()).toBe(1);
+    expect(appends()).toBe(1);
   });
 
   it("replaces messages with the same id", () => {
@@ -144,7 +154,7 @@ describe("ThreadStore", () => {
     expect(message.streaming).toBe(false);
   });
 
-  it("skips corrupt thread files and filters lists", async () => {
+  it("works next to an unreadable snapshot, and filters lists", async () => {
     const storage = new MemoryStorageProvider({
       initialFiles: { ".daily-do-list/threads/bad.json": "{not json" },
     });
