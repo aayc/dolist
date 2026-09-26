@@ -120,6 +120,9 @@ and branches were removed (GitHub has only `main`).
 - **Flaky tests:** done and on `main` (`5687507`): the watcher, subprocess and `trackTasks` tests
   are robust under load (fake timers, event probes instead of sleeps, CPU-time guard, generous
   failure bounds; one test-only `helloTimeoutMs` option). No assertion got looser.
+- **Leaner-code cuts** (in flight): `chore/lean-web-mock`, `chore/lean-vim-tests`,
+  `chore/lean-small`; next the Mac fake daemon, zod as the wire source and journal-only threads (see
+  Decisions). Also `feat/remote-switch` (the "Remote" switch).
 - **Cleanup batch A** (in flight): `chore/cleanup-ts` (two bugs: imported threads kept their old
   note paths because the import looked for journals under the wrong folder, and the approval
   broker could overwrite a newer `approvals.json`; plus dead code, dependency declarations,
@@ -235,6 +238,14 @@ Open: browser pairing over https stays fixme in the e2e harness (no TLS proxy th
   gzip, raised from 1,200 when drawings and the always-on work came together at 1,217 kB. The
   user chose this over per-area budgets or fewer code block languages. Startup stays guarded by
   the 320 kB initial JS budget.
+- **Leaner code** (2026-09-25, evening): the user's priority is reducing the amount of code, by
+  narrow cleanups or rethinking architecture. Approved: web e2e, perf and demo on the real daemon
+  (delete the in-browser mock); Mac demo and tests on the real bundled daemon (delete the in-memory
+  fake daemon); zod schemas as the single source of the TypeScript wire types and test generators;
+  agent threads journal-only; delete Swift vim tests the vectors cover; small cuts (S3 and cloud
+  stubs, duplicate mock LLM, one forwarding base for the relayed and leased runtimes). Kept: both
+  harnesses (Pi and Cursor CLI), the Swift Domain port, the read-only view. The placement toggle
+  becomes "Remote" with a switch (on = the always-on machine).
 - **Journaling** (2026-09-25): not Temporal. Fencing now, in the always-on lease work; the agent
   journal as its own stream right after routines lands.
 - **iPhone** (2026-09-25): deferred. When it resumes: native Swift, a free Apple ID (no push or
