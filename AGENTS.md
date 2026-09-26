@@ -92,6 +92,7 @@ docs/             Architecture, agent system, protocol and data formats, perform
 | Install | `pnpm install` (Node ≥ 24.4, pnpm 10) |
 | Dev (daemon + web, live agent) | `pnpm dev` → http://localhost:5173 |
 | Demo: daemon (mock agent) + web on a throwaway demo vault | `pnpm dev:mock` → http://localhost:5174 |
+| Quick loop: what changed since `main` (or `[<base>]`) | `pnpm test:changed` (only the tests that import a changed file, every package) / `pnpm check:changed` (+ lint and secret scan of the changed files, typecheck) |
 | Lint / format | `pnpm lint` / `pnpm lint:fix` |
 | Typecheck | `pnpm typecheck` |
 | Unit tests | `pnpm test` (or `pnpm --filter @ddl/<pkg> test`) |
@@ -106,8 +107,10 @@ docs/             Architecture, agent system, protocol and data formats, perform
 | Smoke-test the real model | `pnpm --filter @ddl/agent exec tsx scripts/smoke-pi.ts` (also `smoke-llm.ts`) |
 | Smoke-test the Cursor CLI harness | `pnpm --filter @ddl/agent exec tsx scripts/smoke-cursor.ts [--model=…]` (your CLI login, a little usage) |
 
-Scope commands to the package you are working in while iterating. Before you finish, run
-`pnpm check`; for UI or agent changes also run the relevant parts of what CI runs:
+While iterating, `pnpm test:changed` (seconds for most edits) or commands scoped to your package.
+Before you finish, run `pnpm check`: turbo replays every package whose inputs didn't change, so
+it's quick after the first run (worktrees share the main checkout's `.turbo/cache`). For UI or
+agent changes also run the relevant parts of what CI runs:
 `pnpm build && pnpm size:check`, `pnpm bench && pnpm bench:check`, `pnpm e2e`, `pnpm e2e:perf`,
 `pnpm eval:mock`, and `pnpm vim:check` for editor, keyboard or vim changes (see `docs/CI.md`).
 
@@ -241,7 +244,16 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
   `pnpm-workspace.yaml` (`catalog:`) and must also be declared by `apps/daemon` —
   `apps/daemon/build.mjs` fails the build if one is missing.
 - **Turbo:** `typecheck`/`test` depend on a `transit` task so a change in `@ddl/core` invalidates
-  every dependent's cache. Env vars reach tasks only via `passThroughEnv`/`globalEnv`.
+  every dependent's cache. Env vars reach tasks only via `env`/`passThroughEnv`/`globalEnv`. CI
+  caches every task between runs (benchmarks, e2e shards, perf, `vim:check` and the mock evals
+  too), so a task's key must cover everything it reads: a test that reads a file outside its
+  package needs it in that package's `turbo.json` `inputs` (`$TURBO_ROOT$/…`; explicit globs
+  don't honor `.gitignore`, so exclude `node_modules`, `dist`, `.turbo`), and shared config
+  goes in `globalDependencies`.
+- **Vitest isolation:** agent, core, contract and editor run with `isolate: false` (test files
+  share modules within a worker; imports dominated their time). A test there must not leave
+  module-level state behind; one that needs a fresh module graph calls `vi.resetModules()` and
+  imports dynamically (see `packages/editor/src/vim-races.test.ts`).
 - **Daemon startup:** the daemon bundle is code-split; heavy optional dependencies load on first
  use (the Pi harness from `@ddl/agent/pi`, the Cursor harness from `@ddl/agent/cursor`, Playwright
  via `import()` where Chrome launches, the MCP SDK only when `mcp.json` names servers). Don't
@@ -291,7 +303,25 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
 
 ## Testing expectations
 
-- Unit tests are colocated (`foo.test.ts`). Every bug fix gets a regression test.
+One good test per behavior, at the cheapest layer that really protects it. Before adding a test,
+look for the one that already makes the claim; before adding a layer (a scenario over a unit test,
+an e2e over a scenario), make sure the new layer catches something the cheaper one can't (real
+keyboard input, a real browser, several daemons).
+
+- Unit tests are colocated (`foo.test.ts`). Every bug fix gets a regression test, unless an
+  existing test already fails without the fix.
+- A property test states the rule; keep only the examples that pin what it doesn't (exact output,
+  a tricky input from a real bug). A table case earns its row only if it takes a different path.
+- Don't test what the type checker or another test already guarantees: getters, wiring, labels.
+- Agent behavior through the runtime lives in `packages/agent/test/scenarios/` (the fake brain);
+  the scripted tests in `test/*.test.ts` are for what a scenario can't set up precisely.
+- E2E: one test per user journey step (`docs/USER_JOURNEYS.md`) and what only a real browser
+  shows; not logic a unit test covers.
+- Slow is a bug: no real sleeps (inject the clock or shorten the timing the code exposes, as the
+  multi-daemon tests do with sync and lease timings), no real Chrome or process unless that's what's
+  tested.
+- Property tests run 100 cases (`FC_NUM_RUNS`, `scripts/vitest/setup-fast-check.ts`); run a deep
+  sweep with `FC_NUM_RUNS=2000 pnpm test` after touching merge, sync or parsing code.
 - Benchmarks are `*.bench.ts` using Vitest 5's `bench` fixture and assert p99 budgets.
 - UI: Playwright functional e2e (`apps/web/e2e`) and perf e2e with budgets (`docs/PERFORMANCE.md`),
   against real daemons (see "E2E daemons" above).
