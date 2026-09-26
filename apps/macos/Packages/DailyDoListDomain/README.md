@@ -104,8 +104,8 @@ What "exactly" takes, beyond the algorithms:
 | `tasks.json` | 448 | 69 curated documents (fences, frontmatter limits, BOM, CRLF, nesting, notes, emoji/CJK/combining marks) + 220 seeded random documents (1,267 tasks), line edits, blank texts, statuses |
 | `tracker.json` | 319 steps | 85 edit sequences: typing char by char, prefix extensions, typo fixes, reorders, duplicates, deletions, rewrites, thresholds, nesting, notes, Unicode, 45 seeded random edit sequences, and targeted cases that pin each matcher constant (distance weight and cap, prefix score, fuzzy budget and minimum window, duplicate alignment budget and ties, anchor lookup, score ties) |
 | `anchors.json` | 89 | curated cases (deleted tasks, empty and duplicate ids, shared lines) and seeded random edits |
-| `agent-text.json` | 592 | agent markers on 230 lines (ids of every length and alphabet, markers mid-line, blanks and tabs, emoji offsets) with `parseAgentLine`, `stripAgentMarker`, `markAgentLine` × 5 ids; `parseTasks` and `anchorableLines` on 86 documents with agent lines; `resolveLineAnchors` on 276 edited documents |
-| `merge.json` | 607 | `diffLines` on 200 random line lists; `mergeText` on curated merges and 400 random edit pairs (insertions at the same place, adjacent hunks, deletions, conflicts, NFC/NFD, `\r`) |
+| `agent-text.json` | 598 | agent markers on 230 lines (ids of every length and alphabet, markers mid-line, blanks and tabs, emoji offsets) with `parseAgentLine`, `stripAgentMarker`, `markAgentLine` × 6 ids; `parseTasks` and `anchorableLines` on 86 documents with agent lines; `resolveLineAnchors` on 276 edited documents |
+| `merge.json` | 632 | `diffLines` on 200 random line lists and the core's examples; `mergeText` on the core's examples, curated merges and 400 random edit pairs (insertions at the same place, adjacent hunks, deletions, conflicts, NFC/NFD, `\r`) |
 
 Output is deterministic: times are formatted in `America/Los_Angeles` (the Swift tests use the
 same `TimeZone`), `new Date()` / `Date.now()` are pinned to 2026-09-23 09:30 there, and every
