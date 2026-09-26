@@ -16,7 +16,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run --passWithNoTests",
     "fake-openrouter": "tsx scripts/fake-openrouter.ts",
-    "dev:fake": "tsx scripts/dev-fake.ts"
+    "dev:fake": "tsx scripts/dev-fake.ts",
+    "dev:mock": "tsx scripts/dev-mock.ts"
   },
   "dependencies": {
     "@ddl/connectors": "workspace:*",
