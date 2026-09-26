@@ -120,9 +120,9 @@ export class BadgeWidget extends WidgetType {
 
   toDOM(view: EditorView): HTMLElement {
     const doc = view.dom.ownerDocument;
-    const root = doc.createElement("span");
-    root.setAttribute("role", "button");
-    root.tabIndex = 0;
+    const root = badgeButton(doc, () =>
+      view.state.facet(editorCallbacks).onAnnotationClick?.(parts.annotation),
+    );
     const part = (name: string, hidden: boolean) => {
       const el = root.appendChild(doc.createElement("span"));
       el.className = `cm-ddl-badge-${name}`;
@@ -140,18 +140,6 @@ export class BadgeWidget extends WidgetType {
     this.enter = false;
     badgeDom.set(root, parts);
     render(root, parts, this.annotation);
-
-    const activate = (event: Event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      view.state.facet(editorCallbacks).onAnnotationClick?.(parts.annotation);
-    };
-    // Keep the caret where it is: the badge is not part of the text.
-    root.addEventListener("mousedown", (event) => event.preventDefault());
-    root.addEventListener("click", activate);
-    root.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") activate(event);
-    });
     root.addEventListener("animationend", (event) => {
       if (event.target !== root) return;
       parts.entering = parts.popping = false;
@@ -173,4 +161,23 @@ export class BadgeWidget extends WidgetType {
   override ignoreEvent(): boolean {
     return true;
   }
+}
+
+/** A badge that works as a button without moving the caret: click, Enter or Space activate it. */
+export function badgeButton(doc: Document, activate: () => void): HTMLElement {
+  const root = doc.createElement("span");
+  root.setAttribute("role", "button");
+  root.tabIndex = 0;
+  const onActivate = (event: Event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    activate();
+  };
+  // Keep the caret where it is: the badge is not part of the text.
+  root.addEventListener("mousedown", (event) => event.preventDefault());
+  root.addEventListener("click", onActivate);
+  root.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") onActivate(event);
+  });
+  return root;
 }

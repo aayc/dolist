@@ -1,4 +1,5 @@
 import { type EditorView, WidgetType } from "@codemirror/view";
+import { badgeButton } from "../annotations/widget";
 import { editorCallbacks } from "../callbacks";
 import type { ActivityChip } from "../types";
 
@@ -69,9 +70,9 @@ export class ActivityChipWidget extends WidgetType {
 
   toDOM(view: EditorView): HTMLElement {
     const doc = view.dom.ownerDocument;
-    const root = doc.createElement("span");
-    root.setAttribute("role", "button");
-    root.tabIndex = 0;
+    const root = badgeButton(doc, () =>
+      view.state.facet(editorCallbacks).onActivityChipClick?.(parts.chip),
+    );
     const icon = root.appendChild(doc.createElement("span"));
     icon.className = "cm-ddl-badge-icon";
     icon.setAttribute("aria-hidden", "true");
@@ -81,17 +82,6 @@ export class ActivityChipWidget extends WidgetType {
     this.enter = false;
     chipDom.set(root, parts);
     render(root, parts, this.chip);
-
-    const activate = (event: Event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      view.state.facet(editorCallbacks).onActivityChipClick?.(parts.chip);
-    };
-    root.addEventListener("mousedown", (event) => event.preventDefault());
-    root.addEventListener("click", activate);
-    root.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") activate(event);
-    });
     root.addEventListener("animationend", (event) => {
       if (event.target !== root || !parts.entering) return;
       parts.entering = false;
