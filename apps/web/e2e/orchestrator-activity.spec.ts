@@ -2,10 +2,12 @@ import { expect, type Page, test } from "./fixtures";
 import { focusEditorEnd, openApp } from "./helpers";
 
 /*
- * What the orchestrator is doing while you write, with the real keyboard against the in-browser
- * mock (mockSpeed=4: the editor saves 300 ms after the last key, and the mock's 1.2 s settle delay
- * becomes 300 ms).
+ * What the orchestrator is doing while you write, with the real keyboard, against the daemon's
+ * live agent (the fake OpenRouter): its turns last long enough for every phase to show. The editor
+ * saves 300 ms after the last key; the e2e vault settles lines after 800 ms.
  */
+
+test.use({ daemonSpec: { agent: "live" } });
 
 interface Seen {
   at: number;
@@ -92,7 +94,7 @@ test.describe("what the orchestrator is doing while you write", () => {
     test.setTimeout(60_000);
     await openApp(page);
     await recordActivity(page);
-    const request = "Find a plumber for Saturday";
+    const request = "Can you find a plumber for Saturday?";
     const typed = await typeLine(page, request, { first: true });
 
     const chip = chipOn(page, request);
@@ -183,16 +185,18 @@ test.describe("what the orchestrator is doing while you write", () => {
     await expect(
       view.getByTestId("message-text").filter({ hasText: "Nothing is running" }),
     ).toBeVisible();
-    const statuses = (await seen(page)).filter((s) => s.what === "status").map((s) => s.text);
-    expect(statuses).toContain("Orchestrator: working on your message");
-    expect(statuses.at(-1)).toBe("");
+    const statuses = async () =>
+      (await seen(page)).filter((s) => s.what === "status").map((s) => s.text);
+    expect(await statuses()).toContain("Orchestrator: working on your message");
+    // Once the turn ends, the status bar says nothing again.
+    await expect.poll(async () => (await statuses()).at(-1)).toBe("");
   });
 
   test("with reduced motion nothing pulses", async ({ page }) => {
     test.setTimeout(60_000);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await openApp(page);
-    const request = "Find a dentist near the office";
+    const request = "Can you find a dentist near the office?";
     await typeLine(page, request, { first: true });
     const chip = chipOn(page, request);
     await expect(chip).toHaveAttribute("data-kind", /noticed|looking|working/);
