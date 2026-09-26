@@ -346,8 +346,8 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
   library is Foundation only), and `DailyDoListComputer` (`ddl-computer`, the helper the daemon
   spawns to operate other apps through their accessibility tree; not linked into the app).
   `IntegrationTests/` is a separate package that runs against the real daemon.
-- **Drawings:** `@ddl/core`'s drawing format and description are the reference, as vim.js is
-  for vim: `DailyDoListDrawing` replays `packages/core/test/drawings/fixtures` byte for byte, so
+- **Drawings:** `@ddl/core`'s drawing format is the reference, as vim.js is for vim:
+  `DailyDoListDrawing` replays `packages/core/test/drawings/fixtures` byte for byte, so
   a format change updates both sides and adds a fixture. Its Rough.js port is checked against
   samples from Rough.js itself (`fixtures/rough-parity.jsonl`); see its README. In notes,
   `DailyDoListEditor` draws embeds with it (floats are text-container exclusion paths, recomputed

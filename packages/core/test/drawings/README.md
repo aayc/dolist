@@ -2,9 +2,9 @@
 
 Shared test cases for drawing files (`*.excalidraw.md`, the Obsidian Excalidraw plugin's format).
 `@ddl/core` (`packages/core/src/drawings/`) is the reference implementation, the way vim.js is for
-vim mode: the Swift drawing engine (`DailyDoListDrawing`) replays every fixture here and must
-produce the same results, byte for byte where this README says so. When either side finds a case
-the other gets wrong, add a fixture.
+vim mode: the Swift drawing engine (`DailyDoListDrawing`) replays every fixture here (all but the
+description, which only TypeScript makes) and must produce the same results, byte for byte where
+this README says so. When either side finds a case the other gets wrong, add a fixture.
 
 ## Files
 
@@ -46,7 +46,7 @@ plugin writes: `src/shared/ExcalidrawData.ts` `generateMDBase`, `src/shared/exca
 ## Replaying a fixture
 
 1. **Parse** the input and compare every `parse` field.
-2. **Describe** the parsed scene with `title` and compare `description` exactly.
+2. **Describe** the parsed scene with `title` and compare `description` exactly (TypeScript only).
 3. **Write it back**: serialize the parsed scene with the parsed input as the previous file. The
    bytes must equal the file `roundTrip` names. `null` means the scene is unreadable and the writer
    must refuse to write over it.
@@ -55,8 +55,8 @@ plugin writes: `src/shared/ExcalidrawData.ts` `generateMDBase`, `src/shared/exca
 
 ## The rules, briefly
 
-The code is the full statement (`file.ts`, `describe.ts`, `embed.ts`); these are the parts a port
-gets wrong most easily.
+The code is the full statement (`file.ts`, `embed.ts`); these are the parts a port gets wrong most
+easily.
 
 **Reading**
 
@@ -103,19 +103,6 @@ gets wrong most easily.
 - The drawing section's body is the fence `` ```json ``, the JSON, `` ``` ``, `%%` and a line
   break, then whatever followed `%%` before. Compressed: LZ-String base64 in 256-character lines
   joined by blank lines.
-
-**Describing** (`describe.ts`)
-
-- Deleted elements don't count. Text is `originalText`, else `text`, with whitespace runs (JS
-  `\s`, spelled out in `WHITESPACE`) turned into one space and trimmed.
-- Labels are clipped to 60 code points and the title to 100: the first `n - 1`, trailing spaces
-  removed, then `…`. The limit (2000) counts code points.
-- A shape's label is its bound texts joined with ` / `. An unbound arrow end is "near" the
-  closest shape, free text or image within 50 px of its bounding box (ties: smaller area, then
-  scene order).
-- Location is the third of the drawing's bounding box (unrotated) the element's center falls in.
-- Too long: every section lists at most `k` items plus `… and N more`, with the largest `k` that
-  fits under the limit less the note; then the note line.
 
 ## Adding a fixture
 
