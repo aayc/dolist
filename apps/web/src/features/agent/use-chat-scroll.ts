@@ -51,25 +51,21 @@ export function useChatScroll(
   rows: number,
 ): ChatScroll {
   const [start, setStart] = useState(() => Math.max(0, rows - ROWS_PER_PAGE));
-  const startRef = useRef(start);
   const heightBefore = useRef<number | null>(null);
   const showFrom = useCallback(
     (index: number) => {
-      const next = Math.max(0, index);
-      if (next >= startRef.current) return;
+      if (index >= start || start === 0) return;
       heightBefore.current = scrollRef.current?.scrollHeight ?? null;
-      startRef.current = next;
-      setStart(next);
+      setStart(Math.max(0, index));
     },
-    [scrollRef],
+    [scrollRef, start],
   );
-  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once the earlier rows rendered
   useLayoutEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller || heightBefore.current === null) return;
     scroller.scrollTop += scroller.scrollHeight - heightBefore.current;
     heightBefore.current = null;
-  }, [start, scrollRef]);
+  });
 
   const pinnedRef = useRef(true);
   const [pinned, setPinnedState] = useState(true);
@@ -120,8 +116,8 @@ export function useChatScroll(
       return;
     }
     setPinned(atBottom);
-    if (el.scrollTop < EARLIER_WITHIN_PX) showFrom(startRef.current - ROWS_PER_PAGE);
-  }, [scrollRef, setPinned, endJump, showFrom]);
+    if (el.scrollTop < EARLIER_WITHIN_PX) showFrom(start - ROWS_PER_PAGE);
+  }, [scrollRef, setPinned, endJump, showFrom, start]);
 
   const onWheel = useCallback(() => {
     if (jumping.current === null) return;

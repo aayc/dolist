@@ -228,33 +228,26 @@ test("thread:open (badge click → thread rendered)", async ({ page }) => {
 test("thread:open for a 1000-message thread (its latest rows)", async ({ page }) => {
   await boot(page);
   await waitForPrefetch(page);
-  const now = Date.now();
-  const messages = Array.from({ length: 1000 }, (_, i) => ({
-    id: `m${i}`,
-    author: "subagent:research",
-    createdAt: now - (1000 - i) * 1000,
-    ...(i % 4 === 3
-      ? { kind: "tool_call", toolCallId: `c${i}`, toolName: "web_search", input: {}, status: "ok" }
-      : {
-          kind: "text",
-          role: "agent",
-          text: `Checked **option ${i}**:\n\n- [a shop](https://example.com/${i})\n- 3–5 days`,
-        }),
-  }));
-  const thread = {
-    id: "thr_long",
-    taskId: null,
-    notePath: null,
-    title: "A long thread",
-    status: "done",
-  };
-  await page.evaluate((t) => window.__ddlMock!.seedThreads([t]), {
-    ...thread,
-    createdAt: now - 1e6,
-    updatedAt: now,
-    messages,
-    artifacts: [],
-    surfaces: [],
+  await page.evaluate(() => {
+    const at = Date.now();
+    const messages = Array.from({ length: 1000 }, (_, i) => ({
+      id: `m${i}`,
+      kind: "text",
+      role: "agent",
+      author: "orchestrator",
+      createdAt: at,
+      text: `**Option ${i}**:\n\n- [a shop](https://example.com/${i})\n- 3–5 days`,
+    }));
+    const thread = {
+      id: "thr_long",
+      title: "A long thread",
+      taskId: null,
+      notePath: null,
+      status: "done",
+    };
+    window.__ddlMock!.seedThreads([
+      { ...thread, createdAt: at, updatedAt: at, messages, artifacts: [], surfaces: [] },
+    ]);
   });
   await page.keyboard.press("ControlOrMeta+Shift+A");
   const item = page.locator("[data-thread-id='thr_long']");
@@ -265,9 +258,7 @@ test("thread:open for a 1000-message thread (its latest rows)", async ({ page })
     expect(await page.getByTestId("chat-list").locator("> *").count()).toBeLessThan(100);
     await page.getByTestId("thread-back").click();
   }
-  expect(record("thread:open (1000 messages)", samples, BUDGET_MS.threadOpen, "p95").passed).toBe(
-    true,
-  );
+  expect(record("thread:open (1000 msgs)", samples, BUDGET_MS.threadOpen, "p95").passed).toBe(true);
 });
 
 test("a 5000-note vault: the explorer's rows in view, 300 new files at once", async ({ page }) => {

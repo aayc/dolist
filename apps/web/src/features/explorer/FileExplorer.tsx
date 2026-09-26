@@ -1,5 +1,5 @@
 import { ChevronsDownUp, ExternalLink, FilePlus, FolderPlus, Pencil, Trash } from "lucide-react";
-import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useServices } from "../../app/services";
 import { ContextMenu, type MenuItem } from "../../components/ContextMenu";
 import { IconButton } from "../../components/IconButton";
@@ -18,6 +18,8 @@ interface MenuState {
 /** `.tree-row`'s height: only the rows in view (and a margin) are rendered. */
 const ROW_HEIGHT = 28;
 const OVERSCAN = 20;
+/** The explorer is never taller than the screen. */
+const ROWS_IN_VIEW = Math.ceil(screen.height / ROW_HEIGHT);
 
 function visibleRows(
   nodes: readonly TreeNode[],
@@ -32,28 +34,6 @@ function visibleRows(
   return out;
 }
 
-function useRowWindow(ref: RefObject<HTMLDivElement | null>) {
-  const [range, setRange] = useState({ start: 0, end: 2 * OVERSCAN });
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const update = () => {
-      const start = Math.max(0, Math.floor(el.scrollTop / ROW_HEIGHT) - OVERSCAN);
-      const end = Math.ceil((el.scrollTop + el.clientHeight) / ROW_HEIGHT) + OVERSCAN;
-      setRange((r) => (r.start === start && r.end === end ? r : { start, end }));
-    };
-    // Also reports the first size, once laid out.
-    const observer = new ResizeObserver(update);
-    observer.observe(el);
-    el.addEventListener("scroll", update, { passive: true });
-    return () => {
-      observer.disconnect();
-      el.removeEventListener("scroll", update);
-    };
-  }, [ref]);
-  return range;
-}
-
 export function FileExplorer() {
   const { workspace } = useServices();
   const entries = useVaultStore((s) => s.entries);
@@ -61,8 +41,9 @@ export function FileExplorer() {
   const expanded = useUiStore((s) => s.expanded);
   const tree = useMemo(() => buildTree(entries.values()), [entries]);
   const rows = useMemo(() => visibleRows(tree, expanded), [tree, expanded]);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const { start, end } = useRowWindow(scrollRef);
+  const [firstInView, setFirstInView] = useState(0);
+  const start = Math.max(0, firstInView - OVERSCAN);
+  const end = firstInView + ROWS_IN_VIEW + OVERSCAN;
   const [menu, setMenu] = useState<MenuState | null>(null);
 
   const openMenu = useCallback(
@@ -135,10 +116,10 @@ export function FileExplorer() {
         />
       </div>
       <div
-        ref={scrollRef}
         className="explorer-tree"
         role="tree"
         aria-label="Files"
+        onScroll={(event) => setFirstInView(Math.floor(event.currentTarget.scrollTop / ROW_HEIGHT))}
         onContextMenu={(event) => {
           if ((event.target as Element).closest(".tree-row")) return;
           event.preventDefault();
