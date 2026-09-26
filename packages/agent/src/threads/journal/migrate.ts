@@ -170,9 +170,12 @@ async function migrateSnapshots(context: Context): Promise<void> {
 }
 
 async function mergeJournalCopies(context: Context): Promise<void> {
-  const copies = (
-    await readFiles(context.storage, PERSISTED_PATHS.threadJournals, ".jsonl")
-  ).filter((file) => persistedThreadIdFromJournalPath(file.path) === null);
+  const copies = await readFiles(
+    context.storage,
+    PERSISTED_PATHS.threadJournals,
+    ".jsonl",
+    (path) => persistedThreadIdFromJournalPath(path) === null,
+  );
   await forEachLimited(copies, CONCURRENCY, async (file) => {
     const read = decodePersistedThreadJournal(file.text);
     const owners = new Set(
@@ -194,10 +197,15 @@ async function mergeJournalCopies(context: Context): Promise<void> {
   });
 }
 
-async function readFiles(storage: StorageProvider, folder: string, ext: string) {
+async function readFiles(
+  storage: StorageProvider,
+  folder: string,
+  ext: string,
+  wanted: (path: string) => boolean = () => true,
+) {
   const paths = (await storage.list({ prefix: folder, includeHidden: true }))
     .map((entry) => entry.path)
-    .filter((path) => isChild(path, folder, ext));
+    .filter((path) => isChild(path, folder, ext) && wanted(path));
   const files: StoredFile[] = [];
   await forEachLimited(paths, CONCURRENCY, async (path) => {
     const file = await storage.read(path);

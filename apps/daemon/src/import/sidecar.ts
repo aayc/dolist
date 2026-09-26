@@ -18,7 +18,7 @@
  * With no sink it only counts, which is how the preview reports the same numbers the import uses.
  */
 import { join } from "node:path";
-import { foldJournal, planSnapshotImports, readSnapshots } from "@ddl/agent";
+import { foldJournal, planSnapshotImports, readSnapshots } from "@ddl/agent/journal";
 import {
   decodePersistedJournalLine,
   decodePersistedRecords,

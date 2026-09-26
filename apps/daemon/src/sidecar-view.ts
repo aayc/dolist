@@ -1,4 +1,4 @@
-import { foldJournal } from "@ddl/agent";
+import { foldJournal } from "@ddl/agent/journal";
 import {
   decodePersistedApprovals,
   decodePersistedRecords,

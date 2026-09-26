@@ -1,6 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createThreadStore, foldJournal, type TaskEvent, TaskWatcher } from "@ddl/agent";
+import { createThreadStore, type TaskEvent, TaskWatcher } from "@ddl/agent";
+import { foldJournal } from "@ddl/agent/journal";
 import {
   decodePersistedRecords,
   decodePersistedRoutines,
