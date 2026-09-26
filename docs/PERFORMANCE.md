@@ -15,6 +15,8 @@ spec writes `apps/web/perf-results.json`.
 | `daily:prev` | `⌘⇧P` keydown → previous daily note visible | 50 / 150 ms |
 | `tab:switch` | switching between a 2 000-line note and today's note | 30 ms |
 | `thread:open` | badge click → thread rendered | 100 ms |
+| `thread:open (1000 messages)` | inbox click → a 1 000-message thread rendered (fewer than 100 rows) | 100 ms |
+| `vault burst` | 300 `vault.changed` events for new files → shown, 5 000-note vault (fewer than 100 explorer rows) | 100 ms |
 | `keystroke` (p95) | keydown → next frame after the DOM update, 2 000-line note | 16 ms |
 | `keystroke (vim)` (p95) | the same with vim mode on: insert-mode typing, then normal-mode motions, `x` and `u` | 16 ms |
 | `keystroke (beside drawings)` (p95) | typing beside the first of six embedded drawings (floats the text wraps around) | 16 ms |
@@ -24,7 +26,11 @@ CI multiplies budgets by `PERF_BUDGET_MULTIPLIER=2` (slower shared runners). The
 Chrome's frame-rate limiter so "→ next frame" measures work, not vsync alignment.
 
 Latest local run (Apple Silicon): keystroke p95 1.6 ms (vim mode 1.8 ms, beside drawings 1.7 ms),
-daily open ~4–5 ms, tab switch 14 ms, thread open 9 ms, first load 106 ms, zero long tasks.
+daily open ~4–5 ms, tab switch 14 ms, thread open 9 ms (1 000 messages: 7 ms, was 120 ms), first
+load 106 ms, 300 new files 13 ms (was 3.5 s), zero long tasks.
+
+Large data comes from the mock: `?mockNotes=5000` adds notes, and `window.__ddlMock.seedThreads`
+and `emitEvents` add threads and push server events as the socket would (one task each).
 
 Drawings stay off the keystroke path: an embed's box is a widget from the live preview's
 visible-range pass (reused while its `![[…]]` doesn't change), static renders are cached by the
@@ -102,7 +108,7 @@ budgets.
 
 | Bundle | Budget (gzip) | Current |
 | --- | --- | --- |
-| Initial JS (entry + static imports) | 320 kB | ~279 kB |
+| Initial JS (entry + static imports) | 320 kB | ~282 kB |
 | Initial CSS | 40 kB | ~8 kB |
 | Total JS | 1 300 kB | ~1 217 kB |
 
@@ -148,6 +154,12 @@ layer (~1.3 kB gz) is installed from `App` for that reason; the size check catch
   and each frame re-renders only the markdown block that changed. An idle chat requests no frames
   and runs no animations (`e2e/chat.spec.ts` checks it). Chat animations are opacity and
   transform only.
+- Lists that grow with the vault or a thread render what's on screen. The explorer renders the rows
+  in view of a flat list (rows are 28 px); a chat renders its latest 30 rows and adds earlier ones
+  as you scroll up to them. Vault changes are published once per frame, so a burst of events
+  (sync, an import) rebuilds the file list and the explorer once.
+- A streamed delta renders no React: `useThreadMessages` keeps a thread's rows while only agent
+  text changed, and `AgentText` paints the text.
 - Measure before adding to a view that opens often: the chat bar's keycap hint is laid out only
   while you type, because the first layout of the ↩ and ⇧ glyphs looks up fallback fonts (~12 ms,
   which had doubled `thread:open`).
