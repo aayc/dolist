@@ -24,7 +24,7 @@ import type {
   SyncLeasePriority,
   Unsubscribe,
 } from "@ddl/core";
-import { errorMessage } from "@ddl/core";
+import { errorMessage, Listeners } from "@ddl/core";
 import {
   AgentLease,
   agentLeaseClient,
@@ -89,7 +89,9 @@ export function effectivePlacement(
 export class AgentSupervisor implements PlacementSource {
   readonly #options: AgentSupervisorOptions;
   readonly #now: () => number;
-  readonly #listeners = new Set<(snapshot: PlacementSnapshot) => void>();
+  readonly #listeners = new Listeners<PlacementSnapshot>((error) =>
+    this.#options.logger.error("Placement listener failed", { error: errorMessage(error) }),
+  );
   readonly #unsubscribes: Unsubscribe[] = [];
   #arrangement: Arrangement = { kind: "idle" };
   /** A lease being let go (see `heldEpoch`). */
@@ -183,10 +185,7 @@ export class AgentSupervisor implements PlacementSource {
   }
 
   onChange(listener: (snapshot: PlacementSnapshot) => void): Unsubscribe {
-    this.#listeners.add(listener);
-    return () => {
-      this.#listeners.delete(listener);
-    };
+    return this.#listeners.add(listener);
   }
 
   setRelay(state: RelayState | null): void {
@@ -427,13 +426,7 @@ export class AgentSupervisor implements PlacementSource {
     const key = JSON.stringify([snapshot, this.status()]);
     if (key === this.#lastKey) return;
     this.#lastKey = key;
-    for (const listener of [...this.#listeners]) {
-      try {
-        listener(snapshot);
-      } catch (error) {
-        this.#options.logger.error("Placement listener failed", { error: errorMessage(error) });
-      }
-    }
+    this.#listeners.emit(snapshot);
     this.#options.runtime.refreshStatus();
   }
 

@@ -15,6 +15,7 @@ import {
   type CitedSource,
   createId,
   errorMessage,
+  Listeners,
   type Logger,
   type SurfaceKind,
   silentLogger,
@@ -112,7 +113,9 @@ class SidecarThreadStore implements JournaledThreadStore {
   private readonly pendingApprovals: (threadId: string) => number;
   private readonly epoch: () => number;
   private readonly entries = new Map<string, Entry>();
-  private readonly listeners = new Set<(event: ThreadStoreEvent) => void>();
+  private readonly listeners = new Listeners<ThreadStoreEvent>((error) =>
+    this.logger.error("Thread store listener failed", { error: errorMessage(error) }),
+  );
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(options: ThreadStoreOptions) {
@@ -346,10 +349,7 @@ class SidecarThreadStore implements JournaledThreadStore {
   }
 
   on(listener: (event: ThreadStoreEvent) => void): Unsubscribe {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
+    return this.listeners.add(listener);
   }
 
   // ── Journal (agent state) ─────────────────────────────────────────────────
@@ -612,13 +612,7 @@ class SidecarThreadStore implements JournaledThreadStore {
   }
 
   private emit(event: ThreadStoreEvent): void {
-    for (const listener of [...this.listeners]) {
-      try {
-        listener(event);
-      } catch (error) {
-        this.logger.error("Thread store listener failed", { error: errorMessage(error) });
-      }
-    }
+    this.listeners.emit(event);
   }
 }
 

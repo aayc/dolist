@@ -14,6 +14,7 @@ import {
   type ApprovalStatus,
   type ArtifactMeta,
   errorMessage,
+  Listeners,
   type Logger,
   summarizeThread,
   type TaskAgentRecord,
@@ -46,7 +47,9 @@ export interface SidecarViewOptions {
  */
 export class SidecarView {
   readonly #options: SidecarViewOptions;
-  readonly #listeners = new Set<(event: SidecarViewEvent) => void>();
+  readonly #listeners = new Listeners<SidecarViewEvent>((error) =>
+    this.#options.logger.error("Sidecar view listener failed", { error: errorMessage(error) }),
+  );
   readonly #threads = new Map<string, Thread>();
   #approvals: ApprovalRequest[] = [];
   #records: TaskAgentRecord[] = [];
@@ -91,10 +94,7 @@ export class SidecarView {
   }
 
   on(listener: (event: SidecarViewEvent) => void): Unsubscribe {
-    this.#listeners.add(listener);
-    return () => {
-      this.#listeners.delete(listener);
-    };
+    return this.#listeners.add(listener);
   }
 
   listThreads(
@@ -258,12 +258,6 @@ export class SidecarView {
   }
 
   #emit(event: SidecarViewEvent): void {
-    for (const listener of [...this.#listeners]) {
-      try {
-        listener(event);
-      } catch (error) {
-        this.#options.logger.error("Sidecar view listener failed", { error: errorMessage(error) });
-      }
-    }
+    this.#listeners.emit(event);
   }
 }

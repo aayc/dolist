@@ -8,6 +8,7 @@
 import {
   type ConnectorStatus,
   compareStrings,
+  Listeners,
   type Logger,
   silentLogger,
   type ToolSpec,
@@ -69,7 +70,9 @@ export function createConnectorManager(
 
 export class ConnectorManager implements ConnectorToolSource {
   private entries = new Map<string, ServerEntry>();
-  private readonly listeners = new Set<(status: ConnectorStatus[]) => void>();
+  private readonly listeners = new Listeners<ConnectorStatus[]>((error) =>
+    this.logger.warn("connector status listener failed", { error: errorMessage(error) }),
+  );
   private readonly logger: Logger;
   private readonly env: EnvSource;
   private readonly retry: Partial<RetryPolicy> | undefined;
@@ -110,10 +113,7 @@ export class ConnectorManager implements ConnectorToolSource {
   }
 
   onStatus(listener: (status: ConnectorStatus[]) => void): Unsubscribe {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
+    return this.listeners.add(listener);
   }
 
   async reload(config: ConnectorsConfig): Promise<void> {
@@ -299,13 +299,7 @@ export class ConnectorManager implements ConnectorToolSource {
       const serialized = JSON.stringify(status);
       if (serialized === this.lastEmitted) return;
       this.lastEmitted = serialized;
-      for (const listener of [...this.listeners]) {
-        try {
-          listener(status);
-        } catch (error) {
-          this.logger.warn("connector status listener failed", { error: errorMessage(error) });
-        }
-      }
+      this.listeners.emit(status);
     });
   }
 }

@@ -3,7 +3,7 @@
  * inferred. The security policy reads the registry on every request, so a change applies at once:
  * each entry adds an allowed Host, its `https://` Origin and `wss://` in the page's CSP.
  */
-import { normalizeRemoteHost, REMOTE_LIMITS } from "@ddl/core";
+import { Listeners, normalizeRemoteHost, REMOTE_LIMITS } from "@ddl/core";
 
 export interface RemoteHosts {
   list(): readonly string[];
@@ -43,7 +43,7 @@ export function normalizeRemoteHosts(hosts: readonly string[]): readonly string[
 /** The live registry. `set` validates the whole list first and changes nothing when it throws. */
 export class RemoteHostRegistry implements RemoteHosts {
   #hosts: readonly string[];
-  readonly #listeners = new Set<(hosts: readonly string[]) => void>();
+  readonly #listeners = new Listeners<readonly string[]>();
 
   constructor(initial: readonly string[] = []) {
     this.#hosts = normalizeRemoteHosts(initial);
@@ -59,19 +59,11 @@ export class RemoteHostRegistry implements RemoteHosts {
       return;
     }
     this.#hosts = next;
-    // A throwing listener must not keep the others (the policy's consumers) from hearing it.
-    for (const listener of [...this.#listeners]) {
-      try {
-        listener(next);
-      } catch {}
-    }
+    this.#listeners.emit(next);
   }
 
   onChange(listener: (hosts: readonly string[]) => void): () => void {
-    this.#listeners.add(listener);
-    return () => {
-      this.#listeners.delete(listener);
-    };
+    return this.#listeners.add(listener);
   }
 }
 
