@@ -2,7 +2,7 @@
  * Synthetic vaults for the import tests (temp folders only, invented content): an Obsidian vault
  * with its config, plugins, daily notes, attachments, a canvas, Dataview blocks and a drawing, and
  * a current Daily Do List vault with daily notes in another folder and format, a routine and an
- * agent sidecar (threads, records, approvals, routines and tracker state).
+ * agent sidecar (threads and their journals, records, approvals, routines and tracker state).
  */
 import {
   lstat,
@@ -21,13 +21,17 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   encodePersistedApprovals,
+  encodePersistedJournalEvent,
   encodePersistedRecords,
   encodePersistedRoutines,
   encodePersistedTaskState,
   encodePersistedThread,
+  type PersistedJournalEvent,
+  type PersistedJournalPayload,
   type PersistedTaskAgentRecord,
   type PersistedThread,
   type PersistedTrackedTask,
+  persistedThreadJournalPath,
 } from "@ddl/contract";
 import {
   type AppSettings,
@@ -169,6 +173,9 @@ export const ROUTINE_PATH = "Routines/Morning briefing.md";
 
 export function currentFiles(): Record<string, string | Buffer> {
   const routineId = routineIdForPath(ROUTINE_PATH);
+  const dentist = thread("thr_dentist", "tsk_dentist", "Daily/2026-09-24.md");
+  const gone = thread("thr_gone", "tsk_gone", "Daily/2026-09-24.md");
+  const routine: PersistedThread = { ...thread("thr_routine", "run_1", null), routineId };
   const records: PersistedTaskAgentRecord[] = [
     record("tsk_dentist", "Daily/2026-09-24.md", "Book the dentist", 1, "thr_dentist"),
     record("tsk_report", "Daily/2026-09-24.md", "Draft the quarterly report", 2, null),
@@ -187,22 +194,15 @@ export function currentFiles(): Record<string, string | Buffer> {
     ".trash/Deleted note.md": "Gone but kept.\n",
     ".obsidian/app.json": "{}",
     ".daily-do-list/settings.json": `${JSON.stringify(CURRENT_SETTINGS_FILE, null, 2)}\n`,
-    ".daily-do-list/threads/thr_dentist.json": encodePersistedThread(
-      thread("thr_dentist", "tsk_dentist", "Daily/2026-09-24.md"),
-    ),
-    ".daily-do-list/threads/thr_gone.json": encodePersistedThread(
-      thread("thr_gone", "tsk_gone", "Daily/2026-09-24.md"),
-    ),
+    ".daily-do-list/threads/thr_dentist.json": encodePersistedThread(dentist),
+    ".daily-do-list/threads/thr_gone.json": encodePersistedThread(gone),
     ".daily-do-list/threads/thr_passport.json": encodePersistedThread(
       thread("thr_passport", "tsk_passport", "Daily/2026-09-23.md"),
     ),
     ".daily-do-list/threads/thr_ideas.json": encodePersistedThread(
       thread("thr_ideas", null, "ideas.md"),
     ),
-    ".daily-do-list/threads/thr_routine.json": encodePersistedThread({
-      ...thread("thr_routine", "run_1", null),
-      routineId,
-    }),
+    ".daily-do-list/threads/thr_routine.json": encodePersistedThread(routine),
     ".daily-do-list/artifacts/thr_dentist/art_1.png.b64": PNG_BYTES.toString("base64"),
     ".daily-do-list/state/records.json": encodePersistedRecords({ records, specs: {} }),
     ".daily-do-list/state/approvals.json": encodePersistedApprovals({
@@ -259,8 +259,37 @@ export function currentFiles(): Record<string, string | Buffer> {
         settled: {},
       }),
     ".daily-do-list/sync/local.json": '{"format":1,"entries":{}}\n',
-    ".daily-do-list/journal/threads/thr_dentist.jsonl": '{"id":"ev_1","kind":"message"}\n',
+    [persistedThreadJournalPath("thr_dentist")]: startedJournal(dentist),
+    [persistedThreadJournalPath("thr_gone")]: startedJournal(gone),
+    [persistedThreadJournalPath("thr_routine")]: journal("thr_routine", [
+      { type: "thread.imported", thread: routine },
+    ]),
   };
+}
+
+/** The journal of a thread the store started: its snapshot is the fold of these events. */
+function startedJournal(thread: PersistedThread): string {
+  const { id, taskId, notePath, title, status, createdAt, messages } = thread;
+  return journal(id, [
+    { type: "thread.created", thread: { id, taskId, notePath, title, status, createdAt } },
+    ...messages.map((message) => ({ type: "message" as const, message })),
+    { type: "run.prompted", session: "ses_1", text: "Book the dentist" },
+  ]);
+}
+
+function journal(threadId: string, payloads: PersistedJournalPayload[]): string {
+  return payloads
+    .map((payload, i) => {
+      const envelope = {
+        v: 1 as const,
+        id: `evt_${threadId}_${i + 1}`,
+        epoch: 0,
+        seq: i + 1,
+        at: T0,
+      };
+      return encodePersistedJournalEvent({ ...envelope, ...payload } as PersistedJournalEvent);
+    })
+    .join("");
 }
 
 export async function buildCurrentVault(root: string, options: VaultOptions = {}): Promise<void> {

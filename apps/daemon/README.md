@@ -456,10 +456,10 @@ Rules that hold throughout:
 - Only this machine may call these routes: a paired device gets 403 `forbidden_device`. They aren't
   agent tools, and the safety rules deny agents any call to the daemon's API
   (`network.app-self-access`) and any write under `.daily-do-list/`.
-- Agent journal files (`.daily-do-list/state/journal/threads/`) are copied unchanged: the import
-  remaps the thread snapshots, but not yet the note paths and routine ids inside the journals,
-  though the thread store already loads threads from their journals. `remapJournalFile` in
-  `src/import/sidecar.ts` is the hook for remapping journal events.
+- Agent journal files (`.daily-do-list/state/journal/threads/`) are carried over like the thread
+  snapshots: a thread journal's `thread.created` and `thread.imported` events get the new note path
+  and routine id (`remapJournalFile` in `src/import/sidecar.ts`), since the thread store folds the
+  journal first; every other line is copied byte for byte.
 
 ## The agent relay
 

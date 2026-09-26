@@ -1,6 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { type TaskEvent, TaskWatcher } from "@ddl/agent";
+import { createThreadStore, type TaskEvent, TaskWatcher } from "@ddl/agent";
 import {
   decodePersistedRecords,
   decodePersistedRoutines,
@@ -18,7 +18,7 @@ import {
 import { MemoryStorageProvider } from "@ddl/storage";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ObsidianImporter } from "./importer";
-import { DETACHED_NOTE } from "./sidecar";
+import { DETACHED_NOTE, remapJournalFile } from "./sidecar";
 import {
   currentFiles,
   currentSettings,
@@ -146,14 +146,13 @@ describe("carrying over the agent's history", () => {
     ]);
   });
 
-  it("copies approvals, artifacts, routines state and the journal byte for byte", async () => {
+  it("copies approvals, artifacts and routines state byte for byte", async () => {
     await importWith();
     const files = currentFiles();
     for (const path of [
       "state/approvals.json",
       "state/routines.json",
       "artifacts/thr_dentist/art_1.png.b64",
-      "journal/threads/thr_dentist.jsonl",
     ]) {
       expect(await sidecarText(path), path).toBe(files[`${SIDECAR_DIR}/${path}`]);
     }
@@ -176,22 +175,68 @@ describe("carrying over the agent's history", () => {
     });
     expect((await thread("thr_routine")).routineId).toBe(routineIdForPath(renamed));
   });
+
+  it("points thread journals at the notes' new paths, their other events byte for byte", async () => {
+    await importWith();
+    const path = "state/journal/threads/thr_dentist.jsonl";
+    const before = String(currentFiles()[`${SIDECAR_DIR}/${path}`]).split("\n");
+    const after = (await sidecarText(path)).split("\n");
+    expect(after[0]).toBe(
+      before[0]!.replace('"notePath":"Daily/2026-09-24.md"', `"notePath":"${MERGED}"`),
+    );
+    expect(after.slice(1)).toEqual(before.slice(1));
+  });
+});
+
+describe("remapJournalFile", () => {
+  const remap = {
+    notePath: (path: string) => (path === "Daily/old.md" ? "Journal/new.md" : path),
+    routineId: (id: string) => (id === "rtn_old" ? "rtn_new" : id),
+  };
+  const path = "state/journal/threads/thr_a.jsonl";
+  const created =
+    '{"v":1,"id":"evt_1","epoch":0,"seq":1,"at":1,"type":"thread.created","thread":{"id":"thr_a","taskId":null,"notePath":"Daily/old.md","title":"t","status":"idle","createdAt":1,"routineId":"rtn_old"}}';
+  const remapped = created
+    .replace('"notePath":"Daily/old.md"', '"notePath":"Journal/new.md"')
+    .replace('"routineId":"rtn_old"', '"routineId":"rtn_new"');
+  const title =
+    '{"v":1,"id":"evt_2","epoch":0,"seq":2,"at":2,"type":"title","title":"Daily/old.md"}';
+
+  it("remaps thread events and keeps every other line, unreadable ones and line ends included", () => {
+    const text = `\uFEFF${created}\r\n{ not json\r\n${title}\r\n`;
+    expect(remapJournalFile(path, text, remap)).toBe(
+      `\uFEFF${remapped}\r\n{ not json\r\n${title}\r\n`,
+    );
+  });
+
+  it("leaves alone a journal that needs no change, one a newer app wrote, and other journals", () => {
+    expect(remapJournalFile(path, `${title}\n`, remap)).toBeNull();
+    const newer = '{"v":2,"id":"evt_3","epoch":0,"seq":3,"at":3,"type":"future"}';
+    expect(remapJournalFile(path, `${created}\n${newer}\n`, remap)).toBeNull();
+    expect(remapJournalFile("state/journal/approvals.jsonl", `${created}\n`, remap)).toBeNull();
+  });
 });
 
 describe("the agent in the imported vault", () => {
-  /** The watcher on 2026-09-24, with the new vault's settings and files (text only). */
-  async function watchNewVault(settings: AppSettings): Promise<TaskEvent[]> {
+  /** The new vault's files matching `pattern` (text only), in memory. */
+  async function newVaultInMemory(pattern: RegExp): Promise<MemoryStorageProvider> {
     const storage = new MemoryStorageProvider();
     const visit = async (folder: string): Promise<void> => {
       for (const entry of await readdir(join(destination, folder), { withFileTypes: true })) {
         const path = folder ? `${folder}/${entry.name}` : entry.name;
         if (entry.isDirectory()) await visit(path);
-        else if (/\.(md|json)$/.test(path)) {
+        else if (pattern.test(path)) {
           await storage.write(path, await readFile(join(destination, path), "utf8"));
         }
       }
     };
     await visit("");
+    return storage;
+  }
+
+  /** The watcher on 2026-09-24, with the new vault's settings and files (text only). */
+  async function watchNewVault(settings: AppSettings): Promise<TaskEvent[]> {
+    const storage = await newVaultInMemory(/\.(md|json)$/);
     vi.useFakeTimers({ now: new Date(2026, 8, 24, 12, 0, 0) });
     const watcher = new TaskWatcher({
       storage,
@@ -204,6 +249,26 @@ describe("the agent in the imported vault", () => {
     await watcher.stop();
     return events;
   }
+
+  it("loads journaled threads at their notes' new paths and routines' new ids", async () => {
+    await importWith(currentSettings(), {
+      obsidian: { files: { [ROUTINE_PATH]: "Obsidian's own note about mornings.\n" } },
+    });
+    const threads = createThreadStore({
+      storage: await newVaultInMemory(/\.jsonl?$/),
+      now: () => TODAY.getTime(),
+    });
+    await threads.load();
+    expect(threads.get("thr_dentist")).toMatchObject({ taskId: "tsk_dentist", notePath: MERGED });
+    expect(threads.get("thr_passport")).toMatchObject({ notePath: MOVED });
+    const gone = threads.get("thr_gone");
+    expect(gone).toMatchObject({ taskId: "tsk_gone", notePath: MERGED });
+    expect(gone?.messages.at(-1)).toMatchObject({ role: "system", text: DETACHED_NOTE });
+    expect(threads.get("thr_routine")?.routineId).toBe(
+      routineIdForPath("Routines/Morning briefing (Daily Do List).md"),
+    );
+    await threads.flush();
+  });
 
   it("sees no new work: carried tasks keep their identity", async () => {
     await importWith();

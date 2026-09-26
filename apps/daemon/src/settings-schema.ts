@@ -1,7 +1,6 @@
-import { SettingsPatchSectionSchemas, UpdateSettingsRequestSchema } from "@ddl/contract";
+import { UpdateSettingsRequestSchema } from "@ddl/contract";
 import {
   type AppSettings,
-  type DeepPartial,
   dailyNotePath,
   isHiddenPath,
   isSidecarPath,
@@ -17,32 +16,8 @@ export class SettingsValidationError extends Error {
   }
 }
 
-/** One patch schema per top-level section (the wire contract's), so a bad section only drops itself. */
-export const SETTINGS_SECTION_SCHEMAS = SettingsPatchSectionSchemas;
-
 /** Body of `PUT /api/settings`: a deep partial of AppSettings; unknown keys are rejected. */
 export const SettingsPatchSchema = UpdateSettingsRequestSchema;
-
-/** Keeps the valid sections of untrusted stored settings and reports the dropped ones. */
-export function sanitizeStoredSettings(raw: unknown): {
-  settings: DeepPartial<AppSettings>;
-  dropped: string[];
-} {
-  const settings: Record<string, unknown> = {};
-  const dropped: string[] = [];
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-    return { settings, dropped: ["(root)"] };
-  }
-  for (const [key, value] of Object.entries(raw)) {
-    const schema = Object.hasOwn(SETTINGS_SECTION_SCHEMAS, key)
-      ? SETTINGS_SECTION_SCHEMAS[key as keyof typeof SETTINGS_SECTION_SCHEMAS]
-      : undefined;
-    const parsed = schema?.safeParse(value);
-    if (parsed?.success) settings[key] = parsed.data;
-    else dropped.push(key);
-  }
-  return { settings: settings as DeepPartial<AppSettings>, dropped };
-}
 
 /** Cross-field checks a schema cannot express: note paths must stay visible and inside the vault. */
 export function settingsProblems(settings: AppSettings, now: Date = new Date()): string[] {

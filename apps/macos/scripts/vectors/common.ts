@@ -110,6 +110,3 @@ export function uniqueBy<T>(items: readonly T[], key: (item: T) => string): T[] 
     return true;
   });
 }
-
-/** Swift and JSON have no `undefined`; the vectors spell a missing value as `null`. */
-export const orNull = <T>(value: T | undefined | null): T | null => value ?? null;

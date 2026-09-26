@@ -373,7 +373,11 @@ schema (`decision`, `risk`, `categories`, `reason`); `reasoning: "off"`, `temper
 - Approval inputs are stored redacted (typed passwords/card numbers hidden, secrets masked).
 - **Persistence** (when `storage` is given): `.daily-do-list/state/approvals.json` holds grants
   (with their optional `target`), pending approvals and the 200 most recent decided ones, written
-  with a 250 ms debounce after load completes. Unreadable files are ignored; malformed entries are dropped. Approvals that were
+  with a 250 ms debounce after load completes, through `createApprovalStateFile`. An unreadable
+  file is moved to `.daily-do-list/corrupt/` and one from a newer app is never overwritten (both
+  load as no grants and no approvals); malformed entries are dropped. Writes are conditional: a
+  copy another writer saved meanwhile is merged into what is written (`mergeApprovalStates`), but
+  its grants and decisions apply only after the next load. Approvals that were
   pending in a previous process load as `expired` (their agent is gone) and are re-emitted.
   Call `dispose()` on shutdown to flush and release waiting agents.
 - Agents cannot forge grants or change their approval policy: changing anything in the vault's

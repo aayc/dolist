@@ -245,11 +245,6 @@ export function markdownDoc(maxLines = 30): fc.Arbitrary<string> {
     });
 }
 
-/** A document together with a position in it. */
-export function docWithPos(doc: fc.Arbitrary<string>): fc.Arbitrary<[string, number]> {
-  return doc.chain((text) => fc.tuple(fc.constant(text), fc.integer({ min: 0, max: text.length })));
-}
-
 /** Plain-data selection (prints readably in counterexamples); see `toSelection`. */
 export interface SelectionSpec {
   ranges: Array<[anchor: number, head: number]>;
