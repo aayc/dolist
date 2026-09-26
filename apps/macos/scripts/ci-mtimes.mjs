@@ -13,13 +13,15 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const [command, buildDir] = process.argv.slice(2);
 if (!["restore", "save"].includes(command) || !buildDir) {
   console.error("usage: ci-mtimes.mjs restore|save <build dir>");
   process.exit(2);
 }
-const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
+// The checkout this script is in (apps/macos/scripts/), wherever it runs from.
+const repo = fileURLToPath(new URL("../../../", import.meta.url));
 const manifest = join(resolve(buildDir), "ci-mtimes.json");
 
 /** Tracked files under apps/macos: path → blob id. */
