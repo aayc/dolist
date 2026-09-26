@@ -1,5 +1,7 @@
 # Spec: routines (standing jobs the agent runs on a schedule)
 
+Status: built (`a42bcf3`).
+
 Repo: Daily Do List. Read AGENTS.md first (invariants: safety gate on every tool, provider
 registries, `@ddl/core` pure, local-first plain files, wire changes update core + contract + Swift
 models together, time is local; web and macOS control rules; testing: ScriptedHarness /

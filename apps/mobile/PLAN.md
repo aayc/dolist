@@ -81,13 +81,19 @@ and screenshots.
 
 ## Daemon prerequisites
 
-Phase 1 of [docs/ALWAYS_ON.md](../../docs/ALWAYS_ON.md) (remote access), plus two small additions:
+Phase 1 of [docs/ALWAYS_ON.md](../../docs/ALWAYS_ON.md) (remote access) is built:
 
-- Remote hosts, device tokens and pairing. "Settings → Devices → Pair a phone" on web and Mac shows
-  a QR code with the daemon URL and a short, single-use pairing code (never a token). The phone
-  exchanges the code for its own device token, which Settings can revoke.
-- WebSocket authentication by header or first message for remote clients. Today the Swift client
-  puts the token in the WebSocket URL (`ws://…/ws?token=…`), which proxies can log.
+- Remote hosts, device tokens and pairing: Settings → Devices on web and Mac issues a short,
+  single-use pairing code (never a token) and shows the address to open; the phone exchanges the
+  code for its own device token (`POST /api/pair`), which Settings can revoke.
+- WebSocket authentication for remote clients: the Swift client sends
+  `Authorization: Bearer <token>` on the upgrade to any daemon that isn't on loopback, and puts
+  the token in the URL (`?token=`) only on loopback, where remote hosts refuse it anyway.
+
+Still to do:
+
+- A QR code on the pairing screens, with the daemon URL and the pairing code
+  (`POST /api/pairing-codes` already returns the URL for it).
 - An atomic append to a daily note (for Siri: "add X to my do list" must not race with an open
   editor), in the protocol, the contract and `DailyDoListModels` in the same change.
 - Later, with a paid account: a push sender behind an interface in the daemon (APNs, token auth),
@@ -178,7 +184,7 @@ Each phase ends with tests, docs and CI green. Phases 0 and the daemon work can 
 
 0. **Foundations.** Extract the three shared cores from the macOS packages; the mobile skeleton
    (packages, XcodeGen spec, scripts, CI job, demo mode, tab shell with placeholder screens, one
-   UI test); the daemon's remote access and pairing (above).
+   UI test); what's left of the daemon prerequisites (above: the QR code and the atomic append).
 1. **Core features.** Connection and pairing; the editor; Today and Notes; Inbox and threads;
    approvals; orchestrator chat; settings.
 2. **Depth.** The editor's agent integration (badges, marked lines, merging into typing, the
@@ -194,7 +200,7 @@ merged by one lead into a `feat/iphone` branch:
 
 | Wave | Streams |
 | --- | --- |
-| 0 | shared cores extraction · mobile skeleton · daemon remote access and pairing |
+| 0 | shared cores extraction · mobile skeleton · pairing QR code and atomic daily-note append (daemon, web, Mac) |
 | 1 | connection and pairing · editor core · Today and Notes · Inbox and threads · approvals · orchestrator chat · settings |
 | 2 | editor agent integration · offline and outbox · notifications · live view and artifacts · routines · Siri and Shortcuts |
 | 3 | UI tests and accessibility · integration tests · performance, docs and security review |

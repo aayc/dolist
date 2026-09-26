@@ -42,6 +42,10 @@ It's a *do* list, not a *to-do* list: the point is that things get done.
 - **Routines.** Say "every morning at 7:30, brief me on the weather" and the agent sets up a
   routine — a plain markdown file in `Routines/` that it runs on schedule, each run in its own
   thread, notifying you when it's done (or, for a watch, only when something changed).
+- **Drawings in your notes.** Excalidraw drawings in the Obsidian Excalidraw plugin's format and
+  embed syntax, so either app opens them: text wraps around them, and you move and resize them in
+  place. The real Excalidraw on the web, a native engine in the Mac app; the agent sees each
+  drawing as a description, and as an image when its model can look at one.
 - **A separate safety evaluator.** Every tool call from every agent passes a policy → rules → LLM
   judge pipeline before it runs. Payments, bookings, outgoing messages, account changes,
   destructive commands and desktop control require your explicit approval; catastrophic actions are
@@ -57,7 +61,13 @@ It's a *do* list, not a *to-do* list: the point is that things get done.
 - **One vault on all your devices.** A small self-hostable sync service keeps each device's vault
   folder in sync within a couple of seconds (edits to different lines merge; true conflicts keep
   both versions), and makes sure the agent runs on exactly one device — see
-  [docs/SYNC.md](docs/SYNC.md).
+  [docs/SYNC.md](docs/SYNC.md). Both apps show the sync status in Settings.
+- **An always-on agent.** Run the agent on a Linux machine you control (a small Azure VM, say),
+  reachable only over a private network, so routines run while your laptop sleeps. Each device
+  chooses where its agent runs with one switch; a device that uses the always-on machine relays to
+  it, so you see and approve its work from any device. Pair devices with a short code —
+  [design](docs/ALWAYS_ON.md), [Linux setup kit](deploy/linux/README.md),
+  [Azure VM guide](deploy/azure/README.md).
 - **Providers everywhere.** Storage, sync targets, execution, agent harness ([Pi](https://github.com/badlogic/pi-mono) on OpenRouter, or the
   [Cursor CLI](https://cursor.com/cli) with your Cursor account) and connectors sit behind
   interfaces with a registry.
@@ -236,12 +246,12 @@ Responsiveness is a feature, measured on every change (production build served b
 
 | Interaction | Budget | Measured |
 | --- | --- | --- |
-| Keystroke → paint, 2 000-line note (p95) | 16 ms | ~1.7 ms |
+| Keystroke → paint, 2 000-line note (p95) | 16 ms | ~1.6 ms |
 | Long tasks while typing | 0 | 0 |
 | Open today's note (`⌘⇧D`) | 50 ms | ~5 ms |
-| Switch tabs | 30 ms | ~8 ms |
-| Open a task thread | 100 ms | ~15 ms |
-| App interactive (first load) | 800 ms | ~105 ms |
+| Switch tabs | 30 ms | ~14 ms |
+| Open a task thread | 100 ms | ~9 ms |
+| App interactive (first load) | 800 ms | ~106 ms |
 
 Plus micro-benchmarks for the hot paths (task parsing/tracking, live preview, vault listing/search)
 and a bundle-size budget. See [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
@@ -274,15 +284,13 @@ CI details: [docs/CI.md](docs/CI.md).
 
 ## Roadmap
 
-- An always-on agent: the daemon on a Linux VM you control, reachable only over a private network,
-  with your laptop's app relaying to it and optionally lending its hands —
-  [design](docs/ALWAYS_ON.md), [Linux setup kit](deploy/linux/README.md) and
-  [Azure VM guide](deploy/azure/README.md)
-- iPhone app (native Swift, reusing the macOS app's packages; talking to your Mac or a cloud
-  daemon) — [plan](docs/CROSS_PLATFORM.md)
-- Sync, phase 2: attachments in S3/R2, end-to-end encryption, a Cloudflare Durable Object host,
-  sync status in the apps ([docs/SYNC.md](docs/SYNC.md))
-- Watching more than daily notes (projects, weekly notes); scheduled check-ins
+- The always-on agent, next steps: setting it up on a real VM, a Linux desktop for it, and your
+  laptop lending it its hands (its signed-in apps) — [design](docs/ALWAYS_ON.md)
+- iPhone app (native Swift, reusing the macOS app's packages; talking to the always-on machine or
+  your Mac) — [plan](apps/mobile/PLAN.md)
+- Sync, phase 2: attachments in S3/R2, end-to-end encryption, a Cloudflare Durable Object host
+  ([docs/SYNC.md](docs/SYNC.md))
+- Watching more than daily notes (projects, weekly notes)
 - Memory / user profile so the assistant gets more personal over time
 
 ## License

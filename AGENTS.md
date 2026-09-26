@@ -69,6 +69,8 @@ apps/
   mobile/         (planned) native iOS app reusing the Swift packages — plan in PLAN.md
 packages/
   core/           Pure, isomorphic domain logic + wire protocol types (no dependencies!)
+  contract/       Runtime zod schemas for the wire protocol and the sidecar file formats, kept in
+                  lockstep with core's types; fixtures; generates docs/PROTOCOL.md
   storage/        StorageProvider interface; local-fs, memory, remote (sync service); SyncEngine;
                   search
   editor/         CodeMirror 6 markdown editor: live preview, tasks, vim, agent badges
@@ -79,7 +81,8 @@ packages/
 evals/            Agent evals (safety verdicts, triage, latency); mock mode runs in CI
 deploy/           The always-on machine: linux/ (bundle, systemd units, setup.sh), azure/ (VM guide)
 scripts/          Repo tooling (secret scan, bench/bundle budgets, git hooks)
-docs/             Architecture, agent system, performance, security model, cross-platform plan
+docs/             Architecture, agent system, protocol and data formats, performance, CI, sync, the
+                  always-on design, cross-platform plan, user journeys; specs/ for multi-stream work
 ```
 
 ## Commands
@@ -135,12 +138,14 @@ Key flows are documented in `docs/ARCHITECTURE.md` and `docs/AGENT_SYSTEM.md`.
 
 Docs index: `PROGRESS.md` (the handoff log: current state and decisions), `docs/specs/`
 (multi-stream specs), `README.md` (product + quick start), `docs/ARCHITECTURE.md`,
-`docs/AGENT_SYSTEM.md`,
+`docs/AGENT_SYSTEM.md`, `docs/PROTOCOL.md` (the daemon's wire protocol; its reference is
+generated), `docs/DATA_FORMATS.md` (every persisted file and its compatibility rules),
 `docs/USER_JOURNEYS.md` (the living-list journeys and their tests),
 `docs/PERFORMANCE.md`, `docs/CROSS_PLATFORM.md`, `docs/SYNC.md` (devices sharing a vault, the
 agent lease), `docs/ALWAYS_ON.md` (design: the agent on an always-on machine; setting one up:
 `deploy/linux/README.md`, `deploy/azure/README.md`), `docs/CI.md`, `SECURITY.md`, `CONTRIBUTING.md`, and package READMEs
-(`packages/storage`, `packages/connectors`, `packages/editor`, `packages/agent/src/safety`,
+(`packages/contract` (schemas, compatibility rules, how to add a route or event),
+`packages/storage`, `packages/connectors`, `packages/editor`, `packages/agent/src/safety`,
 `packages/agent/src/execution`, `apps/web` (the agent chat, whose pacing and activity wording the
 Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
 
@@ -173,7 +178,10 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
 4. **`@ddl/core` is pure.** No dependencies, no `node:*` imports, no DOM access (timers, `crypto`
    via `globalThis` are fine). It runs in the browser, the daemon and future native shells.
 5. **Wire protocol lives in `packages/core/src/protocol.ts`.** Daemon and clients import the same
-   types. Changing a shape = update both sides in the same change.
+   types. Changing a shape = update both sides in the same change, together with its contract
+   schema (`packages/contract/src/wire/`), the lockstep test, the route in `API_CONTRACT`, the
+   fixtures, `DailyDoListModels` (Swift), and `pnpm --filter @ddl/contract generate` for
+   `docs/PROTOCOL.md` (the steps: "How to add a route or event" in `packages/contract/README.md`).
 6. **The daemon is local-only unless remote hosts are configured, and always authenticated.** It
    binds `127.0.0.1` only. Other devices reach it only through a private-network proxy on the same
    machine (e.g. `tailscale serve`), under a remote host that is configured (`remote.hosts`), never
@@ -238,8 +246,11 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
  use (the Pi harness from `@ddl/agent/pi`, the Cursor harness from `@ddl/agent/cursor`, Playwright
  via `import()` where Chrome launches, the MCP SDK only when `mcp.json` names servers). Don't
  re-export them from a package index or import them statically elsewhere: `apps/daemon/build.mjs`
- fails the build if `main.js` reaches them statically. The one static agent import is `@ddl/agent/routines` (routine files, editable
- while no agent runs here): keep that entry free of harness, execution and model code.
+ fails the build if `main.js` reaches Pi's packages (`@earendil-works/*`), `playwright-core` or the
+ MCP SDK statically. It doesn't check the Cursor harness (our own code), so keep
+ `@ddl/agent/cursor` behind `import()` yourself. The one static agent import is
+ `@ddl/agent/routines` (routine files, editable while no agent runs here): keep that entry free of
+ harness, execution and model code.
 - **Drawing renderer:** the daemon's `build` and `dev` scripts build the page agents render
  drawings with (`packages/agent/scripts/build-drawing-renderer.mjs` → `apps/daemon/dist/drawing-renderer`).
  `@excalidraw/excalidraw` is a build-time dependency of `@ddl/agent` for that page only: no Node
@@ -331,7 +342,11 @@ and real-keyboard e2e tests in `apps/web/e2e/vim.spec.ts`.
   (`packages/storage/src/remote.ts`) in the same change, and update `docs/SYNC.md`. Tests start
   the server in process (`createSyncServer({ db: ":memory:", port: 0 })`), never a real one.
 - **Add a setting:** extend `AppSettings` + `DEFAULT_SETTINGS` in `packages/core/src/settings.ts`,
-  surface it in the settings UI, and handle it in `AgentRuntime.updateSettings` if agent-related.
+  its wire schema (`packages/contract/src/wire/settings.ts`, which the daemon validates updates
+  with) and its file schema (`packages/contract/src/persisted/settings.ts`; see
+  `docs/DATA_FORMATS.md`), the Swift model (`DailyDoListModels/Settings.swift`), surface it in the
+  web settings UI and the Mac settings pane (`apps/macos/Sources/DailyDoListApp/Settings/`), and
+  handle it in `AgentRuntime.updateSettings` if agent-related.
 - **Add a control (web):** give it a tooltip with `data-tooltip` (never `title`), and if it runs a
   command, `data-command` (`IconButton command=…` or `commandTooltip()` do both): the keycaps and
   `aria-keyshortcuts` come from the registry, so never write a shortcut into text. A shorter
@@ -364,13 +379,15 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
 - **Commands:** `apps/macos/scripts/test.sh [Package|app|integration] [-- swift test args]`,
   `apps/macos/scripts/run-app.sh [--demo]`, and
   `apps/macos/scripts/build-app.sh [--release] [--with-daemon] [--zip]` (writes to
-  `apps/macos/build/`, gitignored). Integration tests need `pnpm --filter @ddl/daemon build` first.
+  `apps/macos/build/`, gitignored). Integration tests need
+  `pnpm --filter @ddl/daemon --filter @ddl/sync build` first.
 - **Toolchain:** Swift 6 language mode with strict concurrency, macOS 14+. It builds with only the
   Command Line Tools: there's no XCTest, so tests use Swift Testing, and plain `swift test` can't
   find `Testing.framework`. Always go through `scripts/test.sh`, which adds the flags only when
   `xcode-select` points at the CLT.
-- **Conventions:** every package builds and tests on its own. Models, Client, Domain and Vim stay
-  Foundation-only (they also build for iOS). Use small files with doc comments. Anything touching
+- **Conventions:** every package builds and tests on its own. Models, Client, Domain, Vim and
+  `DailyDoListDrawingModel` (the drawing package's model library) stay Foundation-only (they also
+  build for iOS). Use small files with doc comments. Anything touching
   processes, the network, files or time goes behind a protocol so tests use fakes (see
   `DaemonSupervisorDependencies`). No third-party Swift dependencies so far. swift-format
   (`.swift-format`: 2 spaces, width 100) formats and lints every Swift file: `pnpm lint:fix`.
@@ -428,6 +445,11 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
 
 - Conventional commits (`feat(agent): …`, `fix(web): …`, `perf(editor): …`, `docs: …`), checked
   by the commit-msg hook.
-- Small, focused PRs; CI (lint, typecheck, tests, bench budgets, bundle budget, e2e, mock evals,
-  secret scan) must be green. Include perf numbers for UI-affecting changes.
+- Work lands through branches, not pull requests so far: each stream commits on its own branch,
+  and the lead reviews it, merges it into `main` and pushes (see "How the parallel work runs" in
+  `PROGRESS.md`). Keep changes small and focused. Include perf numbers for UI-affecting changes.
+- CI (lint, typecheck, tests, bench budgets, bundle budget, e2e, mock evals, secret scan) must be
+  green on the branch before it merges and on `main` after. Push and pull request triggers don't
+  start runs right now, so the lead dispatches the workflows on both
+  (`gh workflow run ci.yml --repo aayc/dolist --ref <branch>`; see `docs/CI.md`).
 - If a PR resolves a Linear ticket, put `Resolves <ID>` in the PR body.

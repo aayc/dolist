@@ -1,5 +1,7 @@
 # Spec: the agent anywhere — always-on machine, placement per device, pairing, relay, Settings
 
+Status: built (`7ce1e9f`, `bbe8aff`); verifying it on the real VM is pending.
+
 Repo: Daily Do List. Read `AGENTS.md` first (invariants, conventions, testing rules, the macOS
 section for Swift work), then `docs/ALWAYS_ON.md` (the design; binding), `docs/SYNC.md` (sync,
 the agent lease) and `SECURITY.md`.

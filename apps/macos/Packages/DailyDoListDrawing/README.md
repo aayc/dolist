@@ -36,7 +36,7 @@ same files ([spec](../../../../docs/specs/drawings.md)).
   is written back byte for byte. `JSONParser` keeps key order; `JSONWriter` is
   `JSON.stringify(value, null, "\t")`, numbers included (`JSNumberFormat`).
 - **File format** (`File/`): `ExcalidrawMarkdown` follows `@ddl/core`'s `file.ts`, the reference
-  implementation, exactly (see [Shared fixtures](#shared-fixtures)). It reads `json` and
+  implementation, exactly (see [Testing](#testing)). It reads `json` and
   `compressed-json` (LZ-String base64, `LZString`, a port of lz-string 1.5.0) and writes `json`;
   `## Text Elements` is the truth when reading (the plugin's rule) and is regenerated when
   writing; everything else is kept from the previous file. Parsing never throws: problems are

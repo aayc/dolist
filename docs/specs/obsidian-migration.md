@@ -1,5 +1,8 @@
 # Spec: moving from Obsidian
 
+Status: M (the merge race, `6750f36`) and I0/I1 (Import from Obsidian, `e2fd3ce`) built; B0 and P
+not started.
+
 Read `AGENTS.md` first (invariants: plain files, soft deletes, agents never silently change the
 user's words, time is local, wire changes in core + contract + Swift together, the keystroke
 path). Related: `docs/SYNC.md`, `docs/DATA_FORMATS.md`, `packages/editor/README.md`,

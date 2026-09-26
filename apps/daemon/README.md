@@ -1,11 +1,11 @@
 # @ddl/daemon
 
 The local Daily Do List server. It owns the markdown vault (through a `StorageProvider`), serves
-the web UI, exposes the REST + WebSocket API used by every client (web today, the macOS/iOS shells
-later) and runs the always-on agent runtime. Agents can run shell commands and drive a browser and
-the desktop, so the daemon is locked down: it binds `127.0.0.1` only, every API call needs a bearer
-token, and foreign `Host`/`Origin` headers are rejected. Other devices reach it only through a
-private-network proxy under a configured remote host, with device credentials (see
+the web UI, exposes the REST + WebSocket API used by every client (the web and macOS apps today,
+an iPhone app later) and runs the always-on agent runtime. Agents can run shell commands and drive
+a browser and the desktop, so the daemon is locked down: it binds `127.0.0.1` only, every API call
+needs a bearer token, and foreign `Host`/`Origin` headers are rejected. Other devices reach it only
+through a private-network proxy under a configured remote host, with device credentials (see
 [Remote access and pairing](#remote-access-and-pairing)).
 
 ## Running
@@ -97,7 +97,6 @@ of this repository. Values are never logged.
     "computer": { "enabled": true }
   },
   "allowedOrigins": ["http://localhost:5174"],
-  "remote": { "hosts": ["vm-name.tailnet-name.ts.net"] },
   "webDist": "~/daily-do-list-web",
   "logLevel": "info"
 }
@@ -117,20 +116,19 @@ of this repository. Values are never logged.
   machine; priority `host`) or `always_on_machine` (never asks). It only matters with the sync
   service, and applies once the vault has an always-on machine (`remote.alwaysOnMachine` in the
   app settings); until then the agent is held on this device. `PATCH /api/device` edits it live.
-- `remote.hosts`: the DNS names (optional `:port`, at most 8, no IPs) this daemon answers to besides
-  loopback, for example its tailnet name. `PATCH /api/device` edits it live.
-
-`PATCH /api/device` and `PUT`/`DELETE /api/device/sync` rewrite `config.json` in place (atomically,
-mode `0600`), keeping every key they don't own.
+- `remote.hosts`: the DNS names this daemon answers to besides loopback, e.g. its tailnet name
+  behind `tailscale serve` (`host[:port]`, at most 8; no IPs, schemes or paths; `:443` is the same
+  as no port). Empty or absent: loopback only. `PATCH /api/device` edits it live. See
+  [Remote access and pairing](#remote-access-and-pairing).
 - `execution`: `local` (browser headless by default; computer use defaults to on for macOS only,
   with app control when the helper is found, see `DDL_COMPUTER_HELPER`).
 - `allowedOrigins`: extra exact origins (`scheme://host[:port]`) for other clients, for example a
   Vite dev server on another port or a native shell (`tauri://localhost`). HTTP(S) origins also allow
   their host in the `Host` allowlist; a host that isn't loopback is served like a remote host (never
   the token in the page).
-- `remote.hosts`: the names this daemon answers to besides loopback, e.g. its tailnet name behind
-  `tailscale serve` (`host[:port]`, at most 8; no IPs, schemes or paths; `:443` is the same as no
-  port). Empty or absent: loopback only. See [Remote access and pairing](#remote-access-and-pairing).
+
+`PATCH /api/device` and `PUT`/`DELETE /api/device/sync` rewrite `config.json` in place (atomically,
+mode `0600`), keeping every key they don't own.
 
 ### App settings
 
@@ -264,9 +262,10 @@ device calling a route only this machine may call), `not_found` (404), `conflict
 | GET | `/api/vault/tree` | → `VaultTreeResponse` (visible files and folders) |
 | GET | `/api/notes/<path>` | → `NoteResponse` (404 when missing) |
 | PUT | `/api/notes/<path>` | `WriteNoteRequest` → `WriteNoteResponse` (201 created, 200 updated, 409 `ConflictResponse`) |
-| DELETE | `/api/notes/<path>` | → `{ ok: true }` |
-| POST | `/api/notes-rename` | `RenameRequest` → `WriteNoteResponse` (409 `ConflictResponse` if the target exists) |
+| DELETE | `/api/notes/<path>` | → `TrashResponse` (`{ ok: true, trashedTo }`: moved into `.trash/`; 404 when missing) |
+| POST | `/api/notes-rename` | `RenameRequest` → `RenameResponse` (a note answers like a write, a folder with `{ path, moved }`; 404 no source, 409 the target exists, with `ConflictResponse` for a note) |
 | POST | `/api/folders` | `CreateFolderRequest` → 201 `{ path }` |
+| DELETE | `/api/folders?path=<path>` | → `TrashResponse` (the folder and everything in it moved into `.trash/`; 404 when missing) |
 | GET | `/api/daily/<YYYY-MM-DD\|today>?create=1` | → `DailyNoteResponse` (404 without `create=1`) |
 | GET | `/api/search?q=<query>&limit=<n>` | → `SearchResponse` |
 | GET | `/api/settings` | → `SettingsResponse` |
@@ -457,9 +456,11 @@ Rules that hold throughout:
 - Only this machine may call these routes: a paired device gets 403 `forbidden_device`. They aren't
   agent tools, and the safety rules deny agents any call to the daemon's API
   (`network.app-self-access`) and any write under `.daily-do-list/`.
-- Agent journal files (`.daily-do-list/journal/`) are copied unchanged: the thread snapshots readers
-  use are what the import remaps. `remapJournalFile` in `src/import/sidecar.ts` is where journal
-  events will be remapped once readers fold the journal.
+- Agent journal files (`.daily-do-list/state/journal/threads/`) are copied unchanged: the import
+  remaps the thread snapshots, but not yet the note paths and routine ids inside the journals,
+  though the thread store already loads threads from their journals. `remapJournalFile` in
+  `src/import/sidecar.ts` is the hook for remapping journal events.
+
 ## The agent relay
 
 When this device's effective placement is `always_on_machine` and it holds a credential for the

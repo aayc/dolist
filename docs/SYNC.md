@@ -117,7 +117,8 @@ happens on the devices, in the engine, exactly as for a local mirror folder
 What syncs: every text file in the vault, including the agent's sidecar (`.daily-do-list/threads`,
 `artifacts`, `state/journal`, `state/records.json`, `approvals.json`, `settings.json`). What doesn't: each device's
 own sync snapshot (`.daily-do-list/sync/`), the agent's machine-local scratch data
-(`.daily-do-list/state/tasks`), junk and temp files, and binary files (images, PDFs, …).
+(`.daily-do-list/state/tasks`), the Obsidian import manifest (`.daily-do-list/import/`, which names
+a folder on this machine), junk and temp files, and binary files (images, PDFs, …).
 
 ## Security
 
@@ -214,7 +215,8 @@ the device with `PATCH /api/device` (or edit `name`) to change how other devices
 Don't copy `device.json` to another machine (see below).
 
 `GET /api/sync/status` on the daemon reports `state`, `target`, `lastSyncedAt`, `pendingChanges`,
-`conflicts`, `lastError`, and with the sync service `remoteHost` and `deviceName`.
+`conflicts`, `lastError`, and with the sync service `remoteHost` and `deviceName`. Both apps set
+sync up and show that status in Settings (the Sync section; on the Mac under Always-On).
 
 To try it on one machine, run the server on a spare port and start two daemons with their own
 `DDL_HOME`, `DDL_VAULT` and `DDL_PORT` (none of them the ones you use day to day), each pointing at
@@ -322,14 +324,11 @@ Phase 1 limitations:
 - Only the device that runs the agent acts on agent threads and approvals; the others show them
   read-only and say where the agent runs (a device relaying to the always-on machine acts through
   it, see [ALWAYS_ON.md](./ALWAYS_ON.md#the-agent-relay)).
-- Settings UI is being built (docs/ALWAYS_ON.md); the data is in `GET /api/sync/status`,
-  `GET /api/device` and the agent status.
-
 Phase 2:
 
 - Attachments in S3/R2 (content-addressed, referenced from the change log).
 - A Cloudflare Durable Object host (one object per vault with its own SQLite, same protocol).
 - End-to-end encryption of content and paths.
 - Lease changes pushed on the stream.
-- Change-log compaction, per-vault quotas, and the sync status in the web and Mac apps; the iOS
-  client (the Swift models already decode the sync status).
+- Change-log compaction and per-vault quotas; the iOS client (the Swift models already decode the
+  sync status).
