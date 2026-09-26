@@ -73,7 +73,10 @@ What keeps it fast:
 - **Tree and search don't walk the vault.** While the watcher runs, the storage provider lists
   the visible files once, and again only after one of them changed: at 10 000 notes
   `/api/vault/tree` went from ~80 ms to ~15 ms and `/api/search` from ~65 ms to ~5 ms (10 000
-  file system calls per request to none).
+  file system calls per request to none). On macOS, a watch opening or closing in the process
+  restarts the FSEvents stream, and the watcher then walks the vault once to catch what the
+  restart lost (~12 ms at 2 000 notes, ~60 ms at 10 000; see the storage README). That happens
+  only when a watch opens or closes, never per keystroke or save.
 - **Nothing slow runs before the daemon listens.** The agent harness check (the Cursor CLI's
   `agent status`, ~0.6 s warm and over 1 s cold; an OpenRouter key check over the network) runs
   in the background: `createAgentRuntime` returns without it, and `start()`, after `listen`,
