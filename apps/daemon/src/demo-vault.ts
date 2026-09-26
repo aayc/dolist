@@ -3,10 +3,12 @@
  * files: notes, a drawing, past daily notes, and the agent's sidecar state for yesterday's note,
  * which shows the agent at work in a note (an agent-written sub-bullet citing a source under a
  * task, an agent-written follow-up task, and a question with a thread anchored to its line).
- * Today's note is the empty template, ready for a task. Used by the e2e harness and `pnpm dev:mock`.
+ * Today's note is the empty template, ready for a task. Used by the e2e harness and by `DDL_DEMO=1`
+ * (`pnpm dev:mock`, the Mac app's `--demo`).
  */
+import { existsSync } from "node:fs";
 import { mkdir, utimes, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import {
   encodePersistedJournalEvent,
   encodePersistedRecords,
@@ -226,6 +228,33 @@ export async function writeDemoVault(root: string, options: DemoVaultOptions = {
       doneAt,
     );
   }
+}
+
+/**
+ * `DDL_DEMO=1`, before the daemon starts: seeds DDL_VAULT with the demo vault (tasks settle in
+ * 1.2 s) and turns computer use off in DDL_HOME's `config.json`. Both must be absolute paths; a
+ * vault folder that already exists opens as it is (a restart) and an existing `config.json` stays,
+ * so the demo never writes into your own vault or home.
+ */
+export async function prepareDemo(env: Record<string, string | undefined>): Promise<void> {
+  const home = env.DDL_HOME?.trim() ?? "";
+  const vault = env.DDL_VAULT?.trim() ?? "";
+  if (!isAbsolute(home) || !isAbsolute(vault)) {
+    throw new Error("DDL_DEMO=1 needs absolute DDL_HOME and DDL_VAULT paths");
+  }
+  if (existsSync(vault)) return;
+  await writeDemoVault(vault);
+  await writeFile(
+    join(vault, ".daily-do-list/settings.json"),
+    `${JSON.stringify({ version: 1, agent: { settleMs: 1200 } })}\n`,
+  );
+  await mkdir(home, { recursive: true, mode: 0o700 });
+  const config = { execution: { kind: "local", computer: { enabled: false } } };
+  await writeFile(join(home, "config.json"), `${JSON.stringify(config)}\n`, { flag: "wx" }).catch(
+    (error: NodeJS.ErrnoException) => {
+      if (error.code !== "EEXIST") throw error;
+    },
+  );
 }
 
 interface DemoThread {

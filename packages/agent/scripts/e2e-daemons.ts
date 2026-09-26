@@ -8,9 +8,9 @@
  * that tests call (apps/web/e2e/fixtures.ts) to start daemons in this process:
  *
  * - `POST /daemons` with a `DaemonSpec`: a daemon on a free port serving the built web app, its
- *   vault seeded with the demo vault (demo-vault.ts). Agents run in mock mode (the daemon's
- *   scripted mock agent) unless the spec asks for live mode (the Pi harness against the fake
- *   OpenRouter, whose brain is sandboxed as below).
+ *   vault seeded with the demo vault (apps/daemon/src/demo-vault.ts). Agents run in mock mode
+ *   (the daemon's scripted mock agent) unless the spec asks for live mode (the Pi harness against
+ *   the fake OpenRouter, whose brain is sandboxed as below).
  *   Answers the daemon's URL, its master token and where its files are.
  * - `POST /daemons/:id/stop` and `/start`: the daemon goes down and comes back on the same port
  *   (a machine that stops); `DELETE /daemons/:id` removes it and its files.
@@ -27,8 +27,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { silentLogger } from "@ddl/core";
+import { writeDemoVault } from "../../../apps/daemon/src/demo-vault";
 import { createFakeBrain, startFakeOpenRouter } from "../src/testing";
-import { writeDemoVault } from "./demo-vault";
 
 const port = Number(process.argv.find((a) => a.startsWith("--port="))?.split("=")[1] ?? 4173);
 /** The daemons log nothing unless asked (`DDL_E2E_LOG_LEVEL=debug|info|warn|error`). */

@@ -1,15 +1,14 @@
 /**
  * `pnpm dev:mock`: the demo. The daemon (mock agent: the scripted brain, in process, no network)
- * and the web dev server, on a throwaway DDL_HOME and the demo vault (demo-vault.ts), both deleted
- * on exit. The ports aren't the usual ones, so it runs beside the Mac app and `pnpm dev`: the
- * daemon on 7340, the web app on http://localhost:5174.
+ * and the web dev server, on a throwaway DDL_HOME and the demo vault (`DDL_DEMO=1` seeds it:
+ * apps/daemon/src/demo-vault.ts), both deleted on exit. The ports aren't the usual ones, so it runs
+ * beside the Mac app and `pnpm dev`: the daemon on 7340, the web app on http://localhost:5174.
  */
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { writeDemoVault } from "./demo-vault";
 
 const ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 const DAEMON_PORT = "7340";
@@ -17,23 +16,11 @@ const WEB_PORT = "5174";
 
 async function main(): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "ddl-demo-"));
-  const home = join(root, "home");
-  const vault = join(root, "vault");
-  await writeDemoVault(vault);
-  await writeFile(
-    join(vault, ".daily-do-list/settings.json"),
-    `${JSON.stringify({ version: 1, agent: { settleMs: 1200 } })}\n`,
-  );
-  // The demo never operates this Mac's apps.
-  await mkdir(home, { recursive: true, mode: 0o700 });
-  await writeFile(
-    join(home, "config.json"),
-    `${JSON.stringify({ execution: { kind: "local", computer: { enabled: false } } })}\n`,
-  );
   const env: NodeJS.ProcessEnv = {
     ...process.env,
-    DDL_HOME: home,
-    DDL_VAULT: vault,
+    DDL_DEMO: "1",
+    DDL_HOME: join(root, "home"),
+    DDL_VAULT: join(root, "vault"),
     DDL_PORT: DAEMON_PORT,
     DDL_WEB_PORT: WEB_PORT,
     DDL_AGENT_MODE: "mock",

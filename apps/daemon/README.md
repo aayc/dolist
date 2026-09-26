@@ -12,7 +12,7 @@ through a private-network proxy under a configured remote host, with device cred
 
 ```sh
 pnpm dev          # daemon (tsx watch) + Vite dev server → http://localhost:5173
-pnpm dev:mock     # same, with the deterministic mock agent (DDL_AGENT_MODE=mock)
+pnpm dev:mock     # the demo: the mock agent on a throwaway demo vault (DDL_DEMO=1), web on :5174
 pnpm build        # bundles the daemon to apps/daemon/dist/main.js and builds apps/web/dist
 pnpm start        # production: the daemon serves the built UI → http://127.0.0.1:7331
 ```
@@ -55,6 +55,7 @@ Precedence: environment variable → `$DDL_HOME/config.json` → default.
 | `DDL_AGENT_PLACEMENT` | `this_device` | Where this device's agent runs: `this_device`, `always_on_machine` or `always_on_host` (overrides `agent.placement`). |
 | `DDL_REMOTE_HOSTS` | — | Comma-separated remote hosts (overrides `remote.hosts` in `config.json`; clients show them read-only). |
 | `DDL_SUPERVISED` | — | `1`: a supervisor starts the daemon again after it exits with 75 (the Mac app sets it). |
+| `DDL_DEMO` | — | `1`: the demo (`pnpm dev:mock`, the Mac app's `--demo`). Before starting, seeds `DDL_VAULT` with the demo vault (`src/demo-vault.ts`) and turns computer use off in `DDL_HOME`'s `config.json`. Needs both as absolute paths; an existing vault folder opens as it is and an existing `config.json` stays. |
 
 A device setting set by an environment variable (the placement, the remote hosts, or the sync setup
 through any of the three sync variables) is listed in `lockedByEnv` by `GET /api/device`, and the API
