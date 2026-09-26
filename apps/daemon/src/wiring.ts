@@ -4,12 +4,8 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { AgentRuntime, ExecutionProvider, LlmClient } from "@ddl/agent";
-import {
-  type ConnectorToolSource,
-  createConnectorManager,
-  EMPTY_CONNECTORS_CONFIG,
-  loadConnectorsConfig,
-} from "@ddl/connectors";
+import type { ConnectorsConfig, ConnectorToolSource } from "@ddl/connectors";
+import { EMPTY_CONNECTORS_CONFIG, loadConnectorsConfig } from "@ddl/connectors/config";
 import {
   type AppSettings,
   agentModel,
@@ -62,17 +58,27 @@ export async function createConnectors(
   logger: Logger,
 ): Promise<ConnectorToolSource> {
   const log = logger.child({ component: "connectors" });
+  let servers: ConnectorsConfig = EMPTY_CONNECTORS_CONFIG;
   try {
-    return createConnectorManager(await loadConnectorsConfig(config.mcpConfigPath), {
-      logger: log,
-    });
+    servers = await loadConnectorsConfig(config.mcpConfigPath);
   } catch (error) {
     log.error("Could not load MCP connectors; continuing without them", {
       error: errorMessage(error),
     });
-    return createConnectorManager(EMPTY_CONNECTORS_CONFIG, { logger: log });
   }
+  if (Object.keys(servers.mcpServers ?? {}).length === 0) return NO_CONNECTORS;
+  // The MCP SDK takes ~50 ms to load: only with servers to connect to.
+  const { createConnectorManager } = await import("@ddl/connectors");
+  return createConnectorManager(servers, { logger: log });
 }
+
+const NO_CONNECTORS: ConnectorToolSource = {
+  getTools: async () => [],
+  status: () => [],
+  onStatus: () => () => {},
+  reload: async () => {},
+  dispose: async () => {},
+};
 
 export interface AgentStackOptions {
   config: Pick<DaemonConfig, "agentMode" | "home" | "model" | "execution">;
