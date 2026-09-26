@@ -214,6 +214,25 @@ export function addEx(catalog: Catalog): void {
       steps,
     });
   }
+  catalog.add({
+    name: "ex/misc/history-walk",
+    doc: "",
+    at: [0, 0],
+    steps: [
+      ":registers<CR>",
+      ":sort<CR>",
+      ":map<CR>",
+      ":invalid<CR>",
+      ":",
+      "<Up>",
+      "<Up>",
+      "<Up>",
+      "<Up>",
+      "<Esc>:",
+      "s",
+      "<Up>",
+    ],
+  });
 
   const set: Record<string, readonly string[]> = {
     "boolean-on": [":set pcre<CR>", ":set pcre?<CR>"],

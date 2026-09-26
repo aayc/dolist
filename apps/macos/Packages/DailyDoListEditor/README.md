@@ -466,7 +466,7 @@ real `NSEvent`s through `keyDown`:
 
 - **Vectors** (`VimVectorReplayTests`): every case of `packages/editor/test/vim/vectors.jsonl`,
   replayed through the real controller with `DailyDoListVimTestSupport`, with live preview both
-  off and on: 11,491/11,491 each, in all 18 categories, with no exclusions. The oracle recorded
+  off and on: 11,497/11,497 each, in all 18 categories, with no exclusions. The oracle recorded
   them in a monospaced, unwrapped editor, so the replay gives the controller those metrics
   (internal `EditorTheme.Uniform`), and viewport cases (`H`, `zz`, `<C-d>`) compare exactly.
   An exclusion needs a reason in that file.

@@ -10,7 +10,7 @@ Foundation only, no dependencies, Swift 6 language mode with strict concurrency,
 iOS 17. Third-party attribution: `NOTICE.md`.
 
 Exactness is checked against the web app's behavior vectors (`packages/editor/test/vim`,
-11,491 cases recorded from the engine in Chromium): **all of them pass**, without exclusions.
+11,497 cases recorded from the engine in Chromium): **all of them pass**, without exclusions.
 
 ## How it is built
 
@@ -218,7 +218,7 @@ VIM_VECTORS_FILTER=viewport/ VIM_VECTORS_VERBOSE=1 apps/macos/scripts/test.sh Da
   `VimTextBuffer` following its README exactly (prompt routing, native edits, replace-mode
   fallback, Backspace/Delete recording, a layout pass per key, the header's font geometry),
   prints the pass count per category and the first differences in detail. Skipped when the file
-  is missing. Current result: 11,491/11,491 (edit, ex, insert, jumplist, keys, macro, map, mark,
+  is missing. Current result: 11,497/11,497 (edit, ex, insert, jumplist, keys, macro, map, mark,
   motion, operator, register, repeat, search, textobject, undo, upstream, viewport, visual), no
   exclusions.
 - **Shared replay** (`DailyDoListVimTestSupport`, a library product for tests): the one replay

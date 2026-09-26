@@ -407,7 +407,7 @@ palette too, without shortcuts.
 Turn it on with **Vim key bindings** in Settings → Appearance, View → Vim Key Bindings, or "Toggle
 Vim key bindings" in the command palette. The editor then does what the web app's vim mode does,
 which is Obsidian's: `DailyDoListVim` is a port of the same engine (vim.js), and the web app's
-11,491 recorded vim behaviors replay through the real Mac editor in the tests.
+11,497 recorded vim behaviors replay through the real Mac editor in the tests.
 
 - **Looks:** a block cursor in normal, visual and replace mode (an outline while the window isn't
   active), the command line (`:`, `/`, `?`) and vim's messages under the editor, highlighted

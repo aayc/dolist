@@ -24,6 +24,8 @@ export function addMappings(catalog: Catalog): void {
     "map-to-ex": [cmd("nmap Q :s/o/0/g<CR>"), "Q"],
     "map-to-ex-line": [cmd("nmap Q :2d<CR>"), "Q"],
     "map-leaves-prompt-open": [cmd("nmap Q :s/"), "Q"],
+    "map-to-colon": [cmd("map ; :"), ";"],
+    "nnoremap-esc": [cmd("nnoremap <Esc> i"), "<Esc>", "<Esc>"],
     "unmap-normal": [cmd("nmap Q x"), cmd("unmap Q"), "Q"],
     "unmap-missing": [cmd("unmap Q")],
     mapclear: [cmd("map Q x"), cmd("mapclear"), "Q"],
