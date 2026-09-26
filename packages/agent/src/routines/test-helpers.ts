@@ -31,7 +31,6 @@ export function sept(day: number, hour: number, minute = 0): number {
 }
 
 export const MINUTE = 60_000;
-export const HOUR = 60 * MINUTE;
 
 /** A routine file with these frontmatter lines (`key: value`) and instructions. */
 export function routineFile(

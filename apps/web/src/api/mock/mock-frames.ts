@@ -21,13 +21,6 @@ export interface DesktopScene {
   selected?: number;
 }
 
-export interface FrameAction {
-  kind: string;
-  x?: number;
-  y?: number;
-  text?: string;
-}
-
 export interface FrameImage {
   mimeType: "image/jpeg";
   data: string;

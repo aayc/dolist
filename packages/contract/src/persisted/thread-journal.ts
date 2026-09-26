@@ -77,7 +77,6 @@ export const PersistedJournalThreadHeaderSchema = z.object({
   createdAt: PersistedTimestampSchema,
   routineId: PersistedIdSchema.optional(),
 });
-export type PersistedJournalThreadHeader = z.infer<typeof PersistedJournalThreadHeaderSchema>;
 
 /** How the safety gate let a call through (`tool.decided`). */
 export const PersistedJournalAllowedViaSchema = z.enum([
@@ -169,8 +168,6 @@ export type PersistedJournalEvent =
   | Exclude<Line, { type: "thread.imported" | "sources" }>
   | WithThread<Extract<Line, { type: "thread.imported" }>, PersistedThread>
   | (Omit<Extract<Line, { type: "sources" }>, "sources"> & { sources: PersistedCitedSource[] });
-
-export type PersistedJournalEventType = PersistedJournalEvent["type"];
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 /** An event without its envelope: what a writer records. */

@@ -93,7 +93,6 @@ export type PersistedSettingsOverrides = z.infer<typeof PersistedSettingsOverrid
 export const PersistedSettingsFileSchema = PersistedSettingsOverridesSchema.extend({
   version: z.literal(PERSISTED_SETTINGS_VERSION),
 });
-export type PersistedSettingsFile = z.infer<typeof PersistedSettingsFileSchema>;
 
 /** The file's content without `version`, exactly as stored (unknown keys and invalid values kept). */
 export type PersistedSettingsDocument = PersistedDocument;

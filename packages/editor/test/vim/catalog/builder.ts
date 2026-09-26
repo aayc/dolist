@@ -36,10 +36,6 @@ export function api(op: ApiCall["op"], ...args: unknown[]): { api: ApiCall } {
   return { api: { op, args } };
 }
 
-export function ex(command: string): { api: ApiCall } {
-  return api("ex", command);
-}
-
 /** Types an ex command literally (`<Esc>` inside it is five characters) and submits it. */
 export function cmd(command: string): string[] {
   return [":", ...command, "<CR>"];

@@ -58,11 +58,3 @@ function schedule(now: number): void {
     schedule(at);
   }, next - now);
 }
-
-/** Test helper. */
-export function resetActivityStore(): void {
-  clearTimeout(timer);
-  events = 0;
-  keys = 0;
-  useActivityStore.setState({ ...EMPTY_ACTIVITY, tick: 0 }, true);
-}

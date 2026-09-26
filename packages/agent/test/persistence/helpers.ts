@@ -1,11 +1,7 @@
 import type { Logger } from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
 
-export {
-  type FixtureFormat,
-  listFixtures,
-  readFixture,
-} from "../../../contract/test/persisted/fixtures";
+export { readFixture } from "../../../contract/test/persisted/fixtures";
 
 /** Fixed clock for quarantine names: 2026-09-23T12:00:00.000Z. */
 export const NOW = Date.UTC(2026, 8, 23, 12, 0, 0, 0);

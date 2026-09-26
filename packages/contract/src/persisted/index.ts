@@ -25,7 +25,6 @@ export {
 } from "./artifact";
 export {
   decodePersisted,
-  describeZodError as describePersistedZodError,
   isPersistedObject,
   PersistedCorruption,
   type PersistedDecodeResult,
@@ -109,7 +108,6 @@ export {
   encodePersistedSettings,
   PERSISTED_SETTINGS_VERSION,
   type PersistedSettingsDocument,
-  type PersistedSettingsFile,
   PersistedSettingsFileSchema,
   type PersistedSettingsOverrides,
   PersistedSettingsOverridesSchema,
@@ -156,11 +154,9 @@ export {
   type PersistedJournalAllowedVia,
   PersistedJournalAllowedViaSchema,
   type PersistedJournalEvent,
-  type PersistedJournalEventType,
   type PersistedJournalLineResult,
   type PersistedJournalPayload,
   type PersistedJournalRead,
-  type PersistedJournalThreadHeader,
   PersistedJournalThreadHeaderSchema,
   persistedThreadIdFromJournalPath,
   persistedThreadJournalPath,

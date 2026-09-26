@@ -21,11 +21,6 @@ export function embedRenderers(state: EditorState): readonly EmbedRenderer[] {
   return state.facet(editorCallbacks).embedRenderers ?? NO_RENDERERS;
 }
 
-export function rendererFor(state: EditorState, target: string): EmbedRenderer | null {
-  for (const renderer of embedRenderers(state)) if (renderer.matches(target)) return renderer;
-  return null;
-}
-
 /** Selects the embed whose `![[` is at the position (null deselects). */
 export const selectEmbedEffect = StateEffect.define<number | null>({
   map: (value, mapping) => (value === null ? null : mapping.mapPos(value, 1, MapMode.TrackDel)),

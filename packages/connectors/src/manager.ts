@@ -35,8 +35,6 @@ import {
 import type { ConnectorsConfig, ConnectorToolSource } from "./types";
 import { compareStrings, errorMessage, isPlainObject, stableStringify } from "./util";
 
-export { EMPTY_CONNECTORS_CONFIG, loadConnectorsConfig } from "./config";
-
 export interface ConnectorManagerOptions {
   logger?: Logger;
   /** Environment for `${NAME}` placeholders, read at connect time. Defaults to `process.env`. */

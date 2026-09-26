@@ -172,10 +172,6 @@ export function findSecrets(text: string): SensitiveMatch[] {
   return out;
 }
 
-export function findSensitiveValues(text: string): SensitiveMatch[] {
-  return [...findSecrets(text), ...findCardNumbers(text), ...findSsns(text)];
-}
-
 function shannonEntropy(value: string): number {
   const counts = new Map<string, number>();
   for (const ch of value) counts.set(ch, (counts.get(ch) ?? 0) + 1);
