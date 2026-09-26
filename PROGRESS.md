@@ -28,6 +28,14 @@ the Azure VM.
 
 ## Shipped on `main` (newest first)
 
+- `8eecac3` / `67000e7` Four branches: zod schemas are the single source of the TS wire types, the
+  fast-check generators and one route table (API_PATHS) (−3.3k; invariants 4 and 5 reworded: core has
+  no *runtime* dependencies); agent threads are journal-only with a one-time migration (snapshots
+  folded into journals, then removed; −420); Mac performance (the explorer was quadratic: window
+  open ~4 s → <200 ms, a new note 2-3 s → ~30 ms, launch about halved); Swift cleanup (one link
+  allow-list incl. tel:, chips/Discard/glow like the web, dead code). `build-app.sh` gives the helper
+  its own scratch path. **Installed**; the journal migration ran on the real vault: 15 threads, all
+  matching a backup taken just before.
 - `24217b7` Faster tests and CI (the user asked for a 10x faster loop): CI caches every suite in turbo
   and shards unit tests and e2e (warm 36 s, cold ~2 min, was ~7 min); macOS CI caches SwiftPM builds,
   runs package groups, integration and iOS in parallel, builds the release app only on `main` or with
@@ -154,8 +162,9 @@ and branches were removed (GitHub has only `main`).
 - **Flaky tests:** done and on `main` (`5687507`): the watcher, subprocess and `trackTasks` tests
   are robust under load (fake timers, event probes instead of sleeps, CPU-time guard, generous
   failure bounds; one test-only `helloTimeoutMs` option). No assertion got looser.
-- **Leaner-code cuts** (in flight): `chore/lean-zod` (zod schemas as the single source of the TS wire
-  types and generators), `chore/lean-journal` (threads journal-only, with a one-time migration); next the Mac fake daemon, zod as the wire source and journal-only threads (see
+- **In flight:** `fix/watch-gap` (external edits missed while macOS restarts its FSEvents stream;
+  the flaky notes e2e), `chore/lean-mac-fake` (Mac demo and tests on the real daemon, delete the
+  in-memory fake), `chore/lean-ts-b` (TypeScript narrow cleanups judged by lines removed). Next the Mac fake daemon, zod as the wire source and journal-only threads (see
   Decisions).
 - **Cleanup batch A** (in flight): `chore/cleanup-ts` (two bugs: imported threads kept their old
   note paths because the import looked for journals under the wrong folder, and the approval
