@@ -48,9 +48,9 @@ export interface TaskWatcherOptions {
   /** Editor activity on a task's line within this window postpones its settle. */
   activityWindowMs?: number;
   /**
-   * Settle delay used when the editor reports the cursor on another line than the task (the user
-   * moved on, e.g. pressed Enter). Capped by `settings.agent.settleMs`; set it to `Infinity` to
-   * always wait the full settle delay.
+   * Settle delay used when the editor reports the cursor on another line than the task, or than the
+   * request-like lines of the note (the user moved on, e.g. pressed Enter). Capped by
+   * `settings.agent.settleMs`; set it to `Infinity` to always wait the full settle delay.
    */
   quickSettleMs?: number;
   persistDelayMs?: number;
@@ -153,8 +153,8 @@ interface ProseState {
   settled: string[] | null;
   lastChangeAt: number;
   timer: ReturnType<typeof setTimeout> | undefined;
-  /** Which lines the last `noticed` event named (their numbers), "" for none. */
-  noticed: string;
+  /** Which lines the last `noticed` event named (their numbers). */
+  noticed: number[];
 }
 
 interface PendingSettle {
@@ -500,8 +500,8 @@ export class TaskWatcher implements TaskLookup {
 
   /** Tells which unsettled lines may be requests, when that changed. */
   private notice(state: NoteState, lines: Array<{ line: number; text: string }>): void {
-    const noticed = lines.map((entry) => entry.line).join(",");
-    if (noticed === state.prose.noticed) return;
+    const noticed = lines.map((entry) => entry.line);
+    if (noticed.join() === state.prose.noticed.join()) return;
     state.prose.noticed = noticed;
     this.emitter.emit("noticed", {
       notePath: state.notePath,
@@ -517,14 +517,9 @@ export class TaskWatcher implements TaskLookup {
     state.prose.timer = setTimeout(() => this.settleProse(state.notePath), delay);
   }
 
-  /** Settle delay after the last change, later while the user is still typing in the note. */
   private proseDueAt(state: NoteState): number {
-    let due = state.prose.lastChangeAt + this.settings.agent.settleMs;
-    const activity = this.activity.get(state.notePath);
-    if (activity && this.now() - activity.at <= this.activityWindowMs) {
-      due = Math.max(due, activity.at + this.activityWindowMs);
-    }
-    return due;
+    const { lastChangeAt, noticed } = state.prose;
+    return this.settleDue(state.notePath, lastChangeAt, (line) => noticed.includes(line));
   }
 
   private settleProse(notePath: string): void {
@@ -545,7 +540,7 @@ export class TaskWatcher implements TaskLookup {
       return;
     }
     // The orchestrator takes the noticed lines over with this event.
-    state.prose.noticed = "";
+    state.prose.noticed = [];
     this.emitter.emit("note", { notePath, date: state.date, lines, at: this.now() });
   }
 
@@ -660,18 +655,23 @@ export class TaskWatcher implements TaskLookup {
 
   private dueAt(pending: PendingSettle): number {
     if (pending.immediate) return pending.lastChangeAt;
-    const settleMs = this.settings.agent.settleMs;
-    let due = pending.lastChangeAt + settleMs;
-    const activity = this.activity.get(pending.notePath);
     const task = this.notes.get(pending.notePath)?.tasks.find((t) => t.id === pending.taskId);
-    if (activity && task && this.now() - activity.at <= this.activityWindowMs) {
-      if (isOnTask(activity.line, task)) {
-        due = Math.max(due, activity.at + this.activityWindowMs);
-      } else {
-        due = Math.min(due, pending.lastChangeAt + Math.min(this.quickSettleMs, settleMs));
-      }
-    }
-    return due;
+    if (!task) return pending.lastChangeAt + this.settings.agent.settleMs;
+    return this.settleDue(pending.notePath, pending.lastChangeAt, (line) => isOnTask(line, task));
+  }
+
+  /**
+   * `settleMs` after the last change; while the editor reports typing on the lines, not before the
+   * user pauses; once it reports the cursor on another line (they moved on), `quickSettleMs`.
+   */
+  private settleDue(notePath: string, lastChangeAt: number, onLines: (line: number) => boolean) {
+    const settleMs = this.settings.agent.settleMs;
+    const due = lastChangeAt + settleMs;
+    const activity = this.activity.get(notePath);
+    if (!activity || this.now() - activity.at > this.activityWindowMs) return due;
+    return onLines(activity.line)
+      ? Math.max(due, activity.at + this.activityWindowMs)
+      : Math.min(due, lastChangeAt + Math.min(this.quickSettleMs, settleMs));
   }
 
   private settle(taskId: string): void {
@@ -819,7 +819,7 @@ export class TaskWatcher implements TaskLookup {
         rerun: null,
         saveTimer: undefined,
         content: null,
-        prose: { settled: null, lastChangeAt: 0, timer: undefined, noticed: "" },
+        prose: { settled: null, lastChangeAt: 0, timer: undefined, noticed: [] },
       };
       this.notes.set(notePath, state);
     }

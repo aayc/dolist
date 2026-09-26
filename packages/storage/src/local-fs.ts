@@ -41,6 +41,11 @@ export interface LocalFsStorageOptions {
   logger?: Logger;
   /** Per-path quiet period before an external change is classified and emitted. */
   watchDebounceMs?: number;
+  /**
+   * A file outside the vault that keeps the version memo between runs (saved by `dispose`), so a
+   * restart hashes only the files that changed instead of the whole vault.
+   */
+  versionCache?: string;
 }
 
 /** Files above this size (and binary formats) are versioned by stat instead of content hash. */
@@ -58,6 +63,7 @@ interface Tracking {
   tracker: ChangeTracker;
   watcher: RecursiveWatcher | undefined;
   ready: Promise<void>;
+  primed: boolean;
   stopped: boolean;
 }
 
@@ -105,11 +111,13 @@ export class LocalFsStorageProvider implements StorageProvider {
   private readonly rules: IgnoreRules;
   private readonly logger: Logger;
   private readonly debounceMs: number;
+  private readonly versionCache: string | undefined;
   private readonly locks = new KeyedMutex();
   private readonly readLimit = createLimiter(READ_CONCURRENCY);
   private readonly versions = new Map<string, CachedVersion>();
   private readonly listeners = new Set<(event: StorageEvent) => void>();
   private realRoot: Promise<string> | undefined;
+  private visibleFiles: Promise<FileEntry[]> | undefined;
   private tracking: Tracking | undefined;
   private stopping: Promise<void> = Promise.resolve();
   private disposed = false;
@@ -121,6 +129,7 @@ export class LocalFsStorageProvider implements StorageProvider {
     this.rules = new IgnoreRules(options.ignore);
     this.logger = (options.logger ?? silentLogger).child({ component: "storage.local" });
     this.debounceMs = options.watchDebounceMs ?? 50;
+    this.versionCache = options.versionCache;
   }
 
   /** Creates the vault folder if needed and resolves its real path. Idempotent. */
@@ -134,6 +143,19 @@ export class LocalFsStorageProvider implements StorageProvider {
   }
 
   async list(options: ListOptions = {}): Promise<FileEntry[]> {
+    const tracking = this.tracking;
+    if (options.prefix || options.includeHidden || !tracking?.primed || !tracking.watcher?.active) {
+      return this.listFiles(options);
+    }
+    // The watcher reports every change (each one drops this), so the vault is listed once.
+    this.visibleFiles ??= this.listFiles(options).catch((error: unknown) => {
+      this.visibleFiles = undefined;
+      throw error;
+    });
+    return [...(await this.visibleFiles)];
+  }
+
+  private async listFiles(options: ListOptions): Promise<FileEntry[]> {
     const root = await this.rootPath();
     const scope = await this.scope(root, options);
     if (!scope) return [];
@@ -390,6 +412,14 @@ export class LocalFsStorageProvider implements StorageProvider {
     this.disposed = true;
     this.listeners.clear();
     await this.stopTracking();
+    if (!this.versionCache) return;
+    const entries = [...this.versions].map(([p, v]) => [p, v.mtimeMs, v.size, v.version]);
+    try {
+      await mkdir(dirname(this.versionCache), { recursive: true });
+      await writeFileAtomic(this.versionCache, JSON.stringify({ root: this.root, entries }));
+    } catch (error) {
+      this.logger.warn("could not save the version cache", { error: errorMessage(error) });
+    }
   }
 
   // ── Paths ────────────────────────────────────────────────────────────────
@@ -407,11 +437,31 @@ export class LocalFsStorageProvider implements StorageProvider {
       await mkdir(this.root, { recursive: true });
       const real = await realpath(this.root);
       if (!(await stat(real)).isDirectory()) throw new Error("not a folder");
+      await this.loadVersions();
       return real;
     } catch (error) {
       throw new StorageError(
         `Cannot open vault folder "${this.displayName}": ${errorMessage(error)}`,
       );
+    }
+  }
+
+  /** Entries of a missing, unreadable or foreign cache are just hashed again when listed. */
+  private async loadVersions(): Promise<void> {
+    if (!this.versionCache) return;
+    let saved: { root?: unknown; entries?: unknown[] } | null;
+    try {
+      saved = JSON.parse((await readTextFile(this.versionCache))?.content ?? "null");
+    } catch {
+      return;
+    }
+    if (saved?.root !== this.root || !Array.isArray(saved.entries)) return;
+    for (const entry of saved.entries) {
+      const [p, mtimeMs, size, version] = Array.isArray(entry) ? entry : [];
+      if (typeof p !== "string" || typeof mtimeMs !== "number") continue;
+      if (typeof size === "number" && typeof version === "string") {
+        this.versions.set(p, { mtimeMs, size, version });
+      }
     }
   }
 
@@ -606,6 +656,7 @@ export class LocalFsStorageProvider implements StorageProvider {
       tracker,
       watcher: undefined,
       ready: Promise.resolve(),
+      primed: false,
       stopped: false,
     };
     tracking.ready = (async () => {
@@ -617,13 +668,17 @@ export class LocalFsStorageProvider implements StorageProvider {
         onChange: (path) => {
           if (!this.rules.isIgnored(path)) tracker.notify(path);
         },
-        onRescan: () => tracker.requestRescan(),
+        onRescan: () => {
+          this.visibleFiles = undefined;
+          tracker.requestRescan();
+        },
         skipDirectory: (path) => this.rules.isIgnored(path),
       });
       tracking.watcher = watcher;
       // Watch before the baseline scan so nothing slips in between.
       watcher.start();
       await tracker.start();
+      tracking.primed = true;
     })().catch((error: unknown) => {
       this.logger.error("could not start watching the vault", { error: errorMessage(error) });
     });
@@ -634,6 +689,7 @@ export class LocalFsStorageProvider implements StorageProvider {
     const tracking = this.tracking;
     if (!tracking) return this.stopping;
     this.tracking = undefined;
+    this.visibleFiles = undefined;
     tracking.stopped = true;
     this.stopping = (async () => {
       await tracking.ready;
@@ -678,6 +734,7 @@ export class LocalFsStorageProvider implements StorageProvider {
 
   private emit(event: StorageEvent): void {
     if (this.disposed || this.rules.isIgnored(event.path)) return;
+    if (!isHiddenPath(event.path)) this.visibleFiles = undefined;
     for (const listener of [...this.listeners]) {
       try {
         listener(event);

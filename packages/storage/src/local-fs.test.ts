@@ -65,6 +65,24 @@ describe("LocalFsStorageProvider", () => {
     await nested.dispose();
   });
 
+  it("keeps versions between runs in its version cache, hashing only files that changed", async () => {
+    const versionCache = join(dir, "cache", "versions.json");
+    const first = new LocalFsStorageProvider({ root, versionCache });
+    await first.write("a.md", "one");
+    await first.write("b.md", "two");
+    await first.dispose();
+    const saved = JSON.parse(await readFile(versionCache, "utf8"));
+    for (const entry of saved.entries) if (entry[0] === "a.md") entry[3] = "from-the-cache";
+    await writeFile(versionCache, JSON.stringify(saved));
+    await writeFile(join(root, "b.md"), "changed");
+    const second = new LocalFsStorageProvider({ root, versionCache });
+    expect((await second.list()).map((f) => [f.path, f.version])).toEqual([
+      ["a.md", "from-the-cache"],
+      ["b.md", contentVersion("changed")],
+    ]);
+    await second.dispose();
+  });
+
   it("reads files written by other programs byte for byte", async () => {
     await mkdir(join(root, "Daily"), { recursive: true });
     const content = "\uFEFF# Title\r\n- [ ] task\r\n";

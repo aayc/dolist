@@ -47,8 +47,8 @@ harness's), instead of every judge call and search failing with a 401.
   it, top to bottom, so tasks written together reach the orchestrator as one batch in note order.
   Blank template tasks are ignored until they have text.
 - Emits `added`, `updated`, `completed`, `reopened`, `removed` events.
-- The rest of the note settles too: new or edited lines that aren't tasks become one `note` event
-  per pause, but only when a line could be addressed to the agent (`mayBeRequest` in `@ddl/core`,
+- The rest of the note settles too, with the same timing: new or edited lines that aren't tasks
+  become one `note` event per pause, but only when a line could be addressed to the agent (`mayBeRequest` in `@ddl/core`,
   `markdown/prose.ts`: a question, `@agent`, `TODO`, a line opening with a request verb).
   Journaling never wakes the orchestrator by itself; it still sees those lines in the whole-note
   view of its next digest. Before they settle, a `noticed` event names such lines as soon as a

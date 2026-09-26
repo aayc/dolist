@@ -236,9 +236,9 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
   every dependent's cache. Env vars reach tasks only via `passThroughEnv`/`globalEnv`.
 - **Daemon startup:** the daemon bundle is code-split; heavy optional dependencies load on first
  use (the Pi harness from `@ddl/agent/pi`, the Cursor harness from `@ddl/agent/cursor`, Playwright
- via `import()` where Chrome launches). Don't re-export them from a package index or import them
- statically elsewhere: `apps/daemon/build.mjs` fails the build if they would load before the
- daemon answers. The one static agent import is `@ddl/agent/routines` (routine files, editable
+ via `import()` where Chrome launches, the MCP SDK only when `mcp.json` names servers). Don't
+ re-export them from a package index or import them statically elsewhere: `apps/daemon/build.mjs`
+ fails the build if `main.js` reaches them statically. The one static agent import is `@ddl/agent/routines` (routine files, editable
  while no agent runs here): keep that entry free of harness, execution and model code.
 - **Drawing renderer:** the daemon's `build` and `dev` scripts build the page agents render
  drawings with (`packages/agent/scripts/build-drawing-renderer.mjs` → `apps/daemon/dist/drawing-renderer`).

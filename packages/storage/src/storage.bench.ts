@@ -8,15 +8,17 @@ import { mergeText } from "./sync/diff3";
 import { mergeJournals } from "./sync/journal-merge";
 
 /**
- * Hot paths behind the daemon's tree/search endpoints, every sync run and the agent's journal.
- * Budgets are p99 ms, set from local measurements (list ≈ 13, search ≈ 13, merge ≈ 0.3, journal
- * append ≈ 8 — mostly the flush, whatever the journal's length — and journal merge ≈ 20 on an
- * M-series Mac) with 3–6x headroom for CI runners; scale with BENCH_BUDGET_MULTIPLIER.
+ * Hot paths behind the daemon's tree/search endpoints, its start, every sync run and the agent's
+ * journal. Budgets are p99 ms, set from local measurements (a walked list ≈ 13; the first list
+ * after a restart ≈ 20 with the version cache, ≈ 150 without; search ≈ 3 while watching; merge ≈
+ * 0.3; journal append ≈ 8 — mostly the flush, whatever the journal's length — and journal merge ≈
+ * 20 on an M-series Mac) with 3–6x headroom for CI runners; scale with BENCH_BUDGET_MULTIPLIER.
  */
 const MULTIPLIER = Number(process.env.BENCH_BUDGET_MULTIPLIER ?? 1) || 1;
 const BUDGET_MS = {
   list2k: 40 * MULTIPLIER,
-  search2k: 40 * MULTIPLIER,
+  restart2k: 70 * MULTIPLIER,
+  search2k: 10 * MULTIPLIER,
   merge2k: 2 * MULTIPLIER,
   journalAppend: 50 * MULTIPLIER,
   journalMerge: 80 * MULTIPLIER,
@@ -32,11 +34,14 @@ function note(i: number): string {
 }
 
 let dir: string;
+let root: string;
+let versionCache: string;
 let vault: LocalFsStorageProvider;
 
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), "ddl-bench-"));
-  const root = join(dir, "vault");
+  root = join(dir, "vault");
+  versionCache = join(dir, "versions.json");
   for (let folder = 0; folder < 20; folder++) {
     await mkdir(join(root, `Folder ${folder}`), { recursive: true });
   }
@@ -45,9 +50,14 @@ beforeAll(async () => {
       writeFile(join(root, `Folder ${i % 20}`, `note-${i}.md`), note(i)),
     ),
   );
+  // A previous run that saved its version memo.
+  const previous = new LocalFsStorageProvider({ root, versionCache });
+  await previous.list();
+  await previous.dispose();
+  // Warm the version memo and the search cache, and watch, as a running daemon does.
   vault = new LocalFsStorageProvider({ root });
-  // Warm the version memo and the search cache, as a running daemon would have.
-  await vault.list();
+  vault.watch(() => {});
+  await vault.whenWatchReady();
   await searchVault(vault, "warm-up");
 });
 
@@ -56,15 +66,28 @@ afterAll(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-test("LocalFsStorageProvider.list: 2k-note vault, warm", async ({ bench }) => {
-  const result = await bench("LocalFsStorageProvider.list: 2k-note vault, warm", async () => {
-    await vault.list();
-  }).run();
+test("LocalFsStorageProvider.list: 2k-note vault, warm, walked", async ({ bench }) => {
+  const result = await bench(
+    "LocalFsStorageProvider.list: 2k-note vault, warm, walked",
+    async () => {
+      await vault.list({ includeHidden: true });
+    },
+  ).run();
   expect(result.latency.p99).toBeLessThan(BUDGET_MS.list2k);
 });
 
-test("searchVault: 2k-note vault, warm", async ({ bench }) => {
-  const result = await bench("searchVault: 2k-note vault, warm", async () => {
+test("LocalFsStorageProvider.list: 2k-note vault, restarted with its version cache", async ({
+  bench,
+}) => {
+  const name = "LocalFsStorageProvider.list: 2k-note vault, restarted with its version cache";
+  const result = await bench(name, async () => {
+    await new LocalFsStorageProvider({ root, versionCache }).list();
+  }).run();
+  expect(result.latency.p99).toBeLessThan(BUDGET_MS.restart2k);
+});
+
+test("searchVault: 2k-note vault, warm, watched", async ({ bench }) => {
+  const result = await bench("searchVault: 2k-note vault, warm, watched", async () => {
     await searchVault(vault, "project 36", { limit: 50 });
   }).run();
   expect(result.latency.p99).toBeLessThan(BUDGET_MS.search2k);

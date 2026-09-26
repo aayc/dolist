@@ -43,12 +43,11 @@ if (missing.length > 0) {
 }
 
 /**
- * Loaded on first use only: Pi from its own chunk (`import("./harness/pi")`), Playwright via
- * `import()` at the call site. Statically imported from anywhere else, they would load before the
- * daemon answers (~500 ms on every start).
+ * Loaded on first use only (`import()`): Pi (~400 ms), Playwright (~150 ms) and the MCP SDK
+ * (~50 ms, only with connectors). Statically reachable from main.js, they would load before the
+ * daemon answers.
  */
-const PI_HARNESS_ENTRY = "packages/agent/src/harness/pi.ts";
-const LAZY_DEPENDENCY = /^(?:@earendil-works\/|playwright-core)/;
+const LAZY_DEPENDENCY = /^(?:@earendil-works\/|playwright-core|@modelcontextprotocol\/)/;
 
 const result = await build({
   metafile: true,
@@ -75,13 +74,21 @@ const result = await build({
   },
 });
 
-const eager = Object.entries(result.metafile.outputs).flatMap(([file, output]) => {
-  const isPiChunk = output.entryPoint?.endsWith(PI_HARNESS_ENTRY) ?? false;
-  return output.imports
-    .filter((entry) => entry.kind === "import-statement" && LAZY_DEPENDENCY.test(entry.path))
-    .filter((entry) => !(isPiChunk && entry.path.startsWith("@earendil-works/")))
-    .map((entry) => `${file}: ${entry.path}`);
-});
+const { outputs } = result.metafile;
+const pending = Object.keys(outputs).filter((file) =>
+  outputs[file].entryPoint?.endsWith("main.ts"),
+);
+const loaded = new Set(pending);
+const eager = [];
+while (pending.length > 0) {
+  const file = pending.pop();
+  for (const entry of outputs[file].imports) {
+    if (entry.kind !== "import-statement" || loaded.has(entry.path)) continue;
+    if (!entry.external) pending.push(entry.path);
+    else if (LAZY_DEPENDENCY.test(entry.path)) eager.push(`${file}: ${entry.path}`);
+    loaded.add(entry.path);
+  }
+}
 if (eager.length > 0) {
   console.error(
     `These dependencies must load on first use (import()), not with the daemon:\n  ${[...new Set(eager)].join("\n  ")}`,
