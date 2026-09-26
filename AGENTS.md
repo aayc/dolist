@@ -394,7 +394,8 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
 
 - **Layout:** `Package.swift` is the app shell (`Sources/DailyDoListApp`, OS integration in
   `System/`). Independent local packages live in `Packages/`: `DailyDoListModels` (wire models),
-  `DailyDoListClient` (`HTTPDaemonClient` + `InMemoryDaemonClient`), `DailyDoListDomain` (ported
+  `DailyDoListClient` (`HTTPDaemonClient`; its `DailyDoListClientTestSupport` library has the tests'
+  `FakeDaemonClient`), `DailyDoListDomain` (ported
   `@ddl/core` logic), `DailyDoListEditor`, `DailyDoListAgent`, `DailyDoListVim` (the port of the
   web editor's vim mode), `DailyDoListDaemon` (`DaemonSupervisor`), `DailyDoListUI` (what the
   shell, the agent UI and the editor share: tooltips, keycaps, the pointing hand, `IconButton`),
@@ -414,7 +415,8 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
 - **Commands:** `apps/macos/scripts/test.sh --changed` while iterating (only the packages your
   changes since `main` can affect, from the `Package.swift` dependency graph; `--list` shows
   them), `apps/macos/scripts/test.sh [Package|app|integration] [-- swift test args]`,
-  `apps/macos/scripts/run-app.sh [--demo]`, and
+  `apps/macos/scripts/run-app.sh [--demo]` (the demo supervises a daemon of its own: mock agent,
+  a throwaway demo vault seeded by `DDL_DEMO=1`, a free port; `DaemonLaunchConfiguration.demo`), and
   `apps/macos/scripts/build-app.sh [--release] [--with-daemon] [--zip]` (writes to
   `apps/macos/build/`, gitignored). Tests share one build directory (`apps/macos/.build/tests`),
   so a module compiles once for every package. Integration tests need

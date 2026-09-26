@@ -41,7 +41,8 @@ A native SwiftUI/AppKit app built from independent Swift packages (see
 
 1. The UI is native: a TextKit markdown editor with live preview and agent badges, threads,
    approval cards, a command palette and settings. It uses the same REST + WebSocket API as the
-   web app, through `HTTPDaemonClient`. `--demo` runs it against an in-memory daemon.
+   web app, through `HTTPDaemonClient`. `--demo` runs it against a daemon of its own with the
+   mock agent on a throwaway demo vault.
 2. `DaemonSupervisor` attaches to a running daemon (for example `pnpm dev`) or launches
    `node apps/daemon/dist/main.js` itself, from the app bundle (`build-app.sh --with-daemon`) or a
    checkout. It uses the system Node 24.4+ and reads the token from `$DDL_HOME/daemon-token`. It

@@ -24,7 +24,7 @@ native notifications for approvals.
 ```sh
 pnpm install && pnpm --filter @ddl/daemon build   # the daemon the app will run
 apps/macos/scripts/run-app.sh                      # build (debug) and open the app
-apps/macos/scripts/run-app.sh --demo               # in-memory demo data, no daemon, no Node
+apps/macos/scripts/run-app.sh --demo               # its own daemon, mock agent, throwaway demo vault
 ```
 
 `run-app.sh --env DDL_AGENT_MODE=mock` passes environment variables to the app, and from there to
@@ -42,12 +42,12 @@ future iPhone app too.
 | `Sources/DailyDoListApp` | The app shell: scenes, `AppModel`, stores, workspace, settings panes, commands, the command palette. |
 | `Sources/DailyDoListApp/System` | OS integration: launch at login (`SMAppService`), the global hotkey (Carbon), shortcut parsing, conflicts with macOS shortcuts, and the computer-use permissions with their guide panel. |
 | `Packages/DailyDoListModels` (iOS) | Swift mirror of the wire protocol (the schemas in `packages/contract/src/wire`), checked against the `@ddl/contract` fixtures. |
-| `Packages/DailyDoListClient` (iOS) | `DaemonClient`: `HTTPDaemonClient` (REST + WebSocket, reconnects and resyncs) and `InMemoryDaemonClient` (the demo and test fake). |
+| `Packages/DailyDoListClient` (iOS) | `DaemonClient`: `HTTPDaemonClient` (REST + WebSocket, reconnects and resyncs). `DailyDoListClientTestSupport` has `FakeDaemonClient`, the scriptable fake the agent and app tests use. |
 | `Packages/DailyDoListDomain` (iOS) | Pure domain logic ported from `@ddl/core`: dates and daily notes, task parsing and tracking, line anchors, agent-line markers, three-way merges, wikilinks, paths, fuzzy matching, and the remote access validators. |
 | `Packages/DailyDoListEditor` | The TextKit markdown editor: live preview, clickable checkboxes, agent badges, drawings embedded in notes (floats the text wraps around, edited in place with `DailyDoListDrawing`'s canvas), and vim mode (it hosts `DailyDoListVim`). |
 | `Packages/DailyDoListVim` (iOS) | Vim mode: a port of the web editor's vim.js and its CodeMirror 6 adapter, checked against the web app's vim vectors; hosts implement `VimEditor` ([README](Packages/DailyDoListVim/README.md)). |
 | `Packages/DailyDoListDrawing` (model: iOS) | The native drawing engine: Excalidraw scenes in Obsidian's `.excalidraw.md` files (`DailyDoListDrawingModel`, Foundation only, checked against `@ddl/core`'s shared fixtures), a Rough.js port, the CoreGraphics renderer, Excalidraw's tools and shortcuts, and `DrawingCanvasView`, the canvas the editor embeds ([README](Packages/DailyDoListDrawing/README.md)). |
-| `Packages/DailyDoListAgent` | Agent state and UI: inbox, threads (the live chat: [The agent chat](#the-agent-chat)), the orchestrator's chat ([The orchestrator's chat](#the-orchestrators-chat)), routines ([Routines](#routines)), approval cards, artifacts, notifications, menu bar, Dock badge. |
+| `Packages/DailyDoListAgent` | Agent state and UI: inbox, threads (the live chat: [The agent chat](#the-agent-chat)), the orchestrator's chat ([The orchestrator's chat](#the-orchestrators-chat)), routines ([Routines](#routines)), approval cards, artifacts, notifications, menu bar, Dock badge. `DailyDoListAgentTestSupport` has `SampleData`, the synthetic agent state the tests render. |
 | `Packages/DailyDoListUI` | What the shell, the agent UI and the editor share: the app's one tooltip (`TooltipCenter`, `.tooltip(…)`), keycaps (`KeyShortcut`, `Keycaps`), `.pointingHandCursor()`, `IconButton`, and the chrome and accent button styles. `DailyDoListUITestSupport` finds tooltips in tests and draws them into snapshots. |
 | `Packages/DailyDoListDaemon` | `DaemonSupervisor`: finds Node and the daemon, attaches or launches, health-checks, restarts, stops. |
 | `Packages/DailyDoListComputer` | `ddl-computer`, the helper the daemon spawns so agents can operate other apps through their accessibility tree ([The computer use helper](#the-computer-use-helper-ddl-computer)). Not linked into the app. |
@@ -247,9 +247,7 @@ each turn's status line, *Thought for N s*, the decisions as tool calls with a l
 thread under each (it opens in the main window's agent panel), the user's messages and the
 streamed replies. **Stop** in its header ends a turn in progress. A chip or an orchestrator
 indicator opens it at a turn (`AgentStore.focusOrchestratorMessage`): it scrolls there once the
-message is loaded and highlights it for 2 s. The in-memory daemon of demo mode simulates it: a turn
-per delegated task and finished report, a turn for each request-like line you write (see below),
-and a streamed reply when you write to it.
+message is loaded and highlights it for 2 s.
 
 ## Routines
 
@@ -284,8 +282,7 @@ a thread, so a routine has its own inbox of runs, and a finished run can notify 
 - **Code:** `AgentStore+Routines` (list, runs, actions, `RoutineDraft`), `RoutineAlert` (409/503
   reasons, form errors), `Views/Routines/`, and in the app `UIState.agentSection`,
   `showRoutines()`/`showRoutine(_:)`/`showRoutineRun(routineId:threadId:)` and the sheet in
-  `MainWindowView`. Demo mode has four routines (one paused, one with a schedule it can't read)
-  with past runs, and runs Run Now like the daemon.
+  `MainWindowView`.
 
 ## Where the agent runs
 
@@ -403,10 +400,7 @@ palette too, without shortcuts.
 - **Code:** `ObsidianImportStore` (the vault, the job and its events, the report, the destination,
   Update from Obsidian, and each action's inline error), `AppModel+Events` routes
   `.importProgress` to it, and `AppEnvironment` injects the folder picker, Finder and folder checks
-  so tests use fakes. `InMemoryDaemonClient` imports two synthetic folders under `/Users/me` (an
-  Obsidian vault and a plain folder) with jobs on its virtual timeline, and answers a switch like a
-  supervised daemon (its health then names the new vault); `simulateImportSettings(pairedDevice:
-  lockedByEnv:)` simulates the refusals.
+  so tests use fakes.
 
 ## Vim mode
 
@@ -443,18 +437,17 @@ which is Obsidian's: `DailyDoListVim` is a port of the same engine (vim.js), and
 
 ## Demo mode
 
-`--demo` (or `DDL_DEMO=1`) runs the whole UI against `InMemoryDaemonClient`: sample notes, routines
-with past runs, and a simulated agent that streams, asks for approvals and finishes tasks and runs
-in real time. The demo syncs and has a paired always-on machine (`vm-name`), so the orchestrator
-toggle and Settings → Always-On work, handovers included. There's no daemon, no Node and no
-network, which makes it good for trying the app, UI work and screenshots. Connection settings
-apply on the next normal launch.
-
-Writing a line that may be addressed to the agent in today's note (a port of the daemon's
-`mayBeRequest`: "find a quiet dishwasher", "remind me to…", a question) shows the orchestrator's
-activity: the line is noticed at once, and after the settle delay it reads, thinks and acts,
-adding "- [ ] Find a quiet dishwasher" under it as its own line ("Added a task ↗"), or answers a
-question in its chat ("Replied ↗"). Plain prose wakes nothing.
+`--demo` (or `DDL_DEMO=1`) runs the app against a daemon of its own, like `pnpm dev:mock` does for
+the web app: the mock agent (scripted, no model, no network) on a throwaway copy of the demo vault
+(`apps/daemon/src/demo-vault.ts`: notes, a drawing, yesterday's note with the agent's lines, a
+question it answered). `DemoDaemon` makes a new folder under the temporary directory for its
+`DDL_HOME` and vault at each launch, deletes it on quit, and picks a free port, so the demo runs
+beside the real app and never opens `~/.daily-do-list` or your vault. The supervisor launches it
+with `DaemonLaunchConfiguration.demo`: `DDL_DEMO=1` has the daemon seed the vault (and turn
+computer use off) before it starts, and none of your `DDL_*` variables reach it. It needs Node
+24.4+ and the daemon, like a normal launch. Demo mode keeps its own preferences, can't import or
+switch vaults, and its connection settings apply on the next normal launch. The integration tests
+launch the same configuration.
 
 ## Managed vs. external daemon
 
@@ -710,7 +703,10 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   wire fixture tests, the integration tests, `ddl-computer`'s protected targets and protocol, the
   editor's data safety (merges, never losing typing, no layout while the storage edits), the
   typing and drawing performance budgets, and regression tests of real bugs.
-- **Fakes first.** Supervisor logic runs against injected fakes (process launcher, health
+- **Fakes first.** Stores and views run against `FakeDaemonClient` (`DailyDoListClientTestSupport`):
+  a vault with the daemon's version semantics, held writes and injected failures, and scripted
+  answers for everything else. What needs the daemon's real behavior is an integration test.
+  Supervisor logic runs against injected fakes (process launcher, health
   checker, files, commands, and a clock whose sleeps finish instantly), so crash loops, backoff,
   timeouts and stop escalation are tested in milliseconds. A few tests start real processes: a
   tiny fake daemon script (`Packages/DailyDoListDaemon/Tests/.../Fixtures/fake-daemon.mjs`).
@@ -721,7 +717,8 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   (hello, echo tagging, external edits), agent flows (streamed threads, artifacts, approve, deny,
   retry, cancel), a supervisor restart mid-stream (reconnect + resync), and importing a synthetic
   Obsidian vault (the report, the import and its events, `locked_by_env`, the switch through the
-  vault the app passes and a restart, then Update from Obsidian; its own daemon). The always-on
+  vault the app passes and a restart, then Update from Obsidian; its own daemon), and the demo's
+  configuration (the seeded demo vault, the mock agent, no computer use; its own daemon). The always-on
   tests add device settings (live changes, `lockedByEnv` from a second daemon's environment and
   its 409, the validation bodies the app parses), pairing a device from the daemon's side (a code,
   `pair` without the token, the device token as a bearer and on the WebSocket in the header or the

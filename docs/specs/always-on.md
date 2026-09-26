@@ -342,7 +342,7 @@ older clients still decode.
   real keyboard, bundle budget.
 - **S5 Mac** (apps/macos): the orchestrator location toggle in the agent panel header, the same
   Settings panes natively, agent status presentation for
-  placement/relay/readiness, client methods (`HTTPDaemonClient` + `InMemoryDaemonClient`) for the
+  placement/relay/readiness, client methods (`HTTPDaemonClient`) for the
   new routes, WebSocket auth by header when the endpoint isn't loopback (keep `?token=` for
   loopback), tests with fakes, tooltip/command rules, docs.
 - **S6 VM setup kit** (deploy + CI): a Linux bundle (daemon + web dist + sync service, `pnpm
