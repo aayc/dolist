@@ -101,6 +101,23 @@ installed on the main development Mac (permissions kept).
 
 ## In flight
 
+### Code cleanup and a performance pass (started 2026-09-25, evening)
+
+Per the user: internal APIs and module boundaries may change where it clearly helps; the wire
+protocol and user-visible behavior stay (perceived-speed improvements welcome). Merged worktrees
+and branches were removed (GitHub has only `main`).
+
+- **Audits (report only):** unused TypeScript code and dependencies (knip), duplication and
+  oversized modules, the Swift code, docs and config drift. Their findings get implemented after
+  the perf branches land, so the two don't fight over the same files.
+- **Flaky tests** on `chore/flaky-tests`: the tests listed under "Flaky under load" below, made
+  robust without loosening them.
+- **Performance**, measured first with before/after numbers and budgets: `perf/web` (load, note
+  switching, typing in long notes, palette and search on big vaults, long threads, re-renders),
+  `perf/mac` (launch, note switching, large notes, long lists, Observation invalidations, main
+  thread), `perf/daemon` (startup on large vaults, save-to-event latency, API and search, how
+  fast the orchestrator notices a change).
+
 ### The always-on machine (the Azure VM)
 
 The code is on `main` (`7ce1e9f`, `bbe8aff`). Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md);
