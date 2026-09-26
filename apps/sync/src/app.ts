@@ -1,4 +1,5 @@
 import {
+  escapeRoutingPath,
   folderHoldsAgentOwnedPaths,
   isAgentOwnedPath,
   LEASE_EPOCH_HEADER,
@@ -84,7 +85,7 @@ const ChangesQuerySchema = z.object({
 /** The sync service's HTTP API (the stream's WebSocket upgrade is handled by the server). */
 export function createSyncApp(options: SyncAppOptions): Hono<Env> {
   const { store, hub, logger } = options;
-  const app = new Hono<Env>({ getPath: routingPath });
+  const app = new Hono<Env>({ getPath: (request) => escapeRoutingPath(getPath(request)) });
   app.onError(createErrorHandler(logger));
   app.notFound((c) => c.json(errorBody("not_found", "Unknown route"), 404));
 
@@ -371,21 +372,4 @@ function parse<S extends z.ZodType>(schema: S, value: unknown, what: string): z.
 
 function isFlag(value: string | undefined): boolean {
   return value === "1" || value === "true";
-}
-
-/**
- * Hono routes on the percent-decoded path, and its wildcard patterns don't match line terminators:
- * re-escaping them keeps such requests on their route (authenticated, then validated).
- */
-function routingPath(request: Request): string {
-  const path = getPath(request);
-  let out = "";
-  for (const ch of path) {
-    const code = ch.charCodeAt(0);
-    out +=
-      code < 0x20 || code === 0x7f || code === 0x2028 || code === 0x2029
-        ? encodeURIComponent(ch)
-        : ch;
-  }
-  return out;
 }

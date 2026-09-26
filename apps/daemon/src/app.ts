@@ -3,6 +3,7 @@ import type { AgentRuntime } from "@ddl/agent";
 import type { ConnectorToolSource } from "@ddl/connectors";
 import { WIRE_LIMITS } from "@ddl/contract";
 import type { Logger, SyncStatusResponse } from "@ddl/core";
+import { escapeRoutingPath } from "@ddl/core";
 import { type StorageProvider, searchVault } from "@ddl/storage";
 import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -136,7 +137,7 @@ export function createApp(deps: AppDeps): Hono {
     version: deps.version ?? DAEMON_VERSION,
   };
 
-  const app = new Hono({ getPath: routingPath });
+  const app = new Hono({ getPath: (request) => escapeRoutingPath(getPath(request)) });
   app.onError(createErrorHandler(ctx.logger));
   app.notFound((c) =>
     isApiPath(c.req.path)
@@ -173,24 +174,6 @@ export function createApp(deps: AppDeps): Hono {
   app.all("/ws", (c) => c.json(errorBody("upgrade_required", "Use a WebSocket upgrade"), 426));
   registerWebRoutes(app, ctx);
   return app;
-}
-
-/**
- * Hono routes on the percent-decoded path, and its wildcard patterns do not match line
- * terminators, so a path like `/api/notes/a%0Ab.md` would skip every route and middleware.
- * Re-escaping them keeps such requests on the normal path (guarded, then rejected by validation).
- */
-function routingPath(request: Request): string {
-  const path = getPath(request);
-  let out = "";
-  for (const ch of path) {
-    const code = ch.charCodeAt(0);
-    out +=
-      code < 0x20 || code === 0x7f || code === 0x2028 || code === 0x2029
-        ? encodeURIComponent(ch)
-        : ch;
-  }
-  return out;
 }
 
 function requestLogger(logger: Logger): MiddlewareHandler {
