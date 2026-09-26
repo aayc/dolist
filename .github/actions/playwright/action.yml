@@ -1,7 +1,7 @@
 name: Playwright browsers
 description: >-
-  Installs Playwright's Chromium (cached by the @playwright/test version in pnpm-lock.yaml) and its
-  system dependencies. Run after the workspace setup.
+  Installs Playwright's Chromium, cached by the @playwright/test version in pnpm-lock.yaml. Run
+  after the workspace setup.
 
 runs:
   using: composite
@@ -22,6 +22,13 @@ runs:
         path: ~/.cache/ms-playwright
         key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
     - name: Install Playwright browsers
-      # System dependencies aren't cached, so this also runs on a cache hit (downloads are skipped).
+      # GitHub's Ubuntu images ship Google Chrome and the libraries Chromium needs, so the slow
+      # `--with-deps` (apt) is only a fallback for when a library is missing.
       shell: bash
-      run: pnpm --filter @ddl/web exec playwright install --with-deps chromium
+      run: |
+        pnpm --filter @ddl/web exec playwright install chromium
+        shell="$(find ~/.cache/ms-playwright -path '*chrome-headless-shell*' -type f -name 'chrome-headless-shell' | head -1)"
+        if [ -z "$shell" ] || ldd "$shell" | grep -q 'not found'; then
+          echo "Chromium is missing system libraries; installing them"
+          pnpm --filter @ddl/web exec playwright install --with-deps chromium
+        fi

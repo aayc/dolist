@@ -121,9 +121,10 @@ jobs:
           step: save
 
   test-macos:
-    # The packages that touch the OS: the FSEvents-backed file watcher (storage), processes, the
-    # macOS computer-use helpers and Chrome (agent, connectors), case-insensitive paths and the
-    # Trash (daemon), sockets (sync). The rest is platform-independent and runs on Linux only.
+    # What touches the OS: the agent's processes, shells, macOS computer-use helpers, Chrome and
+    # files (src/execution, src/harness, its persistence tests); the FSEvents-backed file watcher
+    # (storage); stdio servers (connectors); sockets (sync); case-insensitive paths and the Trash
+    # (daemon). The rest is platform-independent logic and runs on Linux only.
     name: Unit tests (macOS, ${{ matrix.shard }})
     runs-on: macos-latest
     timeout-minutes: 25
@@ -131,10 +132,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - shard: agent
-            filter: --filter=@ddl/agent
-          - shard: os
-            filter: --filter=@ddl/daemon --filter=@ddl/storage --filter=@ddl/connectors --filter=@ddl/sync
+          - shard: daemon
+            cache: test-macos-daemon
+            filter: --filter=@ddl/daemon
+          - shard: agent and storage
+            cache: test-macos-agent
+            agent: true
+            filter: --filter=@ddl/storage --filter=@ddl/connectors --filter=@ddl/sync
     env:
       TEST_TIME_SCALE: "5"
       FILTER: ${{ matrix.filter }}
@@ -145,16 +149,22 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/turbo-cache
         with:
-          name: test-${{ matrix.shard }}
+          name: ${{ matrix.cache }}
           step: restore
+      - name: Unit tests (the agent's OS-bound tests)
+        if: matrix.agent
+        run: >-
+          pnpm turbo run test --filter=@ddl/agent --
+          src/execution src/harness test/persistence test/journal.test.ts
       - name: Unit tests
+        if: ${{ !cancelled() }}
         run: |
           # shellcheck disable=SC2086 # FILTER holds several arguments
           pnpm turbo run test --concurrency=1 --continue $FILTER
       - uses: ./.github/actions/turbo-cache
         if: ${{ !cancelled() }}
         with:
-          name: test-${{ matrix.shard }}
+          name: ${{ matrix.cache }}
           step: save
 
   bench:
