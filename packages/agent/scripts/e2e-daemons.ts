@@ -64,6 +64,8 @@ export interface DaemonSpec {
   obsidian?: boolean;
   /** Serve the built web app (default true). */
   web?: boolean;
+  /** Set the vault with DDL_VAULT (switching vaults is then refused) rather than in `config.json`. */
+  lockVault?: boolean;
 }
 
 interface SyncVault {
@@ -143,7 +145,7 @@ async function main(): Promise<void> {
     await mkdir(join(vault, ".daily-do-list"), { recursive: true });
     await writeFile(join(vault, ".daily-do-list/settings.json"), `${JSON.stringify(settings)}\n`);
     const config: Record<string, unknown> = {
-      vaultPath: vault,
+      ...(spec.lockVault ? {} : { vaultPath: vault }),
       execution: { kind: "local", computer: { enabled: false } },
       ...(spec.sync
         ? { sync: { kind: "remote", url: spec.sync.url, vault: spec.sync.vault } }
@@ -171,6 +173,7 @@ async function main(): Promise<void> {
       DDL_HOME: home,
       DDL_AGENT_MODE: spec.agent ?? "mock",
       DDL_LOG_LEVEL: LOG_LEVEL,
+      ...(spec.lockVault ? { DDL_VAULT: vault } : {}),
       ...(spec.web === false ? { DDL_WEB_DIST: join(root, "no-web-build") } : {}),
       ...(spec.agent === "live"
         ? {
@@ -272,6 +275,12 @@ async function main(): Promise<void> {
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
   process.on("SIGHUP", stop);
+  // One daemon's stray error must not take down every other test's daemon.
+  const report = (error: unknown) => {
+    console.error("e2e daemons: uncaught", error instanceof Error ? error.stack : error);
+  };
+  process.on("uncaughtException", report);
+  process.on("unhandledRejection", report);
 }
 
 async function readJson(request: IncomingMessage): Promise<unknown> {

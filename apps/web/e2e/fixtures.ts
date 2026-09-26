@@ -21,6 +21,7 @@ export interface DaemonSpec {
   sync?: SyncVault;
   obsidian?: boolean;
   web?: boolean;
+  lockVault?: boolean;
 }
 
 export interface SyncVault {
@@ -135,6 +136,39 @@ export class Daemon {
 
 export async function startDaemon(spec: DaemonSpec = {}): Promise<Daemon> {
   return new Daemon(await harness<Started>("POST", "/daemons", spec));
+}
+
+interface SeededMessage {
+  id: string;
+  kind: "text";
+  role: "agent" | "user";
+  author: "orchestrator" | "you" | `subagent:${string}`;
+  createdAt: number;
+  text: string;
+}
+
+/**
+ * A finished agent thread as the daemon stores it (`.daily-do-list/threads/<id>.json`, format v1
+ * in @ddl/contract), for `DaemonSpec.files`.
+ */
+export function threadFile(thread: {
+  id: string;
+  title: string;
+  messages: SeededMessage[];
+}): Record<string, string> {
+  const at = thread.messages.at(-1)?.createdAt ?? Date.now();
+  const file = {
+    version: 1,
+    taskId: null,
+    notePath: null,
+    status: "done",
+    createdAt: thread.messages[0]?.createdAt ?? at,
+    updatedAt: at,
+    artifacts: [],
+    surfaces: [],
+    ...thread,
+  };
+  return { [`.daily-do-list/threads/${thread.id}.json`]: `${JSON.stringify(file)}\n` };
 }
 
 /** A new vault on the harness's sync service, with its token. */
