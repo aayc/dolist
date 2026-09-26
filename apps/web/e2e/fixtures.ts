@@ -176,12 +176,27 @@ export function syncVault(): Promise<SyncVault> {
   return harness<SyncVault>("POST", "/sync-vaults");
 }
 
-export const test = base.extend<{ daemonSpec: DaemonSpec; daemon: Daemon }>({
+export const test = base.extend<{
+  daemonSpec: DaemonSpec;
+  daemon: Daemon;
+  /** More daemons for the test (another device, the always-on machine), removed after it. */
+  launch: (spec?: DaemonSpec) => Promise<Daemon>;
+}>({
   daemonSpec: [{}, { option: true }],
   daemon: async ({ daemonSpec }, use) => {
     const daemon = await startDaemon(daemonSpec);
     await use(daemon);
     await daemon.close();
+  },
+  // biome-ignore lint/correctness/noEmptyPattern: Playwright reads a fixture's dependencies from it.
+  launch: async ({}, use) => {
+    const started: Daemon[] = [];
+    await use(async (spec) => {
+      const daemon = await startDaemon(spec);
+      started.push(daemon);
+      return daemon;
+    });
+    await Promise.all(started.map((daemon) => daemon.close()));
   },
   baseURL: async ({ daemon }, use) => {
     await use(daemon.url);

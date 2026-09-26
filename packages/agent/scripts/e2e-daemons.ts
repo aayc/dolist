@@ -20,15 +20,18 @@
  * leaves the machine. Leases and the relay use short timings so handovers take seconds.
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { silentLogger } from "@ddl/core";
 import { createFakeBrain, startFakeOpenRouter } from "../src/testing";
 import { writeDemoVault } from "./demo-vault";
 
 const port = Number(process.argv.find((a) => a.startsWith("--port="))?.split("=")[1] ?? 4173);
-const LOG_LEVEL = process.env.DDL_E2E_LOG_LEVEL ?? "error";
+/** The daemons log nothing unless asked (`DDL_E2E_LOG_LEVEL=debug|info|warn|error`). */
+const LOG_LEVEL = process.env.DDL_E2E_LOG_LEVEL;
 const LEASE = {
   ttlMs: 5_000,
   renewEveryMs: 500,
@@ -38,6 +41,7 @@ const LEASE = {
   marginMs: 1_000,
 };
 const LINK = { pingEveryMs: 500, minBackoffMs: 50, maxBackoffMs: 500 };
+const WEB_DIST = fileURLToPath(new URL("../../../apps/web/dist", import.meta.url));
 
 export interface DaemonSpec {
   /** `mock` (default): the scripted brain in process; `live`: Pi against the fake OpenRouter. */
@@ -101,6 +105,9 @@ async function main(): Promise<void> {
   const { loadConfig } = await import("../../../apps/daemon/src/config");
   const { buildObsidianVault } = await import("../../../apps/daemon/src/import/test-vaults");
   const sync = await createSyncServer({ db: ":memory:", host: "127.0.0.1", port: 0 });
+  // A copy: a build started meanwhile (another run's `vite build`) empties the original.
+  const webDist = await mkdtemp(join(tmpdir(), "ddl-e2e-web-"));
+  await cp(WEB_DIST, webDist, { recursive: true });
 
   const entries = new Map<string, Entry>();
   let counter = 0;
@@ -111,6 +118,7 @@ async function main(): Promise<void> {
     entry.daemon = await startDaemon({
       config,
       env,
+      ...(LOG_LEVEL ? {} : { logger: silentLogger }),
       leaseTimings: LEASE,
       relayLinkTimings: LINK,
       onRestart: () => {
@@ -172,9 +180,9 @@ async function main(): Promise<void> {
     const env: Record<string, string> = {
       DDL_HOME: home,
       DDL_AGENT_MODE: spec.agent ?? "mock",
-      DDL_LOG_LEVEL: LOG_LEVEL,
+      ...(LOG_LEVEL ? { DDL_LOG_LEVEL: LOG_LEVEL } : {}),
       ...(spec.lockVault ? { DDL_VAULT: vault } : {}),
-      ...(spec.web === false ? { DDL_WEB_DIST: join(root, "no-web-build") } : {}),
+      DDL_WEB_DIST: spec.web === false ? join(root, "no-web-build") : webDist,
       ...(spec.agent === "live"
         ? {
             DDL_AGENT_MOCK_ACTIONS: "1",
@@ -269,6 +277,7 @@ async function main(): Promise<void> {
       await Promise.all([...entries.values()].map(remove));
       await sync.close().catch(() => {});
       await fake.close();
+      await rm(webDist, { recursive: true, force: true });
       process.exit(0);
     })();
   };
