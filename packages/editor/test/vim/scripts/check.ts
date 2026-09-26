@@ -4,6 +4,8 @@
  *   2. vim.js's own suite passes against plain CodeMirror 6;
  *   3. it passes against the Daily Do List editor, except the listed deliberate differences;
  *   4. every vector replays identically against the Daily Do List editor, except listed skips.
+ * The four run at once, on pools of pages (`VIM_PAGES`). The replay takes the committed file; when
+ * that turns out stale, the generated vectors replay too, so the problems listed are theirs.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { launchChromium } from "./browser";
@@ -16,18 +18,29 @@ function seconds(since: number): string {
   return `${((performance.now() - since) / 1000).toFixed(1)}s`;
 }
 
+function timed<T>(work: Promise<T>): Promise<{ value: T; took: string }> {
+  const started = performance.now();
+  return work.then((value) => ({ value, took: seconds(started) }));
+}
+
 async function main(): Promise<void> {
   const failures: string[] = [];
   const browser = await launchChromium();
   try {
-    let started = performance.now();
-    const generated = await generateVectors(browser);
     const committed = existsSync(VECTORS_PATH) ? readFileSync(VECTORS_PATH, "utf8") : "";
-    const stale = committed === generated.text ? [] : summarizeDiff(committed, generated);
-    if (committed !== generated.text && stale.length === 0)
+    const [generated, plain, web, committedReplay] = await Promise.all([
+      timed(generateVectors(browser)),
+      timed(runPlainSuite(browser)),
+      timed(runWebSuite(browser)),
+      timed(replayVectors(browser, committed)),
+    ]);
+
+    const fresh = generated.value;
+    const stale = committed === fresh.text ? [] : summarizeDiff(committed, fresh);
+    if (committed !== fresh.text && stale.length === 0)
       stale.push("vectors.jsonl differs byte-wise");
     console.log(
-      `vectors: ${generated.vectors.length} regenerated in ${seconds(started)}, ` +
+      `vectors: ${fresh.vectors.length} regenerated in ${generated.took}, ` +
         (stale.length === 0 ? "committed file is up to date" : "committed file is STALE"),
     );
     if (stale.length > 0) {
@@ -37,22 +50,20 @@ async function main(): Promise<void> {
         ),
       );
     }
-    failures.push(...coverageProblems(generated));
+    failures.push(...coverageProblems(fresh));
 
-    for (const run of [runPlainSuite, runWebSuite]) {
-      started = performance.now();
-      const report = await run(browser);
-      console.log(`${describeSuite(report)} (${seconds(started)})`);
-      failures.push(...report.problems);
+    for (const suite of [plain, web]) {
+      console.log(`${describeSuite(suite.value)} (${suite.took})`);
+      failures.push(...suite.value.problems);
     }
 
-    started = performance.now();
-    const replay = await replayVectors(browser, generated.text);
+    const replay =
+      stale.length === 0 ? committedReplay : await timed(replayVectors(browser, fresh.text));
     console.log(
-      `vector replay (Daily Do List editor): ${replay.passed}/${replay.total} identical, ` +
-        `${replay.skipped} known editor differences (${seconds(started)})`,
+      `vector replay (Daily Do List editor): ${replay.value.passed}/${replay.value.total} identical, ` +
+        `${replay.value.skipped} known editor differences (${replay.took})`,
     );
-    failures.push(...replay.problems);
+    failures.push(...replay.value.problems);
   } finally {
     await browser.close();
   }
