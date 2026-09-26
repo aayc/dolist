@@ -41,7 +41,7 @@ future iPhone app too.
 | `Package.swift`, `Sources/DailyDoList` | The executable: `@main` and nothing else. |
 | `Sources/DailyDoListApp` | The app shell: scenes, `AppModel`, stores, workspace, settings panes, commands, the command palette. |
 | `Sources/DailyDoListApp/System` | OS integration: launch at login (`SMAppService`), the global hotkey (Carbon), shortcut parsing, conflicts with macOS shortcuts, and the computer-use permissions with their guide panel. |
-| `Packages/DailyDoListModels` (iOS) | Swift mirror of the wire protocol (the schemas in `packages/contract/src/wire`), checked against the `@ddl/contract` fixtures. |
+| `Packages/DailyDoListModels` (iOS) | Swift mirror of the wire protocol (the schemas in `packages/contract/src/wire`), checked against the `@ddl/contract` fixtures, and `DaemonHome` (the daemon's home folder, token and port, for the client and the supervisor). |
 | `Packages/DailyDoListClient` (iOS) | `DaemonClient`: `HTTPDaemonClient` (REST + WebSocket, reconnects and resyncs). `DailyDoListClientTestSupport` has `FakeDaemonClient`, the scriptable fake the agent and app tests use. |
 | `Packages/DailyDoListDomain` (iOS) | Pure domain logic ported from `@ddl/core`: dates and daily notes, task parsing and tracking, line anchors, agent-line markers, three-way merges, wikilinks, paths, fuzzy matching, and the remote access validators. |
 | `Packages/DailyDoListEditor` | The TextKit markdown editor: live preview, clickable checkboxes, agent badges, drawings embedded in notes (floats the text wraps around, edited in place with `DailyDoListDrawing`'s canvas), and vim mode (it hosts `DailyDoListVim`). |
