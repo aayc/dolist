@@ -4,7 +4,7 @@
  *
  *   pnpm --filter @ddl/agent exec tsx scripts/smoke-web.ts
  */
-import { type ToolSpec, toolResultText } from "@ddl/core";
+import { errorMessage, type ToolSpec, toolResultText } from "@ddl/core";
 import { createOpenRouterClient } from "../src/llm/openrouter";
 import { createWebTools, type WebFetchDetails } from "../src/tools/web";
 import { loadOpenRouterKey } from "./lib/env";
@@ -91,6 +91,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error(`✖ smoke-web failed: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`✖ smoke-web failed: ${errorMessage(error)}`);
   process.exit(1);
 });

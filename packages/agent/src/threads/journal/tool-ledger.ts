@@ -10,7 +10,13 @@
  * here allows anything: the gate's decision is passed through unchanged, and a call whose record
  * can't be written is blocked.
  */
-import { type Logger, silentLogger, type ToolResult, toolResultText } from "@ddl/core";
+import {
+  errorMessage,
+  type Logger,
+  silentLogger,
+  type ToolResult,
+  toolResultText,
+} from "@ddl/core";
 import type {
   Harness,
   HarnessEvent,
@@ -87,7 +93,7 @@ function journaled(
     } catch (error) {
       logger.error("Couldn't journal a tool call before running it; blocking it", {
         tool: call.toolName,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(error),
       });
       calls.delete(call.toolCallId);
       journal.recordToolFinished(threadId, call.toolCallId, {

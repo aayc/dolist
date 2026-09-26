@@ -1,4 +1,5 @@
 import type { ServerEvent, TaskAgentStatus, ThreadMessageKind } from "@ddl/core";
+import { isRecord } from "@ddl/core";
 
 /**
  * Cheap structural guards for daemon push events (zod stays out of the bundle; the contract's
@@ -6,11 +7,6 @@ import type { ServerEvent, TaskAgentStatus, ThreadMessageKind } from "@ddl/core"
  * calls string methods on; unknown keys are allowed (newer daemons add fields).
  */
 type Check = (value: unknown) => boolean;
-type Json = Record<string, unknown>;
-
-function isObject(value: unknown): value is Json {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 const str: Check = (value) => typeof value === "string";
 const num: Check = (value) => typeof value === "number" && Number.isFinite(value);
@@ -34,7 +30,7 @@ const arrayOf =
 const shape =
   (fields: Record<string, Check>): Check =>
   (value) =>
-    isObject(value) && Object.entries(fields).every(([key, check]) => check(value[key]));
+    isRecord(value) && Object.entries(fields).every(([key, check]) => check(value[key]));
 
 const TASK_STATUSES: readonly TaskAgentStatus[] = [
   "idle",
@@ -97,7 +93,7 @@ const messageKinds: Record<ThreadMessageKind, Check> = {
   status: shape({ ...messageBase, status: taskStatus, text: optional(str) }),
 };
 const message: Check = (value) =>
-  isObject(value) &&
+  isRecord(value) &&
   typeof value.kind === "string" &&
   Object.hasOwn(messageKinds, value.kind) &&
   messageKinds[value.kind as ThreadMessageKind](value);
@@ -315,7 +311,7 @@ const validators: Record<ServerEvent["type"], Check> = {
 
 /** Validates the shape of a daemon push event; unknown or malformed events are dropped. */
 export function parseServerEvent(raw: unknown): ServerEvent | null {
-  if (!isObject(raw) || typeof raw.type !== "string" || !Object.hasOwn(validators, raw.type)) {
+  if (!isRecord(raw) || typeof raw.type !== "string" || !Object.hasOwn(validators, raw.type)) {
     return null;
   }
   const validate = validators[raw.type as ServerEvent["type"]];

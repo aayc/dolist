@@ -8,6 +8,7 @@ export * from "./drawings/file";
 export * from "./drawings/merge";
 export * from "./drawings/types";
 export * from "./events";
+export * from "./guards";
 export * from "./ids";
 export * from "./logger";
 export * from "./markdown/agent-text";

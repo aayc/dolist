@@ -3,9 +3,11 @@
  * before selecting the Cursor harness. `agent status --format json` also prints account details;
  * only the authentication flags are read, nothing else is kept or logged.
  */
+
 import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
+import { errorMessage } from "@ddl/core";
 import { findExecutable, isExecutable, pathDirs } from "../executables";
 
 export const CURSOR_CLI_NAMES = ["agent", "cursor-agent"] as const;
@@ -109,7 +111,7 @@ export async function checkCursorCli(
     return {
       state: "error",
       binary,
-      message: error instanceof Error ? error.message : String(error),
+      message: errorMessage(error),
     };
   }
   const authenticated = parseAuthenticated(output.stdout);

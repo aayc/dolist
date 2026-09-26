@@ -1,12 +1,12 @@
 import { randomBytes } from "node:crypto";
 import {
+  errorMessage,
   type Logger,
   SYNC_LEASE_TAKEOVER,
   type SyncLeaseHolder,
   type SyncLeasePriority,
 } from "@ddl/core";
 import type { LeaseAttempt, SyncServiceClient } from "@ddl/storage";
-import { errorMessage } from "./errors";
 import type { DeviceIdentity } from "./sync-setup";
 
 export interface LeaseRequest {

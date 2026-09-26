@@ -21,6 +21,7 @@ import {
   type DeviceVaultResponse,
   type HealthResponse,
   isCompatibleApiVersion,
+  isRecord,
   type MachinePairRequest,
   type MachineStatusResponse,
   type NoteResponse,
@@ -93,10 +94,6 @@ type Method = "GET" | "PUT" | "PATCH" | "POST" | "DELETE";
 /** A dropped socket probes the auth at most this often (cookie auth). */
 const AUTH_PROBE_MS = 5_000;
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function surfaceKey(threadId: string, surface: string): string {
   return `${threadId}\u0000${surface}`;
 }
@@ -107,7 +104,7 @@ function hasDotSegment(path: string): boolean {
 }
 
 function isIncompatibleClose(event: unknown): boolean {
-  return isObject(event) && event.code === WS_CLOSE_CODES.incompatibleApiVersion;
+  return isRecord(event) && event.code === WS_CLOSE_CODES.incompatibleApiVersion;
 }
 
 export class HttpDaemonClient implements DaemonClient {
@@ -334,7 +331,7 @@ export class HttpDaemonClient implements DaemonClient {
   async setAgentEnabled(enabled: boolean): Promise<AgentStatusResponse | null> {
     const body: SetAgentEnabledRequest = { enabled };
     const data = await this.request<unknown>("POST", API_ROUTES.agentEnabled, body);
-    return isObject(data) && typeof data.enabled === "boolean"
+    return isRecord(data) && typeof data.enabled === "boolean"
       ? (data as unknown as AgentStatusResponse)
       : null;
   }
@@ -342,7 +339,7 @@ export class HttpDaemonClient implements DaemonClient {
   async getConnectors(): Promise<ConnectorStatus[]> {
     const data = await this.request<unknown>("GET", API_ROUTES.connectors);
     if (Array.isArray(data)) return data as ConnectorStatus[];
-    if (isObject(data) && Array.isArray(data.connectors))
+    if (isRecord(data) && Array.isArray(data.connectors))
       return data.connectors as ConnectorStatus[];
     return [];
   }
@@ -383,9 +380,9 @@ export class HttpDaemonClient implements DaemonClient {
     decision: ApprovalDecisionRequest,
   ): Promise<ApprovalRequest | null> {
     const data = await this.request<unknown>("POST", API_ROUTES.approval(id), decision);
-    if (isObject(data) && isObject(data.approval))
+    if (isRecord(data) && isRecord(data.approval))
       return data.approval as unknown as ApprovalRequest;
-    if (isObject(data) && typeof data.id === "string") return data as unknown as ApprovalRequest;
+    if (isRecord(data) && typeof data.id === "string") return data as unknown as ApprovalRequest;
     return null;
   }
 

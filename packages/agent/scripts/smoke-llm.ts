@@ -7,7 +7,7 @@
  * `--offline` targets the fake OpenRouter (`src/testing`; latencies there are simulated). The API
  * key is read from the environment or ~/.daily-do-list/.env and never printed.
  */
-import { createConsoleLogger } from "@ddl/core";
+import { createConsoleLogger, errorMessage } from "@ddl/core";
 import { createOpenRouterClient } from "../src/llm/openrouter";
 import {
   type LlmClient,
@@ -201,6 +201,6 @@ function usage(completion: {
 }
 
 main().catch((error: unknown) => {
-  console.error(`✖ smoke-llm failed: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`✖ smoke-llm failed: ${errorMessage(error)}`);
   process.exit(1);
 });

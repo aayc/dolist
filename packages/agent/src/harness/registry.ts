@@ -3,7 +3,9 @@
  * from running. Each entry checks what its harness needs — Pi an OpenRouter key OpenRouter
  * accepts, Cursor the CLI installed and signed in — and loads the harness module on first use.
  */
+
 import type { AgentHarnessKind, Logger } from "@ddl/core";
+import { errorMessage } from "@ddl/core";
 import { checkOpenRouterKey, type OpenRouterKeyCheck } from "../llm/openrouter";
 import type { CursorCliStatus } from "./cursor/cli";
 import type { Harness } from "./types";
@@ -38,7 +40,7 @@ export async function setupHarness(
   try {
     return await setup(ctx);
   } catch (error) {
-    return { problem: `The agent harness failed to start: ${errorText(error)}` };
+    return { problem: `The agent harness failed to start: ${errorMessage(error)}` };
   }
 }
 
@@ -94,12 +96,8 @@ async function setupCursorHarness(ctx: HarnessSetupContext): Promise<HarnessSetu
   });
   harness.stopLeftovers().catch((error: unknown) => {
     ctx.logger.warn("Couldn't check for leftover Cursor CLI processes", {
-      error: errorText(error),
+      error: errorMessage(error),
     });
   });
   return { harness };
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

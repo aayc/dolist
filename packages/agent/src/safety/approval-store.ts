@@ -14,7 +14,7 @@ import {
   type PersistedStorage,
 } from "@ddl/contract";
 import type { ApprovalRequest, Logger } from "@ddl/core";
-import { silentLogger } from "@ddl/core";
+import { errorMessage, silentLogger } from "@ddl/core";
 import type { ApprovalGrant } from "./types";
 
 export const APPROVALS_STATE_PATH = PERSISTED_PATHS.approvals;
@@ -87,7 +87,7 @@ export function createApprovalStateFile(options: ApprovalStateFileOptions): Appr
         const result = await file.load();
         return result.status === "loaded" ? toState(result.value) : undefined;
       } catch (error) {
-        logger.warn("Failed to read approvals state", { error: errorText(error) });
+        logger.warn("Failed to read approvals state", { error: errorMessage(error) });
         return undefined;
       }
     },
@@ -101,7 +101,7 @@ export function createApprovalStateFile(options: ApprovalStateFileOptions): Appr
           (theirs) => onExternal?.(toState(theirs)),
         );
       } catch (error) {
-        logger.warn("Failed to persist approvals", { error: errorText(error) });
+        logger.warn("Failed to persist approvals", { error: errorMessage(error) });
         return "failed";
       }
     },
@@ -130,8 +130,4 @@ function prune(
 
 function toState(value: PersistedApprovals): ApprovalState {
   return { version: 1, grants: value.grants, approvals: value.approvals };
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

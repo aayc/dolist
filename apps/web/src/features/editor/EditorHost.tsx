@@ -1,3 +1,4 @@
+import { errorMessage } from "@ddl/core";
 import { ClipboardPaste, Copy, ExternalLink, PencilRuler, Scissors, Shapes } from "lucide-react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useServices } from "../../app/services";
@@ -110,6 +111,6 @@ function clipboardProblem(error: unknown): void {
   toast({
     kind: "error",
     title: "The clipboard isn't available",
-    body: error instanceof Error ? error.message : String(error),
+    body: errorMessage(error),
   });
 }

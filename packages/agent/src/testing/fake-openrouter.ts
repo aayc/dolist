@@ -6,7 +6,7 @@
  */
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import { DEFAULT_MODEL } from "@ddl/core";
+import { DEFAULT_MODEL, errorMessage, isRecord } from "@ddl/core";
 import { createFakeBrain, type FakeBrain } from "./brain/brain";
 import type { AssistantTurn, BrainRequest } from "./brain/types";
 import {
@@ -179,7 +179,7 @@ export async function startFakeOpenRouter(
       handle(record, res).catch((error: unknown) => {
         if (!res.headersSent) {
           sendJson(res, record, 500, {
-            error: { message: `Fake server error: ${messageOf(error)}`, code: 500 },
+            error: { message: `Fake server error: ${errorMessage(error)}`, code: 500 },
           });
         } else res.destroy();
       });
@@ -457,12 +457,4 @@ function parseJson(raw: string): unknown {
   } catch {
     return undefined;
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

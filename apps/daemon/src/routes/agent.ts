@@ -11,6 +11,7 @@ import {
   type ApprovalRequest,
   type ApprovalResponse,
   type ConnectorsResponse,
+  errorMessage,
   type SetAgentEnabledResponse,
   type TaskRecordsResponse,
   type ThreadActionResponse,
@@ -19,7 +20,7 @@ import {
 } from "@ddl/core";
 import type { Context, Hono } from "hono";
 import type { AppContext } from "../context";
-import { ApiError, errorMessage, toApiError } from "../errors";
+import { ApiError, toApiError } from "../errors";
 import { idParam, readJson, readQuery } from "../http-utils";
 import { resolveNotePath } from "../vault-paths";
 import { applySettings } from "./settings";

@@ -17,7 +17,7 @@
  * Structural storage interface so this module stays dependency-free; `StorageProvider` from
  * @ddl/storage satisfies it.
  */
-import { type Logger, silentLogger } from "@ddl/core";
+import { errorMessage, type Logger, silentLogger } from "@ddl/core";
 import type { PersistedDecodeResult, PersistedIssue } from "./common";
 import { persistedQuarantinePath } from "./primitives";
 
@@ -196,7 +196,7 @@ export class PersistedFile<T> {
         this.logger.error("Could not move an unreadable file aside; it will not be overwritten", {
           path: this.path,
           reason,
-          error: errorText(error),
+          error: errorMessage(error),
         });
         return null;
       }
@@ -228,7 +228,7 @@ export class PersistedFile<T> {
           "Could not keep a copy of a partly invalid file; it will not be rewritten",
           {
             path: this.path,
-            error: errorText(error),
+            error: errorMessage(error),
           },
         );
         return false;
@@ -253,8 +253,4 @@ export class PersistedFile<T> {
 
 function hasName(error: unknown, name: string): boolean {
   return error instanceof Error && error.name === name;
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

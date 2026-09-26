@@ -1,7 +1,6 @@
 import { watch } from "node:fs";
-import { type Logger, normalizePath } from "@ddl/core";
+import { errorMessage, type Logger, normalizePath } from "@ddl/core";
 import { watchDirectoryTree } from "./directory-tree-watcher";
-import { errorMessage } from "./fs-errors";
 
 /** What the watcher needs from an open watch (an `FSWatcher` or a `DirectoryTreeWatcher`). */
 export interface WatchHandle {

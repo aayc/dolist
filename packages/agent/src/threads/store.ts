@@ -14,6 +14,7 @@ import {
   type ArtifactMeta,
   type CitedSource,
   createId,
+  errorMessage,
   type Logger,
   type SurfaceKind,
   silentLogger,
@@ -129,7 +130,7 @@ class SidecarThreadStore implements JournaledThreadStore {
       logger: this.logger,
       now: this.now,
     }).catch((error: unknown) => {
-      this.logger.warn("Failed to migrate thread files", { error: errorText(error) });
+      this.logger.warn("Failed to migrate thread files", { error: errorMessage(error) });
     });
     const entries = await this.storage.list({ prefix: THREAD_JOURNALS_DIR, includeHidden: true });
     await forEachLimited(entries, LOAD_CONCURRENCY, async ({ path }) => {
@@ -139,7 +140,7 @@ class SidecarThreadStore implements JournaledThreadStore {
         const file = await this.storage.read(path);
         if (file) this.adopt(id, path, file);
       } catch (error) {
-        this.logger.warn("Failed to load thread journal", { path, error: errorText(error) });
+        this.logger.warn("Failed to load thread journal", { path, error: errorMessage(error) });
       }
     });
   }
@@ -417,7 +418,7 @@ class SidecarThreadStore implements JournaledThreadStore {
       this.flushJournal(entry).catch((error: unknown) => {
         this.logger.warn("Failed to journal a tool result; will retry", {
           threadId,
-          error: errorText(error),
+          error: errorMessage(error),
         });
       });
     }
@@ -435,7 +436,7 @@ class SidecarThreadStore implements JournaledThreadStore {
       this.flushJournal(entry).catch((error: unknown) => {
         this.logger.warn("Failed to journal a prompt; will retry", {
           threadId,
-          error: errorText(error),
+          error: errorMessage(error),
         });
       });
     }
@@ -604,7 +605,7 @@ class SidecarThreadStore implements JournaledThreadStore {
     } catch (error) {
       this.logger.warn("Failed to persist thread; will retry", {
         threadId,
-        error: errorText(error),
+        error: errorMessage(error),
       });
       this.schedule(threadId, WRITE_RETRY_MS);
     }
@@ -615,7 +616,7 @@ class SidecarThreadStore implements JournaledThreadStore {
       try {
         listener(event);
       } catch (error) {
-        this.logger.error("Thread store listener failed", { error: errorText(error) });
+        this.logger.error("Thread store listener failed", { error: errorMessage(error) });
       }
     }
   }
@@ -629,8 +630,4 @@ function snapshot(thread: Thread): Thread {
     artifacts: [...thread.artifacts],
     surfaces: [...thread.surfaces],
   };
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

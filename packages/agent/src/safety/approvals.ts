@@ -13,7 +13,7 @@ import type {
   ApprovalStatus,
   Unsubscribe,
 } from "@ddl/core";
-import { createId, DEFAULT_SETTINGS, debounce, silentLogger } from "@ddl/core";
+import { createId, DEFAULT_SETTINGS, debounce, errorMessage, silentLogger } from "@ddl/core";
 import { type ApprovalState, createApprovalStateFile, mergeApprovalStates } from "./approval-store";
 import { riskRank } from "./policy";
 import type {
@@ -115,7 +115,7 @@ export function createApprovalBroker(
         listener(approval);
       } catch (error) {
         logger.warn("approval listener failed", {
-          error: error instanceof Error ? error.message : String(error),
+          error: errorMessage(error),
         });
       }
     }
@@ -134,7 +134,7 @@ export function createApprovalBroker(
         .then(adopt)
         .catch((error: unknown) => {
           logger.warn("failed to load approvals state", {
-            error: error instanceof Error ? error.message : String(error),
+            error: errorMessage(error),
           });
         })
     : Promise.resolve();

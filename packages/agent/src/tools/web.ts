@@ -12,6 +12,7 @@ import { pipeline, Readable } from "node:stream";
 import zlib from "node:zlib";
 import {
   errorResult,
+  isRecord,
   type Logger,
   silentLogger,
   type ToolResult,
@@ -1029,10 +1030,6 @@ function stringField(input: unknown, key: string): string | undefined {
 function numberField(input: unknown, key: string): number | undefined {
   const value = isRecord(input) ? input[key] : undefined;
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function messageOf(error: unknown): string {

@@ -4,6 +4,7 @@ import {
   charFromStatus,
   createId,
   dailyNotePath,
+  errorMessage,
   isActiveTaskStatus,
   isBlankTaskText,
   isClosedStatus,
@@ -220,7 +221,9 @@ export class Orchestrator {
         try {
           options.onActivity?.(activity);
         } catch (error) {
-          this.logger.error("Orchestrator activity listener failed", { error: errorText(error) });
+          this.logger.error("Orchestrator activity listener failed", {
+            error: errorMessage(error),
+          });
         }
       },
       now: this.now,
@@ -529,7 +532,7 @@ export class Orchestrator {
           if (items.length > 0) await this.runTurn(items);
         }
       } catch (error) {
-        this.logger.error("Orchestrator loop failed", { error: errorText(error) });
+        this.logger.error("Orchestrator loop failed", { error: errorMessage(error) });
       } finally {
         this.draining = null;
         if (this.queue.size > 0) this.scheduleDrain();
@@ -595,7 +598,7 @@ export class Orchestrator {
         session.turns++;
       }
     } catch (error) {
-      if (!turn.cancelled) turn.error ??= errorText(error);
+      if (!turn.cancelled) turn.error ??= errorMessage(error);
     } finally {
       this.turn = null;
     }
@@ -624,7 +627,7 @@ export class Orchestrator {
       this.resolveTurn(turn);
       this.options.onTurnResult?.(turn.error ?? null);
     } catch (error) {
-      this.logger.error("Failed to resolve orchestrator turn", { error: errorText(error) });
+      this.logger.error("Failed to resolve orchestrator turn", { error: errorMessage(error) });
     }
   }
 
@@ -1137,7 +1140,7 @@ export class Orchestrator {
       } catch (error) {
         this.logger.warn("Could not describe the drawings of a note", {
           notePath: note.notePath,
-          error: errorText(error),
+          error: errorMessage(error),
         });
       }
     }
@@ -1248,13 +1251,9 @@ export class Orchestrator {
 
   private background(promise: Promise<unknown>): void {
     promise.catch((error: unknown) => {
-      this.logger.error("Orchestrator background task failed", { error: errorText(error) });
+      this.logger.error("Orchestrator background task failed", { error: errorMessage(error) });
     });
   }
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function plural(count: number, noun: string): string {

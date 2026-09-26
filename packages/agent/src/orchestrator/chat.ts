@@ -1,5 +1,6 @@
 import {
   createId,
+  errorMessage,
   type Logger,
   ORCHESTRATOR_THREAD_ID,
   ORCHESTRATOR_THREAD_TITLE,
@@ -130,7 +131,7 @@ export class OrchestratorChat {
     } catch (error) {
       this.logger.error("Failed to record an orchestrator event", {
         type: event.type,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(error),
       });
     }
   }

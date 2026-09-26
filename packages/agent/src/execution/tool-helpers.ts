@@ -1,11 +1,12 @@
 import {
+  errorMessage,
   errorResult,
   type Logger,
   type ToolContent,
   type ToolExecutionContext,
   type ToolResult,
 } from "@ddl/core";
-import { ExecutionError, errorMessage } from "./errors";
+import { ExecutionError } from "./errors";
 import type { BrowserSnapshot, Screenshot } from "./types";
 import { raceAbort } from "./util/abort";
 

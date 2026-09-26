@@ -4,7 +4,9 @@
  * anyOf/oneOf, nullable). Harnesses without their own validation check arguments with it before
  * the safety gate or the tool see them.
  */
+
 import type { JsonSchema } from "@ddl/core";
+import { isRecord } from "@ddl/core";
 
 type Schema = Record<string, unknown>;
 
@@ -67,10 +69,8 @@ export function validateJson(schema: JsonSchema, value: unknown, path = "root"):
       }
     }
   }
-  if (isPlainObject(value)) {
-    const properties = isPlainObject(s.properties)
-      ? (s.properties as Record<string, JsonSchema>)
-      : {};
+  if (isRecord(value)) {
+    const properties = isRecord(s.properties) ? (s.properties as Record<string, JsonSchema>) : {};
     for (const key of Array.isArray(s.required) ? s.required : []) {
       if (typeof key === "string" && value[key] === undefined) {
         errors.push(`${path === "root" ? key : `${path}.${key}`}: is required`);
@@ -98,7 +98,7 @@ export function typeList(type: unknown): string[] {
 function matchesType(type: string, value: unknown): boolean {
   switch (type) {
     case "object":
-      return isPlainObject(value);
+      return isRecord(value);
     case "array":
       return Array.isArray(value);
     case "string":
@@ -117,11 +117,7 @@ function matchesType(type: string, value: unknown): boolean {
 }
 
 export function isSchema(value: unknown): boolean {
-  return isPlainObject(value);
-}
-
-export function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return isRecord(value);
 }
 
 export function deepEqual(a: unknown, b: unknown): boolean {

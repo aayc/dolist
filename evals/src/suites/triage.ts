@@ -40,6 +40,7 @@ import {
   DEFAULT_SETTINGS,
   dailyNotePath,
   describeSchedulePhrase,
+  errorMessage,
   errorResult,
   ROUTINE_NOTIFY_VALUES,
   type RoutineNotify,
@@ -553,7 +554,7 @@ async function runCase(
     const digest = await digestFor(c, Date.now());
     await withTimeout(session.prompt(digest), CASE_TIMEOUT_MS, "case timed out");
   } catch (err) {
-    error = err instanceof Error ? err.message : String(err);
+    error = errorMessage(err);
     await session.abort().catch(() => {});
   } finally {
     await session.dispose().catch(() => {});

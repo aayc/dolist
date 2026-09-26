@@ -8,6 +8,7 @@ import {
 import {
   type AppSettings,
   Emitter,
+  errorMessage,
   hashString,
   isAgentLine,
   isBlankTaskText,
@@ -372,7 +373,7 @@ export class TaskWatcher implements TaskLookup {
 
   private startRescan(): void {
     void this.rescan().catch((error) => {
-      this.logger.error("Daily note scan failed", { error: errorText(error) });
+      this.logger.error("Daily note scan failed", { error: errorMessage(error) });
     });
   }
 
@@ -392,7 +393,7 @@ export class TaskWatcher implements TaskLookup {
     try {
       folder = normalizePath(this.settings.dailyNotes.folder || "");
     } catch (error) {
-      this.logger.warn("Invalid daily notes folder; not watching", { error: errorText(error) });
+      this.logger.warn("Invalid daily notes folder; not watching", { error: errorMessage(error) });
       return;
     }
     const entries = await this.storage.list(folder ? { prefix: folder } : {});
@@ -427,7 +428,10 @@ export class TaskWatcher implements TaskLookup {
         try {
           await this.process(state, next);
         } catch (error) {
-          this.logger.error("Failed to process daily note", { notePath, error: errorText(error) });
+          this.logger.error("Failed to process daily note", {
+            notePath,
+            error: errorMessage(error),
+          });
         }
         next = state.rerun;
       }
@@ -845,7 +849,7 @@ export class TaskWatcher implements TaskLookup {
     } catch (error) {
       this.logger.warn("Failed to load task tracker state", {
         notePath: state.notePath,
-        error: errorText(error),
+        error: errorMessage(error),
       });
     }
     state.loaded = true;
@@ -909,7 +913,7 @@ export class TaskWatcher implements TaskLookup {
     } catch (error) {
       this.logger.warn("Failed to persist task tracker state", {
         notePath: state.notePath,
-        error: errorText(error),
+        error: errorMessage(error),
       });
     }
   }
@@ -944,8 +948,4 @@ function sameNotes(a: readonly string[], b: readonly string[]): boolean {
 
 function cloneTask(task: TrackedTask): TrackedTask {
   return { ...task, notes: [...task.notes] };
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

@@ -1,8 +1,10 @@
 import {
+  errorMessage,
   folderHoldsAgentOwnedPaths,
   InvalidPathError,
   isAgentOwnedPath,
   isHiddenPath,
+  isRecord,
   LEASE_EPOCH_HEADER,
   type Logger,
   normalizePath,
@@ -607,12 +609,4 @@ function closeQuietly(ws: WebSocket): void {
 
 function isSeq(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

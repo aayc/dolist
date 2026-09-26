@@ -16,6 +16,7 @@ import { join } from "node:path";
 import {
   createConsoleLogger,
   DEFAULT_CURSOR_MODEL,
+  errorMessage,
   type ToolSpec,
   textResult,
   toolResultText,
@@ -332,6 +333,6 @@ function oneLine(text: string, max: number): string {
 }
 
 main().catch((error: unknown) => {
-  console.error(`✖ smoke-cursor failed: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`✖ smoke-cursor failed: ${errorMessage(error)}`);
   process.exit(1);
 });

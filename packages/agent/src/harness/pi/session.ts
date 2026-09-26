@@ -3,7 +3,7 @@
  * sees overlapping `prompt()` calls; steering is handed to Pi's queue while a run streams, and
  * anything still queued in Pi when a run settles is replayed as the next prompt.
  */
-import { type Deferred, deferred, type Logger } from "@ddl/core";
+import { type Deferred, deferred, errorMessage, type Logger } from "@ddl/core";
 import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { HarnessEvent, HarnessSession } from "../types";
 import { PiEventMapper } from "./events";
@@ -109,7 +109,7 @@ export class PiHarnessSession implements HarnessSession {
       await this.pi.abort();
       await this.currentRun;
     } catch (error) {
-      this.logger.warn("error while closing session", { error: messageOf(error) });
+      this.logger.warn("error while closing session", { error: errorMessage(error) });
     } finally {
       this.unsubscribe();
       this.pi.dispose();
@@ -160,7 +160,7 @@ export class PiHarnessSession implements HarnessSession {
       await this.pi.prompt(item.text, { expandPromptTemplates: false, source: "rpc" });
       return undefined;
     } catch (error) {
-      const message = messageOf(error);
+      const message = errorMessage(error);
       this.logger.warn("prompt rejected", { error: message });
       this.emit({ type: "error", message });
       if (!this.runSettled) this.emit({ type: "idle" });
@@ -197,11 +197,7 @@ export class PiHarnessSession implements HarnessSession {
     try {
       this.onEvent?.(event);
     } catch (error) {
-      this.logger.warn("onEvent listener threw", { event: event.type, error: messageOf(error) });
+      this.logger.warn("onEvent listener threw", { event: event.type, error: errorMessage(error) });
     }
   }
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

@@ -4,11 +4,13 @@
  * on exit. The ports aren't the usual ones, so it runs beside the Mac app and `pnpm dev`: the
  * daemon on 7340, the web app on http://localhost:5174.
  */
+
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { errorMessage } from "@ddl/core";
 import { writeDemoVault } from "./demo-vault";
 
 const ROOT = fileURLToPath(new URL("../../..", import.meta.url));
@@ -57,6 +59,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error(`✖ dev:mock failed: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`✖ dev:mock failed: ${errorMessage(error)}`);
   process.exit(1);
 });

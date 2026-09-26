@@ -3,6 +3,7 @@ import {
   type AppSettings,
   agentModel,
   createId,
+  errorMessage,
   isActiveTaskStatus,
   type Logger,
   type MessageAuthor,
@@ -296,7 +297,7 @@ export class SubagentManager {
       } catch (error) {
         this.logger.warn("Steering failed; delivering with the next turn", {
           taskId,
-          error: errorText(error),
+          error: errorMessage(error),
         });
       }
     }
@@ -442,7 +443,7 @@ export class SubagentManager {
     this.options.board.setStatus(run.taskId, "working", keepSummary ? {} : { summary: "Working…" });
     this.options.onChange();
     void this.execute(run).catch((error) => {
-      this.logger.error("Subagent run crashed", { taskId: run.taskId, error: errorText(error) });
+      this.logger.error("Subagent run crashed", { taskId: run.taskId, error: errorMessage(error) });
     });
   }
 
@@ -481,7 +482,7 @@ export class SubagentManager {
         await this.prompt(run, run.session, FINISH_NUDGE);
       }
     } catch (error) {
-      if (!run.closed) run.turn.error = errorText(error);
+      if (!run.closed) run.turn.error = errorMessage(error);
     }
     if (!run.closed) this.complete(run);
   }
@@ -538,7 +539,7 @@ export class SubagentManager {
         ...(turn.changed !== undefined ? { changed: turn.changed } : {}),
       });
     } catch (error) {
-      this.logger.error("onFinished listener failed", { error: errorText(error) });
+      this.logger.error("onFinished listener failed", { error: errorMessage(error) });
     }
   }
 
@@ -615,7 +616,7 @@ export class SubagentManager {
     } catch (error) {
       this.logger.warn("Failed to release subagent resources", {
         taskId: run.taskId,
-        error: errorText(error),
+        error: errorMessage(error),
       });
     }
   }
@@ -695,7 +696,7 @@ export class SubagentManager {
     try {
       return (await drawings.blocks(text, drawingBudget())).flatMap((block) => block.lines);
     } catch (error) {
-      this.logger.warn("Could not describe the task's drawings", { error: errorText(error) });
+      this.logger.warn("Could not describe the task's drawings", { error: errorMessage(error) });
       return [];
     }
   }
@@ -723,13 +724,13 @@ export class SubagentManager {
         }),
       );
     } catch (error) {
-      this.logger.warn("Execution tools unavailable", { error: errorText(error) });
+      this.logger.warn("Execution tools unavailable", { error: errorMessage(error) });
     }
     if (capabilities.includes("connectors") && this.options.connectors) {
       try {
         tools.push(...(await this.options.connectors.getTools()));
       } catch (error) {
-        this.logger.warn("Connector tools unavailable", { error: errorText(error) });
+        this.logger.warn("Connector tools unavailable", { error: errorMessage(error) });
       }
     }
     if (this.options.extraTools && task) tools.push(...this.options.extraTools(run.spec, task));
@@ -794,7 +795,7 @@ export class SubagentManager {
       this.logger.error("Failed to apply harness event", {
         taskId: run.taskId,
         type: event.type,
-        error: errorText(error),
+        error: errorMessage(error),
       });
     }
   }
@@ -939,7 +940,7 @@ export class SubagentManager {
     try {
       this.options.approvals().cancelForTask(taskId, reason);
     } catch (error) {
-      this.logger.warn("Failed to cancel approvals", { taskId, error: errorText(error) });
+      this.logger.warn("Failed to cancel approvals", { taskId, error: errorMessage(error) });
     }
   }
 
@@ -992,8 +993,4 @@ export function badgeFrom(markdown: string): string {
       )
       .find((l) => l.length > 0) ?? "";
   return truncate(line, 60);
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

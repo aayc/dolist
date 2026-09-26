@@ -1,7 +1,6 @@
-import { type SearchHit, stem } from "@ddl/core";
+import { errorMessage, type SearchHit, stem } from "@ddl/core";
 import { LoaderCircle, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { errorMessage } from "../../api/errors";
 import { useServices } from "../../app/services";
 import { pluralize } from "../../lib/format";
 import { useUiStore } from "../../state/ui-store";

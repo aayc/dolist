@@ -11,6 +11,7 @@
  */
 import {
   createId,
+  errorMessage,
   errorResult,
   type Logger,
   type ToolResult,
@@ -267,7 +268,7 @@ export class ToolRunner implements McpSessionHandler {
           ...(images !== undefined ? { images } : {}),
         });
       } catch (error) {
-        result = errorResult(error instanceof Error ? error.message : String(error));
+        result = errorResult(errorMessage(error));
       }
     }
     emit({ type: "tool_end", toolCallId, toolName, result, isError: !!result.isError });

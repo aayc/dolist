@@ -9,6 +9,7 @@ import { chmod, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import {
   createId,
+  errorMessage,
   type Logger,
   normalizeDeviceName,
   type PairedDevice,
@@ -268,8 +269,4 @@ function publicDevice(device: StoredDevice): PairedDevice {
 
 function digest(value: string): Buffer {
   return createHash("sha256").update(value, "utf8").digest();
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

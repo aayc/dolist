@@ -1,4 +1,5 @@
 import { DEFAULT_DAILY_NOTE_SETTINGS, DEFAULT_WEEKLY_NOTE_SETTINGS } from "./daily-notes";
+import { isRecord } from "./guards";
 import type { AgentSettings, AppSettings } from "./wire";
 
 /**
@@ -72,10 +73,6 @@ export type DeepPartial<T> = {
       : T[K];
 };
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 /** Deep-merges a partial patch into settings. Unknown keys are dropped; arrays are replaced. */
 export function mergeSettings<T extends object>(base: T, patch: DeepPartial<T> | undefined): T {
   if (!patch) return base;
@@ -84,7 +81,7 @@ export function mergeSettings<T extends object>(base: T, patch: DeepPartial<T> |
     if (!(key in out) || value === undefined) continue;
     const current = out[key];
     out[key] =
-      isPlainObject(current) && isPlainObject(value)
+      isRecord(current) && isRecord(value)
         ? mergeSettings(current, value as DeepPartial<typeof current>)
         : value;
   }

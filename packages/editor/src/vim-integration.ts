@@ -7,7 +7,9 @@
  * editor, so everything here is installed once and resolves the editor it acts on from the `cm`
  * the engine passes in.
  */
+
 import { EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
+import { errorMessage } from "@ddl/core";
 import { CodeMirror, getCM, Vim, vim } from "@replit/codemirror-vim";
 import { editorCallbacks } from "./callbacks";
 import type { EditorCallbacks, VimModeName, VimrcProblem, VimStatus } from "./types";
@@ -277,7 +279,7 @@ function applyVimrc(cm: VimCM, text: string): VimrcProblem[] {
       }
       vimrcExMappings.push(...exMappingsCreatedBy(command));
     } catch (error) {
-      message = error instanceof Error ? error.message : String(error);
+      message = errorMessage(error);
     } finally {
       cm.openNotification = openNotification;
     }

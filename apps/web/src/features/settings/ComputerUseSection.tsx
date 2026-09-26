@@ -1,7 +1,7 @@
 import type { ComputerAccess, ComputerPermissionPane } from "@ddl/core";
+import { errorMessage } from "@ddl/core";
 import { ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
-import { errorMessage } from "../../api/errors";
 import { useServices } from "../../app/services";
 import { cx } from "../../lib/cx";
 import { updateAgentState, useAgentStore } from "../../state/agent-store";

@@ -1,8 +1,8 @@
 import type { ArtifactKind, ArtifactMeta } from "@ddl/core";
+import { errorMessage } from "@ddl/core";
 import { Download, File, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ArtifactContent } from "../../api/client";
-import { errorMessage } from "../../api/errors";
 import { useServices } from "../../app/services";
 import { IconButton } from "../../components/IconButton";
 import { useAgentStore } from "../../state/agent-store";

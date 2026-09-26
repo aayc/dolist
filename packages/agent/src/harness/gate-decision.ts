@@ -1,4 +1,5 @@
 import type { Logger } from "@ddl/core";
+import { errorMessage, isRecord } from "@ddl/core";
 import type { ToolCallDecision, ToolCallRequest } from "./types";
 
 /**
@@ -23,7 +24,7 @@ export async function decideGate(
     if (signal?.aborted) return { allow: false, reason: "the run was aborted" };
     logger?.warn("safety gate threw; blocking tool call", {
       tool: request.toolName,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(error),
     });
     return { allow: false, reason: "the safety check failed" };
   }
@@ -46,8 +47,4 @@ function raceAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Pro
       },
     );
   });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

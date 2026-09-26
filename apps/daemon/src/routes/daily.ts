@@ -5,6 +5,7 @@ import {
   type DailyNoteResponse,
   DEFAULT_DAILY_NOTE_CONTENT,
   dailyNotePath,
+  errorMessage,
   isHiddenPath,
   isSidecarPath,
   type LocalDate,
@@ -18,7 +19,7 @@ import {
 import type { FileContent, StorageProvider } from "@ddl/storage";
 import type { Hono } from "hono";
 import type { AppContext } from "../context";
-import { ApiError, errorMessage, isNamedError } from "../errors";
+import { ApiError, isNamedError } from "../errors";
 import { clientWriteSource, isTruthyFlag } from "../http-utils";
 
 export function registerDailyRoutes(app: Hono, ctx: AppContext): void {

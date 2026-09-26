@@ -24,6 +24,7 @@ import {
   type AppSettings,
   type DeepPartial,
   defaultMachineName,
+  errorMessage,
   type Logger,
   type MachinePairRequest,
   type MachineStatusResponse,
@@ -34,7 +35,7 @@ import {
 } from "@ddl/core";
 import { z } from "zod";
 import type { MachineCredential, MachineCredentialSource } from "./agent-location";
-import { ApiError, errorMessage } from "./errors";
+import { ApiError } from "./errors";
 import type { SecretFile } from "./home-files";
 
 /** This device's credential for the always-on machine, in `$DDL_HOME` (mode 0600). */

@@ -8,6 +8,7 @@ import { join } from "node:path";
 import {
   type AppSettings,
   createId,
+  errorMessage,
   type Logger,
   type ObsidianImportJob,
   type ObsidianImportOrigin,
@@ -18,7 +19,7 @@ import {
   silentLogger,
   type Unsubscribe,
 } from "@ddl/core";
-import { ApiError, errorMessage } from "../errors";
+import { ApiError } from "../errors";
 import {
   type CarryOver,
   countWatchedOpenTasks,

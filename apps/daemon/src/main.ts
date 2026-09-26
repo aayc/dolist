@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { withTimeout } from "@ddl/core";
+import { errorMessage, withTimeout } from "@ddl/core";
 import { runCli } from "./cli";
 import { displayPath } from "./home-paths";
 import { type RunningDaemon, startDaemon } from "./server";
@@ -19,7 +19,7 @@ function installSignalHandlers(daemon: RunningDaemon): void {
     withTimeout(daemon.close(), SHUTDOWN_TIMEOUT_MS, "Shutdown timed out").then(
       () => process.exit(0),
       (error: unknown) => {
-        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        process.stderr.write(`${errorMessage(error)}\n`);
         process.exit(1);
       },
     );
@@ -40,7 +40,7 @@ function restartFor(daemon: RunningDaemon, vaultPath: string): void {
   withTimeout(daemon.close(), SHUTDOWN_TIMEOUT_MS, "Shutdown timed out").then(
     () => process.exit(RESTART_EXIT_CODE),
     (error: unknown) => {
-      process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+      process.stderr.write(`${errorMessage(error)}\n`);
       process.exit(RESTART_EXIT_CODE);
     },
   );
@@ -67,9 +67,7 @@ if (args.length > 0) {
     installSignalHandlers(daemon);
     process.stdout.write(`\n  Daily Do List is running at ${daemon.url}\n\n`);
   } catch (error) {
-    process.stderr.write(
-      `Daily Do List daemon failed to start: ${error instanceof Error ? error.message : String(error)}\n`,
-    );
+    process.stderr.write(`Daily Do List daemon failed to start: ${errorMessage(error)}\n`);
     process.exit(1);
   }
 }

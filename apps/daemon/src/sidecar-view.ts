@@ -13,6 +13,7 @@ import {
   type ApprovalRequest,
   type ApprovalStatus,
   type ArtifactMeta,
+  errorMessage,
   type Logger,
   summarizeThread,
   type TaskAgentRecord,
@@ -21,7 +22,6 @@ import {
   type Unsubscribe,
 } from "@ddl/core";
 import type { StorageProvider } from "@ddl/storage";
-import { errorMessage } from "./errors";
 
 /** Sync writes files in bursts; each file is read again once they settle. */
 const DEFAULT_SETTLE_MS = 50;

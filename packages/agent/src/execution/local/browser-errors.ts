@@ -1,4 +1,5 @@
-import { ExecutionError, errorMessage } from "../errors";
+import { errorMessage } from "@ddl/core";
+import { ExecutionError } from "../errors";
 
 /** First line of a Playwright error without the `locator.click:` API prefix, capped. */
 export function cleanPlaywrightMessage(error: unknown): string {

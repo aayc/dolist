@@ -1,6 +1,7 @@
 import {
   createId,
   describeSchedule,
+  errorMessage,
   formatMinuteOfDay,
   type LocalCalendar,
   type Logger,
@@ -212,7 +213,7 @@ export class RoutineScheduler {
       } catch (error) {
         this.logger.error("Routine scheduling failed", {
           routine: definition.id,
-          error: errorText(error),
+          error: errorMessage(error),
         });
       }
     }
@@ -367,7 +368,7 @@ export class RoutineScheduler {
           this.options.board.setStatus(runId, "failed", { summary: "Took too long", note });
         })
         .catch((error: unknown) => {
-          this.logger.error("Couldn't stop a routine run", { runId, error: errorText(error) });
+          this.logger.error("Couldn't stop a routine run", { runId, error: errorMessage(error) });
         });
     }
   }
@@ -477,7 +478,7 @@ export class RoutineScheduler {
           .catch((error: unknown) => {
             board.setStatus(runId, "failed", {
               summary: "Couldn't start",
-              note: `The run couldn't start: ${errorText(error)}`,
+              note: `The run couldn't start: ${errorMessage(error)}`,
             });
           });
       }
@@ -559,7 +560,7 @@ export class RoutineScheduler {
         at: this.now(),
       });
     } catch (error) {
-      this.logger.error("Routine notification failed", { error: errorText(error) });
+      this.logger.error("Routine notification failed", { error: errorMessage(error) });
     }
   }
 
@@ -607,8 +608,4 @@ function firstLines(text: string): string {
     .filter(Boolean)
     .slice(0, 2)
     .join(" ");
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

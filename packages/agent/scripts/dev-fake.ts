@@ -7,11 +7,13 @@
  *   pnpm dev:fake              # your usual DDL_HOME and vault (like `pnpm dev:mock`)
  *   pnpm dev:fake -- --scratch # a throwaway DDL_HOME and vault, deleted on exit
  */
+
 import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { errorMessage } from "@ddl/core";
 import { createFakeBrain, startFakeOpenRouter } from "../src/testing";
 
 const ROOT = fileURLToPath(new URL("../../..", import.meta.url));
@@ -62,6 +64,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error(`✖ dev:fake failed: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`✖ dev:fake failed: ${errorMessage(error)}`);
   process.exit(1);
 });

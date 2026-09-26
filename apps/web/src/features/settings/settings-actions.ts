@@ -1,6 +1,6 @@
 import type { AppSettings, DeepPartial } from "@ddl/core";
+import { errorMessage } from "@ddl/core";
 import type { DaemonClient } from "../../api/client";
-import { errorMessage } from "../../api/errors";
 import { applySettings, patchSettingsLocally } from "../../state/settings-store";
 import { toast } from "../../state/toast-store";
 

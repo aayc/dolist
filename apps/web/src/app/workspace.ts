@@ -6,6 +6,7 @@ import {
   dirname,
   emptyDrawingScene,
   ensureMarkdownExtension,
+  errorMessage,
   isDailyNotePath,
   isDrawingPath,
   isHiddenPath,
@@ -20,7 +21,7 @@ import {
   type VaultTreeResponse,
 } from "@ddl/core";
 import type { DaemonClient } from "../api/client";
-import { ConflictError, errorMessage } from "../api/errors";
+import { ConflictError } from "../api/errors";
 import { adjacentDailyTarget, dailyPathFor } from "../features/daily/daily-nav";
 import type { DrawingEditing } from "../features/drawings/drawing-editing";
 import { DrawingFeature } from "../features/drawings/drawing-feature";

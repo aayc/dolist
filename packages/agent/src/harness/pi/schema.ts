@@ -5,7 +5,9 @@
  * (MCP) and hand-written specs: OpenAPI `nullable`, draft-04 booleans, `$ref`s providers reject,
  * invalid regexes (which would make every call of the tool fail validation) and missing roots.
  */
+
 import type { JsonSchema } from "@ddl/core";
+import { errorMessage, isRecord } from "@ddl/core";
 import { Compile } from "typebox/compile";
 
 export interface NormalizedToolSchema {
@@ -241,7 +243,7 @@ function compileErrorOf(schema: SchemaObject): string | undefined {
     Compile(schema);
     return undefined;
   } catch (error) {
-    return error instanceof Error ? error.message : String(error);
+    return errorMessage(error);
   }
 }
 
@@ -256,8 +258,4 @@ function isValidPattern(pattern: string): boolean {
 
 function escapePointer(segment: string): string {
   return segment.replace(/~/g, "~0").replace(/\//g, "~1");
-}
-
-function isRecord(value: unknown): value is SchemaObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

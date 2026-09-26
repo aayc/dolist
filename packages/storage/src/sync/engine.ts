@@ -1,7 +1,13 @@
-import { type Debounced, debounce, type Logger, silentLogger, type Unsubscribe } from "@ddl/core";
+import {
+  type Debounced,
+  debounce,
+  errorMessage,
+  type Logger,
+  silentLogger,
+  type Unsubscribe,
+} from "@ddl/core";
 import { isBinaryPath, isJournalPath, isMergeablePath, utf8ByteLength } from "../file-types";
 import { IgnoreRules } from "../ignore-rules";
-import { errorMessage } from "../internal/fs-errors";
 import {
   ConflictError,
   type FileContent,

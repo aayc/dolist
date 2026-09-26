@@ -6,10 +6,11 @@
  * (nothing, `permissionDenied` or `rejected`), while executed ones do (file content, command
  * output, a diff, match counts…).
  */
+
 import path from "node:path";
+import { isRecord } from "@ddl/core";
 import { isInside } from "../workspace-guard";
 import type { AcpLocation, AcpToolCallUpdate } from "./protocol";
-import { isRecord } from "./protocol";
 
 export interface TrackedToolCall {
   toolCallId: string;

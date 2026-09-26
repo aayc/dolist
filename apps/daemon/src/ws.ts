@@ -5,6 +5,7 @@ import {
   API_ROUTES,
   API_VERSION,
   type ClientEvent,
+  errorMessage,
   isHiddenPath,
   type Logger,
   normalizePath,
@@ -16,7 +17,6 @@ import {
 import type { StorageProvider } from "@ddl/storage";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
-import { errorMessage } from "./errors";
 import { isValidClientId } from "./http-utils";
 import type { ObsidianImporter } from "./import/importer";
 import type { PairedDeviceStore } from "./paired-devices";

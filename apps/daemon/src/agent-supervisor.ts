@@ -10,6 +10,7 @@
  * first: a held lease is released after the agent stopped and its state was synced. A change of
  * priority alone keeps the lease and applies on the next request.
  */
+
 import type {
   AgentMode,
   AgentPlacement,
@@ -23,6 +24,7 @@ import type {
   SyncLeasePriority,
   Unsubscribe,
 } from "@ddl/core";
+import { errorMessage } from "@ddl/core";
 import {
   AgentLease,
   agentLeaseClient,
@@ -32,7 +34,6 @@ import {
 } from "./agent-lease";
 import type { MachineCredentialSource, PlacementSnapshot, PlacementSource } from "./agent-location";
 import type { DaemonSyncConfig } from "./config";
-import { errorMessage } from "./errors";
 import type { LeasedAgentRuntime } from "./leased-runtime";
 import type { SyncController } from "./sync-controller";
 import type { DeviceIdentity } from "./sync-setup";

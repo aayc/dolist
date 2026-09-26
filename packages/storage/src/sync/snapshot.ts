@@ -1,4 +1,4 @@
-import { SIDECAR_DIR } from "@ddl/core";
+import { isRecord, SIDECAR_DIR } from "@ddl/core";
 
 /** Where sync bookkeeping lives inside the primary vault. Never synced itself. */
 export const SYNC_STATE_DIR = `${SIDECAR_DIR}/sync`;
@@ -67,8 +67,4 @@ export function parseSnapshot(json: string, targetId: string): SyncSnapshot | nu
     for (const path of data.conflicts) if (typeof path === "string") snapshot.conflicts.add(path);
   }
   return snapshot;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

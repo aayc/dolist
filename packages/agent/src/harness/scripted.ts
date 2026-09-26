@@ -3,7 +3,7 @@
  * model: it can stream text and call tools. Tool calls go through `beforeToolCall` exactly like the
  * real harness, so the safety gate and approval flow are exercised end to end.
  */
-import { createId, errorResult, type ToolResult, type ToolSpec } from "@ddl/core";
+import { createId, errorMessage, errorResult, type ToolResult, type ToolSpec } from "@ddl/core";
 import type {
   AgentRole,
   Harness,
@@ -244,8 +244,4 @@ class ScriptedSession implements HarnessSession {
       return { result, blocked: false, toolCallId };
     }
   }
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

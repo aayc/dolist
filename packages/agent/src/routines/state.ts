@@ -9,7 +9,7 @@ import {
   type PersistedRoutineState,
   type PersistedRoutines,
 } from "@ddl/contract";
-import { Emitter, type Logger, silentLogger, type Unsubscribe } from "@ddl/core";
+import { Emitter, errorMessage, type Logger, silentLogger, type Unsubscribe } from "@ddl/core";
 import type { StorageProvider } from "@ddl/storage";
 
 export const ROUTINES_STATE_PATH = PERSISTED_PATHS.routines;
@@ -67,7 +67,7 @@ export class RoutineStateStore {
     try {
       result = await this.file.load();
     } catch (error) {
-      this.logger.warn("Failed to read routine state", { error: errorText(error) });
+      this.logger.warn("Failed to read routine state", { error: errorMessage(error) });
       return;
     }
     if (result.status !== "loaded") return;
@@ -146,7 +146,7 @@ export class RoutineStateStore {
       } catch (error) {
         this.dirty = true;
         this.logger.warn("Failed to persist routine state; will retry", {
-          error: errorText(error),
+          error: errorMessage(error),
         });
         this.scheduleSave(SAVE_RETRY_MS);
       }
@@ -164,8 +164,4 @@ export class RoutineStateStore {
     for (const [id, state] of Object.entries(merged.routines)) this.states.set(id, state);
     this.emitter.emit("changed", undefined);
   }
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

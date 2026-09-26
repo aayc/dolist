@@ -1,5 +1,5 @@
 import { type ParseArgsOptionsConfig, parseArgs } from "node:util";
-import { createConsoleLogger, type LogLevel } from "@ddl/core";
+import { createConsoleLogger, errorMessage, type LogLevel } from "@ddl/core";
 import {
   createSyncServer,
   DEFAULT_HOST,
@@ -68,7 +68,7 @@ export async function runCli(
       io.stderr(`${error.message}\n\n${USAGE}`);
       return 2;
     }
-    io.stderr(`ddl-sync: ${error instanceof Error ? error.message : String(error)}\n`);
+    io.stderr(`ddl-sync: ${errorMessage(error)}\n`);
     return 1;
   }
 }
@@ -174,7 +174,7 @@ function parse<const T extends ParseArgsOptionsConfig>(argv: readonly string[], 
   try {
     return parseArgs({ args: [...argv], options, strict: true, allowPositionals: false });
   } catch (error) {
-    throw new UsageError(error instanceof Error ? error.message : String(error));
+    throw new UsageError(errorMessage(error));
   }
 }
 

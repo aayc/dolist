@@ -3,6 +3,7 @@
  * session's history (user prompts, assistant messages with their tool calls, tool results), so
  * the model continues the same conversation instead of reading a summary of it.
  */
+import { isRecord } from "@ddl/core";
 import type {
   Api,
   AssistantMessage,
@@ -73,7 +74,5 @@ export function toPiMessage(entry: TranscriptEntry, model: Model<Api>, now: numb
 }
 
 function asArguments(input: unknown): JsonObject {
-  return typeof input === "object" && input !== null && !Array.isArray(input)
-    ? (input as JsonObject)
-    : {};
+  return isRecord(input) ? (input as JsonObject) : {};
 }

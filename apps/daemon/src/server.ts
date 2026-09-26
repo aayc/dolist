@@ -7,6 +7,7 @@ import {
   type AppSettings,
   createConsoleLogger,
   debounce,
+  errorMessage,
   type Logger,
   type Unsubscribe,
 } from "@ddl/core";
@@ -18,7 +19,6 @@ import { createApp } from "./app";
 import { AttributedStorage } from "./attributed-storage";
 import { type DaemonConfig, loadConfig, summarizeConfig } from "./config";
 import { DeviceSettings, deviceSettingsFiles } from "./device-settings";
-import { errorMessage } from "./errors";
 import { jsonObjectFile, secretFile } from "./home-files";
 import { displayPath } from "./home-paths";
 import { ObsidianImporter } from "./import/importer";

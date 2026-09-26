@@ -5,6 +5,7 @@
  * one stretch of `acting`.
  */
 import {
+  isRecord,
   ORCHESTRATOR_ACTIVITY_LIMITS as LIMITS,
   ORCHESTRATOR_THREAD_ID,
   type OrchestratorActivity,
@@ -385,8 +386,4 @@ function firstLine(text: string): string {
       .map((line) => line.trim())
       .find((line) => line !== "") ?? ""
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

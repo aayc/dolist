@@ -1,4 +1,5 @@
 import type { ApiErrorBody, ApiErrorCode, Logger } from "@ddl/core";
+import { errorMessage } from "@ddl/core";
 import type { ErrorHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
@@ -84,8 +85,4 @@ export function toApiError(error: unknown): ApiError {
 
 export function isNamedError(error: unknown, name: string): error is Error {
   return error instanceof Error && error.name === name;
-}
-
-export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

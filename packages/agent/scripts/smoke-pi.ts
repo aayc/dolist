@@ -11,7 +11,13 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createConsoleLogger, type ToolSpec, textResult, toolResultText } from "@ddl/core";
+import {
+  createConsoleLogger,
+  errorMessage,
+  type ToolSpec,
+  textResult,
+  toolResultText,
+} from "@ddl/core";
 import type { ShellExecOptions, ShellExecutor } from "../src/execution/types";
 import { createPiHarness } from "../src/harness/pi";
 import type {
@@ -384,6 +390,6 @@ function oneLine(text: string, max: number): string {
 }
 
 main().catch((error: unknown) => {
-  console.error(`✖ smoke-pi failed: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`✖ smoke-pi failed: ${errorMessage(error)}`);
   process.exit(1);
 });

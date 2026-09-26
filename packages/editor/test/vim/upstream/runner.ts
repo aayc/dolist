@@ -2,6 +2,7 @@
  * Runs vim.js's own test suite (`vimTests`) in the page against a given CodeMirror factory, the
  * way upstream's CM6 runner (packages/codemirror-vim/test/webtest-vim.js) does.
  */
+import { errorMessage } from "@ddl/core";
 import { CodeMirror, Vim } from "@replit/codemirror-vim";
 import { vimTests } from "@replit/codemirror-vim-core/test/vim_test.js";
 import { ORACLE_FONT_STACK, type VimCM } from "../harness/harness";
@@ -144,7 +145,7 @@ export async function runUpstreamSuite(
         results.push({
           name,
           status: "fail",
-          error: error instanceof Error ? error.message : String(error),
+          error: errorMessage(error),
         });
         hooks.after?.(name, false);
       }
