@@ -80,20 +80,22 @@ jobs:
           - group: app
             packages: app
             sources: apps/macos/Package.swift apps/macos/Sources apps/macos/Tests apps/macos/Packages
+          # The editor alone: replaying every vim vector through it twice takes the longest.
           - group: editor
-            packages: DailyDoListUI DailyDoListVim DailyDoListDrawing DailyDoListEditor
+            packages: DailyDoListEditor
             sources: >-
               apps/macos/Packages/DailyDoListUI apps/macos/Packages/DailyDoListVim
               apps/macos/Packages/DailyDoListDrawing apps/macos/Packages/DailyDoListEditor
-          - group: core
+          - group: others
             packages: >-
-              DailyDoListModels DailyDoListDomain DailyDoListClient DailyDoListAgent
-              DailyDoListDaemon DailyDoListComputer
+              DailyDoListModels DailyDoListDomain DailyDoListClient DailyDoListUI DailyDoListAgent
+              DailyDoListDaemon DailyDoListComputer DailyDoListVim DailyDoListDrawing
             sources: >-
               apps/macos/Packages/DailyDoListModels apps/macos/Packages/DailyDoListDomain
               apps/macos/Packages/DailyDoListClient apps/macos/Packages/DailyDoListAgent
               apps/macos/Packages/DailyDoListUI apps/macos/Packages/DailyDoListDaemon
-              apps/macos/Packages/DailyDoListComputer
+              apps/macos/Packages/DailyDoListComputer apps/macos/Packages/DailyDoListVim
+              apps/macos/Packages/DailyDoListDrawing
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -141,7 +143,7 @@ jobs:
           apps/macos/scripts/test.sh $PACKAGES
 
       - name: Smoke-test ddl-computer
-        if: matrix.group == 'core'
+        if: matrix.group == 'others'
         # The debug build the tests made; the release job checks the one bundled in the app.
         run: apps/macos/scripts/smoke-computer-helper.sh apps/macos/.build/tests/debug/ddl-computer
 

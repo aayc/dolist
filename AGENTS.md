@@ -452,7 +452,7 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
   looks next to the `.app`.
 - **CI:** `.github/workflows/macos.yml`, parallel jobs that each restore their SwiftPM build
   directory from a cache (`scripts/ci-mtimes.mjs` keeps unchanged sources' times so only changes
-  rebuild): package tests in three groups (the app, the editor's packages, the rest, with a smoke
+  rebuild): package tests in three groups (the app, the editor, the other packages with a smoke
   test of `ddl-computer`), integration tests with the swift-format check, an iOS build of the
   Foundation-only packages, and on main (or a manual run with `release`) the release app with
   the bundled daemon, its `ddl-computer` smoke test and the zipped artifact (`docs/CI.md`).
