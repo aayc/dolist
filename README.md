@@ -48,12 +48,10 @@ It's a *do* list, not a *to-do* list: the point is that things get done.
   drawing as a description, and as an image when its model can look at one.
 - **A separate safety evaluator.** Every tool call from every agent passes a policy → rules → LLM
   judge pipeline before it runs. Payments, bookings, outgoing messages, account changes,
-  destructive commands and desktop control require your explicit approval; catastrophic actions are
-  denied outright.
-- **Approval policies.** Choose in Settings → Agent how often agents ask: before every action that
-  changes something, for risky actions (the default), only for high-risk actions, or never ("Run
-  everything", confirmed first and shown in the status bar). Actions that are never allowed stay
-  blocked under every policy, and agents can't change the policy themselves.
+  destructive commands and desktop control wait for your approval; catastrophic actions are denied
+  outright. Settings → Agent chooses how often agents ask (every action, risky ones — the default —,
+  high-risk ones, or never); denied actions stay blocked under every policy, and agents can't
+  change it.
 - **Real hands.** Subagents can use a real (headless) Chrome with its own profile, a shell in a
   per-task workspace, and — on macOS — the desktop via screenshots and mouse/keyboard.
 - **Connectors via MCP.** Add any MCP server (Google Workspace, Playwright, GitHub, Notion, …) with
@@ -103,22 +101,12 @@ Other ways to run it:
 The model defaults to **DeepSeek V4.1 Flash** via OpenRouter (`deepseek/deepseek-v4.1-flash`);
 change it with `DDL_MODEL` or in Settings → Agent.
 
-**Run the agent on the Cursor CLI instead.** Install the CLI and sign in with your Cursor account,
-then pick the Cursor harness in Settings → Agent. Its model defaults to Claude Opus 5.5
-(`claude-opus-5-5`); any model `agent models` lists works. The CLI's agent mode runs one preset per
-model (Opus 5.5: medium effort, not fast), so a variant such as `claude-opus-5-5-high-fast` runs as
-that preset. No OpenRouter key is needed; with one, it still powers the safety judge and web
-search.
-
-```bash
-curl https://cursor.com/install -fsS | bash
-agent login
-```
-
-The Cursor CLI's own tools (files, terminal, edits, web fetch) are switched off: agents use this
-app's tools, served to the CLI over a local MCP endpoint and checked by the same safety gate.
-Browser and computer use therefore work the same with both harnesses — they're this app's local
-Chrome and (on macOS) desktop control, not Cursor's. Details: [Agent system](docs/AGENT_SYSTEM.md#5-the-cursor-cli-harness).
+**Run the agent on the Cursor CLI instead:** install it (`curl https://cursor.com/install -fsS |
+bash`), sign in with your Cursor account (`agent login`), then pick the Cursor harness in Settings
+→ Agent. Its model defaults to Claude Opus 5.5 (`claude-opus-5-5`); any model `agent models` lists
+works. No OpenRouter key is needed (with one, it still powers the safety judge and web search). The
+CLI's own tools stay off: agents use this app's tools, checked by the same safety gate
+([details](docs/AGENT_SYSTEM.md#5-the-cursor-cli-harness)).
 
 ## Moving from Obsidian
 
@@ -134,14 +122,12 @@ until you're ready to stop; your current Daily Do List vault is left untouched a
 2. **Open Import from Obsidian**: in the Mac app, **File → Import from Obsidian…** (or Settings →
    General → Vault); in the web app, **Settings → Vault** (or "Import from Obsidian…" in the command
    palette). Choose the folder (Mac) or paste its path (web).
-3. **Read the report** before anything is copied: notes, folders, attachments, the settings found
-   (daily notes, vim mode, vimrc, theme), templates, your community plugins and how each fares here,
-   canvases and drawings, and what happens to your Daily Do List notes: daily notes move to
-   Obsidian's daily-note folder and format, a day both vaults have keeps Obsidian's note with yours
-   added under `## From Daily Do List`, a name Obsidian already uses gets "(Daily Do List)" added,
-   and your agent history (threads, task records, approvals, routines) comes along. If Obsidian's
-   recent daily notes have open tasks, the report says whether the agent will work on them after the
-   switch (only with "Act on existing tasks" on).
+3. **Read the report** before anything is copied: what was found (notes, attachments, settings,
+   templates, your community plugins and how each fares here) and what happens to your Daily Do
+   List notes: daily notes move to Obsidian's daily-note folder and format, a day both vaults have
+   keeps Obsidian's note with yours added under `## From Daily Do List`, and your agent history
+   comes along. Open tasks in Obsidian's recent daily notes are worked on only with "Act on
+   existing tasks" on.
 4. **Import** into the suggested folder (next to your current vault) or one you pick. It's copied
    byte for byte, `.obsidian/` included, so it still opens in Obsidian. You can cancel; nothing is
    left behind.
@@ -166,26 +152,12 @@ Node.js 24.4+ for the daemon it manages.
 
 ```bash
 pnpm --filter @ddl/daemon build
-apps/macos/scripts/run-app.sh                                  # build and open (--demo: sample data, no daemon)
+apps/macos/scripts/run-app.sh                                  # build and open (--demo: mock agent, demo vault)
 apps/macos/scripts/build-app.sh --release --with-daemon --zip  # a self-contained "Daily Do List.app"
 ```
 
-## Keyboard shortcuts
-
-| Shortcut | Action |
-| --- | --- |
-| `⌘⇧D` | Open today's daily note |
-| `⌘⇧P` / `⌘⇧N` | Previous / next daily note |
-| `⌘P` | Command palette |
-| `⌘O` | Quick switcher (`⌘↵` creates the note) |
-| `⌘N` | New note |
-| `⌘⇧F` | Search the vault |
-| `⌘\` | Toggle the agent panel |
-| `⌘⇧A` | Agent inbox |
-| `⌘,` | Settings |
-| `⌘L` / `⌘↵` | Toggle checkbox on the current line |
-
-On Windows/Linux use `Ctrl` instead of `⌘`.
+Every command and its shortcut is in the command palette (`⌘P`; `Ctrl` instead of `⌘` on Windows
+and Linux).
 
 ## How the agent works
 
@@ -228,54 +200,26 @@ Deep dives: [Architecture](docs/ARCHITECTURE.md) · [Agent system](docs/AGENT_SY
 
 ## Configuration
 
-| Where | What |
-| --- | --- |
-| `~/.daily-do-list/.env` | Secrets (`OPENROUTER_API_KEY`) — never inside the repo |
-| `~/.daily-do-list/config.json` | Daemon config: vault path, port, agent mode, sync target, execution provider |
-| `~/.daily-do-list/mcp.json` | MCP connectors (`{ "mcpServers": { … } }`) |
-| `~/.daily-do-list/sync-token`, `device.json` | The sync service's vault token (0600) and this device's id and name ([docs/SYNC.md](docs/SYNC.md)) |
-| `<vault>/.daily-do-list/settings.json` | App settings (theme, editor, daily notes, agent), editable in the UI |
-| Env vars | `DDL_HOME`, `DDL_VAULT`, `DDL_PORT`, `DDL_AGENT_MODE` (`live`/`mock`/`off`), `DDL_MODEL`, `DDL_CURSOR_CLI` (path to the Cursor CLI, if not on PATH or in `~/.local/bin`), `DDL_SYNC_URL` + `DDL_SYNC_VAULT` + `DDL_SYNC_TOKEN` (the sync service) |
+Secrets (`OPENROUTER_API_KEY`) go in `~/.daily-do-list/.env`, never inside the repo; connectors in
+`~/.daily-do-list/mcp.json` ([format](packages/connectors/README.md)); app settings (theme, editor,
+daily notes, agent) in the UI, saved in the vault. The daemon's config file and environment
+variables are in [its README](apps/daemon/README.md#configuration). Agent threads, artifacts and
+state live in the vault's hidden `.daily-do-list/` folder, so they travel with your notes; deleted
+notes go to the vault's `.trash/` folder.
 
-Agent threads, artifacts and state live in the vault's hidden `.daily-do-list/` folder, so they
-travel with your notes. Deleted notes go to the vault's `.trash/` folder.
+## Performance and development
 
-## Performance
-
-Responsiveness is a feature, measured on every change (production build served by a real daemon):
-
-| Interaction | Budget | Measured |
-| --- | --- | --- |
-| Keystroke → paint, 2 000-line note (p95) | 16 ms | ~1.6 ms |
-| Long tasks while typing | 0 | 0 |
-| Open today's note (`⌘⇧D`) | 50 ms | ~5 ms |
-| Switch tabs | 30 ms | ~14 ms |
-| Open a task thread | 100 ms | ~9 ms |
-| App interactive (first load) | 800 ms | ~106 ms |
-
-Plus micro-benchmarks for the hot paths (task parsing/tracking, live preview, vault listing/search)
-and a bundle-size budget. See [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
-
-## Development
-
-```bash
-pnpm lint        # Biome, swift-format, shellcheck, actionlint, file hygiene (also pre-commit)
-pnpm typecheck   # TypeScript 7 across all packages
-pnpm test        # Vitest (≈1 500 tests)
-pnpm bench && pnpm bench:check
-pnpm e2e && pnpm e2e:perf      # Playwright functional + performance budgets
-pnpm eval:mock   # deterministic agent evals (CI); `pnpm eval` hits the real model
-pnpm check:secrets
-```
-
-Repository layout, conventions and invariants are documented in [AGENTS.md](AGENTS.md) (written
-for AI coding agents, useful for humans). Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md).
-CI details: [docs/CI.md](docs/CI.md).
+Responsiveness is a feature: keystroke latency, opening notes and threads, startup and bundle size
+have budgets checked on every change ([docs/PERFORMANCE.md](docs/PERFORMANCE.md)). The commands,
+repository layout, conventions and invariants are in [AGENTS.md](AGENTS.md) (written for AI coding
+agents, useful for humans); the contribution guide is [CONTRIBUTING.md](CONTRIBUTING.md) and CI is
+described in [docs/CI.md](docs/CI.md).
 
 ## Security & privacy
 
 - The daemon listens on `127.0.0.1` only, requires a bearer token, and rejects foreign
-  `Host`/`Origin` headers.
+  `Host`/`Origin` headers; other devices reach it only over a private network, with a paired
+  device's credential.
 - Agents can act on your machine; the safety gate is mandatory for every tool call and fails
   closed. Review approval cards before approving.
 - When the agent is on, the text of your daily notes (and anything agents read) is sent to the

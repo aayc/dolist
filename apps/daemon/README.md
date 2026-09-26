@@ -43,6 +43,7 @@ Precedence: environment variable → `$DDL_HOME/config.json` → default.
 | `DDL_COMPUTER_HELPER` | found automatically | The `ddl-computer` helper for app control (macOS), or `off`. Otherwise `<entry script dir>/../bin/ddl-computer` (the app bundle's copy), then a dev build in `apps/macos/Packages/DailyDoListComputer/.build/{release,debug}/`. Without one, computer use stays screen-level. |
 | `DDL_DRAWING_RENDERER` | found automatically | The page agents render drawings with, or `off`. Otherwise `<entry script dir>/drawing-renderer`, then `apps/daemon/dist/drawing-renderer` (`build` and `dev` build it). Without it or a browser, agents get drawings as text only (the startup summary's `drawingRenderer` says which). |
 | `OPENROUTER_API_KEY` | — | Required for `live` agents on Pi. Without it the agent reports a problem; notes keep working. |
+| `DDL_CURSOR_CLI` | found automatically | The Cursor CLI for the Cursor harness, if it isn't `agent`/`cursor-agent` on PATH or in `~/.local/bin`. |
 | `DDL_SYNC_URL`, `DDL_SYNC_VAULT`, `DDL_SYNC_TOKEN` | — | The sync service (URL and vault together; they override `sync` in `config.json`; the token else comes from `$DDL_HOME/sync-token`, never logged). |
 | `DDL_AGENT_PLACEMENT` | `this_device` | Where this device's agent runs (overrides `agent.placement`). |
 | `DDL_REMOTE_HOSTS` | — | Comma-separated remote hosts (overrides `remote.hosts`). |
@@ -169,7 +170,7 @@ laptop), put it behind a private-network proxy on the same machine and name it:
 | --- | --- | --- |
 | This machine (local page, Mac app, CLI) | master token | page meta tag, `Authorization`, or `?token=` on the WebSocket (loopback only) |
 | Paired app or daemon | device token (from `POST /api/pair`, shown once) | `Authorization: Bearer <token>` on REST and on the WebSocket upgrade |
-| Paired browser on a remote host | `__Host-ddl-device` cookie (from `POST /api/pair` with `kind: "browser"`) | sent by the browser; accepted only with the page's own `Origin` (or `Sec-Fetch-Site: same-origin` on Origin-less GETs), never on loopback |
+| Paired browser on a remote host | `__Host-ddl-device` cookie (`HttpOnly; Secure; SameSite=Strict; Path=/`, from `POST /api/pair` with `kind: "browser"`) | sent by the browser; accepted only with the page's own `Origin` (or `Sec-Fetch-Site: same-origin` on Origin-less GETs), never on loopback; a request with an `Authorization` header is judged by that header alone |
 
 - **Pairing codes:** `POST /api/pairing-codes` returns 8 characters of an unambiguous alphabet
   (shown as `XXXX-XXXX`), single use, valid 5 minutes, at most 3 outstanding (and 50 devices), plus
