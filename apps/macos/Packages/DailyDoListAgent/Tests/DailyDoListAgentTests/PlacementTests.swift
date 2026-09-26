@@ -213,27 +213,6 @@ struct PlacementTests {
 
   // MARK: - The bar in the header
 
-  private func anchors<V: View>(_ view: V, size: CGSize) -> [TooltipAnchorView] {
-    let host = NSHostingView(
-      rootView: view.frame(width: size.width, height: size.height)
-        .environment(\.tooltipCenter, QuietTooltips.makeCenter()))
-    host.frame = CGRect(origin: .zero, size: size)
-    let window = NSWindow(
-      contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-    window.isReleasedWhenClosed = false
-    window.contentView = host
-    window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
-    window.orderFrontRegardless()
-    for _ in 0..<4 {
-      host.layoutSubtreeIfNeeded()
-      window.displayIfNeeded()
-      RunLoop.main.run(until: Date().addingTimeInterval(0.02))
-    }
-    let anchors = tooltipAnchors(in: host)
-    window.close()
-    return anchors
-  }
-
   private func panel(
     _ placement: AgentPlacementStatus, problem: String? = nil, opened: Locked<[Location.SetUp]>
   ) -> some View {
@@ -251,8 +230,8 @@ struct PlacementTests {
 
   @Test func theDisabledToggleExplainsItselfAndOffersTheSetUp() throws {
     let opened = Locked<[Location.SetUp]>([])
-    let found = anchors(
-      panel(Fixture.placement(heldHere: .noMachine), opened: opened),
+    let found = tooltipAnchors(
+      of: panel(Fixture.placement(heldHere: .noMachine), opened: opened),
       size: CGSize(width: 400, height: 500))
     let toggle = try #require(
       found.first { $0.tooltipContent()?.lines.first?.text == "No always-on machine is set up" })
@@ -266,8 +245,8 @@ struct PlacementTests {
 
   @Test func aRevokedDeviceOffersToPairAgain() throws {
     let opened = Locked<[Location.SetUp]>([])
-    let found = anchors(
-      panel(
+    let found = tooltipAnchors(
+      of: panel(
         Fixture.placement(.alwaysOnMachine, runsOn: nil, relay: .notPaired),
         problem: "The always-on machine no longer accepts this device. Pair it again.",
         opened: opened),
@@ -279,8 +258,8 @@ struct PlacementTests {
   }
 
   @Test func runHereRunsTheHostsCommand() throws {
-    let found = anchors(
-      panel(
+    let found = tooltipAnchors(
+      of: panel(
         Fixture.placement(.alwaysOnMachine, runsOn: Fixture.machine, relay: .unreachable),
         opened: Locked([])),
       size: CGSize(width: 400, height: 500))
@@ -294,8 +273,8 @@ struct PlacementTests {
   /// The switch's tooltip says what flipping it does, and names the host's command for that.
   @Test func theRemoteSwitchSaysWhatFlippingItDoes() throws {
     func remote(_ placement: AgentPlacementStatus) throws -> TooltipAnchorView {
-      let found = anchors(
-        panel(placement, opened: Locked([])), size: CGSize(width: 400, height: 500))
+      let found = tooltipAnchors(
+        of: panel(placement, opened: Locked([])), size: CGSize(width: 400, height: 500))
       return try #require(
         found.first { $0.tooltipContent()?.plainText.hasPrefix("Run the orchestrator on") == true }
       )

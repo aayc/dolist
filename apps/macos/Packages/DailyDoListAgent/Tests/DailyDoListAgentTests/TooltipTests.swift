@@ -15,27 +15,6 @@ import Testing
 struct TooltipTests {
   let store = SampleData.makeStore(now: SnapshotTests.now)
 
-  private func anchors<V: View>(_ view: V, size: CGSize) -> [TooltipAnchorView] {
-    let host = NSHostingView(
-      rootView: view.frame(width: size.width, height: size.height)
-        .environment(\.tooltipCenter, QuietTooltips.makeCenter()))
-    host.frame = CGRect(origin: .zero, size: size)
-    let window = NSWindow(
-      contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-    window.isReleasedWhenClosed = false
-    window.contentView = host
-    window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
-    window.orderFrontRegardless()
-    for _ in 0..<4 {
-      host.layoutSubtreeIfNeeded()
-      window.displayIfNeeded()
-      RunLoop.main.run(until: Date().addingTimeInterval(0.02))
-    }
-    let anchors = tooltipAnchors(in: host)
-    window.close()
-    return anchors
-  }
-
   private func tooltips(_ anchors: [TooltipAnchorView]) -> [String: TooltipContent] {
     var byLabel: [String: TooltipContent] = [:]
     for anchor in anchors {
@@ -50,8 +29,8 @@ struct TooltipTests {
     let shortcuts = AgentPanelShortcuts(
       hidePanel: KeyShortcut("\\"), inbox: KeyShortcut("a", [.shift, .command]))
     let found = tooltips(
-      anchors(
-        AgentPanel(
+      tooltipAnchors(
+        of: AgentPanel(
           store: store, selectedThreadId: .constant(SampleData.bookingThreadId),
           onShowInNote: { _ in }, onHide: {}, shortcuts: shortcuts
         ).agentReferenceDate(SnapshotTests.now),
@@ -69,8 +48,8 @@ struct TooltipTests {
   @Test func stopShowsTheHostsCommandBesideSendAndInTheHeaderElsewhere() throws {
     let stop = AgentPanelShortcuts.Command(id: "agent.stop", keys: KeyShortcut("."))
     func stops(tab: ThreadTab) -> [TooltipAnchorView] {
-      anchors(
-        ThreadView(store: store, threadId: SampleData.coffeeThreadId, tab: tab, stop: stop)
+      tooltipAnchors(
+        of: ThreadView(store: store, threadId: SampleData.coffeeThreadId, tab: tab, stop: stop)
           .agentReferenceDate(SnapshotTests.now),
         size: CGSize(width: 440, height: 700)
       ).filter { $0.tooltipContent()?.lines.first?.text == "Stop" }
@@ -87,8 +66,8 @@ struct TooltipTests {
 
   @Test func messagesAndCodeBlocksOfferCopy() {
     let found = tooltips(
-      anchors(
-        VStack {
+      tooltipAnchors(
+        of: VStack {
           TextMessageView(
             message: TextMessage(
               id: "m", author: "orchestrator", createdAt: 0, role: .agent,
@@ -101,8 +80,8 @@ struct TooltipTests {
 
   @Test func theOrchestratorsChatNamesItsControlsAndLinks() {
     let inbox = tooltips(
-      anchors(
-        AgentPanel(store: store, selectedThreadId: .constant(nil)).agentReferenceDate(
+      tooltipAnchors(
+        of: AgentPanel(store: store, selectedThreadId: .constant(nil)).agentReferenceDate(
           SnapshotTests.now), size: CGSize(width: 400, height: 820)))
     #expect(inbox["Open the orchestrator's chat"] != nil)
 
@@ -110,8 +89,8 @@ struct TooltipTests {
     summary.status = .working
     store.apply(.threadUpsert(summary))
     let chat = tooltips(
-      anchors(
-        AgentPanel(
+      tooltipAnchors(
+        of: AgentPanel(
           store: store, selectedThreadId: .constant(OrchestratorThread.id), onHide: {},
           onOpenOrchestratorWindow: {}
         ).agentReferenceDate(SnapshotTests.now), size: CGSize(width: 440, height: 1_300)))

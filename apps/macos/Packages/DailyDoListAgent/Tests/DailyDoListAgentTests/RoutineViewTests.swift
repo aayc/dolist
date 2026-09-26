@@ -31,26 +31,10 @@ struct RoutineViewTests {
   }
 
   private func tooltips<V: View>(_ view: V, size: CGSize) -> [String: TooltipAnchorView] {
-    let host = NSHostingView(
-      rootView: view.frame(width: size.width, height: size.height)
-        .environment(\.tooltipCenter, QuietTooltips.makeCenter()))
-    host.frame = CGRect(origin: .zero, size: size)
-    let window = NSWindow(
-      contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-    window.isReleasedWhenClosed = false
-    window.contentView = host
-    window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
-    window.orderFrontRegardless()
-    for _ in 0..<4 {
-      host.layoutSubtreeIfNeeded()
-      window.displayIfNeeded()
-      RunLoop.main.run(until: Date().addingTimeInterval(0.02))
-    }
     var byLabel: [String: TooltipAnchorView] = [:]
-    for anchor in tooltipAnchors(in: host) {
+    for anchor in tooltipAnchors(of: view, size: size) {
       if let label = anchor.tooltipContent()?.lines.first?.text { byLabel[label] = anchor }
     }
-    window.close()
     return byLabel
   }
 
