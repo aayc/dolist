@@ -28,6 +28,13 @@ the Azure VM.
 
 ## Shipped on `main` (newest first)
 
+- `24217b7` Faster tests and CI (the user asked for a 10x faster loop): CI caches every suite in turbo
+  and shards unit tests and e2e (warm 36 s, cold ~2 min, was ~7 min); macOS CI caches SwiftPM builds,
+  runs package groups, integration and iOS in parallel, builds the release app only on `main` or with
+  `-f release=true` (warm 2m13s, cold ~6 min, was 19.5 min). Local: `pnpm test:changed`, `pnpm
+  check:changed`, `apps/macos/scripts/test.sh --changed`; `pnpm check` warm 3-4 s. Tests pruned
+  (~5.4k lines; Swift snapshots down to 10 key screens). Opt-in thoroughness: `DDL_TEST_THOROUGH=1`
+  (set on `main`) restores full fuzz seeds and perf samples. Runs on `main` always rerun everything.
 - `e1a2f6e` Editor crash fixed (it was the intermittent macOS CI crash): with legacy scroll bars
   (a mouse, or "always show scroll bars"), an edit that showed or hid the scroller resized the text
   view mid-edit and AppKit raised; also the line-number gutter widening at line 100/1,000 mid-edit.
@@ -147,10 +154,6 @@ and branches were removed (GitHub has only `main`).
 - **Flaky tests:** done and on `main` (`5687507`): the watcher, subprocess and `trackTasks` tests
   are robust under load (fake timers, event probes instead of sleeps, CPU-time guard, generous
   failure bounds; one test-only `helloTimeoutMs` option). No assertion got looser.
-- **Faster tests and CI** (in flight, user asked for a 10x faster loop): `chore/fast-tests`
-  (TypeScript: changed-only local runs, turbo cache on CI, sharded e2e, slow tests) and
-  `chore/fast-swift-tests` (affected-only `test.sh`, cached SwiftPM builds, parallel macOS jobs, the
-  release build only where needed). Baseline: macOS CI 19.5 min, CI ~7 min.
 - **Leaner-code cuts** (in flight): `chore/lean-zod` (zod schemas as the single source of the TS wire
   types and generators), `chore/lean-journal` (threads journal-only, with a one-time migration); next the Mac fake daemon, zod as the wire source and journal-only threads (see
   Decisions).
