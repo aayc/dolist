@@ -165,7 +165,7 @@ describe("the preview report", () => {
         approvals: 1,
         routines: 1,
         trackedNotes: 2,
-        journal: 3,
+        journal: 5,
       },
       watchedOpenTasks: 2,
       actOnExistingTasks: false,

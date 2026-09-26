@@ -2,7 +2,8 @@
  * Synthetic vaults for the import tests (temp folders only, invented content): an Obsidian vault
  * with its config, plugins, daily notes, attachments, a canvas, Dataview blocks and a drawing, and
  * a current Daily Do List vault with daily notes in another folder and format, a routine and an
- * agent sidecar (threads and their journals, records, approvals, routines and tracker state).
+ * agent sidecar (thread journals and older snapshots, records, approvals, routines and tracker
+ * state).
  */
 import {
   lstat,
@@ -194,8 +195,8 @@ export function currentFiles(): Record<string, string | Buffer> {
     ".trash/Deleted note.md": "Gone but kept.\n",
     ".obsidian/app.json": "{}",
     ".daily-do-list/settings.json": `${JSON.stringify(CURRENT_SETTINGS_FILE, null, 2)}\n`,
+    // Snapshots an older app wrote: next to a journal, alone, or none (thr_gone).
     ".daily-do-list/threads/thr_dentist.json": encodePersistedThread(dentist),
-    ".daily-do-list/threads/thr_gone.json": encodePersistedThread(gone),
     ".daily-do-list/threads/thr_passport.json": encodePersistedThread(
       thread("thr_passport", "tsk_passport", "Daily/2026-09-23.md"),
     ),
