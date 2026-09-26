@@ -1,32 +1,9 @@
 import AppKit
 import DailyDoListModels
+import DailyDoListUITestSupport
 import Testing
 
 @testable import DailyDoListAgent
-
-/// A frame ticker the test fires by hand (a manual clock for the reveal).
-@MainActor
-final class ManualTicker: FrameTicker {
-  private(set) var isRunning = false
-  private(set) var starts = 0
-  private let onFrame: @MainActor (TimeInterval) -> Void
-
-  init(onFrame: @escaping @MainActor (TimeInterval) -> Void) {
-    self.onFrame = onFrame
-  }
-
-  func start() {
-    isRunning = true
-    starts += 1
-  }
-
-  func stop() { isRunning = false }
-
-  func fire(at timestamp: TimeInterval) {
-    guard isRunning else { return }
-    onFrame(timestamp)
-  }
-}
 
 /// A reveal environment with a manual ticker and a Reduce Motion switch.
 @MainActor

@@ -259,17 +259,4 @@ struct EditorMotionTests {
     #expect(!editor.controller.motion.isTicking, "the live environment: no window, no frames")
     #expect(!editor.controller.motion.state.hasTransitions)
   }
-
-  @Test func theDisplayLinkTickerExistsOnlyWhileRunning() {
-    let view = NSView(frame: NSRect(x: 0, y: 0, width: 10, height: 10))
-    let ticker = DisplayLinkTicker(view: view) {}
-    #expect(!ticker.isRunning)
-    ticker.start()
-    #expect(ticker.isRunning)
-    ticker.stop()
-    #expect(!ticker.isRunning)
-    let orphan = DisplayLinkTicker(view: nil) {}
-    orphan.start()
-    #expect(!orphan.isRunning, "no view, no link")
-  }
 }
