@@ -3,24 +3,14 @@ import type { ConnectorToolSource } from "@ddl/connectors";
 import {
   type AgentMode,
   type AgentStatusResponse,
-  type ApprovalDecisionRequest,
-  type ApprovalRequest,
-  type ApprovalStatus,
   type AppSettings,
-  type ArtifactMeta,
   agentModel,
-  type CreateRoutineRequest,
   type Logger,
-  type Routine,
-  type RoutineRunResponse,
-  type SurfaceKind,
-  type TaskAgentRecord,
-  type Thread,
-  type ThreadSummary,
   type Unsubscribe,
 } from "@ddl/core";
 import type { StorageProvider } from "@ddl/storage";
 import { errorMessage } from "./errors";
+import { ForwardingAgentRuntime } from "./forwarding-runtime";
 import { NullAgentRuntime } from "./null-runtime";
 import type { AgentStack } from "./wiring";
 
@@ -56,7 +46,7 @@ type Listener = (payload: never) => void;
  * the current runtime across swaps, and every swap emits `status` and `routines.changed` (a
  * change of reason emits `status`).
  */
-export class LeasedAgentRuntime implements AgentRuntime {
+export class LeasedAgentRuntime extends ForwardingAgentRuntime {
   readonly mode: AgentMode;
   readonly #options: LeasedAgentRuntimeOptions;
   readonly #idle: NullAgentRuntime;
@@ -72,6 +62,7 @@ export class LeasedAgentRuntime implements AgentRuntime {
   #queue: Promise<void> = Promise.resolve();
 
   constructor(options: LeasedAgentRuntimeOptions) {
+    super();
     this.mode = options.mode;
     this.#options = options;
     this.#settings = options.settings;
@@ -135,7 +126,7 @@ export class LeasedAgentRuntime implements AgentRuntime {
     });
   }
 
-  async start(): Promise<void> {
+  override async start(): Promise<void> {
     this.#started = true;
     await this.#enqueue(async () => {
       await this.#idle.start().catch((error: unknown) => {
@@ -145,7 +136,7 @@ export class LeasedAgentRuntime implements AgentRuntime {
     });
   }
 
-  async stop(): Promise<void> {
+  override async stop(): Promise<void> {
     this.#stopped = true;
     await this.#enqueue(async () => {
       await this.#idle.stop();
@@ -157,8 +148,8 @@ export class LeasedAgentRuntime implements AgentRuntime {
     });
   }
 
-  status(): AgentStatusResponse {
-    return this.#decorate(this.#current().status());
+  override status(): AgentStatusResponse {
+    return this.#decorate(this.inner().status());
   }
 
   /** Emits `status` now (e.g. the placement or readiness changed). */
@@ -166,98 +157,23 @@ export class LeasedAgentRuntime implements AgentRuntime {
     this.#emitStatus();
   }
 
-  async setEnabled(enabled: boolean): Promise<void> {
+  override async setEnabled(enabled: boolean): Promise<void> {
     await this.#idle.setEnabled(enabled);
     await this.#active?.runtime.setEnabled(enabled);
   }
 
-  updateSettings(settings: AppSettings): void {
+  override updateSettings(settings: AppSettings): void {
     this.#settings = settings;
     this.#idle.updateSettings(settings);
     this.#active?.runtime.updateSettings(settings);
   }
 
-  noteEditorActivity(notePath: string, line: number): void {
-    this.#current().noteEditorActivity(notePath, line);
-  }
-
-  getTaskRecords(notePath: string): TaskAgentRecord[] {
-    return this.#current().getTaskRecords(notePath);
-  }
-
-  listThreads(filter?: {
-    notePath?: string;
-    taskId?: string;
-    routineId?: string;
-  }): ThreadSummary[] {
-    return this.#current().listThreads(filter);
-  }
-
-  getThread(id: string): { thread: Thread; approvals: ApprovalRequest[] } | undefined {
-    return this.#current().getThread(id);
-  }
-
-  listApprovals(filter?: { status?: ApprovalStatus }): ApprovalRequest[] {
-    return this.#current().listApprovals(filter);
-  }
-
-  readArtifact(
-    threadId: string,
-    artifactId: string,
-  ): Promise<{ meta: ArtifactMeta; body: Uint8Array } | null> {
-    return this.#current().readArtifact(threadId, artifactId);
-  }
-
-  postUserMessage(threadId: string, text: string): Promise<void> {
-    return this.#current().postUserMessage(threadId, text);
-  }
-
-  decideApproval(id: string, decision: ApprovalDecisionRequest): Promise<ApprovalRequest> {
-    return this.#current().decideApproval(id, decision);
-  }
-
-  cancelThread(threadId: string): Promise<void> {
-    return this.#current().cancelThread(threadId);
-  }
-
-  retryThread(threadId: string): Promise<void> {
-    return this.#current().retryThread(threadId);
-  }
-
-  markThreadRead(threadId: string): void {
-    this.#current().markThreadRead(threadId);
-  }
-
-  subscribeSurface(threadId: string, surface: SurfaceKind): Unsubscribe {
-    return this.#current().subscribeSurface(threadId, surface);
-  }
-
-  listRoutines(): Routine[] {
-    return this.#current().listRoutines();
-  }
-
-  getRoutine(id: string): Routine | undefined {
-    return this.#current().getRoutine(id);
-  }
-
-  createRoutine(input: CreateRoutineRequest): Promise<Routine> {
-    return this.#current().createRoutine(input);
-  }
-
-  setRoutinePaused(id: string, paused: boolean): Promise<Routine> {
-    return this.#current().setRoutinePaused(id, paused);
-  }
-
-  runRoutine(id: string): Promise<RoutineRunResponse> {
-    return this.#current().runRoutine(id);
-  }
-
-  on<K extends keyof AgentRuntimeEvents>(
+  override on<K extends keyof AgentRuntimeEvents>(
     event: K,
     listener: (payload: AgentRuntimeEvents[K]) => void,
   ): Unsubscribe {
     // The inner runtime's own status events get the extras too.
-    const inner = (
+    const forward = (
       event === "status"
         ? (status: AgentStatusResponse) =>
             (listener as (payload: AgentStatusResponse) => void)(this.#decorate(status))
@@ -265,8 +181,8 @@ export class LeasedAgentRuntime implements AgentRuntime {
     ) as Listener;
     const subscription = {
       event,
-      listener: inner,
-      off: this.#current().on(event, inner as never),
+      listener: forward,
+      off: this.inner().on(event, forward as never),
     };
     this.#subscriptions.add(subscription);
     return () => {
@@ -275,12 +191,12 @@ export class LeasedAgentRuntime implements AgentRuntime {
     };
   }
 
-  #current(): AgentRuntime {
+  protected override inner(): AgentRuntime {
     return this.#active?.runtime ?? this.#idle;
   }
 
   #rebind(): void {
-    const runtime = this.#current();
+    const runtime = this.inner();
     for (const subscription of this.#subscriptions) {
       subscription.off();
       subscription.off = runtime.on(subscription.event, subscription.listener as never);
@@ -299,12 +215,12 @@ export class LeasedAgentRuntime implements AgentRuntime {
 
   #emitStatus(): void {
     // Listeners decorate what they're given: pass the undecorated status.
-    this.#emit("status", this.#current().status());
+    this.#emit("status", this.inner().status());
   }
 
   /** Listeners follow the new runtime before the old one stops: its last turn never ends for them. */
   #emitActivity(): void {
-    this.#emit("orchestrator.activity", this.#current().status().orchestrator ?? { phase: "idle" });
+    this.#emit("orchestrator.activity", this.inner().status().orchestrator ?? { phase: "idle" });
   }
 
   /** The other runtime's routines: scheduled or not, with or without live run statuses. */
