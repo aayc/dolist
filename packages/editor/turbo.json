@@ -1,0 +1,11 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "vim:check": {
+      "dependsOn": ["transit"],
+      "passThroughEnv": ["HOME", "TMPDIR", "PLAYWRIGHT_BROWSERS_PATH", "VIM_CHROMIUM_CHANNEL"],
+      "outputs": []
+    }
+  }
+}
