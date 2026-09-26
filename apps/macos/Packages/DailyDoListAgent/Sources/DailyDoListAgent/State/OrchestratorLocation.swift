@@ -2,10 +2,10 @@ import DailyDoListModels
 import DailyDoListUI
 import Foundation
 
-/// What the agent panel's "where the orchestrator runs" control shows, from the daemon's
-/// placement status: This device or Always-on machine, disabled with the reason while the agent
-/// is held on this device, the handover as it happens, and what to do when the always-on machine
-/// can't be reached.
+/// What the orchestrator's Remote switch row shows, from the daemon's placement status: on for
+/// the always-on machine, off for this device, disabled with the reason while the agent is held
+/// on this device, the handover as it happens, and what to do when the always-on machine can't be
+/// reached.
 public struct OrchestratorLocation: Equatable, Sendable {
   /// What's missing before the always-on machine can run the orchestrator (a Settings pane).
   public enum SetUp: String, Equatable, Sendable {
@@ -28,9 +28,9 @@ public struct OrchestratorLocation: Equatable, Sendable {
 
   /// This is the always-on machine: there's nothing to choose.
   public var isHost: Bool
-  /// The chosen segment: `.thisDevice` or `.alwaysOnMachine`.
+  /// Where the switch says it runs: `.alwaysOnMachine` (on) or `.thisDevice` (off).
   public var selection: AgentPlacement
-  /// The control can be used (not held here, not switching, not the host).
+  /// The switch can be flipped (not held here, not switching, not the host).
   public var canSwitch: Bool
   /// A change is on its way to the daemon.
   public var isSwitching: Bool
@@ -119,10 +119,5 @@ public struct OrchestratorLocation: Equatable, Sendable {
   private static func heldDetail(_ reason: String, stored: AgentPlacement) -> String {
     stored == .alwaysOnMachine
       ? reason + " It moves there, as you chose, once that's done." : reason
-  }
-
-  /// The segment's title.
-  public static func title(_ placement: AgentPlacement) -> String {
-    placement == .alwaysOnMachine ? "Always-on machine" : "This device"
   }
 }

@@ -87,8 +87,8 @@ struct AlwaysOnCommandTests {
     await model.teardown()
   }
 
-  /// The panel's control in the workspace: "Run It on This Device Instead" runs the catalog's
-  /// command, and the disabled control explains itself.
+  /// The panel's controls in the workspace: the Remote switch and "Run It on This Device Instead"
+  /// run the catalog's commands.
   @Test func thePanelsControlsRunTheCatalogsCommands() async throws {
     var remote = InMemoryDaemonClient.Remote.alwaysOn
     remote.placement = .alwaysOnMachine
@@ -100,22 +100,51 @@ struct AlwaysOnCommandTests {
     await client.simulateMachine(reachable: false)
     try await eventually("the relay is down") { model.agent?.placement?.relay == .unreachable }
     model.ui.inspectorPresented = true
-    let anchors = Self.anchors(model, workspace)
-    let runHere = try #require(
-      anchors.first {
-        $0.tooltipContent()?.lines.first?.text == "Run the orchestrator on this device instead"
-      })
-    #expect(runHere.command == CommandID.runOrchestratorHere.rawValue)
-    #expect(runHere.tooltipContent()?.lines.first?.keys == CommandID.runOrchestratorHere.shortcut)
+    let anchors = Self.anchors(
+      WorkspaceView(model: model, workspace: workspace, ui: model.ui)
+        .agentReferenceDate(referenceNow))
+    for (text, command) in [
+      ("Run the orchestrator on this device instead", CommandID.runOrchestratorHere),
+      ("Run the orchestrator on this device", .runOrchestratorHere),
+    ] {
+      let anchor = try #require(anchors.first { $0.tooltipContent()?.lines.first?.text == text })
+      #expect(anchor.command == command.rawValue)
+      #expect(anchor.tooltipContent()?.lines.first?.keys == command.shortcut)
+    }
     await model.teardown()
   }
 
-  static func anchors(_ model: AppModel, _ workspace: Workspace) -> [TooltipAnchorView] {
+  /// Settings has the same switch, running the same commands, and says when an environment
+  /// variable sets it.
+  @Test func theSettingsSwitchRunsTheCatalogsCommands() async throws {
+    func anchors(_ remote: InMemoryDaemonClient.Remote) async throws -> [TooltipAnchorView] {
+      let model = try await bootedModel(remote)
+      await model.remote.load()
+      model.ui.alwaysOnSection = .agentLocation
+      let anchors = Self.anchors(AlwaysOnSettingsPane(model: model, remote: model.remote))
+      await model.teardown()
+      return anchors
+    }
+    let remote = try #require(
+      try await anchors(.alwaysOn).first {
+        $0.tooltipContent()?.lines.first?.text == "Run the orchestrator on your always-on machine"
+      })
+    #expect(remote.command == CommandID.runOrchestratorOnMachine.rawValue)
+    #expect(
+      remote.tooltipContent()?.lines.first?.keys == CommandID.runOrchestratorOnMachine.shortcut)
+
+    var locked = InMemoryDaemonClient.Remote.alwaysOn
+    locked.lockedByEnv = [.placement]
+    #expect(
+      try await anchors(locked).contains {
+        $0.tooltipContent()?.plainText == "Set by an environment variable"
+      })
+  }
+
+  static func anchors(_ view: some View) -> [TooltipAnchorView] {
     let size = CGSize(width: 1440, height: 800)
     let hosting = NSHostingView(
-      rootView: WorkspaceView(model: model, workspace: workspace, ui: model.ui)
-        .agentReferenceDate(referenceNow)
-        .environment(\.tooltipCenter, QuietTooltips.makeCenter()))
+      rootView: view.environment(\.tooltipCenter, QuietTooltips.makeCenter()))
     let window = NSWindow(
       contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
       backing: .buffered, defer: false)

@@ -8,7 +8,7 @@ extension AgentStore {
   /// This device's placement and who runs the agent now; nil from daemons that don't report it.
   public var placement: AgentPlacementStatus? { status?.placement }
 
-  /// What the "where the orchestrator runs" control shows; nil without placement.
+  /// What the orchestrator's Remote switch row shows; nil without placement.
   public var orchestratorLocation: OrchestratorLocation? {
     OrchestratorLocation(
       status: placement, machineName: alwaysOnMachineName, problem: status?.problem,

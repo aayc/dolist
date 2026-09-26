@@ -292,15 +292,18 @@ working while the Mac sleeps ([docs/ALWAYS_ON.md](../../docs/ALWAYS_ON.md)). The
 this device's choice, who runs the agent now and the relay to the machine in the agent status
 (`placement`), and applies a change live (`PATCH /api/device`).
 
-- **The toggle:** under the agent panel's header, "Orchestrator [This device | Always-on
-  machine]" (a native segmented control) is one click away. Switching shows the handover's note
-  as it happens ("Handing the agent to vm-name…", "Taking over from vm-name…"). While the agent is
-  held on this device (no always-on machine set up, or no sync) the control is disabled: its
-  tooltip says why, a line under it says what it's waiting for, and **Set Up…** opens the right
-  section of Settings. When the machine can't be reached, **Run It on This Device Instead** takes
-  it back; when this device isn't paired, **Pair…** opens Settings, and **Pair Again…** when the
-  machine no longer accepts it. "Connecting to vm-name…" shows while the relay connects. On the
-  always-on machine itself the row just says "This is the always-on machine".
+- **The toggle:** under the agent panel's header, "Orchestrator … Remote" and a native switch
+  (`OrchestratorSwitch`, also in Settings) is one click away: on runs the orchestrator on the
+  always-on machine, off on this device. Its tooltip says what flipping it does and carries the
+  command that does it (below). Flipping it shows the handover's note as it happens ("Handing the
+  agent to vm-name…", "Taking over from vm-name…"; "Moving the orchestrator…" while the change is
+  on its way). While the agent is held on this device (no always-on machine set up, or no sync)
+  the switch is disabled: its tooltip says why, a line under it says what it's waiting for, and
+  **Set Up…** opens the right section of Settings. When the machine can't be reached, **Run It
+  on This Device Instead** takes it back; when this device isn't paired, **Pair…** opens
+  Settings, and **Pair Again…** when the machine no longer accepts it. "Connecting to vm-name…"
+  shows while the relay connects. On the always-on machine itself the row just says "This is the
+  always-on machine".
 - **Commands:** **Agent → Run the Orchestrator on This Device** and **… on the Always-On
   Machine** (also in the palette, and `:obcommand agent.runHere` / `agent.runOnMachine`). They're
   checked items: the current place is checked and can't be chosen again, and both are off while
@@ -319,9 +322,10 @@ this device's choice, who runs the agent now and the relay to the machine in the
   (`readOnlyReason`, `availabilityBanner`).
 - **Settings → Always-On** has five sections (a segmented control; the toggle's links open the
   right one):
-  - **Location:** the same choice, who runs the agent now, and this device's readiness (agent,
-    model credential, browser, desktop control, connectors) with a fix for each problem
-    (Agent Settings…, Set Up… for computer use, Connectors…).
+  - **Location:** the same Remote switch (disabled, saying so, when `DDL_AGENT_PLACEMENT` sets
+    it), who runs the agent now, and this device's readiness (agent, model credential, browser,
+    desktop control, connectors) with a fix for each problem (Agent Settings…, Set Up… for
+    computer use, Connectors…).
   - **Machine:** pair with the always-on machine (its address, a code it issued, an optional
     name), then what it reports: reachable, version, where its agent runs, its readiness and
     what the last check found wrong. **Check Now**, **Pair Again…** (a new code, for when the
@@ -729,7 +733,7 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
 - **Where the agent runs**: the client's `InMemoryRemoteTests` (placement, handovers, the relay's
   states and 503s, a revoked device, device settings, sync, pairing, the machine) and REST cases
   (`pairing_rejected`, the WebSocket's header auth), the agent package's `PlacementTests` (what
-  the toggle shows in each state, moving the orchestrator, its tooltips, the `orchestrator-*`
+  the switch shows in each state, moving the orchestrator, its tooltips, the `orchestrator-*`
   snapshots) and `ReadOnlyTests` (the web's rules: when there's a banner, disabled actions and
   their reasons, `thread-read-only`), and in the app `AlwaysOnCommandTests`,
   `RemoteSettingsTests` (every action and error message) and the `settings-always-on-*`
