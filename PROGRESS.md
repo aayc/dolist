@@ -147,6 +147,10 @@ and branches were removed (GitHub has only `main`).
 - **Flaky tests:** done and on `main` (`5687507`): the watcher, subprocess and `trackTasks` tests
   are robust under load (fake timers, event probes instead of sleeps, CPU-time guard, generous
   failure bounds; one test-only `helloTimeoutMs` option). No assertion got looser.
+- **Faster tests and CI** (in flight, user asked for a 10x faster loop): `chore/fast-tests`
+  (TypeScript: changed-only local runs, turbo cache on CI, sharded e2e, slow tests) and
+  `chore/fast-swift-tests` (affected-only `test.sh`, cached SwiftPM builds, parallel macOS jobs, the
+  release build only where needed). Baseline: macOS CI 19.5 min, CI ~7 min.
 - **Leaner-code cuts** (in flight): `chore/lean-zod` (zod schemas as the single source of the TS wire
   types and generators), `chore/lean-journal` (threads journal-only, with a one-time migration); next the Mac fake daemon, zod as the wire source and journal-only threads (see
   Decisions).
