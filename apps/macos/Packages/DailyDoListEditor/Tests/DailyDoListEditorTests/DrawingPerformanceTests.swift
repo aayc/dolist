@@ -56,7 +56,7 @@ struct DrawingPerformanceTests {
     let clock = ContinuousClock()
     var samples: [Double] = []
     editor.undoManager.beginUndoGrouping()
-    for index in 0..<300 {
+    for index in 0..<PerformanceTests.samples(300) {
       let character = index % 7 == 6 ? " " : "x"
       let elapsed = clock.measure {
         editor.textView.insertText(
@@ -92,7 +92,7 @@ struct DrawingPerformanceTests {
 
   @Test func loadingANoteWithDrawings() {
     var samples: [Double] = []
-    for _ in 0..<5 {
+    for _ in 0..<PerformanceTests.samples(5) {
       let editor = DrawingEditorHarness(
         text: "", drawings: Self.drawings, size: NSSize(width: 900, height: 800))
       let clock = ContinuousClock()

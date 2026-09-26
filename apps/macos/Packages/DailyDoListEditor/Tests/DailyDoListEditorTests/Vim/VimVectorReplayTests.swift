@@ -22,7 +22,7 @@ struct VimVectorReplayTests {
 
   @Test(arguments: [false, true])
   func everyVectorPassesThroughTheRealEditor(livePreview: Bool) throws {
-    guard let file = try VimVectorFile.load() else {
+    guard let file = try VimVectorFile.loadDefault() else {
       print("vim vectors: \(VimVectorFile.defaultURL.path) not found, skipping")
       return
     }

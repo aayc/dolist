@@ -53,10 +53,10 @@ struct VimPerformanceTests {
     let keys = ["x", "y", "z", " "]
     let plainEditor = makeEditor(vimMode: false)
     plainEditor.textView.moveToEndOfLine(nil)
-    let plain = measure(plainEditor, keys, repeat: 300)
+    let plain = measure(plainEditor, keys, repeat: PerformanceTests.samples(300))
     let editor = makeEditor()
     editor.press("A")
-    let stats = measure(editor, keys, repeat: 300)
+    let stats = measure(editor, keys, repeat: PerformanceTests.samples(300))
     editor.press("<Esc>")
     print(
       "PERF vim insert-mode keystroke (10k lines, keyDown → vim → NSTextView → report): \(stats)")
@@ -67,7 +67,8 @@ struct VimPerformanceTests {
 
   @Test func normalModeMotions() {
     let editor = makeEditor()
-    let stats = measure(editor, ["j", "w", "w", "k", "b", "l", "h", "e"], repeat: 400)
+    let stats = measure(
+      editor, ["j", "w", "w", "k", "b", "l", "h", "e"], repeat: PerformanceTests.samples(400))
     print("PERF vim normal-mode motion (10k lines, j w k b l h e): \(stats)")
     #expect(stats.average < 12 * Self.multiplier)
     #expect(stats.p95 < 30 * Self.multiplier)
@@ -75,7 +76,8 @@ struct VimPerformanceTests {
 
   @Test func normalModeEditsAndUndo() {
     let editor = makeEditor()
-    let stats = measure(editor, ["x", "u", "j", "d", "d", "u", "p", "u"], repeat: 400)
+    let stats = measure(
+      editor, ["x", "u", "j", "d", "d", "u", "p", "u"], repeat: PerformanceTests.samples(400))
     print("PERF vim normal-mode edit (10k lines, x u dd p): \(stats)")
     #expect(stats.average < 12 * Self.multiplier)
     #expect(stats.p95 < 30 * Self.multiplier)
