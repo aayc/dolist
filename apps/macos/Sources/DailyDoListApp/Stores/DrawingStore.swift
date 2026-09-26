@@ -3,6 +3,7 @@ import DailyDoListDomain
 import DailyDoListDrawing
 import DailyDoListEditor
 import DailyDoListModels
+import DailyDoListUI
 import Foundation
 
 /// The drawings notes embed (`![[Plan.excalidraw|360|right-wrap]]`): reads each file once through

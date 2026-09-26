@@ -4,22 +4,19 @@ import Foundation
 @MainActor
 public final class ScheduledAction {
   private var onCancel: (() -> Void)?
-  public private(set) var isCancelled = false
 
   init(onCancel: @escaping () -> Void) {
     self.onCancel = onCancel
   }
 
   public func cancel() {
-    guard !isCancelled else { return }
-    isCancelled = true
     onCancel?()
     onCancel = nil
   }
 }
 
-/// Monotonic time source and main-actor timer factory. Stores debounce and autosave through it so
-/// tests can drive time deterministically with ``ManualScheduler``.
+/// Monotonic time source and main-actor timer factory. Stores debounce and autosave through it,
+/// and tooltips time through it, so tests drive time deterministically with ``ManualScheduler``.
 @MainActor
 public protocol AppScheduler: AnyObject {
   /// Monotonic seconds (only differences are meaningful).
@@ -84,29 +81,17 @@ public final class ManualScheduler: AppScheduler {
   }
 
   /// Moves time forward, firing every action that becomes due in due order (FIFO for ties),
-  /// including actions scheduled by actions fired during the advance.
+  /// including actions scheduled by actions fired during the advance. An action due within a
+  /// nanosecond of the target fires, so sums of delays don't miss by a rounding error.
   public func advance(by interval: TimeInterval) {
     let target = now + max(0, interval)
-    while let next = nextDue(before: target) {
+    while let next = entries.filter({ $0.due <= target + 1e-9 }).min(by: {
+      ($0.due, $0.id) < ($1.due, $1.id)
+    }) {
       entries.removeAll { $0.id == next.id }
       now = max(now, next.due)
       next.action()
     }
     now = target
-  }
-
-  /// Fires everything that is scheduled (repeatedly, up to `limit` rounds of new work).
-  public func runUntilIdle(limit: Int = 1_000) {
-    var rounds = 0
-    while let last = entries.map(\.due).max(), rounds < limit {
-      advance(by: max(0, last - now))
-      rounds += 1
-    }
-  }
-
-  private func nextDue(before target: TimeInterval) -> Entry? {
-    entries
-      .filter { $0.due <= target }
-      .min { ($0.due, $0.id) < ($1.due, $1.id) }
   }
 }

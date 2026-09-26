@@ -1,6 +1,7 @@
 import DailyDoListClient
 import DailyDoListClientTestSupport
 import DailyDoListModels
+import DailyDoListUI
 import Foundation
 import Testing
 

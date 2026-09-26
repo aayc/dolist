@@ -7,7 +7,7 @@ import DailyDoListUI
 public enum QuietTooltips {
   public static func makeCenter() -> TooltipCenter {
     TooltipCenter(
-      clock: ManualTooltipClock(), events: NoEvents(), presenter: { NoPresenter() },
+      clock: ManualScheduler(), events: NoEvents(), presenter: { NoPresenter() },
       reduceMotion: { false }, mouseButtonsDown: { false })
   }
 

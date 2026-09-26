@@ -4,6 +4,7 @@ import DailyDoListClient
 import DailyDoListDaemon
 import DailyDoListEditor
 import DailyDoListModels
+import DailyDoListUI
 import Foundation
 
 /// Everything ``AppModel`` depends on, injectable for tests (fake supervisor/client, manual time,

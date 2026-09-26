@@ -8,7 +8,7 @@ import Testing
 @MainActor
 @Suite("Tooltip panel", .serialized)
 struct TooltipPanelTests {
-  let clock = ManualTooltipClock()
+  let clock = ManualScheduler()
   let window = Self.makeWindow()
   let presenter: TooltipPanelPresenter
 

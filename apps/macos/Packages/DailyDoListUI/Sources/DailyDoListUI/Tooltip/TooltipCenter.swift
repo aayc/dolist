@@ -16,11 +16,11 @@ public final class TooltipCenter {
 
   private enum Phase {
     case idle
-    case pending(TooltipTarget, TooltipTimer)
+    case pending(TooltipTarget, ScheduledAction)
     case showing(TooltipTarget)
   }
 
-  private let clock: TooltipClock
+  private let clock: AppScheduler
   private let events: TooltipEventSource
   private let makePresenter: @MainActor () -> TooltipPresenting
   private lazy var presenter: TooltipPresenting = makePresenter()
@@ -33,11 +33,11 @@ public final class TooltipCenter {
   private var suppressed: ObjectIdentifier?
   /// When the last tooltip started fading out (warm mode lasts a while after that).
   private var hideStartedAt: TimeInterval?
-  private var warmTimer: TooltipTimer?
+  private var warmTimer: ScheduledAction?
   private(set) var isListening = false
 
   public init(
-    clock: TooltipClock = LiveTooltipClock(),
+    clock: AppScheduler = LiveScheduler.shared,
     events: TooltipEventSource = LiveTooltipEvents(),
     presenter: @escaping @MainActor () -> TooltipPresenting = { TooltipPanelPresenter() },
     reduceMotion: @escaping @MainActor () -> Bool = {

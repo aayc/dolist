@@ -3,6 +3,7 @@ import DailyDoListClient
 import DailyDoListDomain
 import DailyDoListEditor
 import DailyDoListModels
+import DailyDoListUI
 import DailyDoListVim
 import Foundation
 import Observation
