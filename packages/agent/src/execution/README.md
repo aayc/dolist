@@ -214,19 +214,13 @@ own actions; app actions are serialized per helper, and their frames are only ca
 
 ## macOS permissions (computer use)
 
-Grant these to the app that runs the daemon — the Daily Do List app when it manages the daemon, or
-the terminal or editor you started it from. Settings → Computer Use (web and Mac app) names that
-app, shows both permissions and opens the right System Settings pane
-(`POST /api/computer/permissions/open`):
-
-- **Accessibility** (operating apps, mouse and keyboard): System Settings → Privacy & Security →
-  Accessibility. Applies right away.
-- **Screen Recording** (screenshots): System Settings → Privacy & Security → Screen & System Audio
-  Recording. macOS applies it after that app restarts.
-
-`provider.computer.check()` and `provider.computerAccess()` report what is missing without
-triggering system prompts. Without Accessibility, macOS silently drops synthesized input, so input
-calls fail with `ComputerPermissionError` instead.
+Grant **Accessibility** (operating apps, mouse and keyboard; applies right away) and **Screen
+Recording** (screenshots; applies after a restart) to the app that runs the daemon — the Daily Do
+List app when it manages the daemon, or the terminal or editor you started it from. Settings →
+Computer Use names that app and opens the right System Settings pane. `provider.computer.check()`
+and `provider.computerAccess()` report what is missing without triggering system prompts; without
+Accessibility, macOS silently drops synthesized input, so input calls fail with
+`ComputerPermissionError` instead.
 
 ## Security notes
 

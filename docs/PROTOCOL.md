@@ -81,8 +81,8 @@ additive (see "Compatibility rules" in `packages/contract/README.md`).
 
 ## Changing the protocol
 
-Follow "How to add a route or event" in `packages/contract/README.md`: update the core type, the
-schema, the route table and the fixtures, then run `pnpm --filter @ddl/contract generate` to
+Follow "How to add a route or event" in `packages/contract/README.md`: the schema (the TypeScript
+type follows), the route table and the fixtures, then `pnpm --filter @ddl/contract generate` to
 refresh `packages/contract/schema/*.json` and the reference below. Tests fail while any of these
 disagree.
 

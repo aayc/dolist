@@ -89,30 +89,16 @@ folders, they outlive their files until deleted, and a file and a folder can't s
 
 The server never merges: it accepts a write only if the client's `ifMatch` still holds, otherwise
 it answers 409 with the current rev, and the engine retries that path on its next pass. Merging
-happens on the devices, in the engine, exactly as for a local mirror folder
-([packages/storage/README.md](../packages/storage/README.md#sync)):
-
-- Edits to different lines of a note on two devices merge cleanly (three-way merge against the
-  last synced version); lines both added at the same spot are all kept.
-- Edits to the same line: the device that syncs second keeps its own text and saves the other
-  device's as `<name> (conflict YYYY-MM-DD HHmm).md`; the copy then syncs to every device, and
-  every device lists it under `conflicts` in its sync status until someone deletes it.
-- The agent's journals (`.daily-do-list/state/journal/**.jsonl`: append-only, one event with a
-  unique id per line) merge as the union of both copies' lines, ordered by `(epoch, seq, id)`.
-  The result depends only on the set of lines, so every device ends with the same bytes, and there
-  is never a conflict copy. Through the sync service they are fenced like every agent file (see
-  [the agent lease](#the-agent-lease)): only the lease holder's appends travel, and when the
-  holder finds the service's copy changed too it pushes the union, so it never drops an event.
-  A device without the lease, or a former holder that appended offline, gives way. Without a
-  lease (a mirrored folder), two devices appending at once keep every event.
-- Other formats (JSON such as the agent's task records, canvases) keep the newest by modification
-  time and save the other as the conflict copy. The server stamps `mtime` with its own clock when
-  it accepts a write, so compare notes across devices with that in mind.
-- A file deleted on one device and edited on another is restored, never lost. Nothing is ever
-  deleted without a snapshot entry, so two devices that sync for the first time only add files
-  (identical files are recognized; different ones become conflict copies).
-- A server whose vault suddenly lists nothing (a replaced database, say) is refused with
-  `SyncAbortedError` instead of deleting every note.
+happens on the devices, in the engine, exactly as for a local mirror folder (the rules are in
+[packages/storage/README.md](../packages/storage/README.md#sync)): edits to different lines merge,
+the same line edited twice leaves a `<name> (conflict YYYY-MM-DD HHmm).md` copy (which syncs to
+every device and is listed under `conflicts` in each one's sync status until someone deletes it),
+the agent's journals merge as a union of lines and never conflict, other formats keep the newest
+by modification time (the server stamps `mtime` with its own clock), an edit beats a delete, and a
+server whose vault suddenly lists nothing is refused instead of deleting every note. Two devices
+that sync for the first time only add files. Through the sync service, journals are fenced like
+every agent file ([the agent lease](#the-agent-lease)): only the lease holder's appends travel,
+pushed as the union when the service's copy changed too, so no event is dropped.
 
 What syncs: every text file in the vault, including the agent's sidecar (`state/journal` with the
 threads, `artifacts`, `state/records.json`, `approvals.json`, `settings.json`, and the thread
