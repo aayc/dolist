@@ -1,12 +1,14 @@
 // @vitest-environment happy-dom
 import { getCM } from "@replit/codemirror-vim";
-import { afterEach, describe, expect, it } from "vitest";
-import { createMarkdownEditor } from "./editor";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CreateEditorOptions, MarkdownEditor } from "./types";
-import { isVimLoaded, preloadVim } from "./vim";
 
-// Vim loads through a module-level dynamic import, so this file relies on running first in a fresh
-// module graph (Vitest isolates test files): everything before `await loaded()` races the load.
+// Vim loads through a module-level dynamic import, so this file needs a module graph where it
+// hasn't loaded yet (other files in the worker may have loaded it): everything before
+// `await loaded()` races the load.
+vi.resetModules();
+const { createMarkdownEditor } = await import("./editor");
+const { isVimLoaded, preloadVim } = await import("./vim");
 
 const editors: MarkdownEditor[] = [];
 
