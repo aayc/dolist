@@ -3,10 +3,10 @@ import { useCallback, useMemo, useState } from "react";
 import { useServices } from "../../app/services";
 import { ContextMenu, type MenuItem } from "../../components/ContextMenu";
 import { IconButton } from "../../components/IconButton";
-import { ui } from "../../state/ui-store";
+import { ui, useUiStore } from "../../state/ui-store";
 import { useVaultStore } from "../../state/vault-store";
 import { TreeItem } from "./TreeItem";
-import { buildTree } from "./tree";
+import { buildTree, type TreeNode } from "./tree";
 
 interface MenuState {
   x: number;
@@ -15,11 +15,35 @@ interface MenuState {
   kind: "file" | "folder" | null;
 }
 
+/** `.tree-row`'s height: only the rows in view (and a margin) are rendered. */
+const ROW_HEIGHT = 28;
+const OVERSCAN = 20;
+/** The explorer is never taller than the screen. */
+const ROWS_IN_VIEW = Math.ceil(screen.height / ROW_HEIGHT);
+
+function visibleRows(
+  nodes: readonly TreeNode[],
+  expanded: Readonly<Record<string, true>>,
+  depth = 0,
+  out: Array<{ node: TreeNode; depth: number }> = [],
+) {
+  for (const node of nodes) {
+    out.push({ node, depth });
+    if (expanded[node.path]) visibleRows(node.children, expanded, depth + 1, out);
+  }
+  return out;
+}
+
 export function FileExplorer() {
   const { workspace } = useServices();
   const entries = useVaultStore((s) => s.entries);
   const vaultName = useVaultStore((s) => s.vaultName);
+  const expanded = useUiStore((s) => s.expanded);
   const tree = useMemo(() => buildTree(entries.values()), [entries]);
+  const rows = useMemo(() => visibleRows(tree, expanded), [tree, expanded]);
+  const [firstInView, setFirstInView] = useState(0);
+  const start = Math.max(0, firstInView - OVERSCAN);
+  const end = firstInView + ROWS_IN_VIEW + OVERSCAN;
   const [menu, setMenu] = useState<MenuState | null>(null);
 
   const openMenu = useCallback(
@@ -95,15 +119,23 @@ export function FileExplorer() {
         className="explorer-tree"
         role="tree"
         aria-label="Files"
+        onScroll={(event) => setFirstInView(Math.floor(event.currentTarget.scrollTop / ROW_HEIGHT))}
         onContextMenu={(event) => {
-          if (event.target !== event.currentTarget) return;
+          if ((event.target as Element).closest(".tree-row")) return;
           event.preventDefault();
           openMenu(event.clientX, event.clientY, null, null);
         }}
       >
-        {tree.map((node) => (
-          <TreeItem key={node.path} node={node} depth={0} onMenu={openMenu} />
-        ))}
+        <div
+          style={{
+            paddingTop: start * ROW_HEIGHT,
+            paddingBottom: Math.max(0, rows.length - end) * ROW_HEIGHT,
+          }}
+        >
+          {rows.slice(start, end).map(({ node, depth }) => (
+            <TreeItem key={node.path} node={node} depth={depth} onMenu={openMenu} />
+          ))}
+        </div>
       </div>
       {menu ? (
         <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu)} onClose={closeMenu} />

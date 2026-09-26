@@ -25,6 +25,8 @@ declare global {
       listPaths(): string[];
       setMachineReachable(reachable: boolean): void;
       setMachineRejects(rejected: boolean): void;
+      emitEvents(events: unknown[]): void;
+      seedThreads(threads: unknown[]): void;
     };
     __ddlDebug?: {
       evictNote(path: string): void;

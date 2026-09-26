@@ -1,10 +1,9 @@
-import type { ThreadMessage } from "@ddl/core";
 import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useServices } from "../../app/services";
 import { Count } from "../../components/Count";
 import { cx } from "../../lib/cx";
-import { useAgentStore } from "../../state/agent-store";
+import { useThreadMessages } from "../../state/agent-store";
 import {
   discardMessage,
   matchPending,
@@ -24,11 +23,9 @@ import { PendingReply } from "./PendingReply";
 import { ToolGroup } from "./ToolGroup";
 import { useChatScroll } from "./use-chat-scroll";
 
-const NO_MESSAGES: readonly ThreadMessage[] = [];
-
 export function ChatTab({ threadId }: { threadId: string }) {
   const { agent } = useServices();
-  const messages = useAgentStore((s) => s.details[threadId]?.messages ?? NO_MESSAGES);
+  const messages = useThreadMessages(threadId);
   const pending = useOutboxStore((s) => pendingOf(s, threadId));
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -37,14 +34,14 @@ export function ChatTab({ threadId }: { threadId: string }) {
   history.current ??= new Set(messages.map((m) => m.id));
   const seen = history.current;
   useMarkdownLinks(scrollRef, threadId);
-  const scroll = useChatScroll(scrollRef, contentRef, messages);
+  const items = useMemo(() => chatItems(messages), [messages]);
+  const scroll = useChatScroll(scrollRef, contentRef, messages, items.length);
 
   useEffect(() => {
     const root = scrollRef.current;
     return root ? installCodeCopy(root) : undefined;
   }, []);
 
-  const items = useMemo(() => chatItems(messages), [messages]);
   const unconfirmed = useMemo(
     () => matchPending(pending, messages).unconfirmed,
     [pending, messages],
@@ -66,18 +63,20 @@ export function ChatTab({ threadId }: { threadId: string }) {
           data-testid="chat-scroll"
         >
           <div ref={contentRef} className="chat-list" data-testid="chat-list">
-            {items.map((item) =>
-              item.kind === "tools" ? (
-                <ToolGroup key={`tools:${item.id}`} calls={item.calls} />
-              ) : (
-                <MessageRow
-                  key={item.message.id}
-                  threadId={threadId}
-                  message={item.message}
-                  live={!seen.has(item.message.id)}
-                />
-              ),
-            )}
+            {items
+              .slice(scroll.start)
+              .map((item) =>
+                item.kind === "tools" ? (
+                  <ToolGroup key={`tools:${item.id}`} calls={item.calls} />
+                ) : (
+                  <MessageRow
+                    key={item.message.id}
+                    threadId={threadId}
+                    message={item.message}
+                    live={!seen.has(item.message.id)}
+                  />
+                ),
+              )}
             {unconfirmed.map((item) => (
               <PendingReply
                 key={item.id}

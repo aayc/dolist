@@ -15,6 +15,7 @@ const BUDGET_MS = {
   threadOpen: 100,
   keystrokeP95: 16,
   longTaskMs: 50,
+  vaultBurst: 100,
 };
 const BIG_NOTE = "Perf/Big note.md";
 
@@ -222,6 +223,67 @@ test("thread:open (badge click → thread rendered)", async ({ page }) => {
     await expect(page.getByTestId("right-panel")).toBeHidden();
   }
   expect(record("thread:open", samples, BUDGET_MS.threadOpen, "p95").passed).toBe(true);
+});
+
+test("thread:open for a 1000-message thread (its latest rows)", async ({ page }) => {
+  await boot(page);
+  await waitForPrefetch(page);
+  await page.evaluate(() => {
+    const at = Date.now();
+    const messages = Array.from({ length: 1000 }, (_, i) => ({
+      id: `m${i}`,
+      kind: "text",
+      role: "agent",
+      author: "orchestrator",
+      createdAt: at,
+      text: `**Option ${i}**:\n\n- [a shop](https://example.com/${i})\n- 3–5 days`,
+    }));
+    const thread = {
+      id: "thr_long",
+      title: "A long thread",
+      taskId: null,
+      notePath: null,
+      status: "done",
+    };
+    window.__ddlMock!.seedThreads([
+      { ...thread, createdAt: at, updatedAt: at, messages, artifacts: [], surfaces: [] },
+    ]);
+  });
+  await page.keyboard.press("ControlOrMeta+Shift+A");
+  const item = page.locator("[data-thread-id='thr_long']");
+  const samples: number[] = [];
+  for (let i = 0; i < 6; i++) {
+    const m = await measure(page, "thread:open", () => item.click());
+    samples.push(m.duration);
+    expect(await page.getByTestId("chat-list").locator("> *").count()).toBeLessThan(100);
+    await page.getByTestId("thread-back").click();
+  }
+  expect(record("thread:open (1000 msgs)", samples, BUDGET_MS.threadOpen, "p95").passed).toBe(true);
+});
+
+test("a 5000-note vault: the explorer's rows in view, 300 new files at once", async ({ page }) => {
+  await boot(page, "&mockNotes=5000");
+  expect(await page.getByTestId("explorer-item").count()).toBeLessThan(100);
+  const events = Array.from({ length: 300 }, (_, i) => ({
+    type: "vault.changed",
+    origin: "external",
+    changes: [{ path: `Inbox/Synced ${i}.md`, kind: "created" }],
+  }));
+  // Each event is a task of its own, like the socket's; done once the new folder shows.
+  const ms = await page.evaluate(
+    (list) =>
+      new Promise<number>((resolve) => {
+        const start = performance.now();
+        window.__ddlMock!.emitEvents(list);
+        const poll = () =>
+          document.querySelector("[data-path='Inbox']")
+            ? resolve(performance.now() - start)
+            : requestAnimationFrame(poll);
+        poll();
+      }),
+    events,
+  );
+  expect(record("vault burst: 300 new files", [ms], BUDGET_MS.vaultBurst, "max").passed).toBe(true);
 });
 
 test("vim mode: keystroke latency and long tasks in a 2000-line note", async ({ page }) => {

@@ -39,10 +39,6 @@ export function PromptList({
   const [selected, setSelected] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // A new query resets the selection to the best match.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset is keyed on the query only
-  useEffect(() => setSelected(0), [query]);
-
   useEffect(() => {
     listRef.current
       ?.querySelector<HTMLElement>(`[data-index="${selected}"]`)
@@ -67,7 +63,11 @@ export function PromptList({
         aria-controls={`${testId}-list`}
         aria-activedescendant={items.length > 0 ? `${testId}-option-${clamped}` : undefined}
         data-testid={`${testId}-input`}
-        onChange={(event) => onQueryChange(event.target.value)}
+        onChange={(event) => {
+          // A new query selects the best match.
+          setSelected(0);
+          onQueryChange(event.target.value);
+        }}
         onKeyDown={(event) => {
           const mod = event.metaKey || event.ctrlKey;
           if (event.key === "ArrowDown" || (event.ctrlKey && event.key === "n")) {

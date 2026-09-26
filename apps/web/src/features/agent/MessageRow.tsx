@@ -17,19 +17,7 @@ interface MessageRowProps {
   live: boolean;
 }
 
-/** Agent text paints its own updates from the store (see `AgentText`), so its row never re-renders. */
-function sameRow(a: MessageRowProps, b: MessageRowProps): boolean {
-  if (a.threadId !== b.threadId || a.live !== b.live) return false;
-  if (a.message === b.message) return true;
-  return (
-    a.message.kind === "text" &&
-    b.message.kind === "text" &&
-    a.message.id === b.message.id &&
-    a.message.role !== "user" &&
-    b.message.role !== "user"
-  );
-}
-
+/** Agent text paints its own updates from the store (see `AgentText` and `useThreadMessages`). */
 export const MessageRow = memo(function MessageRow({ threadId, message, live }: MessageRowProps) {
   const entering = live ? "is-entering" : undefined;
   switch (message.kind) {
@@ -50,7 +38,7 @@ export const MessageRow = memo(function MessageRow({ threadId, message, live }: 
         <ArtifactCard threadId={threadId} artifactId={message.artifactId} className={entering} />
       );
   }
-}, sameRow);
+});
 
 function MessageTime({ at }: { at: number }) {
   return <time dateTime={new Date(at).toISOString()}>{formatTimestamp(at)}</time>;

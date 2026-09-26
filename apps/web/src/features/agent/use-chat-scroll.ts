@@ -8,6 +8,9 @@ const PIN_THRESHOLD_PX = 48;
 const JUMP_TIMEOUT_MS = 1000;
 /** How long an approval card asks for attention again (its CSS animation's length). */
 const FLASH_MS = 1400;
+/** A long chat opens with its latest rows; earlier ones render as you scroll up to them. */
+const ROWS_PER_PAGE = 30;
+const EARLIER_WITHIN_PX = 1500;
 
 /** What the "Jump to latest" count counts: things to read, not tool steps or status lines. */
 function countable(message: ThreadMessage): boolean {
@@ -19,6 +22,10 @@ function countable(message: ThreadMessage): boolean {
 }
 
 export interface ChatScroll {
+  /** The first row rendered. */
+  start: number;
+  /** Renders rows from `index` on (keeping what's on screen in place). */
+  showFrom(index: number): void;
   /** At the bottom, following new content. */
   pinned: boolean;
   /** Messages that arrived since you scrolled up. */
@@ -41,7 +48,25 @@ export function useChatScroll(
   scrollRef: RefObject<HTMLDivElement | null>,
   contentRef: RefObject<HTMLDivElement | null>,
   messages: readonly ThreadMessage[],
+  rows: number,
 ): ChatScroll {
+  const [start, setStart] = useState(() => Math.max(0, rows - ROWS_PER_PAGE));
+  const heightBefore = useRef<number | null>(null);
+  const showFrom = useCallback(
+    (index: number) => {
+      if (index >= start || start === 0) return;
+      heightBefore.current = scrollRef.current?.scrollHeight ?? null;
+      setStart(Math.max(0, index));
+    },
+    [scrollRef, start],
+  );
+  useLayoutEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller || heightBefore.current === null) return;
+    scroller.scrollTop += scroller.scrollHeight - heightBefore.current;
+    heightBefore.current = null;
+  });
+
   const pinnedRef = useRef(true);
   const [pinned, setPinnedState] = useState(true);
   const jumping = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -91,7 +116,8 @@ export function useChatScroll(
       return;
     }
     setPinned(atBottom);
-  }, [scrollRef, setPinned, endJump]);
+    if (el.scrollTop < EARLIER_WITHIN_PX) showFrom(start - ROWS_PER_PAGE);
+  }, [scrollRef, setPinned, endJump, showFrom, start]);
 
   const onWheel = useCallback(() => {
     if (jumping.current === null) return;
@@ -160,5 +186,15 @@ export function useChatScroll(
     return count;
   }, [pinned, messages]);
 
-  return { pinned, newCount, onScroll, onWheel, jumpToLatest, showApproval, showMessage };
+  return {
+    start,
+    showFrom,
+    pinned,
+    newCount,
+    onScroll,
+    onWheel,
+    jumpToLatest,
+    showApproval,
+    showMessage,
+  };
 }
