@@ -28,6 +28,10 @@ the Azure VM.
 
 ## Shipped on `main` (newest first)
 
+- The Mac demo and tests use the real daemon (−6.1k): demo mode launches the bundled daemon with the
+  mock agent on a throwaway demo vault (`DDL_DEMO=1`, shared with `pnpm dev:mock`; temp home, free
+  port, no user `DDL_*` vars); one shared `FakeDaemonClient` for unit tests; the in-memory fake
+  daemon is deleted. The demo no longer simulates an always-on machine, sync or routines.
 - `85494a4` No external edit is lost while macOS restarts its FSEvents stream (every watch in a process
   shares one stream; opening or closing a watch dropped undelivered changes ~20% of the time): a new
   watch waits for the stream before its first scan, and other watchers rescan once when a watch opens
@@ -166,8 +170,7 @@ and branches were removed (GitHub has only `main`).
 - **Flaky tests:** done and on `main` (`5687507`): the watcher, subprocess and `trackTasks` tests
   are robust under load (fake timers, event probes instead of sleeps, CPU-time guard, generous
   failure bounds; one test-only `helloTimeoutMs` option). No assertion got looser.
-- **In flight:** `chore/lean-mac-fake` (Mac demo and tests on the real daemon, delete the
-  in-memory fake), `chore/lean-ts-b` (TypeScript narrow cleanups judged by lines removed). Next the Mac fake daemon, zod as the wire source and journal-only threads (see
+- **In flight:** `chore/lean-ts-b` (TypeScript narrow cleanups judged by lines removed). Next the Mac fake daemon, zod as the wire source and journal-only threads (see
   Decisions).
 - **Cleanup batch A** (in flight): `chore/cleanup-ts` (two bugs: imported threads kept their old
   note paths because the import looked for journals under the wrong folder, and the approval
