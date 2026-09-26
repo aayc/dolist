@@ -110,8 +110,8 @@ What "exactly" takes, beyond the algorithms:
 Output is deterministic: times are formatted in `America/Los_Angeles` (the Swift tests use the
 same `TimeZone`), `new Date()` / `Date.now()` are pinned to 2026-09-23 09:30 there, and every
 random corpus comes from fast-check with a fixed seed. Strings are always well-formed UTF-16
-(Swift strings can't hold lone surrogates). Biome formats the JSON; the check compares parsed
-JSON, so formatting never makes a file stale.
+(Swift strings can't hold lone surrogates). Each file is JSON with one compact case per line
+(Biome leaves them alone), and the check compares their exact text.
 
 ```sh
 pnpm exec tsx apps/macos/scripts/generate-vectors.ts          # regenerate (then commit)

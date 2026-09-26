@@ -14,7 +14,8 @@
       "!**/playwright-report",
       "!**/test-results",
       "!**/.turbo",
-      "!**/*.gen.ts"
+      "!**/*.gen.ts",
+      "!apps/macos/Packages/DailyDoListDomain/Tests/DailyDoListDomainTests/Vectors"
     ]
   },
   "formatter": {
