@@ -18,25 +18,21 @@ import type {
 } from "@ddl/core";
 
 /**
- * An AgentRuntime that hands every call to `inner()`, asked again on each call (so it may change
- * between calls). Wrappers extend it and override only what they change.
+ * An AgentRuntime that hands its queries and commands to `inner()`, asked again on each call (so
+ * it may change between calls). Wrappers implement the lifecycle, status and events, and override
+ * only the calls they change.
  */
 export abstract class ForwardingAgentRuntime implements AgentRuntime {
   abstract readonly mode: AgentMode;
+  abstract start(): Promise<void>;
+  abstract stop(): Promise<void>;
+  abstract status(): AgentStatusResponse;
+  abstract on<K extends keyof AgentRuntimeEvents>(
+    event: K,
+    listener: (payload: AgentRuntimeEvents[K]) => void,
+  ): Unsubscribe;
 
   protected abstract inner(): AgentRuntime;
-
-  start(): Promise<void> {
-    return this.inner().start();
-  }
-
-  stop(): Promise<void> {
-    return this.inner().stop();
-  }
-
-  status(): AgentStatusResponse {
-    return this.inner().status();
-  }
 
   setEnabled(enabled: boolean): Promise<void> {
     return this.inner().setEnabled(enabled);
@@ -119,12 +115,5 @@ export abstract class ForwardingAgentRuntime implements AgentRuntime {
 
   runRoutine(id: string): Promise<RoutineRunResponse> {
     return this.inner().runRoutine(id);
-  }
-
-  on<K extends keyof AgentRuntimeEvents>(
-    event: K,
-    listener: (payload: AgentRuntimeEvents[K]) => void,
-  ): Unsubscribe {
-    return this.inner().on(event, listener);
   }
 }
