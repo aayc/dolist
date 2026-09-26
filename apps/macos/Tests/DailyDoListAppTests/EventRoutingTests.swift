@@ -66,12 +66,16 @@ struct EventRoutingTests {
     #expect(model.toasts.toasts.contains { $0.title.contains("changed elsewhere") })
   }
 
-  @Test func newFilesAppearAtOnceAndTheTreeIsRefreshedDebounced() async throws {
+  @Test func newFilesAppearAtOnceAndOnlyNewFoldersRefreshTheTree() async throws {
     client.resetLog()
     client.setNote("Inbox/New.md", "new")
     client.emit(changed("Inbox/New.md", .created, version: "v1"))
     try await eventually("added to the tree") { workspace.vault.isFile("Inbox/New.md") }
+    scheduler.advance(by: 0.3)
+    await settle()
     #expect(client.calls("tree").isEmpty)
+    client.emit(changed("Archive", .created))
+    await settle()
     scheduler.advance(by: 0.3)
     try await eventually("tree refreshed") { client.calls("tree").count == 1 }
   }

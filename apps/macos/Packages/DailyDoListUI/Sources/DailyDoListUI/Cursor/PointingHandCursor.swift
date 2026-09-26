@@ -9,27 +9,18 @@ extension View {
   }
 }
 
+/// The hand is pushed once when the pointer enters the first hand region and popped once when it
+/// leaves the last, so the cursor stack stays balanced whatever order hover events come in, and a
+/// region that disappears or gets disabled under the pointer lets go. Not `pointerStyle` (macOS
+/// 15) behind `if #available`: that makes the modified view an `AnyView`, and a `List` of such
+/// rows builds every row to count them (4 s for 2,000 explorer rows).
 private struct PointingHandCursor: ViewModifier {
   let isActive: Bool
   @Environment(\.isEnabled) private var isEnabled
-
-  func body(content: Content) -> some View {
-    if #available(macOS 15, *) {
-      content.pointerStyle(isActive && isEnabled ? .link : nil)
-    } else {
-      content.modifier(LegacyPointingHand(isActive: isActive && isEnabled))
-    }
-  }
-}
-
-/// macOS 14: the hand is pushed once when the pointer enters the first hand region and popped
-/// once when it leaves the last, so the cursor stack stays balanced whatever order hover events
-/// come in, and a region that disappears or gets disabled under the pointer lets go.
-private struct LegacyPointingHand: ViewModifier {
-  let isActive: Bool
   @State private var region = PointingHandRegions.Region()
 
   func body(content: Content) -> some View {
+    let isActive = isActive && isEnabled
     content
       .onContinuousHover { phase in
         switch phase {

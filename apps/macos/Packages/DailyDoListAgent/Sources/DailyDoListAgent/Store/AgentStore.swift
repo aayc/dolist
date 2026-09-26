@@ -273,7 +273,7 @@ public final class AgentStore {
   /// Pending approvals, oldest first.
   public var pendingApprovals: [ApprovalRequest] {
     _ = approvals
-    return state.pendingApprovals
+    return state.pendingApprovals()
   }
 
   public var pendingApprovalCount: Int {
@@ -282,7 +282,8 @@ public final class AgentStore {
 
   /// Pending approvals of one thread, oldest first.
   public func pendingApprovals(forThread threadId: String) -> [ApprovalRequest] {
-    pendingApprovals.filter { $0.threadId == threadId }
+    _ = approvals
+    return state.pendingApprovals(threadId: threadId)
   }
 
   /// The inbox: today's threads plus anything still waiting or running, grouped. The

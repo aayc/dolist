@@ -73,11 +73,10 @@ extension AgentState {
     return nil
   }
 
-  /// Pending approvals, oldest first (the first one expires first).
-  var pendingApprovals: [ApprovalRequest] {
-    approvals.values.filter(\.isPending).sorted {
-      ($0.createdAt, $0.id) < ($1.createdAt, $1.id)
-    }
+  /// Pending approvals (of one thread when given), oldest first (the first one expires first).
+  func pendingApprovals(threadId: String? = nil) -> [ApprovalRequest] {
+    approvals.values.filter { $0.isPending && (threadId == nil || $0.threadId == threadId) }
+      .sorted { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }
   }
 
   /// Threads that have at least one pending approval.

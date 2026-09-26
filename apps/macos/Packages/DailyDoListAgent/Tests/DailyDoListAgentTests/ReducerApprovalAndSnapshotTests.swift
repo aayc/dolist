@@ -8,10 +8,10 @@ struct ReducerApprovalTests {
   @Test func upsertsApprovalsAndCountsPendingOnes() {
     var state = AgentState()
     #expect(state.apply(.approvalUpsert(Fixture.approval()), now: 0) == .approvals)
-    #expect(state.pendingApprovals.map(\.id) == ["apr_1"])
+    #expect(state.pendingApprovals().map(\.id) == ["apr_1"])
     _ = state.apply(
       .approvalUpsert(Fixture.approval(status: .approved, scope: .once, decidedAt: 2)), now: 0)
-    #expect(state.pendingApprovals.isEmpty)
+    #expect(state.pendingApprovals().isEmpty)
   }
 
   @Test func aDecidedApprovalNeverTurnsPendingAgain() {
@@ -50,7 +50,7 @@ struct ReducerApprovalTests {
     _ = state.upsertApproval(Fixture.approval("apr_b", createdAt: 9))
     _ = state.upsertApproval(Fixture.approval("apr_a", createdAt: 2))
     _ = state.upsertApproval(Fixture.approval("apr_c", status: .denied, createdAt: 1))
-    #expect(state.pendingApprovals.map(\.id) == ["apr_a", "apr_b"])
+    #expect(state.pendingApprovals().map(\.id) == ["apr_a", "apr_b"])
     #expect(state.threadIdsWithPendingApprovals == ["thr_1"])
   }
 

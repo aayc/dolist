@@ -304,6 +304,6 @@ struct ReducerFuzzTests {
     for approval in pending where state.approvals[approval.id]?.isPending == true {
       #expect(state.approvals[approval.id] == approval)
     }
-    #expect(Set(state.pendingApprovals.map(\.id)).isSubset(of: Set(pending.map(\.id))))
+    #expect(Set(state.pendingApprovals().map(\.id)).isSubset(of: Set(pending.map(\.id))))
   }
 }

@@ -209,7 +209,9 @@ extension AppModel {
     case .success(let value): workspace.applyTree(value)
     case .failure(let error): toasts.error("Couldn't load the vault", error)
     }
-    await workspace.restoreTabs(preferences.lastOpenTabs, active: preferences.lastActiveTab)
+    await workspace.restoreTabs(
+      preferences.lastOpenTabs, active: preferences.lastActiveTab,
+      showActive: (try? daily.get()) == nil)
     switch daily {
     case .success(let note):
       todayNotePath = note.path
