@@ -41,6 +41,8 @@ export interface HelperClientOptions {
   logger?: Logger;
   firstRestartDelayMs?: number;
   maxRestartDelayMs?: number;
+  /** How long a started helper may take to answer `hello`. Default 10 s. */
+  helloTimeoutMs?: number;
   spawn?: SpawnHelper;
   now?: () => number;
 }
@@ -171,7 +173,8 @@ export class HelperClient {
     this.running = running;
     let hello: { version: number; pid: number };
     try {
-      hello = parseHello(await this.send(running, "hello", {}, { timeoutMs: HELLO_TIMEOUT_MS }));
+      const timeoutMs = this.options.helloTimeoutMs ?? HELLO_TIMEOUT_MS;
+      hello = parseHello(await this.send(running, "hello", {}, { timeoutMs }));
     } catch (error) {
       await stop(running);
       throw error;

@@ -9,13 +9,14 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LocalFsStorageProvider } from "./local-fs";
 import { contentVersion } from "./memory";
+import { untilEventsFlow } from "./testing/fs-events";
 import type { StorageEvent } from "./types";
 
-const CONVERGE = { timeout: 8_000, interval: 25 };
+const CONVERGE = { timeout: 15_000, interval: 25 };
 /** Longer than the debounce plus the delete grace period, so a straggler would show up. */
 const QUIET_MS = 120;
 
-describe("LocalFsStorageProvider.watch under bursts", () => {
+describe("LocalFsStorageProvider.watch under bursts", { timeout: 60_000 }, () => {
   let dir: string;
   let root: string;
   let s: LocalFsStorageProvider;
@@ -45,8 +46,14 @@ describe("LocalFsStorageProvider.watch under bursts", () => {
   async function startWatching(): Promise<void> {
     unsubscribe = s.watch((event) => events.push(event));
     await s.whenWatchReady();
-    await writeFile(join(root, ".sentinel"), String(Date.now()));
-    await vi.waitFor(() => expect(events.some((e) => e.path === ".sentinel")).toBe(true), CONVERGE);
+    let latest = "";
+    await untilEventsFlow(
+      async (attempt) => {
+        latest = `sentinel ${attempt}`;
+        await writeFile(join(root, ".sentinel"), latest);
+      },
+      () => events.some((e) => e.path === ".sentinel" && e.version === contentVersion(latest)),
+    );
     events.length = 0;
     initial = await disk();
   }

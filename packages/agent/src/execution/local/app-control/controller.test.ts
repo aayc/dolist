@@ -1,7 +1,6 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   ComputerPermissionError,
@@ -11,9 +10,12 @@ import {
 } from "../../errors";
 import { HelperClient } from "./client";
 import { HelperAppController } from "./controller";
+import {
+  FAKE_HELPER,
+  FAKE_HELPER_HELLO_TIMEOUT_MS,
+  FAKE_HELPER_TEST_TIMEOUT_MS,
+} from "./testing/fake-helper";
 
-const FAKE_HELPER = fileURLToPath(new URL("./testing/fake-computer-helper.ts", import.meta.url));
-const SPAWN_TIMEOUT_MS = 30_000;
 const controllers: HelperAppController[] = [];
 const dirs: string[] = [];
 
@@ -24,7 +26,11 @@ afterEach(async () => {
 
 function controller(flags: string[] = []): HelperAppController {
   const apps = new HelperAppController({
-    client: new HelperClient({ command: process.execPath, args: [FAKE_HELPER, "serve", ...flags] }),
+    client: new HelperClient({
+      command: process.execPath,
+      args: [FAKE_HELPER, "serve", ...flags],
+      helloTimeoutMs: FAKE_HELPER_HELLO_TIMEOUT_MS,
+    }),
     hostApp: async () => ({
       name: "Terminal",
       path: "/System/Applications/Utilities/Terminal.app",
@@ -34,7 +40,7 @@ function controller(flags: string[] = []): HelperAppController {
   return apps;
 }
 
-describe("HelperAppController", { timeout: SPAWN_TIMEOUT_MS }, () => {
+describe("HelperAppController", { timeout: FAKE_HELPER_TEST_TIMEOUT_MS }, () => {
   it("reads apps, windows and screenshots as typed values", async () => {
     const apps = controller();
     const running = await apps.runningApps();

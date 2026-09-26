@@ -5,15 +5,16 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { ComputerUnavailableError, ExecutionError } from "../../errors";
 import { HelperClient, type HelperClientOptions } from "./client";
 import { HelperError, parseRunningApps } from "./protocol";
+import {
+  FAKE_HELPER,
+  FAKE_HELPER_HELLO_TIMEOUT_MS,
+  FAKE_HELPER_TEST_TIMEOUT_MS,
+} from "./testing/fake-helper";
 
-const FAKE_HELPER = fileURLToPath(new URL("./testing/fake-computer-helper.ts", import.meta.url));
-/** Every test starts the fake helper as a process; a loaded machine can take seconds to do that. */
-const SPAWN_TIMEOUT_MS = 30_000;
 const clients: HelperClient[] = [];
 const dirs: string[] = [];
 
@@ -34,6 +35,7 @@ function fake(flags: string[] = [], options: Partial<HelperClientOptions> = {}):
     args: [FAKE_HELPER, "serve", ...flags],
     firstRestartDelayMs: 50,
     maxRestartDelayMs: 400,
+    helloTimeoutMs: FAKE_HELPER_HELLO_TIMEOUT_MS,
     ...options,
   });
   clients.push(client);
@@ -49,7 +51,8 @@ function alive(pid: number): boolean {
   }
 }
 
-async function until(check: () => boolean, timeoutMs = 10_000): Promise<void> {
+/** Polls `check`; `timeoutMs` is a failure bound only. */
+async function until(check: () => boolean, timeoutMs = 60_000): Promise<void> {
   const started = Date.now();
   while (!check()) {
     if (Date.now() - started > timeoutMs) throw new Error("timed out waiting");
@@ -57,7 +60,7 @@ async function until(check: () => boolean, timeoutMs = 10_000): Promise<void> {
   }
 }
 
-describe("HelperClient", { timeout: SPAWN_TIMEOUT_MS }, () => {
+describe("HelperClient", { timeout: FAKE_HELPER_TEST_TIMEOUT_MS }, () => {
   it("starts on first use, checks the version and answers pipelined calls by id", async () => {
     const client = fake(["--fake-noise"]);
     expect(client.pid).toBeUndefined();
@@ -140,6 +143,14 @@ describe("HelperClient", { timeout: SPAWN_TIMEOUT_MS }, () => {
     clock += 60_000;
     await crash();
     await expect(client.call("apps", {})).rejects.toThrow(/restarts in 5 s/);
+  });
+
+  it("gives up on a helper that doesn't answer hello in time", async () => {
+    const client = fake(["--fake-hang-on=hello"], { helloTimeoutMs: 300 });
+    const error = await client.call("apps", {}).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ExecutionError);
+    expect((error as Error).message).toMatch(/didn't answer hello/);
+    await until(() => client.pid === undefined);
   });
 
   it("refuses to run a helper that speaks another protocol version, for good", async () => {

@@ -146,6 +146,8 @@ moving the real cursor. Without one, `apps` is undefined and computer use stays 
 Tests use `local/app-control/testing/fake-computer-helper.ts`, a scripted helper (fake apps whose
 windows react to actions; flags for missing permissions, crashes, hangs, version mismatches and
 request logs) spawned with `process.execPath`. They never run the real helper or touch real apps.
+`testing/fake-helper.ts` has its path and the `hello` deadline and test timeout to give it: the
+fake starts far slower than the real helper, many seconds on a busy machine.
 
 ### Browser profile
 
