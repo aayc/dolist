@@ -96,6 +96,7 @@ describe("Host allowlist", () => {
     });
     expect(policy.isHostAllowed("app.example:8443")).toBe(true);
     expect(policy.isHostAllowed("localhost:5174")).toBe(true);
+    expect(policy.isOriginAllowed("http://localhost:5174")).toBe(true);
     expect(policy.isHostAllowed("localhost")).toBe(false);
     expect(policy.isHostAllowed("app.example")).toBe(false);
   });
