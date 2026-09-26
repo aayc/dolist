@@ -49,10 +49,19 @@ installing or rebuilding the app is slower (~1–2 s) while macOS verifies the n
 What keeps it fast:
 
 - **The daemon loads optional dependencies on first use.** It's bundled with esbuild code
-  splitting: the agent runtime, the Pi harness (`@ddl/agent/pi`, ~400 ms to load) and Playwright
-  (~150 ms, imported where Chrome launches) live outside `main.js`. `apps/daemon/build.mjs` fails
-  the build if anything but the Pi harness chunk imports them statically. Never re-export them
-  from a package index.
+  splitting: the agent runtime, the Pi harness (`@ddl/agent/pi`, ~400 ms to load), Playwright
+  (~150 ms, imported where Chrome launches) and the MCP SDK (~50 ms, only when `mcp.json` names
+  servers) live outside `main.js`. `apps/daemon/build.mjs` fails the build if `main.js` reaches
+  them statically. Never re-export them from a package index.
+- **A restart doesn't re-read the vault.** The file watcher's first scan needs every file's
+  version (a content hash). The vault's version memo is saved in `$DDL_HOME/cache` at shutdown,
+  so a restart hashes only the files that changed: at 10 000 notes the files opened before the
+  daemon settles went from 10 008 to 6 and its startup CPU from ~1.8 s to ~0.5 s. The scan used
+  to delay `listen` too (the thread store's reads queued behind it).
+- **Tree and search don't walk the vault.** While the watcher runs, the storage provider lists
+  the visible files once, and again only after one of them changed: at 10 000 notes
+  `/api/vault/tree` went from ~80 ms to ~15 ms and `/api/search` from ~65 ms to ~5 ms (10 000
+  file system calls per request to none).
 - **Nothing slow runs before the daemon listens.** The agent harness check (the Cursor CLI's
   `agent status`, ~0.6 s warm and over 1 s cold; an OpenRouter key check over the network) runs
   in the background: `createAgentRuntime` returns without it, and `start()`, after `listen`,
@@ -81,7 +90,8 @@ Vitest 5 benchmarks (`*.bench.ts`) assert p99 budgets inside the test and write
 | Agent-line decorations (agent text, markers), 150-line viewport | 1 ms |
 | Drawing file, 2 000 elements: parse `json` / `compressed-json` | 25 / 80 ms |
 | Drawing file, 2 000 elements: write back with the previous file / describe | 40 / 15 ms |
-| Vault listing / search, 2 000 notes (warm) | see `packages/storage/src/storage.bench.ts` |
+| Vault listing, 2 000 notes: walked (warm) / first after a restart (version cache) | 40 / 70 ms |
+| Vault search, 2 000 notes (warm, watched) | 10 ms |
 | 3-way merge, 2 000-line note | see `packages/storage/src/storage.bench.ts` |
 | Obsidian import preview, 10 000-note vault (warm; its report stays under 256 KB) | 1 500 ms |
 | Agent journal: one flushed append to a 5 000-event journal | 50 ms |
@@ -157,8 +167,8 @@ layer (~1.3 kB gz) is installed from `App` for that reason; the size check catch
 
 ## Agent latency
 
-The target is a visible acknowledgment on a new task within ~2–3 s of finishing typing: settle
-(0.7 s after leaving the line, 2.5 s otherwise) + batch (150 ms) + the orchestrator's first tool
+The target is a visible acknowledgment on a new task or request within ~2–3 s of finishing
+typing: settle (0.7 s after leaving the line, 2.5 s otherwise, for tasks and request-like lines) + batch (150 ms) + the orchestrator's first tool
 call. The triage eval measures time-to-first-tool-call (target p95 < 6 s with the live model);
 orchestrator turns use low thinking effort for speed.
 
