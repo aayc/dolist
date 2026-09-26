@@ -11,9 +11,7 @@ import {
   silentLogger,
   type TaskAgentStatus,
   type Thread,
-  type ToolCallMessage,
   type ToolSpec,
-  toolResultText,
   truncate,
 } from "@ddl/core";
 import { type DrawingDescriptions, drawingBudget } from "../drawings/descriptions";
@@ -48,8 +46,8 @@ import type { ThreadJournal, ThreadStore } from "../threads/types";
 import { ToolInputError } from "../tools/input";
 import { createThreadTools, THREAD_TOOL_NAMES, type ThreadToolHost } from "../tools/thread";
 import type { TaskRecords } from "./records";
-import { previewText, sanitizeForDisplay } from "./redact";
 import type { TaskBoard, TaskRef } from "./task-board";
+import { ToolCallRows } from "./tool-messages";
 import type { SubagentSpec } from "./types";
 
 type FrameData = Parameters<FrameListener>[0];
@@ -168,8 +166,7 @@ interface Run {
   lastText: string;
   turn: TurnState;
   streams: Map<string, StreamState>;
-  toolMessages: Map<string, ToolCallMessage>;
-  toolLabels: Map<string, string>;
+  tools: ToolCallRows;
   startedAt: number | null;
   lastActiveAt: number;
 }
@@ -403,11 +400,12 @@ export class SubagentManager {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   private createRun(spec: SubagentSpec, threadId: string): Run {
+    const author = authorFor(spec.capabilities);
     return {
       taskId: spec.taskId,
       threadId,
       spec,
-      author: authorFor(spec.capabilities),
+      author,
       state: "idle",
       closed: false,
       controller: new AbortController(),
@@ -416,8 +414,7 @@ export class SubagentManager {
       lastText: "",
       turn: freshTurn(),
       streams: new Map(),
-      toolMessages: new Map(),
-      toolLabels: new Map(),
+      tools: new ToolCallRows(author, this.now),
       startedAt: null,
       lastActiveAt: this.now(),
     };
@@ -736,7 +733,7 @@ export class SubagentManager {
     if (this.options.extraTools && task) tools.push(...this.options.extraTools(run.spec, task));
     const unique = new Map<string, ToolSpec>();
     for (const tool of tools) if (!unique.has(tool.name)) unique.set(tool.name, tool);
-    run.toolLabels = new Map([...unique.values()].map((tool) => [tool.name, tool.label]));
+    run.tools.labels = new Map([...unique.values()].map((tool) => [tool.name, tool.label]));
     return [...unique.values()];
   }
 
@@ -851,24 +848,11 @@ export class SubagentManager {
         }
         return;
       }
-      case "tool_start": {
-        if (THREAD_TOOL_NAMES.has(event.toolName)) return;
-        const label = run.toolLabels.get(event.toolName);
-        const message: ToolCallMessage = {
-          id: createId("msg"),
-          kind: "tool_call",
-          author: run.author,
-          createdAt: this.now(),
-          toolCallId: event.toolCallId,
-          toolName: event.toolName,
-          ...(label ? { label } : {}),
-          input: sanitizeForDisplay(event.input),
-          status: "running",
-        };
-        run.toolMessages.set(event.toolCallId, message);
-        threads.upsertMessage(run.threadId, message);
+      case "tool_start":
+        if (!THREAD_TOOL_NAMES.has(event.toolName)) {
+          threads.upsertMessage(run.threadId, run.tools.start(event));
+        }
         return;
-      }
       case "tool_end": {
         if (THREAD_TOOL_NAMES.has(event.toolName)) {
           if (event.isError) {
@@ -879,25 +863,7 @@ export class SubagentManager {
           }
           return;
         }
-        const started = run.toolMessages.get(event.toolCallId);
-        run.toolMessages.delete(event.toolCallId);
-        const preview = previewText(toolResultText(event.result), 300);
-        const label = run.toolLabels.get(event.toolName);
-        threads.upsertMessage(run.threadId, {
-          ...(started ?? {
-            id: createId("msg"),
-            kind: "tool_call",
-            author: run.author,
-            createdAt: this.now(),
-            toolCallId: event.toolCallId,
-            toolName: event.toolName,
-            ...(label ? { label } : {}),
-            input: undefined,
-          }),
-          status: event.blocked ? "blocked" : event.isError ? "error" : "ok",
-          ...(preview ? { resultPreview: preview } : {}),
-          endedAt: this.now(),
-        });
+        threads.upsertMessage(run.threadId, run.tools.end(event));
         return;
       }
       case "error":
@@ -925,15 +891,9 @@ export class SubagentManager {
       if (stream.posted) this.finalizeStream(run, stream, stream.text.trim());
     }
     run.streams.clear();
-    for (const message of run.toolMessages.values()) {
-      this.options.threads.upsertMessage(run.threadId, {
-        ...message,
-        status: "error",
-        resultPreview: reason,
-        endedAt: this.now(),
-      });
+    for (const message of run.tools.close(reason)) {
+      this.options.threads.upsertMessage(run.threadId, message);
     }
-    run.toolMessages.clear();
   }
 
   private cancelApprovals(taskId: string, reason: string): void {

@@ -9,12 +9,11 @@ import {
   type TaskAgentStatus,
   type TextMessage,
   type Thread,
-  type ToolCallMessage,
-  toolResultText,
 } from "@ddl/core";
 import type { HarnessEvent } from "../harness/types";
 import type { ThreadStore } from "../threads/types";
-import { previewText, sanitizeForDisplay } from "./redact";
+import { previewText } from "./redact";
+import { ToolCallRows } from "./tool-messages";
 
 /** The chat keeps this many messages; older ones are dropped at the end of each turn. */
 export const ORCHESTRATOR_CHAT_MAX_MESSAGES = 500;
@@ -70,8 +69,7 @@ export class OrchestratorChat {
   private readonly logger: Logger;
   private readonly maxMessages: number;
   private readonly streams = new Map<string, Stream>();
-  private readonly tools = new Map<string, ToolCallMessage>();
-  private labels: ReadonlyMap<string, string> = new Map();
+  private readonly tools: ToolCallRows;
   private thinking: Thinking | null = null;
   private inTurn = false;
 
@@ -80,6 +78,7 @@ export class OrchestratorChat {
     this.now = options.now ?? Date.now;
     this.logger = options.logger ?? silentLogger;
     this.maxMessages = options.maxMessages ?? ORCHESTRATOR_CHAT_MAX_MESSAGES;
+    this.tools = new ToolCallRows("orchestrator", this.now);
   }
 
   /**
@@ -113,7 +112,7 @@ export class OrchestratorChat {
     this.thread();
     this.closeOpenRows("Interrupted");
     this.inTurn = true;
-    this.labels = labels;
+    this.tools.labels = labels;
     const id = this.status("system", "working", trigger);
     this.threads.setStatus(this.threadId, "working");
     return id;
@@ -121,7 +120,7 @@ export class OrchestratorChat {
 
   /** The session's tools changed (a new session was created during the turn). */
   setLabels(labels: ReadonlyMap<string, string>): void {
-    this.labels = labels;
+    this.tools.labels = labels;
   }
 
   onEvent(event: HarnessEvent): void {
@@ -224,46 +223,13 @@ export class OrchestratorChat {
         }
         return;
       }
-      case "tool_start": {
+      case "tool_start":
         this.stopThinking();
-        const label = this.labels.get(event.toolName);
-        const message: ToolCallMessage = {
-          id: createId("msg"),
-          kind: "tool_call",
-          author: "orchestrator",
-          createdAt: this.now(),
-          toolCallId: event.toolCallId,
-          toolName: event.toolName,
-          ...(label ? { label } : {}),
-          input: sanitizeForDisplay(event.input),
-          status: "running",
-        };
-        this.tools.set(event.toolCallId, message);
-        this.threads.upsertMessage(this.threadId, message);
+        this.threads.upsertMessage(this.threadId, this.tools.start(event));
         return;
-      }
-      case "tool_end": {
-        const started = this.tools.get(event.toolCallId);
-        this.tools.delete(event.toolCallId);
-        const label = this.labels.get(event.toolName);
-        const preview = previewText(toolResultText(event.result), 300);
-        this.threads.upsertMessage(this.threadId, {
-          ...(started ?? {
-            id: createId("msg"),
-            kind: "tool_call",
-            author: "orchestrator",
-            createdAt: this.now(),
-            toolCallId: event.toolCallId,
-            toolName: event.toolName,
-            ...(label ? { label } : {}),
-            input: undefined,
-          }),
-          status: event.blocked ? "blocked" : event.isError ? "error" : "ok",
-          ...(preview ? { resultPreview: preview } : {}),
-          endedAt: this.now(),
-        });
+      case "tool_end":
+        this.threads.upsertMessage(this.threadId, this.tools.end(event));
         return;
-      }
       default:
         return;
     }
@@ -339,14 +305,7 @@ export class OrchestratorChat {
       }
     }
     this.streams.clear();
-    for (const message of this.tools.values()) {
-      this.threads.upsertMessage(this.threadId, {
-        ...message,
-        status: "error",
-        resultPreview: reason,
-        endedAt: this.now(),
-      });
-    }
-    this.tools.clear();
+    for (const message of this.tools.close(reason))
+      this.threads.upsertMessage(this.threadId, message);
   }
 }
