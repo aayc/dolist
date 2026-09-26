@@ -155,10 +155,7 @@ describe("golden approvals fixtures through the real approval broker", () => {
     },
   );
 
-  // Known gap: createApprovalBroker (safety/approvals.ts, not owned by this slice) still writes
-  // approvals.json unconditionally. Switching its load/persist to createApprovalStateFile (below)
-  // makes these pass; then turn `it.fails` into `it`.
-  it.fails("the broker keeps a future-version approvals.json untouched after a new approval", async () => {
+  it("the broker keeps a future-version approvals.json untouched after a new approval", async () => {
     const future = readFixture("approvals", "future-version.json");
     const storage = vault({ [APPROVALS_STATE_PATH]: future });
     const { broker: b } = await broker(storage);
@@ -177,7 +174,7 @@ describe("golden approvals fixtures through the real approval broker", () => {
     expect((await storage.read(APPROVALS_STATE_PATH))!.content).toBe(future);
   });
 
-  it.fails("the broker moves a corrupt approvals.json aside before replacing it", async () => {
+  it("the broker moves a corrupt approvals.json aside before replacing it", async () => {
     const corrupt = readFixture("approvals", "corrupt-truncated.json");
     const storage = vault({ [APPROVALS_STATE_PATH]: corrupt });
     const { broker: b } = await broker(storage);
@@ -194,6 +191,50 @@ describe("golden approvals fixtures through the real approval broker", () => {
     });
     await b.dispose();
     expect((await storage.read(CORRUPT_COPY))?.content).toBe(corrupt);
+  });
+
+  it("the broker keeps what another writer added to approvals.json, honoring it only once loaded", async () => {
+    const storage = vault();
+    const { broker: b } = await broker(storage);
+    const outcome = b.request({
+      threadId: null,
+      taskId: "tsk_1",
+      toolName: "bash",
+      input: { command: "ls" },
+      summary: "Run ls",
+      risk: "low",
+      categories: ["read"],
+      reason: "test",
+      timeoutMs: 60_000,
+    });
+    await b.flush();
+    const [pending] = b.list({ status: "pending" });
+    const theirGrant = {
+      toolName: "web_fetch",
+      scope: "always" as const,
+      taskId: null,
+      createdAt: NOW,
+    };
+    const expired = { ...pending!, status: "expired" as const, decidedAt: NOW };
+    storage.simulateExternalChange(
+      APPROVALS_STATE_PATH,
+      serializeApprovalState([theirGrant], [BOOKING, expired]),
+    );
+
+    await b.decide(pending!.id, { decision: "approve" });
+    await expect(outcome).resolves.toMatchObject({ approved: true });
+    await b.flush();
+    const saved = parseApprovalState((await storage.read(APPROVALS_STATE_PATH))!.content)!;
+    expect(saved.grants).toEqual([theirGrant]);
+    expect(saved.approvals).toEqual([BOOKING, b.get(pending!.id)]);
+    // Another writer's grants and decisions never change this run's safety decisions.
+    expect(b.findGrant({ toolName: "web_fetch", taskId: null })).toBeUndefined();
+    expect(b.get(BOOKING.id)).toBeUndefined();
+
+    const { broker: reloaded } = await broker(storage);
+    expect(reloaded.findGrant({ toolName: "web_fetch", taskId: null })).toEqual(theirGrant);
+    await b.dispose();
+    await reloaded.dispose();
   });
 });
 

@@ -315,11 +315,12 @@ categories are all listed), optional `risk` (the grant does not cover riskier ca
   them cover every risk level or category.)
 - Approvals left pending by a previous process load as `expired` ("The app restarted before a
   decision was made.") and the file is rewritten.
-- Corrupt or newer files are ignored by the broker. `createApprovalStateFile` applies the full
-  rules (quarantine, never overwrite newer, conditional writes with `mergeApprovalStates`: union,
-  a decided copy beats a pending one); the broker in `safety/approvals.ts` still reads and writes
-  the file directly until it switches to it (tracked by `it.fails` tests in
-  `packages/agent/test/persistence/approvals.test.ts`).
+- The broker reads and writes the file through `createApprovalStateFile`, with the full rules:
+  a corrupt file is quarantined and a newer one never overwritten (both load as no grants and no
+  approvals), and writes are conditional. A copy another writer saved meanwhile is merged into
+  what is written (`mergeApprovalStates`: union, a decided copy beats a pending one), but its
+  grants and decisions apply only after the next load: the running broker never widens what it
+  allows, nor decides a pending approval, from someone else's copy.
 
 Version history: **1** only. The writer always wrote `version: 1`; files without it are accepted.
 
@@ -503,7 +504,6 @@ keep the old ones loading.
   the next write or apply on restart.
 - Sync conflict copies of single-file state (`records (conflict …).json`, `approvals`, `settings`)
   are left for the user; only thread conflict copies are merged.
-- The approval broker does not use `createApprovalStateFile` yet (see Approvals).
 - Journals are never compacted: a thread's journal grows with the thread (the orchestrator's chat
   trims its messages, not its journal). Compaction needs a marker every device honors, or a union
   would bring compacted events back; it is planned with the agent journal's later phases.
