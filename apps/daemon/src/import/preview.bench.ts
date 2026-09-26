@@ -101,8 +101,10 @@ test("import preview: 10k-note Obsidian vault", async ({ bench }) => {
   expect(report.carryOver.daily.merged).toBeGreaterThanOrEqual(MERGED - 5);
   expect(Buffer.byteLength(JSON.stringify(report))).toBeLessThan(MAX_REPORT_BYTES);
 
+  // Each run is a few hundred ms (the walks above warmed up): tinybench's default floor of 64 runs
+  // would take most of a minute in CI, and p99 of 24 is the same worst case of the sample.
   const result = await bench("import preview: 10k-note Obsidian vault", async () => {
     await importer.preview(source);
-  }).run();
+  }).run({ iterations: 24, time: 0, warmupIterations: 0, warmupTime: 0 });
   expect(result.latency.p99).toBeLessThan(BUDGET_MS);
 }, 300_000);

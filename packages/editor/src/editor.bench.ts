@@ -64,9 +64,11 @@ test("typing: 500 single-character inserts, 2k-line note, 30 badges", async ({ b
   expect(getAnnotations(typed)).toHaveLength(30);
   expect(typed.doc.length).toBe(NOTE.length + 500);
 
+  // Each run is ~100 ms: tinybench's default floor of 64 runs would take most of a minute in CI,
+  // and p99 of 24 is the same worst case of the sample.
   const result = await bench("typing: 500 single-char inserts, 2k lines, 30 badges", () => {
     type500(ANNOTATED);
-  }).run();
+  }).run({ iterations: 24, time: 0, warmupIterations: 3, warmupTime: 0 });
   expect(result.latency.p99).toBeLessThan(BUDGET_MS.typing500);
 });
 
