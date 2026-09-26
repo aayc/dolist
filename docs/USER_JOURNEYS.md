@@ -126,9 +126,8 @@ Tests: the scenario matrix in `packages/agent/test/scenarios/` and the journeys 
 
 Tests: Mac `ComputerAccessTests` (prompt before the link, the links' fallbacks, the check while
 polling, polling that stops, Next, the relaunch's order and the setup resuming after it), the
-banner's rules and its dismissal (`ComputerAccessBannerTests`), the command
-(`ComputerAccessAppTests`), and the snapshots `settings-computer-use-*`,
-`computer-access-guide-*` and `computer-access-banner-*`.
+banner's rules and its dismissal (`ComputerAccessBannerTests`), and the command
+(`ComputerAccessAppTests`).
 
 ## J10. Watching the agent work
 
@@ -154,8 +153,7 @@ The pace of the typing and the wording of the activity row are the same on the w
 
 Tests: web `apps/web/e2e/chat.spec.ts`, the table tests `reveal.test.ts` and `activity.test.ts`,
 `Composer.test.tsx`, `agent-text-view.test.ts`; Mac `RevealTests`, `ChatActivityTests`,
-`MarkdownChunkTests`, `ChatViewTests`, `ComposerTests`, `MotionTests`, and the `chat-*` and
-`composer-states` snapshots.
+`MarkdownChunkTests`, `ChatViewTests`, `ComposerTests` and `MotionTests`.
 
 ## J11. Asking the orchestrator what it's doing, and redirecting it
 
@@ -179,8 +177,7 @@ Tests: `packages/agent/test/scenarios/orchestrator-chat.test.ts` (turns recorded
 answered and acted on through the gate, approvals in the chat, recent exchanges in the digest,
 Stop, restarts), `src/orchestrator/chat.test.ts` (thinking, retention), the brain's direct-message
 tests and the `direct-*` triage eval cases, web e2e `orchestrator.spec.ts`, Mac
-`OrchestratorChatTests`, `OrchestratorWindowTests`, `InMemoryOrchestratorTests` and the snapshots
-`orchestrator-chat-*`, `orchestrator-window-*`.
+`OrchestratorChatTests` and `OrchestratorWindowTests`.
 
 ## J12. A morning briefing, created by saying it
 

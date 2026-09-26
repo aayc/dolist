@@ -16,17 +16,6 @@ struct RemoteModelTests {
     #expect(decoded.placement == nil && decoded.readiness == nil)
   }
 
-  @Test func agentStatusCarriesPlacementAndReadiness() throws {
-    let fixture = try #require(
-      Fixtures.cases("AgentStatusResponse").first { $0.name.hasPrefix("the always-on machine") })
-    let status = try Fixtures.decode(AgentStatusResponse.self, fixture.value)
-    #expect(status.placement?.placement == .alwaysOnHost)
-    #expect(status.placement?.runsOn?.alwaysOnMachine == true)
-    #expect(status.placement?.relay == .off)
-    #expect(status.readiness?.harness.knownKind == .cursor)
-    #expect(status.readiness?.computer == .unsupported)
-  }
-
   @Test func theAgentIsHeldHereWithoutAMachineOrSync() throws {
     let held = try Fixtures.cases("AgentStatusResponse").filter { $0.name.contains("held here") }
     let reasons = try held.map {

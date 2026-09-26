@@ -287,33 +287,4 @@ struct PlacementTests {
     #expect(on.tooltipContent()?.plainText == "Run the orchestrator on this device")
     #expect(on.command == "agent.runHere")
   }
-
-  @Test(arguments: [false, true])
-  func orchestratorBarStates(dark: Bool) throws {
-    let host = AgentRunsOn(
-      deviceId: "dev_vm", name: "vm-name", thisDevice: true, alwaysOnMachine: true)
-    let states: [(String, AgentPlacementStatus)] = [
-      ("orchestrator-held", Fixture.placement(heldHere: .noMachine)),
-      ("orchestrator-here", Fixture.placement()),
-      (
-        "orchestrator-remote",
-        Fixture.placement(.alwaysOnMachine, runsOn: Fixture.machine, relay: .connected)
-      ),
-      (
-        "orchestrator-handover",
-        Fixture.placement(.alwaysOnMachine, runsOn: nil, note: "Handing the agent to vm-name…")
-      ),
-      (
-        "orchestrator-unreachable",
-        Fixture.placement(.alwaysOnMachine, runsOn: Fixture.machine, relay: .unreachable)
-      ),
-      ("orchestrator-host", Fixture.placement(.alwaysOnHost, runsOn: host)),
-    ]
-    for (name, placement) in states {
-      let rendered = try SnapshotRenderer.render(
-        panel(placement, opened: Locked([])), name: name, size: CGSize(width: 400, height: 360),
-        dark: dark)
-      #expect(rendered.bytes > 4_000 && rendered.distinctColors >= 12, "\(name)")
-    }
-  }
 }

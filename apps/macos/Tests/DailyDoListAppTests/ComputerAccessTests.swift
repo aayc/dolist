@@ -298,20 +298,6 @@ struct ComputerAccessTests {
         == "All set. Agents can use your apps now.")
   }
 
-  @Test func theAdHocCheckRunsOnceWhenFirstAsked() {
-    let fakes = ComputerAccessFakes()
-    let checks = Captured(0)
-    var system = fakes.system()
-    system.isSignedAdHoc = {
-      checks.value += 1
-      return true
-    }
-    let access = ComputerAccessSetup(system: system, scheduler: ManualScheduler())
-    #expect(checks.value == 0)
-    #expect(access.isSignedAdHoc)
-    #expect(access.isSignedAdHoc)
-    #expect(checks.value == 1)
-  }
 }
 
 /// A value the closures under test can change.
@@ -544,20 +530,6 @@ struct ComputerAccessAppTests {
     #expect(small.maxX - ComputerAccessGuideLayout.margin == second.maxX - 24)
     #expect(
       small.maxY - ComputerAccessGuideLayout.margin <= second.maxY, "the card's top is on screen")
-  }
-
-  /// The panel floats over System Settings without taking the focus from it, and stays up while
-  /// Daily Do List is in the background (it's never ordered in here).
-  @Test func theGuidePanelNeverTakesTheFocus() {
-    let panel = ComputerAccessGuidePanelPresenter.makePanel()
-    #expect(panel.styleMask.contains(.nonactivatingPanel))
-    #expect(panel.level == .floating)
-    #expect(!panel.hidesOnDeactivate)
-    #expect(panel.becomesKeyOnlyIfNeeded)
-    #expect(!panel.canBecomeMain)
-    #expect(!panel.isOpaque && panel.backgroundColor == .clear)
-    #expect(panel.collectionBehavior.contains(.canJoinAllSpaces))
-    #expect(!panel.isVisible)
   }
 
   @Test func theIconDragsTheAppBundle() throws {

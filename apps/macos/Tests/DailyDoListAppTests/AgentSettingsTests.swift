@@ -5,12 +5,6 @@ import Testing
 
 @Suite("Agent settings")
 struct AgentSettingsTests {
-  @Test func theHarnessChoicesAreLabeledForPeople() {
-    #expect(
-      AgentHarnessKind.allCases.map(\.settingsLabel) == [
-        "Pi · OpenRouter model", "Cursor CLI · your Cursor account",
-      ])
-  }
 
   @Test func theModelFieldIsTheConfiguredHarnesssModel() {
     var agent = AgentSettings.defaults

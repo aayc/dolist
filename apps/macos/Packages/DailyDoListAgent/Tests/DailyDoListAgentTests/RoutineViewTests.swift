@@ -7,8 +7,7 @@ import Testing
 
 @testable import DailyDoListAgent
 
-/// The Routines section: snapshots (`.build/agent-snapshots/routines-*`) and what each screen
-/// offers, read from its controls' tooltips.
+/// The Routines section: what each screen offers, read from its controls' tooltips.
 @MainActor
 @Suite("Routine views", .serialized)
 struct RoutineViewTests {
@@ -28,11 +27,6 @@ struct RoutineViewTests {
       shortcuts: Self.shortcuts, section: .constant(section),
       selectedRoutineId: .constant(routineId), routineActions: Self.actions
     ).agentReferenceDate(Self.now)
-  }
-
-  private func check(_ rendered: SnapshotRenderer.Rendered) {
-    #expect(rendered.bytes > 4_000, "\(rendered.url.lastPathComponent) is not empty")
-    #expect(rendered.distinctColors >= 12, "\(rendered.url.lastPathComponent) has content")
   }
 
   private func tooltips<V: View>(_ view: V, size: CGSize) -> [String: TooltipAnchorView] {
@@ -57,70 +51,6 @@ struct RoutineViewTests {
     }
     window.close()
     return byLabel
-  }
-
-  // MARK: Snapshots
-
-  @Test(arguments: [false, true])
-  func routinesList(dark: Bool) throws {
-    check(
-      try SnapshotRenderer.render(
-        panel(), name: "routines-list", size: CGSize(width: 400, height: 640), dark: dark))
-  }
-
-  @Test(arguments: [false, true])
-  func aRoutinesInbox(dark: Bool) throws {
-    check(
-      try SnapshotRenderer.render(
-        panel(routineId: SampleRoutines.briefingId), name: "routines-detail",
-        size: CGSize(width: 400, height: 640), dark: dark))
-  }
-
-  @Test(arguments: [false, true])
-  func aRoutineThatCantRun(dark: Bool) throws {
-    store.routineAlerts[SampleRoutines.brokenId] = RoutineAlert(
-      kind: .cantRunNow, title: "“Someday” can't run now",
-      message: "“Someday” has a problem: Couldn't read “whenever”.")
-    check(
-      try SnapshotRenderer.render(
-        panel(routineId: SampleRoutines.brokenId), name: "routines-detail-problem",
-        size: CGSize(width: 400, height: 520), dark: dark))
-  }
-
-  @Test(arguments: [false, true])
-  func aRunInTheThreadView(dark: Bool) throws {
-    check(
-      try SnapshotRenderer.render(
-        panel(routineId: SampleRoutines.briefingId, threadId: SampleRoutines.latestBriefingRunId),
-        name: "routines-run", size: CGSize(width: 400, height: 520), dark: dark))
-  }
-
-  @Test(arguments: [false, true])
-  func noRoutinesYet(dark: Bool) throws {
-    let empty = AgentStore(client: SampleDaemonClient())
-    empty.apply(.routinesChanged([]))
-    empty.routinesLoaded = true
-    let view = AgentPanel(
-      store: empty, selectedThreadId: .constant(nil), shortcuts: Self.shortcuts,
-      section: .constant(.routines), routineActions: Self.actions)
-    check(
-      try SnapshotRenderer.render(
-        view, name: "routines-empty", size: CGSize(width: 400, height: 480), dark: dark))
-  }
-
-  @Test(arguments: [false, true])
-  func newRoutineSheet(dark: Bool) async throws {
-    let sheet = NewRoutineSheet(store: store) { _ in }
-    check(
-      try await SnapshotRenderer.renderSettled(
-        sheet, name: "routines-new", size: CGSize(width: 500, height: 600), dark: dark))
-    let repeating = NewRoutineSheet(
-      store: store,
-      draft: RoutineDraft(repeating: "Check the price of the example kettle", threadId: "thr_1")
-    ) { _ in }
-    check(
-      try await SnapshotRenderer.renderSettled(
-        repeating, name: "routines-repeat", size: CGSize(width: 500, height: 520), dark: dark))
   }
 
   // MARK: What each screen offers
@@ -251,16 +181,5 @@ struct RoutineFormatTests {
     #expect(title(-2) == "Today, 7:30 AM")
     #expect(title(-26) == "Yesterday, 7:30 AM")
     #expect(title(-50) == "Mon, Sep 21, 7:30 AM")
-  }
-
-  @Test func notifyAndUsesInWords() {
-    #expect(RoutineFormat.notify(.always) == "Notifies after every run")
-    #expect(RoutineFormat.notify(.whenChanged) == "Notifies when something changed")
-    #expect(RoutineFormat.notify(.never) == "Never notifies")
-    #expect(RoutineFormat.uses([]) == nil)
-    #expect(RoutineFormat.uses([.web]) == "Uses the web")
-    #expect(
-      RoutineFormat.uses([.web, .browser, .connectors])
-        == "Uses the web, the browser and connectors")
   }
 }

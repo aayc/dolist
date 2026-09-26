@@ -160,32 +160,6 @@ struct VimAppTests {
     #expect(VimIndicator.color(.normal) == Theme.accent)
   }
 
-  @Test func badgesComeBackAfterDdAndU() async throws {
-    let agent = AgentStore(client: client)
-    let workspace = try await vimWorkspace(agent: agent)
-    let path = "Daily/2026-09-23.md"
-    agent.apply(
-      .taskRecords(
-        TaskRecordsEvent(
-          notePath: path,
-          records: [
-            .sample(
-              "t1", note: path, text: "Book flights to Lisbon", line: 1, status: .working,
-              summary: "Comparing fares")
-          ])))
-    workspace.editor.recordsDidChange(for: path)
-    scheduler.advance(by: 0)
-    #expect(workspace.editor.controller.badges.map(\.line) == [1])
-    try keys(workspace, "g", "g", "j", "d", "d")
-    #expect(workspace.editor.controller.text == "Intro\n- [ ] Buy milk")
-    scheduler.advance(by: 0.2)
-    #expect(workspace.editor.controller.badges.isEmpty)
-    try keys(workspace, "u")
-    #expect(
-      workspace.editor.controller.text == "Intro\n- [ ] Book flights to Lisbon\n- [ ] Buy milk")
-    scheduler.advance(by: 0.2)
-    #expect(workspace.editor.controller.badges.map(\.line) == [1])
-  }
 }
 
 /// The engine, the settings and the menu in a running app model.

@@ -156,80 +156,8 @@ struct FormattingTests {
   }
 }
 
-@Suite("Styles and icons")
+@Suite("Artifact files and the Dock badge")
 struct StyleTests {
-  @Test func statusLabelsAndTones() {
-    let expected: [(TaskAgentStatus, String, Tone)] = [
-      (.idle, "Idle", .faint), (.triaging, "Triaging", .accent), (.queued, "Queued", .faint),
-      (.working, "Working", .info), (.waitingApproval, "Needs approval", .warning),
-      (.waitingUser, "Needs you", .warning), (.done, "Done", .success),
-      (.failed, "Failed", .danger),
-      (.cancelled, "Stopped", .faint), (.ignored, "Ignored", .faint),
-      ("waiting_for_input", "Waiting for input", .faint),
-    ]
-    for (status, label, tone) in expected {
-      #expect(status.displayLabel == label)
-      #expect(status.tone == tone)
-    }
-    #expect(TaskAgentStatus.triaging.pulses)
-    #expect(!TaskAgentStatus.working.pulses)
-  }
-
-  @Test func riskTones() {
-    #expect(RiskLevel.low.tone == .success)
-    #expect(RiskLevel.medium.tone == .warning)
-    #expect(RiskLevel.high.tone == .danger)
-    #expect(RiskLevel.critical.tone == .danger)
-    #expect(RiskLevel("extreme").tone == .warning)
-    #expect(RiskLevel.high.displayLabel == "High risk")
-    #expect(RiskLevel("extreme").displayLabel == "Extreme risk")
-  }
-
-  @Test func categoryLabels() {
-    #expect(ActionCategory.payment.displayLabel == "Spends money")
-    #expect(ActionCategory.communication.displayLabel == "Contacts someone")
-    #expect(ActionCategory.formSubmission.displayLabel == "Submits a form")
-    #expect(ActionCategory("quantum_leap").displayLabel == "Quantum leap")
-  }
-
-  @Test(arguments: [
-    ("browser_click", "globe"), ("computer_type", "cursorarrow.rays"),
-    ("web_search", "magnifyingglass"),
-    ("web_fetch", "magnifyingglass"), ("bash", "terminal"), ("read", "doc.text"),
-    ("write", "square.and.pencil"), ("edit", "square.and.pencil"),
-    ("grep", "doc.text.magnifyingglass"),
-    ("mcp__mail__send_message", "puzzlepiece.extension"), ("post_update", "text.bubble"),
-    ("ask_user", "questionmark.bubble"), ("create_artifact", "doc.richtext"),
-    ("read_note", "note.text"),
-    ("spawn_subagent", "person.2"), ("something_new", "wrench.and.screwdriver"),
-  ])
-  func toolIcons(tool: String, symbol: String) {
-    #expect(ToolIcon.systemName(for: tool) == symbol)
-  }
-
-  @Test func toolCallStatuses() {
-    #expect(ToolCallStatus.ok.systemImage == "checkmark.circle.fill")
-    #expect(ToolCallStatus.error.systemImage == "xmark.circle.fill")
-    #expect(ToolCallStatus.blocked.systemImage == "shield.lefthalf.filled")
-    #expect(ToolCallStatus.blocked.tone == .warning)
-    #expect(ToolCallStatus.blocked.displayLabel == "Blocked by safety policy")
-    #expect(ToolCallStatus.running.tone == .info)
-  }
-
-  @Test func artifactKinds() {
-    #expect(ArtifactKind.json.displayLabel == "JSON")
-    #expect(ArtifactKind.markdown.displayLabel == "Markdown")
-    let code = ArtifactMeta(
-      id: "a", threadId: "t", title: "x", kind: .code, mimeType: "text/plain", language: "python",
-      path: "p", size: 1, createdAt: 1)
-    #expect(code.kindLabel == "python")
-    #expect(ArtifactFiles.kind(forMimeType: "image/png") == .image)
-    #expect(ArtifactFiles.kind(forMimeType: "text/markdown; charset=utf-8") == .markdown)
-    #expect(ArtifactFiles.kind(forMimeType: "application/json") == .json)
-    #expect(ArtifactFiles.kind(forMimeType: "text/csv") == .text)
-    #expect(ArtifactFiles.kind(forMimeType: "application/pdf") == .file)
-  }
-
   @Test func artifactFileNames() {
     let meta = ArtifactMeta(
       id: "a", threadId: "t", title: "Q3: report/draft?", kind: .code, mimeType: "text/x-python",

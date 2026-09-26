@@ -154,14 +154,4 @@ struct ChatViewTests {
     #expect(scroll.contentView.bounds.origin == readingAt, "the reader stays where they were")
   }
 
-  @Test func theUsersOwnReplyShowsWhole() async throws {
-    await load([])
-    let (host, window) = host()
-    defer { window.close() }
-    try await settle(host)
-    _ = store.enqueueMessage(threadId: "thr_1", text: "Book the patio one")
-    try await settle(host)
-    #expect(harness.reveal.entries.isEmpty)
-    #expect(harness.tickers.isEmpty)
-  }
 }

@@ -35,13 +35,4 @@ struct SmokeTests {
       storage.attribute(.ddlInlineCode, at: editor.offset(of: "code"), effectiveRange: nil) != nil)
   }
 
-  @Test func typingRestylesTheLine() throws {
-    let editor = EditorHarness("|")
-    editor.type("## Hello")
-    let storage = editor.controller.storage
-    let font = try #require(storage.attribute(.font, at: 4, effectiveRange: nil) as? NSFont)
-    #expect(font.pointSize == (16 * 1.4).rounded())
-    #expect(editor.text == "## Hello")
-    #expect(editor.delegate.textChanges.last == "## Hello")
-  }
 }

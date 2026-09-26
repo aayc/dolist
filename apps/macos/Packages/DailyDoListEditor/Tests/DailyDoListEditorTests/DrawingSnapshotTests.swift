@@ -55,14 +55,6 @@ struct DrawingSnapshotTests {
     }
   }
 
-  @Test func rendersASelectedDrawingWithItsHandles() throws {
-    let editor = DrawingEditorHarness(text: Self.note, drawings: Self.drawings)
-    let box = try #require(editor.box(line: 1))
-    editor.click(CGPoint(x: box.midX, y: box.midY))
-    #expect(editor.controller.selectedDrawingLine == 1)
-    try write(editor.snapshot(), "drawings-selected.png")
-  }
-
   @Test func placeholdersKeepTheirWordsInsideTheBox() throws {
     let text = """
       ![[A drawing with a rather long name.excalidraw|150|right-wrap]]

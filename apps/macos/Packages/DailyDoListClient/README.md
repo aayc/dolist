@@ -246,10 +246,11 @@ renewals (up to ~40 s), and nothing persists.
 
 ```sh
 apps/macos/scripts/test.sh DailyDoListClient
-DDL_LIVE_DAEMON=1 apps/macos/scripts/test.sh DailyDoListClient   # + read-only checks against a running daemon
 ```
 
 REST runs against a `URLProtocol` stub; the event stream against an in-process RFC 6455 server
-(`Tests/…/Support/TestWebSocketServer.swift`) that also records the exact upgrade request. The fake
-is validated in exact mode against `packages/contract/schema/wire.schema.json` and the golden
-fixtures, as are the request bodies the HTTP client sends.
+(`Tests/…/Support/TestWebSocketServer.swift`) that also records the exact upgrade request. The
+request bodies the HTTP client sends are validated in exact mode against
+`packages/contract/schema/wire.schema.json`, whose validator is checked against the golden
+fixtures. The in-memory fake has no tests of its own: the app's tests exercise it, and the
+integration tests (`apps/macos/IntegrationTests`) cover the real daemon.

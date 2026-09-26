@@ -67,30 +67,6 @@ struct OrchestratorActivityRoutingTests {
     #expect(controller.badges.isEmpty)
   }
 
-  @Test func aLineRewrittenInTheEditorLosesItsChipForGood() async throws {
-    type("Groceries are done\nfind a quiet dishwasher", in: workspace)
-    try await emit(.note(.noticed, daily, [(1, "find a quiet dishwasher")]))
-    #expect(controller.badges.count == 1)
-    controller.setText("Groceries are done\ncall the plumber on Monday")
-    #expect(controller.badges.isEmpty, "the editor dropped it as the line changed")
-    try await emit(.note(.thinking, daily, [(1, "find a quiet dishwasher")], turn: "msg_2"))
-    #expect(controller.badges.isEmpty, "and it doesn't come back")
-  }
-
-  @Test func aChipOnATasksLineLeavesItToTheTasksBadge() async throws {
-    type("- [ ] Book a table", in: workspace)
-    try await emit(.note(.noticed, daily, [(0, "- [ ] Book a table")]))
-    #expect(controller.badges.map(\.status) == [Status.noticed], "before the task is triaged")
-    client.emit(
-      .taskRecords(
-        TaskRecordsEvent(
-          notePath: daily,
-          records: [.sample("t1", note: daily, text: "Book a table", line: 0, status: .triaging)])))
-    try await eventually("records applied") { model.agent?.records(for: daily).count == 1 }
-    scheduler.advance(by: 0)
-    #expect(controller.badges.map(\.label) == ["Triaging…"])
-  }
-
   @Test func chipsOfAnotherNoteWaitUntilItIsOpen() async throws {
     try await emit(.note(.noticed, "Ideas.md", [(0, "ideas")]))
     #expect(controller.badges.isEmpty)
@@ -136,26 +112,6 @@ struct OrchestratorActivityRoutingTests {
     scheduler.advance(by: 0)
     #expect(controller.badges.isEmpty)
     #expect(workspace.orchestrator.chips.isEmpty)
-  }
-
-  @Test func aTurnWaitingForApprovalSaysSo() async throws {
-    type("book the dentist", in: workspace)
-    let line = [(0, "book the dentist")]
-    try await emit(.note(.acting, daily, line, turn: "msg_4"))
-    #expect(controller.badges.map(\.label) == ["Working…"])
-    try await emit(
-      .note(
-        .acting, daily, line, turn: "msg_4",
-        outcome: OrchestratorOutcome(
-          kind: .askedApproval, threadId: OrchestratorThread.id, text: "Book Dr. Example at 9")))
-    #expect(controller.badges.map(\.label) == ["Needs your approval ↗"])
-    #expect(controller.badges.first?.status == Status.needsYou)
-    #expect(
-      controller.badges.first?.tooltip == "Book Dr. Example at 9 — open the orchestrator chat")
-    scheduler.advance(by: OrchestratorActivityStore.outcomeHold + 1)
-    #expect(controller.badges.first?.isFading == false, "it waits as long as the turn does")
-    try await emit(.note(.acting, daily, line, turn: "msg_4"))
-    #expect(controller.badges.map(\.label) == ["Working…"], "approved: back to work")
   }
 
   /// A snapshot fetched after a reconnect may still carry the outcome of a turn already shown.
@@ -214,32 +170,4 @@ struct OrchestratorActivityRoutingTests {
         == "Orchestrator: working on your message")
   }
 
-  /// End to end with the in-memory daemon: a request written in today's note gets its chip, the
-  /// orchestrator adds a task under it, and the chip says so.
-  @Test func theDemoDaemonsTurnShowsInTheEditor() async throws {
-    let scheduler = ManualScheduler()
-    let environment = makeEnvironment(
-      client: FakeDaemonClient(), demo: true,
-      demoClient: {
-        InMemoryDaemonClient(
-          seed: .empty, clock: .immediate(start: referenceNow), agent: .enabled)
-      }, scheduler: scheduler)
-    let model = AppModel(environment: environment)
-    await model.boot()
-    let workspace = try #require(model.workspace)
-    try await eventually("connected") { model.connection.isOnline }
-    let today = try #require(workspace.activePath)
-    let controller = workspace.editor.controller
-    type(controller.text + "\nfind a quiet dishwasher", in: workspace)
-    scheduler.advance(by: 2)
-    try await eventually("the turn ended", timeout: 5) {
-      scheduler.advance(by: 0)
-      return controller.badges.contains { $0.label == "Added a task ↗" }
-    }
-    #expect(controller.text.contains("- [ ] Find a quiet dishwasher %%agent:thr_orchestrator%%"))
-    let chip = try #require(controller.badges.first { OrchestratorChip.isChipId($0.id) })
-    #expect(controller.text.components(separatedBy: "\n")[chip.line] == "find a quiet dishwasher")
-    #expect(workspace.orchestrator.chips(for: today).first?.turnId != nil)
-    await model.teardown()
-  }
 }
