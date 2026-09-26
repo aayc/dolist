@@ -26,6 +26,8 @@ export interface LocalBrowserOptions {
   /** How long Chrome may take to start. Default 30 s. */
   launchTimeoutMs?: number;
   settleMaxMs?: number;
+  /** How long the network must stay quiet after an action. Default 250 ms. */
+  settleQuietMs?: number;
   screencast?: Partial<ScreencastOptions>;
   screencastIdleMs?: number;
   logger?: Logger;
@@ -54,7 +56,7 @@ export class LocalBrowserController implements BrowserController {
       snapshotMaxChars: options.snapshotMaxChars ?? DEFAULT_SNAPSHOT_MAX_CHARS,
       actionTimeoutMs: options.actionTimeoutMs ?? 8_000,
       navigationTimeoutMs: options.navigationTimeoutMs ?? 30_000,
-      settle: { maxWaitMs: options.settleMaxMs ?? 3_000, quietMs: 250 },
+      settle: { maxWaitMs: options.settleMaxMs ?? 3_000, quietMs: options.settleQuietMs ?? 250 },
       screencast: {
         ...DEFAULT_SCREENCAST,
         maxWidth: viewport.width,

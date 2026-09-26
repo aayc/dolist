@@ -109,6 +109,8 @@ describe.skipIf(!resolved)("LocalBrowserController (real Chrome)", () => {
       profileDir,
       browser: resolved,
       settleMaxMs: 1_500,
+      // The pages are local and quiet, so a short window settles them; each action waits it out.
+      settleQuietMs: 50,
       // CI runners sometimes take over 30 s to start Chrome; a longer bound only delays a failure.
       launchTimeoutMs: 120_000,
     });
