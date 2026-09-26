@@ -66,8 +66,9 @@ field together with a major bump.
 ## How to add a route or event
 
 1. **Schema**: add the zod schema next to its peers in `src/wire/` with `named(id, description,
-   schema)` — `strictObject` for requests, `looseObject` for responses/events — and list it in
-   `WIRE_SCHEMAS` (`src/wire/catalog.ts`; add request schemas to `REQUEST_SCHEMA_NAMES`).
+   schema)` — `strictObject` for requests, `looseObject` for responses/events — and export it:
+   `WIRE_SCHEMAS` (`src/wire/catalog.ts`) collects every exported named schema. Add request
+   schemas to `REQUEST_SCHEMA_NAMES`.
 2. **Type**: export `type Name = WireType<"Name">` from `src/wire/types.ts`; `@ddl/core` re-exports
    it. A new route also goes in `API_PATHS` (`packages/core/src/protocol.ts`), the one route
    table: the daemon registers its pattern and `API_ROUTES` builds its URLs from it.

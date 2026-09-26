@@ -11,10 +11,17 @@ export const wireRegistry = z.registry<WireSchemaMeta>();
 /** Named schemas in declaration order. */
 export const namedWireSchemas: Array<{ id: string; schema: z.ZodType }> = [];
 
+/** A named schema's type carries its id, so `WIRE_SCHEMAS` can be typed from the exports. */
+export type Named<Id extends string, T> = T & { readonly "~wireId": Id };
+
 /** Registers `schema` under `id` with a human description (shown in JSON Schema and docs). */
-export function named<T extends z.ZodType>(id: string, description: string, schema: T): T {
+export function named<Id extends string, T extends z.ZodType>(
+  id: Id,
+  description: string,
+  schema: T,
+): Named<Id, T> {
   const described = schema.describe(description);
   wireRegistry.add(described, { id });
   namedWireSchemas.push({ id, schema: described });
-  return described;
+  return described as Named<Id, T>;
 }

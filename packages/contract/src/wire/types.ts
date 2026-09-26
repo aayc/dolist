@@ -149,7 +149,6 @@ export type ObsidianImportResult = WireType<"ObsidianImportResult">;
 export type ObsidianUpdateReport = WireType<"ObsidianUpdateReport">;
 export type ObsidianImportJob = WireType<"ObsidianImportJob">;
 export type ObsidianImportJobKind = ObsidianImportJob["kind"];
-export type ObsidianImportJobState = ObsidianImportJob["state"];
 export type ObsidianImportPhase = ObsidianImportJob["phase"];
 export type ObsidianImportJobResponse = WireType<"ObsidianImportJobResponse">;
 export type ObsidianImportOrigin = WireType<"ObsidianImportOrigin">;
@@ -171,5 +170,3 @@ export type ServerEventOf<T extends ServerEventType> = Extract<ServerEvent, { ty
 /** A server event's fields without its `type` tag. */
 export type ServerEventPayload<T extends ServerEventType> = Omit<ServerEventOf<T>, "type">;
 export type ClientEvent = WireType<"ClientEvent">;
-export type ClientEventType = ClientEvent["type"];
-export type ClientEventOf<T extends ClientEventType> = Extract<ClientEvent, { type: T }>;
