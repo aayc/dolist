@@ -88,7 +88,7 @@ docs/             Architecture, agent system, performance, security model, cross
 | --- | --- |
 | Install | `pnpm install` (Node ≥ 24.4, pnpm 10) |
 | Dev (daemon + web, live agent) | `pnpm dev` → http://localhost:5173 |
-| Dev with deterministic mock agent | `pnpm dev:mock` |
+| Demo: daemon (mock agent) + web on a throwaway demo vault | `pnpm dev:mock` → http://localhost:5174 |
 | Lint / format | `pnpm lint` / `pnpm lint:fix` |
 | Typecheck | `pnpm typecheck` |
 | Unit tests | `pnpm test` (or `pnpm --filter @ddl/<pkg> test`) |
@@ -271,12 +271,19 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
  that (the import UI lives in `obsidian-import/` and `ObsidianImport/`).
 - **E2E typing:** use Playwright's real keyboard (`page.keyboard.type`). Automation "fill"-style
   typing into CodeMirror rebuilds text from the DOM (including badge widgets) and corrupts notes.
+- **E2E daemons:** every functional and perf spec runs against real daemons that
+  `packages/agent/scripts/e2e-daemons.ts` starts per test (a temporary `DDL_HOME`, the synthetic
+  demo vault, the mock agent or Pi against the fake OpenRouter; `apps/web/e2e/fixtures.ts`). Seed
+  state as files or real API calls, not hooks. `DDL_E2E_PORT` moves the harness (default 4173). The
+  only daemon test hook is `DDL_TEST_HOOKS=1` (a simulated Mac's computer access,
+  `apps/daemon/src/test-hooks.ts`): never set it outside the harness.
 
 ## Testing expectations
 
 - Unit tests are colocated (`foo.test.ts`). Every bug fix gets a regression test.
 - Benchmarks are `*.bench.ts` using Vitest 5's `bench` fixture and assert p99 budgets.
-- UI: Playwright functional e2e (`apps/web/e2e`) and perf e2e with budgets (`docs/PERFORMANCE.md`).
+- UI: Playwright functional e2e (`apps/web/e2e`) and perf e2e with budgets (`docs/PERFORMANCE.md`),
+  against real daemons (see "E2E daemons" above).
 - Agent behavior: add eval cases (`evals/datasets`) for new safety rules or triage behavior. Mock
   mode must stay deterministic and green in CI; the rules layer must never "allow" a case whose
   expected verdict is `require_approval`/`deny`.

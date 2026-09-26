@@ -1,20 +1,42 @@
 # @ddl/web
 
-The browser client: React 19 + Vite. It talks to the daemon over REST + WebSocket, or to the
-in-browser mock daemon with `?mock=1` (`&mockSpeed=4` speeds its agent up), which the e2e and perf
-tests use.
+The browser client: React 19 + Vite. It talks to the daemon over REST + WebSocket. `pnpm dev:mock`
+runs it against a real daemon with the mock agent on a throwaway demo vault.
 
 ```sh
 pnpm --filter @ddl/web test        # unit tests (Vitest; happy-dom where a test needs a DOM)
-pnpm --filter @ddl/web e2e         # Playwright, functional (real keyboard and mouse, mock daemon)
+pnpm --filter @ddl/web e2e         # Playwright, functional (real keyboard and mouse, real daemons)
 pnpm --filter @ddl/web e2e:perf    # Playwright, performance budgets (docs/PERFORMANCE.md)
-pnpm --filter @ddl/web e2e:fullstack  # Playwright against the real daemon and the fake model
 ```
 
 Code map: `src/app` (startup, services, actions), `src/state` (zustand stores and pure reducers),
 `src/features/*` (UI by feature), `src/commands` (the command registry and shortcuts), `src/api`
-(clients and the mock). The rules for controls (tooltips, keycaps from the registry, the pointer)
-are in `AGENTS.md`.
+(the daemon client, page auth, pairing). The rules for controls (tooltips, keycaps from the
+registry, the pointer) are in `AGENTS.md`.
+
+## End-to-end tests
+
+Playwright's web server is `packages/agent/scripts/e2e-daemons.ts` (after `vite build`): a loopback
+control API that starts real daemons in its process, each with its own temporary `DDL_HOME` and
+vault seeded with the demo vault (`packages/agent/scripts/demo-vault.ts`: daily notes, drawings,
+yesterday's note with agent lines, an anchored question and cited sources), and removes them after.
+It also runs a fake OpenRouter and a sync service. `e2e/fixtures.ts` gives every test its own
+daemon (`daemon`; `test.use({ daemonSpec })` picks the vault, files, settings, `config.json`, env
+variables, the agent) and more for the ones that need them (`launch`: another device, the
+always-on machine; `e2e/remote.ts` pairs and hands over as users do). Pages open the test's daemon;
+tests read and edit its vault through the files (`daemon.read`, `daemon.write`, as another app
+would) and call its API with its token (`daemon.api`).
+
+- **Agents**: `agent: "mock"` (default) is the daemon's scripted mock agent, done in a few hundred
+  milliseconds; `agent: "live"` is the Pi harness against the fake OpenRouter (the fake brain,
+  sandboxed: web and files only, `mock_irreversible_action` for risky steps), about ten seconds a
+  task with streaming, tool calls and approvals. Nothing reaches the network.
+- **Ports**: the control API is on `DDL_E2E_PORT` (default 4173); daemons take free ports. Set it
+  to run two checkouts side by side.
+- **Hooks**: `window.__ddlDebug` (open a note, hold writes and replies, run a command) installs with
+  `?debug=1` (`openApp` adds it). The daemons run with `DDL_TEST_HOOKS=1` only where a spec needs
+  a Mac's computer access (see `apps/daemon/src/test-hooks.ts`).
+- **Logs**: the daemons log nothing unless `DDL_E2E_LOG_LEVEL` is set.
 
 ## The agent chat
 
@@ -140,8 +162,8 @@ Unit: `reveal.test.ts` (pacing table, grapheme cuts), `activity.test.ts` (label 
 re-renders, reduced motion), `Composer.test.tsx`, `agent-commands.test.ts`,
 `state/outbox-store.test.ts`. E2E: `e2e/chat.spec.ts` (reveal, history, activity and approval,
 tool groups, chat bar, Stop and its shortcut, optimistic send and retry, jump to latest, copy,
-reduced motion, an idle chat asking for no frames). In mock mode, `__ddlDebug.holdReplies({ ms,
-fail })` delays or fails chat replies.
+reduced motion, an idle chat asking for no frames). `__ddlDebug.holdReplies({ ms, fail })` delays
+or fails chat replies.
 
 ## Drawings
 
@@ -188,18 +210,17 @@ own drawing engine).
   translations; see `docs/PERFORMANCE.md`): exports from Excalidraw's menus embed whole fonts,
   images are picked with a file input, and Mermaid import isn't available.
 
-With `?mock=1`, the mock daemon keeps drawings like any note, never reads one as a task list, and
-seeds `Sketches.md` with a drawing; `&mockPersist=1` keeps the vault in the tab's sessionStorage
-so a reload finds it.
+The demo vault's `Sketches.md` embeds a drawing (`Excalidraw/Garden plan.excalidraw.md`).
 
 ### Tests
 
 Unit: `features/drawings/drawings.test.ts` (ids, the scene written, the render cache, the store,
 saving, 409 merges, changes from elsewhere, unreadable and deleted files), `@ddl/core`'s
-`drawings/merge.test.ts`, the editor's `embeds/*.test.ts`, and the mock's. E2E:
+`drawings/merge.test.ts`, the editor's `embeds/*.test.ts`. E2E:
 `e2e/drawings.spec.ts` (insert, draw a rectangle and an arrow, wrapping and typing beside it,
 move, resize, delete and undo, reload, open the file, a change from elsewhere, the palette and the
-context menu, no request leaving the app), the drawing screens of the cursor audit in
+context menu, no request leaving the app: the daemon's CSP stops Excalidraw's CDN fallbacks), the
+drawing screens of the cursor audit in
 `e2e/polish.spec.ts`, and typing beside six drawings in the perf suite.
 
 ## What the orchestrator is doing while you write
@@ -274,8 +295,8 @@ Unit: `features/editor/activity-chips.test.ts` (rules, wording table, fading, an
 indicators), `packages/editor/src/activity/field.test.ts` (mapping through edits, dropping).
 E2E: `e2e/orchestrator-activity.spec.ts` (real keyboard: a request line's dot before it settles,
 then its outcome and thread; plain prose; "Nothing to do" fading; editing beyond recognition; the
-status bar; reduced motion) and the chips in `e2e/polish.spec.ts`'s cursor audit. The mock daemon
-simulates the daemon's activity for prose lines (`api/mock/mock-agent.ts`).
+status bar; reduced motion) and the chips in `e2e/polish.spec.ts`'s cursor audit, against the
+daemon's live agent.
 
 ## Routines
 
@@ -322,18 +343,15 @@ and opens routines. The wording below is meant to match the Mac app's.
 
 The screens are in the agent panel's chunk and the dialog (with the schedule parser) in its own,
 both prefetched when idle; startup only carries the store, the actions and the toast (~1.6 kB gz).
-With `?mock=1`, `api/mock/mock-routines.ts` keeps routines like the daemon (files in the mock
-vault, Run now with a short scripted run, the extra-runs budget, notify rules, the daemon's error
-bodies), but schedules don't fire.
 
 ### Tests
 
-Unit: `state/routines-store.test.ts`, `app/routine-actions.test.ts` (against the mock daemon),
+Unit: `state/routines-store.test.ts`, `app/routine-actions.test.ts`,
 `app/routine-toasts.test.ts` (notifications and event routing), `routine-errors.test.ts` and
 `create-problem.test.ts` (error mapping), `routine-format.test.ts`, `repeat.test.ts`,
 `RoutinesView.test.tsx`, `RoutineView.test.tsx` (runs, Run now's reasons, Pause, Edit, a run's
-header, Repeat this), `NewRoutineDialog.test.tsx`, `commands/routine-commands.test.ts`, and the
-mock's contract test. E2E: `e2e/fullstack/routines.spec.ts` against the real daemon (New routine
+header, Repeat this), `NewRoutineDialog.test.tsx`, `commands/routine-commands.test.ts`. E2E:
+`e2e/routines.spec.ts` against the daemon's live agent (New routine
 from a template, a routine's runs, Run now, Pause, the notification, Repeat this), and the cursor
 audit of every routines screen in `e2e/polish.spec.ts`.
 
@@ -386,21 +404,6 @@ audit of every routines screen in `e2e/polish.spec.ts`.
   revoked; a dropped socket is followed by a probe request, since a refused upgrade has no
   status) replaces the app with the pairing screen.
 
-With `?mock=1`, `api/mock/mock-remote.ts` keeps the daemon's device side: placement with
-handovers that take a moment, the relay state, readiness, sync, the machine link, pairing codes and
-devices (in localStorage, so a code issued on one page pairs another), and the daemon's error
-codes. `?mockRemote=` picks a starting point: `none` (default: no sync, held here), `no_machine`,
-`ready`, `relayed`, `unreachable`, `not_paired`, `rejected`, `elsewhere`, `host`, `locked`,
-`unready`. The
-mock machine refuses code `XXXX-XXXX` (401) and `YYYY-YYYY` (429), and a host starting with
-`offline.` never answers (502). `?mockAuth=pairing` serves the remote page states: the pairing
-screen until this browser pairs, then the app with cookie auth; revoking it goes back to pairing.
-In mock mode, `window.__ddlMock.setMachineReachable(false)` makes the machine stop answering and
-`setMachineRejects(true)` makes it refuse this device. The relay's states and reasons are the
-daemon's: requests go through while it's `connecting`; "The always-on machine can't be reached.",
-"This device isn't paired with the always-on machine." and "The always-on machine no longer
-accepts this device. Pair it again." otherwise.
-
 ### Tests
 
 Unit: `placement.test.ts` (the toggle's states, the status line, the read-only reason),
@@ -409,16 +412,16 @@ hints), `pairing-code.test.ts` (formatting and the caret, times), `AgentLocation
 `read-only.test.tsx` (the banner, disabled actions), `PairingScreen.test.tsx` (the form, the
 default name, refusals), `api/select-client.test.ts` and `api/http-client.test.ts` (page auth,
 cookie mode: no Authorization header, no token in the WebSocket URL, a 401 reported once, the
-probe), `api/pairing.test.ts`, the client's contract test (every new route) and the mock's.
-E2E: `e2e/agent-anywhere.spec.ts` (the toggle and its handover, held here, the machine going
-away, env locks, read-only, every Settings flow, and pairing a browser then revoking it), and the
-cursor audit of every new screen and state in `e2e/polish.spec.ts`. `e2e/fullstack/
-agent-anywhere.spec.ts` runs them against the real daemons (the served one, a second one as the
-always-on machine, a sync service): held here, sync setup, pairing the machine, a handover and
-back, replying to the machine's orchestrator through the relay (and getting its answer), the
-machine going down (read-only, "can't be reached") and coming back, a device paired through
-`/api/pair` and revoked, and a remote host's pairing screen. Pairing a browser over https (the
-cookie is `Secure`; the harness has no TLS proxy yet) is `test.fixme`.
+probe), `api/pairing.test.ts` and the client's contract test (every new route). E2E:
+`e2e/agent-anywhere.spec.ts` against real daemons (this device's, a second one as the always-on
+machine, another device, the harness's sync service; `e2e/remote.ts`): held here and setting up
+sync, a handover and back, replying to the machine's orchestrator through the relay, the machine
+going down (read-only, "can't be reached", running here instead) and coming back, the machine
+revoking this device and pairing again, the machine's own page, another device holding the agent,
+env locks, every Settings flow (a key-less daemon's readiness, pairing refusals, a device paired
+through `/api/pair` and revoked) and a remote host's pairing screen; and the cursor audit of every
+screen and state in `e2e/polish.spec.ts`. Pairing a browser over https (the cookie is `Secure`; the
+harness has no TLS proxy yet) is `test.fixme`.
 
 ## Settings → Vault and importing from Obsidian
 
@@ -458,24 +461,16 @@ switch with the reason, a link to Settings → Sync and Check again. **DDL_VAULT
 the Mac running Daily Do List can import, and every control is disabled with that reason in its
 tooltip (`components/DisabledReason.tsx`).
 
-With `?mock=1`, `api/mock/mock-import.ts` imports two synthetic folders under `/Users/me`
-(`~/Obsidian Notebook`, an Obsidian vault, and `~/Plain notes`) with jobs that progress on a timer,
-the daemon's error bodies, and a switch that "restarts" the mock (requests fail, the connection
-goes to reconnecting and back); the vault it serves and where imported vaults came from persist in
-localStorage, so the page reloads onto the new vault. Only its name changes: the notes stay the
-demo's. `window.__ddlMock.setPairedDevice`, `setVaultLockedByEnv` and `setSyncing` simulate the
-refusals.
-
 ### Tests
 
 Unit: `obsidian-import-store.test.ts`, `import-text.test.ts`, `vault-switch.test.ts` (flush before
 the switch, waiting through the old daemon and the restart, the notice after the reload),
-`VaultSection.test.tsx` (against the mock: preview, import, switch, an imported vault's update, a
-paired device), `commands/vault-commands.test.ts`, `ui-store.test.ts` (the overlay can't be
-closed), the client's contract test and the mock's (`import.progress` is mocked now). E2E:
-`e2e/obsidian-import.spec.ts` with the real keyboard (preview, import with progress, cancel, import
-again, switch and reload, update; a wrong path, sync and DDL_VAULT; a paired device;
-`DDL_IMPORT_SHOTS=<dir>` saves screenshots), the cursor audit of the report and the result in
-`e2e/polish.spec.ts`, and `e2e/fullstack/obsidian-import.spec.ts` against the real daemon (the
-harness builds the daemon's synthetic Obsidian vault; preview, import into a new folder, the copy and
-the manifest on disk, DDL_VAULT keeping the switch manual).
+`commands/vault-commands.test.ts`, `ui-store.test.ts` (the overlay can't be closed) and the
+client's contract test. E2E: `e2e/obsidian-import.spec.ts` against the real daemon with the real
+keyboard (the harness builds the daemon's synthetic Obsidian vault: preview, import, the copy and
+the manifest on disk, the switch restarting the daemon on the new vault and the page reloading,
+an update from Obsidian; a wrong path, sync on, DDL_VAULT keeping the switch manual and a second
+import needing an empty folder; a paired device's token; `DDL_IMPORT_SHOTS=<dir>` saves
+screenshots) and the cursor audit of the report and the result in `e2e/polish.spec.ts`. Cancelling
+a running import is covered by the daemon's `import/jobs.test.ts` (the harness's vault imports too
+fast to cancel from the page).

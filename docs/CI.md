@@ -108,15 +108,21 @@ pnpm bench:check                      # or: node scripts/bench-check.mjs package
    - replays every vector against the Daily Do List editor (only listed skips may differ).
    After an intended change (a dependency upgrade, a new catalog case) run `pnpm vim:vectors` and
    commit the regenerated file after reviewing its diff.
-4. `pnpm e2e` (project `functional`). The report and traces are uploaded as
-   `playwright-report-functional`.
-5. `pnpm e2e:perf` (project `perf`) with `PERF_BUDGET_MULTIPLIER=2`. The perf specs write
+4. `pnpm e2e` (project `functional`). Playwright's web server builds the web app (`vite build`)
+   and starts `packages/agent/scripts/e2e-daemons.ts`, which starts a real daemon per test (from
+   source, with `tsx`: nothing else to build), each on a temporary `DDL_HOME` and demo vault, plus
+   a fake OpenRouter and a sync service in the same process; nothing reaches the network. The report
+   and traces are uploaded as `playwright-report-functional`.
+5. `pnpm e2e:perf` (project `perf`, the same web server) with `PERF_BUDGET_MULTIPLIER=2`. The
+   perf specs write
    `apps/web/perf-results.json` and fail when a metric exceeds budget × multiplier.
    `.github/scripts/perf-summary.mjs` renders the numbers into the job summary. The report and
    `perf-results.json` are uploaded as `playwright-report-perf`.
 
 The perf step runs even when functional tests fail, so perf numbers are always available. In CI
-(`CI=true`) Playwright uses its bundled Chromium; locally it can use installed Chrome. The perf
+(`CI=true`) Playwright uses its bundled Chromium; locally it can use installed Chrome. Locally the
+harness's control port is `DDL_E2E_PORT` (default 4173), so two checkouts can run side by side;
+`DDL_E2E_LOG_LEVEL=debug` shows the daemons' logs. The perf
 summary understands `{ "multiplier": 2, "results": [{ "name": "tab:switch", "value": 12.3,
 "unit": "ms", "budget": 30, "passed": true }] }`, and falls back to showing raw JSON for other shapes.
 

@@ -153,7 +153,9 @@ jobs:
       - name: Vim mode (vectors up to date, vim.js's own suite, replay against the editor)
         run: pnpm vim:check
 
-      - name: Functional tests
+      # Playwright's web server builds the app and starts packages/agent/scripts/e2e-daemons.ts,
+      # which runs a real daemon per test (mock agent or the fake model; no network).
+      - name: Functional tests (real daemons)
         if: ${{ !cancelled() && steps.browsers.outcome == 'success' }}
         run: pnpm e2e
       # Each Playwright run replaces playwright-report/ and test-results/, so upload in between.

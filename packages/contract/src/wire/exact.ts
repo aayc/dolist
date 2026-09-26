@@ -4,8 +4,8 @@ const cache = new WeakMap<z.ZodType, z.ZodType>();
 
 /**
  * The same schema with every object made strict, recursively. Clients parse responses and events
- * tolerantly; conformance tests parse them with `exact(schema)` so a producer (daemon, runtime, the
- * in-browser mock) can't emit a key the contract doesn't declare.
+ * tolerantly; conformance tests parse them with `exact(schema)` so a producer (daemon, runtime) can't
+ * emit a key the contract doesn't declare.
  */
 export function exact<T extends z.ZodType>(schema: T): T {
   return convert(schema) as T;

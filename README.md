@@ -87,7 +87,7 @@ Other ways to run it:
 
 | Command | What it does |
 | --- | --- |
-| `pnpm dev:mock` | Deterministic scripted agent (no API key, no network) — great for trying the UI |
+| `pnpm dev:mock` | The demo: a scripted agent (no API key, no network) on a throwaway demo vault, at http://localhost:5174 |
 | `DDL_AGENT_MODE=off pnpm dev` | Just the notes app, no agent |
 | `pnpm build && pnpm start` | Production build served by the daemon at http://127.0.0.1:7331 |
 
@@ -233,7 +233,7 @@ travel with your notes. Deleted notes go to the vault's `.trash/` folder.
 
 ## Performance
 
-Responsiveness is a feature, measured on every change (production build, in-browser mock backend):
+Responsiveness is a feature, measured on every change (production build served by a real daemon):
 
 | Interaction | Budget | Measured |
 | --- | --- | --- |

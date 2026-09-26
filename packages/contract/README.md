@@ -29,7 +29,7 @@ guards in `apps/web/src/api/events.ts` are differential-tested against these sch
   must also ignore server event `type`s they don't know.
 - **Query strings** ignore unknown parameters (proxies and cache-busters add them).
 - **Conformance tests use `exact(schema)`**, which makes every object strict recursively, so a
-  producer (the daemon, the agent runtime, the in-browser mock) can't emit a key the contract
+  producer (the daemon, the agent runtime) can't emit a key the contract
   doesn't declare. Tolerance is for consumers; producers are held to the exact shape.
 
 The JSON Schema export reflects the rule: requests have `"additionalProperties": false`,
