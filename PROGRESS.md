@@ -28,6 +28,13 @@ the Azure VM.
 
 ## Shipped on `main` (newest first)
 
+- `7f1f796` Cleanup batch A (TypeScript): imported threads keep their new note paths (the import
+  now remaps journals at `state/journal/`), the approval broker persists through the shared state
+  file (moves a corrupt file aside, never overwrites a newer one), dead code and dependency/config
+  fixes. `8bae6ff` docs drift fixed across the repo; CI is dispatched by hand (push/PR triggers are
+  declared but GitHub Actions never starts them; cause unknown, see `docs/CI.md`).
+- `cf0d413` Test trim (−75.6k): Swift Domain vectors compacted to one case per line (same 20,127
+  cases), tests the vectors and property tests cover removed, shared test helpers.
 - `0011be4` The web e2e, perf tests and `pnpm dev:mock` run on real daemons (one per test, mock
   agent or Pi against the fake model, a seeded demo vault); the in-browser mock is gone (−6.9k lines).
   The fullstack scenarios merged into the functional suite (134 passed); all e2e takes ~106 s instead
@@ -135,7 +142,8 @@ and branches were removed (GitHub has only `main`).
 - **Flaky tests:** done and on `main` (`5687507`): the watcher, subprocess and `trackTasks` tests
   are robust under load (fake timers, event probes instead of sleeps, CPU-time guard, generous
   failure bounds; one test-only `helloTimeoutMs` option). No assertion got looser.
-- **Leaner-code cuts** (in flight): `chore/lean-tests` (test trims, compact Domain vectors); next the Mac fake daemon, zod as the wire source and journal-only threads (see
+- **Leaner-code cuts** (in flight): `chore/lean-zod` (zod schemas as the single source of the TS wire
+  types and generators), `chore/lean-journal` (threads journal-only, with a one-time migration); next the Mac fake daemon, zod as the wire source and journal-only threads (see
   Decisions).
 - **Cleanup batch A** (in flight): `chore/cleanup-ts` (two bugs: imported threads kept their old
   note paths because the import looked for journals under the wrong folder, and the approval
