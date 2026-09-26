@@ -4,11 +4,11 @@ The running handoff log: what shipped, what's in flight, what's next, and the de
 them, so work can continue on any machine at any point. Read it before starting; keep it current
 (the rules are in `AGENTS.md`, "Handoff log").
 
-**Last updated:** 2026-09-25, late evening · `main` has everything below merged and pushed; CI was
-green on `c158aae` (all four workflows) and is running on the later merges. The build installed on
-the main development Mac is `67000e7`: it predates the FSEvents fix, the Mac fake-daemon removal
-(new demo mode), the TypeScript cleanups and the docs trim, so rebuild and install when convenient
-(see "Installing on the main development Mac"). One branch is in flight (below).
+**Last updated:** 2026-09-25, near midnight · `main` at `401997a`: everything is merged and pushed;
+nothing is in flight and no branches are open (GitHub has only `main`). The Mac app installed on the
+main development Mac is built from `401997a` (agent live, app control granted, 15 threads). CI was
+green on `c158aae` and was dispatched on `401997a` (check it: the macOS workflow's iOS job is the only
+check of the Swift cleanup's Models change, since the development Mac has no iOS SDK).
 
 ## Picking this up
 
@@ -49,15 +49,13 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
 
 ## In flight
 
-- **`chore/lean-swift-b`** (Swift narrow cleanups judged by lines removed: one palette in
-  DailyDoListUI, one main-actor scheduler and frame ticker, one daemon-home definition shared by
-  Client and Daemon, shared test helpers, and the Mac "Remote" switch showing the stored placement
-  while held here, like the web). A subagent is working on it in this session in a local worktree
-  (`../assistant-worktrees/lean-swift-b`), not pushed yet. If it isn't merged by the handoff, redo
-  it from this description (the audit behind it is in git history: this file's earlier versions).
+Nothing. Start from "Next up".
 
 ## Shipped on `main` (newest first; older history is `git log`)
 
+- `401997a` Swift cleanups (−699): one palette, scheduler, frame ticker and daemon-home definition
+  (`DaemonHome` in Models, the stricter port/home rules), shared Swift test helpers, the Mac "Remote"
+  switch shows the stored placement while held here (like the web). **Installed.**
 - `e5877cb` Docs trimmed (−2.3k): specs of built features keep only rationale and what's left;
   READMEs link the generated protocol reference, the shared test tables and `SAFETY_RULES`.
 - `6bb69fe` TypeScript cleanups (−750): shared helpers in `@ddl/core` (`errorMessage`, `isRecord`,
@@ -101,7 +99,6 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
   `deploy/azure/README.md`, `deploy/linux/README.md`; design `docs/ALWAYS_ON.md`.
 - **CI triggers** (the user, in repo settings): turn Actions (or each workflow) off and on, push
   once, check `gh run list --event push`; else GitHub Support. Until then, dispatch by hand.
-- **Rebuild and install the Mac app** from current `main` (see above).
 - **B0 binary files** (attachment sync, file serving) and **P rendering parity** (images on the
   drawings' embed layer, tables, callouts, backlinks) — `docs/specs/obsidian-migration.md`.
 - **Agent journal phase 2** (approvals and routines state on the journal, client ids for idempotent
