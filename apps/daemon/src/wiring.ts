@@ -140,6 +140,7 @@ export async function createAgentStack(options: AgentStackOptions): Promise<Agen
       storage: options.storage,
       settings,
       home: config.home,
+      env: options.env,
       execution,
       connectors,
       logger: logger.child({ component: "agent" }),

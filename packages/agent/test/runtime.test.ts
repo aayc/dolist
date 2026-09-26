@@ -135,6 +135,23 @@ describe("AgentRuntime status", () => {
     expect(t.runtime.getTaskRecords(TODAY)).toEqual([]);
   });
 
+  it("reads the OpenRouter key and endpoint from its env, not the process's", async () => {
+    delete process.env.OPENROUTER_API_KEY;
+    const checkApiKey = vi.fn(async () => ({
+      status: "invalid" as const,
+      httpStatus: 401,
+      message: "User not found.",
+    }));
+    const t = await runtime({
+      mode: "live",
+      llm: new MockLlmClient(),
+      env: { OPENROUTER_API_KEY: "the-daemon-key" },
+      overrides: { checkApiKey },
+    });
+    expect(checkApiKey).toHaveBeenCalledWith("the-daemon-key");
+    expect(t.runtime.status().problem).toMatch(/OpenRouter rejected OPENROUTER_API_KEY/);
+  });
+
   it("live mode with an injected harness runs without a key", async () => {
     delete process.env.OPENROUTER_API_KEY;
     const t = await runtime({

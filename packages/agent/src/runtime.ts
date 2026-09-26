@@ -172,6 +172,7 @@ class Runtime implements AgentRuntime {
   private readonly overrides: AgentRuntimeOverrides;
   private readonly logger: Logger;
   private readonly now: () => number;
+  private readonly env: Record<string, string | undefined>;
   private readonly emitter = new Emitter<RuntimeEventMap>();
   private readonly threads: JournaledThreadStore;
   /** How the gate allowed each call in flight (`sessionId\0toolCallId`), for the journal. */
@@ -243,6 +244,7 @@ class Runtime implements AgentRuntime {
     this.enabled = options.settings.agent.enabled;
     this.logger = options.logger ?? silentLogger;
     this.now = options.now ?? Date.now;
+    this.env = options.env ?? process.env;
     const { storage } = options;
     const now = this.now;
 
@@ -340,7 +342,7 @@ class Runtime implements AgentRuntime {
       webTools: () => this.webTools,
       ...(this.mode === "mock" ||
       (this.mode === "live" &&
-        (overrides.mockActions ?? process.env.DDL_AGENT_MOCK_ACTIONS?.trim() === "1"))
+        (overrides.mockActions ?? this.env.DDL_AGENT_MOCK_ACTIONS?.trim() === "1"))
         ? {
             extraTools: (_spec, task) => {
               const verb = riskyVerb(task.text);
@@ -972,7 +974,7 @@ class Runtime implements AgentRuntime {
    */
   private async checkLlmKey(): Promise<void> {
     if (this.mode !== "live" || !this.options.llm) return;
-    const apiKey = this.overrides.openRouter?.apiKey ?? process.env.OPENROUTER_API_KEY?.trim();
+    const apiKey = this.overrides.openRouter?.apiKey ?? this.env.OPENROUTER_API_KEY?.trim();
     if (!apiKey) return;
     const check = await this.checkKey(apiKey);
     if (check.status !== "invalid") return;
@@ -989,7 +991,7 @@ class Runtime implements AgentRuntime {
     if (!check) {
       const baseUrl =
         this.overrides.openRouter?.baseUrl ??
-        (process.env.DDL_OPENROUTER_BASE_URL?.trim() || undefined);
+        (this.env.DDL_OPENROUTER_BASE_URL?.trim() || undefined);
       const verify =
         this.overrides.checkApiKey ??
         ((key: string) => checkOpenRouterKey(key, baseUrl ? { baseUrl } : {}));
@@ -1004,7 +1006,7 @@ class Runtime implements AgentRuntime {
     return {
       home: this.options.home,
       logger: this.logger,
-      env: process.env,
+      env: this.env as NodeJS.ProcessEnv,
       ...(openRouter ? { openRouter } : {}),
       checkOpenRouterKey: (key) => this.checkKey(key),
       ...(checkCursorCli ? { checkCursorCli } : {}),

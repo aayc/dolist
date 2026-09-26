@@ -55,6 +55,7 @@ export interface TestRuntimeOptions {
   llm?: LlmClient;
   overrides?: AgentRuntimeOverrides;
   execution?: FakeExecution;
+  env?: Record<string, string | undefined>;
   start?: boolean;
 }
 
@@ -74,6 +75,7 @@ export async function createTestRuntime(options: TestRuntimeOptions = {}): Promi
       execution,
       ...(harness ? { harness } : {}),
       ...(options.llm ? { llm: options.llm } : {}),
+      ...(options.env ? { env: options.env } : {}),
     },
     safety.overrides,
   );
