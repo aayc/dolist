@@ -1,7 +1,16 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Locator, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, syncVault, test } from "./fixtures";
 import { expectDailyNote, openApp, typeTask } from "./helpers";
+import {
+  agentStatus,
+  machineSpec,
+  openPanel,
+  openSettings,
+  pairWithMachine,
+  relayToMachine,
+  runsHere,
+} from "./remote";
 
 /**
  * Tooltips, pointer cursors and the small details (see src/lib/tooltips.ts), with the real mouse.
@@ -93,7 +102,7 @@ async function isMac(page: Page): Promise<boolean> {
   return page.evaluate(() => /mac/i.test(navigator.platform));
 }
 
-/** Yesterday's note in the mock vault is the living-list demo (badges, ✦, links, checkboxes). */
+/** Yesterday's note in the demo vault shows the agent at work (badges, ✦, links, checkboxes). */
 async function openDemoNote(page: Page): Promise<void> {
   await openApp(page);
   await page.keyboard.press("ControlOrMeta+Shift+P");
@@ -189,10 +198,13 @@ test.describe("tooltips", () => {
     await shownTooltip(page, label!);
   });
 
-  test("a truncated tab shows its full path; a short one shows nothing", async ({ page }) => {
-    await openApp(page);
+  test("a truncated tab shows its full path; a short one shows nothing", async ({
+    page,
+    daemon,
+  }) => {
     const path = "Projects/A note with a name far too long to fit in its tab.md";
-    await page.evaluate((p) => window.__ddlMock!.createNote(p, "# Long"), path);
+    await daemon.write(path, "# Long");
+    await openApp(page);
     await page.evaluate((p) => window.__ddlDebug!.openNote(p, true), path);
     const long = page.locator(`[data-testid="tab"][data-path="${path}"]`);
     await expect(long).toBeVisible();
@@ -208,16 +220,14 @@ test.describe("tooltips", () => {
     await expect(tooltip(page)).not.toHaveClass(/\bis-visible\b/);
   });
 
-  test("a control that can't be used says why", async ({ page }) => {
-    await openApp(page, "mockRemote=none");
+  test("a control that can't be used says why", async ({ page, launch }) => {
+    await openApp(page);
     await page.keyboard.press("ControlOrMeta+Shift+A");
     await hover(page, page.getByTestId("placement-toggle"));
     await shownTooltip(page, "This device doesn't sync");
 
-    await openApp(page, "mockRemote=elsewhere");
-    if ((await page.getByTestId("right-panel").count()) === 0) {
-      await page.keyboard.press("ControlOrMeta+Shift+A");
-    }
+    await openApp(page, `${(await elsewhere(launch)).url}/?debug=1`);
+    await openPanel(page);
     await page.getByTestId("inbox-orchestrator").click();
     await hover(page, page.getByTestId("composer-send"));
     await shownTooltip(page, "The agent is running on Work laptop");
@@ -233,6 +243,23 @@ test.describe("tooltips", () => {
     await expect(page.locator(".prompt-footer .keycaps").first()).toBeVisible();
   });
 });
+
+type Launch = (spec?: import("./fixtures").DaemonSpec) => Promise<import("./fixtures").Daemon>;
+
+/** A device whose vault's agent runs on another device ("Work laptop"). */
+async function elsewhere(launch: Launch) {
+  const sync = await syncVault();
+  const laptop = await launch({ device: "Work laptop", sync, web: false });
+  await runsHere(laptop);
+  const device = await launch({ sync });
+  await expect
+    .poll(() => device.read(".daily-do-list/threads/thr_orchestrator.json"), { timeout: 20_000 })
+    .not.toBeNull();
+  await expect
+    .poll(async () => (await agentStatus(device)).placement?.runsOn?.name, { timeout: 20_000 })
+    .toBe("Work laptop");
+  return device;
+}
 
 /*
  * The cursor audit: on each screen, every visible enabled control has the pointing hand, disabled
@@ -316,41 +343,45 @@ test.describe("cursor audit", () => {
     await audit(page, "search");
   });
 
-  test("orchestrator activity: chips on lines, the note's indicator", async ({ page }) => {
-    test.setTimeout(60_000);
-    // Slow enough that the dot and the indicator stay long enough to audit.
-    await openApp(page, "mockSpeed=0.5");
-    await page.locator(".cm-content").click();
-    await page.keyboard.press("ControlOrMeta+A");
-    await page.keyboard.type("Find a plumber for Saturday", { delay: 5 });
-    const chip = page.locator(".cm-ddl-activity-chip");
-    await expect(chip).toHaveAttribute("data-kind", "noticed");
-    await audit(page, "activity: noticed");
-    await expect(page.getByTestId("note-orchestrator")).toBeVisible({ timeout: 15_000 });
-    await audit(page, "activity: the note's indicator");
-    await expect(chip).toHaveText("Started a task ↗", { timeout: 15_000 });
-    await audit(page, "activity: outcome");
-  });
+  test.describe("with the live agent", () => {
+    // Its turns last long enough for the dot and the indicator to be audited.
+    test.use({ daemonSpec: { agent: "live" } });
 
-  test("agent panel: a task waiting for approval, its inbox, toast and thread", async ({
-    page,
-  }) => {
-    test.setTimeout(60_000);
-    await openApp(page, "mockSpeed=4");
-    await typeTask(page, "Order a replacement water filter");
-    await expect(page.getByTestId("status-approvals")).toBeVisible({ timeout: 25_000 });
-    await expect(page.getByTestId("toast").first()).toBeVisible();
-    await audit(page, "approval pending");
-    await page.keyboard.press("ControlOrMeta+Shift+A");
-    await expect(page.getByTestId("inbox-item").first()).toBeVisible();
-    await audit(page, "inbox");
-    await page.getByTestId("inbox-item").first().click();
-    await expect(page.getByTestId("approval-card")).toHaveAttribute("data-status", "pending");
-    await expect(page.getByTestId("tool-call").first()).toBeVisible();
-    await audit(page, "thread");
-    await page.getByTestId("tool-call").first().locator("button").click();
-    await page.getByTestId("thread-tab-artifacts").click();
-    await audit(page, "thread/artifacts");
+    test("orchestrator activity: chips on lines, the note's indicator", async ({ page }) => {
+      test.setTimeout(60_000);
+      await openApp(page);
+      await page.locator(".cm-content").click();
+      await page.keyboard.press("ControlOrMeta+A");
+      await page.keyboard.type("Is the pharmacy open on Sunday?", { delay: 5 });
+      const chip = page.locator(".cm-ddl-activity-chip");
+      await expect(chip).toHaveAttribute("data-kind", "noticed");
+      await audit(page, "activity: noticed");
+      await expect(page.getByTestId("note-orchestrator")).toBeVisible({ timeout: 15_000 });
+      await audit(page, "activity: the note's indicator");
+      await expect(chip).toHaveText("Replied ↗", { timeout: 20_000 });
+      await audit(page, "activity: outcome");
+    });
+
+    test("agent panel: a task waiting for approval, its inbox, toast and thread", async ({
+      page,
+    }) => {
+      test.setTimeout(60_000);
+      await openApp(page);
+      await typeTask(page, "Order a replacement water filter");
+      await expect(page.getByTestId("status-approvals")).toBeVisible({ timeout: 25_000 });
+      await expect(page.getByTestId("toast").first()).toBeVisible();
+      await audit(page, "approval pending");
+      await page.keyboard.press("ControlOrMeta+Shift+A");
+      await expect(page.getByTestId("inbox-item").first()).toBeVisible();
+      await audit(page, "inbox");
+      await page.getByTestId("inbox-item").first().click();
+      await expect(page.getByTestId("approval-card")).toHaveAttribute("data-status", "pending");
+      await expect(page.getByTestId("tool-call").first()).toBeVisible();
+      await audit(page, "thread");
+      await page.getByTestId("tool-call").first().locator("button").click();
+      await page.getByTestId("thread-tab-artifacts").click();
+      await audit(page, "thread/artifacts");
+    });
   });
 
   test("a finished thread with citations and a wikilink", async ({ page }) => {
@@ -364,54 +395,60 @@ test.describe("cursor audit", () => {
     await audit(page, "thread/citations");
   });
 
-  test("routines: the list, a routine's runs, a run, the New routine dialog", async ({ page }) => {
-    test.setTimeout(60_000);
-    // Full speed: a run lasts long enough to see Run now refused while it goes.
-    await openApp(page, "mockSpeed=1");
-    await page.evaluate(() => {
-      window.__ddlMock!.createNote(
-        "Routines/Morning briefing.md",
-        "---\nschedule: every weekday at 7:30\n---\nBrief me for the day.\n",
-      );
-      window.__ddlMock!.createNote(
-        "Routines/Price watch.md",
-        "---\nschedule: every 2 hours\npaused: true\n---\nCheck the kettle's price.\n",
-      );
-      window.__ddlMock!.createNote("Routines/Broken.md", "---\nschedule: whenever\n---\nDo it.\n");
+  test.describe("with routines", () => {
+    // The live agent: a run lasts long enough to see Run now refused while it goes.
+    test.use({
+      daemonSpec: {
+        agent: "live",
+        files: {
+          "Routines/Morning briefing.md":
+            "---\nschedule: every weekday at 7:30\n---\nBrief me for the day.\n",
+          "Routines/Price watch.md":
+            "---\nschedule: every 2 hours\npaused: true\n---\nCheck the kettle's price.\n",
+          "Routines/Broken.md": "---\nschedule: whenever\n---\nDo it.\n",
+        },
+      },
     });
-    await page.keyboard.press("ControlOrMeta+Shift+A");
-    await expect(page.getByTestId("inbox-routines")).toContainText("Next: Morning briefing");
-    await page.getByTestId("ribbon-routines").click();
-    await expect(page.getByTestId("routine-item")).toHaveCount(3);
-    await audit(page, "routines");
 
-    await page.getByTestId("routine-item").filter({ hasText: "Morning briefing" }).click();
-    await page.getByTestId("routine-run").click();
-    await page.getByTestId("routine-run").click();
-    await expect(page.getByTestId("routine-run-problem")).toBeVisible();
-    await expect(page.getByTestId("routine-run-item")).toHaveCount(1);
-    await audit(page, "routine, run going");
-    await expect(page.getByTestId("routine-run-item")).toHaveAttribute("data-status", "done", {
-      timeout: 20_000,
+    test("routines: the list, a routine's runs, a run, the New routine dialog", async ({
+      page,
+    }) => {
+      test.setTimeout(60_000);
+      await openApp(page);
+      await page.keyboard.press("ControlOrMeta+Shift+A");
+      await expect(page.getByTestId("inbox-routines")).toContainText("Next: Morning briefing");
+      await page.getByTestId("ribbon-routines").click();
+      await expect(page.getByTestId("routine-item")).toHaveCount(3);
+      await audit(page, "routines");
+
+      await page.getByTestId("routine-item").filter({ hasText: "Morning briefing" }).click();
+      await page.getByTestId("routine-run").click();
+      await page.getByTestId("routine-run").click();
+      await expect(page.getByTestId("routine-run-problem")).toBeVisible();
+      await expect(page.getByTestId("routine-run-item")).toHaveCount(1);
+      await audit(page, "routine, run going");
+      await expect(page.getByTestId("routine-run-item")).toHaveAttribute("data-status", "done", {
+        timeout: 20_000,
+      });
+      await page.getByTestId("routine-run-item").click();
+      await expect(page.getByTestId("thread-view")).toBeVisible();
+      await expect(page.getByTestId("message-text").last()).toBeVisible();
+      await audit(page, "routine run");
+
+      await page.getByTestId("thread-back").click();
+      await page.getByTestId("routine-back").click();
+      await page.getByTestId("routine-item").filter({ hasText: "Broken" }).click();
+      await expect(page.getByTestId("routine-view-problem")).toBeVisible();
+      await audit(page, "routine with a problem");
+
+      await page.getByTestId("routine-back").click();
+      await page.getByTestId("routines-new").click();
+      await expect(page.getByTestId("routine-template").first()).toBeVisible();
+      await audit(page, "new routine");
+      await page.getByTestId("routine-template").first().click();
+      await expect(page.getByTestId("routine-create")).toBeEnabled();
+      await audit(page, "new routine, from a template");
     });
-    await page.getByTestId("routine-run-item").click();
-    await expect(page.getByTestId("thread-view")).toBeVisible();
-    await expect(page.getByTestId("message-text").last()).toContainText("Nothing needs");
-    await audit(page, "routine run");
-
-    await page.getByTestId("thread-back").click();
-    await page.getByTestId("routine-back").click();
-    await page.getByTestId("routine-item").filter({ hasText: "Broken" }).click();
-    await expect(page.getByTestId("routine-view-problem")).toBeVisible();
-    await audit(page, "routine with a problem");
-
-    await page.getByTestId("routine-back").click();
-    await page.getByTestId("routines-new").click();
-    await expect(page.getByTestId("routine-template").first()).toBeVisible();
-    await audit(page, "new routine");
-    await page.getByTestId("routine-template").first().click();
-    await expect(page.getByTestId("routine-create")).toBeEnabled();
-    await audit(page, "new routine, from a template");
   });
 
   test("settings, every section", async ({ page }) => {
@@ -437,19 +474,23 @@ test.describe("cursor audit", () => {
     }
   });
 
-  test("import from Obsidian: the report, the import, the result", async ({ page }) => {
-    await openApp(page);
-    await page.getByTestId("ribbon-settings").click();
-    await page.getByTestId("settings-nav-vault").click();
-    await page.getByTestId("import-source").click();
-    await page.keyboard.type("~/Obsidian Notebook", { delay: 5 });
-    await page.keyboard.press("Enter");
-    await expect(page.getByTestId("import-report")).toBeVisible();
-    await page.locator(".report-fold > summary").first().click();
-    await audit(page, "settings/vault, the report");
-    await page.getByTestId("import-start").click();
-    await expect(page.getByTestId("import-result")).toBeVisible({ timeout: 15_000 });
-    await audit(page, "settings/vault, imported");
+  test.describe("with an Obsidian vault", () => {
+    test.use({ daemonSpec: { obsidian: true } });
+
+    test("import from Obsidian: the report, the import, the result", async ({ page, daemon }) => {
+      await openApp(page);
+      await page.getByTestId("ribbon-settings").click();
+      await page.getByTestId("settings-nav-vault").click();
+      await page.getByTestId("import-source").click();
+      await page.keyboard.type(daemon.obsidian!, { delay: 2 });
+      await page.keyboard.press("Enter");
+      await expect(page.getByTestId("import-report")).toBeVisible();
+      await page.locator(".report-fold > summary").first().click();
+      await audit(page, "settings/vault, the report");
+      await page.getByTestId("import-start").click();
+      await expect(page.getByTestId("import-result")).toBeVisible({ timeout: 15_000 });
+      await audit(page, "settings/vault, imported");
+    });
   });
 
   test("drawings: selected, edited in place, and opened", async ({ page }) => {
@@ -494,76 +535,112 @@ test.describe("cursor audit", () => {
     await audit(page, "opened drawing", { ignore: ".excalidraw" });
   });
 
-  test("where the agent runs: the toggle, held here, read-only, and their settings", async ({
+  test("where the agent runs: held here, the toggle and its handover, the machine itself", async ({
     page,
+    launch,
   }) => {
-    test.setTimeout(90_000);
-    // The panel stays open across reloads: open it only when it's closed.
-    const panel = async (query: string) => {
-      await openApp(page, query);
-      if ((await page.getByTestId("right-panel").count()) === 0) {
-        await page.keyboard.press("ControlOrMeta+Shift+A");
-      }
-      await expect(page.getByTestId("agent-location")).toBeVisible();
-    };
-    const settings = async (section: string) => {
-      await page.keyboard.press("ControlOrMeta+,");
-      await page.getByTestId(`settings-nav-${section}`).click();
-      await expect(page.getByTestId(`settings-${section}`)).toBeVisible();
-    };
-
-    await panel("mockRemote=none");
+    test.setTimeout(60_000);
+    await openApp(page);
+    await openPanel(page);
     await expect(page.getByTestId("placement-toggle")).toBeDisabled();
     await audit(page, "agent location, held here");
-    await panel("mockSpeed=1&mockRemote=ready");
+
+    const sync = await syncVault();
+    const machine = await launch({ ...machineSpec(sync), web: true });
+    const device = await launch({ sync });
+    await pairWithMachine(device, machine);
+    await runsHere(device);
+    await openApp(page, `${device.url}/?debug=1`);
+    await openPanel(page);
     await audit(page, "agent location");
     await page.getByTestId("placement-toggle").click();
     await expect(page.getByTestId("agent-location-line")).toHaveAttribute("data-kind", "note");
     await audit(page, "agent location, handing over");
-    await panel("mockRemote=host");
+
+    await openApp(page, `${machine.url}/?debug=1`);
+    await openPanel(page);
     await expect(page.getByTestId("placement-host")).toBeVisible();
     await audit(page, "agent location, the always-on machine");
-    await panel("mockRemote=unreachable");
-    await expect(page.getByTestId("agent-banner")).toBeVisible();
-    await audit(page, "read-only, the machine can't be reached");
-    await panel("mockRemote=elsewhere");
-    await page.getByTestId("inbox-orchestrator").click();
-    await expect(page.getByTestId("composer-input")).toBeDisabled();
-    await audit(page, "read-only, another device runs the agent");
+  });
 
-    await openApp(page, "mockRemote=unready");
-    await settings("location");
-    await expect(page.getByTestId("readiness-here")).toBeVisible();
-    await audit(page, "settings/location, not ready");
-    await page.keyboard.press("Escape");
-    await openApp(page, "mockRemote=no_machine");
-    await settings("machine");
-    await page.getByTestId("machine-pair").click();
-    await expect(page.getByTestId("machine-url-problem")).toBeVisible();
-    await audit(page, "settings/machine, pairing");
-    await openApp(page, "mockRemote=ready");
-    await settings("machine");
+  test("where the agent runs: read-only, and Settings with a machine", async ({ page, launch }) => {
+    test.setTimeout(60_000);
+    const sync = await syncVault();
+    const machine = await launch(machineSpec(sync));
+    const device = await launch({ sync });
+    await pairWithMachine(device, machine);
+    await relayToMachine(device);
+    await openApp(page, `${device.url}/?debug=1`);
+    await openSettings(page, "machine");
     await expect(page.getByTestId("machine-status")).toBeVisible();
     await audit(page, "settings/machine, paired");
     await page.getByTestId("settings-nav-sync").click();
     await expect(page.getByTestId("sync-token-saved")).toBeVisible();
     await audit(page, "settings/sync, on");
-    await openApp(page, "mockRemote=host");
-    await settings("devices");
+    await page.keyboard.press("Escape");
+
+    await machine.stop();
+    await openPanel(page);
+    await expect(page.getByTestId("agent-banner")).toBeVisible({ timeout: 20_000 });
+    await audit(page, "read-only, the machine can't be reached");
+
+    await openApp(page, `${(await elsewhere(launch)).url}/?debug=1`);
+    await openPanel(page);
+    await page.getByTestId("inbox-orchestrator").click();
+    await expect(page.getByTestId("composer-input")).toBeDisabled();
+    await audit(page, "read-only, another device runs the agent");
+
+    await openApp(page, `${(await launch({ sync: await syncVault() })).url}/?debug=1`);
+    await openSettings(page, "machine");
+    await page.getByTestId("machine-pair").click();
+    await expect(page.getByTestId("machine-url-problem")).toBeVisible();
+    await audit(page, "settings/machine, pairing");
+  });
+
+  test("where the agent runs: readiness, devices, remote access, locks, the pairing screen", async ({
+    page,
+    launch,
+    playwright,
+  }) => {
+    test.setTimeout(60_000);
+    await openApp(page, `${(await launch({ agent: "live", noKey: true })).url}/?debug=1`);
+    await openSettings(page, "location");
+    await expect(page.getByTestId("readiness-here")).toBeVisible();
+    await audit(page, "settings/location, not ready");
+    await page.keyboard.press("Escape");
+
+    const host = await launch({ config: { remote: { hosts: ["vm-1.tailnet-name.ts.net"] } } });
+    await openApp(page, `${host.url}/?debug=1`);
+    await openSettings(page, "devices");
     await page.getByTestId("pairing-code-create").click();
     await expect(page.getByTestId("pairing-code-panel")).toBeVisible();
     await audit(page, "settings/devices, a code");
     await page.getByTestId("settings-nav-remote").click();
     await expect(page.getByTestId("remote-host")).toHaveCount(1);
     await audit(page, "settings/remote, a host");
-    await openApp(page, "mockRemote=locked");
-    await settings("remote");
+    await page.keyboard.press("Escape");
+
+    const locked = await launch({ env: { DDL_REMOTE_HOSTS: "laptop.tailnet-name.ts.net" } });
+    await openApp(page, `${locked.url}/?debug=1`);
+    await openSettings(page, "remote");
     await expect(page.getByTestId("remote-locked")).toBeVisible();
     await audit(page, "settings/remote, locked");
 
-    await page.goto("/?mock=1&mockAuth=pairing");
-    await expect(page.getByTestId("pairing-screen")).toBeVisible();
-    await audit(page, "pairing screen", { minControls: 1 });
+    // A browser on a remote host, before it's paired.
+    const remote = `laptop.e2e.example:${host.port}`;
+    await host.api("PATCH", "/api/device", { remoteHosts: [remote] });
+    const browser = await playwright.chromium.launch({
+      ...(test.info().project.use.channel ? { channel: test.info().project.use.channel } : {}),
+      args: ["--host-resolver-rules=MAP laptop.e2e.example 127.0.0.1"],
+    });
+    try {
+      const pairing = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+      await pairing.goto(`http://${remote}/`);
+      await expect(pairing.getByTestId("pairing-screen")).toBeVisible();
+      await audit(pairing, "pairing screen", { minControls: 1 });
+    } finally {
+      await browser.close();
+    }
   });
 
   test("palette and quick switcher", async ({ page }) => {

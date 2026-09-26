@@ -1,4 +1,5 @@
-import { expect, type Locator, type Page, test } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
+import { type Daemon, expect, test } from "./fixtures";
 import { noteTitle, openApp } from "./helpers";
 
 /**
@@ -15,29 +16,26 @@ function noteWith(lines: readonly string[]): string {
   return ["# Drawing test", "", ...lines].join("\n");
 }
 
-async function openNote(page: Page, content: string, query?: string): Promise<void> {
-  await openApp(page, query);
-  await page.evaluate(({ path, text }) => window.__ddlMock!.createNote(path, text), {
-    path: NOTE,
-    text: content,
-  });
+async function openNote(page: Page, daemon: Daemon, content: string): Promise<void> {
+  await daemon.write(NOTE, content);
+  await openApp(page);
   await page.evaluate((path) => window.__ddlDebug!.openNote(path), NOTE);
   await expect(noteTitle(page)).toHaveValue("Drawing test");
 }
 
-function savedNote(page: Page): Promise<string | null> {
-  return page.evaluate((path) => window.__ddlMock!.readNote(path), NOTE);
+function savedNote(daemon: Daemon): Promise<string | null> {
+  return daemon.read(NOTE);
 }
 
-async function newDrawingPath(page: Page): Promise<string> {
-  const paths = await page.evaluate(() => window.__ddlMock!.listPaths());
+async function newDrawingPath(daemon: Daemon): Promise<string> {
+  const paths = await daemon.list();
   const path = paths.find((p) => /^Excalidraw\/Drawing .+\.excalidraw\.md$/.test(p));
   if (!path) throw new Error(`no new drawing among ${paths.join(", ")}`);
   return path;
 }
 
-function drawingFile(page: Page, path: string): Promise<string | null> {
-  return page.evaluate((p) => window.__ddlMock!.readNote(p), path);
+function drawingFile(daemon: Daemon, path: string): Promise<string | null> {
+  return daemon.read(path);
 }
 
 function drawing(page: Page): Locator {
@@ -97,10 +95,15 @@ async function expectTextBeside(page: Page): Promise<void> {
 }
 
 test.describe("drawings", () => {
-  test("insert one, draw in it, and the note wraps around it", async ({ page }) => {
+  test("insert one, draw in it, and the note wraps around it", async ({ page, daemon }) => {
     const requests: string[] = [];
     page.on("request", (request) => requests.push(request.url()));
-    await openNote(page, noteWith([PARAGRAPH, "", PARAGRAPH, "", "Last line."]));
+    // The daemon's CSP stops Excalidraw's CDN fallbacks before they leave the machine.
+    page.on("requestfailed", (request) => {
+      const at = requests.indexOf(request.url());
+      if (request.failure()?.errorText === "csp" && at >= 0) requests.splice(at, 1);
+    });
+    await openNote(page, daemon, noteWith([PARAGRAPH, "", PARAGRAPH, "", "Last line."]));
     await page.locator(".cm-line", { hasText: WORDS }).first().click();
     await page.getByTestId("insert-drawing").click();
 
@@ -111,15 +114,15 @@ test.describe("drawings", () => {
     await expect(overlay).toBeHidden();
 
     // Saved: the file has both elements, with the Obsidian plugin's 8-character ids.
-    const path = await newDrawingPath(page);
-    await expect.poll(() => drawingFile(page, path)).toContain('"type": "arrow"');
-    const file = (await drawingFile(page, path))!;
+    const path = await newDrawingPath(daemon);
+    await expect.poll(() => drawingFile(daemon, path)).toContain('"type": "arrow"');
+    const file = (await drawingFile(daemon, path))!;
     expect(file).toContain("excalidraw-plugin: parsed");
     expect(file).toContain('"type": "rectangle"');
     expect([...file.matchAll(/"id": "([^"]+)"/g)].map((m) => m[1]!.length)).toEqual([8, 8]);
     const name = path.slice("Excalidraw/".length, -".md".length);
     await expect
-      .poll(() => savedNote(page))
+      .poll(() => savedNote(daemon))
       .toBe(noteWith([`![[${name}|360|right-wrap]]`, PARAGRAPH, "", PARAGRAPH, "", "Last line."]));
 
     // Drawn in the note: floated right, selected again after Escape, the text wrapping around it.
@@ -150,8 +153,15 @@ test.describe("drawings", () => {
     );
   });
 
-  test("move it to the other side and another line, resize it, delete it", async ({ page }) => {
-    await openNote(page, noteWith([`![[${DEMO}|300|right-wrap]]`, PARAGRAPH, "", "Last line."]));
+  test("move it to the other side and another line, resize it, delete it", async ({
+    page,
+    daemon,
+  }) => {
+    await openNote(
+      page,
+      daemon,
+      noteWith([`![[${DEMO}|300|right-wrap]]`, PARAGRAPH, "", "Last line."]),
+    );
     const box = drawing(page);
     await expect(box.locator("svg")).toBeVisible();
     await box.click();
@@ -169,7 +179,7 @@ test.describe("drawings", () => {
     const first = await grab();
     await drag(page, first.point, { x: column.x + 120, y: lastBox.y + 2 + first.toTop });
     await expect
-      .poll(() => savedNote(page))
+      .poll(() => savedNote(daemon))
       .toBe(noteWith([PARAGRAPH, "", `![[${DEMO}|300|left-wrap]]`, "Last line."]));
     await expect(drawing(page)).toHaveClass(/cm-ddl-embed-left-wrap/);
     expect((await drawing(page).boundingBox())!.x).toBeLessThan(column.x + column.width / 3);
@@ -181,7 +191,7 @@ test.describe("drawings", () => {
       y: second.point.y - 4,
     });
     await expect
-      .poll(() => savedNote(page))
+      .poll(() => savedNote(daemon))
       .toBe(noteWith([PARAGRAPH, "", `![[${DEMO}|300|right-wrap]]`, "Last line."]));
 
     // Wider by 100 px from its free corner (a right float grows to the left).
@@ -190,7 +200,7 @@ test.describe("drawings", () => {
     const start = await center(handle);
     await drag(page, start, { x: start.x - 100, y: start.y + 20 });
     await expect
-      .poll(() => savedNote(page))
+      .poll(() => savedNote(daemon))
       .toBe(noteWith([PARAGRAPH, "", `![[${DEMO}|400|right-wrap]]`, "Last line."]));
     await expect.poll(async () => (await drawing(page).boundingBox())!.width).toBeCloseTo(400, 0);
 
@@ -198,16 +208,18 @@ test.describe("drawings", () => {
     await expect(drawing(page)).toHaveClass(/is-selected/);
     await page.keyboard.press("Delete");
     await expect(drawing(page)).toHaveCount(0);
-    await expect.poll(() => savedNote(page)).toBe(noteWith([PARAGRAPH, "", "Last line."]));
+    await expect.poll(() => savedNote(daemon)).toBe(noteWith([PARAGRAPH, "", "Last line."]));
     await page.keyboard.press("ControlOrMeta+z");
     await expect(drawing(page)).toBeVisible();
-    const paths = await page.evaluate(() => window.__ddlMock!.listPaths());
-    expect(paths).toContain(`Excalidraw/${DEMO}.md`);
+    expect(await daemon.list()).toContain(`Excalidraw/${DEMO}.md`);
   });
 
-  test("in vim mode, a selected drawing still takes Enter, Escape and Delete", async ({ page }) => {
+  test("in vim mode, a selected drawing still takes Enter, Escape and Delete", async ({
+    page,
+    daemon,
+  }) => {
     const embed = `![[${DEMO}|300|right-wrap]]`;
-    await openNote(page, noteWith([embed, PARAGRAPH]));
+    await openNote(page, daemon, noteWith([embed, PARAGRAPH]));
     await page.evaluate(() => window.__ddlDebug!.runCommand("editor:vim"));
     await expect(page.getByTestId("status-vim")).toHaveAttribute("data-mode", "normal");
     const box = drawing(page);
@@ -220,21 +232,21 @@ test.describe("drawings", () => {
     await expect(box).toHaveClass(/is-selected/);
     await page.keyboard.press("Delete");
     await expect(box).toHaveCount(0);
-    await expect.poll(() => savedNote(page)).toBe(noteWith([PARAGRAPH]));
+    await expect.poll(() => savedNote(daemon)).toBe(noteWith([PARAGRAPH]));
     // Back in the note, in normal mode: vim's undo restores the line.
     await page.keyboard.press("u");
-    await expect.poll(() => savedNote(page)).toBe(noteWith([embed, PARAGRAPH]));
+    await expect.poll(() => savedNote(daemon)).toBe(noteWith([embed, PARAGRAPH]));
   });
 
-  test("it's saved: a reload shows it, and the file opens full size", async ({ page }) => {
-    await openNote(page, noteWith([PARAGRAPH]), "mockSpeed=4&mockPersist=1");
+  test("it's saved: a reload shows it, and the file opens full size", async ({ page, daemon }) => {
+    await openNote(page, daemon, noteWith([PARAGRAPH]));
     await page.locator(".cm-line", { hasText: WORDS }).first().click();
     await page.keyboard.press("ControlOrMeta+Shift+X");
     await drawRectangleAndArrow(page);
     await page.keyboard.press("Escape");
-    const path = await newDrawingPath(page);
-    await expect.poll(() => drawingFile(page, path)).toContain('"type": "arrow"');
-    await expect.poll(() => savedNote(page)).toContain("|360|right-wrap]]");
+    const path = await newDrawingPath(daemon);
+    await expect.poll(() => drawingFile(daemon, path)).toContain('"type": "arrow"');
+    await expect.poll(() => savedNote(daemon)).toContain("|360|right-wrap]]");
 
     await page.reload();
     await expect(page.getByTestId("note-title")).toBeVisible();
@@ -252,8 +264,9 @@ test.describe("drawings", () => {
 
   test("an image goes into a drawing through the file picker, shrunk and saved", async ({
     page,
+    daemon,
   }) => {
-    await openNote(page, noteWith([PARAGRAPH]));
+    await openNote(page, daemon, noteWith([PARAGRAPH]));
     await page.locator(".cm-line", { hasText: WORDS }).first().click();
     await page.keyboard.press("ControlOrMeta+Shift+X");
     const overlay = page.getByTestId("drawing-editor");
@@ -282,9 +295,9 @@ test.describe("drawings", () => {
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     await page.getByTestId("drawing-done").click();
     await expect(overlay).toBeHidden();
-    const path = await newDrawingPath(page);
-    await expect.poll(() => drawingFile(page, path)).toContain('"type": "image"');
-    const file = (await drawingFile(page, path))!;
+    const path = await newDrawingPath(daemon);
+    await expect.poll(() => drawingFile(daemon, path)).toContain('"type": "image"');
+    const file = (await drawingFile(daemon, path))!;
     expect(file).toContain('"mimeType": "image/png"');
     const dataURL = /"dataURL": "(data:image\/png;base64,[^"]+)"/.exec(file)![1]!;
     const width = await page.evaluate(async (src) => {
@@ -299,19 +312,18 @@ test.describe("drawings", () => {
 
   test("a change made elsewhere shows at once, and Insert drawing is in the palette and menu", async ({
     page,
+    daemon,
   }) => {
-    await openNote(page, noteWith([`![[${DEMO}|300|left-wrap]]`, PARAGRAPH]));
+    await openNote(page, daemon, noteWith([`![[${DEMO}|300|left-wrap]]`, PARAGRAPH]));
     const box = drawing(page);
     await expect(box.locator("svg")).toBeVisible();
     const before = await box.locator("svg").innerHTML();
-    await page.evaluate((path) => {
-      const mock = window.__ddlMock!;
-      const text = mock.readNote(path)!;
-      mock.externalEdit(
-        path,
-        text.replace('"backgroundColor": "#b2f2bb"', '"backgroundColor": "#ffc9c9"'),
-      );
-    }, `Excalidraw/${DEMO}.md`);
+    const file = `Excalidraw/${DEMO}.md`;
+    const text = (await daemon.read(file))!;
+    await daemon.write(
+      file,
+      text.replace('"backgroundColor": "#b2f2bb"', '"backgroundColor": "#ffc9c9"'),
+    );
     await expect.poll(() => box.locator("svg").innerHTML()).not.toBe(before);
 
     await page.locator(".cm-line", { hasText: WORDS }).first().click();

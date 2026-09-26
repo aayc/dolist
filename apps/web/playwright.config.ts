@@ -1,31 +1,7 @@
-import { defineConfig, type PlaywrightTestConfig } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
+import { E2E_PORT } from "./e2e/ports.ts";
 
-const PORT = 4173;
-const FULLSTACK_PORT = 4175;
 const CI = Boolean(process.env.CI);
-/**
- * `pnpm e2e:fullstack`: the real daemon in live mode (Pi harness) against the fake OpenRouter,
- * serving the built app. Selected explicitly because it runs a different web server.
- */
-const FULLSTACK = process.env.DDL_E2E_FULLSTACK === "1";
-
-const previewServer: NonNullable<PlaywrightTestConfig["webServer"]> = {
-  command: `pnpm exec vite build && pnpm exec vite preview --port ${PORT} --strictPort`,
-  url: `http://127.0.0.1:${PORT}`,
-  reuseExistingServer: !CI,
-  timeout: 120_000,
-  stdout: "ignore",
-  stderr: "pipe",
-};
-
-const fullstackServer: NonNullable<PlaywrightTestConfig["webServer"]> = {
-  command: `pnpm exec vite build && pnpm --filter @ddl/agent exec tsx scripts/e2e-fullstack.ts --port=${FULLSTACK_PORT}`,
-  url: `http://127.0.0.1:${FULLSTACK_PORT}`,
-  reuseExistingServer: false,
-  timeout: 180_000,
-  stdout: "ignore",
-  stderr: "pipe",
-};
 
 export default defineConfig({
   testDir: "./e2e",
@@ -36,7 +12,6 @@ export default defineConfig({
   retries: CI ? 1 : 0,
   reporter: CI ? [["github"], ["list"]] : [["list"]],
   use: {
-    baseURL: `http://127.0.0.1:${PORT}`,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     // Local runs use the installed Google Chrome; CI installs Playwright's bundled Chromium.
@@ -45,27 +20,10 @@ export default defineConfig({
   // No device preset: its spoofed user agent would make the app pick the wrong "Mod" key
   // (⌘ vs Ctrl) relative to Playwright's host-based ControlOrMeta.
   projects: [
-    ...(FULLSTACK
-      ? [
-          {
-            name: "fullstack",
-            testMatch: /[\\/]fullstack[\\/].*\.spec\.ts$/,
-            // Kept apart from ./test-results, which every functional run wipes.
-            outputDir: "./.playwright-fullstack/test-results",
-            fullyParallel: false,
-            // Every spec shares one daemon and vault (today's note, the agent switch).
-            workers: 1,
-            use: {
-              viewport: { width: 1400, height: 900 },
-              baseURL: `http://127.0.0.1:${FULLSTACK_PORT}`,
-            },
-          },
-        ]
-      : []),
     {
       name: "functional",
       testMatch: /\.spec\.ts$/,
-      testIgnore: /[\\/](perf|fullstack)[\\/]/,
+      testIgnore: /[\\/]perf[\\/]/,
       fullyParallel: true,
       use: { viewport: { width: 1400, height: 900 } },
     },
@@ -82,5 +40,15 @@ export default defineConfig({
       },
     },
   ],
-  webServer: FULLSTACK ? fullstackServer : previewServer,
+  // Real daemons on demand (e2e/fixtures.ts), each serving the app built here.
+  webServer: {
+    command: `pnpm exec vite build && pnpm --filter @ddl/agent exec tsx scripts/e2e-daemons.ts --port=${E2E_PORT}`,
+    url: `http://127.0.0.1:${E2E_PORT}`,
+    reuseExistingServer: !CI,
+    timeout: 180_000,
+    stdout: "ignore",
+    stderr: "pipe",
+    // SIGTERM lets the harness remove its daemons' temporary folders (the default is SIGKILL).
+    gracefulShutdown: { signal: "SIGTERM", timeout: 10_000 },
+  },
 });

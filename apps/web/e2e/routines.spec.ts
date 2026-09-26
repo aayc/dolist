@@ -3,22 +3,18 @@
  * New routine from a template (and the daemon's reason for a schedule it can't read), a routine's
  * own inbox of runs, Run now (and why it can't run twice at once, or with the agent paused), Pause,
  * a finished run's notification, and Repeat this. Real keyboard throughout.
- * Run with `pnpm --filter @ddl/web e2e:fullstack`.
  */
-import { expect, type Page, test } from "@playwright/test";
-import { focusEditorEnd } from "../helpers";
-
-test.describe.configure({ mode: "serial" });
+import { expect, type Page, test } from "./fixtures";
+import { focusEditorEnd, openApp } from "./helpers";
 
 const ROUTINE = "Weekly review";
+/** The routine the first test creates, as a file for the tests that start with one. */
+const ROUTINE_FILE = {
+  [`Routines/${ROUTINE}.md`]:
+    "---\nschedule: every day at 9\n---\nList what's still open this week.\n",
+};
 
-async function openApp(page: Page): Promise<void> {
-  await page.goto("/");
-  await expect(page.getByTestId("note-title")).toBeVisible();
-  await page.waitForFunction(() =>
-    window.__ddlPerf?.measures.some((m) => m.name === "app:interactive"),
-  );
-}
+test.use({ daemonSpec: { agent: "live" } });
 
 /** Replaces a field's text with the real keyboard. */
 async function typeInto(page: Page, testId: string, text: string): Promise<void> {
@@ -127,48 +123,52 @@ test("New routine from a template, its own inbox, Run now and Pause", async ({ p
   await expect(page.getByTestId("inbox-item").filter({ hasText: ROUTINE })).toHaveCount(0);
 });
 
-test("a finished run notifies, and the notification opens the run", async ({ page }) => {
-  test.setTimeout(90_000);
-  await openApp(page);
-  await openRoutine(page, ROUTINE);
-  const view = page.getByTestId("routine-view");
-  const before = await view.getByTestId("routine-run-item").count();
-  await view.getByTestId("routine-run").click();
-  await expect(view.getByTestId("routine-run-item")).toHaveCount(before + 1);
-  const threadId = await view
-    .getByTestId("routine-run-item")
-    .first()
-    .getAttribute("data-thread-id");
+test.describe("with a routine", () => {
+  test.use({ daemonSpec: { agent: "live", files: ROUTINE_FILE } });
 
-  // The routine's inbox shows the run live; the toast comes while something else is on screen.
-  await view.getByTestId("routine-back").click();
-  const toast = page.getByTestId("toast").filter({ hasText: ROUTINE });
-  await expect(toast).toBeVisible({ timeout: 60_000 });
-  await expect(toast).toHaveAttribute("data-kind", "success");
-  await toast.getByTestId("toast-body").click();
-  const thread = page.getByTestId("thread-view");
-  await expect(thread).toHaveAttribute("data-thread-id", threadId!);
-  await expect(thread.getByTestId("thread-title")).toHaveText(ROUTINE);
-});
-
-test("Run now says why when the agent can't run", async ({ page }) => {
-  await openApp(page);
-  const agent = page.getByTestId("status-agent");
-  await agent.click();
-  await expect(agent).toHaveAttribute("data-state", "paused");
-  try {
+  test("a finished run notifies, and the notification opens the run", async ({ page }) => {
+    test.setTimeout(90_000);
+    await openApp(page);
     await openRoutine(page, ROUTINE);
     const view = page.getByTestId("routine-view");
+    const before = await view.getByTestId("routine-run-item").count();
     await view.getByTestId("routine-run").click();
-    const problem = view.getByTestId("routine-run-problem");
-    await expect(problem).toContainText("The agent can't run here");
-    await expect(problem).toContainText("switch it on to run routines");
-    await problem.getByTestId("routine-run-problem-dismiss").click();
-    await expect(problem).toBeHidden();
-  } finally {
+    await expect(view.getByTestId("routine-run-item")).toHaveCount(before + 1);
+    const threadId = await view
+      .getByTestId("routine-run-item")
+      .first()
+      .getAttribute("data-thread-id");
+
+    // The routine's inbox shows the run live; the toast comes while something else is on screen.
+    await view.getByTestId("routine-back").click();
+    const toast = page.getByTestId("toast").filter({ hasText: ROUTINE });
+    await expect(toast).toBeVisible({ timeout: 60_000 });
+    await expect(toast).toHaveAttribute("data-kind", "success");
+    await toast.getByTestId("toast-body").click();
+    const thread = page.getByTestId("thread-view");
+    await expect(thread).toHaveAttribute("data-thread-id", threadId!);
+    await expect(thread.getByTestId("thread-title")).toHaveText(ROUTINE);
+  });
+
+  test("Run now says why when the agent can't run", async ({ page }) => {
+    await openApp(page);
+    const agent = page.getByTestId("status-agent");
     await agent.click();
-    await expect(agent).toHaveAttribute("data-state", "on");
-  }
+    await expect(agent).toHaveAttribute("data-state", "paused");
+    try {
+      await openRoutine(page, ROUTINE);
+      const view = page.getByTestId("routine-view");
+      await view.getByTestId("routine-run").click();
+      const problem = view.getByTestId("routine-run-problem");
+      await expect(problem).toContainText("The agent can't run here");
+      await expect(problem).toContainText("switch it on to run routines");
+      await problem.getByTestId("routine-run-problem-dismiss").click();
+      await expect(problem).toBeHidden();
+    } finally {
+      await agent.click();
+      await expect(agent).toHaveAttribute("data-state", "on");
+    }
+  });
 });
 
 test("Repeat this: a finished task becomes a routine once you give it a schedule", async ({
@@ -180,7 +180,6 @@ test("Repeat this: a finished task becomes a routine once you give it a schedule
   await focusEditorEnd(page);
   await page.keyboard.type(task, { delay: 5 });
   await page.keyboard.press("Enter");
-  // Today's note may hold other specs' tasks: this one's badge is on its own line.
   const done = page.locator(".cm-line", { hasText: task }).locator(".cm-ddl-badge-done");
   await expect(done).toHaveCount(1, { timeout: 30_000 });
   await done.click();
@@ -211,5 +210,5 @@ test("Repeat this: a finished task becomes a routine once you give it a schedule
     "What's the tallest building in NYC?",
   );
   await view.getByTestId("routine-back").click();
-  await expect(page.getByTestId("routine-item")).toHaveCount(2);
+  await expect(page.getByTestId("routine-item")).toHaveCount(1);
 });

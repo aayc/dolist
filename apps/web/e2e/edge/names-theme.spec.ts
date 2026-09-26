@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../fixtures";
 import { dailyHeading, noteTitle, openApp } from "../helpers";
 import {
   caretToEnd,
@@ -6,8 +6,6 @@ import {
   type EdgeWindow,
   expectSaved,
   explorerItem,
-  listPaths,
-  readNote,
   tab,
 } from "./edge-helpers";
 
@@ -18,6 +16,7 @@ const RENAMED = "Заметка ✈️ 旅行の計画 — ٢٠٢٦ edition";
 test.describe("long unicode note names", () => {
   test("create, type, find, rename and reopen a note with a long unicode name", async ({
     page,
+    daemon,
   }) => {
     const errors = collectErrors(page);
     await openApp(page);
@@ -31,7 +30,7 @@ test.describe("long unicode note names", () => {
 
     await caretToEnd(page);
     await page.keyboard.type("- [ ] 買い物 😀");
-    await expect.poll(() => readNote(page, path)).toBe("- [ ] 買い物 😀");
+    await expect.poll(() => daemon.read(path)).toBe("- [ ] 買い物 😀");
     await expectSaved(page);
 
     // Find it again with a unicode query, from another note.
@@ -46,13 +45,16 @@ test.describe("long unicode note names", () => {
     await title.fill(RENAMED);
     await title.press("Enter");
     await expect(explorerItem(page, `${RENAMED}.md`)).toBeVisible();
-    await expect.poll(() => listPaths(page)).toContain(`${RENAMED}.md`);
-    expect(await listPaths(page)).not.toContain(path);
-    expect(await readNote(page, `${RENAMED}.md`)).toBe("- [ ] 買い物 😀");
+    await expect.poll(() => daemon.list()).toContain(`${RENAMED}.md`);
+    expect(await daemon.list()).not.toContain(path);
+    expect(await daemon.read(`${RENAMED}.md`)).toBe("- [ ] 買い物 😀");
     expect(errors).toEqual([]);
   });
 
-  test("names with reserved characters are refused without touching the note", async ({ page }) => {
+  test("names with reserved characters are refused without touching the note", async ({
+    page,
+    daemon,
+  }) => {
     await openApp(page);
     await page.evaluate(() => (window as unknown as EdgeWindow).__ddlDebug.openNote("Ideas.md"));
     const title = noteTitle(page);
@@ -61,13 +63,13 @@ test.describe("long unicode note names", () => {
     await title.press("Enter");
     await expect(page.getByTestId("toast").filter({ hasText: "Can't rename" })).toBeVisible();
     await expect(title).toHaveValue("Ideas");
-    expect(await listPaths(page)).toContain("Ideas.md");
+    expect(await daemon.list()).toContain("Ideas.md");
   });
 });
 
 test.describe("theme", () => {
   test("toggling the theme while the app loads sticks, and survives a reload", async ({ page }) => {
-    await page.goto("/?mock=1&mockSpeed=4");
+    await page.goto("/?debug=1");
     await page.waitForFunction(
       () => (window as unknown as Partial<EdgeWindow>).__ddlDebug !== undefined,
     );
@@ -80,7 +82,7 @@ test.describe("theme", () => {
       window.__ddlPerf?.measures.some((m) => m.name === "app:interactive"),
     );
     await expect(page.locator("html")).toHaveAttribute("data-theme", target);
-    await expect(page.getByTestId("status-connection")).toHaveAttribute("data-state", "online");
+    await expect(page.getByTestId("status-agent")).toBeVisible();
     await page.waitForTimeout(300);
     await expect(page.locator("html")).toHaveAttribute("data-theme", target);
 

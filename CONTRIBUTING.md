@@ -53,7 +53,7 @@ Live agent runs need an OpenRouter key. Put `OPENROUTER_API_KEY=...` in `~/.dail
 | Task | Command |
 | --- | --- |
 | Daemon + web UI with the live agent | `pnpm dev`, then open http://localhost:5173 |
-| Same, with the deterministic mock agent (no key, no model calls) | `pnpm dev:mock` |
+| The demo: the deterministic mock agent (no key, no model calls) on a throwaway demo vault | `pnpm dev:mock`, then open http://localhost:5174 |
 | Production build and run | `pnpm build && pnpm start`, then open http://127.0.0.1:7331 |
 | Lint / auto-fix | `pnpm lint` / `pnpm lint:fix` |
 | Typecheck / unit tests | `pnpm typecheck` / `pnpm test` |

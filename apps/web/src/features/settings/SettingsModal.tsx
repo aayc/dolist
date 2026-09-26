@@ -586,7 +586,7 @@ function AboutSection() {
   const connection = useConnectionStore();
   const status = useAgentStore((s) => s.status);
   const rows: Array<[string, ReactNode]> = [
-    ["Daemon", connection.kind === "mock" ? "In-browser mock (no daemon)" : connection.endpoint],
+    ["Daemon", connection.endpoint],
     ["Connection", connection.state],
     ["Vault", connection.health?.vaultName ?? "—"],
     ["Agent mode", status?.mode ?? connection.health?.agentMode ?? "—"],

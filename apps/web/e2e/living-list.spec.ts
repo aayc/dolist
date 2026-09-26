@@ -1,7 +1,7 @@
-import { expect, type Page, test } from "@playwright/test";
+import { type Daemon, expect, type Page, test } from "./fixtures";
 import { expectDailyNote, noteTitle, openApp, waitForSaved } from "./helpers";
 
-/** Yesterday's note in the mock vault is the living-list demo (apps/web/src/api/mock/mock-demo.ts). */
+/** Yesterday's note in the demo vault shows the agent at work (packages/agent/scripts/demo-vault.ts). */
 async function openDemoNote(page: Page): Promise<void> {
   await openApp(page);
   await page.keyboard.press("ControlOrMeta+Shift+P");
@@ -146,11 +146,9 @@ test.describe("the agent writing in notes", () => {
 test.describe("agent edits meeting the user's typing", () => {
   const AGENT_LINE = "- A monthly someday review %%agent:thr_demo_dinner%%";
 
-  async function agentAppends(page: Page): Promise<void> {
-    await page.evaluate((added) => {
-      const mock = window.__ddlMock!;
-      mock.externalEdit("Ideas.md", `${mock.readNote("Ideas.md")}\n${added}`);
-    }, AGENT_LINE);
+  /** The agent's line lands in the file, as the daemon writes it. */
+  async function agentAppends(daemon: Daemon): Promise<void> {
+    await daemon.write("Ideas.md", `${await daemon.read("Ideas.md")}\n${AGENT_LINE}`);
   }
 
   async function typeInIdeas(page: Page): Promise<void> {
@@ -161,7 +159,7 @@ test.describe("agent edits meeting the user's typing", () => {
     await page.keyboard.type(" on Saturday", { delay: 5 });
   }
 
-  async function expectMerged(page: Page): Promise<void> {
+  async function expectMerged(page: Page, daemon: Daemon): Promise<void> {
     // The caret stayed where the user was typing.
     await page.keyboard.type(" mornings", { delay: 5 });
     await expect(line(page, "Batch errands")).toHaveText(
@@ -170,7 +168,7 @@ test.describe("agent edits meeting the user's typing", () => {
     await expect(line(page, "A monthly someday review")).toHaveClass(/cm-ddl-agent-line/);
     await waitForSaved(page);
     await expect
-      .poll(() => page.evaluate(() => window.__ddlMock?.readNote("Ideas.md")))
+      .poll(() => daemon.read("Ideas.md"))
       .toBe(
         [
           "# Ideas",
@@ -183,32 +181,29 @@ test.describe("agent edits meeting the user's typing", () => {
           AGENT_LINE,
         ].join("\n"),
       );
-    expect(
-      (await page.evaluate(() => window.__ddlMock!.listPaths())).filter((p) =>
-        p.includes("(conflict"),
-      ),
-    ).toEqual([]);
+    expect((await daemon.list()).filter((p) => p.includes("(conflict"))).toEqual([]);
     await expect(page.getByTestId("toast").filter({ hasText: "changed elsewhere" })).toHaveCount(0);
   }
 
   test("an agent edit arriving while the user types is merged, without a conflict copy", async ({
     page,
+    daemon,
   }) => {
     await openApp(page);
     await typeInIdeas(page);
-    await agentAppends(page);
+    await agentAppends(daemon);
     await expect(line(page, "A monthly someday review")).toBeVisible();
-    await expectMerged(page);
+    await expectMerged(page, daemon);
   });
 
-  test("a save that meets an agent edit is merged too", async ({ page }) => {
+  test("a save that meets an agent edit is merged too", async ({ page, daemon }) => {
     await openApp(page);
     await page.evaluate(() => window.__ddlDebug?.delayWrites(600));
     await typeInIdeas(page);
     await page.waitForTimeout(400); // the save of " on Saturday" is now in flight
-    await agentAppends(page);
+    await agentAppends(daemon);
     await page.evaluate(() => window.__ddlDebug?.delayWrites(0));
     await expect(line(page, "A monthly someday review")).toBeVisible();
-    await expectMerged(page);
+    await expectMerged(page, daemon);
   });
 });

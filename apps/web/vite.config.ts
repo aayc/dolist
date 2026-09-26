@@ -10,7 +10,8 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
   version: string;
 };
 
-const DEV_PORT = 5173;
+/** `pnpm dev:mock` moves it (DDL_WEB_PORT) so it runs beside `pnpm dev`. */
+const DEV_PORT = Number(process.env.DDL_WEB_PORT ?? 5173);
 const daemonOrigin = `http://127.0.0.1:${process.env.DDL_PORT ?? "7331"}`;
 const devOrigins = new Set([`http://localhost:${DEV_PORT}`, `http://127.0.0.1:${DEV_PORT}`]);
 

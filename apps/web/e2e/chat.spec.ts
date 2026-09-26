@@ -1,11 +1,13 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./fixtures";
 import { badge, expandToolGroups, expectDailyNote, openApp, typeTask } from "./helpers";
 
 /**
  * The agent chat: typing reveal, live activity, tool rows, the chat bar, jump to latest, copy, and
- * reduced motion. The in-browser mock streams its replies word by word (`mockSpeed` divides its
- * delays), like the daemon's `thread.delta` events.
+ * reduced motion. The daemon runs the agent in live mode against the fake OpenRouter, which streams
+ * its answers in small chunks (`thread.delta` events), a few seconds per task.
  */
+
+test.use({ daemonSpec: { agent: "live" } });
 
 declare global {
   interface Window {
@@ -87,6 +89,34 @@ function agentMessages(page: Page) {
   return page.locator('[data-testid="message-text"].is-agent');
 }
 
+/**
+ * Waits until the agent has been quiet for two seconds (a task's run can resume once more after
+ * it finishes, when its own note edit reaches the orchestrator) and returns its last message.
+ */
+async function quietChat(page: Page): Promise<string> {
+  let previous = "";
+  let since = Date.now();
+  await expect
+    .poll(
+      async () => {
+        const texts = await agentMessages(page).allTextContents();
+        const busy = await page.locator('[data-revealing="true"], [data-streaming="true"]').count();
+        const now = `${texts.length}:${texts.at(-1) ?? ""}:${busy}`;
+        if (now !== previous) {
+          previous = now;
+          since = Date.now();
+        }
+        return busy === 0 && Date.now() - since >= 2_000;
+      },
+      { timeout: 30_000, intervals: [250] },
+    )
+    .toBe(true);
+  return page.evaluate(() => {
+    const bodies = document.querySelectorAll('[data-testid="message-text"].is-agent .message-body');
+    return bodies[bodies.length - 1]?.textContent ?? "";
+  });
+}
+
 async function isMac(page: Page): Promise<boolean> {
   return page.evaluate(() => /mac/i.test(navigator.platform));
 }
@@ -100,7 +130,7 @@ async function hoverTooltip(page: Page, target: ReturnType<Page["locator"]>) {
   return tip;
 }
 
-/** A finished thread from the mock's demo note (yesterday): no agent to wait for. */
+/** A finished thread from the demo vault's note (yesterday): no agent to wait for. */
 async function openFinishedThread(page: Page): Promise<void> {
   await openApp(page);
   await page.keyboard.press("ControlOrMeta+Shift+P");
@@ -117,14 +147,14 @@ test.describe("typing reveal", () => {
     page,
   }) => {
     test.setTimeout(60_000);
-    await openApp(page, "mockSpeed=1");
+    await openApp(page);
     await watchChat(page);
     await startTask(page, "Research quiet mechanical keyboards");
 
-    // Per frame: the length of each agent message and whether a caret shows.
+    // Per frame, while the first messages arrive: each agent message's length, and the carets.
     const frames = await page.evaluate(async () => {
       const out: Array<{ lengths: number[]; carets: number }> = [];
-      const until = performance.now() + 2500;
+      const until = performance.now() + 8000;
       while (performance.now() < until) {
         await new Promise(requestAnimationFrame);
         const bodies = document.querySelectorAll(
@@ -146,9 +176,10 @@ test.describe("typing reveal", () => {
     expect(frames.some((f) => f.carets > 0)).toBe(true);
 
     await expect(badge(page)).toHaveClass(/cm-ddl-badge-done/, { timeout: 30_000 });
-    await expect(agentMessages(page).last()).toContainText(
-      "The full comparison is in the artifact",
-    );
+    await expect(
+      agentMessages(page).filter({ hasText: "details are in the artifact" }),
+    ).toBeVisible();
+    const last = await quietChat(page);
     await expect(page.locator(".type-caret")).toHaveCount(0);
     await expect(page.locator('[data-revealing="true"], [data-streaming="true"]')).toHaveCount(0);
     expect((await watched(page)).revealing).toBe(true);
@@ -196,7 +227,7 @@ test.describe("typing reveal", () => {
         entering: document.querySelectorAll('[data-testid="chat-list"] .is-entering').length,
       };
     });
-    expect(reopened.last).toContain("The full comparison is in the artifact.");
+    expect(reopened.last).toBe(last);
     expect(reopened.carets).toBe(0);
     expect(reopened.entering).toBe(0);
   });
@@ -207,7 +238,7 @@ test.describe("progress", () => {
     page,
   }) => {
     test.setTimeout(60_000);
-    await openApp(page, "mockSpeed=2");
+    await openApp(page);
     await watchChat(page);
     await startTask(page, "Order a replacement water filter");
     await expect(page.locator(".thread-header .status-chip.is-pulsing")).toBeVisible();
@@ -216,8 +247,9 @@ test.describe("progress", () => {
     await expect(activity).toHaveAttribute("data-kind", "approval", { timeout: 20_000 });
     await expect(activity).toContainText("Waiting for your approval");
     const seen = await watched(page);
-    expect(seen.activity).toContain("tool: Opening shop.example…");
-    expect(seen.activity).toContain("tool: Working in the browser…");
+    expect(seen.activity).toContain(
+      "tool: Searching the web for “Order a replacement water filter”…",
+    );
     expect(seen.animations).toEqual(expect.arrayContaining(["ddl-enter", "ddl-ripple"]));
     await expect(page.getByTestId("composer-input")).toHaveAttribute(
       "placeholder",
@@ -245,28 +277,41 @@ test.describe("progress", () => {
 
   test("tool calls spin, land on ✓, then fold into a group", async ({ page }) => {
     test.setTimeout(60_000);
-    await openApp(page, "mockSpeed=1");
+    await openApp(page);
+    // A search can be over between two polls: record whether a call ever spun.
+    await page.evaluate(() => {
+      const flag = window as unknown as { __sawSpin?: boolean };
+      const spinning = '[data-testid="tool-call"][data-status="running"] .tool-call-status.spin';
+      new MutationObserver(() => {
+        if (document.querySelector(spinning)) flag.__sawSpin = true;
+      }).observe(document.body, { subtree: true, childList: true, attributes: true });
+    });
     await startTask(page, "Research quiet mechanical keyboards");
 
-    await expect(
-      page.locator('[data-testid="tool-call"][data-status="running"] .tool-call-status.spin'),
-    ).toHaveCount(1, { timeout: 10_000 });
     // Seen running, it settles with a quick transition.
     await expect(
       page.locator(
         '[data-testid="tool-call"][data-tool="web_search"] .tool-call-status.is-settled',
       ),
     ).toHaveCount(1, { timeout: 10_000 });
-    await expect(page.getByTestId("tool-group")).toBeVisible({ timeout: 15_000 });
-
+    expect(await page.evaluate(() => (window as { __sawSpin?: boolean }).__sawSpin)).toBe(true);
     await expect(badge(page)).toHaveClass(/cm-ddl-badge-done/, { timeout: 30_000 });
+
+    // Finished calls in a row fold into one row: the demo note's dinner thread searched, then read.
+    await page.getByTestId("thread-close").click();
+    await page.keyboard.press("ControlOrMeta+Shift+P");
+    await expectDailyNote(page, -1);
+    await page
+      .locator(".cm-line", { hasText: "Book a table for Friday dinner" })
+      .locator(".cm-ddl-badge")
+      .click();
     const group = page.getByTestId("tool-group");
-    await expect(group).toHaveAttribute("data-count", "3");
-    await expect(group).toContainText("Used 3 tools");
+    await expect(group).toHaveAttribute("data-count", "2");
+    await expect(group).toContainText("Used 2 tools");
     await expect(page.getByTestId("tool-call")).toHaveCount(0);
     await expandToolGroups(page);
-    await expect(group.getByTestId("tool-call")).toHaveCount(3);
-    await expect(group.locator('[data-testid="tool-call"][data-status="ok"]')).toHaveCount(3);
+    await expect(group.getByTestId("tool-call")).toHaveCount(2);
+    await expect(group.locator('[data-testid="tool-call"][data-status="ok"]')).toHaveCount(2);
   });
 });
 
@@ -344,7 +389,7 @@ test.describe("the chat bar", () => {
 
   test("Stop stops the agent, from the chat bar or with its shortcut", async ({ page }) => {
     test.setTimeout(60_000);
-    await openApp(page, "mockSpeed=1");
+    await openApp(page);
     await startTask(page, "Research quiet mechanical keyboards");
     const input = page.getByTestId("composer-input");
     await expect(input).toHaveAttribute("placeholder", "Reply to the agent…");
@@ -380,7 +425,7 @@ test.describe("jump to latest", () => {
     page,
   }) => {
     test.setTimeout(60_000);
-    await openApp(page, "mockSpeed=1");
+    await openApp(page);
     await startTask(page, "Research quiet mechanical keyboards");
     const scroller = page.getByTestId("chat-scroll");
     const jump = page.getByTestId("jump-latest");
@@ -408,22 +453,65 @@ test.describe("jump to latest", () => {
   });
 });
 
+const SCREENSHOTS_ANSWER = [
+  "Finished **sorting the screenshots**: 42 files moved.",
+  "",
+  "```sh",
+  "mv ~/Downloads/Screenshots/* ~/Downloads/",
+  "```",
+].join("\n");
+
+/** A finished thread whose last message has a code block, in the vault's agent state. */
+function screenshotsThread(): string {
+  const at = Date.now();
+  const text = (id: string, body: string, createdAt: number) => ({
+    id,
+    kind: "text",
+    role: "agent",
+    author: "subagent:files",
+    createdAt,
+    text: body,
+  });
+  return `${JSON.stringify({
+    version: 1,
+    id: "thr_screenshots",
+    taskId: null,
+    notePath: null,
+    title: "Organize the screenshots in my Downloads folder",
+    status: "done",
+    createdAt: at - 10_000,
+    updatedAt: at,
+    messages: [
+      text("m1", "Sorting the screenshots by date.", at - 5_000),
+      text("m2", SCREENSHOTS_ANSWER, at),
+    ],
+    artifacts: [],
+    surfaces: [],
+  })}\n`;
+}
+
 test.describe("copy", () => {
+  test.use({
+    daemonSpec: {
+      files: { ".daily-do-list/threads/thr_screenshots.json": screenshotsThread() },
+    },
+  });
+
   test("a message copies its markdown, a code block its code", async ({ page, context }) => {
-    test.setTimeout(60_000);
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-    await openApp(page, "mockSpeed=4");
-    await startTask(page, "Organize the screenshots in my Downloads folder");
-    await expect(badge(page)).toHaveClass(/cm-ddl-badge-done/, { timeout: 30_000 });
+    await openApp(page);
+    await page.keyboard.press("ControlOrMeta+Shift+A");
+    await page
+      .getByTestId("inbox-item")
+      .filter({ hasText: "Organize the screenshots in my Downloads folder" })
+      .click();
     const last = agentMessages(page).last();
     await expect(last.locator(".code-copy")).toHaveCount(1);
 
     await last.hover();
     await last.getByTestId("message-copy").click();
     await expect(last.getByTestId("message-copy")).toHaveAttribute("aria-label", "Copied");
-    const message = await page.evaluate(() => navigator.clipboard.readText());
-    expect(message).toContain("Finished **");
-    expect(message).toContain("```sh");
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(SCREENSHOTS_ANSWER);
 
     await last.locator(".code-wrap").hover();
     await last.locator(".code-copy").click();
@@ -438,7 +526,7 @@ test.describe("reduced motion", () => {
   test("text appears as it arrives and the indicators hold still", async ({ page }) => {
     test.setTimeout(60_000);
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await openApp(page, "mockSpeed=1");
+    await openApp(page);
     await watchChat(page);
     await startTask(page, "Order a replacement water filter");
     await expect(page.getByTestId("chat-activity")).toHaveAttribute("data-kind", "approval", {

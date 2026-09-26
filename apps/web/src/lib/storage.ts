@@ -39,7 +39,6 @@ export const STORAGE_KEYS = {
   settingsCache: "ddl-settings-cache",
   layout: "ddl-layout",
   perf: "ddl-perf",
-  mockSettings: "ddl-mock-settings",
   /** The mock daemon's device-local settings (placement, remote hosts, sync, the machine link). */
   mockDevice: "ddl-mock-device",
   /** The mock daemon's pairing codes and paired devices. */

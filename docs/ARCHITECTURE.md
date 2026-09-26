@@ -22,7 +22,7 @@ apps/web ──REST + WebSocket──▶ apps/daemon ──▶ @ddl/storage (vau
 | `@ddl/connectors` | MCP client: `mcpServers` config → harness-agnostic `ToolSpec`s | Daemon |
 | `apps/daemon` | Hono HTTP API + WebSocket hub, auth, config, settings, static UI; composes everything | Node 24 |
 | `apps/sync` | Sync service: per-vault change log in SQLite, HTTP API with conditional writes, live WebSocket push, the agent lease ([SYNC.md](SYNC.md)) | Node 24 (self-hosted) |
-| `apps/web` | React 19 UI; `DaemonClient` with HTTP and in-browser mock implementations | Browser / WebView |
+| `apps/web` | React 19 UI; `DaemonClient` over HTTP + WebSocket | Browser / WebView |
 | `evals` | Agent eval suites (safety verdicts, triage) with mock (CI) and live modes | Node |
 
 Internal packages export TypeScript source directly (no per-package build). The daemon is bundled
@@ -108,8 +108,8 @@ through an `AttributedStorage` view. The WebSocket hub tags each `vault.changed`
 - What the orchestrator is doing while you write (`orchestrator.activity`) shows as chips at the
   end of the lines that woke it, a note-level indicator in the note header and a status bar item
   for work elsewhere; clicking opens its chat at the turn (see `apps/web/README.md`).
-- `DaemonClient` has two implementations: `HttpDaemonClient` (real) and `MockDaemonClient`
-  (in-browser vault + simulated agent, used by e2e/perf tests and demos via `?mock=1`).
+- `DaemonClient` is implemented by `HttpDaemonClient`. The e2e and perf tests, and the
+  `pnpm dev:mock` demo, run it against real daemons with the mock agent (see `apps/web/README.md`).
 
 ## The agent runtime
 

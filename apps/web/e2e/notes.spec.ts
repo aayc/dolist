@@ -1,8 +1,8 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { expectDailyNote, focusEditorEnd, noteTitle, openApp, waitForSaved } from "./helpers";
 
 test.describe("notes, palette and settings", () => {
-  test("quick switcher opens notes and Mod+Enter creates one", async ({ page }) => {
+  test("quick switcher opens notes and Mod+Enter creates one", async ({ page, daemon }) => {
     await openApp(page);
     await page.keyboard.press("ControlOrMeta+O");
     const input = page.getByTestId("switcher-input");
@@ -20,9 +20,7 @@ test.describe("notes, palette and settings", () => {
     await expect(
       page.locator('[data-testid="explorer-item"][data-path="Weekend plans.md"]'),
     ).toBeVisible();
-    await expect
-      .poll(() => page.evaluate(() => window.__ddlMock?.readNote("Weekend plans.md")))
-      .toBe("");
+    await expect.poll(() => daemon.read("Weekend plans.md")).toBe("");
   });
 
   test("command palette lists hotkeys, runs commands and closes on Escape", async ({ page }) => {
@@ -47,7 +45,7 @@ test.describe("notes, palette and settings", () => {
     await expect(palette).toBeHidden();
   });
 
-  test("create, rename and delete a note", async ({ page }) => {
+  test("create, rename and delete a note", async ({ page, daemon }) => {
     await openApp(page);
     await page.getByTestId("explorer-new-note").click();
     const title = noteTitle(page);
@@ -69,9 +67,7 @@ test.describe("notes, palette and settings", () => {
     await expect(renamed).toBeVisible();
     await expect(created).toHaveCount(0);
     await expect(title).toHaveValue("Groceries");
-    await expect
-      .poll(() => page.evaluate(() => window.__ddlMock?.listPaths().includes("Groceries.md")))
-      .toBe(true);
+    await expect.poll(async () => (await daemon.list()).includes("Groceries.md")).toBe(true);
 
     await renamed.click({ button: "right" });
     await page.getByTestId("context-menu").getByText("Delete").click();
@@ -79,9 +75,7 @@ test.describe("notes, palette and settings", () => {
     await page.getByTestId("confirm-accept").click();
     await expect(renamed).toHaveCount(0);
     await expect(page.getByTestId("tab").filter({ hasText: "Groceries" })).toHaveCount(0);
-    await expect
-      .poll(() => page.evaluate(() => window.__ddlMock?.listPaths().includes("Groceries.md")))
-      .toBe(false);
+    await expect.poll(async () => (await daemon.list()).includes("Groceries.md")).toBe(false);
   });
 
   test("tabs: open in new tab, switch, close with the close button", async ({ page }) => {
@@ -97,7 +91,7 @@ test.describe("notes, palette and settings", () => {
     await expect(page.getByTestId("tab")).toHaveCount(1);
   });
 
-  test("settings changes apply immediately", async ({ page }) => {
+  test("settings changes apply immediately", async ({ page, daemon }) => {
     await openApp(page);
     await page.keyboard.press("ControlOrMeta+,");
     await page.getByTestId("settings-nav-editor").click();
@@ -114,7 +108,7 @@ test.describe("notes, palette and settings", () => {
     await expect(page.getByTestId("daily-preview")).toContainText("Journal/");
 
     await page.getByTestId("settings-nav-about").click();
-    await expect(page.getByTestId("about-list")).toContainText("In-browser mock");
+    await expect(page.getByTestId("about-list")).toContainText(daemon.url);
   });
 
   test("search finds text across the vault and opens the hit", async ({ page }) => {
@@ -133,24 +127,19 @@ test.describe("notes, palette and settings", () => {
 
   test("a conflicting external edit keeps local text and saves the other version as a copy", async ({
     page,
+    daemon,
   }) => {
     await openApp(page);
     await page.evaluate(() => window.__ddlDebug?.openNote("Ideas.md"));
     await expect(noteTitle(page)).toHaveValue("Ideas");
     await focusEditorEnd(page);
     await page.keyboard.type(" local change");
-    await page.evaluate(() =>
-      window.__ddlMock?.externalEdit("Ideas.md", "# Ideas\n\nRemote rewrite"),
-    );
+    await daemon.write("Ideas.md", "# Ideas\n\nRemote rewrite");
 
     const toast = page.getByTestId("toast").filter({ hasText: "changed elsewhere" });
     await expect(toast).toBeVisible();
-    await expect
-      .poll(() => page.evaluate(() => window.__ddlMock?.readNote("Ideas (conflict).md")))
-      .toBe("# Ideas\n\nRemote rewrite");
-    await expect
-      .poll(() => page.evaluate(() => window.__ddlMock?.readNote("Ideas.md")))
-      .toContain("local change");
+    await expect.poll(() => daemon.read("Ideas (conflict).md")).toBe("# Ideas\n\nRemote rewrite");
+    await expect.poll(() => daemon.read("Ideas.md")).toContain("local change");
     await expect(page.locator(".cm-content")).toContainText("local change");
     await waitForSaved(page);
 
@@ -158,13 +147,11 @@ test.describe("notes, palette and settings", () => {
     await expect(noteTitle(page)).toHaveValue("Ideas (conflict)");
   });
 
-  test("external edits update an open note without local changes", async ({ page }) => {
+  test("external edits update an open note without local changes", async ({ page, daemon }) => {
     await openApp(page);
     await page.evaluate(() => window.__ddlDebug?.openNote("Ideas.md"));
     await expect(noteTitle(page)).toHaveValue("Ideas");
-    await page.evaluate(() =>
-      window.__ddlMock?.externalEdit("Ideas.md", "# Ideas\n\nEdited elsewhere"),
-    );
+    await daemon.write("Ideas.md", "# Ideas\n\nEdited elsewhere");
     await expect(page.locator(".cm-content")).toContainText("Edited elsewhere");
   });
 });

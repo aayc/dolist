@@ -17,17 +17,6 @@ declare global {
       clear(): void;
       mark(name: string): void;
     };
-    __ddlMock?: {
-      createNote(path: string, content: string): void;
-      externalEdit(path: string, content: string): void;
-      deleteNote(path: string): void;
-      readNote(path: string): string | null;
-      listPaths(): string[];
-      setMachineReachable(reachable: boolean): void;
-      setMachineRejects(rejected: boolean): void;
-      emitEvents(events: unknown[]): void;
-      seedThreads(threads: unknown[]): void;
-    };
     __ddlDebug?: {
       evictNote(path: string): void;
       activePath(): string | null;
@@ -69,9 +58,12 @@ export function dailyTitle(days = 0): string {
   });
 }
 
-/** Opens the app against the in-browser mock and waits until today's note is interactive. */
-export async function openApp(page: Page, query = "mockSpeed=4"): Promise<void> {
-  await page.goto(`/?mock=1${query ? `&${query}` : ""}`);
+/**
+ * Opens the app on the test's daemon, with `window.__ddlDebug` (`?debug=1`), and waits until
+ * today's note is interactive.
+ */
+export async function openApp(page: Page, path = "/?debug=1"): Promise<void> {
+  await page.goto(path);
   await expect(page.getByTestId("note-title")).toBeVisible();
   await page.waitForFunction(() =>
     window.__ddlPerf?.measures.some((m) => m.name === "app:interactive"),

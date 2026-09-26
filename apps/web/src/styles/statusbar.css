@@ -166,8 +166,3 @@ button.status-item:active {
 .status-connection.is-offline .connection-dot {
   background: var(--ddl-danger);
 }
-
-/* The demo marker (connected to the in-browser mock). */
-.status-connection.is-mock.is-online .connection-dot {
-  background: var(--ddl-info);
-}

@@ -111,7 +111,6 @@ function isIncompatibleClose(event: unknown): boolean {
 }
 
 export class HttpDaemonClient implements DaemonClient {
-  readonly kind = "http" as const;
   readonly clientId: string;
   readonly endpoint: string;
   private readonly clientVersion: string;

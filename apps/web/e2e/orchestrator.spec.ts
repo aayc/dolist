@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { badge, openApp, sawStreaming, typeTask, watchForStreaming } from "./helpers";
 
 test.describe("the orchestrator's chat", () => {
@@ -6,7 +6,7 @@ test.describe("the orchestrator's chat", () => {
     page,
   }) => {
     test.setTimeout(60_000);
-    await openApp(page, "mockSpeed=4");
+    await openApp(page);
     await typeTask(page, "Research beginner guitar lessons");
     await expect(badge(page)).toHaveClass(/cm-ddl-badge-done/, { timeout: 25_000 });
 
@@ -57,25 +57,29 @@ test.describe("the orchestrator's chat", () => {
     await expect(page.getByTestId("thread-title")).toHaveText("Research beginner guitar lessons");
   });
 
-  test("the palette opens it, and Stop ends the run in progress", async ({ page }) => {
-    await openApp(page, "mockSpeed=1");
-    await page.keyboard.press("ControlOrMeta+P");
-    await page.getByTestId("palette-input").fill("orchestrator");
-    const item = page.getByTestId("palette-item").first();
-    await expect(item).toContainText("Open the orchestrator's chat");
-    await page.keyboard.press("Enter");
+  test.describe("with the live agent, whose answers take a moment", () => {
+    test.use({ daemonSpec: { agent: "live" } });
 
-    const view = page.getByTestId("orchestrator-view");
-    await expect(view).toBeVisible();
-    await expect(view.getByTestId("orchestrator-empty")).toBeVisible();
-    await view.getByTestId("composer-input").click();
-    await page.keyboard.type("Tell me a story", { delay: 5 });
-    await page.keyboard.press("Enter");
-    const stop = view.getByTestId("thread-stop");
-    await expect(stop).toBeVisible();
-    await stop.click();
-    await expect(view.getByTestId("status-divider").last()).toContainText("You stopped this run");
-    await expect(view.getByTestId("status-chip")).toHaveAttribute("data-status", "idle");
-    await expect(stop).toBeHidden();
+    test("the palette opens it, and Stop ends the run in progress", async ({ page }) => {
+      await openApp(page);
+      await page.keyboard.press("ControlOrMeta+P");
+      await page.getByTestId("palette-input").fill("orchestrator");
+      const item = page.getByTestId("palette-item").first();
+      await expect(item).toContainText("Open the orchestrator's chat");
+      await page.keyboard.press("Enter");
+
+      const view = page.getByTestId("orchestrator-view");
+      await expect(view).toBeVisible();
+      await expect(view.getByTestId("orchestrator-empty")).toBeVisible();
+      await view.getByTestId("composer-input").click();
+      await page.keyboard.type("Tell me a story", { delay: 5 });
+      await page.keyboard.press("Enter");
+      const stop = view.getByTestId("thread-stop");
+      await expect(stop).toBeVisible();
+      await stop.click();
+      await expect(view.getByTestId("status-divider").last()).toContainText("You stopped this run");
+      await expect(view.getByTestId("status-chip")).toHaveAttribute("data-status", "idle");
+      await expect(stop).toBeHidden();
+    });
   });
 });

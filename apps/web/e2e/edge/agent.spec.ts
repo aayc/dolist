@@ -1,4 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
+import type { Page } from "../fixtures";
+import { expect, test } from "../fixtures";
 import { badge, openApp } from "../helpers";
 import { caretToEnd, collectErrors } from "./edge-helpers";
 
@@ -19,7 +20,7 @@ test.describe("agent edge cases", () => {
   test("two tasks waiting for approval at once are decided independently", async ({ page }) => {
     test.setTimeout(60_000);
     const errors = collectErrors(page);
-    await openApp(page, "mockSpeed=6");
+    await openApp(page);
     await typeTasks(page, ["Order a new desk lamp", "Book a haircut for Saturday"]);
 
     await expect(badge(page)).toHaveCount(2, { timeout: 15_000 });
@@ -49,7 +50,9 @@ test.describe("agent edge cases", () => {
     await expect(page.getByTestId("status-approvals")).toBeHidden();
     await expect(page.getByTestId("toast").filter({ hasText: "Approval needed" })).toHaveCount(0);
 
-    await expect(page.locator(".cm-ddl-badge-done")).toHaveCount(2, { timeout: 25_000 });
+    // The approved one finishes; the denied one asks what to do instead.
+    await expect(page.locator(".cm-ddl-badge-done")).toHaveCount(1, { timeout: 25_000 });
+    await expect(page.locator(".cm-ddl-badge-waiting_user")).toHaveCount(1);
     // Each badge stayed on its own task line.
     const lines = page.locator(".cm-line").filter({ has: page.locator(".cm-ddl-badge") });
     await expect(lines.filter({ hasText: "desk lamp" }).locator(".cm-ddl-badge")).toHaveCount(1);
@@ -59,7 +62,7 @@ test.describe("agent edge cases", () => {
 
   test("the thread panel works with the keyboard only", async ({ page }) => {
     test.setTimeout(60_000);
-    await openApp(page, "mockSpeed=6");
+    await openApp(page);
     await typeTasks(page, ["Research quiet mechanical keyboards"]);
     await expect(page.locator(".cm-ddl-badge-done")).toHaveCount(1, { timeout: 25_000 });
 

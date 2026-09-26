@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { dailyHeading, dailyPath, dailyTitle, expectDailyNote, isoDate, openApp } from "./helpers";
 
 test.describe("startup and daily notes", () => {
@@ -16,9 +16,9 @@ test.describe("startup and daily notes", () => {
     await expect(
       page.locator(`[data-testid="explorer-item"][data-path="${dailyPath()}"]`),
     ).toHaveAttribute("aria-selected", "true");
-    // Quiet status bar: nothing for "connected" or "saved", a marker for the demo.
-    await expect(page.getByTestId("status-connection")).toHaveAttribute("data-state", "online");
-    await expect(page.getByTestId("status-connection")).toHaveText("Demo");
+    // Quiet status bar: nothing for "connected" or "saved".
+    await expect(page.getByTestId("status-agent")).toBeVisible();
+    await expect(page.getByTestId("status-connection")).toHaveCount(0);
     await expect(page.getByTestId("status-bar")).toHaveAttribute("data-save-state", "saved");
     await expect(page.getByTestId("status-save")).toHaveCount(0);
   });
@@ -69,15 +69,14 @@ test.describe("startup and daily notes", () => {
 
   test("Mod+Shift+D creates today's note from the template when it is missing", async ({
     page,
+    daemon,
   }) => {
     await openApp(page);
-    await page.evaluate((path) => window.__ddlMock?.deleteNote(path), dailyPath());
+    await daemon.remove(dailyPath());
     await expect(page.getByTestId("empty-state")).toBeVisible();
     await page.keyboard.press("ControlOrMeta+Shift+D");
     await expectDailyNote(page);
-    await expect
-      .poll(() => page.evaluate((path) => window.__ddlMock?.readNote(path), dailyPath()))
-      .toBe("- [ ] ");
+    await expect.poll(() => daemon.read(dailyPath())).toBe("- [ ] ");
   });
 
   test("theme choice persists across reloads without a flash", async ({ page }) => {

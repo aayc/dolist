@@ -75,9 +75,7 @@ describe("tooltip and control text", () => {
         // Components take `title` props; an iframe's title is its accessible name.
         if (/^[a-z]/.test(name) && name !== "iframe") offenders.push(`${file}: <${name} title>`);
       }
-      if (/\.title\s*=(?!=)/.test(source) && !file.includes("/api/mock/")) {
-        offenders.push(`${file}: .title =`);
-      }
+      if (/\.title\s*=(?!=)/.test(source)) offenders.push(`${file}: .title =`);
     }
     expect(offenders).toEqual([]);
   });

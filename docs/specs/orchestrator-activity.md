@@ -60,7 +60,7 @@ export interface OrchestratorActivity {
 - `reading` while it builds the digest, `thinking` during the model turn, `acting` while its tools
   run; then `idle` with an `outcome`.
 - The relay (`apps/daemon/src/relay/`) forwards `orchestrator.activity` from the always-on machine.
-- The in-browser mock and `InMemoryDaemonClient` emit plausible sequences.
+- The daemon's mock agent and `InMemoryDaemonClient` emit plausible sequences.
 
 ## Editor (web and Mac, the same behavior and wording)
 

@@ -4,9 +4,11 @@ The editor has to feel instant, and the agent has to feel alive. Both are measur
 
 ## UI budgets (Playwright, `pnpm e2e:perf`)
 
-Measured against a production build with the in-browser mock backend (`?mock=1&perf=1`), so the
-numbers reflect UI work only. `window.__ddlPerf` records named `performance.measure`s; the perf
-spec writes `apps/web/perf-results.json`.
+Measured against a production build served by a real daemon on the same machine (its mock agent,
+a fresh temporary vault per test; see "End-to-end tests" in `apps/web/README.md`), opened with
+`?perf=1`. `window.__ddlPerf` records named `performance.measure`s; the perf spec writes
+`apps/web/perf-results.json`. The daemon is in the loop wherever the app asks it (startup, an
+uncached note, a thread), which on loopback costs a few milliseconds: every budget holds unchanged.
 
 | Measure | What it covers | Budget |
 | --- | --- | --- |
@@ -16,7 +18,7 @@ spec writes `apps/web/perf-results.json`.
 | `tab:switch` | switching between a 2 000-line note and today's note | 30 ms |
 | `thread:open` | badge click → thread rendered | 100 ms |
 | `thread:open (1000 messages)` | inbox click → a 1 000-message thread rendered (fewer than 100 rows) | 100 ms |
-| `vault burst` | 300 `vault.changed` events for new files → shown, 5 000-note vault (fewer than 100 explorer rows) | 100 ms |
+| `vault burst` | 300 files created on disk at once → shown, 5 000-note vault (fewer than 100 explorer rows); timed from the first socket frame about them, so it's the client's work | 100 ms |
 | `keystroke` (p95) | keydown → next frame after the DOM update, 2 000-line note | 16 ms |
 | `keystroke (vim)` (p95) | the same with vim mode on: insert-mode typing, then normal-mode motions, `x` and `u` | 16 ms |
 | `keystroke (beside drawings)` (p95) | typing beside the first of six embedded drawings (floats the text wraps around) | 16 ms |
@@ -25,12 +27,16 @@ spec writes `apps/web/perf-results.json`.
 CI multiplies budgets by `PERF_BUDGET_MULTIPLIER=2` (slower shared runners). The perf run disables
 Chrome's frame-rate limiter so "→ next frame" measures work, not vsync alignment.
 
-Latest local run (Apple Silicon): keystroke p95 1.6 ms (vim mode 1.8 ms, beside drawings 1.7 ms),
-daily open ~4–5 ms, tab switch 14 ms, thread open 9 ms (1 000 messages: 7 ms, was 120 ms), first
-load 106 ms, 300 new files 13 ms (was 3.5 s), zero long tasks.
+Latest local run (Apple Silicon, real daemon): keystroke p95 1.7 ms (vim mode 2 ms, beside drawings
+1.5 ms), daily open ~5–7 ms (uncached previous note 18.5 ms), tab switch 12 ms, thread open 24 ms
+(1 000 messages: 56 ms), first load 131 ms (warm 40 ms), 300 new files 25 ms, zero long tasks.
+The in-browser mock these tests used before gave, on the same machine and day: first load 111 ms,
+thread open 21 ms (1 000 messages: 66 ms), 300 new files 9 ms (the daemon batches real file events
+differently from the mock's 300 synthetic ones), everything else within a millisecond or two.
 
-Large data comes from the mock: `?mockNotes=5000` adds notes, and `window.__ddlMock.seedThreads`
-and `emitEvents` add threads and push server events as the socket would (one task each).
+Large data is seeded as files before the daemon starts: `DaemonSpec.notes` adds notes, a thread is
+its `.daily-do-list/threads/<id>.json` (`threadFile` in `e2e/fixtures.ts`), and the vault burst
+writes 300 files into the vault.
 
 Drawings stay off the keystroke path: an embed's box is a widget from the live preview's
 visible-range pass (reused while its `![[…]]` doesn't change), static renders are cached by the

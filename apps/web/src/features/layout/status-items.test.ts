@@ -18,15 +18,11 @@ describe("status bar items", () => {
     expect(visibleSaveState("error")).toBe("error");
   });
 
-  it("shows the connection only when it isn't connected, plus a demo marker", () => {
-    expect(connectionItem("online", "http")).toBeNull();
-    expect(connectionItem("online", null)).toBeNull();
-    expect(connectionItem("online", "mock")?.label).toBe("Demo");
-    expect(connectionItem("connecting", "http")?.label).toBe("Connecting…");
-    expect(connectionItem("reconnecting", "http")?.label).toBe("Reconnecting…");
-    expect(connectionItem("offline", "http")?.label).toBe("Offline");
-    // A problem wins over the demo marker.
-    expect(connectionItem("offline", "mock")?.label).toBe("Offline");
+  it("shows the connection only when it isn't connected", () => {
+    expect(connectionItem("online")).toBeNull();
+    expect(connectionItem("connecting")?.label).toBe("Connecting…");
+    expect(connectionItem("reconnecting")?.label).toBe("Reconnecting…");
+    expect(connectionItem("offline")?.label).toBe("Offline");
   });
 
   it("names the agent mode only when it isn't live", () => {
@@ -102,7 +98,7 @@ describe("status bar items", () => {
 
   it("explains connection problems without a trailing period", () => {
     for (const state of ["connecting", "reconnecting", "offline"] as const) {
-      expect(connectionItem(state, "http")?.title).toMatch(/daemon[^.]*$/);
+      expect(connectionItem(state)?.title).toMatch(/daemon[^.]*$/);
     }
   });
 

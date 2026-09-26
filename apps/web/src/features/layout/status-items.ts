@@ -1,5 +1,5 @@
 import type { AgentMode, AgentPlacementStatus, ComputerAccess } from "@ddl/core";
-import type { ClientKind, ConnectionState } from "../../api/client";
+import type { ConnectionState } from "../../api/client";
 import type { SaveState } from "../../state/notes-store";
 
 /* The status bar is quiet while things are fine: `null` means "show nothing". */
@@ -29,16 +29,10 @@ const CONNECTION_TITLES: Record<Exclude<ConnectionState, "online">, string> = {
   offline: "Can't reach the daemon — retrying automatically",
 };
 
-/** Connection problems show; a live daemon connection doesn't, the in-browser demo gets a marker. */
-export function connectionItem(
-  state: ConnectionState,
-  kind: ClientKind | null,
-): ConnectionItem | null {
-  if (state !== "online")
-    return { label: CONNECTION_PROBLEMS[state], title: CONNECTION_TITLES[state] };
-  if (kind === "mock")
-    return { label: "Demo", title: "Running against the in-browser mock daemon" };
-  return null;
+/** Connection problems show; a live daemon connection doesn't. */
+export function connectionItem(state: ConnectionState): ConnectionItem | null {
+  if (state === "online") return null;
+  return { label: CONNECTION_PROBLEMS[state], title: CONNECTION_TITLES[state] };
 }
 
 /** The agent's mode is worth a word only when it isn't the real agent. */

@@ -1,4 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { openApp } from "./helpers";
 
 async function openAgentSettings(page: Page): Promise<void> {
@@ -21,6 +22,8 @@ async function reloadApp(page: Page): Promise<void> {
 }
 
 test.describe("agent settings", () => {
+  test.use({ daemonSpec: { settings: { agent: { model: "vendor/model-e2e" } } } });
+
   test("the harness and each harness's model persist across reloads", async ({ page }) => {
     await openApp(page);
     await openAgentSettings(page);
@@ -29,7 +32,7 @@ test.describe("agent settings", () => {
     const openRouterModel = page.getByTestId("setting-model");
     const cursorModel = page.getByTestId("setting-cursor-model");
     await expect(pi).toBeChecked();
-    await expect(openRouterModel).toHaveValue("mock/scripted-agent");
+    await expect(openRouterModel).toHaveValue("vendor/model-e2e");
     await expect(cursorModel).toHaveCount(0);
 
     await page.getByTestId("setting-harness-cursor").click();
@@ -58,7 +61,7 @@ test.describe("agent settings", () => {
     await expect(cursor).toBeFocused();
     await page.keyboard.press("ArrowLeft");
     await expect(pi).toBeChecked();
-    await expect(openRouterModel).toHaveValue("mock/scripted-agent");
+    await expect(openRouterModel).toHaveValue("vendor/model-e2e");
     await retype(page, "setting-model", "vendor/model-a");
 
     await reloadApp(page);

@@ -1,10 +1,11 @@
 import { writeFileSync } from "node:fs";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test, threadFile } from "../fixtures";
 import { badge, dailyPath, noteTitle, type PerfMeasure } from "../helpers";
 
 /**
- * Performance budgets (mock mode). CI runs with PERF_BUDGET_MULTIPLIER=2 to absorb slower shared
- * runners; locally the raw budgets apply. Results are written to apps/web/perf-results.json.
+ * Performance budgets, against a real daemon (its mock agent) on this machine. CI runs with
+ * PERF_BUDGET_MULTIPLIER=2 to absorb slower shared runners; locally the raw budgets apply. Results
+ * are written to apps/web/perf-results.json.
  */
 const MULTIPLIER = Number(process.env.PERF_BUDGET_MULTIPLIER ?? "1") || 1;
 const BUDGET_MS = {
@@ -86,8 +87,8 @@ function bigNote(lines: number): string {
   return out.join("\n");
 }
 
-async function boot(page: Page, query = ""): Promise<number> {
-  await page.goto(`/?mock=1&perf=1${query}`);
+async function boot(page: Page): Promise<number> {
+  await page.goto("/?perf=1");
   await page.waitForFunction(() =>
     window.__ddlPerf?.measures.some((m) => m.name === "app:interactive"),
   );
@@ -185,13 +186,10 @@ test("daily:prev (Mod+Shift+P)", async ({ page }) => {
   expect(a.passed && b.passed).toBe(true);
 });
 
-test("tab:switch between a 2000-line note and today's note", async ({ page }) => {
+test("tab:switch between a 2000-line note and today's note", async ({ page, daemon }) => {
+  await daemon.write(BIG_NOTE, bigNote(2000));
   await boot(page);
   await waitForPrefetch(page);
-  await page.evaluate(
-    ([path, content]) => window.__ddlMock!.createNote(path!, content!),
-    [BIG_NOTE, bigNote(2000)],
-  );
   await page.evaluate((path) => window.__ddlDebug!.openNote(path, true), BIG_NOTE);
   await expect(page.getByTestId("tab")).toHaveCount(2);
   // Let the freshly opened 2000-line note finish its first layout/idle work, then warm up once.
@@ -208,7 +206,7 @@ test("tab:switch between a 2000-line note and today's note", async ({ page }) =>
 });
 
 test("thread:open (badge click → thread rendered)", async ({ page }) => {
-  await boot(page, "&mockSpeed=4");
+  await boot(page);
   await waitForPrefetch(page);
   await page.locator(".cm-content").click();
   await page.keyboard.press("ControlOrMeta+End");
@@ -225,74 +223,85 @@ test("thread:open (badge click → thread rendered)", async ({ page }) => {
   expect(record("thread:open", samples, BUDGET_MS.threadOpen, "p95").passed).toBe(true);
 });
 
-test("thread:open for a 1000-message thread (its latest rows)", async ({ page }) => {
-  await boot(page);
-  await waitForPrefetch(page);
-  await page.evaluate(() => {
-    const at = Date.now();
-    const messages = Array.from({ length: 1000 }, (_, i) => ({
-      id: `m${i}`,
-      kind: "text",
-      role: "agent",
-      author: "orchestrator",
-      createdAt: at,
-      text: `**Option ${i}**:\n\n- [a shop](https://example.com/${i})\n- 3–5 days`,
-    }));
-    const thread = {
-      id: "thr_long",
-      title: "A long thread",
-      taskId: null,
-      notePath: null,
-      status: "done",
-    };
-    window.__ddlMock!.seedThreads([
-      { ...thread, createdAt: at, updatedAt: at, messages, artifacts: [], surfaces: [] },
-    ]);
-  });
-  await page.keyboard.press("ControlOrMeta+Shift+A");
-  const item = page.locator("[data-thread-id='thr_long']");
-  const samples: number[] = [];
-  for (let i = 0; i < 6; i++) {
-    const m = await measure(page, "thread:open", () => item.click());
-    samples.push(m.duration);
-    expect(await page.getByTestId("chat-list").locator("> *").count()).toBeLessThan(100);
-    await page.getByTestId("thread-back").click();
-  }
-  expect(record("thread:open (1000 msgs)", samples, BUDGET_MS.threadOpen, "p95").passed).toBe(true);
-});
-
-test("a 5000-note vault: the explorer's rows in view, 300 new files at once", async ({ page }) => {
-  await boot(page, "&mockNotes=5000");
-  expect(await page.getByTestId("explorer-item").count()).toBeLessThan(100);
-  const events = Array.from({ length: 300 }, (_, i) => ({
-    type: "vault.changed",
-    origin: "external",
-    changes: [{ path: `Inbox/Synced ${i}.md`, kind: "created" }],
+test.describe("a 1000-message thread", () => {
+  const at = Date.now();
+  const messages = Array.from({ length: 1000 }, (_, i) => ({
+    id: `m${i}`,
+    kind: "text" as const,
+    role: "agent" as const,
+    author: "orchestrator" as const,
+    createdAt: at,
+    text: `**Option ${i}**:\n\n- [a shop](https://example.com/${i})\n- 3–5 days`,
   }));
-  // Each event is a task of its own, like the socket's; done once the new folder shows.
-  const ms = await page.evaluate(
-    (list) =>
-      new Promise<number>((resolve) => {
-        const start = performance.now();
-        window.__ddlMock!.emitEvents(list);
-        const poll = () =>
-          document.querySelector("[data-path='Inbox']")
-            ? resolve(performance.now() - start)
-            : requestAnimationFrame(poll);
-        poll();
-      }),
-    events,
-  );
-  expect(record("vault burst: 300 new files", [ms], BUDGET_MS.vaultBurst, "max").passed).toBe(true);
+  test.use({
+    daemonSpec: { files: threadFile({ id: "thr_long", title: "A long thread", messages }) },
+  });
+
+  test("thread:open for a 1000-message thread (its latest rows)", async ({ page }) => {
+    await boot(page);
+    await waitForPrefetch(page);
+    await page.keyboard.press("ControlOrMeta+Shift+A");
+    const item = page.locator("[data-thread-id='thr_long']");
+    const samples: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      const m = await measure(page, "thread:open", () => item.click());
+      samples.push(m.duration);
+      expect(await page.getByTestId("chat-list").locator("> *").count()).toBeLessThan(100);
+      await page.getByTestId("thread-back").click();
+    }
+    expect(record("thread:open (1000 msgs)", samples, BUDGET_MS.threadOpen, "p95").passed).toBe(
+      true,
+    );
+  });
 });
 
-test("vim mode: keystroke latency and long tasks in a 2000-line note", async ({ page }) => {
+test.describe("a 5000-note vault", () => {
+  test.use({ daemonSpec: { notes: 5000 } });
+
+  test("the explorer's rows in view, 300 new files at once", async ({ page, daemon }) => {
+    // When the first socket frame about the new files arrives: the client's work starts there.
+    await page.addInitScript(() => {
+      const Native = window.WebSocket;
+      window.WebSocket = class extends Native {
+        constructor(...args: ConstructorParameters<typeof WebSocket>) {
+          super(...args);
+          this.addEventListener("message", (event) => {
+            const flag = window as unknown as { __burstAt?: number };
+            if (flag.__burstAt === undefined && String(event.data).includes("Inbox/Synced")) {
+              flag.__burstAt = performance.now();
+            }
+          });
+        }
+      };
+    });
+    await boot(page);
+    expect(await page.getByTestId("explorer-item").count()).toBeLessThan(100);
+    const shown = page.evaluate(
+      () =>
+        new Promise<number>((resolve) => {
+          const poll = () =>
+            document.querySelector("[data-path='Inbox']")
+              ? resolve(performance.now())
+              : requestAnimationFrame(poll);
+          poll();
+        }),
+    );
+    await Promise.all(
+      Array.from({ length: 300 }, (_, i) => daemon.write(`Inbox/Synced ${i}.md`, `# Synced ${i}`)),
+    );
+    const end = await shown;
+    const start = await page.evaluate(() => (window as unknown as { __burstAt: number }).__burstAt);
+    const ms = end - start;
+    expect(record("vault burst: 300 new files", [ms], BUDGET_MS.vaultBurst, "max").passed).toBe(
+      true,
+    );
+  });
+});
+
+test("vim mode: keystroke latency and long tasks in a 2000-line note", async ({ page, daemon }) => {
+  await daemon.write(BIG_NOTE, bigNote(2000));
   await boot(page);
   await waitForPrefetch(page);
-  await page.evaluate(
-    ([path, content]) => window.__ddlMock!.createNote(path!, content!),
-    [BIG_NOTE, bigNote(2000)],
-  );
   await page.evaluate((path) => window.__ddlDebug!.openNote(path), BIG_NOTE);
   await expect(noteTitle(page)).toHaveValue("Big note");
   await page.evaluate(() => window.__ddlDebug!.runCommand("editor:vim"));
@@ -327,9 +336,7 @@ test("vim mode: keystroke latency and long tasks in a 2000-line note", async ({ 
   expect(tasks.passed, `long tasks: ${JSON.stringify(longTasks)}`).toBe(true);
 });
 
-test("keystroke latency and long tasks while typing beside drawings", async ({ page }) => {
-  await boot(page);
-  await waitForPrefetch(page);
+test("keystroke latency and long tasks while typing beside drawings", async ({ page, daemon }) => {
   const placements = ["right-wrap", "left-wrap", "center", "right-wrap", "full", "left-wrap"];
   const paragraph = "Notes beside a drawing wrap around it while the text is typed and edited. ";
   const lines: string[] = ["# Drawings"];
@@ -337,10 +344,9 @@ test("keystroke latency and long tasks while typing beside drawings", async ({ p
     lines.push(`![[Garden plan.excalidraw|${260 + i * 20}|${placement}]]`);
     for (let j = 0; j < 4; j++) lines.push(paragraph.repeat(3).trim(), "");
   });
-  await page.evaluate(
-    ([path, content]) => window.__ddlMock!.createNote(path!, content!),
-    ["Perf/Drawings.md", lines.join("\n")],
-  );
+  await daemon.write("Perf/Drawings.md", lines.join("\n"));
+  await boot(page);
+  await waitForPrefetch(page);
   await page.evaluate((path) => window.__ddlDebug!.openNote(path), "Perf/Drawings.md");
   await expect(noteTitle(page)).toHaveValue("Drawings");
   await expect(page.locator(".cm-ddl-embed-drawing svg").first()).toBeVisible({ timeout: 20_000 });
@@ -373,13 +379,13 @@ test("keystroke latency and long tasks while typing beside drawings", async ({ p
   expect(tasks.passed, `long tasks: ${JSON.stringify(longTasks)}`).toBe(true);
 });
 
-test("keystroke latency and long tasks while typing in a 2000-line note", async ({ page }) => {
+test("keystroke latency and long tasks while typing in a 2000-line note", async ({
+  page,
+  daemon,
+}) => {
+  await daemon.write(BIG_NOTE, bigNote(2000));
   await boot(page);
   await waitForPrefetch(page);
-  await page.evaluate(
-    ([path, content]) => window.__ddlMock!.createNote(path!, content!),
-    [BIG_NOTE, bigNote(2000)],
-  );
   await page.evaluate((path) => window.__ddlDebug!.openNote(path), BIG_NOTE);
   await expect(noteTitle(page)).toHaveValue("Big note");
   await page.locator(".cm-content").click();

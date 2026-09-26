@@ -112,6 +112,11 @@ export interface AgentRuntimeOptions {
   /** Injectable clock for tests. */
   now?: () => number;
   /**
+   * Where OPENROUTER_API_KEY, DDL_OPENROUTER_BASE_URL, DDL_AGENT_MOCK_ACTIONS and the harnesses'
+   * variables come from. Default `process.env`.
+   */
+  env?: Record<string, string | undefined>;
+  /**
    * The agent lease's current epoch, stamped on every journal event (`(epoch, seq)` orders
    * events across holders). Default 0, until leases carry an epoch.
    */

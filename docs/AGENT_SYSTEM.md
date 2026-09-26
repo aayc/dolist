@@ -561,7 +561,7 @@ Point the whole app at the fake — the real daemon and harness at zero cost:
 pnpm dev:fake                             # daemon + web, live mode, sandboxed fake agent
 pnpm dev:fake -- --scratch                # …with a throwaway DDL_HOME and vault
 pnpm --filter @ddl/agent fake-openrouter  # just the server; prints the env to use
-pnpm --filter @ddl/web e2e:fullstack      # Playwright against daemon + fake model
+pnpm e2e                                  # Playwright against real daemons (mock agent or fake model)
 ```
 
 Plumbing: `DDL_OPENROUTER_BASE_URL` redirects the Pi harness, the key check and the daemon's
