@@ -28,6 +28,10 @@ the Azure VM.
 
 ## Shipped on `main` (newest first)
 
+- `6bb69fe` TypeScript narrow cleanups (−750): `errorMessage`/`isRecord`/`raceAbort`/`pluralize`/
+  `formatBytes`/`Listeners`/one `.env` parser in core; storage's 3-way merge rebuilt on core's line diff
+  (identical on 200k random merges); one tool-call row builder; a shared chat hook and frame on the web;
+  16 never-set options became constants.
 - The Mac demo and tests use the real daemon (−6.1k): demo mode launches the bundled daemon with the
   mock agent on a throwaway demo vault (`DDL_DEMO=1`, shared with `pnpm dev:mock`; temp home, free
   port, no user `DDL_*` vars); one shared `FakeDaemonClient` for unit tests; the in-memory fake
@@ -170,7 +174,8 @@ and branches were removed (GitHub has only `main`).
 - **Flaky tests:** done and on `main` (`5687507`): the watcher, subprocess and `trackTasks` tests
   are robust under load (fake timers, event probes instead of sleeps, CPU-time guard, generous
   failure bounds; one test-only `helloTimeoutMs` option). No assertion got looser.
-- **In flight:** `chore/lean-ts-b` (TypeScript narrow cleanups judged by lines removed). Next the Mac fake daemon, zod as the wire source and journal-only threads (see
+- **In flight:** `chore/lean-swift-b` (Swift narrow cleanups: one palette, scheduler, frame ticker,
+  daemon-home definition, shared test helpers). Next the Mac fake daemon, zod as the wire source and journal-only threads (see
   Decisions).
 - **Cleanup batch A** (in flight): `chore/cleanup-ts` (two bugs: imported threads kept their old
   note paths because the import looked for journals under the wrong folder, and the approval
