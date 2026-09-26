@@ -202,11 +202,12 @@ Every thread's state is an append-only journal of events in the sidecar
 (`.daily-do-list/state/journal/threads/<threadId>.jsonl`, format in
 [DATA_FORMATS.md](./DATA_FORMATS.md#thread-journal--statejournalthreadsthreadidjsonl)): messages
 (streamed text once final), status and title changes, artifacts, sources, and the agent's own
-record of each tool call and prompt. The thread is the fold of its events. `ThreadStore` keeps its
-API, so the orchestrator, subagents, routes and clients didn't change, and `threads/<id>.json` is
-still written, as a snapshot derived from the journal, for every reader that doesn't parse
-journals. Snapshot-only threads migrate on first load. Journals sync as a union of lines (never a
-conflict copy; see [SYNC.md](./SYNC.md#conflicts)).
+record of each tool call and prompt. The thread is the fold of its events, and the journal is all
+that's persisted: `ThreadStore` keeps its API, so the orchestrator, subagents, routes and clients
+didn't change, and the read-only view on a device without the agent folds the same journals.
+Snapshots older versions wrote (`threads/<id>.json`) move into the journals when the store loads
+(`src/threads/journal/migrate.ts`). Journals sync as a union of lines (never a conflict copy; see
+[SYNC.md](./SYNC.md#conflicts)).
 
 **Write-ahead around tool calls.** The runtime wraps every harness in `journalingHarness`
 (`src/threads/journal/tool-ledger.ts`, harness-agnostic: it only uses the `Harness` interfaces).

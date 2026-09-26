@@ -1,7 +1,8 @@
 /**
  * Threads are the conversation attached to one to-do item: agent comments, tool activity, approval
- * requests, artifacts and live surfaces. Persisted in the vault sidecar (`.daily-do-list/threads/`)
- * through the StorageProvider so they sync along with the notes.
+ * requests, artifacts and live surfaces. Persisted as journals in the vault sidecar
+ * (`.daily-do-list/state/journal/threads/`) through the StorageProvider so they sync along with the
+ * notes.
  */
 import type { PersistedJournalAllowedVia, PersistedJournalEvent } from "@ddl/contract";
 import type {

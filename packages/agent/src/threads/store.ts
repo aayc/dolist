@@ -129,7 +129,7 @@ class SidecarThreadStore implements JournaledThreadStore {
       logger: this.logger,
       now: this.now,
     }).catch((error: unknown) => {
-      this.logger.warn("Failed to migrate thread snapshots", { error: errorText(error) });
+      this.logger.warn("Failed to migrate thread files", { error: errorText(error) });
     });
     const entries = await this.storage.list({ prefix: THREAD_JOURNALS_DIR, includeHidden: true });
     await forEachLimited(entries, LOAD_CONCURRENCY, async ({ path }) => {
