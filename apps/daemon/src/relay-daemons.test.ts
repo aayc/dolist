@@ -6,7 +6,7 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { HttpMethod } from "@ddl/contract";
+import { type HttpMethod, persistedThreadJournalPath } from "@ddl/contract";
 import {
   type AgentPlacement,
   type AgentStatusResponse,
@@ -225,13 +225,7 @@ const machineToken = (device: Device): string =>
 
 /** Waits until sync has brought the orchestrator's chat, holding `text`, into `device`'s vault. */
 async function chatSyncedTo(device: Device, text: string): Promise<void> {
-  const file = join(
-    device.root,
-    "vault",
-    ".daily-do-list",
-    "threads",
-    `${ORCHESTRATOR_THREAD_ID}.json`,
-  );
+  const file = join(device.root, "vault", persistedThreadJournalPath(ORCHESTRATOR_THREAD_ID));
   await eventually(async () => expect(readFileSync(file, "utf8")).toContain(text));
 }
 
