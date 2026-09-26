@@ -3,8 +3,8 @@ import DailyDoListModels
 /// One row of the chat: a message, or tool calls. Consecutive tool calls that succeeded collapse
 /// into one run ("Used 6 tools"); a running call, a failure and a blocked call each stay a row of
 /// their own.
-struct ChatItem: Hashable, Identifiable, Sendable {
-  enum Content: Hashable, Sendable {
+struct ChatItem: Identifiable, Sendable {
+  enum Content: Sendable {
     case message(ThreadMessage)
     /// One tool call, or several finished ones in a row.
     case tools([ToolCallMessage])
