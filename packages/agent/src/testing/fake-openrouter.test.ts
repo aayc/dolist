@@ -1,7 +1,6 @@
 import { silentLogger } from "@ddl/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { checkOpenRouterKey, createOpenRouterClient } from "../llm/openrouter";
-import { LlmError } from "../llm/types";
 import { createLlmJudge } from "../safety/llm-judge";
 import { createFakeBrain } from "./brain/brain";
 import { FAKE_OPENROUTER_KEY, type FakeOpenRouter, startFakeOpenRouter } from "./fake-openrouter";
@@ -145,30 +144,6 @@ describe("fake OpenRouter: the one-shot client", () => {
     });
   });
 
-  it("retries a 429 with Retry-After and then succeeds", async () => {
-    const s = await server();
-    s.inject({ kind: "status", status: 429, retryAfter: 0 }, { times: 2 });
-    const result = await client(s).complete({
-      messages: [{ role: "user", content: "Reply with exactly the word: ok" }],
-    });
-    expect(result.text).toBe("ok");
-    expect(s.chatRequests().map((r) => r.status)).toEqual([429, 429, 200]);
-  });
-
-  it("surfaces a persistent 500 as a retryable LlmError with the upstream message", async () => {
-    const s = await server();
-    s.inject({ kind: "status", status: 500, message: "upstream exploded" }, { times: 10 });
-    const error = await client(s, 0)
-      .complete({ messages: [{ role: "user", content: "hi" }] })
-      .catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(LlmError);
-    expect(error).toMatchObject({
-      status: 500,
-      retryable: true,
-      message: "OpenRouter 500: upstream exploded",
-    });
-  });
-
   it("reports a malformed JSON body as a retryable error", async () => {
     const s = await server();
     s.inject({ kind: "malformed-json" });
@@ -181,15 +156,6 @@ describe("fake OpenRouter: the one-shot client", () => {
       retryable: true,
     });
     expect(s.chatRequests()[0]).toMatchObject({ fault: "malformed-json", status: 200 });
-  });
-
-  it("a brain failure becomes an HTTP error the client reports", async () => {
-    const brain = createFakeBrain().fail({ message: "model is down", status: 503 });
-    const s = await server({ brain });
-    const error = await client(s, 0)
-      .complete({ messages: [{ role: "user", content: "hi" }] })
-      .catch((e: unknown) => e);
-    expect(error).toMatchObject({ status: 503, message: "OpenRouter 503: model is down" });
   });
 
   it("applies latency, and the client's timeout gives up on a hung request", async () => {

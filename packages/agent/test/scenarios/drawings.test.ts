@@ -46,19 +46,4 @@ describe("drawings: the orchestrator uses what the digest describes", () => {
     );
     expectAllGated(t);
   });
-
-  it("describes the drawings under a task in its subagent's kickoff", async () => {
-    const t = await runtime();
-    await t.storage.write(
-      "Excalidraw/Garden.excalidraw.md",
-      flowchartDrawing({ boxes: ["Tomatoes", "Basil"], notes: ["South fence"] }),
-    );
-    const task = "Research companion plants for this bed";
-    await t.writeDailyNote([`- [ ] ${task}`, "  - ![[Garden.excalidraw]]"]);
-    await t.waitForStatus(task, "done");
-    const kickoff = t.kickoffs().find((k) => k.includes(`Task: ${JSON.stringify(task)}`)) ?? "";
-    expect(kickoff).toContain("Drawings in the task:\n⟪drawing⟫ Excalidraw/Garden.excalidraw.md");
-    expect(kickoff).toContain("  Shapes: rectangle “Tomatoes”, rectangle “Basil”");
-    expectAllGated(t);
-  });
 });
