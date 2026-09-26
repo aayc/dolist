@@ -10,7 +10,7 @@ public enum DaemonHome {
   /// `$DDL_HOME` (a leading `~` expanded), else `~/.daily-do-list`.
   public static func url(
     environment: [String: String] = ProcessInfo.processInfo.environment,
-    homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
   ) -> URL {
     environment["DDL_HOME"]?.trimmedNonEmpty.map {
       expandingTilde($0, homeDirectory: homeDirectory)
