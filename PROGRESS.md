@@ -4,314 +4,187 @@ The running handoff log: what shipped, what's in flight, what's next, and the de
 them, so work can continue on any machine at any point. Read it before starting; keep it current
 (the rules are in `AGENTS.md`, "Handoff log").
 
-**Last updated:** 2026-09-25 · `main` at `b220dd2`: everything built today is merged (always-on,
-orchestrator activity, drawings, import from Obsidian); CI, macOS app, Security and Linux bundle
-green on it, and it's the build installed on the main development Mac. No open branches; next is
-the Azure VM.
+**Last updated:** 2026-09-25, late evening · `main` has everything below merged and pushed; CI was
+green on `c158aae` (all four workflows) and is running on the later merges. The build installed on
+the main development Mac is `67000e7`: it predates the FSEvents fix, the Mac fake-daemon removal
+(new demo mode), the TypeScript cleanups and the docs trim, so rebuild and install when convenient
+(see "Installing on the main development Mac"). One branch is in flight (below).
 
-## Picking this up on another machine
+## Picking this up
 
-1. Clone, then `pnpm install` (Node ≥ 24.4, pnpm 10). The git hooks install themselves
-   (`scripts/install-git-hooks.mjs`); they need `gitleaks`, `swift-format`, `shellcheck` and
-   `actionlint` on PATH. The macOS app builds with the Command Line Tools (Swift 6).
+1. Clone, then `pnpm install` (Node ≥ 24.4, pnpm 10). The git hooks install themselves; they need
+   `gitleaks`, `swift-format`, `shellcheck` and `actionlint` on PATH. The macOS app builds with the
+   Command Line Tools (Swift 6).
 2. Secrets are never in the repo: recreate `~/.daily-do-list/.env` (for example
-   `OPENROUTER_API_KEY`), and sign the Cursor CLI in (`agent login`) for the Cursor harness.
+   `OPENROUTER_API_KEY`) and sign the Cursor CLI in (`agent login`) for the Cursor harness.
 3. macOS app: `apps/macos/scripts/signing-identity.sh` creates the local signing identity so macOS
    keeps granted permissions across builds; on a new Mac, create it, build, then grant
-   Accessibility and Screen Recording again (Settings → Computer Use guides you).
-4. In-flight work is on the pushed branches below: `git worktree add ../<name> <branch>`.
-5. CI doesn't start on push or pull requests (the triggers are declared, but GitHub hasn't fired
-   them since the first push; see `docs/CI.md`, "How runs start today"). Dispatch it on each
-   branch before merging and on `main` after pushing:
-   `gh workflow run ci.yml --repo aayc/dolist --ref <branch>` (also `security.yml`, `macos.yml`,
-   `linux-bundle.yml`).
+   Accessibility and Screen Recording (Settings → Computer Use guides you).
+4. Fast loop: `pnpm test:changed` / `pnpm check:changed` (only what changed since `main`),
+   `apps/macos/scripts/test.sh --changed` (only affected Swift packages; `--list`, `--since REF`,
+   `--thorough`). `pnpm check` is the full gate (a few seconds warm).
+5. CI doesn't start on push or pull requests (declared, but GitHub hasn't fired them since the
+   first push; `docs/CI.md`). Dispatch it on a branch before merging and on `main` after pushing:
+   `gh workflow run ci.yml --repo aayc/dolist --ref <branch>` (also `macos.yml`, `security.yml`,
+   `linux-bundle.yml`). Branch runs replay cached results for unchanged inputs; `main` reruns
+   everything with `DDL_TEST_THOROUGH=1`; the release app builds on `main` or with `-f release=true`.
 
-## Shipped on `main` (newest first)
+### Verifying a merge (what the lead ran today)
 
-- `6bb69fe` TypeScript narrow cleanups (−750): `errorMessage`/`isRecord`/`raceAbort`/`pluralize`/
-  `formatBytes`/`Listeners`/one `.env` parser in core; storage's 3-way merge rebuilt on core's line diff
-  (identical on 200k random merges); one tool-call row builder; a shared chat hook and frame on the web;
-  16 never-set options became constants.
-- The Mac demo and tests use the real daemon (−6.1k): demo mode launches the bundled daemon with the
-  mock agent on a throwaway demo vault (`DDL_DEMO=1`, shared with `pnpm dev:mock`; temp home, free
-  port, no user `DDL_*` vars); one shared `FakeDaemonClient` for unit tests; the in-memory fake
-  daemon is deleted. The demo no longer simulates an always-on machine, sync or routines.
-- `85494a4` No external edit is lost while macOS restarts its FSEvents stream (every watch in a process
-  shares one stream; opening or closing a watch dropped undelivered changes ~20% of the time): a new
-  watch waits for the stream before its first scan, and other watchers rescan once when a watch opens
-  or closes (~12 ms at 2,000 notes). This was the flaky notes e2e.
-- `8eecac3` / `67000e7` Four branches: zod schemas are the single source of the TS wire types, the
-  fast-check generators and one route table (API_PATHS) (−3.3k; invariants 4 and 5 reworded: core has
-  no *runtime* dependencies); agent threads are journal-only with a one-time migration (snapshots
-  folded into journals, then removed; −420); Mac performance (the explorer was quadratic: window
-  open ~4 s → <200 ms, a new note 2-3 s → ~30 ms, launch about halved); Swift cleanup (one link
-  allow-list incl. tel:, chips/Discard/glow like the web, dead code). `build-app.sh` gives the helper
-  its own scratch path. **Installed**; the journal migration ran on the real vault: 15 threads, all
-  matching a backup taken just before.
-- `24217b7` Faster tests and CI (the user asked for a 10x faster loop): CI caches every suite in turbo
-  and shards unit tests and e2e (warm 36 s, cold ~2 min, was ~7 min); macOS CI caches SwiftPM builds,
-  runs package groups, integration and iOS in parallel, builds the release app only on `main` or with
-  `-f release=true` (warm 2m13s, cold ~6 min, was 19.5 min). Local: `pnpm test:changed`, `pnpm
-  check:changed`, `apps/macos/scripts/test.sh --changed`; `pnpm check` warm 3-4 s. Tests pruned
-  (~5.4k lines; Swift snapshots down to 10 key screens). Opt-in thoroughness: `DDL_TEST_THOROUGH=1`
-  (set on `main`) restores full fuzz seeds and perf samples. Runs on `main` always rerun everything.
-- `e1a2f6e` Editor crash fixed (it was the intermittent macOS CI crash): with legacy scroll bars
-  (a mouse, or "always show scroll bars"), an edit that showed or hid the scroller resized the text
-  view mid-edit and AppKit raised; also the line-number gutter widening at line 100/1,000 mid-edit.
-  Nothing lays out while the text storage is editing now. **Installed** on the main development Mac
-  (threads and approvals intact).
-- `7f1f796` Cleanup batch A (TypeScript): imported threads keep their new note paths (the import
-  now remaps journals at `state/journal/`), the approval broker persists through the shared state
-  file (moves a corrupt file aside, never overwrites a newer one), dead code and dependency/config
-  fixes. `8bae6ff` docs drift fixed across the repo; CI is dispatched by hand (push/PR triggers are
-  declared but GitHub Actions never starts them; cause unknown, see `docs/CI.md`).
-- `cf0d413` Test trim (−75.6k): Swift Domain vectors compacted to one case per line (same 20,127
-  cases), tests the vectors and property tests cover removed, shared test helpers.
-- `0011be4` The web e2e, perf tests and `pnpm dev:mock` run on real daemons (one per test, mock
-  agent or Pi against the fake model, a seeded demo vault); the in-browser mock is gone (−6.9k lines).
-  The fullstack scenarios merged into the functional suite (134 passed); all e2e takes ~106 s instead
-  of ~275 s. One gated test hook: `DDL_TEST_HOOKS=1` simulates a Mac's computer access. `pnpm
-  dev:mock` uses ports 7340/5174 and a throwaway vault.
-- `75ce44d` Small cuts (−1.1k): S3 and cloud stubs gone (and `"s3"` from the protocol), one mock LLM,
-  the triage eval runs on the fake brain (81/81 now), one forwarding base for the relayed and leased
-  runtimes, the Swift drawing description port.
-- `f78a4e9` Swift vim tests the recorded vectors cover are gone (−6.1k); 6 checks became vectors.
-- `c7ca463` The orchestrator's placement is a "Remote" switch (on = the always-on machine, off = this
-  device) in the agent panel and Settings, on the web and the Mac; one shared switch component per
-  platform. **Installed** on the main development Mac.
-- `aa70f6a` Performance, web and daemon: vault event bursts published once per frame (300 new files
-  on a 5,000-note vault: 4.2 s to 21 ms), the explorer and chats render only the rows in view (a
-  1,000-message thread opens in 18 ms instead of 120), one render per palette key; daemon restarts
-  about twice as fast (file versions kept in `$DDL_HOME/cache/vault-versions.json`, keyed on mtime
-  and size like the in-memory cache), tree 6x and search 14x faster at 10,000 notes, the MCP SDK
-  loads only when `mcp.json` names servers, and a request-like line starts a turn about 0.9 s after
-  the cursor leaves it (was 2.7 s). New budgets in `docs/PERFORMANCE.md`.
-- `b220dd2` Patched `nanoid` and `lodash-es` for Dependabot's 11 open alerts (they came with
-  Excalidraw and its Mermaid importer): pnpm overrides; the web bundle is unchanged. **Installed**
-  on the main development Mac (agent live, app control kept); Dependabot: 0 open alerts.
-- `e2fd3ce` Import from Obsidian: point it at your Obsidian vault (it copies it; the original and
-  Obsidian Sync stay untouched), read the report, import into a new folder with this vault's notes
-  and agent history carried over, switch to it, and later Update from Obsidian; web Settings →
-  Vault and Mac Settings → General → Vault and the File menu
-  ([spec](docs/specs/obsidian-migration.md), README "Moving from Obsidian"). Still to try for
-  real: the switch in the running Mac app, and a large real vault.
-- `052dcc8` Drawings in notes: Excalidraw-compatible drawings in the Obsidian Excalidraw plugin's
-  format, embedded with its syntax, floated with text wrapping around them, movable and
-  resizable; the real Excalidraw on the web (lazy-loaded), a native engine on the Mac; the agent
-  sees each drawing as a description and, with `read_drawing`, an image
-  ([spec](docs/specs/drawings.md)). Total JS budget now 1,300 kB (per the user). CI, macOS app,
-  Security and Linux bundle green on the branch; dispatched on `main`.
-- `3f69ea2` What the orchestrator is doing while you write: it notices, reads, thinks, acts and
-  concludes on any line, not only checkbox tasks; chips on the lines that woke it, the note header
-  and the status bar, on the web and the Mac with the same wording and timings
-  ([spec](docs/specs/orchestrator-activity.md)). CI, macOS app and Security green on the branch;
-  dispatched on `main`.
-- `b0897e8` A lease priority test waits for the supervisor's status, not only the sync
-  service's record (it failed under load).
-- `bbe8aff` Linux kit: `setup.sh` stops the daemon before the sync service. One `systemctl
-  restart` of both stopped them together; when sync went first the daemon couldn't give the agent
-  lease back, and its next run waited up to a minute (the arm64 kit job timed out on it after an
-  upgrade). `setup-test.sh` now fails when a restart leaves the lease behind: the old bundle fails
-  it and the fixed one passes every check under real systemd (arm64, OrbStack). Linux bundle
-  workflow green on `main` (x64 and arm64).
-- `7ce1e9f` The agent anywhere: an always-on machine, where the agent runs chosen per device (one
-  toggle, held here without a machine or sync), pairing and device tokens, remote access through
-  `tailscale serve`, the relay, lease priorities and fencing (journals included), web and Mac
-  Settings, the Linux kit (bundle, `setup.sh`, systemd, Azure guide), and the home-folder safety
-  rules (`.env` outside the workspace follows the approval policy). Details in the design and
-  spec below. CI, Security, Linux bundle and macOS app green on `main`. **Installed** on the main development Mac: agent live here (held here: no sync yet),
-  app control kept.
-- `d657518` Merge fix follow-up: a line edit and the lines added next to it merge separately (an
-  agent's line under an edited task no longer ends up in a conflict copy; TypeScript and Swift);
-  the notes model tests fail properly instead of via unhandled rejections. CI and macOS green.
-- `6750f36` The editor merge race: an open editor never brings back lines deleted elsewhere
-  (root cause: the Mac `NotesStore.save()` kept a stale "unsaved" copy of a clean note); conflicts
-  save the merge, not the whole local text (web and Mac); remounted web editors keep unsaved
-  typing. CI and macOS green on the branch. **Installed** on the main development Mac (with the
-  journal).
+`pnpm check`; `pnpm build && pnpm size:check`; `pnpm --filter @ddl/daemon build` (its lazy-load
+check); `pnpm eval:mock`; `pnpm e2e` (plus `pnpm e2e:perf` for UI changes, `pnpm vim:check` for
+editor/vim); `apps/macos/scripts/test.sh --changed --since <last verified main>` (it includes the
+integration tests when the daemon changed); then push and dispatch the four workflows. Under heavy
+machine load Vitest can report "Failed to start forks worker"; rerun that package alone.
 
-- `dffdfdd` The agent journal, phase 1: threads on an append-only journal
-  (`.daily-do-list/state/journal/threads/`, union-merged by sync), snapshots byte-identical to
-  before, write-ahead around tool calls (an unrecorded call is blocked; an interrupted side effect
-  is never re-run), resume after a restart (Pi natively, Cursor from a text transcript). CI and
-  Security green on the branch.
+### Installing on the main development Mac
 
-- `0a041a6` The orchestrator can search the user's notes (`search_notes`, as subagents could), not
-  only read the ones it's told the name of.
-- `a42bcf3` Routines: standing jobs the agent runs on a schedule, one markdown file each in
-  `Routines/`, each run a chat thread in the routine's own inbox, with notifications; on the web
-  and the Mac ([docs/specs/routines.md](docs/specs/routines.md), journeys J12 and J13).
-- `83be988`, `cbba701` Design: the agent anywhere ([docs/ALWAYS_ON.md](docs/ALWAYS_ON.md)).
-- `2a7bb5a` Plan: the native iPhone app ([apps/mobile/PLAN.md](apps/mobile/PLAN.md)).
-- `9e97dda` The orchestrator's chat: pinned in the inbox, its own window on the Mac, and
-  talking to it directly.
-- `5246bfc` Approval policies: ask before every action, ask for risky ones (default), ask for
-  high-risk ones, run everything. Hard denies always apply.
-- `82c04c9`, `c36d830`, `2e99353` Chat polish on the Mac and the web: replies typed out, an
-  activity row, tool groups, an outbox, Stop.
-- `92a1b35` … `f26c5e0` Computer use on the Mac: access onboarding, the `ddl-computer` helper
-  (operating apps through their accessibility tree), app-wide task grants.
-- `661d943` A stable local signing identity for the Mac app.
-- `e5cf22d` The sync service (`apps/sync`) and the agent lease.
-- `a31cd6e` A line break typed on the desktop counts as pressing Return (needs its own approval).
-
-State at `a42bcf3`: verified before merging (`pnpm check`, build and bundle budget, benchmarks,
-mock evals, fullstack, functional, polish and perf e2e, every Swift package, the app and the
-integration tests); CI, macOS app and Security workflows dispatched on `main`. That build is
-installed on the main development Mac (permissions kept).
+Only when `/api/agent/status` shows running 0, queued 0 and no pending approvals. Build into /tmp
+(`apps/macos/scripts/build-app.sh --release --with-daemon --output /tmp/ddl-app-<sha>`), quit the
+app gracefully (`osascript -e 'tell application "Daily Do List" to quit'`), move the old app to
+/tmp as a backup, `ditto` the new one into /Applications, `codesign --verify --deep --strict`, open
+it, then check the agent status, that `/api/threads` still lists every thread, and that app control
+is still granted. Never kill Daily Do List processes by name; never bind or kill 127.0.0.1:7331
+(its daemon) or 5173.
 
 ## In flight
 
-### Code cleanup and a performance pass (started 2026-09-25, evening)
+- **`chore/lean-swift-b`** (Swift narrow cleanups judged by lines removed: one palette in
+  DailyDoListUI, one main-actor scheduler and frame ticker, one daemon-home definition shared by
+  Client and Daemon, shared test helpers, and the Mac "Remote" switch showing the stored placement
+  while held here, like the web). A subagent is working on it in this session in a local worktree
+  (`../assistant-worktrees/lean-swift-b`), not pushed yet. If it isn't merged by the handoff, redo
+  it from this description (the audit behind it is in git history: this file's earlier versions).
 
-Per the user: internal APIs and module boundaries may change where it clearly helps; the wire
-protocol and user-visible behavior stay (perceived-speed improvements welcome). Merged worktrees
-and branches were removed (GitHub has only `main`).
+## Shipped on `main` (newest first; older history is `git log`)
 
-- **Audits (report only):** unused TypeScript code and dependencies (knip), duplication and
-  oversized modules, the Swift code, docs and config drift. Their findings get implemented after
-  the perf branches land, so the two don't fight over the same files.
-- **Flaky tests:** done and on `main` (`5687507`): the watcher, subprocess and `trackTasks` tests
-  are robust under load (fake timers, event probes instead of sleeps, CPU-time guard, generous
-  failure bounds; one test-only `helloTimeoutMs` option). No assertion got looser.
-- **In flight:** `chore/lean-swift-b` (Swift narrow cleanups: one palette, scheduler, frame ticker,
-  daemon-home definition, shared test helpers). Next the Mac fake daemon, zod as the wire source and journal-only threads (see
-  Decisions).
-- **Cleanup batch A** (in flight): `chore/cleanup-ts` (two bugs: imported threads kept their old
-  note paths because the import looked for journals under the wrong folder, and the approval
-  broker could overwrite a newer `approvals.json`; plus dead code, dependency declarations,
-  config mistakes), `chore/cleanup-docs` (docs drift, and why push/PR CI triggers don't fire),
-  `chore/cleanup-swift` (one link allow-list for the Mac, three behaviors aligned with the web,
-  dead code). Batch B (after the perf branches): shared helpers into `@ddl/core`, splitting
-  `tools/web.ts`, `shell-commands.ts`, `orchestrator.ts`, `runtime.ts` and `mock-agent.ts`, and on
-  the Mac one palette, one scheduler and frame ticker, and the fake daemon using Domain.
-- **Performance**, measured first with before/after numbers and budgets: `perf/web` (load, note
-  switching, typing in long notes, palette and search on big vaults, long threads, re-renders),
-  `perf/mac` (launch, note switching, large notes, long lists, Observation invalidations, main
-  thread), `perf/daemon` (startup on large vaults, save-to-event latency, API and search, how
-  fast the orchestrator notices a change).
+- `e5877cb` Docs trimmed (−2.3k): specs of built features keep only rationale and what's left;
+  READMEs link the generated protocol reference, the shared test tables and `SAFETY_RULES`.
+- `6bb69fe` TypeScript cleanups (−750): shared helpers in `@ddl/core` (`errorMessage`, `isRecord`,
+  `raceAbort`, `pluralize`, `formatBytes`, `Listeners`, one `.env` parser), storage's 3-way merge on
+  core's line diff (identical on 200k random merges), a shared web chat hook.
+- `c158aae` The Mac demo and tests use the real daemon (−6.1k): demo mode runs the bundled daemon
+  with the mock agent on a throwaway vault (`DDL_DEMO=1`, shared with `pnpm dev:mock`); one shared
+  `FakeDaemonClient`; the in-memory fake daemon is gone.
+- `85494a4` No external edit is lost while macOS restarts its FSEvents stream (a new watch waits for
+  the stream; other watchers rescan once when a watch opens or closes, ~12 ms at 2,000 notes).
+- `67000e7` zod schemas are the single source of the TS wire types, generators and one route table
+  (−3.3k; invariants 4/5 reworded); threads are journal-only with a one-time migration (it ran on the
+  real vault: 15 threads matched a backup); Mac performance (the explorer was quadratic: window
+  ~4 s → <200 ms, a new note 2–3 s → ~30 ms, launch halved); Swift cleanup (one link allow-list).
+- `24217b7` Faster tests and CI: warm CI 36 s (was ~7 min), warm macOS 2m13s (was 19.5 min),
+  changed-only local commands, ~5.4k test lines pruned.
+- `e1a2f6e` Editor crash fixed (legacy scroll bars: layout while the text storage was editing).
+- `7f1f796` Imported threads keep their new note paths; the approval broker persists safely.
+- `cf0d413`, `0011be4`, `75ce44d`, `f78a4e9` Leaner code: compact Swift vectors and test trims
+  (−75.6k), web e2e/perf/demo on real daemons and the in-browser mock deleted (−6.9k), S3/cloud
+  stubs and duplicates gone (−1.1k), Swift vim tests the vectors cover gone (−6.1k).
+- `c7ca463` The orchestrator placement is a "Remote" switch (web and Mac).
+- `aa70f6a` Web and daemon performance (event bursts batched per frame, windowed explorer and chats,
+  daemon restarts 2x faster, search 14x faster at 10k notes, request-like lines settle in ~0.9 s).
+- `b220dd2` Patched `nanoid` and `lodash-es` (Dependabot: 0 open alerts).
+- `e2fd3ce` Import from Obsidian (web and Mac). Still to try for real: the switch in the running Mac
+  app and a large real vault.
+- `052dcc8` Drawings (Excalidraw-compatible, web and native Mac engine, the agent sees them).
+- `3f69ea2` Orchestrator activity on any line (chips, header, status bar).
+- `7ce1e9f` The agent anywhere (always-on machine, placement, pairing, relay, fencing, Linux kit).
+- Earlier: agent journal phase 1 (`dffdfdd`), routines (`a42bcf3`), the orchestrator's chat,
+  approval policies, chat polish, computer use on the Mac, the sync service.
 
-### The always-on machine (the Azure VM)
+## Next up
 
-The code is on `main` (`7ce1e9f`, `bbe8aff`). Design: [docs/ALWAYS_ON.md](docs/ALWAYS_ON.md);
-wire contract: [docs/specs/always-on.md](docs/specs/always-on.md); the kit and its Azure guide:
-`deploy/linux/README.md`. Streams S0–S6 were built in parallel on `feat/always-on-*` branches
-and merged through `feat/always-on` (their history is in git).
-
-Next: set up the VM with the kit (the user runs `az login` and saves the Tailscale auth key file
-themselves; credentials never go in the chat or the repo): check `Standard_D4ps_v6` availability,
-show the cost and resources, create them, run `setup.sh`, pair, then verify on the real VM what
-only it can: the `az` commands, the Tailscale login, and that `tailscale serve` keeps the original
-`Host` (the daemon refuses loopback-Host requests carrying proxy forwarding headers, so a
-Host-rewriting proxy fails closed instead of getting the master token).
-
-Open: browser pairing over https stays fixme in the e2e harness (no TLS proxy there).
-
-## Next up (not started)
-
-- **The Azure VM** (above): the next step once the user is back.
-- **CI triggers** (the user, in the repository settings): pushes and pull requests start no
-  GitHub Actions runs, and nothing in the repository explains it (details in `docs/CI.md`). Turn
-  Actions off and on again for the repository, or disable and re-enable each workflow, then
-  check that the next push starts runs; if not, ask GitHub Support. Until then, CI is dispatched
-  by hand.
-- **B0 binary files:** attachment sync and file serving ([spec](docs/specs/obsidian-migration.md)).
-- **P rendering parity:** images (on the drawings' embed layer), tables, callouts, backlinks, on
-  the web and the Mac.
-- **Agent journal, phase 2:** approvals and routines state on the journal, client ids for
-  idempotent relay mutations, compaction, resuming the orchestrator's turn
-  ([spec](docs/specs/agent-journal.md)). Phase 1 shipped (`dffdfdd`); the daemon passes the
-  lease epoch.
-- **The web app in the Mac app?** The Mac app's daemon doesn't serve the web UI (its root says
-  to run `pnpm build`); the Linux kit bundles it. Bundling `apps/web/dist` next to the daemon
-  would put the latest web app at http://127.0.0.1:7331 with every install. Ask first.
-- **Security, delete rules:** `rm -rf /users/<name>` in lowercase only asks instead of hitting
-  the "deletes your home directory" hard deny (macOS paths are case-insensitive). Make the delete
-  rules match home paths case-insensitively, with eval cases. Known remaining read gaps (from the
-  home-folder fix): a single file held in a variable, a project folder's `.env` read recursively,
+- **The Azure VM** (the user's next step): the user runs `az login` and saves the Tailscale auth key
+  file themselves (credentials never go in the chat or the repo). Check `Standard_D4ps_v6`
+  availability, show cost and resources, create them, run `setup.sh`, pair, and verify what only the
+  real VM can: the `az` commands, the Tailscale login, and that `tailscale serve` keeps the original
+  `Host` (the daemon refuses loopback-Host requests with proxy forwarding headers). Guides:
+  `deploy/azure/README.md`, `deploy/linux/README.md`; design `docs/ALWAYS_ON.md`.
+- **CI triggers** (the user, in repo settings): turn Actions (or each workflow) off and on, push
+  once, check `gh run list --event push`; else GitHub Support. Until then, dispatch by hand.
+- **Rebuild and install the Mac app** from current `main` (see above).
+- **B0 binary files** (attachment sync, file serving) and **P rendering parity** (images on the
+  drawings' embed layer, tables, callouts, backlinks) — `docs/specs/obsidian-migration.md`.
+- **Agent journal phase 2** (approvals and routines state on the journal, client ids for idempotent
+  relay mutations, compaction, resuming the orchestrator's turn) — `docs/specs/agent-journal.md`.
+- **Ask the user:** bundle `apps/web/dist` into the Mac app so the latest web app is served at
+  http://127.0.0.1:7331 (today the Mac app's daemon doesn't serve the web UI; the Linux kit does).
+- **Security:** delete rules should match home paths case-insensitively (`rm -rf /users/<name>`
+  only asks); remaining read gaps: a file in a variable, a project `.env` read recursively,
   subfolders of personal folders, `~/Library/Preferences`.
-- **iPhone app:** deferred; the web app covers mobile for now. Plan in
-  [apps/mobile/PLAN.md](apps/mobile/PLAN.md). Remote access, device tokens and pairing are built;
-  still needed first: full Xcode, a QR code on the pairing screens, and an atomic daily-note
-  append in the daemon.
-- **Mac:** make sure the floating computer-access guide can't cover the app's controls and closes
-  reliably once access is granted.
-- **App control:** long, virtualized lists only expose their visible rows (an app showed 11 of 14
-  items); teach scrolling or expanding in the tool guidance.
-- **Web:** the status bar's save and connection dots still pulse with reduced motion (selector
-  specificity).
-- **Mac orchestrator window:** bring the typing reveal, activity row and jump-to-latest pill to
-  `OrchestratorChatView`, as on the web.
-- **Drawings follow-ups:** shared merge vectors for `SceneMerge` (Swift) and
-  `mergeDrawingElements` (TypeScript); on the Mac, drawings as accessibility elements, image
-  embeds, the in-place tool bar covering a line of text.
-- **Known mock-eval misses** (pre-existing, the suites still pass): safety
-  `coding-npm-test`, `coding-run-analysis-script`; triage `renew-passport`.
+- **Smaller product items:** the floating computer-access guide can cover app controls; app control
+  sees only visible rows of virtualized lists; reduced-motion dots still pulse on the web; bring the
+  typing reveal / activity row / jump pill to the Mac orchestrator window; drawings follow-ups
+  (shared merge vectors for `SceneMerge` and `mergeDrawingElements`, accessibility, image embeds);
+  the Mac refuses hostless `http:` links while the web allows them; check the pointing-hand cursor
+  by hand on macOS 15+ (it moved to push/pop); iPhone app deferred (`apps/mobile/PLAN.md`: needs
+  full Xcode, a QR code on the pairing screens, an atomic daily-note append).
+- **Performance leftovers:** web inbox renders every row (21 ms at 300), search waits for its 180 ms
+  debounce, each approval re-renders ~33 components, core's drawing parser is in the startup bundle
+  (6.7 kB gz), the switcher lowercases every name per key; Mac tab switch to a 2,000-line note
+  restyles the whole note (~88 ms debug) and the chat rebuilds all rows per token; daemon sync
+  re-walks both sides per change (~104 ms CPU at 2,000 notes), a large vault's first-ever start,
+  a 1.17 MB tree response at 10k notes.
+- **Leaner code, still possible:** consolidate the agent's integration tests (scenarios, journeys,
+  top-level tests overlap; ~−2k, case by case); derive the persisted settings schema from the wire
+  one; CodeQL could skip test code (halves it, loses findings in test code).
+- **Known flakes under heavy machine load** (pass alone): vim perf tests with 1 ms budgets; a relay
+  test reads agent status right after a lease handover; `app.spec.ts` "Mod+Shift+D creates today's
+  note" failed once. Also: agent actions on background browser tabs wait out a 5 s screenshot
+  timeout (headless Chrome doesn't render them); the agent status can briefly show the new placement
+  with the old "running on …" line; the placement tooltip hides if a sync pass lands while hovering.
+- **Mock-eval misses** (pre-existing, suites pass): safety `coding-npm-test`,
+  `coding-run-analysis-script` (over-approvals, no false allows).
 
 ## Decisions (so nobody asks again)
 
-- **Computer use** runs on our own tools (the `ddl-computer` helper and the execution tools),
-  never the harness's built-in ones; the Cursor CLI reaches ours over the MCP bridge.
-- **Approval policy** is a setting with four levels; the default asks for risky actions.
-- **The orchestrator's chat** can be viewed and talked to (pinned in the inbox, a separate Mac
-  window).
-- **Routines:** one markdown file per routine in `Routines/`; each run is a chat thread in the
-  routine's own inbox, with notifications (always, when changed, never); approvals follow the
-  global policy, including agents creating or editing routines; built right after the chat batch.
-- **The agent anywhere** (2026-09-25): an Azure Linux VM reached only over Tailscale; no Azure
-  power management in the app; the agent's location is chosen per device (for example a personal
-  laptop uses the VM, a work laptop runs locally, the web app and the phone use the VM), and
-  everything the agent needs syncs so it can move; the scope runs through the relay, with Settings
-  on the web and the Mac for all of it.
-- **The orchestrator toggle** (2026-09-25): "where the orchestrator runs" (this device or the
-  always-on machine) is one easy toggle in the agent panel's header, flippable at any time (the
-  personal laptop may go local too); it's held on this device while no always-on machine is set
-  up.
-- **The Azure VM** (2026-09-25): set it up only after pairing, placement and the relay are
-  merged, then all in one go. A public IP with every inbound port closed (not a NAT gateway).
-  Budget under $120 a month all in: `Standard_D4ps_v6` (Azure Cobalt 100 ARM, 4 vCPU, 16 GB,
-  about $102 pay-as-you-go in West US 2/3 and East US) plus a 64 GB premium SSD (about $10) and
-  a static IP (about $4) is about $116; check regional availability at setup. Everything it runs
-  supports Linux arm64 (Node 24, the kit's arm64 bundle, Playwright's Chromium, the Cursor CLI).
-  x86 alternatives: `Standard_B4as_v2` (about $110 plus disk and IP, just over) or
-  `Standard_D2as_v5` (2 vCPU, 8 GB, about $63). The user runs `az login` and creates the Tailscale
-  auth key file themselves; credentials never go in the chat or the repo.
-- **Drawings** (2026-09-25): Excalidraw-compatible drawings in notes, stored in Obsidian's
-  Excalidraw plugin format and embedded with its syntax; anchored with text wrapping around them,
-  movable and resizable; the real Excalidraw on the web (lazy-loaded); on the Mac a native engine
-  written from scratch with the core tools (the user's choice, for speed); the orchestrator always
-  sees a text description plus an image for vision-capable models.
-- **Moving from Obsidian** (2026-09-25): the user will switch from Obsidian (Obsidian Sync) by
-  **copying** the vault, not sharing the folder. Build the merge-race fix, Import from Obsidian
-  (report first, a new vault from a copy, carry-over of Daily Do List notes, routines and agent
-  history with daily-note paths remapped, then switch; plus Update from Obsidian), images, tables,
-  callouts, backlinks, and attachment sync.
-- **Secrets and the approval policy** (2026-09-25): the user's strictness is about secrets never
-  being committed to this public repo (the hooks). Agents reading a `.env` to run a project
-  follows the approval policy. Still hard denies: sending secrets off the machine, the daemon's
-  own token files, credential stores (SSH private keys, cloud credentials, keychains), shell
-  histories and sweeping the whole home folder.
-- **Web bundle budget** (2026-09-25): Total JS (every chunk, lazy ones included) is 1,300 kB
-  gzip, raised from 1,200 when drawings and the always-on work came together at 1,217 kB. The
-  user chose this over per-area budgets or fewer code block languages. Startup stays guarded by
-  the 320 kB initial JS budget.
-- **Leaner code** (2026-09-25, evening): the user's priority is reducing the amount of code, by
-  narrow cleanups or rethinking architecture. Approved: web e2e, perf and demo on the real daemon
-  (delete the in-browser mock); Mac demo and tests on the real bundled daemon (delete the in-memory
-  fake daemon); zod schemas as the single source of the TypeScript wire types and test generators;
-  agent threads journal-only; delete Swift vim tests the vectors cover; small cuts (S3 and cloud
-  stubs, duplicate mock LLM, one forwarding base for the relayed and leased runtimes). Kept: both
-  harnesses (Pi and Cursor CLI), the Swift Domain port, the read-only view. The placement toggle
-  becomes "Remote" with a switch (on = the always-on machine).
-- **Journaling** (2026-09-25): not Temporal. Fencing now, in the always-on lease work; the agent
-  journal as its own stream right after routines lands.
-- **iPhone** (2026-09-25): deferred. When it resumes: native Swift, a free Apple ID (no push or
-  TestFlight yet), Siri and Shortcuts as the one extra, network still to decide.
+- **Safety before autonomy:** every tool call passes the gate; approval policy has four levels
+  (default: ask for risky actions); hard denies always apply. Agents reading a `.env` to run a
+  project follows the approval policy; still hard denies: sending secrets off the machine, the
+  daemon's token files, credential stores, shell histories, sweeping the home folder.
+- **Computer use** runs on our own tools (`ddl-computer` and the execution tools), never a harness's
+  built-ins; the Cursor CLI reaches ours over the MCP bridge. Both harnesses (Pi, Cursor CLI) stay.
+- **The agent anywhere:** an Azure Linux VM reached only over Tailscale, no Azure power management
+  in the app; where the agent runs is chosen per device and everything it needs syncs so it can
+  move. The control is one "Remote" switch (on = the always-on machine), disabled with the reason
+  and a set-up link while held here, with "Run it on this device instead" when the machine is
+  unreachable; Settings shows each machine's readiness so a move never fails silently.
+- **Fencing:** the sync service enforces the lease epoch on every write, delete and rename of the
+  agent's files; a former holder's stale agent changes are dropped (never a conflict copy);
+  `settings.json` isn't an agent file; every device must run a fencing daemon (`docs/SYNC.md`).
+  Journaling is not Temporal; threads are journal-only now.
+- **The Azure VM:** public IP with every inbound port closed; under $120/month: `Standard_D4ps_v6`
+  (Cobalt 100 ARM, 4 vCPU, 16 GB, ~$102) + 64 GB premium SSD (~$10) + static IP (~$4); x86
+  alternatives `Standard_B4as_v2` or `Standard_D2as_v5`.
+- **Routines:** one markdown file per routine in `Routines/`, each run a chat thread with
+  notifications (always, when changed, never); approvals follow the global policy; "Repeat this"
+  takes the user's schedule; a missed run catches up once; Run now has a daily budget; starter
+  templates live in `packages/core/src/routines.ts`.
+- **Orchestrator activity** on any line, not only checkboxes (the user wanted the triaging badge
+  everywhere).
+- **Drawings:** Obsidian Excalidraw plugin format and embed syntax; floated right with text
+  wrapping by default; the real Excalidraw on the web, a from-scratch native engine on the Mac (the
+  user's choice, for speed) that keeps unsupported elements untouched; the agent sees a text
+  description plus an image for vision models.
+- **Moving from Obsidian:** by copying the vault (not sharing the folder); import with a report,
+  carry-over and a switch, plus Update from Obsidian; then images, tables, callouts, backlinks,
+  attachment sync.
+- **Web bundle:** Total JS budget 1,300 kB gzip (lazy chunks included); startup stays guarded by the
+  320 kB initial JS budget.
+- **Leaner code** (the user's priority since 2026-09-25 evening): judge changes by lines removed.
+  Done: real daemons instead of both fake daemons, zod as the wire source, journal-only threads,
+  test and docs trims. Kept: both harnesses, the Swift Domain port, the read-only view.
+- **Tests:** one good test per behavior at the cheapest layer that protects it; regression tests for
+  real bugs; no redundant layers (the user thinks we overtest). CI branch runs reuse cached results;
+  `main` runs everything thoroughly.
+- **iPhone:** deferred; when it resumes: native Swift, a free Apple ID, Siri and Shortcuts.
 
 ## How the parallel work runs
 
-One lead integrates. Each stream gets a spec, a branch and a worktree; streams commit each working
-piece, never push, merge or rebase, and report back; the lead reviews, merges, runs the full
-verification, updates this file, pushes and dispatches CI. Agents working next to a running app
-follow the specs' environment rules (never bind or kill the running daemon and dev server, tests
-in temp dirs and on other ports, never touch the real vault or `~/.daily-do-list/`).
+One lead integrates. Each stream gets a brief, a branch and a worktree next to the repo; streams
+commit each working piece, never push, merge or rebase (except agents explicitly allowed to push
+their own branch to measure CI), and report back; the lead reviews, merges, runs the verification
+above, updates this file, pushes and dispatches CI. Agents working next to the running app never
+bind or kill its daemon (7331) or the dev server (5173), test in temp dirs and on other ports, and
+never touch the real vault or `~/.daily-do-list/`. If a subagent's connection drops, its original
+run may keep editing in the background: a resumed agent must check for another writer before
+continuing.
