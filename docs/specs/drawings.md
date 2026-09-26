@@ -1,5 +1,7 @@
 # Spec: drawings in notes (Excalidraw-compatible)
 
+Status: built (`052dcc8`).
+
 Read `AGENTS.md` first (invariants: keystroke path O(line), `@ddl/core` pure, plain Obsidian
 files, the safety gate, wire changes in core + contract + Swift together, web and macOS control
 rules, vim vectors as a model for shared behavior data).

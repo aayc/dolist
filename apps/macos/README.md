@@ -53,7 +53,7 @@ future iPhone app too.
 | `Packages/DailyDoListComputer` | `ddl-computer`, the helper the daemon spawns so agents can operate other apps through their accessibility tree ([The computer use helper](#the-computer-use-helper-ddl-computer)). Not linked into the app. |
 | `IntegrationTests/` | End-to-end tests against the real daemon (a separate package). |
 | `Resources/` | `Info.plist.template` and the rendered 1024 px icon (`AppIcon-1024.png`). |
-| `scripts/` | `test.sh`, `build-app.sh`, `run-app.sh`, `make-icon.swift`. |
+| `scripts/` | `test.sh`, `build-app.sh`, `run-app.sh`, `make-icon.swift`, `signing-identity.sh` (the local signing identity), `generate-vectors.ts` (the Domain package's test vectors, `pnpm vectors`). |
 
 ## Commands
 

@@ -1,5 +1,7 @@
 # Spec: showing what the orchestrator is doing while you write
 
+Status: built (`3f69ea2`).
+
 Read `AGENTS.md` first (invariant 8: nothing on the keystroke path; anchors mapped through
 editor transactions; wire changes in core + contract + Swift together; web and macOS control
 rules).
@@ -11,7 +13,7 @@ user just writes, they want to see when the orchestrator notices, works, and wha
 on any line.
 
 Today a non-task line that may be addressed to the agent (`mayBeRequest` in
-`packages/agent/src/orchestrator/prose.ts`) wakes the orchestrator by itself, and every other line
+`packages/core/src/markdown/prose.ts`) wakes the orchestrator by itself, and every other line
 reaches it in the next digest, but nothing in the editor shows it.
 
 ## Wire (`packages/core/src/protocol.ts` and `agent-types.ts`, contract, Swift models)

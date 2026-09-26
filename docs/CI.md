@@ -41,15 +41,15 @@ gh run list --repo aayc/dolist --branch <branch>           # then gh run watch <
 Why the triggers don't fire: nothing in the repository explains it. Actions is enabled with every
 workflow `active`, the workflows are valid (the same files run when dispatched), no commit message
 carries a skip directive, the pushes come from the owner's account (not a workflow token), and
-`main` has no rulesets or protection. GitHub records every push, and the third-party apps on the repository get their check
-suites for it, but no `github-actions` check suite is ever created. The one push that did start
-runs created `main`; every push since, and a throwaway pull request, started nothing. It began
-during a GitHub incident (billing information, 2026-09-24) and didn't recover once the incident was
-resolved, so it looks like state stuck on GitHub's side. To fix it, the owner can turn Actions off
-and on again for the repository (Settings → Actions → General) or disable and re-enable each
-workflow (`gh workflow disable`/`enable`), then check that the next push starts runs
-(`gh run list --repo aayc/dolist --event push`). If it still doesn't, ask GitHub Support, citing a
-push commit that has other apps' check suites and none from Actions.
+`main` has no rulesets or protection. GitHub records every push, and the third-party apps on the
+repository get their check suites for it, but no `github-actions` check suite is ever created. The
+one push that did start runs created `main`; every push since, and a throwaway pull request,
+started nothing. It began during a GitHub incident (billing information, 2026-09-24) and didn't
+recover once the incident was resolved, so it looks like state stuck on GitHub's side. To fix it,
+the owner can turn Actions off and on again for the repository (Settings → Actions → General) or
+disable and re-enable each workflow (`gh workflow disable`/`enable`), then check that the next
+push starts runs (`gh run list --repo aayc/dolist --event push`). If it still doesn't, ask GitHub
+Support, citing a push commit that has other apps' check suites and none from Actions.
 
 ## CI (`ci.yml`)
 

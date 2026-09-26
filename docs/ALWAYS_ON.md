@@ -1,8 +1,9 @@
 # Always-on agent: design
 
 Status: phases 1 to 3 (remote access, the always-on daemon with its setup kit, the relay) and the
-Settings below are being built; phases 4 and 5 are design only. This document is the plan for
-running the agent on an always-on machine, or on any device, chosen per device.
+Settings below are built and on `main`, except where marked "not built yet"; next is verifying
+them on the real VM. Phases 4 to 6 are design only. This document is the plan for running the
+agent on an always-on machine, or on any device, chosen per device.
 
 ## Goal
 
@@ -109,7 +110,9 @@ What changes in the daemon (`apps/daemon/src/security.ts`, `token.ts`, `routes/w
   scoped to the daemon's origin, accepted only together with an allowed Origin (so script on the
   page never holds a credential). Native clients keep sending bearer tokens.
 - **The macOS app** gets "Connect to a daemon…": URL plus pairing code, token in the Keychain,
-  `DaemonSupervisor` in attach-only mode (it never starts or stops a remote daemon).
+  `DaemonSupervisor` in attach-only mode (it never starts or stops a remote daemon). **Not built
+  yet:** the app attaches to a daemon at another URL only with the local token (its "External"
+  mode, for `pnpm dev`); it reaches the always-on machine through its own daemon's relay.
 
 This is a deliberate change to invariant 6 ("the daemon is local-only"): it becomes "local-only
 unless remote hosts are configured, and then only through a private network with device tokens".
@@ -216,8 +219,9 @@ Everything needed lives in Settings, on the web and in the Mac app:
   credential.
 - **Sync:** the sync service's address, the vault, the vault token (write-only: never shown again)
   and the sync status.
-- **Devices:** the devices paired with this daemon, a pairing code (and a QR code for the phone),
-  and revoking a device.
+- **Devices:** the devices paired with this daemon, a pairing code with the address to open, and
+  revoking a device. A QR code for the phone is not built yet (`POST /api/pairing-codes` already
+  returns the URL for one).
 - **Remote access:** the names this daemon answers to (on the VM, its tailnet name).
 
 Secrets (the vault token, device credentials) are stored `0600` in `DDL_HOME`, never in
@@ -259,10 +263,10 @@ For apps that have no API and run on Linux (or web apps that need a real screen)
 Each phase ships on its own, with tests, docs and CI green.
 
 1. **Remote access.** Remote hosts, device tokens, pairing (API, web pairing screen, Settings →
-   Devices on web and Mac), the cookie for remote browsers, "Connect to a daemon…" in the Mac app,
-   and a setup guide. Done when a second machine on the private network pairs and uses the full
-   app, a revoked device is cut off immediately, and every existing security test still holds
-   (plus a Host/Origin/token matrix for remote hosts).
+   Devices on web and Mac), the cookie for remote browsers, "Connect to a daemon…" in the Mac app
+   (not built yet), and a setup guide. Done when a second machine on the private network pairs
+   and uses the full app, a revoked device is cut off immediately, and every existing security
+   test still holds (plus a Host/Origin/token matrix for remote hosts).
 2. **The always-on daemon.** A Linux bundle (`pnpm deploy` output, like the Mac app's), systemd
    units, a setup kit (`deploy/linux`, `deploy/azure`), the sync service on the same VM, health
    and log rotation, and placement per device with lease priorities. Done when the VM runs

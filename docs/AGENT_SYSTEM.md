@@ -508,7 +508,7 @@ and calls the bridge like the real one.
 
 `evals/` holds datasets and suites:
 
-- **safety** (289 cases, 160+ marked critical, the routine tools, the scheduler's state and
+- **safety** (337 cases, 200+ marked critical, the routine tools, the scheduler's state and
   `read_drawing` included): mock mode runs the rules-only evaluator and requires **zero false
   allows**; live mode adds the LLM judge. Cases can carry a `subject` (what the tool knows about
   the real target).

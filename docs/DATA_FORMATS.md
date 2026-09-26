@@ -34,6 +34,7 @@ corruption.
 | `state/tasks/<hash(notePath)>.json` | `packages/agent/src/orchestrator/task-watcher.ts` | JSON, compact | 1 | **no** (excluded in `apps/daemon/src/wiring.ts`) |
 | `state/records.json` | `packages/agent/src/orchestrator/records.ts` | JSON, compact | 1 | yes |
 | `state/approvals.json` | `packages/agent/src/safety/approval-store.ts` | JSON, pretty | 1 | yes |
+| `state/routines.json` | `packages/agent/src/routines/state.ts` | JSON, compact | 1 | yes |
 | `settings.json` | `apps/daemon/src/settings-store.ts` | JSON, pretty, user-editable | 1 | yes |
 | `corrupt/…` | `PersistedFile` (all owners) | copies / moved originals | — | yes |
 | `sync/<targetId>.json` | `packages/storage/src/sync/snapshot.ts` | JSON | `format: 1` | **never** (per device) |
@@ -51,11 +52,18 @@ Owned by other slices; listed so the inventory is complete.
 | --- | --- | --- |
 | `config.json` | Daemon config: vault path (also written by `PUT /api/device/vault`), port, agent mode, model, sync target, execution provider, allowed origins, log level | `apps/daemon/src/config.ts` |
 | `daemon-token` | Bearer token, 64 hex chars + newline, mode `0600` | `apps/daemon/src/token.ts` |
+| `sync-token` | The sync service's vault token, one line, mode `0600`, never returned by the API | `apps/daemon/src/sync-setup.ts` (read), `device-settings.ts` (written) |
+| `device.json` | This device's `{ id, name }`, created on first use; never copied to another machine | `apps/daemon/src/sync-setup.ts` |
+| `devices.json` | Devices paired with this daemon: names, kinds, times and token hashes (never tokens), mode `0600` | `apps/daemon/src/paired-devices.ts` |
+| `machine-token` | This device's credential for the always-on machine (`{ url, deviceId, token }`), mode `0600` | `apps/daemon/src/machine-link.ts` |
 | `.env` | Secrets such as `OPENROUTER_API_KEY` | `apps/daemon/src/env-file.ts` |
 | `mcp.json` | MCP connectors (`{ "mcpServers": { … } }`) | `packages/connectors` |
 | `pi/` | Pi harness agent dir (`auth.json`, `models.json`); sessions are in memory | `packages/agent/src/harness/pi/` |
+| `cursor/` | The Cursor harness's private CLI config (never the user's own) | `packages/agent/src/harness/cursor/workspace.ts` |
 | `workspaces/<key>/` | Per-task scratch folders, mode `0700` | `packages/agent/src/execution/local/workspace.ts` |
 | `browser-profile/` | The agent browser's profile (cookies, logins), mode `0700` | `packages/agent/src/execution/local/provider.ts` |
+| `cache/drawings/` | Drawings rendered to PNG for agents, by content hash (at most 64 MB, least recently used removed first); safe to delete | `packages/agent/src/execution/local/provider.ts` |
+| `node-location.json` | Where the Mac app last found Node, reused while that binary is unchanged | `apps/macos/Packages/DailyDoListDaemon` (`DaemonSupervisor`) |
 
 ## Compatibility rules
 
@@ -323,6 +331,37 @@ categories are all listed), optional `risk` (the grant does not cover riskier ca
 
 Version history: **1** only. The writer always wrote `version: 1`; files without it are accepted.
 
+### Routine state — `state/routines.json`
+
+The routine scheduler's state for every routine: its next run, its last run (with a compact
+result the next run starts from) and its recent runs. The definitions live in the routine files
+in `Routines/` (notes, see "Routines" in [AGENT_SYSTEM.md](./AGENT_SYSTEM.md#routines)); this file
+never holds anything the user sets. Schema: `packages/contract/src/persisted/routines.ts`.
+
+```text
+{ version: 1, routines: { [routineId]: { path, scheduleKey: string|null, nextRunAt: number|null,
+  lastRun?: RoutineRun, runs: threadId[], extraRuns?: { date, count }, updatedAt } } }
+```
+
+`RoutineRun`: `runId`, `threadId`, `trigger` (`schedule|catch_up|manual`), `status`
+(`TaskAgentStatus`), `startedAt`, optional `finishedAt`, `summary` (badge text), `result` (what
+the run reported, shortened), `changed`, `notified` (announced, or deliberately not: never twice).
+
+- `path` is the routine file it was last seen at; a different `scheduleKey` (the schedule phrase
+  `nextRunAt` came from) means reschedule. `nextRunAt: null` means not scheduled (paused, invalid,
+  never seen enabled); one in the past is a missed run. `runs` lists thread ids newest first
+  (writers keep 100; the threads stay in `threads/` either way). `extraRuns` counts runs beyond the
+  schedule on that local day (the daily budget).
+- Corrupt → quarantined and state starts empty. Newer → never written this run. Invalid routine
+  entries are dropped one by one.
+- Writes are debounced (300 ms), and a failed write is retried after 5 s. A device that doesn't
+  run the agent reads the file (for next and last runs) and never writes it.
+- A concurrent change is merged (`mergePersistedRoutines`): union by routine id, and for a routine
+  on both sides the state updated last wins. State of deleted routines is harmless leftover.
+- It lives under the agent-owned `state/`, so the agent lease's fencing covers it.
+
+Version history: **1** only (files without `version` are read as version 1).
+
 ### Settings — `settings.json`
 
 The user's explicit `AppSettings` overrides (a deep partial), merged over the defaults (which
@@ -334,8 +373,15 @@ include `DDL_MODEL` from the daemon config).
   template? (≤512) }, agent?: { enabled?, settleMs? (0–120000), maxConcurrentSubagents? (1–32),
   harness? ("pi" | "cursor"), model?, cursorModel?, judgeModel? (1–200 chars, trimmed),
   watch?: { pastDays?, futureDays? (0–366) }, actOnExistingTasks?, approvalTimeoutMs? (1 min–30 days),
-  approvalPolicy? ("ask_every_action" | "ask_risky" | "ask_high_risk" | "run_everything") } }
+  approvalPolicy? ("ask_every_action" | "ask_risky" | "ask_high_risk" | "run_everything") },
+  remote?: { alwaysOnMachine?: { name, url } | null } }
 ```
+
+- **Always-on machine:** `remote.alwaysOnMachine` names the vault's always-on machine (its display
+  name and address: an `https://` origin, plain `http` only to loopback; see
+  [ALWAYS_ON.md](./ALWAYS_ON.md)); `null` or absent means none. It's one value: an invalid name
+  or address drops it whole (no machine), never half of it. Credentials for it are never here:
+  each device keeps its own in `$DDL_HOME/machine-token`.
 
 - **Approval policy:** `agent.approvalPolicy` decides when agents ask before acting (see
   `packages/agent/src/safety/README.md`). Files without it, and files with a policy this version
@@ -365,7 +411,9 @@ include `DDL_MODEL` from the daemon config).
   joining a synced vault pulls the vault's settings rather than replacing them. Newer → defaults apply and updates are refused with an explanation
   until the app is updated. A read error at startup no longer stops the daemon: defaults apply and
   the first update re-reads the file.
-- External edits otherwise apply on the next start (the store does not watch the file).
+- **Reloaded live:** the daemon watches the vault and reloads the file when it changes (a hand
+  edit, or a change synced from another device), then hands the result to the agent and to
+  clients (`settings.changed`); the store's own writes reload to what it already has.
 
 Version history: unversioned (before the contract) → **1**: same object plus `version`, added on
 the next write.
@@ -499,8 +547,8 @@ keep the old ones loading.
 
 ## Known limitations
 
-- Threads and settings are not reloaded live when another device changes them; changes merge at
-  the next write or apply on restart.
+- Threads are not reloaded live when another device changes them; changes merge at the next write
+  or apply on restart. (Settings are reloaded live, see Settings.)
 - Sync conflict copies of single-file state (`records (conflict …).json`, `approvals`, `settings`)
   are left for the user; only thread conflict copies are merged.
 - The approval broker does not use `createApprovalStateFile` yet (see Approvals).

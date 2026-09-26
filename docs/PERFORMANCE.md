@@ -73,7 +73,7 @@ Vitest 5 benchmarks (`*.bench.ts`) assert p99 budgets inside the test and write
 
 | Benchmark | Budget (p99) |
 | --- | --- |
-| `parseTasks`, 2 000-line note | 4 ms |
+| `parseTasks`, 2 000-line note | 6 ms |
 | `trackTasks`, 2 000-line note, one edit | 12 ms |
 | `resolveTaskAnchors`, 50 anchors in 2 000 lines | 12 ms |
 | Editor: 500 single-char inserts, 2 000 lines, 30 badges | 500 ms |
