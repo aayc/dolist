@@ -64,48 +64,41 @@ export const TreeItem = memo(function TreeItem({ node, depth, onMenu }: TreeItem
 
   // Flat ARIA tree (aria-level) so every row is a focusable treeitem.
   return (
-    <>
-      <div
-        role="treeitem"
-        aria-level={depth + 1}
-        aria-expanded={isFolder ? expanded : undefined}
-        aria-selected={active}
-        className={cx("tree-row", isFolder ? "is-folder" : "is-file", active && "is-active")}
-        style={{ paddingInlineStart: 8 + depth * 16 }}
-        tabIndex={0}
-        data-tooltip={node.path}
-        data-tooltip-overflow=".tree-name"
-        data-testid="explorer-item"
-        data-path={node.path}
-        data-kind={node.kind}
-        onClick={(event) => !renaming && activate(event.metaKey || event.ctrlKey)}
-        onAuxClick={(event) => {
-          if (event.button === 1 && !isFolder) void workspace.openNote(node.path, { newTab: true });
-        }}
-        onContextMenu={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          onMenu(event.clientX, event.clientY, node.path, node.kind);
-        }}
-        onKeyDown={onKeyDown}
-      >
-        {isFolder ? (
-          <ChevronRight
-            size={14}
-            className={cx("tree-chevron", expanded && "is-open")}
-            aria-hidden="true"
-          />
-        ) : (
-          <span className="tree-chevron-spacer" />
-        )}
-        {renaming ? <RenameInput node={node} /> : <span className="tree-name">{node.name}</span>}
-      </div>
-      {isFolder && expanded
-        ? node.children.map((child) => (
-            <TreeItem key={child.path} node={child} depth={depth + 1} onMenu={onMenu} />
-          ))
-        : null}
-    </>
+    <div
+      role="treeitem"
+      aria-level={depth + 1}
+      aria-expanded={isFolder ? expanded : undefined}
+      aria-selected={active}
+      className={cx("tree-row", isFolder ? "is-folder" : "is-file", active && "is-active")}
+      style={{ paddingInlineStart: 8 + depth * 16 }}
+      tabIndex={0}
+      data-tooltip={node.path}
+      data-tooltip-overflow=".tree-name"
+      data-testid="explorer-item"
+      data-path={node.path}
+      data-kind={node.kind}
+      onClick={(event) => !renaming && activate(event.metaKey || event.ctrlKey)}
+      onAuxClick={(event) => {
+        if (event.button === 1 && !isFolder) void workspace.openNote(node.path, { newTab: true });
+      }}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onMenu(event.clientX, event.clientY, node.path, node.kind);
+      }}
+      onKeyDown={onKeyDown}
+    >
+      {isFolder ? (
+        <ChevronRight
+          size={14}
+          className={cx("tree-chevron", expanded && "is-open")}
+          aria-hidden="true"
+        />
+      ) : (
+        <span className="tree-chevron-spacer" />
+      )}
+      {renaming ? <RenameInput node={node} /> : <span className="tree-name">{node.name}</span>}
+    </div>
   );
 });
 
