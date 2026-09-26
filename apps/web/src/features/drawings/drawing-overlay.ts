@@ -2,7 +2,7 @@ import type { DrawingElement } from "@ddl/core";
 import type { EmbedHost } from "@ddl/editor";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { DrawingView } from "./DrawingEditor";
-import { DrawingEditing } from "./drawing-editing";
+import type { DrawingEditing } from "./drawing-editing";
 import type { Drawings } from "./drawing-store";
 import type { ExcalidrawLib } from "./excalidraw-loader";
 
@@ -106,6 +106,8 @@ export class DrawingOverlay {
 
   private async open(): Promise<void> {
     try {
+      // Loaded with Excalidraw, the first time a drawing is edited.
+      const { DrawingEditing } = await import("./drawing-editing");
       const editing = await DrawingEditing.open({
         drawings: this.options.drawings,
         path: this.options.path,
