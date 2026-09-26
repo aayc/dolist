@@ -538,10 +538,10 @@ public final class MarkdownEditorController {
   // MARK: Edit pipeline
 
   /// Every character edit, from `didProcessEditing`: update the line index and styles, remap badges
-  /// and keep the revealed lines covering the edit.
+  /// and keep the revealed lines covering the edit. The storage is still processing the edit, so
+  /// nothing here may lay out text or resize a view (AppKit raises).
   func storageDidEditCharacters(in editedRange: NSRange, changeInLength delta: Int) {
     let oldLength = editedRange.length - delta
-    let linesBefore = highlighter.lineIndex.count
     highlighter.textDidChange(in: editedRange, changeInLength: delta)
     let restyled = highlighter.lastRestyledRange
     if restyled.length > 0 {
@@ -559,10 +559,7 @@ public final class MarkdownEditorController {
       location: editedRange.location, oldLength: oldLength, newLength: editedRange.length)
     embedsDidEdit(
       location: editedRange.location, oldLength: oldLength, newLength: editedRange.length)
-    if let ruler = lineNumberRuler {
-      if highlighter.lineIndex.count != linesBefore { ruler.updateThickness() }
-      ruler.needsDisplay = true
-    }
+    lineNumberRuler?.needsDisplay = true
     if !replacingDocument {
       vimHost.storageDidEdit(
         location: editedRange.location, oldLength: oldLength, newLength: editedRange.length)

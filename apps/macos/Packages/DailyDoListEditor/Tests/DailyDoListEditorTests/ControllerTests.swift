@@ -165,6 +165,25 @@ struct ControllerTests {
     #expect(editor.controller.scrollView.verticalRulerView is LineNumberRulerView)
   }
 
+  /// Legacy scrollers (a mouse, or "show scroll bars: always") take width from the clip view: a
+  /// gutter retiled while the edit is processed makes the text view lay out, which raises.
+  @Test func theGutterWidensForTheHundredthLineOnceTheEditIsProcessed() throws {
+    var configuration = EditorConfiguration()
+    configuration.showLineNumbers = true
+    let editor = EditorHarness(
+      text: Array(repeating: "line", count: 99).joined(separator: "\n"),
+      configuration: configuration, size: NSSize(width: 700, height: 500))
+    editor.controller.scrollView.scrollerStyle = .legacy
+    let ruler = try #require(editor.controller.scrollView.verticalRulerView)
+    let twoDigits = ruler.ruleThickness
+    editor.select(NSRange(location: editor.controller.storage.length, length: 0))
+    editor.type("x")
+    editor.enter()
+    let rep = try #require(ruler.bitmapImageRepForCachingDisplay(in: ruler.bounds))
+    ruler.cacheDisplay(in: ruler.bounds, to: rep)
+    #expect(ruler.ruleThickness > twoDigits)
+  }
+
   @Test func geometryCentersAReadableColumnAndReservesBadgeRoom() {
     let wide = TextGeometry.compute(
       viewWidth: 1200, readable: true, horizontalPadding: 28, topPadding: 20, badgeReserve: 0)
