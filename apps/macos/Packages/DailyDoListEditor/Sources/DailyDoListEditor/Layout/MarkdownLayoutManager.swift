@@ -9,34 +9,36 @@ import AppKit
 /// thread (layout and drawing are driven by the text view), hence the `assumeIsolated` hops.
 final class MarkdownLayoutManager: NSLayoutManager {
   weak var renderer: DecorationRenderer?
-  /// Character ranges restyled while the text storage processed an edit; invalidated as soon as
-  /// this layout manager has processed that edit (their coordinates are the edited text's).
+  /// Character ranges restyled while the text storage processed an edit; invalidated along with
+  /// that edit when this layout manager processes it (their coordinates are the edited text's).
   var invalidateAfterEdit: [NSRange] = []
 
+  /// The restyled ranges join the range the edit invalidates, so `super` invalidates them in its
+  /// one pass. A second pass after it (`invalidateGlyphs`, `invalidateLayout`) recomputes the text
+  /// container's used rect, which resizes the text view; when that shows or hides a legacy
+  /// scroller, the text view counts its glyphs, and generating the ones `super` just invalidated
+  /// raises while the storage is still processing the edit.
   override func processEditing(
     for textStorage: NSTextStorage, edited editMask: NSTextStorageEditActions,
     range newCharRange: NSRange,
     changeInLength delta: Int, invalidatedRange invalidatedCharRange: NSRange
   ) {
-    super.processEditing(
-      for: textStorage, edited: editMask, range: newCharRange, changeInLength: delta,
-      invalidatedRange: invalidatedCharRange)
-    guard !invalidateAfterEdit.isEmpty else { return }
-    let ranges = invalidateAfterEdit
-    invalidateAfterEdit.removeAll()
+    var invalidated = invalidatedCharRange
     var beyondEditedLines = false
-    for range in ranges {
+    for range in invalidateAfterEdit {
       let clamped = range.clamped(to: textStorage.length)
       guard clamped.length > 0 else { continue }
-      // Glyphs can't be generated while the storage is still processing the edit, so only
-      // invalidate here (no display invalidation by character range).
-      invalidateGlyphs(forCharacterRange: clamped, changeInLength: 0, actualCharacterRange: nil)
-      invalidateLayout(forCharacterRange: clamped, actualCharacterRange: nil)
       if clamped.location < invalidatedCharRange.location || clamped.end > invalidatedCharRange.end
       {
         beyondEditedLines = true
       }
+      invalidated = NSUnionRange(invalidated, clamped)
     }
+    invalidateAfterEdit.removeAll()
+    super.processEditing(
+      for: textStorage, edited: editMask, range: newCharRange, changeInLength: delta,
+      invalidatedRange: invalidated)
+    // Display invalidation by character range would generate glyphs: redraw what's visible.
     guard beyondEditedLines else { return }
     nonisolated(unsafe) let manager = self
     MainActor.assumeIsolated {
