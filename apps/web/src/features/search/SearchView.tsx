@@ -101,7 +101,8 @@ export function SearchView() {
         />
         {loading ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : null}
       </label>
-      {q && !loading && !error ? (
+      {/* It describes the results shown, which stay while the next ones load. */}
+      {q && !error && (!loading || hits.length > 0) ? (
         <div className="search-summary">
           {pluralize(hits.length, "result")} in {pluralize(groups.length, "note")}
         </div>
