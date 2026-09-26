@@ -1523,6 +1523,14 @@ export class MockAgent {
     });
   }
 
+  /** Adds threads as they are and announces them (performance tests). */
+  seedThreads(threads: readonly Thread[]): void {
+    for (const thread of threads) {
+      this.threads.set(thread.id, thread);
+      this.emitThread(thread);
+    }
+  }
+
   /**
    * Instantly fabricates the demo of a note the agent works in (see mock-demo.ts): the dinner
    * task's thread, which wrote lines into the note, and a thread anchored to a question.

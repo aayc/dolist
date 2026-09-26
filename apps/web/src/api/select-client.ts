@@ -73,6 +73,7 @@ async function mockStartup(): Promise<Startup> {
         computer: parseMockComputerMode(searchParam("mockComputer")),
         remote: parseMockRemoteScenario(searchParam("mockRemote")),
         persistVault: searchParam("mockPersist") === "1",
+        notes: Number(searchParam("mockNotes")) || 0,
         deviceId,
         onUnauthorized,
       }),

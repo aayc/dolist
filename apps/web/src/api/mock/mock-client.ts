@@ -45,6 +45,7 @@ import {
   type SettingsResponse,
   type SyncStatusResponse,
   type TaskRecordsResponse,
+  type Thread,
   type ThreadListResponse,
   type ThreadResponse,
   today,
@@ -101,6 +102,8 @@ export interface MockDaemonClientOptions {
   onUnauthorized?: () => void;
   /** The pairing codes and devices (default: this browser's, when persisting). */
   pairing?: MockPairing;
+  /** Extra notes, a third each at the root, in a folder and in a subfolder (performance tests). */
+  notes?: number;
 }
 
 export interface MockTestHooks {
@@ -119,6 +122,9 @@ export interface MockTestHooks {
   setMachineReachable(reachable: boolean): void;
   /** The always-on machine revokes (or accepts again) this device. */
   setMachineRejects(rejected: boolean): void;
+  /** Pushes each event like the daemon's socket, one task each (performance tests). */
+  emitEvents(events: ServerEvent[]): void;
+  seedThreads(threads: Thread[]): void;
 }
 
 declare global {
@@ -294,6 +300,9 @@ export class MockDaemonClient implements DaemonClient {
       },
     );
     seedVault(this.vault, this.agent, this.settings);
+    for (let i = 0; i < (options.notes ?? 0); i++) {
+      this.vault.write(`${["", "Archive/", "Areas/Area 7/"][i % 3]}Note ${i}.md`, `# Note ${i}`);
+    }
     if (options.persistVault) this.persistVault();
     if ((options.installHooks ?? true) && typeof window !== "undefined") {
       window.__ddlMock = this.testHooks();
@@ -828,6 +837,10 @@ export class MockDaemonClient implements DaemonClient {
       setSyncing: (on) => this.remote.setSynced(on),
       setMachineReachable: (reachable) => this.remote.setMachineReachable(reachable),
       setMachineRejects: (rejected) => this.remote.setMachineRejects(rejected),
+      emitEvents: (events) => {
+        for (const event of events) this.emit(event);
+      },
+      seedThreads: (threads) => this.agent.seedThreads(threads),
     };
   }
 }
