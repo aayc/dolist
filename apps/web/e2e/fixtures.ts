@@ -154,5 +154,5 @@ export const test = base.extend<{ daemonSpec: DaemonSpec; daemon: Daemon }>({
   },
 });
 
-export type { Locator, Page } from "@playwright/test";
+export type { Browser, Locator, Page } from "@playwright/test";
 export { expect };
