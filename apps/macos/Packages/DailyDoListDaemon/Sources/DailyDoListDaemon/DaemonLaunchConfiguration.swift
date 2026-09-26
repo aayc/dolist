@@ -25,6 +25,9 @@ public struct DaemonLaunchConfiguration: Hashable, Sendable {
   /// (crash, force quit), the daemon sees its stdin close and shuts itself down gracefully instead
   /// of lingering as an orphan that the next launch would attach to.
   public var stopsWhenAppExits: Bool
+  /// Whether the `DDL_*` variables of this process's environment reach a managed daemon (a sync
+  /// service, remote hosts, another vault). The demo's daemon gets none of them.
+  public var inheritsDaemonSettings: Bool
 
   public init(
     home: URL = DaemonLaunchConfiguration.defaultHome,
@@ -35,7 +38,8 @@ public struct DaemonLaunchConfiguration: Hashable, Sendable {
     daemonEntry: URL? = nil,
     manageProcess: Bool = true,
     extraEnvironment: [String: String] = [:],
-    stopsWhenAppExits: Bool = true
+    stopsWhenAppExits: Bool = true,
+    inheritsDaemonSettings: Bool = true
   ) {
     self.home = home
     self.vaultPath = vaultPath
@@ -46,6 +50,19 @@ public struct DaemonLaunchConfiguration: Hashable, Sendable {
     self.manageProcess = manageProcess
     self.extraEnvironment = extraEnvironment
     self.stopsWhenAppExits = stopsWhenAppExits
+    self.inheritsDaemonSettings = inheritsDaemonSettings
+  }
+
+  /// The demo (`--demo`): a daemon of its own with the mock agent on `port`, its home and vault in
+  /// `root`, a folder that doesn't exist yet. `DDL_DEMO=1` has the daemon seed the vault with the
+  /// demo vault (and turn computer use off), and none of the user's `DDL_*` settings apply, so it
+  /// never opens `~/.daily-do-list` or a real vault.
+  public static func demo(root: URL, port: Int) -> DaemonLaunchConfiguration {
+    DaemonLaunchConfiguration(
+      home: root.appendingPathComponent("home", isDirectory: true),
+      vaultPath: root.appendingPathComponent("Demo Vault", isDirectory: true),
+      port: port, agentMode: "mock", extraEnvironment: ["DDL_DEMO": "1"],
+      inheritsDaemonSettings: false)
   }
 
   /// The daemon's default port (`DEFAULT_PORT` in `apps/daemon/src/config.ts`).

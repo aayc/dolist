@@ -2,7 +2,8 @@ import Foundation
 
 /// Command-line / environment switches.
 struct LaunchOptions: Equatable, Sendable {
-  /// `--demo` or `DDL_DEMO=1`: run against the in-memory demo daemon (no Node, no network).
+  /// `--demo` or `DDL_DEMO=1`: run a daemon of its own with the mock agent on a throwaway demo
+  /// vault (`DemoDaemon`).
   var demo: Bool
 
   init(demo: Bool = false) {

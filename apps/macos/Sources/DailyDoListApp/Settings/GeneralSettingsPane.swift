@@ -27,7 +27,7 @@ struct GeneralSettingsPane: View {
         if model.isDemo {
           SettingsNote(
             text:
-              "Running in demo mode (--demo): an in-memory daemon with sample notes. Connection settings apply on the next normal launch."
+              "Running in demo mode (--demo): a daemon of its own with the mock agent on a throwaway demo vault. Connection settings apply on the next normal launch."
           )
         }
         switch preferences.daemonMode {
@@ -106,7 +106,7 @@ struct GeneralSettingsPane: View {
             run { await model.boot() }
           }
           .pointingHandCursor()
-          if preferences.daemonMode == .managed, !model.isDemo {
+          if model.managesDaemon {
             Button("Restart Daemon") { run { await model.restartDaemon() } }.pointingHandCursor()
           }
         }
@@ -121,7 +121,7 @@ struct GeneralSettingsPane: View {
             model.connection.isOnline ? Theme.success : Theme.warning)
         }
         SettingsNote(text: model.connection.detail)
-        if preferences.daemonMode == .managed, !model.isDemo {
+        if model.managesDaemon {
           LabeledContent("Supervisor", value: model.supervisor.state.summary)
           if let error = model.supervisor.lastError {
             SettingsNote(text: error.summary, tone: Theme.danger)
@@ -131,7 +131,7 @@ struct GeneralSettingsPane: View {
           LabeledContent(
             "Daemon", value: "\(health.version) · API v\(health.apiVersion) · \(health.vaultName)")
         }
-        if preferences.daemonMode == .managed, !model.isDemo {
+        if model.managesDaemon {
           DaemonLogView(supervisor: model.supervisor)
         }
       }

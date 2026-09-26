@@ -3,7 +3,7 @@
 #
 #   apps/macos/scripts/run-app.sh [--demo] [--release] [--with-daemon] [--env VAR=value]… [-- args…]
 #
-#   --demo          start in demo mode (in-memory data, no daemon)
+#   --demo          start in demo mode (its own daemon, mock agent, a throwaway demo vault)
 #   --env VAR=value pass an environment variable to the app, e.g. --env DDL_AGENT_MODE=mock
 #   -- args…        pass the remaining arguments to the app
 set -eu

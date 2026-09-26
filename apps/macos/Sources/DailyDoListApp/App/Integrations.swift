@@ -1,12 +1,17 @@
-import DailyDoListClient
+import DailyDoListDaemon
 import Foundation
 
-/// Provides the demo-mode client (`--demo` / `DDL_DEMO=1`): the in-memory daemon with the demo
-/// vault, the simulated agent paced in real time, and a paired always-on machine to hand it to.
-@MainActor
-enum DemoClientFactory {
-  static let make: (@MainActor () -> DaemonClient)? = {
-    InMemoryDaemonClient(seed: .demo, clock: .realTime(), agent: .enabled, remote: .alwaysOn)
+/// Demo mode (`--demo` / `DDL_DEMO=1`): the daemon with the mock agent on a throwaway demo vault,
+/// in a new temporary folder each launch (deleted on quit) and on a free port, so it runs beside
+/// the real app and never touches the real home or vault.
+struct DemoDaemon: Equatable {
+  var root: URL
+  var configuration: DaemonLaunchConfiguration
+
+  static func make() throws -> DemoDaemon {
+    let root = FileManager.default.temporaryDirectory
+      .appendingPathComponent("ddl-demo-\(UUID().uuidString)", isDirectory: true)
+    return DemoDaemon(root: root, configuration: .demo(root: root, port: try LocalPort.findFree()))
   }
 }
 

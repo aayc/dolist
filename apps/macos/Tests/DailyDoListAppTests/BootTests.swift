@@ -179,33 +179,40 @@ struct BootTests {
     }
   }
 
-  @Test func demoModeUsesTheInMemoryDaemon() async throws {
-    let model = AppModel(
-      environment: makeEnvironment(
-        client: FakeDaemonClient(), demo: true,
-        demoClient: {
-          InMemoryDaemonClient(
-            seed: .demo, clock: .immediate(start: referenceNow, timeZone: .current),
-            agent: .disabled)
-        }))
+  /// The demo runs a daemon of its own (the configuration the integration tests launch) and
+  /// deletes its folder on quit.
+  @Test func demoModeSupervisesItsOwnDaemonAndCleansUpOnQuit() async throws {
+    let supervisor = FakeSupervisor(
+      connection: DaemonConnectionInfo(
+        baseURL: URL(string: "http://127.0.0.1:50123")!, token: "demo-token"))
+    var environment = makeEnvironment(
+      client: FakeDaemonClient(), supervisor: supervisor, mode: .external, demo: true)
+    var removed: [URL] = []
+    environment.removeFolder = { removed.append($0) }
+    let model = AppModel(environment: environment)
     await model.boot()
     #expect(model.phase == .ready)
-    #expect(model.connection.isDemo)
-    let workspace = try #require(model.workspace)
-    #expect(workspace.activePath == "Daily/2026-09-23.md")
-    #expect(workspace.vault.files.contains("Templates/Daily.md"))
-    try await eventually("demo connected") { model.connection.isOnline }
-    await model.teardown()
+    #expect(supervisor.startCount == 1)
+    #expect(supervisor.configuration == testDemoDaemon.configuration)
+    #expect(model.connection.isDemo && model.managesDaemon)
+    #expect(model.connection.kind == .demo(URL(string: "http://127.0.0.1:50123")!))
+    await model.restartDaemon()
+    #expect(supervisor.stopCount == 1 && supervisor.startCount == 2)
+    #expect(supervisor.configuration == testDemoDaemon.configuration, "restarts keep its vault")
+    await model.prepareForTermination()
+    #expect(supervisor.stopCount == 2)
+    #expect(removed == [testDemoDaemon.root])
   }
 
-  @Test func demoModeWithoutAFakeDaemonExplainsIt() async {
-    let model = AppModel(
-      environment: makeEnvironment(client: FakeDaemonClient(), demo: true, demoClient: nil))
-    await model.boot()
-    guard case .failed(.other) = model.phase else {
-      Issue.record("expected a failure, got \(model.phase)")
-      return
-    }
+  @Test func eachDemoGetsANewFolderAndAFreePort() throws {
+    let first = try DemoDaemon.make()
+    let second = try DemoDaemon.make()
+    #expect(first.root != second.root)
+    #expect(first.root.path.hasPrefix(FileManager.default.temporaryDirectory.path))
+    #expect(first.configuration.home.path.hasPrefix(first.root.path))
+    #expect(first.configuration.vaultPath?.path.hasPrefix(first.root.path) == true)
+    #expect(first.configuration.port != DaemonLaunchConfiguration.defaultPort)
+    #expect(!FileManager.default.fileExists(atPath: first.root.path), "the daemon seeds it")
   }
 
   @Test func lastSessionTabsAreRestoredAndTodayIsAddedAsANewTab() async throws {

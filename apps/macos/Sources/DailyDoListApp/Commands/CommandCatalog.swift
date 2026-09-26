@@ -243,7 +243,7 @@ struct CommandCatalog {
       },
       AppCommand(
         .restartDaemon, "Restart Daemon", palette: "Restart the daemon",
-        enabled: { !model.isDemo && model.preferences.daemonMode == .managed },
+        enabled: { model.managesDaemon },
         perform: { Task { await model.restartDaemon() } }),
     ]
 

@@ -44,6 +44,27 @@ struct DaemonProcessEnvironmentTests {
     #expect(variables["DDL_AGENT_MODE"] == nil)
   }
 
+  /// The demo's daemon: mock agent, its own folders, and nothing from the user's DDL_* settings.
+  @Test func theDemoRunsOnItsOwnFoldersWithNoneOfTheUsersSettings() {
+    let root = URL(fileURLWithPath: "/tmp/ddl-demo-1")
+    let configuration = DaemonLaunchConfiguration.demo(root: root, port: 50_123)
+    let base = [
+      "HOME": "/Users/me", "PATH": "/usr/bin", "DDL_SYNC_URL": "https://sync.example.com",
+      "DDL_SYNC_VAULT": "v1", "DDL_REMOTE_HOSTS": "vm.ts.net", "DDL_MODEL": "some/model",
+    ]
+
+    let variables = DaemonProcessEnvironment.variables(
+      base: base, configuration: configuration, node: node)
+
+    #expect(
+      variables.filter { $0.key.hasPrefix("DDL_") } == [
+        "DDL_HOME": "/tmp/ddl-demo-1/home", "DDL_VAULT": "/tmp/ddl-demo-1/Demo Vault",
+        "DDL_PORT": "50123", "DDL_AGENT_MODE": "mock", "DDL_SUPERVISED": "1", "DDL_DEMO": "1",
+      ])
+    #expect(variables["HOME"] == "/Users/me")
+    #expect(configuration.manageProcess && configuration.stopsWhenAppExits)
+  }
+
   @Test func pathStartsWithNodeThenLoginShellThenInherited() {
     #expect(
       DaemonProcessEnvironment.searchPath(

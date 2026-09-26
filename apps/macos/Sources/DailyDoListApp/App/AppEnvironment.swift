@@ -15,8 +15,10 @@ struct AppEnvironment {
   var scheduler: AppScheduler
   var supervisor: DaemonSupervising
   var makeClient: @MainActor (DaemonEndpoint) -> DaemonClient
-  /// The in-memory demo daemon (`--demo`); nil when this build can't provide one.
-  var makeDemoClient: (@MainActor () -> DaemonClient)?
+  /// Demo mode's daemon (`--demo`), made once per launch.
+  var makeDemoDaemon: @MainActor () throws -> DemoDaemon = { try DemoDaemon.make() }
+  /// Deletes a folder (the demo's, once its daemon stopped).
+  var removeFolder: @MainActor (URL) -> Void = { try? FileManager.default.removeItem(at: $0) }
   /// Token + URL of an external daemon from DDL_HOME (throws when there's no token).
   var discoverEndpoint: @MainActor (_ home: URL, _ port: Int?) throws -> DaemonEndpoint
   var systemIntegration: SystemIntegrationBridge
@@ -56,7 +58,6 @@ struct AppEnvironment {
       scheduler: LiveScheduler.shared,
       supervisor: DaemonSupervisor(),
       makeClient: { HTTPDaemonClient(endpoint: $0) },
-      makeDemoClient: DemoClientFactory.make,
       discoverEndpoint: { home, port in try DaemonEndpoint.discover(home: home, port: port) },
       systemIntegration: SystemIntegrationFactory.make(),
       now: { Date() },

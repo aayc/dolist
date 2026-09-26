@@ -6,8 +6,8 @@ import Observation
 /// Where the app's data comes from.
 enum ConnectionKind: Equatable, Sendable {
   case daemon(URL)
-  /// In-memory fake daemon (`--demo` / `DDL_DEMO=1`).
-  case demo
+  /// The demo's daemon (`--demo` / `DDL_DEMO=1`): mock agent, throwaway demo vault.
+  case demo(URL)
 }
 
 /// Live state of the daemon connection for the status bar and the offline banner.
@@ -45,7 +45,10 @@ final class ConnectionStore {
     return false
   }
 
-  var isDemo: Bool { kind == .demo }
+  var isDemo: Bool {
+    if case .demo = kind { return true }
+    return false
+  }
 
   /// The unobtrusive "offline" banner: we were connected and lost it.
   var showsOfflineBanner: Bool {
@@ -63,8 +66,7 @@ final class ConnectionStore {
 
   var endpointDescription: String {
     switch kind {
-    case .daemon(let url): url.absoluteString
-    case .demo: "In-memory demo daemon"
+    case .daemon(let url), .demo(let url): url.absoluteString
     case nil: "—"
     }
   }
@@ -84,7 +86,7 @@ final class ConnectionStore {
     switch state {
     case .connected(let version):
       isDemo
-        ? "Running against the in-memory demo daemon"
+        ? "Demo daemon \(version) at \(endpointDescription): the mock agent on a throwaway vault"
         : "Daemon \(version) at \(endpointDescription)"
     case .connecting, .idle: "Connecting to \(endpointDescription)"
     case .reconnecting(let attempt, let reason):

@@ -56,7 +56,7 @@ private struct BootFailureView: View {
         SettingsLink { Text("Open Settings…") }.pointingHandCursor()
       }
       .disabled(isWorking)
-      if model.preferences.daemonMode == .managed, !model.supervisor.logLines.isEmpty {
+      if model.managesDaemon, !model.supervisor.logLines.isEmpty {
         DisclosureGroup("Daemon log") {
           ScrollView {
             Text(model.supervisor.logLines.suffix(40).joined(separator: "\n"))

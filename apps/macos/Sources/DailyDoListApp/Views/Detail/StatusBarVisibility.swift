@@ -5,7 +5,7 @@ import DailyDoListModels
 /// saved, daemon connected, live agent) shows nothing, so only changes and problems draw the eye.
 struct StatusBarVisibility: Equatable {
   enum Connection: Equatable {
-    /// Connected to the in-memory demo daemon: a small "Demo" marker.
+    /// Connected to the demo's daemon: a small "Demo" marker.
     case demo
     /// Connecting, reconnecting, offline or incompatible: dot, label and details.
     case problem
