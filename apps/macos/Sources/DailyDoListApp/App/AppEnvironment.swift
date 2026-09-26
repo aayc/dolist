@@ -29,7 +29,7 @@ struct AppEnvironment {
   /// observers, global hotkey. Off in tests.
   var enablesSystemServices: Bool
   /// The pasteboard behind vim's `+` and `*` registers (tests pass a private one).
-  var vimPasteboard: @MainActor () -> VimPasteboard = { SystemVimPasteboard() }
+  var vimPasteboard: @MainActor () -> NSPasteboard = { .general }
   /// Permission checks and prompts, System Settings, the guide panel and relaunching for computer
   /// use (tests pass fakes; the default touches nothing and reports access as granted).
   var computerAccess: ComputerAccessSystem = .inert

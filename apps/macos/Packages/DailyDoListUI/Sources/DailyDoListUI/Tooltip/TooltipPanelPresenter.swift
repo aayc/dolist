@@ -156,9 +156,6 @@ public final class TooltipPanelPresenter: TooltipPresenting {
   /// The bubble's layer, where the animations run (tests).
   var bubbleLayer: CALayer? { hosting.view.layer }
 
-  /// The bubble view as shown (snapshot tests draw it).
-  var bubbleView: NSView { hosting.view }
-
   // MARK: Private
 
   private func attach(to window: NSWindow?) {

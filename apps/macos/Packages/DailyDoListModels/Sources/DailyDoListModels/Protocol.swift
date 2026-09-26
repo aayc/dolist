@@ -360,11 +360,6 @@ public struct TrashResponse: Codable, Hashable, Sendable {
   }
 }
 
-public struct OkResponse: Codable, Hashable, Sendable {
-  public var ok: Bool
-  public init(ok: Bool = true) { self.ok = ok }
-}
-
 /// 200 when the action finished; 202 with `pending: true` when it continues in the background.
 public struct ThreadActionResponse: Codable, Hashable, Sendable {
   public var ok: Bool

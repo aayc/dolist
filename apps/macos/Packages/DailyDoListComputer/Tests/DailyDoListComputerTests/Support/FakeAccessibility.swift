@@ -64,8 +64,6 @@ final class FakeAccessibility: AccessibilityAPI, @unchecked Sendable {
 
   var recorded: [Call] { lock.withLock { calls } }
 
-  func clearRecorded() { lock.withLock { calls.removeAll() } }
-
   /// Installs an app with `windows` (the first is focused and main unless told otherwise).
   @discardableResult
   func installApp(
@@ -102,13 +100,6 @@ final class FakeAccessibility: AccessibilityAPI, @unchecked Sendable {
   /// Changes a stored node (by key), e.g. to rename it, mark it gone or make it hang.
   func update(_ key: String, _ change: (inout Stored) -> Void) {
     lock.withLock { change(&nodes[keys[key]!]!) }
-  }
-
-  func appendChild(_ node: Node, to key: String) {
-    lock.withLock {
-      let id = add(node)
-      nodes[keys[key]!]!.children.append(id)
-    }
   }
 
   /// Makes an existing node also a child of another (apps with cyclic trees do this).

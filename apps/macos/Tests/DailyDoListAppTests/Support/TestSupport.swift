@@ -123,7 +123,7 @@ func makeEnvironment(
     systemIntegration: UnavailableSystemIntegration(),
     now: now,
     enablesSystemServices: false,
-    vimPasteboard: { SystemVimPasteboard(privatePasteboard()) },
+    vimPasteboard: { privatePasteboard() },
     computerAccess: computerAccess)
   environment.makeDemoDaemon = { testDemoDaemon }
   environment.removeFolder = { _ in }
