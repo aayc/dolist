@@ -10,7 +10,7 @@ import { LocalFsStorageProvider } from "@ddl/storage";
 import { afterEach, describe, expect, it } from "vitest";
 import { TaskRecords } from "../../src/orchestrator/records";
 import { createThreadStore, threadJournalPath } from "../../src/threads/store";
-import { NOW, STAMP } from "./helpers";
+import { NOW, readFixture, STAMP } from "./helpers";
 
 let root: string | undefined;
 let storage: LocalFsStorageProvider | undefined;
@@ -47,6 +47,22 @@ describe("persistence on the local file system", () => {
     );
     expect(moved.equals(bytes)).toBe(true);
     expect(await readdir(join(root, ".daily-do-list", "state"))).toEqual([]);
+  });
+
+  it("moves a snapshot into its journal, conditionally removing it", async () => {
+    const { root, storage } = await localVault();
+    await mkdir(join(root, ".daily-do-list", "threads"), { recursive: true });
+    await writeFile(
+      join(root, ".daily-do-list", "threads", "thr_minimal0001.json"),
+      readFixture("threads", "v1-minimal.json"),
+    );
+    const store = createThreadStore({ storage, now: () => NOW });
+    await store.load();
+    expect(store.get("thr_minimal0001")).toMatchObject({ id: "thr_minimal0001", title: "" });
+    expect(await readdir(join(root, ".daily-do-list", "threads"))).toEqual([]);
+    expect(await readdir(join(root, ".daily-do-list", "state", "journal", "threads"))).toEqual([
+      "thr_minimal0001.jsonl",
+    ]);
   });
 
   it("appends to thread journals and leaves no temp files behind", async () => {
