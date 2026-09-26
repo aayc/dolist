@@ -1,8 +1,10 @@
 import {
   encodePersistedApprovals,
+  encodePersistedJournalEvent,
   encodePersistedRecords,
-  encodePersistedThread,
   PERSISTED_PATHS,
+  persistedThreadImportEvent,
+  persistedThreadJournalPath,
 } from "@ddl/contract";
 import { silentLogger, type TaskAgentRecord, type Thread } from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
@@ -44,16 +46,20 @@ function thread(id: string, overrides: Partial<Thread> = {}): Thread {
   });
 }
 
-const threadPath = (name: string) => `${PERSISTED_PATHS.threads}/${name}.json`;
+/** The thread's journal, holding it whole. */
+async function writeThread(storage: MemoryStorageProvider, value: Thread): Promise<void> {
+  await storage.write(
+    persistedThreadJournalPath(value.id),
+    encodePersistedJournalEvent(persistedThreadImportEvent(value)),
+  );
+}
 
 async function vault(): Promise<MemoryStorageProvider> {
   const storage = new MemoryStorageProvider();
-  await storage.write(threadPath("thr_1"), encodePersistedThread(thread("thr_1")));
-  await storage.write(
-    threadPath("thr_2"),
-    encodePersistedThread(
-      thread("thr_2", { notePath: "Other.md", updatedAt: 5, routineId: "rtn_1" }),
-    ),
+  await writeThread(storage, thread("thr_1"));
+  await writeThread(
+    storage,
+    thread("thr_2", { notePath: "Other.md", updatedAt: 5, routineId: "rtn_1" }),
   );
   await storage.write(
     PERSISTED_PATHS.approvals,
@@ -121,10 +127,7 @@ describe("the synced sidecar, read-only", () => {
       size: 3,
       createdAt: 1,
     };
-    await storage.write(
-      threadPath("thr_1"),
-      encodePersistedThread(thread("thr_1", { artifacts: [artifact] })),
-    );
+    await writeThread(storage, thread("thr_1", { artifacts: [artifact] }));
     const { view } = await startView(storage);
     const read = await view.readArtifact("thr_1", "art_1");
     expect(read?.meta).toEqual(artifact);
@@ -132,29 +135,16 @@ describe("the synced sidecar, read-only", () => {
     expect(await view.readArtifact("thr_1", "art_missing")).toBeNull();
   });
 
-  it("merges conflict copies, skips unreadable and newer files, and never writes", async () => {
+  it("skips unreadable journals and ones a newer app wrote, ignores snapshots, and never writes", async () => {
     const storage = await vault();
-    const copy = thread("thr_1", {
-      updatedAt: 9,
-      messages: [
-        {
-          id: "msg_2",
-          kind: "text",
-          role: "agent",
-          author: "orchestrator",
-          text: "Done",
-          createdAt: 2,
-        },
-      ],
-    });
+    await storage.write(persistedThreadJournalPath("thr_bad"), "{ not json");
     await storage.write(
-      threadPath("thr_1 (conflict 2026-09-23 1830)"),
-      encodePersistedThread(copy),
+      persistedThreadJournalPath("thr_new"),
+      '{"v":99,"id":"evt_1","epoch":0,"seq":1,"at":1,"type":"hologram"}\n',
     );
-    await storage.write(threadPath("thr_bad"), "{ not json");
     await storage.write(
-      threadPath("thr_new"),
-      JSON.stringify({ ...thread("thr_new"), version: 99 }),
+      `${PERSISTED_PATHS.threads}/thr_old.json`,
+      JSON.stringify(thread("thr_old")),
     );
     const write = vi.spyOn(storage, "write");
     const remove = vi.spyOn(storage, "delete");
@@ -167,26 +157,20 @@ describe("the synced sidecar, read-only", () => {
         .map((t) => t.id)
         .sort(),
     ).toEqual(["thr_1", "thr_2"]);
-    expect(view.getThread("thr_1")?.thread.messages.map((m) => m.id)).toEqual(["msg_1", "msg_2"]);
-    expect(view.getThread("thr_1")?.thread.updatedAt).toBe(9);
     expect(write).not.toHaveBeenCalled();
     expect(remove).not.toHaveBeenCalled();
     expect(rename).not.toHaveBeenCalled();
-    expect(await storage.read(threadPath("thr_bad"))).not.toBeNull();
   });
 
   it("follows what sync brings in", async () => {
     const storage = await vault();
     const { view, events } = await startView(storage);
 
-    await storage.write(
-      threadPath("thr_1"),
-      encodePersistedThread(thread("thr_1", { status: "done", updatedAt: 7 })),
+    await storage.append!(
+      persistedThreadJournalPath("thr_1"),
+      '{"v":1,"id":"evt_done","epoch":0,"seq":2,"at":7,"type":"status","status":"done"}\n',
     );
-    await storage.write(
-      threadPath("thr_3"),
-      encodePersistedThread(thread("thr_3", { updatedAt: 8 })),
-    );
+    await writeThread(storage, thread("thr_3", { updatedAt: 8 }));
     await vi.waitFor(() => expect(view.listThreads()[0]?.id).toBe("thr_3"));
     expect(view.getThread("thr_1")?.thread.status).toBe("done");
 
@@ -207,7 +191,7 @@ describe("the synced sidecar, read-only", () => {
     await vi.waitFor(() => expect(view.pendingApprovals()).toBe(0));
     await vi.waitFor(() => expect(view.getTaskRecords(NOTE)[0]?.status).toBe("done"));
 
-    await storage.delete(threadPath("thr_3"));
+    await storage.delete(persistedThreadJournalPath("thr_3"));
     await vi.waitFor(() => expect(view.getThread("thr_3")).toBeUndefined());
 
     const kinds = events.map((event) =>
@@ -234,7 +218,7 @@ describe("the synced sidecar, read-only", () => {
     view.stop();
     expect(view.listThreads()).toEqual([]);
     expect(view.listApprovals()).toEqual([]);
-    await storage.write(threadPath("thr_3"), encodePersistedThread(thread("thr_3")));
+    await writeThread(storage, thread("thr_3"));
     await view.start();
     expect(view.listThreads()).toHaveLength(3);
   });
@@ -263,7 +247,7 @@ describe("a device that doesn't run the agent", () => {
 
       const upserts: string[] = [];
       runtime.on("thread.upsert", (summary) => upserts.push(summary.id));
-      await storage.write(threadPath("thr_3"), encodePersistedThread(thread("thr_3")));
+      await writeThread(storage, thread("thr_3"));
       await vi.waitFor(() => expect(upserts).toEqual(["thr_3"]));
 
       await runtime.followSidecar(false);

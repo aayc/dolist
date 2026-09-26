@@ -1,14 +1,13 @@
+import { foldJournal } from "@ddl/agent";
 import {
   decodePersistedApprovals,
   decodePersistedRecords,
-  decodePersistedThread,
+  decodePersistedThreadJournal,
   encodePersistedThread,
   isPersistedArtifactPath,
-  mergePersistedThreads,
   PERSISTED_BINARY_ARTIFACT_SUFFIX,
   PERSISTED_PATHS,
-  type PersistedThread,
-  persistedThreadIdFromPath,
+  persistedThreadIdFromJournalPath,
 } from "@ddl/contract";
 import {
   type ApprovalRequest,
@@ -24,7 +23,6 @@ import {
 import type { StorageProvider } from "@ddl/storage";
 import { errorMessage } from "./errors";
 
-const THREADS_PREFIX = `${PERSISTED_PATHS.threads}/`;
 /** Sync writes files in bursts; each file is read again once they settle. */
 const DEFAULT_SETTLE_MS = 50;
 
@@ -41,16 +39,14 @@ export interface SidecarViewOptions {
 
 /**
  * The agent's work as the vault's sidecar shows it, for a device that doesn't run the agent:
- * threads (`threads/<id>.json`, sync conflict copies merged in), approvals and task records, read
- * with the contract's persisted-format parsers and followed as sync changes them. Read-only: it
- * never writes, repairs or moves a file (they belong to the agent holding the lease). Files it
- * can't read, or that a newer app wrote, are skipped.
+ * threads (the fold of each journal, `state/journal/threads/<id>.jsonl`), approvals and task
+ * records, read with the contract's persisted-format parsers and followed as sync changes them.
+ * Read-only: it never writes, repairs or moves a file (they belong to the agent holding the lease).
+ * Files it can't read, or that a newer app wrote, are skipped.
  */
 export class SidecarView {
   readonly #options: SidecarViewOptions;
   readonly #listeners = new Set<(event: SidecarViewEvent) => void>();
-  /** Every readable thread file, by path (a thread's own file and any conflict copies). */
-  readonly #files = new Map<string, PersistedThread>();
   readonly #threads = new Map<string, Thread>();
   #approvals: ApprovalRequest[] = [];
   #records: TaskAgentRecord[] = [];
@@ -73,12 +69,10 @@ export class SidecarView {
     const { storage } = this.#options;
     this.#unwatch = storage.watch((event) => this.#changed(event.path));
     const entries = await storage
-      .list({ prefix: PERSISTED_PATHS.threads, includeHidden: true })
+      .list({ prefix: PERSISTED_PATHS.threadJournals, includeHidden: true })
       .catch(() => []);
     await Promise.all([
-      ...entries
-        .filter((entry) => isThreadFile(entry.path))
-        .map((entry) => this.#readThread(entry.path, generation, false)),
+      ...entries.map((entry) => this.#readThread(entry.path, generation, false)),
       this.#readApprovals(generation, false),
       this.#readRecords(generation, false),
     ]);
@@ -91,7 +85,6 @@ export class SidecarView {
     this.#unwatch = undefined;
     for (const timer of this.#timers.values()) clearTimeout(timer);
     this.#timers.clear();
-    this.#files.clear();
     this.#threads.clear();
     this.#approvals = [];
     this.#records = [];
@@ -161,7 +154,7 @@ export class SidecarView {
         ? (generation: number) => this.#readApprovals(generation, true)
         : path === PERSISTED_PATHS.records
           ? (generation: number) => this.#readRecords(generation, true)
-          : isThreadFile(path)
+          : persistedThreadIdFromJournalPath(path)
             ? (generation: number) => this.#readThread(path, generation, true)
             : null;
     if (!read) return;
@@ -189,36 +182,17 @@ export class SidecarView {
   }
 
   async #readThread(path: string, generation: number, announce: boolean): Promise<void> {
+    const id = persistedThreadIdFromJournalPath(path);
+    if (!id) return;
     const text = await this.#readText(path);
     if (generation !== this.#generation) return;
-    const before = this.#files.get(path)?.id;
-    const decoded =
-      text === null
-        ? null
-        : decodePersistedThread(text, persistedThreadIdFromPath(path) ?? undefined);
-    if (decoded?.ok) this.#files.set(path, decoded.value);
-    else this.#files.delete(path);
-    const ids = new Set([before, decoded?.ok ? decoded.value.id : undefined]);
-    for (const id of ids) if (id) this.#rebuild(id, announce);
-  }
-
-  /** A thread from its own file first, then its copies from the most recently updated. */
-  #rebuild(id: string, announce: boolean): void {
-    const own = `${THREADS_PREFIX}${id}.json`;
-    const copies = [...this.#files.entries()]
-      .filter(([, thread]) => thread.id === id)
-      .sort(
-        ([pathA, a], [pathB, b]) =>
-          Number(pathB === own) - Number(pathA === own) || b.updatedAt - a.updatedAt,
-      )
-      .map(([, thread]) => thread);
+    const read = text === null ? null : decodePersistedThreadJournal(text, id);
+    const thread = read && read.newer === null ? foldJournal(read.events, id).thread : undefined;
     const previous = this.#threads.get(id);
-    const [first, ...rest] = copies;
-    if (!first) {
+    if (!thread) {
       this.#threads.delete(id);
       return;
     }
-    const thread = rest.reduce(mergePersistedThreads, first) as Thread;
     this.#threads.set(id, thread);
     if (
       announce &&
@@ -292,13 +266,4 @@ export class SidecarView {
       }
     }
   }
-}
-
-/** A file directly in `threads/` (a thread or a sync conflict copy of one). */
-function isThreadFile(path: string): boolean {
-  return (
-    path.startsWith(THREADS_PREFIX) &&
-    path.endsWith(".json") &&
-    !path.slice(THREADS_PREFIX.length).includes("/")
-  );
 }

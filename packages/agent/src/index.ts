@@ -55,6 +55,7 @@ export { AgentUnavailableError, createAgentRuntime, UnknownThreadError } from ".
 export type * from "./runtime-types";
 export * from "./safety";
 export type * from "./safety/types";
+export { foldJournal } from "./threads/journal/fold";
 export type { ThreadStoreOptions } from "./threads/store";
 export { ARTIFACTS_DIR, BINARY_ARTIFACT_SUFFIX, createThreadStore } from "./threads/store";
 export type * from "./threads/types";
