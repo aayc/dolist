@@ -1,12 +1,11 @@
 // @vitest-environment happy-dom
+import { sleep } from "@ddl/core";
 import type { MarkdownEditor } from "@ddl/editor";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MockDaemonClient } from "../api/mock/mock-client";
 import { useTabsStore } from "../state/tabs-store";
 import { AgentActions } from "./agent-actions";
 import { Workspace } from "./workspace";
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let client: MockDaemonClient;
 let workspace: Workspace;

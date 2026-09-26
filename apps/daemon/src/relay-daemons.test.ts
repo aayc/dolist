@@ -24,14 +24,14 @@ import {
   type ThreadResponse,
 } from "@ddl/core";
 import { createSyncServer, type RunningSyncServer } from "@ddl/sync";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { LeaseTimings } from "./agent-lease";
 import { loadConfig } from "./config";
 import { declaredResponse, expectConforms, routePath } from "./contract-test-helpers";
 import { MACHINE_TOKEN_FILE } from "./machine-link";
 import type { LinkTimings } from "./relay/link";
 import { RELAY_PROBLEMS } from "./relay/relay";
-import { RecordingLogger, TestSocket } from "./security/harness";
+import { eventually, RecordingLogger, TestSocket } from "./security/harness";
 import { type RunningDaemon, startDaemon } from "./server";
 import { tempDir } from "./test-helpers";
 
@@ -156,9 +156,6 @@ async function openSocket(device: Device): Promise<TestSocket> {
   await socket.next("hello");
   return socket;
 }
-
-const eventually = (assertion: () => Promise<void>) =>
-  vi.waitFor(assertion, { timeout: WAIT_MS, interval: 100 });
 
 const sayToOrchestrator = (device: Device, text: string) =>
   call(device, "POST", "threadMessages", {

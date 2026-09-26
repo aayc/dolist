@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { sleep } from "@ddl/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MockDaemonClient } from "../api/mock/mock-client";
 import { useTabsStore } from "../state/tabs-store";
@@ -11,8 +12,6 @@ function dailyPath(days: number): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `Daily/${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}.md`;
 }
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let client: MockDaemonClient;
 let workspace: Workspace;

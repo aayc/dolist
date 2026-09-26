@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { toolResultText } from "@ddl/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { waitFor } from "../../testing/helpers";
 import { TOOL } from "../../tools/contracts";
 import { NavigationBlockedError, StaleRefError } from "../errors";
 import { createExecutionTools } from "../tools";
@@ -75,14 +76,6 @@ function refOf(snapshot: BrowserSnapshot, pattern: RegExp): string {
     }
   }
   throw new Error(`No ref for ${pattern} in:\n${snapshot.snapshot}`);
-}
-
-async function waitFor(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error("condition not met in time");
-    await new Promise((r) => setTimeout(r, 25));
-  }
 }
 
 describe.skipIf(!resolved)("LocalBrowserController (real Chrome)", () => {

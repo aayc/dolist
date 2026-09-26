@@ -2,10 +2,10 @@
  * The helper client against the fake helper (a Node script speaking the same protocol), never the
  * real `ddl-computer`.
  */
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { useTempDirs } from "../../../testing/helpers";
 import { ComputerUnavailableError, ExecutionError } from "../../errors";
 import { HelperClient, type HelperClientOptions } from "./client";
 import { HelperError, parseRunningApps } from "./protocol";
@@ -15,19 +15,12 @@ import {
   FAKE_HELPER_TEST_TIMEOUT_MS,
 } from "./testing/fake-helper";
 
+const tempDir = useTempDirs("ddl-helper-client-");
 const clients: HelperClient[] = [];
-const dirs: string[] = [];
 
 afterEach(async () => {
   await Promise.all(clients.splice(0).map((client) => client.dispose()));
-  await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
-
-async function tempDir(): Promise<string> {
-  const dir = await mkdtemp(path.join(tmpdir(), "ddl-helper-client-"));
-  dirs.push(dir);
-  return dir;
-}
 
 function fake(flags: string[] = [], options: Partial<HelperClientOptions> = {}): HelperClient {
   const client = new HelperClient({

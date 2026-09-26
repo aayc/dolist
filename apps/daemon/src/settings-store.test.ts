@@ -11,6 +11,7 @@ import {
   DEFAULT_SETTINGS,
   type Logger,
   mergeSettings,
+  recordingLogger,
 } from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
 import { fc, test } from "@fast-check/vitest";
@@ -34,22 +35,6 @@ async function storedOverrides(storage: MemoryStorageProvider): Promise<unknown>
 
 function vault(files: Record<string, string> = {}) {
   return new MemoryStorageProvider({ initialFiles: files });
-}
-
-function recordingLogger() {
-  const entries: Array<{ level: string; message: string; fields?: Record<string, unknown> }> = [];
-  const logger: Logger = {
-    debug: (message, fields) =>
-      entries.push({ level: "debug", message, ...(fields ? { fields } : {}) }),
-    info: (message, fields) =>
-      entries.push({ level: "info", message, ...(fields ? { fields } : {}) }),
-    warn: (message, fields) =>
-      entries.push({ level: "warn", message, ...(fields ? { fields } : {}) }),
-    error: (message, fields) =>
-      entries.push({ level: "error", message, ...(fields ? { fields } : {}) }),
-    child: () => logger,
-  };
-  return { logger, entries };
 }
 
 const open = (storage: MemoryStorageProvider, logger?: Logger, defaults?: AppSettings) =>
@@ -239,10 +224,10 @@ describe("settings store", () => {
     const storage = vault({
       [SETTINGS_PATH]: JSON.stringify({ version: 1, agent: { approvalPolicy: "ask_payments" } }),
     });
-    const { logger, entries } = recordingLogger();
+    const logger = recordingLogger();
     const store = await open(storage, logger);
     expect(store.get().agent.approvalPolicy).toBe("ask_risky");
-    expect(entries).toContainEqual({
+    expect(logger.entries).toContainEqual({
       level: "warn",
       message: "Ignoring invalid settings; their defaults apply",
       fields: { fields: ["agent.approvalPolicy"] },
@@ -306,10 +291,10 @@ describe("settings store", () => {
     // Previously a read error made createSettingsStore throw, which stopped the daemon from starting.
     const storage = vault({ [SETTINGS_PATH]: JSON.stringify({ version: 1, theme: "dark" }) });
     const read = vi.spyOn(storage, "read").mockRejectedValueOnce(new Error("EIO"));
-    const { logger, entries } = recordingLogger();
+    const logger = recordingLogger();
     const store = await open(storage, logger);
     expect(store.get()).toEqual(DEFAULT_SETTINGS);
-    expect(entries.some((e) => e.level === "error")).toBe(true);
+    expect(logger.entries.some((e) => e.level === "error")).toBe(true);
     read.mockRestore();
     const next = await store.update({ editor: { vimMode: true } });
     expect(next).toMatchObject({ theme: "dark", editor: { vimMode: true } });
@@ -390,14 +375,14 @@ describe("golden settings fixtures through the real settings store", () => {
 
   it("v1-invalid-values.json falls back field by field, reports it, and keeps every stored key", async () => {
     const storage = vault({ [SETTINGS_PATH]: readFixture("settings", "v1-invalid-values.json") });
-    const { logger, entries } = recordingLogger();
+    const logger = recordingLogger();
     const store = await open(storage, logger);
     expect(store.get()).toEqual({
       ...DEFAULT_SETTINGS,
       editor: { ...DEFAULT_SETTINGS.editor, vimMode: true },
       agent: { ...DEFAULT_SETTINGS.agent, enabled: false },
     });
-    expect(entries.map((e) => [e.level, e.message, e.fields])).toEqual([
+    expect(logger.entries.map((e) => [e.level, e.message, e.fields])).toEqual([
       [
         "warn",
         "Ignoring invalid settings; their defaults apply",
@@ -497,10 +482,10 @@ describe("settings.json edge cases", () => {
         agent: { harness: "claude", cursorModel: "gpt-6" },
       }),
     });
-    const { logger, entries } = recordingLogger();
+    const logger = recordingLogger();
     const store = await open(storage, logger);
     expect(store.get().agent).toMatchObject({ harness: "pi", cursorModel: "gpt-6" });
-    expect(entries).toContainEqual({
+    expect(logger.entries).toContainEqual({
       level: "warn",
       message: "Ignoring invalid settings; their defaults apply",
       fields: { fields: ["agent.harness"] },

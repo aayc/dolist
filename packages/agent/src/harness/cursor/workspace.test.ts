@@ -1,9 +1,10 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { useTempDirs } from "../../testing/helpers";
 import { AcpClosedError, AcpConnection, AcpRpcError, AcpTimeoutError } from "./acp";
 import {
   checkCursorCli,
@@ -29,14 +30,13 @@ import {
 const FAKE_CLI = fileURLToPath(new URL("./testing/fake-cursor-cli.ts", import.meta.url));
 /** These tests start the fake CLI as a process; a loaded machine can take seconds to do that. */
 const SPAWN_TIMEOUT_MS = 30_000;
-const dirs: string[] = [];
+const tempDir = useTempDirs("ddl-cursor-ws-");
 const processes: ChildProcess[] = [];
 
 afterEach(async () => {
   for (const child of processes.splice(0)) {
     if (child.pid !== undefined && isAlive(child.pid)) process.kill(-child.pid, "SIGKILL");
   }
-  await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
 function isAlive(pid: number): boolean {
@@ -58,12 +58,6 @@ function lingering(cwd: string): ChildProcess {
   child.unref();
   processes.push(child);
   return child;
-}
-
-async function tempDir(): Promise<string> {
-  const dir = await mkdtemp(path.join(tmpdir(), "ddl-cursor-ws-"));
-  dirs.push(dir);
-  return dir;
 }
 
 const mode = async (file: string) => (await stat(file)).mode & 0o777;

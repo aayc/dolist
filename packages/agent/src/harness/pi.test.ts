@@ -2,8 +2,7 @@
  * Drives the real Pi agent loop (AgentSession, tool validation, extension hooks, queues) with
  * pi-ai's in-process faux provider standing in for OpenRouter. No network.
  */
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { deferred, type ToolResult, type ToolSpec, textResult } from "@ddl/core";
 import {
@@ -18,23 +17,14 @@ import {
   type TranscriptContext,
 } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ShellExecOptions, ShellExecutor } from "../execution/types";
+import { useTempDirs } from "../testing/helpers";
 import { createPiHarness } from "./pi";
 import { PiHarness } from "./pi/harness";
 import type { HarnessEvent, HarnessSession, HarnessSessionOptions, ToolCallRequest } from "./types";
 
-const cleanup: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(cleanup.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-});
-
-async function tempDir(prefix: string): Promise<string> {
-  const dir = await mkdtemp(path.join(tmpdir(), prefix));
-  cleanup.push(dir);
-  return dir;
-}
+const tempDir = useTempDirs();
 
 interface Setup {
   faux: FauxProviderHandle;

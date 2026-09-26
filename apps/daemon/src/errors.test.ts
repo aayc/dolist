@@ -1,23 +1,7 @@
-import type { Logger } from "@ddl/core";
+import { type LogEntry, recordingLogger } from "@ddl/core";
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
 import { createErrorHandler } from "./errors";
-
-interface LogEntry {
-  level: "debug" | "info" | "warn" | "error";
-  message: string;
-}
-
-function recordingLogger(entries: LogEntry[]): Logger {
-  const logger: Logger = {
-    debug: (message) => entries.push({ level: "debug", message }),
-    info: (message) => entries.push({ level: "info", message }),
-    warn: (message) => entries.push({ level: "warn", message }),
-    error: (message) => entries.push({ level: "error", message }),
-    child: () => logger,
-  };
-  return logger;
-}
 
 function namedError(name: string, message: string): Error {
   const error = new Error(message);
@@ -26,14 +10,14 @@ function namedError(name: string, message: string): Error {
 }
 
 async function request(thrown: Error): Promise<{ status: number; entries: LogEntry[] }> {
-  const entries: LogEntry[] = [];
+  const logger = recordingLogger();
   const app = new Hono();
-  app.onError(createErrorHandler(recordingLogger(entries)));
+  app.onError(createErrorHandler(logger));
   app.get("/boom", () => {
     throw thrown;
   });
   const response = await app.request("/boom");
-  return { status: response.status, entries };
+  return { status: response.status, entries: logger.entries };
 }
 
 describe("createErrorHandler", () => {
@@ -48,6 +32,8 @@ describe("createErrorHandler", () => {
   it("logs unexpected errors as failures", async () => {
     const { status, entries } = await request(new Error("unexpected"));
     expect(status).toBe(500);
-    expect(entries).toContainEqual({ level: "error", message: "Request failed" });
+    expect(entries).toContainEqual(
+      expect.objectContaining({ level: "error", message: "Request failed" }),
+    );
   });
 });
