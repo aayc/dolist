@@ -196,7 +196,7 @@ extension AppModel {
 
   /// Settings, tree and today's note in parallel; then restored tabs and the agent's state.
   private func loadInitialData(generation: Int) async {
-    guard let client, let workspace, let agent else { return }
+    guard let client, let workspace, agent != nil else { return }
     async let settingsResult = Self.capture { try await client.settings() }
     async let treeResult = Self.capture { try await client.tree() }
     async let dailyResult = Self.capture { try await client.dailyNote("today", create: true) }
@@ -257,15 +257,14 @@ extension AppModel {
 
   /// The vault's local folder when this Mac can see it (Reveal in Finder).
   func localVaultURL() -> URL? {
-    let fileManager = FileManager.default
     if let vault = supervisor.configuration.vaultPath ?? preferences.launchConfiguration.vaultPath {
-      return fileManager.fileExists(atPath: vault.path) ? vault : nil
+      return environment.folderExists(vault.path) ? vault : nil
     }
     // The daemon's default vault, when it's the one being served.
-    let fallback = fileManager.homeDirectoryForCurrentUser.appendingPathComponent(
+    let fallback = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
       "DailyDoList", isDirectory: true)
-    guard fileManager.fileExists(atPath: fallback.path),
-      connection.health.map({ $0.vaultName == fallback.lastPathComponent }) ?? false
+    guard environment.folderExists(fallback.path),
+      connection.health?.vaultName == fallback.lastPathComponent
     else { return nil }
     return fallback
   }

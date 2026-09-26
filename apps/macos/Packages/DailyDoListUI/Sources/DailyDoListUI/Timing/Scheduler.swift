@@ -27,6 +27,15 @@ public protocol AppScheduler: AnyObject {
     -> ScheduledAction
 }
 
+extension AppScheduler {
+  /// Suspends for `delay` seconds of this scheduler's time.
+  public func sleep(for delay: TimeInterval) async {
+    await withCheckedContinuation { continuation in
+      schedule(after: delay) { continuation.resume() }
+    }
+  }
+}
+
 /// Real time: `systemUptime` + the main dispatch queue.
 @MainActor
 public final class LiveScheduler: AppScheduler {

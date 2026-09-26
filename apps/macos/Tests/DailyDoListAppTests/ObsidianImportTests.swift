@@ -305,6 +305,7 @@ struct ObsidianImportTests {
       }
     }
     supervisor.state = .running(pid: 42, connection: Self.connection)
+    (model.environment.scheduler as? ManualScheduler)?.advance(by: 0.1)
     #expect(await switching.value == nil)
     #expect(model.phase == .ready)
     #expect(model.connection.health?.vaultName == "Obsidian Notebook (Daily Do List)")

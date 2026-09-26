@@ -83,12 +83,7 @@ struct MachineSection: View {
       )
     }
     .task(id: remote.machine?.paired == true) {
-      // The daemon checks the machine while a client watches: keep the status fresh while shown.
-      while remote.machine?.paired == true, !Task.isCancelled {
-        try? await Task.sleep(for: .seconds(15))
-        guard !Task.isCancelled else { return }
-        await remote.refreshMachine()
-      }
+      await remote.watchMachine(on: model.environment.scheduler)
     }
   }
 }
