@@ -1,4 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { openApp } from "./helpers";
 
 async function openAgentSettings(page: Page): Promise<void> {
@@ -21,6 +22,8 @@ async function reloadApp(page: Page): Promise<void> {
 }
 
 test.describe("agent settings", () => {
+  test.use({ daemonSpec: { settings: { agent: { model: "mock/scripted-agent" } } } });
+
   test("the harness and each harness's model persist across reloads", async ({ page }) => {
     await openApp(page);
     await openAgentSettings(page);

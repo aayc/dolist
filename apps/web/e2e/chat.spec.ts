@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./fixtures";
 import { badge, expandToolGroups, expectDailyNote, openApp, typeTask } from "./helpers";
 
 /**
@@ -117,7 +117,7 @@ test.describe("typing reveal", () => {
     page,
   }) => {
     test.setTimeout(60_000);
-    await openApp(page, "mockSpeed=1");
+    await openApp(page);
     await watchChat(page);
     await startTask(page, "Research quiet mechanical keyboards");
 
@@ -207,7 +207,7 @@ test.describe("progress", () => {
     page,
   }) => {
     test.setTimeout(60_000);
-    await openApp(page, "mockSpeed=2");
+    await openApp(page);
     await watchChat(page);
     await startTask(page, "Order a replacement water filter");
     await expect(page.locator(".thread-header .status-chip.is-pulsing")).toBeVisible();
@@ -245,7 +245,7 @@ test.describe("progress", () => {
 
   test("tool calls spin, land on ✓, then fold into a group", async ({ page }) => {
     test.setTimeout(60_000);
-    await openApp(page, "mockSpeed=1");
+    await openApp(page);
     await startTask(page, "Research quiet mechanical keyboards");
 
     await expect(
@@ -344,7 +344,7 @@ test.describe("the chat bar", () => {
 
   test("Stop stops the agent, from the chat bar or with its shortcut", async ({ page }) => {
     test.setTimeout(60_000);
-    await openApp(page, "mockSpeed=1");
+    await openApp(page);
     await startTask(page, "Research quiet mechanical keyboards");
     const input = page.getByTestId("composer-input");
     await expect(input).toHaveAttribute("placeholder", "Reply to the agent…");
@@ -380,7 +380,7 @@ test.describe("jump to latest", () => {
     page,
   }) => {
     test.setTimeout(60_000);
-    await openApp(page, "mockSpeed=1");
+    await openApp(page);
     await startTask(page, "Research quiet mechanical keyboards");
     const scroller = page.getByTestId("chat-scroll");
     const jump = page.getByTestId("jump-latest");
@@ -412,7 +412,7 @@ test.describe("copy", () => {
   test("a message copies its markdown, a code block its code", async ({ page, context }) => {
     test.setTimeout(60_000);
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-    await openApp(page, "mockSpeed=4");
+    await openApp(page);
     await startTask(page, "Organize the screenshots in my Downloads folder");
     await expect(badge(page)).toHaveClass(/cm-ddl-badge-done/, { timeout: 30_000 });
     const last = agentMessages(page).last();
@@ -438,7 +438,7 @@ test.describe("reduced motion", () => {
   test("text appears as it arrives and the indicators hold still", async ({ page }) => {
     test.setTimeout(60_000);
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await openApp(page, "mockSpeed=1");
+    await openApp(page);
     await watchChat(page);
     await startTask(page, "Order a replacement water filter");
     await expect(page.getByTestId("chat-activity")).toHaveAttribute("data-kind", "approval", {

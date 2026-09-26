@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { badge, openApp, sawStreaming, typeTask, watchForStreaming } from "./helpers";
 
 test.describe("the orchestrator's chat", () => {
@@ -6,7 +6,7 @@ test.describe("the orchestrator's chat", () => {
     page,
   }) => {
     test.setTimeout(60_000);
-    await openApp(page, "mockSpeed=4");
+    await openApp(page);
     await typeTask(page, "Research beginner guitar lessons");
     await expect(badge(page)).toHaveClass(/cm-ddl-badge-done/, { timeout: 25_000 });
 
@@ -58,7 +58,7 @@ test.describe("the orchestrator's chat", () => {
   });
 
   test("the palette opens it, and Stop ends the run in progress", async ({ page }) => {
-    await openApp(page, "mockSpeed=1");
+    await openApp(page);
     await page.keyboard.press("ControlOrMeta+P");
     await page.getByTestId("palette-input").fill("orchestrator");
     const item = page.getByTestId("palette-item").first();

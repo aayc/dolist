@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../fixtures";
 import { dailyPath, noteTitle, openApp } from "../helpers";
 import {
   caretToEnd,
@@ -6,17 +6,18 @@ import {
   delayWrites,
   expectSaved,
   explorerItem,
-  listPaths,
-  readNote,
   tab,
 } from "./edge-helpers";
 
 test.describe("saves in flight", () => {
-  test("switching tabs while a save is in flight keeps every note's text", async ({ page }) => {
+  test("switching tabs while a save is in flight keeps every note's text", async ({
+    page,
+    daemon,
+  }) => {
     const errors = collectErrors(page);
     await openApp(page);
     const today = dailyPath();
-    const initial = (await readNote(page, today)) ?? "";
+    const initial = (await daemon.read(today)) ?? "";
     await delayWrites(page, 700);
 
     await caretToEnd(page);
@@ -33,21 +34,20 @@ test.describe("saves in flight", () => {
     for (let i = 0; i < 6; i++) await tab(page, i % 2 ? today : "Ideas.md").click();
     await delayWrites(page, 0);
 
-    await expect
-      .poll(() => readNote(page, today), { timeout: 15_000 })
-      .toBe(`${initial}alpha gamma`);
-    await expect.poll(() => readNote(page, "Ideas.md")).toMatch(/Small steps every day\. beta$/);
+    await expect.poll(() => daemon.read(today), { timeout: 15_000 }).toBe(`${initial}alpha gamma`);
+    await expect.poll(() => daemon.read("Ideas.md")).toMatch(/Small steps every day\. beta$/);
     await expectSaved(page);
-    expect((await listPaths(page)).filter((p) => p.includes("(conflict"))).toEqual([]);
+    expect((await daemon.list()).filter((p) => p.includes("(conflict"))).toEqual([]);
     expect(errors).toEqual([]);
   });
 
   test("unsaved text is flushed on pagehide / beforeunload / hidden, before the debounce", async ({
     page,
+    daemon,
   }) => {
     await openApp(page);
     const today = dailyPath();
-    const initial = (await readNote(page, today)) ?? "";
+    const initial = (await daemon.read(today)) ?? "";
     for (const [i, event] of ["pagehide", "beforeunload", "visibilitychange"].entries()) {
       await caretToEnd(page);
       await page.keyboard.type(`w${i}`);
@@ -68,7 +68,7 @@ test.describe("saves in flight", () => {
       }, event);
       // Well inside the 300 ms autosave debounce: only the flush can have written this.
       await expect
-        .poll(() => readNote(page, today), { timeout: 250, intervals: [20] })
+        .poll(() => daemon.read(today), { timeout: 250, intervals: [20] })
         .toBe(initial + ["w0", "w1", "w2"].slice(0, i + 1).join(""));
     }
   });
@@ -90,10 +90,11 @@ test.describe("saves in flight", () => {
 
   test("text typed while a save is in flight is saved when the window loses focus", async ({
     page,
+    daemon,
   }) => {
     await openApp(page);
     const today = dailyPath();
-    const initial = (await readNote(page, today)) ?? "";
+    const initial = (await daemon.read(today)) ?? "";
     await delayWrites(page, 500);
     await caretToEnd(page);
     await page.keyboard.type("first");
@@ -101,15 +102,14 @@ test.describe("saves in flight", () => {
     await page.keyboard.type(" second");
     await page.evaluate(() => window.dispatchEvent(new Event("blur")));
     await delayWrites(page, 0);
-    await expect
-      .poll(() => readNote(page, today), { timeout: 10_000 })
-      .toBe(`${initial}first second`);
+    await expect.poll(() => daemon.read(today), { timeout: 10_000 }).toBe(`${initial}first second`);
   });
 });
 
 test.describe("deleting open notes", () => {
   test("a note can't be opened twice; deleting it closes its tab and shows the neighbour", async ({
     page,
+    daemon,
   }) => {
     const errors = collectErrors(page);
     await openApp(page);
@@ -126,7 +126,7 @@ test.describe("deleting open notes", () => {
     await expect(page.getByTestId("tab")).toHaveCount(1);
     await expect(page.getByTestId("tab")).toHaveAttribute("data-path", dailyPath());
     await expect(page.locator(".cm-content")).not.toContainText("Small steps every day");
-    await expect.poll(() => readNote(page, "Ideas.md")).toBeNull();
+    await expect.poll(() => daemon.read("Ideas.md")).toBeNull();
     expect(errors).toEqual([]);
   });
 
@@ -143,7 +143,10 @@ test.describe("deleting open notes", () => {
     await expect(page.getByTestId("tab")).toHaveAttribute("data-path", dailyPath());
   });
 
-  test("deleted elsewhere: unsaved text is written back, a clean note closes", async ({ page }) => {
+  test("deleted elsewhere: unsaved text is written back, a clean note closes", async ({
+    page,
+    daemon,
+  }) => {
     await openApp(page);
     await page.evaluate(() =>
       (
@@ -151,28 +154,30 @@ test.describe("deleting open notes", () => {
       ).__ddlDebug.openNote("Ideas.md", true),
     );
     await expect(noteTitle(page)).toHaveValue("Ideas");
+    let writing = 0;
+    page.on("request", (request) => {
+      if (request.method() === "PUT") writing++;
+    });
+    const done = (request: { method(): string }) => {
+      if (request.method() === "PUT") writing--;
+    };
+    page.on("requestfinished", done);
+    page.on("requestfailed", done);
     await delayWrites(page, 300);
     await caretToEnd(page);
     await page.keyboard.type(" keep this");
-    await page.evaluate(() =>
-      (window as unknown as { __ddlMock: { deleteNote(p: string): void } }).__ddlMock.deleteNote(
-        "Ideas.md",
-      ),
-    );
+    await daemon.remove("Ideas.md");
     await delayWrites(page, 0);
     await expect(
       page.getByTestId("toast").filter({ hasText: "was deleted elsewhere" }),
     ).toBeVisible();
-    await expect.poll(() => readNote(page, "Ideas.md")).toMatch(/ keep this$/);
+    await expect.poll(() => daemon.read("Ideas.md")).toMatch(/ keep this$/);
     await expect(tab(page, "Ideas.md")).toHaveCount(1);
 
-    // Now clean: another deletion closes the tab.
+    // Now clean (the write-back and the held save have both landed): another deletion closes the tab.
     await expectSaved(page);
-    await page.evaluate(() =>
-      (window as unknown as { __ddlMock: { deleteNote(p: string): void } }).__ddlMock.deleteNote(
-        "Ideas.md",
-      ),
-    );
+    await expect.poll(() => writing).toBe(0);
+    await daemon.remove("Ideas.md");
     await expect(tab(page, "Ideas.md")).toHaveCount(0);
     await expect(
       page

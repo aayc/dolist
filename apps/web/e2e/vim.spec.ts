@@ -1,4 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { type Daemon, expect, test } from "./fixtures";
 import { badge, dailyPath, noteTitle, openApp, typeTask, waitForSaved } from "./helpers";
 
 // Every key goes through Playwright's real keyboard: vim reads keydown events, and fill-style
@@ -37,9 +38,9 @@ async function enableVim(page: Page): Promise<void> {
   await page.locator(".cm-content").click();
 }
 
-async function savedNote(page: Page, path = dailyPath()): Promise<string | null> {
+async function savedNote(page: Page, daemon: Daemon, path = dailyPath()): Promise<string | null> {
   await waitForSaved(page);
-  return page.evaluate((p) => window.__ddlMock!.readNote(p), path);
+  return daemon.read(path);
 }
 
 test.describe("vim mode", () => {
@@ -64,6 +65,7 @@ test.describe("vim mode", () => {
 
   test("insert a task, leave insert mode, dd, u, p — with list continuation on Enter", async ({
     page,
+    daemon,
   }) => {
     await openApp(page);
     await enableVim(page);
@@ -72,19 +74,19 @@ test.describe("vim mode", () => {
     await vim(page, "Buy oat milk<CR>Call the bank");
     await vim(page, "<Esc>");
     await expectMode(page, "normal");
-    expect(await savedNote(page)).toBe("- [ ] Buy oat milk\n- [ ] Call the bank");
+    expect(await savedNote(page, daemon)).toBe("- [ ] Buy oat milk\n- [ ] Call the bank");
 
     await vim(page, "ggdd");
-    expect(await savedNote(page)).toBe("- [ ] Call the bank");
+    expect(await savedNote(page, daemon)).toBe("- [ ] Call the bank");
     await vim(page, "u");
-    expect(await savedNote(page)).toBe("- [ ] Buy oat milk\n- [ ] Call the bank");
+    expect(await savedNote(page, daemon)).toBe("- [ ] Buy oat milk\n- [ ] Call the bank");
     await vim(page, "Gp");
-    expect(await savedNote(page)).toBe(
+    expect(await savedNote(page, daemon)).toBe(
       "- [ ] Buy oat milk\n- [ ] Call the bank\n- [ ] Buy oat milk",
     );
   });
 
-  test("visual yank and paste", async ({ page }) => {
+  test("visual yank and paste", async ({ page, daemon }) => {
     await openApp(page);
     await enableVim(page);
     await vim(page, "ggAsoy milk<Esc>");
@@ -93,16 +95,17 @@ test.describe("vim mode", () => {
     await vim(page, "y");
     await expectMode(page, "normal");
     await vim(page, "$p");
-    expect(await savedNote(page)).toBe("- [ ] soy milksoy");
+    expect(await savedNote(page, daemon)).toBe("- [ ] soy milksoy");
     await vim(page, "Vyp");
-    expect(await savedNote(page)).toBe("- [ ] soy milksoy\n- [ ] soy milksoy");
+    expect(await savedNote(page, daemon)).toBe("- [ ] soy milksoy\n- [ ] soy milksoy");
   });
 
   test("works with the markdown editor: Enter and Tab, checkboxes, / search, wiki links", async ({
     page,
+    daemon,
   }) => {
     await openApp(page);
-    await page.evaluate(() => window.__ddlMock!.createNote("Garden.md", "# Garden"));
+    await daemon.write("Garden.md", "# Garden");
     await page.evaluate(() => window.__ddlDebug!.openNote("Garden.md"));
     await expect(noteTitle(page)).toHaveValue("Garden");
     await enableVim(page);
@@ -111,18 +114,18 @@ test.describe("vim mode", () => {
     await vim(page, "Go- [ ] Water the plants<CR><Tab>Buy soil for the [[Balcony]] pots<Esc>");
     await expectMode(page, "normal");
     const tasks = "- [ ] Water the plants\n\t- [ ] Buy soil for the [[Balcony]] pots";
-    expect(await savedNote(page, "Garden.md")).toBe(`# Garden\n${tasks}`);
+    expect(await savedNote(page, daemon, "Garden.md")).toBe(`# Garden\n${tasks}`);
 
     // Live preview still renders the syntax the cursor isn't on.
     await vim(page, "gg");
     await expect(page.locator(".cm-ddl-wikilink")).toHaveText("Balcony");
     await page.locator(".cm-ddl-checkbox").first().click();
-    expect(await savedNote(page, "Garden.md")).toContain("- [x] Water the plants");
+    expect(await savedNote(page, daemon, "Garden.md")).toContain("- [x] Water the plants");
 
     await vim(page, "/plants<CR>");
     await expect(page.locator(".cm-searchMatch")).toHaveCount(1);
     await vim(page, "ciwroses<Esc>");
-    expect(await savedNote(page, "Garden.md")).toContain("- [x] Water the roses");
+    expect(await savedNote(page, daemon, "Garden.md")).toContain("- [x] Water the roses");
     await vim(page, ":noh<CR>");
     await expect(page.locator(".cm-searchMatch")).toHaveCount(0);
 
@@ -131,7 +134,7 @@ test.describe("vim mode", () => {
     await expect(noteTitle(page)).toHaveValue("Balcony");
   });
 
-  test("dd then u on a task: its agent badge comes back", async ({ page }) => {
+  test("dd then u on a task: its agent badge comes back", async ({ page, daemon }) => {
     await openApp(page);
     await typeTask(page, "Order a replacement water filter");
     await expect(badge(page)).toHaveCount(1, { timeout: 15_000 });
@@ -140,7 +143,7 @@ test.describe("vim mode", () => {
     // Well within the save debounce, so the agent never sees the task deleted.
     await page.keyboard.type("ddu");
     await expect(badge(page)).toHaveCount(1);
-    expect(await savedNote(page)).toBe("- [ ] Order a replacement water filter");
+    expect(await savedNote(page, daemon)).toBe("- [ ] Order a replacement water filter");
   });
 
   test("the status bar shows the mode, pending keys and macro recording", async ({ page }) => {
@@ -178,11 +181,14 @@ test.describe("vim mode", () => {
     await expect(page.getByTestId("status-vim-recording")).toHaveCount(0);
   });
 
-  test(":w saves, :e opens a note, gt switches tabs, :q and :wq close tabs", async ({ page }) => {
+  test(":w saves, :e opens a note, gt switches tabs, :q and :wq close tabs", async ({
+    page,
+    daemon,
+  }) => {
     await openApp(page);
     await enableVim(page);
     await vim(page, "ggApay rent<Esc>:w<CR>");
-    expect(await savedNote(page)).toBe("- [ ] pay rent");
+    expect(await savedNote(page, daemon)).toBe("- [ ] pay rent");
 
     await vim(page, ":e Garden Redesign<CR>");
     await expect(noteTitle(page)).toHaveValue("Garden Redesign");
@@ -206,11 +212,8 @@ test.describe("vim mode", () => {
     await page.locator(".cm-content").click();
     await vim(page, "<Esc>GoA note from vim<Esc>:wq<CR>");
     await expect(page.getByTestId("tab")).toHaveCount(0);
-    const garden = await page.evaluate(() =>
-      window.__ddlMock!.listPaths().find((p) => p.endsWith("Garden Redesign.md")),
-    );
     await expect
-      .poll(() => page.evaluate((p) => window.__ddlMock!.readNote(p!), garden))
+      .poll(() => daemon.read("Projects/Garden Redesign.md"))
       .toMatch(/\nA note from vim$/);
   });
 
@@ -221,7 +224,7 @@ test.describe("vim mode", () => {
     await expect(page.getByTestId("switcher")).toBeVisible();
   });
 
-  test("Escape closes the palette without changing the vim mode", async ({ page }) => {
+  test("Escape closes the palette without changing the vim mode", async ({ page, daemon }) => {
     await openApp(page);
     await enableVim(page);
     await vim(page, "A");
@@ -233,10 +236,10 @@ test.describe("vim mode", () => {
     await expectMode(page, "insert");
     await page.keyboard.type("still typing", { delay: 5 });
     await vim(page, "<Esc>");
-    expect(await savedNote(page)).toBe("- [ ] still typing");
+    expect(await savedNote(page, daemon)).toBe("- [ ] still typing");
   });
 
-  test("a vimrc mapping takes effect and survives a reload", async ({ page }) => {
+  test("a vimrc mapping takes effect and survives a reload", async ({ page, daemon }) => {
     await openApp(page);
     await enableVim(page);
     await page.keyboard.press("ControlOrMeta+,");
@@ -251,7 +254,7 @@ test.describe("vim mode", () => {
     await page.locator(".cm-content").click();
     await vim(page, "ggAhijj");
     await expectMode(page, "normal");
-    expect(await savedNote(page)).toBe("- [ ] hi");
+    expect(await savedNote(page, daemon)).toBe("- [ ] hi");
 
     await page.reload();
     await expect(page.getByTestId("note-title")).toBeVisible();
@@ -268,6 +271,7 @@ test.describe("vim and the system clipboard", () => {
 
   test('"+ and "* registers read and write the clipboard, set clipboard=unnamed mirrors yanks', async ({
     page,
+    daemon,
   }) => {
     await openApp(page);
     await enableVim(page);
@@ -282,7 +286,7 @@ test.describe("vim and the system clipboard", () => {
     // A person pauses between naming the register and pasting; the clipboard read is async.
     await page.waitForTimeout(150);
     await vim(page, "p");
-    expect(await savedNote(page)).toBe("- [ ] first linefrom elsewhere");
+    expect(await savedNote(page, daemon)).toBe("- [ ] first linefrom elsewhere");
 
     await vim(page, ":set clipboard=unnamed<CR>");
     await vim(page, "0yiw");
@@ -302,6 +306,7 @@ test.describe("vim and app shortcuts where Mod is Ctrl", () => {
 
   test("normal mode keeps the Ctrl keys vim binds; other shortcuts and insert mode keep the app's", async ({
     page,
+    daemon,
   }) => {
     await openApp(page);
     await enableVim(page);
@@ -311,7 +316,7 @@ test.describe("vim and app shortcuts where Mod is Ctrl", () => {
     await page.keyboard.press("Control+o");
     await expect(page.getByTestId("switcher")).toBeHidden();
     await vim(page, "x");
-    expect(await savedNote(page)).toBe(" [ ] one\n- [ ] two\n- [ ] three");
+    expect(await savedNote(page, daemon)).toBe(" [ ] one\n- [ ] two\n- [ ] three");
 
     // Ctrl-S isn't bound by vim: the app saves.
     await vim(page, "ifoo<Esc>");

@@ -1,0 +1,158 @@
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, join, relative } from "node:path";
+import { test as base, expect } from "@playwright/test";
+import { E2E_PORT } from "./ports";
+
+/**
+ * Real daemons for the specs, started by the harness Playwright runs as its web server
+ * (packages/agent/scripts/e2e-daemons.ts, where `DaemonSpec` is documented). Every test gets its
+ * own daemon (`daemon`, configured with `test.use({ daemonSpec })`) and the pages open its URL.
+ */
+export interface DaemonSpec {
+  agent?: "mock" | "live" | "off";
+  noKey?: boolean;
+  vault?: "demo" | "empty";
+  notes?: number;
+  files?: Record<string, string>;
+  settings?: Record<string, unknown>;
+  config?: Record<string, unknown>;
+  env?: Record<string, string>;
+  device?: string;
+  sync?: SyncVault;
+  obsidian?: boolean;
+  web?: boolean;
+}
+
+export interface SyncVault {
+  url: string;
+  vault: string;
+  token: string;
+}
+
+interface Started {
+  id: string;
+  url: string;
+  port: number;
+  token: string;
+  root: string;
+  home: string;
+  vault: string;
+  obsidian?: string;
+}
+
+const HARNESS = `http://127.0.0.1:${E2E_PORT}`;
+
+async function harness<T>(method: string, path: string, body: unknown = {}): Promise<T> {
+  const response = await fetch(`${HARNESS}${path}`, {
+    method,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(`e2e harness ${method} ${path}: ${response.status} ${text}`);
+  return JSON.parse(text) as T;
+}
+
+export class Daemon {
+  readonly id: string;
+  readonly url: string;
+  readonly port: number;
+  readonly token: string;
+  /** Where its files are: `home` (DDL_HOME), `vault`, and `obsidian` when asked for. */
+  readonly root: string;
+  readonly home: string;
+  readonly vault: string;
+  readonly obsidian: string | undefined;
+
+  constructor(started: Started) {
+    this.id = started.id;
+    this.url = started.url;
+    this.port = started.port;
+    this.token = started.token;
+    this.root = started.root;
+    this.home = started.home;
+    this.vault = started.vault;
+    this.obsidian = started.obsidian;
+  }
+
+  /** A vault file's content, or null when it doesn't exist. */
+  async read(path: string): Promise<string | null> {
+    return readFile(join(this.vault, path), "utf8").catch(() => null);
+  }
+
+  /** Writes a vault file on disk, as another app (or sync) would: the daemon sees it change. */
+  async write(path: string, content: string): Promise<void> {
+    await mkdir(dirname(join(this.vault, path)), { recursive: true });
+    await writeFile(join(this.vault, path), content);
+  }
+
+  /** Deletes a vault file on disk, as another app would. */
+  async remove(path: string): Promise<void> {
+    await rm(join(this.vault, path), { force: true });
+  }
+
+  /** The vault's notes and files (not hidden ones), as vault paths. */
+  async list(): Promise<string[]> {
+    const entries = await readdir(this.vault, { recursive: true, withFileTypes: true });
+    return entries
+      .filter((entry) => entry.isFile())
+      .map((entry) => relative(this.vault, join(entry.parentPath, entry.name)))
+      .filter((path) => !path.split("/").some((part) => part.startsWith(".")));
+  }
+
+  /** Calls the daemon's API with its master token. */
+  async api<T = unknown>(
+    method: string,
+    route: string,
+    body?: unknown,
+  ): Promise<{ status: number; body: T }> {
+    const response = await fetch(`${this.url}${route}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${this.token}`,
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    const text = await response.text();
+    return { status: response.status, body: (text ? JSON.parse(text) : null) as T };
+  }
+
+  /** The daemon goes down (its port closes), as when a machine stops. */
+  async stop(): Promise<void> {
+    await harness("POST", `/daemons/${this.id}/stop`);
+  }
+
+  /** It comes back: same home, vault and port. */
+  async start(): Promise<void> {
+    await harness("POST", `/daemons/${this.id}/start`);
+  }
+
+  async close(): Promise<void> {
+    await harness("DELETE", `/daemons/${this.id}`);
+  }
+}
+
+export async function startDaemon(spec: DaemonSpec = {}): Promise<Daemon> {
+  return new Daemon(await harness<Started>("POST", "/daemons", spec));
+}
+
+/** A new vault on the harness's sync service, with its token. */
+export function syncVault(): Promise<SyncVault> {
+  return harness<SyncVault>("POST", "/sync-vaults");
+}
+
+export const test = base.extend<{ daemonSpec: DaemonSpec; daemon: Daemon }>({
+  daemonSpec: [{}, { option: true }],
+  daemon: async ({ daemonSpec }, use) => {
+    const daemon = await startDaemon(daemonSpec);
+    await use(daemon);
+    await daemon.close();
+  },
+  baseURL: async ({ daemon }, use) => {
+    await use(daemon.url);
+  },
+});
+
+export type { Locator, Page } from "@playwright/test";
+export { expect };

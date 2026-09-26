@@ -2,7 +2,7 @@ import { type ThemePreference, today, toISODate } from "@ddl/core";
 import { StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { PairBrowser } from "../api/pairing";
-import { isMockMode, resolveStartup } from "../api/select-client";
+import { resolveStartup } from "../api/select-client";
 import { installGlobalHotkeys } from "../commands/keyboard";
 import { armCounts } from "../components/Count";
 import { announceVaultSwitch } from "../features/obsidian-import/vault-switch";
@@ -13,6 +13,7 @@ import {
   storedThemePreference,
 } from "../features/settings/theme";
 import { onIdle } from "../lib/idle";
+import { searchParam } from "../lib/platform";
 import { installPerfGlobal, perfDetailed } from "../perf/perf";
 import { useConnectionStore } from "../state/connection-store";
 import { applySettings, getSettings, useSettingsStore } from "../state/settings-store";
@@ -103,8 +104,9 @@ function installSettingsEffects(services: Services, appliedTheme: ThemePreferenc
   });
 }
 
+/** `window.__ddlDebug` for the e2e and perf tests: `?debug=1` (or `?perf=1`) only. */
 function installDebugHooks(services: Services): void {
-  if (!isMockMode() && !perfDetailed) return;
+  if (searchParam("debug") !== "1" && !perfDetailed) return;
   const { client } = services;
   const writeNote = client.writeNote.bind(client);
   const postMessage = client.postMessage.bind(client);

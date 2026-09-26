@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./fixtures";
 import { focusEditorEnd, openApp } from "./helpers";
 
 /*
@@ -191,7 +191,7 @@ test.describe("what the orchestrator is doing while you write", () => {
   test("with reduced motion nothing pulses", async ({ page }) => {
     test.setTimeout(60_000);
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await openApp(page, "mockSpeed=1");
+    await openApp(page);
     const request = "Find a dentist near the office";
     await typeLine(page, request, { first: true });
     const chip = chipOn(page, request);

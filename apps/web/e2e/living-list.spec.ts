@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./fixtures";
 import { expectDailyNote, noteTitle, openApp, waitForSaved } from "./helpers";
 
 /** Yesterday's note in the mock vault is the living-list demo (apps/web/src/api/mock/mock-demo.ts). */

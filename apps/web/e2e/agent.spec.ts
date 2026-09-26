@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import {
   badge,
   expandToolGroups,
@@ -10,7 +10,7 @@ import {
 
 test.describe("agent threads", () => {
   test("new task → badge → thread with streamed messages → approval → done", async ({ page }) => {
-    await openApp(page, "mockSpeed=2");
+    await openApp(page);
     await typeTask(page, "Order a replacement water filter");
 
     await expect(badge(page)).toHaveCount(1, { timeout: 15_000 });
@@ -55,7 +55,7 @@ test.describe("agent threads", () => {
   });
 
   test("denying an approval blocks the action and finishes with a note", async ({ page }) => {
-    await openApp(page, "mockSpeed=3");
+    await openApp(page);
     await typeTask(page, "Book a table for two on Friday");
     await expect(badge(page)).toHaveCount(1, { timeout: 15_000 });
     await badge(page).click();
@@ -77,7 +77,7 @@ test.describe("agent threads", () => {
   });
 
   test("artifact viewer and live browser frames", async ({ page }) => {
-    await openApp(page, "mockSpeed=4");
+    await openApp(page);
     await typeTask(page, "Compare three robot vacuums");
     await expect(badge(page)).toHaveClass(/cm-ddl-badge-done/, { timeout: 25_000 });
     await expect(badge(page)).toContainText("Done · 3 options");
@@ -108,7 +108,7 @@ test.describe("agent threads", () => {
   });
 
   test("inbox groups today's threads and opens them", async ({ page }) => {
-    await openApp(page, "mockSpeed=4");
+    await openApp(page);
     await typeTask(page, "Research beginner guitar lessons");
     await expect(badge(page)).toHaveClass(/cm-ddl-badge-done/, { timeout: 25_000 });
     await page.keyboard.press("ControlOrMeta+Shift+A");
