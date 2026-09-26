@@ -377,26 +377,13 @@ export class SyncEngine {
   private async syncPath(path: string, ctx: RunContext): Promise<void> {
     const base = ctx.snapshot.entries.get(path);
     const decision = decideSync(base, ctx.primaryFiles.get(path), ctx.targetFiles.get(path));
-    if (this.fence?.covers(path)) {
-      await this.syncFencedPath(path, decision, base, ctx);
-      return;
-    }
+    const fenced = this.fence?.covers(path) ?? false;
     switch (decision.action) {
       case "skip":
         return;
       case "forget":
-        ctx.snapshot.entries.delete(path);
-        ctx.dirtySnapshot = true;
+        this.forget(ctx, path);
         return;
-      case "push": {
-        const source = await this.readOrDefer(this.primary, path);
-        const written = await this.target.write(path, source.content, {
-          ifMatch: decision.target?.version ?? null,
-        });
-        this.record(ctx, path, source.version, written.version, source.content);
-        ctx.report.pushed.push(path);
-        return;
-      }
       case "pull": {
         const source = await this.readOrDefer(this.target, path);
         const written = await this.writePrimary(
@@ -407,18 +394,35 @@ export class SyncEngine {
         this.record(ctx, path, written.version, source.version, source.content);
         ctx.report.pulled.push(path);
         // Another device resolved a conflict: its copy is this device's to review too.
-        if (!decision.primary && isConflictCopyPath(path)) ctx.snapshot.conflicts.add(path);
+        if (!fenced && !decision.primary && isConflictCopyPath(path)) {
+          ctx.snapshot.conflicts.add(path);
+        }
+        return;
+      }
+      case "delete-primary":
+        await this.deletePrimary(path, decision.primary.version);
+        this.forget(ctx, path);
+        ctx.report.deletedLocal.push(path);
+        return;
+    }
+    if (fenced) {
+      await this.syncFencedPath(path, decision, base, ctx);
+      return;
+    }
+    switch (decision.action) {
+      case "push": {
+        const source = await this.readOrDefer(this.primary, path);
+        const written = await this.target.write(path, source.content, {
+          ifMatch: decision.target?.version ?? null,
+        });
+        this.record(ctx, path, source.version, written.version, source.content);
+        ctx.report.pushed.push(path);
         return;
       }
       case "delete-target":
         await this.target.delete(path, { ifMatch: decision.target.version });
         this.forget(ctx, path);
         ctx.report.deletedRemote.push(path);
-        return;
-      case "delete-primary":
-        await this.deletePrimary(path, decision.primary.version);
-        this.forget(ctx, path);
-        ctx.report.deletedLocal.push(path);
         return;
       case "reconcile":
         await this.reconcile(path, base, ctx);
@@ -463,39 +467,16 @@ export class SyncEngine {
   }
 
   /**
-   * A path only the lease holder may change on the target. Pulls work as usual. The holder pushes
+   * A path only the lease holder may change on the target (pulls work as usual). The holder pushes
    * its version (it is the authority: no merge, no conflict copy); anyone else, or a holder whose
    * grant the target no longer accepts, takes the target's version.
    */
   private async syncFencedPath(
     path: string,
-    decision: SyncDecision,
+    decision: Extract<SyncDecision, { action: "push" | "delete-target" | "reconcile" }>,
     base: SnapshotEntry | undefined,
     ctx: RunContext,
   ): Promise<void> {
-    switch (decision.action) {
-      case "skip":
-        return;
-      case "forget":
-        this.forget(ctx, path);
-        return;
-      case "pull": {
-        const source = await this.readOrDefer(this.target, path);
-        const written = await this.writePrimary(
-          path,
-          source.content,
-          decision.primary?.version ?? null,
-        );
-        this.record(ctx, path, written.version, source.version, source.content);
-        ctx.report.pulled.push(path);
-        return;
-      }
-      case "delete-primary":
-        await this.deletePrimary(path, decision.primary.version);
-        this.forget(ctx, path);
-        ctx.report.deletedLocal.push(path);
-        return;
-    }
     if (this.fence?.epoch() === null) {
       await this.yieldToTarget(path, base, ctx);
       return;
