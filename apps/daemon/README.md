@@ -92,7 +92,8 @@ unknown keys are rejected so typos surface):
   (`src/agent-supervisor.ts`, `src/agent-lease.ts`); how that and `agent.placement` work:
   [docs/SYNC.md](../../docs/SYNC.md#the-agent-lease).
 - `remote.hosts`: the DNS names this daemon answers to besides loopback (`host[:port]`, at most 8;
-  no IPs, schemes or paths; `:443` is the same as no port). See
+  no IPs, schemes or paths; `:443` is the same as no port). Each adds an allowed `Host`, its
+  `https://` Origin and a `wss://` entry in the page's CSP. See
   [Remote access and pairing](#remote-access-and-pairing).
 - `execution`: `local` (browser headless by default; computer use on by default on macOS only, with
   app control when the helper is found).

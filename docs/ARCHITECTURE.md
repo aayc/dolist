@@ -37,23 +37,16 @@ packages and the daemon bundle are pinned once in the pnpm catalog (`pnpm-worksp
   `StorageProvider` (`packages/storage/src/types.ts`): list/read/write/delete/rename, optimistic
   concurrency via content versions (`ifMatch`), and a `watch()` stream that distinguishes the
   provider's own writes (`self: true`) from external edits (e.g. Obsidian, git, sync).
-- Agent data lives in the hidden sidecar `.daily-do-list/` inside the vault: `threads/`,
-  `artifacts/`, `state/` (task identities, task records, approvals) and `settings.json`. Because it
-  goes through the same provider, it syncs with the notes.
+- Agent data lives in the hidden sidecar `.daily-do-list/` inside the vault (thread journals,
+  artifacts, task identities and records, approvals, routines state, `settings.json`; the
+  inventory is in [DATA_FORMATS.md](DATA_FORMATS.md)). Because it goes through the same provider,
+  it syncs with the notes.
 - Deletes through the API are soft: files move to the vault's `.trash/` folder.
-- Local provider details: atomic writes (temp file + rename), per-path locks, symlink-escape
-  protection, recursive `fs.watch` with debounce and self-write suppression, version caching.
-
-### Storage and sync providers
-
-`createStorageProvider(config)` is the only place a backend is chosen (`local`, `memory`).
-`SyncEngine` replicates the vault to any other provider (`createSyncTarget`: a local folder such as
-iCloud Drive, or the sync service shared by several devices) using a persisted base
-snapshot and a line-based 3-way merge; true conflicts keep your version and save theirs as a
-`(conflict …)` copy. It runs a pass after vault changes, after changes the target reports from
-elsewhere (the sync service pushes them live), and every 30 s. A mass-deletion guard refuses to
-mirror an empty side (unmounted drive) into deletions. Devices, the sync service and the agent
-lease (one device runs the agent): [SYNC.md](SYNC.md).
+- `createStorageProvider(config)` is the only place a backend is chosen; `SyncEngine` replicates
+  the vault to a sync target (`createSyncTarget`: a local folder such as iCloud Drive, or the sync
+  service shared by several devices) with a line-based 3-way merge. Providers, the engine and its
+  conflict rules: [packages/storage](../packages/storage/README.md); devices, the sync service and
+  the agent lease (one device runs the agent): [SYNC.md](SYNC.md).
 
 ## The daemon
 
@@ -66,13 +59,11 @@ lease (one device runs the agent): [SYNC.md](SYNC.md).
   light `ClientEvent`s (hello, editor presence, surface subscriptions, read receipts).
 - **The built UI** (production), with the auth token injected into `index.html`.
 
-Security: bearer token (`$DDL_HOME/daemon-token`, 0600) checked in constant time on every API and
-WebSocket request, `Host` allowlist (DNS-rebinding defense), `Origin` allowlist (CSRF defense), no
-CORS, zod validation, body limits, sandboxed artifact responses. The Vite dev proxy injects the
-token only for requests that originate from the dev UI itself. Other devices reach the daemon only
-through a private-network proxy under a configured remote host, with a paired device's token (or a
-paired browser's HttpOnly cookie); see [SECURITY.md](../SECURITY.md#threat-model-summary) and
-[apps/daemon/README.md](../apps/daemon/README.md#remote-access-and-pairing).
+Security: a bearer token on every request, `Host` and `Origin` allowlists, no CORS, zod
+validation, body limits, sandboxed artifact responses; other devices only through a
+private-network proxy with device credentials ([apps/daemon/README.md](../apps/daemon/README.md#security-model),
+[SECURITY.md](../SECURITY.md#threat-model-summary)). The Vite dev proxy injects the token only for
+requests that originate from the dev UI itself.
 
 Change attribution: writes made through the API carry the tab's client id; writes by the agent go
 through an `AttributedStorage` view. The WebSocket hub tags each `vault.changed` as `client`,
@@ -89,9 +80,8 @@ see everything else live.
   transactions so they stay attached while you type.
 - Calm by default: a daily note's title is its date ("Thursday, September 24", with the year only
   when it isn't the current one; tabs and the explorer keep the file name). The status bar shows
-  nothing while things are fine: no "Saved", no "Connected" (the in-browser demo gets a "Demo"
-  marker), and the approval policy only while it isn't the default ("Runs everything" in the
-  warning color). Only badges that need the user are loud, and motion is CSS-only, paint-only and off
+  nothing while things are fine: no "Saved", no "Connected", and the approval policy only while it
+  isn't the default ("Runs everything" in the warning color). Only badges that need the user are loud, and motion is CSS-only, paint-only and off
   under `prefers-reduced-motion` (see `packages/editor/README.md`).
 - Tooltips: one delegated layer (`src/lib/tooltips.ts`, one element, document listeners) shows
   what an element declares with `data-tooltip`, React components and editor widgets alike, with
@@ -108,11 +98,11 @@ see everything else live.
   `MessageRow`s and `Composer` with a header of its own (status, Stop) and a link under each
   decision to its task's thread, and from the palette ("Open the orchestrator's chat",
   `agent:orchestrator`).
-- What the orchestrator is doing while you write (`orchestrator.activity`) shows as chips at the
-  end of the lines that woke it, a note-level indicator in the note header and a status bar item
-  for work elsewhere; clicking opens its chat at the turn (see `apps/web/README.md`).
-- `DaemonClient` is implemented by `HttpDaemonClient`. The e2e and perf tests, and the
-  `pnpm dev:mock` demo, run it against real daemons with the mock agent (see `apps/web/README.md`).
+- What the orchestrator is doing while you write shows as chips on the lines that woke it, in the
+  note header and in the status bar; routines, remote settings, drawings and the Obsidian import
+  are in `apps/web/README.md`.
+- `DaemonClient` is implemented by `HttpDaemonClient`; the e2e and perf tests and the
+  `pnpm dev:mock` demo run it against real daemons.
 
 ## The agent runtime
 

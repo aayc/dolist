@@ -348,7 +348,7 @@ and real-keyboard e2e tests in `apps/web/e2e/vim.spec.ts`.
 
 - **Add a storage backend:** implement `StorageProvider` (`packages/storage/src/types.ts`), add it to
   `StorageConfig` and `createStorageProvider` (and `createSyncTarget` for a sync target), run the
-  shared contract tests against it, document config in `docs/ARCHITECTURE.md`.
+  shared contract tests against it, document its config in `packages/storage/README.md`.
 - **Add an execution backend:** implement `ExecutionProvider` (`packages/agent/src/execution/types.ts`),
   add its config to `ExecutionConfig` and register it in `createExecutionProvider`. Tools are built
   by `createExecutionTools` from the provider's controllers, so they work unchanged.

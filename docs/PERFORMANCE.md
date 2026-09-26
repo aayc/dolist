@@ -30,9 +30,6 @@ Chrome's frame-rate limiter so "→ next frame" measures work, not vsync alignme
 Latest local run (Apple Silicon, real daemon): keystroke p95 1.7 ms (vim mode 2 ms, beside drawings
 1.5 ms), daily open ~5–7 ms (uncached previous note 18.5 ms), tab switch 12 ms, thread open 24 ms
 (1 000 messages: 56 ms), first load 131 ms (warm 40 ms), 300 new files 25 ms, zero long tasks.
-The in-browser mock these tests used before gave, on the same machine and day: first load 111 ms,
-thread open 21 ms (1 000 messages: 66 ms), 300 new files 9 ms (the daemon batches real file events
-differently from the mock's 300 synthetic ones), everything else within a millisecond or two.
 
 Large data is seeded as files before the daemon starts: `DaemonSpec.notes` adds notes, a thread is
 its journal (`threadFile` in `e2e/fixtures.ts`), and the vault burst writes 300 files into the
@@ -160,9 +157,9 @@ budgets.
 
 | Bundle | Budget (gzip) | Current |
 | --- | --- | --- |
-| Initial JS (entry + static imports) | 320 kB | ~282 kB |
+| Initial JS (entry + static imports) | 320 kB | ~279 kB |
 | Initial CSS | 40 kB | ~8 kB |
-| Total JS | 1 300 kB | ~1 217 kB |
+| Total JS | 1 300 kB | ~1 200 kB |
 
 The initial JS is dominated by CodeMirror core and React. `@codemirror/lang-markdown` would embed
 `@codemirror/lang-html` and with it the JS and CSS parsers (~60 kB gz); our `pnpm patch`
@@ -181,10 +178,10 @@ canvas downscales pasted images), pako (~14 kB gz; Excalidraw embeds scenes in e
 uncompressed without it), browser-fs-access (a file input opens images) and the translations.
 
 Total JS counts every chunk, including the lazy ones: the code block languages (~400 kB gz, each
-loaded for a fenced block in that language), Excalidraw (~327 kB gz) and the mock the e2e tests
-run against the production build (~27 kB gz). It was raised from 1 200 to 1 300 kB when drawings
-and the always-on work landed together; startup is guarded by the initial JS budget, which
-didn't change. A new dependency of Excalidraw's size still needs a look at what else can go.
+loaded for a fenced block in that language) and Excalidraw. It was raised from 1 200 to 1 300 kB
+when drawings and the always-on work landed together; startup is guarded by the initial JS
+budget, which didn't change. A new dependency of Excalidraw's size still needs a look at what else
+can go.
 
 Gzip sizes differ a little between machines for the same bytes (Node's zlib on CI's x86 runners
 compresses ~0.5% worse than on Apple Silicon), so keep some headroom under the budget.
