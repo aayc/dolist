@@ -18,6 +18,7 @@
     "@ddl/core": "workspace:*"
   },
   "devDependencies": {
-    "@ddl/sync": "workspace:*"
+    "@ddl/sync": "workspace:*",
+    "vitest": "^5.0.1"
   }
 }

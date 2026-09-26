@@ -284,6 +284,10 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 4.6.5
+    devDependencies:
+      fast-check:
+        specifier: ^4.10.2
+        version: 4.10.2
 
   packages/core: {}
 
@@ -335,9 +339,6 @@ importers:
       '@replit/codemirror-vim-core':
         specifier: 0.1.0
         version: 0.1.0
-      '@types/node':
-        specifier: ^24.0.0
-        version: 24.13.6
       codemirror:
         specifier: ^6.0.2
         version: 6.0.2
@@ -363,6 +364,9 @@ importers:
       '@ddl/sync':
         specifier: workspace:*
         version: link:../../apps/sync
+      vitest:
+        specifier: ^5.0.1
+        version: 5.0.1(@types/node@24.13.6)(happy-dom@20.14.5)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.0))
 
 packages:
 
