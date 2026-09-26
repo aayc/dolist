@@ -370,6 +370,19 @@ describe("TaskWatcher: the rest of the note", () => {
     expect(watcher.getContent(TODAY)).toContain("What's the capital of Australia?");
   });
 
+  it("settles a request quickly once the cursor moved to another line", async () => {
+    const { storage, watcher, notes } = withNotes();
+    await watcher.start();
+    await storage.write(TODAY, "Slept badly.\nCan you find a plumber for Saturday?\n");
+    watcher.noteEditorActivity(TODAY, 2);
+    await vi.advanceTimersByTimeAsync(699);
+    expect(notes).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(notes.map((n) => n.lines)).toEqual([
+      [{ line: 1, text: "Can you find a plumber for Saturday?" }],
+    ]);
+  });
+
   it("stays quiet for journaling, the agent's own lines, and a cut-and-paste", async () => {
     const { storage, watcher, notes } = withNotes();
     await watcher.start();
