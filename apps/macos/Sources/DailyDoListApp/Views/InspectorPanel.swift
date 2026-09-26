@@ -20,16 +20,7 @@ struct InspectorPanel: View {
           headerHeight: Theme.headerHeight,
           onHide: { ui.inspectorPresented = false },
           noteLinks: workspace.agentNoteLinks,
-          shortcuts: AgentPanelShortcuts(
-            hidePanel: CommandID.toggleAgentPanel.shortcut, inbox: CommandID.agentInbox.shortcut,
-            stop: .init(id: CommandID.stopTask.rawValue, keys: CommandID.stopTask.shortcut),
-            routines: .init(
-              id: CommandID.showRoutines.rawValue, keys: CommandID.showRoutines.shortcut),
-            newRoutine: .init(
-              id: CommandID.newRoutine.rawValue, keys: CommandID.newRoutine.shortcut),
-            runHere: .init(
-              id: CommandID.runOrchestratorHere.rawValue,
-              keys: CommandID.runOrchestratorHere.shortcut)),
+          shortcuts: .app,
           onOpenOrchestratorWindow: { model.showOrchestratorWindow() },
           section: $ui.agentSection, selectedRoutineId: $ui.selectedRoutineId,
           routineActions: AgentRoutineActions(

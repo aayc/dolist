@@ -9,6 +9,7 @@ import { type ReactNode, Suspense, useEffect, useState } from "react";
 import { errorMessage } from "../../api/errors";
 import { useServices } from "../../app/services";
 import { IconButton } from "../../components/IconButton";
+import { Switch } from "../../components/Switch";
 import { cx } from "../../lib/cx";
 import { preloadable } from "../../lib/preloadable";
 import { useAgentStore } from "../../state/agent-store";
@@ -116,32 +117,6 @@ export function SettingsModal({ section }: { section: SettingsSection }) {
         {active === "about" ? <AboutSection /> : null}
       </div>
     </Modal>
-  );
-}
-
-function Toggle({
-  checked,
-  onChange,
-  label,
-  testId,
-}: {
-  checked: boolean;
-  onChange(value: boolean): void;
-  label: string;
-  testId?: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      className={cx("toggle", checked && "is-on")}
-      onClick={() => onChange(!checked)}
-      data-testid={testId}
-    >
-      <span className="toggle-knob" />
-    </button>
   );
 }
 
@@ -316,7 +291,7 @@ function EditorSection() {
     <section>
       <h2 className="settings-heading">Editor</h2>
       <Setting name="Vim key bindings" description="Use Vim keys in the editor.">
-        <Toggle
+        <Switch
           checked={editor.vimMode}
           onChange={(vimMode) => set({ vimMode })}
           label="Vim key bindings"
@@ -338,14 +313,14 @@ function EditorSection() {
         </div>
       ) : null}
       <Setting name="Live preview" description="Hide markdown syntax away from the cursor.">
-        <Toggle
+        <Switch
           checked={editor.livePreview}
           onChange={(livePreview) => set({ livePreview })}
           label="Live preview"
         />
       </Setting>
       <Setting name="Readable line length" description="Limit line width and center the text.">
-        <Toggle
+        <Switch
           checked={editor.readableLineLength}
           onChange={(readableLineLength) => set({ readableLineLength })}
           label="Readable line length"
@@ -363,14 +338,14 @@ function EditorSection() {
         />
       </Setting>
       <Setting name="Spellcheck">
-        <Toggle
+        <Switch
           checked={editor.spellcheck}
           onChange={(spellcheck) => set({ spellcheck })}
           label="Spellcheck"
         />
       </Setting>
       <Setting name="Line numbers">
-        <Toggle
+        <Switch
           checked={editor.showLineNumbers}
           onChange={(showLineNumbers) => set({ showLineNumbers })}
           label="Line numbers"
@@ -447,7 +422,7 @@ function AgentSection() {
       <h2 className="settings-heading">Agent</h2>
       {status?.problem ? <div className="settings-problem">{status.problem}</div> : null}
       <Setting name="Agent enabled" description="When off, the orchestrator ignores note changes.">
-        <Toggle
+        <Switch
           checked={enabled}
           onChange={(value) => {
             void agent.setEnabled(value);

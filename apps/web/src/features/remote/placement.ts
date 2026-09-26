@@ -1,14 +1,6 @@
 import type { AgentPlacement, AgentPlacementStatus, AgentReadiness, AgentRunsOn } from "@ddl/core";
 import type { SettingsSection } from "../../state/ui-store";
 
-/** What the toggle offers: where the orchestrator runs for this device. */
-export type PlacementChoice = Exclude<AgentPlacement, "always_on_host">;
-
-export const PLACEMENT_CHOICES: ReadonlyArray<{ value: PlacementChoice; label: string }> = [
-  { value: "this_device", label: "This device" },
-  { value: "always_on_machine", label: "Always-on machine" },
-];
-
 /** A link that opens the Settings section which fixes something. */
 export interface SetupLink {
   section: SettingsSection;
@@ -34,37 +26,33 @@ const HELD_HERE: Record<
 export const PLACEMENT_LOCKED =
   "DDL_AGENT_PLACEMENT sets where the agent runs on this device, so it can't be changed here";
 
-export type ToggleState =
-  /** The daemon doesn't report placement (an older daemon). */
-  | { kind: "hidden" }
-  /** This is the always-on machine. */
-  | { kind: "host" }
-  | {
-      kind: "toggle";
-      selected: PlacementChoice;
-      /** Why it can't be switched (its tooltip), or null. */
-      disabled: string | null;
-      saving: boolean;
-    };
+export const PLACEMENT_MOVING = "Moving the orchestrator…";
+
+export interface ToggleState {
+  /** On: the orchestrator runs on the always-on machine. */
+  remote: boolean;
+  /** Why it can't be flipped (its tooltip), or null. */
+  disabled: string | null;
+}
 
 /**
- * The toggle for a placement status: the stored choice (or the one being saved), disabled with a
- * reason while the agent is held here or an environment variable sets it.
+ * The Remote switch for a placement status: the stored choice (or the one being saved), disabled
+ * with a reason while the agent is held here, an environment variable sets it, or it's moving.
+ * Null when there's nothing to switch: an older daemon, or this is the always-on machine.
  */
 export function toggleState(
   placement: AgentPlacementStatus | undefined,
   options: { locked: boolean; pending: AgentPlacement | null },
-): ToggleState {
-  if (!placement) return { kind: "hidden" };
-  const stored = options.pending ?? placement.placement;
-  if (stored === "always_on_host") return { kind: "host" };
-  const saving = options.pending !== null;
+): ToggleState | null {
+  if (!placement || placement.placement === "always_on_host") return null;
   const disabled = placement.heldHere
     ? HELD_HERE[placement.heldHere].why
     : options.locked
       ? PLACEMENT_LOCKED
-      : null;
-  return { kind: "toggle", selected: stored, disabled, saving };
+      : options.pending
+        ? PLACEMENT_MOVING
+        : null;
+  return { remote: (options.pending ?? placement.placement) === "always_on_machine", disabled };
 }
 
 /** Where the agent runs, in a few words, and more for a tooltip. */

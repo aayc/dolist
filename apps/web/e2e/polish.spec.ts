@@ -211,7 +211,7 @@ test.describe("tooltips", () => {
   test("a control that can't be used says why", async ({ page }) => {
     await openApp(page, "mockRemote=none");
     await page.keyboard.press("ControlOrMeta+Shift+A");
-    await hover(page, page.getByTestId("placement-toggle-always_on_machine"));
+    await hover(page, page.getByTestId("placement-toggle"));
     await shownTooltip(page, "This device doesn't sync");
 
     await openApp(page, "mockRemote=elsewhere");
@@ -513,11 +513,11 @@ test.describe("cursor audit", () => {
     };
 
     await panel("mockRemote=none");
-    await expect(page.getByTestId("placement-toggle")).toHaveAttribute("data-disabled", "true");
+    await expect(page.getByTestId("placement-toggle")).toBeDisabled();
     await audit(page, "agent location, held here");
     await panel("mockSpeed=1&mockRemote=ready");
     await audit(page, "agent location");
-    await page.getByTestId("placement-toggle-always_on_machine").click();
+    await page.getByTestId("placement-toggle").click();
     await expect(page.getByTestId("agent-location-line")).toHaveAttribute("data-kind", "note");
     await audit(page, "agent location, handing over");
     await panel("mockRemote=host");

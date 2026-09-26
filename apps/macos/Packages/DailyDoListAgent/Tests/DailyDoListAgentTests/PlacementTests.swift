@@ -221,7 +221,8 @@ struct PlacementTests {
     store.apply(.agentStatus(Fixture.status(problem: problem, placement: placement)))
     return AgentPanel(
       store: store, selectedThreadId: .constant(nil),
-      shortcuts: AgentPanelShortcuts(runHere: .init(id: "agent.runHere")),
+      shortcuts: AgentPanelShortcuts(
+        runHere: .init(id: "agent.runHere"), runOnMachine: .init(id: "agent.runOnMachine")),
       placementActions: AgentPlacementActions(openSetUp: { setUp in
         opened.mutate { $0.append(setUp) }
       })
@@ -268,7 +269,23 @@ struct PlacementTests {
         $0.tooltipContent()?.lines.first?.text == "Run the orchestrator on this device instead"
       })
     #expect(runHere.command == "agent.runHere")
-    #expect(found.contains { $0.tooltipContent()?.plainText == "Where the orchestrator runs" })
+  }
+
+  /// The switch's tooltip says what flipping it does, and names the host's command for that.
+  @Test func theRemoteSwitchSaysWhatFlippingItDoes() throws {
+    func remote(_ placement: AgentPlacementStatus) throws -> TooltipAnchorView {
+      let found = anchors(
+        panel(placement, opened: Locked([])), size: CGSize(width: 400, height: 500))
+      return try #require(
+        found.first { $0.tooltipContent()?.plainText.hasPrefix("Run the orchestrator on") == true }
+      )
+    }
+    let off = try remote(Fixture.placement())
+    #expect(off.tooltipContent()?.plainText == "Run the orchestrator on your always-on machine")
+    #expect(off.command == "agent.runOnMachine")
+    let on = try remote(Fixture.placement(.alwaysOnMachine, runsOn: Fixture.machine))
+    #expect(on.tooltipContent()?.plainText == "Run the orchestrator on this device")
+    #expect(on.command == "agent.runHere")
   }
 
   @Test(arguments: [false, true])
@@ -278,6 +295,10 @@ struct PlacementTests {
     let states: [(String, AgentPlacementStatus)] = [
       ("orchestrator-held", Fixture.placement(heldHere: .noMachine)),
       ("orchestrator-here", Fixture.placement()),
+      (
+        "orchestrator-remote",
+        Fixture.placement(.alwaysOnMachine, runsOn: Fixture.machine, relay: .connected)
+      ),
       (
         "orchestrator-handover",
         Fixture.placement(.alwaysOnMachine, runsOn: nil, note: "Handing the agent to vm-name…")

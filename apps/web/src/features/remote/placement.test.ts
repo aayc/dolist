@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   locationLine,
   PLACEMENT_LOCKED,
+  PLACEMENT_MOVING,
   readOnlyReason,
   runsOnText,
   toggleState,
@@ -39,34 +40,30 @@ const READY: AgentReadiness = {
   connectors: { configured: 2, connected: 2 },
 };
 
-describe("the orchestrator toggle", () => {
+describe("the Remote switch", () => {
   const unlocked = { locked: false, pending: null };
 
-  it("is hidden when the daemon doesn't report placement", () => {
-    expect(toggleState(undefined, unlocked)).toEqual({ kind: "hidden" });
+  it("isn't there when the daemon doesn't report placement, or on the always-on machine", () => {
+    expect(toggleState(undefined, unlocked)).toBeNull();
+    expect(toggleState(status({ placement: "always_on_host" }), unlocked)).toBeNull();
   });
 
-  it("shows the stored choice, enabled", () => {
-    expect(toggleState(status(), unlocked)).toEqual({
-      kind: "toggle",
-      selected: "this_device",
-      disabled: null,
-      saving: false,
-    });
-    expect(toggleState(status({ placement: "always_on_machine" }), unlocked)).toMatchObject({
-      selected: "always_on_machine",
+  it("shows the stored choice, enabled: on for the always-on machine", () => {
+    expect(toggleState(status(), unlocked)).toEqual({ remote: false, disabled: null });
+    expect(toggleState(status({ placement: "always_on_machine" }), unlocked)).toEqual({
+      remote: true,
       disabled: null,
     });
   });
 
   it("is disabled while held here, saying why, and keeps the stored choice", () => {
-    expect(toggleState(status({ heldHere: "no_machine" }), unlocked)).toMatchObject({
-      selected: "this_device",
+    expect(toggleState(status({ heldHere: "no_machine" }), unlocked)).toEqual({
+      remote: false,
       disabled: "Set up an always-on machine in Settings",
     });
     expect(
       toggleState(status({ placement: "always_on_machine", heldHere: "no_sync" }), unlocked),
-    ).toMatchObject({ selected: "always_on_machine", disabled: "This device doesn't sync" });
+    ).toEqual({ remote: true, disabled: "This device doesn't sync" });
   });
 
   it("is disabled when an environment variable sets the placement", () => {
@@ -77,16 +74,8 @@ describe("the orchestrator toggle", () => {
 
   it("shows a choice being saved, disabled until the daemon answers", () => {
     expect(toggleState(status(), { locked: false, pending: "always_on_machine" })).toEqual({
-      kind: "toggle",
-      selected: "always_on_machine",
-      disabled: null,
-      saving: true,
-    });
-  });
-
-  it("says this is the always-on machine on the machine itself", () => {
-    expect(toggleState(status({ placement: "always_on_host" }), unlocked)).toEqual({
-      kind: "host",
+      remote: true,
+      disabled: PLACEMENT_MOVING,
     });
   });
 });

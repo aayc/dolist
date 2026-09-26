@@ -1,3 +1,4 @@
+import DailyDoListAgent
 import DailyDoListUI
 import SwiftUI
 
@@ -24,6 +25,21 @@ extension IconButton {
     self.init(
       systemImage, label: label, keys: command.shortcut, command: command.rawValue,
       detail: detail, isActive: isActive, isEnabled: isEnabled, size: size, action: action)
+  }
+}
+
+extension AgentPanelShortcuts {
+  /// The catalog's commands behind the agent panel's buttons (and the Remote switch in Settings).
+  static let app = AgentPanelShortcuts(
+    hidePanel: CommandID.toggleAgentPanel.shortcut, inbox: CommandID.agentInbox.shortcut,
+    stop: Command(.stopTask), routines: Command(.showRoutines), newRoutine: Command(.newRoutine),
+    runHere: Command(.runOrchestratorHere), runOnMachine: Command(.runOrchestratorOnMachine))
+}
+
+extension AgentPanelShortcuts.Command {
+  /// `command`'s id and its shortcut from the catalog.
+  init(_ command: CommandID) {
+    self.init(id: command.rawValue, keys: command.shortcut)
   }
 }
 

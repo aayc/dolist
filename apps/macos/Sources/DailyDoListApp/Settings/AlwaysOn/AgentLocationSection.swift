@@ -3,9 +3,9 @@ import DailyDoListModels
 import DailyDoListUI
 import SwiftUI
 
-/// Settings → Always-On → Agent Location: the same choice as the agent panel's control (this
-/// device or the always-on machine; on the machine itself, "this is the always-on machine"), who
-/// runs the agent right now, and this device's readiness with what fixes it.
+/// Settings → Always-On → Agent Location: the agent panel's Remote switch (on the machine itself,
+/// "this is the always-on machine"), who runs the agent right now, and this device's readiness
+/// with what fixes it.
 struct AgentLocationSection: View {
   let model: AppModel
   let remote: RemoteSettingsStore
@@ -23,9 +23,11 @@ struct AgentLocationSection: View {
                 "This is the always-on machine. It runs the agent whenever no device set to run it itself is running."
             )
           } else {
-            LabeledContent("The orchestrator runs on") {
-              OrchestratorPicker(agent: agent, location: location, locked: isLocked)
-            }
+            OrchestratorSwitch(
+              store: agent, location: location, shortcuts: .app, locked: isLocked)
+            SettingsNote(
+              text: "Run the orchestrator on your always-on machine, even while this device sleeps."
+            )
             if isLocked {
               LockedByEnvNote(variables: "`DDL_AGENT_PLACEMENT`")
             } else if let reason = location.heldTooltip {
@@ -82,38 +84,6 @@ struct AgentLocationSection: View {
     if runsOn.alwaysOnMachine { return "\(runsOn.name), the always-on machine" }
     return runsOn.name
   }
-}
-
-/// The segmented "This device | Always-on machine" control of Settings.
-struct OrchestratorPicker: View {
-  let agent: AgentStore
-  let location: OrchestratorLocation
-  let locked: Bool
-
-  var body: some View {
-    Picker(
-      "The orchestrator runs on",
-      selection: Binding(
-        get: { location.selection },
-        set: { target in Task { await agent.moveOrchestrator(to: target) } })
-    ) {
-      ForEach([AgentPlacement.thisDevice, .alwaysOnMachine], id: \.self) { placement in
-        Text(OrchestratorLocation.title(placement)).tag(placement)
-      }
-    }
-    .pickerStyle(.segmented)
-    .labelsHidden()
-    .fixedSize()
-    .pointingHandCursor(enabled)
-    .tooltip(
-      TooltipContent("Where the orchestrator runs"),
-      whenDisabled: locked
-        ? TooltipContent("Set by an environment variable") : location.heldTooltip
-    )
-    .disabled(!enabled)
-  }
-
-  private var enabled: Bool { location.canSwitch && !locked }
 }
 
 /// Why the choice waits, and the way to set up what's missing.

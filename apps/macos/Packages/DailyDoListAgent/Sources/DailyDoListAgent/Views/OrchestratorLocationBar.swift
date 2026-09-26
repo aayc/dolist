@@ -2,7 +2,7 @@ import DailyDoListModels
 import DailyDoListUI
 import SwiftUI
 
-/// What the host does for the "where the orchestrator runs" control.
+/// What the host does for the orchestrator's Remote switch row.
 public struct AgentPlacementActions {
   /// Opens the Settings pane that sets up what's missing (the always-on machine, or sync).
   public var openSetUp: ((OrchestratorLocation.SetUp) -> Void)?
@@ -14,15 +14,14 @@ public struct AgentPlacementActions {
   public static var none: AgentPlacementActions { AgentPlacementActions() }
 }
 
-/// Under the agent panel's header: where the orchestrator runs, one click away. A segmented
-/// control (This device | Always-on machine), disabled with the reason while the agent is held on
-/// this device (and a way to set up what's missing), the handover as it happens, and "Run It on
-/// This Device Instead" when the always-on machine can't be reached. On the always-on machine
-/// itself it just says so.
+/// Under the agent panel's header: "Orchestrator … Remote" and its switch, one click away,
+/// disabled with the reason while the agent is held on this device (and a way to set up what's
+/// missing), the handover as it happens, and "Run It on This Device Instead" when the always-on
+/// machine can't be reached. On the always-on machine itself it just says so.
 struct OrchestratorLocationBar: View {
   let store: AgentStore
   let location: OrchestratorLocation
-  let runHere: AgentPanelShortcuts.Command
+  let shortcuts: AgentPanelShortcuts
   let actions: AgentPlacementActions
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -33,10 +32,16 @@ struct OrchestratorLocationBar: View {
           .font(.system(size: 12, weight: .medium))
           .foregroundStyle(AgentTheme.mutedText)
       } else {
-        ViewThatFits(in: .horizontal) {
-          controls(labeled: true)
-          controls(labeled: false)
+        HStack(spacing: 8) {
+          Text("Orchestrator")
+            .foregroundStyle(AgentTheme.mutedText)
+          Spacer(minLength: 0)
+          OrchestratorSwitch(store: store, location: location, shortcuts: shortcuts)
+            .foregroundStyle(AgentTheme.text)
+            .controlSize(.mini)
+            .fixedSize()
         }
+        .font(.system(size: 12))
       }
       if let line = location.line {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -70,7 +75,8 @@ struct OrchestratorLocationBar: View {
           ChromeButtonStyle(horizontalPadding: 8, verticalPadding: 3, showsBorder: true)
         )
         .tooltip(
-          "Run the orchestrator on this device instead", keys: runHere.keys, command: runHere.id)
+          "Run the orchestrator on this device instead", keys: shortcuts.runHere.keys,
+          command: shortcuts.runHere.id)
       }
     }
     .padding(.horizontal, 12)
@@ -83,43 +89,6 @@ struct OrchestratorLocationBar: View {
   private var setUpTitle: String {
     if location.heldHere != nil { return "Set Up…" }
     return location.pairsAgain ? "Pair Again…" : "Pair…"
-  }
-
-  private func controls(labeled: Bool) -> some View {
-    HStack(spacing: 8) {
-      if labeled {
-        Text("Orchestrator")
-          .font(.system(size: 12))
-          .foregroundStyle(AgentTheme.mutedText)
-          .fixedSize()
-      }
-      picker
-      Spacer(minLength: 0)
-    }
-  }
-
-  private var picker: some View {
-    Picker(
-      "Where the orchestrator runs",
-      selection: Binding(
-        get: { location.selection },
-        set: { target in Task { await store.moveOrchestrator(to: target) } })
-    ) {
-      ForEach([AgentPlacement.thisDevice, .alwaysOnMachine], id: \.self) { placement in
-        Text(OrchestratorLocation.title(placement)).tag(placement)
-      }
-    }
-    .pickerStyle(.segmented)
-    .labelsHidden()
-    .controlSize(.small)
-    .fixedSize()
-    .pointingHandCursor(location.canSwitch)
-    .tooltip(
-      TooltipContent("Where the orchestrator runs"),
-      whenDisabled: location.heldTooltip
-        ?? (location.isSwitching ? TooltipContent("Moving the orchestrator…") : nil)
-    )
-    .disabled(!location.canSwitch)
   }
 }
 

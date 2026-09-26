@@ -25,12 +25,15 @@ public struct AgentPanelShortcuts: Hashable, Sendable {
   public var routines: Command
   /// Opens the New Routine sheet (the Routines tab's New Routine button).
   public var newRoutine: Command
-  /// Runs the orchestrator on this device ("Run It on This Device Instead").
+  /// Runs the orchestrator on this device (turning Remote off, "Run It on This Device Instead").
   public var runHere: Command
+  /// Runs the orchestrator on the always-on machine (turning Remote on).
+  public var runOnMachine: Command
 
   public init(
     hidePanel: KeyShortcut? = nil, inbox: KeyShortcut? = nil, stop: Command = Command(),
-    routines: Command = Command(), newRoutine: Command = Command(), runHere: Command = Command()
+    routines: Command = Command(), newRoutine: Command = Command(), runHere: Command = Command(),
+    runOnMachine: Command = Command()
   ) {
     self.hidePanel = hidePanel
     self.inbox = inbox
@@ -38,6 +41,7 @@ public struct AgentPanelShortcuts: Hashable, Sendable {
     self.routines = routines
     self.newRoutine = newRoutine
     self.runHere = runHere
+    self.runOnMachine = runOnMachine
   }
 }
 
@@ -81,8 +85,8 @@ public struct AgentPanel: View {
   ///   - section: the inbox or the routines (constant: the inbox only, without the tabs).
   ///   - selectedRoutineId: the routine whose runs show in the routines section.
   ///   - routineActions: New Routine (also "Repeat this" on finished tasks) and Edit File.
-  ///   - placementActions: what the "where the orchestrator runs" control opens to set up what's
-  ///     missing. The control shows when the daemon reports placement.
+  ///   - placementActions: what the orchestrator's Remote switch row opens to set up what's
+  ///     missing. The row shows when the daemon reports placement.
   public init(
     store: AgentStore, selectedThreadId: Binding<String?>,
     onShowInNote: ((TaskLocation) -> Void)? = nil, onClose: (() -> Void)? = nil,
@@ -115,7 +119,7 @@ public struct AgentPanel: View {
       header
       if let location = store.orchestratorLocation {
         OrchestratorLocationBar(
-          store: store, location: location, runHere: shortcuts.runHere, actions: placementActions)
+          store: store, location: location, shortcuts: shortcuts, actions: placementActions)
       }
       if let readOnly = store.readOnly, let banner = readOnly.banner {
         ReadOnlyBanner(kind: readOnly.kind, text: banner)
