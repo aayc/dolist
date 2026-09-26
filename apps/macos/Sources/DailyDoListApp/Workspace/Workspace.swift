@@ -261,8 +261,9 @@ final class Workspace {
       at: VaultPath.ensureMarkdownExtension(normalized), newTab: newTab, focusTitle: false)
   }
 
-  /// Restores last session's tabs (existing notes only), loading them in parallel.
-  func restoreTabs(_ paths: [String], active: String?) async {
+  /// Restores last session's tabs (existing notes only), loading them in parallel. `showActive`
+  /// false leaves the editor alone (another note is about to be shown).
+  func restoreTabs(_ paths: [String], active: String?, showActive: Bool = true) async {
     let existing = paths.filter { vault.isFile($0) }
     guard !existing.isEmpty else { return }
     let loads = existing.filter { !notes.has($0) }.map { path in
@@ -272,8 +273,12 @@ final class Workspace {
     let loaded = existing.filter { notes.has($0) }
     guard !loaded.isEmpty else { return }
     let target = active.flatMap { loaded.contains($0) ? $0 : nil } ?? loaded[0]
-    switchEditor(to: target) { tabs.restore(tabs: loaded, active: target) }
-    afterActivate(target, OpenOptions(focusEditor: false))
+    if showActive {
+      switchEditor(to: target) { tabs.restore(tabs: loaded, active: target) }
+      afterActivate(target, OpenOptions(focusEditor: false))
+    } else {
+      tabs.restore(tabs: loaded, active: target)
+    }
   }
 
   // MARK: - Helpers
