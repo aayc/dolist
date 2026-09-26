@@ -1,16 +1,17 @@
 import { silentLogger, toolResultText } from "@ddl/core";
 import { describe, expect, it } from "vitest";
 import { createExecutionTools } from "../execution";
+import { MockLlmClient } from "../llm/mock";
 import { LlmError } from "../llm/types";
 import { createLlmJudge } from "../safety/llm-judge";
 import { createFakeBrain } from "./brain/brain";
 import {
+  brainResponder,
   createFakeConnectors,
   createFakeExecution,
   createFakeWeb,
   createFakeWebTools,
 } from "./fakes";
-import { createFakeLlmClient } from "./llm-client";
 
 const ctx = { toolCallId: "c1" };
 
@@ -33,7 +34,9 @@ describe("fake web", () => {
   });
 
   it("web_search runs through the brain as an LLM client, with citations", async () => {
-    const tools = createFakeWebTools({ llm: createFakeLlmClient(createFakeBrain()) });
+    const tools = createFakeWebTools({
+      llm: new MockLlmClient(brainResponder(createFakeBrain())),
+    });
     const search = tools.find((t) => t.name === "web_search")!;
     const result = await search.execute({ query: "standing desks" }, ctx);
     expect(toolResultText(result)).toContain(
@@ -115,7 +118,7 @@ describe("fake connectors", () => {
 
 describe("in-process LLM client", () => {
   it("feeds the real judge schema-valid verdicts", async () => {
-    const llm = createFakeLlmClient(createFakeBrain());
+    const llm = new MockLlmClient(brainResponder(createFakeBrain()));
     const judge = createLlmJudge({ llm, timeoutMs: 1_000, logger: silentLogger });
     const verdict = await judge.judge({
       ctx: {
@@ -139,7 +142,7 @@ describe("in-process LLM client", () => {
 
   it("turns brain failures into LlmErrors and honors aborts", async () => {
     const brain = createFakeBrain().fail({ status: 429, message: "slow down" }).hang();
-    const llm = createFakeLlmClient(brain);
+    const llm = new MockLlmClient(brainResponder(brain));
     const error = await llm
       .complete({ messages: [{ role: "user", content: "x" }] })
       .catch((e: unknown) => e);
