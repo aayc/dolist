@@ -15,7 +15,7 @@ public enum DaemonProtocol {
 
 // MARK: - Routes
 
-/// Paths of every daemon route (see `API_ROUTES` in protocol.ts).
+/// Paths of every daemon route (see `API_PATHS` in protocol.ts).
 public enum APIRoute {
   public static let health = "/api/health"
   public static let tree = "/api/vault/tree"

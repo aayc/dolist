@@ -35,123 +35,95 @@ export const WS_CLOSE_CODES = {
 /** Header clients send so the daemon can tag the origin of a change and skip echoing it back. */
 export const CLIENT_ID_HEADER = "x-ddl-client-id";
 
-/** Route → methods (request body → response body per status). Errors answer `ApiErrorBody`. */
-export const API_ROUTES = {
-  /** GET → HealthResponse */
+/**
+ * Every route's path: `:name` is one segment, a trailing `*` the rest (a vault path). The daemon
+ * registers these patterns and clients build URLs from them (`API_ROUTES`); what each route
+ * accepts and answers is `API_CONTRACT` in `@ddl/contract`, rendered in docs/PROTOCOL.md.
+ */
+export const API_PATHS = {
   health: "/api/health",
-  /** GET → VaultTreeResponse */
   tree: "/api/vault/tree",
-  /**
-   * GET → NoteResponse · PUT WriteNoteRequest → WriteNoteResponse (200 overwritten, 201 created,
-   * 409 ConflictResponse) · DELETE → TrashResponse (moved into `.trash/`)
-   */
-  note: (path: string) => `/api/notes/${encodeVaultPath(path)}`,
-  /** POST RenameRequest → RenameResponse (a note or a whole folder); 409 on conflict */
+  note: "/api/notes/*",
   rename: "/api/notes-rename",
-  /** POST CreateFolderRequest → 201 CreateFolderResponse · DELETE `?path=` → TrashResponse */
   folders: "/api/folders",
-  /** GET → DailyNoteResponse (creates from the template with `?create=1`) */
-  daily: (date: string, create = true) => `/api/daily/${date}${create ? "?create=1" : ""}`,
-  /** GET (`?q=`, `?limit=`) → SearchResponse */
-  search: (q: string) => `/api/search?q=${encodeURIComponent(q)}`,
-  /** GET → SettingsResponse · PUT (or PATCH) UpdateSettingsRequest → SettingsResponse */
+  daily: "/api/daily/:date",
+  search: "/api/search",
   settings: "/api/settings",
-  /** GET → AgentStatusResponse */
   agentStatus: "/api/agent/status",
-  /** PUT/POST SetAgentEnabledRequest → SetAgentEnabledResponse */
   agentEnabled: "/api/agent/enabled",
-  /** GET → TaskRecordsResponse */
-  tasks: (notePath: string) => `/api/tasks?notePath=${encodeURIComponent(notePath)}`,
-  /** GET (`?notePath=`, `?taskId=`, `?routineId=`) → ThreadListResponse */
+  tasks: "/api/tasks",
   threads: "/api/threads",
-  /** GET → ThreadResponse */
-  thread: (id: string) => `/api/threads/${encodeURIComponent(id)}`,
-  /** POST PostMessageRequest → ThreadActionResponse (200 done, 202 still running) */
-  threadMessages: (id: string) => `/api/threads/${encodeURIComponent(id)}/messages`,
-  /** POST → ThreadActionResponse (200 done, 202 still running) */
-  threadCancel: (id: string) => `/api/threads/${encodeURIComponent(id)}/cancel`,
-  /** POST → ThreadActionResponse (200 done, 202 still running) */
-  threadRetry: (id: string) => `/api/threads/${encodeURIComponent(id)}/retry`,
-  /** GET (`?status=`) → ApprovalListResponse */
+  thread: "/api/threads/:id",
+  threadMessages: "/api/threads/:id/messages",
+  threadCancel: "/api/threads/:id/cancel",
+  threadRetry: "/api/threads/:id/retry",
   approvals: "/api/approvals",
-  /**
-   * GET → ApprovalResponse · POST ApprovalDecisionRequest → ApprovalResponse (409
-   * ApprovalConflictResponse when it is no longer pending)
-   */
-  approval: (id: string) => `/api/approvals/${encodeURIComponent(id)}`,
-  /** GET → artifact bytes (Content-Type from the artifact; `?download=1` forces an attachment) */
-  artifact: (threadId: string, artifactId: string) =>
-    `/api/artifacts/${encodeURIComponent(threadId)}/${encodeURIComponent(artifactId)}`,
-  /**
-   * GET → RoutineListResponse · POST CreateRoutineRequest → 201 RoutineResponse (writes
-   * `Routines/<name>.md`; 409 when it exists, 400 when the schedule can't be read)
-   */
+  approval: "/api/approvals/:id",
+  artifact: "/api/artifacts/:threadId/:artifactId",
   routines: "/api/routines",
-  /** GET → RoutineResponse */
-  routine: (id: string) => `/api/routines/${encodeURIComponent(id)}`,
-  /**
-   * POST → RoutineRunResponse: runs it now (409 while a run is going or when today's extra runs
-   * are used up; 503 while the agent can't run)
-   */
-  routineRun: (id: string) => `/api/routines/${encodeURIComponent(id)}/run`,
-  /** POST → RoutineResponse (sets `paused: true` in the file) */
-  routinePause: (id: string) => `/api/routines/${encodeURIComponent(id)}/pause`,
-  /** POST → RoutineResponse (sets `paused: false` in the file) */
-  routineResume: (id: string) => `/api/routines/${encodeURIComponent(id)}/resume`,
-  /** GET → ConnectorsResponse */
+  routine: "/api/routines/:id",
+  routineRun: "/api/routines/:id/run",
+  routinePause: "/api/routines/:id/pause",
+  routineResume: "/api/routines/:id/resume",
   connectors: "/api/connectors",
-  /** GET → SyncStatusResponse */
   syncStatus: "/api/sync/status",
-  /**
-   * POST ComputerPermissionsOpenRequest → OkResponse: opens System Settings at that privacy pane
-   * (macOS; 404 elsewhere).
-   */
   computerPermissionsOpen: "/api/computer/permissions/open",
-  /**
-   * GET → DeviceSettingsResponse · PATCH DeviceSettingsPatch → DeviceSettingsResponse (409 when a
-   * field is set by an environment variable)
-   */
   device: "/api/device",
-  /** PUT DeviceSyncSetupRequest → DeviceSettingsResponse · DELETE → DeviceSettingsResponse (sync off) */
   deviceSync: "/api/device/sync",
-  /**
-   * GET → DeviceVaultResponse · PUT DeviceVaultRequest → DeviceVaultResponse, then the daemon
-   * restarts on that vault (409 when `DDL_VAULT` sets it, an import runs or the vault syncs).
-   * This machine only (403 for paired devices).
-   */
   deviceVault: "/api/device/vault",
-  /** POST ObsidianImportPreviewRequest → ObsidianImportPreview (reads the folder, writes nothing) */
   importObsidianPreview: "/api/import/obsidian/preview",
-  /**
-   * GET → ObsidianImportStatusResponse · POST ObsidianImportRequest → 202
-   * ObsidianImportJobResponse (progress arrives as `import.progress` events; 409 while a job runs)
-   */
   importObsidian: "/api/import/obsidian",
-  /** POST → ObsidianImportJobResponse: the stopped job, once its partial work is removed (404 when none runs) */
   importObsidianCancel: "/api/import/obsidian/cancel",
-  /** POST → 202 ObsidianImportJobResponse: copies what changed in Obsidian since the import (404 when there's nothing to update from) */
   importObsidianUpdate: "/api/import/obsidian/update",
-  /** POST PairingCodeRequest → 201 PairingCodeResponse (429 when too many are outstanding) */
   pairingCodes: "/api/pairing-codes",
-  /** POST PairRequest → 201 PairResponse. No bearer token: the pairing code is the credential. */
   pair: "/api/pair",
-  /** GET → PairedDevicesResponse */
   devices: "/api/devices",
-  /** DELETE → 204: revokes a paired device and closes its sockets */
-  pairedDevice: (id: string) => `/api/devices/${encodeURIComponent(id)}`,
-  /** GET → MachineStatusResponse */
+  pairedDevice: "/api/devices/:id",
   machine: "/api/machine",
-  /** POST MachinePairRequest → MachineStatusResponse */
   machinePair: "/api/machine/pair",
-  /** POST → MachineStatusResponse (checks the machine now) */
   machineCheck: "/api/machine/check",
-  /** DELETE → MachineStatusResponse (drops this device's credential for the machine) */
   machinePairing: "/api/machine/pairing",
-  /** WebSocket: ServerEvent ⇄ ClientEvent */
   ws: "/ws",
 } as const;
 
-export type ApiRouteName = keyof typeof API_ROUTES;
+export type ApiRouteName = keyof typeof API_PATHS;
+
+type PathArgs<P> = P extends `${string}/:${string}/${infer Rest}`
+  ? [string, ...PathArgs<`/${Rest}`>]
+  : P extends `${string}/:${string}` | `${string}/*`
+    ? [string]
+    : [];
+
+type RouteUrls = {
+  readonly [K in ApiRouteName]: PathArgs<(typeof API_PATHS)[K]> extends []
+    ? (typeof API_PATHS)[K]
+    : (...args: PathArgs<(typeof API_PATHS)[K]>) => string;
+};
+
+const urls = Object.fromEntries(
+  Object.entries(API_PATHS).map(([name, path]) => [
+    name,
+    /[:*]/.test(path)
+      ? (...args: string[]) =>
+          path.replace(/:\w+|\*/g, (param) =>
+            (param === "*" ? encodeVaultPath : encodeURIComponent)(args.shift() as string),
+          )
+      : path,
+  ]),
+) as RouteUrls;
+
+/**
+ * Every route's URL (relative to the daemon's base URL): a static route is its path, a pattern a
+ * builder taking its parameters in order (percent-encoded; a note path keeps its `/`). `daily`,
+ * `search` and `tasks` add their query.
+ */
+export const API_ROUTES = {
+  ...urls,
+  /** `create` (the default) makes the note from its template when it doesn't exist. */
+  daily: (date: string, create = true) => `${urls.daily(date)}${create ? "?create=1" : ""}`,
+  search: (q: string) => `${urls.search}?q=${encodeURIComponent(q)}`,
+  tasks: (notePath: string) => `${urls.tasks}?notePath=${encodeURIComponent(notePath)}`,
+};
 
 /** Encodes each path segment but keeps `/` separators readable. */
 export function encodeVaultPath(path: string): string {

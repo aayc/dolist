@@ -1,7 +1,7 @@
 import type { AgentRuntime } from "@ddl/agent";
 import { CreateRoutineRequestSchema } from "@ddl/contract";
 import {
-  API_ROUTES,
+  API_PATHS,
   ROUTINE_TEMPLATES,
   type Routine,
   type RoutineListResponse,
@@ -20,7 +20,7 @@ import { idParam, readJson } from "../http-utils";
 export function registerRoutineRoutes(app: Hono, ctx: AppContext): void {
   const { runtime } = ctx;
 
-  app.get(API_ROUTES.routines, (c) => {
+  app.get(API_PATHS.routines, (c) => {
     const body: RoutineListResponse = {
       routines: runtime.listRoutines(),
       templates: [...ROUTINE_TEMPLATES],
@@ -28,18 +28,18 @@ export function registerRoutineRoutes(app: Hono, ctx: AppContext): void {
     return c.json(body);
   });
 
-  app.post(API_ROUTES.routines, async (c) => {
+  app.post(API_PATHS.routines, async (c) => {
     const input = await readJson(c, CreateRoutineRequestSchema);
     const body: RoutineResponse = { routine: await runtime.createRoutine(input) };
     return c.json(body, 201);
   });
 
-  app.get("/api/routines/:id", (c) => {
+  app.get(API_PATHS.routine, (c) => {
     const body: RoutineResponse = { routine: requireRoutine(runtime, idParam(c, "id")) };
     return c.json(body);
   });
 
-  app.post("/api/routines/:id/run", async (c) => {
+  app.post(API_PATHS.routineRun, async (c) => {
     const id = idParam(c, "id");
     requireRoutine(runtime, id);
     let body: RoutineRunResponse;
@@ -56,8 +56,8 @@ export function registerRoutineRoutes(app: Hono, ctx: AppContext): void {
     return c.json(body);
   });
 
-  app.post("/api/routines/:id/pause", (c) => setPaused(c, runtime, true));
-  app.post("/api/routines/:id/resume", (c) => setPaused(c, runtime, false));
+  app.post(API_PATHS.routinePause, (c) => setPaused(c, runtime, true));
+  app.post(API_PATHS.routineResume, (c) => setPaused(c, runtime, false));
 }
 
 async function setPaused(c: Context, runtime: AgentRuntime, paused: boolean): Promise<Response> {

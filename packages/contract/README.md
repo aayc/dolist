@@ -69,12 +69,13 @@ field together with a major bump.
    schema)` — `strictObject` for requests, `looseObject` for responses/events — and list it in
    `WIRE_SCHEMAS` (`src/wire/catalog.ts`; add request schemas to `REQUEST_SCHEMA_NAMES`).
 2. **Type**: export `type Name = WireType<"Name">` from `src/wire/types.ts`; `@ddl/core` re-exports
-   it. A new route also goes in `API_ROUTES` (`packages/core/src/protocol.ts`).
+   it. A new route also goes in `API_PATHS` (`packages/core/src/protocol.ts`), the one route
+   table: the daemon registers its pattern and `API_ROUTES` builds its URLs from it.
 3. **Route table**: add the route to `API_CONTRACT` (`src/wire/routes.ts`) with its `auth`
    (`bearer`; `pairing_code` for `/api/pair`, where the code in the body is the credential;
    `upgrade` for `/ws`), params, query, body and the response of every status it can answer
-   (`{ kind: "empty" }` for a 204). `satisfies Record<ApiRouteName, …>` fails until every
-   `API_ROUTES` entry has one.
+   (`{ kind: "empty" }` for a 204); its path comes from `API_PATHS`. `satisfies
+   Record<ApiRouteName, …>` fails until every route has one.
 4. **Generator**: none to write: `wireArbitraries` and `arb` derive one from the schema. A field
    whose refinement or format a generic value can't satisfy makes it throw, naming the field: give
    it realistic values in `BY_SCHEMA` (a shared schema) or `BY_PATH` (`Schema.field`) in

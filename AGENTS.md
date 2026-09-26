@@ -182,7 +182,8 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
    inferred from `@ddl/contract`'s schemas, erased at build (nothing of contract or zod ships).
 5. **The wire protocol is the zod schemas in `packages/contract/src/wire/`.** Its TypeScript types
    are inferred from them (`src/wire/types.ts`) and imported from `@ddl/core`, by the daemon and
-   every client alike; core keeps the enums and constants the schemas use, and `API_ROUTES`.
+   every client alike; core keeps the enums and constants the schemas use, and the one route
+   table (`API_PATHS`, with the URL builders `API_ROUTES`) that `API_CONTRACT` specifies.
    Changing a shape = change its schema (the type follows) and both sides in the same change,
    together with the route in `API_CONTRACT`, the fixtures, `DailyDoListModels` (Swift), and
    `pnpm --filter @ddl/contract generate` for `docs/PROTOCOL.md` (the steps: "How to add a route

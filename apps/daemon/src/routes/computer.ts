@@ -1,5 +1,5 @@
 import { ComputerPermissionsOpenRequestSchema } from "@ddl/contract";
-import { API_ROUTES, type OkResponse } from "@ddl/core";
+import { API_PATHS, type OkResponse } from "@ddl/core";
 import type { Hono } from "hono";
 import type { AppContext } from "../context";
 import { ApiError, errorMessage } from "../errors";
@@ -7,7 +7,7 @@ import { readJson } from "../http-utils";
 
 export function registerComputerRoutes(app: Hono, ctx: AppContext): void {
   // Only fixed deep links are opened (see system-settings.ts): the body just picks the pane.
-  app.post(API_ROUTES.computerPermissionsOpen, async (c) => {
+  app.post(API_PATHS.computerPermissionsOpen, async (c) => {
     const { pane } = await readJson(c, ComputerPermissionsOpenRequestSchema);
     let outcome: "opened" | "unsupported";
     try {
