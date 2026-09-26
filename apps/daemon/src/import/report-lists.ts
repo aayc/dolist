@@ -1,4 +1,5 @@
 import {
+  compareStrings,
   IMPORT_REPORT_LIMIT,
   type ImportMove,
   type ImportMoveList,
@@ -34,8 +35,4 @@ export function skippedList(list: BoundedList<ImportSkipped>): ImportSkippedList
     count: list.count,
     items: [...list.items].sort((a, b) => compareStrings(a.path, b.path)),
   };
-}
-
-export function compareStrings(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }

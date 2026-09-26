@@ -4,8 +4,9 @@
  *
  * Adapted from Hermes Agent (MIT): tools/mcp_tool_schema.py (`mcp_prefixed_tool_name`).
  */
+
 import { createHash } from "node:crypto";
-import { compareStrings } from "./util";
+import { compareStrings } from "@ddl/core";
 
 export const MCP_TOOL_PREFIX = "mcp__";
 export const MAX_TOOL_NAME_LENGTH = 64;

@@ -1,4 +1,5 @@
 import {
+  compareStrings,
   errorMessage,
   folderHoldsAgentOwnedPaths,
   InvalidPathError,
@@ -157,7 +158,7 @@ export class RemoteStorageProvider implements StorageProvider {
     return response.files
       .filter((file) => this.#visible(file.path, options))
       .map(toFileEntry)
-      .sort((a, b) => comparePaths(a.path, b.path));
+      .sort((a, b) => compareStrings(a.path, b.path));
   }
 
   async listFolders(options: ListOptions = {}): Promise<string[]> {
@@ -169,7 +170,7 @@ export class RemoteStorageProvider implements StorageProvider {
         })
       ).body,
     );
-    return folders.filter((folder) => this.#visible(folder, options)).sort(comparePaths);
+    return folders.filter((folder) => this.#visible(folder, options)).sort(compareStrings);
   }
 
   async stat(path: string): Promise<FileEntry | null> {
@@ -293,7 +294,7 @@ export class RemoteStorageProvider implements StorageProvider {
         )
       ).body,
     );
-    for (const file of [...deleted].sort(comparePaths)) {
+    for (const file of [...deleted].sort(compareStrings)) {
       this.#emit({ kind: "deleted", path: file, self: true });
     }
   }
@@ -577,10 +578,6 @@ function required<T>(body: T | undefined): T {
 }
 
 /** Code-point order, like the other providers (UIs apply their own display sort). */
-function comparePaths(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-
 function asChange(frame: Record<string, unknown>): SyncChange | null {
   const { seq, path, rev, deleted, created, device, at } = frame;
   if (!isSeq(seq) || typeof path !== "string" || typeof deleted !== "boolean") return null;

@@ -7,6 +7,7 @@
  */
 import {
   type ConnectorStatus,
+  compareStrings,
   type Logger,
   silentLogger,
   type ToolSpec,
@@ -33,7 +34,7 @@ import {
   type TransportSourceOptions,
 } from "./transports";
 import type { ConnectorsConfig, ConnectorToolSource } from "./types";
-import { compareStrings, errorMessage, isPlainObject, stableStringify } from "./util";
+import { errorMessage, isPlainObject, stableStringify } from "./util";
 
 export interface ConnectorManagerOptions {
   logger?: Logger;

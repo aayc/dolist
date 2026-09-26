@@ -1,5 +1,6 @@
 import {
   ancestorFolders,
+  compareStrings,
   createId,
   hashString,
   InvalidPathError,
@@ -80,12 +81,12 @@ export class MemoryStorageProvider implements StorageProvider {
       out.push(this.entry(path, file));
     }
     // Code-point order: deterministic across locales. UIs apply their own display sort.
-    return out.sort((a, b) => comparePaths(a.path, b.path));
+    return out.sort((a, b) => compareStrings(a.path, b.path));
   }
 
   async listFolders(options: ListOptions = {}): Promise<string[]> {
     const prefix = listPrefix(options);
-    return [...this.folders].filter((f) => this.matches(f, prefix, options)).sort(comparePaths);
+    return [...this.folders].filter((f) => this.matches(f, prefix, options)).sort(compareStrings);
   }
 
   async stat(path: string): Promise<FileEntry | null> {
@@ -192,7 +193,7 @@ export class MemoryStorageProvider implements StorageProvider {
     if (!this.folders.has(p)) throw new NotFoundError(p);
     const inside = (candidate: string) => candidate === p || candidate.startsWith(`${p}/`);
     for (const folder of [...this.folders]) if (inside(folder)) this.folders.delete(folder);
-    for (const file of [...this.files.keys()].filter(inside).sort(comparePaths)) {
+    for (const file of [...this.files.keys()].filter(inside).sort(compareStrings)) {
       this.files.delete(file);
       this.emit({ kind: "deleted", path: file, self: true });
     }
@@ -283,10 +284,6 @@ function toVaultPath(input: string): string {
 
 function listPrefix(options: ListOptions): string {
   return options.prefix ? normalizePath(options.prefix) : "";
-}
-
-function comparePaths(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function byteLength(content: string): number {
