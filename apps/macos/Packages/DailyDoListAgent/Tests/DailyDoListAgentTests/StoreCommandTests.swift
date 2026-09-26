@@ -102,14 +102,14 @@ struct StoreCommandTests {
     #expect(!store.isAgentAvailable)
   }
 
-  @Test func handleRoutesStreamItems() async {
+  @Test func handleRoutesStreamItems() async throws {
     store.handle(.state(.connected(serverVersion: "1.0")))
     #expect(store.connectionState == .connected(serverVersion: "1.0"))
     store.handle(.event(.approvalUpsert(Fixture.approval())))
     #expect(store.pendingApprovalCount == 1)
     client.script { $0.agentStatus = { Fixture.status(running: 7) } }
     store.handle(.resync)
-    #expect(await eventually { store.status?.running == 7 })
+    try await eventually { store.status?.running == 7 }
   }
 
   // MARK: Threads
@@ -150,7 +150,7 @@ struct StoreCommandTests {
     #expect(store.thread("thr_1") != nil)
   }
 
-  @Test func anArtifactMessageForAnUnknownArtifactRefetchesTheThread() async {
+  @Test func anArtifactMessageForAnUnknownArtifactRefetchesTheThread() async throws {
     await loadThread()
     let artifact = ArtifactMeta(
       id: "art_1", threadId: "thr_1", title: "Draft", kind: .markdown, mimeType: "text/markdown",
@@ -176,8 +176,7 @@ struct StoreCommandTests {
           message: .artifact(
             ArtifactMessage(
               id: "m_art", author: "subagent:writer", createdAt: 2, artifactId: "art_1")))))
-    #expect(
-      await eventually { store.artifactMeta(threadId: "thr_1", artifactId: "art_1") == artifact })
+    try await eventually { store.artifactMeta(threadId: "thr_1", artifactId: "art_1") == artifact }
     #expect(client.calls("thread:").count == 2)
   }
 

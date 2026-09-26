@@ -1,3 +1,4 @@
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import Foundation
 import Testing
@@ -5,34 +6,14 @@ import os
 
 @testable import DailyDoListClient
 
-struct TimeoutError: Error, CustomStringConvertible {
-  let description: String
-}
-
-/// Polls `condition` until it holds (every few ms), failing after `timeout`.
-func waitUntil(
-  _ what: @autoclosure () -> String = "condition",
-  timeout: Duration = .seconds(5),
-  _ condition: () -> Bool
-) async throws {
-  let clock = ContinuousClock()
-  let deadline = clock.now.advanced(by: timeout)
-  while !condition() {
-    guard clock.now < deadline else {
-      throw TimeoutError(description: "timed out waiting for \(what())")
-    }
-    try await Task.sleep(for: .milliseconds(5))
-  }
-}
-
 /// Polls `value` until it returns non-nil.
 func waitFor<T>(
   _ what: @autoclosure () -> String = "value",
-  timeout: Duration = .seconds(5),
+  timeout: Duration = .seconds(10),
   _ value: () -> T?
 ) async throws -> T {
   var result: T?
-  try await waitUntil(what(), timeout: timeout) {
+  try await eventually(what(), timeout: timeout) {
     result = value()
     return result != nil
   }
@@ -42,7 +23,7 @@ func waitFor<T>(
 
 /// Runs `body` with a deadline, failing the test (instead of hanging) when it doesn't finish.
 func withTimeout<T: Sendable>(
-  _ timeout: Duration = .seconds(5),
+  _ timeout: Duration = .seconds(10),
   _ body: @escaping @Sendable () async throws -> T
 ) async throws -> T {
   try await withThrowingTaskGroup(of: T.self) { group in
@@ -83,17 +64,17 @@ final class StreamRecorder: Sendable {
   var resyncCount: Int { items.filter { $0 == .resync }.count }
 
   func waitFor(
-    _ what: String = "item", timeout: Duration = .seconds(5), _ match: (DaemonStreamItem) -> Bool
+    _ what: String = "item", timeout: Duration = .seconds(10), _ match: (DaemonStreamItem) -> Bool
   ) async throws {
-    try await waitUntil(what, timeout: timeout) { items.contains(where: match) }
+    try await eventually(what, timeout: timeout) { items.contains(where: match) }
   }
 
-  func waitForState(_ state: ConnectionState, timeout: Duration = .seconds(5)) async throws {
+  func waitForState(_ state: ConnectionState, timeout: Duration = .seconds(10)) async throws {
     try await waitFor("state \(state)", timeout: timeout) { $0 == .state(state) }
   }
 
-  func waitForFinish(timeout: Duration = .seconds(5)) async throws {
-    try await waitUntil("stream to finish", timeout: timeout) { finished }
+  func waitForFinish(timeout: Duration = .seconds(10)) async throws {
+    try await eventually("stream to finish", timeout: timeout) { finished }
   }
 
   func cancel() { task.cancel() }

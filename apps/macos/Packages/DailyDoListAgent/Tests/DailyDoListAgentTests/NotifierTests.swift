@@ -65,13 +65,13 @@ struct NotifierTests {
     #expect(notifier.isAvailable)
   }
 
-  @Test func postsOneNotificationPerNewPendingApproval() async {
+  @Test func postsOneNotificationPerNewPendingApproval() async throws {
     store.apply(
       .threadUpsert(
         Fixture.summary(title: "Email Sam the Q3 report", updatedAt: Self.now.epochMillis)))
     notifier.start()
     store.apply(.approvalUpsert(approval()))
-    #expect(await eventually { center.posted.count == 1 })
+    try await eventually { center.posted.count == 1 }
     store.apply(.approvalUpsert(approval()))
     store.apply(
       .threadUpsert(Fixture.summary(title: "Renamed", updatedAt: Self.now.epochMillis + 1)))
@@ -88,45 +88,45 @@ struct NotifierTests {
     #expect(notification?.userInfo == ["approvalId": "apr_1", "threadId": "thr_1"])
 
     store.apply(.approvalUpsert(approval("apr_2")))
-    #expect(await eventually { center.posted.count == 2 })
+    try await eventually { center.posted.count == 2 }
     #expect(center.authorizationRequests == 1)
   }
 
-  @Test func removesTheNotificationWhenTheApprovalIsDecidedElsewhere() async {
+  @Test func removesTheNotificationWhenTheApprovalIsDecidedElsewhere() async throws {
     notifier.start()
     store.apply(.approvalUpsert(approval()))
-    #expect(await eventually { center.posted.count == 1 })
+    try await eventually { center.posted.count == 1 }
     store.apply(
       .approvalUpsert(
         Fixture.approval(
           threadId: "thr_1", status: .approved, createdAt: Self.now.epochMillis, decidedAt: 5)))
-    #expect(await eventually { center.removed == ["ddl.approval.apr_1"] })
+    try await eventually { center.removed == ["ddl.approval.apr_1"] }
   }
 
-  @Test func approvalsThatWereAlreadyWaitingDontBanner() async {
+  @Test func approvalsThatWereAlreadyWaitingDontBanner() async throws {
     store.apply(.approvalUpsert(approval(minutesAgo: 30)))
     notifier.start()
     store.apply(.approvalUpsert(approval("apr_new")))
-    #expect(await eventually { center.posted.count == 1 })
+    try await eventually { center.posted.count == 1 }
     #expect(center.posted.map(\.id) == ["ddl.approval.apr_new"])
   }
 
-  @Test func threadsOnScreenGetNoBanner() async {
+  @Test func threadsOnScreenGetNoBanner() async throws {
     notifier.isThreadOnScreen = { $0 == "thr_1" }
     notifier.start()
     store.apply(.approvalUpsert(approval()))
     store.apply(.approvalUpsert(approval("apr_2", thread: "thr_2")))
-    #expect(await eventually { center.posted.count == 1 })
+    try await eventually { center.posted.count == 1 }
     await settle()
     #expect(center.posted.map(\.id) == ["ddl.approval.apr_2"])
   }
 
-  @Test func withoutPermissionNothingIsPosted() async {
+  @Test func withoutPermissionNothingIsPosted() async throws {
     center.grantsAuthorization = false
     notifier.start()
     store.apply(.approvalUpsert(approval()))
     store.apply(.approvalUpsert(approval("apr_2")))
-    #expect(await eventually { center.authorizationRequests == 1 })
+    try await eventually { center.authorizationRequests == 1 }
     await settle()
     #expect(center.posted.isEmpty)
     #expect(center.authorizationRequests == 1)
@@ -154,7 +154,7 @@ struct NotifierTests {
     #expect(store.approvals["apr_2"]?.status == .denied)
   }
 
-  @Test func clickingANotificationOpensItsThread() async {
+  @Test func clickingANotificationOpensItsThread() async throws {
     var activated = false
     var opened: [String?] = []
     notifier.activateApp = { activated = true }
@@ -164,7 +164,7 @@ struct NotifierTests {
       AgentNotificationResponse(
         notificationId: "n", actionIdentifier: AgentNotificationResponse.defaultAction,
         userInfo: ["approvalId": "apr_1", "threadId": "thr_1"]))
-    #expect(await eventually { opened == ["thr_1"] })
+    try await eventually { opened == ["thr_1"] }
     #expect(activated)
     await notifier.handle(
       AgentNotificationResponse(
@@ -173,7 +173,7 @@ struct NotifierTests {
     #expect(opened == ["thr_1"])
   }
 
-  @Test func finishedTasksAreAnnouncedWhenAskedTo() async {
+  @Test func finishedTasksAreAnnouncedWhenAskedTo() async throws {
     store.apply(
       .threadUpsert(
         Fixture.summary(
@@ -190,7 +190,7 @@ struct NotifierTests {
           preview: "**Pick:** Example Rise Pro")))
     store.apply(
       .threadUpsert(Fixture.summary("thr_b", title: "Quiet task", status: .done, updatedAt: 2)))
-    #expect(await eventually { center.posted.count == 1 })
+    try await eventually { center.posted.count == 1 }
     await settle()
     #expect(center.posted.map(\.id) == ["ddl.done.thr_a"])
     #expect(center.posted.first?.title == "Task done")
@@ -229,7 +229,7 @@ struct NotifierTests {
 @MainActor
 @Suite("Dock badge")
 struct DockBadgeTests {
-  @Test func showsThePendingCountWhileStarted() async {
+  @Test func showsThePendingCountWhileStarted() async throws {
     let store = AgentStore(client: FakeDaemonClient())
     var labels: [String?] = []
     let badge = DockBadge(store: store) { labels.append($0) }
@@ -237,10 +237,10 @@ struct DockBadgeTests {
     badge.start()
     #expect(labels == ["1"])
     store.apply(.approvalUpsert(Fixture.approval("apr_2")))
-    #expect(await eventually { labels.last == "2" })
+    try await eventually { labels.last == "2" }
     store.apply(.approvalUpsert(Fixture.approval("apr_1", status: .approved, decidedAt: 2)))
     store.apply(.approvalUpsert(Fixture.approval("apr_2", status: .denied, decidedAt: 2)))
-    #expect(await eventually { labels.last == .some(nil) })
+    try await eventually { labels.last == .some(nil) }
     badge.stop()
     store.apply(.approvalUpsert(Fixture.approval("apr_3")))
     try? await Task.sleep(for: .milliseconds(30))

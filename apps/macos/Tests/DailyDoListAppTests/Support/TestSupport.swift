@@ -1,6 +1,7 @@
 import AppKit
 import DailyDoListAgent
 import DailyDoListClient
+import DailyDoListClientTestSupport
 import DailyDoListDaemon
 import DailyDoListDomain
 import DailyDoListEditor
@@ -12,26 +13,9 @@ import Testing
 
 @testable import DailyDoListApp
 
-struct TimeoutError: Error, CustomStringConvertible {
-  let description: String
-}
-
 /// `DDL_TEST_THOROUGH=1` (`test.sh --thorough`) runs model-based and fuzz tests with every seed;
 /// by default they run the first few.
 let thoroughTests = ProcessInfo.processInfo.environment["DDL_TEST_THOROUGH"] == "1"
-
-/// Polls `condition` (yielding to let async work progress) until it holds or `timeout` passes.
-@MainActor
-func eventually(
-  _ what: String = "condition", timeout: TimeInterval = 3, _ condition: @MainActor () -> Bool
-) async throws {
-  let deadline = Date().addingTimeInterval(timeout)
-  while !condition() {
-    if Date() > deadline { throw TimeoutError(description: "timed out waiting for \(what)") }
-    await Task.yield()
-    try await Task.sleep(for: .milliseconds(2))
-  }
-}
 
 /// Lets queued main-actor work run (tasks spawned by the code under test).
 @MainActor

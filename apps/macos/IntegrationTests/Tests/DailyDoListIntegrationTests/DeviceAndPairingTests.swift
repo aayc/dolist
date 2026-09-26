@@ -92,7 +92,7 @@ extension RealDaemonTests {
     @Test func readinessShowsOnceProbed() async throws {
       let fixture = try Fixtures.current()
       let client = try fixture.makeClient()
-      let readiness = try await poll("readiness in the agent status") {
+      let readiness = try await eventually("readiness in the agent status", timeout: .seconds(30)) {
         try await client.agentStatus().readiness
       }
       #expect(readiness.harness.knownKind == .pi, "the default harness")

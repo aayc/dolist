@@ -348,14 +348,14 @@ struct RoutineNotifierTests {
       threadId: threadId, status: status, at: at)
   }
 
-  @Test func postsFinishedRunsAndOpensTheRunOnClick() async {
+  @Test func postsFinishedRunsAndOpensTheRunOnClick() async throws {
     var opened: [(String, String)] = []
     var activated = 0
     notifier.onOpenRoutineRun = { opened.append(($0, $1)) }
     notifier.activateApp = { activated += 1 }
     notifier.start()
     store.apply(.routineNotification(notification()))
-    #expect(await eventually { center.posted.count == 1 })
+    try await eventually { center.posted.count == 1 }
     let posted = center.posted.first
     #expect(posted?.id == "ddl.routine.thr_r1" && posted?.title == "Morning briefing")
     #expect(posted?.body == "3 meetings · 68°F sunny" && posted?.subtitle == nil)
@@ -372,21 +372,21 @@ struct RoutineNotifierTests {
     #expect(opened.map(\.0) == ["rtn_1"] && opened.map(\.1) == ["thr_r1"])
   }
 
-  @Test func failuresSayWhyAndRunsOnScreenStayQuiet() async {
+  @Test func failuresSayWhyAndRunsOnScreenStayQuiet() async throws {
     notifier.isThreadOnScreen = { $0 == "thr_seen" }
     notifier.start()
     store.apply(.routineNotification(notification("thr_seen")))
     store.apply(.routineNotification(notification("thr_r2", status: .failed, at: 2)))
-    #expect(await eventually { center.posted.count == 1 })
+    try await eventually { center.posted.count == 1 }
     #expect(center.posted.first?.subtitle == "Run failed")
     #expect(center.posted.first?.id == "ddl.routine.thr_r2")
   }
 
-  @Test func notificationsFromBeforeStartDontBanner() async {
+  @Test func notificationsFromBeforeStartDontBanner() async throws {
     store.apply(.routineNotification(notification()))
     notifier.start()
     store.apply(.routineNotification(notification("thr_r2", at: 2)))
-    #expect(await eventually { center.posted.count == 1 })
+    try await eventually { center.posted.count == 1 }
     #expect(center.posted.map(\.id) == ["ddl.routine.thr_r2"])
   }
 

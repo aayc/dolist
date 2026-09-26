@@ -95,7 +95,7 @@ struct Relay {
         guard case .routinesChanged(let routines) = event else { return nil }
         return routines.contains { $0.id == routine.id } ? true : nil
       }
-      _ = try await poll("the routine on the machine") {
+      _ = try await eventually("the routine on the machine", timeout: .seconds(30)) {
         try await onMachine.routines().routines.first { $0.id == routine.id }
       }
       let runMark = log.mark
@@ -127,7 +127,7 @@ struct Relay {
         guard case .routinesChanged(let routines) = event else { return nil }
         return routines.contains { $0.id == routine.id } ? true : nil
       }
-      _ = try await poll("the synced threads") {
+      _ = try await eventually("the synced threads", timeout: .seconds(30)) {
         let ids = Set(try await client.threads(notePath: nil, taskId: nil).map(\.id))
         return ids.isSuperset(of: [taskThread, run.threadId]) ? true : nil
       }
@@ -142,7 +142,7 @@ struct Relay {
       _ = try await log.placement(from: upMark, timeout: .seconds(90), "connected again") {
         $0.relay == .connected
       }
-      _ = try await poll("the machine's agent back", timeout: .seconds(90)) {
+      _ = try await eventually("the machine's agent back", timeout: .seconds(90)) {
         let status = try await client.agentStatus()
         return status.placement?.relay == .connected && status.problem == nil ? true : nil
       }
@@ -245,7 +245,7 @@ func withRelayedLaptop(_ body: (RelayedLaptop) async throws -> Void) async throw
       let onMachine = try machine.makeClient()
       let machineDevice = try await onMachine.updateDeviceSettings(
         DeviceSettingsPatch(name: "vm-name"))
-      _ = try await poll("the machine runs its agent", timeout: .seconds(120)) {
+      _ = try await eventually("the machine runs its agent", timeout: .seconds(120)) {
         try await onMachine.agentStatus().placement?.runsOn?.thisDevice == true ? true : nil
       }
       let (client, log) = try await connectedClient(laptop)

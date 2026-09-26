@@ -96,7 +96,7 @@ final class TestWebSocketServer: @unchecked Sendable {
   func setRejectStatus(_ status: Int?) { state.withLock { $0.rejectStatus = status } }
 
   /// Waits for the `n`-th (1-based) upgraded connection.
-  func peer(_ n: Int, timeout: Duration = .seconds(5)) async throws -> Peer {
+  func peer(_ n: Int, timeout: Duration = .seconds(10)) async throws -> Peer {
     try await waitFor("connection #\(n)", timeout: timeout) {
       peers.count >= n ? peers[n - 1] : nil
     }

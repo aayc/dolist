@@ -19,6 +19,8 @@ let package = Package(
     .target(
       name: "DailyDoListClientTestSupport",
       dependencies: ["DailyDoListClient", "DailyDoListModels"]),
-    .testTarget(name: "DailyDoListClientTests", dependencies: ["DailyDoListClient"]),
+    .testTarget(
+      name: "DailyDoListClientTests",
+      dependencies: ["DailyDoListClient", "DailyDoListClientTestSupport"]),
   ]
 )
