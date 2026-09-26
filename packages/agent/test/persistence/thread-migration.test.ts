@@ -13,7 +13,7 @@ import {
 import type { Thread, ThreadMessage } from "@ddl/core";
 import { MemoryStorageProvider, SyncEngine } from "@ddl/storage";
 import { describe, expect, it, vi } from "vitest";
-import { migrateThreadSnapshots } from "../../src/threads/journal/migrate";
+import { migrateThreadFiles } from "../../src/threads/journal/migrate";
 import { ARTIFACTS_DIR, createThreadStore, threadJournalPath } from "../../src/threads/store";
 import { NOW, paths, readFixture, recordingLogger, STAMP, sidecar, vault } from "./helpers";
 
@@ -547,19 +547,68 @@ describe("a snapshot next to a journal merges as it always did", () => {
   });
 });
 
+describe("conflict copies of journals a third-party sync made", () => {
+  const line = (id: string, seq: number, message: ThreadMessage) =>
+    `${JSON.stringify({ v: 1, id, epoch: 0, seq, at: T + seq, type: "message", message })}\n`;
+
+  it("merge into the journal as a union of events, then go", async () => {
+    const storage = vault();
+    await journaled(storage, thread("thr_a", { messages: [text("m1", T + 1)] }));
+    const shared = (await storage.read(threadJournalPath("thr_a")))!.content;
+    await storage.append!(threadJournalPath("thr_a"), line("evt_ours", 9, text("ours", T + 9)));
+    await storage.write(
+      ".daily-do-list/state/journal/threads/thr_a 2.jsonl",
+      shared + line("evt_theirs", 9, text("theirs", T + 8)),
+    );
+    const store = await loadStore(storage);
+    expect(store.get("thr_a")!.messages.map((m) => m.id)).toEqual(["m1", "ours", "theirs"]);
+    expect(await paths(storage)).toEqual([threadJournalPath("thr_a")]);
+    expect((await loadStore(storage)).get("thr_a")).toEqual(store.get("thr_a"));
+  });
+
+  it("are left alone when they don't say which thread they belong to", async () => {
+    const orphan = ".daily-do-list/state/journal/threads/thr_a (conflicted copy).jsonl";
+    const storage = vault({ [orphan]: line("evt_1", 1, text("m1", T)) });
+    const logger = recordingLogger();
+    const store = await loadStore(storage, logger);
+    expect(store.list()).toEqual([]);
+    expect(await paths(storage)).toEqual([orphan]);
+    expect(logger.entries.map((e) => e.message)).toContain("Left a thread journal copy alone");
+  });
+});
+
 describe("the migration never loses anything", () => {
   it("is idempotent, even after a crash between the append and the removal", async () => {
     const snapshot = encodePersistedThread(thread("thr_a", { messages: [text("m1", T)] }));
     const storage = vault({ [snapshotPath("thr_a")]: snapshot });
     const context = { storage, logger: recordingLogger(), now: () => NOW };
-    await migrateThreadSnapshots(context);
+    await migrateThreadFiles(context);
     const migrated = await sidecar(storage);
-    await migrateThreadSnapshots(context);
+    await migrateThreadFiles(context);
     expect(await sidecar(storage)).toEqual(migrated);
     // The snapshot is back, as if the process died before removing it: it goes, nothing is added.
     await storage.write(snapshotPath("thr_a"), snapshot);
-    await migrateThreadSnapshots(context);
+    await migrateThreadFiles(context);
     expect(await sidecar(storage)).toEqual(migrated);
+  });
+
+  it("removes a snapshot found again whose import the journal already holds, even superseded", async () => {
+    const snapshot = encodePersistedThread(
+      thread("thr_a", { sources: [{ url: "https://old.example" }] }),
+    );
+    const storage = vault({ [snapshotPath("thr_a")]: snapshot });
+    const store = await loadStore(storage);
+    // Fifty newer pages push the snapshot's out of the capped list.
+    store.addSources(
+      "thr_a",
+      Array.from({ length: 50 }, (_, i) => ({ url: `https://new.example/${i}` })),
+    );
+    await store.flush();
+    const journal = (await storage.read(threadJournalPath("thr_a")))!.content;
+    await storage.write(snapshotPath("thr_a"), snapshot);
+    const reloaded = await loadStore(storage);
+    expect(reloaded.get("thr_a")!.sources).toHaveLength(50);
+    expect(await sidecar(storage)).toEqual({ [threadJournalPath("thr_a")]: journal });
   });
 
   it("keeps a snapshot rewritten while it was migrated, and moves it at the next load", async () => {

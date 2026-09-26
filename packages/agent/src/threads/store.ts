@@ -36,7 +36,7 @@ import {
   mergeSources,
   type OpenToolCall,
 } from "./journal/fold";
-import { forEachLimited, migrateThreadSnapshots } from "./journal/migrate";
+import { forEachLimited, migrateThreadFiles } from "./journal/migrate";
 import { type JournalExternalChange, JournalWriter } from "./journal/writer";
 import type {
   JournaledThreadStore,
@@ -94,8 +94,8 @@ interface Entry {
  * @ddl/contract). Every change is an event, applied through the same fold that loading uses, so the
  * thread in memory is the thread a restart reads back.
  *
- * - Loading first moves the snapshots older apps wrote (`threads/<id>.json`) into their journals
- *   (`journal/migrate.ts`), then folds every journal. Lines a journal can't read are skipped and
+ * - Loading first moves the snapshots older apps wrote (`threads/<id>.json`) and journal conflict
+ *   copies into the journals (`journal/migrate.ts`), then folds every journal. Lines a journal can't read are skipped and
  *   reported; a journal with a newer app's lines is left alone, and so is its thread.
  * - Events are appended in debounced batches, the tool call write-ahead record right away
  *   (`recordToolStarting`). Streaming text is journaled once final (or at a flush). Journals are
@@ -124,7 +124,7 @@ class SidecarThreadStore implements JournaledThreadStore {
   }
 
   async load(): Promise<void> {
-    await migrateThreadSnapshots({
+    await migrateThreadFiles({
       storage: this.storage,
       logger: this.logger,
       now: this.now,

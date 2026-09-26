@@ -1,19 +1,22 @@
 /**
- * Moves the thread snapshots older apps wrote (`threads/<id>.json`, and sync conflict copies of
- * them) into the threads' journals. The thread store runs it at every load, before it reads the
- * journals, so only the device running the agent (the lease holder) ever writes here.
+ * Brings thread files other than journals into the journals, at every load of the thread store and
+ * before it reads them, so only the device running the agent (the lease holder) writes here:
  *
- * - A snapshot holding something its journal lacks becomes a `thread.imported` event appended to
- *   the journal, in the order older apps merged them (the thread's own file, then copies from the
- *   most recently updated), so the journal folds to the thread they served. Its id comes from the
- *   snapshot's content: two devices migrating at once write the same line, which the union merge
- *   keeps once, and running it again appends nothing.
- * - A snapshot is removed only once the journal, read back, holds all of it; the removal is
- *   conditional, so one rewritten meanwhile (an older app on another device) stays for the next
- *   load. A partly invalid snapshot is copied into `corrupt/` first.
- * - Unreadable snapshots and ones a newer app wrote are left alone and reported. Nothing is written
- *   for a thread whose journal a newer app wrote, or whose own snapshot a newer app wrote while it
- *   has no journal.
+ * - **Snapshots older apps wrote** (`threads/<id>.json`, and sync conflict copies of them). One
+ *   that holds something its journal lacks becomes a `thread.imported` event, in the order older
+ *   apps merged them (the thread's own file, then copies from the most recently updated), so the
+ *   journal folds to the thread they served. Its id comes from the snapshot's content: two devices
+ *   migrating at once write the same line, which the union merge keeps once, and running it again
+ *   appends nothing. Unreadable snapshots and ones a newer app wrote are left alone and reported;
+ *   nothing is written for a thread whose own snapshot a newer app wrote while it has no journal.
+ * - **Conflict copies of journals a third-party sync made** (`thr_a 2.jsonl`,
+ *   `thr_a (conflicted copy).jsonl`): the events the journal lacks are appended as they are, the
+ *   union the SyncEngine would have made.
+ *
+ * A file is removed only once the journal, read back, holds every event planned from it, and
+ * conditionally, so one rewritten meanwhile (an older app on another device) stays for the next
+ * load; a partly unreadable one is copied into `corrupt/` first. Nothing is written to a journal a
+ * newer app wrote.
  */
 import {
   decodePersistedThread,
@@ -21,8 +24,10 @@ import {
   encodePersistedJournalEvent,
   PERSISTED_PATHS,
   type PersistedJournalEvent,
+  type PersistedJournalRead,
   type PersistedThread,
   persistedQuarantinePath,
+  persistedThreadIdFromJournalPath,
   persistedThreadIdFromPath,
   persistedThreadImportEvent,
   persistedThreadJournalPath,
@@ -64,11 +69,12 @@ interface Context {
 
 type StoredFile = SnapshotFile & { version: string };
 
-/** Whether a vault path is a snapshot (a file directly in `threads/`). */
-export function isSnapshotPath(path: string): boolean {
-  const prefix = `${PERSISTED_PATHS.threads}/`;
+/** A file directly in `folder` with the extension `ext`. */
+function isChild(path: string, folder: string, ext: string): boolean {
   return (
-    path.startsWith(prefix) && path.endsWith(".json") && !path.slice(prefix.length).includes("/")
+    path.startsWith(`${folder}/`) &&
+    path.endsWith(ext) &&
+    !path.slice(folder.length + 1).includes("/")
   );
 }
 
@@ -126,114 +132,148 @@ export function planSnapshotImports(
   return planned;
 }
 
-export async function migrateThreadSnapshots(context: Context): Promise<void> {
+export async function migrateThreadFiles(context: Context): Promise<void> {
+  await mergeJournalCopies(context);
+  await migrateSnapshots(context);
+}
+
+async function migrateSnapshots(context: Context): Promise<void> {
   const { storage, logger } = context;
-  const paths = (await storage.list({ prefix: PERSISTED_PATHS.threads, includeHidden: true }))
-    .map((entry) => entry.path)
-    .filter(isSnapshotPath);
-  if (paths.length === 0) return;
-  const files: StoredFile[] = [];
-  await forEachLimited(paths, CONCURRENCY, async (path) => {
-    const file = await storage.read(path);
-    if (file) files.push({ path, text: file.content, version: file.version });
-  });
+  const files = await readFiles(storage, PERSISTED_PATHS.threads, ".json");
+  if (files.length === 0) return;
   const { threads, skipped, newer } = readSnapshots(files);
   for (const { file, reason } of skipped) {
     logger.warn("Left a thread snapshot alone", { path: file.path, reason });
   }
   let moved = 0;
   await forEachLimited([...threads], CONCURRENCY, async ([id, snapshots]) => {
-    try {
-      if (await migrateThread(context, id, snapshots, newer.has(id))) moved++;
-    } catch (error) {
-      logger.warn("Failed to migrate a thread's snapshots; will retry at the next start", {
+    const held = await appendUntilHeld(context, id, (read, exists) => {
+      if (exists || !newer.has(id)) {
+        return planSnapshotImports(
+          id,
+          read.events,
+          snapshots.map((s) => s.thread),
+        );
+      }
+      logger.warn("Not journaling a thread whose own snapshot a newer version of the app wrote", {
         threadId: id,
-        error: error instanceof Error ? error.message : String(error),
       });
+      return null;
+    });
+    if (!held) return;
+    for (const { file, repaired } of snapshots) {
+      if (!repaired || (await keepEvidence(context, file))) await remove(context, file);
     }
+    moved++;
   });
   if (moved > 0) logger.info("Moved thread snapshots into their journals", { threads: moved });
 }
 
-/** True once the journal holds every snapshot of the thread and they were removed. */
-async function migrateThread(
+async function mergeJournalCopies(context: Context): Promise<void> {
+  const copies = (
+    await readFiles(context.storage, PERSISTED_PATHS.threadJournals, ".jsonl")
+  ).filter((file) => persistedThreadIdFromJournalPath(file.path) === null);
+  await forEachLimited(copies, CONCURRENCY, async (file) => {
+    const read = decodePersistedThreadJournal(file.text);
+    const owners = new Set(
+      read.events.flatMap((e) =>
+        e.type === "thread.created" || e.type === "thread.imported" ? [e.thread.id] : [],
+      ),
+    );
+    const [id] = owners;
+    if (read.newer !== null || owners.size !== 1 || !id) {
+      context.logger.warn("Left a thread journal copy alone", {
+        path: file.path,
+        reason: read.newer !== null ? `format v${read.newer}` : "no single thread",
+      });
+      return;
+    }
+    if (!(await appendUntilHeld(context, id, () => read.events))) return;
+    if (read.issues.length === 0 || (await keepEvidence(context, file)))
+      await remove(context, file);
+  });
+}
+
+async function readFiles(storage: StorageProvider, folder: string, ext: string) {
+  const paths = (await storage.list({ prefix: folder, includeHidden: true }))
+    .map((entry) => entry.path)
+    .filter((path) => isChild(path, folder, ext));
+  const files: StoredFile[] = [];
+  await forEachLimited(paths, CONCURRENCY, async (path) => {
+    const file = await storage.read(path);
+    if (file) files.push({ path, text: file.content, version: file.version });
+  });
+  return files;
+}
+
+/**
+ * Appends to a thread's journal the events `plan` gives that it doesn't hold yet (by id), until it
+ * holds them all (true), or gives up (false): `plan` refused (null), the journal is a newer app's,
+ * or it kept changing. Failures are reported; the next load retries.
+ */
+async function appendUntilHeld(
   context: Context,
   id: string,
-  snapshots: ThreadSnapshot<StoredFile>[],
-  ownIsNewer: boolean,
+  plan: (read: PersistedJournalRead, exists: boolean) => PersistedJournalEvent[] | null,
 ): Promise<boolean> {
   const { storage, logger } = context;
   const path = persistedThreadJournalPath(id);
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const journal = await storage.read(path);
-    if (!journal && ownIsNewer) {
-      logger.warn("Not journaling a thread whose own snapshot a newer version of the app wrote", {
-        threadId: id,
-      });
-      return false;
+  try {
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const journal = await storage.read(path);
+      const read = decodePersistedThreadJournal(journal?.content ?? "", id);
+      if (read.newer !== null) {
+        logger.warn("Not migrating into a journal a newer version of the app wrote", {
+          threadId: id,
+        });
+        return false;
+      }
+      const planned = plan(read, journal !== null);
+      if (planned === null) return false;
+      const known = new Set(read.events.map((event) => event.id));
+      const missing = planned.filter((event) => !known.has(event.id));
+      if (missing.length === 0) return true;
+      const text =
+        (read.endsWithNewline ? "" : "\n") + missing.map(encodePersistedJournalEvent).join("");
+      try {
+        await appendToFile(storage, path, text, { ifMatch: journal?.version ?? null });
+      } catch (error) {
+        if (!isNamed(error, "ConflictError")) throw error;
+      }
     }
-    const read = decodePersistedThreadJournal(journal?.content ?? "", id);
-    if (read.newer !== null) {
-      logger.warn("Left the snapshots of a thread whose journal a newer version of the app wrote", {
-        threadId: id,
-      });
-      return false;
-    }
-    const planned = planSnapshotImports(
-      id,
-      read.events,
-      snapshots.map((s) => s.thread),
-    );
-    if (planned.length === 0) {
-      await removeSnapshots(context, snapshots);
-      return true;
-    }
-    const known = new Set(read.events.map((event) => event.id));
-    if (planned.some((event) => known.has(event.id))) {
-      logger.warn("A thread's journal doesn't hold its snapshots after importing them; kept them", {
-        threadId: id,
-      });
-      return false;
-    }
-    const text =
-      (read.endsWithNewline ? "" : "\n") + planned.map(encodePersistedJournalEvent).join("");
-    try {
-      await appendToFile(storage, path, text, { ifMatch: journal?.version ?? null });
-    } catch (error) {
-      if (!isNamed(error, "ConflictError")) throw error;
-    }
+    logger.warn("A thread's journal kept changing while files were migrated into it", {
+      threadId: id,
+    });
+  } catch (error) {
+    logger.warn("Failed to migrate into a thread's journal; will retry at the next start", {
+      threadId: id,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
-  logger.warn("A thread's journal kept changing while its snapshots were migrated", {
-    threadId: id,
-  });
   return false;
 }
 
-async function removeSnapshots(
-  context: Context,
-  snapshots: ThreadSnapshot<StoredFile>[],
-): Promise<void> {
-  for (const { file, repaired } of snapshots) {
-    if (repaired && !(await keepEvidence(context, file))) continue;
-    try {
-      await context.storage.delete(file.path, { ifMatch: file.version });
-    } catch (error) {
-      if (!isNamed(error, "ConflictError") && !isNamed(error, "NotFoundError")) throw error;
-      context.logger.info("A thread snapshot changed while it was migrated; it moves next time", {
-        path: file.path,
-      });
-    }
+/** Removes a file unless it changed since it was read (then the next load looks at it again). */
+async function remove(context: Context, file: StoredFile): Promise<void> {
+  try {
+    await context.storage.delete(file.path, { ifMatch: file.version });
+  } catch (error) {
+    if (isNamed(error, "ConflictError") || isNamed(error, "NotFoundError")) return;
+    context.logger.warn("Could not remove a migrated thread file", {
+      path: file.path,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
-/** Copies a partly invalid snapshot into `corrupt/` (false if that failed). */
+/** Copies a partly unreadable file into `corrupt/` before it goes (false if that failed). */
 async function keepEvidence(context: Context, file: StoredFile): Promise<boolean> {
   const at = new Date(context.now());
   for (let attempt = 1; attempt <= MAX_NAME_ATTEMPTS; attempt++) {
     const target = persistedQuarantinePath(file.path, at, attempt);
     try {
       await context.storage.write(target, file.text, { ifMatch: null });
-      context.logger.warn("Kept a copy of a partly invalid thread snapshot", {
+      context.logger.warn("Kept a copy of a partly unreadable thread file", {
         path: file.path,
         copiedTo: target,
       });
@@ -242,7 +282,7 @@ async function keepEvidence(context: Context, file: StoredFile): Promise<boolean
       if (!isNamed(error, "ConflictError")) break;
     }
   }
-  context.logger.warn("Could not keep a copy of a partly invalid thread snapshot; kept it", {
+  context.logger.warn("Could not keep a copy of a partly unreadable thread file; kept it", {
     path: file.path,
   });
   return false;
