@@ -16,6 +16,7 @@ import {
   addDays,
   type CarryOverPlan,
   compareLocalDates,
+  compareStrings,
   type DailyNoteSettings,
   type DailyNotesSource,
   DEFAULT_DAILY_NOTE_CONTENT,
@@ -103,7 +104,7 @@ export async function planCarryOver(input: CarryOverInput): Promise<CarryOver> {
       date: isInTrash(file.path) ? null : parseDailyNotePath(file.path, ddlDaily),
     }))
     .filter((entry): entry is { file: CurrentFile; date: LocalDate } => entry.date !== null)
-    .sort((a, b) => compareLocalDates(a.date, b.date) || compare(a.file.path, b.file.path));
+    .sort((a, b) => compareLocalDates(a.date, b.date) || compareStrings(a.file.path, b.file.path));
   const choice = chooseDailyNotes(
     input.obsidian,
     ddlDaily,
@@ -151,7 +152,7 @@ export async function planCarryOver(input: CarryOverInput): Promise<CarryOver> {
     moves.push(fileMove(file, renamed, date ? { date, merged: false } : undefined));
     collisions.add({ from: file.path, to: renamed });
   }
-  moves.sort((a, b) => compare(a.from, b.from));
+  moves.sort((a, b) => compareStrings(a.from, b.from));
 
   const notes = new BoundedList<ImportMove>();
   const daily = new BoundedList<CarryOverPlan["daily"]["items"][number]>();
@@ -462,8 +463,4 @@ async function readText(absolute: string, name: string): Promise<string> {
   const bytes = await readRegularFile(absolute, Number.MAX_SAFE_INTEGER);
   if (!bytes) throw new Error(`${name} can't be read`);
   return bytes.toString("utf8");
-}
-
-function compare(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }

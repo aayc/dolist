@@ -12,7 +12,14 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
-import { type DrawingElement, type DrawingScene, type Logger, silentLogger } from "@ddl/core";
+import {
+  type DrawingElement,
+  type DrawingScene,
+  errorMessage,
+  type Logger,
+  raceAbort,
+  silentLogger,
+} from "@ddl/core";
 import { RenderCache } from "../../drawings/render-cache";
 import type { RenderPageInput, RenderPageOutput } from "../../drawings/render-page/protocol";
 import {
@@ -22,7 +29,6 @@ import {
   type RenderDrawingOptions,
   type RenderedDrawing,
 } from "../../drawings/renderer";
-import { raceAbort } from "../util/abort";
 import { Mutex } from "../util/mutex";
 
 /** The page's origin: never resolved, every request to it is answered from the page directory. */
@@ -70,7 +76,6 @@ export interface ChromiumDrawingRendererOptions {
   idleMs?: number;
   /** One render, launching the browser included. Default 30 s. */
   timeoutMs?: number;
-  cacheMaxBytes?: number;
   logger?: Logger;
   /** Opens the page (tests: a fake). Default: headless Chromium through playwright-core. */
   openPage?: (options: OpenRenderPageOptions) => Promise<RenderPage>;
@@ -91,7 +96,6 @@ export class ChromiumDrawingRenderer implements DrawingRenderer {
     this.logger = options.logger ?? silentLogger;
     this.cache = new RenderCache({
       dir: options.cacheDir,
-      ...(options.cacheMaxBytes !== undefined ? { maxBytes: options.cacheMaxBytes } : {}),
       logger: this.logger,
     });
   }
@@ -140,7 +144,7 @@ export class ChromiumDrawingRenderer implements DrawingRenderer {
       );
     }
     await this.cache.put(key, bytes).catch((error: unknown) => {
-      this.logger.warn("Could not cache a drawing render", { error: errorText(error) });
+      this.logger.warn("Could not cache a drawing render", { error: errorMessage(error) });
     });
     this.logger.debug("drawing rendered", {
       ms: Math.round(performance.now() - startedAt),
@@ -177,7 +181,7 @@ export class ChromiumDrawingRenderer implements DrawingRenderer {
       if (error instanceof DrawingRenderError || !page || page.closed) await this.closePage();
       throw error instanceof DrawingRenderError
         ? error
-        : new DrawingRenderError(firstLine(errorText(error)));
+        : new DrawingRenderError(firstLine(errorMessage(error)));
     } finally {
       clearTimeout(timer);
       if (!this.disposed) this.scheduleIdle();
@@ -214,7 +218,7 @@ export class ChromiumDrawingRenderer implements DrawingRenderer {
     const page = await opening?.catch(() => null);
     if (!page) return;
     await page.close().catch((error: unknown) => {
-      this.logger.debug("closing the drawing renderer failed", { error: errorText(error) });
+      this.logger.debug("closing the drawing renderer failed", { error: errorMessage(error) });
     });
   }
 
@@ -343,8 +347,4 @@ export function pngSize(bytes: Uint8Array): { width: number; height: number } | 
 
 function firstLine(text: string): string {
   return (text.split("\n")[0] ?? "").slice(0, 300);
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

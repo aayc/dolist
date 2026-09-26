@@ -7,6 +7,7 @@
  * `--no-sandbox` lets the fake agent use every tool it is offered (browser, shell, MCP, web_fetch);
  * the default sandbox keeps it to thread/note tools, web_search and the mock irreversible action.
  */
+import { errorMessage } from "@ddl/core";
 import { createFakeBrain, startFakeOpenRouter } from "../src/testing";
 
 function flag(name: string): string | undefined {
@@ -59,8 +60,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error(
-    `✖ fake-openrouter failed: ${error instanceof Error ? error.message : String(error)}`,
-  );
+  console.error(`✖ fake-openrouter failed: ${errorMessage(error)}`);
   process.exit(1);
 });

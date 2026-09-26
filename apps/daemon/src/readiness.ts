@@ -12,10 +12,10 @@ import {
   type AgentMode,
   type AgentReadiness,
   type AgentStatusResponse,
+  errorMessage,
   type Logger,
   silentLogger,
 } from "@ddl/core";
-import { errorMessage } from "./errors";
 
 export interface HarnessProbe {
   ready: boolean;

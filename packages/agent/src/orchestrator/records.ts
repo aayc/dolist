@@ -8,6 +8,7 @@ import {
 } from "@ddl/contract";
 import {
   Emitter,
+  errorMessage,
   isActiveTaskStatus,
   type Logger,
   silentLogger,
@@ -93,7 +94,7 @@ export class TaskRecords {
     try {
       result = await this.file.load();
     } catch (error) {
-      this.logger.warn("Failed to read task records", { error: errorText(error) });
+      this.logger.warn("Failed to read task records", { error: errorMessage(error) });
       return;
     }
     if (result.status !== "loaded") return;
@@ -348,7 +349,7 @@ export class TaskRecords {
       } catch (error) {
         this.dirty = true;
         this.logger.warn("Failed to persist task records; will retry", {
-          error: errorText(error),
+          error: errorMessage(error),
         });
         this.scheduleSave(SAVE_RETRY_MS);
       }
@@ -374,8 +375,4 @@ export class TaskRecords {
     }
     if (this.dirtyNotes.size > 0) this.scheduleNoteEvents();
   }
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

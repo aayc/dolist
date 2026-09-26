@@ -11,7 +11,7 @@
  * journal is left alone. A line that doesn't parse or validate is skipped and reported; the rest of
  * the journal still loads.
  */
-import { hashString } from "@ddl/core";
+import { compareStrings, hashString } from "@ddl/core";
 import { z } from "zod";
 import {
   describeZodError,
@@ -319,7 +319,7 @@ export function persistedThreadImportEvent(
 function sortedJson(value: unknown): string {
   return JSON.stringify(value, (_key, v: unknown) =>
     isPersistedObject(v)
-      ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => compareStrings(a, b)))
       : v,
   );
 }

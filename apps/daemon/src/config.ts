@@ -9,6 +9,8 @@ import {
   type AgentPlacement,
   DEFAULT_MODEL,
   type DeviceSettingsResponse,
+  errorMessage,
+  isRecord,
   type LogLevel,
   normalizeRemoteHost,
   REMOTE_LIMITS,
@@ -404,10 +406,6 @@ function lockedByEnv(env: Record<string, string | undefined>): EnvLockedField[] 
   return locked;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function resolveExecution(
   execution: ConfigFile["execution"],
   home: string,
@@ -517,8 +515,4 @@ function safeHost(url: string): string {
   } catch {
     return "invalid endpoint";
   }
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

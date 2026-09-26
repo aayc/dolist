@@ -1,8 +1,8 @@
 import { ComputerPermissionsOpenRequestSchema } from "@ddl/contract";
-import { API_PATHS, type OkResponse } from "@ddl/core";
+import { API_PATHS, errorMessage, type OkResponse } from "@ddl/core";
 import type { Hono } from "hono";
 import type { AppContext } from "../context";
-import { ApiError, errorMessage } from "../errors";
+import { ApiError } from "../errors";
 import { readJson } from "../http-utils";
 
 export function registerComputerRoutes(app: Hono, ctx: AppContext): void {

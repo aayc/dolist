@@ -8,11 +8,13 @@ import { homedir as osHomedir } from "node:os";
 import {
   API_ROUTES,
   type ApiErrorBody,
+  formatDate,
   formatPairingCode,
   normalizeDeviceName,
   type PairedDevice,
   type PairedDevicesResponse,
   type PairingCodeResponse,
+  pluralize,
 } from "@ddl/core";
 import { ConfigError, type DaemonConfig, type LoadConfigOptions, loadConfig } from "./config";
 import { displayPath } from "./home-paths";
@@ -105,7 +107,7 @@ async function pair(args: readonly string[], io: CliIo): Promise<void> {
   const minutes = Math.max(1, Math.round((issued.expiresAt - now) / 60_000));
   const lines = [
     `Pairing code: ${formatPairingCode(issued.code)}`,
-    `Valid once, until ${clockTime(issued.expiresAt)} (${minutes} minute${minutes === 1 ? "" : "s"}).`,
+    `Valid once, until ${formatDate(new Date(issued.expiresAt), "HH:mm")} (${pluralize(minutes, "minute")}).`,
   ];
   if (issued.url) {
     lines.push(
@@ -247,17 +249,7 @@ async function readToken(path: string, display: (path: string) => string): Promi
   return token;
 }
 
-function clockTime(ms: number): string {
-  const date = new Date(ms);
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 /** Local time (invariant: time is local). */
 function dateTime(ms: number): string {
-  const date = new Date(ms);
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${clockTime(ms)}`;
-}
-
-function pad(value: number): string {
-  return String(value).padStart(2, "0");
+  return formatDate(new Date(ms), "YYYY-MM-DD HH:mm");
 }

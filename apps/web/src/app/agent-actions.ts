@@ -2,12 +2,13 @@ import {
   type ApprovalDecisionRequest,
   type ApprovalRequest,
   type CitedSource,
+  errorMessage,
   ORCHESTRATOR_THREAD_ID,
   resolveLineAnchors,
   resolveTaskAnchors,
 } from "@ddl/core";
 import type { DaemonClient } from "../api/client";
-import { errorMessage, HttpError } from "../api/errors";
+import { HttpError } from "../api/errors";
 import { chipTarget } from "../features/editor/activity-chips";
 import { perfCancel, perfStart } from "../perf/perf";
 import { activityEventCount, seedActivity, useActivityStore } from "../state/activity-store";

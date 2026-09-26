@@ -4,6 +4,8 @@
  * input and is validated before use.
  */
 
+import { isRecord } from "@ddl/core";
+
 export const ACP_PROTOCOL_VERSION = 1;
 
 export interface AcpModel {
@@ -202,10 +204,6 @@ export function permissionOutcome(
 }
 
 export const CANCELLED_PERMISSION: AcpPermissionOutcome = { outcome: { outcome: "cancelled" } };
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function asRecord(value: unknown, what: string): Record<string, unknown> {
   if (!isRecord(value)) throw new Error(`The Cursor CLI sent an invalid ${what}`);

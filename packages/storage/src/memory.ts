@@ -1,10 +1,11 @@
 import {
   ancestorFolders,
+  compareStrings,
   createId,
   hashString,
-  InvalidPathError,
   isHiddenPath,
   normalizePath,
+  toVaultPath,
   type Unsubscribe,
 } from "@ddl/core";
 import { toStorableText } from "./file-types";
@@ -80,12 +81,12 @@ export class MemoryStorageProvider implements StorageProvider {
       out.push(this.entry(path, file));
     }
     // Code-point order: deterministic across locales. UIs apply their own display sort.
-    return out.sort((a, b) => comparePaths(a.path, b.path));
+    return out.sort((a, b) => compareStrings(a.path, b.path));
   }
 
   async listFolders(options: ListOptions = {}): Promise<string[]> {
     const prefix = listPrefix(options);
-    return [...this.folders].filter((f) => this.matches(f, prefix, options)).sort(comparePaths);
+    return [...this.folders].filter((f) => this.matches(f, prefix, options)).sort(compareStrings);
   }
 
   async stat(path: string): Promise<FileEntry | null> {
@@ -101,34 +102,24 @@ export class MemoryStorageProvider implements StorageProvider {
   }
 
   async write(path: string, content: string, options: WriteOptions = {}): Promise<WriteResult> {
-    const p = toVaultPath(path);
-    if (this.folders.has(p)) throw new StorageError(`Not a file: "${p}"`, p);
-    const existing = this.files.get(p);
-    this.checkPrecondition(p, existing, options);
-    this.assertCanHoldFile(p);
-    const file = this.store(p, content);
-    this.emit({
-      kind: existing ? "modified" : "created",
-      path: p,
-      version: file.version,
-      self: true,
-    });
-    return {
-      path: p,
-      version: file.version,
-      mtime: file.mtime,
-      size: byteLength(file.content),
-      created: !existing,
-    };
+    return this.put(path, () => content, options);
   }
 
   async append(path: string, content: string, options: WriteOptions = {}): Promise<WriteResult> {
+    return this.put(path, (existing = "") => existing + content, options);
+  }
+
+  private put(
+    path: string,
+    contentFrom: (existing: string | undefined) => string,
+    options: WriteOptions,
+  ): WriteResult {
     const p = toVaultPath(path);
     if (this.folders.has(p)) throw new StorageError(`Not a file: "${p}"`, p);
     const existing = this.files.get(p);
     this.checkPrecondition(p, existing, options);
     this.assertCanHoldFile(p);
-    const file = this.store(p, (existing?.content ?? "") + content);
+    const file = this.store(p, contentFrom(existing?.content));
     this.emit({
       kind: existing ? "modified" : "created",
       path: p,
@@ -192,7 +183,7 @@ export class MemoryStorageProvider implements StorageProvider {
     if (!this.folders.has(p)) throw new NotFoundError(p);
     const inside = (candidate: string) => candidate === p || candidate.startsWith(`${p}/`);
     for (const folder of [...this.folders]) if (inside(folder)) this.folders.delete(folder);
-    for (const file of [...this.files.keys()].filter(inside).sort(comparePaths)) {
+    for (const file of [...this.files.keys()].filter(inside).sort(compareStrings)) {
       this.files.delete(file);
       this.emit({ kind: "deleted", path: file, self: true });
     }
@@ -275,18 +266,8 @@ export class MemoryStorageProvider implements StorageProvider {
   }
 }
 
-function toVaultPath(input: string): string {
-  const p = normalizePath(input);
-  if (p === "") throw new InvalidPathError(input, "is empty");
-  return p;
-}
-
 function listPrefix(options: ListOptions): string {
   return options.prefix ? normalizePath(options.prefix) : "";
-}
-
-function comparePaths(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function byteLength(content: string): number {

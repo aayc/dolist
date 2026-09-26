@@ -6,7 +6,6 @@ import { StringDecoder } from "node:string_decoder";
 import { type Logger, silentLogger } from "@ddl/core";
 import { ExecutionError } from "../errors";
 import type { ShellExecOptions, ShellExecutor, ShellResult } from "../types";
-import { abortReason } from "../util/abort";
 import { HeadTailBuffer } from "./output-buffer";
 import { buildChildEnv, unsetPrelude } from "./shell-env";
 
@@ -73,7 +72,7 @@ export class LocalShellExecutor implements ShellExecutor {
 
   async exec(command: string, options: ShellExecOptions): Promise<ShellResult> {
     const { signal } = options;
-    if (signal?.aborted) throw abortReason(signal);
+    if (signal?.aborted) throw signal.reason;
     const cwdStat = await stat(options.cwd).catch(() => undefined);
     if (!cwdStat?.isDirectory()) {
       throw new ExecutionError(`Working directory does not exist: ${options.cwd}`);
@@ -153,7 +152,7 @@ export class LocalShellExecutor implements ShellExecutor {
         onText(decoders[1].end());
         cleanup();
         if (aborted && signal) {
-          reject(abortReason(signal));
+          reject(signal.reason);
           return;
         }
         resolve({

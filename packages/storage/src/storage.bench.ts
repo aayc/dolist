@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { LocalFsStorageProvider } from "./local-fs";
 import { searchVault } from "./search";
-import { mergeText } from "./sync/diff3";
+import { mergeText3 } from "./sync/diff3";
 import { mergeJournals } from "./sync/journal-merge";
 
 /**
@@ -105,7 +105,7 @@ const THEIRS = BASE.replace("- [ ] task 1500\n", "- [x] task 1500\n").replace(
 
 test("mergeText: 2k-line note, edits on both sides", async ({ bench }) => {
   const result = await bench("mergeText: 2k-line note, edits on both sides", () => {
-    mergeText(BASE, OURS, THEIRS, { unionInsertions: true });
+    mergeText3(BASE, OURS, THEIRS);
   }).run();
   expect(result.latency.p99).toBeLessThan(BUDGET_MS.merge2k);
 });

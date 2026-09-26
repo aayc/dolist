@@ -1,7 +1,12 @@
-import { API_PATHS, type AppSettings, type DeepPartial, type SettingsResponse } from "@ddl/core";
+import {
+  API_PATHS,
+  type AppSettings,
+  type DeepPartial,
+  errorMessage,
+  type SettingsResponse,
+} from "@ddl/core";
 import type { Hono } from "hono";
 import type { AppContext } from "../context";
-import { errorMessage } from "../errors";
 import { readJson } from "../http-utils";
 import { SettingsPatchSchema } from "../settings-schema";
 

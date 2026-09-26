@@ -1,6 +1,6 @@
 import type { ArtifactKind, ArtifactMeta } from "@ddl/core";
+import { formatBytes } from "@ddl/core";
 import { Braces, File, FileCode, FileText, Globe, Image, type LucideIcon } from "lucide-react";
-import { formatBytes } from "../../lib/format";
 import { useAgentStore } from "../../state/agent-store";
 import { ui } from "../../state/ui-store";
 

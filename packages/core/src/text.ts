@@ -65,3 +65,19 @@ export function hashString(input: string, seed = 0): string {
 export function splitLines(input: string): string[] {
   return input.split(/\r?\n/);
 }
+
+/** "1 file", "2 files"; pass `plural` for irregular nouns. */
+export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Orders by UTF-16 code units, like `sort()` without a comparator: stable across locales. */
+export function compareStrings(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}

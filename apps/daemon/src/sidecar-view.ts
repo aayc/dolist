@@ -13,6 +13,8 @@ import {
   type ApprovalRequest,
   type ApprovalStatus,
   type ArtifactMeta,
+  errorMessage,
+  Listeners,
   type Logger,
   summarizeThread,
   type TaskAgentRecord,
@@ -21,7 +23,6 @@ import {
   type Unsubscribe,
 } from "@ddl/core";
 import type { StorageProvider } from "@ddl/storage";
-import { errorMessage } from "./errors";
 
 /** Sync writes files in bursts; each file is read again once they settle. */
 const DEFAULT_SETTLE_MS = 50;
@@ -46,7 +47,9 @@ export interface SidecarViewOptions {
  */
 export class SidecarView {
   readonly #options: SidecarViewOptions;
-  readonly #listeners = new Set<(event: SidecarViewEvent) => void>();
+  readonly #listeners = new Listeners<SidecarViewEvent>((error) =>
+    this.#options.logger.error("Sidecar view listener failed", { error: errorMessage(error) }),
+  );
   readonly #threads = new Map<string, Thread>();
   #approvals: ApprovalRequest[] = [];
   #records: TaskAgentRecord[] = [];
@@ -91,10 +94,7 @@ export class SidecarView {
   }
 
   on(listener: (event: SidecarViewEvent) => void): Unsubscribe {
-    this.#listeners.add(listener);
-    return () => {
-      this.#listeners.delete(listener);
-    };
+    return this.#listeners.add(listener);
   }
 
   listThreads(
@@ -258,12 +258,6 @@ export class SidecarView {
   }
 
   #emit(event: SidecarViewEvent): void {
-    for (const listener of [...this.#listeners]) {
-      try {
-        listener(event);
-      } catch (error) {
-        this.#options.logger.error("Sidecar view listener failed", { error: errorMessage(error) });
-      }
-    }
+    this.#listeners.emit(event);
   }
 }

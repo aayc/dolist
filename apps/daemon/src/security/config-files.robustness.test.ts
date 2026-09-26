@@ -1,9 +1,10 @@
 import { chmodSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
+import { parseEnvFile } from "@ddl/core";
 import { fc, test } from "@fast-check/vitest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ConfigError, loadConfig, summarizeConfig } from "../config";
-import { loadEnvFiles, parseEnvFile } from "../env-file";
+import { loadEnvFiles } from "../env-file";
 import { displayPath, resolveUserPath } from "../home-paths";
 import { tempDir } from "../test-helpers";
 

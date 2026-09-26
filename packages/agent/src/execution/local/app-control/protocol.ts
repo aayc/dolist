@@ -3,6 +3,7 @@
  * stdout, matched by id. Results carry other apps' UI content, so every one is parsed defensively
  * here (types checked, strings and lists bounded) before anything else sees it.
  */
+import { isRecord } from "@ddl/core";
 import { ExecutionError } from "../../errors";
 import type {
   AppActionOutcome,
@@ -73,10 +74,6 @@ const MAX_APPS = 2_000;
 const MAX_IMAGE_BASE64 = 30 * 1024 * 1024;
 
 type Json = Record<string, unknown>;
-
-function isRecord(value: unknown): value is Json {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function fail(what: string): never {
   throw new HelperProtocolError(`The computer helper sent a malformed ${what}.`);

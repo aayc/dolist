@@ -1,5 +1,7 @@
 /** Small helpers for untrusted, JSON-shaped values (config files, MCP payloads). */
 
+import { compareStrings } from "@ddl/core";
+
 export type PlainObject = Record<string, unknown>;
 
 export function isPlainObject(value: unknown): value is PlainObject {
@@ -39,11 +41,6 @@ export function defineOwn(target: PlainObject, key: string, value: unknown): voi
 }
 
 /** Locale-independent ordering, so sorted output is identical on every machine. */
-export function compareStrings(a: string, b: string): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
-}
-
 /** JSON with object keys sorted, for order-insensitive comparisons. */
 export function stableStringify(value: unknown): string {
   return (

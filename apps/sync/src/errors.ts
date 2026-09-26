@@ -5,6 +5,7 @@ import type {
   SyncLeaseHolder,
   SyncStaleLeaseBody,
 } from "@ddl/core";
+import { errorMessage } from "@ddl/core";
 import type { Context, ErrorHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
@@ -83,7 +84,7 @@ export function createErrorHandler(logger: Logger): ErrorHandler {
     }
     logger.error("Request failed", {
       method: c.req.method,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(error),
     });
     return c.json(errorBody("internal_error", "Internal server error"), 500);
   };

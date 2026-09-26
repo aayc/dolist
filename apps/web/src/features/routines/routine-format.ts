@@ -1,4 +1,4 @@
-import type { Routine, RoutineNotify } from "@ddl/core";
+import { pluralize, type Routine, type RoutineNotify } from "@ddl/core";
 
 const clock = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 const weekday = new Intl.DateTimeFormat(undefined, { weekday: "long" });
@@ -70,5 +70,5 @@ export const NOTIFY_LABELS: Record<RoutineNotify, string> = {
 
 export function extraRunsLabel(left: number): string {
   if (left === 0) return "No extra runs left today";
-  return `${left} extra ${left === 1 ? "run" : "runs"} left today`;
+  return `${pluralize(left, "extra run")} left today`;
 }

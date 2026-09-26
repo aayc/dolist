@@ -14,7 +14,7 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createConsoleLogger } from "@ddl/core";
+import { createConsoleLogger, sleep } from "@ddl/core";
 import { createExecutionProvider } from "../index";
 import type { FrameListener } from "../types";
 
@@ -64,7 +64,7 @@ try {
     );
     if (keep) await writeFile(join(home, "browser.jpg"), Buffer.from(shot.data, "base64"));
     await session.scroll("down", 200);
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    await sleep(1_000);
     unsubscribe();
     const sample = frames.at(-1);
     console.log(

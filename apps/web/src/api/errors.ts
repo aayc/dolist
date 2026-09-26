@@ -39,8 +39,3 @@ export class NetworkError extends Error {
 export function isNotFound(error: unknown): boolean {
   return error instanceof HttpError && error.status === 404;
 }
-
-export function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
-}

@@ -12,6 +12,7 @@
  *     Freehand: 2 freehand strokes, bottom left
  *     Frames: frame “Backend” with rectangle “API”, rectangle “DB”, 1 arrow
  */
+import { pluralize } from "../text";
 import type { DrawingElement, DrawingScene } from "./types";
 
 export interface DescribeDrawingOptions {
@@ -74,7 +75,7 @@ export function describeDrawing(scene: DrawingScene, options: DescribeDrawingOpt
   const bounds = union(elements.map(boxOf));
   const width = Math.round(bounds.maxX - bounds.minX);
   const height = Math.round(bounds.maxY - bounds.minY);
-  const header = `${title} (${width}×${height} px, ${count(elements.length, "element")})`;
+  const header = `${title} (${width}×${height} px, ${pluralize(elements.length, "element")})`;
 
   const sections: Section[] = [
     { label: "Text", items: context.freeTexts.map((text) => quote(text)), separator: ", " },
@@ -154,7 +155,7 @@ class DescribeContext {
     }
     for (const type of SHAPES) {
       const n = unlabeled.get(type) ?? 0;
-      if (n > 0) items.push(`${n} unlabeled ${plural(type, n)}`);
+      if (n > 0) items.push(pluralize(n, `unlabeled ${type}`));
     }
     return items;
   }
@@ -204,7 +205,7 @@ class DescribeContext {
         counts.set(kind, (counts.get(kind) ?? 0) + 1);
       }
     }
-    for (const [kind, n] of counts) items.push(count(n, kind));
+    for (const [kind, n] of counts) items.push(pluralize(n, kind));
     return `${name} with ${items.join(", ")}`;
   }
 
@@ -222,7 +223,7 @@ class DescribeContext {
     for (const element of elements) {
       if (!known.has(element.type)) counts.set(element.type, (counts.get(element.type) ?? 0) + 1);
     }
-    return [...counts].map(([type, n]) => count(n, type));
+    return [...counts].map(([type, n]) => pluralize(n, type));
   }
 
   private endpoint(arrow: DrawingElement, end: "start" | "end"): Endpoint | null {
@@ -285,7 +286,7 @@ function counted(
   const places = LOCATIONS.flatMap((location, i) =>
     perCell[i]! > 0 ? [[location, perCell[i]!] as const] : [],
   );
-  const total = count(matching.length, noun);
+  const total = pluralize(matching.length, noun);
   if (places.length === 1) return [`${total}, ${places[0]![0]}`];
   return [`${total}: ${places.map(([location, n]) => `${n} ${location}`).join(", ")}`];
 }
@@ -367,16 +368,8 @@ function length(text: string): number {
   return n;
 }
 
-function count(n: number, noun: string): string {
-  return `${n} ${plural(noun, n)}`;
-}
-
 function nonZero(n: number, noun: string): string[] {
-  return n > 0 ? [count(n, noun)] : [];
-}
-
-function plural(noun: string, n: number): string {
-  return n === 1 ? noun : `${noun}s`;
+  return n > 0 ? [pluralize(n, noun)] : [];
 }
 
 function finite(value: unknown): number {

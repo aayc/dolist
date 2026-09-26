@@ -1,4 +1,5 @@
-import { errorMessage, HttpError, NetworkError } from "../../api/errors";
+import { errorMessage } from "@ddl/core";
+import { HttpError, NetworkError } from "../../api/errors";
 
 /** What went wrong, for a notice: a short title and the daemon's reason. */
 export interface Notice {

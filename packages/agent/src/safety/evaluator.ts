@@ -4,7 +4,7 @@
  * judge, then the category policy. It never throws: internal errors yield `require_approval`.
  */
 import type { ActionCategory, RiskLevel, SafetyDecision } from "@ddl/core";
-import { silentLogger } from "@ddl/core";
+import { errorMessage, silentLogger } from "@ddl/core";
 import { type ActionAnalysis, analyzeAction } from "./analyze";
 import { describeAction, redactActionInput } from "./describe";
 import { createLlmJudge, type LlmJudge } from "./llm-judge";
@@ -280,7 +280,7 @@ export function createSafetyEvaluator(options: SafetyEvaluatorOptions = {}): Saf
       } catch (error) {
         logger.error("safety evaluation failed", {
           tool: ctx.toolName,
-          error: error instanceof Error ? error.message : String(error),
+          error: errorMessage(error),
         });
         const fallback = fallbackVerdict(
           ctx,

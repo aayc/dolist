@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { raceAbort } from "./abort";
 import { type Frame, FrameHub } from "./frame-hub";
 import { jpegSize, jpegSizeFromBase64 } from "./jpeg";
 import { Mutex } from "./mutex";
@@ -112,25 +111,5 @@ describe("FrameHub", () => {
     hub.clear();
     hub.emit(frame(3));
     expect(seen).toEqual([1, 1, 2]);
-  });
-});
-
-describe("raceAbort", () => {
-  it("passes through results without a signal", async () => {
-    await expect(raceAbort(Promise.resolve(1), undefined)).resolves.toBe(1);
-  });
-
-  it("rejects as soon as the signal aborts", async () => {
-    const controller = new AbortController();
-    const never = new Promise<number>(() => {});
-    const raced = raceAbort(never, controller.signal);
-    controller.abort();
-    await expect(raced).rejects.toMatchObject({ name: "AbortError" });
-  });
-
-  it("rejects immediately for an aborted signal", async () => {
-    const controller = new AbortController();
-    controller.abort(new Error("stop"));
-    await expect(raceAbort(Promise.resolve(1), controller.signal)).rejects.toThrow("stop");
   });
 });

@@ -6,21 +6,20 @@
 import type { Stream } from "node:stream";
 import { StringDecoder } from "node:string_decoder";
 
+const MAX_LINE_LENGTH = 2_000;
+
 export interface StderrBufferOptions {
   maxLines?: number;
-  maxLineLength?: number;
   onLine?: (line: string) => void;
 }
 
 export class StderrBuffer {
   private readonly lines: string[] = [];
   private readonly maxLines: number;
-  private readonly maxLineLength: number;
   private readonly onLine: ((line: string) => void) | undefined;
 
   constructor(options: StderrBufferOptions = {}) {
     this.maxLines = options.maxLines ?? 100;
-    this.maxLineLength = options.maxLineLength ?? 2_000;
     this.onLine = options.onLine;
   }
 
@@ -36,7 +35,7 @@ export class StderrBuffer {
       pending = lines.pop() ?? "";
       for (const line of lines) this.push(line);
       // Unterminated progress output must not grow without bound.
-      if (pending.length > this.maxLineLength) {
+      if (pending.length > MAX_LINE_LENGTH) {
         this.push(pending);
         pending = "";
       }
@@ -57,7 +56,7 @@ export class StderrBuffer {
     const trimmed = line.trimEnd();
     if (trimmed === "") return;
     const clamped =
-      trimmed.length > this.maxLineLength ? `${trimmed.slice(0, this.maxLineLength)}…` : trimmed;
+      trimmed.length > MAX_LINE_LENGTH ? `${trimmed.slice(0, MAX_LINE_LENGTH)}…` : trimmed;
     this.lines.push(clamped);
     if (this.lines.length > this.maxLines) this.lines.shift();
     this.onLine?.(clamped);

@@ -26,7 +26,7 @@ import { createServer, type IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { silentLogger } from "@ddl/core";
+import { errorMessage, silentLogger } from "@ddl/core";
 import { writeDemoVault } from "../../../apps/daemon/src/demo-vault";
 import { createFakeBrain, startFakeOpenRouter } from "../src/testing";
 
@@ -301,6 +301,6 @@ async function readJson(request: IncomingMessage): Promise<unknown> {
 }
 
 main().catch((error: unknown) => {
-  console.error(`✖ e2e daemons failed: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`✖ e2e daemons failed: ${errorMessage(error)}`);
   process.exit(1);
 });

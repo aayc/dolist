@@ -2,8 +2,10 @@
  * A synthesizer for minimal schema-valid values, and the validator (`tools/json-schema`) that
  * mirrors what the harness enforces before a tool runs.
  */
+
 import type { JsonSchema } from "@ddl/core";
-import { deepEqual, isPlainObject, isSchema, typeList, validateJson } from "../tools/json-schema";
+import { isRecord } from "@ddl/core";
+import { deepEqual, isSchema, typeList, validateJson } from "../tools/json-schema";
 
 export { validateJson } from "../tools/json-schema";
 
@@ -41,14 +43,12 @@ function synth(
     return nullable ? null : synth(options[0] as Schema, hints, name, depth);
   }
   if (hinted !== undefined && validateJson(s, hinted).length === 0) return hinted;
-  const type = typeList(s.type)[0] ?? (isPlainObject(s.properties) ? "object" : "string");
+  const type = typeList(s.type)[0] ?? (isRecord(s.properties) ? "object" : "string");
   switch (type) {
     case "object": {
       const out: Record<string, unknown> = {};
       if (depth > 8) return out;
-      const properties = isPlainObject(s.properties)
-        ? (s.properties as Record<string, Schema>)
-        : {};
+      const properties = isRecord(s.properties) ? (s.properties as Record<string, Schema>) : {};
       for (const key of Array.isArray(s.required) ? s.required : []) {
         if (typeof key === "string") out[key] = synth(properties[key] ?? {}, hints, key, depth + 1);
       }

@@ -27,7 +27,9 @@
  * sections and fields) is kept when the previous file is given.
  */
 import { formatDate } from "../dates";
+import { errorMessage, isRecord } from "../guards";
 import { basename } from "../paths";
+import { pluralize } from "../text";
 import { compressToBase64, decompressFromBase64 } from "./lz-string";
 import {
   DRAWING_PLUGIN_SOURCE_PREFIX,
@@ -383,7 +385,7 @@ function readScene(block: DrawingBlock, problems: DrawingProblem[]): DrawingScen
     problems.push({
       code: "invalid-json",
       severity: "error",
-      message: `The scene isn't valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+      message: `The scene isn't valid JSON: ${errorMessage(error)}`,
     });
     return null;
   }
@@ -408,7 +410,7 @@ function readScene(block: DrawingBlock, problems: DrawingProblem[]): DrawingScen
     problems.push({
       code: "invalid-element",
       severity: "warning",
-      message: `${dropped} element${dropped === 1 ? "" : "s"} without an id and a type were dropped.`,
+      message: `${pluralize(dropped, "element")} without an id and a type were dropped.`,
     });
   }
   return {
@@ -730,8 +732,4 @@ function setOwn(target: Record<string, unknown>, key: string, value: unknown): v
       writable: true,
       configurable: true,
     });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -4,11 +4,11 @@ import type {
   ObsidianImportPreview,
   SyncStatusResponse,
 } from "@ddl/core";
+import { formatBytes, pluralize } from "@ddl/core";
 import { type FormEvent, useState } from "react";
 import { VaultSwitchOverlay } from "../../app/lazy";
 import { useServices } from "../../app/services";
 import { DisabledReason } from "../../components/DisabledReason";
-import { formatBytes, pluralize } from "../../lib/format";
 import { applyImportJob, useObsidianImportStore } from "../../state/obsidian-import-store";
 import { CarryOver, PreviewReport } from "./ImportReport";
 import {

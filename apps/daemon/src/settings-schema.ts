@@ -2,6 +2,7 @@ import { UpdateSettingsRequestSchema } from "@ddl/contract";
 import {
   type AppSettings,
   dailyNotePath,
+  errorMessage,
   isHiddenPath,
   isSidecarPath,
   templateNotePath,
@@ -35,7 +36,7 @@ function checkNotePath(problems: string[], section: string, resolve: () => strin
     const path = resolve();
     if (isHiddenPath(path)) problems.push(`${section}: notes would be created in a hidden folder`);
   } catch (error) {
-    problems.push(`${section}: ${error instanceof Error ? error.message : String(error)}`);
+    problems.push(`${section}: ${errorMessage(error)}`);
   }
 }
 
@@ -45,6 +46,6 @@ function checkTemplate(problems: string[], section: string, settings: { template
     if (path && isSidecarPath(path))
       problems.push(`${section}: template cannot live in the sidecar`);
   } catch (error) {
-    problems.push(`${section}: ${error instanceof Error ? error.message : String(error)}`);
+    problems.push(`${section}: ${errorMessage(error)}`);
   }
 }

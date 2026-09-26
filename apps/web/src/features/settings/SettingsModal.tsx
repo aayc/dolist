@@ -2,11 +2,11 @@ import {
   type ConnectorStatus,
   DEFAULT_CURSOR_MODEL,
   DEFAULT_MODEL,
+  errorMessage,
   type ThemePreference,
 } from "@ddl/core";
 import { X } from "lucide-react";
 import { type ReactNode, Suspense, useEffect, useState } from "react";
-import { errorMessage } from "../../api/errors";
 import { useServices } from "../../app/services";
 import { IconButton } from "../../components/IconButton";
 import { Switch } from "../../components/Switch";

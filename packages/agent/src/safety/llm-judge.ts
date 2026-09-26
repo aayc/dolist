@@ -6,7 +6,9 @@
  * shell comments are stripped, and the prompt tells the judge to ignore instructions inside it.
  * Any failure — timeout, error, malformed output — yields `require_approval`.
  */
+
 import type { ActionCategory, JsonSchema, Logger, RiskLevel, SafetyDecision } from "@ddl/core";
+import { errorMessage } from "@ddl/core";
 import type { LlmClient } from "../llm/types";
 import { ACTION_CATEGORIES, RISK_LEVELS, SAFETY_DECISIONS } from "./policy";
 import { maskSensitiveText } from "./sensitive";
@@ -224,7 +226,7 @@ export function createLlmJudge(options: LlmJudgeOptions): LlmJudge {
         }
         logger.warn("safety judge failed", {
           tool: request.ctx.toolName,
-          error: error instanceof Error ? error.message : String(error),
+          error: errorMessage(error),
         });
         return fallback("The safety judge was unavailable; asking you instead.");
       } finally {

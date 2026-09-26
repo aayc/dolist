@@ -20,6 +20,7 @@ import {
   type ApprovalListResponse,
   type ApprovalRequest,
   Emitter,
+  errorMessage,
   type Logger,
   normalizeMachineUrl,
   type RelayState,
@@ -38,7 +39,7 @@ import type {
   MachineCredentialSource,
   PlacementSource,
 } from "../agent-location";
-import { errorBody, errorMessage } from "../errors";
+import { errorBody } from "../errors";
 import { ForwardingAgentRuntime } from "../forwarding-runtime";
 import { readJson } from "../http-utils";
 import { AgentUnavailableError } from "../null-runtime";

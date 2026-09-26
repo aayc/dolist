@@ -26,6 +26,7 @@ import {
   type SurfaceKind,
   type SyncStatusResponse,
   silentLogger,
+  sleep,
   summarizeThread,
   type TaskAgentRecord,
   type Thread,
@@ -343,7 +344,7 @@ export class FakeAgentRuntime implements AgentRuntime {
   }
 
   private async runAction(): Promise<void> {
-    if (this.actionDelayMs > 0) await new Promise((r) => setTimeout(r, this.actionDelayMs));
+    if (this.actionDelayMs > 0) await sleep(this.actionDelayMs);
     if (this.actionError) throw this.actionError;
   }
 }

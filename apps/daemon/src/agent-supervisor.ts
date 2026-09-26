@@ -10,6 +10,7 @@
  * first: a held lease is released after the agent stopped and its state was synced. A change of
  * priority alone keeps the lease and applies on the next request.
  */
+
 import type {
   AgentMode,
   AgentPlacement,
@@ -23,6 +24,7 @@ import type {
   SyncLeasePriority,
   Unsubscribe,
 } from "@ddl/core";
+import { errorMessage, Listeners } from "@ddl/core";
 import {
   AgentLease,
   agentLeaseClient,
@@ -32,7 +34,6 @@ import {
 } from "./agent-lease";
 import type { MachineCredentialSource, PlacementSnapshot, PlacementSource } from "./agent-location";
 import type { DaemonSyncConfig } from "./config";
-import { errorMessage } from "./errors";
 import type { LeasedAgentRuntime } from "./leased-runtime";
 import type { SyncController } from "./sync-controller";
 import type { DeviceIdentity } from "./sync-setup";
@@ -88,7 +89,9 @@ export function effectivePlacement(
 export class AgentSupervisor implements PlacementSource {
   readonly #options: AgentSupervisorOptions;
   readonly #now: () => number;
-  readonly #listeners = new Set<(snapshot: PlacementSnapshot) => void>();
+  readonly #listeners = new Listeners<PlacementSnapshot>((error) =>
+    this.#options.logger.error("Placement listener failed", { error: errorMessage(error) }),
+  );
   readonly #unsubscribes: Unsubscribe[] = [];
   #arrangement: Arrangement = { kind: "idle" };
   /** A lease being let go (see `heldEpoch`). */
@@ -182,10 +185,7 @@ export class AgentSupervisor implements PlacementSource {
   }
 
   onChange(listener: (snapshot: PlacementSnapshot) => void): Unsubscribe {
-    this.#listeners.add(listener);
-    return () => {
-      this.#listeners.delete(listener);
-    };
+    return this.#listeners.add(listener);
   }
 
   setRelay(state: RelayState | null): void {
@@ -426,13 +426,7 @@ export class AgentSupervisor implements PlacementSource {
     const key = JSON.stringify([snapshot, this.status()]);
     if (key === this.#lastKey) return;
     this.#lastKey = key;
-    for (const listener of [...this.#listeners]) {
-      try {
-        listener(snapshot);
-      } catch (error) {
-        this.#options.logger.error("Placement listener failed", { error: errorMessage(error) });
-      }
-    }
+    this.#listeners.emit(snapshot);
     this.#options.runtime.refreshStatus();
   }
 

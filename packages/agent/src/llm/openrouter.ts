@@ -2,7 +2,7 @@
  * One-shot OpenRouter chat-completions client (non-streaming). Used outside the agent loop: the
  * safety judge, triage helpers, web search and evals. Never logs the API key or message content.
  */
-import { type Logger, silentLogger, sleep } from "@ddl/core";
+import { errorMessage, isRecord, type Logger, silentLogger, sleep } from "@ddl/core";
 import { parseJsonLoose } from "./json";
 import { estimateCostUsd } from "./pricing";
 import {
@@ -73,7 +73,7 @@ export async function checkOpenRouterKey(
     }
     return { status: "unknown", message: `HTTP ${response.status}` };
   } catch (error) {
-    return { status: "unknown", message: error instanceof Error ? error.message : String(error) };
+    return { status: "unknown", message: errorMessage(error) };
   }
 }
 
@@ -411,9 +411,7 @@ function safeJsonParse(text: string): unknown {
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
+  return isRecord(value) ? value : undefined;
 }
 
 function numberOr(value: unknown, fallback: number): number {

@@ -1,36 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { diff3Regions, diffLines, mergeLines, mergeText } from "./diff3";
+import { mergeLines, mergeText3 } from "./diff3";
 
 // Stretched on slow CI runners (TEST_TIME_SCALE, see scripts/vitest/setup-fast-check.ts).
 const TIME_SCALE = Number(process.env.TEST_TIME_SCALE) || 1;
 
-describe("diffLines", () => {
-  it("falls back to one hunk beyond the edit-distance budget", () => {
-    const older = ["same", "a1", "a2", "a3", "same-end"];
-    const newer = ["same", "b1", "b2", "b3", "same-end"];
-    expect(diffLines(older, newer, { maxEditDistance: 2 })).toEqual([
-      { oldStart: 1, oldLength: 3, newStart: 1, newLength: 3 },
-    ]);
-  });
-});
-
-describe("diff3Regions", () => {
-  it("separates stable and conflicting regions", () => {
-    expect(diff3Regions(["a", "b", "c"], ["a", "B", "c"], ["a", "b2", "c"])).toEqual([
-      { stable: true, lines: ["a"] },
-      { stable: false, ours: ["B"], base: ["b"], theirs: ["b2"] },
-      { stable: true, lines: ["c"] },
-    ]);
-  });
-});
-
-describe("mergeText", () => {
+describe("mergeText3", () => {
   const base = "# Today\n- [ ] one\n- [ ] two\n- [ ] three\n- [ ] four\n";
 
   it("merges edits to adjacent lines", () => {
     const ours = base.replace("- [ ] two", "- [x] two");
     const theirs = base.replace("- [ ] three", "- [x] three");
-    expect(mergeText(base, ours, theirs)).toEqual({
+    expect(mergeText3(base, ours, theirs)).toEqual({
       clean: true,
       text: "# Today\n- [ ] one\n- [x] two\n- [x] three\n- [ ] four\n",
     });
@@ -39,7 +19,7 @@ describe("mergeText", () => {
   it("merges an insertion next to an edit", () => {
     const ours = base.replace("- [ ] two\n", "- [ ] two\n- [ ] new task\n");
     const theirs = base.replace("- [ ] three", "- [x] three");
-    expect(mergeText(base, ours, theirs)).toEqual({
+    expect(mergeText3(base, ours, theirs)).toEqual({
       clean: true,
       text: "# Today\n- [ ] one\n- [ ] two\n- [ ] new task\n- [x] three\n- [ ] four\n",
     });
@@ -48,7 +28,7 @@ describe("mergeText", () => {
   it("reports conflicting edits to the same line with markers", () => {
     const ours = base.replace("two", "two (mine)");
     const theirs = base.replace("two", "two (theirs)");
-    const result = mergeText(base, ours, theirs);
+    const result = mergeText3(base, ours, theirs);
     expect(result.clean).toBe(false);
     expect(result).toMatchObject({ conflicts: 1 });
     expect(result.text).toBe(
@@ -59,25 +39,24 @@ describe("mergeText", () => {
   it("treats a delete racing an edit of the same line as a conflict", () => {
     const ours = base.replace("- [ ] two\n", "");
     const theirs = base.replace("two", "two!");
-    expect(mergeText(base, ours, theirs).clean).toBe(false);
+    expect(mergeText3(base, ours, theirs).clean).toBe(false);
   });
 
-  it("conflicts on insertions at the same spot unless asked to union them", () => {
+  it("keeps both sides' insertions at the same spot, ours first", () => {
     const ours = `${base}- [ ] buy milk\n`;
     const theirs = `${base}- [ ] call the plumber\n`;
-    expect(mergeText(base, ours, theirs).clean).toBe(false);
-    expect(mergeText(base, ours, theirs, { unionInsertions: true })).toEqual({
+    expect(mergeText3(base, ours, theirs)).toEqual({
       clean: true,
       text: `${base}- [ ] buy milk\n- [ ] call the plumber\n`,
     });
   });
 
   it("never unions over a replaced base line", () => {
-    expect(mergeText("x", "a", "b", { unionInsertions: true }).clean).toBe(false);
+    expect(mergeText3("x", "a", "b").clean).toBe(false);
   });
 
   it("keeps a trailing newline one side added", () => {
-    expect(mergeText("a\nb", "a!\nb", "a\nb\n")).toEqual({ clean: true, text: "a!\nb\n" });
+    expect(mergeText3("a\nb", "a!\nb", "a\nb\n")).toEqual({ clean: true, text: "a!\nb\n" });
   });
 
   it("merges edits at both ends of a long note quickly", () => {

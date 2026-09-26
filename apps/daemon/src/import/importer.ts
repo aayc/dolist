@@ -8,17 +8,19 @@ import { join } from "node:path";
 import {
   type AppSettings,
   createId,
+  errorMessage,
   type Logger,
   type ObsidianImportJob,
   type ObsidianImportOrigin,
   type ObsidianImportPreview,
   type ObsidianImportRequest,
   type ObsidianImportResult,
+  pluralize,
   SIDECAR_DIR,
   silentLogger,
   type Unsubscribe,
 } from "@ddl/core";
-import { ApiError, errorMessage } from "../errors";
+import { ApiError } from "../errors";
 import {
   type CarryOver,
   countWatchedOpenTasks,
@@ -318,7 +320,7 @@ export class ObsidianImporter {
     }
     if (plan.watchedOpenTasks > 0 && plan.actOnExistingTasks) {
       warnings.push(
-        `After the switch the agent looks at ${plural(plan.watchedOpenTasks, "open task")} in Obsidian's daily notes for the days it watches, because "Act on existing tasks" is on.`,
+        `After the switch the agent looks at ${pluralize(plan.watchedOpenTasks, "open task")} in Obsidian's daily notes for the days it watches, because "Act on existing tasks" is on.`,
       );
     }
     const outside = scan.skipped.items.filter((item) => item.reason === "symlink_outside").length;
@@ -356,8 +358,4 @@ function describeFailure(error: unknown): string {
   if (code === "ENOSPC") return "The disk is full";
   if (code === "EACCES" || code === "EPERM") return `Permission denied: ${errorMessage(error)}`;
   return errorMessage(error) || "The import stopped with an unexpected error";
-}
-
-function plural(n: number, noun: string): string {
-  return `${n} ${noun}${n === 1 ? "" : "s"}`;
 }

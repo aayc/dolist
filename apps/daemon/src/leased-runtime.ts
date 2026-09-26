@@ -5,11 +5,11 @@ import {
   type AgentStatusResponse,
   type AppSettings,
   agentModel,
+  errorMessage,
   type Logger,
   type Unsubscribe,
 } from "@ddl/core";
 import type { StorageProvider } from "@ddl/storage";
-import { errorMessage } from "./errors";
 import { ForwardingAgentRuntime } from "./forwarding-runtime";
 import { NullAgentRuntime } from "./null-runtime";
 import type { AgentStack } from "./wiring";

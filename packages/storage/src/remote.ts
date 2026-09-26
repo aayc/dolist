@@ -1,8 +1,11 @@
 import {
+  compareStrings,
+  errorMessage,
   folderHoldsAgentOwnedPaths,
   InvalidPathError,
   isAgentOwnedPath,
   isHiddenPath,
+  isRecord,
   LEASE_EPOCH_HEADER,
   type Logger,
   normalizePath,
@@ -21,6 +24,7 @@ import {
   type SyncWriteFileRequest,
   type SyncWriteResponse,
   silentLogger,
+  toVaultPath,
   type Unsubscribe,
 } from "@ddl/core";
 import { toStorableText } from "./file-types";
@@ -155,7 +159,7 @@ export class RemoteStorageProvider implements StorageProvider {
     return response.files
       .filter((file) => this.#visible(file.path, options))
       .map(toFileEntry)
-      .sort((a, b) => comparePaths(a.path, b.path));
+      .sort((a, b) => compareStrings(a.path, b.path));
   }
 
   async listFolders(options: ListOptions = {}): Promise<string[]> {
@@ -167,7 +171,7 @@ export class RemoteStorageProvider implements StorageProvider {
         })
       ).body,
     );
-    return folders.filter((folder) => this.#visible(folder, options)).sort(comparePaths);
+    return folders.filter((folder) => this.#visible(folder, options)).sort(compareStrings);
   }
 
   async stat(path: string): Promise<FileEntry | null> {
@@ -291,7 +295,7 @@ export class RemoteStorageProvider implements StorageProvider {
         )
       ).body,
     );
-    for (const file of [...deleted].sort(comparePaths)) {
+    for (const file of [...deleted].sort(compareStrings)) {
       this.#emit({ kind: "deleted", path: file, self: true });
     }
   }
@@ -555,12 +559,6 @@ function toStorageError(error: SyncRequestError, path: string | undefined): Erro
   }
 }
 
-function toVaultPath(input: string): string {
-  const p = normalizePath(input);
-  if (p === "") throw new InvalidPathError(input, "is empty");
-  return p;
-}
-
 function listPrefix(options: ListOptions): string {
   return options.prefix ? normalizePath(options.prefix) : "";
 }
@@ -575,10 +573,6 @@ function required<T>(body: T | undefined): T {
 }
 
 /** Code-point order, like the other providers (UIs apply their own display sort). */
-function comparePaths(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-
 function asChange(frame: Record<string, unknown>): SyncChange | null {
   const { seq, path, rev, deleted, created, device, at } = frame;
   if (!isSeq(seq) || typeof path !== "string" || typeof deleted !== "boolean") return null;
@@ -607,12 +601,4 @@ function closeQuietly(ws: WebSocket): void {
 
 function isSeq(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

@@ -8,6 +8,8 @@
 import {
   type JsonSchema,
   type Logger,
+  pluralize,
+  sleep,
   type ToolResult,
   type ToolSpec,
   type ToolSubject,
@@ -307,7 +309,7 @@ export class AppToolKit {
     action: FrameAction & { point?: { x: number; y: number } },
   ): Promise<void> {
     if (!this.ctx.onFrame || this.ctx.watching?.("computer") === false) return;
-    if (this.settleMs > 0) await new Promise((resolve) => setTimeout(resolve, this.settleMs));
+    if (this.settleMs > 0) await sleep(this.settleMs);
     try {
       const shot = await this.apps.screenshot(app.pid, { maxWidth: 1280 });
       this.emitFrame(shot, action);
@@ -449,7 +451,7 @@ export class AppToolKit {
     );
     if (outcome.stale) this.session.markStale(app.pid);
     return textResult(
-      `Typed ${text.length} character${text.length === 1 ? "" : "s"} into ${app.name}.${staleNote(outcome.stale, app)}`,
+      `Typed ${pluralize(text.length, "character")} into ${app.name}.${staleNote(outcome.stale, app)}`,
     );
   }
 

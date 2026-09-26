@@ -1,5 +1,6 @@
 import {
   describeSchedule,
+  Listeners,
   type LocalCalendar,
   type Logger,
   nextRunAfter,
@@ -53,7 +54,7 @@ export class RoutineLibrary {
   private readonly calendar: LocalCalendar;
   private readonly readOnly: boolean;
   private readonly liveRun: (runId: string) => LiveRun | undefined;
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Listeners();
   private readonly disposers: Unsubscribe[] = [];
   private changeQueued = false;
 
@@ -98,10 +99,7 @@ export class RoutineLibrary {
 
   /** Something the user sees changed (a file, a next run, a last run). Coalesced per microtask. */
   on(listener: () => void): Unsubscribe {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
+    return this.listeners.add(listener);
   }
 
   /** Tells listeners the routines changed (e.g. a run's live status moved). */
@@ -110,13 +108,7 @@ export class RoutineLibrary {
     this.changeQueued = true;
     queueMicrotask(() => {
       this.changeQueued = false;
-      for (const listener of [...this.listeners]) {
-        try {
-          listener();
-        } catch {
-          // A listener's failure must not keep the others from hearing it.
-        }
-      }
+      this.listeners.emit();
     });
   }
 

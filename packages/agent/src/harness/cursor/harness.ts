@@ -10,7 +10,7 @@
 import { randomBytes } from "node:crypto";
 import { realpath } from "node:fs/promises";
 import os from "node:os";
-import { type Logger, silentLogger, TOOL_NAME_RE, type ToolSpec } from "@ddl/core";
+import { type Logger, silentLogger, type ToolSpec, validateToolNames } from "@ddl/core";
 import { TOOL } from "../../tools/contracts";
 import { createWorkspaceTools } from "../builtin-tools";
 import type { Harness, HarnessSession, HarnessSessionOptions } from "../types";
@@ -381,11 +381,8 @@ function sameItems(a: readonly string[], b: readonly string[]): boolean {
 }
 
 function validateTools(tools: readonly ToolSpec[]): void {
-  const seen = new Set<string>();
+  validateToolNames(tools);
   for (const tool of tools) {
-    if (!TOOL_NAME_RE.test(tool.name)) throw new Error(`Invalid tool name "${tool.name}"`);
-    if (seen.has(tool.name)) throw new Error(`Duplicate tool name "${tool.name}"`);
-    seen.add(tool.name);
     const type = (tool.parameters as { type?: unknown }).type;
     if (type !== undefined && type !== "object") {
       throw new Error(`Tool "${tool.name}": parameters must be an object schema`);

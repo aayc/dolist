@@ -11,11 +11,12 @@ export interface ComputerStatus {
   moreApps: number;
 }
 
+/** Permission status older than this is refreshed on the next read. */
+const ACCESS_TTL_MS = 3_000;
+/** The app list older than this is refreshed on the next read. */
+const APPS_TTL_MS = 60_000;
+
 export interface ComputerStatusOptions {
-  /** Permission status older than this is refreshed on the next read. Default 3 s. */
-  accessTtlMs?: number;
-  /** The app list older than this is refreshed on the next read. Default 60 s. */
-  appsTtlMs?: number;
   /** Most app names kept. Default 80. */
   maxApps?: number;
   /** A refresh changed the status. */
@@ -73,15 +74,15 @@ export class ComputerStatusMonitor {
   private stale(): boolean {
     const now = this.now();
     return (
-      now - this.accessAt >= (this.options.accessTtlMs ?? 3_000) ||
-      (this.provider.apps !== undefined && now - this.appsAt >= (this.options.appsTtlMs ?? 60_000))
+      now - this.accessAt >= ACCESS_TTL_MS ||
+      (this.provider.apps !== undefined && now - this.appsAt >= APPS_TTL_MS)
     );
   }
 
   private async load(force: boolean): Promise<void> {
     const now = this.now();
     const next: ComputerStatus = { ...this.status };
-    if (force || now - this.accessAt >= (this.options.accessTtlMs ?? 3_000)) {
+    if (force || now - this.accessAt >= ACCESS_TTL_MS) {
       try {
         const access = await this.provider.computerAccess?.();
         if (access) next.access = access;
@@ -92,7 +93,7 @@ export class ComputerStatusMonitor {
       this.accessAt = this.now();
     }
     const apps = this.provider.apps;
-    if (apps && (force || now - this.appsAt >= (this.options.appsTtlMs ?? 60_000))) {
+    if (apps && (force || now - this.appsAt >= APPS_TTL_MS)) {
       try {
         const [running, installed] = await Promise.all([apps.runningApps(), apps.installedApps()]);
         const names: string[] = [];

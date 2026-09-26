@@ -1,9 +1,10 @@
 import {
   type CreateRoutineRequest,
+  errorMessage,
   ROUTINE_INSTRUCTIONS_MAX_LENGTH,
   routineNameProblem,
 } from "@ddl/core";
-import { errorMessage, HttpError } from "../../api/errors";
+import { HttpError } from "../../api/errors";
 import { reason } from "./routine-errors";
 
 export type RoutineField = "name" | "schedule" | "instructions";

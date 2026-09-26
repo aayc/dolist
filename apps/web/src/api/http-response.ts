@@ -1,9 +1,6 @@
 import type { NoteResponse } from "@ddl/core";
+import { isRecord } from "@ddl/core";
 import { ConflictError, HttpError } from "./errors";
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 /** `Retry-After` in whole seconds (the daemon sends seconds, never a date). */
 function retryAfter(response: Response): number | undefined {
@@ -27,13 +24,13 @@ export async function readResponse<T>(response: Response): Promise<T> {
   }
   if (!response.ok) {
     // Only note conflicts carry `current`; other 409s (e.g. an approval already decided) don't.
-    if (response.status === 409 && isObject(data) && "current" in data) {
-      const current = isObject(data.current) ? (data.current as unknown as NoteResponse) : null;
+    if (response.status === 409 && isRecord(data) && "current" in data) {
+      const current = isRecord(data.current) ? (data.current as unknown as NoteResponse) : null;
       throw new ConflictError(current, data);
     }
     const message =
-      (isObject(data) && typeof data.message === "string" && data.message) ||
-      (isObject(data) && typeof data.error === "string" && data.error) ||
+      (isRecord(data) && typeof data.message === "string" && data.message) ||
+      (isRecord(data) && typeof data.error === "string" && data.error) ||
       response.statusText ||
       `HTTP ${response.status}`;
     throw new HttpError(response.status, message, data, retryAfter(response));

@@ -10,6 +10,7 @@ import type {
   ObsidianUpdateReport,
   Unsubscribe,
 } from "@ddl/core";
+import { Listeners } from "@ddl/core";
 import { ApiError } from "../errors";
 
 export const PROGRESS_INTERVAL_MS = 200;
@@ -65,7 +66,7 @@ export interface JobRunnerOptions {
 
 export class JobRunner {
   readonly #options: JobRunnerOptions;
-  readonly #listeners = new Set<JobListener>();
+  readonly #listeners = new Listeners<ObsidianImportJob>();
   #running: { job: ObsidianImportJob; controller: AbortController; done: Promise<void> } | null =
     null;
   #last: ObsidianImportJob | null = null;
@@ -86,10 +87,7 @@ export class JobRunner {
   }
 
   onProgress(listener: JobListener): Unsubscribe {
-    this.#listeners.add(listener);
-    return () => {
-      this.#listeners.delete(listener);
-    };
+    return this.#listeners.add(listener);
   }
 
   /** Refuses while a job runs. */
@@ -169,13 +167,7 @@ export class JobRunner {
     if (!force && now - this.#lastEmit < PROGRESS_INTERVAL_MS) return;
     this.#lastEmit = now;
     if (this.#listeners.size === 0) return;
-    const snapshot = structuredClone(job);
-    for (const listener of [...this.#listeners]) {
-      try {
-        listener(snapshot);
-      } catch {
-        // A listener's failure must not stop the import.
-      }
-    }
+    // A listener's failure must not stop the import.
+    this.#listeners.emit(structuredClone(job));
   }
 }

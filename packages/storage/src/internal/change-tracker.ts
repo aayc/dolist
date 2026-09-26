@@ -1,7 +1,7 @@
 import type { Logger } from "@ddl/core";
+import { errorMessage } from "@ddl/core";
 import { isUnderPrefix } from "../ignore-rules";
 import type { StorageEvent } from "../types";
-import { errorMessage } from "./fs-errors";
 
 export type PathProbe =
   | { type: "file"; version: string }

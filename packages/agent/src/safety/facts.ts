@@ -4,7 +4,9 @@
  * app a computer action targets and every string in the input. Rules never look at raw inputs
  * directly.
  */
+
 import type { ToolSubject } from "@ddl/core";
+import { isRecord } from "@ddl/core";
 import { MCP_TOOL_PREFIX, TOOL } from "../tools/contracts";
 import { INTERNAL_TOOLS, KNOWLEDGE_TOOLS } from "./policy";
 import { ROUTINE_TOOLS } from "./rules/routines";
@@ -107,10 +109,6 @@ const COMPUTER_ACTIONS: Readonly<Record<string, UiAction>> = {
 
 const FILE_READ_TOOLS: ReadonlySet<string> = new Set([TOOL.read, TOOL.grep, TOOL.find, TOOL.ls]);
 const FILE_WRITE_TOOLS: ReadonlySet<string> = new Set([TOOL.write, TOOL.edit]);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function str(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;

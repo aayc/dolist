@@ -1,4 +1,5 @@
 import type { JsonSchema, Logger, ToolResult, ToolSpec } from "@ddl/core";
+import { pluralize } from "@ddl/core";
 import { TOOL } from "../tools/contracts";
 import { APP_PARAM, AppToolKit, ID_PARAM } from "./app-tools";
 import { clickVerb, describeTyping, scrollPhrase } from "./computer-describe";
@@ -253,10 +254,7 @@ export function createComputerTools(
         if (byApp(input)) return kit!.type(input);
         const text = readString(asRecord(input), "text", { required: true, maxLength: 10_000 });
         const frame = await withFrames(() => computer.type(text));
-        return actionResult(
-          `Typed ${text.length} character${text.length === 1 ? "" : "s"}.`,
-          frame,
-        );
+        return actionResult(`Typed ${pluralize(text.length, "character")}.`, frame);
       }),
   };
 

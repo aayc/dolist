@@ -4,7 +4,7 @@
  * ask the user, honors standing grants for those, and otherwise asks through the approval broker.
  * It never throws; any internal failure blocks the call.
  */
-import { silentLogger } from "@ddl/core";
+import { errorMessage, silentLogger } from "@ddl/core";
 import type { ToolCallDecision, ToolCallRequest } from "../harness/types";
 import {
   EVERY_ACTION_REASON,
@@ -45,7 +45,7 @@ export function createSafetyGate(options: SafetyGateOptions): SafetyGate {
       options.onVerdict?.(call, verdict);
     } catch (error) {
       logger.warn("onVerdict listener failed", {
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(error),
       });
     }
   };
@@ -82,7 +82,7 @@ export function createSafetyGate(options: SafetyGateOptions): SafetyGate {
           });
         } catch (error) {
           logger.warn("onAllowed listener failed", {
-            error: error instanceof Error ? error.message : String(error),
+            error: errorMessage(error),
           });
         }
         return { allow: true };
@@ -159,7 +159,7 @@ export function createSafetyGate(options: SafetyGateOptions): SafetyGate {
     } catch (error) {
       logger.error("safety gate failed", {
         tool: call.toolName,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(error),
       });
       return { allow: false, reason: "The safety check failed, so this action was blocked." };
     }

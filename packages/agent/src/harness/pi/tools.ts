@@ -3,6 +3,7 @@
  * every tool handed to Pi (custom and built-in).
  */
 import {
+  isRecord,
   type Logger,
   type ToolContent,
   type ToolResult,
@@ -129,8 +130,4 @@ function errorTextForModel(result: ToolResult): string {
   const text = toolResultText(result).trim();
   if (!text) return "Error: the tool reported a failure without details";
   return /^error\b/i.test(text) ? text : `Error: ${text}`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

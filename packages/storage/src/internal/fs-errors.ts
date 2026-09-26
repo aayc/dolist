@@ -15,6 +15,4 @@ export function isAccessError(error: unknown): boolean {
   return code === "EACCES" || code === "EPERM";
 }
 
-export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+export { errorMessage } from "@ddl/core";

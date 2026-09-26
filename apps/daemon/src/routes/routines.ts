@@ -2,6 +2,7 @@ import type { AgentRuntime } from "@ddl/agent";
 import { CreateRoutineRequestSchema } from "@ddl/contract";
 import {
   API_PATHS,
+  errorMessage,
   ROUTINE_TEMPLATES,
   type Routine,
   type RoutineListResponse,
@@ -10,7 +11,7 @@ import {
 } from "@ddl/core";
 import type { Context, Hono } from "hono";
 import type { AppContext } from "../context";
-import { ApiError, errorMessage, isNamedError } from "../errors";
+import { ApiError, isNamedError } from "../errors";
 import { idParam, readJson } from "../http-utils";
 
 /**

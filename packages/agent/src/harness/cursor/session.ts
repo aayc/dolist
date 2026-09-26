@@ -12,7 +12,9 @@
 import {
   type Deferred,
   deferred,
+  errorMessage,
   errorResult,
+  isRecord,
   type Logger,
   type ToolResult,
   type ToolSpec,
@@ -46,7 +48,6 @@ import {
   type AcpPermissionOutcome,
   type AcpToolCallUpdate,
   CANCELLED_PERMISSION,
-  isRecord,
   parseInitializeResult,
   parseModels,
   parsePermissionRequest,
@@ -760,5 +761,5 @@ export function describeError(error: unknown): string {
     }
     return `Cursor: ${error.message}${detail}`;
   }
-  return error instanceof Error ? error.message : String(error);
+  return errorMessage(error);
 }

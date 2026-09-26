@@ -4,6 +4,7 @@ import {
   charFromStatus,
   createId,
   dailyNotePath,
+  errorMessage,
   isActiveTaskStatus,
   isBlankTaskText,
   isClosedStatus,
@@ -15,6 +16,7 @@ import {
   type OrchestratorTrigger,
   parseAgentLine,
   parseDailyNotePath,
+  pluralize,
   silentLogger,
   stripAgentMarker,
   type TaskAgentStatus,
@@ -90,8 +92,6 @@ export interface OrchestratorOptions {
   batchWindowMs?: number;
   /** Subagent reports wait this long, to share a turn with other events. */
   reportDelayMs?: number;
-  /** A fresh session is started after this many turns to keep latency low. */
-  maxTurnsPerSession?: number;
   /** A turn that takes longer is aborted and its tasks marked failed. */
   turnTimeoutMs?: number;
   /** After each turn: the error, or null when it succeeded. */
@@ -104,8 +104,6 @@ export interface OrchestratorOptions {
   drawings?: Pick<DrawingDescriptions, "blocks" | "blockFor">;
   /** What it is doing (`orchestrator.activity`), whenever that changes. */
   onActivity?: (activity: OrchestratorActivity) => void;
-  /** See `ACTING_LINGER_MS`. */
-  actingLingerMs?: number;
 }
 
 type QueueItem =
@@ -168,6 +166,8 @@ const CHAT_CONTEXT_MESSAGES = 8;
 /** The note view of a note that is itself a drawing. */
 const DRAWING_NOTE_TEXT = "(This note is an Excalidraw drawing: its scene data isn't shown.)";
 const TRIGGER_TASK_CHARS = 60;
+/** A fresh session is started after this many turns to keep latency low. */
+const MAX_TURNS_PER_SESSION = 30;
 
 const CHANGE_PRIORITY: Record<DigestChange, number> = {
   updated: 0,
@@ -190,7 +190,6 @@ export class Orchestrator {
   private readonly logger: Logger;
   private readonly batchWindowMs: number;
   private readonly reportDelayMs: number;
-  private readonly maxTurnsPerSession: number;
   private readonly turnTimeoutMs: number;
   private readonly queue = new Map<string, QueueItem>();
   private readonly previousStatus = new Map<string, TaskAgentStatus>();
@@ -212,7 +211,6 @@ export class Orchestrator {
     this.logger = options.logger ?? silentLogger;
     this.batchWindowMs = options.batchWindowMs ?? 150;
     this.reportDelayMs = options.reportDelayMs ?? 1_500;
-    this.maxTurnsPerSession = options.maxTurnsPerSession ?? 30;
     this.turnTimeoutMs = options.turnTimeoutMs ?? 180_000;
     this.host = this.createHost();
     this.activity = new OrchestratorActivityPublisher({
@@ -220,11 +218,12 @@ export class Orchestrator {
         try {
           options.onActivity?.(activity);
         } catch (error) {
-          this.logger.error("Orchestrator activity listener failed", { error: errorText(error) });
+          this.logger.error("Orchestrator activity listener failed", {
+            error: errorMessage(error),
+          });
         }
       },
       now: this.now,
-      ...(options.actingLingerMs !== undefined ? { lingerMs: options.actingLingerMs } : {}),
     });
   }
 
@@ -529,7 +528,7 @@ export class Orchestrator {
           if (items.length > 0) await this.runTurn(items);
         }
       } catch (error) {
-        this.logger.error("Orchestrator loop failed", { error: errorText(error) });
+        this.logger.error("Orchestrator loop failed", { error: errorMessage(error) });
       } finally {
         this.draining = null;
         if (this.queue.size > 0) this.scheduleDrain();
@@ -595,7 +594,7 @@ export class Orchestrator {
         session.turns++;
       }
     } catch (error) {
-      if (!turn.cancelled) turn.error ??= errorText(error);
+      if (!turn.cancelled) turn.error ??= errorMessage(error);
     } finally {
       this.turn = null;
     }
@@ -624,7 +623,7 @@ export class Orchestrator {
       this.resolveTurn(turn);
       this.options.onTurnResult?.(turn.error ?? null);
     } catch (error) {
-      this.logger.error("Failed to resolve orchestrator turn", { error: errorText(error) });
+      this.logger.error("Failed to resolve orchestrator turn", { error: errorMessage(error) });
     }
   }
 
@@ -678,7 +677,7 @@ export class Orchestrator {
       current &&
       current.harness === harness &&
       current.date === date &&
-      current.turns < this.maxTurnsPerSession
+      current.turns < MAX_TURNS_PER_SESSION
     ) {
       return current;
     }
@@ -792,8 +791,8 @@ export class Orchestrator {
     }
     const parts = [...notes].map(([notePath, { tasks, lines }]) => {
       const counts = [
-        ...(tasks > 0 ? [plural(tasks, "task")] : []),
-        ...(lines > 0 ? [plural(lines, "line")] : []),
+        ...(tasks > 0 ? [pluralize(tasks, "task")] : []),
+        ...(lines > 0 ? [pluralize(lines, "line")] : []),
       ];
       return `${notePath} changed: ${counts.join(", ")}`;
     });
@@ -1137,7 +1136,7 @@ export class Orchestrator {
       } catch (error) {
         this.logger.warn("Could not describe the drawings of a note", {
           notePath: note.notePath,
-          error: errorText(error),
+          error: errorMessage(error),
         });
       }
     }
@@ -1248,17 +1247,9 @@ export class Orchestrator {
 
   private background(promise: Promise<unknown>): void {
     promise.catch((error: unknown) => {
-      this.logger.error("Orchestrator background task failed", { error: errorText(error) });
+      this.logger.error("Orchestrator background task failed", { error: errorMessage(error) });
     });
   }
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function plural(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
 function describeReport(task: string, status: TaskAgentStatus): string {

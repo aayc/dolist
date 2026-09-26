@@ -8,8 +8,8 @@ import type {
   ObsidianImportPhase,
   ObsidianPluginSupport,
 } from "@ddl/core";
+import { errorMessage, formatBytes, pluralize } from "@ddl/core";
 import { HttpError, NetworkError } from "../../api/errors";
-import { formatBytes, pluralize } from "../../lib/format";
 
 export const PHASE_LABEL: Record<ObsidianImportPhase, string> = {
   checking: "Reading the vault…",
@@ -126,5 +126,5 @@ export function importProblem(error: unknown): ImportProblem {
     const message = code === "forbidden_device" ? PAIRED_DEVICE_REASON : error.message;
     return { message, status: error.status, ...(code ? { code } : {}) };
   }
-  return { message: error instanceof Error ? error.message : String(error) };
+  return { message: errorMessage(error) };
 }

@@ -2,10 +2,15 @@
  * The vault's sync engine and its target, replaceable while the daemon runs: `configure` stops the
  * current engine, disposes its target, prepares the new setup (loading the token) and starts it.
  */
-import { type Logger, type SyncStatusResponse, type Unsubscribe, withTimeout } from "@ddl/core";
+import {
+  errorMessage,
+  type Logger,
+  type SyncStatusResponse,
+  type Unsubscribe,
+  withTimeout,
+} from "@ddl/core";
 import type { StorageProvider } from "@ddl/storage";
 import type { DaemonSyncConfig } from "./config";
-import { errorMessage } from "./errors";
 import { disabledSyncStatusResponse, toSyncStatusResponse } from "./routes/sync";
 import { type DeviceIdentity, type PreparedSync, prepareSync } from "./sync-setup";
 import { createSync, type SyncHandle } from "./wiring";

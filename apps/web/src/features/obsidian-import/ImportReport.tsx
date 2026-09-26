@@ -6,9 +6,9 @@ import type {
   ObsidianImportPreview,
   ObsidianUpdateReport,
 } from "@ddl/core";
+import { formatBytes, pluralize } from "@ddl/core";
 import type { ReactNode } from "react";
 import { cx } from "../../lib/cx";
-import { formatBytes, pluralize } from "../../lib/format";
 import {
   attachmentKinds,
   dailyNotesText,

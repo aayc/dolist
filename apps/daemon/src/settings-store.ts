@@ -11,6 +11,8 @@ import {
   DEFAULT_SETTINGS,
   type DeepPartial,
   Emitter,
+  errorMessage,
+  isRecord,
   type Logger,
   mergeSettings,
   silentLogger,
@@ -249,15 +251,7 @@ function mergePatch(
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) continue;
     const current = out[key];
-    out[key] = isPlainObject(current) && isPlainObject(value) ? mergePatch(current, value) : value;
+    out[key] = isRecord(current) && isRecord(value) ? mergePatch(current, value) : value;
   }
   return out;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

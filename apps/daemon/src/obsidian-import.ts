@@ -3,6 +3,7 @@ import {
   type AppSettings,
   type DeepPartial,
   type EditorSettings,
+  errorMessage,
   isHiddenPath,
   type Logger,
   normalizePath,
@@ -111,7 +112,7 @@ export async function readConfig<S extends z.ZodType>(
   } catch (error) {
     logger.warn("Could not read Obsidian config", {
       path,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(error),
     });
   }
   return null;
@@ -129,7 +130,7 @@ async function readVimrc(storage: VaultReader, logger: Logger): Promise<string |
   } catch (error) {
     logger.warn("Could not read the Obsidian vimrc", {
       path: VIMRC_FILE,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(error),
     });
     return null;
   }

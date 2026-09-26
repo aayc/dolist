@@ -11,6 +11,7 @@
  *   `data/` is the CLI's data dir (`CURSOR_DATA_DIR`); `cli.pid` is the CLI process it runs.
  *   Neither directory is the task workspace: our own file and shell tools work there.
  */
+
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
@@ -27,6 +28,7 @@ import {
 import path from "node:path";
 import { promisify } from "node:util";
 import type { Logger } from "@ddl/core";
+import { isRecord, sleep } from "@ddl/core";
 
 const execFileAsync = promisify(execFile);
 /** In a session's root: the pid of the CLI process it runs. */
@@ -129,9 +131,7 @@ export async function writeCliConfig(configDir: string, permissions: CliPermissi
   let existing: Record<string, unknown> = {};
   try {
     const parsed: unknown = JSON.parse(await readFile(file, "utf8"));
-    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-      existing = parsed as Record<string, unknown>;
-    }
+    if (isRecord(parsed)) existing = parsed;
   } catch {
     // Missing or unreadable: start over.
   }
@@ -274,7 +274,7 @@ async function exitsWithin(pid: number, ms: number): Promise<boolean> {
     } catch {
       return true;
     }
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await sleep(50);
   }
   return false;
 }

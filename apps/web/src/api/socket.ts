@@ -19,11 +19,9 @@ export interface ReconnectingSocketOptions {
   onMessage(data: string): void;
   onStateChange(state: ConnectionState, reconnected: boolean): void;
   createSocket?(url: string): SocketLike;
-  initialDelayMs?: number;
   maxDelayMs?: number;
   /** Keep-alive message sent while open (proxies drop idle sockets). */
   pingMessage?: string;
-  pingIntervalMs?: number;
   random?(): number;
   /** A close the server meant as final (e.g. incompatible API version): stop reconnecting. */
   isFatalClose?(event: unknown): boolean;
@@ -125,9 +123,8 @@ export class ReconnectingSocket {
 
   private scheduleRetry(): void {
     if (this.stopped) return;
-    const initial = this.options.initialDelayMs ?? 300;
     const max = this.options.maxDelayMs ?? 10_000;
-    const base = Math.min(max, initial * 2 ** this.attempt);
+    const base = Math.min(max, 300 * 2 ** this.attempt);
     const random = this.options.random ?? Math.random;
     const delay = Math.max(0, base + base * 0.25 * (random() * 2 - 1));
     this.attempt++;
@@ -147,7 +144,7 @@ export class ReconnectingSocket {
     this.stopPing();
     const message = this.options.pingMessage;
     if (!message) return;
-    this.pingTimer = setInterval(() => this.send(message), this.options.pingIntervalMs ?? 25_000);
+    this.pingTimer = setInterval(() => this.send(message), 25_000);
   }
 
   private stopPing(): void {

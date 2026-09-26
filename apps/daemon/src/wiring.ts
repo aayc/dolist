@@ -10,6 +10,7 @@ import {
   type AppSettings,
   agentModel,
   DEFAULT_SETTINGS,
+  errorMessage,
   isAgentOwnedPath,
   type Logger,
   mergeSettings,
@@ -23,7 +24,6 @@ import {
   searchVault,
 } from "@ddl/storage";
 import type { DaemonConfig } from "./config";
-import { errorMessage } from "./errors";
 import { IMPORT_DIR } from "./import/manifest";
 import { NullExecutionProvider } from "./null-execution";
 import { NullAgentRuntime } from "./null-runtime";

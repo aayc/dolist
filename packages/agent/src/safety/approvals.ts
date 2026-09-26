@@ -13,7 +13,14 @@ import type {
   ApprovalStatus,
   Unsubscribe,
 } from "@ddl/core";
-import { createId, DEFAULT_SETTINGS, debounce, silentLogger } from "@ddl/core";
+import {
+  createId,
+  DEFAULT_SETTINGS,
+  debounce,
+  errorMessage,
+  Listeners,
+  silentLogger,
+} from "@ddl/core";
 import { type ApprovalState, createApprovalStateFile, mergeApprovalStates } from "./approval-store";
 import { riskRank } from "./policy";
 import type {
@@ -107,18 +114,12 @@ export function createApprovalBroker(
   /** Pending approvals asked only because the approval policy asks (the evaluator allowed them). */
   const policyOnly = new Set<string>();
   const grants: ApprovalGrant[] = [];
-  const listeners = new Set<(approval: ApprovalRequest) => void>();
+  const listeners = new Listeners<ApprovalRequest>((error) =>
+    logger.warn("approval listener failed", { error: errorMessage(error) }),
+  );
 
   const emit = (approval: ApprovalRequest) => {
-    for (const listener of [...listeners]) {
-      try {
-        listener(approval);
-      } catch (error) {
-        logger.warn("approval listener failed", {
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
+    listeners.emit(approval);
   };
 
   const file = storage ? createApprovalStateFile({ storage, logger, now }) : undefined;
@@ -134,7 +135,7 @@ export function createApprovalBroker(
         .then(adopt)
         .catch((error: unknown) => {
           logger.warn("failed to load approvals state", {
-            error: error instanceof Error ? error.message : String(error),
+            error: errorMessage(error),
           });
         })
     : Promise.resolve();
@@ -383,10 +384,7 @@ export function createApprovalBroker(
     },
 
     onUpsert(listener: (approval: ApprovalRequest) => void): Unsubscribe {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
+      return listeners.add(listener);
     },
 
     flush,

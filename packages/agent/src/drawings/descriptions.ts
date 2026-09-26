@@ -14,6 +14,7 @@ import {
   type DrawingEmbedSpec,
   describeDrawing,
   drawingTitleFromPath,
+  errorMessage,
   findDrawingEmbeds,
   formatDrawingEmbed,
   isDrawingMarkdown,
@@ -232,7 +233,7 @@ export class DrawingDescriptions {
         lines = await this.blockLines(embed, path, line, seen, budget);
       } catch (error) {
         if (!(error instanceof DrawingPathError)) {
-          this.logger.warn("Could not describe a drawing", { error: errorText(error) });
+          this.logger.warn("Could not describe a drawing", { error: errorMessage(error) });
         }
         lines = [`${DRAWING_MARKER} ${formatDrawingEmbed(embed)} · couldn't be looked at`];
       }
@@ -392,8 +393,4 @@ function lineIndex(text: string): (offset: number) => number {
     for (; at < offset && at < text.length; at++) if (text.charCodeAt(at) === 10) line++;
     return line;
   };
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

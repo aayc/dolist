@@ -24,10 +24,6 @@ export function formatTimestamp(ts: number, now: number = Date.now()): string {
   return isSameLocalDay(ts, now) ? timeFormat.format(ts) : dayTimeFormat.format(ts);
 }
 
-export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
 const WORD_RE = /[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu;
 
 export function countWords(text: string): number {
@@ -35,10 +31,4 @@ export function countWords(text: string): number {
   WORD_RE.lastIndex = 0;
   while (WORD_RE.exec(text) !== null) count++;
   return count;
-}
-
-export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

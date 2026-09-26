@@ -1,7 +1,7 @@
 import type { DeviceSyncSetup, SyncStatusResponse } from "@ddl/core";
+import { pluralize } from "@ddl/core";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useId, useState } from "react";
 import { useServices } from "../../../app/services";
-import { pluralize } from "../../../lib/format";
 import { applyDevice, loadDevice, useDeviceStore } from "../device-store";
 import { syncTokenProblem, syncUrlProblem, syncVaultProblem } from "../inputs";
 import { remoteErrorMessage } from "../remote-errors";

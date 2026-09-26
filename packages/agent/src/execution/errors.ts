@@ -46,7 +46,3 @@ export class ProtectedAppError extends ExecutionError {
 export class StaleElementError extends ExecutionError {
   override name = "StaleElementError";
 }
-
-export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}

@@ -33,6 +33,31 @@ export function normalizePath(input: string): string {
 }
 
 /** True when `input` normalizes cleanly and stays inside the vault. */
+/** `normalizePath`, refusing the vault root: the path of a file or folder in it. */
+export function toVaultPath(input: string): string {
+  const p = normalizePath(input);
+  if (p === "") throw new InvalidPathError(input, "is empty");
+  return p;
+}
+
+/**
+ * Percent-encodes control characters and U+2028/U+2029 in a request path. Hono routes on the
+ * decoded path and its wildcards don't match line terminators, so a path like
+ * `/api/notes/a%0Ab.md` would skip every route and middleware; re-escaped, it stays on its route
+ * (guarded, then rejected by validation).
+ */
+export function escapeRoutingPath(path: string): string {
+  let out = "";
+  for (const ch of path) {
+    const code = ch.charCodeAt(0);
+    out +=
+      code < 0x20 || code === 0x7f || code === 0x2028 || code === 0x2029
+        ? encodeURIComponent(ch)
+        : ch;
+  }
+  return out;
+}
+
 export function isSafeVaultPath(input: string): boolean {
   try {
     return normalizePath(input).length > 0;

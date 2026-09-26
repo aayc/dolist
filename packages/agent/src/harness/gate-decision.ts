@@ -1,4 +1,5 @@
 import type { Logger } from "@ddl/core";
+import { errorMessage, isRecord, raceAbort } from "@ddl/core";
 import type { ToolCallDecision, ToolCallRequest } from "./types";
 
 /**
@@ -23,31 +24,8 @@ export async function decideGate(
     if (signal?.aborted) return { allow: false, reason: "the run was aborted" };
     logger?.warn("safety gate threw; blocking tool call", {
       tool: request.toolName,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(error),
     });
     return { allow: false, reason: "the safety check failed" };
   }
-}
-
-function raceAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
-  if (!signal) return promise;
-  if (signal.aborted) return Promise.reject(signal.reason);
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = () => reject(signal.reason);
-    signal.addEventListener("abort", onAbort, { once: true });
-    promise.then(
-      (value) => {
-        signal.removeEventListener("abort", onAbort);
-        resolve(value);
-      },
-      (error: unknown) => {
-        signal.removeEventListener("abort", onAbort);
-        reject(error);
-      },
-    );
-  });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

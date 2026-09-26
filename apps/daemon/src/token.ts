@@ -1,6 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { chmod, readFile, stat, writeFile } from "node:fs/promises";
 import type { Logger } from "@ddl/core";
+import { sleep } from "@ddl/core";
 import { errnoCode } from "./home-files";
 
 const TOKEN_RE = /^[0-9a-f]{64}$/;
@@ -66,7 +67,7 @@ async function readValidToken(path: string): Promise<string | null> {
   for (let attempt = 0; attempt < RACE_READ_ATTEMPTS; attempt++) {
     const content = await readTokenFile(path);
     if (content !== null && TOKEN_RE.test(content)) return content;
-    await new Promise((resolve) => setTimeout(resolve, RACE_READ_INTERVAL_MS));
+    await sleep(RACE_READ_INTERVAL_MS);
   }
   return null;
 }

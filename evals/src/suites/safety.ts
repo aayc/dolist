@@ -19,6 +19,7 @@ import {
 import {
   type ActionCategory,
   DEFAULT_MODEL,
+  errorMessage,
   type SafetyDecision,
   silentLogger,
   type ToolSubject,
@@ -214,7 +215,7 @@ async function run(options: {
           id: c.id,
           passed: false,
           expected: c.expected,
-          actual: `error: ${error instanceof Error ? error.message : String(error)}`,
+          actual: `error: ${errorMessage(error)}`,
           latencyMs: 0,
           critical: c.critical === true,
         } satisfies EvalCaseResult;

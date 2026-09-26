@@ -1,5 +1,6 @@
 import {
   Emitter,
+  errorMessage,
   hashString,
   isRoutinePath,
   type Logger,
@@ -54,7 +55,7 @@ export class RoutineCatalog {
     try {
       entries = await this.storage.list({ prefix: ROUTINES_FOLDER });
     } catch (error) {
-      this.logger.warn("Failed to list routines", { error: errorText(error) });
+      this.logger.warn("Failed to list routines", { error: errorMessage(error) });
     }
     await Promise.all(
       entries.filter((entry) => isRoutinePath(entry.path)).map((entry) => this.reload(entry.path)),
@@ -108,7 +109,7 @@ export class RoutineCatalog {
     try {
       content = (await this.storage.read(path))?.content ?? null;
     } catch (error) {
-      this.logger.warn("Failed to read a routine", { path, error: errorText(error) });
+      this.logger.warn("Failed to read a routine", { path, error: errorMessage(error) });
       return;
     }
     if (content === null) {
@@ -126,8 +127,4 @@ export class RoutineCatalog {
     });
     this.emitter.emit("changed", undefined);
   }
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

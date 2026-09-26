@@ -1,6 +1,6 @@
 import type { CreateRoutineRequest, Routine } from "@ddl/core";
+import { errorMessage } from "@ddl/core";
 import type { DaemonClient } from "../api/client";
-import { errorMessage } from "../api/errors";
 import { type Notice, runProblem } from "../features/routines/routine-errors";
 import { mergeThreadSummaries } from "../state/agent-reducer";
 import { updateAgentState } from "../state/agent-store";

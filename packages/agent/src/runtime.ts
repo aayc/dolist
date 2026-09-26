@@ -11,6 +11,7 @@ import {
   createId,
   dailyNotePath,
   Emitter,
+  errorMessage,
   isOrchestratorThread,
   type Logger,
   type Routine,
@@ -427,13 +428,13 @@ class Runtime implements AgentRuntime {
   async init(): Promise<void> {
     await Promise.all([
       this.threads.load().catch((error: unknown) => {
-        this.logger.error("Failed to load threads", { error: errorText(error) });
+        this.logger.error("Failed to load threads", { error: errorMessage(error) });
       }),
       this.records.load().catch((error: unknown) => {
-        this.logger.error("Failed to load task records", { error: errorText(error) });
+        this.logger.error("Failed to load task records", { error: errorMessage(error) });
       }),
       this.routines.start().catch((error: unknown) => {
-        this.logger.error("Failed to load routines", { error: errorText(error) });
+        this.logger.error("Failed to load routines", { error: errorMessage(error) });
       }),
     ]);
     this.safely(() => this.markInterruptedToolCalls(), undefined);
@@ -829,7 +830,7 @@ class Runtime implements AgentRuntime {
       try {
         listener(payload);
       } catch (error) {
-        this.logger.error("AgentRuntime listener failed", { event, error: errorText(error) });
+        this.logger.error("AgentRuntime listener failed", { event, error: errorMessage(error) });
       }
     });
   }
@@ -846,9 +847,9 @@ class Runtime implements AgentRuntime {
         logger: this.logger.child({ component: "approvals" }),
       });
     } catch (error) {
-      const reason = `The approval system failed to start: ${errorText(error)}`;
+      const reason = `The approval system failed to start: ${errorMessage(error)}`;
       if (this.mode !== "off") this.problem = reason;
-      this.logger.error("Approval broker unavailable", { error: errorText(error) });
+      this.logger.error("Approval broker unavailable", { error: errorMessage(error) });
       return createInertApprovalBroker(reason);
     }
   }
@@ -895,8 +896,8 @@ class Runtime implements AgentRuntime {
     } catch (error) {
       this.evaluator = null;
       this.gate = null;
-      this.problem ??= `The safety system failed to start (${errorText(error)}); the agent won't act until it's fixed.`;
-      this.logger.error("Safety system unavailable", { error: errorText(error) });
+      this.problem ??= `The safety system failed to start (${errorMessage(error)}); the agent won't act until it's fixed.`;
+      this.logger.error("Safety system unavailable", { error: errorMessage(error) });
     }
   }
 
@@ -1025,7 +1026,7 @@ class Runtime implements AgentRuntime {
         .filter((tool) => llm !== undefined || tool.name !== TOOL.webSearch)
         .map((tool) => this.sourceCatalog.observe(tool));
     } catch (error) {
-      this.logger.warn("Web tools unavailable", { error: errorText(error) });
+      this.logger.warn("Web tools unavailable", { error: errorMessage(error) });
     }
   }
 
@@ -1233,8 +1234,8 @@ class Runtime implements AgentRuntime {
       const allowed = this.allowedCalls.get(key);
       return decision.allow && allowed ? { ...allowed, ...decision } : decision;
     } catch (error) {
-      this.logger.error("Safety gate threw", { tool: call.toolName, error: errorText(error) });
-      return { allow: false, reason: `The safety check failed: ${errorText(error)}` };
+      this.logger.error("Safety gate threw", { tool: call.toolName, error: errorMessage(error) });
+      return { allow: false, reason: `The safety check failed: ${errorMessage(error)}` };
     } finally {
       this.allowedCalls.delete(key);
     }
@@ -1452,7 +1453,7 @@ class Runtime implements AgentRuntime {
   }
 
   private logError(context: string, error: unknown): void {
-    this.logger.error(`Agent runtime error (${context})`, { error: errorText(error) });
+    this.logger.error(`Agent runtime error (${context})`, { error: errorMessage(error) });
   }
 }
 
@@ -1496,8 +1497,4 @@ function createInertApprovalBroker(reason: string): ApprovalBroker {
     approvePending: () => [],
     onUpsert: () => () => {},
   };
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

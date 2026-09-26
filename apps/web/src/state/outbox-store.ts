@@ -1,6 +1,5 @@
-import { createId, type ThreadMessage } from "@ddl/core";
+import { createId, errorMessage, type ThreadMessage } from "@ddl/core";
 import { create } from "zustand";
-import { errorMessage } from "../api/errors";
 
 export type PendingState = "sending" | "sent" | "failed";
 

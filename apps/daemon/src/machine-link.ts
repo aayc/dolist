@@ -24,6 +24,8 @@ import {
   type AppSettings,
   type DeepPartial,
   defaultMachineName,
+  errorMessage,
+  Listeners,
   type Logger,
   type MachinePairRequest,
   type MachineStatusResponse,
@@ -34,7 +36,7 @@ import {
 } from "@ddl/core";
 import { z } from "zod";
 import type { MachineCredential, MachineCredentialSource } from "./agent-location";
-import { ApiError, errorMessage } from "./errors";
+import { ApiError } from "./errors";
 import type { SecretFile } from "./home-files";
 
 /** This device's credential for the always-on machine, in `$DDL_HOME` (mode 0600). */
@@ -89,7 +91,11 @@ export class MachineLink implements MachineCredentialSource {
   readonly #options: MachineLinkOptions;
   readonly #fetch: typeof fetch;
   readonly #now: () => number;
-  readonly #listeners = new Set<(credential: MachineCredential | null) => void>();
+  readonly #listeners = new Listeners<MachineCredential | null>((error) =>
+    this.#options.logger.error("Machine credential listener failed", {
+      error: errorMessage(error),
+    }),
+  );
   readonly #unsubscribe: Unsubscribe;
   #stored: StoredCredential | null;
   #last: LastCheck | null = null;
@@ -133,10 +139,7 @@ export class MachineLink implements MachineCredentialSource {
   }
 
   onChange(listener: (credential: MachineCredential | null) => void): Unsubscribe {
-    this.#listeners.add(listener);
-    return () => {
-      this.#listeners.delete(listener);
-    };
+    return this.#listeners.add(listener);
   }
 
   /** The last known status; a stale one is refreshed in the background for the next read. */
@@ -354,15 +357,7 @@ export class MachineLink implements MachineCredentialSource {
     if (key === this.#credentialKey) return;
     this.#credentialKey = key;
     const credential = this.current();
-    for (const listener of [...this.#listeners]) {
-      try {
-        listener(credential);
-      } catch (error) {
-        this.#options.logger.error("Machine credential listener failed", {
-          error: errorMessage(error),
-        });
-      }
-    }
+    this.#listeners.emit(credential);
   }
 }
 

@@ -18,6 +18,7 @@
  * load; a partly unreadable one is copied into `corrupt/` first. Nothing is written to a journal a
  * newer app wrote.
  */
+
 import {
   decodePersistedThread,
   decodePersistedThreadJournal,
@@ -33,6 +34,7 @@ import {
   persistedThreadJournalPath,
 } from "@ddl/contract";
 import type { Logger } from "@ddl/core";
+import { errorMessage } from "@ddl/core";
 import { appendToFile, type StorageProvider } from "@ddl/storage";
 import { applyJournalPayload, foldJournal, snapshotAddsTo } from "./fold";
 
@@ -255,7 +257,7 @@ async function appendUntilHeld(
   } catch (error) {
     logger.warn("Failed to migrate into a thread's journal; will retry at the next start", {
       threadId: id,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(error),
     });
   }
   return false;
@@ -269,7 +271,7 @@ async function remove(context: Context, file: StoredFile): Promise<void> {
     if (isNamed(error, "ConflictError") || isNamed(error, "NotFoundError")) return;
     context.logger.warn("Could not remove a migrated thread file", {
       path: file.path,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(error),
     });
   }
 }

@@ -9,7 +9,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import { type JsonSchema, type Logger, silentLogger } from "@ddl/core";
+import { errorMessage, isRecord, type JsonSchema, type Logger, silentLogger } from "@ddl/core";
 
 export const MCP_PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 const DEFAULT_MAX_BODY_BYTES = 4 * 1024 * 1024;
@@ -82,7 +82,7 @@ export class McpBridge {
     this.logger = (options.logger ?? silentLogger).child({ component: "mcp-bridge" });
     this.server = http.createServer((req, res) => {
       this.handle(req, res).catch((error: unknown) => {
-        this.logger.warn("MCP bridge request failed", { error: messageOf(error) });
+        this.logger.warn("MCP bridge request failed", { error: errorMessage(error) });
         if (!res.headersSent) res.writeHead(500).end();
       });
     });
@@ -327,12 +327,4 @@ function validToken(header: string | undefined, expected: Buffer): boolean {
 
 function sha256(text: string): Buffer {
   return createHash("sha256").update(text).digest();
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

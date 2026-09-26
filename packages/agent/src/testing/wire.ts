@@ -4,6 +4,7 @@
  * content deltas, tool-call deltas with index, id, name and argument fragments, finish_reason, a
  * usage chunk). Pure; the HTTP fake and the tests share it.
  */
+import { isRecord } from "@ddl/core";
 import type {
   AssistantTurn,
   BrainMessage,
@@ -294,7 +295,5 @@ function contentText(content: unknown): string {
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
+  return isRecord(value) ? value : undefined;
 }

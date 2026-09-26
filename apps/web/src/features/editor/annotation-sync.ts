@@ -1,13 +1,9 @@
 import type { TaskAgentRecord } from "@ddl/core";
+import { onNextFrame } from "../../lib/frame-loop";
 import type { RecordBucket } from "../../state/agent-reducer";
 import { useAgentStore } from "../../state/agent-store";
 import { buildAnnotations } from "./annotations";
 import type { EditorController } from "./editor-controller";
-
-const nextFrame: (cb: () => void) => void =
-  typeof requestAnimationFrame === "function"
-    ? (cb) => requestAnimationFrame(() => cb())
-    : (cb) => setTimeout(cb, 16);
 
 /**
  * Keeps the editor's agent badges in sync: recomputes on the next frame when the active note's
@@ -20,7 +16,7 @@ export class AnnotationSync {
   private readonly delayMs: number;
   private activePath: string | null = null;
   private timer: ReturnType<typeof setTimeout> | undefined;
-  private framePending = false;
+  private readonly scheduleFrame = onNextFrame(() => this.recompute());
   private readonly unsubscribe: () => void;
 
   constructor(editor: EditorController, delayMs = 150) {
@@ -29,15 +25,6 @@ export class AnnotationSync {
     this.unsubscribe = useAgentStore.subscribe((state, previous) => {
       const path = this.activePath;
       if (path !== null && state.records[path] !== previous.records[path]) this.scheduleFrame();
-    });
-  }
-
-  private scheduleFrame(): void {
-    if (this.framePending) return;
-    this.framePending = true;
-    nextFrame(() => {
-      this.framePending = false;
-      this.recompute();
     });
   }
 

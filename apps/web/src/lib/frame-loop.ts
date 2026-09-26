@@ -36,6 +36,21 @@ export const onEveryFrame: FrameScheduler = (task) => {
   };
 };
 
+/** A function that runs `fn` on the next frame, once however often it's called before then. */
+export function onNextFrame(fn: () => void): () => void {
+  let pending = false;
+  const run = () => {
+    pending = false;
+    fn();
+  };
+  return () => {
+    if (pending) return;
+    pending = true;
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(run);
+    else setTimeout(run, 16);
+  };
+}
+
 export function prefersReducedMotion(): boolean {
   return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 }

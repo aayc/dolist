@@ -3,6 +3,7 @@ import {
   type AppSettings,
   agentModel,
   createId,
+  errorMessage,
   isActiveTaskStatus,
   type Logger,
   type MessageAuthor,
@@ -10,9 +11,7 @@ import {
   silentLogger,
   type TaskAgentStatus,
   type Thread,
-  type ToolCallMessage,
   type ToolSpec,
-  toolResultText,
   truncate,
 } from "@ddl/core";
 import { type DrawingDescriptions, drawingBudget } from "../drawings/descriptions";
@@ -47,8 +46,8 @@ import type { ThreadJournal, ThreadStore } from "../threads/types";
 import { ToolInputError } from "../tools/input";
 import { createThreadTools, THREAD_TOOL_NAMES, type ThreadToolHost } from "../tools/thread";
 import type { TaskRecords } from "./records";
-import { previewText, sanitizeForDisplay } from "./redact";
 import type { TaskBoard, TaskRef } from "./task-board";
+import { ToolCallRows } from "./tool-messages";
 import type { SubagentSpec } from "./types";
 
 type FrameData = Parameters<FrameListener>[0];
@@ -110,8 +109,6 @@ export interface SubagentManagerOptions {
   onChange: () => void;
   now?: () => number;
   logger?: Logger;
-  /** Finished sessions kept warm for follow-ups; older ones are disposed (and re-primed later). */
-  maxIdleSessions?: number;
   /** The routine a task is a run of (its kickoff and `finish_task` change accordingly). */
   routineBrief?: (taskId: string) => RoutineBrief | undefined;
   /** Describes the drawings a task or its notes embed, for the kickoff. */
@@ -167,13 +164,13 @@ interface Run {
   lastText: string;
   turn: TurnState;
   streams: Map<string, StreamState>;
-  toolMessages: Map<string, ToolCallMessage>;
-  toolLabels: Map<string, string>;
+  tools: ToolCallRows;
   startedAt: number | null;
   lastActiveAt: number;
 }
 
-const DEFAULT_MAX_IDLE_SESSIONS = 8;
+/** Finished sessions kept warm for follow-ups; older ones are disposed (and re-primed later). */
+const MAX_IDLE_SESSIONS = 8;
 
 /**
  * Runs one harness session per task: concurrency-limited (FIFO queue), streaming into the task's
@@ -183,7 +180,6 @@ export class SubagentManager {
   private readonly options: SubagentManagerOptions;
   private readonly now: () => number;
   private readonly logger: Logger;
-  private readonly maxIdleSessions: number;
   private readonly runs = new Map<string, Run>();
   private readonly bySession = new Map<string, Run>();
   private readonly usedSessionIds = new Set<string>();
@@ -194,7 +190,6 @@ export class SubagentManager {
     this.options = options;
     this.now = options.now ?? Date.now;
     this.logger = options.logger ?? silentLogger;
-    this.maxIdleSessions = options.maxIdleSessions ?? DEFAULT_MAX_IDLE_SESSIONS;
   }
 
   runningCount(): number {
@@ -296,7 +291,7 @@ export class SubagentManager {
       } catch (error) {
         this.logger.warn("Steering failed; delivering with the next turn", {
           taskId,
-          error: errorText(error),
+          error: errorMessage(error),
         });
       }
     }
@@ -402,11 +397,12 @@ export class SubagentManager {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   private createRun(spec: SubagentSpec, threadId: string): Run {
+    const author = authorFor(spec.capabilities);
     return {
       taskId: spec.taskId,
       threadId,
       spec,
-      author: authorFor(spec.capabilities),
+      author,
       state: "idle",
       closed: false,
       controller: new AbortController(),
@@ -415,8 +411,7 @@ export class SubagentManager {
       lastText: "",
       turn: freshTurn(),
       streams: new Map(),
-      toolMessages: new Map(),
-      toolLabels: new Map(),
+      tools: new ToolCallRows(author, this.now),
       startedAt: null,
       lastActiveAt: this.now(),
     };
@@ -442,7 +437,7 @@ export class SubagentManager {
     this.options.board.setStatus(run.taskId, "working", keepSummary ? {} : { summary: "Working…" });
     this.options.onChange();
     void this.execute(run).catch((error) => {
-      this.logger.error("Subagent run crashed", { taskId: run.taskId, error: errorText(error) });
+      this.logger.error("Subagent run crashed", { taskId: run.taskId, error: errorMessage(error) });
     });
   }
 
@@ -481,7 +476,7 @@ export class SubagentManager {
         await this.prompt(run, run.session, FINISH_NUDGE);
       }
     } catch (error) {
-      if (!run.closed) run.turn.error = errorText(error);
+      if (!run.closed) run.turn.error = errorMessage(error);
     }
     if (!run.closed) this.complete(run);
   }
@@ -538,7 +533,7 @@ export class SubagentManager {
         ...(turn.changed !== undefined ? { changed: turn.changed } : {}),
       });
     } catch (error) {
-      this.logger.error("onFinished listener failed", { error: errorText(error) });
+      this.logger.error("onFinished listener failed", { error: errorMessage(error) });
     }
   }
 
@@ -615,7 +610,7 @@ export class SubagentManager {
     } catch (error) {
       this.logger.warn("Failed to release subagent resources", {
         taskId: run.taskId,
-        error: errorText(error),
+        error: errorMessage(error),
       });
     }
   }
@@ -624,7 +619,7 @@ export class SubagentManager {
     const idle = [...this.runs.values()]
       .filter((run) => run.state === "idle" && run.session)
       .sort((a, b) => a.lastActiveAt - b.lastActiveAt);
-    while (idle.length > this.maxIdleSessions) {
+    while (idle.length > MAX_IDLE_SESSIONS) {
       const run = idle.shift()!;
       run.needsHistory = true;
       void this.disposeSession(run);
@@ -695,7 +690,7 @@ export class SubagentManager {
     try {
       return (await drawings.blocks(text, drawingBudget())).flatMap((block) => block.lines);
     } catch (error) {
-      this.logger.warn("Could not describe the task's drawings", { error: errorText(error) });
+      this.logger.warn("Could not describe the task's drawings", { error: errorMessage(error) });
       return [];
     }
   }
@@ -723,19 +718,19 @@ export class SubagentManager {
         }),
       );
     } catch (error) {
-      this.logger.warn("Execution tools unavailable", { error: errorText(error) });
+      this.logger.warn("Execution tools unavailable", { error: errorMessage(error) });
     }
     if (capabilities.includes("connectors") && this.options.connectors) {
       try {
         tools.push(...(await this.options.connectors.getTools()));
       } catch (error) {
-        this.logger.warn("Connector tools unavailable", { error: errorText(error) });
+        this.logger.warn("Connector tools unavailable", { error: errorMessage(error) });
       }
     }
     if (this.options.extraTools && task) tools.push(...this.options.extraTools(run.spec, task));
     const unique = new Map<string, ToolSpec>();
     for (const tool of tools) if (!unique.has(tool.name)) unique.set(tool.name, tool);
-    run.toolLabels = new Map([...unique.values()].map((tool) => [tool.name, tool.label]));
+    run.tools.labels = new Map([...unique.values()].map((tool) => [tool.name, tool.label]));
     return [...unique.values()];
   }
 
@@ -794,7 +789,7 @@ export class SubagentManager {
       this.logger.error("Failed to apply harness event", {
         taskId: run.taskId,
         type: event.type,
-        error: errorText(error),
+        error: errorMessage(error),
       });
     }
   }
@@ -850,24 +845,11 @@ export class SubagentManager {
         }
         return;
       }
-      case "tool_start": {
-        if (THREAD_TOOL_NAMES.has(event.toolName)) return;
-        const label = run.toolLabels.get(event.toolName);
-        const message: ToolCallMessage = {
-          id: createId("msg"),
-          kind: "tool_call",
-          author: run.author,
-          createdAt: this.now(),
-          toolCallId: event.toolCallId,
-          toolName: event.toolName,
-          ...(label ? { label } : {}),
-          input: sanitizeForDisplay(event.input),
-          status: "running",
-        };
-        run.toolMessages.set(event.toolCallId, message);
-        threads.upsertMessage(run.threadId, message);
+      case "tool_start":
+        if (!THREAD_TOOL_NAMES.has(event.toolName)) {
+          threads.upsertMessage(run.threadId, run.tools.start(event));
+        }
         return;
-      }
       case "tool_end": {
         if (THREAD_TOOL_NAMES.has(event.toolName)) {
           if (event.isError) {
@@ -878,25 +860,7 @@ export class SubagentManager {
           }
           return;
         }
-        const started = run.toolMessages.get(event.toolCallId);
-        run.toolMessages.delete(event.toolCallId);
-        const preview = previewText(toolResultText(event.result), 300);
-        const label = run.toolLabels.get(event.toolName);
-        threads.upsertMessage(run.threadId, {
-          ...(started ?? {
-            id: createId("msg"),
-            kind: "tool_call",
-            author: run.author,
-            createdAt: this.now(),
-            toolCallId: event.toolCallId,
-            toolName: event.toolName,
-            ...(label ? { label } : {}),
-            input: undefined,
-          }),
-          status: event.blocked ? "blocked" : event.isError ? "error" : "ok",
-          ...(preview ? { resultPreview: preview } : {}),
-          endedAt: this.now(),
-        });
+        threads.upsertMessage(run.threadId, run.tools.end(event));
         return;
       }
       case "error":
@@ -924,22 +888,16 @@ export class SubagentManager {
       if (stream.posted) this.finalizeStream(run, stream, stream.text.trim());
     }
     run.streams.clear();
-    for (const message of run.toolMessages.values()) {
-      this.options.threads.upsertMessage(run.threadId, {
-        ...message,
-        status: "error",
-        resultPreview: reason,
-        endedAt: this.now(),
-      });
+    for (const message of run.tools.close(reason)) {
+      this.options.threads.upsertMessage(run.threadId, message);
     }
-    run.toolMessages.clear();
   }
 
   private cancelApprovals(taskId: string, reason: string): void {
     try {
       this.options.approvals().cancelForTask(taskId, reason);
     } catch (error) {
-      this.logger.warn("Failed to cancel approvals", { taskId, error: errorText(error) });
+      this.logger.warn("Failed to cancel approvals", { taskId, error: errorMessage(error) });
     }
   }
 
@@ -992,8 +950,4 @@ export function badgeFrom(markdown: string): string {
       )
       .find((l) => l.length > 0) ?? "";
   return truncate(line, 60);
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

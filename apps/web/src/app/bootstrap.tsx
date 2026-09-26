@@ -1,4 +1,4 @@
-import { type ThemePreference, today, toISODate } from "@ddl/core";
+import { sleep, type ThemePreference, today, toISODate } from "@ddl/core";
 import { StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { PairBrowser } from "../api/pairing";
@@ -113,7 +113,7 @@ function installDebugHooks(services: Services): void {
   let replyDelay = 0;
   let failReplies = 0;
   client.postMessage = async (threadId, text) => {
-    if (replyDelay > 0) await new Promise((resolve) => setTimeout(resolve, replyDelay));
+    if (replyDelay > 0) await sleep(replyDelay);
     if (failReplies > 0) {
       failReplies--;
       throw new Error("The daemon didn't answer");
@@ -126,11 +126,7 @@ function installDebugHooks(services: Services): void {
     openNote: (path, newTab) => services.workspace.openNote(path, { newTab: newTab ?? false }),
     renderMarkdown: async (source) => (await import("../lib/markdown")).renderMarkdown(source),
     delayWrites: (ms) => {
-      client.writeNote =
-        ms > 0
-          ? (...args) =>
-              new Promise((resolve) => setTimeout(resolve, ms)).then(() => writeNote(...args))
-          : writeNote;
+      client.writeNote = ms > 0 ? (...args) => sleep(ms).then(() => writeNote(...args)) : writeNote;
     },
     holdReplies: ({ ms = 0, fail = 0 }) => {
       replyDelay = ms;
