@@ -46,6 +46,8 @@ const LEASE: Partial<LeaseTimings> = {
   marginMs: 1_000,
 };
 const LINK: Partial<LinkTimings> = { pingEveryMs: 500, minBackoffMs: 50, maxBackoffMs: 500 };
+/** Local changes reach the sync service this long after they settle (1.5 s in the app). */
+const SYNC_DEBOUNCE_MS = 100;
 const TASK = "Order a replacement water filter";
 
 interface Device {
@@ -111,6 +113,7 @@ async function startDevice(
     logger: logger.child({ device: name }),
     leaseTimings: LEASE,
     relayLinkTimings: LINK,
+    syncDebounceMs: SYNC_DEBOUNCE_MS,
   });
   running.push(daemon);
   const apiToken = readFileSync(config.tokenPath, "utf8").trim();

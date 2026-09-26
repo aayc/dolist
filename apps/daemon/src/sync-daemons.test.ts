@@ -31,6 +31,8 @@ const LEASE: Partial<LeaseTimings> = {
   maxBackoffMs: 1_000,
   marginMs: 1_000,
 };
+/** Local changes reach the sync service this long after they settle (1.5 s in the app). */
+const SYNC_DEBOUNCE_MS = 100;
 
 interface Device {
   name: string;
@@ -94,6 +96,7 @@ async function startDevice(
     env,
     logger: logger.child({ device: name }),
     leaseTimings: LEASE,
+    syncDebounceMs: SYNC_DEBOUNCE_MS,
   });
   running.push(daemon);
   return { name, daemon, apiToken: readFileSync(config.tokenPath, "utf8").trim() };
