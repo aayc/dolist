@@ -83,6 +83,10 @@ test.describe("the orchestrator toggle", () => {
     await expect(page.getByTestId("placement-toggle-always_on_machine")).toBeDisabled();
     await expect(await tooltipOf(page, toggle)).toHaveText("This device doesn't sync");
     await expect(line(page)).toHaveText("Running on this device");
+    await openSettings(page, "location");
+    await expect(page.getByTestId("readiness-here").getByTestId(/^readiness-/)).toHaveCount(5);
+    await expect(page.getByTestId("readiness-credential")).toContainText("Present");
+    await page.keyboard.press("Escape");
 
     await page.getByTestId("agent-location-line-action").click();
     await expect(page.getByTestId("settings-sync")).toBeVisible();
