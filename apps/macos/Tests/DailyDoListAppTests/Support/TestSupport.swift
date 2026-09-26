@@ -118,7 +118,6 @@ func makeEnvironment(
   supervisor: FakeSupervisor = FakeSupervisor(),
   mode: DaemonMode = .external,
   demo: Bool = false,
-  demoClient: (@MainActor () -> DaemonClient)? = nil,
   scheduler: AppScheduler = ManualScheduler(),
   defaults: UserDefaults = testDefaults(),
   discover: (@MainActor (URL, Int?) throws -> DaemonEndpoint)? = nil,
@@ -127,13 +126,12 @@ func makeEnvironment(
 ) -> AppEnvironment {
   let preferences = AppPreferences(defaults: defaults, environment: [:])
   preferences.daemonMode = mode
-  return AppEnvironment(
+  var environment = AppEnvironment(
     preferences: preferences,
     launchOptions: LaunchOptions(demo: demo),
     scheduler: scheduler,
     supervisor: supervisor,
     makeClient: { _ in client },
-    makeDemoClient: demoClient,
     discoverEndpoint: discover ?? { _, _ in
       DaemonEndpoint(baseURL: URL(string: "http://127.0.0.1:7331")!, token: "test-token")
     },
@@ -142,7 +140,15 @@ func makeEnvironment(
     enablesSystemServices: false,
     vimPasteboard: { SystemVimPasteboard(privatePasteboard()) },
     computerAccess: computerAccess)
+  environment.makeDemoDaemon = { testDemoDaemon }
+  environment.removeFolder = { _ in }
+  return environment
 }
+
+/// Demo mode's daemon in tests (a folder that never exists: the supervisor is a fake).
+let testDemoDaemon = DemoDaemon(
+  root: URL(fileURLWithPath: "/tmp/ddl-demo-test"),
+  configuration: .demo(root: URL(fileURLWithPath: "/tmp/ddl-demo-test"), port: 50_123))
 
 /// A pasteboard of its own for one test (vim's clipboard registers never touch the user's).
 @MainActor

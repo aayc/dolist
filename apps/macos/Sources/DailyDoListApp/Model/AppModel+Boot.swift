@@ -16,24 +16,15 @@ extension AppModel {
     guard generation == bootGeneration else { return }
 
     let client: DaemonClient
-    if isDemo {
-      guard let makeDemoClient = environment.makeDemoClient else {
-        phase = .failed(.other(detail: "Demo mode isn't available in this build."))
-        return
-      }
-      client = makeDemoClient()
-      connection.setKind(.demo)
-    } else {
-      switch await acquireEndpoint() {
-      case .failure(let failure):
-        if generation == bootGeneration { phase = .failed(failure) }
-        return
-      case .success(let endpoint):
-        BootTrace.mark("app: daemon endpoint ready")
-        client = environment.makeClient(endpoint)
-        clientEndpoint = endpoint
-        connection.setKind(.daemon(endpoint.baseURL))
-      }
+    switch await acquireEndpoint() {
+    case .failure(let failure):
+      if generation == bootGeneration { phase = .failed(failure) }
+      return
+    case .success(let endpoint):
+      BootTrace.mark("app: daemon endpoint ready")
+      client = environment.makeClient(endpoint)
+      clientEndpoint = endpoint
+      connection.setKind(isDemo ? .demo(endpoint.baseURL) : .daemon(endpoint.baseURL))
     }
     guard generation == bootGeneration else { return }
 
@@ -81,11 +72,11 @@ extension AppModel {
   /// Settings → Restart daemon. A managed daemon restarts in place (the client reconnects and
   /// resyncs); otherwise this reconnects.
   func restartDaemon() async {
-    guard preferences.daemonMode == .managed, !isDemo, phase == .ready else {
+    guard managesDaemon, phase == .ready, let configuration = try? launchConfiguration() else {
       await boot()
       return
     }
-    supervisor.configuration = preferences.launchConfiguration
+    supervisor.configuration = configuration
     guard let info = await supervisor.restart() else {
       phase = .failed(BootFailure(supervisorError: supervisor.lastError, state: supervisor.state))
       return
@@ -101,7 +92,7 @@ extension AppModel {
 
   /// The supervisor gave up on (or stopped) the managed daemon, so reconnecting can't help.
   var managedDaemonIsDown: Bool {
-    guard preferences.daemonMode == .managed, !isDemo else { return false }
+    guard managesDaemon else { return false }
     switch supervisor.state {
     case .failed, .stopped, .idle: return true
     case .starting, .running, .attached, .restarting: return false
@@ -110,7 +101,7 @@ extension AppModel {
 
   /// Follows a managed daemon the supervisor restarts on its own after a crash.
   func supervisorStateChanged(_ state: DaemonSupervisorState) {
-    guard phase == .ready, preferences.daemonMode == .managed, !isDemo else { return }
+    guard phase == .ready, managesDaemon else { return }
     switch state {
     case .running(_, let info), .attached(let info):
       if needsNewClient(for: info) { bootTask = Task { await boot() } }
@@ -138,30 +129,41 @@ extension AppModel {
 
   // MARK: - Steps
 
+  /// What a managed daemon launches with: the demo's (the same for every boot of this launch), or
+  /// the preferences'.
+  func launchConfiguration() throws -> DaemonLaunchConfiguration {
+    guard isDemo else { return preferences.launchConfiguration }
+    let demo = try demoDaemon ?? environment.makeDemoDaemon()
+    demoDaemon = demo
+    return demo.configuration
+  }
+
   private func acquireEndpoint() async -> Result<DaemonEndpoint, BootFailure> {
-    switch preferences.daemonMode {
-    case .managed:
-      supervisor.configuration = preferences.launchConfiguration
+    if managesDaemon {
+      do {
+        supervisor.configuration = try launchConfiguration()
+      } catch {
+        return .failure(.other(detail: "Couldn't set up the demo: \(error)"))
+      }
       phase = .booting("Starting the daemon…")
       guard let info = await supervisor.start() else {
         return .failure(BootFailure(supervisorError: supervisor.lastError, state: supervisor.state))
       }
       return .success(DaemonEndpoint(baseURL: info.baseURL, token: info.token))
-    case .external:
-      guard let url = preferences.externalURL else {
-        return .failure(
-          .invalidConfiguration(
-            detail: "“\(preferences.externalBaseURL)” isn't a valid http(s) URL."))
-      }
-      phase = .booting("Connecting to \(url.absoluteString)…")
-      do {
-        var endpoint = try environment.discoverEndpoint(preferences.homeURL, url.port)
-        endpoint.baseURL = url
-        return .success(endpoint)
-      } catch {
-        let detail = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-        return .failure(.daemonNotRunning(detail: detail))
-      }
+    }
+    guard let url = preferences.externalURL else {
+      return .failure(
+        .invalidConfiguration(detail: "“\(preferences.externalBaseURL)” isn't a valid http(s) URL.")
+      )
+    }
+    phase = .booting("Connecting to \(url.absoluteString)…")
+    do {
+      var endpoint = try environment.discoverEndpoint(preferences.homeURL, url.port)
+      endpoint.baseURL = url
+      return .success(endpoint)
+    } catch {
+      let detail = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+      return .failure(.daemonNotRunning(detail: detail))
     }
   }
 
@@ -186,7 +188,7 @@ extension AppModel {
     self.workspace = workspace
     startEventLoop(client)
     Task { await client.connect() }
-    if preferences.daemonMode == .managed, !isDemo { watchSupervisor() }
+    if managesDaemon { watchSupervisor() }
     if environment.enablesSystemServices { startAgentServices(agent) }
     observeAgentErrors(agent)
     Task { await imports.load() }
@@ -255,7 +257,6 @@ extension AppModel {
 
   /// The vault's local folder when this Mac can see it (Reveal in Finder).
   func localVaultURL() -> URL? {
-    guard !isDemo else { return nil }
     let fileManager = FileManager.default
     if let vault = supervisor.configuration.vaultPath ?? preferences.launchConfiguration.vaultPath {
       return fileManager.fileExists(atPath: vault.path) ? vault : nil

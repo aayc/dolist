@@ -6,6 +6,7 @@ import SwiftUI
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentTestSupport
 
 /// The Routines section: what each screen offers, read from its controls' tooltips.
 @MainActor

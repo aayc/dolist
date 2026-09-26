@@ -40,6 +40,8 @@ let package = Package(
       name: "DailyDoListAppTests",
       dependencies: [
         "DailyDoListApp", .product(name: "DailyDoListVim", package: "DailyDoListVim"),
+        .product(name: "DailyDoListClientTestSupport", package: "DailyDoListClient"),
+        .product(name: "DailyDoListAgentTestSupport", package: "DailyDoListAgent"),
         .product(name: "DailyDoListUI", package: "DailyDoListUI"),
         .product(name: "DailyDoListUITestSupport", package: "DailyDoListUI"),
         .product(name: "DailyDoListDrawing", package: "DailyDoListDrawing"),

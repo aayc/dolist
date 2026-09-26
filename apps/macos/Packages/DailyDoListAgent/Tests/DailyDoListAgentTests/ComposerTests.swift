@@ -1,5 +1,7 @@
 import AppKit
+import DailyDoListAgentTestSupport
 import DailyDoListClient
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import Foundation
 import SwiftUI
@@ -182,7 +184,7 @@ struct ComposerModelTests {
     #expect(!model.canSend)
     #expect(model.send() == nil)
     #expect(model.text == "Hello")
-    #expect(client.count("postMessage") == 0)
+    #expect(client.calls("postMessage").count == 0)
   }
 
   @Test func stopShowsWhileTheAgentWorksAndCancelsOnce() async throws {
@@ -202,7 +204,7 @@ struct ComposerModelTests {
     await gate.open()
     await stopping.value
     #expect(!model.isStopping)
-    #expect(client.count("cancelThread") == 1)
+    #expect(client.calls("cancelThread").count == 1)
   }
 
   @Test(arguments: [TaskAgentStatus.done, .failed, .cancelled, .idle])

@@ -57,6 +57,7 @@ if (args.length > 0) {
   process.stdout.write("", () => process.stderr.write("", () => process.exit(code)));
 } else {
   try {
+    if (process.env.DDL_DEMO === "1") await (await import("./demo-vault")).prepareDemo(process.env);
     let running: RunningDaemon | undefined;
     const daemon = await startDaemon({
       onRestart: (vaultPath) => {

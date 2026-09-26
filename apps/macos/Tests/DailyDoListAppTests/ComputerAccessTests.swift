@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListClientTestSupport
 import DailyDoListDaemon
 import DailyDoListModels
 import Foundation

@@ -1,7 +1,7 @@
 import { type Daemon, expect, type Page, test } from "./fixtures";
 import { expectDailyNote, noteTitle, openApp, waitForSaved } from "./helpers";
 
-/** Yesterday's note in the demo vault shows the agent at work (packages/agent/scripts/demo-vault.ts). */
+/** Yesterday's note in the demo vault shows the agent at work (apps/daemon/src/demo-vault.ts). */
 async function openDemoNote(page: Page): Promise<void> {
   await openApp(page);
   await page.keyboard.press("ControlOrMeta+Shift+P");

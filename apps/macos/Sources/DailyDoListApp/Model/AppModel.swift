@@ -14,8 +14,8 @@ import Observation
 ///
 /// Boot: preferences → `DaemonSupervisor.start()` (managed) or DDL_HOME token discovery (external)
 /// → `HTTPDaemonClient` → health + API version check → `connect()` + event loop → settings, tree,
-/// today's daily note, restored tabs, agent state. Demo mode (`--demo`) swaps in the in-memory
-/// daemon instead.
+/// today's daily note, restored tabs, agent state. Demo mode (`--demo`) supervises a daemon of its
+/// own on a throwaway demo vault (`DemoDaemon`).
 @MainActor
 @Observable
 public final class AppModel {
@@ -43,8 +43,10 @@ public final class AppModel {
   /// The macOS permissions computer use needs, and the setup that gets them.
   let computerAccess: ComputerAccessSetup
   var client: DaemonClient?
-  /// Where `client` points (nil in demo mode).
+  /// Where `client` points.
   @ObservationIgnored var clientEndpoint: DaemonEndpoint?
+  /// Demo mode's daemon, made on the first boot (restarts keep its vault).
+  @ObservationIgnored var demoDaemon: DemoDaemon?
   var agent: AgentStore?
   var workspace: Workspace?
   /// Path of today's daily note once known (agent inbox scope).
@@ -95,6 +97,9 @@ public final class AppModel {
   }
 
   var isDemo: Bool { environment.launchOptions.demo }
+
+  /// This app runs the daemon it uses: managed, or the demo's.
+  var managesDaemon: Bool { isDemo || preferences.daemonMode == .managed }
 
   /// Boots once (idempotent): called when the app finishes launching and when the window appears.
   public func start() {
@@ -214,6 +219,7 @@ public final class AppModel {
     persistTabs()
     await flushAll()
     await client?.disconnect()
-    if preferences.daemonMode == .managed, !isDemo { await supervisor.stop() }
+    if managesDaemon { await supervisor.stop() }
+    if let demoDaemon { environment.removeFolder(demoDaemon.root) }
   }
 }

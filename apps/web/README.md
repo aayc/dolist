@@ -18,7 +18,7 @@ registry, the pointer) are in `AGENTS.md`.
 
 Playwright's web server is `packages/agent/scripts/e2e-daemons.ts` (after `vite build`): a loopback
 control API that starts real daemons in its process, each with its own temporary `DDL_HOME` and
-vault seeded with the demo vault (`packages/agent/scripts/demo-vault.ts`: daily notes, drawings,
+vault seeded with the demo vault (`apps/daemon/src/demo-vault.ts`: daily notes, drawings,
 yesterday's note with agent lines, an anchored question and cited sources), and removes them after.
 It also runs a fake OpenRouter and a sync service. `e2e/fixtures.ts` gives every test its own
 daemon (`daemon`; `test.use({ daemonSpec })` picks the vault, files, settings, `config.json`, env

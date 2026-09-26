@@ -104,7 +104,7 @@ enum DaemonHost: Equatable, Sendable {
   case otherApp
   /// Settings → General → External.
   case external
-  /// Demo mode has no daemon.
+  /// Demo mode's daemon, which runs with computer use off.
   case demo
 
   /// Why granting Daily Do List the permissions doesn't reach this daemon; nil when it does.
@@ -125,7 +125,7 @@ enum DaemonHost: Equatable, Sendable {
       permissions of the app that started it, so turn these on for that app instead.
       """
     case .demo:
-      "Demo mode runs without a daemon, so agents can't use your apps here."
+      "The demo's daemon runs with computer use off, so agents can't use your apps here."
     }
   }
 }

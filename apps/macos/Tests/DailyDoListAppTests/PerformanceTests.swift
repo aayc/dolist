@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import DailyDoListUITestSupport
 import SwiftUI

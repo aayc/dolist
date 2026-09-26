@@ -12,13 +12,15 @@ enum DaemonProcessEnvironment {
     (stopsWhenAppExits ? ["--import", watchdogPreload] : []) + [entry.path]
   }
 
-  /// The user's environment, then the daemon settings of `configuration` (and `DDL_SUPERVISED`: the
-  /// supervisor starts the daemon again when it exits to restart), a PATH that starts with Node's
-  /// directory, and finally `configuration.extraEnvironment`.
+  /// The user's environment (without its `DDL_*` variables unless `inheritsDaemonSettings`), then
+  /// the daemon settings of `configuration` (and `DDL_SUPERVISED`: the supervisor starts the daemon
+  /// again when it exits to restart), a PATH that starts with Node's directory, and finally
+  /// `configuration.extraEnvironment`.
   static func variables(
     base: [String: String], configuration: DaemonLaunchConfiguration, node: ResolvedNode
   ) -> [String: String] {
-    var variables = base
+    var variables =
+      configuration.inheritsDaemonSettings ? base : base.filter { !$0.key.hasPrefix("DDL_") }
     variables["DDL_HOME"] = configuration.home.path
     if let vault = configuration.vaultPath { variables["DDL_VAULT"] = vault.path }
     variables["DDL_PORT"] = String(configuration.port)

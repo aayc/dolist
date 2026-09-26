@@ -1,5 +1,7 @@
 import AppKit
+import DailyDoListAgentTestSupport
 import DailyDoListClient
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import DailyDoListUI
 import DailyDoListUITestSupport
@@ -102,24 +104,28 @@ struct ReadOnlyTests {
   // MARK: - The store and the composer
 
   @Test func aTriedActionSurfacesTheDaemonsReason() async throws {
-    var remote = InMemoryDaemonClient.Remote.alwaysOn
-    remote.placement = .alwaysOnMachine
-    let client = InMemoryDaemonClient(
-      seed: .files(["Daily/2026-09-23.md": ""]), clock: .immediate(), clientId: "macos_test",
-      remote: remote)
+    let client = FakeDaemonClient()
+    let unreachable = "The always-on machine can't be reached."
+    let status = Locked(
+      Fixture.status(
+        problem: unreachable,
+        placement: Fixture.placement(.alwaysOnMachine, runsOn: Fixture.machine, relay: .unreachable)
+      ))
+    client.script {
+      $0.agentStatus = { status.current }
+      $0.approvals = { _ in [Fixture.approval()] }
+      $0.decideApproval = { _, _ in
+        throw DaemonClientError.http(
+          status: 503, body: ApiErrorBody(error: .agentUnavailable, message: unreachable))
+      }
+    }
     let store = AgentStore(client: client)
-    _ = try await client.writeNote(
-      "Daily/2026-09-23.md", content: "- [ ] Book a table\n", baseVersion: .unconditional)
     await store.refresh()
     let approval = try #require(store.pendingApprovals.first)
-    #expect(store.readOnly == nil)
-
-    await client.simulateMachine(reachable: false)
-    await store.refresh()
     let reason = "The always-on machine can't be reached"
     #expect(store.readOnly?.reason == reason)
     #expect(await store.decide(approval.id, .approve) == false)
-    #expect(store.lastError?.message == "The always-on machine can't be reached.")
+    #expect(store.lastError?.message == unreachable)
     #expect(store.approvals[approval.id]?.isPending == true, "the optimistic decision rolled back")
 
     let composer = ComposerModel(store: store, threadId: try #require(approval.threadId))
@@ -128,7 +134,11 @@ struct ReadOnlyTests {
     #expect(composer.placeholder == "Replies are off while this is read-only")
     #expect(composer.stopUnavailableReason == reason)
 
-    await client.simulateMachine(reachable: true, acceptsThisDevice: false)
+    status.mutate {
+      $0 = Fixture.status(
+        problem: "The always-on machine no longer accepts this device. Pair it again.",
+        placement: Fixture.placement(.alwaysOnMachine, runsOn: nil, relay: .notPaired))
+    }
     await store.refresh()
     #expect(store.readOnly?.kind == .rejected)
     #expect(store.orchestratorLocation?.pairsAgain == true)

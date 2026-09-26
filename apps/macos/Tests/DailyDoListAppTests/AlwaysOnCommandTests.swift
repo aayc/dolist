@@ -1,6 +1,7 @@
 import AppKit
 import DailyDoListAgent
 import DailyDoListClient
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import DailyDoListUI
 import DailyDoListUITestSupport
@@ -14,9 +15,46 @@ import Testing
 @MainActor
 @Suite("Always-on commands", .serialized)
 struct AlwaysOnCommandTests {
-  func bootedModel(_ remote: InMemoryDaemonClient.Remote) async throws -> AppModel {
-    let client = InMemoryDaemonClient(
-      seed: .empty, clock: .immediate(), agent: .enabled, clientId: "macos_test", remote: remote)
+  nonisolated static let thisMac = AgentRunsOn(
+    deviceId: "dev_mac", name: "Studio Mac", thisDevice: true, alwaysOnMachine: false)
+  nonisolated static let vm = AgentRunsOn(
+    deviceId: "dev_vm", name: "vm-name", thisDevice: false, alwaysOnMachine: true)
+  nonisolated static let runsHere = AgentPlacementStatus(
+    placement: .thisDevice, runsOn: thisMac, relay: .off)
+  nonisolated static let heldHere = AgentPlacementStatus(
+    placement: .thisDevice, heldHere: .noSync, runsOn: thisMac, relay: .off)
+
+  /// A booted app whose daemon reports `placement`, and hands the agent over at once when asked.
+  func bootedModel(
+    _ placement: AgentPlacementStatus, lockedByEnv: [DeviceSettingField] = []
+  ) async throws -> AppModel {
+    let client = FakeDaemonClient()
+    let base = client.withState { $0.agentStatus }
+    let current = Locked(placement)
+    client.script {
+      $0.agentStatus = {
+        var status = base
+        status.placement = current.current
+        return status
+      }
+      $0.deviceSettings = {
+        DeviceSettingsResponse(
+          device: .init(id: "dev_mac", name: "Studio Mac"), placement: current.current.placement,
+          remoteHosts: [], sync: DeviceSyncSetup(url: nil, vault: nil, hasToken: false),
+          lockedByEnv: lockedByEnv)
+      }
+      $0.updateDeviceSettings = { patch in
+        let target = patch.placement ?? .thisDevice
+        current.mutate {
+          $0 = AgentPlacementStatus(
+            placement: target, runsOn: target == .alwaysOnMachine ? Self.vm : Self.thisMac,
+            relay: target == .alwaysOnMachine ? .connected : .off)
+        }
+        return DeviceSettingsResponse(
+          device: .init(id: "dev_mac", name: "Studio Mac"), placement: target, remoteHosts: [],
+          sync: DeviceSyncSetup(url: nil, vault: nil, hasToken: false))
+      }
+    }
     let model = AppModel(environment: makeEnvironment(client: client))
     await model.boot()
     try await eventually("the agent's placement") { model.agent?.placement != nil }
@@ -24,7 +62,7 @@ struct AlwaysOnCommandTests {
   }
 
   @Test func theCommandsAreNamedAndHaveNoShortcut() async throws {
-    let model = try await bootedModel(.alwaysOn)
+    let model = try await bootedModel(Self.runsHere)
     let catalog = CommandCatalog(model: model)
     let here = try #require(catalog.command(.runOrchestratorHere))
     #expect(here.title == "Run the Orchestrator on This Device")
@@ -39,7 +77,7 @@ struct AlwaysOnCommandTests {
   }
 
   @Test func theMenuChecksWhereItRunsAndThePaletteOffersTheOther() async throws {
-    let model = try await bootedModel(.alwaysOn)
+    let model = try await bootedModel(Self.runsHere)
     let catalog = CommandCatalog(model: model)
     var here = try #require(catalog.command(.runOrchestratorHere))
     var machine = try #require(catalog.command(.runOrchestratorOnMachine))
@@ -61,7 +99,7 @@ struct AlwaysOnCommandTests {
   }
 
   @Test func whileHeldHereNeitherCommandRuns() async throws {
-    let model = try await bootedModel(.standalone)
+    let model = try await bootedModel(Self.heldHere)
     let catalog = CommandCatalog(model: model)
     #expect(!catalog.run(.runOrchestratorHere))
     #expect(!catalog.run(.runOrchestratorOnMachine))
@@ -71,7 +109,10 @@ struct AlwaysOnCommandTests {
   }
 
   @Test func theAlwaysOnMachineOffersNoChoice() async throws {
-    let model = try await bootedModel(.host)
+    let host = AgentRunsOn(
+      deviceId: "dev_vm", name: "vm-name", thisDevice: true, alwaysOnMachine: true)
+    let model = try await bootedModel(
+      AgentPlacementStatus(placement: .alwaysOnHost, runsOn: host, relay: .off))
     let catalog = CommandCatalog(model: model)
     #expect(catalog.command(.runOrchestratorHere)?.isEnabled() == false)
     #expect(catalog.command(.runOrchestratorOnMachine)?.isEnabled() == false)
@@ -80,7 +121,7 @@ struct AlwaysOnCommandTests {
   }
 
   @Test func setUpOpensSettingsOnTheAlwaysOnPane() async throws {
-    let model = try await bootedModel(.standalone)
+    let model = try await bootedModel(Self.heldHere)
     model.ui.settingsPane = .general
     model.showAlwaysOnSettings(AlwaysOnSection(.alwaysOnMachine))
     #expect(model.ui.settingsPane == .alwaysOn)
@@ -90,15 +131,9 @@ struct AlwaysOnCommandTests {
   /// The panel's controls in the workspace: the Remote switch and "Run It on This Device Instead"
   /// run the catalog's commands.
   @Test func thePanelsControlsRunTheCatalogsCommands() async throws {
-    var remote = InMemoryDaemonClient.Remote.alwaysOn
-    remote.placement = .alwaysOnMachine
-    let client = InMemoryDaemonClient(
-      seed: .empty, clock: .immediate(), agent: .enabled, clientId: "macos_test", remote: remote)
-    let model = AppModel(environment: makeEnvironment(client: client))
-    await model.boot()
+    let model = try await bootedModel(
+      AgentPlacementStatus(placement: .alwaysOnMachine, runsOn: Self.vm, relay: .unreachable))
     let workspace = try #require(model.workspace)
-    await client.simulateMachine(reachable: false)
-    try await eventually("the relay is down") { model.agent?.placement?.relay == .unreachable }
     model.ui.inspectorPresented = true
     let anchors = Self.anchors(
       WorkspaceView(model: model, workspace: workspace, ui: model.ui)
@@ -117,8 +152,8 @@ struct AlwaysOnCommandTests {
   /// Settings has the same switch, running the same commands, and says when an environment
   /// variable sets it.
   @Test func theSettingsSwitchRunsTheCatalogsCommands() async throws {
-    func anchors(_ remote: InMemoryDaemonClient.Remote) async throws -> [TooltipAnchorView] {
-      let model = try await bootedModel(remote)
+    func anchors(_ lockedByEnv: [DeviceSettingField]) async throws -> [TooltipAnchorView] {
+      let model = try await bootedModel(Self.runsHere, lockedByEnv: lockedByEnv)
       await model.remote.load()
       model.ui.alwaysOnSection = .agentLocation
       let anchors = Self.anchors(AlwaysOnSettingsPane(model: model, remote: model.remote))
@@ -126,17 +161,15 @@ struct AlwaysOnCommandTests {
       return anchors
     }
     let remote = try #require(
-      try await anchors(.alwaysOn).first {
+      try await anchors([]).first {
         $0.tooltipContent()?.lines.first?.text == "Run the orchestrator on your always-on machine"
       })
     #expect(remote.command == CommandID.runOrchestratorOnMachine.rawValue)
     #expect(
       remote.tooltipContent()?.lines.first?.keys == CommandID.runOrchestratorOnMachine.shortcut)
 
-    var locked = InMemoryDaemonClient.Remote.alwaysOn
-    locked.lockedByEnv = [.placement]
     #expect(
-      try await anchors(locked).contains {
+      try await anchors([.placement]).contains {
         $0.tooltipContent()?.plainText == "Set by an environment variable"
       })
   }

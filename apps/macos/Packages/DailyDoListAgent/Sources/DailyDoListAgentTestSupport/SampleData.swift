@@ -1,11 +1,14 @@
 import DailyDoListClient
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import Foundation
 
-/// Rich synthetic agent data for previews, demo mode and screenshots: a day of tasks in every
-/// state, a booking thread with every message kind (including a pending approval), artifacts of
-/// each kind and live surface frames. Everything is made up (people, places, sites use
-/// `example` names); times are relative to `now`.
+@testable import DailyDoListAgent
+
+/// Rich synthetic agent data for the tests' views and snapshots: a day of tasks in every state, a
+/// booking thread with every message kind (including a pending approval), artifacts of each kind
+/// and live surface frames. Everything is made up (people, places, sites use `example` names);
+/// times are relative to `now`.
 public enum SampleData {
   public static let bookingThreadId = "thr_sample_booking"
   public static let emailThreadId = "thr_sample_email"
@@ -87,11 +90,11 @@ public enum SampleData {
     }
   }
 
-  /// A store filled with the sample (backed by a `SampleDaemonClient`, so actions work).
+  /// A store filled with the sample, whose client serves it.
   @MainActor
   public static func makeStore(now: Date = Date()) -> AgentStore {
     let snapshot = snapshot(now: now)
-    let store = AgentStore(client: SampleDaemonClient(snapshot: snapshot))
+    let store = AgentStore(client: FakeDaemonClient(snapshot: snapshot))
     store.load(snapshot)
     return store
   }
@@ -103,9 +106,43 @@ public enum SampleData {
   }
 }
 
+extension FakeDaemonClient {
+  /// A daemon serving `snapshot`'s agent state: records, threads, approvals, artifacts, routines.
+  public convenience init(snapshot: SampleData.Snapshot) {
+    self.init()
+    script {
+      $0.agentStatus = { snapshot.status }
+      $0.taskRecords = { path in snapshot.records.filter { $0.notePath == path } }
+      $0.threads = { note, task in
+        snapshot.threads.filter {
+          (note == nil || $0.notePath == note) && (task == nil || $0.taskId == task)
+        }
+      }
+      $0.thread = { id in
+        guard let response = snapshot.threadResponse(id) else {
+          throw DaemonClientError.http(status: 404, body: ApiErrorBody(error: .notFound))
+        }
+        return response
+      }
+      $0.approvals = { status in snapshot.approvals.filter { status == nil || $0.status == status }
+      }
+      $0.artifact = { _, id in
+        guard let payload = snapshot.artifacts[id] else {
+          throw DaemonClientError.http(status: 404, body: ApiErrorBody(error: .notFound))
+        }
+        return payload
+      }
+      $0.routines = {
+        RoutineListResponse(routines: snapshot.routines, templates: snapshot.routineTemplates)
+      }
+      $0.routineRuns = { id in snapshot.threads.filter { $0.routineId == id } }
+    }
+  }
+}
+
 extension AgentStore {
-  /// Replaces the store's state with a snapshot (sample data, demo mode).
-  func load(_ snapshot: SampleData.Snapshot) {
+  /// Replaces the store's state with a snapshot.
+  public func load(_ snapshot: SampleData.Snapshot) {
     todayNotePath = snapshot.dailyNotePath
     mutate { state in
       var changes = state.setStatus(snapshot.status)

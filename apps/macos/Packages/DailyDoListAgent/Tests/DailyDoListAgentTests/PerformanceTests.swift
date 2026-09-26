@@ -1,10 +1,12 @@
 import AppKit
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import DailyDoListUITestSupport
 import SwiftUI
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentTestSupport
 
 /// The agent panel with 400 of today's threads (their records, 60 pending approvals) and a thread
 /// of 1,000 messages, in an offscreen window: each sample includes SwiftUI's layout and drawing.
@@ -42,7 +44,7 @@ struct PerformanceTests {
       approvals: (0..<60).map { Fixture.approval("apr_\($0)", threadId: "thr_\($0 * 5)") },
       artifacts: [:], frames: [])
     let now = now
-    let store = AgentStore(client: SampleDaemonClient(snapshot: snapshot), now: { now })
+    let store = AgentStore(client: FakeDaemonClient(snapshot: snapshot), now: { now })
     store.load(snapshot)
     return store
   }

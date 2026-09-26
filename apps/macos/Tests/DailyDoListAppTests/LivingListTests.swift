@@ -1,5 +1,7 @@
 import DailyDoListAgent
+import DailyDoListAgentTestSupport
 import DailyDoListClient
+import DailyDoListClientTestSupport
 import DailyDoListDomain
 import DailyDoListEditor
 import DailyDoListModels

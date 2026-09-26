@@ -1,8 +1,8 @@
 import DailyDoListModels
 import Foundation
 
-/// Everything the apps need from the daemon. `HTTPDaemonClient` is the real implementation;
-/// `InMemoryDaemonClient` is a deterministic fake for tests, previews and demo mode.
+/// Everything the apps need from the daemon. `HTTPDaemonClient` is the real implementation; tests
+/// use `FakeDaemonClient` (`DailyDoListClientTestSupport`).
 ///
 /// Every throwing method throws `DaemonClientError`.
 public protocol DaemonClient: AnyObject, Sendable {

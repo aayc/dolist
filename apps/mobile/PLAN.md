@@ -38,8 +38,8 @@ Compact, single-pane iPhone UI with four tabs:
   daily notes, appearance, diagnostics.
 
 Plus pairing (scan a QR code or paste a pairing link), offline reading and editing, local
-notifications, Siri and Shortcuts, and a demo mode on the in-memory daemon for previews, UI tests
-and screenshots.
+notifications, Siri and Shortcuts, and a demo mode (against a demo daemon, like the Mac's
+`--demo`) for UI tests and screenshots.
 
 ## Architecture
 
@@ -145,7 +145,7 @@ confirm when building):
 - The offline cache uses Data Protection; "Sign out of this daemon" deletes the token, the cache
   and the outbox.
 - Nothing personal in the repo: no team id, bundle id suffixes or device names; demo data is
-  synthetic (the in-memory daemon's seed).
+  synthetic (the daemon's demo vault).
 
 ## Toolchain
 
@@ -161,7 +161,7 @@ confirm when building):
 
 ## Testing
 
-- **Multiplatform packages:** Swift Testing with `InMemoryDaemonClient` and fakes (clock,
+- **Multiplatform packages:** Swift Testing with `FakeDaemonClient` and fakes (clock,
   Keychain, file store, reachability), run on macOS: stores, event routing, outbox and merge,
   offline cache, pairing state machine, intents' logic.
 - **iOS packages** (simulator, `xcodebuild test`): the editor (typing, task toggles, badges,

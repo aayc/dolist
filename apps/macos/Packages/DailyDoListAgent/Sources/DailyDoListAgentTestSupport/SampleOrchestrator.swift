@@ -1,6 +1,8 @@
 import DailyDoListModels
 import Foundation
 
+@testable import DailyDoListAgent
+
 extension SampleData {
   /// The orchestrator's chat in the sample: a morning of decisions on the sample's tasks, then the
   /// user asking what it's working on and redirecting the booking.

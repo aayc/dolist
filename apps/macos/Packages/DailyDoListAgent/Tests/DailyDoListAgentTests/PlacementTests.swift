@@ -1,5 +1,7 @@
 import AppKit
+import DailyDoListAgentTestSupport
 import DailyDoListClient
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import DailyDoListUI
 import DailyDoListUITestSupport
@@ -125,30 +127,48 @@ struct PlacementTests {
 
   // MARK: - Moving the orchestrator
 
+  /// The daemon's status right after the change shows at once; its pushed `agent.status` events
+  /// then follow the handover.
   @Test func movingSendsTheChangeAndFollowsTheHandover() async throws {
-    let client = InMemoryDaemonClient(
-      seed: .empty, clock: .manual(), clientId: "macos_test", remote: .alwaysOn)
+    let client = FakeDaemonClient()
+    let placement = Locked(Fixture.placement())
+    client.script {
+      $0.agentStatus = { Fixture.status(placement: placement.current) }
+      $0.updateDeviceSettings = { patch in
+        placement.mutate {
+          $0 =
+            patch.placement == .alwaysOnMachine
+            ? Fixture.placement(
+              .alwaysOnMachine, runsOn: nil, note: "Handing the agent to vm-name…")
+            : Fixture.placement(runsOn: Fixture.machine, note: "Taking over from vm-name…")
+        }
+        return DeviceSettingsResponse(
+          device: .init(id: "dev_mac", name: "Studio Mac"),
+          placement: patch.placement ?? .thisDevice,
+          remoteHosts: [], sync: DeviceSyncSetup(url: nil, vault: nil, hasToken: false))
+      }
+    }
     let store = AgentStore(client: client)
-    let events = Task { @MainActor in for await item in client.events() { store.handle(item) } }
-    defer { events.cancel() }
-    await client.connect()
     await store.refresh()
     #expect(store.canMoveOrchestrator(to: .alwaysOnMachine))
     #expect(!store.canMoveOrchestrator(to: .thisDevice), "already there")
 
     #expect(await store.moveOrchestrator(to: .alwaysOnMachine))
+    #expect(client.calls.contains("updateDeviceSettings:always_on_machine"))
     #expect(store.pendingPlacement == nil)
     #expect(store.placement?.note == "Handing the agent to vm-name…")
     #expect(store.orchestratorLocation?.selection == .alwaysOnMachine)
-    await client.advance(by: .seconds(2))
-    #expect(await eventually { store.placement?.runsOn?.name == "vm-name" })
-    #expect(store.placement?.note == nil && store.placement?.relay == .connected)
+    store.handle(
+      .event(
+        .agentStatus(
+          Fixture.status(
+            placement: Fixture.placement(
+              .alwaysOnMachine, runsOn: Fixture.machine, relay: .unreachable)))))
+    #expect(store.placement?.runsOn?.name == "vm-name" && store.placement?.note == nil)
+    #expect(store.orchestratorLocation?.offersRunHere == true)
 
-    await client.simulateMachine(reachable: false)
-    #expect(await eventually { store.orchestratorLocation?.offersRunHere == true })
     #expect(await store.moveOrchestrator(to: .thisDevice))
     #expect(store.placement?.note == "Taking over from vm-name…")
-    await client.disconnect()
   }
 
   @Test func whileHeldHereNothingIsSent() async throws {
@@ -160,7 +180,7 @@ struct PlacementTests {
     await store.refresh()
     #expect(!store.canMoveOrchestrator(to: .alwaysOnMachine))
     #expect(await store.moveOrchestrator(to: .alwaysOnMachine) == false)
-    #expect(client.count("updateDeviceSettings") == 0)
+    #expect(client.calls("updateDeviceSettings").count == 0)
   }
 
   @Test func aRefusedChangeSaysWhy() async throws {
@@ -188,7 +208,7 @@ struct PlacementTests {
     #expect(store.pendingPlacement == nil && store.orchestratorLocation?.selection == .thisDevice)
     #expect(store.lastError?.title == "Couldn't move the orchestrator to the always-on machine")
     #expect(store.lastError?.message == "The placement is set by DDL_AGENT_PLACEMENT.")
-    #expect(client.callLog.contains("updateDeviceSettings:always_on_machine"))
+    #expect(client.calls.contains("updateDeviceSettings:always_on_machine"))
   }
 
   // MARK: - The bar in the header

@@ -1,6 +1,7 @@
 import AppKit
 import DailyDoListAgent
 import DailyDoListClient
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import Testing
 
