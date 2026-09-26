@@ -166,9 +166,11 @@ same edit inserts that exact line again, e.g. a whole-document replacement).
 
 **Links.** A plain click follows a rendered link (live preview on, caret not on its line); ⌘-click
 follows any link. Wikilinks and scheme-less markdown destinations (`[x](Notes/Plan.md#Goals)`) go to
-`didClickWikiLink` with the target only (no alias, no `#subpath`), `newWindow` = ⌘ held; `http(s)`,
-`mailto`, `tel`, `www.` and email addresses go to `didClickLink`. Other schemes (`javascript:`,
-`file:`, `data:`, …) are never passed on. The pointer becomes a hand over clickable things.
+`didClickWikiLink` with the target only (no alias, no `#subpath`), `newWindow` = ⌘ held; what
+`DailyDoListUI`'s `LinkPolicy` lets open (`http(s)` with a host, `mailto`, `tel`; `www.` and email
+addresses become such links) goes to `didClickLink`, the same rule the app opens links by. Other
+URLs (`javascript:`, `file:`, `data:`, `http:` without a host, …) are never passed on. The pointer
+becomes a hand over clickable things.
 
 ### Drawings
 

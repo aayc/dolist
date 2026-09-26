@@ -29,8 +29,8 @@ struct MachineSection: View {
                 .foregroundStyle(accepted ? Theme.success : Theme.warning)
             }
             HStack {
-              if let url = URL(string: machine.url) {
-                Button("Open Its Web App") { NSWorkspace.shared.open(url) }
+              if let url = URL(string: machine.url), LinkPolicy.isAllowed(url) {
+                Button("Open Its Web App") { LinkPolicy.open(url) }
                   .pointingHandCursor()
                   .tooltip(TooltipContent.path(machine.url))
               }

@@ -1,4 +1,5 @@
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// What agent text needs from the host to follow `[[wikilinks]]`: opening a note and its hover
@@ -79,7 +80,7 @@ extension LinkPolicy {
         noteLinks.open(target)
         return .handled
       }
-      return open(url)
+      return open(url) ? .handled : .discarded
     }
   }
 }

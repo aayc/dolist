@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 
 enum TextMetrics {
@@ -30,20 +29,5 @@ enum TextMetrics {
 
   static func pluralize(_ count: Int, _ singular: String, _ plural: String? = nil) -> String {
     "\(count) \(count == 1 ? singular : (plural ?? "\(singular)s"))"
-  }
-}
-
-enum ExternalLinks {
-  /// Only web and mail links leave the app; `file:`, `javascript:` and custom schemes never open.
-  static func isAllowed(_ url: URL) -> Bool {
-    guard let scheme = url.scheme?.lowercased() else { return false }
-    return scheme == "http" || scheme == "https" || scheme == "mailto"
-  }
-
-  @MainActor
-  @discardableResult
-  static func open(_ url: URL) -> Bool {
-    guard isAllowed(url) else { return false }
-    return NSWorkspace.shared.open(url)
   }
 }

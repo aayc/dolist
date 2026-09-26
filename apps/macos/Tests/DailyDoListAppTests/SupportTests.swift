@@ -1,6 +1,7 @@
 import DailyDoListClient
 import DailyDoListDomain
 import DailyDoListModels
+import DailyDoListUI
 import Foundation
 import Testing
 
@@ -93,12 +94,14 @@ struct TextSupportTests {
     #expect(TextMetrics.countWords("日本語 テキスト") == 2)
   }
 
-  @Test func onlyWebAndMailLinksOpen() throws {
-    #expect(ExternalLinks.isAllowed(try #require(URL(string: "https://example.com"))))
-    #expect(ExternalLinks.isAllowed(try #require(URL(string: "mailto:someone@example.com"))))
-    #expect(!ExternalLinks.isAllowed(try #require(URL(string: "file:///etc/passwd"))))
-    #expect(!ExternalLinks.isAllowed(try #require(URL(string: "javascript:alert(1)"))))
-    #expect(!ExternalLinks.isAllowed(try #require(URL(string: "x-custom://open"))))
+  @Test func onlyWebMailAndPhoneLinksOpen() throws {
+    #expect(LinkPolicy.isAllowed(try #require(URL(string: "https://example.com"))))
+    #expect(LinkPolicy.isAllowed(try #require(URL(string: "mailto:someone@example.com"))))
+    #expect(LinkPolicy.isAllowed(try #require(URL(string: "tel:+15550100"))))
+    #expect(!LinkPolicy.isAllowed(try #require(URL(string: "http:relative"))))
+    #expect(!LinkPolicy.isAllowed(try #require(URL(string: "file:///etc/passwd"))))
+    #expect(!LinkPolicy.isAllowed(try #require(URL(string: "javascript:alert(1)"))))
+    #expect(!LinkPolicy.isAllowed(try #require(URL(string: "x-custom://open"))))
   }
 
   @Test func badgeLabelsMatchTheWeb() {

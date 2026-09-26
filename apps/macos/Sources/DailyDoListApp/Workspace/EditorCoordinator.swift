@@ -1,6 +1,7 @@
 import AppKit
 import DailyDoListEditor
 import DailyDoListModels
+import DailyDoListUI
 import Foundation
 import Observation
 
@@ -233,7 +234,7 @@ extension EditorCoordinator: MarkdownEditorDelegate {
   }
 
   func editor(_ editor: MarkdownEditorController, didClickLink url: URL) {
-    ExternalLinks.open(url)
+    LinkPolicy.open(url)
   }
 
   func editor(_ editor: MarkdownEditorController, cursorDidMoveToLine line: Int) {

@@ -1,5 +1,6 @@
 import AppKit
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// What a link's hover card shows.
@@ -217,7 +218,7 @@ final class CitationTextView: NSTextView, NSTextViewDelegate {
     if let target = WikiLinkURL.target(of: url) {
       noteLinks.open(target)
     } else {
-      _ = LinkPolicy.handle(url) { NSWorkspace.shared.open($0) }
+      LinkPolicy.open(url)
     }
     return true
   }
