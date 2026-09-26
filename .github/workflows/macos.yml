@@ -1,9 +1,12 @@
 name: macOS app
 
-# The native Swift app (apps/macos): every Swift package's tests, integration tests against the
-# real daemon (mock agent), and a release build of "Daily Do List.app" with the bundled daemon,
-# uploaded as an artifact. Runs when the app, the daemon, what the daemon bundles or the vim
-# behavior vectors the Swift engine replays change (keep both path lists in sync).
+# The native Swift app (apps/macos), in parallel jobs: the Swift packages' tests in three groups,
+# the integration tests against the real daemon (mock agent), and the iOS build of the shared
+# packages. Each Swift job restores its SwiftPM build directory from a cache, so a run only
+# recompiles what changed. The release "Daily Do List.app" with the bundled daemon is built (and
+# uploaded) on main, or on demand with the `release` input. Runs when the app, the daemon, what the
+# daemon bundles or the vim behavior vectors the Swift engine replays change (keep both path lists
+# in sync).
 on:
   push:
     branches: [main]
@@ -41,6 +44,15 @@ on:
       - ".github/actions/setup/**"
       - ".github/workflows/macos.yml"
   workflow_dispatch:
+    inputs:
+      release:
+        description: Build the release app with the bundled daemon and upload it (always on main)
+        type: boolean
+        default: false
+      thorough:
+        description: Run fuzz, model-based and performance tests with every seed and sample
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -52,12 +64,105 @@ concurrency:
 
 env:
   TURBO_TELEMETRY_DISABLED: "1"
+  # Full fuzz, model-based and performance iterations on main (test.sh --thorough).
+  DDL_TEST_THOROUGH: ${{ (github.ref == 'refs/heads/main' || inputs.thorough) && '1' || '' }}
 
 jobs:
-  app:
-    name: macOS app (Swift)
+  packages:
+    name: Swift packages (${{ matrix.group }})
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The app shell's tests compile every package they link.
+          - group: app
+            packages: app
+            sources: apps/macos/Package.swift apps/macos/Sources apps/macos/Tests apps/macos/Packages
+          # The editor alone: replaying every vim vector through it twice takes the longest.
+          - group: editor
+            packages: DailyDoListEditor
+            sources: >-
+              apps/macos/Packages/DailyDoListUI apps/macos/Packages/DailyDoListVim
+              apps/macos/Packages/DailyDoListDrawing apps/macos/Packages/DailyDoListEditor
+          - group: others
+            packages: >-
+              DailyDoListModels DailyDoListDomain DailyDoListClient DailyDoListUI DailyDoListAgent
+              DailyDoListDaemon DailyDoListComputer DailyDoListVim DailyDoListDrawing
+            sources: >-
+              apps/macos/Packages/DailyDoListModels apps/macos/Packages/DailyDoListDomain
+              apps/macos/Packages/DailyDoListClient apps/macos/Packages/DailyDoListAgent
+              apps/macos/Packages/DailyDoListUI apps/macos/Packages/DailyDoListDaemon
+              apps/macos/Packages/DailyDoListComputer apps/macos/Packages/DailyDoListVim
+              apps/macos/Packages/DailyDoListDrawing
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Node for the cache's mtime script and the supervisor's real-process tests (no pnpm).
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Select the newest Xcode
+        id: xcode
+        # With Xcode selected, test.sh adds no Command Line Tools flags.
+        run: apps/macos/scripts/ci-select-xcode.sh
+
+      - name: Cache key
+        id: key
+        env:
+          SOURCES: ${{ matrix.sources }}
+        # The blobs of the group's packages and their dependencies: an unchanged group reuses its
+        # cache as is, a changed one starts from the latest (this branch's, else main's).
+        run: |
+          # shellcheck disable=SC2086
+          echo "sources=$(git ls-files -s -- $SOURCES | git hash-object --stdin)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the build directory
+        id: cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/macos/.build
+          key: swiftpm-${{ steps.xcode.outputs.key }}-${{ matrix.group }}-${{ steps.key.outputs.sources }}
+          restore-keys: swiftpm-${{ steps.xcode.outputs.key }}-${{ matrix.group }}-
+
+      - name: Keep unchanged sources' times
+        run: node apps/macos/scripts/ci-mtimes.mjs restore apps/macos/.build
+
+      - name: Swift package tests
+        env:
+          PACKAGES: ${{ matrix.packages }}
+          # Performance tests assert budgets calibrated on a dev machine, in the unoptimized test
+          # build; the hosted macOS runner is a few times slower.
+          PERF_BUDGET_MULTIPLIER: "4"
+          EDITOR_PERF_BUDGET_MULTIPLIER: "2"
+        run: |
+          # shellcheck disable=SC2086
+          apps/macos/scripts/test.sh $PACKAGES
+
+      - name: Smoke-test ddl-computer
+        if: matrix.group == 'others'
+        # The debug build the tests made; the release job checks the one bundled in the app.
+        run: apps/macos/scripts/smoke-computer-helper.sh apps/macos/.build/tests/debug/ddl-computer
+
+      - name: Record the sources' times
+        if: ${{ !cancelled() && steps.cache.outputs.cache-hit != 'true' }}
+        run: node apps/macos/scripts/ci-mtimes.mjs save apps/macos/.build
+
+      - name: Save the build directory
+        # Also after failing tests: the build itself is reusable.
+        if: ${{ !cancelled() && steps.cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/macos/.build
+          key: swiftpm-${{ steps.xcode.outputs.key }}-${{ matrix.group }}-${{ steps.key.outputs.sources }}
+
+  integration:
+    name: Integration tests and Swift format
+    runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -65,14 +170,8 @@ jobs:
       - uses: ./.github/actions/setup
 
       - name: Select the newest Xcode
-        # The packages need a recent Swift 6 toolchain; runner images ship several Xcodes. With
-        # Xcode selected, test.sh adds no Command Line Tools flags.
-        run: |
-          xcode="$(printf '%s\n' /Applications/Xcode_*.app | grep -viE 'beta|release_candidate' | sort -V | tail -n 1 || true)"
-          if [ -d "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
-          xcode-select -p
-          swift --version
-          node --version
+        id: xcode
+        run: apps/macos/scripts/ci-select-xcode.sh
 
       - name: Swift format (swift-format lint, strict)
         run: node scripts/lint.mjs --all --only swift
@@ -81,15 +180,53 @@ jobs:
         # The integration tests run two synced daemons through the real sync service.
         run: pnpm --filter @ddl/daemon --filter @ddl/sync build
 
-      - name: Swift package tests
-        run: apps/macos/scripts/test.sh
-        env:
-          # Performance tests assert budgets calibrated on a dev machine, in the unoptimized test
-          # build; the hosted macOS runner is a few times slower.
-          PERF_BUDGET_MULTIPLIER: "4"
-          EDITOR_PERF_BUDGET_MULTIPLIER: "2"
+      - name: Cache key
+        id: key
+        run: |
+          sources="apps/macos/IntegrationTests apps/macos/Packages/DailyDoListModels
+            apps/macos/Packages/DailyDoListDomain apps/macos/Packages/DailyDoListClient
+            apps/macos/Packages/DailyDoListDaemon"
+          # shellcheck disable=SC2086
+          echo "sources=$(git ls-files -s -- $sources | git hash-object --stdin)" >> "$GITHUB_OUTPUT"
 
-      - name: Shared packages build for iOS
+      - name: Restore the build directory
+        id: cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/macos/.build
+          key: swiftpm-${{ steps.xcode.outputs.key }}-integration-${{ steps.key.outputs.sources }}
+          restore-keys: swiftpm-${{ steps.xcode.outputs.key }}-integration-
+
+      - name: Keep unchanged sources' times
+        run: node apps/macos/scripts/ci-mtimes.mjs restore apps/macos/.build
+
+      - name: Integration tests (real daemon, mock agent)
+        run: apps/macos/scripts/test.sh integration
+
+      - name: Record the sources' times
+        if: ${{ !cancelled() && steps.cache.outputs.cache-hit != 'true' }}
+        run: node apps/macos/scripts/ci-mtimes.mjs save apps/macos/.build
+
+      - name: Save the build directory
+        if: ${{ !cancelled() && steps.cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/macos/.build
+          key: swiftpm-${{ steps.xcode.outputs.key }}-integration-${{ steps.key.outputs.sources }}
+
+  ios:
+    name: Shared packages build for iOS
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Select the newest Xcode
+        run: apps/macos/scripts/ci-select-xcode.sh
+
+      - name: Build for iOS
         # The Foundation-only packages the planned iPhone app reuses must not pick up AppKit.
         # DailyDoListComputer (the ddl-computer helper) is macOS-only, so it isn't listed.
         # `package:scheme` builds one library of a package (DailyDoListDrawing's model; its
@@ -105,8 +242,39 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Integration tests (real daemon, mock agent)
-        run: apps/macos/scripts/test.sh integration
+  release:
+    name: Release app (bundled daemon)
+    # On main, and on demand; branches compile the app target in the app group's tests.
+    if: github.ref == 'refs/heads/main' || inputs.release
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+
+      - name: Select the newest Xcode
+        id: xcode
+        run: apps/macos/scripts/ci-select-xcode.sh
+
+      - name: Cache key
+        id: key
+        run: |
+          sources="apps/macos/Package.swift apps/macos/Sources apps/macos/Packages"
+          # shellcheck disable=SC2086
+          echo "sources=$(git ls-files -s -- $sources | git hash-object --stdin)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the build directory
+        id: cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/macos/.build
+          key: swiftpm-${{ steps.xcode.outputs.key }}-release-${{ steps.key.outputs.sources }}
+          restore-keys: swiftpm-${{ steps.xcode.outputs.key }}-release-
+
+      - name: Keep unchanged sources' times
+        run: node apps/macos/scripts/ci-mtimes.mjs restore apps/macos/.build
 
       - name: Build the app (release, bundled daemon)
         run: apps/macos/scripts/build-app.sh --release --with-daemon --zip
@@ -114,13 +282,19 @@ jobs:
       - name: Smoke-test the bundled ddl-computer
         # Where the daemon looks for it, signed, and answering; passive methods only (no prompts).
         run: |
-          helper="apps/macos/build/Daily Do List.app/Contents/Resources/daemon/bin/ddl-computer"
-          codesign --verify --strict "$helper"
-          out="$(printf '%s\n' '{"id":1,"method":"hello"}' '{"id":2,"method":"permissions"}' \
-            | "$helper" serve)"
-          echo "$out"
-          echo "$out" | grep -q '^{"id":1,"result":{"version":1,'
-          echo "$out" | grep -q '^{"id":2,"result":{"accessibility":'
+          apps/macos/scripts/smoke-computer-helper.sh \
+            "apps/macos/build/Daily Do List.app/Contents/Resources/daemon/bin/ddl-computer"
+
+      - name: Record the sources' times
+        if: ${{ !cancelled() && steps.cache.outputs.cache-hit != 'true' }}
+        run: node apps/macos/scripts/ci-mtimes.mjs save apps/macos/.build
+
+      - name: Save the build directory
+        if: ${{ !cancelled() && steps.cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/macos/.build
+          key: swiftpm-${{ steps.xcode.outputs.key }}-release-${{ steps.key.outputs.sources }}
 
       - name: Upload the app
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

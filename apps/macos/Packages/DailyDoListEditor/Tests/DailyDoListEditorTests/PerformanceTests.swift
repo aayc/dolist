@@ -7,13 +7,18 @@ import Testing
 /// Offscreen timings on a 2,000-line note with mixed markdown and 30 badges. Targets (release):
 /// load + style < 60 ms, keystroke avg < 3 ms / p95 < 8 ms, selection change < 2 ms. Assertions use
 /// generous budgets (debug builds are several times slower), scaled by
-/// `EDITOR_PERF_BUDGET_MULTIPLIER`; the measured numbers are printed (`PERF …`).
+/// `EDITOR_PERF_BUDGET_MULTIPLIER`; the measured numbers are printed (`PERF …`). Each timing takes
+/// a third of its samples unless `DDL_TEST_THOROUGH=1` (`test.sh --thorough`).
 @Suite("Performance", .serialized)
 @MainActor
 struct PerformanceTests {
   static let multiplier =
     Double(ProcessInfo.processInfo.environment["EDITOR_PERF_BUDGET_MULTIPLIER"] ?? "") ?? 1
   static let note = SampleNote.long(lines: 2000)
+  static let thorough = ProcessInfo.processInfo.environment["DDL_TEST_THOROUGH"] == "1"
+
+  /// How many samples a timing takes: `full` in thorough runs, a third of it otherwise.
+  static func samples(_ full: Int) -> Int { thorough ? full : max(3, full / 3) }
 
   struct Stats: CustomStringConvertible {
     var samples: [Double]
@@ -56,7 +61,7 @@ struct PerformanceTests {
 
   @Test func initialLoadAndStyle() {
     var samples: [Double] = []
-    for _ in 0..<5 {
+    for _ in 0..<Self.samples(5) {
       let editor = makeEditor()
       let clock = ContinuousClock()
       let elapsed = clock.measure {
@@ -89,7 +94,7 @@ struct PerformanceTests {
     let clock = ContinuousClock()
     var samples: [Double] = []
     editor.act {
-      for index in 0..<300 {
+      for index in 0..<Self.samples(300) {
         let character = index % 7 == 6 ? " " : "x"
         let elapsed = clock.measure {
           editor.textView.insertText(
@@ -118,7 +123,7 @@ struct PerformanceTests {
     let clock = ContinuousClock()
     var handling: [Double] = []
     var withLayout: [Double] = []
-    for step in 0..<200 {
+    for step in 0..<Self.samples(200) {
       let target = index.start(ofLine: 1000 + step % 40) + 1
       let elapsed = clock.measure {
         editor.textView.setSelectedRange(NSRange(location: target, length: 0))
@@ -151,7 +156,7 @@ struct PerformanceTests {
     editor.layout()
     let clock = ContinuousClock()
     var samples: [Double] = []
-    for _ in 0..<100 {
+    for _ in 0..<Self.samples(100) {
       let elapsed = clock.measure { editor.controller.textViewWillDraw(editor.textView) }
       samples.append(Self.milliseconds(elapsed))
     }

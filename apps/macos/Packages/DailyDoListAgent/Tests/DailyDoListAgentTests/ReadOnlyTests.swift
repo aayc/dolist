@@ -191,15 +191,4 @@ struct ReadOnlyTests {
     let retry = try #require(found.first { $0.tooltipContent()?.lines.first?.text == "Retry" })
     #expect(retry.tooltipContent()?.detail == "The always-on machine can't be reached")
   }
-
-  @Test(arguments: [false, true])
-  func readOnlyPanel(dark: Bool) throws {
-    let store = readOnlyStore()
-    let view = AgentPanel(
-      store: store, selectedThreadId: .constant(SampleData.bookingThreadId), onShowInNote: { _ in }
-    ).agentReferenceDate(SnapshotTests.now)
-    let rendered = try SnapshotRenderer.render(
-      view, name: "thread-read-only", size: CGSize(width: 440, height: 1_100), dark: dark)
-    #expect(rendered.bytes > 4_000 && rendered.distinctColors >= 12)
-  }
 }

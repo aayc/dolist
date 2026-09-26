@@ -9,7 +9,7 @@ cache, then `pnpm install --frozen-lockfile`.
 | --- | --- | --- |
 | CI (`ci.yml`) | push to `main`, pull requests, merge queue, manual | `check`, `test` (3 shards), `test-macos` (2), `bench`, `e2e` (4), `perf`, `vim`, `evals-mock` |
 | Security (`security.yml`) | push to `main`, pull requests, merge queue, weekly (Mon 05:27 UTC), manual | `gitleaks`, `codeql` (JS/TS + Actions), `dependency-review` (PRs) |
-| macOS app (`macos.yml`) | push to `main` and pull requests touching the app, the daemon, the sync service, what they bundle or the vim vectors; manual | `app` |
+| macOS app (`macos.yml`) | push to `main` and pull requests touching the app, the daemon, the sync service, what they bundle or the vim vectors; manual (inputs `release`, `thorough`) | `packages` (`app`, `editor`, `others`), `integration`, `ios`, `release` (main or `release`) |
 | Linux bundle (`linux-bundle.yml`) | push to `main` and pull requests touching `deploy/linux`, the daemon, the sync service, the web app or what they bundle; manual | `bundle`, `setup` |
 | Evals (live) (`evals.yml`) | weekly (Mon 06:43 UTC), manual | `gate`, `live` |
 | Dependabot (`dependabot.yml`) | weekly (Monday) | npm and GitHub Actions update PRs |
@@ -241,31 +241,51 @@ pnpm eval:mock && node .github/scripts/eval-summary.mjs
 
 ## macOS app (`macos.yml`)
 
-One job, `app`, on `macos-latest`. On push and pull requests it runs only when `apps/macos`, the
-daemon, the sync service (`apps/sync`), a package they bundle or the vim behavior vectors
-(`packages/editor/test/vim`, replayed by `DailyDoListVim`) change (the two path lists in the
-workflow must stay in sync); a manual run always runs. It selects the newest non-beta Xcode, lints
-the Swift formatting (`node scripts/lint.mjs --all --only swift`, strict swift-format), builds the
-daemon and the sync service (the integration tests run two synced daemons through the real sync
-service), runs every Swift package's tests (including the vim vector replay), compiles for iOS the
-Foundation-only code the iPhone app will reuse (`DailyDoListModels`, `DailyDoListClient`,
-`DailyDoListDomain`, `DailyDoListVim`, and `DailyDoListDrawing`'s `DailyDoListDrawingModel`
-library, built as `DailyDoListDrawing:DailyDoListDrawingModel`), runs the integration tests
-against the real daemon with the mock agent, builds a release "Daily Do List.app" with the bundled
-daemon, smoke-tests the bundled `ddl-computer` (where the daemon looks for it, validly signed, and
-answering the passive `hello` and `permissions` methods), and uploads the zipped app as the
-`daily-do-list-macos` artifact (kept 14 days; ad hoc signed, not notarized).
+On push and pull requests it runs only when `apps/macos`, the daemon, the sync service
+(`apps/sync`), a package they bundle or the vim behavior vectors (`packages/editor/test/vim`,
+replayed by `DailyDoListVim` and `DailyDoListEditor`) change (the two path lists in the workflow
+must stay in sync); a manual run always runs. Every job selects the newest non-beta Xcode
+(`apps/macos/scripts/ci-select-xcode.sh`), and they all start at once:
+
+| Job | What it does |
+| --- | --- |
+| `Swift packages (app)` | `test.sh app`: the app shell's tests, which compile every package it links and the app target itself (the branches' compile check of the app) |
+| `Swift packages (editor)` | `test.sh DailyDoListEditor`: its replay of every vim vector through the real editor (live preview off and on) is the longest test, so it has a job of its own |
+| `Swift packages (others)` | `test.sh` for the other packages (Models, Domain, Client, UI, Agent, Daemon, Computer, Vim with its vector replay, Drawing), then a smoke test of the debug `ddl-computer` |
+| `Integration tests and Swift format` | strict swift-format (`node scripts/lint.mjs --all --only swift`), builds the daemon and the sync service, `test.sh integration` (the real daemon with the mock agent; two synced daemons through the real sync service) |
+| `Shared packages build for iOS` | builds for iOS the Foundation-only code the iPhone app will reuse: `DailyDoListModels`, `DailyDoListClient`, `DailyDoListDomain`, `DailyDoListVim`, and `DailyDoListDrawing`'s `DailyDoListDrawingModel` library (`DailyDoListDrawing:DailyDoListDrawingModel`) |
+| `Release app (bundled daemon)` | on `main`, or a manual run with `release`: a release "Daily Do List.app" with the bundled daemon, a smoke test of the bundled `ddl-computer` (where the daemon looks for it, validly signed, answering the passive `hello` and `permissions` methods), and the zipped app as the `daily-do-list-macos` artifact (kept 14 days; ad hoc signed, not notarized) |
+
+To build the release app on a branch, dispatch with `-f release=true` (`-f thorough=true` for the
+full iteration counts). The package jobs need no `pnpm install`, only Node from `.nvmrc` (the supervisor's real-process
+tests need Node 24.4+). On `main`, or with the `thorough` input, `DDL_TEST_THOROUGH=1` runs fuzz,
+model-based and performance tests with every seed and sample; branches run the default slice.
+
+**Build caches.** Each Swift job restores `apps/macos/.build` (`test.sh` builds in its `tests/`
+folder, `build-app.sh` in the folder itself) with `actions/cache`, keyed by the runner OS, the
+Xcode version and the git blobs of the job's packages and their dependencies. An unchanged group
+gets its exact cache back and saves nothing; a changed one restores the latest cache with the same
+prefix (its branch's, else `main`'s), builds incrementally and saves a new one, also when tests
+failed (the build itself is fine to reuse; a cancelled job saves nothing). A checkout gives every
+file a new modification time, and the Swift driver rebuilds any file whose time differs from the
+one it recorded, so `apps/macos/scripts/ci-mtimes.mjs` records each tracked file's blob and time
+next to the build (`save`) and, after a restore, gives files whose blob is unchanged their recorded
+time back (`restore`). Changed and new files keep the current time, which no recorded time equals,
+so they and whatever depends on them always rebuild: a cache can make a run faster, never skip a
+rebuild. Branch caches are visible only to that branch; `main`'s to every branch.
 
 ```sh
 node scripts/lint.mjs --all --only swift   # or pnpm lint:fix to format
 pnpm --filter @ddl/daemon --filter @ddl/sync build
 apps/macos/scripts/test.sh                 # every package, then the app shell
+apps/macos/scripts/test.sh --changed       # only what your changes affect (the local loop)
 apps/macos/scripts/test.sh integration     # real daemon, mock agent
 apps/macos/scripts/build-app.sh --release --with-daemon --zip
+apps/macos/scripts/smoke-computer-helper.sh "apps/macos/build/Daily Do List.app/Contents/Resources/daemon/bin/ddl-computer"
 ```
 
 With only the Command Line Tools installed (no Xcode), `test.sh` adds the framework and rpath flags
-Swift Testing needs.
+Swift Testing needs. `test.sh --thorough` runs the full iteration counts locally.
 
 ## Linux bundle (`linux-bundle.yml`)
 
@@ -314,7 +334,7 @@ deploy/linux/smoke-test.sh deploy/linux/build/ddl-linux-arm64.tar.gz   # Linux o
 | --- | --- | --- | --- |
 | Hot-path p99 latency | each `*.bench.ts` | ×1 | ×2 (`BENCH_BUDGET_MULTIPLIER`) |
 | Unit-test timing guards ("stays fast" assertions) and default timeouts | those tests, `scripts/vitest/setup-fast-check.ts` | ×1 | ×5 (`TEST_TIME_SCALE`) |
-| Swift performance tests (debug build) | `*PerformanceTests.swift` in the Swift packages | ×1 | ×4 (`PERF_BUDGET_MULTIPLIER`), editor ×2 (`EDITOR_PERF_BUDGET_MULTIPLIER`) |
+| Swift performance tests (debug build; the editor's take a third of their samples unless `DDL_TEST_THOROUGH=1`, as on `main`) | `*PerformanceTests.swift` in the Swift packages | ×1 | ×4 (`PERF_BUDGET_MULTIPLIER`), editor ×2 (`EDITOR_PERF_BUDGET_MULTIPLIER`) |
 | UI perf: startup, daily-note open, tab switch, thread open, keystroke latency, long tasks | `apps/web/e2e/perf/`, see `docs/PERFORMANCE.md` | ×1 | ×2 (`PERF_BUDGET_MULTIPLIER`) |
 | Bundle size, gzip: initial JS ≤ 320 kB, initial CSS ≤ 40 kB, total JS ≤ 1300 kB | top of `scripts/bundle-size-check.mjs` | same | same |
 | Eval thresholds (accuracy, false-allow rate, …) | each eval suite | same | same |

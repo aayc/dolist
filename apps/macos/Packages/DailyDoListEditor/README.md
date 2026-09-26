@@ -441,13 +441,13 @@ pathological lines, random edits with drawing), agent lines (marker grammar, col
 markers and sparkle slots, sparkle clicks and tooltips, the caret and Enter around markers),
 anchored-line bands (also checked on pixels), link previews and the shared tooltip (on virtual
 time: the delay, gliding between badge, sparkle and link, fading out, a note switch), remote
-changes (caret, badges and undo), performance, and offscreen PNG renders written to
-`.build/editor-snapshots/` for manual review (ignored by git): the sample note (light, dark, source
-mode with line numbers), badges in every status (light, dark), narrow-window badges, agent lines
-with an anchored line (light, dark, source mode), tooltips over a badge and the sparkle (light,
-dark), and a frame in the middle of every kind of motion.
+changes (caret, badges and undo), performance (a third of the samples unless
+`DDL_TEST_THOROUGH=1`), and offscreen renders with pixel checks, also written to
+`.build/editor-snapshots/` (ignored by git): badges in every status (light, dark), narrow-window
+badges, the orchestrator's chips, agent lines with an anchored line (light, dark), and a frame in
+the middle of every kind of motion.
 
-Drawings have 54 of these tests, driving an editor in an offscreen window with real `NSEvent`s
+Drawings have 53 of these tests, driving an editor in an offscreen window with real `NSEvent`s
 and a delegate that serves synthetic drawings (`Support/DrawingTestSupport.swift`):
 
 - **Embeds** (`DrawingEmbedTests`): which lines are embeds, the embed lines through edits, sizes

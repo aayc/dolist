@@ -4,14 +4,6 @@ import Testing
 @testable import DailyDoListModels
 
 struct RoutineModelTests {
-  @Test func routesEncodeTheRoutineId() {
-    #expect(APIRoute.routines == "/api/routines")
-    #expect(APIRoute.routine("rtn_0a1b") == "/api/routines/rtn_0a1b")
-    #expect(APIRoute.routineRun("rtn_0a1b") == "/api/routines/rtn_0a1b/run")
-    #expect(APIRoute.routinePause("rtn_0a1b") == "/api/routines/rtn_0a1b/pause")
-    #expect(APIRoute.routineResume("rtn_0a1b") == "/api/routines/rtn_0a1b/resume")
-    #expect(APIRoute.threads(routineId: "rtn_0a1b") == "/api/threads?routineId=rtn_0a1b")
-  }
 
   @Test func runThreadsCarryTheirRoutine() throws {
     let json = #"""

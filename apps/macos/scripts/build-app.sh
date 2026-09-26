@@ -83,14 +83,20 @@ WORK="$OUTPUT/.work"
 mkdir -p "$WORK"
 
 # 1. Compile ---------------------------------------------------------------------------------------
+# One scratch path for both packages (the app's own; test.sh builds in its tests/ folder).
+SCRATCH="$MACOS_DIR/.build"
 step "Building $EXECUTABLE ($CONFIGURATION)"
-swift build --package-path "$MACOS_DIR" -c "$CONFIGURATION" --product "$EXECUTABLE"
-BIN_DIR="$(swift build --package-path "$MACOS_DIR" -c "$CONFIGURATION" --show-bin-path)"
+swift build --package-path "$MACOS_DIR" --scratch-path "$SCRATCH" -c "$CONFIGURATION" \
+  --product "$EXECUTABLE"
+BIN_DIR="$(swift build --package-path "$MACOS_DIR" --scratch-path "$SCRATCH" -c "$CONFIGURATION" \
+  --show-bin-path)"
 [ -x "$BIN_DIR/$EXECUTABLE" ] || fail "no executable at $BIN_DIR/$EXECUTABLE"
 if [ "$WITH_DAEMON" = 1 ]; then
   step "Building $HELPER_NAME ($CONFIGURATION)"
-  swift build --package-path "$HELPER_PACKAGE" -c "$CONFIGURATION" --product "$HELPER_NAME"
-  HELPER_BIN_DIR="$(swift build --package-path "$HELPER_PACKAGE" -c "$CONFIGURATION" --show-bin-path)"
+  swift build --package-path "$HELPER_PACKAGE" --scratch-path "$SCRATCH" -c "$CONFIGURATION" \
+    --product "$HELPER_NAME"
+  HELPER_BIN_DIR="$(swift build --package-path "$HELPER_PACKAGE" --scratch-path "$SCRATCH" \
+    -c "$CONFIGURATION" --show-bin-path)"
   [ -x "$HELPER_BIN_DIR/$HELPER_NAME" ] || fail "no executable at $HELPER_BIN_DIR/$HELPER_NAME"
 fi
 
@@ -114,6 +120,8 @@ cp "$BIN_DIR/$EXECUTABLE" "$APP/Contents/MacOS/$EXECUTABLE"
 # looks next to the .app (where codesign forbids files), so packages should read resources from
 # Bundle.main.resourceURL instead.
 for bundle in "$BIN_DIR"/*.bundle; do
+  # The scratch path is shared with the tests: their bundles don't belong in the app.
+  case "$bundle" in *Tests.bundle) continue ;; esac
   if [ -d "$bundle" ]; then cp -R "$bundle" "$APP/Contents/Resources/"; fi
 done
 PLIST="$APP/Contents/Info.plist"

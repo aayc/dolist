@@ -6,7 +6,6 @@
 //   FAKE_DAEMON_CRASH_AFTER_MS   exit with status 3 this long after listening
 //   FAKE_DAEMON_CRASH_TIMES      only crash on the first N runs (counted in $DDL_HOME)
 //   FAKE_DAEMON_IGNORE_SIGTERM=1 ignore SIGTERM (the supervisor must escalate to SIGKILL)
-//   FAKE_DAEMON_FOREIGN=1        pretend to be some other web server (404 for everything)
 //   FAKE_DAEMON_STARTUP_DELAY_MS wait before listening
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -19,7 +18,6 @@ if (!home || !Number.isInteger(port) || port <= 0) {
   console.error("fake daemon: DDL_HOME and DDL_PORT are required");
   process.exit(2);
 }
-const foreign = process.env.FAKE_DAEMON_FOREIGN === "1";
 mkdirSync(home, { recursive: true, mode: 0o700 });
 
 function loadOrCreateToken() {
@@ -44,7 +42,7 @@ function shouldCrash() {
   return true;
 }
 
-const token = foreign ? null : loadOrCreateToken();
+const token = loadOrCreateToken();
 
 function json(res, status, body) {
   res.writeHead(status, { "content-type": "application/json" });
@@ -52,11 +50,6 @@ function json(res, status, body) {
 }
 
 const server = createServer((req, res) => {
-  if (foreign) {
-    res.writeHead(404, { "content-type": "text/html", server: "FakeForeign/1.0" });
-    res.end("<h1>Not the daemon</h1>");
-    return;
-  }
   if (req.url !== "/api/health") return json(res, 404, { error: "not_found" });
   if (req.headers.authorization !== `Bearer ${token}`) {
     return json(res, 401, { error: "unauthorized", message: "Missing or invalid bearer token" });

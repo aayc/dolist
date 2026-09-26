@@ -285,7 +285,7 @@ struct RemoteDeleteModelTests {
   static let path = "Daily/2026-09-23.md"
 
   @Test func nothingDeletedElsewhereComesBackAndACleanNoteWritesNothingNew() async throws {
-    for seed in 1...40 { try await run(seed: UInt64(seed)) }
+    for seed in 1...(thoroughTests ? 40 : 10) { try await run(seed: UInt64(seed)) }
   }
 
   private func run(seed: UInt64) async throws {

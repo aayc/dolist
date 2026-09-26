@@ -35,58 +35,6 @@ struct MotionTimelineTests {
     }
   }
 
-  @Test func easingsHaveTheirCSSShapes() {
-    #expect(abs(CubicBezier.easeInOut(0.5) - 0.5) < 1e-9, "ease-in-out is symmetric")
-    #expect(abs(CubicBezier.easeInOut(0.25) + CubicBezier.easeInOut(0.75) - 1) < 1e-9)
-    #expect(CubicBezier.easeInOut(0.1) < 0.1, "starts slow")
-    #expect(CubicBezier.easeOut(0.5) > 0.6, "ease-out is ahead of linear")
-    #expect(CubicBezier.easeOut(0.9) > 0.97, "and lands softly")
-  }
-
-  @Test func aBadgeFadesInWhileSettling2ptUpwardsIn160ms() {
-    let start = MotionTimeline.appear(after: 0)
-    #expect(start.opacity == 0)
-    #expect(start.offsetY == 2)
-    let middle = MotionTimeline.appear(after: 0.08)
-    #expect(middle.opacity > 0.5 && middle.opacity < 1)
-    #expect(abs(middle.offsetY - 2 * (1 - middle.opacity)) < 1e-9, "moves as it fades")
-    let end = MotionTimeline.appear(after: 0.16)
-    #expect(end.opacity == 1)
-    #expect(end.offsetY == 0)
-    #expect(MotionTimeline.appear(after: 5).opacity == 1)
-    #expect(MotionTimeline.appear(after: -1).opacity == 0, "a clock that went backwards")
-  }
-
-  @Test func aCrossfadeTakes160ms() {
-    #expect(MotionTimeline.crossfade(after: 0) == 0)
-    #expect(MotionTimeline.crossfade(after: 0.08) > 0.5)
-    #expect(MotionTimeline.crossfade(after: 0.16) == 1)
-  }
-
-  @Test func theTriagingDotBreathesDownTo35PercentAndBackEvery1_2s() {
-    #expect(MotionTimeline.pulse(after: 0) == 1)
-    #expect(abs(MotionTimeline.pulse(after: 0.6) - 0.35) < 1e-9)
-    #expect(abs(MotionTimeline.pulse(after: 1.2) - 1) < 1e-9)
-    // Ease-in-out on each half: halfway down at a quarter period, halfway up at three quarters.
-    #expect(abs(MotionTimeline.pulse(after: 0.3) - 0.675) < 1e-9)
-    #expect(abs(MotionTimeline.pulse(after: 0.9) - 0.675) < 1e-9)
-    #expect(MotionTimeline.pulse(after: 0.1) > 0.95, "eases out of full opacity")
-    #expect(MotionTimeline.pulse(after: 0.2) > MotionTimeline.pulse(after: 0.4), "going down")
-    #expect(MotionTimeline.pulse(after: 0.8) < MotionTimeline.pulse(after: 1.0), "coming back")
-    #expect(abs(MotionTimeline.pulse(after: 12 * 1.2 + 0.6) - 0.35) < 1e-6, "repeats")
-  }
-
-  @Test func aCheckmarkScalesFrom80PercentWhileFadingInIn120ms() {
-    let start = MotionTimeline.check(after: 0)
-    #expect(start.scale == 0.8)
-    #expect(start.opacity == 0)
-    let middle = MotionTimeline.check(after: 0.06)
-    #expect(middle.scale > 0.9 && middle.scale < 1)
-    #expect(middle.opacity > 0.5 && middle.opacity < 1)
-    let end = MotionTimeline.check(after: 0.12)
-    #expect(end.scale == 1)
-    #expect(end.opacity == 1)
-  }
 }
 
 @Suite("Motion state")

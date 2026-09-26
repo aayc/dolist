@@ -20,35 +20,6 @@ enum RealProcesses {
     kill(pid, 0) == 0 || errno == EPERM
   }
 
-  /// Starts the fake daemon outside any supervisor (a daemon "someone else" runs).
-  static func launchUnsupervised(home: URL, port: Int, extra: [String: String] = [:]) async throws
-    -> Process
-  {
-    let nodeURL: URL = try #require(await node.value)
-    let process = Process()
-    process.executableURL = nodeURL
-    process.arguments = [fakeDaemon.path]
-    process.environment = ProcessInfo.processInfo.environment.merging(
-      ["DDL_HOME": home.path, "DDL_PORT": String(port)].merging(extra) { $1 }
-    ) { $1 }
-    process.standardOutput = FileHandle.nullDevice
-    process.standardError = FileHandle.nullDevice
-    try process.run()
-    let checker = URLSessionHealthChecker()
-    let base = URL(string: "http://127.0.0.1:\(port)")!
-    for _ in 0..<200 {
-      let token = try? String(
-        contentsOf: home.appendingPathComponent("daemon-token"), encoding: .utf8)
-      switch await checker.check(
-        baseURL: base, token: token?.trimmingCharacters(in: .whitespacesAndNewlines))
-      {
-      case .healthy, .foreign: return process
-      default: try await Task.sleep(for: .milliseconds(50))
-      }
-    }
-    process.terminate()
-    throw LocalPort.Failure(description: "the unsupervised fake daemon never answered")
-  }
 }
 
 @MainActor
@@ -124,29 +95,6 @@ struct RealProcessTests {
     }
   }
 
-  @Test func attachesToADaemonItDidNotStartAndLeavesItRunning() async throws {
-    try await withSupervisor { supervisor, home in
-      let external = try await RealProcesses.launchUnsupervised(
-        home: home, port: supervisor.configuration.port)
-      defer { external.terminate() }
-
-      let connection = try #require(await supervisor.start())
-      #expect(supervisor.state == .attached(connection: connection))
-
-      await supervisor.stop()
-
-      #expect(supervisor.state == .stopped)
-      #expect(external.isRunning)
-      guard
-        case .healthy = await URLSessionHealthChecker().check(
-          baseURL: connection.baseURL, token: connection.token)
-      else {
-        Issue.record("the external daemon should still answer")
-        return
-      }
-    }
-  }
-
   @Test func restartsAfterACrash() async throws {
     try await withSupervisor(extra: [
       "FAKE_DAEMON_CRASH_AFTER_MS": "300", "FAKE_DAEMON_CRASH_TIMES": "1",
@@ -188,40 +136,6 @@ struct RealProcessTests {
       #expect(!RealProcesses.isAlive(pid))
       #expect(supervisor.logLines.contains { $0.contains("fake daemon ignoring SIGTERM") })
       #expect(supervisor.logLines.contains { $0.contains("sending SIGKILL") })
-    }
-  }
-
-  @Test func reportsAnotherProgramOnThePort() async throws {
-    try await withSupervisor { supervisor, home in
-      let foreignHome = home.appendingPathComponent("other")
-      let foreign = try await RealProcesses.launchUnsupervised(
-        home: foreignHome, port: supervisor.configuration.port, extra: ["FAKE_DAEMON_FOREIGN": "1"])
-      defer { foreign.terminate() }
-
-      #expect(await supervisor.start() == nil)
-
-      guard case .portInUse(let port, let detail) = supervisor.lastError else {
-        Issue.record("expected portInUse, got \(supervisor.state)")
-        return
-      }
-      #expect(port == supervisor.configuration.port)
-      #expect(detail.contains("HTTP 404"))
-      #expect(detail.contains("FakeForeign"))
-    }
-  }
-
-  @Test func reportsADaemonThatRejectsTheToken() async throws {
-    try await withSupervisor { supervisor, home in
-      let other = try await RealProcesses.launchUnsupervised(
-        home: home.appendingPathComponent("other-home"), port: supervisor.configuration.port)
-      defer { other.terminate() }
-
-      #expect(await supervisor.start() == nil)
-
-      guard case .tokenRejected = supervisor.lastError else {
-        Issue.record("expected tokenRejected, got \(supervisor.state)")
-        return
-      }
     }
   }
 

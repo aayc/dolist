@@ -15,6 +15,10 @@ struct TimeoutError: Error, CustomStringConvertible {
   let description: String
 }
 
+/// `DDL_TEST_THOROUGH=1` (`test.sh --thorough`) runs model-based and fuzz tests with every seed;
+/// by default they run the first few.
+let thoroughTests = ProcessInfo.processInfo.environment["DDL_TEST_THOROUGH"] == "1"
+
 /// Polls `condition` (yielding to let async work progress) until it holds or `timeout` passes.
 @MainActor
 func eventually(

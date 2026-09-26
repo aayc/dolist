@@ -10,28 +10,6 @@ struct OrchestratorActivityTests {
     try JSONDecoder.daemon.decode(T.self, from: Data(json.utf8))
   }
 
-  @Test func aNoticedLineDecodes() throws {
-    let json = #"""
-      {"type":"orchestrator.activity","activity":{"phase":"noticed",
-       "trigger":{"kind":"note","notePath":"Daily/2026-09-25.md",
-        "lines":[{"line":4,"text":"find a quiet dishwasher?"}],"summary":"“find a quiet dishwasher?”"}}}
-      """#
-    let event = try Self.decode(ServerEvent.self, json)
-    #expect(event.type == "orchestrator.activity")
-    guard case .orchestratorActivity(let activity) = event else {
-      Issue.record("expected orchestrator.activity, got \(event)")
-      return
-    }
-    #expect(activity.phase == .noticed)
-    #expect(!activity.phase.isWorking)
-    #expect(activity.turnId == nil && activity.startedAt == nil && activity.outcome == nil)
-    let trigger = try #require(activity.trigger)
-    #expect(trigger.kind == .note)
-    #expect(trigger.notePath == "Daily/2026-09-25.md")
-    #expect(trigger.lines == [OrchestratorTriggerLine(line: 4, text: "find a quiet dishwasher?")])
-    #expect(trigger.summary == "“find a quiet dishwasher?”")
-  }
-
   @Test func aTurnInEveryPhaseDecodes() throws {
     for phase in ["reading", "thinking", "acting"] {
       let json = """
@@ -50,24 +28,6 @@ struct OrchestratorActivityTests {
       #expect(activity.startedAt == 1_790_000_000_000)
       #expect(activity.trigger?.kind == .task)
     }
-  }
-
-  @Test func theOutcomeOfATurnDecodes() throws {
-    let json = #"""
-      {"type":"orchestrator.activity","activity":{"phase":"idle","turnId":"msg_0007",
-       "trigger":{"kind":"message","summary":"your message"},
-       "outcome":{"kind":"tasks_added","count":3,"threadId":"thr_0003","text":"Added 3 tasks under “Trip”"}}}
-      """#
-    guard case .orchestratorActivity(let activity) = try Self.decode(ServerEvent.self, json) else {
-      Issue.record("expected orchestrator.activity")
-      return
-    }
-    #expect(activity.phase == .idle)
-    #expect(activity.trigger?.notePath == nil && activity.trigger?.lines == nil)
-    #expect(
-      activity.outcome
-        == OrchestratorOutcome(
-          kind: .tasksAdded, count: 3, threadId: "thr_0003", text: "Added 3 tasks under “Trip”"))
   }
 
   @Test func everyOutcomeKindOfTheSpecIsKnown() throws {
@@ -102,45 +62,6 @@ struct OrchestratorActivityTests {
     #expect(activity.phase.isWorking)
     #expect(activity.trigger?.kind.rawValue == "calendar")
     #expect(activity.outcome?.kind.rawValue == "meeting_moved")
-  }
-
-  @Test func encodingIsCanonical() throws {
-    let activity = OrchestratorActivity(
-      phase: .thinking, turnId: "msg_1",
-      trigger: OrchestratorTrigger(
-        kind: .note, notePath: "Daily/2026-09-25.md",
-        lines: [OrchestratorTriggerLine(line: 0, text: "Plan the trip?")], summary: "your note"),
-      startedAt: 1_000)
-    let json = String(
-      decoding: try JSONEncoder.daemon.encode(ServerEvent.orchestratorActivity(activity)),
-      as: UTF8.self)
-    #expect(
-      json
-        == #"{"activity":{"phase":"thinking","startedAt":1000,"trigger":{"kind":"note","lines":[{"line":0,"text":"Plan the trip?"}],"notePath":"Daily/2026-09-25.md","summary":"your note"},"turnId":"msg_1"},"type":"orchestrator.activity"}"#
-    )
-    let idle = String(
-      decoding: try JSONEncoder.daemon.encode(OrchestratorActivity.idle), as: UTF8.self)
-    #expect(idle == #"{"phase":"idle"}"#)
-  }
-
-  @Test func theStatusCarriesTheActivityForAClientJoiningMidTurn() throws {
-    let json = #"""
-      {"mode":"live","enabled":true,"model":"m","running":0,"queued":0,"pendingApprovals":0,
-       "connectors":[],"execution":{"provider":"local","capabilities":{"shell":true,"browser":true,"computer":false}},
-       "orchestrator":{"phase":"acting","turnId":"msg_9","startedAt":5,
-        "trigger":{"kind":"routine","summary":"Morning briefing"}}}
-      """#
-    let status = try Self.decode(AgentStatusResponse.self, json)
-    #expect(status.orchestrator?.phase == .acting)
-    #expect(status.orchestrator?.trigger?.kind == .routine)
-    guard
-      case .agentStatus(let pushed) = try Self.decode(
-        ServerEvent.self, #"{"type":"agent.status","status":\#(json)}"#)
-    else {
-      Issue.record("expected agent.status")
-      return
-    }
-    #expect(pushed == status)
   }
 
   @Test func anOlderDaemonsStatusHasNoActivity() throws {

@@ -18,6 +18,11 @@ public struct VimVectorFile: Sendable {
     .deletingLastPathComponent()  // apps
     .appendingPathComponent("packages/editor/test/vim/vectors.jsonl")
 
+  /// The file in this source tree, parsed once per process (replays of several editor
+  /// configurations share it); nil when it doesn't exist.
+  public static func loadDefault() throws -> VimVectorFile? { try defaultFile.get() }
+  private static let defaultFile = Result { try load() }
+
   /// Reads and parses a vectors file; nil when it doesn't exist.
   public static func load(from url: URL = defaultURL) throws -> VimVectorFile? {
     guard let data = FileManager.default.contents(atPath: url.path) else { return nil }

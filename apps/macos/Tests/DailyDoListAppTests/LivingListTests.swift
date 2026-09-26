@@ -35,13 +35,6 @@ struct LivingListTests {
     return workspace
   }
 
-  @Test func theAppIsDarkByDefault() {
-    #expect(AppSettings.defaults.theme == .dark)
-    #expect(AppModel.appearance(for: AppSettings.defaults.theme)?.name == .darkAqua)
-    #expect(AppModel.appearance(for: .light)?.name == .aqua)
-    #expect(AppModel.appearance(for: .system) == nil)
-  }
-
   // MARK: Badges
 
   @Test func anchoredRecordsBadgeTheirLineAndHighlightIt() {

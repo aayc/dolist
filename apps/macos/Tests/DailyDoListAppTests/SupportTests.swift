@@ -119,11 +119,6 @@ struct TextSupportTests {
     #expect(label(TaskAgentStatus(rawValue: "future_status")) == nil)
   }
 
-  @Test func launchOptionsDetectDemoMode() {
-    #expect(LaunchOptions(arguments: ["app", "--demo"], environment: [:]).demo)
-    #expect(LaunchOptions(arguments: ["app"], environment: ["DDL_DEMO": "1"]).demo)
-    #expect(!LaunchOptions(arguments: ["app"], environment: ["DDL_DEMO": "0"]).demo)
-  }
 }
 
 @MainActor

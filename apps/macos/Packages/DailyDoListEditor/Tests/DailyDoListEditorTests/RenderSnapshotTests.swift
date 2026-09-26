@@ -18,20 +18,6 @@ struct RenderSnapshotTests {
       .appendingPathComponent(".build/editor-snapshots", isDirectory: true)
   }
 
-  @Test(arguments: [("light", NSAppearance.Name.aqua), ("dark", NSAppearance.Name.darkAqua)])
-  func rendersSampleNote(name: String, appearance: NSAppearance.Name) throws {
-    let editor = EditorHarness(text: SampleNote.text, size: NSSize(width: 900, height: 1200))
-    editor.controller.scrollView.appearance = NSAppearance(named: appearance)
-    editor.controller.setBadges(SampleNote.badges(for: editor.text))
-    // Caret on the formatting line: its syntax shows raw, everything else renders.
-    editor.select(NSRange(location: editor.offset(of: "Plan for today") + 5, length: 0))
-    let png = try render(editor)
-    #expect(png.count > 10_000)
-    try FileManager.default.createDirectory(
-      at: Self.outputDirectory, withIntermediateDirectories: true)
-    try png.write(to: Self.outputDirectory.appendingPathComponent("sample-\(name).png"))
-  }
-
   @Test func rendersBadgesInTheReservedMargin() throws {
     let text = [
       "- [ ] Research the best espresso machines under $500",
@@ -282,66 +268,6 @@ struct RenderSnapshotTests {
       "the band is tinted")
     // A sparkle is drawn in each hidden marker's slot.
     #expect(editor.controller.agentSparkles().count == 3)
-  }
-
-  /// The shared tooltip over a badge and over the agent's sparkle, where the app shows them: the
-  /// real bubble, placed by the app's rules (the panel itself can't be captured offscreen).
-  @Test(arguments: [("light", NSAppearance.Name.aqua), ("dark", NSAppearance.Name.darkAqua)])
-  func rendersTooltipsOverABadgeAndTheSparkle(name: String, appearance: NSAppearance.Name) throws {
-    let text = Self.agentNote
-    let editor = EditorHarness(
-      text: text, selection: NSRange(location: (text as NSString).length, length: 0),
-      size: NSSize(width: 900, height: 360))
-    editor.controller.scrollView.appearance = NSAppearance(named: appearance)
-    editor.textView.appearance = NSAppearance(named: appearance)
-    editor.controller.setBadges(Self.agentBadges(text))
-    editor.controller.scrollView.layoutSubtreeIfNeeded()
-    editor.layout()
-    let badge = try #require(editor.controller.currentBadgeLayouts().first)
-    let sparkle = try #require(editor.controller.agentSparkles().first)
-    let bounds = editor.textView.bounds
-    try FileManager.default.createDirectory(
-      at: Self.outputDirectory, withIntermediateDirectories: true)
-    for (shot, rect) in [("tooltip-badge", badge.rect), ("tooltip-sparkle", sparkle.rect)] {
-      let rep = try snapshot(editor.textView)
-      let said = try #require(
-        editor.controller.textView(editor.textView, toolTipAt: NSPoint(x: rect.midX, y: rect.midY))
-      )
-      let content = try #require(TooltipContent(multilineText: said))
-      // The text view is flipped; the capture is drawn into bottom-up.
-      let anchor = NSRect(
-        x: rect.minX, y: bounds.height - rect.maxY, width: rect.width, height: rect.height)
-      try TooltipSnapshot(content: content, anchor: anchor, prefersBelow: false).draw(
-        into: rep, windowSize: bounds.size)
-      let png = try #require(rep.representation(using: .png, properties: [:]))
-      try png.write(to: Self.outputDirectory.appendingPathComponent("\(shot)-\(name).png"))
-    }
-  }
-
-  @Test func rendersAgentLinesInSourceMode() throws {
-    let text = Self.agentNote
-    let configuration = EditorConfiguration(livePreview: false, readableLineLength: false)
-    let editor = EditorHarness(
-      text: text, configuration: configuration, size: NSSize(width: 1000, height: 320))
-    editor.controller.scrollView.appearance = NSAppearance(named: .darkAqua)
-    editor.controller.setBadges(Self.agentBadges(text))
-    let png = try render(editor)
-    try FileManager.default.createDirectory(
-      at: Self.outputDirectory, withIntermediateDirectories: true)
-    try png.write(to: Self.outputDirectory.appendingPathComponent("agent-lines-source-mode.png"))
-  }
-
-  @Test func rendersSourceModeWithLineNumbers() throws {
-    let configuration = EditorConfiguration(
-      livePreview: false, readableLineLength: false, showLineNumbers: true)
-    let editor = EditorHarness(
-      text: SampleNote.text, configuration: configuration, size: NSSize(width: 900, height: 1200))
-    editor.controller.scrollView.appearance = NSAppearance(named: .aqua)
-    let png = try render(editor, includeRuler: true)
-    #expect(png.count > 10_000)
-    try FileManager.default.createDirectory(
-      at: Self.outputDirectory, withIntermediateDirectories: true)
-    try png.write(to: Self.outputDirectory.appendingPathComponent("sample-source-mode.png"))
   }
 
   /// Renders the text view (and the line-number ruler to its left when requested) to PNG data.

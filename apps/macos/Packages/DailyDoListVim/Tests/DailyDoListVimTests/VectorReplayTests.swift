@@ -15,7 +15,7 @@ import Testing
   static let exclusions: [String: String] = [:]
 
   @Test func everyVectorPassesThroughTheReferenceBuffer() throws {
-    guard let file = try VimVectorFile.load() else {
+    guard let file = try VimVectorFile.loadDefault() else {
       print("vim vectors: \(VimVectorFile.defaultURL.path) not found, skipping")
       return
     }
