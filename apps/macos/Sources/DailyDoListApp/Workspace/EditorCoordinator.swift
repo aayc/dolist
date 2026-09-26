@@ -1,6 +1,7 @@
 import AppKit
 import DailyDoListEditor
 import DailyDoListModels
+import DailyDoListUI
 import Foundation
 import Observation
 
@@ -99,8 +100,6 @@ final class EditorCoordinator {
   func liveText(for path: String) -> String? {
     path == activePath ? controller.text : snapshots[path]?.text
   }
-
-  func hasSnapshot(_ path: String) -> Bool { snapshots[path] != nil }
 
   /// A newer server version (no local edits): minimal-diff update of the active note; inactive
   /// notes drop their snapshot and reload from the store when shown again.
@@ -233,7 +232,7 @@ extension EditorCoordinator: MarkdownEditorDelegate {
   }
 
   func editor(_ editor: MarkdownEditorController, didClickLink url: URL) {
-    ExternalLinks.open(url)
+    LinkPolicy.open(url)
   }
 
   func editor(_ editor: MarkdownEditorController, cursorDidMoveToLine line: Int) {

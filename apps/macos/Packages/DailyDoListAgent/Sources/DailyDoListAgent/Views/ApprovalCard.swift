@@ -5,8 +5,14 @@ import SwiftUI
 /// A risky action waiting for the user (or the record of their decision): summary, tool, risk and
 /// categories, the evaluator's reason, the exact input, and Approve once / Approve for this task /
 /// Deny… (with an optional note for the agent). One that arrives while the chat is open glows
-/// twice to draw the eye (not with Reduce Motion).
+/// once to draw the eye (not with Reduce Motion).
 public struct ApprovalCard: View {
+  /// The arrival glow's phases: up, then back to the first (the phase animator returns to it).
+  static let glowPhases: [Double] = [0, 1]
+  /// How long the glow takes to reach `glow`: up in the first fifth of 1.4 s, then fading, like
+  /// the web's `ddl-attention`.
+  static func glowDuration(to glow: Double) -> Double { glow > 0 ? 0.28 : 1.12 }
+
   let approval: ApprovalRequest
   let isDeciding: Bool
   let announces: Bool
@@ -100,7 +106,7 @@ public struct ApprovalCard: View {
     .overlay(
       RoundedRectangle(cornerRadius: 10).strokeBorder(tint.opacity(approval.isPending ? 0.6 : 0.35))
     )
-    .phaseAnimator([0.0, 1.0, 0.3, 0.9, 0.0], trigger: attention) { card, glow in
+    .phaseAnimator(Self.glowPhases, trigger: attention) { card, glow in
       card
         .overlay(
           RoundedRectangle(cornerRadius: 10)
@@ -108,8 +114,8 @@ public struct ApprovalCard: View {
             .allowsHitTesting(false)
         )
         .shadow(color: AgentTheme.warning.opacity(glow * 0.35), radius: 10 * glow)
-    } animation: { _ in
-      .easeInOut(duration: 0.26)
+    } animation: { glow in
+      .easeOut(duration: Self.glowDuration(to: glow))
     }
     .onAppear {
       guard announces else { return }

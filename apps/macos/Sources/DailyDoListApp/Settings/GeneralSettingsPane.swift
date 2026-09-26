@@ -47,7 +47,7 @@ struct GeneralSettingsPane: View {
         case .managed:
           CommitTextField(
             title: "Port", value: preferences.managedPortOverride.map(String.init) ?? "",
-            prompt: String(DaemonLaunchConfiguration.standard().port)
+            prompt: String(preferences.standardPort)
           ) { text in
             let port = Int(text.trimmingCharacters(in: .whitespaces))
             preferences.managedPortOverride = port.flatMap { (1...65_535).contains($0) ? $0 : nil }

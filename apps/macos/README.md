@@ -173,13 +173,13 @@ app's.
   highlighted). The
   tooltip says what it's doing or what it did. With Reduce Motion nothing pulses and outcomes just
   go.
-- **Where chips go:** each is placed once per document by its line and text (the same line if
-  its text is still there, else the nearest line with that text, else the most similar line the
-  editor would still recognize within 20 lines: `ChipBuilder`), then the editor maps it through
-  edits like a badge and drops it when its line is edited beyond recognition
-  (`EditorLineMatch`); it doesn't come back. A line with a task's badge keeps only that badge
-  (the task's triage speaks for it). Chips update on events and editor edits only: nothing runs
-  per keystroke.
+- **Where chips go:** each is placed once per document by its line and text, like the web's
+  `findEditedLine` (the same line while the editor would still recognize it, else the nearest
+  line with that text, else the nearest line the editor would still recognize, anywhere in the
+  note: `ChipBuilder`), then the editor maps it through edits like a badge and drops it when its
+  line is edited beyond recognition (`EditorLineMatch`); it doesn't come back. A line with a
+  task's badge keeps only that badge (the task's triage speaks for it). Chips update on events and
+  editor edits only: nothing runs per keystroke.
 - **The note header** says "Orchestrator: reading this note…", "thinking…" or "working…" beside
   the title while a turn is about the open note; **the status bar** says "Orchestrator: working on
   2026-09-24" while it's about another note (or what woke it: "working on your message"). Both open
@@ -211,14 +211,14 @@ extra protocol. The web app's chat follows the same rules and wording.
   doing: "Waiting for your approval" (click it to scroll to the card), the running tool call in
   words ("Opening Safari…", "Searching the web for “espresso grinders”…", from `ChatActivity`),
   or "Thinking…", with the step's time once it passes 3 s. Text typing out needs no row: the caret
-  says it. The header's status pulses while the agent works; a new approval card glows twice.
+  says it. The header's status pulses while the agent works; a new approval card glows once.
 - **Tool calls** show a spinner, then pop to ✓, ✕ or a shield. Calls that succeeded in a row
   collapse into "Used 6 tools"; a running call and failures stay visible.
 - **Scrolling:** the chat follows new text while you're at the bottom and never moves while you
   read further up; a "Jump to latest" pill counts what arrived and scrolls down.
 - **The chat bar** grows from one line to eight, then scrolls. Return sends, Shift-Return adds a
   line. A sent message shows at once (a quiet "Sending…"), the input clears and keeps the focus,
-  and a message that didn't go out stays with Retry and Remove. While the agent works, Stop sits
+  and a message that didn't go out stays with Retry and Discard. While the agent works, Stop sits
   beside Send (**Stop Task**, ⌘., also in the Agent menu). The placeholder says what a reply does:
   "Reply to the agent…", "Approve above, or reply to change course…", "Ask a follow-up…".
 - **Messages** fade and rise in; under the pointer they show their time and a copy button, and

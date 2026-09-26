@@ -49,6 +49,8 @@ final class Workspace {
   @ObservationIgnored let now: () -> Date
   /// Local vault folder when known (Reveal in Finder).
   var localVaultURL: URL?
+  /// Shows a file or folder in Finder (`AppEnvironment.revealInFinder`).
+  @ObservationIgnored var showInFinder: (@MainActor (URL) -> Void)?
 
   /// Most recently used notes, newest first (quick switcher, cache eviction).
   private(set) var recent: [String] = []

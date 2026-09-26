@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListUI
 import Testing
 
 @testable import DailyDoListEditor
@@ -120,5 +121,30 @@ struct HitTestingTests {
     #expect(
       LinkClassifier.destination(for: .wiki(target: "", subpath: "H", alias: nil, isEmbed: false))
         == nil)
+  }
+
+  @Test func externalLinksAreExactlyTheOnesTheAppOpens() {
+    let raws = [
+      "https://x.com", "HTTPS://X.COM/a", "www.x.com", "//x.com", "me@example.com",
+      "mailto:me@example.com", "tel:+123", "http:relative", "https://", "mailto:", "tel:",
+      "javascript:alert(1)", "ftp://x.com",
+    ]
+    for raw in raws {
+      guard case .external(let url) = LinkClassifier.classify(raw) else { continue }
+      #expect(LinkPolicy.isAllowed(url), "\(raw)")
+    }
+    #expect(LinkClassifier.classify("http:relative") == nil, "no host")
+    #expect(LinkClassifier.classify("mailto:") == nil)
+    #expect(LinkClassifier.classify("tel:") == nil)
+  }
+
+  @Test func phoneLinksAreFollowedAndHostlessOnesAreNot() {
+    let text = "[call](tel:+15550100) or [nowhere](http:relative)\nx"
+    let editor = EditorHarness(
+      text: text, selection: NSRange(location: (text as NSString).length, length: 0))
+    editor.layout()
+    editor.controller.handleClick(at: editor.point(at: editor.range(of: "call")), modifiers: [])
+    editor.controller.handleClick(at: editor.point(at: editor.range(of: "nowhere")), modifiers: [])
+    #expect(editor.delegate.links == [URL(string: "tel:+15550100")!])
   }
 }

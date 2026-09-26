@@ -245,8 +245,30 @@ struct OrchestratorChipTests {
     #expect(ChipBuilder.resolve(3, text: "find a lamp", in: lines) == 1, "moved up")
     #expect(ChipBuilder.resolve(4, text: "find a lamp for the desk", in: lines) == 1, "similar")
     #expect(ChipBuilder.resolve(1, text: "book the dentist", in: lines) == nil, "gone")
-    #expect(ChipBuilder.resolve(40, text: "call Sam", in: lines) == nil, "too far to guess")
+    #expect(ChipBuilder.resolve(40, text: "call Sam", in: lines) == 4, "a similar line anywhere")
     #expect(ChipBuilder.resolve(40, text: "call Sam?", in: lines) == 4, "the same text anywhere")
+    #expect(ChipBuilder.resolve(-3, text: "find a lamp for", in: lines) == 1)
+  }
+
+  /// The web's `findEditedLine` (`packages/core/src/markdown/anchors.test.ts`).
+  @Test func placementFollowsTheWebsRules() {
+    let lines = [
+      "# Today", "find a plumber for Sunday", "Groceries", "find a plumber for Saturday",
+    ]
+    #expect(ChipBuilder.resolve(3, text: "find a plumber for Saturday", in: lines) == 3)
+    #expect(
+      ChipBuilder.resolve(1, text: "find a plumber for Sun", in: lines) == 1,
+      "the line itself while it's still being typed")
+    #expect(ChipBuilder.resolve(2, text: "find a plumber for Saturday", in: lines) == 3, "exact")
+    #expect(ChipBuilder.resolve(0, text: "Grocerie", in: lines) == 2, "similar")
+    #expect(ChipBuilder.resolve(0, text: "Call mom", in: lines) == nil)
+    #expect(
+      ChipBuilder.resolve(0, text: "find a plumber for Saturdays", in: lines) == 1,
+      "the nearest similar line, not the most similar")
+    let far = ["find a lamp for the desk"] + Array(repeating: "", count: 60) + ["# Friday"]
+    #expect(ChipBuilder.resolve(61, text: "find a lamp", in: far) == 0, "anywhere in the note")
+    #expect(ChipBuilder.resolve(1, text: "x", in: ["a", "x", "x"]) == 1)
+    #expect(ChipBuilder.resolve(2, text: "x", in: ["x", "", "", "", "x"]) == 0, "earlier on ties")
   }
 
   @Test func placedChipsFollowTheEditorAndStayOffTaskLines() {

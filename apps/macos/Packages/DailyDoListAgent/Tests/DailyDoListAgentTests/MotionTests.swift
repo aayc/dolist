@@ -77,4 +77,21 @@ struct MotionTests {
     #expect(CaretMode(reduceMotion: false) == .blinking)
     #expect(CaretMode(reduceMotion: true) == .steady)
   }
+
+  @Test func aNewApprovalCardGlowsOnceLikeTheWeb() throws {
+    let phases = ApprovalCard.glowPhases
+    let start = try #require(phases.first)
+    // The phase animator runs through the phases, then back to the first.
+    let steps = phases.dropFirst() + [start]
+    var rises = 0
+    var previous = start
+    for glow in steps {
+      if glow > previous { rises += 1 }
+      previous = glow
+    }
+    #expect(rises == 1)
+    #expect(start == 0, "dark before and after")
+    let total = steps.map(ApprovalCard.glowDuration(to:)).reduce(0, +)
+    #expect(abs(total - 1.4) < 0.001, "the web's ddl-attention takes 1.4 s")
+  }
 }

@@ -46,6 +46,10 @@ final class AppPreferences {
   var managedPortOverride: Int? {
     didSet { defaults.set(managedPortOverride, forKey: Key.managedPort) }
   }
+  /// The port without an override (the Port field's placeholder), read once: finding it reads the
+  /// environment and `config.json`.
+  @ObservationIgnored private(set) lazy var standardPort =
+    DaemonLaunchConfiguration.standard(environment: environment).port
   /// DDL_HOME override; nil = `$DDL_HOME` or `~/.daily-do-list`.
   var homeOverride: String? { didSet { defaults.set(homeOverride, forKey: Key.home) } }
   /// Vault folder override for the managed daemon; nil = `$DDL_VAULT` or the daemon's default.

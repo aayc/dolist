@@ -20,18 +20,6 @@ extension MarkdownEditorController {
   /// The selected drawing's 0-based line.
   public var selectedDrawingLine: Int? { selectedEmbed?.line }
 
-  /// Selects the drawn embed on a line (nil deselects). The caret doesn't move.
-  @discardableResult
-  public func selectDrawing(atLine line: Int?) -> Bool {
-    guard let line else {
-      setSelectedEmbed(nil)
-      return true
-    }
-    guard let embed = embedLine(line), isEmbedDrawn(embed) else { return false }
-    setSelectedEmbed(embed.lineStart)
-    return true
-  }
-
   func setSelectedEmbed(_ lineStart: Int?) {
     guard lineStart != embeds.selectedLineStart else { return }
     embeds.selectedLineStart = lineStart

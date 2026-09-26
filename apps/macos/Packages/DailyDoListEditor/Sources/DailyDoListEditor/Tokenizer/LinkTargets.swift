@@ -1,3 +1,4 @@
+import DailyDoListUI
 import Foundation
 
 /// The parts of a wikilink's inner text `target#subpath|alias` (whitespace trimmed).
@@ -25,17 +26,15 @@ struct WikiLinkParts: Equatable, Sendable {
 
 /// Where following a link leads.
 enum LinkDestination: Equatable, Sendable {
-  /// An `http(s)`, `mailto` or `tel` URL (`www.` gets `https://`, bare emails `mailto:`).
+  /// A URL `LinkPolicy` lets open (`www.` gets `https://`, bare emails `mailto:`).
   case external(URL)
   /// A note in the vault: wikilinks and scheme-less markdown destinations (`[x](Daily/2026.md)`).
   case note(target: String, subpath: String?)
 }
 
 enum LinkClassifier {
-  private static let safeSchemes: Set<String> = ["http", "https", "mailto", "tel"]
-
-  /// Resolves a link target. Unsafe schemes (`javascript:`, `file:`, `data:`, …) resolve to nil
-  /// and are never handed to the host.
+  /// Resolves a link target. URLs `LinkPolicy` refuses (`javascript:`, `file:`, `data:`, `http:`
+  /// without a host, …) resolve to nil and are never handed to the host.
   static func destination(for target: LinkTarget) -> LinkDestination? {
     switch target {
     case .wiki(let target, let subpath, _, _):
@@ -51,10 +50,7 @@ enum LinkClassifier {
       url = String(url.dropFirst().dropLast()).trimmingCharacters(in: .whitespaces)
     }
     guard !url.isEmpty else { return nil }
-    if let scheme = scheme(of: url) {
-      guard safeSchemes.contains(scheme.lowercased()) else { return nil }
-      return external(url)
-    }
+    if scheme(of: url) != nil { return external(url) }
     if url.lowercased().hasPrefix("www.") { return external("https://" + url) }
     if url.hasPrefix("//") { return external("https:" + url) }
     if isEmail(url) { return external("mailto:" + url) }
@@ -66,9 +62,12 @@ enum LinkClassifier {
   }
 
   private static func external(_ string: String) -> LinkDestination? {
-    if let url = URL(string: string) { return .external(url) }
-    let escaped = string.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed)
-    return escaped.flatMap(URL.init(string:)).map(LinkDestination.external)
+    let url =
+      URL(string: string)
+      ?? string.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed).flatMap(
+        URL.init(string:))
+    guard let url, LinkPolicy.isAllowed(url) else { return nil }
+    return .external(url)
   }
 
   /// `scheme:` per RFC 3986 (a letter, then letters, digits, `+`, `.`, `-`).

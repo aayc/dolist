@@ -77,9 +77,7 @@ public struct ExcalidrawElement: Hashable, Sendable, Identifiable {
     if value != nil, !preserved.keyOrder.contains(key) { preserved.keyOrder.append(key) }
   }
 
-  public var isText: Bool { type == .text }
   public var isLinear: Bool { type.isLinear }
-  public var hasBoundText: Bool { boundTextId != nil }
 
   /// The id of the text label bound to this element.
   public var boundTextId: String? {

@@ -18,8 +18,6 @@ final class IdleTimer {
     self.action = action
   }
 
-  var isArmed: Bool { pending != nil }
-
   func poke() {
     lastPoke = scheduler.now
     if pending == nil { arm(after: delay) }
@@ -28,12 +26,6 @@ final class IdleTimer {
   func cancel() {
     pending?.cancel()
     pending = nil
-  }
-
-  /// Cancels the timer and runs the action immediately.
-  func fireNow() {
-    cancel()
-    action()
   }
 
   private func arm(after interval: TimeInterval) {

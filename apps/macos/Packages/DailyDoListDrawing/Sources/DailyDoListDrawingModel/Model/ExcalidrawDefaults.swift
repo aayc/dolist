@@ -29,27 +29,11 @@ public enum ExcalidrawPalette {
   /// The background quick picks (transparent, then shade 1 of red, green, blue, yellow).
   public static let backgroundPicks = [transparent, "#ffc9c9", "#b2f2bb", "#a5d8ff", "#ffec99"]
 
-  /// Every stroke color the picker offers (quick picks first, then the grid by hue).
-  public static var strokeColors: [String] {
-    var colors = strokePicks
-    for (_, row) in shades { colors += row.filter { !colors.contains($0) } }
-    return colors + [white]
-  }
-
-  /// Every background the picker offers.
-  public static var backgroundColors: [String] {
-    var colors = backgroundPicks
-    for (_, row) in shades { colors += row.filter { !colors.contains($0) } }
-    return colors + [white]
-  }
-
   /// Thin, bold, extra bold.
   public static let strokeWidths: [Double] = [1, 2, 4]
   /// Architect, artist, cartoonist.
   public static let roughnessLevels: [Double] = [0, 1, 2]
   public static let defaultFontSize: Double = 20
-  /// Small, medium, large, very large.
-  public static let fontSizes: [Double] = [16, 20, 28, 36]
 }
 
 /// What a new element is drawn with: Excalidraw's `DEFAULT_ELEMENT_PROPS` and the tool bar's

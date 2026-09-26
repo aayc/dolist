@@ -169,6 +169,20 @@ struct CommandCatalogTests {
     await model.teardown()
   }
 
+  @Test func revealInFinderGoesThroughTheEnvironment() async throws {
+    var environment = makeEnvironment(client: FakeDaemonClient(notes: ["Projects/Ideas.md": "x"]))
+    var revealed: [URL] = []
+    environment.revealInFinder = { revealed.append($0) }
+    let model = AppModel(environment: environment)
+    await model.boot()
+    let workspace = try #require(model.workspace)
+    workspace.localVaultURL = URL(fileURLWithPath: "/Users/me/Vault", isDirectory: true)
+    await workspace.openNote("Projects/Ideas.md")
+    #expect(CommandCatalog(model: model).run(.revealNote))
+    #expect(revealed.map(\.path) == ["/Users/me/Vault/Projects/Ideas.md"])
+    await model.teardown()
+  }
+
   @Test func paletteCommandsRunAgainstTheModel() async throws {
     let model = AppModel(environment: makeEnvironment(client: FakeDaemonClient()))
     await model.boot()

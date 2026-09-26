@@ -180,6 +180,7 @@ extension AppModel {
     workspace.commandRunner = { [weak self] id in self?.runCommand(id: id) ?? false }
     workspace.openOrchestratorTurn = { [weak self] turnId in self?.showOrchestratorTurn(turnId) }
     workspace.localVaultURL = localVaultURL()
+    workspace.showInFinder = environment.revealInFinder
     workspace.onTabsChanged = { [weak self] in self?.scheduleTabsPersist() }
     self.agent = agent
     self.workspace = workspace

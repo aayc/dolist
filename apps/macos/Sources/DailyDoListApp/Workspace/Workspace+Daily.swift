@@ -5,11 +5,6 @@ import Foundation
 extension Workspace {
   var today: LocalDate { LocalDate.today(now: now()) }
 
-  /// Date of the active note when it is a daily note.
-  var activeDailyDate: LocalDate? {
-    activePath.flatMap { DailyNotes.date(forPath: $0, settings: settings.settings.dailyNotes) }
-  }
-
   func openToday() async {
     await openDaily(today)
   }
