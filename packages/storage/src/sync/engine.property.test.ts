@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { isBinaryPath, isMergeablePath } from "../file-types";
 import { MemoryStorageProvider } from "../memory";
 import type { StorageProvider, SyncReport } from "../types";
-import { mergeText } from "./diff3";
+import { mergeText3 } from "./diff3";
 import { SyncAbortedError, SyncEngine } from "./engine";
 import { SYNC_STATE_DIR } from "./snapshot";
 
@@ -173,9 +173,7 @@ function checkRun(
     if (inP !== undefined && inT !== undefined) {
       const bothChanged = baseText === undefined || (inP !== baseText && inT !== baseText);
       const merged =
-        baseText !== undefined && isMergeablePath(path)
-          ? mergeText(baseText, inP, inT, { unionInsertions: true })
-          : null;
+        baseText !== undefined && isMergeablePath(path) ? mergeText3(baseText, inP, inT) : null;
       const trueConflict = bothChanged && inP !== inT && !merged?.clean;
       expect(copiesOf(path).length > 0, `conflict copy for ${path}`).toBe(trueConflict);
       if (trueConflict && isMergeablePath(path)) expect(after.get(path)).toBe(inP);

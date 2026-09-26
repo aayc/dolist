@@ -24,7 +24,7 @@ import {
 } from "../types";
 import { conflictCopyPath, isConflictCopyPath } from "./conflict-path";
 import { decideSync, type SyncDecision } from "./decide";
-import { mergeText } from "./diff3";
+import { mergeText3 } from "./diff3";
 import { mergeJournals } from "./journal-merge";
 import {
   emptySnapshot,
@@ -444,7 +444,7 @@ export class SyncEngine {
       return;
     }
     if (base?.b !== undefined && isMergeablePath(path)) {
-      const merged = mergeText(base.b, ours.content, theirs.content, { unionInsertions: true });
+      const merged = mergeText3(base.b, ours.content, theirs.content);
       if (merged.clean) {
         const primaryVersion =
           merged.text === ours.content
