@@ -1,4 +1,5 @@
 import DailyDoListAgent
+import DailyDoListUI
 import SwiftUI
 
 /// Right-hand pane (⌘\): the agent panel — inbox, or the selected thread.

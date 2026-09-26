@@ -64,7 +64,7 @@ public struct ApprovalCard: View {
 
   private var tint: Color {
     approval.isPending
-      ? AgentTheme.warning : approval.status == .approved ? AgentTheme.success : AgentTheme.faint
+      ? Theme.warning : approval.status == .approved ? Theme.success : Theme.faintText
   }
 
   public var body: some View {
@@ -84,7 +84,7 @@ public struct ApprovalCard: View {
       if !approval.reason.isEmpty {
         Text(verbatim: approval.reason)
           .font(.callout)
-          .foregroundStyle(AgentTheme.mutedText)
+          .foregroundStyle(Theme.mutedText)
           .fixedSize(horizontal: false, vertical: true)
       }
       DisclosureGroup(isExpanded: $showsDetails) {
@@ -110,10 +110,10 @@ public struct ApprovalCard: View {
       card
         .overlay(
           RoundedRectangle(cornerRadius: 10)
-            .strokeBorder(AgentTheme.warning.opacity(glow * 0.9), lineWidth: 1 + glow)
+            .strokeBorder(Theme.warning.opacity(glow * 0.9), lineWidth: 1 + glow)
             .allowsHitTesting(false)
         )
-        .shadow(color: AgentTheme.warning.opacity(glow * 0.35), radius: 10 * glow)
+        .shadow(color: Theme.warning.opacity(glow * 0.35), radius: 10 * glow)
     } animation: { glow in
       .easeOut(duration: Self.glowDuration(to: glow))
     }
@@ -131,7 +131,7 @@ public struct ApprovalCard: View {
       Image(systemName: approval.status.systemImage).foregroundStyle(tint)
       Text(approval.isPending ? "Approval needed" : "Approval")
         .font(.headline)
-        .foregroundStyle(approval.isPending ? AgentTheme.warning : AgentTheme.text)
+        .foregroundStyle(approval.isPending ? Theme.warning : Theme.text)
       Spacer(minLength: 8)
       Label {
         Text(verbatim: approval.toolLabel ?? approval.toolName).lineLimit(1)
@@ -139,7 +139,7 @@ public struct ApprovalCard: View {
         Image(systemName: ToolIcon.systemName(for: approval.toolName))
       }
       .font(.caption)
-      .foregroundStyle(AgentTheme.mutedText)
+      .foregroundStyle(Theme.mutedText)
     }
   }
 
@@ -175,15 +175,15 @@ public struct ApprovalCard: View {
           Text("Sending your decision…")
         }
         .font(.caption)
-        .foregroundStyle(AgentTheme.mutedText)
+        .foregroundStyle(Theme.mutedText)
       } else if let readOnlyReason {
         Label("Read-only: \(readOnlyReason)", systemImage: "eye")
           .font(.caption)
-          .foregroundStyle(AgentTheme.mutedText)
+          .foregroundStyle(Theme.mutedText)
       } else if let expiresAt = approval.expiresAt {
         Label(AgentFormat.expiry(expiresAt, now: now), systemImage: "clock")
           .font(.caption)
-          .foregroundStyle(AgentTheme.mutedText)
+          .foregroundStyle(Theme.mutedText)
       }
     }
   }
@@ -206,7 +206,7 @@ public struct ApprovalCard: View {
     Button(role: .destructive) {
       denying = true
     } label: {
-      Text("Deny…").foregroundStyle(AgentTheme.danger)
+      Text("Deny…").foregroundStyle(Theme.danger)
     }
     .buttonStyle(.bordered)
     .pointingHandCursor(readOnlyReason == nil)
@@ -230,7 +230,7 @@ public struct ApprovalCard: View {
           Text(verbatim: "“\(note)”")
             .font(.callout)
             .italic()
-            .foregroundStyle(AgentTheme.mutedText)
+            .foregroundStyle(Theme.mutedText)
             .fixedSize(horizontal: false, vertical: true)
         }
       }
@@ -275,10 +275,10 @@ struct ApprovalPlaceholder: View {
   var body: some View {
     HStack(spacing: 8) {
       ProgressView().controlSize(.small)
-      Text("Loading approval…").font(.callout).foregroundStyle(AgentTheme.mutedText)
+      Text("Loading approval…").font(.callout).foregroundStyle(Theme.mutedText)
     }
     .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
     .padding(.horizontal, 12)
-    .background(RoundedRectangle(cornerRadius: 10).strokeBorder(AgentTheme.border))
+    .background(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.separator))
   }
 }

@@ -30,14 +30,14 @@ struct OrchestratorLocationBar: View {
       if location.isHost {
         Label("This is the always-on machine", systemImage: "server.rack")
           .font(.system(size: 12, weight: .medium))
-          .foregroundStyle(AgentTheme.mutedText)
+          .foregroundStyle(Theme.mutedText)
       } else {
         HStack(spacing: 8) {
           Text("Orchestrator")
-            .foregroundStyle(AgentTheme.mutedText)
+            .foregroundStyle(Theme.mutedText)
           Spacer(minLength: 0)
           OrchestratorSwitch(store: store, location: location, shortcuts: shortcuts)
-            .foregroundStyle(AgentTheme.text)
+            .foregroundStyle(Theme.text)
             .controlSize(.mini)
             .fixedSize()
         }
@@ -52,7 +52,7 @@ struct OrchestratorLocationBar: View {
             } label: {
               Text(setUpTitle)
                 .font(.caption.weight(.medium))
-                .foregroundStyle(AgentTheme.accent)
+                .foregroundStyle(Theme.accent)
             }
             .buttonStyle(ChromeButtonStyle(horizontalPadding: 4, verticalPadding: 1))
             .fixedSize()
@@ -82,7 +82,7 @@ struct OrchestratorLocationBar: View {
     .padding(.horizontal, 12)
     .padding(.vertical, 7)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .overlay(alignment: .bottom) { AgentHairline() }
+    .overlay(alignment: .bottom) { Hairline() }
     .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: location)
   }
 
@@ -101,18 +101,18 @@ struct ReadOnlyBanner: View {
     HStack(alignment: .firstTextBaseline, spacing: 8) {
       Image(systemName: kind == .elsewhere || kind == .idle ? "eye" : "icloud.slash")
         .font(.system(size: 11, weight: .semibold))
-        .foregroundStyle(AgentTheme.info)
+        .foregroundStyle(Theme.info)
       Text(text)
         .font(.caption)
-        .foregroundStyle(AgentTheme.text)
+        .foregroundStyle(Theme.text)
         .fixedSize(horizontal: false, vertical: true)
       Spacer(minLength: 0)
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 7)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(AgentTheme.info.opacity(0.10))
-    .overlay(alignment: .bottom) { AgentHairline() }
+    .background(Theme.info.opacity(0.10))
+    .overlay(alignment: .bottom) { Hairline() }
     .accessibilityElement(children: .combine)
   }
 }
@@ -130,7 +130,7 @@ private struct LocationLine: View {
       }
       Text(line.text)
         .font(.caption)
-        .foregroundStyle(line.tone == .faint ? AgentTheme.mutedText : line.tone.color)
+        .foregroundStyle(line.tone == .faint ? Theme.mutedText : line.tone.color)
         .lineLimit(2)
         .fixedSize(horizontal: false, vertical: true)
     }

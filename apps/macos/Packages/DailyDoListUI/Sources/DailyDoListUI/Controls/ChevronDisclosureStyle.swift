@@ -30,7 +30,7 @@ private struct ChevronDisclosure: View {
             .frame(width: 10)
           configuration.label
         }
-        .foregroundStyle(hovering ? UIPalette.text : UIPalette.mutedText)
+        .foregroundStyle(hovering ? Theme.text : Theme.mutedText)
         .contentShape(Rectangle())
       }
       .buttonStyle(.plain)

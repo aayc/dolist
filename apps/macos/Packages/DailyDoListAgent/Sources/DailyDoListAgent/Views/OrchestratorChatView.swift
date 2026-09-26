@@ -40,7 +40,7 @@ public struct OrchestratorChatView: View {
         status: status,
         onStop: status == .working ? { Task { await store.cancelThread(id) } } : nil,
         onOpenWindow: onOpenWindow, onClose: onClose, readOnlyReason: store.readOnly?.reason)
-      AgentHairline()
+      Hairline()
       content
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -56,8 +56,8 @@ public struct OrchestratorChatView: View {
           }
       }
     }
-    .foregroundStyle(AgentTheme.text)
-    .tint(AgentTheme.accent)
+    .foregroundStyle(Theme.text)
+    .tint(Theme.accent)
     .modifier(NoteLinksEnvironment(noteLinks: noteLinks))
   }
 
@@ -110,7 +110,7 @@ struct OrchestratorHeader: View {
           StatusChip(status: status)
           Text("Every task, every decision")
             .font(.caption)
-            .foregroundStyle(AgentTheme.mutedText)
+            .foregroundStyle(Theme.mutedText)
             .lineLimit(1)
         }
       }
@@ -179,7 +179,7 @@ struct OrchestratorMessages: View {
                 "Each time the orchestrator wakes up — a task changed, you replied, a subagent finished — what it decided shows up here. Write to it below: ask what it's doing, or tell it what to change."
               )
               .font(.callout)
-              .foregroundStyle(AgentTheme.mutedText)
+              .foregroundStyle(Theme.mutedText)
               .fixedSize(horizontal: false, vertical: true)
               .padding(20)
             }
@@ -188,7 +188,7 @@ struct OrchestratorMessages: View {
                 row(for: message, link: message.orchestratorTaskId.flatMap { links[$0] }, now: now)
                   .background {
                     RoundedRectangle(cornerRadius: 6)
-                      .fill(AgentTheme.accentSoft)
+                      .fill(Theme.accentSoft)
                       .padding(-6)
                       .opacity(highlighted == message.id ? 1 : 0)
                   }
@@ -225,7 +225,7 @@ struct OrchestratorMessages: View {
           proxy.scrollTo(Self.bottomId, anchor: .bottom)
         }
       }
-      AgentHairline()
+      Hairline()
       Composer(store: store, threadId: thread.id)
     }
   }
@@ -311,7 +311,7 @@ struct ThoughtRow: View {
       Text(verbatim: AgentFormat.timestamp(message.createdAt, now: now))
     }
     .font(.caption)
-    .foregroundStyle(AgentTheme.faint)
+    .foregroundStyle(Theme.faintText)
     .accessibilityElement(children: .combine)
   }
 }
@@ -327,7 +327,7 @@ struct OrchestratorTaskButton: View {
       Button {
         action(threadId)
       } label: {
-        label.foregroundStyle(hovering ? AgentTheme.accentStrong : AgentTheme.accent)
+        label.foregroundStyle(hovering ? Theme.accentStrong : Theme.accent)
       }
       .buttonStyle(.plain)
       .onHover { hovering = $0 }
@@ -335,7 +335,7 @@ struct OrchestratorTaskButton: View {
       .tooltip("Open this task's thread")
       .accessibilityLabel("Open the thread of \(link.title)")
     } else {
-      label.foregroundStyle(AgentTheme.faint)
+      label.foregroundStyle(Theme.faintText)
     }
   }
 

@@ -1,4 +1,5 @@
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// The thread's messages with the chat bar below. Agent text that arrives while the chat is open
@@ -91,7 +92,7 @@ struct ChatView: View {
             if thread.messages.isEmpty && activity == nil {
               Text("No messages yet. The agent posts updates here as it works.")
                 .font(.callout)
-                .foregroundStyle(AgentTheme.mutedText)
+                .foregroundStyle(Theme.mutedText)
                 .padding(24)
             }
             Color.clear
@@ -125,7 +126,7 @@ struct ChatView: View {
         .animation(.snappy(duration: 0.2), value: isPinned)
         .onAppear { proxy.scrollTo(Self.bottomId, anchor: .bottom) }
       }
-      AgentHairline()
+      Hairline()
       Composer(store: store, threadId: thread.id, stop: stop)
     }
     .background(RevealHost(reveal: reveal))

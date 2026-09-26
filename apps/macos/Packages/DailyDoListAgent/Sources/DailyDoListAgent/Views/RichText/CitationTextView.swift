@@ -86,7 +86,7 @@ final class CitationTextView: NSTextView, NSTextViewDelegate {
 
   override func viewDidChangeEffectiveAppearance() {
     super.viewDidChangeEffectiveAppearance()
-    caretLayer?.backgroundColor = LayerMotion.cgColor(AgentPalette.accent, in: self)
+    caretLayer?.backgroundColor = LayerMotion.cgColor(NSColor(Theme.accent), in: self)
   }
 
   /// Places the caret after the last glyph; a move restarts the blink's delay, so it rests solid
@@ -109,7 +109,7 @@ final class CitationTextView: NSTextView, NSTextViewDelegate {
       host.addSublayer(bar)
       caretLayer = bar
     }
-    bar.backgroundColor = LayerMotion.cgColor(AgentPalette.accent, in: self)
+    bar.backgroundColor = LayerMotion.cgColor(NSColor(Theme.accent), in: self)
     bar.frame = caretRect()
     guard restartBlink else { return }
     bar.removeAnimation(forKey: LayerMotion.caretBlinkKey)
@@ -311,7 +311,7 @@ final class CitationLayoutManager: NSLayoutManager {
         width: digits + 2 * padding,
         height: font.capHeight + 3.5
       ).offsetBy(dx: origin.x, dy: origin.y)
-      AgentPalette.accentSoft.setFill()
+      NSColor(Theme.accentSoft).setFill()
       NSBezierPath(roundedRect: chip, xRadius: chip.height / 2, yRadius: chip.height / 2).fill()
     }
   }

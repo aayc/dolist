@@ -31,7 +31,7 @@ struct Composer: View {
           if model.text.isEmpty {
             Text(verbatim: model.placeholder)
               .font(Font(ComposerMetrics.font))
-              .foregroundStyle(AgentTheme.faint)
+              .foregroundStyle(Theme.faintText)
               .lineLimit(1)
               .padding(.leading, 7)
               .padding(.top, ComposerMetrics.inset.height)
@@ -63,14 +63,14 @@ struct Composer: View {
       .padding(.trailing, 5)
       .padding(.vertical, 4)
       .background(
-        RoundedRectangle(cornerRadius: 12, style: .continuous).fill(AgentTheme.cardBackground)
+        RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.elevated)
       )
       .overlay(
         RoundedRectangle(cornerRadius: 12, style: .continuous)
-          .strokeBorder(isFocused ? AgentTheme.accent.opacity(0.7) : AgentTheme.border)
+          .strokeBorder(isFocused ? Theme.accent.opacity(0.7) : Theme.separator)
       )
       .shadow(
-        color: isFocused ? AgentTheme.accent.opacity(0.28) : .black.opacity(0.12),
+        color: isFocused ? Theme.accent.opacity(0.28) : .black.opacity(0.12),
         radius: isFocused ? 7 : 3, y: isFocused ? 0 : 1
       )
       .contentShape(Rectangle())
@@ -82,7 +82,7 @@ struct Composer: View {
       if let unavailable {
         Label(unavailable, systemImage: "pause.circle")
           .font(.caption)
-          .foregroundStyle(AgentTheme.mutedText)
+          .foregroundStyle(Theme.mutedText)
           .lineLimit(2)
       }
     }
@@ -172,17 +172,17 @@ private struct ComposerButtonStyle: ButtonStyle {
     private var fill: Color {
       switch kind {
       case .send:
-        guard isEnabled else { return AgentTheme.hoverFill }
-        return hovering || configuration.isPressed ? AgentTheme.accentStrong : AgentTheme.accent
+        guard isEnabled else { return Theme.hover }
+        return hovering || configuration.isPressed ? Theme.accentStrong : Theme.accent
       case .stop:
-        return hovering || configuration.isPressed ? AgentTheme.selectedFill : AgentTheme.hoverFill
+        return hovering || configuration.isPressed ? Theme.pressed : Theme.hover
       }
     }
 
     private var foreground: Color {
       switch kind {
-      case .send: isEnabled ? .white : AgentTheme.faint
-      case .stop: AgentTheme.text
+      case .send: isEnabled ? .white : Theme.faintText
+      case .stop: Theme.text
       }
     }
   }

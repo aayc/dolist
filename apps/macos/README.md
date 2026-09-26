@@ -108,8 +108,8 @@ future iPhone app too.
   (disabled controls don't, and fade to 40%); every custom control tints under the pointer within
   about 110 ms and deepens when pressed; counts pop when they change. Text stays an I-beam, pane
   edges a resize cursor.
-- **Dark by default**, in the app's blue palette (the web app's `--ddl-*` tokens: `Theme`,
-  `AgentTheme`, `EditorColors`). Settings → Appearance switches to light or the system's.
+- **Dark by default**, in the app's blue palette (the web app's `--ddl-*` tokens, once:
+  `DailyDoListUI`'s `Theme`). Settings → Appearance switches to light or the system's.
 
 ## The agent in your notes
 

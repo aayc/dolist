@@ -82,7 +82,7 @@ struct PalettePanel: View {
     }
     .frame(width: 580)
     .background(Theme.elevated, in: RoundedRectangle(cornerRadius: 12))
-    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.border))
+    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.separator))
     .shadow(color: .black.opacity(0.25), radius: 24, y: 10)
     .accessibilityElement(children: .contain)
     .accessibilityLabel(palette.mode == .commands ? "Command palette" : "Quick switcher")

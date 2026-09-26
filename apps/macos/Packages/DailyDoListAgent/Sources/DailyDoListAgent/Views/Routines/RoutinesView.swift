@@ -44,7 +44,7 @@ struct RoutinesView: View {
     HStack(spacing: 8) {
       Text(countLabel)
         .font(.caption.weight(.semibold))
-        .foregroundStyle(AgentTheme.mutedText)
+        .foregroundStyle(Theme.mutedText)
       Spacer(minLength: 8)
       if let newRoutine = actions.newRoutine {
         NewRoutineButton(shortcuts: shortcuts) { newRoutine(RoutineDraft()) }
@@ -164,19 +164,19 @@ struct RoutineRow: View {
               Text(verbatim: AgentFormat.relativeTime(Date(epochMillis: run.startedAt), now: now))
                 .font(.caption)
                 .monospacedDigit()
-                .foregroundStyle(AgentTheme.mutedText)
+                .foregroundStyle(Theme.mutedText)
             }
           }
           Text(verbatim: RoutineFormat.schedule(routine))
             .font(.callout)
-            .foregroundStyle(AgentTheme.mutedText)
+            .foregroundStyle(Theme.mutedText)
             .lineLimit(1)
           HStack(spacing: 6) {
             RoutineStateChip(routine: routine)
             if let subtitle = RoutineFormat.subtitle(routine, now: now) {
               Text(verbatim: subtitle)
                 .font(.caption)
-                .foregroundStyle(AgentTheme.faint)
+                .foregroundStyle(Theme.faintText)
                 .lineLimit(1)
             }
             Spacer(minLength: 0)
@@ -185,7 +185,7 @@ struct RoutineRow: View {
           if let error = routine.error {
             Text(verbatim: error)
               .font(.caption)
-              .foregroundStyle(AgentTheme.warning)
+              .foregroundStyle(Theme.warning)
               .lineLimit(2)
           }
         }
@@ -207,10 +207,10 @@ struct RoutineRow: View {
   }
 
   private var symbolColor: Color {
-    if routine.error != nil { return AgentTheme.warning }
-    if routine.paused { return AgentTheme.faint }
+    if routine.error != nil { return Theme.warning }
+    if routine.paused { return Theme.faintText }
     if routine.isRunning, let status = routine.lastRun?.status { return status.tone.color }
-    return AgentTheme.accent
+    return Theme.accent
   }
 }
 

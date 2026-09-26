@@ -21,7 +21,7 @@ struct ToolCallRow: View {
       } label: {
         HStack(spacing: 7) {
           Image(systemName: ToolIcon.systemName(for: call.toolName))
-            .foregroundStyle(AgentTheme.mutedText)
+            .foregroundStyle(Theme.mutedText)
             .frame(width: 16)
           Text(verbatim: call.label ?? call.toolName)
             .lineLimit(1)
@@ -30,7 +30,7 @@ struct ToolCallRow: View {
           if call.label != nil {
             Text(verbatim: call.toolName)
               .font(.system(size: 11, design: .monospaced))
-              .foregroundStyle(AgentTheme.faint)
+              .foregroundStyle(Theme.faintText)
               .lineLimit(1)
               .layoutPriority(-1)
           }
@@ -39,12 +39,12 @@ struct ToolCallRow: View {
             Text(verbatim: duration)
               .font(.caption)
               .monospacedDigit()
-              .foregroundStyle(AgentTheme.mutedText)
+              .foregroundStyle(Theme.mutedText)
           }
           ToolStatusIcon(status: call.status)
           Image(systemName: "chevron.right")
             .font(.caption2.weight(.semibold))
-            .foregroundStyle(hovering ? AgentTheme.mutedText : AgentTheme.faint)
+            .foregroundStyle(hovering ? Theme.mutedText : Theme.faintText)
             .rotationEffect(.degrees(expanded ? 90 : 0))
         }
         .contentShape(Rectangle())
@@ -58,7 +58,7 @@ struct ToolCallRow: View {
       if let preview = call.resultPreview, !preview.isEmpty {
         Text(verbatim: preview)
           .font(.caption)
-          .foregroundStyle(call.status == .error ? AgentTheme.danger : AgentTheme.mutedText)
+          .foregroundStyle(call.status == .error ? Theme.danger : Theme.mutedText)
           .lineLimit(expanded ? nil : 2)
           .textSelection(.enabled)
           .padding(.leading, 23)
@@ -73,12 +73,12 @@ struct ToolCallRow: View {
     .padding(.vertical, 7)
     .background(
       RoundedRectangle(cornerRadius: 8).fill(
-        hovering ? AgentTheme.hoverFill : AgentTheme.subtleFill)
+        hovering ? Theme.hover : Theme.secondaryBackground)
     )
     .overlay(
       RoundedRectangle(cornerRadius: 8)
         .strokeBorder(
-          call.status == .blocked ? AgentTheme.warning.opacity(0.55) : AgentTheme.border)
+          call.status == .blocked ? Theme.warning.opacity(0.55) : Theme.separator)
     )
     .animation(.easeOut(duration: 0.11), value: hovering)
   }

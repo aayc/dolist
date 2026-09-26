@@ -116,8 +116,8 @@ struct ControlState: Hashable {
 
   var fill: Color {
     guard isEnabled else { return .clear }
-    if isPressed { return UIPalette.pressed }
-    return isHovered ? UIPalette.hover : .clear
+    if isPressed { return Theme.pressed }
+    return isHovered ? Theme.hover : .clear
   }
 }
 
@@ -131,8 +131,8 @@ struct IconButtonFace<Label: View>: View {
     label
       .foregroundStyle(
         state.isActive
-          ? UIPalette.accent
-          : state.isHovered && state.isEnabled ? UIPalette.text : UIPalette.mutedText
+          ? Theme.accent
+          : state.isHovered && state.isEnabled ? Theme.text : Theme.mutedText
       )
       .frame(width: size.side, height: size.side)
       .background(RoundedRectangle(cornerRadius: 6).fill(state.fill))

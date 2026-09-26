@@ -63,9 +63,9 @@ on a rounded background, fenced code blocks on a full-width rounded background (
 YAML frontmatter as small monospaced metadata, links and wikilinks in the accent color (`#1D6FE8`,
 `#3B8BFF` in dark mode; markdown links and URLs underlined), blockquotes with accent bars and muted
 text, completed tasks struck through and muted (cancelled ones fainter), horizontal rules as a thin
-line. Wrapped list items align with their text. Colors are the app's palette (`EditorColors`:
-background, text, muted and faint text, accent, agent text, anchor band, status tones), dynamic
-light/dark; the caret is the accent and selections an accent tint.
+line. Wrapped list items align with their text. Colors are the app's palette (`EditorColors`, from
+`DailyDoListUI`'s `Theme`: background, text, muted and faint text, accent, agent text, anchor band,
+status tones), dynamic light/dark; the caret is the accent and selections an accent tint.
 
 **Agent lines.** A line ending with `%%agent:<threadId>%%` (or `%%agent%%`; the grammar of
 `@ddl/core`'s `AGENT_MARKER_RE`, outside code and frontmatter) was written by the agent: its text is

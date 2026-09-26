@@ -1,5 +1,6 @@
 import DailyDoListEditor
 import DailyDoListModels
+import DailyDoListUI
 import SwiftUI
 
 /// The vimrc (Settings → Appearance → Editor, while vim key bindings are on): a monospaced editor
@@ -48,7 +49,7 @@ struct VimrcEditor: View {
       }
       .frame(minHeight: 140)
       .background(Theme.background, in: RoundedRectangle(cornerRadius: 6))
-      .overlay(RoundedRectangle(cornerRadius: 6).stroke(focused ? Theme.accent : Theme.border))
+      .overlay(RoundedRectangle(cornerRadius: 6).stroke(focused ? Theme.accent : Theme.separator))
       if draft.utf16.count >= SettingsRanges.vimrcLength {
         Text("The vimrc can have up to \(SettingsRanges.vimrcLength) characters.")
           .font(.caption)

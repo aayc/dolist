@@ -61,7 +61,7 @@ public struct ComputerSurfaceView: View {
         image: frame.flatMap { store.image(for: $0) }, frame: frame,
         markers: Self.markers(for: actions),
         emptyText: "No screenshots yet — they appear here while the agent uses the computer.")
-      AgentHairline()
+      Hairline()
       actionLog(actions)
     }
     .surfaceSubscription(store: store, key: SurfaceKey(threadId: threadId, surface: .computer))
@@ -81,16 +81,16 @@ public struct ComputerSurfaceView: View {
   private func actionLog(_ actions: [SurfaceAction]) -> some View {
     let now = referenceDate ?? Date()
     return VStack(alignment: .leading, spacing: 4) {
-      Text("Actions").font(.caption.weight(.semibold)).foregroundStyle(AgentTheme.mutedText)
+      Text("Actions").font(.caption.weight(.semibold)).foregroundStyle(Theme.mutedText)
       if actions.isEmpty {
-        Text("Nothing yet.").font(.caption).foregroundStyle(AgentTheme.faint)
+        Text("Nothing yet.").font(.caption).foregroundStyle(Theme.faintText)
       } else {
         ScrollView {
           VStack(alignment: .leading, spacing: 3) {
             ForEach(actions.reversed()) { action in
               HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(verbatim: AgentFormat.timestamp(action.ts, now: now))
-                  .foregroundStyle(AgentTheme.faint)
+                  .foregroundStyle(Theme.faintText)
                   .monospacedDigit()
                 Text(verbatim: action.summary).lineLimit(1).truncationMode(.middle)
               }
@@ -144,7 +144,7 @@ private struct SurfaceBar: View {
       let live = SurfaceFeed.isLive(lastFrameAt: lastFrameAt, now: referenceDate ?? context.date)
       HStack(spacing: 8) {
         LiveBadge(isLive: live)
-        Image(systemName: systemImage).foregroundStyle(AgentTheme.mutedText)
+        Image(systemName: systemImage).foregroundStyle(Theme.mutedText)
         VStack(alignment: .leading, spacing: 1) {
           Text(verbatim: title)
             .font(monospacedTitle ? .system(size: 11.5, design: .monospaced) : .callout)
@@ -157,7 +157,7 @@ private struct SurfaceBar: View {
                 ? .monospacedSystemFont(ofSize: 11.5, weight: .regular)
                 : .preferredFont(forTextStyle: .callout))
           if let subtitle, !subtitle.isEmpty {
-            Text(verbatim: subtitle).font(.caption).foregroundStyle(AgentTheme.mutedText).lineLimit(
+            Text(verbatim: subtitle).font(.caption).foregroundStyle(Theme.mutedText).lineLimit(
               1)
           }
         }
@@ -165,7 +165,7 @@ private struct SurfaceBar: View {
       }
       .padding(.horizontal, 10)
       .padding(.vertical, 6)
-      .background(RoundedRectangle(cornerRadius: 7).fill(AgentTheme.subtleFill))
+      .background(RoundedRectangle(cornerRadius: 7).fill(Theme.secondaryBackground))
       .padding(.horizontal, 12)
       .padding(.top, 10)
     }
@@ -177,10 +177,10 @@ private struct LiveBadge: View {
 
   var body: some View {
     HStack(spacing: 4) {
-      Circle().fill(isLive ? AgentTheme.danger : AgentTheme.faint).frame(width: 7, height: 7)
+      Circle().fill(isLive ? Theme.danger : Theme.faintText).frame(width: 7, height: 7)
       Text(isLive ? "Live" : "Idle")
         .font(.caption2.weight(.semibold))
-        .foregroundStyle(isLive ? AgentTheme.danger : AgentTheme.mutedText)
+        .foregroundStyle(isLive ? Theme.danger : Theme.mutedText)
     }
     .accessibilityElement(children: .combine)
   }
@@ -214,7 +214,7 @@ private struct SurfaceStage: View {
             }
           }
           .clipShape(RoundedRectangle(cornerRadius: 6))
-          .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(AgentTheme.border))
+          .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.separator))
           .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
           .accessibilityLabel(frame.title ?? "Latest frame")
       } else {
@@ -235,9 +235,9 @@ private struct ActionMarker: View {
 
   var body: some View {
     ZStack {
-      Circle().fill(AgentTheme.accent.opacity(0.25)).frame(width: 24, height: 24)
-      Circle().strokeBorder(AgentTheme.accent, lineWidth: 2).frame(width: 24, height: 24)
-      Circle().fill(AgentTheme.accent).frame(width: 6, height: 6)
+      Circle().fill(Theme.accent.opacity(0.25)).frame(width: 24, height: 24)
+      Circle().strokeBorder(Theme.accent, lineWidth: 2).frame(width: 24, height: 24)
+      Circle().fill(Theme.accent).frame(width: 6, height: 6)
     }
     .overlay(alignment: .top) {
       if let label, !label.isEmpty {
@@ -248,7 +248,7 @@ private struct ActionMarker: View {
           .fixedSize()
           .padding(.horizontal, 6)
           .padding(.vertical, 2)
-          .background(Capsule().fill(AgentTheme.accent))
+          .background(Capsule().fill(Theme.accent))
           .offset(y: 28)
       }
     }

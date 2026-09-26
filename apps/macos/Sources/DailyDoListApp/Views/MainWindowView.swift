@@ -1,5 +1,6 @@
 import DailyDoListAgent
 import DailyDoListDomain
+import DailyDoListUI
 import SwiftUI
 
 /// Root of the main window: the boot screen until a daemon is connected, then the workspace.

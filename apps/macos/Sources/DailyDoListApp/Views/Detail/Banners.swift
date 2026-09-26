@@ -76,7 +76,7 @@ private struct ToastView: View {
     .padding(12)
     .frame(width: 320)
     .background(Theme.elevated, in: RoundedRectangle(cornerRadius: 10))
-    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.border))
+    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.separator))
     .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
   }
 

@@ -1,5 +1,6 @@
 import AppKit
 import DailyDoListAgent
+import DailyDoListUI
 import SwiftUI
 
 /// Scene id of the orchestrator's chat window (one; reopening it focuses it).

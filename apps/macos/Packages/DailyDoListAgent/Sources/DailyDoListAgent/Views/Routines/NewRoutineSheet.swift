@@ -38,7 +38,7 @@ public struct NewRoutineSheet: View {
           "The agent does this on a schedule, and each run reports back in the routine's own inbox. It's saved as a note in Routines, so you can edit it later."
         )
         .font(.callout)
-        .foregroundStyle(AgentTheme.mutedText)
+        .foregroundStyle(Theme.mutedText)
         .fixedSize(horizontal: false, vertical: true)
       }
       if !isRepeat, !store.routineTemplates.isEmpty { templates }
@@ -63,8 +63,8 @@ public struct NewRoutineSheet: View {
           .scrollContentBackground(.hidden)
           .padding(4)
           .frame(minHeight: 96, maxHeight: 180)
-          .background(RoundedRectangle(cornerRadius: 6).fill(AgentTheme.subtleFill))
-          .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(AgentTheme.border))
+          .background(RoundedRectangle(cornerRadius: 6).fill(Theme.secondaryBackground))
+          .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.separator))
           .focused($focus, equals: .instructions)
       }
       field("Notify me", error: nil, hint: RoutineFormat.uses(draft.uses)) {
@@ -79,7 +79,7 @@ public struct NewRoutineSheet: View {
       if let error, error.field == .other {
         Label(error.message, systemImage: "exclamationmark.triangle")
           .font(.callout)
-          .foregroundStyle(AgentTheme.warning)
+          .foregroundStyle(Theme.warning)
       }
       HStack(spacing: 8) {
         Spacer()
@@ -99,8 +99,8 @@ public struct NewRoutineSheet: View {
     }
     .padding(20)
     .frame(width: 500)
-    .foregroundStyle(AgentTheme.text)
-    .tint(AgentTheme.accent)
+    .foregroundStyle(Theme.text)
+    .tint(Theme.accent)
     .onAppear {
       focus = draft.name.isEmpty ? .name : draft.schedule.isEmpty ? .schedule : .name
     }
@@ -113,7 +113,7 @@ public struct NewRoutineSheet: View {
     VStack(alignment: .leading, spacing: 6) {
       Text("Start from")
         .font(.caption.weight(.semibold))
-        .foregroundStyle(AgentTheme.mutedText)
+        .foregroundStyle(Theme.mutedText)
       FlowLayout(spacing: 6) {
         TemplateChip(title: "Blank", detail: nil, isSelected: draft.templateId == nil) {
           draft = RoutineDraft()
@@ -138,18 +138,18 @@ public struct NewRoutineSheet: View {
     VStack(alignment: .leading, spacing: 4) {
       Text(title)
         .font(.caption.weight(.semibold))
-        .foregroundStyle(AgentTheme.mutedText)
+        .foregroundStyle(Theme.mutedText)
       content()
       if let error {
         Label(error, systemImage: "exclamationmark.triangle.fill")
           .font(.caption)
-          .foregroundStyle(AgentTheme.warning)
+          .foregroundStyle(Theme.warning)
           .fixedSize(horizontal: false, vertical: true)
           .accessibilityLabel("\(title): \(error)")
       } else if let hint {
         Text(verbatim: hint)
           .font(.caption)
-          .foregroundStyle(AgentTheme.faint)
+          .foregroundStyle(Theme.faintText)
           .fixedSize(horizontal: false, vertical: true)
       }
     }
@@ -194,7 +194,7 @@ private struct TemplateChip: View {
     Button(action: action) {
       Text(verbatim: title)
         .font(.system(size: 12, weight: isSelected ? .medium : .regular))
-        .foregroundStyle(isSelected ? AgentTheme.text : AgentTheme.mutedText)
+        .foregroundStyle(isSelected ? Theme.text : Theme.mutedText)
     }
     .buttonStyle(
       ChromeButtonStyle(

@@ -40,12 +40,12 @@ struct Keycap: View {
   var body: some View {
     Text(verbatim: text)
       .font(.system(size: 11, weight: .medium))
-      .foregroundStyle(UIPalette.mutedText)
+      .foregroundStyle(Theme.mutedText)
       .lineLimit(1)
       .padding(.horizontal, 4)
       .frame(minWidth: 16, minHeight: Self.height, maxHeight: Self.height)
-      .background(RoundedRectangle(cornerRadius: 4).fill(UIPalette.Keycap.fill))
+      .background(RoundedRectangle(cornerRadius: 4).fill(Theme.Keycap.fill))
       .overlay(
-        RoundedRectangle(cornerRadius: 4).strokeBorder(UIPalette.Keycap.border, lineWidth: 1))
+        RoundedRectangle(cornerRadius: 4).strokeBorder(Theme.Keycap.border, lineWidth: 1))
   }
 }
