@@ -1,5 +1,6 @@
 import AppKit
 import DailyDoListClient
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import DailyDoListUI
 import DailyDoListUITestSupport
@@ -160,7 +161,7 @@ struct PlacementTests {
     await store.refresh()
     #expect(!store.canMoveOrchestrator(to: .alwaysOnMachine))
     #expect(await store.moveOrchestrator(to: .alwaysOnMachine) == false)
-    #expect(client.count("updateDeviceSettings") == 0)
+    #expect(client.calls("updateDeviceSettings").count == 0)
   }
 
   @Test func aRefusedChangeSaysWhy() async throws {
@@ -188,7 +189,7 @@ struct PlacementTests {
     #expect(store.pendingPlacement == nil && store.orchestratorLocation?.selection == .thisDevice)
     #expect(store.lastError?.title == "Couldn't move the orchestrator to the always-on machine")
     #expect(store.lastError?.message == "The placement is set by DDL_AGENT_PLACEMENT.")
-    #expect(client.callLog.contains("updateDeviceSettings:always_on_machine"))
+    #expect(client.calls.contains("updateDeviceSettings:always_on_machine"))
   }
 
   // MARK: - The bar in the header

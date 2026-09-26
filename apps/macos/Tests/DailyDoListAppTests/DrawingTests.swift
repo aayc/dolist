@@ -1,5 +1,6 @@
 import AppKit
 import DailyDoListClient
+import DailyDoListClientTestSupport
 import DailyDoListDomain
 import DailyDoListDrawing
 import DailyDoListEditor

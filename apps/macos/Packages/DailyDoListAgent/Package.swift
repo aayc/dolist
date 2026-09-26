@@ -29,6 +29,7 @@ let package = Package(
         "DailyDoListAgent",
         .product(name: "DailyDoListModels", package: "DailyDoListModels"),
         .product(name: "DailyDoListClient", package: "DailyDoListClient"),
+        .product(name: "DailyDoListClientTestSupport", package: "DailyDoListClient"),
         .product(name: "DailyDoListUI", package: "DailyDoListUI"),
         .product(name: "DailyDoListUITestSupport", package: "DailyDoListUI"),
       ]

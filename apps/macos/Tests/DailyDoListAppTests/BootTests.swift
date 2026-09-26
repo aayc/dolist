@@ -1,4 +1,5 @@
 import DailyDoListClient
+import DailyDoListClientTestSupport
 import DailyDoListDaemon
 import DailyDoListModels
 import Foundation

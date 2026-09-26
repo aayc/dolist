@@ -1,5 +1,6 @@
 import AppKit
 import DailyDoListClient
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import Foundation
 import Testing
@@ -59,10 +60,10 @@ struct StoreRefreshTests {
     #expect(store.threads.keys.sorted() == ["thr_1", "thr_2", OrchestratorThread.id])
     #expect(store.records(for: Fixture.note).map(\.taskId) == ["tsk_1"])
     #expect(store.thread("thr_1")?.messages.map(\.id) == ["m", "m2"])
-    #expect(client.callLog.contains("approvals:pending"))
-    #expect(client.callLog.contains("threads:*"))
-    #expect(client.count("thread:thr_1") == 2)
-    #expect(client.count("thread:\(OrchestratorThread.id)") == 1)
+    #expect(client.calls.contains("approvals:pending"))
+    #expect(client.calls.contains("threads:*"))
+    #expect(client.calls("thread:thr_1").count == 2)
+    #expect(client.calls("thread:\(OrchestratorThread.id)").count == 1)
     #expect(store.lastError == nil)
   }
 
@@ -77,8 +78,8 @@ struct StoreRefreshTests {
     await store.refresh(todayNotePath: Fixture.note)
     #expect(store.todayNotePath == Fixture.note)
     #expect(store.threads.keys.sorted() == ["thr_other", "thr_today"])
-    #expect(client.callLog.contains("threads:\(Fixture.note)"))
-    #expect(client.callLog.contains("taskRecords:\(Fixture.note)"))
+    #expect(client.calls.contains("threads:\(Fixture.note)"))
+    #expect(client.calls.contains("taskRecords:\(Fixture.note)"))
     #expect(store.records(for: Fixture.note).count == 1)
   }
 
@@ -186,13 +187,13 @@ struct StoreRefreshTests {
     client.script { $0.taskRecords = { note in [Fixture.record(notePath: note)] } }
     await store.loadRecords(for: Fixture.note)
     await store.loadRecords(for: Fixture.note)
-    #expect(client.count("taskRecords:") == 1)
+    #expect(client.calls("taskRecords:").count == 1)
     client.script { $0.agentStatus = { Fixture.status() } }
     await store.refresh()
-    #expect(client.count("taskRecords:") == 2)
+    #expect(client.calls("taskRecords:").count == 2)
     store.forgetRecords(for: Fixture.note)
     await store.refresh()
-    #expect(client.count("taskRecords:") == 2)
+    #expect(client.calls("taskRecords:").count == 2)
   }
 
   @Test func aRecordsFetchNeverOverwritesANewerPush() async {

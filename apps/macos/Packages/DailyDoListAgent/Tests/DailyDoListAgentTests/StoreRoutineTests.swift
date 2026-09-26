@@ -1,4 +1,5 @@
 import DailyDoListClient
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import Foundation
 import Testing
@@ -155,8 +156,8 @@ struct StoreRoutineTests {
     client.script { $0.routineRuns = { _ in [Fixture.run("thr_r3")] } }
     await store.refresh()
     #expect(store.runs(ofRoutine: "rtn_1").map(\.id) == ["thr_r3"])
-    #expect(client.count("threads:routine:rtn_1") == 2)
-    #expect(client.count("routines") >= 1, "refresh fetches the routines")
+    #expect(client.calls("threads:routine:rtn_1").count == 2)
+    #expect(client.calls("routines").count >= 1, "refresh fetches the routines")
   }
 
   // MARK: Actions
@@ -247,7 +248,7 @@ struct StoreRoutineTests {
     #expect(await pause.value == false)
     #expect(store.routine("rtn_1") == Fixture.routine())
     #expect(store.routineAlerts["rtn_1"]?.title == "Couldn't pause “Morning briefing”")
-    #expect(client.callLog.contains("pauseRoutine:rtn_1"))
+    #expect(client.calls.contains("pauseRoutine:rtn_1"))
   }
 
   @Test func resumeAdoptsTheDaemonsAnswer() async {
@@ -255,7 +256,7 @@ struct StoreRoutineTests {
     store.apply(.routinesChanged([Fixture.routine(paused: true)]))
     #expect(await store.setRoutinePaused("rtn_1", false))
     #expect(store.routine("rtn_1") == Fixture.routine())
-    #expect(client.callLog.contains("resumeRoutine:rtn_1"))
+    #expect(client.calls.contains("resumeRoutine:rtn_1"))
   }
 
   @Test func createAddsTheRoutine() async throws {

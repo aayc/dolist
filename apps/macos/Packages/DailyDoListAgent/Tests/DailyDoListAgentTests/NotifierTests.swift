@@ -1,3 +1,4 @@
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import Foundation
 import Testing
@@ -148,7 +149,7 @@ struct NotifierTests {
       AgentNotificationResponse(
         notificationId: "n2", actionIdentifier: ApprovalNotifier.denyAction,
         userInfo: ["approvalId": "apr_2"]))
-    #expect(client.callLog == ["decideApproval:apr_1:approve:once", "decideApproval:apr_2:deny:-"])
+    #expect(client.calls == ["decideApproval:apr_1:approve:once", "decideApproval:apr_2:deny:-"])
     #expect(store.approvals["apr_1"]?.status == .approved)
     #expect(store.approvals["apr_2"]?.status == .denied)
   }

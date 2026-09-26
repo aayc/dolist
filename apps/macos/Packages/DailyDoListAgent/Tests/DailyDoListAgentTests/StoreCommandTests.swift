@@ -1,4 +1,5 @@
 import DailyDoListClient
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import Foundation
 import Observation
@@ -132,12 +133,12 @@ struct StoreCommandTests {
       .threadMessage(ThreadMessageEvent(threadId: "thr_1", message: Fixture.toolCall("m2"))))
     await gate.open()
     _ = await (first, second)
-    #expect(client.count("thread:") == 1)
+    #expect(client.calls("thread:").count == 1)
     #expect(store.thread("thr_1")?.messages.map(\.id) == ["m1", "m2"])
     #expect(store.loadingThreadIds.isEmpty)
     // Loaded threads aren't refetched unless forced.
     await store.loadThread("thr_1")
-    #expect(client.count("thread:") == 1)
+    #expect(client.calls("thread:").count == 1)
   }
 
   @Test func aFailedLoadIsReportedAndCanBeRetried() async {
@@ -177,7 +178,7 @@ struct StoreCommandTests {
               id: "m_art", author: "subagent:writer", createdAt: 2, artifactId: "art_1")))))
     #expect(
       await eventually { store.artifactMeta(threadId: "thr_1", artifactId: "art_1") == artifact })
-    #expect(client.count("thread:") == 2)
+    #expect(client.calls("thread:").count == 2)
   }
 
   @Test func markReadTellsTheDaemonAndClearsTheBadge() async {
@@ -235,7 +236,7 @@ struct StoreCommandTests {
     #expect(await decision.value)
     #expect(store.approvals["apr_1"]?.decidedAt == 1_234)
     #expect(store.decidingApprovalIds.isEmpty)
-    #expect(client.callLog.contains("decideApproval:apr_1:approve:task"))
+    #expect(client.calls.contains("decideApproval:apr_1:approve:task"))
   }
 
   @Test func aFailedDecisionRollsBack() async {
@@ -297,7 +298,7 @@ struct StoreCommandTests {
   @Test func alreadyDecidedApprovalsAreNotSentAgain() async {
     store.apply(.approvalUpsert(Fixture.approval(status: .denied, decidedAt: 3)))
     #expect(await store.decide("apr_1", .approve) == false)
-    #expect(client.count("decideApproval") == 0)
+    #expect(client.calls("decideApproval").count == 0)
   }
 
   @Test func anApprovalWeDontKnowIsStillDecided() async {
@@ -446,7 +447,7 @@ struct StoreCommandTests {
 
   @Test func blankRepliesAreNotSent() async {
     #expect(await store.postMessage(threadId: "thr_1", text: " \n ") == false)
-    #expect(client.count("postMessage") == 0)
+    #expect(client.calls("postMessage").count == 0)
   }
 
   // MARK: Pause / resume
@@ -485,6 +486,6 @@ struct StoreCommandTests {
     }
     let payload = try await store.fetchArtifact(threadId: "thr_1", artifactId: "art_1")
     #expect(payload.mimeType == "text/markdown")
-    #expect(client.callLog == ["artifact:thr_1/art_1"])
+    #expect(client.calls == ["artifact:thr_1/art_1"])
   }
 }

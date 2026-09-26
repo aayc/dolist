@@ -1,4 +1,5 @@
 import DailyDoListClient
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import Foundation
 import Testing
@@ -72,7 +73,7 @@ struct OrchestratorChatTests {
       }
     }
     await store.refresh(todayNotePath: Fixture.note)
-    #expect(client.callLog.contains("threads:\(Fixture.note)"))
+    #expect(client.calls.contains("threads:\(Fixture.note)"))
     #expect(store.orchestratorThread?.messages.map(\.id) == ["m1"])
     #expect(store.orchestratorSummary?.title == "Orchestrator")
   }
@@ -80,7 +81,7 @@ struct OrchestratorChatTests {
   @Test func aDaemonWithoutOneIsNoError() async {
     client.script { $0.agentStatus = { Fixture.status(running: 0) } }
     await store.refresh(todayNotePath: Fixture.note)
-    #expect(client.count("thread:\(OrchestratorThread.id)") == 1)
+    #expect(client.calls("thread:\(OrchestratorThread.id)").count == 1)
     #expect(store.orchestratorSummary == nil)
     #expect(store.failedThreadIds == [OrchestratorThread.id])
     #expect(store.lastError == nil)
@@ -104,7 +105,7 @@ struct OrchestratorChatTests {
     #expect(await store.postMessage(threadId: OrchestratorThread.id, text: "What are you doing?"))
     #expect(await store.cancelThread(OrchestratorThread.id))
     #expect(
-      client.callLog.suffix(2) == [
+      client.calls.suffix(2) == [
         "postMessage:\(OrchestratorThread.id)", "cancelThread:\(OrchestratorThread.id)",
       ])
   }
