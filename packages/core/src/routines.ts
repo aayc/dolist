@@ -15,10 +15,11 @@
  * Plain files: editable in Obsidian, synced, versioned. Reading never throws; problems are
  * reported on the routine. The scheduler's state lives in the sidecar, never in the file.
  */
-import type { RoutineNotify, RoutineTemplate, RoutineUse } from "./agent-types";
+
 import { basename, isHiddenPath, stem } from "./paths";
 import { describeSchedule, parseSchedule, type RoutineSchedule } from "./routine-schedule";
 import { hashString } from "./text";
+import type { RoutineNotify, RoutineTemplate, RoutineUse } from "./wire";
 
 export const ROUTINES_FOLDER = "Routines";
 export const ROUTINE_NOTIFY_VALUES: readonly RoutineNotify[] = ["always", "when_changed", "never"];

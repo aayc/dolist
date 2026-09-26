@@ -1,7 +1,11 @@
 # @ddl/contract
 
-Runtime schemas (zod 4) for every data contract of Daily Do List, kept in lockstep with the
-TypeScript types in `@ddl/core` by type-level tests:
+Runtime schemas (zod 4) for every data contract of Daily Do List. The wire schemas are the single
+source of the protocol's TypeScript types: `src/wire/types.ts` infers them (`WireType<Name>`, the
+parsed output minus the index signatures of tolerant objects), and `@ddl/core` re-exports that
+module type-only, so code imports `Thread` or `ServerEvent` from `@ddl/core` and zod never ships
+with it. Enums whose values core owns (`AGENT_HARNESS_KINDS`, `APPROVAL_POLICIES`,
+`ORCHESTRATOR_THREAD_ID`) are declared in core and passed to the schemas.
 
 - **Wire** (`src/wire/`): the daemon protocol — every REST request/response body, every
   WebSocket `ServerEvent`/`ClientEvent`, the domain objects they carry (task records, threads,
@@ -61,26 +65,24 @@ field together with a major bump.
 
 ## How to add a route or event
 
-1. **Core type**: add or change the TypeScript shape in `packages/core/src/protocol.ts` (or
-   `agent-types.ts` / `settings.ts`) and the route in `API_ROUTES`.
-2. **Schema**: add the zod schema next to its peers in `src/wire/` with `named(id, description,
+1. **Schema**: add the zod schema next to its peers in `src/wire/` with `named(id, description,
    schema)` — `strictObject` for requests, `looseObject` for responses/events — and list it in
    `WIRE_SCHEMAS` (`src/wire/catalog.ts`; add request schemas to `REQUEST_SCHEMA_NAMES`).
-3. **Lockstep**: map the name to the core type in `test/wire/lockstep.test.ts`. `tsc` fails until
-   `z.input`/`z.output` and the core type are mutually assignable.
-4. **Route table**: add the route to `API_CONTRACT` (`src/wire/routes.ts`) with its `auth`
+2. **Type**: export `type Name = WireType<"Name">` from `src/wire/types.ts`; `@ddl/core` re-exports
+   it. A new route also goes in `API_ROUTES` (`packages/core/src/protocol.ts`).
+3. **Route table**: add the route to `API_CONTRACT` (`src/wire/routes.ts`) with its `auth`
    (`bearer`; `pairing_code` for `/api/pair`, where the code in the body is the credential;
    `upgrade` for `/ws`), params, query, body and the response of every status it can answer
    (`{ kind: "empty" }` for a 204). `satisfies Record<ApiRouteName, …>` fails until every
    `API_ROUTES` entry has one.
-5. **Arbitrary**: add a generator to `wireArbitraries` (`src/testing/arbitraries.ts`); the typed
+4. **Arbitrary**: add a generator to `wireArbitraries` (`src/testing/arbitraries.ts`); the typed
    map fails to compile without one. Mix realistic values with edge cases.
-6. **Fixtures**: add canonical `fixtures/wire/<Name>.valid.json` cases and tricky
+5. **Fixtures**: add canonical `fixtures/wire/<Name>.valid.json` cases and tricky
    `<Name>.invalid.json` ones (with the expected issue `path` and `code`).
-7. **Producers**: implement it in the daemon (validate requests with the contract schema) and in
+6. **Producers**: implement it in the daemon (validate requests with the contract schema) and in
    the web mock; the conformance suites (`apps/daemon/src/contract*.test.ts`,
    `packages/agent/test/contract.test.ts`, `apps/web/src/api/**/*.contract.test.ts`) must pass.
-8. **Regenerate**: `pnpm --filter @ddl/contract generate` rewrites `schema/*.json` and the
+7. **Regenerate**: `pnpm --filter @ddl/contract generate` rewrites `schema/*.json` and the
    reference in `docs/PROTOCOL.md`; tests fail while either is stale.
 
 ## Testing utilities
@@ -123,6 +125,6 @@ express (canonical vault paths) are described in each field's `description`.
 ## Commands
 
 ```sh
-pnpm --filter @ddl/contract test       # schemas, lockstep, fixtures, properties, freshness
+pnpm --filter @ddl/contract test       # schemas, fixtures, properties, freshness
 pnpm --filter @ddl/contract generate   # schema/*.json and docs/PROTOCOL.md
 ```

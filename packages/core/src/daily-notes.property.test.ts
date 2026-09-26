@@ -1,7 +1,6 @@
 import { fc, test } from "@fast-check/vitest";
 import { describe, expect, it } from "vitest";
 import {
-  type DailyNoteSettings,
   DEFAULT_DAILY_NOTE_SETTINGS,
   dailyNotePath,
   findAdjacentDailyNote,
@@ -23,6 +22,7 @@ import {
 import { InvalidPathError, normalizePath, stem } from "./paths";
 import { renderTemplate } from "./template";
 import { dayNumber, fromDayNumber, weekdayOf } from "./testing/calendar-oracle";
+import type { DailyNoteSettings } from "./wire";
 
 const dateArb = fc
   .integer({

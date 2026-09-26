@@ -7,23 +7,9 @@ import {
   today,
 } from "./dates";
 import { ensureMarkdownExtension, isMarkdownPath, normalizePath } from "./paths";
+import type { DailyNoteSettings, WeeklyNoteSettings } from "./wire";
 
 /** Mirrors Obsidian's `.obsidian/daily-notes.json` so existing vaults work unchanged. */
-export interface DailyNoteSettings {
-  /** Vault folder for daily notes (e.g. `Daily`). Empty string = vault root. */
-  folder: string;
-  /** Moment-style file name format; may contain `/` for nested folders (e.g. `YYYY/MM/YYYY-MM-DD`). */
-  format: string;
-  /** Template note path (with or without `.md`). Empty string = no template. */
-  template: string;
-}
-
-export interface WeeklyNoteSettings {
-  folder: string;
-  format: string;
-  template: string;
-}
-
 export const DEFAULT_DAILY_NOTE_SETTINGS: DailyNoteSettings = {
   folder: "Daily",
   format: "YYYY-MM-DD",

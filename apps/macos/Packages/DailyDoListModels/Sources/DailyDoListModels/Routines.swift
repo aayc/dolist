@@ -1,6 +1,6 @@
 import Foundation
 
-// Swift mirror of the routine shapes in `packages/core/src/agent-types.ts` and `protocol.ts`.
+// Swift mirror of the routine shapes in `packages/contract/src/wire`.
 
 /// When a finished run notifies: every time, only when it found something new, or never.
 public struct RoutineNotify: WireEnum {

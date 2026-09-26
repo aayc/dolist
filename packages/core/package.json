@@ -2,7 +2,7 @@
   "name": "@ddl/core",
   "version": "0.1.0",
   "private": true,
-  "description": "Pure, dependency-free domain logic shared by every Daily Do List surface: vault paths, daily notes, markdown task parsing and identity tracking, agent/thread types, and the daemon wire protocol.",
+  "description": "Pure, dependency-free domain logic shared by every Daily Do List surface: vault paths, daily notes, markdown task parsing and identity tracking, agent helpers, and the daemon wire protocol's constants and URLs (its types are inferred from @ddl/contract's schemas and re-exported type-only).",
   "type": "module",
   "sideEffects": false,
   "exports": {

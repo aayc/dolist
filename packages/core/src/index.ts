@@ -27,3 +27,4 @@ export * from "./sync-service";
 export * from "./template";
 export * from "./text";
 export * from "./tools";
+export type * from "./wire";

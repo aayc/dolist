@@ -1,9 +1,10 @@
 # Daemon protocol
 
 How clients (the web and macOS apps today, an iPhone app later) talk to the daemon. The
-TypeScript types live in `packages/core/src/protocol.ts` and `agent-types.ts`; the runtime
-schemas, route table, test arbitraries and fixtures live in `@ddl/contract`
-(`packages/contract`). Everything below the "Reference" heading is generated from the contract.
+protocol is the zod schemas in `@ddl/contract` (`packages/contract/src/wire`): the TypeScript
+types are inferred from them (and imported from `@ddl/core`), and the route table, test
+generators and fixtures live beside them. Everything below the "Reference" heading is generated
+from the contract.
 
 ## Transport and auth
 

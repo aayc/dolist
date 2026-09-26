@@ -4,7 +4,7 @@
  * the safety gate wraps every one of them. Nothing outside `packages/agent/src/harness` should know
  * which agent harness is in use.
  */
-import type { ActionCategory } from "./agent-types";
+import type { ActionCategory } from "./wire";
 
 /** A JSON Schema object describing a tool's input (draft 2020-12 subset, `type: "object"`). */
 export type JsonSchema = { [key: string]: unknown };

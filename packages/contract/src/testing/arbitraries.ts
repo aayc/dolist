@@ -8,9 +8,9 @@ import { ORCHESTRATOR_THREAD_ID } from "@ddl/core";
 import fc from "fast-check";
 import type { WireSchemaName } from "../wire/catalog";
 import { API_ERROR_CODES } from "../wire/errors";
+import type { WireType } from "../wire/infer";
 import { WIRE_LIMITS } from "../wire/primitives";
 import { SETTINGS_RANGES } from "../wire/settings";
-import type { WireType } from "../wire/types";
 import * as p from "./primitives";
 
 type Arb<T> = fc.Arbitrary<T>;

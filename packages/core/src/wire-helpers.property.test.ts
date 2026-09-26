@@ -6,7 +6,8 @@ import { fc, test } from "@fast-check/vitest";
 import { describe, expect, it } from "vitest";
 import { normalizePath } from "./paths";
 import { API_ROUTES, decodeVaultPath, encodeVaultPath } from "./protocol";
-import { type AppSettings, DEFAULT_SETTINGS, type DeepPartial, mergeSettings } from "./settings";
+import { DEFAULT_SETTINGS, type DeepPartial, mergeSettings } from "./settings";
+import type { AppSettings } from "./wire";
 
 const segmentArb = fc.oneof(
   fc.constantFrom(

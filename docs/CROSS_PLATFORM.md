@@ -16,13 +16,14 @@ app's platform-neutral Swift packages.
 - **The web UI is origin-independent.** It talks to the backend through the `DaemonClient`
   interface (`apps/web/src/api/client.ts`) with an explicit base URL and token. No UI code assumes
   the page origin is the daemon.
-- **The protocol is explicit.** `packages/core/src/protocol.ts` defines every REST route, body and
-  WebSocket event. Any client (WebView, native widget, CLI) can implement it.
-- **Native clients speak the same protocol.** `DailyDoListModels` mirrors `protocol.ts` in Swift
+- **The protocol is explicit.** The schemas in `packages/contract/src/wire` define every REST
+  route, body and WebSocket event (and, inferred from them, the TypeScript types). Any client
+  (WebView, native widget, CLI) can implement it.
+- **Native clients speak the same protocol.** `DailyDoListModels` mirrors the schemas in Swift
   and its tests decode the `@ddl/contract` fixtures, so drift fails CI. `DailyDoListClient`
   implements the same `DaemonClient` surface over REST and WebSocket. Both are Foundation-only and
   build for iOS.
-- **Domain logic is pure.** `@ddl/core` has no dependencies and no Node/DOM APIs, so daily-note
+- **Domain logic is pure.** `@ddl/core` has no runtime dependencies and no Node/DOM APIs, so daily-note
   math, task parsing and identity tracking behave identically everywhere.
 - **Editor behavior is pinned by vectors.** Vim mode runs `@replit/codemirror-vim` on the web and
   `DailyDoListVim` (a Foundation-only Swift port) natively; both replay the same recorded behavior
