@@ -5,7 +5,7 @@ import {
   WriteNoteRequestSchema,
 } from "@ddl/contract";
 import {
-  API_ROUTES,
+  API_PATHS,
   type ConflictResponse,
   type CreateFolderResponse,
   type FolderRenameResponse,
@@ -31,14 +31,14 @@ import {
 import { notePathFromUrl, resolveNotePath, resolveVaultPath } from "../vault-paths";
 
 export function registerNoteRoutes(app: Hono, ctx: AppContext): void {
-  app.get("/api/notes/*", async (c) => {
+  app.get(API_PATHS.note, async (c) => {
     const path = notePathFromUrl(c.req.url);
     const note = await ctx.storage.read(path);
     if (!note) throw new ApiError(404, "not_found", `No note at "${path}"`);
     return c.json(toNoteResponse(note));
   });
 
-  app.put("/api/notes/*", async (c) => {
+  app.put(API_PATHS.note, async (c) => {
     const path = notePathFromUrl(c.req.url);
     const body = await readJson(c, WriteNoteRequestSchema);
     // `null` = create only; omitted = unconditional overwrite.
@@ -60,7 +60,7 @@ export function registerNoteRoutes(app: Hono, ctx: AppContext): void {
     return c.json(response, result.created ? 201 : 200);
   });
 
-  app.delete("/api/notes/*", async (c) => {
+  app.delete(API_PATHS.note, async (c) => {
     const path = notePathFromUrl(c.req.url);
     if (!(await ctx.storage.stat(path)))
       throw new ApiError(404, "not_found", `No note at "${path}"`);
@@ -70,7 +70,7 @@ export function registerNoteRoutes(app: Hono, ctx: AppContext): void {
     return c.json(response);
   });
 
-  app.post(API_ROUTES.rename, async (c) => {
+  app.post(API_PATHS.rename, async (c) => {
     const body = await readJson(c, RenameRequestSchema);
     const fromFolder = resolveVaultPath(body.from);
     if (await folderExists(ctx.storage, fromFolder)) {
@@ -97,7 +97,7 @@ export function registerNoteRoutes(app: Hono, ctx: AppContext): void {
     return c.json(response);
   });
 
-  app.post(API_ROUTES.folders, async (c) => {
+  app.post(API_PATHS.folders, async (c) => {
     const body = await readJson(c, CreateFolderRequestSchema);
     const path = resolveVaultPath(body.path);
     await ctx.storage.createFolder(path);
@@ -105,7 +105,7 @@ export function registerNoteRoutes(app: Hono, ctx: AppContext): void {
     return c.json(response, 201);
   });
 
-  app.delete(API_ROUTES.folders, async (c) => {
+  app.delete(API_PATHS.folders, async (c) => {
     const query = readQuery(c, API_CONTRACT.folders.methods.DELETE.query);
     const path = resolveVaultPath(query.path);
     const now = ctx.now();

@@ -2,7 +2,7 @@
   "name": "@ddl/contract",
   "version": "0.1.0",
   "private": true,
-  "description": "Runtime schemas (zod) for every data contract: the daemon wire protocol (REST + WebSocket) and the persisted sidecar formats. Kept in lockstep with the TypeScript types in @ddl/core by type-level tests.",
+  "description": "Runtime schemas (zod) for every data contract: the daemon wire protocol (REST + WebSocket) and the persisted sidecar formats. The wire schemas are the source of the protocol's TypeScript types, which @ddl/core re-exports type-only.",
   "type": "module",
   "sideEffects": false,
   "exports": {

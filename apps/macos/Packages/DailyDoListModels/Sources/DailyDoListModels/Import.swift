@@ -1,7 +1,7 @@
 import Foundation
 
 // Swift mirror of the vault switch and Obsidian import shapes of
-// `packages/core/src/protocol.ts`. Enums a newer daemon may extend are `WireEnum`s.
+// `packages/contract/src/wire/imports.ts`. Enums a newer daemon may extend are `WireEnum`s.
 
 // MARK: - Switching vaults
 

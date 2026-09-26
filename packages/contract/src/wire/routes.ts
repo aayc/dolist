@@ -1,8 +1,8 @@
 /**
- * The route table: for every entry of `API_ROUTES`, its path pattern, parameters, query, request
- * body and the response of each status it can answer (success and documented errors).
+ * The route table: for every route of `API_PATHS`, its parameters, query, request body and the
+ * response of each status it can answer (success and documented errors).
  */
-import type { ApiErrorCode, ApiRouteName } from "@ddl/core";
+import { API_PATHS, type ApiErrorCode, type ApiRouteName } from "@ddl/core";
 import { z } from "zod";
 import { ApprovalStatusSchema } from "./domain";
 import {
@@ -200,9 +200,8 @@ const ROUTINE_FILE_RESPONSES = {
 } as const;
 const Flag = z.string().optional().describe("`1`, `true` or `yes` = on; anything else = off.");
 
-export const API_CONTRACT = {
+const ROUTES = {
   health: {
-    path: "/api/health",
     auth: "bearer",
     methods: {
       GET: {
@@ -212,7 +211,6 @@ export const API_CONTRACT = {
     },
   },
   tree: {
-    path: "/api/vault/tree",
     auth: "bearer",
     methods: {
       GET: {
@@ -222,7 +220,6 @@ export const API_CONTRACT = {
     },
   },
   note: {
-    path: "/api/notes/*",
     auth: "bearer",
     params: z.object({
       path: RequestPathSchema.describe("Vault path of a text note, each segment percent-encoded."),
@@ -262,7 +259,6 @@ export const API_CONTRACT = {
     },
   },
   rename: {
-    path: "/api/notes-rename",
     auth: "bearer",
     methods: {
       POST: {
@@ -283,7 +279,6 @@ export const API_CONTRACT = {
     },
   },
   folders: {
-    path: "/api/folders",
     auth: "bearer",
     methods: {
       POST: {
@@ -307,7 +302,6 @@ export const API_CONTRACT = {
     },
   },
   daily: {
-    path: "/api/daily/:date",
     auth: "bearer",
     params: z.object({
       date: z
@@ -327,7 +321,6 @@ export const API_CONTRACT = {
     },
   },
   search: {
-    path: "/api/search",
     auth: "bearer",
     methods: {
       GET: {
@@ -353,7 +346,6 @@ export const API_CONTRACT = {
     },
   },
   settings: {
-    path: "/api/settings",
     auth: "bearer",
     methods: {
       GET: {
@@ -381,7 +373,6 @@ export const API_CONTRACT = {
     },
   },
   agentStatus: {
-    path: "/api/agent/status",
     auth: "bearer",
     methods: {
       GET: {
@@ -391,7 +382,6 @@ export const API_CONTRACT = {
     },
   },
   agentEnabled: {
-    path: "/api/agent/enabled",
     auth: "bearer",
     methods: {
       PUT: {
@@ -415,7 +405,6 @@ export const API_CONTRACT = {
     },
   },
   tasks: {
-    path: "/api/tasks",
     auth: "bearer",
     methods: {
       GET: {
@@ -429,7 +418,6 @@ export const API_CONTRACT = {
     },
   },
   threads: {
-    path: "/api/threads",
     auth: "bearer",
     methods: {
       GET: {
@@ -452,7 +440,6 @@ export const API_CONTRACT = {
     },
   },
   thread: {
-    path: "/api/threads/:id",
     auth: "bearer",
     params: ThreadIdParams,
     methods: {
@@ -467,7 +454,6 @@ export const API_CONTRACT = {
     },
   },
   threadMessages: {
-    path: "/api/threads/:id/messages",
     auth: "bearer",
     params: ThreadIdParams,
     methods: {
@@ -483,7 +469,6 @@ export const API_CONTRACT = {
     },
   },
   threadCancel: {
-    path: "/api/threads/:id/cancel",
     auth: "bearer",
     params: ThreadIdParams,
     methods: {
@@ -491,7 +476,6 @@ export const API_CONTRACT = {
     },
   },
   threadRetry: {
-    path: "/api/threads/:id/retry",
     auth: "bearer",
     params: ThreadIdParams,
     methods: {
@@ -499,7 +483,6 @@ export const API_CONTRACT = {
     },
   },
   approvals: {
-    path: "/api/approvals",
     auth: "bearer",
     methods: {
       GET: {
@@ -513,7 +496,6 @@ export const API_CONTRACT = {
     },
   },
   approval: {
-    path: "/api/approvals/:id",
     auth: "bearer",
     params: z.object({ id: RuntimeIdSchema }),
     methods: {
@@ -545,7 +527,6 @@ export const API_CONTRACT = {
     },
   },
   artifact: {
-    path: "/api/artifacts/:threadId/:artifactId",
     auth: "bearer",
     params: z.object({ threadId: RuntimeIdSchema, artifactId: RuntimeIdSchema }),
     methods: {
@@ -565,7 +546,6 @@ export const API_CONTRACT = {
     },
   },
   routines: {
-    path: "/api/routines",
     auth: "bearer",
     methods: {
       GET: {
@@ -585,7 +565,6 @@ export const API_CONTRACT = {
     },
   },
   routine: {
-    path: "/api/routines/:id",
     auth: "bearer",
     params: RoutineIdParams,
     methods: {
@@ -600,7 +579,6 @@ export const API_CONTRACT = {
     },
   },
   routineRun: {
-    path: "/api/routines/:id/run",
     auth: "bearer",
     params: RoutineIdParams,
     methods: {
@@ -620,7 +598,6 @@ export const API_CONTRACT = {
     },
   },
   routinePause: {
-    path: "/api/routines/:id/pause",
     auth: "bearer",
     params: RoutineIdParams,
     methods: {
@@ -631,7 +608,6 @@ export const API_CONTRACT = {
     },
   },
   routineResume: {
-    path: "/api/routines/:id/resume",
     auth: "bearer",
     params: RoutineIdParams,
     methods: {
@@ -642,7 +618,6 @@ export const API_CONTRACT = {
     },
   },
   connectors: {
-    path: "/api/connectors",
     auth: "bearer",
     methods: {
       GET: {
@@ -652,7 +627,6 @@ export const API_CONTRACT = {
     },
   },
   syncStatus: {
-    path: "/api/sync/status",
     auth: "bearer",
     methods: {
       GET: {
@@ -662,7 +636,6 @@ export const API_CONTRACT = {
     },
   },
   computerPermissionsOpen: {
-    path: "/api/computer/permissions/open",
     auth: "bearer",
     methods: {
       POST: {
@@ -680,7 +653,6 @@ export const API_CONTRACT = {
     },
   },
   device: {
-    path: "/api/device",
     auth: "bearer",
     methods: {
       GET: {
@@ -695,7 +667,6 @@ export const API_CONTRACT = {
     },
   },
   deviceSync: {
-    path: "/api/device/sync",
     auth: "bearer",
     methods: {
       PUT: {
@@ -711,7 +682,6 @@ export const API_CONTRACT = {
     },
   },
   deviceVault: {
-    path: "/api/device/vault",
     auth: "bearer",
     methods: {
       GET: {
@@ -739,7 +709,6 @@ export const API_CONTRACT = {
     },
   },
   importObsidianPreview: {
-    path: "/api/import/obsidian/preview",
     auth: "bearer",
     methods: {
       POST: {
@@ -756,7 +725,6 @@ export const API_CONTRACT = {
     },
   },
   importObsidian: {
-    path: "/api/import/obsidian",
     auth: "bearer",
     methods: {
       GET: {
@@ -781,7 +749,6 @@ export const API_CONTRACT = {
     },
   },
   importObsidianCancel: {
-    path: "/api/import/obsidian/cancel",
     auth: "bearer",
     methods: {
       POST: {
@@ -796,7 +763,6 @@ export const API_CONTRACT = {
     },
   },
   importObsidianUpdate: {
-    path: "/api/import/obsidian/update",
     auth: "bearer",
     methods: {
       POST: {
@@ -815,7 +781,6 @@ export const API_CONTRACT = {
     },
   },
   pairingCodes: {
-    path: "/api/pairing-codes",
     auth: "bearer",
     methods: {
       POST: {
@@ -831,7 +796,6 @@ export const API_CONTRACT = {
     },
   },
   pair: {
-    path: "/api/pair",
     auth: "pairing_code",
     methods: {
       POST: {
@@ -849,7 +813,6 @@ export const API_CONTRACT = {
     },
   },
   devices: {
-    path: "/api/devices",
     auth: "bearer",
     methods: {
       GET: {
@@ -859,7 +822,6 @@ export const API_CONTRACT = {
     },
   },
   pairedDevice: {
-    path: "/api/devices/:id",
     auth: "bearer",
     params: z.object({ id: RuntimeIdSchema }),
     methods: {
@@ -874,7 +836,6 @@ export const API_CONTRACT = {
     },
   },
   machine: {
-    path: "/api/machine",
     auth: "bearer",
     methods: {
       GET: {
@@ -884,7 +845,6 @@ export const API_CONTRACT = {
     },
   },
   machinePair: {
-    path: "/api/machine/pair",
     auth: "bearer",
     methods: {
       POST: {
@@ -906,7 +866,6 @@ export const API_CONTRACT = {
     },
   },
   machineCheck: {
-    path: "/api/machine/check",
     auth: "bearer",
     methods: {
       POST: {
@@ -916,7 +875,6 @@ export const API_CONTRACT = {
     },
   },
   machinePairing: {
-    path: "/api/machine/pairing",
     auth: "bearer",
     methods: {
       DELETE: {
@@ -927,7 +885,6 @@ export const API_CONTRACT = {
     },
   },
   ws: {
-    path: "/ws",
     auth: "upgrade",
     methods: {
       GET: {
@@ -947,7 +904,15 @@ export const API_CONTRACT = {
     },
     websocket: { server: ServerEventSchema, client: ClientEventSchema },
   },
-} as const satisfies Record<ApiRouteName, RouteSpec>;
+} as const satisfies Record<ApiRouteName, Omit<RouteSpec, "path">>;
+
+/** The route table: every route's path (`API_PATHS`) with what it accepts and answers. */
+export const API_CONTRACT = Object.fromEntries(
+  Object.entries(ROUTES).map(([name, route]) => [
+    name,
+    { path: API_PATHS[name as ApiRouteName], ...route },
+  ]),
+) as { [K in ApiRouteName]: (typeof ROUTES)[K] & { path: (typeof API_PATHS)[K] } };
 
 export type ApiContract = typeof API_CONTRACT;
 

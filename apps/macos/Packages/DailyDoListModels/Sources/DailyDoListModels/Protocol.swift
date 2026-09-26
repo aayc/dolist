@@ -1,6 +1,6 @@
 import Foundation
 
-/// Swift mirror of `packages/core/src/protocol.ts` (REST shapes). The canonical, versioned
+/// Swift mirror of the REST shapes in `packages/contract/src/wire`. The canonical, versioned
 /// contract is `@ddl/contract`; the Swift tests decode its fixtures to stay in lockstep.
 public enum DaemonProtocol {
   /// Major protocol version. A client and a daemon interoperate exactly when these are equal.
@@ -15,7 +15,7 @@ public enum DaemonProtocol {
 
 // MARK: - Routes
 
-/// Paths of every daemon route (see `API_ROUTES` in protocol.ts).
+/// Paths of every daemon route (see `API_PATHS` in protocol.ts).
 public enum APIRoute {
   public static let health = "/api/health"
   public static let tree = "/api/vault/tree"

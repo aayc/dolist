@@ -68,9 +68,10 @@ apps/
                   DailyDoListDrawing is its native Excalidraw drawing engine
   mobile/         (planned) native iOS app reusing the Swift packages — plan in PLAN.md
 packages/
-  core/           Pure, isomorphic domain logic + wire protocol types (no dependencies!)
-  contract/       Runtime zod schemas for the wire protocol and the sidecar file formats, kept in
-                  lockstep with core's types; fixtures; generates docs/PROTOCOL.md
+  core/           Pure, isomorphic domain logic, enums and constants (no runtime dependencies!);
+                  re-exports the wire types type-only
+  contract/       zod schemas for the wire protocol (the source of its TypeScript types) and the
+                  sidecar file formats; fixtures, test generators; generates docs/PROTOCOL.md
   storage/        StorageProvider interface; local-fs, memory, remote (sync service); SyncEngine;
                   search
   editor/         CodeMirror 6 markdown editor: live preview, tasks, vim, agent badges
@@ -178,13 +179,18 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
 3. **Provider registries.** Backend selection happens only in registries
    (`createStorageProvider`, `createExecutionProvider`, `createSyncTarget`, …). No
    `if (kind === "remote")` in callers.
-4. **`@ddl/core` is pure.** No dependencies, no `node:*` imports, no DOM access (timers, `crypto`
-   via `globalThis` are fine). It runs in the browser, the daemon and future native shells.
-5. **Wire protocol lives in `packages/core/src/protocol.ts`.** Daemon and clients import the same
-   types. Changing a shape = update both sides in the same change, together with its contract
-   schema (`packages/contract/src/wire/`), the lockstep test, the route in `API_CONTRACT`, the
-   fixtures, `DailyDoListModels` (Swift), and `pnpm --filter @ddl/contract generate` for
-   `docs/PROTOCOL.md` (the steps: "How to add a route or event" in `packages/contract/README.md`).
+4. **`@ddl/core` is pure.** No runtime dependencies, no `node:*` imports, no DOM access (timers,
+   `crypto` via `globalThis` are fine). It runs in the browser, the daemon and future native
+   shells. Its only reference outside itself is type-only: `src/wire.ts` re-exports the wire types
+   inferred from `@ddl/contract`'s schemas, erased at build (nothing of contract or zod ships).
+5. **The wire protocol is the zod schemas in `packages/contract/src/wire/`.** Its TypeScript types
+   are inferred from them (`src/wire/types.ts`) and imported from `@ddl/core`, by the daemon and
+   every client alike; core keeps the enums and constants the schemas use, and the one route
+   table (`API_PATHS`, with the URL builders `API_ROUTES`) that `API_CONTRACT` specifies.
+   Changing a shape = change its schema (the type follows) and both sides in the same change,
+   together with the route in `API_CONTRACT`, the fixtures, `DailyDoListModels` (Swift), and
+   `pnpm --filter @ddl/contract generate` for `docs/PROTOCOL.md` (the steps: "How to add a route
+   or event" in `packages/contract/README.md`).
 6. **The daemon is local-only unless remote hosts are configured, and always authenticated.** It
    binds `127.0.0.1` only. Other devices reach it only through a private-network proxy on the same
    machine (e.g. `tailscale serve`), under a remote host that is configured (`remote.hosts`), never
@@ -371,12 +377,12 @@ and real-keyboard e2e tests in `apps/web/e2e/vim.spec.ts`.
   `SYNC_API_VERSION`), then the server (`apps/sync`) and `RemoteStorageProvider`
   (`packages/storage/src/remote.ts`) in the same change, and update `docs/SYNC.md`. Tests start
   the server in process (`createSyncServer({ db: ":memory:", port: 0 })`), never a real one.
-- **Add a setting:** extend `AppSettings` + `DEFAULT_SETTINGS` in `packages/core/src/settings.ts`,
-  its wire schema (`packages/contract/src/wire/settings.ts`, which the daemon validates updates
-  with) and its file schema (`packages/contract/src/persisted/settings.ts`; see
-  `docs/DATA_FORMATS.md`), the Swift model (`DailyDoListModels/Settings.swift`), surface it in the
-  web settings UI and the Mac settings pane (`apps/macos/Sources/DailyDoListApp/Settings/`), and
-  handle it in `AgentRuntime.updateSettings` if agent-related.
+- **Add a setting:** extend its wire schema (`packages/contract/src/wire/settings.ts`: `AppSettings`
+  is inferred from it, and the daemon validates updates with it), `DEFAULT_SETTINGS` in
+  `packages/core/src/settings.ts`, its file schema (`packages/contract/src/persisted/settings.ts`;
+  see `docs/DATA_FORMATS.md`), the Swift model (`DailyDoListModels/Settings.swift`), surface it in
+  the web settings UI and the Mac settings pane (`apps/macos/Sources/DailyDoListApp/Settings/`),
+  and handle it in `AgentRuntime.updateSettings` if agent-related.
 - **Add a control (web):** give it a tooltip with `data-tooltip` (never `title`), and if it runs a
   command, `data-command` (`IconButton command=…` or `commandTooltip()` do both): the keycaps and
   `aria-keyshortcuts` come from the registry, so never write a shortcut into text. A shorter
@@ -456,7 +462,7 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
   get `.pointingHandCursor()` (the shared button styles include it), and custom controls a hover
   tint. Tests that drive tooltips give views their own `TooltipCenter` (a `ManualTooltipClock`,
   or `QuietTooltips`) through `\.tooltipCenter`.
-- **Protocol changes:** a wire change in `packages/core/src/protocol.ts` also updates
+- **Protocol changes:** a wire change in `packages/contract/src/wire/` also updates
   `DailyDoListModels` in the same change. Its tests decode the `@ddl/contract` fixtures.
 - **Daemon supervision:** the app attaches to a running daemon and never stops one it didn't
   start. It reads the token from `$DDL_HOME/daemon-token` and never logs it. A managed daemon runs

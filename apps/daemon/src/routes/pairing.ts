@@ -1,6 +1,6 @@
 import { PairingCodeRequestSchema, PairRequestSchema } from "@ddl/contract";
 import {
-  API_ROUTES,
+  API_PATHS,
   normalizePairingCode,
   type PairedDevicesResponse,
   type PairingCodeResponse,
@@ -26,7 +26,7 @@ export const MAX_PAIR_BODY_BYTES = 1024;
 export function registerPairingRoutes(app: Hono, ctx: AppContext): void {
   const log = ctx.logger.child({ component: "pairing" });
 
-  app.post(API_ROUTES.pairingCodes, async (c) => {
+  app.post(API_PATHS.pairingCodes, async (c) => {
     const { name } = await readJson(c, PairingCodeRequestSchema);
     if (ctx.devices.isFull) {
       throw new ApiError(
@@ -53,7 +53,7 @@ export function registerPairingRoutes(app: Hono, ctx: AppContext): void {
   });
 
   app.post(
-    API_ROUTES.pair,
+    API_PATHS.pair,
     rateLimit(ctx),
     bodyLimit({
       maxSize: MAX_PAIR_BODY_BYTES,
@@ -105,7 +105,7 @@ export function registerPairingRoutes(app: Hono, ctx: AppContext): void {
     },
   );
 
-  app.get(API_ROUTES.devices, (c) => {
+  app.get(API_PATHS.devices, (c) => {
     const principal = principalOf(c);
     const current = principal?.kind === "device" ? principal.device.id : undefined;
     const body: PairedDevicesResponse = {
@@ -116,7 +116,7 @@ export function registerPairingRoutes(app: Hono, ctx: AppContext): void {
     return c.json(body);
   });
 
-  app.delete("/api/devices/:id", async (c) => {
+  app.delete(API_PATHS.pairedDevice, async (c) => {
     const id = idParam(c, "id");
     if (!(await ctx.devices.revoke(id))) throw new ApiError(404, "not_found", "Unknown device");
     log.info("Revoked a device", { device: id });

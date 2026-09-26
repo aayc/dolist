@@ -5,6 +5,7 @@ export * from "./errors";
 export * from "./events";
 export * from "./exact";
 export * from "./imports";
+export type * from "./infer";
 export * from "./primitives";
 export { namedWireSchemas, type WireSchemaMeta, wireRegistry } from "./registry";
 export * from "./remote";

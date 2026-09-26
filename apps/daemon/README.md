@@ -249,7 +249,7 @@ arguments. The token is never printed.
 
 ## REST API
 
-All paths come from `API_ROUTES` in `@ddl/core` (`packages/core/src/protocol.ts`). Errors are
+All paths come from `API_PATHS` in `@ddl/core` (`packages/core/src/protocol.ts`). Errors are
 `{ "error": "<code>", "message": "…" }` (`ApiErrorBody`). Common codes: `invalid_request` and
 `invalid_json` (400), `invalid_path` (400), `unauthorized` (401), `pairing_rejected` (401, a bad
 pairing code), `forbidden_host` and `forbidden_origin` (403), `forbidden_device` (403, a paired

@@ -6,7 +6,7 @@ import {
   SetAgentEnabledRequestSchema,
 } from "@ddl/contract";
 import {
-  API_ROUTES,
+  API_PATHS,
   type ApprovalListResponse,
   type ApprovalRequest,
   type ApprovalResponse,
@@ -30,17 +30,17 @@ const ACTION_GRACE_MS = 3_000;
 export function registerAgentRoutes(app: Hono, ctx: AppContext): void {
   const { runtime } = ctx;
 
-  app.get(API_ROUTES.agentStatus, (c) => c.json(runtime.status()));
+  app.get(API_PATHS.agentStatus, (c) => c.json(runtime.status()));
 
   // Persisted as `agent.enabled` so the switch survives restarts and syncs with the vault.
-  app.on(["PUT", "POST"], API_ROUTES.agentEnabled, async (c) => {
+  app.on(["PUT", "POST"], API_PATHS.agentEnabled, async (c) => {
     const { enabled } = await readJson(c, SetAgentEnabledRequestSchema);
     await applySettings(ctx, { agent: { enabled } });
     const body: SetAgentEnabledResponse = runtime.status();
     return c.json(body);
   });
 
-  app.get("/api/tasks", (c) => {
+  app.get(API_PATHS.tasks, (c) => {
     const { notePath } = readQuery(c, API_CONTRACT.tasks.methods.GET.query);
     const body: TaskRecordsResponse = {
       records: runtime.getTaskRecords(resolveNotePath(notePath)),
@@ -48,7 +48,7 @@ export function registerAgentRoutes(app: Hono, ctx: AppContext): void {
     return c.json(body);
   });
 
-  app.get(API_ROUTES.threads, (c) => {
+  app.get(API_PATHS.threads, (c) => {
     const { notePath, taskId, routineId } = readQuery(c, API_CONTRACT.threads.methods.GET.query);
     const filter = {
       ...(notePath ? { notePath: resolveNotePath(notePath) } : {}),
@@ -61,31 +61,31 @@ export function registerAgentRoutes(app: Hono, ctx: AppContext): void {
     return c.json(body);
   });
 
-  app.get("/api/threads/:id", (c) => {
+  app.get(API_PATHS.thread, (c) => {
     const body: ThreadResponse = requireThread(runtime, idParam(c, "id"));
     return c.json(body);
   });
 
-  app.post("/api/threads/:id/messages", async (c) => {
+  app.post(API_PATHS.threadMessages, async (c) => {
     const id = idParam(c, "id");
     const { text } = await readJson(c, PostMessageRequestSchema);
     requireThread(runtime, id);
     return runAction(c, ctx, "postUserMessage", () => runtime.postUserMessage(id, text));
   });
 
-  app.post("/api/threads/:id/cancel", (c) => {
+  app.post(API_PATHS.threadCancel, (c) => {
     const id = idParam(c, "id");
     requireThread(runtime, id);
     return runAction(c, ctx, "cancelThread", () => runtime.cancelThread(id));
   });
 
-  app.post("/api/threads/:id/retry", (c) => {
+  app.post(API_PATHS.threadRetry, (c) => {
     const id = idParam(c, "id");
     requireThread(runtime, id);
     return runAction(c, ctx, "retryThread", () => runtime.retryThread(id));
   });
 
-  app.get(API_ROUTES.approvals, (c) => {
+  app.get(API_PATHS.approvals, (c) => {
     const { status } = readQuery(c, API_CONTRACT.approvals.methods.GET.query);
     const body: ApprovalListResponse = {
       approvals: runtime.listApprovals(status === undefined ? undefined : { status }),
@@ -93,12 +93,12 @@ export function registerAgentRoutes(app: Hono, ctx: AppContext): void {
     return c.json(body);
   });
 
-  app.get("/api/approvals/:id", (c) => {
+  app.get(API_PATHS.approval, (c) => {
     const body: ApprovalResponse = { approval: requireApproval(runtime, idParam(c, "id")) };
     return c.json(body);
   });
 
-  app.post("/api/approvals/:id", async (c) => {
+  app.post(API_PATHS.approval, async (c) => {
     const id = idParam(c, "id");
     const decision = await readJson(c, ApprovalDecisionRequestSchema);
     assertPending(requireApproval(runtime, id));
@@ -112,7 +112,7 @@ export function registerAgentRoutes(app: Hono, ctx: AppContext): void {
     }
   });
 
-  app.get(API_ROUTES.connectors, (c) => {
+  app.get(API_PATHS.connectors, (c) => {
     const body: ConnectorsResponse = {
       connectors: ctx.connectors?.status() ?? runtime.status().connectors,
     };

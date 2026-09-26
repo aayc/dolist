@@ -1,5 +1,6 @@
 import { API_CONTRACT } from "@ddl/contract";
 import {
+  API_PATHS,
   type AppSettings,
   type DailyNoteResponse,
   DEFAULT_DAILY_NOTE_CONTENT,
@@ -22,7 +23,7 @@ import { clientWriteSource, isTruthyFlag } from "../http-utils";
 
 export function registerDailyRoutes(app: Hono, ctx: AppContext): void {
   /** `GET /api/daily/<YYYY-MM-DD|today>?create=1`, dates in the daemon's local time zone. */
-  app.get("/api/daily/:date", async (c) => {
+  app.get(API_PATHS.daily, async (c) => {
     const param = API_CONTRACT.daily.params.safeParse({ date: c.req.param("date") });
     const value = param.success ? param.data.date : null;
     const date = value === "today" ? today(ctx.now()) : value && parseISODate(value);

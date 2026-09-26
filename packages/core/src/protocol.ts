@@ -12,34 +12,9 @@
  * 127.0.0.1 and rejects foreign `Host`/`Origin` headers (DNS-rebinding/CSRF); remote hosts are
  * configured names reached through a private-network proxy.
  *
- * Runtime schemas for every shape here live in `@ddl/contract` (kept in lockstep by type tests);
- * the generated reference is `docs/PROTOCOL.md`.
+ * The shapes are the zod schemas in `@ddl/contract`; their inferred types are re-exported from
+ * `./wire`. The generated reference is `docs/PROTOCOL.md`.
  */
-import type {
-  ApprovalDecision,
-  ApprovalRequest,
-  ApprovalScope,
-  OrchestratorActivity,
-  Routine,
-  RoutineNotification,
-  RoutineNotify,
-  RoutineTemplate,
-  RoutineUse,
-  SurfaceFrame,
-  SurfaceKind,
-  TaskAgentRecord,
-  Thread,
-  ThreadMessage,
-  ThreadSummary,
-} from "./agent-types";
-import type { DailyNoteSettings } from "./daily-notes";
-import type {
-  AgentHarnessKind,
-  AlwaysOnMachine,
-  AppSettings,
-  DeepPartial,
-  ThemePreference,
-} from "./settings";
 
 /**
  * Major version of the protocol, bumped only for breaking changes (everything else is additive).
@@ -60,123 +35,95 @@ export const WS_CLOSE_CODES = {
 /** Header clients send so the daemon can tag the origin of a change and skip echoing it back. */
 export const CLIENT_ID_HEADER = "x-ddl-client-id";
 
-/** Route → methods (request body → response body per status). Errors answer `ApiErrorBody`. */
-export const API_ROUTES = {
-  /** GET → HealthResponse */
+/**
+ * Every route's path: `:name` is one segment, a trailing `*` the rest (a vault path). The daemon
+ * registers these patterns and clients build URLs from them (`API_ROUTES`); what each route
+ * accepts and answers is `API_CONTRACT` in `@ddl/contract`, rendered in docs/PROTOCOL.md.
+ */
+export const API_PATHS = {
   health: "/api/health",
-  /** GET → VaultTreeResponse */
   tree: "/api/vault/tree",
-  /**
-   * GET → NoteResponse · PUT WriteNoteRequest → WriteNoteResponse (200 overwritten, 201 created,
-   * 409 ConflictResponse) · DELETE → TrashResponse (moved into `.trash/`)
-   */
-  note: (path: string) => `/api/notes/${encodeVaultPath(path)}`,
-  /** POST RenameRequest → RenameResponse (a note or a whole folder); 409 on conflict */
+  note: "/api/notes/*",
   rename: "/api/notes-rename",
-  /** POST CreateFolderRequest → 201 CreateFolderResponse · DELETE `?path=` → TrashResponse */
   folders: "/api/folders",
-  /** GET → DailyNoteResponse (creates from the template with `?create=1`) */
-  daily: (date: string, create = true) => `/api/daily/${date}${create ? "?create=1" : ""}`,
-  /** GET (`?q=`, `?limit=`) → SearchResponse */
-  search: (q: string) => `/api/search?q=${encodeURIComponent(q)}`,
-  /** GET → SettingsResponse · PUT (or PATCH) UpdateSettingsRequest → SettingsResponse */
+  daily: "/api/daily/:date",
+  search: "/api/search",
   settings: "/api/settings",
-  /** GET → AgentStatusResponse */
   agentStatus: "/api/agent/status",
-  /** PUT/POST SetAgentEnabledRequest → SetAgentEnabledResponse */
   agentEnabled: "/api/agent/enabled",
-  /** GET → TaskRecordsResponse */
-  tasks: (notePath: string) => `/api/tasks?notePath=${encodeURIComponent(notePath)}`,
-  /** GET (`?notePath=`, `?taskId=`, `?routineId=`) → ThreadListResponse */
+  tasks: "/api/tasks",
   threads: "/api/threads",
-  /** GET → ThreadResponse */
-  thread: (id: string) => `/api/threads/${encodeURIComponent(id)}`,
-  /** POST PostMessageRequest → ThreadActionResponse (200 done, 202 still running) */
-  threadMessages: (id: string) => `/api/threads/${encodeURIComponent(id)}/messages`,
-  /** POST → ThreadActionResponse (200 done, 202 still running) */
-  threadCancel: (id: string) => `/api/threads/${encodeURIComponent(id)}/cancel`,
-  /** POST → ThreadActionResponse (200 done, 202 still running) */
-  threadRetry: (id: string) => `/api/threads/${encodeURIComponent(id)}/retry`,
-  /** GET (`?status=`) → ApprovalListResponse */
+  thread: "/api/threads/:id",
+  threadMessages: "/api/threads/:id/messages",
+  threadCancel: "/api/threads/:id/cancel",
+  threadRetry: "/api/threads/:id/retry",
   approvals: "/api/approvals",
-  /**
-   * GET → ApprovalResponse · POST ApprovalDecisionRequest → ApprovalResponse (409
-   * ApprovalConflictResponse when it is no longer pending)
-   */
-  approval: (id: string) => `/api/approvals/${encodeURIComponent(id)}`,
-  /** GET → artifact bytes (Content-Type from the artifact; `?download=1` forces an attachment) */
-  artifact: (threadId: string, artifactId: string) =>
-    `/api/artifacts/${encodeURIComponent(threadId)}/${encodeURIComponent(artifactId)}`,
-  /**
-   * GET → RoutineListResponse · POST CreateRoutineRequest → 201 RoutineResponse (writes
-   * `Routines/<name>.md`; 409 when it exists, 400 when the schedule can't be read)
-   */
+  approval: "/api/approvals/:id",
+  artifact: "/api/artifacts/:threadId/:artifactId",
   routines: "/api/routines",
-  /** GET → RoutineResponse */
-  routine: (id: string) => `/api/routines/${encodeURIComponent(id)}`,
-  /**
-   * POST → RoutineRunResponse: runs it now (409 while a run is going or when today's extra runs
-   * are used up; 503 while the agent can't run)
-   */
-  routineRun: (id: string) => `/api/routines/${encodeURIComponent(id)}/run`,
-  /** POST → RoutineResponse (sets `paused: true` in the file) */
-  routinePause: (id: string) => `/api/routines/${encodeURIComponent(id)}/pause`,
-  /** POST → RoutineResponse (sets `paused: false` in the file) */
-  routineResume: (id: string) => `/api/routines/${encodeURIComponent(id)}/resume`,
-  /** GET → ConnectorsResponse */
+  routine: "/api/routines/:id",
+  routineRun: "/api/routines/:id/run",
+  routinePause: "/api/routines/:id/pause",
+  routineResume: "/api/routines/:id/resume",
   connectors: "/api/connectors",
-  /** GET → SyncStatusResponse */
   syncStatus: "/api/sync/status",
-  /**
-   * POST ComputerPermissionsOpenRequest → OkResponse: opens System Settings at that privacy pane
-   * (macOS; 404 elsewhere).
-   */
   computerPermissionsOpen: "/api/computer/permissions/open",
-  /**
-   * GET → DeviceSettingsResponse · PATCH DeviceSettingsPatch → DeviceSettingsResponse (409 when a
-   * field is set by an environment variable)
-   */
   device: "/api/device",
-  /** PUT DeviceSyncSetupRequest → DeviceSettingsResponse · DELETE → DeviceSettingsResponse (sync off) */
   deviceSync: "/api/device/sync",
-  /**
-   * GET → DeviceVaultResponse · PUT DeviceVaultRequest → DeviceVaultResponse, then the daemon
-   * restarts on that vault (409 when `DDL_VAULT` sets it, an import runs or the vault syncs).
-   * This machine only (403 for paired devices).
-   */
   deviceVault: "/api/device/vault",
-  /** POST ObsidianImportPreviewRequest → ObsidianImportPreview (reads the folder, writes nothing) */
   importObsidianPreview: "/api/import/obsidian/preview",
-  /**
-   * GET → ObsidianImportStatusResponse · POST ObsidianImportRequest → 202
-   * ObsidianImportJobResponse (progress arrives as `import.progress` events; 409 while a job runs)
-   */
   importObsidian: "/api/import/obsidian",
-  /** POST → ObsidianImportJobResponse: the stopped job, once its partial work is removed (404 when none runs) */
   importObsidianCancel: "/api/import/obsidian/cancel",
-  /** POST → 202 ObsidianImportJobResponse: copies what changed in Obsidian since the import (404 when there's nothing to update from) */
   importObsidianUpdate: "/api/import/obsidian/update",
-  /** POST PairingCodeRequest → 201 PairingCodeResponse (429 when too many are outstanding) */
   pairingCodes: "/api/pairing-codes",
-  /** POST PairRequest → 201 PairResponse. No bearer token: the pairing code is the credential. */
   pair: "/api/pair",
-  /** GET → PairedDevicesResponse */
   devices: "/api/devices",
-  /** DELETE → 204: revokes a paired device and closes its sockets */
-  pairedDevice: (id: string) => `/api/devices/${encodeURIComponent(id)}`,
-  /** GET → MachineStatusResponse */
+  pairedDevice: "/api/devices/:id",
   machine: "/api/machine",
-  /** POST MachinePairRequest → MachineStatusResponse */
   machinePair: "/api/machine/pair",
-  /** POST → MachineStatusResponse (checks the machine now) */
   machineCheck: "/api/machine/check",
-  /** DELETE → MachineStatusResponse (drops this device's credential for the machine) */
   machinePairing: "/api/machine/pairing",
-  /** WebSocket: ServerEvent ⇄ ClientEvent */
   ws: "/ws",
 } as const;
 
-export type ApiRouteName = keyof typeof API_ROUTES;
+export type ApiRouteName = keyof typeof API_PATHS;
+
+type PathArgs<P> = P extends `${string}/:${string}/${infer Rest}`
+  ? [string, ...PathArgs<`/${Rest}`>]
+  : P extends `${string}/:${string}` | `${string}/*`
+    ? [string]
+    : [];
+
+type RouteUrls = {
+  readonly [K in ApiRouteName]: PathArgs<(typeof API_PATHS)[K]> extends []
+    ? (typeof API_PATHS)[K]
+    : (...args: PathArgs<(typeof API_PATHS)[K]>) => string;
+};
+
+const urls = Object.fromEntries(
+  Object.entries(API_PATHS).map(([name, path]) => [
+    name,
+    /[:*]/.test(path)
+      ? (...args: string[]) =>
+          path.replace(/:\w+|\*/g, (param) =>
+            (param === "*" ? encodeVaultPath : encodeURIComponent)(args.shift() as string),
+          )
+      : path,
+  ]),
+) as RouteUrls;
+
+/**
+ * Every route's URL (relative to the daemon's base URL): a static route is its path, a pattern a
+ * builder taking its parameters in order (percent-encoded; a note path keeps its `/`). `daily`,
+ * `search` and `tasks` add their query.
+ */
+export const API_ROUTES = {
+  ...urls,
+  /** `create` (the default) makes the note from its template when it doesn't exist. */
+  daily: (date: string, create = true) => `${urls.daily(date)}${create ? "?create=1" : ""}`,
+  search: (q: string) => `${urls.search}?q=${encodeURIComponent(q)}`,
+  tasks: (notePath: string) => `${urls.tasks}?notePath=${encodeURIComponent(notePath)}`,
+};
 
 /** Encodes each path segment but keeps `/` separators readable. */
 export function encodeVaultPath(path: string): string {
@@ -187,847 +134,5 @@ export function decodeVaultPath(encoded: string): string {
   return encoded.split("/").map(decodeURIComponent).join("/");
 }
 
-// ── REST shapes ────────────────────────────────────────────────────────────
-
-export type AgentMode = "live" | "mock" | "off";
-
-export interface HealthResponse {
-  ok: true;
-  version: string;
-  apiVersion: number;
-  vaultName: string;
-  agentMode: AgentMode;
-}
-
-export interface VaultEntry {
-  path: string;
-  kind: "file" | "folder";
-  size?: number;
-  mtime?: number;
-  version?: string;
-}
-
-export interface VaultTreeResponse {
-  vaultName: string;
-  entries: VaultEntry[];
-}
-
-export interface NoteResponse {
-  path: string;
-  content: string;
-  /** Opaque content version (hash). Send back as `baseVersion` for optimistic concurrency. */
-  version: string;
-  mtime: number;
-}
-
-export interface WriteNoteRequest {
-  content: string;
-  /** Version the client edited from. `null` = create (fails if the note exists). Omit to force. */
-  baseVersion?: string | null;
-}
-
-export interface WriteNoteResponse {
-  path: string;
-  version: string;
-  mtime: number;
-}
-
-/** Renames a note, or a folder (moving everything inside it) when `from` is a folder. */
-export interface RenameRequest {
-  from: string;
-  to: string;
-}
-
-export interface FolderRenameResponse {
-  path: string;
-  /** Number of files moved. */
-  moved: number;
-}
-
-/** A renamed note answers like a write; a renamed folder reports how many files moved. */
-export type RenameResponse = WriteNoteResponse | FolderRenameResponse;
-
-export interface CreateFolderRequest {
-  path: string;
-}
-
-/** 201 body of `POST /api/folders`: the normalized folder path. */
-export interface CreateFolderResponse {
-  path: string;
-}
-
-/** Deletes are soft: the note/folder moves into the vault's `.trash/` folder. */
-export interface TrashResponse {
-  ok: true;
-  trashedTo: string;
-}
-
-export interface OkResponse {
-  ok: true;
-}
-
-/**
- * Thread actions (message, cancel, retry) wait briefly for the runtime: 200 when it finished,
- * 202 with `pending: true` when it keeps going in the background (its effects arrive as events).
- */
-export interface ThreadActionResponse {
-  ok: true;
-  pending?: true;
-}
-
-export interface DailyNoteResponse extends NoteResponse {
-  /** Local ISO date (YYYY-MM-DD). */
-  date: string;
-  created: boolean;
-}
-
-export interface SearchHit {
-  path: string;
-  /** `name`: the note's name matched; `content`: a line matched. */
-  kind: "name" | "content";
-  /** 0-based line of a `content` hit (0 for `name` hits). */
-  line: number;
-  preview: string;
-}
-
-export interface SearchResponse {
-  hits: SearchHit[];
-}
-
-export interface SettingsResponse {
-  settings: AppSettings;
-}
-
-/** A deep partial of AppSettings (PATCH semantics); unknown keys are rejected. */
-export type UpdateSettingsRequest = DeepPartial<AppSettings>;
-
-export interface ConnectorStatus {
-  name: string;
-  transport: "stdio" | "http" | "sse";
-  state: "disabled" | "idle" | "connecting" | "connected" | "error";
-  toolCount: number;
-  error?: string;
-}
-
-/** The app macOS attributes the daemon's privacy permissions to. */
-export interface ComputerHostApp {
-  /** As listed in System Settings, e.g. `Daily Do List`, `Terminal`. */
-  name: string;
-  /** The `.app` bundle. */
-  path?: string;
-  bundleId?: string;
-}
-
-/**
- * Computer use on this Mac: the two privacy permissions it needs and whether agents can operate
- * apps in the background (the `ddl-computer` helper).
- */
-export interface ComputerAccess {
-  /** Input and reading other apps' UI. */
-  accessibility: boolean;
-  /** Screenshots. macOS applies a new grant only after the host app restarts. */
-  screenRecording: boolean;
-  /** App control (background, accessibility-based) is available; otherwise screen-level only. */
-  appControl: boolean;
-  /** Absent when it can't be determined. */
-  hostApp?: ComputerHostApp;
-}
-
-export interface ExecutionStatus {
-  provider: string;
-  capabilities: { shell: boolean; browser: boolean; computer: boolean };
-  /** Present where computer use exists (macOS with computer use enabled). */
-  computerAccess?: ComputerAccess;
-}
-
-export interface AgentStatusResponse {
-  mode: AgentMode;
-  enabled: boolean;
-  model: string;
-  running: number;
-  queued: number;
-  pendingApprovals: number;
-  connectors: ConnectorStatus[];
-  execution: ExecutionStatus;
-  /** Present when the agent cannot run (e.g. missing OPENROUTER_API_KEY). */
-  problem?: string;
-  /** Where the agent runs for this device, and who runs it now. */
-  placement?: AgentPlacementStatus;
-  /** This daemon's own readiness to run the agent. */
-  readiness?: AgentReadiness;
-  /** What the orchestrator is doing now, for a client joining mid-turn (then `orchestrator.activity`). */
-  orchestrator?: OrchestratorActivity;
-}
-
-export interface SetAgentEnabledRequest {
-  enabled: boolean;
-}
-
-/** The switch is persisted as `agent.enabled`; the answer is the resulting agent status. */
-export type SetAgentEnabledResponse = AgentStatusResponse;
-
-export interface TaskRecordsResponse {
-  records: TaskAgentRecord[];
-}
-
-export interface ThreadListResponse {
-  threads: ThreadSummary[];
-}
-
-export interface ThreadResponse {
-  thread: Thread;
-  approvals: ApprovalRequest[];
-}
-
-export interface PostMessageRequest {
-  text: string;
-}
-
-export interface ApprovalListResponse {
-  approvals: ApprovalRequest[];
-}
-
-export interface ApprovalResponse {
-  approval: ApprovalRequest;
-}
-
-export interface ConnectorsResponse {
-  connectors: ConnectorStatus[];
-}
-
-export interface RoutineListResponse {
-  /** Sorted by name. */
-  routines: Routine[];
-  /** Starter routines for "New routine". */
-  templates: RoutineTemplate[];
-}
-
-export interface RoutineResponse {
-  routine: Routine;
-}
-
-/** A new routine file, `Routines/<name>.md`. */
-export interface CreateRoutineRequest {
-  /** The file name, without `.md`. */
-  name: string;
-  schedule: string;
-  instructions: string;
-  /** Default `always`. */
-  notify?: RoutineNotify;
-  uses?: RoutineUse[];
-  paused?: boolean;
-}
-
-export interface RoutineRunResponse {
-  routine: Routine;
-  /** The new run's thread. */
-  threadId: string;
-}
-
-export interface ApprovalDecisionRequest {
-  decision: ApprovalDecision;
-  scope?: ApprovalScope;
-  note?: string;
-}
-
-/** `disabled` = no sync target configured. */
-export type SyncState = "idle" | "syncing" | "error" | "disabled";
-
-/** Where the vault syncs: nowhere, another folder, or the sync service (other devices). */
-export type SyncTargetKind = "none" | "local" | "remote";
-
-export interface SyncStatusResponse {
-  state: SyncState;
-  target: SyncTargetKind;
-  /** When the last pass finished (epoch ms), or null before the first one. */
-  lastSyncedAt: number | null;
-  /** Files changed on either side and not synced yet (retried ones included). */
-  pendingChanges: number;
-  /** Conflict copies (vault paths) waiting for the user to resolve them. */
-  conflicts: string[];
-  /** Why the last pass failed, or which files it couldn't sync. */
-  lastError?: string;
-  /** `host[:port]` of the sync server (`remote` only). */
-  remoteHost?: string;
-  /** This device's name as other devices see it (`remote` only). */
-  deviceName?: string;
-}
-
-/** The System Settings privacy panes computer use needs. */
-export type ComputerPermissionPane = "accessibility" | "screenRecording";
-
-export interface ComputerPermissionsOpenRequest {
-  pane: ComputerPermissionPane;
-}
-
-// ── Placement, readiness ───────────────────────────────────────────────────
-
-/**
- * Where this device's agent runs (a device-local setting, never synced):
- * - `this_device`: here; it takes the agent lease over from the always-on machine.
- * - `always_on_machine`: never here; agent routes and events relay to the always-on machine.
- * - `always_on_host`: this is the always-on machine; it runs the agent when no `this_device` does.
- * Without sync a daemon is standalone and runs its own agent whatever the placement.
- */
-export type AgentPlacement = "this_device" | "always_on_machine" | "always_on_host";
-
-export interface AgentRunsOn {
-  deviceId: string;
-  name: string;
-  thisDevice: boolean;
-  /** The holder requested the lease with priority "host". */
-  alwaysOnMachine: boolean;
-}
-
-export type RelayState = "off" | "connecting" | "connected" | "unreachable" | "not_paired";
-
-export interface AgentPlacementStatus {
-  /** The stored choice (see heldHere for when it can't apply). */
-  placement: AgentPlacement;
-  /**
-   * Why the agent is held on this device despite the stored choice: no always-on machine is set
-   * up (`no_machine`) or this device doesn't sync (`no_sync`). The stored choice applies again
-   * once both are set up.
-   */
-  heldHere?: "no_machine" | "no_sync";
-  /** Who runs the agent now (null: nobody, or unknown without sync). */
-  runsOn: AgentRunsOn | null;
-  relay: RelayState;
-  /** Short, human ("Taking over from vm-1…", "Handing the agent to vm-1…"). */
-  note?: string;
-}
-
-export interface AgentReadiness {
-  harness: { kind: AgentHarnessKind; ready: boolean; problem?: string };
-  /** A model credential for the configured harness is present (never the value). */
-  modelCredential: boolean;
-  browser: boolean;
-  computer: "available" | "needs_permissions" | "unsupported";
-  connectors: { configured: number; connected: number };
-}
-
-// ── This daemon's device-local settings ────────────────────────────────────
-
-export interface DeviceSyncSetup {
-  /** null: not syncing with the sync service. */
-  url: string | null;
-  vault: string | null;
-  /** A vault token is saved (the token is never returned). */
-  hasToken: boolean;
-}
-
-export interface DeviceSettingsResponse {
-  device: { id: string; name: string };
-  placement: AgentPlacement;
-  /** Names this daemon answers to besides loopback (e.g. its tailnet name), lowercase. */
-  remoteHosts: string[];
-  sync: DeviceSyncSetup;
-  /** Fields set by environment variables; the UI shows them read-only. */
-  lockedByEnv: Array<"placement" | "remoteHosts" | "sync">;
-}
-
-export interface DeviceSettingsPatch {
-  /** 1–64 characters, trimmed. */
-  name?: string;
-  placement?: AgentPlacement;
-  /** DNS names (optional `:port`), at most 8, no IPs, no scheme or path (see `normalizeRemoteHost`). */
-  remoteHosts?: string[];
-}
-
-export interface DeviceSyncSetupRequest {
-  /** https (plain http only for loopback). */
-  url: string;
-  /** Sync vault id. */
-  vault: string;
-  /** Omit to keep the saved token. Written 0600 to `$DDL_HOME/sync-token`. */
-  token?: string;
-}
-
-/** How a daemon that exits to apply a change comes back: its supervisor (the Mac app) starts it again, or the user does. */
-export type DaemonRestart = "supervisor" | "manual";
-
-export interface DeviceVaultRequest {
-  /** An existing folder: absolute, or starting with `~/`. */
-  path: string;
-}
-
-export interface DeviceVaultResponse {
-  /** The vault this daemon serves (absolute). */
-  path: string;
-  /** `DDL_VAULT` sets it: switching answers 409 `locked_by_env`. */
-  lockedByEnv: boolean;
-  /**
-   * Set when switching: the daemon exits with `RESTART_EXIT_CODE` right after answering, and opens
-   * the new vault when it starts again.
-   */
-  restart?: DaemonRestart;
-}
-
-// ── Importing an Obsidian vault ────────────────────────────────────────────
-
 /** Lists in import reports hold at most this many entries (their `count` is the full number). */
 export const IMPORT_REPORT_LIMIT = 200;
-
-export interface ObsidianImportPreviewRequest {
-  /** The Obsidian vault folder: absolute, or starting with `~/`. Only ever read. */
-  source: string;
-}
-
-export interface ObsidianImportRequest {
-  source: string;
-  /** A new or empty folder, never inside the source. Default: the preview's `defaultDestination`. */
-  destination?: string;
-}
-
-export interface ImportPathList {
-  count: number;
-  /** Vault-relative, sorted; at most `IMPORT_REPORT_LIMIT`. */
-  paths: string[];
-}
-
-export interface ImportMove {
-  from: string;
-  to: string;
-}
-
-export interface ImportMoveList {
-  count: number;
-  /** At most `IMPORT_REPORT_LIMIT`, sorted by `from`. */
-  items: ImportMove[];
-}
-
-export type ImportSkipReason =
-  /** A symlink to something outside the vault (never followed). */
-  | "symlink_outside"
-  /** A symlink to a folder inside the vault (its target is copied where it is). */
-  | "symlink_folder"
-  /** Not a regular file (socket, pipe, device). */
-  | "special_file"
-  | "unreadable"
-  /** The vault's own `.daily-do-list/` folder: the carried-over agent history replaces it. */
-  | "sidecar";
-
-export interface ImportSkipped {
-  path: string;
-  reason: ImportSkipReason;
-}
-
-export interface ImportSkippedList {
-  count: number;
-  items: ImportSkipped[];
-}
-
-export type AttachmentType = "image" | "pdf" | "audio" | "video" | "other";
-
-export interface AttachmentTypeSummary {
-  type: AttachmentType;
-  count: number;
-  bytes: number;
-}
-
-export interface AttachmentSummary {
-  count: number;
-  bytes: number;
-  /** Types that occur, in `AttachmentType` order. */
-  byType: AttachmentTypeSummary[];
-}
-
-export type ObsidianPluginSupport = "supported" | "partial" | "unsupported" | "unknown";
-
-export interface ObsidianPlugin {
-  id: string;
-  /** From the plugin's manifest, when it could be read. */
-  name?: string;
-  support: ObsidianPluginSupport;
-  /** How it fares here, one sentence. */
-  note: string;
-}
-
-/** The editor preferences Obsidian's `app.json` holds that this app imports. */
-export interface ObsidianEditorSettings {
-  vimMode?: boolean;
-  livePreview?: boolean;
-  readableLineLength?: boolean;
-  showLineNumbers?: boolean;
-  spellcheck?: boolean;
-}
-
-export interface ObsidianSettingsFound {
-  /** Config files found, vault-relative (`.obsidian/daily-notes.json`, `.obsidian.vimrc`, …). */
-  files: string[];
-  /** The daily notes Obsidian keeps (its defaults when the plugin is on without a config); null when it keeps none. */
-  dailyNotes: DailyNoteSettings | null;
-  editor: ObsidianEditorSettings;
-  /** A vimrc will be imported with the editor settings. */
-  vimrc: boolean;
-  theme?: ThemePreference;
-}
-
-export interface ObsidianTemplates {
-  /** The templates folder (core Templates, else Templater), vault-relative; null when none is set. */
-  folder: string | null;
-  /** Notes in it. */
-  count: number;
-}
-
-/** Where the new vault's daily-note settings come from. */
-export type DailyNotesSource = "obsidian" | "obsidian_defaults" | "daily_do_list";
-
-export interface CarryOverDailyNote {
-  /** YYYY-MM-DD. */
-  date: string;
-  from: string;
-  to: string;
-  /** Obsidian has a note for this date: it is kept and this one appended under `## From Daily Do List`. */
-  merged: boolean;
-}
-
-export interface CarryOverAgent {
-  threads: number;
-  /** Threads whose task can't be found in the new vault: kept, and marked detached. */
-  detached: number;
-  records: number;
-  approvals: number;
-  /** Routines with scheduler state. */
-  routines: number;
-  /** Daily notes whose task identities carry over. */
-  trackedNotes: number;
-  /** Agent journal files; thread journals get the new note paths and routine ids. */
-  journal: number;
-}
-
-/** What happens to the current vault's notes, routines, drawings and agent history. */
-export interface CarryOverPlan {
-  /** The current vault: left untouched (it's the backup). */
-  vault: string;
-  /** The new vault's daily-note settings. */
-  dailyNotes: DailyNoteSettings;
-  dailyNotesFrom: DailyNotesSource;
-  /** Every other file, at the same path unless it collides (`to` differs, see `collisions`). */
-  notes: ImportMoveList;
-  daily: { count: number; merged: number; items: CarryOverDailyNote[] };
-  /** Files renamed because the Obsidian vault has one at that path: `Name (Daily Do List).md`. */
-  collisions: ImportMoveList;
-  routines: number;
-  drawings: number;
-  agent: CarryOverAgent;
-  /**
-   * Open tasks in Obsidian's daily notes inside the agent's watch window. After the switch the
-   * agent treats them as existing tasks: it acts on them only when `actOnExistingTasks` is on.
-   */
-  watchedOpenTasks: number;
-  actOnExistingTasks: boolean;
-  /** Hidden files and folders of the current vault that stay behind (other than the sidecar and `.trash/`). */
-  leftBehind: ImportPathList;
-}
-
-export interface ObsidianImportPreview {
-  /** The resolved source folder. */
-  source: string;
-  /** Next to the current vault, never inside the source. */
-  defaultDestination: string;
-  /** It has an `.obsidian/` folder. */
-  isObsidianVault: boolean;
-  /** Everything that will be copied, `.obsidian/` and attachments included. */
-  files: number;
-  bytes: number;
-  /** Markdown notes outside hidden folders (drawings not included). */
-  notes: number;
-  folders: number;
-  attachments: AttachmentSummary;
-  settings: ObsidianSettingsFound;
-  templates: ObsidianTemplates;
-  /** Enabled community plugins. */
-  plugins: ObsidianPlugin[];
-  /** Canvas files: copied, not viewable here yet. */
-  canvases: ImportPathList;
-  /** Excalidraw drawings (`*.excalidraw.md`). */
-  drawings: ImportPathList;
-  skipped: ImportSkippedList;
-  carryOver: CarryOverPlan;
-  /** Things to know before importing, one sentence each. */
-  warnings: string[];
-}
-
-export type ObsidianImportJobKind = "import" | "update";
-export type ObsidianImportJobState = "running" | "done" | "failed" | "cancelled";
-export type ObsidianImportPhase = "checking" | "copying" | "carrying_over" | "finishing";
-
-export interface ObsidianImportProgress {
-  files: number;
-  totalFiles: number;
-  bytes: number;
-  totalBytes: number;
-}
-
-export interface ObsidianImportResult {
-  copied: { files: number; bytes: number };
-  skipped: ImportSkippedList;
-  carryOver: CarryOverPlan;
-  /** Vault path of the manifest (`.daily-do-list/import/obsidian.json`). */
-  manifest: string;
-}
-
-export interface ObsidianUpdateReport {
-  /** New in Obsidian: copied. */
-  added: ImportPathList;
-  /** Changed in Obsidian, unchanged here: replaced. */
-  updated: ImportPathList;
-  /** Changed in Obsidian after being deleted here: written back. */
-  restored: ImportPathList;
-  /** Changed on both sides: `from` is kept, the Obsidian version is saved as `to`. */
-  conflicts: ImportMoveList;
-  /** Deleted in Obsidian: kept here (an update never deletes). */
-  deletedInSource: ImportPathList;
-  unchanged: number;
-  skipped: ImportSkippedList;
-}
-
-export interface ObsidianImportJob {
-  id: string;
-  kind: ObsidianImportJobKind;
-  state: ObsidianImportJobState;
-  /** The current phase, or the last one reached. */
-  phase: ObsidianImportPhase;
-  source: string;
-  /** The new vault (`import`), or the vault being updated (`update`). */
-  destination: string;
-  startedAt: number;
-  finishedAt?: number;
-  progress: ObsidianImportProgress;
-  /** Why it failed. */
-  error?: string;
-  /** What an import did (`done`). */
-  result?: ObsidianImportResult;
-  /** What an update did (`done`). */
-  update?: ObsidianUpdateReport;
-}
-
-export interface ObsidianImportJobResponse {
-  job: ObsidianImportJob;
-}
-
-/** Where the vault this daemon serves was imported from (its import manifest). */
-export interface ObsidianImportOrigin {
-  /** The Obsidian vault it was copied from (absolute). */
-  source: string;
-  importedAt: number;
-  /** The last "Update from Obsidian". */
-  updatedAt?: number;
-  /** The vault that was current at the import, left untouched: the backup. */
-  previousVault?: string;
-}
-
-export interface ObsidianImportStatusResponse {
-  /** The running job, or the last one since the daemon started; null when there was none. */
-  job: ObsidianImportJob | null;
-  /** Set when this vault was imported from Obsidian (so it can be updated from there). */
-  imported?: ObsidianImportOrigin;
-}
-
-// ── Pairing (this daemon issuing device credentials) ───────────────────────
-
-export type PairedDeviceKind = "browser" | "app" | "daemon";
-
-export interface PairedDevice {
-  id: string;
-  name: string;
-  kind: PairedDeviceKind;
-  createdAt: number;
-  lastSeenAt: number | null;
-  /** The device making this request. */
-  current?: boolean;
-}
-
-export interface PairingCodeRequest {
-  name?: string;
-}
-
-export interface PairingCodeResponse {
-  /** 8 characters, unambiguous alphabet, shown as XXXX-XXXX; single use. */
-  code: string;
-  expiresAt: number;
-  /** https://<first remote host> for the QR code, or null without remote hosts. */
-  url: string | null;
-}
-
-export interface PairRequest {
-  code: string;
-  name: string;
-  kind: PairedDeviceKind;
-}
-
-export interface PairResponse {
-  device: PairedDevice;
-  /** For "app" and "daemon" kinds; a browser gets an HttpOnly cookie instead. */
-  token?: string;
-}
-
-export interface PairedDevicesResponse {
-  devices: PairedDevice[];
-}
-
-// ── The always-on machine, from this device's side ─────────────────────────
-
-export interface MachineStatusResponse {
-  machine: AlwaysOnMachine | null;
-  /** This device holds a credential for it ($DDL_HOME/machine-token). */
-  paired: boolean;
-  /** null: not checked yet, or no machine. */
-  reachable: boolean | null;
-  checkedAt: number | null;
-  version?: string;
-  /** As the machine reports it. */
-  agent?: { runsOn: AgentRunsOn | null; problem?: string };
-  readiness?: AgentReadiness;
-  error?: string;
-}
-
-export interface MachinePairRequest {
-  /** `https://<tailnet name>[:port]`, no path, query or credentials (see `normalizeMachineUrl`). */
-  url: string;
-  code: string;
-  /** Default: the first label of the host. */
-  name?: string;
-}
-
-// ── Errors ────────────────────────────────────────────────────────────────
-
-/**
- * Every `error` code the daemon answers with. Clients must treat a code they don't know like any
- * other failure with that HTTP status (codes may be added without an API version bump).
- */
-export type ApiErrorCode =
-  /** 400: the body is not JSON. */
-  | "invalid_json"
-  /** 400: body, query or route parameter failed validation. */
-  | "invalid_request"
-  /** 400: a vault path is malformed, hidden (dot-files, sidecar) or not a text note. */
-  | "invalid_path"
-  /** 400: the stored settings make the request impossible (e.g. daily notes in a hidden folder). */
-  | "invalid_settings"
-  /** 401: missing or wrong bearer token. */
-  | "unauthorized"
-  /** 401: a pairing code was wrong, expired or already used (here, or on the always-on machine). */
-  | "pairing_rejected"
-  /** 403: the Host header is not a loopback address of this daemon (DNS rebinding). */
-  | "forbidden_host"
-  /** 403: the Origin header is not allowed (CSRF). */
-  | "forbidden_origin"
-  /** 403: only this machine may do this (importing a folder, switching vaults), not a paired device. */
-  | "forbidden_device"
-  /** 404: unknown route, or the addressed note/folder/thread/approval/artifact doesn't exist. */
-  | "not_found"
-  /** 409: optimistic-concurrency conflict, existing target, or an approval already decided. */
-  | "conflict"
-  /** 409: a device setting is set by an environment variable (see `lockedByEnv`). */
-  | "locked_by_env"
-  /** 413: request body over 5 MB. */
-  | "payload_too_large"
-  /** 426: `/ws` requested without a WebSocket upgrade. */
-  | "upgrade_required"
-  /** 429: too many pairing attempts, or too many pairing codes outstanding. */
-  | "rate_limited"
-  /** 4xx/5xx raised by the HTTP framework itself. */
-  | "http_error"
-  /** 500: an agent action failed unexpectedly. */
-  | "agent_error"
-  /** 500: unexpected daemon failure. */
-  | "internal_error"
-  /** 502: the always-on machine didn't answer (network, TLS or timeout). */
-  | "machine_unreachable"
-  /** 503: the agent runtime can't act right now (mode off, missing API key, safety system down). */
-  | "agent_unavailable";
-
-export interface ApiErrorBody {
-  error: ApiErrorCode;
-  message?: string;
-}
-
-/** 409 body of a note write or rename whose target changed; `current` is null if it's gone. */
-export interface ConflictResponse extends ApiErrorBody {
-  error: "conflict";
-  current: NoteResponse | null;
-}
-
-/** 409 body of `POST /api/approvals/:id` when the approval is no longer pending. */
-export interface ApprovalConflictResponse extends ApiErrorBody {
-  error: "conflict";
-  approval: ApprovalRequest;
-}
-
-// ── WebSocket events ───────────────────────────────────────────────────────
-
-export type VaultChangeOrigin = "external" | "client" | "agent" | "sync";
-
-export interface VaultChange {
-  path: string;
-  kind: "created" | "modified" | "deleted";
-  version?: string;
-}
-
-/** Machine-readable reason of a server `error` event. */
-export type WsErrorCode =
-  /** The message was not JSON. */
-  | "invalid_json"
-  /** JSON, but not a valid ClientEvent. */
-  | "invalid_message"
-  /** Binary frames are not part of the protocol. */
-  | "binary_unsupported"
-  | "too_many_subscriptions"
-  | "subscribe_failed"
-  /** `hello.apiVersion` is incompatible; the daemon closes with `WS_CLOSE_CODES.incompatibleApiVersion`. */
-  | "incompatible_api_version";
-
-export type ServerEvent =
-  /** First event on every connection. */
-  | { type: "hello"; serverVersion: string; apiVersion: number }
-  | {
-      type: "vault.changed";
-      changes: VaultChange[];
-      origin: VaultChangeOrigin;
-      /** Client that caused the change (so it can ignore its own echo). */
-      clientId?: string;
-    }
-  | { type: "task.records"; notePath: string; records: TaskAgentRecord[] }
-  | { type: "task.record"; record: TaskAgentRecord }
-  | { type: "thread.upsert"; thread: ThreadSummary }
-  | { type: "thread.message"; threadId: string; message: ThreadMessage }
-  | { type: "thread.delta"; threadId: string; messageId: string; delta: string }
-  | { type: "approval.upsert"; approval: ApprovalRequest }
-  | { type: "agent.status"; status: AgentStatusResponse }
-  /** What the orchestrator is doing, whenever that changes (coalesced; never per keystroke). */
-  | { type: "orchestrator.activity"; activity: OrchestratorActivity }
-  | ({ type: "surface.frame" } & SurfaceFrame)
-  | { type: "settings.changed"; settings: AppSettings }
-  /** Every routine, whenever one changed (its file, its schedule, its last run). */
-  | { type: "routines.changed"; routines: Routine[] }
-  /** A run finished and its routine's `notify` says to tell the user. */
-  | { type: "routine.notification"; notification: RoutineNotification }
-  /** An import or update from Obsidian progressed, changed phase, or ended (`job.state`). */
-  | { type: "import.progress"; job: ObsidianImportJob }
-  | { type: "error"; message: string; code?: WsErrorCode };
-
-export type ClientEvent =
-  | {
-      type: "hello";
-      clientId: string;
-      /** API_VERSION the client was built against. Absent = a client from before the handshake (1). */
-      apiVersion?: number;
-      /** Client build for diagnostics, e.g. `web/0.1.0`. */
-      clientVersion?: string;
-    }
-  | { type: "ping" }
-  | { type: "surface.subscribe"; threadId: string; surface: SurfaceKind }
-  | { type: "surface.unsubscribe"; threadId: string; surface: SurfaceKind }
-  | { type: "thread.read"; threadId: string }
-  /** Where the user is typing, so the orchestrator never jumps on a half-written task. */
-  | { type: "editor.activity"; notePath: string; line: number };
-
-export type ServerEventType = ServerEvent["type"];
-export type ServerEventOf<T extends ServerEventType> = Extract<ServerEvent, { type: T }>;
-/** A server event's fields without its `type` tag. */
-export type ServerEventPayload<T extends ServerEventType> = Omit<ServerEventOf<T>, "type">;
-
-export type ClientEventType = ClientEvent["type"];
-export type ClientEventOf<T extends ClientEventType> = Extract<ClientEvent, { type: T }>;

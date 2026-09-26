@@ -1,4 +1,4 @@
-import { type ArtifactMeta, extname } from "@ddl/core";
+import { API_PATHS, type ArtifactMeta, extname } from "@ddl/core";
 import type { Hono } from "hono";
 import type { AppContext } from "../context";
 import { ApiError } from "../errors";
@@ -27,7 +27,7 @@ const ARTIFACT_CSP =
   "sandbox; default-src 'none'; img-src data: blob:; media-src data: blob:; style-src 'unsafe-inline'";
 
 export function registerArtifactRoutes(app: Hono, ctx: AppContext): void {
-  app.get("/api/artifacts/:threadId/:artifactId", async (c) => {
+  app.get(API_PATHS.artifact, async (c) => {
     const artifact = await ctx.runtime.readArtifact(
       idParam(c, "threadId"),
       idParam(c, "artifactId"),

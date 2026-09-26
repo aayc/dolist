@@ -14,7 +14,7 @@ import type {
   ObsidianImportPreview,
   ObsidianImportStatusResponse,
 } from "@ddl/core";
-import { API_ROUTES } from "@ddl/core";
+import { API_PATHS } from "@ddl/core";
 import type { Context, Hono } from "hono";
 import type { AppContext } from "../context";
 import { ApiError } from "../errors";
@@ -32,27 +32,27 @@ function thisMachineOnly(c: Context): void {
 }
 
 export function registerImportRoutes(app: Hono, ctx: AppContext): void {
-  app.get(API_ROUTES.deviceVault, (c) => {
+  app.get(API_PATHS.deviceVault, (c) => {
     thisMachineOnly(c);
     const body: DeviceVaultResponse = ctx.vault.response();
     return c.json(body);
   });
 
-  app.put(API_ROUTES.deviceVault, async (c) => {
+  app.put(API_PATHS.deviceVault, async (c) => {
     thisMachineOnly(c);
     const { path } = await readJson(c, DeviceVaultRequestSchema);
     const body: DeviceVaultResponse = await ctx.vault.switchTo(path);
     return c.json(body);
   });
 
-  app.post(API_ROUTES.importObsidianPreview, async (c) => {
+  app.post(API_PATHS.importObsidianPreview, async (c) => {
     thisMachineOnly(c);
     const { source } = await readJson(c, ObsidianImportPreviewRequestSchema);
     const body: ObsidianImportPreview = await ctx.imports.preview(source);
     return c.json(body);
   });
 
-  app.get(API_ROUTES.importObsidian, async (c) => {
+  app.get(API_PATHS.importObsidian, async (c) => {
     thisMachineOnly(c);
     const imported = await ctx.imports.origin();
     const body: ObsidianImportStatusResponse = {
@@ -62,20 +62,20 @@ export function registerImportRoutes(app: Hono, ctx: AppContext): void {
     return c.json(body);
   });
 
-  app.post(API_ROUTES.importObsidian, async (c) => {
+  app.post(API_PATHS.importObsidian, async (c) => {
     thisMachineOnly(c);
     const request = await readJson(c, ObsidianImportRequestSchema);
     const body: ObsidianImportJobResponse = { job: await ctx.imports.startImport(request) };
     return c.json(body, 202);
   });
 
-  app.post(API_ROUTES.importObsidianCancel, async (c) => {
+  app.post(API_PATHS.importObsidianCancel, async (c) => {
     thisMachineOnly(c);
     const body: ObsidianImportJobResponse = { job: await ctx.imports.cancel() };
     return c.json(body);
   });
 
-  app.post(API_ROUTES.importObsidianUpdate, async (c) => {
+  app.post(API_PATHS.importObsidianUpdate, async (c) => {
     thisMachineOnly(c);
     const body: ObsidianImportJobResponse = { job: await ctx.imports.startUpdate() };
     return c.json(body, 202);

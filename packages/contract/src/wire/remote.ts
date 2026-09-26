@@ -28,7 +28,7 @@ import { named } from "./registry";
 import { AgentHarnessKindSchema, AlwaysOnMachineSchema } from "./settings";
 
 /** Device ids of the sync service (`dev_…`): 1–64 URL-safe characters. */
-const SyncDeviceIdSchema = z
+export const SyncDeviceIdSchema = z
   .string()
   .regex(SYNC_ID_PATTERN, "must be 1-64 characters of A-Z a-z 0-9 _ -")
   .describe("Device id (as the sync service knows it).");
@@ -105,7 +105,7 @@ export const AgentReadinessSchema = named(
 // ── This daemon's device-local settings ──────────────────────────────────
 
 /** A remote host as the daemon reports it: `host[:port]`, lowercase (`normalizeRemoteHost`). */
-const RemoteHostSchema = z
+export const RemoteHostSchema = z
   .string()
   .min(1)
   .max(REMOTE_LIMITS.hostnameLength + 6)
@@ -113,7 +113,7 @@ const RemoteHostSchema = z
   .describe("`host[:port]`, lowercase DNS name (never an IP address or a loopback name).");
 
 /** A remote host as a client sends it: trimmed and lowercased, then validated. */
-const RemoteHostInputSchema = z
+export const RemoteHostInputSchema = z
   .string()
   .max(REMOTE_LIMITS.hostnameLength + 16)
   .trim()
@@ -198,7 +198,7 @@ export const DeviceSyncSetupRequestSchema = named(
 // ── Pairing ──────────────────────────────────────────────────────────────
 
 /** A pairing code as a user types it: `XXXX-XXXX`, any case, spaces and dashes ignored. */
-const PairingCodeInputSchema = z
+export const PairingCodeInputSchema = z
   .string()
   .min(1)
   .max(32)

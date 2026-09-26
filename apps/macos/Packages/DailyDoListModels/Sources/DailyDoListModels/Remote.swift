@@ -1,7 +1,7 @@
 import Foundation
 
 // Swift mirror of the placement, device settings, pairing and always-on machine shapes of
-// `packages/core/src/protocol.ts`. Enums a newer daemon may extend are `WireEnum`s.
+// `packages/contract/src/wire`. Enums a newer daemon may extend are `WireEnum`s.
 
 // MARK: - Placement, readiness
 

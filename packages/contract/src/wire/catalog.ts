@@ -1,186 +1,36 @@
+import { z } from "zod";
 import * as domain from "./domain";
 import * as errors from "./errors";
 import * as events from "./events";
 import * as imports from "./imports";
+import { wireRegistry } from "./registry";
 import * as remote from "./remote";
 import * as rest from "./rest";
 import * as settings from "./settings";
 
-/** Every named wire schema by name (the `$defs` of the JSON Schema export). */
-export const WIRE_SCHEMAS = {
-  // Domain
-  TaskAgentStatus: domain.TaskAgentStatusSchema,
-  TaskAgentRecord: domain.TaskAgentRecordSchema,
-  RiskLevel: domain.RiskLevelSchema,
-  ActionCategory: domain.ActionCategorySchema,
-  ApprovalScope: domain.ApprovalScopeSchema,
-  ApprovalDecision: domain.ApprovalDecisionSchema,
-  ApprovalStatus: domain.ApprovalStatusSchema,
-  ApprovalRequest: domain.ApprovalRequestSchema,
-  ArtifactKind: domain.ArtifactKindSchema,
-  ArtifactMeta: domain.ArtifactMetaSchema,
-  MessageAuthor: domain.MessageAuthorSchema,
-  TextMessage: domain.TextMessageSchema,
-  ToolCallStatus: domain.ToolCallStatusSchema,
-  ToolCallMessage: domain.ToolCallMessageSchema,
-  ApprovalMessage: domain.ApprovalMessageSchema,
-  ArtifactMessage: domain.ArtifactMessageSchema,
-  StatusMessage: domain.StatusMessageSchema,
-  ThreadMessage: domain.ThreadMessageSchema,
-  SurfaceKind: domain.SurfaceKindSchema,
-  OrchestratorThreadId: domain.OrchestratorThreadIdSchema,
-  OrchestratorPhase: domain.OrchestratorPhaseSchema,
-  OrchestratorTriggerKind: domain.OrchestratorTriggerKindSchema,
-  OrchestratorTrigger: domain.OrchestratorTriggerSchema,
-  OrchestratorOutcomeKind: domain.OrchestratorOutcomeKindSchema,
-  OrchestratorOutcome: domain.OrchestratorOutcomeSchema,
-  OrchestratorActivity: domain.OrchestratorActivitySchema,
-  Thread: domain.ThreadSchema,
-  CitedSource: domain.CitedSourceSchema,
-  ThreadSummary: domain.ThreadSummarySchema,
-  RoutineNotify: domain.RoutineNotifySchema,
-  RoutineUse: domain.RoutineUseSchema,
-  RoutineRunTrigger: domain.RoutineRunTriggerSchema,
-  RoutineRun: domain.RoutineRunSchema,
-  Routine: domain.RoutineSchema,
-  RoutineTemplate: domain.RoutineTemplateSchema,
-  RoutineNotification: domain.RoutineNotificationSchema,
-  SurfaceFrameAction: domain.SurfaceFrameActionSchema,
-  SurfaceFrame: domain.SurfaceFrameSchema,
-  // Settings
-  ThemePreference: settings.ThemePreferenceSchema,
-  EditorSettings: settings.EditorSettingsSchema,
-  DailyNoteSettings: settings.DailyNoteSettingsSchema,
-  WeeklyNoteSettings: settings.WeeklyNoteSettingsSchema,
-  AgentWatchWindow: settings.AgentWatchWindowSchema,
-  AgentHarnessKind: settings.AgentHarnessKindSchema,
-  ApprovalPolicy: settings.ApprovalPolicySchema,
-  AgentSettings: settings.AgentSettingsSchema,
-  AlwaysOnMachine: settings.AlwaysOnMachineSchema,
-  RemoteSettings: settings.RemoteSettingsSchema,
-  AppSettings: settings.AppSettingsSchema,
-  UpdateSettingsRequest: settings.UpdateSettingsRequestSchema,
-  // REST
-  AgentMode: rest.AgentModeSchema,
-  HealthResponse: rest.HealthResponseSchema,
-  VaultEntry: rest.VaultEntrySchema,
-  VaultTreeResponse: rest.VaultTreeResponseSchema,
-  NoteResponse: rest.NoteResponseSchema,
-  WriteNoteRequest: rest.WriteNoteRequestSchema,
-  WriteNoteResponse: rest.WriteNoteResponseSchema,
-  RenameRequest: rest.RenameRequestSchema,
-  FolderRenameResponse: rest.FolderRenameResponseSchema,
-  RenameResponse: rest.RenameResponseSchema,
-  CreateFolderRequest: rest.CreateFolderRequestSchema,
-  CreateFolderResponse: rest.CreateFolderResponseSchema,
-  TrashResponse: rest.TrashResponseSchema,
-  OkResponse: rest.OkResponseSchema,
-  ThreadActionResponse: rest.ThreadActionResponseSchema,
-  DailyNoteResponse: rest.DailyNoteResponseSchema,
-  SearchHit: rest.SearchHitSchema,
-  SearchResponse: rest.SearchResponseSchema,
-  SettingsResponse: rest.SettingsResponseSchema,
-  ConnectorStatus: rest.ConnectorStatusSchema,
-  ComputerHostApp: rest.ComputerHostAppSchema,
-  ComputerAccess: rest.ComputerAccessSchema,
-  ExecutionStatus: rest.ExecutionStatusSchema,
-  AgentStatusResponse: rest.AgentStatusResponseSchema,
-  SetAgentEnabledRequest: rest.SetAgentEnabledRequestSchema,
-  TaskRecordsResponse: rest.TaskRecordsResponseSchema,
-  ThreadListResponse: rest.ThreadListResponseSchema,
-  ThreadResponse: rest.ThreadResponseSchema,
-  PostMessageRequest: rest.PostMessageRequestSchema,
-  ApprovalListResponse: rest.ApprovalListResponseSchema,
-  ApprovalResponse: rest.ApprovalResponseSchema,
-  ApprovalDecisionRequest: rest.ApprovalDecisionRequestSchema,
-  ConnectorsResponse: rest.ConnectorsResponseSchema,
-  RoutineListResponse: rest.RoutineListResponseSchema,
-  RoutineResponse: rest.RoutineResponseSchema,
-  CreateRoutineRequest: rest.CreateRoutineRequestSchema,
-  RoutineRunResponse: rest.RoutineRunResponseSchema,
-  SyncState: rest.SyncStateSchema,
-  SyncTargetKind: rest.SyncTargetKindSchema,
-  SyncStatusResponse: rest.SyncStatusResponseSchema,
-  ComputerPermissionPane: rest.ComputerPermissionPaneSchema,
-  ComputerPermissionsOpenRequest: rest.ComputerPermissionsOpenRequestSchema,
-  // Placement, device settings, pairing, the always-on machine
-  AgentPlacement: remote.AgentPlacementSchema,
-  AgentRunsOn: remote.AgentRunsOnSchema,
-  RelayState: remote.RelayStateSchema,
-  AgentPlacementStatus: remote.AgentPlacementStatusSchema,
-  AgentReadiness: remote.AgentReadinessSchema,
-  DeviceSyncSetup: remote.DeviceSyncSetupSchema,
-  DeviceSettingsResponse: remote.DeviceSettingsResponseSchema,
-  DeviceSettingsPatch: remote.DeviceSettingsPatchSchema,
-  DeviceSyncSetupRequest: remote.DeviceSyncSetupRequestSchema,
-  PairedDeviceKind: remote.PairedDeviceKindSchema,
-  PairedDevice: remote.PairedDeviceSchema,
-  PairingCodeRequest: remote.PairingCodeRequestSchema,
-  PairingCodeResponse: remote.PairingCodeResponseSchema,
-  PairRequest: remote.PairRequestSchema,
-  PairResponse: remote.PairResponseSchema,
-  PairedDevicesResponse: remote.PairedDevicesResponseSchema,
-  MachineStatusResponse: remote.MachineStatusResponseSchema,
-  MachinePairRequest: remote.MachinePairRequestSchema,
-  // Switching vaults, importing from Obsidian
-  DaemonRestart: imports.DaemonRestartSchema,
-  DeviceVaultRequest: imports.DeviceVaultRequestSchema,
-  DeviceVaultResponse: imports.DeviceVaultResponseSchema,
-  ImportPathList: imports.ImportPathListSchema,
-  ImportMove: imports.ImportMoveSchema,
-  ImportMoveList: imports.ImportMoveListSchema,
-  ImportSkipReason: imports.ImportSkipReasonSchema,
-  ImportSkippedList: imports.ImportSkippedListSchema,
-  AttachmentType: imports.AttachmentTypeSchema,
-  AttachmentSummary: imports.AttachmentSummarySchema,
-  ObsidianPluginSupport: imports.ObsidianPluginSupportSchema,
-  ObsidianPlugin: imports.ObsidianPluginSchema,
-  ObsidianSettingsFound: imports.ObsidianSettingsFoundSchema,
-  DailyNotesSource: imports.DailyNotesSourceSchema,
-  CarryOverPlan: imports.CarryOverPlanSchema,
-  ObsidianImportPreviewRequest: imports.ObsidianImportPreviewRequestSchema,
-  ObsidianImportPreview: imports.ObsidianImportPreviewSchema,
-  ObsidianImportRequest: imports.ObsidianImportRequestSchema,
-  ObsidianImportResult: imports.ObsidianImportResultSchema,
-  ObsidianUpdateReport: imports.ObsidianUpdateReportSchema,
-  ObsidianImportJob: imports.ObsidianImportJobSchema,
-  ObsidianImportJobResponse: imports.ObsidianImportJobResponseSchema,
-  ObsidianImportOrigin: imports.ObsidianImportOriginSchema,
-  ObsidianImportStatusResponse: imports.ObsidianImportStatusResponseSchema,
-  // Errors
-  ApiErrorCode: errors.ApiErrorCodeSchema,
-  ApiErrorBody: errors.ApiErrorBodySchema,
-  ConflictResponse: errors.ConflictResponseSchema,
-  ApprovalConflictResponse: errors.ApprovalConflictResponseSchema,
-  // WebSocket
-  VaultChangeOrigin: events.VaultChangeOriginSchema,
-  VaultChange: events.VaultChangeSchema,
-  WsErrorCode: events.WsErrorCodeSchema,
-  ServerHelloEvent: events.ServerHelloEventSchema,
-  VaultChangedEvent: events.VaultChangedEventSchema,
-  TaskRecordsEvent: events.TaskRecordsEventSchema,
-  TaskRecordEvent: events.TaskRecordEventSchema,
-  ThreadUpsertEvent: events.ThreadUpsertEventSchema,
-  ThreadMessageEvent: events.ThreadMessageEventSchema,
-  ThreadDeltaEvent: events.ThreadDeltaEventSchema,
-  ApprovalUpsertEvent: events.ApprovalUpsertEventSchema,
-  AgentStatusEvent: events.AgentStatusEventSchema,
-  OrchestratorActivityEvent: events.OrchestratorActivityEventSchema,
-  SurfaceFrameEvent: events.SurfaceFrameEventSchema,
-  SettingsChangedEvent: events.SettingsChangedEventSchema,
-  RoutinesChangedEvent: events.RoutinesChangedEventSchema,
-  RoutineNotificationEvent: events.RoutineNotificationEventSchema,
-  ImportProgressEvent: events.ImportProgressEventSchema,
-  ServerErrorEvent: events.ServerErrorEventSchema,
-  ServerEvent: events.ServerEventSchema,
-  ClientHelloEvent: events.ClientHelloEventSchema,
-  ClientPingEvent: events.ClientPingEventSchema,
-  SurfaceSubscribeEvent: events.SurfaceSubscribeEventSchema,
-  SurfaceUnsubscribeEvent: events.SurfaceUnsubscribeEventSchema,
-  ThreadReadEvent: events.ThreadReadEventSchema,
-  EditorActivityEvent: events.EditorActivityEventSchema,
-  ClientEvent: events.ClientEventSchema,
-} as const;
+type Modules = typeof domain &
+  typeof errors &
+  typeof events &
+  typeof imports &
+  typeof remote &
+  typeof rest &
+  typeof settings;
+
+type Catalog = {
+  [K in keyof Modules as Modules[K] extends { readonly "~wireId": infer Id extends string }
+    ? Id
+    : never]: Modules[K];
+};
+
+/** Every named wire schema by name (the `$defs` of the JSON Schema export), from the exports. */
+export const WIRE_SCHEMAS = Object.fromEntries(
+  [domain, errors, events, imports, remote, rest, settings]
+    .flatMap((module) => Object.values(module) as unknown[])
+    .flatMap((value) => {
+      const id = value instanceof z.ZodType ? wireRegistry.get(value)?.id : undefined;
+      return id === undefined ? [] : [[id, value] as const];
+    }),
+) as unknown as Catalog;
 
 export type WireSchemaName = keyof typeof WIRE_SCHEMAS;
 

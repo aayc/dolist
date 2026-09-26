@@ -1,4 +1,4 @@
-import { API_ROUTES, type AppSettings, type DeepPartial, type SettingsResponse } from "@ddl/core";
+import { API_PATHS, type AppSettings, type DeepPartial, type SettingsResponse } from "@ddl/core";
 import type { Hono } from "hono";
 import type { AppContext } from "../context";
 import { errorMessage } from "../errors";
@@ -6,13 +6,13 @@ import { readJson } from "../http-utils";
 import { SettingsPatchSchema } from "../settings-schema";
 
 export function registerSettingsRoutes(app: Hono, ctx: AppContext): void {
-  app.get(API_ROUTES.settings, (c) => {
+  app.get(API_PATHS.settings, (c) => {
     const body: SettingsResponse = { settings: ctx.settings.get() };
     return c.json(body);
   });
 
   // PUT with a deep partial (PATCH semantics); PATCH is accepted as an alias.
-  app.on(["PUT", "PATCH"], API_ROUTES.settings, async (c) => {
+  app.on(["PUT", "PATCH"], API_PATHS.settings, async (c) => {
     const patch = await readJson(c, SettingsPatchSchema);
     const body: SettingsResponse = { settings: await applySettings(ctx, patch) };
     return c.json(body);
