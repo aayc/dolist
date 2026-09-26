@@ -1,11 +1,7 @@
+import { onNextFrame } from "../../lib/frame-loop";
 import { useActivityStore } from "../../state/activity-store";
 import { placeChips } from "./activity-chips";
 import type { EditorController } from "./editor-controller";
-
-const nextFrame: (cb: () => void) => void =
-  typeof requestAnimationFrame === "function"
-    ? (cb) => requestAnimationFrame(() => cb())
-    : (cb) => setTimeout(cb, 16);
 
 /**
  * Keeps the editor's activity chips in step with what the orchestrator is doing: recomputes on the
@@ -16,7 +12,7 @@ const nextFrame: (cb: () => void) => void =
 export class ActivitySync {
   private readonly editor: EditorController;
   private activePath: string | null = null;
-  private framePending = false;
+  private readonly scheduleFrame = onNextFrame(() => this.recompute());
   private readonly unsubscribe: () => void;
 
   constructor(editor: EditorController) {
@@ -51,14 +47,5 @@ export class ActivitySync {
 
   dispose(): void {
     this.unsubscribe();
-  }
-
-  private scheduleFrame(): void {
-    if (this.framePending) return;
-    this.framePending = true;
-    nextFrame(() => {
-      this.framePending = false;
-      this.recompute();
-    });
   }
 }
