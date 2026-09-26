@@ -234,8 +234,10 @@ describe("two daemons sharing a vault through the sync service", {
         (await get<SettingsResponse>(laptop, API_ROUTES.settings)).body.settings.remote,
       ).toEqual({ alwaysOnMachine: machine }),
     );
-    await eventually(async () =>
-      expect((await agentStatus(laptop)).placement).toEqual({
+    // The placement and the problem come from different sources and can take a moment to agree.
+    await eventually(async () => {
+      const status = await agentStatus(laptop);
+      expect(status.placement).toEqual({
         placement: "this_device",
         runsOn: {
           deviceId: "dev_laptop",
@@ -244,9 +246,9 @@ describe("two daemons sharing a vault through the sync service", {
           alwaysOnMachine: false,
         },
         relay: "off",
-      }),
-    );
-    expect(await agentProblem(laptop)).toBeUndefined();
+      });
+      expect(status.problem).toBeUndefined();
+    });
     await eventually(async () =>
       expect(await agentStatus(vm)).toMatchObject({
         problem: "The agent is running on Laptop.",
