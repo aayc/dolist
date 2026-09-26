@@ -233,7 +233,9 @@ struct PreferencesTests {
       defaults: defaults, environment: ["DDL_HOME": "/opt/ddl-test-home", "DDL_PORT": "7444"])
     #expect(preferences.launchConfiguration.home.path == "/opt/ddl-test-home")
     #expect(preferences.launchConfiguration.port == 7444)
+    #expect(preferences.standardPort == 7444)
     preferences.managedPortOverride = 7555
+    #expect(preferences.standardPort == 7444, "the placeholder is the port without an override")
     preferences.agentMode = .mock
     preferences.vaultPath = "/opt/ddl-test-vault"
     preferences.lastOpenTabs = ["a.md"]

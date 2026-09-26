@@ -1,4 +1,3 @@
-import AppKit
 import DailyDoListClient
 import DailyDoListDomain
 import DailyDoListModels
@@ -180,7 +179,7 @@ extension Workspace {
 
   func revealInFinder(_ path: String) {
     guard let url = localURL(for: path) else { return }
-    NSWorkspace.shared.activateFileViewerSelecting([url])
+    showInFinder?(url)
   }
 
   func localURL(for path: String) -> URL? {
