@@ -228,12 +228,13 @@ VIM_VECTORS_FILTER=viewport/ VIM_VECTORS_VERBOSE=1 apps/macos/scripts/test.sh Da
   `VimTextBuffer.vectorHost(_:)`. `VectorReplayTests` runs it on `VimTextBuffer`, and
   `DailyDoListEditor` runs it on the real Mac editor. It uses `package` access to a few session
   internals (`Support/ReplaySupport.swift`).
-- **Upstream** (`Upstream/`): vim.js's own `vim_test.js`, ported. The table-driven helpers
-  (`testMotion`, `testJumplist`, `testEdit`, `testSelection`, `testSubstitute`,
-  `testSubstituteConfirm`) are generated from the upstream source; 382 `testVim` cases are
-  translated statement by statement and 28 more by hand. Left out: tests that need a language
-  mode, soft wrapping, CodeMirror 5 metrics or the upstream page's DOM (listed at the top of
-  `UpstreamVimTests.swift`).
+- **Upstream** (`Upstream/`): vim.js's own `vim_test.js` is recorded in the vectors (the 647
+  `upstream/` cases above). Ported here are only the 27 of its tests a vector can't express: the
+  "recording @q" status, the search highlight, 'langmap' translating typed keys, an arrow key in
+  insert mode, defined options and ex commands, the mode and keypress callbacks, `:write`,
+  `handleKey`'s result and an edit inside a vim operation (each file's header says which).
+  Left out: tests that need a language mode, soft wrapping, CodeMirror 5 metrics or the upstream
+  page's DOM (listed at the top of `UpstreamVimTests.swift`).
 - **Behavior** (`UnicodeBehaviorTests`, `EditorBehaviorTests`): Unicode columns, undo grouping,
   multiple selections, replace mode, marks through edits, multiline search, ex ranges and their
   error messages, with expected states recorded from the vectors' Chromium oracle.
