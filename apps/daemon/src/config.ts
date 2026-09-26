@@ -3,6 +3,7 @@ import { homedir as osHomedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExecutionConfig } from "@ddl/agent";
+import { CONNECTORS_CONFIG_FILE } from "@ddl/connectors/config";
 import {
   type AgentMode,
   type AgentPlacement,
@@ -23,7 +24,6 @@ import { InvalidRemoteHostsError, normalizeRemoteHosts } from "./remote-hosts";
 
 export const DEFAULT_PORT = 7331;
 export const CONFIG_FILE = "config.json";
-export const MCP_CONFIG_FILE = "mcp.json";
 export const TOKEN_FILE = "daemon-token";
 /** The sync service's vault token (mode 0600). Never in config.json, never in the vault. */
 export const SYNC_TOKEN_FILE = "sync-token";
@@ -293,7 +293,7 @@ export function loadConfig(options: LoadConfigOptions = {}): DaemonConfig {
     logLevel:
       parseEnumEnv("DDL_LOG_LEVEL", env.DDL_LOG_LEVEL, LOG_LEVELS) ?? file.logLevel ?? "info",
     configPath,
-    mcpConfigPath: join(home, MCP_CONFIG_FILE),
+    mcpConfigPath: join(home, CONNECTORS_CONFIG_FILE),
     tokenPath: join(home, TOKEN_FILE),
     syncTokenPath: join(home, SYNC_TOKEN_FILE),
     devicePath: join(home, DEVICE_FILE),

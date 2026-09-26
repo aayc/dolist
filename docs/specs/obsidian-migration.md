@@ -1,5 +1,8 @@
 # Spec: moving from Obsidian
 
+Status: M (the merge race, `6750f36`) and I0/I1 (Import from Obsidian, `e2fd3ce`) built; B0 and P
+not started.
+
 Read `AGENTS.md` first (invariants: plain files, soft deletes, agents never silently change the
 user's words, time is local, wire changes in core + contract + Swift together, the keystroke
 path). Related: `docs/SYNC.md`, `docs/DATA_FORMATS.md`, `packages/editor/README.md`,
@@ -44,9 +47,10 @@ property test: an editor that has no unsaved typing never writes content the vau
     the Obsidian note is kept and the Daily Do List note's content is appended under a
     `## From Daily Do List` heading (nothing is dropped);
   - `Routines/` and drawings as they are;
-  - the agent sidecar (`.daily-do-list/`): threads, task records, approvals and routines state
-    with note paths (and task lines, where daily notes merged) remapped through core's task
-    parser; a task that can't be matched keeps its thread, marked detached;
+  - the agent sidecar (`.daily-do-list/`): threads (snapshots and journals), task records,
+    approvals and routines state with note paths (and task lines, where daily notes merged)
+    remapped through core's task parser; a task that can't be matched keeps its thread, marked
+    detached;
   - settings: agent settings from Daily Do List, daily-note and editor settings from Obsidian.
   The current vault is left untouched (it's the backup), and the import writes a manifest
   (`.daily-do-list/import/obsidian.json`: source, time, a hash per copied file).

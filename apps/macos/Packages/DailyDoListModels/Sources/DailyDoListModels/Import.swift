@@ -299,7 +299,7 @@ public struct CarryOverAgent: Codable, Hashable, Sendable {
   public var routines: Int
   /// Daily notes whose task identities carry over.
   public var trackedNotes: Int
-  /// Agent journal files, copied as they are.
+  /// Agent journal files; thread journals get the new note paths and routine ids.
   public var journal: Int
 
   public init(

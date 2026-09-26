@@ -221,16 +221,3 @@ export const LONG = doc(
   ),
   { top: [0, 0], middle: [30, 5], bottom: [59, 0], "screen-2": [25, 3] },
 );
-
-export const MOTION_DOCS: readonly Doc[] = [
-  WORDS,
-  PUNCT,
-  PROSE,
-  CODE,
-  INDENTED,
-  BLANK,
-  SINGLE,
-  EMPTY,
-  UNICODE,
-  TABS,
-];

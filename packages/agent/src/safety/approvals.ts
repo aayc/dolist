@@ -2,7 +2,9 @@
  * The approval broker: turns `require_approval` verdicts into pending approval requests, waits
  * for the user's decision (or a timeout / abort), and records standing grants for "approve for
  * this task" and "always approve". With a storage provider, grants and recent approvals persist
- * in the vault sidecar; approvals left pending by a previous process load as `expired`.
+ * in the vault sidecar (`createApprovalStateFile`: a corrupt file is moved aside and a newer one
+ * never overwritten, both loading as no state); approvals left pending by a previous process load
+ * as `expired`.
  */
 import type {
   ApprovalDecisionRequest,
@@ -12,7 +14,7 @@ import type {
   Unsubscribe,
 } from "@ddl/core";
 import { createId, DEFAULT_SETTINGS, debounce, silentLogger } from "@ddl/core";
-import { APPROVALS_STATE_PATH, parseApprovalState, serializeApprovalState } from "./approval-store";
+import { type ApprovalState, createApprovalStateFile, mergeApprovalStates } from "./approval-store";
 import { riskRank } from "./policy";
 import type {
   ApprovalBroker,
@@ -119,58 +121,60 @@ export function createApprovalBroker(
     }
   };
 
-  const ready: Promise<void> = storage ? load() : Promise.resolve();
+  const file = storage ? createApprovalStateFile({ storage, logger, now }) : undefined;
+  /**
+   * What another writer saved (a sync, a hand edit), seen when a write conflicted. Written back
+   * merged with ours so nothing it holds is lost, but never honored before the next load: grants
+   * and decisions apply only once loaded, and a live approval is decided only here.
+   */
+  let external: ApprovalState | undefined;
+  const ready: Promise<void> = file
+    ? file
+        .load()
+        .then(adopt)
+        .catch((error: unknown) => {
+          logger.warn("failed to load approvals state", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        })
+    : Promise.resolve();
   let writes: Promise<void> = ready;
 
-  async function load(): Promise<void> {
-    try {
-      const file = await storage!.read(APPROVALS_STATE_PATH);
-      if (!file) return;
-      const state = parseApprovalState(file.content);
-      if (!state) {
-        logger.warn("ignoring unreadable approvals state", { path: APPROVALS_STATE_PATH });
-        return;
+  function adopt(state: ApprovalState | undefined): void {
+    if (!state) return;
+    for (const grant of state.grants)
+      if (!grants.some((g) => sameGrant(g, grant))) grants.unshift(grant);
+    let expired = 0;
+    for (const approval of state.approvals) {
+      if (approvals.has(approval.id)) continue;
+      if (approval.status !== "pending") {
+        approvals.set(approval.id, approval);
+        continue;
       }
-      for (const grant of state.grants)
-        if (!grants.some((g) => sameGrant(g, grant))) grants.unshift(grant);
-      let expired = 0;
-      for (const approval of state.approvals) {
-        if (approvals.has(approval.id)) continue;
-        if (approval.status !== "pending") {
-          approvals.set(approval.id, approval);
-          continue;
-        }
-        // Its agent died with the previous process; nobody is waiting for this decision anymore.
-        const stale: ApprovalRequest = {
-          ...approval,
-          status: "expired",
-          decidedAt: now(),
-          decisionNote: "The app restarted before a decision was made.",
-        };
-        approvals.set(approval.id, stale);
-        expired++;
-        emit(stale);
-      }
-      if (expired > 0) schedulePersist();
-    } catch (error) {
-      logger.warn("failed to load approvals state", {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      // Its agent died with the previous process; nobody is waiting for this decision anymore.
+      const stale: ApprovalRequest = {
+        ...approval,
+        status: "expired",
+        decidedAt: now(),
+        decisionNote: "The app restarted before a decision was made.",
+      };
+      approvals.set(approval.id, stale);
+      expired++;
+      emit(stale);
     }
+    if (expired > 0) schedulePersist();
   }
 
   async function persist(): Promise<void> {
-    if (!storage) return;
-    try {
-      await storage.write(
-        APPROVALS_STATE_PATH,
-        serializeApprovalState(grants, [...approvals.values()]),
-      );
-    } catch (error) {
-      logger.warn("failed to persist approvals", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+    await file?.save(
+      () => {
+        const ours: ApprovalState = { version: 1, grants, approvals: [...approvals.values()] };
+        return external ? mergeApprovalStates(ours, external) : ours;
+      },
+      (theirs) => {
+        external = theirs;
+      },
+    );
   }
 
   const persistSoon = debounce(() => {
@@ -178,7 +182,7 @@ export function createApprovalBroker(
   }, PERSIST_DEBOUNCE_MS);
 
   function schedulePersist(): void {
-    if (storage) persistSoon();
+    if (file) persistSoon();
   }
 
   async function flush(): Promise<void> {

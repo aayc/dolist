@@ -20,11 +20,26 @@ the Azure VM.
    keeps granted permissions across builds; on a new Mac, create it, build, then grant
    Accessibility and Screen Recording again (Settings → Computer Use guides you).
 4. In-flight work is on the pushed branches below: `git worktree add ../<name> <branch>`.
-5. CI doesn't run on push. Dispatch it on a branch or `main`:
-   `gh workflow run ci.yml --ref <branch>` (also `macos.yml`, `security.yml`).
+5. CI doesn't start on push or pull requests (the triggers are declared, but GitHub hasn't fired
+   them since the first push; see `docs/CI.md`, "How runs start today"). Dispatch it on each
+   branch before merging and on `main` after pushing:
+   `gh workflow run ci.yml --repo aayc/dolist --ref <branch>` (also `security.yml`, `macos.yml`,
+   `linux-bundle.yml`).
 
 ## Shipped on `main` (newest first)
 
+- `e1a2f6e` Editor crash fixed (it was the intermittent macOS CI crash): with legacy scroll bars
+  (a mouse, or "always show scroll bars"), an edit that showed or hid the scroller resized the text
+  view mid-edit and AppKit raised; also the line-number gutter widening at line 100/1,000 mid-edit.
+  Nothing lays out while the text storage is editing now. **Installed** on the main development Mac
+  (threads and approvals intact).
+- `7f1f796` Cleanup batch A (TypeScript): imported threads keep their new note paths (the import
+  now remaps journals at `state/journal/`), the approval broker persists through the shared state
+  file (moves a corrupt file aside, never overwrites a newer one), dead code and dependency/config
+  fixes. `8bae6ff` docs drift fixed across the repo; CI is dispatched by hand (push/PR triggers are
+  declared but GitHub Actions never starts them; cause unknown, see `docs/CI.md`).
+- `cf0d413` Test trim (−75.6k): Swift Domain vectors compacted to one case per line (same 20,127
+  cases), tests the vectors and property tests cover removed, shared test helpers.
 - `0011be4` The web e2e, perf tests and `pnpm dev:mock` run on real daemons (one per test, mock
   agent or Pi against the fake model, a seeded demo vault); the in-browser mock is gone (−6.9k lines).
   The fullstack scenarios merged into the functional suite (134 passed); all e2e takes ~106 s instead
@@ -132,7 +147,12 @@ and branches were removed (GitHub has only `main`).
 - **Flaky tests:** done and on `main` (`5687507`): the watcher, subprocess and `trackTasks` tests
   are robust under load (fake timers, event probes instead of sleeps, CPU-time guard, generous
   failure bounds; one test-only `helloTimeoutMs` option). No assertion got looser.
-- **Leaner-code cuts** (in flight): `chore/lean-tests` (test trims, compact Domain vectors); next the Mac fake daemon, zod as the wire source and journal-only threads (see
+- **Faster tests and CI** (in flight, user asked for a 10x faster loop): `chore/fast-tests`
+  (TypeScript: changed-only local runs, turbo cache on CI, sharded e2e, slow tests) and
+  `chore/fast-swift-tests` (affected-only `test.sh`, cached SwiftPM builds, parallel macOS jobs, the
+  release build only where needed). Baseline: macOS CI 19.5 min, CI ~7 min.
+- **Leaner-code cuts** (in flight): `chore/lean-zod` (zod schemas as the single source of the TS wire
+  types and generators), `chore/lean-journal` (threads journal-only, with a one-time migration); next the Mac fake daemon, zod as the wire source and journal-only threads (see
   Decisions).
 - **Cleanup batch A** (in flight): `chore/cleanup-ts` (two bugs: imported threads kept their old
   note paths because the import looked for journals under the wrong folder, and the approval
@@ -167,6 +187,11 @@ Open: browser pairing over https stays fixme in the e2e harness (no TLS proxy th
 ## Next up (not started)
 
 - **The Azure VM** (above): the next step once the user is back.
+- **CI triggers** (the user, in the repository settings): pushes and pull requests start no
+  GitHub Actions runs, and nothing in the repository explains it (details in `docs/CI.md`). Turn
+  Actions off and on again for the repository, or disable and re-enable each workflow, then
+  check that the next push starts runs; if not, ask GitHub Support. Until then, CI is dispatched
+  by hand.
 - **B0 binary files:** attachment sync and file serving ([spec](docs/specs/obsidian-migration.md)).
 - **P rendering parity:** images (on the drawings' embed layer), tables, callouts, backlinks, on
   the web and the Mac.
@@ -183,7 +208,9 @@ Open: browser pairing over https stays fixme in the e2e harness (no TLS proxy th
   home-folder fix): a single file held in a variable, a project folder's `.env` read recursively,
   subfolders of personal folders, `~/Library/Preferences`.
 - **iPhone app:** deferred; the web app covers mobile for now. Plan in
-  [apps/mobile/PLAN.md](apps/mobile/PLAN.md); needs full Xcode and remote access (S1) first.
+  [apps/mobile/PLAN.md](apps/mobile/PLAN.md). Remote access, device tokens and pairing are built;
+  still needed first: full Xcode, a QR code on the pairing screens, and an atomic daily-note
+  append in the daemon.
 - **Mac:** make sure the floating computer-access guide can't cover the app's controls and closes
   reliably once access is granted.
 - **App control:** long, virtualized lists only expose their visible rows (an app showed 11 of 14
@@ -195,8 +222,6 @@ Open: browser pairing over https stays fixme in the e2e harness (no TLS proxy th
 - **Drawings follow-ups:** shared merge vectors for `SceneMerge` (Swift) and
   `mergeDrawingElements` (TypeScript); on the Mac, drawings as accessibility elements, image
   embeds, the in-place tool bar covering a line of text.
-- **Swift editor tests crash intermittently on CI** (uncaught NSException, 2 of 3 runs): under
-  investigation on `fix/editor-test-crash` (an exception handler to name it, then the root cause).
 - **macOS file watching:** Node serves every directory watch in a process from one FSEvents
   stream and restarts it "from now" when a watch opens or closes, so vault changes made during the
   restart are dropped until the next rescan (the daemon too, e.g. when a sync target's watch

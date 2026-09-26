@@ -5,18 +5,51 @@ the commands below. Workflows live in `.github/workflows/`. Jobs share one setup
 `.github/actions/setup`: pnpm (version from `packageManager`), Node.js (from `.nvmrc`), a pnpm store
 cache, then `pnpm install --frozen-lockfile`.
 
-| Workflow | Triggers | Jobs |
+| Workflow | Declared triggers | Jobs |
 | --- | --- | --- |
-| CI (`ci.yml`) | push to `main`, pull requests, merge queue | `check`, `test-macos`, `bench`, `e2e`, `evals-mock` |
+| CI (`ci.yml`) | push to `main`, pull requests, merge queue, manual | `check`, `test-macos`, `bench`, `e2e`, `evals-mock` |
 | Security (`security.yml`) | push to `main`, pull requests, merge queue, weekly (Mon 05:27 UTC), manual | `gitleaks`, `codeql` (JS/TS + Actions), `dependency-review` (PRs) |
-| macOS app (`macos.yml`) | push to `main` and pull requests touching the app, the daemon, what it bundles or the vim vectors; manual | `app` |
+| macOS app (`macos.yml`) | push to `main` and pull requests touching the app, the daemon, the sync service, what they bundle or the vim vectors; manual | `app` |
 | Linux bundle (`linux-bundle.yml`) | push to `main` and pull requests touching `deploy/linux`, the daemon, the sync service, the web app or what they bundle; manual | `bundle`, `setup` |
 | Evals (live) (`evals.yml`) | weekly (Mon 06:43 UTC), manual | `gate`, `live` |
 | Dependabot (`dependabot.yml`) | weekly (Monday) | npm and GitHub Actions update PRs |
 
-All workflows default to `permissions: contents: read` and have per-job timeouts. A new push to a
-pull request cancels the PR's previous run; runs on `main` are never cancelled, so every commit on
-`main` keeps a result.
+All workflows default to `permissions: contents: read` and have per-job timeouts. Only a newer
+push to the same pull request cancels a run in progress; runs on `main` and dispatched runs are
+never cancelled by a newer one.
+
+### How runs start today: by hand
+
+The push, pull request and merge queue triggers are declared but don't fire: since the
+repository's first push (2026-09-24), GitHub Actions has started no run for a push or a pull
+request, while manual runs work. Until that is fixed, the lead dispatches the workflows on each
+branch before merging it and on `main` after pushing:
+
+```sh
+gh workflow run ci.yml --repo aayc/dolist --ref <branch>   # also security.yml, macos.yml, linux-bundle.yml
+gh run list --repo aayc/dolist --branch <branch>           # then gh run watch <id>
+```
+
+- Path filters don't apply to manual runs: dispatch `macos.yml` and `linux-bundle.yml` when the
+  change touches what their path lists name (running them anyway costs only time).
+- Only the commits someone dispatched have a result, normally the tip of each branch before it
+  merges and `main` after each push. A push to `main` that nobody dispatched is untested.
+- `dependency-review` runs only for pull requests, so it doesn't run at all for now.
+- The weekly schedules haven't come due since the repository was created, so whether they fire
+  is still unknown.
+
+Why the triggers don't fire: nothing in the repository explains it. Actions is enabled with every
+workflow `active`, the workflows are valid (the same files run when dispatched), no commit message
+carries a skip directive, the pushes come from the owner's account (not a workflow token), and
+`main` has no rulesets or protection. GitHub records every push, and the third-party apps on the
+repository get their check suites for it, but no `github-actions` check suite is ever created. The
+one push that did start runs created `main`; every push since, and a throwaway pull request,
+started nothing. It began during a GitHub incident (billing information, 2026-09-24) and didn't
+recover once the incident was resolved, so it looks like state stuck on GitHub's side. To fix it,
+the owner can turn Actions off and on again for the repository (Settings → Actions → General) or
+disable and re-enable each workflow (`gh workflow disable`/`enable`), then check that the next
+push starts runs (`gh run list --repo aayc/dolist --event push`). If it still doesn't, ask GitHub
+Support, citing a push commit that has other apps' check suites and none from Actions.
 
 ## CI (`ci.yml`)
 
@@ -81,7 +114,7 @@ const MULTIPLIER = Number(process.env.BENCH_BUDGET_MULTIPLIER ?? 1);
 
 test("parseTasks: 2k-line note", async ({ bench }) => {
   const result = await bench("parseTasks: 2k-line note", () => parseTasks(NOTE_2K)).run();
-  expect(result.latency.p99).toBeLessThan(4 * MULTIPLIER);
+  expect(result.latency.p99).toBeLessThan(6 * MULTIPLIER);
 });
 ```
 
@@ -150,20 +183,24 @@ pnpm eval:mock && node .github/scripts/eval-summary.mjs
 
 ## macOS app (`macos.yml`)
 
-One job, `app`, on `macos-latest`, only when `apps/macos`, the daemon, a package the daemon
-bundles or the vim behavior vectors (`packages/editor/test/vim`, replayed by `DailyDoListVim`)
-change (the two path lists in the workflow must stay in sync). It selects the newest non-beta
-Xcode, lints the Swift formatting (`node scripts/lint.mjs --all --only swift`, strict
-swift-format), builds the daemon, runs every Swift package's tests (including the vim vector replay),
-compiles the Foundation-only packages the iPhone app will reuse (`DailyDoListModels`,
-`DailyDoListClient`, `DailyDoListDomain`, `DailyDoListVim`) for iOS, runs the integration tests
+One job, `app`, on `macos-latest`. On push and pull requests it runs only when `apps/macos`, the
+daemon, the sync service (`apps/sync`), a package they bundle or the vim behavior vectors
+(`packages/editor/test/vim`, replayed by `DailyDoListVim`) change (the two path lists in the
+workflow must stay in sync); a manual run always runs. It selects the newest non-beta Xcode, lints
+the Swift formatting (`node scripts/lint.mjs --all --only swift`, strict swift-format), builds the
+daemon and the sync service (the integration tests run two synced daemons through the real sync
+service), runs every Swift package's tests (including the vim vector replay), compiles for iOS the
+Foundation-only code the iPhone app will reuse (`DailyDoListModels`, `DailyDoListClient`,
+`DailyDoListDomain`, `DailyDoListVim`, and `DailyDoListDrawing`'s `DailyDoListDrawingModel`
+library, built as `DailyDoListDrawing:DailyDoListDrawingModel`), runs the integration tests
 against the real daemon with the mock agent, builds a release "Daily Do List.app" with the bundled
-daemon, and uploads the zipped app as the `daily-do-list-macos` artifact (kept 14 days; ad hoc
-signed, not notarized).
+daemon, smoke-tests the bundled `ddl-computer` (where the daemon looks for it, validly signed, and
+answering the passive `hello` and `permissions` methods), and uploads the zipped app as the
+`daily-do-list-macos` artifact (kept 14 days; ad hoc signed, not notarized).
 
 ```sh
 node scripts/lint.mjs --all --only swift   # or pnpm lint:fix to format
-pnpm --filter @ddl/daemon build
+pnpm --filter @ddl/daemon --filter @ddl/sync build
 apps/macos/scripts/test.sh                 # every package, then the app shell
 apps/macos/scripts/test.sh integration     # real daemon, mock agent
 apps/macos/scripts/build-app.sh --release --with-daemon --zip
@@ -332,7 +369,11 @@ pnpm eval --suite safety && node .github/scripts/eval-summary.mjs
 - Set Workflow permissions to "Read repository contents and packages permissions".
 - Require approval before running workflows from fork pull requests by first-time contributors.
 
-**Branch ruleset for `main`**
+**Branch ruleset for `main`** (recommended, not enabled)
+
+`main` has no protection today: the lead merges branches into `main` locally and pushes, with CI
+dispatched on the branch and on `main` (see [How runs start today](#how-runs-start-today-by-hand)).
+The ruleset to enable once work lands through pull requests:
 
 - Require a pull request with at least one approval. Block force pushes and deletions.
 - Required status checks: `Lint, typecheck, test, build`, `Unit tests (macOS)`, `Benchmarks`,

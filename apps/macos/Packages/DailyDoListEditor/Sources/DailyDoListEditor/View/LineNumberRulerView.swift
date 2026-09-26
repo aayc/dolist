@@ -43,6 +43,14 @@ final class LineNumberRulerView: NSRulerView {
     if abs(ruleThickness - thickness) > 0.5 { ruleThickness = thickness }
   }
 
+  /// Edits reach the thickness here, not while the text storage processes them: a new thickness
+  /// retiles the scroll view, and the text view resizes itself (lays out) when its clip view
+  /// changes, which raises while the storage is still editing.
+  override func viewWillDraw() {
+    updateThickness()
+    super.viewWillDraw()
+  }
+
   override func drawHashMarksAndLabels(in rect: NSRect) {
     guard let textView, let layoutManager = textView.layoutManager,
       let container = textView.textContainer,

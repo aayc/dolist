@@ -321,14 +321,6 @@ export class ObsidianImporter {
         `After the switch the agent looks at ${plural(plan.watchedOpenTasks, "open task")} in Obsidian's daily notes for the days it watches, because "Act on existing tasks" is on.`,
       );
     }
-    const journal = plan.agent.journal;
-    if (journal > 0) {
-      warnings.push(
-        journal === 1
-          ? "1 agent journal file is copied unchanged: the note paths inside aren't updated yet."
-          : `${journal} agent journal files are copied unchanged: the note paths inside aren't updated yet.`,
-      );
-    }
     const outside = scan.skipped.items.filter((item) => item.reason === "symlink_outside").length;
     if (outside > 0) {
       warnings.push(

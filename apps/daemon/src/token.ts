@@ -1,6 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { chmod, readFile, stat, writeFile } from "node:fs/promises";
 import type { Logger } from "@ddl/core";
+import { errnoCode } from "./home-files";
 
 const TOKEN_RE = /^[0-9a-f]{64}$/;
 const MAX_CANDIDATE_LENGTH = 512;
@@ -85,10 +86,4 @@ async function restrictPermissions(path: string, logger: Logger): Promise<void> 
   if ((mode & 0o077) === 0) return;
   await chmod(path, 0o600);
   logger.warn("Daemon token file was readable by other users; restricted it to 0600");
-}
-
-function errnoCode(error: unknown): string | undefined {
-  return typeof error === "object" && error !== null && "code" in error
-    ? String(error.code)
-    : undefined;
 }

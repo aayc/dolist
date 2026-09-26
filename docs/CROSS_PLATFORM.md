@@ -8,7 +8,7 @@ app's platform-neutral Swift packages.
 | Surface | Client | Where the agent runs | Status |
 | --- | --- | --- | --- |
 | Web | Browser → daemon on `127.0.0.1` | Local daemon | ✅ working |
-| macOS | Native SwiftUI/AppKit app that supervises its own daemon (or attaches to a running one) | Local daemon (full capabilities: shell, browser, desktop) | in progress — `apps/macos` |
+| macOS | Native SwiftUI/AppKit app that supervises its own daemon (or attaches to a running one) | Local daemon (full capabilities: shell, browser, desktop), or relayed to the always-on machine | ✅ working — `apps/macos` |
 | iPhone | Native SwiftUI app reusing `DailyDoListModels`, `DailyDoListClient`, `DailyDoListDomain` and `DailyDoListVim` | The always-on daemon over a private network ([ALWAYS_ON.md](./ALWAYS_ON.md)), or your Mac's | planned — `apps/mobile` |
 
 ## Why every client can share one backend
@@ -50,8 +50,9 @@ A native SwiftUI/AppKit app built from independent Swift packages (see
    badge, and native notifications for approval requests.
 4. Browser-reserved shortcuts (`⌘W`, `⌘N`, `⌘⇧W` for the weekly note) are available.
 5. The daemon runs as the app's child, so computer use asks for Accessibility and Screen
-   Recording under the app's identity. The identity stays stable once the app is signed with a
-   real certificate; today's builds are signed ad hoc.
+   Recording under the app's identity. `build-app.sh` signs with the local signing identity when
+   it exists (`scripts/signing-identity.sh` creates it), so macOS keeps granted permissions across
+   builds; without it, and in CI, builds are signed ad hoc. None are notarized.
 
 ## iPhone app (apps/mobile)
 
@@ -60,8 +61,10 @@ The detailed plan, with the decisions made so far, is [apps/mobile/PLAN.md](../a
 1. A native SwiftUI app reusing `DailyDoListModels`, `DailyDoListClient`, `DailyDoListDomain` and
    `DailyDoListVim` (Foundation-only, declared for iOS 17), with a compact UI: single pane, thread
    as a sheet, approvals as native notifications with Approve/Deny actions.
-2. Connects to a daemon it does not host: the user's Mac (paired with a QR code carrying the URL
-   and a device-scoped token; reachable over Tailscale or a relay) or a cloud daemon.
+2. Connects to a daemon it does not host: the always-on machine or the user's Mac, over a private
+   network (Tailscale). It pairs with a QR code carrying the daemon's URL and a single-use pairing
+   code, never a token: the phone exchanges the code for its own device token with
+   `POST /api/pair`. (The pairing screens show the code and URL; the QR code isn't built yet.)
 3. Offline: a local cache of the vault with the same `SyncEngine` semantics, so editing works on
    the subway and merges later.
 

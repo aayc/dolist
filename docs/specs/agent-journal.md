@@ -1,8 +1,9 @@
 # Spec: the agent journal
 
-Status: **phase 1 (threads) built** (see [Phase 1: what was built](#phase-1-what-was-built));
-phase 2 waits for the always-on work. Fencing, its prerequisite, ships with the always-on work
-([always-on.md](./always-on.md), "Fencing").
+Status: **phase 1 (threads) built** (`dffdfdd`; see
+[Phase 1: what was built](#phase-1-what-was-built)). Phase 2 is unblocked, not started: fencing,
+its prerequisite, shipped with the always-on work (`7ce1e9f`; [always-on.md](./always-on.md),
+"Fencing"), and the daemon passes the lease epoch to the journal.
 
 ## Why
 
@@ -19,8 +20,8 @@ as an activity, while our agent loop lives inside the harness.
 - **Append-only events** with unique ids and `(epoch, seq)` from the lease grant: messages, tool
   calls and results, approvals requested and decided, routine runs scheduled, started and
   finished, thread status changes. Stored as JSONL in the sidecar (for example
-  `.daily-do-list/journal/threads/<threadId>.jsonl`); current state is a fold of the events, with
-  snapshots for speed.
+  `.daily-do-list/state/journal/threads/<threadId>.jsonl`); current state is a fold of the
+  events, with snapshots for speed.
 - **Merging is a union** by event id: appends from different machines never produce conflict
   copies (the sync engine gets a JSONL merge rule). Fencing keeps a former holder from appending
   under an old grant.
@@ -53,8 +54,9 @@ as an activity, while our agent loop lives inside the harness.
 - Resume after a restart of the agent runtime (the same code path a handover will use).
 - Migration: existing thread files become journals on first load; nothing is lost.
 
-**Phase 2, after the always-on work merges:** approvals and routines state on the journal, and
-client-generated ids for idempotent mutations through the relay (an additive wire change).
+**Phase 2 (the always-on work it waited for has merged):** approvals and routines state on the
+journal, and client-generated ids for idempotent mutations through the relay (an additive wire
+change).
 
 ## Phase 1: what was built
 

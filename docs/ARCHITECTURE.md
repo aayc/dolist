@@ -16,13 +16,15 @@ apps/web ──REST + WebSocket──▶ apps/daemon ──▶ @ddl/storage (vau
 | Package | Role | Runs in |
 | --- | --- | --- |
 | `@ddl/core` | Vault paths, Obsidian-compatible dates & daily notes, markdown task parsing, task identity tracking, agent/thread types, the daemon↔client protocol, settings. **No dependencies.** | Browser, daemon, future native shells |
+| `@ddl/contract` | Runtime zod schemas for the wire protocol (every route, body and event, `API_CONTRACT`) and the sidecar file formats, kept in lockstep with `@ddl/core`'s types; fixtures and test arbitraries; generates the reference in [PROTOCOL.md](PROTOCOL.md) ([DATA_FORMATS.md](DATA_FORMATS.md) for the files) | Daemon; tests everywhere (the web app never loads zod at runtime) |
 | `@ddl/storage` | `StorageProvider` contract; local filesystem, memory and remote (the sync service) providers; provider registry; 3-way `SyncEngine`; vault search | Daemon |
 | `@ddl/editor` | CodeMirror 6 editor: live preview, task checkboxes, agent badges, vim, keymaps | Browser |
-| `@ddl/agent` | `AgentRuntime`: task watcher, orchestrator, subagents, Pi harness, safety evaluator, approvals, execution providers, threads/artifacts, tools, OpenRouter client | Daemon |
+| `@ddl/agent` | `AgentRuntime`: task watcher, orchestrator, subagents, harnesses (Pi and the Cursor CLI), safety evaluator, approvals, execution providers, threads/artifacts, tools, OpenRouter client | Daemon |
 | `@ddl/connectors` | MCP client: `mcpServers` config → harness-agnostic `ToolSpec`s | Daemon |
 | `apps/daemon` | Hono HTTP API + WebSocket hub, auth, config, settings, static UI; composes everything | Node 24 |
 | `apps/sync` | Sync service: per-vault change log in SQLite, HTTP API with conditional writes, live WebSocket push, the agent lease ([SYNC.md](SYNC.md)) | Node 24 (self-hosted) |
 | `apps/web` | React 19 UI; `DaemonClient` over HTTP + WebSocket | Browser / WebView |
+| `apps/macos` | Native SwiftUI/AppKit client of the daemon, built from local Swift packages; supervises its own daemon and bundles `ddl-computer`, the helper that operates other apps ([README](../apps/macos/README.md), [CROSS_PLATFORM.md](CROSS_PLATFORM.md)) | macOS 14+ |
 | `evals` | Agent eval suites (safety verdicts, triage) with mock (CI) and live modes | Node |
 
 Internal packages export TypeScript source directly (no per-package build). The daemon is bundled
@@ -74,7 +76,8 @@ paired browser's HttpOnly cookie); see [SECURITY.md](../SECURITY.md#threat-model
 
 Change attribution: writes made through the API carry the tab's client id; writes by the agent go
 through an `AttributedStorage` view. The WebSocket hub tags each `vault.changed` as `client`,
-`agent` or `external`, so clients ignore their own echoes but see everything else live.
+`agent`, `sync` (written by the SyncEngine) or `external`, so clients ignore their own echoes but
+see everything else live.
 
 ## The UI
 
@@ -124,7 +127,7 @@ threads and artifacts persisted in the sidecar.
 | --- | --- | --- | --- |
 | Vault storage | `StorageProvider` | local fs, memory | `createStorageProvider` |
 | Sync target | `StorageProvider` + `SyncEngine` | none, local folder, sync service (remote) | `createSyncTarget` |
-| Agent harness | `Harness` / `HarnessSession` | Pi, scripted (mock/tests) | runtime options |
+| Agent harness | `Harness` / `HarnessSession` | Pi, Cursor CLI, scripted (mock/tests) | `src/harness/registry.ts` (`setupHarness`, from `agent.harness`) |
 | Execution | `ExecutionProvider` | local (shell, Chrome, macOS desktop) | `createExecutionProvider` |
 | Tools from services | `ConnectorToolSource` | MCP (stdio, streamable HTTP, SSE) | `createConnectorManager` |
 | One-shot LLM calls | `LlmClient` | OpenRouter, mock | runtime options |

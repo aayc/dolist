@@ -29,11 +29,6 @@
       "cache": false,
       "persistent": true,
       "passThroughEnv": ["DDL_*", "OPENROUTER_API_KEY", "HOME"]
-    },
-    "e2e": {
-      "cache": false,
-      "dependsOn": ["^build"],
-      "passThroughEnv": ["PERF_BUDGET_MULTIPLIER", "CI"]
     }
   }
 }
