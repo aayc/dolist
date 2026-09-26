@@ -69,10 +69,14 @@ struct FuzzTests {
     }
   }
 
-  @Test func editorSurvivesRandomEditsSelectionsAndDrawing() throws {
+  /// Legacy scrollers (a mouse, or "show scroll bars: always") show and hide as the document
+  /// outgrows the view, which changes the clip view's width while edits are processed.
+  @Test(arguments: [NSScroller.Style.overlay, .legacy])
+  func editorSurvivesRandomEditsSelectionsAndDrawing(scrollers: NSScroller.Style) throws {
     var rng = SeededGenerator(seed: 9)
     let editor = EditorHarness(text: SampleNote.text, size: NSSize(width: 700, height: 500))
     let controller = editor.controller
+    controller.scrollView.scrollerStyle = scrollers
     controller.setBadges(SampleNote.badges(for: editor.text))
     let storage = controller.storage
     for step in 0..<400 {

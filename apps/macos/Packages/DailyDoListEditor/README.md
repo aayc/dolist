@@ -356,8 +356,15 @@ TextKit 1 techniques worth knowing before changing things (each verified experim
 - **Restyle timing**: restyling happens in `textStorage(_:didProcessEditing:)`. Attribute changes
   made in `willProcessEditing` are merged into the edited range, and NSTextView then puts the caret
   at the end of that range instead of after the typed character. Since `didProcessEditing` changes
-  aren't reported to the layout manager, `MarkdownLayoutManager` invalidates the restyled lines
-  right after it processed the edit, and the controller fixes their attributes (font fallback).
+  aren't reported to the layout manager, `MarkdownLayoutManager` adds the restyled lines to the
+  range the edit invalidates (one pass, `super`'s), and the controller fixes their attributes (font
+  fallback).
+- **Nothing lays out while the storage processes an edit** (`didProcessEditing`, the layout
+  manager's `processEditing`): AppKit raises ("attempted glyph generation / layout while
+  textStorage is editing"). Resizing the text view or retiling the scroll view counts: with legacy
+  scrollers (a mouse, or "show scroll bars: always") a scroller that shows or hides resizes the
+  clip view, and the text view then measures its text. `super`'s own invalidation copes; a second
+  one after it doesn't. The fuzz test runs with both scroller styles.
 - **Typing attributes** are set from the caret's own line on every selection change. A typed
   character with another paragraph style (a list line's hanging indent) makes the storage re-fix the
   whole paragraph and widens every keystroke's edit.
