@@ -17,10 +17,14 @@ concurrency:
 
 env:
   TURBO_TELEMETRY_DISABLED: "1"
+  # Every job restores turbo's cache (.github/actions/turbo-cache): a task whose inputs didn't change
+  # replays its result. Main re-runs everything, so a cache-key mistake can't hide there.
+  TURBO_FORCE: ${{ github.ref == 'refs/heads/main' }}
+  TURBO_RUN_SUMMARY: "true"
 
 jobs:
   check:
-    name: Lint, typecheck, test, build
+    name: Lint, typecheck, build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -37,6 +41,10 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
+      - uses: ./.github/actions/turbo-cache
+        with:
+          name: check
+          step: restore
 
       - name: Install actionlint and shellcheck
         run: |
@@ -57,38 +65,97 @@ jobs:
       - name: Lint (hygiene, Biome, shellcheck, actionlint, Swift vectors)
         # Swift formatting is linted by the macOS workflow, with Xcode's swift-format.
         run: pnpm lint --skip swift
-      - name: Typecheck
-        run: pnpm typecheck
-      - name: Unit tests
-        # One package at a time: a runner has 4 vCPUs, and every package's Vitest starts a worker per
-        # core, so running them together makes timing-sensitive tests many times slower than on a dev
-        # machine. TEST_TIME_SCALE stretches the timing budgets and default timeouts for the rest.
-        run: pnpm test --concurrency=1 --continue
-        env:
-          TEST_TIME_SCALE: "5"
       - name: Secret scan
         run: node scripts/check-secrets.mjs --all
+      - name: Typecheck
+        run: pnpm typecheck
       - name: Build
         run: pnpm build
       - name: Bundle size budget
         run: node scripts/bundle-size-check.mjs
 
-  test-macos:
-    # The local filesystem watcher, macOS computer-use helpers and Chrome-based browser tests.
-    name: Unit tests (macOS)
-    runs-on: macos-latest
-    timeout-minutes: 25
+      - uses: ./.github/actions/turbo-cache
+        if: ${{ !cancelled() }}
+        with:
+          name: check
+          step: save
+
+  test:
+    # Each shard gets a runner of its own. On one, packages run one at a time (a runner has 4 vCPUs
+    # and every package's Vitest starts a worker per core, so running them together makes
+    # timing-sensitive tests many times slower than on a dev machine); TEST_TIME_SCALE stretches the
+    # timing budgets and default timeouts for the rest.
+    name: Unit tests (Linux, ${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: agent
+            filter: --filter=@ddl/agent
+          - shard: daemon
+            filter: --filter=@ddl/daemon
+          - shard: rest
+            filter: --filter=!@ddl/agent --filter=!@ddl/daemon
+    env:
+      TEST_TIME_SCALE: "5"
+      FILTER: ${{ matrix.filter }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-
+      - uses: ./.github/actions/turbo-cache
+        with:
+          name: test-${{ matrix.shard }}
+          step: restore
       - name: Unit tests
-        # See the Linux job: one package at a time, stretched timing budgets (3 vCPUs here).
-        run: pnpm test --concurrency=1 --continue
-        env:
-          TEST_TIME_SCALE: "5"
+        run: |
+          # shellcheck disable=SC2086 # FILTER holds several arguments
+          pnpm turbo run test --concurrency=1 --continue $FILTER
+      - uses: ./.github/actions/turbo-cache
+        if: ${{ !cancelled() }}
+        with:
+          name: test-${{ matrix.shard }}
+          step: save
+
+  test-macos:
+    # The packages that touch the OS: the FSEvents-backed file watcher (storage), processes, the
+    # macOS computer-use helpers and Chrome (agent, connectors), case-insensitive paths and the
+    # Trash (daemon), sockets (sync). The rest is platform-independent and runs on Linux only.
+    name: Unit tests (macOS, ${{ matrix.shard }})
+    runs-on: macos-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: agent
+            filter: --filter=@ddl/agent
+          - shard: os
+            filter: --filter=@ddl/daemon --filter=@ddl/storage --filter=@ddl/connectors --filter=@ddl/sync
+    env:
+      TEST_TIME_SCALE: "5"
+      FILTER: ${{ matrix.filter }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/turbo-cache
+        with:
+          name: test-${{ matrix.shard }}
+          step: restore
+      - name: Unit tests
+        run: |
+          # shellcheck disable=SC2086 # FILTER holds several arguments
+          pnpm turbo run test --concurrency=1 --continue $FILTER
+      - uses: ./.github/actions/turbo-cache
+        if: ${{ !cancelled() }}
+        with:
+          name: test-${{ matrix.shard }}
+          step: save
 
   bench:
     name: Benchmarks
@@ -101,12 +168,15 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
+      - uses: ./.github/actions/turbo-cache
+        with:
+          name: bench
+          step: restore
 
       - name: Run benchmarks
-        # One package at a time so suites don't compete for the runner's CPUs. Loose env mode lets
-        # BENCH_BUDGET_MULTIPLIER through Turbo's strict env filtering, which drops variables that
-        # turbo.json doesn't declare for the task.
-        run: pnpm bench --concurrency=1 --env-mode=loose
+        # One package at a time so suites don't compete for the runner's CPUs. A cache hit restores
+        # the package's bench-results.json.
+        run: pnpm bench --concurrency=1
       - name: Check results
         if: ${{ !cancelled() }}
         run: node scripts/bench-check.mjs
@@ -121,67 +191,88 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+      - uses: ./.github/actions/turbo-cache
+        if: ${{ !cancelled() }}
+        with:
+          name: bench
+          step: save
+
   e2e:
-    name: E2E and perf (Playwright)
+    # Playwright's web server builds the app and starts packages/agent/scripts/e2e-daemons.ts, which
+    # runs a real daemon per test (mock agent or the fake model; no network). The functional suite
+    # is split across runners by test.
+    name: E2E (Playwright, ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      SHARD: ${{ matrix.shard }}/4
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-
-      - name: Resolve Playwright version
-        id: playwright
-        run: |
-          version="$(grep -m1 -E "^  '?@playwright/test@[0-9]" pnpm-lock.yaml | cut -d@ -f3 | tr -d "':")"
-          if [ -z "$version" ]; then
-            echo "::error::@playwright/test not found in pnpm-lock.yaml"
-            exit 1
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-      - name: Cache Playwright browsers
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - uses: ./.github/actions/turbo-cache
         with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-      - name: Install Playwright browsers
-        id: browsers
-        # System dependencies aren't cached, so this also runs on a cache hit (downloads are skipped).
-        run: pnpm --filter @ddl/web exec playwright install --with-deps chromium
+          name: e2e-${{ matrix.shard }}
+          step: restore
+      - name: Cached already?
+        id: cached
+        run: node .github/scripts/turbo-hit.mjs e2e --filter=@ddl/web -- "--shard=$SHARD"
+      - uses: ./.github/actions/playwright
+        if: steps.cached.outputs.hit != 'true'
 
-      - name: Vim mode (vectors up to date, vim.js's own suite, replay against the editor)
-        run: pnpm vim:check
-
-      # Playwright's web server builds the app and starts packages/agent/scripts/e2e-daemons.ts,
-      # which runs a real daemon per test (mock agent or the fake model; no network).
       - name: Functional tests (real daemons)
-        if: ${{ !cancelled() && steps.browsers.outcome == 'success' }}
-        run: pnpm e2e
-      # Each Playwright run replaces playwright-report/ and test-results/, so upload in between.
-      - name: Upload functional report
-        if: ${{ !cancelled() && steps.browsers.outcome == 'success' }}
+        run: pnpm turbo run e2e --filter=@ddl/web -- "--shard=$SHARD"
+      - name: Upload report
+        if: ${{ failure() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright-report-functional
+          name: playwright-report-functional-${{ matrix.shard }}
           path: |
             apps/web/playwright-report/
             apps/web/test-results/
           if-no-files-found: ignore
           retention-days: 14
 
+      - uses: ./.github/actions/turbo-cache
+        if: ${{ !cancelled() }}
+        with:
+          name: e2e-${{ matrix.shard }}
+          step: save
+
+  perf:
+    name: Perf (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PERF_BUDGET_MULTIPLIER: "2"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/turbo-cache
+        with:
+          name: perf
+          step: restore
+      - name: Cached already?
+        id: cached
+        run: node .github/scripts/turbo-hit.mjs e2e:perf --filter=@ddl/web
+      - uses: ./.github/actions/playwright
+        if: steps.cached.outputs.hit != 'true'
+
       - name: Perf tests
-        if: ${{ !cancelled() && steps.browsers.outcome == 'success' }}
-        run: pnpm e2e:perf
-        env:
-          PERF_BUDGET_MULTIPLIER: "2"
+        # A cache hit restores apps/web/perf-results.json, so the summary still shows the numbers.
+        run: pnpm turbo run e2e:perf --filter=@ddl/web
       - name: Perf summary
-        if: ${{ !cancelled() && steps.browsers.outcome == 'success' }}
+        if: ${{ !cancelled() }}
         run: node .github/scripts/perf-summary.mjs
-        env:
-          PERF_BUDGET_MULTIPLIER: "2"
       - name: Upload perf report
-        if: ${{ !cancelled() && steps.browsers.outcome == 'success' }}
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report-perf
@@ -192,6 +283,40 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - uses: ./.github/actions/turbo-cache
+        if: ${{ !cancelled() }}
+        with:
+          name: perf
+          step: save
+
+  vim:
+    name: Vim mode (vectors, vim.js suite, replay)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/turbo-cache
+        with:
+          name: vim
+          step: restore
+      - name: Cached already?
+        id: cached
+        run: node .github/scripts/turbo-hit.mjs vim:check --filter=@ddl/editor
+      - uses: ./.github/actions/playwright
+        if: steps.cached.outputs.hit != 'true'
+
+      - name: Vim check
+        run: pnpm turbo run vim:check --filter=@ddl/editor
+
+      - uses: ./.github/actions/turbo-cache
+        if: ${{ !cancelled() }}
+        with:
+          name: vim
+          step: save
+
   evals-mock:
     name: Evals (mock)
     runs-on: ubuntu-latest
@@ -201,9 +326,13 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
+      - uses: ./.github/actions/turbo-cache
+        with:
+          name: evals
+          step: restore
 
       - name: Run mock evals
-        run: pnpm eval:mock
+        run: pnpm turbo run eval:mock --filter=@ddl/evals
       - name: Summary
         if: ${{ !cancelled() }}
         run: node .github/scripts/eval-summary.mjs
@@ -215,3 +344,9 @@ jobs:
           path: evals/eval-results/
           if-no-files-found: warn
           retention-days: 30
+
+      - uses: ./.github/actions/turbo-cache
+        if: ${{ !cancelled() }}
+        with:
+          name: evals
+          step: save

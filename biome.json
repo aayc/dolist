@@ -49,7 +49,7 @@
   },
   "overrides": [
     {
-      "includes": ["apps/macos/**"],
+      "includes": ["apps/macos/**", ".github/scripts/**"],
       "linter": {
         "rules": {
           "suspicious": {

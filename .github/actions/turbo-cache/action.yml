@@ -1,0 +1,36 @@
+name: Turbo cache
+description: >-
+  Restores turbo's local cache (.turbo/cache) from this job's latest saved copy on this branch or
+  main, or saves it pruned to the entries this job's runs used. Turbo keys each entry by the task's
+  inputs, so a hit replays a task whose inputs are unchanged; runs on main set TURBO_FORCE and
+  re-run everything. Needs TURBO_RUN_SUMMARY=true for the pruning.
+
+inputs:
+  name:
+    description: The job's cache name (one per job and shard), e.g. `test-linux-agent`.
+    required: true
+  step:
+    description: "`restore` (after setup) or `save` (last step, `if: !cancelled()`)."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Restore turbo cache
+      if: inputs.step == 'restore'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: .turbo/cache
+        key: turbo-${{ runner.os }}-${{ inputs.name }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: turbo-${{ runner.os }}-${{ inputs.name }}-
+
+    - name: Prune turbo cache
+      if: inputs.step == 'save'
+      shell: bash
+      run: node .github/scripts/prune-turbo-cache.mjs
+    - name: Save turbo cache
+      if: inputs.step == 'save'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: .turbo/cache
+        key: turbo-${{ runner.os }}-${{ inputs.name }}-${{ github.run_id }}-${{ github.run_attempt }}
