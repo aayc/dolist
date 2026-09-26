@@ -2,14 +2,13 @@
 
 Swift client of the local Daily Do List daemon (`apps/daemon`): REST under `/api/*` and the `/ws`
 event stream. Foundation only (macOS 14+, iOS 17+), Swift 6 strict concurrency. Wire types come from
-`DailyDoListModels`, and the fake checks input with `DailyDoListDomain`'s port of the core's
-validators; the protocol itself is documented in `docs/PROTOCOL.md`.
+`DailyDoListModels`; the protocol itself is documented in `docs/PROTOCOL.md`.
 
 | Type | What |
 | --- | --- |
 | `DaemonClient` | The protocol the app codes against (REST calls + `connect`/`events`/`send`). |
 | `HTTPDaemonClient` | The real client: `URLSession` REST + `URLSessionWebSocketTask` events. |
-| `InMemoryDaemonClient` | A faithful fake daemon for tests, SwiftUI previews and demo mode. |
+| `FakeDaemonClient` | `DailyDoListClientTestSupport`: the tests' daemon (below). |
 | `DaemonEndpoint` | Base URL + bearer token; `DaemonEndpoint.discover()` reads the token file. |
 | `DaemonClientError` | Every failure, typed. |
 | `ConnectionState`, `DaemonStreamItem` | What `events()` streams yield. |
@@ -134,113 +133,16 @@ never holds the caller past the deadline.
 - `disconnect()` stops reconnecting, closes the socket (code 1000), emits `.state(.disconnected)`
   and finishes every current stream. `connectionState` reads the current state synchronously.
 
-## InMemoryDaemonClient (tests, previews, demo mode)
+## FakeDaemonClient (tests)
 
-```swift
-// Demo mode / previews: seeded vault, real-time pacing.
-let demo = InMemoryDaemonClient()                                   // seed: .demo, clock: .realTime()
-
-// Tests: deterministic, instant.
-let client = InMemoryDaemonClient(seed: .empty, clock: .immediate(), agent: .enabled)
-_ = try await client.writeNote("Daily/2026-09-23.md", content: "- [ ] Order a new kettle\n", baseVersion: .createOnly)
-let approval = try await client.approvals(status: .pending).first!   // the agent now waits on it
-_ = try await client.decideApproval(approval.id, .init(decision: .deny, note: "Not now"))
-```
-
-`init(seed:clock:agent:clientId:remote:)`:
-
-- **`Seed`** — `.demo`: today's daily note from the `- [ ] ` template with two tasks the agent already
-  finished, the lines it wrote under them (each citing a page its thread lists in `sources`), a
-  task it wrote, and a question written as prose that it answered in a thread anchored to that line
-  (a record with `anchor: line`; the answer cites its sources and links `[[Ideas]]`); previous days
-  with a gap and done tasks (with finished threads and approvals), `Templates/Daily.md`,
-  `Projects/…`, `Ideas.md`, `Welcome.md` (synthetic content only). `.empty`, or
-  `.files([path: content])`. Tasks already in a seed are never acted on.
-- **`SimulationClock`** — `.realTime(speed:)` (default; wall-clock pacing), `.immediate()` (scheduled
-  work runs to completion before each call returns), `.manual()` (nothing runs until
-  `advance(by:)`/`runUntilIdle()`). The deterministic clocks start at 2026-09-23 09:30 UTC in UTC
-  (pass `start:`/`timeZone:` to change); `today` and daily note names use the clock's time zone.
-  Given the same calls, `.immediate`/`.manual` fakes emit identical events, ids (`thr_0001`, …) and
-  timestamps.
-- **`AgentSimulation`** — `.enabled`, or `.disabled` (agent mode `off`: no records or threads; thread
-  actions answer 503 `agent_unavailable`).
-- **`Remote`** — sync, the always-on machine and placement at start: `.standalone` (default: no
-  sync, no machine, so the agent is held here), `.alwaysOn` (demo mode: syncing, with a paired and
-  reachable `vm-name`; the agent runs here), `.host` (the always-on machine itself, placement and
-  remote hosts locked by the environment), or any `Remote(…)`.
-
-It follows the daemon's semantics: canonical/hidden path rules, content-hash versions identical to
-the daemon's, `baseVersion` (unconditional / create-only / match → `.conflict` with the current
-note), soft deletes into `.trash/` with the daemon's ` (YYYY-MM-DD HHmmss[ n])` collision suffixes,
-folder rename/delete, daily notes from the template (`today` in local time, `created`, idempotent),
-search (every term, name hits first, 0-based lines, previews), settings patches validated against
-`SettingsRanges` (→ `.http(400, invalid_request)`), and the same error codes and messages. A parity
-run against a live daemon gave identical results for 29 REST scenarios.
-
-The simulated agent (same scripts as the web mock) watches daily notes inside the watch window. A
-new open, non-blank task (`- [ ] text`, identity kept across edits like the real tracker) settles
-for `agent.settleMs` (1.2 s; longer while `editor.activity` points at its line), then: record `idle` →
-`triaging` → `working`, a thread (`thread.upsert`), streamed text (`thread.message` streaming,
-`thread.delta` per word, final `thread.message`), tool calls `running` → `ok`, a markdown artifact,
-and `done` with a summary. Research answers cite the thread's `sources` (`[1](url)`), and a finished
-research task gets an agent line under it (`  - … %%agent:<thread>%%`, a `vault.changed` with origin
-`agent`), so clients merge it with unsaved edits. Task texts leave agent markers out, and line
-anchors follow their text. Whole-word `buy|order|book|reserve|email|send|pay` tasks request an
-approval (`approval.upsert`) and wait: approve → tool `ok` → `done`; deny → tool `blocked` → `done`
-with the note quoted. Tasks mentioning "browse" show a browser surface and send `surface.frame`s (a
-16×10 PNG) to subscribers. `maxConcurrentSubagents` queues extra tasks; `cancelThread`,
-`retryThread`, `postMessage` (orchestrator reply) and `thread.read` (clears `unread`) work; deleting
-a task line drops its record. Writes emit `vault.changed` with origin `client` and this `clientId`.
-
-Routines are read from the vault like the daemon reads them: every `Routines/<name>.md` (a port of
-`@ddl/core`'s file format and schedule phrases, with the same error messages, the schedule in words
-and the next run in the clock's time zone), ids from the path, and `routines.changed` after any
-change to such a file or to a run. `createRoutine` checks the name, the instructions and the
-schedule (400 with the reason) and a taken name (409), then writes the file; pause and resume
-rewrite its `paused:` line. `runRoutine` answers 409 while a run is going, for a routine with a
-problem and after five extra runs a day, and 503 with the agent disabled or paused; otherwise it
-starts a thread (`routineId`, task id `run_…`, the routine's file as its note) that streams a
-report, or waits on an approval when the instructions order, book or send something. When it
-ends, the routine's last run is updated and `routine.notification` follows the routine's `notify`
-(odd-numbered runs "found something new"). Stop, Retry and replies work on runs. The demo seed
-has four routines, two with past runs, one paused and one with a schedule it can't read.
-
-This device, pairing and the always-on machine follow the daemon's rules too, with its messages
-(checked against the real daemon by the integration tests). Device settings check names, remote
-hosts (normalized, at most 8, no repeats) and `lockedByEnv` (409, after the 400s); the sync
-setup checks the address and vault, needs a token the first time and never returns it; pairing
-codes are single use, last five minutes, at most three wait at once, a device paired with a
-code gets the name the code was issued for (else the one it sent), and `pair` allows five
-attempts a minute (`.rateLimited` with `Retry-After`; after ten failures every waiting code is
-dropped); pairing the machine checks the address and code, then makes it the vault's machine
-(`settings.changed`); Forget drops the credential and the last check, and a check without a
-credential only learns that the machine answers. The agent status carries `placement` and
-`readiness`: the agent is held here without sync (`no_sync`, checked first) or without a machine
-(`no_machine`), and a standalone daemon runs its own agent, never as the always-on machine.
-Switching placement runs a simulated handover (2 s to the machine, during which nobody holds
-it and the relay is `off`; 3 s back) whose note shows in `agent.status` and as the status's
-`problem` until it's done. Then the fake plays the relay: `connected` (actions work, no
-`problem`), `unreachable`, or `not_paired` without a credential or once the machine no longer
-accepts it (revoked there; pairing again fixes it, and its check says so), with the relay's
-words as the `problem` and as the 503 message of every agent action (reads still work).
-Another device holding the agent, or a handover under way, answer 503 with the daemon's words
-too. `simulateMachine(reachable:rejectsCodes:acceptsThisDevice:)` and
-`simulateAgentElsewhere(_:)` drive those states.
-
-Extras: `advance(by:)`, `runUntilIdle()`, `pendingActions`, `now`,
-`simulateExternalEdit(_:content:)` (origin `external`, `nil` deletes), `connectionState`,
-`simulateMachine(reachable:rejectsCodes:acceptsThisDevice:)`, `simulateAgentElsewhere(_:)`.
-Connection semantics match `HTTPDaemonClient` (`connect` → `.connecting`, `.connected`, `hello`;
-`.resync` on reconnect; events only while connected; `disconnect` finishes streams).
-
-Differences from the real daemon: no approval expiry, no `vault.changed` coalescing window,
-empty subfolders of a moved folder are not kept (like the daemon), scripts are the web mock's (the
-real mock runtime may ask questions after a denial), routines never start on their own (their
-schedule only sets `nextRunAt`; runs come from `runRoutine`) and have no run-time limit, the
-always-on machine is simulated in process (relayed actions run on the fake's own agent, and the
-machine's status never checks itself), the relay connects at once (the daemon's is `connecting`
-for a moment, and reconnects with backoff), handovers take seconds instead of the lease's
-renewals (up to ~40 s), and nothing persists.
+The `DailyDoListClientTestSupport` library: a vault with the daemon's `baseVersion` semantics
+(versions, 409s with the current note, renames, daily notes from a template), writes that can be
+held, failures injected per call (`fail("readNote:Ideas.md", with:)`), a call log (`calls`,
+`calls("thread:")`), a hand-driven event stream (`emit`), and canned answers per call
+(`script { $0.agentStatus = { … } }`). Unscripted, agent and routine calls answer from `State`,
+and the device, pairing and import calls like a daemon without those routes (404). It holds no
+daemon logic: flows that need the daemon's real behavior belong in the integration tests
+(`apps/macos/IntegrationTests`), which run the real daemon with the mock agent.
 
 ## Tests
 
@@ -252,5 +154,4 @@ REST runs against a `URLProtocol` stub; the event stream against an in-process R
 (`Tests/…/Support/TestWebSocketServer.swift`) that also records the exact upgrade request. The
 request bodies the HTTP client sends are validated in exact mode against
 `packages/contract/schema/wire.schema.json`, whose validator is checked against the golden
-fixtures. The in-memory fake has no tests of its own: the app's tests exercise it, and the
-integration tests (`apps/macos/IntegrationTests`) cover the real daemon.
+fixtures. The integration tests (`apps/macos/IntegrationTests`) cover the real daemon.
