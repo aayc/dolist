@@ -15,6 +15,7 @@ import {
   type PairedDeviceKind,
 } from "@ddl/core";
 import { z } from "zod";
+import { errnoCode } from "./home-files";
 
 export const MAX_PAIRED_DEVICES = 50;
 export const LAST_SEEN_RESOLUTION_MS = 60_000;
@@ -267,12 +268,6 @@ function publicDevice(device: StoredDevice): PairedDevice {
 
 function digest(value: string): Buffer {
   return createHash("sha256").update(value, "utf8").digest();
-}
-
-function errnoCode(error: unknown): string | undefined {
-  return typeof error === "object" && error !== null && "code" in error
-    ? String(error.code)
-    : undefined;
 }
 
 function errorMessage(error: unknown): string {

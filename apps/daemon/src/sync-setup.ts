@@ -9,6 +9,7 @@ import { hostname as osHostname } from "node:os";
 import { createId, type Logger, SYNC_ID_PATTERN, SYNC_LIMITS } from "@ddl/core";
 import { SyncServiceClient, type SyncTargetConfig } from "@ddl/storage";
 import type { DaemonSyncConfig } from "./config";
+import { errnoCode } from "./home-files";
 
 export interface DeviceIdentity {
   /** Random and stable: recorded on every change this device makes, and holds the agent lease. */
@@ -179,10 +180,4 @@ function validToken(token: string, source: string): string {
     throw new Error(`${source} doesn't hold a sync token (one line, no spaces)`);
   }
   return token;
-}
-
-function errnoCode(error: unknown): string | undefined {
-  return typeof error === "object" && error !== null && "code" in error
-    ? String(error.code)
-    : undefined;
 }
