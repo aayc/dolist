@@ -83,8 +83,10 @@ WORK="$OUTPUT/.work"
 mkdir -p "$WORK"
 
 # 1. Compile ---------------------------------------------------------------------------------------
-# One scratch path for both packages (the app's own; test.sh builds in its tests/ folder).
+# The app's scratch path (test.sh builds in its tests/ folder). The helper, a separate root package,
+# needs its own: SwiftPM keeps one build description per scratch path.
 SCRATCH="$MACOS_DIR/.build"
+HELPER_SCRATCH="$MACOS_DIR/.build/helper"
 step "Building $EXECUTABLE ($CONFIGURATION)"
 swift build --package-path "$MACOS_DIR" --scratch-path "$SCRATCH" -c "$CONFIGURATION" \
   --product "$EXECUTABLE"
@@ -93,9 +95,9 @@ BIN_DIR="$(swift build --package-path "$MACOS_DIR" --scratch-path "$SCRATCH" -c 
 [ -x "$BIN_DIR/$EXECUTABLE" ] || fail "no executable at $BIN_DIR/$EXECUTABLE"
 if [ "$WITH_DAEMON" = 1 ]; then
   step "Building $HELPER_NAME ($CONFIGURATION)"
-  swift build --package-path "$HELPER_PACKAGE" --scratch-path "$SCRATCH" -c "$CONFIGURATION" \
-    --product "$HELPER_NAME"
-  HELPER_BIN_DIR="$(swift build --package-path "$HELPER_PACKAGE" --scratch-path "$SCRATCH" \
+  swift build --package-path "$HELPER_PACKAGE" --scratch-path "$HELPER_SCRATCH" \
+    -c "$CONFIGURATION" --product "$HELPER_NAME"
+  HELPER_BIN_DIR="$(swift build --package-path "$HELPER_PACKAGE" --scratch-path "$HELPER_SCRATCH" \
     -c "$CONFIGURATION" --show-bin-path)"
   [ -x "$HELPER_BIN_DIR/$HELPER_NAME" ] || fail "no executable at $HELPER_BIN_DIR/$HELPER_NAME"
 fi
