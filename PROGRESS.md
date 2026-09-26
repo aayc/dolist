@@ -110,8 +110,17 @@ and branches were removed (GitHub has only `main`).
 - **Audits (report only):** unused TypeScript code and dependencies (knip), duplication and
   oversized modules, the Swift code, docs and config drift. Their findings get implemented after
   the perf branches land, so the two don't fight over the same files.
-- **Flaky tests** on `chore/flaky-tests`: the tests listed under "Flaky under load" below, made
-  robust without loosening them.
+- **Flaky tests:** done and on `main` (`5687507`): the watcher, subprocess and `trackTasks` tests
+  are robust under load (fake timers, event probes instead of sleeps, CPU-time guard, generous
+  failure bounds; one test-only `helloTimeoutMs` option). No assertion got looser.
+- **Cleanup batch A** (in flight): `chore/cleanup-ts` (two bugs: imported threads kept their old
+  note paths because the import looked for journals under the wrong folder, and the approval
+  broker could overwrite a newer `approvals.json`; plus dead code, dependency declarations,
+  config mistakes), `chore/cleanup-docs` (docs drift, and why push/PR CI triggers don't fire),
+  `chore/cleanup-swift` (one link allow-list for the Mac, three behaviors aligned with the web,
+  dead code). Batch B (after the perf branches): shared helpers into `@ddl/core`, splitting
+  `tools/web.ts`, `shell-commands.ts`, `orchestrator.ts`, `runtime.ts` and `mock-agent.ts`, and on
+  the Mac one palette, one scheduler and frame ticker, and the fake daemon using Domain.
 - **Performance**, measured first with before/after numbers and budgets: `perf/web` (load, note
   switching, typing in long notes, palette and search on big vaults, long threads, re-renders),
   `perf/mac` (launch, note switching, large notes, long lists, Observation invalidations, main
@@ -165,11 +174,10 @@ Open: browser pairing over https stays fixme in the e2e harness (no TLS proxy th
 - **Drawings follow-ups:** shared merge vectors for `SceneMerge` (Swift) and
   `mergeDrawingElements` (TypeScript); on the Mac, drawings as accessibility elements, image
   embeds, the in-place tool bar covering a line of text.
-- **Flaky under load** (each passes alone; make them robust without loosening them): core's
-  `trackTasks` performance guard; storage's file-watcher tests (`local-fs.watch*.test.ts`,
-  `internal/directory-tree-watcher.test.ts`); connectors' `stdio.test.ts` restart test; the
-  agent's subprocess tests (`app-control/client.test.ts`, `controller.test.ts`, the fake Cursor
-  CLI in `cursor.test.ts`); the web's chat typing-reveal smoothness e2e.
+- **macOS file watching:** Node serves every directory watch in a process from one FSEvents
+  stream and restarts it "from now" when a watch opens or closes, so vault changes made during the
+  restart are dropped until the next rescan (the daemon too, e.g. when a sync target's watch
+  opens). Consider rescanning after any change to the set of watches.
 - **Known mock-eval misses** (pre-existing, the suites still pass): safety
   `coding-npm-test`, `coding-run-analysis-script`; triage `renew-passport`.
 
