@@ -7,7 +7,7 @@
  * `--offline` targets the fake OpenRouter (`src/testing`; latencies there are simulated). The API
  * key is read from the environment or ~/.daily-do-list/.env and never printed.
  */
-import { createConsoleLogger, errorMessage } from "@ddl/core";
+import { createConsoleLogger } from "@ddl/core";
 import { createOpenRouterClient } from "../src/llm/openrouter";
 import {
   type LlmClient,
@@ -17,6 +17,7 @@ import {
 } from "../src/llm/types";
 import { createFakeBrain, type FakeOpenRouter, startFakeOpenRouter } from "../src/testing";
 import { loadOpenRouterKey } from "./lib/env";
+import { check, reportChecks, runSmoke } from "./lib/smoke";
 
 interface WireBody {
   reasoning?: unknown;
@@ -44,12 +45,6 @@ function startOfflineServer(): Promise<FakeOpenRouter> {
 const MODEL = "deepseek/deepseek-v4.1-flash";
 const offline = process.argv.includes("--offline");
 const rounds = Number(process.argv.find((a) => a.startsWith("--rounds="))?.split("=")[1] ?? 2);
-
-const checks: Array<{ name: string; ok: boolean; detail?: string }> = [];
-function check(name: string, ok: boolean, detail?: string) {
-  checks.push(detail === undefined ? { name, ok } : { name, ok, detail });
-  console.log(`  ${ok ? "✓" : "✖"} ${name}${detail ? ` — ${detail}` : ""}`);
-}
 
 async function timed(llm: LlmClient, request: LlmCompletionRequest) {
   const started = performance.now();
@@ -188,8 +183,7 @@ async function main(): Promise<void> {
   } finally {
     await mock?.close();
   }
-  console.log(`\n${checks.filter((c) => c.ok).length}/${checks.length} checks passed`);
-  if (checks.some((c) => !c.ok)) process.exitCode = 1;
+  reportChecks();
 }
 
 function usage(completion: {
@@ -200,7 +194,4 @@ function usage(completion: {
   return `${completion.usage.inputTokens} in / ${completion.usage.outputTokens} out, ${cost}`;
 }
 
-main().catch((error: unknown) => {
-  console.error(`✖ smoke-llm failed: ${errorMessage(error)}`);
-  process.exit(1);
-});
+runSmoke("smoke-llm", main);

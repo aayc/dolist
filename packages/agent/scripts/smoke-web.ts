@@ -4,16 +4,11 @@
  *
  *   pnpm --filter @ddl/agent exec tsx scripts/smoke-web.ts
  */
-import { errorMessage, type ToolSpec, toolResultText } from "@ddl/core";
+import { type ToolSpec, toolResultText } from "@ddl/core";
 import { createOpenRouterClient } from "../src/llm/openrouter";
 import { createWebTools, type WebFetchDetails } from "../src/tools/web";
 import { loadOpenRouterKey } from "./lib/env";
-
-const checks: Array<{ name: string; ok: boolean; detail?: string }> = [];
-function check(name: string, ok: boolean, detail?: string) {
-  checks.push(detail === undefined ? { name, ok } : { name, ok, detail });
-  console.log(`  ${ok ? "✓" : "✖"} ${name}${detail ? ` — ${detail}` : ""}`);
-}
+import { check, reportChecks, runSmoke } from "./lib/smoke";
 
 async function run(tool: ToolSpec, input: Record<string, unknown>) {
   const started = performance.now();
@@ -86,11 +81,7 @@ async function main(): Promise<void> {
     );
   else console.log("    (skipped check: no OPENROUTER_API_KEY)");
 
-  console.log(`\n${checks.filter((c) => c.ok).length}/${checks.length} checks passed`);
-  if (checks.some((c) => !c.ok)) process.exitCode = 1;
+  reportChecks();
 }
 
-main().catch((error: unknown) => {
-  console.error(`✖ smoke-web failed: ${errorMessage(error)}`);
-  process.exit(1);
-});
+runSmoke("smoke-web", main);

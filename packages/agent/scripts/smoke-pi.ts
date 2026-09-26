@@ -11,97 +11,29 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  createConsoleLogger,
-  errorMessage,
-  type ToolSpec,
-  textResult,
-  toolResultText,
-} from "@ddl/core";
-import type { ShellExecOptions, ShellExecutor } from "../src/execution/types";
+import { createConsoleLogger } from "@ddl/core";
 import { createPiHarness } from "../src/harness/pi";
-import type {
-  HarnessEvent,
-  HarnessSession,
-  ThinkingLevel,
-  ToolCallRequest,
-} from "../src/harness/types";
+import type { HarnessEvent, HarnessSession, ThinkingLevel } from "../src/harness/types";
 import { createFakeBrain, type FakeOpenRouter, startFakeOpenRouter } from "../src/testing";
 import { loadOpenRouterKey } from "./lib/env";
+import {
+  check,
+  checkAbort,
+  checkQueuedPrompts,
+  newStats,
+  type RunStats,
+  reportChecks,
+  runSmoke,
+  SMOKE_SYSTEM_PROMPT,
+  smokeFixtures,
+  TOOL_TASK,
+  transcript,
+} from "./lib/smoke";
 
 const MODEL = "deepseek/deepseek-v4.1-flash";
 const offline = process.argv.includes("--offline");
 const thinking = (process.argv.find((a) => a.startsWith("--thinking="))?.split("=")[1] ??
   "low") as ThinkingLevel;
-
-const checks: Array<{ name: string; ok: boolean; detail?: string }> = [];
-function check(name: string, ok: boolean, detail?: string) {
-  checks.push(detail === undefined ? { name, ok } : { name, ok, detail });
-}
-
-interface RunStats {
-  startedAt: number;
-  firstTokenMs?: number;
-  firstTextMs?: number;
-  inputTokens: number;
-  outputTokens: number;
-  costUsd: number;
-  errors: string[];
-}
-
-function newStats(): RunStats {
-  return { startedAt: performance.now(), inputTokens: 0, outputTokens: 0, costUsd: 0, errors: [] };
-}
-
-/** Compact live transcript; also accumulates timing and usage for the current run. */
-function transcript(getStats: () => RunStats) {
-  let thinkingChars = 0;
-  const toolStarted = new Map<string, number>();
-  return (event: HarnessEvent) => {
-    const stats = getStats();
-    const at = () => Math.round(performance.now() - stats.startedAt);
-    switch (event.type) {
-      case "thinking_delta":
-        stats.firstTokenMs ??= at();
-        thinkingChars += event.delta.length;
-        break;
-      case "text_delta":
-        stats.firstTokenMs ??= at();
-        stats.firstTextMs ??= at();
-        break;
-      case "message_end":
-        if (thinkingChars > 0) console.log(`    (thought for ${thinkingChars} chars)`);
-        thinkingChars = 0;
-        if (event.text) console.log(`  ◀ assistant [${at()}ms]: ${oneLine(event.text, 400)}`);
-        break;
-      case "tool_start":
-        toolStarted.set(event.toolCallId, performance.now());
-        console.log(`    ⚙ ${event.toolName} ${oneLine(JSON.stringify(event.input), 120)}`);
-        break;
-      case "tool_end": {
-        const took = Math.round(
-          performance.now() - (toolStarted.get(event.toolCallId) ?? performance.now()),
-        );
-        const mark = event.blocked ? "⛔ blocked" : event.isError ? "✖ error" : "✓";
-        console.log(
-          `      ${mark} ${event.toolName} (${took}ms) → ${oneLine(toolResultText(event.result), 160)}`,
-        );
-        break;
-      }
-      case "usage":
-        stats.inputTokens += event.inputTokens;
-        stats.outputTokens += event.outputTokens;
-        stats.costUsd += event.costUsd ?? 0;
-        break;
-      case "error":
-        stats.errors.push(event.message);
-        console.log(`  ✖ error: ${event.message}`);
-        break;
-      default:
-        break;
-    }
-  };
-}
 
 async function main(): Promise<void> {
   const home = await mkdtemp(join(tmpdir(), "ddl-smoke-pi-home-"));
@@ -128,64 +60,7 @@ async function main(): Promise<void> {
     );
 
     // ── tools ────────────────────────────────────────────────────────────────
-    let weatherCalls = 0;
-    let deleteExecuted = false;
-    const getWeather: ToolSpec = {
-      name: "get_weather",
-      label: "Get weather",
-      description: "Current weather for a city.",
-      parameters: {
-        type: "object",
-        properties: {
-          city: { type: "string", description: "City name" },
-          unit: { type: "string", enum: ["celsius", "fahrenheit"], nullable: true },
-        },
-        required: ["city"],
-      },
-      safety: { readOnly: true, category: "network" },
-      async execute(input) {
-        weatherCalls++;
-        const city = (input as { city?: string }).city ?? "?";
-        return textResult(`Sunny, 21°C, light breeze in ${city}`, { city, temperatureC: 21 });
-      },
-    };
-    const deleteEverything: ToolSpec = {
-      name: "delete_everything",
-      label: "Delete everything",
-      description: "Permanently delete all of the user's files.",
-      parameters: {
-        type: "object",
-        properties: { confirm: { type: "boolean" } },
-        required: ["confirm"],
-      },
-      safety: { destructive: true, category: "destructive", alwaysRequireApproval: true },
-      async execute() {
-        deleteExecuted = true;
-        return textResult("everything deleted");
-      },
-    };
-    const shellCalls: Array<{ command: string; options: ShellExecOptions }> = [];
-    const shell: ShellExecutor = {
-      async exec(command, options) {
-        shellCalls.push({ command, options });
-        const output = command.includes("echo")
-          ? `${command.replace(/^.*?echo\s+/, "").replace(/^["']|["']$/g, "")}\n`
-          : "ok\n";
-        options.onData?.(output);
-        return { exitCode: 0, output, timedOut: false, truncated: false, durationMs: 4 };
-      },
-    };
-    const gateCalls: ToolCallRequest[] = [];
-    const beforeToolCall = async (call: ToolCallRequest) => {
-      gateCalls.push(call);
-      if (call.toolName === "delete_everything") {
-        return {
-          allow: false as const,
-          reason: "destructive actions require explicit user approval",
-        };
-      }
-      return { allow: true as const };
-    };
+    const { seen, getWeather, deleteEverything, shell, beforeToolCall } = smokeFixtures();
 
     let stats = newStats();
     const events: HarnessEvent[] = [];
@@ -194,8 +69,7 @@ async function main(): Promise<void> {
     const session: HarnessSession = await harness.createSession({
       sessionId: "thr_smoke",
       role: "subagent",
-      systemPrompt:
-        "You are a subagent of Daily Do List. Use the provided tools exactly as the user asks, one step at a time, and keep replies short.",
+      systemPrompt: SMOKE_SYSTEM_PROMPT,
       tools: [getWeather, deleteEverything],
       model: MODEL,
       thinking,
@@ -210,35 +84,33 @@ async function main(): Promise<void> {
     console.log(`session created in ${Math.round(performance.now() - createStarted)}ms\n`);
 
     // ── scenario 1: tools, gate, bash ──────────────────────────────────────
-    const task =
-      "What's the weather in Paris? Use get_weather. Then run `echo hello from bash` with the bash tool. Then call delete_everything with confirm=true. Finally, in one sentence, say what happened with each of the three tools.";
-    console.log(`▶ user: ${task}`);
+    console.log(`▶ user: ${TOOL_TASK}`);
     stats = newStats();
-    await session.prompt(task);
+    await session.prompt(TOOL_TASK);
     const main = { ...stats, totalMs: Math.round(performance.now() - stats.startedAt) };
     const toolEnds = events.filter(
       (e): e is Extract<HarnessEvent, { type: "tool_end" }> => e.type === "tool_end",
     );
     const finalText = events.filter((e) => e.type === "message_end").at(-1);
     check("no errors in the tool scenario", main.errors.length === 0, main.errors.join("; "));
-    check("get_weather executed", weatherCalls > 0);
+    check("get_weather executed", seen.weatherCalls > 0);
     check(
       "bash ran through the ShellExecutor",
-      shellCalls.length > 0 && shellCalls[0]?.options.cwd === cwd,
+      seen.shellCalls.length > 0 && seen.shellCalls[0]?.options.cwd === cwd,
     );
     check(
       "bash did not receive the daemon environment",
-      shellCalls.every((c) => c.options.env === undefined),
+      seen.shellCalls.every((c) => c.options.env === undefined),
     );
     check(
       "delete_everything blocked and never executed",
-      !deleteExecuted &&
+      !seen.deleteExecuted &&
         toolEnds.some((e) => e.toolName === "delete_everything" && e.blocked === true),
     );
     check(
       "safety gate saw every tool call",
-      gateCalls.length === toolEnds.length && gateCalls.length >= 3,
-      `${gateCalls.length} gate calls / ${toolEnds.length} tool results`,
+      seen.gateCalls.length === toolEnds.length && seen.gateCalls.length >= 3,
+      `${seen.gateCalls.length} gate calls / ${toolEnds.length} tool results`,
     );
     check(
       "final answer produced",
@@ -251,59 +123,10 @@ async function main(): Promise<void> {
       return summarize(main, mock);
     }
 
-    // ── scenario 2: prompt while running (queued follow-up) ───────────────
-    console.log(
-      "\n▶ user: Which city did you check? (sent twice, the second while the first is running)",
-    );
     stats = newStats();
-    const followStarted = performance.now();
-    const first = session.prompt("Which city did you check? Answer in five words or fewer.");
-    const queuedWhileRunning = session.isRunning;
-    const second = session.prompt("Which city did you check, again? Five words or fewer.");
-    await Promise.all([first, second]);
-    const followMs = Math.round(performance.now() - followStarted);
-    check(
-      "second prompt was queued while running and both resolved",
-      queuedWhileRunning && !session.isRunning,
-      `${followMs}ms`,
-    );
-
-    // ── scenario 3: abort mid-stream ───────────────────────────────────────
-    console.log(
-      "\n▶ user: Write a 300-word story about a lighthouse. (aborted after the first token)",
-    );
+    await checkQueuedPrompts(session);
     stats = newStats();
-    const before = events.length;
-    const storyRun = session.prompt("Write a 300-word story about a lighthouse.");
-    const abortedAfter = await new Promise<number>((resolve) => {
-      const finish = (value: number) => {
-        clearInterval(poll);
-        clearTimeout(giveUp);
-        resolve(value);
-      };
-      const poll = setInterval(() => {
-        if (
-          events.slice(before).some((e) => e.type === "text_delta" || e.type === "thinking_delta")
-        ) {
-          finish(Math.round(performance.now() - stats.startedAt));
-        }
-      }, 5);
-      const giveUp = setTimeout(() => finish(-1), 30_000);
-      void storyRun.then(() => finish(-1));
-    });
-    const abortStarted = performance.now();
-    await session.abort();
-    await storyRun;
-    const abortMs = Math.round(performance.now() - abortStarted);
-    const storyEnd = events
-      .slice(before)
-      .filter((e) => e.type === "message_end")
-      .at(-1);
-    check(
-      "abort stops the run promptly",
-      abortedAfter >= 0 && abortMs < 2_000 && events.at(-1)?.type === "idle",
-      `first token after ${abortedAfter}ms, settled ${abortMs}ms after abort, ${storyEnd?.type === "message_end" ? storyEnd.text.length : 0} chars kept`,
-    );
+    await checkAbort(session, events, { giveUpMs: 30_000, settleMs: 2_000 });
 
     await session.dispose();
     summarize(main, mock);
@@ -379,17 +202,7 @@ function summarize(main: RunStats & { totalMs: number }, mock: FakeOpenRouter | 
   console.log(
     `tokens: ${main.inputTokens} in / ${main.outputTokens} out, cost $${main.costUsd.toFixed(6)}`,
   );
-  for (const c of checks)
-    console.log(`${c.ok ? "✓" : "✖"} ${c.name}${c.detail ? ` — ${c.detail}` : ""}`);
-  if (checks.some((c) => !c.ok)) process.exitCode = 1;
+  reportChecks();
 }
 
-function oneLine(text: string, max: number): string {
-  const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
-}
-
-main().catch((error: unknown) => {
-  console.error(`✖ smoke-pi failed: ${errorMessage(error)}`);
-  process.exit(1);
-});
+runSmoke("smoke-pi", main);
