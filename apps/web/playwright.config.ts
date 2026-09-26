@@ -48,5 +48,7 @@ export default defineConfig({
     timeout: 180_000,
     stdout: "ignore",
     stderr: "pipe",
+    // SIGTERM lets the harness remove its daemons' temporary folders (the default is SIGKILL).
+    gracefulShutdown: { signal: "SIGTERM", timeout: 10_000 },
   },
 });
