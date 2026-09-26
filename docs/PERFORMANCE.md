@@ -86,6 +86,39 @@ What keeps it fast:
   the app is signed, not the hash of every bundled file (that alone cost ~300 ms, seconds cold).
 - The supervisor polls a starting daemon every 20 ms (loopback requests are cheap).
 
+## macOS app on a large vault (`PerformanceTests`)
+
+The app's and the agent package's `PerformanceTests` use synthetic data: a 5,000-note vault with
+the daily notes folder open in the sidebar (2,000 rows) and a 2,000-line note restored as the last
+active tab, and an agent panel with 400 of today's threads, 60 pending approvals and a
+1,000-message thread. Each sample includes SwiftUI's layout and drawing in an offscreen window
+(`Perf` in `DailyDoListUITestSupport`); medians print as `PERF …`. Budgets hold in the debug build
+and scale with `PERF_BUDGET_MULTIPLIER` (4 on CI). Release numbers:
+`apps/macos/scripts/test.sh app -- -c release -Xswiftc -enable-testing --filter PerformanceTests`
+(and `DailyDoListAgent`).
+
+| Median | Budget (debug) | Now (release) | Before (release) |
+| --- | --- | --- | --- |
+| Launch → today's note in the editor (fake daemon, instant replies) | 500 ms | ~80 ms | ~170 ms |
+| The window's first render | 1 000 ms | ~175 ms | ~4 000 ms |
+| `vault.changed` announcing a new note, window updated | 250 ms | ~28 ms | 2 000–3 000 ms |
+| Quick switcher keystroke | 150 ms | ~6 ms | ~6 ms |
+| A 1,000-message thread opens | 150 ms | ~55 ms | ~55 ms |
+| Streamed text in that thread | 12 ms | ~4 ms | ~4 ms |
+| An agent event with 400 threads in the inbox | 12 ms | ~3 ms | ~3 ms |
+
+What keeps it fast:
+
+- **List rows need a view count SwiftUI knows without building them.** A modifier that branches on
+  `if #available` makes the row an `AnyView`; the sidebar's outline view then asks for each row by
+  index, and every lookup walks the rows before it. `.pointingHandCursor()` has one code path on
+  every macOS version for this reason.
+- **A new note goes into the vault tree in place** (`VaultTree.inserting`) instead of re-sorting
+  every entry with the locale-aware compare, and `vault.changed` refetches the tree only for a
+  folder the app doesn't know, like the web app.
+- **Launch lays out one note.** The last session's tabs come back in the tab strip, but only
+  today's note is shown.
+
 ## Micro-benchmarks (`pnpm bench` then `pnpm bench:check`)
 
 Vitest 5 benchmarks (`*.bench.ts`) assert p99 budgets inside the test and write

@@ -719,6 +719,10 @@ strictly: unknown keys, wrong types, out-of-range numbers and text over the caps
   [editor README](Packages/DailyDoListEditor/README.md#vim-mode).
 - **CI**: `.github/workflows/macos.yml` builds the daemon, runs every package's tests and the
   integration tests, builds a release app with the bundled daemon, and uploads the zip.
+- **Performance**: `PerformanceTests` in the app (launch, the window, a new note arriving and the
+  quick switcher on a 5,000-note vault) and in `DailyDoListAgent` (a 1,000-message thread, a busy
+  inbox), next to the editor's, domain's, vim's and drawing's. Budgets and numbers:
+  [docs/PERFORMANCE.md](../../docs/PERFORMANCE.md#macos-app-on-a-large-vault-performancetests).
 - **Tooltips**: the timing runs on a manual clock with fake event monitors and a recording
   presenter (`DailyDoListUI`), the real panel's placement and animations are checked without
   sleeping, and the app's tests lay the workspace out and check every tooltip: controls that run a
