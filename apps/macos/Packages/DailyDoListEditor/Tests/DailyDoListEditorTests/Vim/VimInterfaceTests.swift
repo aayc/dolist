@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListUITestSupport
 import DailyDoListVim
 import Testing
 
@@ -204,13 +205,7 @@ struct VimInterfaceTests {
     #expect(distance(pixel, background) > 0.3, "the block is filled on \(name)")
     #expect(
       pixel.blueComponent > pixel.greenComponent, "the block has the accent's blue on \(name)")
-    try FileManager.default.createDirectory(
-      at: RenderSnapshotTests.outputDirectory, withIntermediateDirectories: true)
-    if let png = focused.representation(using: .png, properties: [:]) {
-      try png.write(
-        to: RenderSnapshotTests.outputDirectory.appendingPathComponent(
-          "vim-block-cursor-\(name).png"))
-    }
+    try focused.writePNG("vim-block-cursor-\(name)", in: RenderSnapshotTests.outputDirectory)
     // An inactive window shows only the outline.
     editor.window.reportsKey = false
     let inactive = try render(editor)
@@ -239,10 +234,7 @@ struct VimInterfaceTests {
 
   private func render(_ editor: VimEditorHarness) throws -> NSBitmapImageRep {
     editor.controller.layoutManager.ensureLayout(for: editor.controller.textContainer)
-    let rep = try #require(
-      editor.textView.bitmapImageRepForCachingDisplay(in: editor.textView.bounds))
-    editor.textView.cacheDisplay(in: editor.textView.bounds, to: rep)
-    return rep
+    return editor.textView.bitmap()
   }
 
   private func distance(_ a: NSColor, _ b: NSColor) -> CGFloat {

@@ -31,17 +31,14 @@ struct RenderSnapshotTests {
       EditorBadge(id: "b", line: 1, status: "waiting_approval", label: "Needs approval", unread: 4),
       EditorBadge(id: "c", line: 2, status: "done", label: "Done · About 250 g", unread: 1),
     ])
-    let png = try render(editor)
-    try FileManager.default.createDirectory(
-      at: Self.outputDirectory, withIntermediateDirectories: true)
-    try png.write(to: Self.outputDirectory.appendingPathComponent("badges-narrow.png"))
+    try render(editor).writePNG("badges-narrow", in: Self.outputDirectory)
 
     // A pill that starts inside the text column and ends in the margin is drawn in full.
     let column = editor.textView.textContainerOrigin.x + editor.controller.textContainer.size.width
     let layouts = editor.controller.currentBadgeLayouts()
     let crossing = try #require(
       layouts.first { $0.rect.minX < column && $0.rect.maxX > column + 24 })
-    let rep = try snapshot(editor.textView)
+    let rep = editor.textView.bitmap()
     let scale = CGFloat(rep.pixelsWide) / editor.textView.bounds.width
     var colors = Set<UInt32>()
     for x in stride(from: column + 4, to: crossing.rect.maxX - 2, by: 1) {
@@ -77,12 +74,9 @@ struct RenderSnapshotTests {
           id: "b\(index)", line: index + 1, status: item.status, label: item.label,
           unread: item.unread)
       })
-    let png = try render(editor)
-    try FileManager.default.createDirectory(
-      at: Self.outputDirectory, withIntermediateDirectories: true)
-    try png.write(to: Self.outputDirectory.appendingPathComponent("badges-\(name).png"))
+    try render(editor).writePNG("badges-\(name)", in: Self.outputDirectory)
 
-    let rep = try snapshot(editor.textView)
+    let rep = editor.textView.bitmap()
     let scale = CGFloat(rep.pixelsWide) / editor.textView.bounds.width
     func color(_ point: NSPoint) throws -> NSColor {
       try #require(
@@ -146,12 +140,9 @@ struct RenderSnapshotTests {
       } + [
         EditorBadge(id: "t", line: chips.count + 1, status: "triaging", label: "Triaging…")
       ])
-    let png = try render(editor)
-    try FileManager.default.createDirectory(
-      at: Self.outputDirectory, withIntermediateDirectories: true)
-    try png.write(to: Self.outputDirectory.appendingPathComponent("chips-\(name).png"))
+    try render(editor).writePNG("chips-\(name)", in: Self.outputDirectory)
 
-    let rep = try snapshot(editor.textView)
+    let rep = editor.textView.bitmap()
     let scale = CGFloat(rep.pixelsWide) / editor.textView.bounds.width
     func color(_ point: NSPoint) throws -> NSColor {
       try #require(
@@ -207,10 +198,7 @@ struct RenderSnapshotTests {
         at: NSPoint(x: checkbox.rect.midX, y: checkbox.rect.midY), modifiers: []))
     motion.frame(after: 0.07)
     #expect(motion.isTicking)
-    let png = try render(editor)
-    try FileManager.default.createDirectory(
-      at: Self.outputDirectory, withIntermediateDirectories: true)
-    try png.write(to: Self.outputDirectory.appendingPathComponent("motion-frame.png"))
+    try render(editor).writePNG("motion-frame", in: Self.outputDirectory)
   }
 
   static let agentNote = [
@@ -245,13 +233,10 @@ struct RenderSnapshotTests {
       size: NSSize(width: 900, height: 360))
     editor.controller.scrollView.appearance = NSAppearance(named: appearance)
     editor.controller.setBadges(Self.agentBadges(text))
-    let png = try render(editor)
-    try FileManager.default.createDirectory(
-      at: Self.outputDirectory, withIntermediateDirectories: true)
-    try png.write(to: Self.outputDirectory.appendingPathComponent("agent-lines-\(name).png"))
+    try render(editor).writePNG("agent-lines-\(name)", in: Self.outputDirectory)
 
     // The band is drawn: accent-tinted pixels left of the question's text, over the background.
-    let rep = try snapshot(editor.textView)
+    let rep = editor.textView.bitmap()
     let scale = CGFloat(rep.pixelsWide) / editor.textView.bounds.width
     let band = try #require(
       editor.controller.anchoredLineBands(in: editor.textView.visibleRect).first)
@@ -270,44 +255,13 @@ struct RenderSnapshotTests {
     #expect(editor.controller.agentSparkles().count == 3)
   }
 
-  /// Renders the text view (and the line-number ruler to its left when requested) to PNG data.
-  private func render(_ editor: EditorHarness, includeRuler: Bool = false) throws -> Data {
-    let scrollView = editor.controller.scrollView
-    scrollView.layoutSubtreeIfNeeded()
+  /// Renders the text view.
+  private func render(_ editor: EditorHarness) -> NSBitmapImageRep {
+    editor.controller.scrollView.layoutSubtreeIfNeeded()
     editor.layout()
-    editor.textView.appearance = scrollView.appearance
-    let text = try snapshot(editor.textView)
-    #expect(distinctColors(try #require(text.cgImage)) > 8, "rendered image looks blank")
-    guard includeRuler, let ruler = scrollView.verticalRulerView else {
-      return try #require(text.representation(using: .png, properties: [:]))
-    }
-    ruler.appearance = scrollView.appearance
-    ruler.frame.size.height = editor.textView.bounds.height
-    let gutter = try snapshot(ruler)
-    let composite = try #require(
-      NSBitmapImageRep(
-        bitmapDataPlanes: nil, pixelsWide: gutter.pixelsWide + text.pixelsWide,
-        pixelsHigh: text.pixelsHigh,
-        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-        colorSpaceName: .deviceRGB,
-        bytesPerRow: 0, bitsPerPixel: 0))
-    NSGraphicsContext.saveGraphicsState()
-    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: composite)
-    let height = CGFloat(text.pixelsHigh)
-    gutter.draw(
-      in: NSRect(
-        x: 0, y: height - CGFloat(gutter.pixelsHigh), width: CGFloat(gutter.pixelsWide),
-        height: CGFloat(gutter.pixelsHigh)))
-    text.draw(
-      in: NSRect(
-        x: CGFloat(gutter.pixelsWide), y: 0, width: CGFloat(text.pixelsWide), height: height))
-    NSGraphicsContext.restoreGraphicsState()
-    return try #require(composite.representation(using: .png, properties: [:]))
-  }
-
-  private func snapshot(_ view: NSView) throws -> NSBitmapImageRep {
-    let rep = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
-    view.cacheDisplay(in: view.bounds, to: rep)
-    return rep
+    editor.textView.appearance = editor.controller.scrollView.appearance
+    let text = editor.textView.bitmap()
+    #expect(text.distinctColors() > 8, "rendered image looks blank")
+    return text
   }
 }

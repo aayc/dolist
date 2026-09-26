@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListUITestSupport
 import Testing
 
 @testable import DailyDoListEditor
@@ -101,9 +102,7 @@ struct FuzzTests {
       }
       if step % 25 == 0 {
         editor.layout()
-        let rep = try #require(
-          editor.textView.bitmapImageRepForCachingDisplay(in: editor.textView.visibleRect))
-        editor.textView.cacheDisplay(in: editor.textView.visibleRect, to: rep)
+        _ = editor.textView.bitmap(in: editor.textView.visibleRect)
         _ = controller.checkboxRects()
         _ = controller.currentBadgeLayouts()
       }

@@ -3,6 +3,7 @@ import DailyDoListClientTestSupport
 import DailyDoListDomain
 import DailyDoListModels
 import DailyDoListUI
+import DailyDoListUITestSupport
 import Foundation
 import Testing
 

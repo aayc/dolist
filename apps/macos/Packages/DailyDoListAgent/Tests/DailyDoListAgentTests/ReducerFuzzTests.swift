@@ -1,4 +1,5 @@
 import DailyDoListModels
+import DailyDoListUITestSupport
 import Testing
 
 @testable import DailyDoListAgent
@@ -18,7 +19,7 @@ struct ReducerFuzzTests {
   ]
 
   struct Generator {
-    var rng: SplitMix64
+    var rng: SeededGenerator
 
     mutating func pick<T>(_ items: [T]) -> T { items[Int.random(in: 0..<items.count, using: &rng)] }
     mutating func time() -> EpochMillis { EpochMillis(Int.random(in: 1...12, using: &rng)) }
@@ -206,7 +207,7 @@ struct ReducerFuzzTests {
 
   @Test(arguments: 0..<24)
   func neverBreaksInvariantsAndEveryStepDoesWhatItSays(seed: Int) {
-    var generator = Generator(rng: SplitMix64(seed: UInt64(seed) &* 7919 &+ 1))
+    var generator = Generator(rng: SeededGenerator(seed: UInt64(seed) &* 7919 &+ 1))
     var state = AgentState()
     var history: [ServerEvent] = []
     for _ in 0..<80 {
@@ -249,7 +250,7 @@ struct ReducerFuzzTests {
 
   @Test(arguments: 0..<24)
   func deliveringAnEventTwiceIsTheSameAsOnce(seed: Int) {
-    var generator = Generator(rng: SplitMix64(seed: UInt64(seed) &+ 1_000))
+    var generator = Generator(rng: SeededGenerator(seed: UInt64(seed) &+ 1_000))
     var state = AgentState()
     var history: [ServerEvent] = []
     for _ in 0..<Int.random(in: 0...40, using: &generator.rng) {
@@ -270,7 +271,7 @@ struct ReducerFuzzTests {
 
   @Test(arguments: 0..<24)
   func aResyncConvergesToTheDaemonsSnapshot(seed: Int) {
-    var generator = Generator(rng: SplitMix64(seed: UInt64(seed) &+ 5_000))
+    var generator = Generator(rng: SeededGenerator(seed: UInt64(seed) &+ 5_000))
     var state = AgentState()
     var history: [ServerEvent] = []
     for _ in 0..<Int.random(in: 0...40, using: &generator.rng) {

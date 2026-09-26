@@ -244,9 +244,7 @@ struct SnapshotTests {
       Self.pumpRunLoop(0.03)
       try await Task.sleep(for: .milliseconds(10))
     }
-    let bounds = hosting.bounds
-    let drawn = try #require(hosting.bitmapImageRepForCachingDisplay(in: bounds))
-    hosting.cacheDisplay(in: bounds, to: drawn)
+    let drawn = hosting.bitmap()
     // Layer-backed content (grouped forms) only shows up when rendering the layer tree, and
     // split-view columns only in the window server's copy of the window.
     let candidates = [
@@ -254,20 +252,17 @@ struct SnapshotTests {
       Self.windowServerCapture(window),
     ]
     .compactMap { $0 }
-    let rep = candidates.max { Self.distinctColors($0) < Self.distinctColors($1) } ?? drawn
+    let rep =
+      candidates.max {
+        $0.distinctColors(grid: 40, levels: 101) < $1.distinctColors(grid: 40, levels: 101)
+      } ?? drawn
     window.close()
     // The host outlives this call; emptied, it stops laying out views it shares with the next
     // snapshot (the one editor), which would otherwise get this window's geometry.
     content.isShown = false
     hosting.layoutSubtreeIfNeeded()
-    let data = try #require(rep.representation(using: .png, properties: [:]))
-    #expect(data.count > 2_000, "\(name) rendered something")
-    #expect(Self.distinctColors(rep) > 4, "\(name) isn't a blank image")
-    try FileManager.default.createDirectory(
-      at: Self.outputDirectory, withIntermediateDirectories: true)
-    let url = Self.outputDirectory.appendingPathComponent("\(name)-\(dark ? "dark" : "light").png")
-    try data.write(to: url)
-    return url
+    #expect(rep.distinctColors() > 4, "\(name) isn't a blank image")
+    return try rep.writePNG("\(name)-\(dark ? "dark" : "light")", in: Self.outputDirectory)
   }
 
   /// Renders `view`'s layer tree into a bitmap (2x), over the window background color.
@@ -314,23 +309,6 @@ struct SnapshotTests {
   /// AppKit-backed content (grouped forms, lists) commits on run-loop turns.
   static func pumpRunLoop(_ interval: TimeInterval) {
     RunLoop.main.run(until: Date().addingTimeInterval(interval))
-  }
-
-  /// Distinct colors on a coarse grid (a blank render has one or two).
-  private static func distinctColors(_ rep: NSBitmapImageRep) -> Int {
-    var colors = Set<String>()
-    let stepX = max(1, rep.pixelsWide / 40)
-    let stepY = max(1, rep.pixelsHigh / 40)
-    for x in stride(from: 0, to: rep.pixelsWide, by: stepX) {
-      for y in stride(from: 0, to: rep.pixelsHigh, by: stepY) {
-        guard let color = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
-        colors.insert(
-          String(
-            format: "%.2f-%.2f-%.2f", color.redComponent, color.greenComponent, color.blueComponent)
-        )
-      }
-    }
-    return colors.count
   }
 }
 

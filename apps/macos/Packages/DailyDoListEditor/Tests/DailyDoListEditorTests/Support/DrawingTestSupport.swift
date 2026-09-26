@@ -1,5 +1,6 @@
 import AppKit
 import DailyDoListDrawing
+import DailyDoListUITestSupport
 import DailyDoListVim
 
 @testable import DailyDoListEditor
@@ -230,8 +231,6 @@ final class DrawingEditorHarness {
     layout()
     let view = textView
     view.appearance = window.appearance
-    let rep = view.bitmapImageRepForCachingDisplay(in: view.visibleRect)!
-    view.cacheDisplay(in: view.visibleRect, to: rep)
-    return rep
+    return view.bitmap(in: view.visibleRect)
   }
 }

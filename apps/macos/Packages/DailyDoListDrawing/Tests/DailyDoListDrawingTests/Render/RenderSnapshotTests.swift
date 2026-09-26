@@ -1,8 +1,7 @@
-import CoreGraphics
+import AppKit
 import DailyDoListDrawingModel
 import DailyDoListUITestSupport
 import Foundation
-import ImageIO
 import Testing
 
 @testable import DailyDoListDrawing
@@ -16,8 +15,9 @@ struct RenderSnapshotTests {
   func rendersEveryElementType(theme: DrawingTheme) throws {
     let scene = TestScenes.gallery()
     let image = try #require(DrawingImage.render(scene, scale: 2, theme: theme))
-    _ = try Pixels.writePNG(image, name: "gallery-\(theme.rawValue)")
-    #expect(distinctColors(image) > 40, "the render looks blank")
+    try NSBitmapImageRep(cgImage: image).writePNG(
+      "gallery-\(theme.rawValue)", in: Fixtures.snapshotDirectory)
+    #expect(NSBitmapImageRep(cgImage: image).distinctColors() > 40, "the render looks blank")
     let corner = Pixels.color(image, x: 2, y: 2)
     if theme == .light {
       #expect(corner.r == 255 && corner.g == 255 && corner.b == 255)

@@ -1,6 +1,7 @@
 import AppKit
 import DailyDoListDrawingModel
 import DailyDoListUI
+import DailyDoListUITestSupport
 import Foundation
 import SwiftUI
 import Testing
@@ -211,13 +212,7 @@ struct PropertiesPanelTests {
       window.displayIfNeeded()
       RunLoop.main.run(until: Date().addingTimeInterval(0.02))
     }
-    let rep = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
-    host.cacheDisplay(in: host.bounds, to: rep)
-    let data = try #require(rep.representation(using: .png, properties: [:]))
-    try FileManager.default.createDirectory(
-      at: Fixtures.snapshotDirectory, withIntermediateDirectories: true)
-    try data.write(
-      to: Fixtures.snapshotDirectory.appendingPathComponent("properties-\(theme.rawValue).png"))
+    try host.bitmap().writePNG("properties-\(theme.rawValue)", in: Fixtures.snapshotDirectory)
     #expect(host.frame.height > 300, "every section shows")
     #expect(!editor.style.roundEdges, "the panel shows the selection's sharp edges")
     // Picking a color from the panel's palette restyles the selection.

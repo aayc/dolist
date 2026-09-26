@@ -1,5 +1,6 @@
 import AppKit
 import DailyDoListDrawingModel
+import DailyDoListUITestSupport
 import Foundation
 
 @testable import DailyDoListDrawing
@@ -120,17 +121,12 @@ final class CanvasHarness {
       window.displayIfNeeded()
       RunLoop.main.run(until: Date().addingTimeInterval(0.02))
     }
-    let rep = canvas.bitmapImageRepForCachingDisplay(in: canvas.bounds)!
-    canvas.cacheDisplay(in: canvas.bounds, to: rep)
-    return rep
+    return canvas.bitmap()
   }
 
   func writeSnapshot(_ name: String) throws -> NSBitmapImageRep {
     let rep = snapshot()
-    try FileManager.default.createDirectory(
-      at: Fixtures.snapshotDirectory, withIntermediateDirectories: true)
-    let data = rep.representation(using: .png, properties: [:])!
-    try data.write(to: Fixtures.snapshotDirectory.appendingPathComponent("\(name).png"))
+    try rep.writePNG(name, in: Fixtures.snapshotDirectory)
     return rep
   }
 }
