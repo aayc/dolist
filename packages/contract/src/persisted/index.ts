@@ -159,5 +159,6 @@ export {
   type PersistedJournalRead,
   PersistedJournalThreadHeaderSchema,
   persistedThreadIdFromJournalPath,
+  persistedThreadImportEvent,
   persistedThreadJournalPath,
 } from "./thread-journal";

@@ -105,7 +105,7 @@ happens on the devices, in the engine, exactly as for a local mirror folder
   holder finds the service's copy changed too it pushes the union, so it never drops an event.
   A device without the lease, or a former holder that appended offline, gives way. Without a
   lease (a mirrored folder), two devices appending at once keep every event.
-- Other formats (JSON such as the agent's thread files, canvases) keep the newest by modification
+- Other formats (JSON such as the agent's task records, canvases) keep the newest by modification
   time and save the other as the conflict copy. The server stamps `mtime` with its own clock when
   it accepts a write, so compare notes across devices with that in mind.
 - A file deleted on one device and edited on another is restored, never lost. Nothing is ever
@@ -114,11 +114,13 @@ happens on the devices, in the engine, exactly as for a local mirror folder
 - A server whose vault suddenly lists nothing (a replaced database, say) is refused with
   `SyncAbortedError` instead of deleting every note.
 
-What syncs: every text file in the vault, including the agent's sidecar (`.daily-do-list/threads`,
-`artifacts`, `state/journal`, `state/records.json`, `approvals.json`, `settings.json`). What doesn't: each device's
-own sync snapshot (`.daily-do-list/sync/`), the agent's machine-local scratch data
-(`.daily-do-list/state/tasks`), the Obsidian import manifest (`.daily-do-list/import/`, which names
-a folder on this machine), junk and temp files, and binary files (images, PDFs, …).
+What syncs: every text file in the vault, including the agent's sidecar (`state/journal` with the
+threads, `artifacts`, `state/records.json`, `approvals.json`, `settings.json`, and the thread
+snapshots older versions wrote in `threads/`, until the agent's holder moves them into the
+journals). What doesn't: each device's own sync snapshot (`.daily-do-list/sync/`), the agent's
+machine-local scratch data (`.daily-do-list/state/tasks`), the Obsidian import manifest
+(`.daily-do-list/import/`, which names a folder on this machine), junk and temp files, and binary
+files (images, PDFs, …).
 
 ## Security
 
@@ -306,10 +308,13 @@ So a device that lost the agent while offline can't overwrite the new holder's s
 reconnects. The price: agent changes a device made but couldn't sync before it lost the lease are
 dropped.
 
-**Upgrade note:** every device of a vault needs a daemon with fencing. An older daemon sends no
+**Upgrade notes:** every device of a vault needs a daemon with fencing. An older daemon sends no
 epoch, so the upgraded sync service refuses its agent file changes (its notes and settings still
 sync), and it doesn't understand the refusal: it keeps retrying those files and reports them as
-sync failures. Upgrade the sync service and every daemon together.
+sync failures. Upgrade the sync service and every daemon together. Threads are journal-only too:
+a device on an older version shows another device's threads read-only from snapshots, which
+aren't written any more, and an older holder writes snapshots that the next holder on this
+version moves into the journals (losing nothing).
 
 ## Limitations and what's next
 

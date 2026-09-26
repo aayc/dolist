@@ -6,9 +6,10 @@
  *   path with core's task parser and tracker, so each task keeps its id (and its thread and
  *   badge). Obsidian's own tasks in a merged note count as existing tasks: settled unless
  *   `actOnExistingTasks` is on, exactly as when the agent first sees a note.
- * - Task records get the new note path and line; threads (snapshots and journals) the new note
- *   path and routine id. A thread whose task can't be found in its moved note is kept and marked
- *   detached (a system message in its snapshot, which the thread store merges into its journal).
+ * - Task records get the new note path and line. Threads arrive as journals with the new note path
+ *   and routine id: the snapshots an older app wrote are migrated in on the way, exactly as the
+ *   thread store would at its next start. A thread whose task can't be found in its moved note is
+ *   kept and marked detached (a system message appended to its journal).
  * - Routines state follows renamed routines; approvals, artifacts and anything unknown are copied
  *   byte for byte, as is every file that needs no change. The sync engine's snapshots and an
  *   earlier import's manifest belong to the old vault and stay behind; `settings.json` is merged
@@ -17,19 +18,20 @@
  * With no sink it only counts, which is how the preview reports the same numbers the import uses.
  */
 import { join } from "node:path";
+import { foldJournal, planSnapshotImports, readSnapshots } from "@ddl/agent/journal";
 import {
   decodePersistedJournalLine,
   decodePersistedRecords,
   decodePersistedRoutines,
   decodePersistedTaskState,
-  decodePersistedThread,
+  decodePersistedThreadJournal,
+  encodePersistedJournalEvent,
   encodePersistedRecords,
   encodePersistedRoutines,
   encodePersistedTaskState,
-  encodePersistedThread,
+  type PersistedJournalEvent,
   type PersistedSettledTask,
   type PersistedTaskAgentRecord,
-  type PersistedThread,
   persistedThreadIdFromJournalPath,
 } from "@ddl/contract";
 import {
@@ -77,6 +79,12 @@ export const DETACHED_NOTE =
 
 const MAX_STATE_BYTES = 64 * 1024 * 1024;
 
+interface SidecarFile {
+  /** Sidecar-relative. */
+  path: string;
+  absolute: string;
+}
+
 type Category =
   | "thread"
   | "tracker"
@@ -89,10 +97,9 @@ type Category =
 
 /**
  * The agent journal (`state/journal/`, docs/specs/agent-journal.md) with the new vault's
- * references, or null to copy it as it is. A thread's journal is its source of truth: the thread
- * store folds it first and keeps its routine id (and, on equal `updatedAt`, its note path) over
- * the snapshot's, so its thread events (`thread.created`, `thread.imported`) are remapped like the
- * snapshot. Every other line stays byte for byte, and a journal a newer app wrote is left alone.
+ * references, or null to copy it as it is: a thread journal's thread events (`thread.created`,
+ * `thread.imported`) get the new note path and routine id. Every other line stays byte for byte,
+ * and a journal a newer app wrote is left alone.
  */
 export function remapJournalFile(path: string, text: string, remap: SidecarRemap): string | null {
   const threadId = persistedThreadIdFromJournalPath(`${SIDECAR_DIR}/${path}`);
@@ -142,7 +149,7 @@ export async function carrySidecar(
   };
   if (!input.vault) return counts;
   const root = join(input.vault, SIDECAR_DIR);
-  const files = new Map<Category, Array<{ path: string; absolute: string }>>();
+  const files = new Map<Category, SidecarFile[]>();
   try {
     for await (const entry of walkVault(root, input.signal ? { signal: input.signal } : {})) {
       if (entry.kind !== "file") continue;
@@ -231,46 +238,6 @@ export async function carrySidecar(
     }
   }
 
-  for (const file of files.get("thread") ?? []) {
-    input.signal?.throwIfAborted();
-    counts.threads++;
-    const text = await readText(file.absolute);
-    const decoded = text === null ? null : decodePersistedThread(text);
-    if (!decoded?.ok) {
-      await sink?.copy(file.path, file.absolute);
-      continue;
-    }
-    const thread = decoded.value;
-    const next: PersistedThread = {
-      ...thread,
-      notePath: thread.notePath === null ? null : remap.notePath(thread.notePath),
-      ...(thread.routineId ? { routineId: remap.routineId(thread.routineId) } : {}),
-    };
-    const move = thread.notePath === null ? undefined : input.carry.byFrom.get(thread.notePath);
-    if (thread.taskId && move?.daily && notes.changes(move)) {
-      if (!(await notes.locates(move, thread.taskId))) {
-        counts.detached++;
-        next.messages = [
-          ...thread.messages,
-          {
-            id: newId("msg"),
-            kind: "text",
-            role: "system",
-            author: "system",
-            text: DETACHED_NOTE,
-            createdAt: input.now,
-          },
-        ];
-      }
-    }
-    const changed =
-      next.notePath !== thread.notePath ||
-      next.routineId !== thread.routineId ||
-      next.messages !== thread.messages;
-    if (changed) await sink?.write(file.path, encodePersistedThread(next));
-    else await sink?.copy(file.path, file.absolute);
-  }
-
   for (const file of files.get("routines") ?? []) {
     const text = await readText(file.absolute);
     const decoded = text === null ? null : decodePersistedRoutines(text);
@@ -291,12 +258,74 @@ export async function carrySidecar(
     else await sink?.copy(file.path, file.absolute);
   }
 
+  const journals = new Map<string, SidecarFile>();
   for (const file of files.get("journal") ?? []) {
+    const id = persistedThreadIdFromJournalPath(`${SIDECAR_DIR}/${file.path}`);
+    if (id) {
+      journals.set(id, file);
+      continue;
+    }
     counts.journal++;
+    await sink?.copy(file.path, file.absolute);
+  }
+  const snapshotFiles: Array<SidecarFile & { text: string }> = [];
+  for (const file of files.get("thread") ?? []) {
     const text = await readText(file.absolute);
-    const remapped = text === null ? null : remapJournalFile(file.path, text, remap);
-    if (remapped === null) await sink?.copy(file.path, file.absolute);
-    else await sink?.write(file.path, remapped);
+    if (text === null) await sink?.copy(file.path, file.absolute);
+    else snapshotFiles.push({ ...file, text });
+  }
+  const snapshots = readSnapshots(snapshotFiles);
+  for (const { file } of snapshots.skipped) await sink?.copy(file.path, file.absolute);
+  for (const id of new Set([...snapshots.threads.keys(), ...journals.keys()])) {
+    input.signal?.throwIfAborted();
+    counts.threads++;
+    counts.journal++;
+    const own = snapshots.threads.get(id) ?? [];
+    const journal = journals.get(id);
+    const path = journal?.path ?? `state/journal/threads/${id}.jsonl`;
+    const original = journal ? await readText(journal.absolute) : "";
+    const read = decodePersistedThreadJournal(original ?? "", id);
+    if (original === null || read.newer !== null || (!journal && snapshots.newer.has(id))) {
+      // Left as it is, like the thread store leaves it.
+      if (journal) await sink?.copy(journal.path, journal.absolute);
+      for (const { file } of own) await sink?.copy(file.path, file.absolute);
+      continue;
+    }
+    const planned = planSnapshotImports(
+      id,
+      read.events,
+      own.map((snapshot) => snapshot.thread),
+    );
+    const merged = appendEvents(original, read.endsWithNewline, planned);
+    const before = decodePersistedThreadJournal(merged, id);
+    const thread = foldJournal(before.events, id).thread;
+    let text = remapJournalFile(path, merged, remap) ?? merged;
+    const move = thread?.notePath ? input.carry.byFrom.get(thread.notePath) : undefined;
+    if (thread?.taskId && move?.daily && notes.changes(move)) {
+      if (!(await notes.locates(move, thread.taskId))) {
+        counts.detached++;
+        text = appendEvents(text, before.endsWithNewline, [
+          {
+            v: 1,
+            id: newId("evt"),
+            epoch: before.events.at(-1)?.epoch ?? 0,
+            seq: before.maxSeq + 1,
+            at: input.now,
+            type: "message",
+            message: {
+              id: newId("msg"),
+              kind: "text",
+              role: "system",
+              author: "system",
+              text: DETACHED_NOTE,
+              createdAt: input.now,
+            },
+          },
+        ]);
+      }
+    }
+    if (journal && text === original) await sink?.copy(path, journal.absolute);
+    else await sink?.write(path, text);
   }
 
   for (const file of files.get("copy") ?? []) {
@@ -305,6 +334,16 @@ export async function carrySidecar(
     await sink?.copy(file.path, file.absolute);
   }
   return counts;
+}
+
+/** `text` with `events` appended, starting a line if its last one was cut off. */
+function appendEvents(
+  text: string,
+  endsWithNewline: boolean,
+  events: readonly PersistedJournalEvent[],
+): string {
+  if (events.length === 0) return text;
+  return (endsWithNewline ? text : `${text}\n`) + events.map(encodePersistedJournalEvent).join("");
 }
 
 /** Sidecar-relative path of a note's tracker state (the watcher's `taskStatePath`). */

@@ -1,11 +1,12 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createThreadStore, type TaskEvent, TaskWatcher } from "@ddl/agent";
+import { foldJournal } from "@ddl/agent/journal";
 import {
   decodePersistedRecords,
   decodePersistedRoutines,
   decodePersistedTaskState,
-  decodePersistedThread,
+  decodePersistedThreadJournal,
   type PersistedThread,
 } from "@ddl/contract";
 import {
@@ -60,9 +61,13 @@ async function sidecarText(path: string): Promise<string> {
 }
 
 async function thread(id: string): Promise<PersistedThread> {
-  const decoded = decodePersistedThread(await sidecarText(`threads/${id}.json`));
-  if (!decoded.ok) throw new Error(`thread ${id} unreadable`);
-  return decoded.value;
+  const read = decodePersistedThreadJournal(
+    await sidecarText(`state/journal/threads/${id}.jsonl`),
+    id,
+  );
+  const folded = foldJournal(read.events, id).thread;
+  if (!folded || read.issues.length > 0) throw new Error(`thread ${id} unreadable`);
+  return folded;
 }
 
 function tracker(path: string) {
@@ -79,17 +84,18 @@ afterEach(async () => {
 });
 
 describe("carrying over the agent's history", () => {
-  it("points threads at their notes' new paths", async () => {
+  it("carries threads as journals at their notes' new paths, older snapshots migrated in", async () => {
     await importWith();
     expect((await thread("thr_dentist")).notePath).toBe(MERGED);
     expect((await thread("thr_passport")).notePath).toBe(MOVED);
     expect((await thread("thr_ideas")).notePath).toBe("ideas (Daily Do List).md");
-    expect(await sidecarText("threads/thr_routine.json")).toBe(
-      currentFiles()[".daily-do-list/threads/thr_routine.json"],
+    expect(await sidecarText("state/journal/threads/thr_routine.jsonl")).toBe(
+      currentFiles()[".daily-do-list/state/journal/threads/thr_routine.jsonl"],
     );
+    expect(await readdir(join(destination, SIDECAR_DIR))).not.toContain("threads");
   });
 
-  it("keeps a thread whose task isn't in its note any more, marked detached", async () => {
+  it("keeps a thread whose task isn't in its note any more, marked detached in its journal", async () => {
     await importWith();
     const gone = await thread("thr_gone");
     expect(gone).toMatchObject({ taskId: "tsk_gone", notePath: MERGED });

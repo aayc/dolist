@@ -9,7 +9,6 @@ import {
   PersistedRecordsFileSchema,
   PersistedRoutinesFileSchema,
   PersistedTaskStateFileSchema,
-  PersistedThreadFileSchema,
   persistedThreadIdFromJournalPath,
   ServerEventSchema,
 } from "@ddl/contract";
@@ -77,18 +76,20 @@ async function invalidFiles(t: FakeAgentRuntime): Promise<string[]> {
       }
       continue;
     }
+    if (entry.path.startsWith(".daily-do-list/threads/")) {
+      problems.push(`${entry.path}: threads are journal-only`);
+      continue;
+    }
     const schema =
-      entry.path.startsWith(".daily-do-list/threads/") && entry.path.endsWith(".json")
-        ? PersistedThreadFileSchema
-        : entry.path === ".daily-do-list/state/records.json"
-          ? PersistedRecordsFileSchema
-          : entry.path === ".daily-do-list/state/approvals.json"
-            ? PersistedApprovalsFileSchema
-            : entry.path === ".daily-do-list/state/routines.json"
-              ? PersistedRoutinesFileSchema
-              : entry.path.startsWith(".daily-do-list/state/tasks/")
-                ? PersistedTaskStateFileSchema
-                : undefined;
+      entry.path === ".daily-do-list/state/records.json"
+        ? PersistedRecordsFileSchema
+        : entry.path === ".daily-do-list/state/approvals.json"
+          ? PersistedApprovalsFileSchema
+          : entry.path === ".daily-do-list/state/routines.json"
+            ? PersistedRoutinesFileSchema
+            : entry.path.startsWith(".daily-do-list/state/tasks/")
+              ? PersistedTaskStateFileSchema
+              : undefined;
     if (!schema) continue;
     const file = await t.storage.read(entry.path);
     const parsed = schema.safeParse(JSON.parse(file!.content));

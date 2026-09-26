@@ -56,13 +56,7 @@ export type * from "./runtime-types";
 export * from "./safety";
 export type * from "./safety/types";
 export type { ThreadStoreOptions } from "./threads/store";
-export {
-  ARTIFACTS_DIR,
-  BINARY_ARTIFACT_SUFFIX,
-  createThreadStore,
-  THREADS_DIR,
-  threadPath,
-} from "./threads/store";
+export { ARTIFACTS_DIR, BINARY_ARTIFACT_SUFFIX, createThreadStore } from "./threads/store";
 export type * from "./threads/types";
 export type * from "./tools/contracts";
 export { MCP_TOOL_PREFIX, TOOL } from "./tools/contracts";

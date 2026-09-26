@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Locator, type Page, syncVault, test } from "./fixtures";
+import { expect, type Locator, type Page, syncVault, test, threadJournal } from "./fixtures";
 import { expectDailyNote, openApp, typeTask } from "./helpers";
 import {
   agentStatus,
@@ -253,7 +253,7 @@ async function elsewhere(launch: Launch) {
   await runsHere(laptop);
   const device = await launch({ sync });
   await expect
-    .poll(() => device.read(".daily-do-list/threads/thr_orchestrator.json"), { timeout: 20_000 })
+    .poll(() => device.read(threadJournal("thr_orchestrator")), { timeout: 20_000 })
     .not.toBeNull();
   await expect
     .poll(async () => (await agentStatus(device)).placement?.runsOn?.name, { timeout: 20_000 })

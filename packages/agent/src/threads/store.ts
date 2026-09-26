@@ -1,20 +1,13 @@
 import {
-  decodePersistedThread,
   decodePersistedThreadJournal,
-  encodePersistedThread,
   isPersistedArtifactPath,
-  mergePersistedThreads,
   PERSISTED_BINARY_ARTIFACT_SUFFIX,
   PERSISTED_FILE_ID_PATTERN,
   PERSISTED_PATHS,
   PersistedCitedSourceSchema,
-  PersistedFile,
   type PersistedJournalEvent,
   type PersistedJournalPayload,
-  type PersistedJournalRead,
-  type PersistedThread,
   persistedThreadIdFromJournalPath,
-  persistedThreadIdFromPath,
   persistedThreadJournalPath,
 } from "@ddl/contract";
 import {
@@ -36,15 +29,14 @@ import type { StorageProvider } from "@ddl/storage";
 import { artifactExtension, decodeBase64, encodeBase64, utf8Length } from "./artifacts";
 import {
   applyJournalPayload,
-  copyThread,
   emptyFold,
   findMessageIndex,
   foldJournal,
   type JournalFold,
-  mergeSnapshot,
   mergeSources,
   type OpenToolCall,
 } from "./journal/fold";
+import { forEachLimited, migrateThreadFiles } from "./journal/migrate";
 import { type JournalExternalChange, JournalWriter } from "./journal/writer";
 import type {
   JournaledThreadStore,
@@ -55,7 +47,6 @@ import type {
   ToolCallStart,
 } from "./types";
 
-export const THREADS_DIR = PERSISTED_PATHS.threads;
 export const ARTIFACTS_DIR = PERSISTED_PATHS.artifacts;
 export const THREAD_JOURNALS_DIR = PERSISTED_PATHS.threadJournals;
 /** Storage is text-only: binary artifact bodies are stored base64-encoded under this suffix. */
@@ -73,16 +64,12 @@ export interface ThreadStoreOptions {
   storage: StorageProvider;
   now?: () => number;
   logger?: Logger;
-  /** Debounce before a changed thread is written. Streaming deltas alone never schedule a write. */
+  /** Debounce before a thread's new events are appended. Streaming deltas alone never schedule one. */
   flushDelayMs?: number;
   /** Pending approvals per thread, included in `thread.upsert` summaries. */
   pendingApprovals?: (threadId: string) => number;
   /** The agent lease's epoch, stamped on new journal events (0 until leases carry one). */
   epoch?: () => number;
-}
-
-export function threadPath(threadId: string): string {
-  return `${THREADS_DIR}/${threadId}.json`;
 }
 
 export function threadJournalPath(threadId: string): string {
@@ -93,46 +80,28 @@ export function createThreadStore(options: ThreadStoreOptions): JournaledThreadS
   return new SidecarThreadStore(options);
 }
 
-interface LoadedThread {
-  path: string;
-  thread: Thread;
-  repaired: boolean;
-}
-
-interface LoadedJournal {
-  read: PersistedJournalRead;
-  version: string;
-}
-
 interface Entry {
   id: string;
   /** `fold.thread` is set for every entry in the map. */
   fold: JournalFold;
   journal: JournalWriter;
-  /** Loaded from its snapshot alone: imported into the journal right before its first event. */
-  base: Thread | null;
   /** Messages still streaming: kept in memory until final (or until the store is flushed). */
   streaming: Set<string>;
 }
 
 /**
- * Threads persist as an append-only journal each (`state/journal/threads/<id>.jsonl`, the source of
- * truth) plus a snapshot derived from it (`threads/<id>.json`, the format every reader knows),
- * both in @ddl/contract. Every change is an event, applied through the same fold that loading uses.
+ * Threads persist as an append-only journal each (`state/journal/threads/<id>.jsonl`, format in
+ * @ddl/contract). Every change is an event, applied through the same fold that loading uses, so the
+ * thread in memory is the thread a restart reads back.
  *
- * - Loading prefers the journal, merges in whatever a snapshot holds that the journal lacks (an
- *   older app version, a crash between the two writes, a sync conflict copy) and rewrites the
- *   snapshot when it's behind. A thread with only a snapshot is migrated on first load: its first
- *   event is preceded by a `thread.imported` event holding the thread as loaded, so the journal
- *   file appears with the thread's first change and nothing is written for a thread that is only
- *   read.
- * - Snapshots follow the shared rules (unreadable files moved to `corrupt/`, newer files never
- *   overwritten, conditional writes merging another device's changes). A thread whose own
- *   snapshot comes from a newer app and has no journal is left alone: it runs in memory only.
- * - Journal events are appended in batches with the snapshot writes (debounced); the tool call
- *   write-ahead record is appended right away (`recordToolStarting`). Streaming text is journaled
- *   once final. Journals are never rewritten; lines they can't read are skipped and reported.
- * - External changes are not watched live; they show up at the next write or restart.
+ * - Loading first moves the snapshots older apps wrote (`threads/<id>.json`) and journal conflict
+ *   copies into the journals (`journal/migrate.ts`), then folds every journal. Lines a journal can't read are skipped and
+ *   reported; a journal with a newer app's lines is left alone, and so is its thread.
+ * - Events are appended in debounced batches, the tool call write-ahead record right away
+ *   (`recordToolStarting`). Streaming text is journaled once final (or at a flush). Journals are
+ *   never rewritten.
+ * - Another writer's events (a sync merge, another device) are folded in at the next append; they
+ *   aren't watched live.
  */
 class SidecarThreadStore implements JournaledThreadStore {
   private readonly storage: StorageProvider;
@@ -142,11 +111,8 @@ class SidecarThreadStore implements JournaledThreadStore {
   private readonly pendingApprovals: (threadId: string) => number;
   private readonly epoch: () => number;
   private readonly entries = new Map<string, Entry>();
-  private readonly files = new Map<string, PersistedFile<PersistedThread>>();
   private readonly listeners = new Set<(event: ThreadStoreEvent) => void>();
-  private readonly dirty = new Set<string>();
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
-  private readonly writes = new Map<string, Promise<void>>();
 
   constructor(options: ThreadStoreOptions) {
     this.storage = options.storage;
@@ -158,73 +124,24 @@ class SidecarThreadStore implements JournaledThreadStore {
   }
 
   async load(): Promise<void> {
-    const [snapshotEntries, journalEntries] = await Promise.all([
-      this.storage.list({ prefix: THREADS_DIR, includeHidden: true }),
-      this.storage.list({ prefix: THREAD_JOURNALS_DIR, includeHidden: true }),
-    ]);
-    const loaded: LoadedThread[] = [];
-    const journals = new Map<string, LoadedJournal>();
-    const newerSnapshots = new Set<string>();
-    const newerJournals = new Set<string>();
-    const unreadJournals = new Set<string>();
-    const tasks: Array<() => Promise<void>> = [];
-    for (const { path } of snapshotEntries) {
-      if (!path.endsWith(".json") || path.slice(THREADS_DIR.length + 1).includes("/")) continue;
-      tasks.push(async () => {
-        const file = this.fileAt(path, undefined);
-        try {
-          const result = await file.load();
-          if (result.status === "loaded") {
-            loaded.push({ path, thread: result.value, repaired: result.issues.length > 0 });
-          } else if (result.status === "newer") {
-            const id = persistedThreadIdFromPath(path);
-            if (id) newerSnapshots.add(id);
-            this.logger.warn("Skipping a thread saved by a newer version of the app", {
-              path,
-              version: result.version,
-            });
-          }
-        } catch (error) {
-          this.logger.warn("Failed to load thread", { path, error: errorText(error) });
-        }
-      });
-    }
-    for (const { path } of journalEntries) {
+    await migrateThreadFiles({
+      storage: this.storage,
+      logger: this.logger,
+      now: this.now,
+    }).catch((error: unknown) => {
+      this.logger.warn("Failed to migrate thread files", { error: errorText(error) });
+    });
+    const entries = await this.storage.list({ prefix: THREAD_JOURNALS_DIR, includeHidden: true });
+    await forEachLimited(entries, LOAD_CONCURRENCY, async ({ path }) => {
       const id = persistedThreadIdFromJournalPath(path);
-      if (!id) continue;
-      tasks.push(async () => {
-        try {
-          const file = await this.storage.read(path);
-          if (!file) return;
-          const read = decodePersistedThreadJournal(file.content, id);
-          if (read.newer !== null) {
-            newerJournals.add(id);
-            this.logger.warn("Skipping a thread whose journal a newer version of the app wrote", {
-              path,
-              version: read.newer,
-            });
-            return;
-          }
-          if (read.issues.length > 0) {
-            this.logger.warn("Skipped unreadable journal lines", {
-              path,
-              skipped: read.issues.length,
-              lines: read.issues.slice(0, 5).map((issue) => issue.path),
-            });
-          }
-          journals.set(id, { read, version: file.version });
-        } catch (error) {
-          unreadJournals.add(id);
-          this.logger.warn("Failed to load thread journal", { path, error: errorText(error) });
-        }
-      });
-    }
-    let next = 0;
-    const worker = async () => {
-      while (next < tasks.length) await tasks[next++]!();
-    };
-    await Promise.all(Array.from({ length: Math.min(LOAD_CONCURRENCY, tasks.length) }, worker));
-    this.adopt(loaded, journals, { newerSnapshots, newerJournals, unreadJournals });
+      if (!id) return;
+      try {
+        const file = await this.storage.read(path);
+        if (file) this.adopt(id, path, file);
+      } catch (error) {
+        this.logger.warn("Failed to load thread journal", { path, error: errorText(error) });
+      }
+    });
   }
 
   create(input: {
@@ -260,7 +177,6 @@ class SidecarThreadStore implements JournaledThreadStore {
       },
       at,
     );
-    this.fileAt(threadPath(id), null);
     this.changed(entry, true);
     return snapshot(entry.fold.thread!);
   }
@@ -326,7 +242,6 @@ class SidecarThreadStore implements JournaledThreadStore {
     const next = { ...current, text: current.text + delta };
     if (current.streaming === true) thread.messages[index] = next;
     else this.commit(entry, { type: "message", message: next }, thread.updatedAt);
-    this.dirty.add(threadId);
     this.emit({ type: "thread.delta", threadId, messageId, delta });
   }
 
@@ -425,11 +340,8 @@ class SidecarThreadStore implements JournaledThreadStore {
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
     for (const entry of this.entries.values()) this.journalStreaming(entry);
-    const ids = [...this.entries.values()]
-      .filter((entry) => this.dirty.has(entry.id) || entry.journal.hasPending)
-      .map((entry) => entry.id);
-    await Promise.all(ids.map((id) => this.persist(id)));
-    await Promise.all([...this.writes.values()]);
+    // Every journal, pending or not: an append already under way finishes before this resolves.
+    await Promise.all([...this.entries.keys()].map((id) => this.persist(id)));
   }
 
   on(listener: (event: ThreadStoreEvent) => void): Unsubscribe {
@@ -567,104 +479,28 @@ class SidecarThreadStore implements JournaledThreadStore {
 
   // ── Loading ───────────────────────────────────────────────────────────────
 
-  /**
-   * One thread can come from its journal and several snapshots: its own and copies (sync conflict
-   * copies). Without a journal its own snapshot wins, then the most recently updated copy, and the
-   * others are merged in; the result is written back to its own file.
-   */
-  private adopt(
-    loaded: LoadedThread[],
-    journals: Map<string, LoadedJournal>,
-    skips: {
-      newerSnapshots: ReadonlySet<string>;
-      newerJournals: ReadonlySet<string>;
-      unreadJournals: ReadonlySet<string>;
-    },
-  ): void {
-    const own = (entry: LoadedThread) => (entry.path === threadPath(entry.thread.id) ? 0 : 1);
-    loaded.sort(
-      (a, b) =>
-        own(a) - own(b) ||
-        b.thread.updatedAt - a.thread.updatedAt ||
-        (a.path < b.path ? -1 : a.path > b.path ? 1 : 0),
-    );
-    const byThread = new Map<string, LoadedThread[]>();
-    for (const entry of loaded) {
-      const list = byThread.get(entry.thread.id);
-      if (list) list.push(entry);
-      else byThread.set(entry.thread.id, [entry]);
+  private adopt(id: string, path: string, file: { content: string; version: string }): void {
+    const read = decodePersistedThreadJournal(file.content, id);
+    if (read.newer !== null) {
+      this.logger.warn("Skipping a thread whose journal a newer version of the app wrote", {
+        path,
+        version: read.newer,
+      });
+      return;
     }
-    for (const id of new Set([...byThread.keys(), ...journals.keys()])) {
-      if (skips.newerJournals.has(id)) continue;
-      const snapshots = byThread.get(id) ?? [];
-      const journal = journals.get(id);
-      const fold = journal ? foldJournal(journal.read.events, id) : emptyFold();
-      if (fold.thread) {
-        this.adoptJournaled(id, fold, journal!, snapshots, own);
-      } else if (snapshots.length > 0) {
-        this.adoptSnapshots(id, snapshots, own, {
-          journal,
-          journalUnknown: skips.unreadJournals.has(id),
-          ownIsNewer: skips.newerSnapshots.has(id),
-        });
-      }
+    if (read.issues.length > 0) {
+      this.logger.warn("Skipped unreadable journal lines", {
+        path,
+        skipped: read.issues.length,
+        lines: read.issues.slice(0, 5).map((issue) => issue.path),
+      });
     }
-    for (const id of this.dirty) this.schedule(id, this.flushDelayMs);
-  }
-
-  private adoptJournaled(
-    id: string,
-    fold: JournalFold,
-    journal: LoadedJournal,
-    snapshots: LoadedThread[],
-    own: (entry: LoadedThread) => number,
-  ): void {
+    const fold = foldJournal(read.events, id);
+    if (!fold.thread) return;
     const entry = this.newEntry(id);
     entry.fold = fold;
-    entry.journal.adopt(journal.read, journal.version);
+    entry.journal.adopt(read, file.version);
     this.entries.set(id, entry);
-    for (const copy of snapshots) {
-      if (mergeSnapshot(entry.fold, copy.thread)) {
-        this.commit(entry, { type: "thread.imported", thread: copy.thread });
-      }
-    }
-    const ownSnapshot = snapshots.find((copy) => own(copy) === 0);
-    if (
-      !ownSnapshot ||
-      ownSnapshot.repaired ||
-      encodePersistedThread(ownSnapshot.thread) !== encodePersistedThread(entry.fold.thread!)
-    ) {
-      this.dirty.add(id);
-    }
-    if (entry.journal.hasPending) this.dirty.add(id);
-  }
-
-  private adoptSnapshots(
-    id: string,
-    snapshots: LoadedThread[],
-    own: (entry: LoadedThread) => number,
-    context: { journal: LoadedJournal | undefined; journalUnknown: boolean; ownIsNewer: boolean },
-  ): void {
-    const [first, ...rest] = snapshots;
-    let thread = first!.thread;
-    let dirty = first!.repaired || own(first!) === 1;
-    for (const copy of rest) {
-      const merged = mergePersistedThreads(thread, copy.thread);
-      if (encodePersistedThread(merged) !== encodePersistedThread(thread)) {
-        thread = merged;
-        dirty = true;
-      }
-    }
-    const entry = this.newEntry(id);
-    entry.fold.thread = thread;
-    entry.base = copyThread(thread);
-    if (context.journal) entry.journal.adopt(context.journal.read, context.journal.version);
-    else if (!context.journalUnknown) entry.journal.assumeMissing();
-    if (context.ownIsNewer) {
-      entry.journal.disable("its thread file was written by a newer version of the app");
-    }
-    this.entries.set(id, entry);
-    if (dirty) this.dirty.add(id);
   }
 
   // ── Changes ───────────────────────────────────────────────────────────────
@@ -679,16 +515,11 @@ class SidecarThreadStore implements JournaledThreadStore {
       logger: this.logger,
     });
     if (!PERSISTED_FILE_ID_PATTERN.test(id)) journal.disable("the thread id can't name a file");
-    return { id, fold: emptyFold(), journal, base: null, streaming: new Set() };
+    return { id, fold: emptyFold(), journal, streaming: new Set() };
   }
 
   /** Records an event and applies it: the thread in memory is always the fold of its journal. */
   private commit(entry: Entry, payload: PersistedJournalPayload, at = this.now()): void {
-    if (entry.base) {
-      const base = entry.base;
-      entry.base = null;
-      entry.journal.record({ type: "thread.imported", thread: base }, at);
-    }
     entry.journal.record(payload, at);
     applyJournalPayload(entry.fold, payload, at, entry.id);
   }
@@ -709,19 +540,6 @@ class SidecarThreadStore implements JournaledThreadStore {
       const message = index === -1 ? undefined : thread.messages[index];
       if (message) this.commit(entry, { type: "message", message }, thread.updatedAt);
     }
-  }
-
-  /** Another device changed this thread's snapshot since we last read or wrote it. */
-  private mergeExternal(entry: Entry, theirs: Thread): void {
-    if (!mergeSnapshot(entry.fold, theirs)) return;
-    const known = new Set(entry.fold.thread!.messages.map((message) => message.id));
-    this.commit(entry, { type: "thread.imported", thread: theirs });
-    for (const message of entry.fold.thread!.messages) {
-      if (!known.has(message.id)) {
-        this.emit({ type: "thread.message", threadId: entry.id, message });
-      }
-    }
-    this.emit({ type: "thread.upsert", thread: this.summarize(entry.fold.thread!) });
   }
 
   /** Another writer appended to this thread's journal: fold everything again, in order. */
@@ -748,36 +566,16 @@ class SidecarThreadStore implements JournaledThreadStore {
       if (!known.has(message.id))
         this.emit({ type: "thread.message", threadId: entry.id, message });
     }
-    this.dirty.add(entry.id);
     this.emit({ type: "thread.upsert", thread: this.summarize(fold.thread) });
   }
 
   // ── Writing ───────────────────────────────────────────────────────────────
-
-  /** `known`: what the caller knows about the file (`null` = it does not exist). */
-  private fileAt(path: string, known: string | null | undefined): PersistedFile<PersistedThread> {
-    let file = this.files.get(path);
-    if (!file) {
-      const expectedId = persistedThreadIdFromPath(path) ?? undefined;
-      file = new PersistedFile({
-        storage: this.storage,
-        path,
-        decode: (text) => decodePersistedThread(text, expectedId),
-        logger: this.logger,
-        now: this.now,
-        known,
-      });
-      this.files.set(path, file);
-    }
-    return file;
-  }
 
   private summarize(thread: Thread): ThreadSummary {
     return summarizeThread(thread, this.pendingApprovals(thread.id));
   }
 
   private changed(entry: Entry, schedule: boolean): void {
-    this.dirty.add(entry.id);
     if (schedule) this.schedule(entry.id, this.flushDelayMs);
     this.emit({ type: "thread.upsert", thread: this.summarize(entry.fold.thread!) });
   }
@@ -798,38 +596,11 @@ class SidecarThreadStore implements JournaledThreadStore {
     });
   }
 
-  /** Writes are chained per thread so an older snapshot never lands after a newer one. */
-  private persist(threadId: string): Promise<void> {
-    const previous = this.writes.get(threadId) ?? Promise.resolve();
-    const next = previous.then(() => this.writeNow(threadId));
-    this.writes.set(threadId, next);
-    void next.then(() => {
-      if (this.writes.get(threadId) === next) this.writes.delete(threadId);
-    });
-    return next;
-  }
-
-  /** The journal first (the source of truth), then the snapshot derived from it. */
-  private async writeNow(threadId: string): Promise<void> {
+  private async persist(threadId: string): Promise<void> {
     const entry = this.entries.get(threadId);
     if (!entry) return;
     try {
       await this.flushJournal(entry);
-      if (this.dirty.has(threadId)) {
-        this.dirty.delete(threadId);
-        const file = this.fileAt(threadPath(threadId), null);
-        try {
-          await file.save(
-            () => encodePersistedThread(entry.fold.thread!),
-            (theirs) => this.mergeExternal(entry, theirs),
-          );
-        } catch (error) {
-          this.dirty.add(threadId);
-          throw error;
-        }
-      }
-      // Merging another device's snapshot journals what it brought.
-      if (entry.journal.hasPending) await this.flushJournal(entry);
     } catch (error) {
       this.logger.warn("Failed to persist thread; will retry", {
         threadId,

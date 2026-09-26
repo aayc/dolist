@@ -8,6 +8,7 @@ import {
   PERSISTED_FORMATS,
   type PersistedJournalEvent,
   persistedThreadIdFromJournalPath,
+  persistedThreadImportEvent,
   persistedThreadJournalPath,
 } from "../../src/persisted";
 import {
@@ -180,20 +181,25 @@ describe("thread journal lines", () => {
     expect(decoded).toEqual({ ok: true, event, issues: [] });
   });
 
-  test.prop([threadArb])("thread.imported round-trips a whole thread", (thread) => {
-    const event = {
-      v: 1,
-      id: "evt_1",
-      epoch: 0,
-      seq: 1,
-      at: T,
-      type: "thread.imported",
-      thread,
-    } as const;
-    const read = decodePersistedThreadJournal(encodePersistedJournalEvent(event), thread.id);
-    expect(read.issues).toEqual([]);
-    expect(read.events).toEqual([event]);
-  });
+  test.prop([threadArb])(
+    "thread.imported round-trips a whole thread, under an id only its content decides",
+    (thread) => {
+      const event = persistedThreadImportEvent(thread, { epoch: 2, seq: 5 });
+      expect(event).toMatchObject({ epoch: 2, seq: 6, at: thread.updatedAt });
+      const read = decodePersistedThreadJournal(encodePersistedJournalEvent(event), thread.id);
+      expect(read.issues).toEqual([]);
+      expect(read.events).toEqual([event]);
+      const reversed = JSON.parse(JSON.stringify(thread), (_key, value: unknown) =>
+        value && typeof value === "object" && !Array.isArray(value)
+          ? Object.fromEntries(Object.entries(value).reverse())
+          : value,
+      );
+      expect(persistedThreadImportEvent(reversed).id).toBe(event.id);
+      expect(persistedThreadImportEvent({ ...thread, title: `${thread.title}!` }).id).not.toBe(
+        event.id,
+      );
+    },
+  );
 
   test.prop([fc.array(eventArb, { maxLength: 30 })])(
     "a journal decodes to its unique events in canonical order",

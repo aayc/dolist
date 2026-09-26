@@ -35,8 +35,8 @@ thread open 21 ms (1 000 messages: 66 ms), 300 new files 9 ms (the daemon batche
 differently from the mock's 300 synthetic ones), everything else within a millisecond or two.
 
 Large data is seeded as files before the daemon starts: `DaemonSpec.notes` adds notes, a thread is
-its `.daily-do-list/threads/<id>.json` (`threadFile` in `e2e/fixtures.ts`), and the vault burst
-writes 300 files into the vault.
+its journal (`threadFile` in `e2e/fixtures.ts`), and the vault burst writes 300 files into the
+vault.
 
 Drawings stay off the keystroke path: an embed's box is a widget from the live preview's
 visible-range pass (reused while its `![[…]]` doesn't change), static renders are cached by the

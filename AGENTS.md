@@ -134,8 +134,7 @@ agent changes also run the relevant parts of what CI runs:
                                         ▼                                  ▼
                                      ApprovalBroker ──WS──▶ UI card     journal: "about to run", then the result
                                      ExecutionProvider (local): shell, browser, computer
-                                     ThreadStore: journal (state/journal/threads/*.jsonl, the source of truth)
-                                                  + snapshots (threads/*.json), artifacts
+                                     ThreadStore: journals (state/journal/threads/*.jsonl), artifacts
 ```
 
 Key flows are documented in `docs/ARCHITECTURE.md` and `docs/AGENT_SYSTEM.md`.

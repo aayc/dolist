@@ -1,8 +1,7 @@
 /**
  * `.daily-do-list/state/journal/threads/<threadId>.jsonl` — the append-only journal of one agent
- * thread, its source of truth. One event per line (compact JSON, `\n`-terminated), written by the
- * thread store (packages/agent/src/threads/store.ts); the thread is the fold of its events, and
- * `threads/<threadId>.json` is a snapshot derived from it for readers that never parse journals.
+ * thread, its only persisted form. One event per line (compact JSON, `\n`-terminated), written by
+ * the thread store (packages/agent/src/threads/store.ts); the thread is the fold of its events.
  *
  * Every event has a unique `id` and an `(epoch, seq)`: `epoch` is the agent lease's grant (0 until
  * leases carry one), `seq` grows with every append. Readers order events by `(epoch, seq, id)`, so
@@ -12,6 +11,7 @@
  * journal is left alone. A line that doesn't parse or validate is skipped and reported; the rest of
  * the journal still loads.
  */
+import { hashString } from "@ddl/core";
 import { z } from "zod";
 import {
   describeZodError,
@@ -95,8 +95,9 @@ const LineSchema = z.discriminatedUnion("type", [
     thread: PersistedJournalThreadHeaderSchema,
   }),
   /**
-   * A whole thread merged in: a snapshot-only thread migrating (its first event), or a snapshot
-   * another app version or device changed (merged with `mergePersistedThreads`).
+   * A whole thread merged in with `mergePersistedThreads`: a snapshot an older app wrote
+   * (`threads/<id>.json`) migrating into the journal, or the thread in memory restarting a journal
+   * that disappeared.
    */
   z.object({ ...envelope, type: z.literal("thread.imported"), thread: PersistedMapSchema }),
   /** Adds a message, or replaces the one with the same id. */
@@ -291,4 +292,34 @@ export function decodePersistedThreadJournal(
 export function encodePersistedJournalEvent(event: PersistedJournalEvent): string {
   const { v, id, epoch, seq, at, type, ...payload } = event;
   return `${JSON.stringify({ v, id, epoch, seq, at, type, ...payload })}\n`;
+}
+
+/**
+ * The `thread.imported` event that brings `thread` into a journal right after the event at
+ * `(epoch, seq)`. Its id comes from the thread's content, so two devices importing the same
+ * snapshot write the same event, which the union merge keeps once.
+ */
+export function persistedThreadImportEvent(
+  thread: PersistedThread,
+  after: { epoch: number; seq: number } = { epoch: 0, seq: 0 },
+): PersistedJournalEvent {
+  const key = `${thread.id}\n${sortedJson(thread)}`;
+  return {
+    v: PERSISTED_THREAD_JOURNAL_VERSION,
+    id: `evt_${hashString(key)}${hashString(key, 1)}`,
+    epoch: after.epoch,
+    seq: after.seq + 1,
+    at: thread.updatedAt,
+    type: "thread.imported",
+    thread,
+  };
+}
+
+/** JSON with every object's keys sorted: equal values give equal text, whatever their key order. */
+function sortedJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    isPersistedObject(v)
+      ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : v,
+  );
 }

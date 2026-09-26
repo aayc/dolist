@@ -1,11 +1,15 @@
 /**
  * Persisted state as the whole runtime sees it at startup (mock mode, real stores).
  */
-import { encodePersistedRecords, encodePersistedThread } from "@ddl/contract";
+import {
+  encodePersistedJournalEvent,
+  encodePersistedRecords,
+  persistedThreadImportEvent,
+} from "@ddl/contract";
 import { ORCHESTRATOR_THREAD_ID, type TextMessage, type Thread } from "@ddl/core";
 import { describe, expect, it } from "vitest";
 import { RECORDS_PATH } from "../../src/orchestrator/records";
-import { threadPath } from "../../src/threads/store";
+import { threadJournalPath } from "../../src/threads/store";
 import { createTestRuntime, TODAY } from "../helpers/runtime";
 import { paths, readFixture, vault } from "./helpers";
 
@@ -24,7 +28,11 @@ const orphan: Thread = {
 
 describe("runtime startup with persisted state", () => {
   it("keeps threads whose task no longer exists and explains why it cannot act on them", async () => {
-    const storage = vault({ [threadPath("thr_orphan")]: encodePersistedThread(orphan) });
+    const storage = vault({
+      [threadJournalPath("thr_orphan")]: encodePersistedJournalEvent(
+        persistedThreadImportEvent(orphan),
+      ),
+    });
     const t = await createTestRuntime({ storage });
     try {
       expect(t.runtime.listThreads().map((s) => s.id)).toEqual([
@@ -68,10 +76,10 @@ describe("runtime startup with persisted state", () => {
     }
   });
 
-  it("starts healthy on corrupt state: unreadable files are moved aside, the rest loads", async () => {
+  it("starts healthy on corrupt state: unreadable files are set aside, the rest loads", async () => {
     const storage = vault({
       [RECORDS_PATH]: readFixture("records", "corrupt-truncated.json"),
-      [threadPath("thr_minimal0001")]: readFixture("threads", "v1-minimal.json"),
+      ".daily-do-list/threads/thr_minimal0001.json": readFixture("threads", "v1-minimal.json"),
       ".daily-do-list/threads/corrupt-truncated.json": readFixture(
         "threads",
         "corrupt-truncated.json",
@@ -87,9 +95,10 @@ describe("runtime startup with persisted state", () => {
       const moved = (await paths(storage, ".daily-do-list/corrupt")).map((p) =>
         p.replace(/\.\d{8}T\d{9}Z/, ""),
       );
-      expect(moved.sort()).toEqual([
-        ".daily-do-list/corrupt/state/records.json",
-        ".daily-do-list/corrupt/threads/corrupt-truncated.json",
+      expect(moved).toEqual([".daily-do-list/corrupt/state/records.json"]);
+      // An unreadable thread snapshot stays where it is (it's never migrated).
+      expect(await paths(storage, ".daily-do-list/threads")).toEqual([
+        ".daily-do-list/threads/corrupt-truncated.json",
       ]);
     } finally {
       await t.runtime.stop();

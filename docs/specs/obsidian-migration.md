@@ -47,7 +47,7 @@ property test: an editor that has no unsaved typing never writes content the vau
     the Obsidian note is kept and the Daily Do List note's content is appended under a
     `## From Daily Do List` heading (nothing is dropped);
   - `Routines/` and drawings as they are;
-  - the agent sidecar (`.daily-do-list/`): threads (snapshots and journals), task records,
+  - the agent sidecar (`.daily-do-list/`): threads (as journals), task records,
     approvals and routines state with note paths (and task lines, where daily notes merged)
     remapped through core's task parser; a task that can't be matched keeps its thread, marked
     detached;

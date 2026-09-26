@@ -424,10 +424,11 @@ it stays as the backup. The product decisions are in the spec, `docs/specs/obsid
      `Name (Daily Do List).md`, and files that don't collide keep their names first;
    - the agent sidecar: tracker state of moved or merged daily notes is rebuilt at the new path so
      every task keeps its id (Obsidian's tasks in a merged note count as existing tasks, acted on
-     only with `actOnExistingTasks`), records get the new path and line, threads the new path and
-     routine id, and a thread whose task isn't in its note any more is kept with a system note
-     saying it's detached. Approvals, artifacts and anything unknown are copied byte for byte; the
-     sync engine's snapshots and an earlier import's manifest stay behind;
+     only with `actOnExistingTasks`), records get the new path and line, threads arrive as journals
+     with the new path and routine id (snapshots an older app wrote migrated in on the way), and a
+     thread whose task isn't in its note any more is kept with a system note saying it's detached.
+     Approvals, artifacts and anything unknown are copied byte for byte; the sync engine's
+     snapshots and an earlier import's manifest stay behind;
    - `settings.json`: this vault's, with the new daily-note settings and Obsidian's editor settings;
    - the manifest, `.daily-do-list/import/obsidian.json` (see `docs/DATA_FORMATS.md`), which
      also records the previous vault, so `GET /api/import/obsidian` can say where the backup is
@@ -456,10 +457,11 @@ Rules that hold throughout:
 - Only this machine may call these routes: a paired device gets 403 `forbidden_device`. They aren't
   agent tools, and the safety rules deny agents any call to the daemon's API
   (`network.app-self-access`) and any write under `.daily-do-list/`.
-- Agent journal files (`.daily-do-list/state/journal/threads/`) are carried over like the thread
-  snapshots: a thread journal's `thread.created` and `thread.imported` events get the new note path
-  and routine id (`remapJournalFile` in `src/import/sidecar.ts`), since the thread store folds the
-  journal first; every other line is copied byte for byte.
+- Threads are carried over as journals (`.daily-do-list/state/journal/threads/`,
+  `src/import/sidecar.ts`): thread snapshots an older app wrote are migrated into the journal with
+  the thread store's planner (`planSnapshotImports`), the thread events (`thread.created`,
+  `thread.imported`) get the new note path and routine id (`remapJournalFile`), a detached thread
+  gets its system note appended, and every other line is copied byte for byte.
 
 ## The agent relay
 
@@ -519,7 +521,7 @@ retrying) or `not_paired` (no credential, or the machine refused it). While `unr
 
 **Fallback.** While `unreachable` or `not_paired`, and on any device that doesn't hold the agent
 (another device runs it), the daemon serves the agent read-only from the synced sidecar: threads
-(conflict copies merged), approvals, task records and artifacts, parsed with the contract's
+(each the fold of its journal), approvals, task records and artifacts, parsed with the contract's
 persisted formats; it never writes them. Routine files stay listable, creatable and pausable (they
 sync). Agent actions (messages, cancel, retry, deciding an approval, running a routine) answer 503
 `agent_unavailable` with one of:

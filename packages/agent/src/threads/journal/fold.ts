@@ -29,7 +29,7 @@ export interface OpenToolCall {
 
 export interface JournalFold {
   thread: Thread | undefined;
-  /** Messages trimmed away, so a stale snapshot merged in later can't bring them back. */
+  /** Messages trimmed away, so a stale snapshot imported later can't bring them back. */
   trimmed: Set<string>;
   /** Started calls without a result: in flight now, uncertain after a restart. */
   open: Map<string, OpenToolCall>;
@@ -179,19 +179,18 @@ export function mergeSources(
 }
 
 /**
- * `theirs` merged into the fold's thread, or null when that changes nothing (the snapshot holds
- * nothing the journal lacks). Messages the journal trimmed don't count.
+ * Whether a snapshot holds something the fold's thread lacks, so importing it would change the
+ * thread. Messages the journal trimmed don't count.
  */
-export function mergeSnapshot(fold: JournalFold, theirs: PersistedThread): Thread | null {
+export function snapshotAddsTo(fold: JournalFold, snapshot: PersistedThread): boolean {
   const ours = fold.thread;
-  const incoming = withoutTrimmed(theirs, fold.trimmed);
-  if (!ours) return copyThread(incoming);
-  const merged = mergePersistedThreads(ours, incoming);
-  return encodePersistedThread(merged) === encodePersistedThread(ours) ? null : merged;
+  if (!ours) return true;
+  const merged = mergePersistedThreads(ours, withoutTrimmed(snapshot, fold.trimmed));
+  return encodePersistedThread(merged) !== encodePersistedThread(ours);
 }
 
 /** Copy with fresh arrays: messages and artifacts are never mutated in place. */
-export function copyThread(thread: PersistedThread): Thread {
+function copyThread(thread: PersistedThread): Thread {
   return {
     ...thread,
     messages: [...thread.messages],
