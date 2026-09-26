@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { isAgentOwnedPath } from "@ddl/core";
+import { isAgentOwnedPath, sleep } from "@ddl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appendToFile } from "../append";
 import { LocalFsStorageProvider } from "../local-fs";
@@ -84,8 +84,6 @@ const PAIRS: Array<[string, () => Promise<Pair>]> = [
 
 /** 2026-09-23 18:30 local time: conflict copies are stamped "2026-09-23 1830". */
 const NOW = new Date(2026, 8, 23, 18, 30).getTime();
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Every synced file with its content (sync bookkeeping excluded). */
 async function contents(provider: StorageProvider): Promise<Record<string, string>> {

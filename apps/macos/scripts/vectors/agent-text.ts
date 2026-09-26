@@ -70,7 +70,14 @@ const lineArb = fc
   )
   .map((parts) => parts.join(""));
 
-const MARK_IDS: Array<string | null> = [null, "thr_1", "", "not a valid id!", "a".repeat(64)];
+const MARK_IDS: Array<string | null> = [
+  null,
+  "thr_1",
+  "thr_Ab-9",
+  "",
+  "not a valid id!",
+  "a".repeat(64),
+];
 
 // ── Agent-written tasks and line anchors ───────────────────────────────────────────────────────
 
@@ -208,6 +215,13 @@ const tripleArb = fc.tuple(
   fc.array(editArb, { maxLength: 3 }),
 );
 
+/** A daily note with these lines between its heading and "Notes". */
+const day = (...lines: string[]) => ["# Thursday", ...lines, "Notes"].join("\n");
+const BOOK = "- [ ] Book a table";
+const RENEW = "- [ ] Renew passport";
+const SOLE = "  - Sole at 7 %%agent:thr_1%%";
+const DAY = day(BOOK, RENEW);
+
 const CURATED_MERGES: Array<[string, string, string]> = [
   [
     "# Thursday\n- [ ] Book a table\n- [ ] Renew passport\nNotes",
@@ -238,17 +252,43 @@ const CURATED_MERGES: Array<[string, string, string]> = [
   ],
   ["- [ ] base 0\nx", "- [ ] base 0 mine\nx", "theirs+\n- [ ] base 0 theirs theirs theirs\nx"],
   ["a\n\nb", "a\nmine\nb", "a\ntheirs\nb"],
+  // The examples of merge.test.ts.
+  [DAY, `${DAY}\n- [ ] Call mom`, `${DAY}\n- Found 3 flights %%agent%%`],
+  [DAY, day("- [x] Book a table", RENEW), day("- [x] Book a table", RENEW)],
+  [DAY, day("- [ ] Book a table for 4", RENEW), day("- [x] Book a table", RENEW)],
+  [DAY, day("- [ ] Call the dentist", "- [ ] Water the plants"), day(BOOK, SOLE, RENEW)],
+  [DAY, day("- [ ] Book a table for 4", "- [ ] Renew it"), day("- [x] Book a table", SOLE, RENEW)],
+  [DAY, day("- [ ] Book a table for 4", RENEW), day("- [x] Book a table")],
+  [DAY, day(BOOK, "- [ ] Renew passport by May"), day()],
+  [DAY, `${DAY}!`, day(RENEW)],
+  [
+    day("- [ ] Rehearsal", "\t- Done: 11 bots %%agent:thr_1%%"),
+    day("- [ ] Rehearsal", "\t- ask about the 3 missing ones", "\t- Done: 11 bots %%agent:thr_1%%"),
+    day(),
+  ],
+  // A deletion among identical lines can align with the other side's edit of another copy.
+  [
+    "  - note\n- [ ] b\n- [ ] b\n- [ ] b\n- [ ] b\n\n## h\n- [ ] b\n- [ ] a",
+    "  - note\n- [ ] b\n- [ ] b\n- [ ] b\n\n## h\n- [ ] b\n- [ ] a",
+    "  - note\n- [ ] b\n- [ ] b\n- [ ] b\n- [ ] a\ntext\n- [ ] a\n\n## h\n- [ ] b\n- [ ] a",
+  ],
+  ["caf\u00e9\nx", "caf\u00e9\ny", "cafe\u0301\nx"],
 ];
 
 export function buildMergeVectors(core: CoreModule) {
-  const diffs = sample(
+  const random = sample(
     fc.tuple(
       fc.array(fc.constantFrom("a", "b", "c", "d"), { maxLength: 30 }),
       fc.array(fc.constantFrom("a", "b", "c", "d"), { maxLength: 30 }),
     ),
     10_004,
     200,
-  ).map(([a, b]) => ({
+  );
+  // The examples of merge.test.ts (a line per letter), then NFC and NFD spellings of one line.
+  const examples = ["abc abc", "ac abc", "abc ac", "abc aBc", " x"].map((pair) =>
+    pair.split(" ").map((letters) => [...letters]),
+  ) as Array<[string[], string[]]>;
+  const diffs = [...random, ...examples, [["caf\u00e9"], ["cafe\u0301"]]].map(([a, b]) => ({
     a,
     b,
     hunks: core.diffLines(a, b).map((h) => [h.start, h.end, h.lines]),

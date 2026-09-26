@@ -2,6 +2,7 @@ import { fc, test } from "@fast-check/vitest";
 import { describe, expect, it } from "vitest";
 import {
   type DailyNoteSettings,
+  DEFAULT_DAILY_NOTE_SETTINGS,
   dailyNotePath,
   findAdjacentDailyNote,
   isDailyNotePath,
@@ -105,6 +106,11 @@ describe("daily note paths", () => {
       ).toBeNull();
     },
   );
+
+  it("defaults to Obsidian's daily notes: Daily/YYYY-MM-DD.md", () => {
+    const date = { year: 2026, month: 9, day: 23 };
+    expect(dailyNotePath(date, DEFAULT_DAILY_NOTE_SETTINGS)).toBe("Daily/2026-09-23.md");
+  });
 
   it("matches the extension case-insensitively, like the rest of the vault", () => {
     const settings = { folder: "Daily", format: "YYYY-MM-DD", template: "" };

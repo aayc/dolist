@@ -3,25 +3,9 @@ import Foundation
 import Testing
 
 extension DomainTests {
-  /// Mirrors @ddl/core `merge.test.ts`; the property tests draw from a seeded generator.
+  /// The properties of @ddl/core's merge tests over a seeded generator (the core's examples are in
+  /// merge.json), plus `TextMerge.lines` and a large rewrite.
   struct TextMergeTests {
-    private func note(_ lines: String...) -> String { lines.joined(separator: "\n") }
-
-    @Test func describesInsertionsDeletionsAndReplacementsAsHunksOverTheOldLines() {
-      #expect(TextMerge.diffLines(["a", "b", "c"], ["a", "b", "c"]).isEmpty)
-      #expect(
-        TextMerge.diffLines(["a", "c"], ["a", "b", "c"]) == [
-          LineHunk(start: 1, end: 1, lines: ["b"])
-        ])
-      #expect(
-        TextMerge.diffLines(["a", "b", "c"], ["a", "c"]) == [LineHunk(start: 1, end: 2, lines: [])])
-      #expect(
-        TextMerge.diffLines(["a", "b", "c"], ["a", "B", "c"]) == [
-          LineHunk(start: 1, end: 2, lines: ["B"])
-        ])
-      #expect(TextMerge.diffLines([], ["x"]) == [LineHunk(start: 0, end: 0, lines: ["x"])])
-    }
-
     @Test func applyingTheHunksToTheOldLinesGivesTheNewOnes() {
       var generator = SeededGenerator(seed: 11)
       for _ in 0..<400 {
@@ -39,157 +23,8 @@ extension DomainTests {
       }
     }
 
-    @Test func linesCompareByCodeUnits() {
-      // NFC and NFD spellings are different lines, like in JavaScript.
-      #expect(
-        TextMerge.diffLines(["caf\u{E9}"], ["cafe\u{301}"]) == [
-          LineHunk(start: 0, end: 1, lines: ["cafe\u{301}"])
-        ])
-      let merged = TextMerge.merge(
-        base: "caf\u{E9}\nx", local: "caf\u{E9}\ny", remote: "cafe\u{301}\nx")
-      #expect(merged == MergeResult(text: "cafe\u{301}\ny", conflict: false))
-      #expect(merged.text.unicodeScalars.count == 7)
-      // `\r` stays part of its line.
+    @Test func aCarriageReturnStaysPartOfItsLine() {
       #expect(TextMerge.lines("a\r\nb\n") == ["a\r", "b", ""])
-    }
-
-    let base = "# Thursday\n- [ ] Book a table\n- [ ] Renew passport\nNotes"
-
-    @Test func keepsTheAgentsLinesAndTheUsersTypingWhenTheyTouchDifferentLines() {
-      let local = note("# Thursday", "- [ ] Book a table for two", "- [ ] Renew passport", "Notes")
-      let remote = note(
-        "# Thursday", "- [ ] Book a table", "  - Trattoria Sole has a table at 7pm %%agent:thr_1%%",
-        "- [ ] Renew passport", "Notes")
-      #expect(
-        TextMerge.merge(base: base, local: local, remote: remote)
-          == MergeResult(
-            text: note(
-              "# Thursday", "- [ ] Book a table for two",
-              "  - Trattoria Sole has a table at 7pm %%agent:thr_1%%",
-              "- [ ] Renew passport", "Notes"),
-            conflict: false))
-    }
-
-    @Test func keepsBothWhenBothSidesAddLinesAtTheSamePlaceTheUsersFirst() {
-      let local = "\(base)\n- [ ] Call mom"
-      let remote = "\(base)\n- Found 3 flights %%agent%%"
-      #expect(
-        TextMerge.merge(base: base, local: local, remote: remote)
-          == MergeResult(
-            text: "\(base)\n- [ ] Call mom\n- Found 3 flights %%agent%%", conflict: false))
-    }
-
-    @Test func takesIdenticalChangesOnce() {
-      let both = note("# Thursday", "- [x] Book a table", "- [ ] Renew passport", "Notes")
-      #expect(
-        TextMerge.merge(base: base, local: both, remote: both)
-          == MergeResult(text: both, conflict: false))
-    }
-
-    @Test func reportsAConflictWhenBothSidesRewriteTheSameLineKeepingTheUsers() {
-      let local = note("# Thursday", "- [ ] Book a table for 4", "- [ ] Renew passport", "Notes")
-      let remote = note("# Thursday", "- [x] Book a table", "- [ ] Renew passport", "Notes")
-      #expect(
-        TextMerge.merge(base: base, local: local, remote: remote)
-          == MergeResult(text: local, conflict: true))
-    }
-
-    @Test func keepsLinesDeletedElsewhereDeletedWhenTheUserAddedALineBetweenThem() {
-      let day = note("# Thursday", "- [ ] Rehearsal", "\t- Done: 11 bots %%agent:thr_1%%", "Notes")
-      let local = note(
-        "# Thursday", "- [ ] Rehearsal", "\t- ask about the 3 missing ones",
-        "\t- Done: 11 bots %%agent:thr_1%%", "Notes")
-      let remote = note("# Thursday", "Notes")
-      #expect(
-        TextMerge.merge(base: day, local: local, remote: remote)
-          == MergeResult(
-            text: note("# Thursday", "\t- ask about the 3 missing ones", "Notes"), conflict: false))
-    }
-
-    var withAgentLine: String {
-      note(
-        "# Thursday", "- [ ] Book a table", "  - Sole at 7 %%agent:thr_1%%", "- [ ] Renew passport",
-        "Notes")
-    }
-
-    @Test func keepsTheOtherSidesLineWhereItAddedItBetweenLinesTheUserEdited() {
-      let local = note("# Thursday", "- [x] Book a table", "- [x] Renew passport", "Notes")
-      #expect(
-        TextMerge.merge(base: base, local: local, remote: withAgentLine)
-          == MergeResult(
-            text: note(
-              "# Thursday", "- [x] Book a table", "  - Sole at 7 %%agent:thr_1%%",
-              "- [x] Renew passport", "Notes"),
-            conflict: false))
-    }
-
-    @Test func keepsTheOtherSidesLinesAddedInsideABlockTheUserRewroteAfterIt() {
-      let local = note("# Thursday", "- [ ] Call the dentist", "- [ ] Water the plants", "Notes")
-      #expect(
-        TextMerge.merge(base: base, local: local, remote: withAgentLine)
-          == MergeResult(
-            text: note(
-              "# Thursday", "- [ ] Call the dentist", "- [ ] Water the plants",
-              "  - Sole at 7 %%agent:thr_1%%", "Notes"),
-            conflict: false))
-    }
-
-    // A diff reports "line edited, line added under it" as one replaced block; the web fuzz
-    // test's shrunk counterexamples (two tabs, the agent adding a line) are these two merges.
-    @Test func takesTheSameEditOnceAndKeepsTheLineTheOtherSideAddedUnderIt() {
-      #expect(
-        TextMerge.merge(base: "- [ ] start", local: "- [ ]", remote: "- [ ]\n- a3 %%agent%%")
-          == MergeResult(text: "- [ ]\n- a3 %%agent%%", conflict: false))
-    }
-
-    @Test func keepsTheLineTheOtherSideAddedUnderALineBothEdited() {
-      #expect(
-        TextMerge.merge(
-          base: "- [ ] start", local: "- [ ] start c1e1",
-          remote: "- [ ] start c0e0\n- a3 %%agent%%")
-          == MergeResult(text: "- [ ] start c1e1\n- a3 %%agent%%", conflict: true))
-    }
-
-    @Test func keepsTheOtherSidesNewLinesInsideABlockBothChangedAfterTheUsersLines() {
-      let local = note("# Thursday", "- [ ] Book a table for 4", "- [ ] Renew it", "Notes")
-      let remote = note(
-        "# Thursday", "- [x] Book a table", "  - Sole at 7 %%agent:thr_1%%", "- [ ] Renew passport",
-        "Notes")
-      #expect(
-        TextMerge.merge(base: base, local: local, remote: remote)
-          == MergeResult(
-            text: note(
-              "# Thursday", "- [ ] Book a table for 4", "  - Sole at 7 %%agent:thr_1%%",
-              "- [ ] Renew it", "Notes"),
-            conflict: true))
-    }
-
-    @Test func doesntBringBackLinesDeletedElsewhereWhenTheSameLineConflicts() {
-      let local = note("# Thursday", "- [ ] Book a table for 4", "- [ ] Renew passport", "Notes")
-      let remote = note("# Thursday", "- [x] Book a table", "Notes")
-      #expect(
-        TextMerge.merge(base: base, local: local, remote: remote)
-          == MergeResult(
-            text: note("# Thursday", "- [ ] Book a table for 4", "Notes"), conflict: true)
-      )
-    }
-
-    @Test func keepsOnlyTheUsersOwnLinesOfABlockBothSidesChanged() {
-      let local = note("# Thursday", "- [ ] Book a table", "- [ ] Renew passport by May", "Notes")
-      let remote = note("# Thursday", "Notes")
-      #expect(
-        TextMerge.merge(base: base, local: local, remote: remote)
-          == MergeResult(
-            text: note("# Thursday", "- [ ] Renew passport by May", "Notes"), conflict: true))
-    }
-
-    @Test func appliesADeletionNextToAnEdit() {
-      let local = note("# Thursday", "- [ ] Book a table", "- [ ] Renew passport", "Notes!")
-      let remote = note("# Thursday", "- [ ] Renew passport", "Notes")
-      #expect(
-        TextMerge.merge(base: base, local: local, remote: remote)
-          == MergeResult(
-            text: note("# Thursday", "- [ ] Renew passport", "Notes!"), conflict: false))
     }
 
     static let lineChoices = ["- [ ] a", "- [ ] b", "text", "", "## h", "  - note"]
@@ -213,8 +48,8 @@ extension DomainTests {
       }
     }
 
-    /// Base lines are unique here: with repeated lines a deletion can align with another copy (see
-    /// `aDeletionAmongIdenticalLinesCanAlignWithTheOtherSidesEdit`).
+    /// Base lines are unique here: with repeated lines a deletion can align with another copy (a
+    /// case in merge.json).
     @Test func editsToSeparateHalvesOfANoteMergeIntoBothEdits() {
       var generator = SeededGenerator(seed: 13)
       var checked = 0
@@ -242,26 +77,6 @@ extension DomainTests {
         #expect(!merged.conflict, "\(lines) / \(local) / \(remote)")
         #expect(merged.text == expected.joined(separator: "\n"))
       }
-    }
-
-    /// Same answer as @ddl/core: the local side deleted one of four identical lines and the diff
-    /// takes it to be the last, which the remote side turned into three lines: one edit of it (the
-    /// deletion wins, a conflict) and two added lines, which stay.
-    @Test func aDeletionAmongIdenticalLinesCanAlignWithTheOtherSidesEdit() {
-      let base = note(
-        "  - note", "- [ ] b", "- [ ] b", "- [ ] b", "- [ ] b", "", "## h", "- [ ] b", "- [ ] a")
-      let local = note(
-        "  - note", "- [ ] b", "- [ ] b", "- [ ] b", "", "## h", "- [ ] b", "- [ ] a")
-      let remote = note(
-        "  - note", "- [ ] b", "- [ ] b", "- [ ] b", "- [ ] a", "text", "- [ ] a", "", "## h",
-        "- [ ] b", "- [ ] a")
-      #expect(
-        TextMerge.merge(base: base, local: local, remote: remote)
-          == MergeResult(
-            text: note(
-              "  - note", "- [ ] b", "- [ ] b", "- [ ] b", "- [ ] a", "text", "", "## h", "- [ ] b",
-              "- [ ] a"),
-            conflict: true))
     }
 
     @Test func largeRewritesStayLinearPastTheEditDistanceCap() {

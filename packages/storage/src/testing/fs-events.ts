@@ -7,6 +7,8 @@
  * takes a while. Before a test makes the change it asserts on, it proves events flow by repeating
  * a harmless change until its event arrives.
  */
+import { sleep } from "@ddl/core";
+
 export interface EventsFlowOptions {
   /** Gives up (and throws) after this long. A failure bound only. */
   timeoutMs?: number;
@@ -36,8 +38,4 @@ export async function untilEventsFlow(
     }
     wait = Math.min(wait * 2, MAX_RETRY_MS);
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

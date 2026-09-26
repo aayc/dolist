@@ -351,7 +351,7 @@ struct RenderSnapshotTests {
     editor.layout()
     editor.textView.appearance = scrollView.appearance
     let text = try snapshot(editor.textView)
-    #expect(Self.distinctColors(text) > 8, "rendered image looks blank")
+    #expect(distinctColors(try #require(text.cgImage)) > 8, "rendered image looks blank")
     guard includeRuler, let ruler = scrollView.verticalRulerView else {
       return try #require(text.representation(using: .png, properties: [:]))
     }
@@ -383,22 +383,5 @@ struct RenderSnapshotTests {
     let rep = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
     view.cacheDisplay(in: view.bounds, to: rep)
     return rep
-  }
-
-  /// Number of distinct colors on a coarse grid (a blank render has one or two).
-  static func distinctColors(_ rep: NSBitmapImageRep) -> Int {
-    var colors = Set<UInt32>()
-    let stepX = max(1, rep.pixelsWide / 60)
-    let stepY = max(1, rep.pixelsHigh / 120)
-    for y in stride(from: 0, to: rep.pixelsHigh, by: stepY) {
-      for x in stride(from: 0, to: rep.pixelsWide, by: stepX) {
-        guard let color = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
-        let r = UInt32(color.redComponent * 255)
-        let g = UInt32(color.greenComponent * 255)
-        let b = UInt32(color.blueComponent * 255)
-        colors.insert(r << 16 | g << 8 | b)
-      }
-    }
-    return colors.count
   }
 }

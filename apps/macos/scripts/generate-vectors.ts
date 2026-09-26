@@ -8,10 +8,9 @@
  * results to Tests/DailyDoListDomainTests/Vectors/, where the Swift tests assert that the port
  * produces exactly the same output. Output is deterministic: a fixed time zone, a pinned clock
  * (`new Date()` / `Date.now()`) and fixed fast-check seeds. Bumping fast-check may change the
- * generated corpus; regenerate and commit. `--check` compares parsed JSON, so formatting (owned by
- * Biome) never makes the files stale.
+ * generated corpus; regenerate and commit. The files are JSON with one case per line (Biome
+ * ignores them), and `--check` compares their exact text.
  */
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as core from "../../../packages/core/src/index.ts";
@@ -25,7 +24,6 @@ import { buildTextVectors } from "./vectors/text";
 import { buildAnchorVectors, buildTrackerVectors } from "./vectors/tracker";
 import { buildWikiLinkVectors } from "./vectors/wikilinks";
 
-const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const vectorDir = fileURLToPath(
   new URL("../Packages/DailyDoListDomain/Tests/DailyDoListDomainTests/Vectors/", import.meta.url),
 );
@@ -66,11 +64,28 @@ function diffJson(a: unknown, b: unknown, path: string, out: string[], limit = 5
   return count;
 }
 
+/** JSON with one case per line: the top two levels of objects and their arrays are spread out. */
+function layout(value: unknown, indent = ""): string {
+  const inner = `${indent}  `;
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "[]";
+    return `[\n${value.map((item) => inner + JSON.stringify(item)).join(",\n")}\n${indent}]`;
+  }
+  if (typeof value === "object" && value !== null && indent.length < 4) {
+    const entries = Object.entries(value).map(
+      ([key, item]) => `${inner}${JSON.stringify(key)}: ${layout(item, inner)}`,
+    );
+    return `{\n${entries.join(",\n")}\n${indent}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function main(): void {
   const check = process.argv.includes("--check");
   const generated = builders.map(([name, build]) => {
-    const json = `${JSON.stringify(build(), null, 2)}\n`;
-    return { name, path: `${vectorDir}${name}`, json, value: JSON.parse(json) as unknown };
+    // Round-tripped so that `undefined` is dropped exactly as JSON.stringify drops it.
+    const value: unknown = JSON.parse(JSON.stringify(build()));
+    return { name, path: `${vectorDir}${name}`, json: `${layout(value)}\n`, value };
   });
 
   if (check) {
@@ -81,11 +96,14 @@ function main(): void {
         stale++;
         continue;
       }
-      const details: string[] = [];
-      const count = diffJson(JSON.parse(readFileSync(file.path, "utf8")), file.value, "", details);
-      if (count === 0) continue;
+      const text = readFileSync(file.path, "utf8");
+      if (text === file.json) continue;
       stale++;
-      console.error(`✗ ${file.name}: ${count} difference(s)`);
+      const details: string[] = [];
+      const count = diffJson(JSON.parse(text), file.value, "", details);
+      console.error(
+        `✗ ${file.name}: ${count ? `${count} difference(s)` : "not in the generated layout"}`,
+      );
       for (const line of details) console.error(`    ${line.slice(0, 300)}`);
     }
     if (stale > 0) {
@@ -99,17 +117,9 @@ function main(): void {
   }
 
   mkdirSync(vectorDir, { recursive: true });
-  for (const file of generated) writeFileSync(file.path, file.json);
-  try {
-    execFileSync("pnpm", ["exec", "biome", "format", "--write", ...generated.map((f) => f.path)], {
-      cwd: repoRoot,
-      stdio: "inherit",
-    });
-  } catch {
-    console.warn("biome format failed; run `pnpm lint:fix` before committing");
-  }
   for (const file of generated) {
-    console.log(`wrote ${file.name} (${Math.round(readFileSync(file.path).length / 1024)} KiB)`);
+    writeFileSync(file.path, file.json);
+    console.log(`wrote ${file.name} (${Math.round(Buffer.byteLength(file.json) / 1024)} KiB)`);
   }
 }
 

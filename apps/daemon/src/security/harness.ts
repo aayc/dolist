@@ -9,10 +9,11 @@ import { createServer, type Server } from "node:http";
 import { type AddressInfo, connect } from "node:net";
 import { dirname, join, relative, sep } from "node:path";
 import { inspect } from "node:util";
-import { API_ROUTES, type Logger, type ServerEvent, silentLogger } from "@ddl/core";
+import { API_ROUTES, type Logger, type ServerEvent, silentLogger, sleep } from "@ddl/core";
 import { MemoryStorageProvider, type StorageProvider } from "@ddl/storage";
 import { fc } from "@fast-check/vitest";
 import { getRequestListener } from "@hono/node-server";
+import { vi } from "vitest";
 import { type ClientOptions, WebSocket } from "ws";
 import { createApp } from "../app";
 import { PairedDeviceStore } from "../paired-devices";
@@ -349,9 +350,15 @@ export async function waitFor(condition: () => boolean, timeoutMs = 2_000): Prom
   const started = Date.now();
   while (!condition()) {
     if (Date.now() - started > timeoutMs) throw new Error("Condition not met in time");
-    await new Promise((resolve) => setTimeout(resolve, 2));
+    await sleep(2);
   }
 }
+
+const TIME_SCALE = Number(process.env.TEST_TIME_SCALE) || 1;
+
+/** Retries `assertion` until it passes; 30 s (scaled on slow CI) is a failure bound only. */
+export const eventually = (assertion: () => Promise<void>) =>
+  vi.waitFor(assertion, { timeout: 30_000 * TIME_SCALE, interval: 50 });
 
 /** A Logger that keeps every line it is given (fields rendered in full, errors included). */
 export class RecordingLogger implements Logger {

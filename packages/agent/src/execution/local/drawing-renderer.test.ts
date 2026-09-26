@@ -1,5 +1,4 @@
-import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -7,6 +6,7 @@ import { RenderCache } from "../../drawings/render-cache";
 import type { RenderPageInput } from "../../drawings/render-page/protocol";
 import { DrawingRenderError } from "../../drawings/renderer";
 import { flowchartScene } from "../../testing/drawings";
+import { useTempDirs } from "../../testing/helpers";
 import {
   ChromiumDrawingRenderer,
   type OpenRenderPageOptions,
@@ -15,18 +15,11 @@ import {
   type RenderPage,
 } from "./drawing-renderer";
 
-const dirs: string[] = [];
+const tempDir = useTempDirs("ddl-render-");
 
-afterEach(async () => {
+afterEach(() => {
   vi.useRealTimers();
-  await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
-
-async function tempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "ddl-render-"));
-  dirs.push(dir);
-  return dir;
-}
 
 /** A minimal valid PNG of the given size (IHDR is all `pngSize` reads). */
 function png(width: number, height: number): Buffer {

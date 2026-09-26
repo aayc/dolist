@@ -86,16 +86,6 @@ struct RealProcessTests {
     try? FileManager.default.removeItem(at: home)
   }
 
-  func waitUntil(timeout: Duration = .seconds(20), _ condition: @MainActor () -> Bool) async -> Bool
-  {
-    let deadline = ContinuousClock.now + timeout
-    while ContinuousClock.now < deadline {
-      if condition() { return true }
-      try? await Task.sleep(for: .milliseconds(20))
-    }
-    return condition()
-  }
-
   @Test func spawnsHealthChecksAndStops() async throws {
     try await withSupervisor { supervisor, home in
       let connection = try #require(await supervisor.start(), "\(supervisor.state)")
@@ -111,10 +101,13 @@ struct RealProcessTests {
           ))
       #expect(supervisor.health?.version == "0.0.0-fake")
       #expect(
-        await waitUntil { supervisor.logLines.contains { $0.contains("fake daemon listening") } })
+        await waitUntil(timeout: .seconds(20)) {
+          supervisor.logLines.contains { $0.contains("fake daemon listening") }
+        })
       #expect(
-        await waitUntil { supervisor.logLines.contains("fake daemon stderr line") },
-        "stderr is captured too")
+        await waitUntil(timeout: .seconds(20)) {
+          supervisor.logLines.contains("fake daemon stderr line")
+        }, "stderr is captured too")
       #expect(getpgid(pid) == pid, "the daemon leads its own process group")
 
       await supervisor.stop()
@@ -259,7 +252,10 @@ struct RealProcessTests {
         workingDirectory: FileManager.default.temporaryDirectory,
         keepsStandardInputOpen: true))
     defer { process.signal(SIGKILL) }
-    #expect(await waitUntil { process.recentOutput.contains { $0.contains("listening") } })
+    #expect(
+      await waitUntil(timeout: .seconds(20)) {
+        process.recentOutput.contains { $0.contains("listening") }
+      })
     #expect(process.exitStatus == nil, "an open stdin keeps it running")
 
     // What the kernel does when the app dies: the last write end of the daemon's stdin closes.

@@ -1,3 +1,4 @@
+import { sleep } from "@ddl/core";
 import type { Page, Request } from "playwright-core";
 
 export interface SettleOptions {
@@ -9,8 +10,6 @@ export interface SettleOptions {
 
 const TRACKED_TYPES = new Set(["document", "stylesheet", "script", "xhr", "fetch"]);
 const POLL_MS = 50;
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function isMainFrameNavigation(page: Page, request: Request): boolean {
   try {

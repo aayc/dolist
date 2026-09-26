@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { type ClientOptions, WebSocket } from "ws";
 import { createApp } from "./app";
 import { createSecurityPolicy } from "./security";
+import { waitFor } from "./security/harness";
 import { createSettingsStore } from "./settings-store";
 import { FakeAgentRuntime, makeApproval, testToken } from "./test-helpers";
 import { DAEMON_VERSION } from "./version";
@@ -159,14 +160,6 @@ class TestClient {
   async barrier(): Promise<void> {
     this.send({ type: "barrier" });
     await this.next("error");
-  }
-}
-
-async function waitFor(condition: () => boolean, timeoutMs = 2_000): Promise<void> {
-  const started = Date.now();
-  while (!condition()) {
-    if (Date.now() - started > timeoutMs) throw new Error("Condition not met in time");
-    await new Promise((resolve) => setTimeout(resolve, 5));
   }
 }
 

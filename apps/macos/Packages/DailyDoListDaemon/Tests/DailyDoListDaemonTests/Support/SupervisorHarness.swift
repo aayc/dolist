@@ -58,18 +58,17 @@ struct SupervisorHarness {
 
   /// The most recently launched fake process.
   var lastProcess: FakeProcess? { machine.processes.last }
+}
 
-  /// Waits (in real time, polling the main actor) until `condition` holds.
-  func waitUntil(
-    timeout: Duration = .seconds(5), _ condition: @MainActor () -> Bool
-  ) async -> Bool {
-    let deadline = ContinuousClock.now + timeout
-    while ContinuousClock.now < deadline {
-      if condition() { return true }
-      try? await Task.sleep(for: .milliseconds(2))
-    }
-    return condition()
+/// Waits (in real time, polling the main actor) until `condition` holds.
+@MainActor
+func waitUntil(timeout: Duration = .seconds(5), _ condition: @MainActor () -> Bool) async -> Bool {
+  let deadline = ContinuousClock.now + timeout
+  while ContinuousClock.now < deadline {
+    if condition() { return true }
+    try? await Task.sleep(for: .milliseconds(2))
   }
+  return condition()
 }
 
 extension DaemonSupervisorState {

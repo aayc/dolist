@@ -104,6 +104,18 @@ describe("fuzzyMatch (properties)", () => {
   );
 });
 
+describe("fuzzyMatch: word starts", () => {
+  it("highlights a word-start character over an earlier interior one", () => {
+    expect(fuzzyMatch("gr", "Garden Redesign")?.indices).toEqual([0, 7]);
+  });
+
+  it("scores a word prefix above letters scattered over word starts", () => {
+    const wordPrefix = fuzzyMatch("tod", "Open today's daily note")!;
+    const scattered = fuzzyMatch("tod", "Toggle Light/Dark Theme")!;
+    expect(wordPrefix.score).toBeGreaterThan(scattered.score);
+  });
+});
+
 describe("fuzzyMatch: unicode", () => {
   it("aligns highlights when lowercasing changes the length (Turkish İ)", () => {
     const match = fuzzyMatch("ist", "İstanbul notes");

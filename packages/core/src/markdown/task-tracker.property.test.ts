@@ -470,6 +470,27 @@ describe("trackTasks under random edit sequences", () => {
   );
 });
 
+describe("similar and different texts", () => {
+  it("keeps identity through typo fixes and small rewrites", () => {
+    const ids = sequentialIds();
+    const first = track([], "- [ ] Email Sarah about the offsite agenda", ids);
+    const second = track(first.tasks, "- [ ] Email Sara about offsite agenda + budget", ids);
+    expect(second.tasks[0]!.id).toBe(first.tasks[0]!.id);
+  });
+
+  it("reports a different task in a deleted one's place as removed and added", () => {
+    const ids = sequentialIds();
+    const first = track([], "- [ ] buy milk\n- [ ] renew car registration", ids);
+    const second = track(
+      first.tasks,
+      "- [ ] renew car registration\n- [ ] plan birthday party",
+      ids,
+    );
+    expect(second.diff.removed.map((t) => t.text)).toEqual(["buy milk"]);
+    expect(second.diff.added.map((t) => t.text)).toEqual(["plan birthday party"]);
+  });
+});
+
 describe("duplicate texts (regressions)", () => {
   it("typing a duplicate above an existing task does not steal its id", () => {
     const ids = sequentialIds();

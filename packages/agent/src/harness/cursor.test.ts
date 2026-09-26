@@ -3,8 +3,7 @@
  * policy monitor, suspend/resume — against a deterministic fake of the Cursor CLI that speaks the
  * same protocol and calls our MCP endpoint like the real one. No network, no real CLI.
  */
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -15,8 +14,9 @@ import {
   type ToolSpec,
   textResult,
 } from "@ddl/core";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import type { ShellExecOptions, ShellExecutor } from "../execution/types";
+import { waitFor as poll, useTempDirs } from "../testing/helpers";
 import { createCursorHarness } from "./cursor";
 import { CursorHarness, type CursorHarnessOptions } from "./cursor/harness";
 import type { HarnessEvent, HarnessSession, HarnessSessionOptions, ToolCallRequest } from "./types";
@@ -28,19 +28,14 @@ const FAKE_CLI = fileURLToPath(new URL("./cursor/testing/fake-cursor-cli.ts", im
  */
 const SPAWN_TIMEOUT_MS = 120_000;
 const CLI_START_TIMEOUT_MS = 60_000;
-const cleanup: string[] = [];
+const tempDir = useTempDirs();
 const sessions: HarnessSession[] = [];
 
 afterEach(async () => {
   await Promise.all(sessions.splice(0).map((s) => s.dispose().catch(() => {})));
-  await Promise.all(cleanup.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-async function tempDir(prefix: string): Promise<string> {
-  const dir = await mkdtemp(path.join(tmpdir(), prefix));
-  cleanup.push(dir);
-  return dir;
-}
+const waitFor = (check: () => boolean | Promise<boolean>) => poll(check, CLI_START_TIMEOUT_MS);
 
 interface Setup {
   harness: CursorHarness;
@@ -134,17 +129,6 @@ function alive(pid: number): boolean {
     return true;
   } catch {
     return false;
-  }
-}
-
-async function waitFor(
-  check: () => boolean | Promise<boolean>,
-  ms = CLI_START_TIMEOUT_MS,
-): Promise<void> {
-  const until = Date.now() + ms;
-  while (!(await check())) {
-    if (Date.now() > until) throw new Error("timed out waiting");
-    await new Promise((resolve) => setTimeout(resolve, 20));
   }
 }
 
@@ -351,11 +335,9 @@ describe("CursorHarness (fake CLI)", { timeout: SPAWN_TIMEOUT_MS }, () => {
     });
     const shell: ShellExecutor = { exec };
     const s = await setup();
-    await writeFile(
-      path.join(path.dirname(s.cwd), `outside-${path.basename(s.cwd)}.txt`),
-      "private",
-    );
-    cleanup.push(path.join(path.dirname(s.cwd), `outside-${path.basename(s.cwd)}.txt`));
+    const outside = path.join(path.dirname(s.cwd), `outside-${path.basename(s.cwd)}.txt`);
+    await writeFile(outside, "private");
+    onTestFinished(() => rm(outside, { force: true }));
     const session = await s.create({ builtinTools: { files: true, shell } });
     await session.prompt("!list");
     expect(lastText(s.events)).toBe("tools: read,write,edit,bash");

@@ -228,6 +228,7 @@ describe("REST authentication", () => {
   it("guards URL spellings that still route to API handlers", async () => {
     const { request } = await createTestApp();
     for (const path of [
+      "/api",
       "/%61pi/health",
       "/api/../api/health",
       "/api/./health",

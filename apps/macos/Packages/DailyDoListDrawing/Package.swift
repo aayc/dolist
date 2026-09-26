@@ -30,6 +30,7 @@ let package = Package(
       dependencies: [
         "DailyDoListDrawingModel", "DailyDoListDrawing",
         .product(name: "DailyDoListUI", package: "DailyDoListUI"),
+        .product(name: "DailyDoListUITestSupport", package: "DailyDoListUI"),
       ],
       exclude: ["fixtures"]),
   ]

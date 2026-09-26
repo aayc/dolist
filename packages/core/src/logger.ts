@@ -40,3 +40,27 @@ export const silentLogger: Logger = {
   error: () => {},
   child: () => silentLogger,
 };
+
+export interface LogEntry {
+  level: LogLevel;
+  message: string;
+  fields?: Record<string, unknown>;
+}
+
+/** For tests: keeps every entry; `text()` lets them assert nothing sensitive was logged. */
+export function recordingLogger(): Logger & { entries: LogEntry[]; text(): string } {
+  const entries: LogEntry[] = [];
+  const record = (level: LogLevel) => (message: string, fields?: Record<string, unknown>) => {
+    entries.push({ level, message, ...(fields ? { fields } : {}) });
+  };
+  const logger = {
+    entries,
+    debug: record("debug"),
+    info: record("info"),
+    warn: record("warn"),
+    error: record("error"),
+    child: () => logger,
+    text: () => JSON.stringify(entries),
+  };
+  return logger;
+}

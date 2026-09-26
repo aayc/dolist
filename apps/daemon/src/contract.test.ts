@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { RoutineConflictError, RoutineInputError } from "@ddl/agent/routines";
 import { API_CONTRACT, listOperations } from "@ddl/contract";
 import {
+  API_VERSION,
   type ApiRouteName,
   type AppSettings,
   DEFAULT_SETTINGS,
@@ -248,7 +249,12 @@ type Scenario = (observed: Observed) => Promise<void>;
 const scenarios: Record<string, Scenario> = {
   "GET health": async (observed) => {
     const { api } = await setup(observed);
-    expect((await api.call("health", "GET")).body).toMatchObject({ ok: true, agentMode: "mock" });
+    expect((await api.call("health", "GET")).body).toMatchObject({
+      ok: true,
+      apiVersion: API_VERSION,
+      agentMode: "mock",
+      vaultName: "Memory vault",
+    });
   },
 
   "GET tree": async (observed) => {

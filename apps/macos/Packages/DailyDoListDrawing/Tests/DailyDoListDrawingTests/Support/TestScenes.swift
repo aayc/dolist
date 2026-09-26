@@ -216,37 +216,6 @@ enum Pixels {
     return (Int(data[0]), Int(data[1]), Int(data[2]), Int(data[3]))
   }
 
-  /// Distinct colors on a coarse grid (a blank render has one).
-  static func distinctColors(_ image: CGImage) -> Int {
-    guard let data = rgba(image) else { return 0 }
-    var colors = Set<UInt32>()
-    let stepX = max(1, image.width / 120)
-    let stepY = max(1, image.height / 120)
-    for y in stride(from: 0, to: image.height, by: stepY) {
-      for x in stride(from: 0, to: image.width, by: stepX) {
-        let offset = (y * image.width + x) * 4
-        colors.insert(
-          UInt32(data[offset]) << 16 | UInt32(data[offset + 1]) << 8 | UInt32(data[offset + 2]))
-      }
-    }
-    return colors.count
-  }
-
-  static func rgba(_ image: CGImage) -> [UInt8]? {
-    var data = [UInt8](repeating: 0, count: image.width * image.height * 4)
-    let ok = data.withUnsafeMutableBytes { buffer -> Bool in
-      guard
-        let context = CGContext(
-          data: buffer.baseAddress, width: image.width, height: image.height, bitsPerComponent: 8,
-          bytesPerRow: image.width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
-          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-      else { return false }
-      context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
-      return true
-    }
-    return ok ? data : nil
-  }
-
   static func writePNG(_ image: CGImage, name: String) throws -> URL {
     try FileManager.default.createDirectory(
       at: Fixtures.snapshotDirectory, withIntermediateDirectories: true)

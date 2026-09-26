@@ -14,11 +14,11 @@ import {
   type SyncStatusResponse,
 } from "@ddl/core";
 import { createSyncServer, type RunningSyncServer } from "@ddl/sync";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { LeaseTimings } from "./agent-lease";
 import { loadConfig } from "./config";
 import { RELAY_PROBLEMS } from "./relay/relay";
-import { RecordingLogger } from "./security/harness";
+import { eventually, RecordingLogger } from "./security/harness";
 import { type RunningDaemon, startDaemon } from "./server";
 import { tempDir } from "./test-helpers";
 
@@ -122,9 +122,6 @@ const agentStatus = async (device: Device) =>
   (await get<AgentStatusResponse>(device, API_ROUTES.agentStatus)).body;
 
 const agentProblem = async (device: Device) => (await agentStatus(device)).problem;
-
-const eventually = (assertion: () => Promise<void>) =>
-  vi.waitFor(assertion, { timeout: 20_000 * TIME_SCALE, interval: 50 });
 
 describe("two daemons sharing a vault through the sync service", {
   timeout: 60_000 * TIME_SCALE,
