@@ -85,7 +85,7 @@ private struct MarkdownBlockView: View {
     case .listItem(_, let marker, let depth, let text):
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         Text(verbatim: marker ?? "")
-          .foregroundStyle(AgentTheme.mutedText)
+          .foregroundStyle(Theme.mutedText)
           .monospacedDigit()
           .frame(minWidth: 14, alignment: .trailing)
         RichTextBlock(text: text, caret: caret)
@@ -94,7 +94,7 @@ private struct MarkdownBlockView: View {
       .padding(.leading, CGFloat(depth - 1) * 16)
     case .quote(_, let text):
       HStack(spacing: 8) {
-        RoundedRectangle(cornerRadius: 1.5).fill(AgentTheme.accent.opacity(0.55)).frame(width: 3)
+        RoundedRectangle(cornerRadius: 1.5).fill(Theme.accent.opacity(0.55)).frame(width: 3)
         RichTextBlock(text: text, style: .quote, caret: caret)
       }
       .fixedSize(horizontal: false, vertical: true)
@@ -120,7 +120,7 @@ struct CodeBlockView: View {
       if let language {
         Text(verbatim: language)
           .font(.caption2.weight(.medium))
-          .foregroundStyle(AgentTheme.mutedText)
+          .foregroundStyle(Theme.mutedText)
           .padding(.horizontal, 10)
           .padding(.top, 6)
       }
@@ -134,11 +134,11 @@ struct CodeBlockView: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(RoundedRectangle(cornerRadius: 6).fill(AgentTheme.codeBackground))
-    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(AgentTheme.border))
+    .background(RoundedRectangle(cornerRadius: 6).fill(Theme.codeBackground))
+    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.separator))
     .overlay(alignment: .topTrailing) {
       CopyButton(text: code, label: "Copy code")
-        .background(RoundedRectangle(cornerRadius: 6).fill(AgentTheme.codeBackground))
+        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.codeBackground))
         .padding(3)
         .opacity(hovering ? 1 : 0)
     }
@@ -172,7 +172,7 @@ private struct MarkdownTableView: View {
       }
       .padding(8)
     }
-    .background(RoundedRectangle(cornerRadius: 6).strokeBorder(AgentTheme.border))
+    .background(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.separator))
   }
 
   /// Table cells are SwiftUI `Text`: numbered citations become small raised numbers.

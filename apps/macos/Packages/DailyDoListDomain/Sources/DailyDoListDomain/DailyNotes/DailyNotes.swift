@@ -27,8 +27,6 @@ public enum DailyNotes {
 
   public static let defaultFormat = "YYYY-MM-DD"
   public static let defaultWeeklyFormat = "gggg-[W]ww"
-  /// Content used for a brand-new daily note when no template exists.
-  public static let defaultContent = "- [ ] "
 
   // MARK: - Paths
 
@@ -49,13 +47,6 @@ public enum DailyNotes {
   ) throws(InvalidPathError) -> String {
     try checkedNotePath(
       date, folder: settings.folder, format: settings.format, fallback: defaultFormat, timeZone)
-  }
-
-  /// `todayDailyNotePath`.
-  public static func todayPath(
-    settings: DailyNoteSettings, now: Date = Date(), timeZone: TimeZone = .current
-  ) -> String {
-    path(for: LocalDate(date: now, timeZone: timeZone), settings: settings, timeZone: timeZone)
   }
 
   /// `weeklyNotePath`: the note of the week containing `date` (default format `gggg-[W]ww`).

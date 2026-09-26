@@ -156,31 +156,10 @@ struct ReadOnlyTests {
     return store
   }
 
-  private func anchors<V: View>(_ view: V, size: CGSize) -> [TooltipAnchorView] {
-    let host = NSHostingView(
-      rootView: view.frame(width: size.width, height: size.height)
-        .environment(\.tooltipCenter, QuietTooltips.makeCenter()))
-    host.frame = CGRect(origin: .zero, size: size)
-    let window = NSWindow(
-      contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-    window.isReleasedWhenClosed = false
-    window.contentView = host
-    window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
-    window.orderFrontRegardless()
-    for _ in 0..<4 {
-      host.layoutSubtreeIfNeeded()
-      window.displayIfNeeded()
-      RunLoop.main.run(until: Date().addingTimeInterval(0.02))
-    }
-    let anchors = tooltipAnchors(in: host)
-    window.close()
-    return anchors
-  }
-
   @Test func disabledActionsSayWhy() throws {
     let store = readOnlyStore()
-    let found = anchors(
-      AgentPanel(
+    let found = tooltipAnchors(
+      of: AgentPanel(
         store: store, selectedThreadId: .constant(SampleData.bookingThreadId),
         onShowInNote: { _ in }
       ).agentReferenceDate(SnapshotTests.now),
@@ -194,8 +173,8 @@ struct ReadOnlyTests {
 
   @Test func aStoppedThreadsRetrySaysWhy() throws {
     let store = readOnlyStore()
-    let found = anchors(
-      ThreadView(store: store, threadId: SampleData.desksThreadId, tab: .artifacts)
+    let found = tooltipAnchors(
+      of: ThreadView(store: store, threadId: SampleData.desksThreadId, tab: .artifacts)
         .agentReferenceDate(SnapshotTests.now),
       size: CGSize(width: 440, height: 600))
     let retry = try #require(found.first { $0.tooltipContent()?.lines.first?.text == "Retry" })

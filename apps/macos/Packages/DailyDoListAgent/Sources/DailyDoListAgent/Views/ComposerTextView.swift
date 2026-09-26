@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListUI
 import SwiftUI
 
 /// The composer's sizes: it grows from one line to `maxLines`, then scrolls.
@@ -61,7 +62,7 @@ struct ComposerTextView: NSViewRepresentable {
     textView.drawsBackground = false
     textView.font = ComposerMetrics.font
     textView.textColor = .labelColor
-    textView.insertionPointColor = AgentPalette.accent
+    textView.insertionPointColor = NSColor(Theme.accent)
     textView.textContainerInset = ComposerMetrics.inset
     textView.isAutomaticQuoteSubstitutionEnabled = false
     textView.isAutomaticDashSubstitutionEnabled = false

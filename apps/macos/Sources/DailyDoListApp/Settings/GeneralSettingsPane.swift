@@ -224,12 +224,8 @@ struct DaemonLogView: View {
         .onAppear { proxy.scrollTo("log-end", anchor: .bottom) }
       }
       HStack {
-        Button("Copy") {
-          NSPasteboard.general.clearContents()
-          NSPasteboard.general.setString(
-            supervisor.logLines.joined(separator: "\n"), forType: .string)
-        }
-        .pointingHandCursor()
+        Button("Copy") { Clipboard.copy(supervisor.logLines.joined(separator: "\n")) }
+          .pointingHandCursor()
         Button("Clear") { supervisor.clearLogs() }.pointingHandCursor()
       }
       .controlSize(.small)

@@ -135,9 +135,6 @@ struct FormattingTests {
     #expect(AgentFormat.bytes(12) == "12 B")
     #expect(AgentFormat.bytes(3_482) == "3.4 KB")
     #expect(AgentFormat.bytes(1_300_000) == "1.2 MB")
-    #expect(AgentFormat.noteName("Daily/2026-09-23.md") == "2026-09-23")
-    #expect(AgentFormat.noteName("Inbox") == "Inbox")
-    #expect(AgentFormat.noteName(".hidden") == ".hidden")
   }
 
   @Test func conflictMessagesNameTheActualState() {

@@ -41,14 +41,14 @@ future iPhone app too.
 | `Package.swift`, `Sources/DailyDoList` | The executable: `@main` and nothing else. |
 | `Sources/DailyDoListApp` | The app shell: scenes, `AppModel`, stores, workspace, settings panes, commands, the command palette. |
 | `Sources/DailyDoListApp/System` | OS integration: launch at login (`SMAppService`), the global hotkey (Carbon), shortcut parsing, conflicts with macOS shortcuts, and the computer-use permissions with their guide panel. |
-| `Packages/DailyDoListModels` (iOS) | Swift mirror of the wire protocol (the schemas in `packages/contract/src/wire`), checked against the `@ddl/contract` fixtures. |
+| `Packages/DailyDoListModels` (iOS) | Swift mirror of the wire protocol (the schemas in `packages/contract/src/wire`), checked against the `@ddl/contract` fixtures, and `DaemonHome` (the daemon's home folder, token and port, for the client and the supervisor). |
 | `Packages/DailyDoListClient` (iOS) | `DaemonClient`: `HTTPDaemonClient` (REST + WebSocket, reconnects and resyncs). `DailyDoListClientTestSupport` has `FakeDaemonClient`, the scriptable fake the agent and app tests use. |
 | `Packages/DailyDoListDomain` (iOS) | Pure domain logic ported from `@ddl/core`: dates and daily notes, task parsing and tracking, line anchors, agent-line markers, three-way merges, wikilinks, paths, fuzzy matching, and the remote access validators. |
 | `Packages/DailyDoListEditor` | The TextKit markdown editor: live preview, clickable checkboxes, agent badges, drawings embedded in notes (floats the text wraps around, edited in place with `DailyDoListDrawing`'s canvas), and vim mode (it hosts `DailyDoListVim`). |
 | `Packages/DailyDoListVim` (iOS) | Vim mode: a port of the web editor's vim.js and its CodeMirror 6 adapter, checked against the web app's vim vectors; hosts implement `VimEditor` ([README](Packages/DailyDoListVim/README.md)). |
 | `Packages/DailyDoListDrawing` (model: iOS) | The native drawing engine: Excalidraw scenes in Obsidian's `.excalidraw.md` files (`DailyDoListDrawingModel`, Foundation only, checked against `@ddl/core`'s shared fixtures), a Rough.js port, the CoreGraphics renderer, Excalidraw's tools and shortcuts, and `DrawingCanvasView`, the canvas the editor embeds ([README](Packages/DailyDoListDrawing/README.md)). |
 | `Packages/DailyDoListAgent` | Agent state and UI: inbox, threads (the live chat: [The agent chat](#the-agent-chat)), the orchestrator's chat ([The orchestrator's chat](#the-orchestrators-chat)), routines ([Routines](#routines)), approval cards, artifacts, notifications, menu bar, Dock badge. `DailyDoListAgentTestSupport` has `SampleData`, the synthetic agent state the tests render. |
-| `Packages/DailyDoListUI` | What the shell, the agent UI and the editor share: the app's one tooltip (`TooltipCenter`, `.tooltip(…)`), keycaps (`KeyShortcut`, `Keycaps`), `.pointingHandCursor()`, `IconButton`, and the chrome and accent button styles. `DailyDoListUITestSupport` finds tooltips in tests and draws them into snapshots. |
+| `Packages/DailyDoListUI` | What the shell, the agent UI and the editor share: the palette (`Theme`), the main-actor scheduler (`AppScheduler`, with `ManualScheduler` for tests), the display-link `FrameTicker`, the app's one tooltip (`TooltipCenter`, `.tooltip(…)`), keycaps (`KeyShortcut`, `Keycaps`), `.pointingHandCursor()`, `IconButton`, and the chrome and accent button styles. `DailyDoListUITestSupport` finds tooltips in tests and draws them into snapshots, and has `ManualTicker`. |
 | `Packages/DailyDoListDaemon` | `DaemonSupervisor`: finds Node and the daemon, attaches or launches, health-checks, restarts, stops. |
 | `Packages/DailyDoListComputer` | `ddl-computer`, the helper the daemon spawns so agents can operate other apps through their accessibility tree ([The computer use helper](#the-computer-use-helper-ddl-computer)). Not linked into the app. |
 | `IntegrationTests/` | End-to-end tests against the real daemon (a separate package). |
@@ -108,8 +108,8 @@ future iPhone app too.
   (disabled controls don't, and fade to 40%); every custom control tints under the pointer within
   about 110 ms and deepens when pressed; counts pop when they change. Text stays an I-beam, pane
   edges a resize cursor.
-- **Dark by default**, in the app's blue palette (the web app's `--ddl-*` tokens: `Theme`,
-  `AgentTheme`, `EditorColors`). Settings → Appearance switches to light or the system's.
+- **Dark by default**, in the app's blue palette (the web app's `--ddl-*` tokens, once:
+  `DailyDoListUI`'s `Theme`). Settings → Appearance switches to light or the system's.
 
 ## The agent in your notes
 
@@ -297,8 +297,9 @@ this device's choice, who runs the agent now and the relay to the machine in the
   command that does it (below). Flipping it shows the handover's note as it happens ("Handing the
   agent to vm-name…", "Taking over from vm-name…"; "Moving the orchestrator…" while the change is
   on its way). While the agent is held on this device (no always-on machine set up, or no sync)
-  the switch is disabled: its tooltip says why, a line under it says what it's waiting for, and
-  **Set Up…** opens the right section of Settings. When the machine can't be reached, **Run It
+  the switch is disabled but still shows the stored choice (as on the web): its tooltip says why,
+  a line under it says what it's waiting for, and **Set Up…** opens the right section of
+  Settings. When the machine can't be reached, **Run It
   on This Device Instead** takes it back; when this device isn't paired, **Pair…** opens
   Settings, and **Pair Again…** when the machine no longer accepts it. "Connecting to vm-name…"
   shows while the relay connects. On the always-on machine itself the row just says "This is the

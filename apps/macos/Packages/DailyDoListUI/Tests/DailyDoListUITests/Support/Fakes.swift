@@ -78,7 +78,7 @@ final class FakeEvents: TooltipEventSource {
 /// A center wired to fakes.
 @MainActor
 struct CenterHarness {
-  let clock = ManualTooltipClock()
+  let clock = ManualScheduler()
   let events = FakeEvents()
   let presenter = RecordingPresenter()
   let flags = Flags()

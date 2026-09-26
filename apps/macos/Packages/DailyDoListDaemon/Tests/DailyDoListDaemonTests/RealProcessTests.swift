@@ -71,14 +71,12 @@ struct RealProcessTests {
             DaemonHealth(version: "0.0.0-fake", apiVersion: 1, vaultName: "Fake", agentMode: "mock")
           ))
       #expect(supervisor.health?.version == "0.0.0-fake")
-      #expect(
-        await waitUntil(timeout: .seconds(20)) {
-          supervisor.logLines.contains { $0.contains("fake daemon listening") }
-        })
-      #expect(
-        await waitUntil(timeout: .seconds(20)) {
-          supervisor.logLines.contains("fake daemon stderr line")
-        }, "stderr is captured too")
+      try await eventually(timeout: .seconds(20)) {
+        supervisor.logLines.contains { $0.contains("fake daemon listening") }
+      }
+      try await eventually("stderr is captured too", timeout: .seconds(20)) {
+        supervisor.logLines.contains("fake daemon stderr line")
+      }
       #expect(getpgid(pid) == pid, "the daemon leads its own process group")
 
       await supervisor.stop()
@@ -166,10 +164,9 @@ struct RealProcessTests {
         workingDirectory: FileManager.default.temporaryDirectory,
         keepsStandardInputOpen: true))
     defer { process.signal(SIGKILL) }
-    #expect(
-      await waitUntil(timeout: .seconds(20)) {
-        process.recentOutput.contains { $0.contains("listening") }
-      })
+    try await eventually(timeout: .seconds(20)) {
+      process.recentOutput.contains { $0.contains("listening") }
+    }
     #expect(process.exitStatus == nil, "an open stdin keeps it running")
 
     // What the kernel does when the app dies: the last write end of the daemon's stdin closes.

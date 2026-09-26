@@ -2,6 +2,7 @@ import AppKit
 import DailyDoListAgentTestSupport
 import DailyDoListModels
 import DailyDoListUI
+import DailyDoListUITestSupport
 import Foundation
 import SwiftUI
 import Testing
@@ -201,8 +202,7 @@ struct CitationTests {
   /// The chip is drawn around the raised digit, inside its line (checked on pixels).
   @Test func chipsSurroundTheirDigits() throws {
     let view = try textView("with its spire [1](https://x.example/a). It has")
-    let rep = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
-    view.cacheDisplay(in: view.bounds, to: rep)
+    let rep = view.bitmap()
     let scale = CGFloat(rep.pixelsWide) / view.bounds.width
     let digit = view.anchorRect(of: (view.string as NSString).range(of: "1"))
     func bounds(_ matches: (NSColor) -> Bool) -> NSRect {

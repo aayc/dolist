@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListUI
 
 extension NSAttributedString.Key {
   /// A numbered citation (`[1](url)`), drawn as a small chip.
@@ -23,7 +24,7 @@ enum RichTextStyle: Hashable, Sendable {
     }
   }
 
-  var color: NSColor { self == .quote ? AgentPalette.mutedText : AgentPalette.text }
+  var color: NSColor { self == .quote ? NSColor(Theme.mutedText) : NSColor(Theme.text) }
 }
 
 /// Agent markdown (an `AttributedString` from `MarkdownRenderer`) as TextKit attributes: fonts for
@@ -52,7 +53,7 @@ enum AgentRichText {
       }
       if let link = run.link {
         attributes[.link] = link
-        attributes[.foregroundColor] = AgentPalette.accent
+        attributes[.foregroundColor] = NSColor(Theme.accent)
         if LinkPreview.isCitationLabel(string) {
           attributes[.font] = NSFont.systemFont(ofSize: 9.5, weight: .semibold)
           attributes[.baselineOffset] = citationBaselineOffset
@@ -60,7 +61,7 @@ enum AgentRichText {
           citations.append(NSRange(location: result.length, length: (string as NSString).length))
         } else {
           attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
-          attributes[.underlineColor] = AgentPalette.accent.withAlphaComponent(0.5)
+          attributes[.underlineColor] = NSColor(Theme.accent).withAlphaComponent(0.5)
         }
       }
       result.append(NSAttributedString(string: string, attributes: attributes))

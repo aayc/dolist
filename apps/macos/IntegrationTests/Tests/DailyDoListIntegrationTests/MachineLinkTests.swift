@@ -97,7 +97,7 @@ extension RealDaemonTests {
         #expect(paired.version == machineVersion)
         #expect(paired.agent?.runsOn?.thisDevice == true, "as the machine reports it: itself")
         // A machine that just started may not have probed its readiness yet: a later check has it.
-        let readiness = try await poll("the machine's readiness") {
+        let readiness = try await eventually("the machine's readiness", timeout: .seconds(30)) {
           try await client.checkMachine().readiness
         }
         #expect(readiness.harness.ready && readiness.modelCredential)

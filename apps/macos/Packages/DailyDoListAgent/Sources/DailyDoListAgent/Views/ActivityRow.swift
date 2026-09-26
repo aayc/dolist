@@ -42,7 +42,7 @@ struct ActivityRow: View {
       if case .approval = activity.kind {
         Image(systemName: "arrow.up")
           .font(.caption.weight(.semibold))
-          .foregroundStyle(AgentTheme.warning.opacity(0.8))
+          .foregroundStyle(Theme.warning.opacity(0.8))
       }
       Spacer(minLength: 0)
     }
@@ -52,8 +52,8 @@ struct ActivityRow: View {
   }
 
   private var tint: Color {
-    if case .approval = activity.kind { return AgentTheme.warning }
-    return AgentTheme.mutedText
+    if case .approval = activity.kind { return Theme.warning }
+    return Theme.mutedText
   }
 
   @ViewBuilder
@@ -66,20 +66,20 @@ struct ActivityRow: View {
         ProgressView().controlSize(.small).scaleEffect(0.6)
         Image(systemName: ToolIcon.systemName(for: name))
           .font(.system(size: 7, weight: .bold))
-          .foregroundStyle(AgentTheme.accent)
+          .foregroundStyle(Theme.accent)
       }
     case .approval:
       ZStack {
-        PulseDot(color: AgentPalette.warning, diameter: 10, animates: !reduceMotion)
+        PulseDot(color: NSColor(Theme.warning), diameter: 10, animates: !reduceMotion)
           .opacity(0.5)
         Image(systemName: "exclamationmark.shield.fill")
           .font(.system(size: 11))
-          .foregroundStyle(AgentTheme.warning)
+          .foregroundStyle(Theme.warning)
       }
     case .waitingToStart:
       Image(systemName: "clock")
         .font(.system(size: 11))
-        .foregroundStyle(AgentTheme.faint)
+        .foregroundStyle(Theme.faintText)
     }
   }
 
@@ -104,7 +104,7 @@ private struct ElapsedLabel: View {
     if let text = ChatActivity.elapsed(since: since, now: now) {
       Text(verbatim: "· \(text)")
         .monospacedDigit()
-        .foregroundStyle(AgentTheme.faint)
+        .foregroundStyle(Theme.faintText)
     }
   }
 }
@@ -125,12 +125,12 @@ struct JumpToLatestPill: View {
             .accessibilityLabel(unseen == 1 ? "1 new message" : "\(unseen) new messages")
         }
       }
-      .foregroundStyle(AgentTheme.text)
+      .foregroundStyle(Theme.text)
       .padding(.leading, 10)
       .padding(.trailing, unseen > 0 ? 6 : 11)
       .padding(.vertical, 5)
-      .background(Capsule().fill(AgentTheme.cardBackground))
-      .overlay(Capsule().strokeBorder(AgentTheme.border))
+      .background(Capsule().fill(Theme.elevated))
+      .overlay(Capsule().strokeBorder(Theme.separator))
       .shadow(color: .black.opacity(0.22), radius: 8, y: 2)
       .contentShape(Capsule())
     }

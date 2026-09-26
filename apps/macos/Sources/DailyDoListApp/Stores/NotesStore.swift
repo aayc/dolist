@@ -1,6 +1,7 @@
 import DailyDoListClient
 import DailyDoListDomain
 import DailyDoListModels
+import DailyDoListUI
 import Foundation
 import Observation
 
@@ -95,6 +96,9 @@ final class NotesStore {
   func adopt(_ note: NoteResponse) {
     guard let doc = docs[note.path] else {
       let doc = NoteDoc(note: note)
+      doc.saveTimer = IdleTimer(scheduler: scheduler, delay: saveDelay) { [weak self, weak doc] in
+        if let self, let doc { self.save(doc) }
+      }
       docs[note.path] = doc
       updateStatus(doc)
       return
@@ -112,9 +116,8 @@ final class NotesStore {
   func markDirty(_ path: String) {
     guard let doc = docs[path] else { return }
     doc.localRev += 1
-    doc.lastEdit = scheduler.now
     updateStatus(doc)
-    arm(doc, delay: saveDelay)
+    doc.saveTimer?.poke()
   }
 
   /// Starts saving `path`'s pending edits right away (capturing the live text synchronously, e.g.
@@ -167,7 +170,7 @@ final class NotesStore {
       // Both changed the same lines: the next save gets a 409, keeps a copy of theirs and merges.
       doc.conflict = true
       updateStatus(doc)
-      arm(doc, delay: saveDelay)
+      doc.saveTimer?.schedule()
       return
     }
     // Local edits pending: merge them with the new version and save the result on top of it.
@@ -219,7 +222,7 @@ final class NotesStore {
     if isBusy(path) {
       doc.conflict = true
       updateStatus(doc)
-      arm(doc, delay: saveDelay)
+      doc.saveTimer?.schedule()
       return
     }
     forget(path)
@@ -244,8 +247,7 @@ final class NotesStore {
 
   func forget(_ path: String) {
     guard let doc = docs[path] else { return }
-    doc.timer?.cancel()
-    doc.timer = nil
+    doc.saveTimer?.cancel()
     docs[path] = nil
     saveStates[path] = nil
     onStateChange?(path, nil)
@@ -253,27 +255,11 @@ final class NotesStore {
 
   // MARK: - Saving
 
-  /// One timer per note, re-armed from the last edit time instead of being reset per keystroke.
-  private func arm(_ doc: NoteDoc, delay: TimeInterval) {
-    guard doc.timer == nil else { return }
-    doc.timer = scheduler.schedule(after: delay) { [weak self, weak doc] in
-      guard let self, let doc else { return }
-      doc.timer = nil
-      let idle = self.scheduler.now - doc.lastEdit
-      if idle + 1e-9 < self.saveDelay {
-        self.arm(doc, delay: self.saveDelay - idle)
-        return
-      }
-      self.save(doc)
-    }
-  }
-
   /// Starts a write if the note has unsaved edits. Returns a task that finishes when the edits known
   /// now are persisted (or failed); nil when there is nothing to do.
   @discardableResult
   private func save(_ doc: NoteDoc) -> Task<Void, Never>? {
-    doc.timer?.cancel()
-    doc.timer = nil
+    doc.saveTimer?.cancel()
     if doc.localRev != doc.savedRev, let live = delegate?.notesStore(self, liveContentOf: doc.path)
     {
       doc.pendingContent = live
@@ -313,7 +299,7 @@ final class NotesStore {
         doc.resave = false
         save(doc)
       } else {
-        arm(doc, delay: saveDelay)
+        doc.saveTimer?.schedule()
       }
     }
   }
@@ -463,8 +449,8 @@ private final class NoteDoc {
   /// the note has no unsaved edits, so it never outlives the edits it holds (a note shown without
   /// an editor snapshot shows it).
   var pendingContent: String?
-  var lastEdit: TimeInterval = 0
-  var timer: ScheduledAction?
+  /// Saves once the note has been left alone for the store's delay.
+  var saveTimer: IdleTimer?
   var inflight: Task<Void, Never>?
   var resave = false
   var recheck = false

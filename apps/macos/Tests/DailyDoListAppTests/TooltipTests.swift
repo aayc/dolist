@@ -19,28 +19,9 @@ struct TooltipTests {
 
   /// The tooltips of the workspace, laid out in an offscreen window.
   private func anchors(_ model: AppModel, _ workspace: Workspace) -> [TooltipAnchorView] {
-    let size = CGSize(width: 1440, height: 800)
-    let center = QuietTooltips.makeCenter()
-    let hosting = NSHostingView(
-      rootView: WorkspaceView(model: model, workspace: workspace, ui: model.ui)
-        .agentReferenceDate(referenceNow)
-        .environment(\.tooltipCenter, center))
-    let window = NSWindow(
-      contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
-      backing: .buffered, defer: false)
-    window.isReleasedWhenClosed = false
-    window.contentView = hosting
-    hosting.frame = NSRect(origin: .zero, size: size)
-    window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
-    window.orderFrontRegardless()
-    for _ in 0..<6 {
-      hosting.layoutSubtreeIfNeeded()
-      window.displayIfNeeded()
-      RunLoop.main.run(until: Date().addingTimeInterval(0.03))
-    }
-    let anchors = tooltipAnchors(in: hosting)
-    window.close()
-    return anchors
+    tooltipAnchors(
+      of: WorkspaceView(model: model, workspace: workspace, ui: model.ui)
+        .agentReferenceDate(referenceNow), size: CGSize(width: 1440, height: 800))
   }
 
   @Test func controlsShowTheCatalogsShortcuts() async throws {
@@ -118,25 +99,8 @@ struct TooltipTests {
     let model = AppModel(
       environment: makeEnvironment(
         client: FakeDaemonClient(), computerAccess: ComputerAccessFakes().system()))
-    let size = CGSize(width: 900, height: 34)
-    let hosting = NSHostingView(
-      rootView: ComputerAccessBanner(model: model, kind: .setUp)
-        .environment(\.tooltipCenter, QuietTooltips.makeCenter()))
-    let window = NSWindow(
-      contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
-      backing: .buffered, defer: false)
-    window.isReleasedWhenClosed = false
-    window.contentView = hosting
-    hosting.frame = NSRect(origin: .zero, size: size)
-    window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
-    window.orderFrontRegardless()
-    defer { window.close() }
-    for _ in 0..<4 {
-      hosting.layoutSubtreeIfNeeded()
-      window.displayIfNeeded()
-      RunLoop.main.run(until: Date().addingTimeInterval(0.02))
-    }
-    let anchors = tooltipAnchors(in: hosting)
+    let anchors = tooltipAnchors(
+      of: ComputerAccessBanner(model: model, kind: .setUp), size: CGSize(width: 900, height: 34))
     let setUp = try #require(
       anchors.first { $0.command == CommandID.setUpComputerUse.rawValue }, "Set Up… runs it")
     #expect(setUp.tooltipContent()?.plainText == "Open Settings → Computer Use")

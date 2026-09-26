@@ -38,7 +38,7 @@ editor.configure(EditorConfiguration(fontSize: 16, vimMode: true))
 | `applyRemoteChanges(_:)` | Someone else's changes (`EditorTextChange`s: non-overlapping UTF-16 ranges of the current text, applied in order at the same place), e.g. the remote side of a merge. Each is its own storage edit, so the caret, selection, badges and the user's undo history stay; together they're one undoable step. The delegate isn't notified. |
 | `configure(_:)`, `configuration` | Font size (restyles), live preview, readable line length, spellcheck, line numbers, editable, vim mode. |
 | `vim`, `vimSession`, `vimStatus` | The app's shared `Vim` (vim mode needs it and `configuration.vimMode`), the session attached to this editor, and its mode line. In a read-only editor vim moves, yanks and searches but doesn't edit. |
-| `EditorVimIntegration(vim:pasteboard:)`, `applyVimrc(_:)`, `vimrcProblems` | Install once per app on the shared `Vim`: the app's ex commands, `gt`/`gT`, the clipboard registers and the vimrc (see [Vim mode](#vim-mode)). `VimPasteboard` puts the pasteboard behind a protocol for tests. |
+| `EditorVimIntegration(vim:pasteboard:)`, `applyVimrc(_:)`, `vimrcProblems` | Install once per app on the shared `Vim`: the app's ex commands, `gt`/`gT`, the clipboard registers and the vimrc (see [Vim mode](#vim-mode)). It takes an `NSPasteboard` (tests pass a private one). |
 | `focus()`, `moveCaretToEnd()`, `scrollToLine(_:)` | `focus()` before the editor is in a window applies once it is (the first note at launch). `moveCaretToEnd` puts the caret after the last line and scrolls to it. `scrollToLine` puts the caret at the line start and centers it (0-based, clamped). |
 | `snapshot()`, `restore(_:)` | Text, selection, scroll offset and the note's own `UndoManager` for instant tab switches. `restore` and `setText(_:resetUndo: true)` start a new document: badges are cleared and the caret line is always reported. |
 | `delegate` | `editorTextDidChange` (user edits only, including undo), `didClickBadge` (with its current line), `didClickAgentThread` (a sparkle), `didClickWikiLink(target:newWindow:)`, `didClickLink(url:)`, `previewFor(_: EditorLinkPreview)` (a link's tooltip: asked when hovering starts and when the tooltip shows; nil = `fallbackText`), `cursorDidMoveToLine` (only when the line changes), `editorDidRequestSave` (also `:w`), `vimStatusDidChange` (only when it changes; nil when vim mode ends), `perform(_: EditorVimRequest)` (vim's app commands; the default answers `.unavailable`), `drawingFor(target)`, `didEditDrawing`, `didEndEditingDrawing`, `willShowContextMenu` (see [Drawings](#drawings)). |
@@ -63,9 +63,9 @@ on a rounded background, fenced code blocks on a full-width rounded background (
 YAML frontmatter as small monospaced metadata, links and wikilinks in the accent color (`#1D6FE8`,
 `#3B8BFF` in dark mode; markdown links and URLs underlined), blockquotes with accent bars and muted
 text, completed tasks struck through and muted (cancelled ones fainter), horizontal rules as a thin
-line. Wrapped list items align with their text. Colors are the app's palette (`EditorColors`:
-background, text, muted and faint text, accent, agent text, anchor band, status tones), dynamic
-light/dark; the caret is the accent and selections an accent tint.
+line. Wrapped list items align with their text. Colors are the app's palette (`EditorColors`, from
+`DailyDoListUI`'s `Theme`: background, text, muted and faint text, accent, agent text, anchor band,
+status tones), dynamic light/dark; the caret is the accent and selections an accent tint.
 
 **Agent lines.** A line ending with `%%agent:<threadId>%%` (or `%%agent%%`; the grammar of
 `@ddl/core`'s `AGENT_MARKER_RE`, outside code and frontmatter) was written by the agent: its text is

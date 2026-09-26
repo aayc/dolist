@@ -15,7 +15,7 @@ struct OrchestratorInboxRow: View {
     Button(action: action) {
       HStack(alignment: .top, spacing: 10) {
         Image(systemName: "point.3.connected.trianglepath.dotted")
-          .foregroundStyle(AgentTheme.accent)
+          .foregroundStyle(Theme.accent)
           .symbolEffect(.pulse, isActive: status == .working)
           .frame(width: 16)
           .padding(.top, 1)
@@ -30,12 +30,12 @@ struct OrchestratorInboxRow: View {
               )
               .font(.caption)
               .monospacedDigit()
-              .foregroundStyle(AgentTheme.mutedText)
+              .foregroundStyle(Theme.mutedText)
             }
           }
           Text(verbatim: preview)
             .font(.callout)
-            .foregroundStyle(AgentTheme.mutedText)
+            .foregroundStyle(Theme.mutedText)
             .lineLimit(2)
           HStack(spacing: 6) {
             StatusChip(status: status)
@@ -44,9 +44,7 @@ struct OrchestratorInboxRow: View {
               CountBadge(
                 count: pendingApprovals, tone: .warning, systemImage: "exclamationmark.shield.fill"
               )
-              .tooltip(
-                pendingApprovals == 1
-                  ? "1 approval waiting" : "\(pendingApprovals) approvals waiting")
+              .tooltip(AgentFormat.approvalsWaiting(pendingApprovals))
             }
           }
         }
@@ -56,8 +54,8 @@ struct OrchestratorInboxRow: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(RowButtonStyle())
-    .background(RoundedRectangle(cornerRadius: 8).fill(AgentTheme.subtleFill))
-    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(AgentTheme.border))
+    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.secondaryBackground))
+    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.separator))
     .tooltip("Open the orchestrator's chat")
     .accessibilityElement(children: .combine)
     .accessibilityHint("Opens the orchestrator's chat")

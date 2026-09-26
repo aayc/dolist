@@ -228,26 +228,9 @@ struct ObsidianImportTests {
     let model = AppModel(environment: environment)
     await model.boot()
     await model.imports.load()
-    let size = CGSize(width: 600, height: 520)
-    let hosting = NSHostingView(
-      rootView: Form { VaultSettingsSection(model: model, imports: model.imports) }
-        .formStyle(.grouped)
-        .environment(\.tooltipCenter, QuietTooltips.makeCenter()))
-    let window = NSWindow(
-      contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
-      backing: .buffered, defer: false)
-    window.isReleasedWhenClosed = false
-    window.contentView = hosting
-    hosting.frame = NSRect(origin: .zero, size: size)
-    window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
-    window.orderFrontRegardless()
-    defer { window.close() }
-    for _ in 0..<6 {
-      hosting.layoutSubtreeIfNeeded()
-      window.displayIfNeeded()
-      SnapshotTests.pumpRunLoop(0.02)
-    }
-    let anchors = tooltipAnchors(in: hosting)
+    let anchors = tooltipAnchors(
+      of: Form { VaultSettingsSection(model: model, imports: model.imports) }.formStyle(.grouped),
+      size: CGSize(width: 600, height: 520))
     for command in [CommandID.importFromObsidian, .updateFromObsidian, .revealPreviousVault] {
       let anchor = try #require(
         anchors.first { $0.command == command.rawValue }, "a control runs \(command.rawValue)")
@@ -305,6 +288,7 @@ struct ObsidianImportTests {
       }
     }
     supervisor.state = .running(pid: 42, connection: Self.connection)
+    (model.environment.scheduler as? ManualScheduler)?.advance(by: 0.1)
     #expect(await switching.value == nil)
     #expect(model.phase == .ready)
     #expect(model.connection.health?.vaultName == "Obsidian Notebook (Daily Do List)")

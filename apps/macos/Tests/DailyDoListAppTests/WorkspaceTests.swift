@@ -4,6 +4,7 @@ import DailyDoListClientTestSupport
 import DailyDoListDomain
 import DailyDoListEditor
 import DailyDoListModels
+import DailyDoListUI
 import Foundation
 import Testing
 

@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListUITestSupport
 import Foundation
 
 @testable import DailyDoListEditor
@@ -31,7 +32,7 @@ final class ManualMotion {
   /// Moves the clock forward and delivers one display frame (if the ticker runs).
   func frame(after seconds: TimeInterval = 1.0 / 60) {
     now += seconds
-    tickers.last?.fire()
+    tickers.last?.fire(at: now)
   }
 
   /// Frames every 1/60 s for `seconds`.
@@ -42,23 +43,6 @@ final class ManualMotion {
 
   func clearInvalidated() {
     invalidated.removeAll()
-  }
-}
-
-@MainActor
-final class ManualTicker: FrameTicker {
-  private let onFrame: @MainActor () -> Void
-  private(set) var isRunning = false
-
-  init(onFrame: @escaping @MainActor () -> Void) {
-    self.onFrame = onFrame
-  }
-
-  func start() { isRunning = true }
-  func stop() { isRunning = false }
-
-  func fire() {
-    if isRunning { onFrame() }
   }
 }
 

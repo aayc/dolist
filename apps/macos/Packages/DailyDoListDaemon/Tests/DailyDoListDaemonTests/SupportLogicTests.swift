@@ -254,20 +254,14 @@ struct DaemonLaunchConfigurationTests {
 
     #expect(fromFile.port == 7612)
     #expect(fromEnvironment.port == 7613, "env beats config.json, like the daemon")
+    let unusable = DaemonLaunchConfiguration.standard(
+      environment: ["DDL_HOME": directory.path, "DDL_PORT": " 70000\n"], homeDirectory: home)
+    #expect(unusable.port == 7612, "an unusable DDL_PORT falls back to config.json")
 
     try Data(#"{"port": 0}"#.utf8).write(to: directory.appendingPathComponent("config.json"))
     #expect(
       DaemonLaunchConfiguration.standard(
         environment: ["DDL_HOME": directory.path], homeDirectory: home
       ).port == 7331)
-  }
-
-  @Test func errorMessagesAbbreviateTheHomeFolder() {
-    #expect(
-      displayPath("/Users/me/.daily-do-list/daemon-token", homeDirectory: "/Users/me")
-        == "~/.daily-do-list/daemon-token")
-    #expect(displayPath("/Users/me", homeDirectory: "/Users/me") == "~")
-    #expect(displayPath("/Users/me2", homeDirectory: "/Users/me") == "/Users/me2")
-    #expect(displayPath("/Users/you/x", homeDirectory: "/Users/me") == "/Users/you/x")
   }
 }

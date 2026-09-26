@@ -1,3 +1,4 @@
+import DailyDoListModels
 import Foundation
 
 /// How to reach (or launch) the daemon.
@@ -30,9 +31,9 @@ public struct DaemonLaunchConfiguration: Hashable, Sendable {
   public var inheritsDaemonSettings: Bool
 
   public init(
-    home: URL = DaemonLaunchConfiguration.defaultHome,
+    home: URL = DaemonHome.url(environment: [:]),
     vaultPath: URL? = nil,
-    port: Int = DaemonLaunchConfiguration.defaultPort,
+    port: Int = DaemonHome.defaultPort,
     agentMode: String? = nil,
     nodePath: URL? = nil,
     daemonEntry: URL? = nil,
@@ -65,18 +66,8 @@ public struct DaemonLaunchConfiguration: Hashable, Sendable {
       inheritsDaemonSettings: false)
   }
 
-  /// The daemon's default port (`DEFAULT_PORT` in `apps/daemon/src/config.ts`).
-  public static let defaultPort = 7331
-
-  /// `~/.daily-do-list`, the daemon's default DDL_HOME.
-  public static var defaultHome: URL {
-    FileManager.default.homeDirectoryForCurrentUser
-      .appendingPathComponent(".daily-do-list", isDirectory: true)
-  }
-
   public var baseURL: URL { URL(string: "http://127.0.0.1:\(port)")! }
-  public var tokenFile: URL { home.appendingPathComponent("daemon-token") }
-  public var configFile: URL { home.appendingPathComponent("config.json") }
+  public var tokenFile: URL { DaemonHome.tokenFile(in: home) }
 
   /// The configuration a daemon started from a terminal would use, so the app attaches to a
   /// `pnpm dev` daemon and a managed daemon behaves the same: `DDL_HOME`, `DDL_VAULT`, `DDL_PORT`
@@ -87,47 +78,17 @@ public struct DaemonLaunchConfiguration: Hashable, Sendable {
     environment: [String: String] = ProcessInfo.processInfo.environment,
     homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
   ) -> DaemonLaunchConfiguration {
-    var configuration = DaemonLaunchConfiguration()
-    if let home = nonEmpty(environment["DDL_HOME"]) {
-      configuration.home = expandingTilde(home, homeDirectory: homeDirectory)
-    } else {
-      configuration.home = homeDirectory.appendingPathComponent(".daily-do-list", isDirectory: true)
+    var configuration = DaemonLaunchConfiguration(
+      home: DaemonHome.url(environment: environment, homeDirectory: homeDirectory))
+    if let vault = environment["DDL_VAULT"]?.trimmedNonEmpty {
+      configuration.vaultPath = DaemonHome.expandingTilde(vault, homeDirectory: homeDirectory)
     }
-    if let vault = nonEmpty(environment["DDL_VAULT"]) {
-      configuration.vaultPath = expandingTilde(vault, homeDirectory: homeDirectory)
-    }
-    if let port = nonEmpty(environment["DDL_PORT"]).flatMap(Int.init), (1...65_535).contains(port) {
-      configuration.port = port
-    } else if let port = configuredPort(in: configuration.configFile) {
-      configuration.port = port
-    }
-    if let mode = nonEmpty(environment["DDL_AGENT_MODE"]) {
+    configuration.port =
+      DaemonHome.configuredPort(home: configuration.home, environment: environment)
+      ?? DaemonHome.defaultPort
+    if let mode = environment["DDL_AGENT_MODE"]?.trimmedNonEmpty {
       configuration.agentMode = mode.lowercased()
     }
     return configuration
   }
-
-  /// `port` from the daemon's `config.json`; `0` ("pick a free port") can't be supervised.
-  static func configuredPort(in configFile: URL) -> Int? {
-    guard let data = try? Data(contentsOf: configFile),
-      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-      let port = object["port"] as? Int, (1...65_535).contains(port)
-    else { return nil }
-    return port
-  }
-}
-
-func nonEmpty(_ value: String?) -> String? {
-  guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty
-  else { return nil }
-  return trimmed
-}
-
-/// Expands a leading `~` (not `~user`) and standardizes the path.
-func expandingTilde(_ path: String, homeDirectory: URL) -> URL {
-  if path == "~" { return homeDirectory }
-  if path.hasPrefix("~/") {
-    return homeDirectory.appendingPathComponent(String(path.dropFirst(2))).standardizedFileURL
-  }
-  return URL(fileURLWithPath: path).standardizedFileURL
 }

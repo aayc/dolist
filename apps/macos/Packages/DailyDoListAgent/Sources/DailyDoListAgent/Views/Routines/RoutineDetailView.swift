@@ -21,7 +21,7 @@ struct RoutineDetailView: View {
             readOnlyReason: store.readOnly?.reason, onRun: run, onSetPaused: setPaused,
             onEdit: actions.edit.map { edit in { edit(routine) } })
           callouts(routine)
-          AgentHairline()
+          Hairline()
           runs(routine, now: now)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -98,15 +98,15 @@ struct RoutineDetailView: View {
             HStack(spacing: 6) {
               Text("RUNS")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(AgentTheme.mutedText)
-              Text(verbatim: "\(runs.count)").font(.caption).foregroundStyle(AgentTheme.faint)
+                .foregroundStyle(Theme.mutedText)
+              Text(verbatim: "\(runs.count)").font(.caption).foregroundStyle(Theme.faintText)
               Spacer()
             }
             .padding(.horizontal, 10)
             .padding(.top, 12)
             .padding(.bottom, 4)
             .frame(maxWidth: .infinity)
-            .background(AgentTheme.panelBackground)
+            .background(Theme.background)
             .accessibilityAddTraits(.isHeader)
           }
         }
@@ -141,7 +141,7 @@ struct RoutineHeader: View {
               lineLimit: 2)
           Text(verbatim: RoutineFormat.schedule(routine))
             .font(.callout)
-            .foregroundStyle(AgentTheme.mutedText)
+            .foregroundStyle(Theme.mutedText)
         }
         Spacer(minLength: 8)
         HStack(spacing: 0) {
@@ -159,7 +159,7 @@ struct RoutineHeader: View {
         if let subtitle = RoutineFormat.subtitle(routine, now: now) {
           Text(verbatim: subtitle)
             .font(.caption)
-            .foregroundStyle(AgentTheme.mutedText)
+            .foregroundStyle(Theme.mutedText)
             .lineLimit(1)
         }
         Spacer(minLength: 8)
@@ -187,7 +187,7 @@ struct RoutineHeader: View {
       }
       Text(verbatim: details)
         .font(.caption)
-        .foregroundStyle(AgentTheme.faint)
+        .foregroundStyle(Theme.faintText)
         .lineLimit(2)
     }
     .padding(.horizontal, 12)
@@ -223,13 +223,13 @@ struct RoutineCallout: View {
   var body: some View {
     HStack(alignment: .top, spacing: 8) {
       Image(systemName: systemImage)
-        .foregroundStyle(AgentTheme.warning)
+        .foregroundStyle(Theme.warning)
         .padding(.top, 1)
       VStack(alignment: .leading, spacing: 3) {
         Text(verbatim: title).font(.callout.weight(.semibold))
         Text(verbatim: message)
           .font(.callout)
-          .foregroundStyle(AgentTheme.mutedText)
+          .foregroundStyle(Theme.mutedText)
           .fixedSize(horizontal: false, vertical: true)
           .textSelection(.enabled)
         if let actionTitle, let onAction {
@@ -248,10 +248,10 @@ struct RoutineCallout: View {
     }
     .padding(10)
     .background(
-      RoundedRectangle(cornerRadius: 8).fill(AgentTheme.warning.opacity(0.1))
+      RoundedRectangle(cornerRadius: 8).fill(Theme.warning.opacity(0.1))
     )
     .overlay(
-      RoundedRectangle(cornerRadius: 8).strokeBorder(AgentTheme.warning.opacity(0.35))
+      RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.warning.opacity(0.35))
     )
     .accessibilityElement(children: .contain)
   }
@@ -280,12 +280,12 @@ struct RoutineRunRow: View {
             Text(verbatim: AgentFormat.relativeTime(Date(epochMillis: run.updatedAt), now: now))
               .font(.caption)
               .monospacedDigit()
-              .foregroundStyle(AgentTheme.mutedText)
+              .foregroundStyle(Theme.mutedText)
           }
           if let preview = run.lastMessagePreview.map(AgentFormat.plainPreview), !preview.isEmpty {
             Text(verbatim: preview)
               .font(.callout)
-              .foregroundStyle(AgentTheme.mutedText)
+              .foregroundStyle(Theme.mutedText)
               .lineLimit(2)
           }
           HStack(spacing: 6) {
@@ -295,9 +295,7 @@ struct RoutineRunRow: View {
               CountBadge(
                 count: pendingApprovals, tone: .warning, systemImage: "exclamationmark.shield.fill"
               )
-              .tooltip(
-                pendingApprovals == 1
-                  ? "1 approval waiting" : "\(pendingApprovals) approvals waiting")
+              .tooltip(AgentFormat.approvalsWaiting(pendingApprovals))
             }
           }
         }

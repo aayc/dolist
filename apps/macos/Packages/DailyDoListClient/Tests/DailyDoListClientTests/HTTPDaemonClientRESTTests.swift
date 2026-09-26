@@ -1,3 +1,4 @@
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import Foundation
 import Testing
@@ -728,7 +729,7 @@ struct HTTPDaemonClientRESTTests {
     let stub = Stub { _ in .hang }
     let client = stub.client()
     let call = Task { try await client.health() }
-    try await waitUntil("request to arrive") { !stub.requests.isEmpty }
+    try await eventually("request to arrive") { !stub.requests.isEmpty }
     call.cancel()
     let result = await call.result
     #expect(throws: DaemonClientError.cancelled) { try result.get() }

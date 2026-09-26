@@ -34,7 +34,7 @@ enum ChipBuilder {
         return make(Status.looking, looking, "The orchestrator is looking at this line")
       }
     }
-    let text = outcome.text?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+    let text = outcome.text?.trimmedNonEmpty
     let count = outcome.count ?? 1
     switch outcome.kind {
     case .noAction:

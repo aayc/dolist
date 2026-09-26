@@ -108,8 +108,7 @@ extension AgentStore {
   /// `postMessage`, with the message in the thread by the time this returns (the composer clears
   /// its input in the same update). Nil for a blank message.
   func enqueueMessage(threadId: String, text: String) -> Task<Bool, Never>? {
-    let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !body.isEmpty else { return nil }
+    guard let body = text.trimmedNonEmpty else { return nil }
     let localId = "local-\(UUID().uuidString.lowercased())"
     let message = TextMessage(
       id: localId, author: "you", createdAt: now().epochMillis, role: .user, text: body)

@@ -10,7 +10,7 @@ public final class TooltipPanelPresenter: TooltipPresenting {
   let panel: NSPanel
   private let container: NSView
   private let hosting: NSHostingController<TooltipPanelContent>
-  private let clock: TooltipClock
+  private let clock: AppScheduler
   /// The surface (without the shadow margin) in screen coordinates, last time it was shown.
   private(set) var surfaceFrame: NSRect?
   /// Ordered in (possibly fading out).
@@ -19,7 +19,7 @@ public final class TooltipPanelPresenter: TooltipPresenting {
   /// Bumped by every show and hide, so a finished fade can't order out a newer tooltip.
   private var generation = 0
 
-  public init(clock: TooltipClock = LiveTooltipClock()) {
+  public init(clock: AppScheduler = LiveScheduler.shared) {
     self.clock = clock
     panel = TooltipPanel(
       contentRect: NSRect(x: 0, y: 0, width: 10, height: 10),
@@ -155,9 +155,6 @@ public final class TooltipPanelPresenter: TooltipPresenting {
 
   /// The bubble's layer, where the animations run (tests).
   var bubbleLayer: CALayer? { hosting.view.layer }
-
-  /// The bubble view as shown (snapshot tests draw it).
-  var bubbleView: NSView { hosting.view }
 
   // MARK: Private
 

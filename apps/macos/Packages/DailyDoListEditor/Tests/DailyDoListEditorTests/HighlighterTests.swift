@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListUITestSupport
 import Testing
 
 @testable import DailyDoListEditor

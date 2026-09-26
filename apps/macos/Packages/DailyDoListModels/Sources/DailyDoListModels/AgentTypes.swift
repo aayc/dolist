@@ -125,14 +125,6 @@ public struct RiskLevel: WireEnum {
   public static let critical: Self = "critical"
 }
 
-public struct SafetyDecision: WireEnum {
-  public let rawValue: String
-  public init(rawValue: String) { self.rawValue = rawValue }
-  public static let allow: Self = "allow"
-  public static let requireApproval: Self = "require_approval"
-  public static let deny: Self = "deny"
-}
-
 /// Coarse effect categories used by the safety evaluator and shown on approval cards.
 public struct ActionCategory: WireEnum {
   public let rawValue: String

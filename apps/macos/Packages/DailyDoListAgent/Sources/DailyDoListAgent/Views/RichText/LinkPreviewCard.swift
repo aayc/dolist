@@ -1,3 +1,4 @@
+import DailyDoListUI
 import SwiftUI
 
 /// The hover card of a link in agent text: a page (title, hostname, snippet, full URL) or a note
@@ -25,24 +26,24 @@ private struct PagePreview: View {
     VStack(alignment: .leading, spacing: 5) {
       Text(verbatim: preview.title)
         .font(.system(size: 13, weight: .semibold))
-        .foregroundStyle(AgentTheme.text)
+        .foregroundStyle(Theme.text)
         .lineLimit(2)
       if !preview.host.isEmpty {
         Label(preview.host, systemImage: "globe")
           .font(.caption)
-          .foregroundStyle(AgentTheme.mutedText)
+          .foregroundStyle(Theme.mutedText)
           .lineLimit(1)
       }
       if let snippet = preview.snippet {
         Text(verbatim: snippet)
           .font(.callout)
-          .foregroundStyle(AgentTheme.text)
+          .foregroundStyle(Theme.text)
           .lineLimit(5)
           .fixedSize(horizontal: false, vertical: true)
       }
       Text(verbatim: preview.url)
         .font(.caption2)
-        .foregroundStyle(AgentTheme.faint)
+        .foregroundStyle(Theme.faintText)
         .lineLimit(2)
         .truncationMode(.middle)
     }
@@ -68,18 +69,18 @@ struct NotePreviewView: View {
     VStack(alignment: .leading, spacing: 5) {
       Label(preview?.title ?? WikiLinkURL.noteName(target), systemImage: "doc.text")
         .font(.system(size: 13, weight: .semibold))
-        .foregroundStyle(AgentTheme.text)
+        .foregroundStyle(Theme.text)
         .lineLimit(1)
       if let lines = preview?.lines, !lines.isEmpty {
         Text(verbatim: lines.joined(separator: "\n"))
           .font(.callout)
-          .foregroundStyle(AgentTheme.mutedText)
+          .foregroundStyle(Theme.mutedText)
           .lineLimit(8)
           .fixedSize(horizontal: false, vertical: true)
       } else if loaded {
         Text(preview == nil ? "Not in this vault yet — clicking creates it." : "Empty note")
           .font(.callout)
-          .foregroundStyle(AgentTheme.faint)
+          .foregroundStyle(Theme.faintText)
       } else {
         ProgressView().controlSize(.small)
       }

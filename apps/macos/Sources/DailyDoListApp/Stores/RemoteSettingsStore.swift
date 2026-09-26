@@ -1,5 +1,6 @@
 import DailyDoListClient
 import DailyDoListModels
+import DailyDoListUI
 import Foundation
 import Observation
 
@@ -120,6 +121,16 @@ final class RemoteSettingsStore {
   func refreshMachine() async {
     guard let client, let status = try? await client.machineStatus() else { return }
     machine = status
+  }
+
+  /// Refreshes a paired machine's status every 15 s until the task is cancelled: the daemon checks
+  /// the machine while a client watches, so the section stays fresh while it shows.
+  func watchMachine(on scheduler: AppScheduler) async {
+    while machine?.paired == true, !Task.isCancelled {
+      await scheduler.sleep(for: 15)
+      guard !Task.isCancelled else { return }
+      await refreshMachine()
+    }
   }
 
   func checkMachine() async {

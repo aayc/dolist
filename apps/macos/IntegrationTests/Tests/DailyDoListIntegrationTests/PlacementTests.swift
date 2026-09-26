@@ -39,7 +39,7 @@ struct Placement {
     let port = try machine.connection.baseURL.port ?? 0
     let machineURL = "http://127.0.0.1:\(port)"
     // The machine syncs from the start, so it holds the agent before the laptop asks.
-    _ = try await poll("the machine runs its agent", timeout: Self.handoverTimeout) {
+    _ = try await eventually("the machine runs its agent", timeout: Self.handoverTimeout) {
       try await onMachine.agentStatus().placement?.runsOn?.thisDevice == true ? true : nil
     }
 
@@ -68,7 +68,9 @@ struct Placement {
 
     // With sync on and no machine yet, whoever asked first keeps the agent: the laptop is held
     // here while the machine (asking like any device) runs it.
-    let firstHolder = try await poll("the laptop sees the holder", timeout: Self.handoverTimeout) {
+    let firstHolder = try await eventually(
+      "the laptop sees the holder", timeout: Self.handoverTimeout
+    ) {
       try await client.agentStatus().placement?.runsOn
     }
     #expect(firstHolder.deviceId == machineDevice.device.id && !firstHolder.thisDevice)
@@ -93,7 +95,7 @@ struct Placement {
       return nil
     }
     #expect(notes.contains { $0.hasPrefix("Taking over from ") }, "the takeover showed: \(notes)")
-    let machineSees = try await poll("the machine sees the laptop", timeout: .seconds(30)) {
+    let machineSees = try await eventually("the machine sees the laptop", timeout: .seconds(30)) {
       let runsOn = try await onMachine.agentStatus().placement?.runsOn
       return runsOn?.deviceId == laptopDevice.device.id ? runsOn : nil
     }

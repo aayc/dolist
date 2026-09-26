@@ -65,6 +65,6 @@ struct AccentButtonFace<Label: View>: View {
 extension ControlState {
   /// The accent button's fill.
   var accentFill: Color {
-    isEnabled && (isHovered || isPressed) ? UIPalette.accentStrong : UIPalette.accent
+    isEnabled && (isHovered || isPressed) ? Theme.accentStrong : Theme.accent
   }
 }

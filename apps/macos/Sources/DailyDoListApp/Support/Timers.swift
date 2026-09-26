@@ -1,3 +1,4 @@
+import DailyDoListUI
 import Foundation
 
 /// Trailing debounce that fires once `delay` has passed since the LAST ``poke()``.
@@ -20,6 +21,11 @@ final class IdleTimer {
 
   func poke() {
     lastPoke = scheduler.now
+    schedule()
+  }
+
+  /// Arms the timer if it isn't armed, without counting as activity.
+  func schedule() {
     if pending == nil { arm(after: delay) }
   }
 

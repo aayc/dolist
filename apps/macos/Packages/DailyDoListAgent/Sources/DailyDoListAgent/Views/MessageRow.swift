@@ -65,7 +65,7 @@ struct MessageRow: View, Equatable {
     case .unknown(let kind, _, _):
       Label("Unsupported message (\(kind))", systemImage: "questionmark.square.dashed")
         .font(.caption)
-        .foregroundStyle(AgentTheme.faint)
+        .foregroundStyle(Theme.faintText)
     }
   }
 }
@@ -97,8 +97,8 @@ struct TextMessageView: View {
       HStack(spacing: 6) {
         Text(verbatim: AgentFormat.authorLabel(message.author))
           .font(.caption.weight(.semibold))
-          .foregroundStyle(AgentTheme.mutedText)
-        Text(verbatim: time).font(.caption).foregroundStyle(AgentTheme.faint)
+          .foregroundStyle(Theme.mutedText)
+        Text(verbatim: time).font(.caption).foregroundStyle(Theme.faintText)
           .opacity(hovering ? 1 : 0)
       }
       AgentText(message: message, reveal: reveal)
@@ -122,21 +122,21 @@ struct TextMessageView: View {
           ProgressView().controlSize(.mini)
           Text("Sending…")
         } else if unsent == nil {
-          Text(verbatim: time).foregroundStyle(AgentTheme.faint).opacity(hovering ? 1 : 0)
+          Text(verbatim: time).foregroundStyle(Theme.faintText).opacity(hovering ? 1 : 0)
         }
         Text("You").fontWeight(.semibold)
       }
       .font(.caption)
-      .foregroundStyle(AgentTheme.mutedText)
+      .foregroundStyle(Theme.mutedText)
       Text(verbatim: message.text)
         .textSelection(.enabled)
         .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 11)
         .padding(.vertical, 7)
-        .background(RoundedRectangle(cornerRadius: 12).fill(AgentTheme.accent.opacity(0.15)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.accent.opacity(0.15)))
         .overlay(
           RoundedRectangle(cornerRadius: 12)
-            .strokeBorder(AgentTheme.danger.opacity(unsent == nil ? 0 : 0.6))
+            .strokeBorder(Theme.danger.opacity(unsent == nil ? 0 : 0.6))
         )
         .overlay(alignment: .leading) {
           CopyButton(text: message.text, label: "Copy message")
@@ -164,7 +164,7 @@ struct TextMessageView: View {
       Text(MarkdownRenderer.inline(message.text)).fixedSize(horizontal: false, vertical: true)
     }
     .font(.callout)
-    .foregroundStyle(AgentTheme.mutedText)
+    .foregroundStyle(Theme.mutedText)
     .frame(maxWidth: .infinity, alignment: .leading)
     .environment(\.openURL, LinkPolicy.openURLAction)
   }
@@ -202,10 +202,10 @@ private struct UnsentBar: View {
         .tooltip("Couldn't send your message", detail: TooltipContent.sentence(reason))
       Button("Retry", action: onRetry)
         .buttonStyle(ChromeButtonStyle(horizontalPadding: 6, verticalPadding: 2))
-        .foregroundStyle(AgentTheme.accent)
+        .foregroundStyle(Theme.accent)
       Button("Discard", action: onDiscard)
         .buttonStyle(ChromeButtonStyle(horizontalPadding: 6, verticalPadding: 2))
-        .foregroundStyle(AgentTheme.mutedText)
+        .foregroundStyle(Theme.mutedText)
     }
     .font(.caption.weight(.medium))
   }
@@ -213,8 +213,8 @@ private struct UnsentBar: View {
   private struct UnsentLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
       HStack(spacing: 4) {
-        configuration.icon.foregroundStyle(AgentTheme.danger)
-        configuration.title.foregroundStyle(AgentTheme.danger)
+        configuration.icon.foregroundStyle(Theme.danger)
+        configuration.title.foregroundStyle(Theme.danger)
       }
     }
   }
@@ -232,7 +232,7 @@ struct StatusDivider: View {
         Image(systemName: message.status.systemImage).imageScale(.small)
         Text(verbatim: message.text ?? message.status.displayLabel).lineLimit(2)
         Text(verbatim: "· \(AgentFormat.timestamp(message.createdAt, now: now))")
-          .foregroundStyle(AgentTheme.faint)
+          .foregroundStyle(Theme.faintText)
       }
       .font(.caption)
       .foregroundStyle(message.status.tone.color)
@@ -244,7 +244,7 @@ struct StatusDivider: View {
   }
 
   private var line: some View {
-    Rectangle().fill(AgentTheme.border).frame(height: 1).frame(maxWidth: .infinity)
+    Rectangle().fill(Theme.separator).frame(height: 1).frame(maxWidth: .infinity)
   }
 }
 
@@ -258,9 +258,9 @@ struct ArtifactRow: View {
       HStack(spacing: 10) {
         Image(systemName: meta?.kind.systemImage ?? "doc")
           .font(.system(size: 15))
-          .foregroundStyle(AgentTheme.accent)
+          .foregroundStyle(Theme.accent)
           .frame(width: 30, height: 30)
-          .background(RoundedRectangle(cornerRadius: 7).fill(AgentTheme.accent.opacity(0.12)))
+          .background(RoundedRectangle(cornerRadius: 7).fill(Theme.accent.opacity(0.12)))
         VStack(alignment: .leading, spacing: 2) {
           Text(verbatim: meta?.title ?? "Artifact")
             .font(.system(size: 13, weight: .medium))
@@ -272,18 +272,18 @@ struct ArtifactRow: View {
             verbatim: meta.map { "\($0.kindLabel) · \(AgentFormat.bytes($0.size))" } ?? "Loading…"
           )
           .font(.caption)
-          .foregroundStyle(AgentTheme.mutedText)
+          .foregroundStyle(Theme.mutedText)
         }
         Spacer(minLength: 4)
         Image(systemName: "chevron.right")
           .font(.caption.weight(.semibold))
-          .foregroundStyle(AgentTheme.faint)
+          .foregroundStyle(Theme.faintText)
       }
       .padding(8)
       .contentShape(Rectangle())
     }
     .buttonStyle(RowButtonStyle())
-    .background(RoundedRectangle(cornerRadius: 8).strokeBorder(AgentTheme.border))
+    .background(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.separator))
     .accessibilityLabel("Open \(meta?.title ?? "artifact")")
   }
 }

@@ -10,7 +10,7 @@ extension Workspace {
   @discardableResult
   func createNote(in folder: String = "", name: String? = nil, newTab: Bool = true) async -> String?
   {
-    if let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+    if let name = name?.trimmedNonEmpty {
       let path = VaultPath.ensureMarkdownExtension(
         VaultPath.normalize(folder.isEmpty ? name : "\(folder)/\(name)"))
       if let problem = NotePaths.validateName(VaultPath.stem(path)) {

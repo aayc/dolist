@@ -15,11 +15,6 @@ public enum ConnectionState: Equatable, Sendable {
   case incompatible(serverApiVersion: Int)
   /// `disconnect()` was called.
   case disconnected
-
-  public var isConnected: Bool {
-    if case .connected = self { return true }
-    return false
-  }
 }
 
 /// Items of the event stream: connection state changes and server events, in order.

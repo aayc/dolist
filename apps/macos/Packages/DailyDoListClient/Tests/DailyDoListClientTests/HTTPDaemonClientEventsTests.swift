@@ -1,3 +1,4 @@
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import Foundation
 import Testing
@@ -272,7 +273,7 @@ struct HTTPDaemonClientEventsTests {
     await client.send(.surfaceSubscribe(threadId: "thr_1", surface: .browser))  // duplicate
     await client.send(.surfaceUnsubscribe(threadId: "thr_2", surface: .computer))
     await client.send(.surfaceUnsubscribe(threadId: "thr_0", surface: .computer))
-    try await waitUntil("signals on connection 1") { first.messages.count == 7 }
+    try await eventually("signals on connection 1") { first.messages.count == 7 }
     #expect(
       try first.messages.map(Self.decode) == [
         .hello(clientId: "macos_test", apiVersion: 1, clientVersion: "macos/test"),
@@ -287,7 +288,7 @@ struct HTTPDaemonClientEventsTests {
     first.drop()
     let second = try await server.peer(2)
     try await recorder.waitFor("resync") { $0 == .resync }
-    try await waitUntil("replayed subscriptions") { second.messages.count == 2 }
+    try await eventually("replayed subscriptions") { second.messages.count == 2 }
     try await Task.sleep(for: .milliseconds(50))
     #expect(
       try second.messages.map(Self.decode) == [
@@ -307,7 +308,7 @@ struct HTTPDaemonClientEventsTests {
     let recorder = StreamRecorder(client.events())
     try await recorder.waitForState(.connected(serverVersion: "test-1"))
     await client.send(.threadRead(threadId: "thr_live"))
-    try await waitUntil("live signal") { peer.messages.count == 2 }
+    try await eventually("live signal") { peer.messages.count == 2 }
     await client.disconnect()
     await client.send(.threadRead(threadId: "thr_late"))
     try await Task.sleep(for: .milliseconds(50))
@@ -334,7 +335,7 @@ struct HTTPDaemonClientEventsTests {
     #expect(first.items.last == .state(.disconnected))
     #expect(second.items.last == .state(.disconnected))
     #expect(client.connection.broadcaster.subscriberCount == 0)
-    try await waitUntil("server to see the close") { peer.isClosed }
+    try await eventually("server to see the close") { peer.isClosed }
     #expect(peer.receivedCloseCode == 1000)
 
     // New streams start disconnected and stay open; no reconnect happens.
@@ -347,7 +348,7 @@ struct HTTPDaemonClientEventsTests {
 
     // A consumer that stops listening is unregistered.
     after.cancel()
-    try await waitUntil("cancelled stream to unregister") {
+    try await eventually("cancelled stream to unregister") {
       client.connection.broadcaster.subscriberCount == 0
     }
 
@@ -388,7 +389,9 @@ struct HTTPDaemonClientEventsTests {
     let client = Self.client(server, options: options)
     await client.connect()
     let peer = try await server.peer(1)
-    try await waitUntil("two pings") { peer.messages.filter { $0.contains(#""ping""#) }.count >= 2 }
+    try await eventually("two pings") {
+      peer.messages.filter { $0.contains(#""ping""#) }.count >= 2
+    }
     await client.disconnect()
   }
 
@@ -413,7 +416,7 @@ struct HTTPDaemonClientEventsTests {
 }
 
 extension StreamRecorder {
-  func waitUntilResyncs(_ count: Int, timeout: Duration = .seconds(5)) async throws {
-    try await waitUntil("\(count) resyncs", timeout: timeout) { resyncCount >= count }
+  func waitUntilResyncs(_ count: Int, timeout: Duration = .seconds(10)) async throws {
+    try await eventually("\(count) resyncs", timeout: timeout) { resyncCount >= count }
   }
 }

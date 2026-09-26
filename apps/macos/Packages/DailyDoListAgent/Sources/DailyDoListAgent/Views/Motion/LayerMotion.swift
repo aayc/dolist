@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListUI
 import QuartzCore
 import SwiftUI
 
@@ -143,11 +144,11 @@ final class SoftCaretView: NSView {
 
   override func viewDidChangeEffectiveAppearance() {
     super.viewDidChangeEffectiveAppearance()
-    bar.backgroundColor = LayerMotion.cgColor(AgentPalette.accent, in: self)
+    bar.backgroundColor = LayerMotion.cgColor(NSColor(Theme.accent), in: self)
   }
 
   private func install() {
-    bar.backgroundColor = LayerMotion.cgColor(AgentPalette.accent, in: self)
+    bar.backgroundColor = LayerMotion.cgColor(NSColor(Theme.accent), in: self)
     bar.removeAnimation(forKey: LayerMotion.caretBlinkKey)
     if mode == .blinking {
       bar.add(LayerMotion.caretBlink(delay: 0.5, on: bar), forKey: LayerMotion.caretBlinkKey)
@@ -181,7 +182,7 @@ struct PulseDot: NSViewRepresentable {
 final class PulseDotView: NSView {
   private let dot = LayerMotion.stillLayer()
   private let halo = LayerMotion.stillLayer()
-  private var color: NSColor = AgentPalette.accent
+  private var color: NSColor = NSColor(Theme.accent)
   private var diameter: CGFloat = 6
   private(set) var animates = false
 
@@ -311,7 +312,7 @@ final class ThinkingDotsView: NSView {
   }
 
   private func recolor() {
-    let color = LayerMotion.cgColor(AgentPalette.accent, in: self)
+    let color = LayerMotion.cgColor(NSColor(Theme.accent), in: self)
     for dot in dots { dot.backgroundColor = color }
   }
 

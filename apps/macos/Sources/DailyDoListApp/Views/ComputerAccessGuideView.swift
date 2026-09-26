@@ -65,7 +65,7 @@ struct ComputerAccessGuideView: View {
     )
     .overlay(
       RoundedRectangle(cornerRadius: ComputerAccessGuideLayout.cornerRadius, style: .continuous)
-        .strokeBorder(Theme.border)
+        .strokeBorder(Theme.separator)
     )
     .shadow(color: .black.opacity(0.24), radius: 16, y: 6)
     .animation(motion, value: guide)

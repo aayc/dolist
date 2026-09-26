@@ -19,20 +19,8 @@ actor Gate {
   }
 }
 
-/// Polls `condition` on the main actor until it holds or `timeout` passes. The default leaves room
-/// for CI's macOS runners, which can be many times slower than a laptop.
-@MainActor
-func eventually(timeout: Duration = .seconds(10), _ condition: () -> Bool) async -> Bool {
-  let deadline = ContinuousClock.now + timeout
-  while ContinuousClock.now < deadline {
-    if condition() { return true }
-    try? await Task.sleep(for: .milliseconds(5))
-  }
-  return condition()
-}
-
 /// Waits until the gate has at least `count` arrivals.
-func waitForArrivals(_ gate: Gate, _ count: Int = 1, timeout: Duration = .seconds(3)) async -> Bool
+func waitForArrivals(_ gate: Gate, _ count: Int = 1, timeout: Duration = .seconds(10)) async -> Bool
 {
   let deadline = ContinuousClock.now + timeout
   while ContinuousClock.now < deadline {

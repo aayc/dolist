@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListUI
 import SwiftUI
 import Testing
 
@@ -38,9 +39,9 @@ struct MotionTests {
     let dot = PulseDotView()
     let window = inWindow(dot)
     defer { window.close() }
-    dot.configure(color: AgentPalette.info, diameter: 6, animates: true)
+    dot.configure(color: NSColor(Theme.info), diameter: 6, animates: true)
     #expect(dot.isPulsing)
-    dot.configure(color: AgentPalette.info, diameter: 6, animates: false)
+    dot.configure(color: NSColor(Theme.info), diameter: 6, animates: false)
     #expect(!dot.isPulsing)
   }
 

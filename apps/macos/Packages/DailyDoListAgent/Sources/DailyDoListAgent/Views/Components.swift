@@ -48,10 +48,10 @@ struct Chip: View {
       Text(text)
     }
     .font(.caption.weight(.medium))
-    .foregroundStyle(tone?.color ?? AgentTheme.mutedText)
+    .foregroundStyle(tone?.color ?? Theme.mutedText)
     .padding(.horizontal, 7)
     .padding(.vertical, 2)
-    .background(Capsule().fill((tone?.color ?? AgentTheme.text).opacity(tone == nil ? 0.07 : 0.14)))
+    .background(Capsule().fill((tone?.color ?? Theme.text).opacity(tone == nil ? 0.07 : 0.14)))
   }
 }
 
@@ -73,18 +73,6 @@ struct CountBadge: View {
     .padding(.vertical, 1.5)
     .background(Capsule().fill(tone.color))
     .popOnChange(of: count)
-  }
-}
-
-/// A one-pixel line in ``AgentTheme/border``.
-struct AgentHairline: View {
-  @Environment(\.displayScale) private var displayScale
-
-  var body: some View {
-    Rectangle()
-      .fill(AgentTheme.border)
-      .frame(height: 1 / max(displayScale, 1))
-      .accessibilityHidden(true)
   }
 }
 
@@ -112,7 +100,7 @@ struct RowButtonStyle: ButtonStyle {
               !isEnabled
                 ? Color.clear
                 : configuration.isPressed
-                  ? AgentTheme.hoverFill : hovering ? AgentTheme.subtleFill : Color.clear)
+                  ? Theme.hover : hovering ? Theme.secondaryBackground : Color.clear)
         )
         .onHover { hovering = $0 }
         .pointingHandCursor()
@@ -154,34 +142,8 @@ struct JSONBlock: View {
         .padding(8)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(RoundedRectangle(cornerRadius: 6).fill(AgentTheme.codeBackground))
-    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(AgentTheme.border))
-  }
-}
-
-/// Copies `text` (a message, a code block); a check confirms it for a moment.
-struct CopyButton: View {
-  let text: String
-  let label: String
-  @State private var copies = 0
-  @State private var copied = false
-  @Environment(\.agentClipboard) private var clipboard
-
-  var body: some View {
-    IconButton(
-      copied ? "checkmark" : "doc.on.doc", label: copied ? "Copied" : label, size: .compact
-    ) {
-      clipboard.copy(text)
-      copied = true
-      copies += 1
-    }
-    .contentTransition(.symbolEffect(.replace))
-    .task(id: copies) {
-      guard copies > 0 else { return }
-      try? await Task.sleep(for: .seconds(1.2))
-      guard !Task.isCancelled else { return }
-      copied = false
-    }
+    .background(RoundedRectangle(cornerRadius: 6).fill(Theme.codeBackground))
+    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.separator))
   }
 }
 
@@ -192,17 +154,17 @@ struct AgentErrorBanner: View {
 
   var body: some View {
     HStack(alignment: .top, spacing: 8) {
-      Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(AgentTheme.danger)
+      Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.danger)
       VStack(alignment: .leading, spacing: 2) {
         Text(alert.title).font(.callout.weight(.semibold))
-        Text(alert.message).font(.caption).foregroundStyle(AgentTheme.mutedText).lineLimit(3)
+        Text(alert.message).font(.caption).foregroundStyle(Theme.mutedText).lineLimit(3)
       }
       Spacer(minLength: 4)
       IconButton("xmark", label: "Dismiss", size: .compact, action: onDismiss)
     }
     .padding(10)
-    .background(RoundedRectangle(cornerRadius: 10).fill(AgentTheme.cardBackground))
-    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(AgentTheme.border))
+    .background(RoundedRectangle(cornerRadius: 10).fill(Theme.elevated))
+    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.separator))
     .shadow(color: .black.opacity(0.18), radius: 10, y: 3)
     .accessibilityElement(children: .combine)
   }
@@ -216,7 +178,7 @@ struct AgentStatusIndicator: View {
     let (text, tone) = summary
     HStack(spacing: 5) {
       Circle().fill(tone.color).frame(width: 7, height: 7)
-      Text(text).font(.caption).foregroundStyle(AgentTheme.mutedText).lineLimit(1)
+      Text(text).font(.caption).foregroundStyle(Theme.mutedText).lineLimit(1)
     }
     .tooltip(tooltip, accessibility: .none)
     .accessibilityElement(children: .combine)

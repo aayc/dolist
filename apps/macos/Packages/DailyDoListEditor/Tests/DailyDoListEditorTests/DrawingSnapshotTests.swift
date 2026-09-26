@@ -1,5 +1,6 @@
 import AppKit
 import DailyDoListDrawing
+import DailyDoListUITestSupport
 import Testing
 
 @testable import DailyDoListEditor
@@ -43,7 +44,7 @@ struct DrawingSnapshotTests {
       text: Self.note, drawings: Self.drawings, size: NSSize(width: 760, height: 1100),
       appearance: appearance)
     let rep = editor.snapshot()
-    try write(rep, "drawings-\(name).png")
+    try rep.writePNG("drawings-\(name)", in: RenderSnapshotTests.outputDirectory)
     let scale = CGFloat(rep.pixelsWide) / editor.textView.visibleRect.width
     let background = try #require(
       rep.colorAt(x: 4, y: 4)?.usingColorSpace(.sRGB))
@@ -69,7 +70,7 @@ struct DrawingSnapshotTests {
         "Broken.excalidraw": .unreadable,
       ])
     let rep = editor.snapshot()
-    try write(rep, "drawings-placeholders.png")
+    try rep.writePNG("drawings-placeholders", in: RenderSnapshotTests.outputDirectory)
     let scale = CGFloat(rep.pixelsWide) / editor.textView.visibleRect.width
     let background = try #require(rep.colorAt(x: 4, y: 4)?.usingColorSpace(.sRGB))
     for line in [0, 2] {
@@ -82,13 +83,6 @@ struct DrawingSnapshotTests {
         distinctColors(in: outside, rep: rep, scale: scale, excluding: background) == 0,
         "the words on line \(line) spill out of the box")
     }
-  }
-
-  private func write(_ rep: NSBitmapImageRep, _ name: String) throws {
-    let png = try #require(rep.representation(using: .png, properties: [:]))
-    try FileManager.default.createDirectory(
-      at: RenderSnapshotTests.outputDirectory, withIntermediateDirectories: true)
-    try png.write(to: RenderSnapshotTests.outputDirectory.appendingPathComponent(name))
   }
 
   private func distinctColors(

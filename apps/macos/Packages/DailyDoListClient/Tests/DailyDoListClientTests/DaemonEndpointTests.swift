@@ -93,24 +93,6 @@ struct DaemonEndpointTests {
       message.contains("~/.daily-do-list/daemon-token") && !message.contains(NSHomeDirectory()))
   }
 
-  @Test func portResolvesLikeTheDaemon() throws {
-    let home = try TempHome()
-    defer { home.cleanup() }
-    #expect(DaemonEndpoint.configuredPort(home: home.url, environment: [:]) == nil)
-    try home.write("config.json", #"{"vaultPath":"~/Notes","port":7440}"#)
-    #expect(DaemonEndpoint.configuredPort(home: home.url, environment: [:]) == 7440)
-    #expect(
-      DaemonEndpoint.configuredPort(home: home.url, environment: ["DDL_PORT": "7550"]) == 7550)
-    try home.write("config.json", #"{"port":0}"#)
-    #expect(DaemonEndpoint.configuredPort(home: home.url, environment: [:]) == nil)
-  }
-
-  @Test func defaultHomeIsTheDaemonsDefault() {
-    if ProcessInfo.processInfo.environment["DDL_HOME"] == nil {
-      #expect(DaemonEndpoint.defaultHome.path == NSHomeDirectory() + "/.daily-do-list")
-    }
-  }
-
   // MARK: - waitUntilHealthy
 
   @Test func waitUntilHealthyRetriesUntilTheDaemonAnswers() async throws {

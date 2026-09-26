@@ -135,7 +135,7 @@ struct VimIntegrationTests {
     weak var released: EditorVimIntegration?
     do {
       let integration = EditorVimIntegration(
-        vim: editor.vim, pasteboard: SystemVimPasteboard(editor.pasteboard))
+        vim: editor.vim, pasteboard: editor.pasteboard)
       released = integration
       ex(editor, "set clipboard=unnamed")
     }

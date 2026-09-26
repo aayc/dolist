@@ -3,6 +3,7 @@ import DailyDoListDomain
 import DailyDoListDrawing
 import DailyDoListEditor
 import DailyDoListModels
+import DailyDoListUI
 import Foundation
 
 /// The drawings notes embed (`![[Plan.excalidraw|360|right-wrap]]`): reads each file once through
@@ -120,8 +121,12 @@ final class DrawingStore {
       }
       doc.take(ExcalidrawMarkdown.parse(note.content), version: note.version)
     } else {
-      docs[note.path] = Doc(
+      let doc = Doc(
         path: note.path, document: ExcalidrawMarkdown.parse(note.content), version: note.version)
+      doc.saveTimer = IdleTimer(scheduler: scheduler, delay: saveDelay) { [weak self, weak doc] in
+        if let self, let doc { self.save(doc) }
+      }
+      docs[note.path] = doc
     }
     changed()
   }
@@ -134,8 +139,7 @@ final class DrawingStore {
     doc.scene = scene
     doc.contentHash = DrawingContentHash.hash(scene)
     doc.localRev += 1
-    doc.lastEdit = scheduler.now
-    arm(doc, delay: saveDelay)
+    doc.saveTimer?.poke()
   }
 
   /// Saves pending edits now; the task finishes when they're written (or failed).
@@ -221,24 +225,9 @@ final class DrawingStore {
 
   // MARK: - Saving
 
-  private func arm(_ doc: Doc, delay: TimeInterval) {
-    guard doc.timer == nil else { return }
-    doc.timer = scheduler.schedule(after: delay) { [weak self, weak doc] in
-      guard let self, let doc else { return }
-      doc.timer = nil
-      let idle = self.scheduler.now - doc.lastEdit
-      if idle + 1e-9 < self.saveDelay {
-        self.arm(doc, delay: self.saveDelay - idle)
-        return
-      }
-      self.save(doc)
-    }
-  }
-
   @discardableResult
   private func save(_ doc: Doc) -> Task<Void, Never>? {
-    doc.timer?.cancel()
-    doc.timer = nil
+    doc.saveTimer?.cancel()
     if let inflight = doc.inflight {
       if doc.localRev == doc.savedRev { return inflight }
       doc.resave = true
@@ -326,7 +315,7 @@ final class DrawingStore {
         doc.resave = false
         save(doc)
       } else {
-        arm(doc, delay: saveDelay)
+        doc.saveTimer?.schedule()
       }
     }
   }
@@ -383,8 +372,8 @@ private final class Doc {
   var version: String
   var localRev = 0
   var savedRev = 0
-  var lastEdit: TimeInterval = 0
-  var timer: ScheduledAction?
+  /// Saves once the drawing has been left alone for the store's delay.
+  var saveTimer: IdleTimer?
   var inflight: Task<Void, Never>?
   var resave = false
   var recheck = false

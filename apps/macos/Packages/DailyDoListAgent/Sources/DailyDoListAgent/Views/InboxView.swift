@@ -1,3 +1,4 @@
+import DailyDoListDomain
 import DailyDoListModels
 import DailyDoListUI
 import SwiftUI
@@ -71,15 +72,15 @@ private struct InboxSectionHeader: View {
     HStack(spacing: 6) {
       Text(group.title.uppercased())
         .font(.caption.weight(.semibold))
-        .foregroundStyle(group == .needsYou ? AgentTheme.warning : AgentTheme.mutedText)
-      Text(verbatim: "\(count)").font(.caption).foregroundStyle(AgentTheme.faint)
+        .foregroundStyle(group == .needsYou ? Theme.warning : Theme.mutedText)
+      Text(verbatim: "\(count)").font(.caption).foregroundStyle(Theme.faintText)
       Spacer()
     }
     .padding(.horizontal, 10)
     .padding(.top, 12)
     .padding(.bottom, 4)
     .frame(maxWidth: .infinity)
-    .background(AgentTheme.panelBackground)
+    .background(Theme.background)
     .accessibilityAddTraits(.isHeader)
   }
 }
@@ -111,21 +112,21 @@ struct InboxRow: View {
             Text(verbatim: AgentFormat.relativeTime(Date(epochMillis: thread.updatedAt), now: now))
               .font(.caption)
               .monospacedDigit()
-              .foregroundStyle(AgentTheme.mutedText)
+              .foregroundStyle(Theme.mutedText)
           }
           if let preview = thread.lastMessagePreview.map(AgentFormat.plainPreview), !preview.isEmpty
           {
             Text(verbatim: preview)
               .font(.callout)
-              .foregroundStyle(AgentTheme.mutedText)
+              .foregroundStyle(Theme.mutedText)
               .lineLimit(2)
           }
           HStack(spacing: 6) {
             StatusChip(status: thread.status)
             if let notePath = thread.notePath {
-              Text(verbatim: AgentFormat.noteName(notePath))
+              Text(verbatim: VaultPath.stem(notePath))
                 .font(.caption)
-                .foregroundStyle(AgentTheme.faint)
+                .foregroundStyle(Theme.faintText)
                 .lineLimit(1)
             }
             Spacer(minLength: 0)
@@ -133,9 +134,7 @@ struct InboxRow: View {
               CountBadge(
                 count: pendingApprovals, tone: .warning, systemImage: "exclamationmark.shield.fill"
               )
-              .tooltip(
-                pendingApprovals == 1
-                  ? "1 approval waiting" : "\(pendingApprovals) approvals waiting")
+              .tooltip(AgentFormat.approvalsWaiting(pendingApprovals))
             }
             if unread > 0 {
               CountBadge(count: unread, tone: .accent).tooltip("\(unread) unread")

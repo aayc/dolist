@@ -1,3 +1,4 @@
+import DailyDoListDomain
 import DailyDoListModels
 import DailyDoListUI
 import SwiftUI
@@ -103,7 +104,7 @@ public struct ThreadView: View {
       ThreadTabBar(tabs: tabs, selection: $tab, artifactCount: artifactCount)
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
-      AgentHairline()
+      Hairline()
       content(thread: thread, tab: selected)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -216,14 +217,14 @@ struct ThreadHeader: View {
           if let notePath {
             HStack(spacing: 4) {
               Image(systemName: "doc.text")
-              Text(verbatim: AgentFormat.noteName(notePath))
+              Text(verbatim: VaultPath.stem(notePath))
                 .lineLimit(1)
                 .tooltip(
-                  ifTruncated: AgentFormat.noteName(notePath),
+                  ifTruncated: VaultPath.stem(notePath),
                   font: .preferredFont(forTextStyle: .caption1), showing: .path(notePath))
             }
             .font(.caption)
-            .foregroundStyle(AgentTheme.mutedText)
+            .foregroundStyle(Theme.mutedText)
           }
         }
       }
@@ -284,7 +285,7 @@ private struct ThreadTabChip: View {
     Button(action: action) {
       Text(verbatim: title)
         .font(.system(size: 12, weight: isSelected ? .medium : .regular))
-        .foregroundStyle(isSelected ? AgentTheme.text : AgentTheme.mutedText)
+        .foregroundStyle(isSelected ? Theme.text : Theme.mutedText)
         .frame(height: 22)
     }
     .buttonStyle(

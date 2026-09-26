@@ -447,7 +447,7 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
   so its keycaps come from `CommandID.shortcut`, the one table of shortcuts; never write a
   shortcut into text (`TooltipTests` scans the sources). Clickable things that aren't text fields
   get `.pointingHandCursor()` (the shared button styles include it), and custom controls a hover
-  tint. Tests that drive tooltips give views their own `TooltipCenter` (a `ManualTooltipClock`,
+  tint. Tests that drive tooltips give views their own `TooltipCenter` (a `ManualScheduler`,
   or `QuietTooltips`) through `\.tooltipCenter`.
 - **Protocol changes:** a wire change in `packages/contract/src/wire/` also updates
   `DailyDoListModels` in the same change. Its tests decode the `@ddl/contract` fixtures.

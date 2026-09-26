@@ -28,7 +28,8 @@ public struct OrchestratorLocation: Equatable, Sendable {
 
   /// This is the always-on machine: there's nothing to choose.
   public var isHost: Bool
-  /// Where the switch says it runs: `.alwaysOnMachine` (on) or `.thisDevice` (off).
+  /// The choice the switch shows (the stored one, or the one being saved, like the web's):
+  /// `.alwaysOnMachine` (on) or `.thisDevice` (off), even while the agent is held here.
   public var selection: AgentPlacement
   /// The switch can be flipped (not held here, not switching, not the host).
   public var canSwitch: Bool
@@ -61,7 +62,7 @@ public struct OrchestratorLocation: Equatable, Sendable {
     heldHere = isHost ? nil : status.heldHere
     let stored: AgentPlacement =
       status.placement == .alwaysOnMachine ? .alwaysOnMachine : .thisDevice
-    selection = pending ?? (heldHere == nil ? stored : .thisDevice)
+    selection = pending ?? stored
     isSwitching = pending != nil
     canSwitch = !isHost && heldHere == nil && pending == nil
     offersRunHere = false
@@ -91,7 +92,7 @@ public struct OrchestratorLocation: Equatable, Sendable {
     // sync on and no machine yet, another device asking with the same priority can hold the
     // agent while this one is "held here": say who runs it before what this one waits for.
     let other = status.runsOn.flatMap { $0.thisDevice || $0.alwaysOnMachine ? nil : $0.name }
-    if let note = status.note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+    if let note = status.note?.trimmedNonEmpty {
       line = Line(note, tone: .info, inProgress: true)
     } else if status.relay == .unreachable {
       line = Line("\(machineName ?? "The always-on machine") can't be reached", tone: .warning)

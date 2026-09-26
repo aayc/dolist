@@ -33,9 +33,9 @@ public struct ChromeButtonStyle: ButtonStyle {
   }
 
   fileprivate func fill(_ state: ControlState) -> Color {
-    guard state.isEnabled else { return isSelected ? UIPalette.pressed : .clear }
-    if state.isPressed || isSelected { return UIPalette.pressed }
-    return state.isHovered ? UIPalette.hover : .clear
+    guard state.isEnabled else { return isSelected ? Theme.pressed : .clear }
+    if state.isPressed || isSelected { return Theme.pressed }
+    return state.isHovered ? Theme.hover : .clear
   }
 }
 
@@ -50,13 +50,13 @@ private struct ChromeButtonBody: View {
       isHovered: hovering, isPressed: configuration.isPressed, isEnabled: isEnabled)
     configuration.label
       .foregroundStyle(
-        style.brightensLabel && hovering && isEnabled ? UIPalette.text : UIPalette.mutedText
+        style.brightensLabel && hovering && isEnabled ? Theme.text : Theme.mutedText
       )
       .padding(style.padding)
       .background(RoundedRectangle(cornerRadius: style.cornerRadius).fill(style.fill(state)))
       .overlay {
         if style.showsBorder {
-          RoundedRectangle(cornerRadius: style.cornerRadius).strokeBorder(UIPalette.separator)
+          RoundedRectangle(cornerRadius: style.cornerRadius).strokeBorder(Theme.separator)
         }
       }
       .contentShape(RoundedRectangle(cornerRadius: style.cornerRadius))
@@ -78,7 +78,7 @@ extension View {
     background(
       RoundedRectangle(cornerRadius: cornerRadius)
         .fill(
-          isSelected || isPressed ? UIPalette.pressed : isHovered ? UIPalette.hover : .clear)
+          isSelected || isPressed ? Theme.pressed : isHovered ? Theme.hover : .clear)
     )
     .animation(.easeOut(duration: ControlState.hoverDuration), value: isHovered)
   }

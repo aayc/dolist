@@ -30,7 +30,7 @@ public final class EditorVimIntegration {
   /// Installs the integration on `vim` (call once per app; the clipboard registers read and write
   /// `pasteboard`). Keep it as long as `vim` is used: once it's released, the commands and hooks
   /// it installed do nothing.
-  public init(vim: Vim, pasteboard: VimPasteboard = SystemVimPasteboard()) {
+  public init(vim: Vim, pasteboard: NSPasteboard = .general) {
     self.vim = vim
     clipboard = VimSystemClipboard(pasteboard: pasteboard)
     clipboardRegister = PasteboardRegister(clipboard: clipboard)

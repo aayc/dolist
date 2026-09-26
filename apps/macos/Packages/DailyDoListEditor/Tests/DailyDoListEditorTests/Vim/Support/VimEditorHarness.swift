@@ -69,7 +69,7 @@ final class VimEditorHarness {
     vim = Vim(scheduler: scheduler, isMac: true)
     pasteboard = NSPasteboard(name: NSPasteboard.Name("ddl.tests.vim.\(UUID().uuidString)"))
     integration =
-      integrated ? EditorVimIntegration(vim: vim, pasteboard: SystemVimPasteboard(pasteboard)) : nil
+      integrated ? EditorVimIntegration(vim: vim, pasteboard: pasteboard) : nil
     controller.vim = vim
     window.makeFirstResponder(controller.textView)
     host.clock = { [weak self] in self?.now ?? 0 }

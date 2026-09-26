@@ -60,15 +60,24 @@ struct SupervisorHarness {
   var lastProcess: FakeProcess? { machine.processes.last }
 }
 
-/// Waits (in real time, polling the main actor) until `condition` holds.
-@MainActor
-func waitUntil(timeout: Duration = .seconds(5), _ condition: @MainActor () -> Bool) async -> Bool {
+struct TimeoutError: Error, CustomStringConvertible {
+  let description: String
+}
+
+/// Polls `condition` (on the caller's actor, in real time) every few milliseconds until it holds,
+/// failing after `timeout`: `DailyDoListClientTestSupport`'s `eventually`, which this package
+/// doesn't depend on.
+func eventually(
+  _ what: @autoclosure () -> String = "condition", timeout: Duration = .seconds(10),
+  isolation: isolated (any Actor)? = #isolation, _ condition: () -> Bool
+) async throws {
   let deadline = ContinuousClock.now + timeout
-  while ContinuousClock.now < deadline {
-    if condition() { return true }
-    try? await Task.sleep(for: .milliseconds(2))
+  while !condition() {
+    guard ContinuousClock.now < deadline else {
+      throw TimeoutError(description: "timed out waiting for \(what())")
+    }
+    try await Task.sleep(for: .milliseconds(2))
   }
-  return condition()
 }
 
 extension DaemonSupervisorState {

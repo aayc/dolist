@@ -1,6 +1,7 @@
 import DailyDoListClient
 import DailyDoListDaemon
 import DailyDoListModels
+import DailyDoListUI
 import Foundation
 
 /// How the app moves its daemon to another vault.
@@ -105,12 +106,13 @@ extension AppModel {
 
   /// Until the supervisor runs a new daemon (it relaunches one that exits to open another vault).
   private func waitForRelaunch(of pid: Int32) async {
-    let deadline = Date().addingTimeInterval(60)
-    while Date() < deadline {
+    let scheduler = environment.scheduler
+    let deadline = scheduler.now + 60
+    while scheduler.now < deadline {
       switch supervisor.state {
       case .running(let next, _) where next != pid: return
       case .failed: return
-      default: try? await Task.sleep(for: .milliseconds(100))
+      default: await scheduler.sleep(for: 0.1)
       }
     }
   }
@@ -122,14 +124,15 @@ extension AppModel {
   {
     guard let endpoint else { return }
     let probe = environment.makeClient(endpoint)
-    let deadline = Date().addingTimeInterval(waitsForUser ? 600 : 60)
-    while Date() < deadline {
+    let scheduler = environment.scheduler
+    let deadline = scheduler.now + (waitsForUser ? 600 : 60)
+    while scheduler.now < deadline {
       if let health = try? await probe.health() {
         if health.vaultName == vaultName { return }
       } else if !waitsForUser {
         return
       }
-      try? await Task.sleep(for: .milliseconds(500))
+      await scheduler.sleep(for: 0.5)
     }
   }
 

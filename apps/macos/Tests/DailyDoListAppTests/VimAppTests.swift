@@ -4,6 +4,7 @@ import DailyDoListClient
 import DailyDoListClientTestSupport
 import DailyDoListEditor
 import DailyDoListModels
+import DailyDoListUI
 import DailyDoListVim
 import Foundation
 import Testing
@@ -28,7 +29,7 @@ struct VimAppTests {
 
   init() {
     integration = EditorVimIntegration(
-      vim: vim, pasteboard: SystemVimPasteboard(privatePasteboard()))
+      vim: vim, pasteboard: privatePasteboard())
   }
 
   private func vimWorkspace(agent: AgentStore? = nil) async throws -> Workspace {
@@ -217,7 +218,7 @@ struct VimAppModelTests {
     client.withState { $0.settings.editor.vimMode = true }
     let pasteboard = privatePasteboard()
     var environment = makeEnvironment(client: client)
-    environment.vimPasteboard = { SystemVimPasteboard(pasteboard) }
+    environment.vimPasteboard = { pasteboard }
     let model = AppModel(environment: environment)
     await model.boot()
     let workspace = try #require(model.workspace)

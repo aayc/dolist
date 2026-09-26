@@ -1,3 +1,4 @@
+import DailyDoListAgent
 import DailyDoListDomain
 import DailyDoListUI
 import SwiftUI
@@ -46,11 +47,6 @@ struct EditorHeader: View {
   }
 }
 
-/// "1 approval waiting", "3 approvals waiting".
-func approvalsWaiting(_ count: Int) -> String {
-  count == 1 ? "1 approval waiting" : "\(count) approvals waiting"
-}
-
 /// Opens the agent panel; a dot (popping in) while approvals wait in it.
 private struct AgentPanelToggle: View {
   let pending: Int
@@ -60,7 +56,7 @@ private struct AgentPanelToggle: View {
   var body: some View {
     IconButton(
       "sidebar.right", label: "Show agent panel", command: .toggleAgentPanel,
-      detail: pending > 0 ? approvalsWaiting(pending) : nil, action: action
+      detail: pending > 0 ? AgentFormat.approvalsWaiting(pending) : nil, action: action
     )
     .overlay(alignment: .topTrailing) {
       if pending > 0 {
@@ -148,10 +144,7 @@ private struct TabItem: View {
       Button("Close Tab") { workspace.closeTab(path) }
       Button("Close Other Tabs") { workspace.closeOtherTabs(except: path) }
       Divider()
-      Button("Copy Path") {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(path, forType: .string)
-      }
+      Button("Copy Path") { Clipboard.copy(path) }
       if workspace.localVaultURL != nil {
         Button("Reveal in Finder") { workspace.revealInFinder(path) }
       }

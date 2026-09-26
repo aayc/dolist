@@ -8,7 +8,7 @@ import Foundation
 enum BadgeBuilder {
   /// Pill text for a task's badge; nil = no badge (idle, ignored, unknown statuses).
   static func label(for record: TaskAgentRecord) -> String? {
-    let summary = record.summary?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+    let summary = record.summary?.trimmedNonEmpty
     switch record.status {
     case .triaging: return "Triaging…"
     case .queued: return "Queued"
@@ -57,8 +57,4 @@ enum BadgeBuilder {
     }
     return TaskAnchors.resolve(document, anchors: [TaskAnchor(record: record)])[record.taskId]
   }
-}
-
-extension String {
-  var nilIfEmpty: String? { isEmpty ? nil : self }
 }

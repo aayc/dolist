@@ -64,15 +64,15 @@ struct ToolGroupRow: View {
             ForEach(icons, id: \.self) { icon in
               Image(systemName: icon)
                 .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(AgentTheme.mutedText)
+                .foregroundStyle(Theme.mutedText)
                 .frame(width: 16, height: 16)
-                .background(Circle().fill(AgentTheme.cardBackground))
-                .overlay(Circle().strokeBorder(AgentTheme.border))
+                .background(Circle().fill(Theme.elevated))
+                .overlay(Circle().strokeBorder(Theme.separator))
             }
           }
-          Text(verbatim: title).foregroundStyle(AgentTheme.text)
+          Text(verbatim: title).foregroundStyle(Theme.text)
           Text(verbatim: summary)
-            .foregroundStyle(AgentTheme.faint)
+            .foregroundStyle(Theme.faintText)
             .lineLimit(1)
             .truncationMode(.tail)
             .layoutPriority(-1)
@@ -81,13 +81,13 @@ struct ToolGroupRow: View {
             Text(verbatim: span)
               .font(.caption)
               .monospacedDigit()
-              .foregroundStyle(AgentTheme.mutedText)
+              .foregroundStyle(Theme.mutedText)
           }
           Image(systemName: ToolCallStatus.ok.systemImage)
             .foregroundStyle(ToolCallStatus.ok.tone.color)
           Image(systemName: "chevron.right")
             .font(.caption2.weight(.semibold))
-            .foregroundStyle(hovering ? AgentTheme.mutedText : AgentTheme.faint)
+            .foregroundStyle(hovering ? Theme.mutedText : Theme.faintText)
             .rotationEffect(.degrees(expanded ? 90 : 0))
         }
         .contentShape(Rectangle())
@@ -110,9 +110,9 @@ struct ToolGroupRow: View {
     .padding(.vertical, 7)
     .background(
       RoundedRectangle(cornerRadius: 8).fill(
-        hovering && !expanded ? AgentTheme.hoverFill : AgentTheme.subtleFill)
+        hovering && !expanded ? Theme.hover : Theme.secondaryBackground)
     )
-    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(AgentTheme.border))
+    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.separator))
     .animation(.easeOut(duration: 0.11), value: hovering)
   }
 }

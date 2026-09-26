@@ -1,5 +1,6 @@
 import AppKit
 import DailyDoListDrawing
+import DailyDoListUITestSupport
 import DailyDoListVim
 import Testing
 
@@ -184,12 +185,7 @@ struct DrawingEditingTests {
     let editor = DrawingEditorHarness(
       text: Self.text, drawings: DrawingEmbedTests.plan, appearance: appearance)
     #expect(editor.controller.beginEditingDrawing(atLine: 1))
-    let rep = editor.snapshot()
-    let png = try #require(rep.representation(using: .png, properties: [:]))
-    try FileManager.default.createDirectory(
-      at: RenderSnapshotTests.outputDirectory, withIntermediateDirectories: true)
-    try png.write(
-      to: RenderSnapshotTests.outputDirectory.appendingPathComponent("drawings-editing-\(name).png")
-    )
+    try editor.snapshot().writePNG(
+      "drawings-editing-\(name)", in: RenderSnapshotTests.outputDirectory)
   }
 }

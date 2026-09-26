@@ -1,34 +1,6 @@
 import AppKit
 import DailyDoListVim
 
-/// A pasteboard vim reads and writes plain text on (behind a protocol so tests use a private one).
-@MainActor
-public protocol VimPasteboard: AnyObject {
-  /// Changes whenever anyone writes to the pasteboard.
-  var changeCount: Int { get }
-  func string() -> String?
-  func setString(_ string: String)
-}
-
-/// An `NSPasteboard` as vim's clipboard (`.general` in the app).
-@MainActor
-public final class SystemVimPasteboard: VimPasteboard {
-  public let pasteboard: NSPasteboard
-
-  public init(_ pasteboard: NSPasteboard = .general) {
-    self.pasteboard = pasteboard
-  }
-
-  public var changeCount: Int { pasteboard.changeCount }
-
-  public func string() -> String? { pasteboard.string(forType: .string) }
-
-  public func setString(_ string: String) {
-    pasteboard.clearContents()
-    pasteboard.setString(string, forType: .string)
-  }
-}
-
 /// The system clipboard as vim sees it (the web app's `SystemClipboard`): what vim last wrote,
 /// keeping its shape (linewise, blockwise), while the pasteboard still holds it; else what another
 /// app copied, linewise when it ends with a line break (like Vim).
@@ -40,21 +12,22 @@ final class VimSystemClipboard {
     var blockwise: Bool
   }
 
-  let pasteboard: VimPasteboard
+  let pasteboard: NSPasteboard
   private var written: (content: Content, changeCount: Int)?
 
-  init(pasteboard: VimPasteboard) {
+  init(pasteboard: NSPasteboard) {
     self.pasteboard = pasteboard
   }
 
   var content: Content {
     if let written, written.changeCount == pasteboard.changeCount { return written.content }
-    let text = pasteboard.string() ?? ""
+    let text = pasteboard.string(forType: .string) ?? ""
     return Content(text: text, linewise: text.hasSuffix("\n"), blockwise: false)
   }
 
   func write(_ content: Content) {
-    pasteboard.setString(content.text)
+    pasteboard.clearContents()
+    pasteboard.setString(content.text, forType: .string)
     written = (content, pasteboard.changeCount)
   }
 }

@@ -15,7 +15,7 @@ public struct TooltipBubble: View {
         HStack(alignment: .center, spacing: 8) {
           Text(verbatim: line.text)
             .font(.system(size: 12))
-            .foregroundStyle(UIPalette.Tooltip.text)
+            .foregroundStyle(Theme.Tooltip.text)
             .fixedSize(horizontal: false, vertical: true)
           if let keys = line.keys { Keycaps(keys) }
         }
@@ -23,7 +23,7 @@ public struct TooltipBubble: View {
       if let detail = content.detail {
         Text(verbatim: detail)
           .font(.system(size: 11))
-          .foregroundStyle(UIPalette.Tooltip.detail)
+          .foregroundStyle(Theme.Tooltip.detail)
           .fixedSize(horizontal: false, vertical: true)
       }
     }
@@ -31,10 +31,10 @@ public struct TooltipBubble: View {
     .padding(.vertical, 5)
     .background(
       RoundedRectangle(cornerRadius: 6)
-        .fill(UIPalette.Tooltip.surface)
+        .fill(Theme.Tooltip.surface)
         .shadow(color: .black.opacity(0.35), radius: 6, y: 4)
     )
-    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(UIPalette.Tooltip.border, lineWidth: 1))
+    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.Tooltip.border, lineWidth: 1))
     .environment(\.colorScheme, .dark)
     .accessibilityHidden(true)
   }

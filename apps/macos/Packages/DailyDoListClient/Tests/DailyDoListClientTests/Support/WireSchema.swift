@@ -1,3 +1,4 @@
+import DailyDoListClientTestSupport
 import DailyDoListModels
 import Foundation
 
@@ -44,14 +45,6 @@ struct WireSchema: Sendable {
   func properties(of name: String) -> Set<String> {
     guard case .object(let properties)? = definitions[name]?["properties"] else { return [] }
     return Set(properties.keys)
-  }
-
-  /// Whether the `ServerEvent` union has a branch for events of `type`.
-  func declaresEvent(_ type: String) -> Bool {
-    guard case .array(let branches)? = definitions["ServerEvent"]?["oneOf"] else { return false }
-    return branches.map(resolve).contains {
-      $0["properties"]?["type"]?["const"] == .string(type)
-    }
   }
 
   /// Required property names of an object definition.
@@ -183,10 +176,5 @@ extension JSONValue {
   /// The JSON the daemon encoders produce for `value`.
   init(encoding value: some Encodable) throws {
     self = try JSONDecoder.daemon.decode(JSONValue.self, from: JSONEncoder.daemon.encode(value))
-  }
-
-  var objectKeys: Set<String> {
-    if case .object(let object) = self { return Set(object.keys) }
-    return []
   }
 }

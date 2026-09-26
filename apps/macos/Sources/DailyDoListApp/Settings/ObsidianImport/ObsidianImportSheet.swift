@@ -74,7 +74,7 @@ struct ObsidianImportSheet: View {
       }
       ImportStep(number: 3, title: "Where the new vault goes") {
         Text(
-          "A new folder, or an empty one, outside the Obsidian vault. \(ImportText.count(preview.files, "file")) (\(ImportText.bytes(preview.bytes))) are copied into it as they are, so it still opens in Obsidian."
+          "A new folder, or an empty one, outside the Obsidian vault. \(TextMetrics.pluralize(preview.files, "file")) (\(ImportText.bytes(preview.bytes))) are copied into it as they are, so it still opens in Obsidian."
         )
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
@@ -175,7 +175,7 @@ private struct JobView: View {
   @ViewBuilder private func done(_ result: ObsidianImportResult) -> some View {
     Label {
       Text(
-        "Imported. \(ImportText.count(result.copied.files, "file")) (\(ImportText.bytes(result.copied.bytes))) were copied, and your Daily Do List notes carried over."
+        "Imported. \(TextMetrics.pluralize(result.copied.files, "file")) (\(ImportText.bytes(result.copied.bytes))) were copied, and your Daily Do List notes carried over."
       )
       .fixedSize(horizontal: false, vertical: true)
     } icon: {

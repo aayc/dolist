@@ -29,10 +29,6 @@ public enum ExcalidrawPalette {
   /// The background quick picks (transparent, then shade 1 of red, green, blue, yellow).
   public static let backgroundPicks = [transparent, "#ffc9c9", "#b2f2bb", "#a5d8ff", "#ffec99"]
 
-  /// Thin, bold, extra bold.
-  public static let strokeWidths: [Double] = [1, 2, 4]
-  /// Architect, artist, cartoonist.
-  public static let roughnessLevels: [Double] = [0, 1, 2]
   public static let defaultFontSize: Double = 20
 }
 

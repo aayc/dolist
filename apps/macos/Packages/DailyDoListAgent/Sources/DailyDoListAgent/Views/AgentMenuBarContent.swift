@@ -44,7 +44,7 @@ public struct AgentMenuBarContent: View {
       actionsSection.padding(6)
     }
     .frame(width: 320)
-    .tint(AgentTheme.accent)
+    .tint(Theme.accent)
   }
 
   // MARK: Status
@@ -53,14 +53,14 @@ public struct AgentMenuBarContent: View {
     HStack(alignment: .center, spacing: 10) {
       Image(systemName: "checklist")
         .font(.system(size: 18, weight: .semibold))
-        .foregroundStyle(AgentTheme.accent)
+        .foregroundStyle(Theme.accent)
         .frame(width: 30, height: 30)
-        .background(RoundedRectangle(cornerRadius: 7).fill(AgentTheme.accent.opacity(0.13)))
+        .background(RoundedRectangle(cornerRadius: 7).fill(Theme.accent.opacity(0.13)))
       VStack(alignment: .leading, spacing: 2) {
         Text("Daily Do List").font(.headline)
         Text(verbatim: statusLine)
           .font(.caption)
-          .foregroundStyle(store.status?.problem == nil ? AgentTheme.mutedText : AgentTheme.danger)
+          .foregroundStyle(store.status?.problem == nil ? Theme.mutedText : Theme.danger)
           .lineLimit(2)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -85,14 +85,14 @@ public struct AgentMenuBarContent: View {
     if pending.isEmpty {
       Label("No approvals waiting", systemImage: "checkmark.shield")
         .font(.callout)
-        .foregroundStyle(AgentTheme.mutedText)
+        .foregroundStyle(Theme.mutedText)
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
     } else {
       VStack(alignment: .leading, spacing: 2) {
-        Text(pending.count == 1 ? "1 approval waiting" : "\(pending.count) approvals waiting")
+        Text(AgentFormat.approvalsWaiting(pending.count))
           .font(.caption.weight(.semibold))
-          .foregroundStyle(AgentTheme.warning)
+          .foregroundStyle(Theme.warning)
           .padding(.horizontal, 12)
           .padding(.bottom, 2)
         ForEach(pending.prefix(Self.maxApprovals)) { approval in
@@ -109,7 +109,7 @@ public struct AgentMenuBarContent: View {
         if pending.count > Self.maxApprovals {
           Text("+\(pending.count - Self.maxApprovals) more in the app")
             .font(.caption)
-            .foregroundStyle(AgentTheme.mutedText)
+            .foregroundStyle(Theme.mutedText)
             .padding(.horizontal, 12)
             .padding(.top, 2)
         }
@@ -163,7 +163,7 @@ private struct MenuApprovalRow: View {
         if isDeciding { ProgressView().controlSize(.small) }
         Spacer()
         Button(role: .destructive, action: onDeny) {
-          Text("Deny").foregroundStyle(AgentTheme.danger)
+          Text("Deny").foregroundStyle(Theme.danger)
         }
         .controlSize(.small)
         .pointingHandCursor()
@@ -190,7 +190,7 @@ private struct MenuApprovalRow: View {
             separator: " · ")
         )
         .font(.caption)
-        .foregroundStyle(AgentTheme.mutedText)
+        .foregroundStyle(Theme.mutedText)
         .lineLimit(1)
       }
       Spacer(minLength: 0)
@@ -209,7 +209,7 @@ private struct MenuRowButton: View {
   var body: some View {
     Button(action: action) {
       HStack(spacing: 8) {
-        Image(systemName: systemImage).frame(width: 18).foregroundStyle(AgentTheme.mutedText)
+        Image(systemName: systemImage).frame(width: 18).foregroundStyle(Theme.mutedText)
         Text(title)
         Spacer()
         if let shortcut { Keycaps(shortcut) }

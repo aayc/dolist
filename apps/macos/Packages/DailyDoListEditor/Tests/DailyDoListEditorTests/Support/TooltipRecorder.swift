@@ -5,7 +5,7 @@ import DailyDoListUI
 /// app's shared one).
 @MainActor
 final class TooltipRecorder {
-  let clock = ManualTooltipClock()
+  let clock = ManualScheduler()
   let presenter = Presenter()
   private(set) lazy var center: TooltipCenter = {
     let presenter = presenter

@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListUITestSupport
 import Testing
 
 @testable import DailyDoListEditor
@@ -179,8 +180,7 @@ struct ControllerTests {
     editor.select(NSRange(location: editor.controller.storage.length, length: 0))
     editor.type("x")
     editor.enter()
-    let rep = try #require(ruler.bitmapImageRepForCachingDisplay(in: ruler.bounds))
-    ruler.cacheDisplay(in: ruler.bounds, to: rep)
+    _ = ruler.bitmap()
     #expect(ruler.ruleThickness > twoDigits)
   }
 

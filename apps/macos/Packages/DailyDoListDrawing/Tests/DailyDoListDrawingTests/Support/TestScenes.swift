@@ -2,7 +2,6 @@ import CoreGraphics
 import DailyDoListDrawing
 import DailyDoListDrawingModel
 import Foundation
-import ImageIO
 
 /// Synthetic scenes for renders and interaction tests.
 enum TestScenes {
@@ -214,20 +213,5 @@ enum Pixels {
     )
     let data = context.data!.assumingMemoryBound(to: UInt8.self)
     return (Int(data[0]), Int(data[1]), Int(data[2]), Int(data[3]))
-  }
-
-  static func writePNG(_ image: CGImage, name: String) throws -> URL {
-    try FileManager.default.createDirectory(
-      at: Fixtures.snapshotDirectory, withIntermediateDirectories: true)
-    let url = Fixtures.snapshotDirectory.appendingPathComponent("\(name).png")
-    guard
-      let destination = CGImageDestinationCreateWithURL(
-        url as CFURL, "public.png" as CFString, 1, nil)
-    else {
-      throw CocoaError(.fileWriteUnknown)
-    }
-    CGImageDestinationAddImage(destination, image, nil)
-    guard CGImageDestinationFinalize(destination) else { throw CocoaError(.fileWriteUnknown) }
-    return url
   }
 }

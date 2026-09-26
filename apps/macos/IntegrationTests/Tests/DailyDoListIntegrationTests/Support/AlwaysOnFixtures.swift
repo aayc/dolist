@@ -120,8 +120,8 @@ final class SyncServiceFixture {
 
 /// Polls `probe` until it returns a value (or `timeout` passes, failing with `what`).
 @MainActor
-func poll<T>(
-  _ what: String, timeout: Duration = .seconds(30), every interval: Duration = .milliseconds(250),
+func eventually<T>(
+  _ what: String, timeout: Duration = .seconds(10), every interval: Duration = .milliseconds(250),
   _ probe: () async throws -> T?
 ) async throws -> T {
   let deadline = ContinuousClock.now + timeout

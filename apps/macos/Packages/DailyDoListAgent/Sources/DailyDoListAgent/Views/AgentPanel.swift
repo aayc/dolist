@@ -168,8 +168,8 @@ public struct AgentPanel: View {
     .animation(.snappy(duration: 0.2), value: store.lastError?.id)
     .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: store.readOnly)
     .frame(minWidth: 300)
-    .foregroundStyle(AgentTheme.text)
-    .tint(AgentTheme.accent)
+    .foregroundStyle(Theme.text)
+    .tint(Theme.accent)
     .environment(\.agentNoteLinks, noteLinks)
     .environment(\.openURL, LinkPolicy.openURLAction(noteLinks: noteLinks))
   }
@@ -191,7 +191,7 @@ public struct AgentPanel: View {
       }
       if pending > 0 {
         CountBadge(count: pending, tone: .warning, systemImage: "exclamationmark.shield.fill")
-          .tooltip(pending == 1 ? "1 approval waiting" : "\(pending) approvals waiting")
+          .tooltip(AgentFormat.approvalsWaiting(pending))
           .countTransition()
       }
       Spacer(minLength: 8)
@@ -205,7 +205,7 @@ public struct AgentPanel: View {
     .padding(.leading, 12)
     .padding(.trailing, onHide == nil ? 12 : 6)
     .frame(height: headerHeight)
-    .overlay(alignment: .bottom) { AgentHairline() }
+    .overlay(alignment: .bottom) { Hairline() }
   }
 
   /// A thread's way back: to its routine's runs when it was opened there, else the list it came
@@ -236,7 +236,7 @@ private struct BackButton: View {
     Button(action: action) {
       Label(title, systemImage: "chevron.left")
         .font(.system(size: 13, weight: .medium))
-        .foregroundStyle(AgentTheme.accent)
+        .foregroundStyle(Theme.accent)
         .lineLimit(1)
     }
     .buttonStyle(ChromeButtonStyle(horizontalPadding: 6, verticalPadding: 3))
@@ -270,7 +270,7 @@ private struct SectionTabs: View {
     } label: {
       Label(title, systemImage: systemImage)
         .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-        .foregroundStyle(isSelected ? AgentTheme.text : AgentTheme.mutedText)
+        .foregroundStyle(isSelected ? Theme.text : Theme.mutedText)
     }
     .buttonStyle(
       ChromeButtonStyle(horizontalPadding: 6, verticalPadding: 3, isSelected: isSelected)

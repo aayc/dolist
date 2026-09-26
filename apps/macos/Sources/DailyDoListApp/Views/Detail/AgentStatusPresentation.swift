@@ -25,7 +25,7 @@ struct AgentStatusPresentation: Equatable {
   /// Nil until the daemon reported a status (nothing is shown rather than a guess).
   init?(status: AgentStatusResponse?) {
     guard let status else { return nil }
-    let problem = status.problem?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+    let problem = status.problem?.trimmedNonEmpty
     if status.mode == .off {
       self.init(
         .off, "Agent off", "moon.zzz", problem ?? "The agent is turned off for this daemon.")

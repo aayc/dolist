@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListUI
 import QuartzCore
 
 /// What the editor's motion depends on: time, the Reduce Motion setting, whether the window is on
@@ -11,7 +12,7 @@ struct MotionEnvironment {
   var reduceMotion: () -> Bool
   /// Whether the editor's window is visible (occluded and windowless editors don't animate).
   var isOnScreen: () -> Bool
-  var makeTicker: (_ onFrame: @escaping @MainActor () -> Void) -> FrameTicker
+  var makeTicker: (_ onFrame: @escaping @MainActor (TimeInterval) -> Void) -> FrameTicker
   var setNeedsDisplay: (NSRect) -> Void
 
   /// The real thing for `view`: media time, the system setting, a display link of the view.
@@ -119,7 +120,7 @@ final class EditorMotion {
       return
     }
     if ticker == nil {
-      ticker = environment.makeTicker { [weak self] in self?.onFrame?() }
+      ticker = environment.makeTicker { [weak self] _ in self?.onFrame?() }
     }
     ticker?.start()
   }

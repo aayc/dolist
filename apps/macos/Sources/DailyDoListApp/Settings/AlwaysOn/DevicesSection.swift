@@ -1,4 +1,3 @@
-import AppKit
 import DailyDoListDomain
 import DailyDoListModels
 import DailyDoListUI
@@ -187,7 +186,7 @@ struct PairingCodeCard: View {
             .textSelection(.enabled)
             .accessibilityLabel(
               "Pairing code \(code.displayCode.map(String.init).joined(separator: " "))")
-          IconButton("doc.on.doc", label: "Copy code") { Self.copy(code.displayCode) }
+          CopyButton(text: code.displayCode, label: "Copy code", size: .regular)
           Spacer()
           Text(remaining > 0 ? "Expires in \(Self.countdown(remaining))" : "Expired")
             .font(.callout.monospacedDigit())
@@ -196,7 +195,7 @@ struct PairingCodeCard: View {
         if let url = code.url {
           HStack(spacing: 8) {
             Text(url).font(.callout).textSelection(.enabled)
-            IconButton("doc.on.doc", label: "Copy address", size: .compact) { Self.copy(url) }
+            CopyButton(text: url, label: "Copy address")
           }
           SettingsNote(text: "On the new device, open this address and enter the code.")
         } else {
@@ -225,10 +224,5 @@ struct PairingCodeCard: View {
   static func countdown(_ seconds: TimeInterval) -> String {
     let whole = max(0, Int(seconds.rounded(.up)))
     return "\(whole / 60):" + String(format: "%02d", whole % 60)
-  }
-
-  private static func copy(_ text: String) {
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(text, forType: .string)
   }
 }

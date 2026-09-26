@@ -175,24 +175,6 @@ struct AlwaysOnCommandTests {
   }
 
   static func anchors(_ view: some View) -> [TooltipAnchorView] {
-    let size = CGSize(width: 1440, height: 800)
-    let hosting = NSHostingView(
-      rootView: view.environment(\.tooltipCenter, QuietTooltips.makeCenter()))
-    let window = NSWindow(
-      contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
-      backing: .buffered, defer: false)
-    window.isReleasedWhenClosed = false
-    window.contentView = hosting
-    hosting.frame = NSRect(origin: .zero, size: size)
-    window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
-    window.orderFrontRegardless()
-    for _ in 0..<6 {
-      hosting.layoutSubtreeIfNeeded()
-      window.displayIfNeeded()
-      RunLoop.main.run(until: Date().addingTimeInterval(0.03))
-    }
-    let anchors = tooltipAnchors(in: hosting)
-    window.close()
-    return anchors
+    tooltipAnchors(of: view, size: CGSize(width: 1440, height: 800))
   }
 }

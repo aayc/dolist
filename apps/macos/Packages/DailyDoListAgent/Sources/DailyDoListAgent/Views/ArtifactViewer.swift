@@ -66,18 +66,18 @@ struct ArtifactViewerContent: View {
       content.frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .frame(minWidth: 560, idealWidth: 720, minHeight: 420, idealHeight: 560)
-    .tint(AgentTheme.accent)
+    .tint(Theme.accent)
     .environment(\.openURL, LinkPolicy.openURLAction)
   }
 
   private var header: some View {
     HStack(spacing: 8) {
-      Image(systemName: kind.systemImage).foregroundStyle(AgentTheme.accent)
+      Image(systemName: kind.systemImage).foregroundStyle(Theme.accent)
       Text(verbatim: meta?.title ?? "Artifact").font(.headline).lineLimit(1)
       Chip(text: meta?.kindLabel ?? kind.displayLabel)
       if let meta {
         Text(verbatim: AgentFormat.bytes(meta.size)).font(.caption).foregroundStyle(
-          AgentTheme.mutedText)
+          Theme.mutedText)
       }
       Spacer(minLength: 8)
       Button {
@@ -167,7 +167,7 @@ private struct ArtifactBody: View {
           .fixedSize()
           .padding(16)
       }
-      .background(AgentTheme.codeBackground)
+      .background(Theme.codeBackground)
     case .text:
       ScrollView {
         Text(verbatim: text)
@@ -199,7 +199,7 @@ struct CodeArtifactView: View {
     TopLeadingScrollView {
       HStack(alignment: .top, spacing: 14) {
         Text(verbatim: numbers)
-          .foregroundStyle(AgentTheme.faint)
+          .foregroundStyle(Theme.faintText)
           .multilineTextAlignment(.trailing)
           .accessibilityHidden(true)
         Text(verbatim: code).textSelection(.enabled)
@@ -208,7 +208,7 @@ struct CodeArtifactView: View {
       .fixedSize()
       .padding(16)
     }
-    .background(AgentTheme.codeBackground)
+    .background(Theme.codeBackground)
     .accessibilityLabel(language.map { "\($0) code" } ?? "Code")
   }
 }
