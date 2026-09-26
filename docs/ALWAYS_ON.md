@@ -34,7 +34,7 @@ files, local-first editing or the safety model.
   service's agent lease ([SYNC.md](./SYNC.md#the-agent-lease)) already guarantees one agent per
   vault; the always-on machine is simply the device that holds it.
 - **Clients stay thin.** Web, macOS and the planned iPhone app speak the existing wire protocol
-  (`packages/core/src/protocol.ts`) with a base URL and a token. Nothing in them assumes the
+  ([PROTOCOL.md](./PROTOCOL.md)) with a base URL and a credential. Nothing in them assumes the
   agent is on the same machine.
 - **Hands are wherever the effect has to happen.** By default the always-on machine's own shell,
   browser and virtual desktop. The laptop can lend its hands (its signed-in desktop apps, local
@@ -77,62 +77,25 @@ Setup principles:
 - **Separate accounts.** The agent's browser on the VM is signed in only to what the user gives
   it. A mistake lands on the agent's machine, not on the user's.
 
-Setting one up: the [Linux setup kit](../deploy/linux/README.md) builds a bundle (daemon, web app,
-sync service) and installs it with `setup.sh` as two hardened systemd services under their own
-user, with the always-on placement and the tailnet name as remote host, and the
-[Azure guide](../deploy/azure/README.md) creates an Arm64 VM (`Standard_D4ps_v6`) whose security
-group closes every inbound port (it has a public IP for outbound traffic only, or none behind a
-NAT gateway), with encryption at host, joined to the tailnet at first boot.
+Setting one up: the [Linux setup kit](../deploy/linux/README.md) (a bundle installed as two
+hardened systemd services) and the [Azure guide](../deploy/azure/README.md) (an Arm64 VM with
+every inbound port closed, joined to the tailnet at first boot).
 
 ## Remote access
 
 The daemon keeps binding `127.0.0.1`. A private overlay network (Tailscale, or any equivalent such
 as WireGuard or Cloudflare Tunnel with Access) terminates TLS on the VM and forwards to the
 loopback port, so the daemon is reachable only from the user's devices and never from the public
-internet. The daemon knows nothing about the overlay; it sees a local proxy.
+internet. The daemon knows nothing about the overlay; it sees a local proxy. Remote hosts are
+configured, never inferred; each client pairs once with a short-lived code for a device credential
+of its own (a token for apps and daemons, an HttpOnly cookie for a browser, so script on the page
+never holds one), revocable from Settings; the master token never leaves the machine. How to set
+it up and the rules: [apps/daemon/README.md](../apps/daemon/README.md#remote-access-and-pairing).
 
-What changes in the daemon (`apps/daemon/src/security.ts`, `token.ts`, `routes/web.ts`):
-
-- **Remote hosts are configured, not inferred.** `remote.hosts` lists the names the daemon answers
-  to (for example the VM's tailnet name). Each adds an allowed `Host`, the `https://` Origin and a
-  `wss://` entry in the page's `connect-src`. Everything else keeps getting `forbidden_host`.
-- **Device tokens.** Each client gets its own token: random, 256-bit, stored hashed in `DDL_HOME`
-  (never in the vault, so it never syncs), with a name, creation time, last use and revocation.
-  Revoking one closes that device's WebSockets. The master token (`$DDL_HOME/daemon-token`) never
-  leaves the machine.
-- **Pairing.** A trusted client (a local one, or an already-paired device) asks for a pairing code:
-  short, single-use, valid for a few minutes, rate-limited. The new device exchanges it for its
-  device token. Settings lists paired devices and revokes them (web and Mac).
-- **The page never embeds a token for a remote Host.** `index.html` gets the master token only when
-  the request's Host is loopback, as today. For a remote Host it renders the pairing screen; after
-  pairing, the browser keeps its device token in an `HttpOnly`, `Secure`, `SameSite=Strict` cookie
-  scoped to the daemon's origin, accepted only together with an allowed Origin (so script on the
-  page never holds a credential). Native clients keep sending bearer tokens.
-- **The macOS app** gets "Connect to a daemon…": URL plus pairing code, token in the Keychain,
-  `DaemonSupervisor` in attach-only mode (it never starts or stops a remote daemon). **Not built
-  yet:** the app attaches to a daemon at another URL only with the local token (its "External"
-  mode, for `pnpm dev`); it reaches the always-on machine through its own daemon's relay.
-
-This is a deliberate change to invariant 6 ("the daemon is local-only"): it becomes "local-only
-unless remote hosts are configured, and then only through a private network with device tokens".
-`AGENTS.md` changes with phase 1.
-
-### With Tailscale
-
-On the machine running the daemon (placeholders: `vm-name.tailnet-name.ts.net`, port 7331):
-
-1. `sudo tailscale serve --bg --https=443 http://127.0.0.1:7331`. Tailscale terminates TLS with the
-   tailnet's certificate and keeps the original `Host`. Never `tailscale funnel`: that publishes
-   the daemon on the internet.
-2. `"remote": { "hosts": ["vm-name.tailnet-name.ts.net"] }` in `$DDL_HOME/config.json` (or
-   `DDL_REMOTE_HOSTS`), then restart the daemon. Without it every request through the proxy gets
-   `forbidden_host`; a proxy that rewrote the `Host` to loopback would be refused too.
-3. `node dist/main.js pair` on that machine (as the daemon's user) prints a code; open
-   `https://vm-name.tailnet-name.ts.net` on the new device, or enter it as the always-on machine's
-   address, and type the code.
-
-Details (credentials per client, the cookie rules, limits): [apps/daemon/README.md](../apps/daemon/README.md#remote-access-and-pairing)
-and [SECURITY.md](../SECURITY.md).
+**Not built yet:** the macOS app's "Connect to a daemon…" (URL plus pairing code, token in the
+Keychain, `DaemonSupervisor` in attach-only mode). Today the app attaches to a daemon at another
+URL only with the local token (its "External" mode, for `pnpm dev`), and reaches the always-on
+machine through its own daemon's relay.
 
 ## The agent relay
 
@@ -140,24 +103,14 @@ A daemon that doesn't hold the agent lease shows the holder's threads, approvals
 read-only from the synced sidecar ("The agent is running on <device>"). With the relay, a device
 set to `always_on_machine` forwards agent routes and events to the always-on machine, so the
 laptop's app shows the always-on agent's threads, approvals, orchestrator chat and routines, and
-the user approves from any device. Details: [apps/daemon/README.md](../apps/daemon/README.md#the-agent-relay).
+the user approves from any device. Notes, search, settings, sync and device routes stay local.
 
-- **Which routes relay:** threads (the orchestrator's chat included) with their messages, cancel
-  and retry; approvals and deciding them; artifacts; task records; routines (list, create, run,
-  pause, resume); and the agent status, which keeps this device's placement and readiness. The
-  machine's agent events come over one WebSocket (surface frames as they are; a client that can't
-  keep up skips frames, as locally), and surface watches, thread reads and typing go the other
-  way. Notes, search, settings, sync and device routes stay local.
-- **Where it goes:** to the always-on machine named in the vault's settings
-  (`remote.alwaysOnMachine`), with the credential this device got when it paired with it, like any
-  device; the relay doesn't look the holder up in the lease. When the machine doesn't hold the
-  agent itself (a device set to `this_device` took it over), the machine answers with its own
-  read-only view, so the relaying device shows that work read-only and actions say where the agent
-  runs.
-- **Offline:** when the machine can't be reached, or this device isn't paired, the daemon itself
-  serves the synced threads, approvals and records read-only (the sidecar already syncs, see
-  [SYNC.md](./SYNC.md)), routine files stay editable, and agent actions answer
-  `agent_unavailable` saying why. The relay reconnects by itself and resyncs its clients.
+The relay goes to the always-on machine named in the vault's settings (`remote.alwaysOnMachine`)
+with the credential this device got when it paired with it, like any device; it doesn't look the
+holder up in the lease. When the machine doesn't hold the agent itself (a device set to
+`this_device` took it over), or can't be reached, the relaying device shows the work read-only and
+actions say where the agent runs; routine files stay editable. Details:
+[apps/daemon/README.md](../apps/daemon/README.md#the-agent-relay).
 
 ## Where the agent runs: a choice per device
 
@@ -179,13 +132,12 @@ and the phone use the always-on machine.
 - **One toggle:** a "Remote" switch (on: the always-on machine runs the orchestrator; off: this
   device does) sits in the agent panel's header on the web and the Mac, not only in Settings, and
   can be flipped at any time; the handover shows as it happens.
-- **Handover uses the agent lease with a priority.** A `this_device` request outranks the
-  always-on machine's: the sync service marks a takeover, the holder sees it on its next renewal,
-  stops its agent, runs a sync pass and releases, and the requester starts from the synced state
-  (about half a minute). When that device quits or sleeps, the always-on machine takes the lease
-  back as today. Equal priorities keep first come, first served. A run in progress at handover
-  stops on the old holder and resumes on the new one from its thread's journal (unless it stopped
-  in the middle of an action that may or may not have happened: that one waits for the user).
+- **Handover uses the agent lease with a priority** ([SYNC.md](./SYNC.md#priorities-and-takeover)):
+  a `this_device` request outranks the always-on machine's, the holder yields on its next renewal,
+  and the requester starts from the synced state (about half a minute). When that device quits or
+  sleeps, the always-on machine takes the lease back. A run in progress at handover resumes on the
+  new holder from its thread's journal (unless it stopped in the middle of an action that may or
+  may not have happened: that one waits for the user).
 - **Everything the agent needs to move syncs already**: notes, routine files, threads, artifacts,
   task records, approvals, routines state and settings (the sidecar, see [SYNC.md](./SYNC.md)).
   What stays with each machine is what belongs to it: connectors (`mcp.json`), API keys, the
@@ -194,37 +146,23 @@ and the phone use the always-on machine.
   desktop available), so moving the agent never fails silently.
 - **The always-on machine's name and address are synced settings**, so every device knows it;
   each device still pairs once and keeps its own credential.
-- **Fencing:** every lease grant has an increasing epoch, and the sync service refuses writes to
-  the agent's sidecar files (threads, artifacts, `state/`) that don't carry the current one, so a
-  device that lost the agent while offline can't overwrite the new holder's state when it
-  reconnects.
-- **The journal (phase 1 built, for threads):** thread state is append-only events that merge as
-  a union (`state/journal/threads/`, under the fenced `state/`), side effects are journaled before
-  and after they run (never re-run when uncertain), and a run resumes on the new machine instead of
-  stopping ([docs/specs/agent-journal.md](./specs/agent-journal.md),
-  [AGENT_SYSTEM.md](./AGENT_SYSTEM.md#the-journal-write-ahead-interrupted-steps-and-resuming)).
-  Approvals and routines state follow in phase 2. Temporal was considered and rejected:
-  a central server every device would depend on, histories outside the vault, and replay that
-  needs control of the agent loop, which lives inside the harness.
+- **Fencing** ([SYNC.md](./SYNC.md#fencing)): every lease grant has an increasing epoch, and the
+  sync service refuses agent-file writes that don't carry the current one, so a device that lost
+  the agent while offline can't overwrite the new holder's state.
+- **The journal** (threads built; approvals and routines state next): append-only events that
+  merge as a union, side effects journaled before and after they run, and runs that resume on the
+  new machine ([specs/agent-journal.md](./specs/agent-journal.md), which also says why not
+  Temporal).
 
 ## Settings
 
-Everything needed lives in Settings, on the web and in the Mac app:
-
-- **Agent location:** the Remote switch (on the VM: "this is the always-on machine"), where the
-  agent runs right now, and this device's readiness.
-- **Always-on machine:** its address (tailnet name), pairing with a code, and its status
-  (reachable, version, where its agent runs, its readiness). Forgetting it drops this device's
-  credential.
-- **Sync:** the sync service's address, the vault, the vault token (write-only: never shown again)
-  and the sync status.
-- **Devices:** the devices paired with this daemon, a pairing code with the address to open, and
-  revoking a device. A QR code for the phone is not built yet (`POST /api/pairing-codes` already
-  returns the URL for one).
-- **Remote access:** the names this daemon answers to (on the VM, its tailnet name).
-
-Secrets (the vault token, device credentials) are stored `0600` in `DDL_HOME`, never in
-`settings.json` (which syncs) and never returned by the API.
+Everything needed lives in Settings, on the web and in the Mac app: **Agent location** (the Remote
+switch, where the agent runs, this device's readiness), **Always-on machine** (its address,
+pairing, its status and readiness; forgetting it drops this device's credential), **Sync** (address,
+vault, a write-only vault token, status), **Devices** (paired devices, a pairing code with the
+address to open, revoking; no QR code yet) and **Remote access** (the names this daemon answers
+to). Secrets are stored `0600` in `DDL_HOME`, never in `settings.json` (which syncs) and never
+returned by the API.
 
 ## Lending the laptop's hands
 

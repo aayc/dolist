@@ -164,10 +164,7 @@ current one for a client joining mid-turn.
   runtime's activity on every swap. A bare `{ phase: "idle" }` event means nothing is in progress.
 
 The web and Mac editors turn this into chips on lines, a note-level indicator and a status bar item
-with the same wording and timings (`apps/web/README.md`). Tests: `src/orchestrator/activity.test.ts`
-(publisher, triggers, outcomes), `test/scenarios/activity.test.ts` (each trigger kind end to end,
-`noticed` before the settle delay, bounds, approvals, a client joining mid-turn),
-`test/task-watcher.test.ts` (noticed once per line, withdrawn, handed over).
+with the same wording and timings (`apps/web/README.md`).
 
 ## 3. Doing (SubagentManager)
 
@@ -310,10 +307,8 @@ the drawing itself.
   `ScriptedHarness` from its `images` option. The image travels as image content in the tool result,
   like screenshots: Pi sends it to the model with the result, the Cursor harness through its MCP
   bridge. `read_drawing` doesn't render at all for a model that can't see images.
-- **Rendering**: the local execution provider renders drawings in a headless Chromium of its own
-  on a page built from Excalidraw's export, caches renders in `$DDL_HOME/cache/drawings`, and closes
-  the browser when idle (details in `packages/agent/src/execution/README.md`). The daemon's build
-  makes the page (`dist/drawing-renderer`); the startup summary says when it's missing.
+- **Rendering**: the local execution provider, in a headless Chromium of its own
+  ([its README](../packages/agent/src/execution/README.md#drawing-renderer)).
 - **Changes**: the task watcher ignores drawing files, so a drawing that changes under a watched
   note isn't an edit of that note: nothing is re-triaged and no turn starts; the next digest
   describes the new version.
@@ -334,17 +329,11 @@ Standing jobs the agent runs on a schedule: a morning briefing, a price watch, a
   hours or minutes (at least 15), monthly on a day, at listed times) with the next run computed
   in local time across DST changes. A phrase it can't read is an error on the routine, never a
   guess.
-- **Catalog and library.** `RoutineCatalog` reads `Routines/*.md` and follows edits made anywhere
-  (the app, Obsidian, sync) through storage events; invalid or unreadable files are listed with
-  their problems. `RoutineLibrary` joins each file with the scheduler's state into the wire
-  `Routine` (schedule in words, next run, last run, run count, extra runs left today), and writes
-  the files for create, pause and resume (`files.ts`: checks the name, schedule and instructions,
-  never overwrites a routine, and changes only the frontmatter lines it sets).
-- **State.** `.daily-do-list/state/routines.json` (`RoutineStateStore`, format in `@ddl/contract`):
-  per routine the planned next run and the schedule it was planned from, the last run (status,
-  compact result, `changed`, whether it notified), recent run threads and today's extra runs.
-  Nothing of it goes in the routine file. A corrupt file is moved to `.daily-do-list/corrupt/`, a
-  newer app's file is left alone, and concurrent saves (another device) merge per routine.
+- **Catalog, library and state.** `RoutineCatalog` follows `Routines/*.md` edited anywhere (the
+  app, Obsidian, sync), listing invalid files with their problems; `RoutineLibrary` joins each file
+  with the scheduler's state (`state/routines.json`, [DATA_FORMATS.md](./DATA_FORMATS.md); nothing
+  of it goes in the routine file) and writes the files for create, pause and resume, changing only
+  the frontmatter lines it sets and never overwriting a routine.
 - **Scheduler.** `RoutineScheduler` runs in the agent runtime and is active exactly while the agent
   can run here and is enabled. It looks at least once a minute, and at the next due slot. A slot
   found more than 2 minutes late (the Mac slept, the daemon was down) runs once, as a `catch_up`
@@ -385,9 +374,6 @@ Standing jobs the agent runs on a schedule: a morning briefing, a price watch, a
   one by one) and listing are allowed. A run editing a file in `Routines/` asks too. The
   scheduler's state is sidecar state: writing, moving or deleting it is a hard deny under every
   policy (`src/routines/state-protection.test.ts`).
-- **Wire.** `GET`/`POST /api/routines`, `GET /api/routines/:id`, `POST …/run`, `…/pause`,
-  `…/resume`, `?routineId=` on `/api/threads`, and the `routines.changed` and
-  `routine.notification` events (status codes in `apps/daemon/README.md`).
 
 ## 4. Staying safe (SafetyGate)
 
@@ -398,43 +384,19 @@ serves every tool itself and gates each call before running it; see below for th
 Once the gate allows a call, the journal records it before it runs (write-ahead, above); nothing
 about the journal allows anything.
 
-Pipeline (details and the full rule table in `packages/agent/src/safety/README.md`):
-
-1. **Policy & grants** — always-deny/allow/require lists; standing grants from "approve for this
-   task" (narrowed by category and risk; a computer action's grant covers every computer action
-   in the app it targeted, and only that app).
-2. **Hints** — internal and read-only tools take a fast path unless a risky rule matches. A tool
-   that knows the real target (`subject`: the app's real name, the element's real label) adds it to
-   the model's words; it can only make the verdict stricter.
-3. **Rules** — 147 rules across payment, booking, communication, publishing, account,
-   credentials, privacy, destructive, system, computer control, forms, file writes and network,
-   including a real shell parser (pipelines, subshells, `bash -c`, heredocs…). Catastrophic
-   commands, and operating Daily Do List itself, System Settings, password managers or
-   authenticators, are **hard-denied** even with approval.
-4. **LLM judge** — for uncertain effectful actions: a separate, tool-less model call with a strict
-   JSON schema and prompt-injection defenses; it can only escalate, and falls back to
-   `require_approval` on timeout or bad output.
-5. **Most restrictive wins; fail closed.** Any internal error means `require_approval`.
+The evaluator runs policy and standing grants, the tool's hints (a tool that knows the real
+target adds it through `subject`, which can only make a verdict stricter), the rules (a real shell
+parser included; catastrophic commands and operating Daily Do List, System Settings, password
+managers or authenticators are hard-denied even with approval), and for uncertain effectful
+actions an independent, tool-less LLM judge that can only escalate. The most restrictive verdict
+wins, and any error means `require_approval`. The pipeline, the rules, grants and the approval
+policies (`settings.agent.approvalPolicy`, applied by the gate after the evaluation; `deny` is
+blocked under every policy) are in `packages/agent/src/safety/README.md`.
 
 `require_approval` pauses the agent and shows an approval card (Approve once / Approve for this
 task / Deny with a note). Pending approvals time out (default 12 h → denied) and are cancelled when
-the task is removed or completed.
-
-**Approval policies.** The user's `settings.agent.approvalPolicy` (Settings → Agent → Approvals)
-decides which verdicts ask; the gate applies it after the evaluation, reading it on every call:
-
-- `ask_every_action` — every effectful action asks, even ones the evaluator allows (thread tools,
-  note reads, web search/fetch and read-only file, browser and computer tools never ask).
-- `ask_risky` (default) — the evaluator decides, as above.
-- `ask_high_risk` — only `require_approval` verdicts of high or critical risk ask; the rest run.
-- `run_everything` — nothing asks.
-
-`deny` verdicts are blocked under every policy. A looser policy approves the pending approvals it
-wouldn't ask about ("Approved by your approval policy"); a stricter one leaves them waiting.
-Agents can't change the policy: the settings file and the rest of the sidecar, `$DDL_HOME`, the
-daemon, the web dev server and the app itself are hard denies. Web and Mac show a policy other
-than the default in the status bar ("Runs everything" in the warning color), and "Run everything"
-asks for confirmation.
+the task is removed or completed. Web and Mac show a policy other than the default in the status
+bar ("Runs everything" in the warning color), and "Run everything" asks for confirmation.
 
 ## 5. The Cursor CLI harness
 
@@ -445,8 +407,10 @@ against the CLI's model list by id, base id (`gpt-5.5` for `gpt-5.5[…]`) or di
 
 **Tools.** The CLI runs its own tools (read, grep/glob, shell, edit, delete, web fetch, subagents)
 without asking the client, so none of them is used. Every tool the agent has is ours, served over
-a local MCP endpoint (the "bridge", one per harness on 127.0.0.1 with a per-session path and bearer
-token): the ToolSpecs of the session plus, when `builtinTools` asks for them, `read`/`write`/`edit`
+a local MCP endpoint (the "bridge", one per harness on an ephemeral 127.0.0.1 port, with a random
+path and a 32-byte bearer token per session compared in constant time; requests with any `Origin`,
+another `Host` or an oversized body are refused before parsing): the ToolSpecs of the session plus,
+when `builtinTools` asks for them, `read`/`write`/`edit`
 (or `read`/`grep`/`find`/`ls`) confined to the task workspace and `bash` through the
 ShellExecutor — the names and inputs Pi uses, gated without a spec so the built-in safety rules
 apply. Each MCP call is validated against the tool's schema, then gated, then executed, with the
@@ -509,11 +473,9 @@ and calls the bridge like the real one.
 
 `evals/` holds datasets and suites:
 
-- **safety** (337 cases, 200+ marked critical, the routine tools, the scheduler's state and
-  `read_drawing` included): mock mode runs the rules-only evaluator and requires **zero false
-  allows**; live mode adds the LLM judge. Cases can carry a `subject` (what the tool knows about
-  the real target).
-- **triage** (80+ synthetic tasks, including desktop-app tasks with and without computer access,
+- **safety** (337 cases, 208 marked critical; the case format is in the safety README): mock mode
+  runs the rules-only evaluator and requires **zero false allows**; live mode adds the LLM judge.
+- **triage** (81 synthetic tasks, including desktop-app tasks with and without computer access,
   recurring requests that should become routines, messages written to the orchestrator in its
   chat — drop, pass on, just reply, or create a routine — and tasks about a drawing embedded under
   them, "implement the flow in the diagram"): live mode runs the real orchestrator prompt on Pi
@@ -528,34 +490,18 @@ pnpm eval -- --suite triage            # real model (needs OPENROUTER_API_KEY)
 
 ## Extending
 
-- New tool: name it in `src/tools/contracts.ts`, implement a `ToolSpec` with honest safety hints
-  and a `describe()` (plus a `subject()` when it knows the real target better than the model's
-  words), add safety eval cases.
-- New execution backend: implement `ExecutionProvider` and register it in `createExecutionProvider`.
-- New harness: implement `Harness` in `src/harness/<name>/` (only that directory may import its
-  SDK or know its CLI), add an entry to `src/harness/registry.ts` that checks its requirements and
-  loads it with `import()`, and a value to `AgentHarnessKind` in `@ddl/core` settings.
+New tools and execution backends: "How to…" in `AGENTS.md`. A new harness implements `Harness` in
+`src/harness/<name>/` (only that directory may import its SDK or know its CLI), gets an entry in
+`src/harness/registry.ts` that checks its requirements and loads it with `import()`, and a value in
+`AgentHarnessKind` (`@ddl/core` settings).
 
 ## Testing with the fake agent
 
-The real model is never used in tests. `@ddl/agent/testing` (see
-`packages/agent/src/testing/README.md`) provides a **FakeBrain** — a deterministic stand-in for
-the model that plays the orchestrator (parses the digest, triages every task, answers messages
-written to it in its chat), subagents (a
-step-by-step plan that reacts to tool results, blocks and steering), the safety judge (schema-valid
-verdicts) and web search — and runs it two ways:
-
-- **In-process** (`createFakeAgentScript` on `ScriptedHarness`): what `DDL_AGENT_MODE=mock` uses, and
-  the breadth of the scenario matrix in `packages/agent/test/scenarios/` (≈100 end-to-end runtime
-  scenarios in a few seconds: triage, approvals, cancellation, steering, retries, concurrency,
-  restarts, vault changes, midnight, contract checks on every event and sidecar file).
-- **Over HTTP** (`startFakeOpenRouter`): a local OpenAI-compatible server (streaming SSE, tool calls,
-  `/key`, `/models`, fault injection) that the real Pi harness and OpenRouter client talk to.
-
-`createFakeAgentRuntime({ via: "scripted" | "pi-http" })` wires either into the real runtime and
-safety stack, with helpers to write notes, wait for statuses, decide approvals and reply, and an
-audit that every executed tool passed the safety gate.
-
+The real model is never used in tests. `@ddl/agent/testing`
+([its README](../packages/agent/src/testing/README.md)) provides a deterministic **FakeBrain**
+that plays the orchestrator, subagents, the safety judge and web search, run in process on
+`ScriptedHarness` (what `DDL_AGENT_MODE=mock` uses, and the ≈100 runtime scenarios in
+`packages/agent/test/scenarios/`) or behind a fake OpenRouter that the real Pi harness talks to.
 Point the whole app at the fake — the real daemon and harness at zero cost:
 
 ```bash

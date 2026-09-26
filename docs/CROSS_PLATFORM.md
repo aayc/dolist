@@ -1,81 +1,27 @@
 # Cross-platform plan: web, macOS, iPhone
 
 Daily Do List is one product across three surfaces that share one daemon and one wire protocol.
-The web app (`apps/web`) runs in a browser. The macOS app (`apps/macos`) is a native
-SwiftUI/AppKit client of the same daemon. The iPhone app is planned; it will reuse the macOS
-app's platform-neutral Swift packages.
 
 | Surface | Client | Where the agent runs | Status |
 | --- | --- | --- | --- |
-| Web | Browser → daemon on `127.0.0.1` | Local daemon | ✅ working |
-| macOS | Native SwiftUI/AppKit app that supervises its own daemon (or attaches to a running one) | Local daemon (full capabilities: shell, browser, desktop), or relayed to the always-on machine | ✅ working — `apps/macos` |
-| iPhone | Native SwiftUI app reusing `DailyDoListModels`, `DailyDoListClient`, `DailyDoListDomain` and `DailyDoListVim` | The always-on daemon over a private network ([ALWAYS_ON.md](./ALWAYS_ON.md)), or your Mac's | planned — `apps/mobile` |
+| Web | Browser → daemon | Local daemon | ✅ working |
+| macOS | Native SwiftUI/AppKit app that supervises its own daemon (or attaches to a running one) | Local daemon (shell, browser, desktop), or relayed to the always-on machine | ✅ working — [`apps/macos`](../apps/macos/README.md) |
+| iPhone | Native SwiftUI app reusing the macOS app's Foundation-only packages | The always-on daemon over a private network ([ALWAYS_ON.md](./ALWAYS_ON.md)), or your Mac's | planned — [plan](../apps/mobile/PLAN.md) |
 
-## Why every client can share one backend
+Why every client can share one backend:
 
-- **The web UI is origin-independent.** It talks to the backend through the `DaemonClient`
-  interface (`apps/web/src/api/client.ts`) with an explicit base URL and token. No UI code assumes
-  the page origin is the daemon.
-- **The protocol is explicit.** The schemas in `packages/contract/src/wire` define every REST
-  route, body and WebSocket event (and, inferred from them, the TypeScript types). Any client
-  (WebView, native widget, CLI) can implement it.
-- **Native clients speak the same protocol.** `DailyDoListModels` mirrors the schemas in Swift
-  and its tests decode the `@ddl/contract` fixtures, so drift fails CI. `DailyDoListClient`
-  implements the same `DaemonClient` surface over REST and WebSocket. Both are Foundation-only and
-  build for iOS.
-- **Domain logic is pure.** `@ddl/core` has no runtime dependencies and no Node/DOM APIs, so daily-note
-  math, task parsing and identity tracking behave identically everywhere.
-- **Editor behavior is pinned by vectors.** Vim mode runs `@replit/codemirror-vim` on the web and
-  `DailyDoListVim` (a Foundation-only Swift port) natively; both replay the same recorded behavior
-  vectors (`packages/editor/test/vim`), so a key sequence does the same thing on every surface.
-- **Hands are a provider.** The agent loop only needs an `ExecutionProvider`. On macOS it's the
-  local one; for iPhone-only use, a remote provider (a sandbox with browser/desktop) could plug in
-  without touching the orchestrator.
-- **Storage and sync are providers.** A vault lives on disk and is mirrored to an iCloud Drive folder
-  or the sync service via `SyncEngine`, which is how notes reach the phone.
-
-## macOS app (apps/macos)
-
-A native SwiftUI/AppKit app built from independent Swift packages (see
-[apps/macos/README.md](../apps/macos/README.md)):
-
-1. The UI is native: a TextKit markdown editor with live preview and agent badges, threads,
-   approval cards, a command palette and settings. It uses the same REST + WebSocket API as the
-   web app, through `HTTPDaemonClient`. `--demo` runs it against a daemon of its own with the
-   mock agent on a throwaway demo vault.
-2. `DaemonSupervisor` attaches to a running daemon (for example `pnpm dev`) or launches
-   `node apps/daemon/dist/main.js` itself, from the app bundle (`build-app.sh --with-daemon`) or a
-   checkout. It uses the system Node 24.4+ and reads the token from `$DDL_HOME/daemon-token`. It
-   health-checks the daemon, restarts it with backoff after a crash, and stops it (SIGTERM, then
-   SIGKILL) when the app quits.
-3. Native niceties: a global hotkey for today's note, launch at login, menu-bar status, a Dock
-   badge, and native notifications for approval requests.
-4. Browser-reserved shortcuts (`⌘W`, `⌘N`, `⌘⇧W` for the weekly note) are available.
-5. The daemon runs as the app's child, so computer use asks for Accessibility and Screen
-   Recording under the app's identity. `build-app.sh` signs with the local signing identity when
-   it exists (`scripts/signing-identity.sh` creates it), so macOS keeps granted permissions across
-   builds; without it, and in CI, builds are signed ad hoc. None are notarized.
-
-## iPhone app (apps/mobile)
-
-The detailed plan, with the decisions made so far, is [apps/mobile/PLAN.md](../apps/mobile/PLAN.md).
-
-1. A native SwiftUI app reusing `DailyDoListModels`, `DailyDoListClient`, `DailyDoListDomain` and
-   `DailyDoListVim` (Foundation-only, declared for iOS 17), with a compact UI: single pane, thread
-   as a sheet, approvals as native notifications with Approve/Deny actions.
-2. Connects to a daemon it does not host: the always-on machine or the user's Mac, over a private
-   network (Tailscale). It pairs with a QR code carrying the daemon's URL and a single-use pairing
-   code, never a token: the phone exchanges the code for its own device token with
-   `POST /api/pair`. (The pairing screens show the code and URL; the QR code isn't built yet.)
-3. Offline: a local cache of the vault with the same `SyncEngine` semantics, so editing works on
-   the subway and merges later.
-
-## Checklist before the iPhone app
-
-The first two items are phase 1 of [ALWAYS_ON.md](./ALWAYS_ON.md).
-
-- [x] Device-scoped tokens and pairing endpoint in the daemon (`POST /api/pairing-codes`,
-  `POST /api/pair`, revocation; see [apps/daemon/README.md](../apps/daemon/README.md#remote-access-and-pairing)).
-- [x] Remote access story (Tailscale/relay) with TLS; keep `127.0.0.1` binding the default
-  (`tailscale serve` to the loopback port, `remote.hosts`; see [ALWAYS_ON.md](./ALWAYS_ON.md#remote-access)).
-- [ ] Compact iPhone layouts for the note, thread and approval views.
+- **The protocol is explicit.** The zod schemas in `packages/contract/src/wire` define every REST
+  route, body and WebSocket event ([PROTOCOL.md](./PROTOCOL.md)). The web UI talks to the daemon
+  only through its `DaemonClient` with an explicit base URL and credential; `DailyDoListModels`
+  mirrors the schemas in Swift and decodes the contract's fixtures, so drift fails CI, and
+  `DailyDoListClient` implements the same client over REST and WebSocket. Both Swift packages are
+  Foundation-only and build for iOS.
+- **Domain logic is pure and pinned.** `@ddl/core` has no runtime dependencies and no Node/DOM
+  APIs; its Swift port (`DailyDoListDomain`) replays vectors generated from it, and vim mode on
+  every surface replays the same recorded behavior vectors (`packages/editor/test/vim`).
+- **Hands and storage are providers.** The agent loop only needs an `ExecutionProvider`, so a
+  remote one could serve iPhone-only use without touching the orchestrator; a vault syncs to other
+  devices through `SyncEngine` and the sync service.
+- **The Mac app is a client like any other.** It uses the same REST + WebSocket API through
+  `HTTPDaemonClient`; its daemon runs as the app's child, so computer use asks for permissions
+  under the app's identity.

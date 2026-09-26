@@ -17,19 +17,16 @@ ToolCallRequest ─▶ SafetyGate ─▶ SafetyEvaluator ─▶ verdict
 
 ## Public API (`index.ts`)
 
-| Export | What it is |
-| --- | --- |
-| `createSafetyEvaluator({ policy?, llm?, judgeModel?, logger? })` | The evaluator. With `policy.llmJudge` and an `llm`, uncertain actions go to the LLM judge. |
-| `createApprovalBroker({ storage?, defaultTimeoutMs?, now?, logger? })` | Pending approvals, decisions, standing grants, persistence. Returns a `PersistentApprovalBroker` (adds `ready`, `flush()`, `dispose()`). |
-| `createSafetyGate(options)` | `beforeToolCall` for `HarnessSessionOptions`. Never throws. `options.approvalPolicy()` is read on every call. |
-| `policyAsks(policy, verdict)`, `effectivePolicy(value)`, `isLooserPolicy(next, previous)` | The approval policy as pure functions (`approval-policy.ts`), plus its reasons and `POLICY_APPROVAL_NOTE`. |
-| `DEFAULT_SAFETY_POLICY`, `resolvePolicy(partial)` | Default policy and safe merging of overrides (malformed values are ignored). |
-| `builtinToolHints(name)` | Hints for harness built-ins without a `ToolSpec`: `read/grep/find/ls` → read-only, `write/edit` → `file_write`, `bash` → `system` (its commands are analyzed by the shell rules). The Cursor harness sends its own versions of these, and the Cursor CLI's web search/fetch as `web_search {query}` / `web_fetch {url}`, all without a spec; they get the same verdicts (`harness-requests.test.ts`). |
-| `SAFETY_RULES` | Metadata of every rule (id, category, decision, risk, description), sorted by id. |
-| `describeAction(ctx)`, `redactActionInput(ctx)` | Approval-card summary and the input with secrets hidden. |
-| `maskSensitiveText`, `redactSensitiveInput`, `luhnValid` | Masking helpers (cards keep their last 4 digits; secrets and SSNs are hidden). |
-| `ApprovalNotFoundError`, `ApprovalStateError` | Thrown by `decide()` for unknown / already-decided approvals (map to 404 / 409). |
-| `APPROVALS_STATE_PATH` | `.daily-do-list/state/approvals.json`. |
+`createSafetyEvaluator` (with `policy.llmJudge` and an `llm`, uncertain actions go to the judge),
+`createApprovalBroker` (pending approvals, decisions, standing grants, persistence),
+`createSafetyGate` (`beforeToolCall` for harness sessions; never throws; reads
+`options.approvalPolicy()` on every call), the approval policy as pure functions
+(`approval-policy.ts`), `DEFAULT_SAFETY_POLICY`/`resolvePolicy`, `SAFETY_RULES`, and the
+describe and masking helpers. `builtinToolHints(name)` gives harness built-ins without a
+`ToolSpec` their hints (`read/grep/find/ls` read-only, `write/edit` `file_write`, `bash` `system`,
+its commands analyzed by the shell rules); the Cursor harness's versions of these and the Cursor
+CLI's web search/fetch (`web_search {query}`, `web_fetch {url}`) get the same verdicts
+(`harness-requests.test.ts`).
 
 ## The pipeline (`evaluator.ts`)
 
@@ -180,163 +177,13 @@ Then per family:
 
 ## Rules
 
-Stable ids, grouped by decision (generated from `SAFETY_RULES`; 153 rules).
+Every rule has a stable id, a category, a decision, a risk and a description written for the user
+(it appears in reasons). The catalog is `SAFETY_RULES` (`rules/index.ts`), sorted by id; print it
+with:
 
-| Rule id | Category | Decision | Risk | Matches |
-| --- | --- | --- | --- | --- |
-| `browser.dangerous-scheme` | system | deny | critical | Opens a script, local-file or browser-internal address |
-| `network.app-self-access` | system | deny | critical | Operates the Daily Do List app itself (an agent could approve its own actions or change its settings) |
-| `notes.edit.hidden-path` | system | deny | critical | Writes to the app's hidden state instead of a note |
-| `secrets.app-config-write` | system | deny | critical | Changes the app's own settings, keys, connector config or approval state (an agent could change its approval policy or grant itself permissions) |
-| `secrets.credential-folder` | credentials | deny | critical | Reads a whole folder that holds saved logins and private data (~/Library, ~/.config, …) |
-| `secrets.credential-store` | credentials | deny | critical | Reads saved logins: a password store, keychain, browser credential database, cloud, cluster, Docker or Cursor credentials, or the app's API keys and tokens |
-| `secrets.embedded-access` | credentials | deny | critical | Reads private keys, keychains or credential stores from code or typed text |
-| `secrets.env-file` | credentials | require_approval | high | Reads a .env file outside the task workspace (it holds API keys and passwords) |
-| `secrets.exfiltration` | credentials | deny | critical | Sends secrets (keys, .env files, credentials, environment variables) over the network |
-| `secrets.gpg-export` | credentials | deny | critical | Exports GPG secret keys |
-| `secrets.home-folder` | credentials | deny | critical | Reads your whole home folder, including SSH keys and cloud credentials |
-| `secrets.keychain-dump` | credentials | deny | critical | Dumps passwords from the macOS keychain |
-| `secrets.shell-history` | credentials | deny | critical | Reads your shell history (commands you typed, often with passwords and tokens in them) |
-| `secrets.ssh-private-key` | credentials | deny | critical | Reads a private SSH key |
-| `shell.hardline.embedded` | destructive | deny | critical | Runs a catastrophic command hidden inside code or typed text |
-| `shell.hardline.fork-bomb` | system | deny | critical | Runs a fork bomb |
-| `shell.hardline.format-disk` | destructive | deny | critical | Formats or erases a disk |
-| `shell.hardline.kill-all` | system | deny | critical | Kills every process on the machine |
-| `shell.hardline.raw-device-write` | destructive | deny | critical | Writes directly to a raw disk device |
-| `shell.hardline.rm-home` | destructive | deny | critical | Deletes your home directory |
-| `shell.hardline.rm-root` | destructive | deny | critical | Deletes the root filesystem |
-| `shell.hardline.rm-system-dir` | destructive | deny | critical | Deletes a system directory |
-| `shell.hardline.shutdown` | system | deny | critical | Shuts down or reboots the machine |
-| `shell.hardline.sudo-stdin` | credentials | deny | critical | Pipes a password into sudo |
-| `shell.hardline.too-large` | system | deny | critical | Shell command is too large to verify (write files with the write tool instead) |
-| `system.protected-app` | system | deny | critical | Operates a protected app: Daily Do List itself, System Settings, a password manager, a keychain or an authenticator |
-| `notes.read.outside-vault` | privacy | deny | high | Reads a path outside your notes (outside the vault, or the app's hidden folders) |
-| `account.account-control` | account | require_approval | high | Creates, deletes or changes an account, its security or its permissions |
-| `account.unsubscribe-link` | account | require_approval | medium | Opens an unsubscribe / opt-out link |
-| `booking.change-control` | booking | require_approval | high | Cancels or changes a reservation or appointment |
-| `booking.reservation-control` | booking | require_approval | high | Books, reserves, schedules or RSVPs |
-| `communication.app-automation-message` | communication | require_approval | high | Sends a message or email through another app |
-| `communication.desktop-send` | communication | require_approval | high | Sends a message in a messaging app (Return, a typed line break or a send button) |
-| `communication.message-link` | communication | require_approval | high | Opens a link that starts an email, message or call |
-| `communication.message-submit` | communication | require_approval | high | Types a message and sends it |
-| `communication.messaging-api` | communication | require_approval | high | Posts to a messaging or email service |
-| `communication.send-control` | communication | require_approval | high | Sends a message, email, reply, invite or comment |
-| `communication.send-shortcut` | communication | require_approval | high | Presses a send shortcut (Cmd/Ctrl+Enter) |
-| `communication.shell-message` | communication | require_approval | high | Sends email or messages from the shell |
-| `computer_control.desktop-action` | computer_control | require_approval | medium | Controls your computer's mouse or keyboard |
-| `credentials.cloud-metadata` | credentials | require_approval | high | Reads a cloud instance-metadata endpoint (serves live credentials) |
-| `credentials.credential-file-write` | credentials | require_approval | high | Overwrites keys or credential files |
-| `credentials.env-dump` | credentials | require_approval | medium | Prints environment variables that may contain API keys |
-| `credentials.runtime-folder-read` | credentials | require_approval | high | Reads a whole folder chosen when the command runs, which could be your home folder |
-| `credentials.secret-and-network` | credentials | require_approval | critical | Reads secrets and uses the network in the same command |
-| `credentials.secret-in-request` | credentials | require_approval | critical | Sends a secret (API key, token, password) in a network request |
-| `credentials.secret-in-url` | credentials | require_approval | high | Puts a secret or credentials into a URL |
-| `credentials.secret-search` | credentials | require_approval | medium | Searches files outside the workspace for passwords, keys or tokens |
-| `credentials.secret-value` | credentials | require_approval | high | Enters or sends a password, API key or other secret |
-| `credentials.sensitive-field` | credentials | require_approval | high | Types into a password, card, security-code or other secret field |
-| `credentials.sensitive-file` | credentials | require_approval | high | Reads a file that usually holds secrets (.env, keys, credential configs, shell history) |
-| `credentials.token-print` | credentials | require_approval | high | Prints a stored login token |
-| `destructive.containers` | destructive | require_approval | high | Deletes containers, images, volumes or cluster resources |
-| `destructive.crontab-remove` | destructive | require_approval | medium | Removes all your scheduled jobs |
-| `destructive.delete-control` | destructive | require_approval | high | Deletes, clears or resets something |
-| `destructive.delete-link` | destructive | require_approval | medium | Opens a link that deletes or cancels something |
-| `destructive.delete-shortcut` | destructive | require_approval | high | Presses a delete / empty-trash shortcut |
-| `destructive.find-delete` | destructive | require_approval | high | Deletes files found outside the task workspace |
-| `destructive.git-discard` | destructive | require_approval | medium | Discards uncommitted work or rewrites git history |
-| `destructive.git-force-push` | destructive | require_approval | high | Force-pushes or deletes remote git history |
-| `destructive.keychain-delete` | destructive | require_approval | high | Deletes keychain items |
-| `destructive.move-outside` | destructive | require_approval | medium | Moves files away from their place outside the task workspace |
-| `destructive.package-uninstall` | destructive | require_approval | medium | Uninstalls software |
-| `destructive.rm-outside-workspace` | destructive | require_approval | high | Deletes files outside the task workspace |
-| `destructive.sql` | destructive | require_approval | high | Runs destructive SQL (DROP, TRUNCATE, DELETE without WHERE) |
-| `destructive.unsafe-variable-path` | destructive | require_approval | critical | Deletes a path built from a variable that could expand to your home or root folder |
-| `file_write.note-edit` | file_write | require_approval | medium | Edits a note or vault file outside the task workspace |
-| `file_write.outside-workspace` | file_write | require_approval | medium | Writes files outside the task workspace |
-| `file_write.symlink-outside` | file_write | require_approval | medium | Creates a link that points outside the task workspace |
-| `forms.action-link` | form_submission | require_approval | medium | Opens a link that confirms, approves or answers something |
-| `forms.desktop-return` | form_submission | require_approval | medium | Presses Return on the computer, as a key or a line break in typed text (sends chat messages, submits forms, runs commands) |
-| `forms.enter-key` | form_submission | require_approval | medium | Presses Enter while working on a task that commits something (purchase, booking, message…) |
-| `forms.submit-control` | form_submission | require_approval | medium | Submits or confirms a form |
-| `forms.submit-typed` | form_submission | require_approval | medium | Types into a form field and submits it |
-| `mcp.account-action` | account | require_approval | high | Connector tool that changes accounts, members or permissions |
-| `mcp.booking-action` | booking | require_approval | high | Connector tool that books, schedules or changes calendar events |
-| `mcp.communication-action` | communication | require_approval | high | Connector tool that sends messages, emails, invites or comments |
-| `mcp.destructive-action` | destructive | require_approval | high | Connector tool that deletes, cancels or resets data |
-| `mcp.payment-action` | payment | require_approval | high | Connector tool that moves money (pay, charge, buy, refund, transfer) |
-| `mcp.publishing-action` | publishing | require_approval | high | Connector tool that posts, publishes or changes shared content |
-| `mcp.system-action` | system | require_approval | high | Connector tool that runs commands or installs software |
-| `network.code-http-write` | network | require_approval | medium | Inline code sends data over the network |
-| `network.file-transfer` | network | require_approval | high | Copies files to or from another machine or cloud storage |
-| `network.http-write` | network | require_approval | medium | Sends data to a web service (POST/PUT/PATCH/DELETE or upload) |
-| `network.local-address` | network | require_approval | high | Reaches a service on this computer or the local network |
-| `network.raw-socket` | network | require_approval | medium | Opens a raw network connection |
-| `notes.edit.delete-user-text` | destructive | require_approval | medium | Deletes text you wrote from a note |
-| `notes.edit.unreadable` | file_write | require_approval | medium | A note edit the rules can't read |
-| `notes.edit.user-text` | file_write | require_approval | medium | Changes text you wrote in a note |
-| `payment.amount-field` | payment | require_approval | medium | Enters a payment, tip or transfer amount |
-| `payment.card-field` | payment | require_approval | high | Fills in payment card or bank details |
-| `payment.card-number` | payment | require_approval | critical | Enters or sends a payment card number |
-| `payment.payment-api` | payment | require_approval | high | Calls a payment service |
-| `payment.payment-method-control` | payment | require_approval | high | Adds or changes a payment method |
-| `payment.purchase-control` | payment | require_approval | high | Completes a purchase or payment |
-| `payment.subscription-control` | payment | require_approval | high | Starts, upgrades or renews a paid subscription |
-| `payment.transfer-text` | payment | require_approval | high | Text asks to send money, gift cards or crypto |
-| `privacy.clipboard-read` | privacy | require_approval | medium | Reads your clipboard |
-| `privacy.file-upload` | privacy | require_approval | high | Uploads files from your computer to a website |
-| `privacy.id-number` | privacy | require_approval | high | Enters or sends a social security number |
-| `privacy.personal-data` | privacy | require_approval | high | Reads your messages, mail, photos or browsing data |
-| `privacy.personal-data-in-url` | privacy | require_approval | high | Puts a card number or ID number into a URL |
-| `privacy.personal-field` | privacy | require_approval | medium | Shares personal details (ID numbers, date of birth, phone, address) |
-| `privacy.personal-folder` | privacy | require_approval | medium | Reads a whole folder of your personal files (Documents, Desktop, Downloads, …) |
-| `privacy.screen-capture` | privacy | require_approval | medium | Captures your screen or camera from the shell |
-| `publishing.post-control` | publishing | require_approval | high | Posts, publishes, shares, uploads or reacts publicly |
-| `publishing.shell-publish` | publishing | require_approval | high | Publishes code, packages or deployments |
-| `publishing.social-api` | publishing | require_approval | high | Posts to a social network or code host |
-| `routines.change` | file_write | require_approval | medium | Changes what a routine does or when it runs, or resumes it |
-| `routines.create` | file_write | require_approval | medium | Creates a routine: work the agent will do on its own, on a schedule |
-| `routines.file-edit` | file_write | require_approval | medium | Edits a routine's file (what the agent does on its own, and when) |
-| `system.app-automation` | system | require_approval | high | Scripts other apps on your Mac (AppleScript, Shortcuts) |
-| `system.code-hazard-write` | system | require_approval | high | Writes a script that deletes system data, reads secrets or runs downloaded code |
-| `system.config-change` | system | require_approval | high | Changes system, network or global tool configuration |
-| `system.containers` | system | require_approval | medium | Starts, stops or changes containers or cloud infrastructure |
-| `system.disk` | system | require_approval | high | Mounts, unmounts or changes disks |
-| `system.dynamic-eval` | system | require_approval | high | Evaluates code that is computed at runtime or sourced from outside the workspace |
-| `system.expose-network` | system | require_approval | high | Exposes files or ports on this computer to the network |
-| `system.non-web-link` | system | require_approval | medium | Opens a non-web address (data:, blob:, app links, …) |
-| `system.obfuscated-exec` | system | require_approval | critical | Runs decoded or obfuscated code |
-| `system.open-app` | system | require_approval | medium | Opens an app, file or link outside the agent's browser |
-| `system.page-script` | system | require_approval | high | Runs custom JavaScript in the page (it can do anything you can on that site) |
-| `system.permissions` | system | require_approval | high | Loosens file permissions, changes ownership or disables macOS protections |
-| `system.persistence` | system | require_approval | high | Changes background services, scheduled jobs or system defaults |
-| `system.persistence-write` | system | require_approval | high | Changes shell startup files, login items, scheduled jobs or SSH access |
-| `system.pipe-to-interpreter` | system | require_approval | high | Runs commands piped into a shell or interpreter |
-| `system.privilege-escalation` | system | require_approval | high | Runs with administrator (root) privileges |
-| `system.process-control` | system | require_approval | medium | Stops running programs |
-| `system.remote-access` | system | require_approval | high | Runs commands on another machine or inside a container |
-| `system.remote-code` | system | require_approval | critical | Runs code downloaded from the internet |
-| `system.software-install` | system | require_approval | high | Installs or updates software |
-| `system.system-path-write` | system | require_approval | high | Writes to a system location |
-| `system.system-shortcut` | system | require_approval | medium | Quits apps, force-quits or logs out |
-| `system.unparseable` | system | require_approval | medium | Shell command could not be fully analyzed |
-| `browser.benign-control` | browser_input | allow | low | Clicks navigation, search, filters, cookie banners or links |
-| `browser.benign-key` | browser_input | allow | low | Presses a navigation key (Tab, Escape, arrows, paging) |
-| `browser.benign-select` | browser_input | allow | low | Chooses an option in a dropdown |
-| `browser.benign-typing` | browser_input | allow | low | Types into a field without submitting (or into a search box) |
-| `file_write.workspace` | file_write | allow | low | Writes files inside the task workspace |
-| `files.read` | read | allow | low | Reads or searches files |
-| `mcp.draft` | file_write | allow | low | Connector tool that only saves a draft |
-| `mcp.read-action` | read | allow | low | Connector tool that only reads (get, list, search, …) |
-| `notes.edit.own` | file_write | allow | low | Adds its own text to a note, or changes lines it wrote |
-| `notes.read` | read | allow | low | Reads or searches your notes |
-| `routines.pause` | file_write | allow | low | Pauses a routine |
-| `routines.read` | read | allow | low | Lists routines and their last results |
-| `routines.run` | compute | allow | low | Runs a routine now (each of its actions is checked as usual) |
-| `shell.compute` | compute | allow | low | Runs computations (calculators, text processing, inline code without side effects) |
-| `shell.read-only` | read | allow | low | Runs read-only shell commands (listing, reading, searching, git status, HTTP GET) |
-| `shell.workspace-write` | file_write | allow | low | Creates or changes files inside the task workspace |
-| `ui.read-only` | read | allow | low | Looks at the page or screen, scrolls, hovers or goes back |
-| `web.read` | read | allow | low | Reads a public web page |
-| `web.search` | read | allow | low | Searches the web |
+```sh
+pnpm --filter @ddl/agent exec tsx -e 'import { SAFETY_RULES } from "./src/safety/index.ts"; for (const r of SAFETY_RULES) console.log(r.decision, r.risk, r.id, "-", r.description)'
+```
 
 ## The LLM judge (`llm-judge.ts`)
 

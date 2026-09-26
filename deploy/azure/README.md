@@ -6,8 +6,7 @@ inbound port closed (SSH included), administration over Tailscale SSH, encryptio
 first boot ([cloud-init.yaml](./cloud-init.yaml)) joins your tailnet with Tailscale SSH and
 installs Node.js; then the [Linux setup kit](../linux/README.md) installs the daemon and the sync
 service. The design is in [docs/ALWAYS_ON.md](../../docs/ALWAYS_ON.md). An option replaces the
-public IP with a NAT gateway, so the VM has no public address at all, for about $33 more a month
-plus data processed.
+public IP with a NAT gateway, so the VM has no public address at all (see [Cost](#cost)).
 
 Daily Do List never manages Azure itself: you create, stop and delete the VM, here or in the
 portal. Everything below uses placeholders (`<resource-group>`, `<vm-name>`, …); keep your real
@@ -32,13 +31,8 @@ names, keys and IDs out of any repository.
 | `Standard_B4as_v2` | AMD, x86, burstable | 4, 16 GiB | about $110 | about $124 |
 | `Standard_D2as_v5` | AMD, x86 | 2, 8 GiB | about $63 | about $77 |
 
-Prices are approximate pay-as-you-go retail at the time of writing (September 2026), for Linux
-in West US 2, West US 3 and East US, running around the clock: `Standard_D4ps_v6` is about $0.140
-an hour. "With disk and IP" adds the 64 GiB Premium SSD (about $10 a month) and the static public
-IP (about $4). Other regions differ; check the
-[pricing calculator](https://azure.microsoft.com/pricing/calculator/). For the x86 4-vCPU sizes, a
-1-year savings plan lowers the price in exchange for a commitment that bills whether the VM runs or
-not.
+Prices are approximate, running around the clock; "with disk and IP" adds the OS disk and the
+static public IP (details in [Cost](#cost)).
 
 Four vCPUs and 16 GiB leave room for Node, Chromium and the agent's tools at once; 2 vCPUs and
 8 GiB work for lighter use. Sizes aren't offered in every region or to every subscription, so
@@ -264,45 +258,11 @@ sudo ./ddl-linux-arm64/deploy/setup.sh
 ```
 
 `setup.sh` takes the machine's tailnet name from `tailscale status` as the daemon's remote host,
-creates the sync vault, installs Chromium and starts the services; the
-[Linux kit's README](../linux/README.md) details every step. Then follow the next steps it prints:
-
-1. **Serve on the tailnet:**
-
-   ```sh
-   sudo tailscale serve --bg --https=443 http://127.0.0.1:7331
-   sudo tailscale serve --bg --https=8443 http://127.0.0.1:7332
-   ```
-
-2. **Model credentials.** Install and sign in the Cursor CLI as the service user (the login prints
-   a link to open on your laptop), then choose the Cursor harness in Settings:
-
-   ```sh
-   sudo -u ddl -H bash -c 'curl https://cursor.com/install -fsS | bash'
-   sudo -u ddl -H env NO_OPEN_BROWSER=1 /var/lib/ddl/.local/bin/agent login
-   ```
-
-   Or, for the Pi harness, add `OPENROUTER_API_KEY=…` to `/etc/ddl/ddl.env` with `sudoedit` and
-   `sudo systemctl restart ddl-daemon`. Add only the keys this machine needs; don't copy your
-   laptop's whole `.env`.
-3. **Connectors (`mcp.json`).** Review your laptop's `~/.daily-do-list/mcp.json` first: commands
-   and paths must exist on the VM, and any tokens in it are secrets. Then:
-
-   ```sh
-   scp ~/.daily-do-list/mcp.json "$ADMIN@$VM:"                     # on your laptop
-   sudo install -o ddl -g ddl -m 0600 mcp.json /var/lib/ddl/.daily-do-list/mcp.json && rm mcp.json
-   sudo systemctl restart ddl-daemon                                # on the VM
-   ```
-
-4. **Pair your laptop.** On the VM, `sudo -u ddl -H node /opt/ddl/current/daemon/dist/main.js
-   pair` prints a pairing code. In the laptop's app, Settings → Always-on machine takes
-   `https://vm-name.tailnet-name.ts.net` and the code; Settings → Sync takes
-   `https://vm-name.tailnet-name.ts.net:8443`, the vault id and the vault token
-   (`sudo cat /var/lib/ddl/.daily-do-list/sync-token` on the VM). Then choose where the laptop's
-   agent runs (Settings → Agent location).
-
-The agent's browser on the VM starts signed in to nothing. Sign it in only to accounts made or set
-aside for the agent, so that a mistake lands there and not on your own accounts.
+creates the sync vault, installs Chromium and starts the services, then prints the next steps with
+your names filled in: serve both on the tailnet, give the agent a model (the Cursor CLI signed in
+as the service user, or an OpenRouter key), install your connectors (`scp
+~/.daily-do-list/mcp.json "$ADMIN@$VM:"` first) and pair your laptop. The
+[Linux kit's README](../linux/README.md#next-steps) has them with every command.
 
 ## Cost
 
@@ -386,11 +346,8 @@ for your region:
   you ever need the OpenSSH server over the tailnet.
 - **`tailscale serve` complains about HTTPS.** Turn on HTTPS certificates (admin console → DNS).
   The first request after that takes a few seconds while the certificate is issued.
-- **The browser shows `forbidden_host`.** The daemon doesn't list the name you used in
-  `remote.hosts`: check `sudo cat /var/lib/ddl/.daily-do-list/config.json`, and run `setup.sh`
-  again with `--host vm-name.tailnet-name.ts.net`.
-- **A service doesn't start.** `journalctl -u ddl-daemon -n 50` (or `-u ddl-sync`). Configuration
-  errors name the file and the key.
+- **`forbidden_host`, a service that doesn't start, Chromium that won't download:** see the
+  [Linux kit's troubleshooting](../linux/README.md#troubleshooting).
 - **Everything is slow from one device.** `tailscale ping <vm-name>` may say `via DERP`: when a
   direct connection can't be set up (more often behind a NAT gateway, or a strict network on
   the device's side), Tailscale falls back to its relays. It works, with more latency.

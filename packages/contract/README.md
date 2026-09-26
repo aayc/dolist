@@ -11,8 +11,8 @@ with it. Enums whose values core owns (`AGENT_HARNESS_KINDS`, `APPROVAL_POLICIES
   WebSocket `ServerEvent`/`ClientEvent`, the domain objects they carry (task records, threads,
   messages, approvals, artifacts, frames, settings), the error vocabulary, and `API_CONTRACT`,
   the route table. The human-readable reference is `docs/PROTOCOL.md`.
-- **Persisted** (`src/persisted/`): the sidecar file formats under `.daily-do-list/` (owned
-  separately; see that folder).
+- **Persisted** (`src/persisted/`): the sidecar file formats under `.daily-do-list/` (see
+  `docs/DATA_FORMATS.md`).
 
 | Import | What |
 | --- | --- |
@@ -25,28 +25,18 @@ guards in `apps/web/src/api/events.ts` are differential-tested against these sch
 
 ## Strict requests, tolerant responses
 
-- **Requests are strict** — REST bodies and client WebSocket events reject unknown keys
-  (`z.strictObject`). A typo (`baseversion`) or a setting this daemon doesn't know fails loudly
-  with 400 `invalid_request` instead of being silently dropped.
-- **Responses and server events are tolerant** — `z.looseObject`: unknown keys are accepted and
-  preserved, so an older client keeps working against a newer daemon that added fields. Clients
-  must also ignore server event `type`s they don't know.
-- **Query strings** ignore unknown parameters (proxies and cache-busters add them).
-- **Conformance tests use `exact(schema)`**, which makes every object strict recursively, so a
-  producer (the daemon, the agent runtime) can't emit a key the contract
-  doesn't declare. Tolerance is for consumers; producers are held to the exact shape.
-
-The JSON Schema export reflects the rule: requests have `"additionalProperties": false`,
-responses `"additionalProperties": {}`.
+The rule is in `docs/PROTOCOL.md`; here it's `z.strictObject` for requests (unknown keys fail with
+400 `invalid_request`) and `z.looseObject` for responses and server events (unknown keys accepted
+and preserved), and the JSON Schema export says `"additionalProperties": false` or `{}`
+accordingly. **Conformance tests use `exact(schema)`**, which makes every object strict
+recursively, so a producer (the daemon, the agent runtime) can't emit a key the contract doesn't
+declare: tolerance is for consumers, producers are held to the exact shape.
 
 ## Versioning and compatibility
 
-`API_VERSION` (`@ddl/core`) is an integer **major** version. A client and a daemon interoperate
-exactly when their versions are equal: clients check `GET /api/health` → `apiVersion`, both sides
-exchange it in the WebSocket `hello`, and the daemon closes incompatible sockets with
-`WS_CLOSE_CODES.incompatibleApiVersion` (4426). See `docs/PROTOCOL.md` for the handshake.
-
-Within a major version only **additive** changes are allowed:
+`API_VERSION` (`@ddl/core`) is an integer **major** version; a client and a daemon interoperate
+exactly when their versions are equal (the handshake is in `docs/PROTOCOL.md`). Within a major
+version only **additive** changes are allowed:
 
 | Change | Compatible? |
 | --- | --- |
@@ -83,9 +73,10 @@ field together with a major bump.
    `src/testing/arbitraries.ts`.
 5. **Fixtures**: add canonical `fixtures/wire/<Name>.valid.json` cases and tricky
    `<Name>.invalid.json` ones (with the expected issue `path` and `code`).
-6. **Producers**: implement it in the daemon (validate requests with the contract schema) and in
-   the web mock; the conformance suites (`apps/daemon/src/contract*.test.ts`,
-   `packages/agent/test/contract.test.ts`, `apps/web/src/api/**/*.contract.test.ts`) must pass.
+6. **Producers and clients**: implement it in the daemon (validate requests with the contract
+   schema), the web client and `DailyDoListModels` (Swift); the conformance suites
+   (`apps/daemon/src/contract*.test.ts`, `packages/agent/test/contract.test.ts`,
+   `apps/web/src/api/**/*.contract.test.ts`, the Swift fixture decoding tests) must pass.
 7. **Regenerate**: `pnpm --filter @ddl/contract generate` rewrites `schema/*.json` and the
    reference in `docs/PROTOCOL.md`; tests fail while either is stale.
 

@@ -32,20 +32,13 @@ Config shapes (`StorageConfig` / `SyncTargetConfig` in `src/types.ts`):
 
 ### Remote (the sync service)
 
-- Talks to the sync service's HTTP API (`packages/core/src/sync-service.ts`) through
-  `SyncServiceClient` (`src/remote-client.ts`): bearer token, the device id on every change, a
-  timeout on every request, `Retry-After` on 429, typed errors. The token is never logged or put in
-  an error message.
-- Versions are the server's revs (identical content keeps its rev; a rename carries it along).
-  `ifMatch` maps to the server's conditional writes and deletes; a stale one is a `ConflictError`
-  with the current rev. Semantics match `MemoryStorageProvider`, which `remote.model.test.ts`
-  checks command by command against a real in-process server, besides the shared contract suite.
-- `watch()` holds a WebSocket to the vault's change stream while anyone listens: other devices'
-  changes arrive as `self: false` events; this device's own changes were reported when it made
-  them and aren't repeated. It reconnects with capped exponential backoff (0.5 s → 30 s, jitter)
-  and then replays the net effect of what it missed from the change log.
-- Created only through `createSyncTarget`. The design, the server and the agent lease are in
-  [docs/SYNC.md](../../docs/SYNC.md).
+`RemoteStorageProvider` talks to the sync service's HTTP API through `SyncServiceClient`
+(`src/remote-client.ts`: bearer token, the device id on every change, a timeout on every request,
+`Retry-After` on 429, typed errors; the token is never logged or put in an error message).
+Versions are the server's revs, and `ifMatch` maps to its conditional writes; semantics match
+`MemoryStorageProvider`, which `remote.model.test.ts` checks command by command against a real
+in-process server. It is created only through `createSyncTarget`. Live push, catch-up and echoes,
+the server and the agent lease: [docs/SYNC.md](../../docs/SYNC.md).
 
 ### Local filesystem
 

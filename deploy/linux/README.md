@@ -125,12 +125,14 @@ makes the names read-only in Settings.)
      ```
 
    - an OpenRouter key for the Pi harness: `sudoedit /etc/ddl/ddl.env`, add
-     `OPENROUTER_API_KEY=…`, then `sudo systemctl restart ddl-daemon`.
-3. **Connectors:** copy your `mcp.json` to the machine (never into the vault), then install it
-   for the service user and restart:
+     `OPENROUTER_API_KEY=…`, then `sudo systemctl restart ddl-daemon`. Add only the keys this
+     machine needs; don't copy your laptop's whole `.env`.
+3. **Connectors:** review your `mcp.json` first (commands and paths must exist on the machine, and
+   any tokens in it are secrets), copy it over (never into the vault), then install it for the
+   service user, delete the copy and restart:
 
    ```sh
-   sudo install -o ddl -g ddl -m 0600 mcp.json /var/lib/ddl/.daily-do-list/mcp.json
+   sudo install -o ddl -g ddl -m 0600 mcp.json /var/lib/ddl/.daily-do-list/mcp.json && rm mcp.json
    sudo systemctl restart ddl-daemon
    ```
 
@@ -141,6 +143,9 @@ makes the names read-only in Settings.)
    Settings → Sync takes `https://vm-name.tailnet-name.ts.net:8443`, the vault id `setup.sh`
    printed, and the vault token (`sudo cat /var/lib/ddl/.daily-do-list/sync-token` shows it on
    the machine). Set the laptop's agent location to the always-on machine or to itself.
+
+The agent's browser on the machine starts signed in to nothing. Sign it in only to accounts made or
+set aside for the agent, so that a mistake lands there and not on your own accounts.
 
 ## Where things are
 

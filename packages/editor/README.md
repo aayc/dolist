@@ -2,13 +2,9 @@
 
 Framework-agnostic CodeMirror 6 markdown editor for Daily Do List: Obsidian-style live preview,
 task checkboxes, vim mode, agent status badges on task lines (and on lines a thread is anchored
-to), text the agent wrote drawn as agent text, link previews, and `![[…]]` embeds (drawings) that
-float with the text wrapping around them. The web app wraps it in a React component; the
-desktop/mobile shells reuse the web app unchanged.
-
 to), chips saying what the orchestrator is doing about a line, text the agent wrote drawn as agent
-text, and link previews. The web app wraps it in a React component; the desktop/mobile shells
-reuse the web app unchanged.
+text, link previews, and `![[…]]` embeds (drawings) that float with the text wrapping around them.
+The web app wraps it in a React component.
 
 ```ts
 import { createMarkdownEditor } from "@ddl/editor";
@@ -36,7 +32,8 @@ editor.setAnnotations([
 ```
 
 The contract (`MarkdownEditor`, `EditorConfig`, `EditorCallbacks`, `LineAnnotation`,
-`ActivityChip`) lives in [`src/types.ts`](src/types.ts).
+`ActivityChip`) lives in [`src/types.ts`](src/types.ts); the building blocks, pure edits and test
+helpers are exported from [`src/index.ts`](src/index.ts).
 
 ## Features
 
@@ -56,110 +53,72 @@ frontmatter is styled as metadata instead of a rule plus a heading. Images stay 
 
 **Tasks.** `- [ ]` renders as a checkbox (`role="checkbox"`); clicking toggles `[ ]` ↔ `[x]` with
 user event `input.toggle` (never in read-only mode). Completed tasks are muted and struck through.
-Obsidian's alternate statuses (`[/]` in progress, `[-]` cancelled, `[>]` deferred) are parsed as
-tasks, like `parseTasks` in `@ddl/core`. Enter on a task line (any status) starts `- [ ] `; Enter on
-an empty item ends the list.
+Obsidian's alternate statuses (`[/]`, `[-]`, `[>]`) are tasks, like `parseTasks` in `@ddl/core`.
+Enter on a task line starts `- [ ] `; Enter on an empty item ends the list.
 
-**Agent badges.** `setAnnotations()` replaces the set of badges. Each badge shows a status dot, a
-truncated label and, when its thread has unread messages, a small accent dot (the count is in the
-tooltip and the accessible name). Its weight follows what the user has to do: `waiting_approval` and
-`waiting_user` are the only loud badges (warning tint and border), `failed` is tinted, `triaging`,
-`queued` and `working` are neutral pills, and `done`/`cancelled` are quiet text with the same hit
-target. The line gets a faint marker, colored only when the task needs the user or failed. Click,
-Enter or Space calls `onAnnotationClick`. `idle` and `ignored` annotations are not rendered.
+**Agent badges.** `setAnnotations()` replaces the set of badges: a status dot, a truncated label
+and, with unread messages, an accent dot (the count is in the tooltip and accessible name). Only
+`waiting_approval` and `waiting_user` are loud (warning tint and border), `failed` is tinted,
+`triaging`, `queued` and `working` are neutral pills, `done`/`cancelled` quiet text; `idle` and
+`ignored` aren't drawn. The line gets a faint marker, colored only when the task needs the user or
+failed. Click, Enter or Space calls `onAnnotationClick`. An annotation with `lineAnchor: true`
+(a thread attached to prose or a heading) also gives its line a soft accent band and a 2px bar
+(`cm-ddl-anchored`). Motion is CSS-only, paint-only and off under `prefers-reduced-motion`: a new
+badge fades in, a new status pops once, the `triaging` dot pulses; badges update their DOM in
+place, so typing never replays the entrance.
 
-Motion is CSS-only, paint-only (opacity, transform, color) and off under `prefers-reduced-motion`.
-A badge that appears after the note's first `setAnnotations()` fades in with a 2px rise (160 ms), a
-new status pops it once (150 ms; a new label or unread count doesn't) and crossfades its colors
-(120 ms), the `triaging` dot pulses (1.2 s), and checking a task scales its checkmark in (120 ms;
-unchecking doesn't animate). Badges update their DOM in place (`eq`/`updateDOM`), so typing and
-status changes never replay the entrance, and a note shown again doesn't animate the badges it
-already had.
+Badges stay attached while the user edits. Each is anchored to the start of its line and drawn at
+the end of whichever line holds that anchor: Enter at the end of a task leaves the badge on the
+task, Enter at its start moves it down with the task, and splitting, indenting, moving or joining
+lines keep it with the task text. A badge is dropped when a single change removes its line's whole
+content (delete line, vim `dd`, cut, select + retype) unless that change inserts the exact same line
+again (moving lines, undo, an external reorder). `getAnnotations(state)` returns them with their
+lines mapped.
 
-**Hover and tooltips.** Clickable widgets (badges, the ✦, checkboxes, rendered links, fold markers)
-show a pointer, a hover and a pressed state, and a hit target at least 24px tall that never reaches
-into text a click should put the caret in. They name themselves with `data-tooltip` rather than
-`title`, for the host's tooltip layer (the web app's `src/lib/tooltips.ts`): a badge's tooltip is
-its full label and unread count ("Researching… · 2 unread"), the ✦'s "Written by the agent — open
-thread".
-Checkboxes have no tooltip: they are part of the list, and one per hover would get in the way.
-
-A thread can also be attached to a line that isn't a task (a question written as prose, a heading):
-an annotation with `lineAnchor: true` draws the same badge and highlights the line with a soft
-accent band (`--ddl-anchor-bg`) and a 2px accent bar at its left edge (`cm-ddl-anchored`; the bar
-takes the warning or danger color while the thread needs the user or failed).
-
-Badges stay attached while the user edits. Each badge is anchored to the start of its line and drawn
-at the end of whichever line holds that anchor. That way, pressing Enter at the end of a task leaves
-the badge on the task (not on the new empty task), Enter at its start moves the badge down with the
-task, and splitting, indenting, moving or joining lines keep it with the task text (also for the
-neighbour a moved line swaps with, and when a replacement at the line start inserts a line break). A
-badge is dropped when a single change removes its line's whole content (delete line, vim `dd`, cut,
-select + retype) unless that change inserts the exact same line again (moving lines, undoing a move,
-an external reorder). `getAnnotations(state)` returns the annotations with their lines mapped.
-
-**Activity chips.** `setActivityChips()` replaces the chips that say what the orchestrator is doing
-about a line (`ActivityChip`: `id`, `line`, `label`, `tooltip`, `tone`, and `pulse`, `fading`,
-`kind`). The host decides the wording and when a chip fades or goes (the web app's README has the
-shared table). A chip is drawn after the line's last character, after its badge when it has one
-(widget side 2), with the badge's look and tones: an empty label is a quiet dot, `pulse` pulses the
-dot, `fading` fades the chip out (600 ms), `kind` becomes `data-kind`. Click, Enter or Space calls
-`onActivityChipClick`; the tooltip is `data-tooltip` and the accessible name. Like badges, a chip is
-anchored to its line's start and mapped through every edit; unlike badges it remembers the line's
-text when it was set and is dropped as soon as an edit leaves the line unrecognizable
-(`isSameLineEdited` in `@ddl/core`: a prefix while typing, or Dice similarity ≥ 0.5), or when the
-line is deleted or joined away. A rewrite in place that still reads as the line keeps it. Updates
-reuse the chip's DOM, so a dot turning into a label doesn't replay its entrance; with
-`prefers-reduced-motion` nothing pulses or fades. `getActivityChips(state)` returns the chips with
-their lines mapped.
+**Activity chips.** `setActivityChips()` replaces the chips (`ActivityChip`: `id`, `line`, `label`,
+`tooltip`, `tone`, `pulse`, `fading`, `kind`); the host decides the wording and when a chip fades
+(the web app's README has the shared rules). A chip is drawn after the line's badge with the
+badge's look: an empty label is a quiet dot, `fading` fades it out (600 ms). Click, Enter or Space
+calls `onActivityChipClick`. Like badges, chips are anchored to their line's start and mapped
+through every edit; unlike badges, a chip is dropped as soon as an edit leaves the line
+unrecognizable (`isSameLineEdited` in `@ddl/core`: a prefix while typing, or Dice similarity ≥ 0.5)
+or deletes it. `getActivityChips(state)` returns them with their lines mapped.
 
 **Agent text.** A line the agent wrote ends with an Obsidian comment naming its thread,
-`%%agent:thr_1%%` (`%%agent%%` without one; see `markdown/agent-text.ts` in `@ddl/core`). Such lines
-are drawn in the agent text color (`--ddl-agent-text`, class `cm-ddl-agent-line`) in both modes;
-links, tags, checkboxes and bullets keep their own colors. The live preview hides the marker behind
-a ✦ in the accent color: clicking it calls `onAgentLineClick(threadId)` (tooltip "Written by the
-agent — open thread"; a marker without a thread gives a ✦ that isn't clickable). Like block syntax, the
-marker is revealed (faint, `cm-ddl-agent-marker`) while the selection is on the line; source mode
-always shows it faint. Text typed at or after the marker (e.g. after clicking the end of the line,
-which puts the caret after the hidden marker) goes in front of it, so the marker stays last; the
-user deletes the marker to make the line theirs. Alt-Enter on an agent line without a badge opens
-its thread too.
+`%%agent:thr_1%%` (see `markdown/agent-text.ts` in `@ddl/core`), and is drawn in the agent text
+color (`cm-ddl-agent-line`) in both modes. The live preview hides the marker behind a ✦: clicking
+it calls `onAgentLineClick(threadId)`. The marker is revealed faintly while the selection is on
+the line and always in source mode. Text typed at or after the marker goes in front of it, so it
+stays last; the user deletes the marker to make the line theirs. Alt-Enter on an agent line
+without a badge opens its thread.
 
-**Link previews.** Resting the mouse on a link for 300 ms shows a card (`LinkPopover`, in the
-document's body) with what `onLinkPreview({ link, label, threadId })` returns. `threadId` is the
-thread named by the agent marker of the link's line, so a host can describe a URL with the sources
-that thread cites. Without a host answer, web links show their label (or host, for numbered
-citations and bare URLs), host and full URL, and note links show nothing. The editor never fetches
-a link. Editing, moving the caret, scrolling or pressing a key hides the card. `LinkPopover`,
-`renderLinkPreview` and `webLinkPreview` are exported so hosts can show the same card elsewhere.
+**Hover and tooltips.** Clickable widgets (badges, the ✦, checkboxes, links, fold markers) show a
+pointer, hover and pressed states, and a hit target at least 24px tall that never covers text a
+click should put the caret in. They name themselves with `data-tooltip` (never `title`) for the
+host's tooltip layer; checkboxes have none.
 
-**Embeds** (live preview). An `![[target|…]]` alone on its line (whitespace around it allowed) is
-drawn by the first host renderer whose `matches(target)` accepts it; other embeds stay wikilink
-syntax. See [Embeds](#embeds) for the contract; the web app registers drawings, and images plug in
-the same way.
+**Link previews.** Resting on a link for 300 ms shows a card (`LinkPopover`) with what
+`onLinkPreview({ link, label, threadId })` returns (`threadId`: the thread named by the line's agent
+marker, so the host can describe a URL with the sources that thread cites). Without an answer,
+web links show their label, host and URL, and note links nothing. The editor never fetches a link.
 
 **Obsidian syntax** as `@lezer/markdown` extensions, so none of it is ever detected inside code:
 `[[target]]`, `[[target#heading|alias]]`, `![[embed]]`, `#tags` (not `#123`, not mid-word),
 `==highlight==`. Indented code blocks are disabled so an indented task always stays a task
 (`@ddl/core` has no notion of indented code either).
 
-**Indentation** uses tabs displayed 4 columns wide, which is Obsidian's default ("Indent using
-tabs") and what `@ddl/core` expects. Tab indents list items (anywhere on the line) and otherwise
-inserts a tab; Shift-Tab outdents. Escape then Tab moves focus out of the editor.
+**Indentation** uses tabs displayed 4 columns wide (Obsidian's default, and what `@ddl/core`
+expects). Tab indents list items (anywhere on the line) and otherwise inserts a tab; Shift-Tab
+outdents. Escape then Tab moves focus out of the editor.
 
-**Auto-pairing** closes `(`, `[` and `{` (typing the closing bracket steps over it) and never quotes.
-Inside HTML blocks and tags, what is typed is inserted literally: no auto-closed tags, no paired
-quotes (lang-markdown mounts lang-html, whose input rules would turn `<div>x</div>` into
-`<div>x</div></div>`).
+**Auto-pairing** closes `(`, `[` and `{` (typing the closing bracket steps over it) and never
+quotes. Inside HTML blocks and tags, text is inserted literally (lang-html's input rules would turn
+`<div>x</div>` into `<div>x</div></div>`).
 
-**Vim** (`vimMode`): Obsidian-style vim keybindings with ex commands mapped to app actions, a mode
-indicator, clipboard registers and a vimrc. See [Vim mode](#vim-mode).
-
-**Links.** A plain click follows a rendered (not currently edited) link. Mod-click follows any link,
-also in source mode. Mod-click and middle-click open wikilinks in a new pane. External URLs are
-passed on only for `http(s)`, `mailto` and `tel`; `javascript:`, `data:`, `file:` and other schemes
-are never passed to the host. Scheme-less destinations (`[x](Daily/2026-06-19.md#Tasks)`) are note
-links, as in Obsidian.
+**Links.** A plain click follows a rendered link; Mod-click follows any link, also in source mode.
+Mod-click and middle-click open wikilinks in a new pane. External URLs are passed on only for
+`http(s)`, `mailto` and `tel`; other schemes never reach the host. Scheme-less destinations
+(`[x](Daily/2026-06-19.md#Tasks)`) are note links, as in Obsidian.
 
 ### Keyboard
 
@@ -178,10 +137,10 @@ Mod-e is deliberately unbound so the host can use it (for example to toggle read
 
 ## Embeds
 
-The embed layer ([`src/embeds/`](src/embeds)) draws `![[…]]` embeds in the live preview. It owns
-the box (placement, size, selection, moving, resizing, deleting); a renderer the host registers
-owns what's inside. Drawings are the first renderer (`apps/web/src/features/drawings`); images
-are next, through the same layer.
+The embed layer ([`src/embeds/`](src/embeds)) draws `![[…]]` embeds alone on their line in the
+live preview. It owns the box (placement, size, selection, moving, resizing, deleting); a renderer
+the host registers owns what's inside. Drawings are the first renderer
+(`apps/web/src/features/drawings`); images plug in the same way:
 
 ```ts
 const images: EmbedRenderer = {
@@ -202,74 +161,60 @@ const images: EmbedRenderer = {
 createMarkdownEditor(parent, { doc, callbacks: { embedRenderers: [images] } });
 ```
 
-**Modifiers** are the Obsidian Excalidraw plugin's (`parseDrawingEmbed` in `@ddl/core`): an
-optional alias, a size (`360`, `360x240`, `x240`, `50%`) and a placement (`left`, `right`,
-`center`, `left-wrap`, `right-wrap`); none is full width.
+**Modifiers** are the Obsidian Excalidraw plugin's (`parseDrawingEmbed` in `@ddl/core`): an alias,
+a size (`360`, `360x240`, `x240`, `50%`) and a placement (`left`, `right`, `center`, `left-wrap`,
+`right-wrap`); none is full width.
 
 - `left-wrap` / `right-wrap` float inside the embed's line with CSS floats, and the lines after it
-  wrap around the box, as in Obsidian's live preview. The float's line takes no height, so the
-  text beside it starts level with its top. `.cm-content` is a flow root, so a float at the end of
-  the note stays inside it.
-- `left`, `right`, `center` and full width sit on their line as an inline block (the line gets
-  `cm-ddl-embed-line-<placement>` to align it).
-- Width: the modifier, else 100% for full width, else the content's natural width
-  (`host.setNaturalSize`), else 360 px; never wider than the column. Height: a given height, else
-  the natural aspect ratio (reserved before the content arrives), else a 160 px placeholder.
-- The syntax shows in full while the selection is on the embed's line; source mode always shows
-  it. Nothing is revealed while the editor is unfocused.
+  wrap around the box, as in Obsidian's live preview (the float's line takes no height; `.cm-content`
+  is a flow root). `left`, `right`, `center` and full width sit on their line as an inline block.
+- Width: the modifier, else 100% for full width, else the content's natural width, else 360 px;
+  never wider than the column. Height: a given height, else the natural aspect ratio (reserved
+  before the content arrives), else a 160 px placeholder.
+- The syntax shows while the selection is on the embed's line, and always in source mode.
 
 **Using it** (all ordinary, undoable edits):
 
 | Action | Result | User event |
 | --- | --- | --- |
 | Click | selects it (`is-selected`, handles) without moving the caret; the box takes the keyboard | |
-| Drag (the box or its grip) | the box follows the pointer and an indicator shows where it lands: between the two lines nearest its top edge, left in the column's left third, right in its right third, full width between; dropping moves its line and sets `left-wrap`/`right-wrap`/full width (full width drops the size) | `move.embed`, or `input.embed` for a side change on the same line |
+| Drag (the box or its grip) | an indicator shows where it lands: between the two lines nearest its top edge, left in the column's left third, right in its right third, full width between; dropping moves its line and sets `left-wrap`/`right-wrap`/full width (full width drops the size) | `move.embed`, or `input.embed` for a side change on the same line |
 | Drag a corner | resizes live; dropping sets the width (a given height scales with it). A right float grows from its left corner, a left one from its right corner, a centered one from both | `input.embed` |
-| Delete, Backspace | removes the embed's line (the embedded file stays, so undo brings it back) | `delete.embed` |
+| Delete, Backspace | removes the embed's line (the file stays, so undo brings it back) | `delete.embed` |
 | Enter, double-click | `content.activate()` (drawings: edit in place) | |
 | Escape / arrows | deselects / puts the caret on the line before or after | |
-| Mod-z, Shift-Mod-z | undo / redo | |
 | Escape while dragging | cancels the drag | |
 
-Typing a character while an embed is selected deselects it and types at the caret. Hosts can
-select an embed (`host.select()`, `selectEmbed(view, from)`), insert one on its own line at the
-caret's line (`editor.insertEmbed(text)`: on the line when it's blank, else above it, the caret
-staying off the embed's line), and activate a drawn one (`editor.activateEmbed(from)`).
+Typing while an embed is selected deselects it and types at the caret. Hosts can select an embed
+(`host.select()`, `selectEmbed(view, from)`), insert one on its own line at the caret's line
+(`editor.insertEmbed(text)`: on the line when it's blank, else above it) and activate one
+(`editor.activateEmbed(from)`).
 
-**The contract** ([`src/embeds/types.ts`](src/embeds/types.ts)):
+**The contract** ([`src/embeds/types.ts`](src/embeds/types.ts)): `EmbedRenderer` (`kind`,
+`matches(target)`, `mount(host) → EmbedContent`), `EmbedHost` (`dom`, `view`, `spec`, `embed()`,
+`setNaturalSize(size)`, `select()`) and `EmbedContent` (`update?(spec)`, returning false to be
+remounted; `activate?()`; `destroy()`). `mount` runs when the embed's line is drawn and `destroy`
+when it isn't anymore (scrolled away, its syntax revealed, the note switched): keep both cheap and
+cache by content, as drawings do. The pure edits behind the gestures (`moveEmbed`, `resizeEmbed`,
+`removeEmbed`, `insertEmbed`, `dropTarget`, …) are exported.
 
-- `EmbedRenderer`: `kind`, `matches(target)`, `mount(host) → EmbedContent`. `mount` is called
-  when the embed's line is drawn (it scrolled into view) and `destroy` when it isn't anymore
-  (scrolled away, the caret revealed its syntax, the note was switched). Keep both cheap: cache
-  by content, as drawings do.
-- `EmbedHost`: `dom` (render into it), `view`, `spec` (as mounted), `embed()` (current position),
-  `setNaturalSize(size)`, `select()`.
-- `EmbedContent`: `update?(spec)` (same target, new modifiers; return false to be remounted),
-  `activate?()`, `destroy()`.
-- The pure edits behind the gestures are exported for tests and other hosts: `embedOfLine`,
-  `embedAt`, `moveEmbed`, `resizeEmbed`, `removeEmbed`, `insertEmbed`, `formatEmbed`,
-  `dropTarget`.
-
-**Performance.** Embeds come from the live preview's one pass over the visible ranges: the
-builder checks a `WikiLink` node that starts with `!` and parses its line (O(line)). The widget
-compares by embed text, selection and read-only state, so typing elsewhere reuses the box and its
-content. Renderers mount only for drawn lines, never per keystroke. Size changes call
-`requestMeasure` (CodeMirror doesn't watch widget styles).
+**Performance.** Embeds come from the live preview's one pass over the visible ranges (O(line) per
+embed); the widget compares by embed text, selection and read-only state, so typing elsewhere
+reuses the box. Size changes call `requestMeasure` (CodeMirror doesn't watch widget styles).
 
 ## Vim mode
 
 `config.vimMode` turns on vim keybindings: vim.js (`@replit/codemirror-vim`) plus the app
-integration in [`src/vim-integration.ts`](src/vim-integration.ts). They load together as one lazy
-chunk (~42 kB gz). `vimMode(true)` yields nothing until the chunk arrives, then every editor that
-asked for vim reconfigures. Toggling vim during the load settles on the latest setting. Hosts call
-`preloadVim()` at startup when the setting is on. It rejects if the chunk can't load, and enabling
-vim again retries. Vim is always the first extension, so it sees keys before any keymap.
+integration in [`src/vim-integration.ts`](src/vim-integration.ts), one lazy chunk (~42 kB gz).
+`vimMode(true)` yields nothing until the chunk arrives, then every editor that asked for vim
+reconfigures; toggling during the load settles on the latest setting. Hosts call `preloadVim()` at
+startup when the setting is on (it rejects if the chunk can't load; enabling vim again retries).
+Vim is always the first extension, so it sees keys before any keymap. vim.js keeps mappings,
+registers, options and ex commands in module-level state shared by every editor; the integration
+is installed once and acts on the editor a command came from.
 
-vim.js keeps mappings, registers, options and ex commands in module-level state shared by every
-editor. The integration is installed once and acts on the editor a command came from.
-
-**Ex commands and keys** call host callbacks. When the host doesn't provide a callback, the vim
-panel says "`:cmd` isn't available here".
+**Ex commands and keys** call host callbacks; without one, the vim panel says "`:cmd` isn't
+available here".
 
 | Command | Callback | Web app |
 | --- | --- | --- |
@@ -287,94 +232,45 @@ panel says "`:cmd` isn't available here".
 | `:obcommand id` | `onRunCommand(id)` (false: "No command id") | run a command-palette command, e.g. `daily:today` |
 
 Notes save continuously, so `:q!` doesn't discard edits and `:w` only skips the save debounce.
-vim.js's own ex commands keep working: `:s`, `:g`, `:v`, `:sort`, `:normal`, `:d`, `:y`, `:j`,
-`:marks`, `:registers`, `:noh`, `:set`, the `:map` family and so on. `:obcommand` uses Obsidian's
-name, so vimrc lines like `exmap today obcommand daily:today` carry over.
+vim.js's own ex commands keep working (`:s`, `:g`, `:v`, `:sort`, `:normal`, `:d`, `:marks`,
+`:registers`, `:noh`, `:set`, the `:map` family…). `:obcommand` uses Obsidian's name, so vimrc
+lines like `exmap today obcommand daily:today` carry over.
 
-**Status.** `onVimStatus({ mode, pending, recording })` reports:
-
-- `mode`: `normal`, `insert`, `replace`, `visual`, `visual-line` or `visual-block`;
-- `pending`: the keys of the command being typed (vim's showcmd, e.g. `2d` or `"a`);
-- `recording`: the register a macro is being recorded into.
-
-It fires at most once per keystroke and only when a field changed, so typing in insert mode
-triggers nothing. It reports `null` when vim turns off. The web app's status bar shows
-`recording @q`, the pending keys and `NORMAL` / `INSERT` / `REPLACE` / `VISUAL` / `V-LINE` /
-`V-BLOCK`.
+**Status.** `onVimStatus({ mode, pending, recording })` reports the mode (`normal`, `insert`,
+`replace`, `visual`, `visual-line`, `visual-block`), the keys of the command being typed (showcmd)
+and the register a macro records into, at most once per keystroke and only when a field changed
+(`null` when vim turns off).
 
 **Clipboard registers.** `"+` and `"*` are the system clipboard (one register, as in Vim on macOS
-and Windows). `:set clipboard=unnamed` (or `unnamedplus`) mirrors the unnamed register: yanks and
-deletes also go to the system clipboard, and `p` pastes text copied in another app. Browsers read
-the clipboard asynchronously and only with permission, but vim pastes synchronously, so the
-registers read from a cache. It refreshes:
+and Windows); `:set clipboard=unnamed` (or `unnamedplus`) mirrors the unnamed register. Browsers
+read the clipboard asynchronously and only with permission while vim pastes synchronously, so the
+registers read from a cache, refreshed when the editor gains focus or the window becomes visible
+(once read permission was granted), from copy, cut and paste events, and when the user types `"+`,
+`"*` or insert-mode `<C-r>` (which may show the permission prompt). Writes always go through.
+Like any Clipboard API, it needs a secure context.
 
-- in the background, when the editor gains focus or the window becomes visible, and only once
-  clipboard-read permission was granted;
-- from copy, cut and paste events, which need no permission;
-- explicitly, when the user types `"+`, `"*` or insert-mode `<C-r>`; this read may show the
-  browser's permission prompt.
+**vimrc.** `config.vimrc` (`AppSettings.editor.vimrc`, Settings → Editor) is applied to every vim
+editor: one ex command per line (optional leading `:`), `"` comments, `let mapleader = " "`, and
+Obsidian's `exmap name command`. The mapping commands work (`map`, `nmap`, `imap`, `vmap`, `omap`,
+their `noremap` forms, `unmap`), and `set` for vim.js's options and `clipboard`. Each change first
+undoes the previous vimrc (mappings cleared, aliases removed, options restored). Rejected lines go
+to `onVimrcApplied([{ line, message }])` (0-based). On first run the daemon imports an Obsidian
+vault's `.obsidian.vimrc`.
 
-Writes always go through. Without read permission, the registers hold what the app last wrote
-or saw pasted. Like any Clipboard API, this needs a secure context (`https:` or `localhost`).
+**Keys shared with the app.** `vimClaimsKey(event)` tells a host whether a keydown belongs to vim:
+true in normal, visual and operator-pending mode for the Ctrl keys vim binds (by default or
+through a vimrc mapping). The web app uses it only where "Mod" is Ctrl (Windows and Linux), so vim
+wins for its keys there; insert mode and ⌘ shortcuts on macOS are unaffected. Escape goes to vim
+unless an overlay is open. Mappings made interactively with `:map` aren't claimed.
 
-**vimrc.** `config.vimrc` is a vimrc applied to every vim editor (`AppSettings.editor.vimrc`,
-edited in Settings → Editor when vim mode is on). It accepts:
+**With the rest of the editor.** Insert-mode Enter continues lists and Tab indents list items;
+live preview, checkboxes and Alt-Enter work in every mode. Vim edits are ordinary transactions, so
+badges behave as for any edit (`dd` drops the task's badge; after `u` the host re-resolves it). `/`
+and `?` use vim.js's search, highlighted until `:noh`; Mod-f still opens CodeMirror's search panel.
 
-- one ex command per line, with an optional leading `:`;
-- `"` comments and blank lines;
-- `let mapleader = " "` (or `"\<Space>"`, `","`…), which applies to `<leader>` in later lines;
-- Obsidian's `exmap name command`, which defines `:name` as an alias.
-
-The mapping commands work (`map`, `nmap`, `imap`, `vmap`, `omap`, their `noremap` forms and
-`unmap`), and so do `set` for vim.js's options (`textwidth`, `pcre`, `insertModeEscKeysTimeout`,
-`langmap`) and `clipboard`. Each change first undoes the previous vimrc: every mapping is cleared
-(`gt`/`gT` come back), the previous vimrc's ex aliases are removed and the options it set are
-restored. Lines vim.js rejects are reported to `onVimrcApplied([{ line, message }])`, 0-based,
-and the web app lists them under the setting. `set ignorecase`/`smartcase` are reported as
-unknown options: `/` search in vim.js is always smart-case. On first run, the daemon imports
-`.obsidian.vimrc` from an Obsidian vault (the Vimrc Support plugin's default location).
-
-**Keys shared with the app.** `vimClaimsKey(event)` tells a host whether a keydown inside a vim
-editor belongs to vim. It returns true in normal, visual and operator-pending mode for the Ctrl
-keys vim binds: by default (`<C-o>`, `<C-d>`, `<C-u>`, `<C-r>`, `<C-v>`, `<C-a>`, …) or through
-a vimrc mapping. The web app's global hotkeys use it only where "Mod" is Ctrl (Windows and
-Linux), so there vim wins for its keys, and app shortcuts vim doesn't bind keep working. Insert
-mode and every ⌘ shortcut on macOS are unaffected. Escape goes to vim unless an overlay (palette,
-switcher, modal) is open. Mappings made interactively with `:map` aren't claimed; put them in
-the vimrc.
-
-**With the rest of the editor.** Insert-mode Enter continues lists and tasks and Tab indents list
-items. Live preview, clickable checkboxes and Alt-Enter (follow the link, or open the line's agent
-thread) work in every mode. Vim edits are ordinary transactions, so badges behave as for any other
-edit: they follow their task through edits, `dd` drops the task's badge like any line deletion,
-and a dropped badge never comes back by itself. After `u`, the host shows it again when it
-re-resolves the agent's tasks; the web app does that ~150 ms after an edit. `/` and `?` use
-vim.js's search, and its matches are highlighted like the search panel's until `:noh`. Mod-f
-still opens CodeMirror's search panel. The block cursor uses the accent color and turns into an
-outline when the editor loses focus. The vim panel (`:` prompt, messages) uses the app's colors
-in light and dark themes.
-
-### How vim is tested
-
-vim.js is the reference implementation, and the tests pin it from three sides (details in
-[`test/vim/README.md`](test/vim/README.md)):
-
-- **Vectors.** [`test/vim/vectors.jsonl`](test/vim/vectors.jsonl) holds ~11 500 cases: a
-  generated catalog of every default key binding and ex command over a set of documents, with
-  counts, plus vim.js's own tests recorded as steps. Each case is a document, a selection, keys and
-  the expected document, selections, mode and registers after every step. The file is produced by
-  running vim.js on a plain CodeMirror 6 "oracle" editor in Chromium, and it is the contract the
-  Swift port replays. The catalog must cover every entry of vim.js's `defaultKeymap` and
-  `defaultExCommandMap` (exclusions are listed with reasons).
-- **vim.js's test suite** runs in Chromium against plain CodeMirror 6 (upstream's setup, all must
-  pass) and against this editor (vim + live preview). Only the documented expected failures in
-  [`test/vim/upstream/expected-failures.ts`](test/vim/upstream/expected-failures.ts) may fail:
-  tests that depend on the JavaScript/XML language upstream loads.
-- **Replay.** Every vector is replayed against this editor. The skip list, with reasons, is in
-  the same file.
-
-Integration code has unit tests (`src/vim*.test.ts`), the web app has real-keyboard Playwright
-tests (`apps/web/e2e/vim.spec.ts`), and the perf suite budgets vim-mode typing like normal typing.
+**Testing.** vim.js is the reference; `test/vim` pins it with generated vectors (the contract the
+Swift port replays), vim.js's own test suite and a replay against this editor. The rules are in
+`AGENTS.md` ("Vim mode") and the details in [`test/vim/README.md`](test/vim/README.md).
 
 ```sh
 pnpm vim:vectors    # regenerate test/vim/vectors.jsonl (~10 s, Chromium)
@@ -383,54 +279,24 @@ pnpm --filter @ddl/editor vim:upstream -- --web     # just vim.js's suite (--pla
 pnpm --filter @ddl/editor vim:replay -- --filter 'motion/'   # replay a subset
 ```
 
-After a vim.js upgrade or a catalog change, run `pnpm vim:vectors` and review the diff. The file
-is sorted by case name and byte-for-byte deterministic. `pnpm vim:check` prints a per-case diff
-when the committed file is stale.
-
 ## API notes
 
 - `setDocument(doc)` applies external changes as one change per run of changed lines
   (`documentChanges`: a line diff, each run trimmed to its common prefix/suffix and aligned to line
-  starts for whole-line insertions/deletions), so the selection, scroll position, badges and the
-  undo history of edits on other lines survive. That is what lets the host put a three-way merge
-  of the agent's edits into a note the user is typing in. A caret at the start of a line that gets
-  lines inserted above it stays on its line. External changes are not added to the undo history
-  (local history is mapped through them), and `onDocChange` reports them with `userEvent: false`.
-  `withDocument(state, doc)` applies an external change the same way to a state that isn't shown
-  (e.g. a cached note).
-  `setDocument(doc, { resetHistory: true })` starts a fresh state with the current config (no
-  history, no badges).
-- `createState` / `getState` / `setState` support caching one state per open note (instant switching
-  with per-note undo). `setState` re-applies the current config and callbacks and clears badges (the
-  host re-sends them; that first set doesn't animate in). States from other editor instances work
-  too; a plain `EditorState` keeps only its document and selection.
+  starts), so the selection, scroll position, badges and the undo history of edits on other lines
+  survive. That is what lets the host put a three-way merge of the agent's edits into a note the
+  user is typing in. A caret at the start of a line that gets lines inserted above it stays on its
+  line. External changes are not added to the undo history, and `onDocChange` reports them with
+  `userEvent: false`. `withDocument(state, doc)` does the same to a state that isn't shown;
+  `setDocument(doc, { resetHistory: true })` starts fresh (no history, no badges).
+- `createState` / `getState` / `setState` cache one state per open note (instant switching with
+  per-note undo). `setState` re-applies the current config and callbacks and clears badges (the
+  host re-sends them; that first set doesn't animate in).
 - `onDocChange` fires once per view update. `userEvent` is true for `input.*` (typing, paste,
   `input.toggle`, formatting), `delete.*`, `move.*`, `undo` and `redo`; vim edits count as input.
 - `onWikiLinkClick(target, { newPane, subpath })`: `target` never includes the `#subpath` or the
   alias (same meaning as `WikiLink.target` in `@ddl/core`).
 - `scrollToLine(line)` moves the caret to the line and centers it.
-
-Additions to the contract: `EditorCallbacks.onWikiLinkClick` options gained an optional `subpath`;
-`LineAnnotation.lineAnchor`, `EditorCallbacks.onAgentLineClick` and `onLinkPreview` (with the
-`LinkPreview` and `LinkPreviewRequest` types) are new. Additional exports:
-
-- state and tests: `createHeadlessEditorState`, `editorExtensions`, `externalChange`,
-  `withDocument`;
-- annotations: `annotationField`, `setAnnotationsEffect`, `getAnnotations`,
-  `HIDDEN_BADGE_STATUSES`;
-- agent lines: `agentLines`, `buildAgentLineDecorations`, `AGENT_SPARKLE_TITLE`;
-- commands: `toggleTaskAtLine`, `toggleChecklist`, the formatting and list commands (including
-  `continueAlternateTask`), `saveDocument`, `followLinkAtCursor`;
-- links: `findLinkAt`, `linkAt` (with the link's visible text);
-- link previews: `linkPreviews`, `linkPreviewAt`, `LinkPopover`, `renderLinkPreview`,
-  `webLinkPreview`, `hostnameOf`;
-- live preview: `buildLivePreviewDecorations`, `livePreview`, `livePreviewEnabled`;
-- embeds: the types (`EmbedRenderer`, `EmbedHost`, `EmbedContent`, `BlockEmbed`, `EmbedSpec`,
-  `EmbedPlacement`), `EmbedWidget`, the edits above, `embedSelection`, `selectEmbedEffect`,
-  `selectEmbed`, `selectedEmbed`, `activateEmbed`, `insertEmbedAtCursor`; on `MarkdownEditor`,
-  `insertEmbed(text)` and `activateEmbed(from)`; `EditorCallbacks.embedRenderers`;
-- building blocks: `markdownSupport`, `ddlTags`, `splitWikiLink`, `editorTheme`,
-  `markdownHighlightStyle`, `editorKeymap`, `minimalChange`, `documentChanges`.
 
 ## Saving and merging
 
@@ -480,69 +346,39 @@ The editor uses only these app-defined variables: `--ddl-bg`, `--ddl-bg-secondar
 `--ddl-info`, `--ddl-shadow-small`, `--ddl-font-ui`, `--ddl-font-editor`, `--ddl-font-mono`,
 `--ddl-editor-font-size` (set per editor from `config.fontSize`) and `--ddl-line-width` (readable
 line length). Headings take their line's color, so a heading the agent wrote is agent text.
-
-CodeMirror base-theme overrides are in [`src/theme.ts`](src/theme.ts); component styles are in
-[`src/styles.css`](src/styles.css). Every class is prefixed `cm-ddl-`: `cm-ddl-editor`,
-`cm-ddl-live-preview`, `cm-ddl-readable`, `cm-ddl-h1`…`h6`, `cm-ddl-quote`, `cm-ddl-codeblock`,
-`cm-ddl-task-done`, `cm-ddl-checkbox`, `cm-ddl-bullet`, `cm-ddl-hr`, `cm-ddl-link`,
-`cm-ddl-wikilink`, `cm-ddl-badge` (+ `cm-ddl-badge-<status>`, `cm-ddl-badge-tone-<tone>` with tones
-`needs-you`, `failed`, `working` and `quiet`, and `cm-ddl-badge-enter` while it animates in),
-`cm-ddl-annotated-<status>`, `cm-ddl-anchored`, `cm-ddl-agent-line`, `cm-ddl-agent-marker`,
-`cm-ddl-agent-sparkle`, `cm-ddl-link-popover`, `cm-ddl-link-preview-*`, and for embeds
-`cm-ddl-embed` (+ `cm-ddl-embed-<kind>`, `cm-ddl-embed-<placement>`, `is-selected`,
-`is-dragging`, `is-resizing`, `is-readonly`), `cm-ddl-embed-content`, `cm-ddl-embed-grip`,
-`cm-ddl-embed-resize(-start|-end)`, `cm-ddl-embed-drop` (the drop indicator) and
-`cm-ddl-embed-line(-<placement>)`.
+CodeMirror base-theme overrides are in [`src/theme.ts`](src/theme.ts) and component styles in
+[`src/styles.css`](src/styles.css); every class is prefixed `cm-ddl-`.
 
 ## Performance
 
 The keystroke path is O(visible lines + badges):
 
-- Live preview decorations come from one syntax-tree pass over `view.visibleRanges`, using shared
-  decoration instances and cached widgets. Widgets implement `eq`/`updateDOM`, so unchanged
-  checkboxes and badges are never re-rendered.
-- Agent lines are found by scanning the visible lines for `%%agent` (a string check per line, the
-  regex only on hits); the input filter that keeps markers last looks at the edited line only.
-- Badges are an ordered array of anchors, mapped with `ChangeSet.mapPos` (O(badges) per change).
-  Pure insertions (typing) skip the line-deletion check.
-- Obsidian syntax is parsed incrementally by lezer, not with regexes over lines.
-- Configuration changes use compartments. The language, theme, keymaps and fields are created once
-  and shared by every state.
-- `onDocChange` builds the document string (`doc.toString()`, O(document) but only tens of
-  microseconds for 2k lines) only when a handler is registered.
+- Live preview decorations come from one syntax-tree pass over `view.visibleRanges`, with shared
+  decoration instances and cached widgets (`eq`/`updateDOM`, so unchanged checkboxes and badges
+  never re-render).
+- Agent lines are found by a string check for `%%agent` per visible line; the input filter that
+  keeps markers last looks at the edited line only.
+- Badges are an ordered array of anchors mapped with `ChangeSet.mapPos` (O(badges) per change);
+  pure insertions skip the line-deletion check.
+- Configuration changes use compartments; the language, theme, keymaps and fields are created once.
+- `onDocChange` builds the document string only when a handler is registered.
 
-Measured on an Apple-silicon laptop (`pnpm --filter @ddl/editor bench`; budgets are p99 and scale
-with `BENCH_BUDGET_MULTIPLIER`):
-
-| Benchmark (2k-line note) | mean | p99 | budget |
-| --- | --- | --- | --- |
-| 500 single-character inserts with 30 badges (state level) | 132 ms (0.26 ms/key) | 147 ms | 500 ms |
-| live preview, 60-line viewport | 0.07 ms | 0.16 ms | 2 ms |
-| live preview, 150-line viewport | 0.17 ms | 0.35 ms | 4 ms |
-| agent lines, 150-line viewport, every 4th line the agent's | 0.02 ms | 0.04 ms | 1 ms |
-
-In Chromium, on a 2k-line note with badges, a keystroke's synchronous work (transaction, live
-preview, DOM update) measured p50 1.7 ms / p95 1.9 ms, and keystroke to the next frame p95 9.3 ms,
-with no long tasks. The live-preview builder accounted for about 4 µs per keystroke in a CPU profile.
-
-About 90% of the state-level cost is lezer's incremental markdown parse: stock GFM costs 216 µs
-per keystroke, this language 225 µs, and the full editor state with 30 badges 241 µs. While a
-fenced-code language chunk is still loading, lezer skips those blocks and re-parses around them on
-every change (roughly 10x slower). CodeMirror re-parses once the chunk arrives, so this only lasts
-for the first moments after opening a note with code blocks.
+Measured on an Apple-silicon laptop (`pnpm --filter @ddl/editor bench`), p99 against budget, 2k-line
+note: 500 single-character inserts with 30 badges 147 ms (500 ms); live preview, 60/150-line
+viewport, 0.16/0.35 ms (2/4 ms); agent lines, 150-line viewport, 0.04 ms (1 ms). About 90% of the
+state-level cost is lezer's incremental markdown parse (stock GFM costs 216 µs per keystroke, this
+language 225 µs). While a fenced-code language chunk is still loading, lezer skips those blocks and
+re-parses around them on every change (roughly 10x slower) until the chunk arrives.
 
 ## Development
 
-Property tests (`*.property.test.ts`, fast-check via `@fast-check/vitest`) share generators in
-[`src/test-arbitraries.ts`](src/test-arbitraries.ts): random Obsidian-flavoured markdown,
-selections and CodeMirror-shaped viewports. Reproduce a failure with `FC_SEED=<seed>`, sweep deeper
-with `FC_NUM_RUNS=2000`.
+Property tests (`*.property.test.ts`, fast-check) share generators in
+[`src/test-arbitraries.ts`](src/test-arbitraries.ts). Reproduce a failure with `FC_SEED=<seed>`,
+sweep deeper with `FC_NUM_RUNS=2000`.
 
 ```sh
-pnpm --filter @ddl/editor typecheck
 pnpm --filter @ddl/editor test          # vitest (DOM tests run in happy-dom)
 pnpm --filter @ddl/editor bench         # vitest bench, writes bench-results.json
-pnpm exec biome check --write packages/editor
 ```
 
 ## Limitations / TODO
@@ -560,8 +396,9 @@ pnpm exec biome check --write packages/editor
   character instead of the list markup.
 - With line numbers and readable line length on, the gutter stays at the left edge of the editor.
 - The `@codemirror/language-data` descriptions are bundled eagerly; languages load lazily.
-- Vim: no `ignorecase`/`smartcase` options (search is always smart-case), no `:m`/`:t`/`:copy`,
-  no splits and no `:abbreviate`. vim.js throws on a few rare sequences: `di<` outside angle
-  brackets, `<C-a>`/`<C-x>` counts that lengthen a binary number, and recursive macros (a
-  failing motion doesn't stop a macro, so it recurses until the stack overflows). CodeMirror
-  logs the error and the editor keeps working. The catalog pins them as "verified to throw".
+- Vim: no `ignorecase`/`smartcase` options (search is always smart-case; `set` reports them as
+  unknown), no `:m`/`:t`/`:copy`, no splits and no `:abbreviate`. vim.js throws on a few rare
+  sequences: `di<` outside angle brackets, `<C-a>`/`<C-x>` counts that lengthen a binary number,
+  and recursive macros (a failing motion doesn't stop a macro, so it recurses until the stack
+  overflows). CodeMirror logs the error and the editor keeps working. The catalog pins them as
+  "verified to throw".

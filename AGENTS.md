@@ -36,7 +36,8 @@ Product principles, in priority order:
   them.
 - API keys live in `~/.daily-do-list/.env` (outside the repo) or the process environment. Code must
   read them from `process.env` at runtime and must never log them.
-- Test fixtures and examples must be synthetic (no real names, emails, addresses or notes).
+- Test fixtures, examples, screenshots and demo notes must be synthetic (no real names, emails,
+  addresses or notes).
 - Before committing, run `git status` and review every staged file.
 
 ## Handoff log: `PROGRESS.md`
@@ -137,20 +138,14 @@ agent changes also run the relevant parts of what CI runs:
                                      ThreadStore: journals (state/journal/threads/*.jsonl), artifacts
 ```
 
-Key flows are documented in `docs/ARCHITECTURE.md` and `docs/AGENT_SYSTEM.md`.
-
-Docs index: `PROGRESS.md` (the handoff log: current state and decisions), `docs/specs/`
-(multi-stream specs), `README.md` (product + quick start), `docs/ARCHITECTURE.md`,
-`docs/AGENT_SYSTEM.md`, `docs/PROTOCOL.md` (the daemon's wire protocol; its reference is
+Docs: `PROGRESS.md` (the handoff log), `docs/specs/`, `docs/ARCHITECTURE.md` and
+`docs/AGENT_SYSTEM.md` (the key flows), `docs/PROTOCOL.md` (the wire protocol; its reference is
 generated), `docs/DATA_FORMATS.md` (every persisted file and its compatibility rules),
-`docs/USER_JOURNEYS.md` (the living-list journeys and their tests),
-`docs/PERFORMANCE.md`, `docs/CROSS_PLATFORM.md`, `docs/SYNC.md` (devices sharing a vault, the
-agent lease), `docs/ALWAYS_ON.md` (design: the agent on an always-on machine; setting one up:
-`deploy/linux/README.md`, `deploy/azure/README.md`), `docs/CI.md`, `SECURITY.md`, `CONTRIBUTING.md`, and package READMEs
-(`packages/contract` (schemas, compatibility rules, how to add a route or event),
-`packages/storage`, `packages/connectors`, `packages/editor`, `packages/agent/src/safety`,
-`packages/agent/src/execution`, `apps/web` (the agent chat, whose pacing and activity wording the
-Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
+`docs/USER_JOURNEYS.md` (the journeys and their tests), `docs/PERFORMANCE.md`, `docs/SYNC.md`
+(devices sharing a vault, the agent lease), `docs/ALWAYS_ON.md` (with `deploy/linux`,
+`deploy/azure`), `docs/CROSS_PLATFORM.md`, `docs/CI.md`, `SECURITY.md`, and a README in each
+package and app (`packages/contract`: how to add a route or event; `apps/web`: the behavior the Mac
+app mirrors).
 
 ## Invariants (do not break these)
 
@@ -269,24 +264,17 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
  `@ddl/agent/routines` (routine files, editable while no agent runs here): keep that entry free of
  harness, execution and model code.
 - **Drawing renderer:** the daemon's `build` and `dev` scripts build the page agents render
- drawings with (`packages/agent/scripts/build-drawing-renderer.mjs` → `apps/daemon/dist/drawing-renderer`).
- `@excalidraw/excalidraw` is a build-time dependency of `@ddl/agent` for that page only: no Node
- code imports it, and the daemon ships the built page, not the package.
+ drawings with (`packages/agent/scripts/build-drawing-renderer.mjs`). `@excalidraw/excalidraw` is
+ a build-time dependency of `@ddl/agent` for that page only: no Node code imports it, and the
+ daemon ships the built page, not the package.
 - **Pi harness:** sessions are hermetic (isolated `agentDir` under `$DDL_HOME/pi`, no discovered
   extensions/skills/context files) and refuse to start if the safety-gate extension didn't load.
-- **Cursor harness:** set `agent.harness` to `cursor` in Settings (the other settings keep working;
-  `agent.cursorModel` picks the model). It needs the Cursor CLI installed (`curl
-  https://cursor.com/install -fsS | bash`, found as `agent`/`cursor-agent` on PATH or in
-  `~/.local/bin`, or `DDL_CURSOR_CLI=/path/to/agent`) and signed in (`agent login`); no
-  `OPENROUTER_API_KEY` needed, though the safety judge and our `web_search` still use one when set.
-  It keeps a private CLI config under `$DDL_HOME/cursor/` and never uses yours. Tests must not
-  spawn the real CLI: use `src/harness/cursor/testing/fake-cursor-cli.ts` (see `cursor.test.ts`).
-- **Computer helper (app control):** on macOS the daemon finds `ddl-computer`
-  (`DDL_COMPUTER_HELPER`, `off` to disable; then `<daemon entry dir>/../bin/ddl-computer`, the copy
-  the Mac app bundles; then a dev build in `apps/macos/Packages/DailyDoListComputer/.build/`) and
-  passes it to the execution provider; without one, computer use stays screen-level. The client
-  speaks the helper's JSON-lines RPC (`src/execution/local/app-control/`). Tests must not run the
-  real helper, take real screenshots or send real input: use
+- **Cursor harness** (`agent.harness: "cursor"`; setup in the root README): it keeps a private CLI
+  config under `$DDL_HOME/cursor/` and never uses yours. Tests must not spawn the real CLI: use
+  `src/harness/cursor/testing/fake-cursor-cli.ts` (see `cursor.test.ts`).
+- **Computer helper (app control):** on macOS the daemon finds `ddl-computer` (`DDL_COMPUTER_HELPER`
+  and the search order are in `apps/daemon/README.md`); without one, computer use stays
+  screen-level. Tests must not run the real helper, take real screenshots or send real input: use
   `src/execution/local/app-control/testing/fake-computer-helper.ts` (see `client.test.ts`), and the
   daemon's `FakeSystemSettings` for the System Settings route (`createApp` opens nothing by default).
 - **Excalidraw (web drawings)** is one lazy chunk: import `@excalidraw/excalidraw` only from
@@ -299,11 +287,9 @@ Mac app shares), `apps/daemon`, `apps/sync`, `apps/macos`).
  that (the import UI lives in `obsidian-import/` and `ObsidianImport/`).
 - **E2E typing:** use Playwright's real keyboard (`page.keyboard.type`). Automation "fill"-style
   typing into CodeMirror rebuilds text from the DOM (including badge widgets) and corrupts notes.
-- **E2E daemons:** every functional and perf spec runs against real daemons that
-  `packages/agent/scripts/e2e-daemons.ts` starts per test (a temporary `DDL_HOME`, the synthetic
-  demo vault, the mock agent or Pi against the fake OpenRouter; `apps/web/e2e/fixtures.ts`). Seed
-  state as files or real API calls, not hooks. `DDL_E2E_PORT` moves the harness (default 4173). The
-  only daemon test hook is `DDL_TEST_HOOKS=1` (a simulated Mac's computer access,
+- **E2E daemons:** every functional and perf spec runs against real daemons the harness starts per
+  test ("End-to-end tests" in `apps/web/README.md`). Seed state as files or real API calls, not
+  hooks. The only daemon test hook is `DDL_TEST_HOOKS=1` (a simulated Mac's computer access,
   `apps/daemon/src/test-hooks.ts`): never set it outside the harness.
 
 ## Testing expectations
@@ -362,7 +348,7 @@ and real-keyboard e2e tests in `apps/web/e2e/vim.spec.ts`.
 
 - **Add a storage backend:** implement `StorageProvider` (`packages/storage/src/types.ts`), add it to
   `StorageConfig` and `createStorageProvider` (and `createSyncTarget` for a sync target), run the
-  shared contract tests against it, document config in `docs/ARCHITECTURE.md`.
+  shared contract tests against it, document its config in `packages/storage/README.md`.
 - **Add an execution backend:** implement `ExecutionProvider` (`packages/agent/src/execution/types.ts`),
   add its config to `ExecutionConfig` and register it in `createExecutionProvider`. Tools are built
   by `createExecutionTools` from the provider's controllers, so they work unchanged.
@@ -501,8 +487,7 @@ A native SwiftUI/AppKit client of the daemon; details in `apps/macos/README.md`.
 - Work lands through branches, not pull requests so far: each stream commits on its own branch,
   and the lead reviews it, merges it into `main` and pushes (see "How the parallel work runs" in
   `PROGRESS.md`). Keep changes small and focused. Include perf numbers for UI-affecting changes.
-- CI (lint, typecheck, tests, bench budgets, bundle budget, e2e, mock evals, secret scan) must be
-  green on the branch before it merges and on `main` after. Push and pull request triggers don't
-  start runs right now, so the lead dispatches the workflows on both
-  (`gh workflow run ci.yml --repo aayc/dolist --ref <branch>`; see `docs/CI.md`).
+- CI must be green on the branch before it merges and on `main` after. Push and pull request
+  triggers don't start runs right now, so the lead dispatches the workflows on both ("How runs
+  start today" in `docs/CI.md`).
 - If a PR resolves a Linear ticket, put `Resolves <ID>` in the PR body.
