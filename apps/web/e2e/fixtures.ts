@@ -155,8 +155,9 @@ interface SeededMessage {
 }
 
 /**
- * A finished agent thread as the daemon stores it (`.daily-do-list/threads/<id>.json`, format v1
- * in @ddl/contract), for `DaemonSpec.files`.
+ * A finished agent thread as the daemon stores it, for `DaemonSpec.files`: its journal
+ * (`.daily-do-list/state/journal/threads/<id>.jsonl`, format in @ddl/contract) holding the whole
+ * thread in one `thread.imported` event.
  */
 export function threadFile(thread: {
   id: string;
@@ -164,18 +165,30 @@ export function threadFile(thread: {
   messages: SeededMessage[];
 }): Record<string, string> {
   const at = thread.messages.at(-1)?.createdAt ?? Date.now();
-  const file = {
-    version: 1,
-    taskId: null,
-    notePath: null,
-    status: "done",
-    createdAt: thread.messages[0]?.createdAt ?? at,
-    updatedAt: at,
-    artifacts: [],
-    surfaces: [],
-    ...thread,
+  const event = {
+    v: 1,
+    id: `evt_seed_${thread.id}`,
+    epoch: 0,
+    seq: 1,
+    at,
+    type: "thread.imported",
+    thread: {
+      taskId: null,
+      notePath: null,
+      status: "done",
+      createdAt: thread.messages[0]?.createdAt ?? at,
+      updatedAt: at,
+      artifacts: [],
+      surfaces: [],
+      ...thread,
+    },
   };
-  return { [`.daily-do-list/threads/${thread.id}.json`]: `${JSON.stringify(file)}\n` };
+  return { [threadJournal(thread.id)]: `${JSON.stringify(event)}\n` };
+}
+
+/** Vault path of a thread's journal. */
+export function threadJournal(id: string): string {
+  return `.daily-do-list/state/journal/threads/${id}.jsonl`;
 }
 
 /** A new vault on the harness's sync service, with its token. */

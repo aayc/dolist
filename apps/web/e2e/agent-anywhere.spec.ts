@@ -1,4 +1,4 @@
-import { expect, type Page, syncVault, test } from "./fixtures";
+import { expect, type Page, syncVault, test, threadJournal } from "./fixtures";
 import { openApp } from "./helpers";
 import {
   agentStatus,
@@ -289,7 +289,7 @@ test.describe("while another device runs the agent", () => {
     const device = await launch({ sync });
     // Its orchestrator's chat is synced like the rest of the vault.
     await expect
-      .poll(() => device.read(".daily-do-list/threads/thr_orchestrator.json"), { timeout: 20_000 })
+      .poll(() => device.read(threadJournal("thr_orchestrator")), { timeout: 20_000 })
       .not.toBeNull();
     await expect
       .poll(async () => (await agentStatus(device)).placement?.runsOn?.name, { timeout: 20_000 })

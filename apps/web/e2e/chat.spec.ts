@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "./fixtures";
+import { expect, type Page, test, threadFile } from "./fixtures";
 import { badge, expandToolGroups, expectDailyNote, openApp, typeTask } from "./helpers";
 
 /**
@@ -461,39 +461,22 @@ const SCREENSHOTS_ANSWER = [
   "```",
 ].join("\n");
 
-/** A finished thread whose last message has a code block, in the vault's agent state. */
-function screenshotsThread(): string {
-  const at = Date.now();
-  const text = (id: string, body: string, createdAt: number) => ({
-    id,
-    kind: "text",
-    role: "agent",
-    author: "subagent:files",
-    createdAt,
-    text: body,
-  });
-  return `${JSON.stringify({
-    version: 1,
-    id: "thr_screenshots",
-    taskId: null,
-    notePath: null,
-    title: "Organize the screenshots in my Downloads folder",
-    status: "done",
-    createdAt: at - 10_000,
-    updatedAt: at,
-    messages: [
-      text("m1", "Sorting the screenshots by date.", at - 5_000),
-      text("m2", SCREENSHOTS_ANSWER, at),
-    ],
-    artifacts: [],
-    surfaces: [],
-  })}\n`;
+/** A message of the finished thread whose last message has a code block. */
+function screenshotsMessage(id: string, text: string, createdAt: number) {
+  return { id, kind: "text", role: "agent", author: "subagent:files", createdAt, text } as const;
 }
 
 test.describe("copy", () => {
   test.use({
     daemonSpec: {
-      files: { ".daily-do-list/threads/thr_screenshots.json": screenshotsThread() },
+      files: threadFile({
+        id: "thr_screenshots",
+        title: "Organize the screenshots in my Downloads folder",
+        messages: [
+          screenshotsMessage("m1", "Sorting the screenshots by date.", Date.now() - 5_000),
+          screenshotsMessage("m2", SCREENSHOTS_ANSWER, Date.now()),
+        ],
+      }),
     },
   });
 

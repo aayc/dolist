@@ -8,10 +8,12 @@
 import { mkdir, utimes, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
+  encodePersistedJournalEvent,
   encodePersistedRecords,
-  encodePersistedThread,
   PERSISTED_PATHS,
   type PersistedThread,
+  persistedThreadImportEvent,
+  persistedThreadJournalPath,
 } from "@ddl/contract";
 import {
   addDays,
@@ -219,8 +221,8 @@ export async function writeDemoVault(root: string, options: DemoVaultOptions = {
     questionThread(notePath, doneAt),
   ]) {
     await put(
-      `${PERSISTED_PATHS.threads}/${thread.id}.json`,
-      encodePersistedThread(thread),
+      persistedThreadJournalPath(thread.id),
+      encodePersistedJournalEvent(persistedThreadImportEvent(thread)),
       doneAt,
     );
   }
