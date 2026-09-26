@@ -16,7 +16,7 @@ apps/web ──REST + WebSocket──▶ apps/daemon ──▶ @ddl/storage (vau
 | Package | Role | Runs in |
 | --- | --- | --- |
 | `@ddl/core` | Vault paths, Obsidian-compatible dates & daily notes, markdown task parsing, task identity tracking, agent helpers, the daemon↔client protocol's constants and URLs (its types are re-exported type-only from `@ddl/contract`), settings. **No runtime dependencies.** | Browser, daemon, future native shells |
-| `@ddl/contract` | zod schemas for the wire protocol (every route, body and event, `API_CONTRACT`; `@ddl/core` re-exports the types inferred from them) and the sidecar file formats; fixtures and test arbitraries; generates the reference in [PROTOCOL.md](PROTOCOL.md) ([DATA_FORMATS.md](DATA_FORMATS.md) for the files) | Daemon; tests everywhere (the web app never loads zod at runtime) |
+| `@ddl/contract` | zod schemas for the wire protocol (every route, body and event, `API_CONTRACT`; `@ddl/core` re-exports the types inferred from them) and the sidecar file formats; fixtures and test generators derived from the schemas; generates the reference in [PROTOCOL.md](PROTOCOL.md) ([DATA_FORMATS.md](DATA_FORMATS.md) for the files) | Daemon; tests everywhere (the web app never loads zod at runtime) |
 | `@ddl/storage` | `StorageProvider` contract; local filesystem, memory and remote (the sync service) providers; provider registry; 3-way `SyncEngine`; vault search | Daemon |
 | `@ddl/editor` | CodeMirror 6 editor: live preview, task checkboxes, agent badges, vim, keymaps | Browser |
 | `@ddl/agent` | `AgentRuntime`: task watcher, orchestrator, subagents, harnesses (Pi and the Cursor CLI), safety evaluator, approvals, execution providers, threads/artifacts, tools, OpenRouter client | Daemon |

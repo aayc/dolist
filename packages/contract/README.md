@@ -18,7 +18,7 @@ with it. Enums whose values core owns (`AGENT_HARNESS_KINDS`, `APPROVAL_POLICIES
 | --- | --- |
 | `@ddl/contract` | Everything (wire + persisted). |
 | `@ddl/contract/wire` | Wire schemas, `API_CONTRACT`, `matchRoute`, `exact`, `WIRE_SCHEMAS`. |
-| `@ddl/contract/testing` | fast-check arbitraries and invalid-value generators. **Tests only.** |
+| `@ddl/contract/testing` | fast-check arbitraries derived from the schemas, and invalid-value generators. **Tests only.** |
 
 The web app must not import zod at runtime: it uses `@ddl/contract` in tests only (its event
 guards in `apps/web/src/api/events.ts` are differential-tested against these schemas).
@@ -75,8 +75,10 @@ field together with a major bump.
    `upgrade` for `/ws`), params, query, body and the response of every status it can answer
    (`{ kind: "empty" }` for a 204). `satisfies Record<ApiRouteName, …>` fails until every
    `API_ROUTES` entry has one.
-4. **Arbitrary**: add a generator to `wireArbitraries` (`src/testing/arbitraries.ts`); the typed
-   map fails to compile without one. Mix realistic values with edge cases.
+4. **Generator**: none to write: `wireArbitraries` and `arb` derive one from the schema. A field
+   whose refinement or format a generic value can't satisfy makes it throw, naming the field: give
+   it realistic values in `BY_SCHEMA` (a shared schema) or `BY_PATH` (`Schema.field`) in
+   `src/testing/arbitraries.ts`.
 5. **Fixtures**: add canonical `fixtures/wire/<Name>.valid.json` cases and tricky
    `<Name>.invalid.json` ones (with the expected issue `path` and `code`).
 6. **Producers**: implement it in the daemon (validate requests with the contract schema) and in
@@ -99,10 +101,11 @@ test.prop([invalidFor(WIRE_SCHEMAS.WriteNoteRequest, arb.writeNoteRequest())])("
 expect(exact(ServerEventSchema).safeParse(message).success).toBe(true);
 ```
 
-- `arb.*` / `wireArbitraries[Name]()` generate valid values for every named schema: realistic
-  text mixed with unicode (graphemes, astral code points, controls), empty-but-valid strings,
-  maximum lengths, every enum value, epoch 0 and `MAX_SAFE_INTEGER`. Values are plain objects that
-  survive a JSON round trip unchanged.
+- `arb.*` / `wireArbitraries[Name]()` generate valid values for every named schema, derived from
+  it by `arbitraryFor(schema)`: every enum value and union member, optional keys present and
+  absent, text mixed with unicode (graphemes, astral code points, controls), empty-but-valid
+  strings, maximum lengths and numeric bounds, plus realistic values for ids, paths, URLs and
+  names. Values are plain objects that parse unchanged and survive a JSON round trip.
 - `invalidFor(schema, arb)` derives values that `schema` rejects by one mutation (dropped key,
   wrong type, out-of-range value, unknown key).
 - `exact(schema)` — see above. `matchRoute(pathname)` resolves a URL to its `API_CONTRACT` entry

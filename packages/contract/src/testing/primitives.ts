@@ -1,7 +1,9 @@
+/** Realistic values mixed with edge cases for the wire primitives (see `REALISTIC` in arbitraries). */
 import {
   isMachineUrl,
   isRemoteHost,
   normalizeDeviceName,
+  ORCHESTRATOR_THREAD_ID,
   PAIRING_CODE_ALPHABET,
   PAIRING_CODE_LENGTH,
   REMOTE_LIMITS,
@@ -22,7 +24,7 @@ const CLIENT_ID_CHARS = `${ID_ALPHABET}ABCDEFGHIJKLMNOPQRSTUVWXYZ_-`;
 const chars = (alphabet: string) => fc.constantFrom(...alphabet.split(""));
 
 /** `createId(prefix)`-style ids: `thr_k3j9x0q2m1ab`. */
-export const createdId = (prefix: string, length = 12) =>
+const createdId = (prefix: string, length = 12) =>
   fc
     .string({ unit: chars(ID_ALPHABET), minLength: length, maxLength: length })
     .map((suffix) => `${prefix}_${suffix}`);
@@ -37,20 +39,14 @@ export const runtimeId = (prefix = "thr") =>
         .string({ unit: chars(RUNTIME_ID_CHARS), minLength: 1, maxLength: 40 })
         .filter((id) => id !== "." && id !== ".."),
     },
-    { weight: 1, arbitrary: fc.constantFrom("a", "x".repeat(WIRE_LIMITS.idLength), "a.b:c-d_e") },
-  );
-
-/** Any non-empty identifier up to 200 UTF-16 units (tool-call ids come from model providers). */
-export const id = (prefix = "tsk") =>
-  fc.oneof(
-    { weight: 6, arbitrary: createdId(prefix, 10) },
-    {
-      weight: 2,
-      arbitrary: lengthWithin(fc.string({ unit: "grapheme", minLength: 1, maxLength: 30 }), 1, 200),
-    },
     {
       weight: 1,
-      arbitrary: fc.constantFrom("1", "z".repeat(WIRE_LIMITS.idLength), "call_00_ABC-def.01:x"),
+      arbitrary: fc.constantFrom(
+        "a",
+        "x".repeat(WIRE_LIMITS.idLength),
+        "a.b:c-d_e",
+        ORCHESTRATOR_THREAD_ID,
+      ),
     },
   );
 
@@ -72,12 +68,12 @@ export const epochMs = () =>
     { weight: 1, arbitrary: fc.maxSafeNat() },
   );
 
-/** Counts, sizes and 0-based lines. */
-export const count = (max = 500) =>
+/** Integers in `[min, max]`: mostly small, plus both bounds. */
+export const integer = (min: number, max: number) =>
   fc.oneof(
-    { weight: 8, arbitrary: fc.nat({ max }) },
-    { weight: 1, arbitrary: fc.constant(0) },
-    { weight: 1, arbitrary: fc.constant(Number.MAX_SAFE_INTEGER) },
+    { weight: 8, arbitrary: fc.integer({ min, max: Math.min(max, min + 500) }) },
+    { weight: 1, arbitrary: fc.constantFrom(min, max) },
+    { weight: 1, arbitrary: fc.integer({ min, max }) },
   );
 
 /** A finite number without `-0` (which JSON turns into `0`). */
@@ -111,7 +107,6 @@ export const isoDate = () =>
         "2000-02-29",
         "2100-02-28",
         "1999-12-31",
-        "2026-01-01",
         "0001-01-01",
         "9999-12-31",
       ),
@@ -132,14 +127,13 @@ const REALISTIC_TEXT = [
   "Find a dentist",
   "Book dentist appointment next week",
   "Research best standing desks under $500",
-  "Order a new kettle",
   "Email the landlord about the heater",
-  "Compare three robot vacuums",
   "Plan a picnic ☀️",
   "Réserver une table 🍝",
   "预约牙医",
   "Позвонить маме",
   "**Bold**, _italic_ and `code` with [[Wiki link]]",
+  "- [ ] Find a dentist\n- [x] Paid rent\n",
   "Line one\nLine two\r\nLine three",
   "Tab\tseparated\u00a0nbsp",
   "👩‍👩‍👧‍👦 family emoji and e\u0301 combining accent",
@@ -165,31 +159,13 @@ export const trimmedText = (maxLength = 2_000) =>
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
 
-/** Short human labels (titles, tool labels, names). */
-export const label = () =>
-  fc.oneof(
-    {
-      weight: 4,
-      arbitrary: fc.constantFrom(
-        "Search the web",
-        "Open page",
-        "Summary: Kettles",
-        "Report",
-        "Café ☕",
-      ),
-    },
-    { weight: 1, arbitrary: fc.string({ unit: "grapheme", maxLength: 20 }) },
-  );
-
 const SEGMENTS = [
   "Daily",
   "Projects",
-  "Templates",
   "Garden Redesign",
   "Café ☕",
   "100% done",
   "a#b?c&d=e",
-  "2026",
   "déjà vu",
   "日本語",
   "emoji 🎉",
@@ -236,21 +212,22 @@ export const vaultPath = () =>
     },
   );
 
-/** Content versions: short hashes and the 256-character extreme. */
-export const contentVersion = () =>
+/** A vault path as a client sends it: canonical, or one the daemon normalizes or refuses. */
+export const requestPath = () =>
   fc.oneof(
+    { weight: 6, arbitrary: notePath() },
     {
-      weight: 8,
-      arbitrary: fc.string({ unit: chars("0123456789abcdef"), minLength: 14, maxLength: 14 }),
+      weight: 1,
+      arbitrary: fc.constantFrom(
+        "Daily//2026-09-23.md",
+        "./a.md",
+        "a\\b.md",
+        "p".repeat(WIRE_LIMITS.requestPathLength),
+      ),
     },
-    { weight: 1, arbitrary: fc.constantFrom("v", "f".repeat(WIRE_LIMITS.versionLength)) },
   );
 
-/** JSON values that survive `JSON.stringify` → `JSON.parse` unchanged (no `-0`). */
-export const jsonValue = () =>
-  fc.jsonValue({ maxDepth: 3 }).map((value) => JSON.parse(JSON.stringify(value)) as unknown);
-
-/** Tool inputs: realistic argument objects and arbitrary JSON. */
+/** Tool inputs: realistic argument objects and JSON that survives a round trip (no `-0`). */
 export const toolInput = () =>
   fc.oneof(
     {
@@ -262,28 +239,44 @@ export const toolInput = () =>
         {},
       ),
     },
-    { weight: 1, arbitrary: jsonValue() },
+    {
+      weight: 1,
+      arbitrary: fc.jsonValue({ maxDepth: 3 }).map((v) => JSON.parse(JSON.stringify(v)) as unknown),
+    },
   );
 
 const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 
-/** Padded base64 of 1..512 random bytes. */
-export const base64 = () => fc.uint8Array({ minLength: 1, maxLength: 512 }).map(toBase64);
+/** 1×1 grey JPEG (the web mock's fallback frame). */
+export const TINY_JPEG_BASE64 =
+  "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=";
+
+/** Padded base64 of 1..512 random bytes, or a real JPEG. */
+export const base64 = () =>
+  fc.oneof(
+    fc.uint8Array({ minLength: 1, maxLength: 512 }).map(toBase64),
+    fc.constant(TINY_JPEG_BASE64),
+  );
+
+const modelIdOf = (known: string[], filler: string) =>
+  fc.oneof(
+    { weight: 4, arbitrary: fc.constantFrom(...known) },
+    { weight: 1, arbitrary: trimmedText(WIRE_LIMITS.modelIdLength) },
+    { weight: 1, arbitrary: fc.constant(filler.repeat(WIRE_LIMITS.modelIdLength)) },
+  );
 
 /** A model id without surrounding whitespace. */
 export const modelId = () =>
-  fc.oneof(
-    {
-      weight: 4,
-      arbitrary: fc.constantFrom(
-        "deepseek/deepseek-v4.1-flash",
-        "mock",
-        "openai/gpt-5.2",
-        "anthropic/claude-opus-4.5",
-      ),
-    },
-    { weight: 1, arbitrary: trimmedText(WIRE_LIMITS.modelIdLength) },
-    { weight: 1, arbitrary: fc.constant("m".repeat(WIRE_LIMITS.modelIdLength)) },
+  modelIdOf(
+    ["deepseek/deepseek-v4.1-flash", "mock", "openai/gpt-5.2", "anthropic/claude-opus-4.5"],
+    "m",
+  );
+
+/** A Cursor CLI model id, optionally with parameters, without surrounding whitespace. */
+export const cursorModelId = () =>
+  modelIdOf(
+    ["composer-2.5", "gpt-5.5", "gpt-5.5[reasoning=high]", "claude-4.5-sonnet-thinking"],
+    "c",
   );
 
 const DEVICE_NAMES = ["Work laptop", "MacBook Pro", "vm-name", "iPhone", "Café ☕", "Büro-PC"];
@@ -311,17 +304,18 @@ export const syncDeviceId = () =>
     { weight: 1, arbitrary: fc.constantFrom("d", "D".repeat(64), "dev_A-b_9") },
   );
 
-const REMOTE_HOSTS = [
-  "vm-name.tailnet-name.ts.net",
-  "vm-name.tailnet-name.ts.net:8443",
-  "always-on.example.com",
-  "vm-1",
-];
-
 /** `host[:port]` as a daemon reports its remote hosts (lowercase DNS names). */
 export const remoteHost = () =>
   fc.oneof(
-    { weight: 4, arbitrary: fc.constantFrom(...REMOTE_HOSTS) },
+    {
+      weight: 4,
+      arbitrary: fc.constantFrom(
+        "vm-name.tailnet-name.ts.net",
+        "vm-name.tailnet-name.ts.net:8443",
+        "always-on.example.com",
+        "vm-1",
+      ),
+    },
     { weight: 2, arbitrary: fc.domain().filter(isRemoteHost) },
     {
       weight: 1,
@@ -335,12 +329,7 @@ export const remoteHost = () =>
 /** A machine URL in its normalized form: `https://<remote host>`, or plain http to loopback. */
 export const machineUrl = () =>
   fc.oneof(
-    {
-      weight: 6,
-      arbitrary: remoteHost()
-        .map((host) => `https://${host}`)
-        .filter(isMachineUrl),
-    },
+    { weight: 6, arbitrary: httpsMachineUrl() },
     {
       weight: 1,
       arbitrary: fc.constantFrom(
@@ -352,11 +341,18 @@ export const machineUrl = () =>
     },
   );
 
-const pairingChar = chars(PAIRING_CODE_ALPHABET);
+export const httpsMachineUrl = () =>
+  remoteHost()
+    .map((host) => `https://${host}`)
+    .filter(isMachineUrl);
 
 /** A pairing code as the daemon issues it: 8 characters of the unambiguous alphabet. */
 export const pairingCode = () =>
-  fc.string({ unit: pairingChar, minLength: PAIRING_CODE_LENGTH, maxLength: PAIRING_CODE_LENGTH });
+  fc.string({
+    unit: chars(PAIRING_CODE_ALPHABET),
+    minLength: PAIRING_CODE_LENGTH,
+    maxLength: PAIRING_CODE_LENGTH,
+  });
 
 /** A pairing code as a user types it: canonical, `XXXX-XXXX` or lowercase. */
 export const pairingCodeInput = () =>
@@ -364,20 +360,4 @@ export const pairingCodeInput = () =>
     pairingCode(),
     pairingCode().map((code) => `${code.slice(0, 4)}-${code.slice(4)}`),
     pairingCode().map((code) => code.toLowerCase()),
-  );
-
-/** A Cursor CLI model id, optionally with parameters, without surrounding whitespace. */
-export const cursorModelId = () =>
-  fc.oneof(
-    {
-      weight: 4,
-      arbitrary: fc.constantFrom(
-        "composer-2.5",
-        "gpt-5.5",
-        "gpt-5.5[reasoning=high]",
-        "claude-4.5-sonnet-thinking",
-      ),
-    },
-    { weight: 1, arbitrary: trimmedText(WIRE_LIMITS.modelIdLength) },
-    { weight: 1, arbitrary: fc.constant("c".repeat(WIRE_LIMITS.modelIdLength)) },
   );
