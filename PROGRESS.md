@@ -25,6 +25,9 @@ the Azure VM.
 
 ## Shipped on `main` (newest first)
 
+- `c7ca463` The orchestrator's placement is a "Remote" switch (on = the always-on machine, off = this
+  device) in the agent panel and Settings, on the web and the Mac; one shared switch component per
+  platform. **Installed** on the main development Mac.
 - `aa70f6a` Performance, web and daemon: vault event bursts published once per frame (300 new files
   on a 5,000-note vault: 4.2 s to 21 ms), the explorer and chats render only the rows in view (a
   1,000-message thread opens in 18 ms instead of 120), one render per palette key; daemon restarts
@@ -122,7 +125,7 @@ and branches were removed (GitHub has only `main`).
   failure bounds; one test-only `helloTimeoutMs` option). No assertion got looser.
 - **Leaner-code cuts** (in flight): `chore/lean-web-mock`, `chore/lean-vim-tests`,
   `chore/lean-small`; next the Mac fake daemon, zod as the wire source and journal-only threads (see
-  Decisions). Also `feat/remote-switch` (the "Remote" switch).
+  Decisions).
 - **Cleanup batch A** (in flight): `chore/cleanup-ts` (two bugs: imported threads kept their old
   note paths because the import looked for journals under the wrong folder, and the approval
   broker could overwrite a newer `approvals.json`; plus dead code, dependency declarations,
