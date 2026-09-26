@@ -4,37 +4,21 @@ import {
   type StatusMessage,
   type ThreadMessage,
 } from "@ddl/core";
-import { ArrowDown, ArrowLeft, Brain, CornerDownRight, Square, X } from "lucide-react";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Brain, CornerDownRight, Square, X } from "lucide-react";
+import { memo, useEffect, useLayoutEffect, useState } from "react";
 import { useShallow } from "zustand/shallow";
 import { useServices } from "../../app/services";
-import { Count } from "../../components/Count";
 import { DisabledReason } from "../../components/DisabledReason";
 import { IconButton } from "../../components/IconButton";
-import { cx } from "../../lib/cx";
 import { formatTimestamp } from "../../lib/format";
 import { perfEndAfterPaint, perfPending } from "../../perf/perf";
 import { useAgentStore, useThreadMessages } from "../../state/agent-store";
-import {
-  discardMessage,
-  matchPending,
-  type PostMessage,
-  pendingOf,
-  pruneConfirmed,
-  retryMessage,
-  useOutboxStore,
-} from "../../state/outbox-store";
 import { ui, useUiStore } from "../../state/ui-store";
 import { useReadOnlyReason } from "../remote/read-only";
-import { ActivityRow } from "./ActivityRow";
-import { Composer } from "./Composer";
-import { installCodeCopy } from "./code-copy";
+import { ChatFrame, useChat } from "./ChatFrame";
 import { MessageRow } from "./MessageRow";
-import { useMarkdownLinks } from "./markdown-links";
 import { resolveTask, taskIdOf } from "./orchestrator-links";
-import { PendingReply } from "./PendingReply";
 import { StatusChip } from "./StatusChip";
-import { useChatScroll } from "./use-chat-scroll";
 import "../../styles/orchestrator.css";
 
 const THREAD_ID = ORCHESTRATOR_THREAD_ID;
@@ -135,26 +119,12 @@ function OrchestratorHeader() {
  * that decisions stay one per row with their task link instead of folding into a tool group.
  */
 function OrchestratorChat() {
-  const { agent } = useServices();
   const messages = useThreadMessages(THREAD_ID);
-  const pending = useOutboxStore((s) => pendingOf(s, THREAD_ID));
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  // What was there when the chat opened is history: it renders at once, without animation.
-  const history = useRef<ReadonlySet<string> | null>(null);
-  history.current ??= new Set(messages.map((m) => m.id));
-  const seen = history.current;
-  useMarkdownLinks(scrollRef, THREAD_ID);
-  const scroll = useChatScroll(scrollRef, contentRef, messages, messages.length);
-
-  useEffect(() => {
-    const root = scrollRef.current;
-    return root ? installCodeCopy(root) : undefined;
-  }, []);
+  const chat = useChat(THREAD_ID, messages, messages.length);
 
   // Opened at a turn (an activity chip, the note's indicator): show where that turn starts.
   const focus = useUiStore((s) => s.chatFocus);
-  const { start, showFrom, showMessage } = scroll;
+  const { start, showFrom, showMessage } = chat.scroll;
   useEffect(() => {
     if (!focus) return;
     const index = messages.findIndex((m) => m.id === focus.messageId);
@@ -167,65 +137,19 @@ function OrchestratorChat() {
     }
   }, [focus, messages, start, showFrom, showMessage]);
 
-  const unconfirmed = useMemo(
-    () => matchPending(pending, messages).unconfirmed,
-    [pending, messages],
-  );
-  useEffect(() => {
-    if (pending.length > 0) pruneConfirmed(THREAD_ID, messages);
-  }, [messages, pending]);
-
-  const post: PostMessage = useCallback((id, text) => agent.postMessage(id, text), [agent]);
-
   return (
-    <div className="chat">
-      <div className="chat-main">
-        <div
-          ref={scrollRef}
-          className="chat-scroll"
-          onScroll={scroll.onScroll}
-          onWheel={scroll.onWheel}
-          data-testid="chat-scroll"
-        >
-          <div ref={contentRef} className="chat-list" data-testid="chat-list">
-            {messages.length === 0 && unconfirmed.length === 0 ? (
-              <p className="orchestrator-empty" data-testid="orchestrator-empty">
-                Each time the orchestrator wakes up — a task changed, you replied, a subagent
-                finished — what it decided shows up here. Write to it below: ask what it's doing, or
-                tell it what to change.
-              </p>
-            ) : null}
-            {messages.slice(start).map((message) => (
-              <OrchestratorRow key={message.id} message={message} live={!seen.has(message.id)} />
-            ))}
-            {unconfirmed.map((item) => (
-              <PendingReply
-                key={item.id}
-                item={item}
-                onRetry={() => void retryMessage(post, THREAD_ID, item.id)}
-                onDiscard={() => discardMessage(THREAD_ID, item.id)}
-              />
-            ))}
-            <ActivityRow threadId={THREAD_ID} onShowApproval={scroll.showApproval} />
-          </div>
-        </div>
-        <button
-          type="button"
-          className={cx("jump-latest", !scroll.pinned && "is-visible")}
-          onClick={scroll.jumpToLatest}
-          data-testid="jump-latest"
-        >
-          <ArrowDown size={14} aria-hidden="true" />
-          Jump to latest
-          {scroll.newCount > 0 ? (
-            <span className="jump-latest-count">
-              <Count value={scroll.newCount} className="jump-latest-number" /> new
-            </span>
-          ) : null}
-        </button>
-      </div>
-      <Composer threadId={THREAD_ID} post={post} onSend={scroll.jumpToLatest} />
-    </div>
+    <ChatFrame chat={chat}>
+      {messages.length === 0 && chat.unconfirmed.length === 0 ? (
+        <p className="orchestrator-empty" data-testid="orchestrator-empty">
+          Each time the orchestrator wakes up — a task changed, you replied, a subagent finished —
+          what it decided shows up here. Write to it below: ask what it's doing, or tell it what to
+          change.
+        </p>
+      ) : null}
+      {messages.slice(start).map((message) => (
+        <OrchestratorRow key={message.id} message={message} live={!chat.seen.has(message.id)} />
+      ))}
+    </ChatFrame>
   );
 }
 
