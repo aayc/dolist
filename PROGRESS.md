@@ -25,6 +25,15 @@ the Azure VM.
 
 ## Shipped on `main` (newest first)
 
+- `0011be4` The web e2e, perf tests and `pnpm dev:mock` run on real daemons (one per test, mock
+  agent or Pi against the fake model, a seeded demo vault); the in-browser mock is gone (−6.9k lines).
+  The fullstack scenarios merged into the functional suite (134 passed); all e2e takes ~106 s instead
+  of ~275 s. One gated test hook: `DDL_TEST_HOOKS=1` simulates a Mac's computer access. `pnpm
+  dev:mock` uses ports 7340/5174 and a throwaway vault.
+- `75ce44d` Small cuts (−1.1k): S3 and cloud stubs gone (and `"s3"` from the protocol), one mock LLM,
+  the triage eval runs on the fake brain (81/81 now), one forwarding base for the relayed and leased
+  runtimes, the Swift drawing description port.
+- `f78a4e9` Swift vim tests the recorded vectors cover are gone (−6.1k); 6 checks became vectors.
 - `c7ca463` The orchestrator's placement is a "Remote" switch (on = the always-on machine, off = this
   device) in the agent panel and Settings, on the web and the Mac; one shared switch component per
   platform. **Installed** on the main development Mac.
@@ -123,8 +132,7 @@ and branches were removed (GitHub has only `main`).
 - **Flaky tests:** done and on `main` (`5687507`): the watcher, subprocess and `trackTasks` tests
   are robust under load (fake timers, event probes instead of sleeps, CPU-time guard, generous
   failure bounds; one test-only `helloTimeoutMs` option). No assertion got looser.
-- **Leaner-code cuts** (in flight): `chore/lean-web-mock`, `chore/lean-vim-tests`,
-  `chore/lean-small`; next the Mac fake daemon, zod as the wire source and journal-only threads (see
+- **Leaner-code cuts** (in flight): `chore/lean-tests` (test trims, compact Domain vectors); next the Mac fake daemon, zod as the wire source and journal-only threads (see
   Decisions).
 - **Cleanup batch A** (in flight): `chore/cleanup-ts` (two bugs: imported threads kept their old
   note paths because the import looked for journals under the wrong folder, and the approval
@@ -187,6 +195,8 @@ Open: browser pairing over https stays fixme in the e2e harness (no TLS proxy th
 - **Drawings follow-ups:** shared merge vectors for `SceneMerge` (Swift) and
   `mergeDrawingElements` (TypeScript); on the Mac, drawings as accessibility elements, image
   embeds, the in-place tool bar covering a line of text.
+- **Swift editor tests crash intermittently on CI** (uncaught NSException, 2 of 3 runs): under
+  investigation on `fix/editor-test-crash` (an exception handler to name it, then the root cause).
 - **macOS file watching:** Node serves every directory watch in a process from one FSEvents
   stream and restarts it "from now" when a watch opens or closes, so vault changes made during the
   restart are dropped until the next rescan (the daemon too, e.g. when a sync target's watch
