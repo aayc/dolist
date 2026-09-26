@@ -14,7 +14,7 @@ import { IconButton } from "../../components/IconButton";
 import { cx } from "../../lib/cx";
 import { formatTimestamp } from "../../lib/format";
 import { perfEndAfterPaint, perfPending } from "../../perf/perf";
-import { useAgentStore } from "../../state/agent-store";
+import { useAgentStore, useThreadMessages } from "../../state/agent-store";
 import {
   discardMessage,
   matchPending,
@@ -38,7 +38,6 @@ import { useChatScroll } from "./use-chat-scroll";
 import "../../styles/orchestrator.css";
 
 const THREAD_ID = ORCHESTRATOR_THREAD_ID;
-const NO_MESSAGES: readonly ThreadMessage[] = [];
 /** A turn asked for that isn't in the chat (yet) stops being waited for after this. */
 const FOCUS_WAIT_MS = 5_000;
 
@@ -137,7 +136,7 @@ function OrchestratorHeader() {
  */
 function OrchestratorChat() {
   const { agent } = useServices();
-  const messages = useAgentStore((s) => s.details[THREAD_ID]?.messages ?? NO_MESSAGES);
+  const messages = useThreadMessages(THREAD_ID);
   const pending = useOutboxStore((s) => pendingOf(s, THREAD_ID));
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -146,7 +145,7 @@ function OrchestratorChat() {
   history.current ??= new Set(messages.map((m) => m.id));
   const seen = history.current;
   useMarkdownLinks(scrollRef, THREAD_ID);
-  const scroll = useChatScroll(scrollRef, contentRef, messages);
+  const scroll = useChatScroll(scrollRef, contentRef, messages, messages.length);
 
   useEffect(() => {
     const root = scrollRef.current;
@@ -155,14 +154,18 @@ function OrchestratorChat() {
 
   // Opened at a turn (an activity chip, the note's indicator): show where that turn starts.
   const focus = useUiStore((s) => s.chatFocus);
-  const { showMessage } = scroll;
+  const { start, showFrom, showMessage } = scroll;
   useEffect(() => {
     if (!focus) return;
-    const arrived = messages.some((m) => m.id === focus.messageId);
-    if ((arrived && showMessage(focus.messageId)) || Date.now() - focus.at > FOCUS_WAIT_MS) {
+    const index = messages.findIndex((m) => m.id === focus.messageId);
+    if (index !== -1 && index < start) {
+      showFrom(index);
+      return;
+    }
+    if ((index !== -1 && showMessage(focus.messageId)) || Date.now() - focus.at > FOCUS_WAIT_MS) {
       ui.set({ chatFocus: null });
     }
-  }, [focus, messages, showMessage]);
+  }, [focus, messages, start, showFrom, showMessage]);
 
   const unconfirmed = useMemo(
     () => matchPending(pending, messages).unconfirmed,
@@ -192,7 +195,7 @@ function OrchestratorChat() {
                 tell it what to change.
               </p>
             ) : null}
-            {messages.map((message) => (
+            {messages.slice(start).map((message) => (
               <OrchestratorRow key={message.id} message={message} live={!seen.has(message.id)} />
             ))}
             {unconfirmed.map((item) => (
