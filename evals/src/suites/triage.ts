@@ -7,9 +7,9 @@
  * Both modes run the real orchestrator system prompt, event digest and orchestrator tools, with the
  * tools' host stubbed to RECORD decisions (no subagents run, nothing is written):
  *  - live: PiHarness on OpenRouter (web tools are real when available);
- *  - mock: a ScriptedHarness driven by a keyword baseline — validates the dataset and the eval
- *    plumbing deterministically. The baseline is tuned to this dataset; it says nothing about
- *    model quality.
+ *  - mock: a ScriptedHarness driven by the fake brain (`@ddl/agent/testing`, what
+ *    `DDL_AGENT_MODE=mock` runs) — validates the dataset and the eval plumbing deterministically.
+ *    Its keyword triage is tuned to this dataset; it says nothing about model quality.
  */
 import { readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -17,27 +17,23 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  type AgentScript,
   buildOrchestratorSystemPrompt,
   CAPABILITIES,
   type Capability,
   createOrchestratorTools,
   createRoutineTools,
   type DigestLine,
-  DRAWING_MARKER,
   DrawingDescriptions,
   drawingBudget,
   formatOrchestratorDigest,
   type Harness,
   type OrchestratorToolHost,
-  parseDigestItems,
   type RoutineToolHost,
-  type ScriptContext,
   ScriptedHarness,
   TOOL,
   ToolInputError,
 } from "@ddl/agent";
-import { flowchartDrawing, type RoutineRequest, routineRequest } from "@ddl/agent/testing";
+import { createFakeAgentScript, createFakeBrain, flowchartDrawing } from "@ddl/agent/testing";
 import {
   addDays,
   DEFAULT_MODEL,
@@ -581,184 +577,6 @@ async function runCase(
   };
 }
 
-// ── Mock baseline ───────────────────────────────────────────────────────────
-
-const VAGUE = /\b(it|the thing|that|him|her|them|the issue)\b/;
-const PHYSICAL =
-  /\b(gym|walk the dog|laundry|call mom|call dad|meditate|water the plants|pick up|dry cleaning|groceries|notice|grateful)\b|\bappointment at \d/;
-const ONLINE_ERRAND = /\b(membership|online|subscription)\b/;
-const QUESTION_START =
-  /^(what|what's|how|when|which|who|where|why|calculate|convert|define|speed of|capital of)\b/;
-
-/** A desktop app from the digest's list that the task names. */
-function namesDesktopApp(text: string): boolean {
-  const words = ` ${text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ")} `;
-  return DESKTOP_APPS.some((app) => words.includes(` ${app.toLowerCase()} `));
-}
-
-/** Keyword triage used as the deterministic "model" in mock mode. */
-export function baselineTriage(
-  text: string,
-  computerAccess: "allowed" | "missing" = "allowed",
-): { decision: Decision; capabilities: Capability[] } {
-  const t = text.toLowerCase().trim();
-  const words = t.split(/\s+/).filter(Boolean);
-  if (/\[\[daily\/\d{4}-\d{2}-\d{2}\]\]/.test(t)) return { decision: "ignore", capabilities: [] };
-  // A task for a desktop app goes to that app; without access, the user is asked to allow it.
-  if (namesDesktopApp(text)) {
-    return computerAccess === "missing"
-      ? { decision: "comment", capabilities: [] }
-      : { decision: "delegate", capabilities: ["computer"] };
-  }
-  if (words.length <= 5 && VAGUE.test(t) && !/https?:/.test(t)) {
-    return { decision: "ask_user", capabilities: [] };
-  }
-  if (PHYSICAL.test(t) && !ONLINE_ERRAND.test(t)) return { decision: "ignore", capabilities: [] };
-  const question = t.endsWith("?") || QUESTION_START.test(t);
-  if (question && !/\b(best|compare|research|plan)\b/.test(t)) {
-    return { decision: "comment", capabilities: [] };
-  }
-  const capabilities: Capability[] = [];
-  if (/\b(email|reply|recruiter|1:1|meeting|calendar|invite|send)\b/.test(t)) {
-    capabilities.push("connectors");
-  } else if (
-    /\b(book|reserve|order|buy|pay|cancel|renew|appointment|subscription|registration)\b/.test(t)
-  ) {
-    capabilities.push("browser");
-  }
-  if (/\b(repo|test|script|code|bug)\b/.test(t)) capabilities.push("shell");
-  if (/\b(csv|spreadsheet|resume|file|document)\b/.test(t)) capabilities.push("files");
-  if (capabilities.length === 0) capabilities.push("web");
-  return { decision: "delegate", capabilities };
-}
-
-const DIRECT_LINE = /^- \[direct\] ("(?:[^"\\]|\\.)*")$/m;
-const DROP = /\b(drop|cancel|stop|never ?mind|forget|skip)\b/i;
-const STATUS_QUESTION =
-  /\b(what are you|what's running|status|progress|how's it going|waiting on me)\b/i;
-
-const DEFERRAL_LINK = /\[\[daily\/\d{4}-\d{2}-\d{2}\]\]/i;
-
-/** Something recurring, as the mock brain reads it; a deferral link names a day, not a recurrence. */
-function baselineRoutine(text: string): RoutineRequest | undefined {
-  return DEFERRAL_LINK.test(text) ? undefined : routineRequest(text);
-}
-
-async function createBaselineRoutine(ctx: ScriptContext, routine: RoutineRequest): Promise<void> {
-  await ctx.callTool(TOOL.createRoutine, {
-    name: routine.name,
-    schedule: routine.schedule,
-    instructions: routine.instructions,
-    notify: routine.notify,
-    uses: routine.capabilities,
-  });
-}
-
-/** Keyword handling of a direct message about the case's task (mock mode). */
-async function baselineDirect(ctx: ScriptContext, message: string): Promise<void> {
-  const taskId = CASE_TASK_ID;
-  const working = new RegExp(`${taskId}: "(?:[^"\\\\]|\\\\.)*" · agent: working`).test(ctx.message);
-  const routine = baselineRoutine(message);
-  if (routine) {
-    await createBaselineRoutine(ctx, routine);
-    await ctx.say(`Done — “${routine.name}” runs ${routine.schedule}.`);
-  } else if (STATUS_QUESTION.test(message)) {
-    await ctx.say("Here's where things stand.");
-  } else if (DROP.test(message)) {
-    if (working) {
-      await ctx.callTool(TOOL.cancelSubagent, { taskId, reason: "The user dropped it." });
-    } else {
-      await ctx.callTool(TOOL.setTaskStatus, { taskId, status: "ignored", summary: "Dropped" });
-    }
-    await ctx.say("Dropped it.");
-  } else {
-    await ctx.callTool(TOOL.messageSubagent, { taskId, text: message });
-    await ctx.say("Passed that on.");
-  }
-}
-
-const REFERS_TO_DRAWING = /\b(diagram|drawing|sketch|flow ?chart|whiteboard|mock-?up|wireframe)\b/i;
-
-/** The digest's drawing blocks, one line each: "The drawing <path>: <its description>". */
-function digestDrawings(message: string): string[] {
-  const out: Array<{ path: string; description: string[] }> = [];
-  let current: { path: string; description: string[] } | null = null;
-  for (const line of message.split("\n")) {
-    const trimmed = line.trimStart();
-    if (trimmed.startsWith(`${DRAWING_MARKER} `)) {
-      const rest = trimmed.slice(DRAWING_MARKER.length + 1);
-      current = { path: rest.split(" · ")[0]!, description: [] };
-      out.push(current);
-    } else if (current && /^\s{4,}\S/.test(line)) {
-      current.description.push(trimmed);
-    } else {
-      current = null;
-    }
-  }
-  return out
-    .filter((drawing) => drawing.description.length > 0)
-    .map((drawing) => `The drawing ${drawing.path}: ${drawing.description.join(" ")}`);
-}
-
-const baselineScript: AgentScript = async (ctx) => {
-  const direct = DIRECT_LINE.exec(ctx.message);
-  if (direct) {
-    await baselineDirect(ctx, JSON.parse(direct[1]!) as string);
-    return;
-  }
-  const access = /\nComputer access: missing/.test(ctx.message) ? "missing" : "allowed";
-  for (const item of parseDigestItems(ctx.message)) {
-    const taskId = item.taskId;
-    const routine = baselineRoutine(item.text);
-    if (routine) {
-      await createBaselineRoutine(ctx, routine);
-      await ctx.callTool(TOOL.postComment, {
-        taskId,
-        text: `Routine “${routine.name}” — ${routine.schedule}. Each run reports under Routines.`,
-        summary: "Routine created",
-      });
-      await ctx.callTool(TOOL.setTaskStatus, {
-        taskId,
-        status: "done",
-        summary: "Routine created",
-      });
-      continue;
-    }
-    const { decision, capabilities } = baselineTriage(item.text, access);
-    switch (decision) {
-      case "delegate": {
-        const drawings = REFERS_TO_DRAWING.test(item.text) ? digestDrawings(ctx.message) : [];
-        await ctx.callTool(TOOL.postComment, { taskId, text: "On it.", summary: "On it" });
-        await ctx.callTool(TOOL.spawnSubagent, {
-          taskId,
-          goal: item.text,
-          capabilities,
-          ...(drawings.length > 0 ? { instructions: drawings.join("\n") } : {}),
-        });
-        break;
-      }
-      case "comment":
-        if (access === "missing" && namesDesktopApp(item.text)) {
-          await ctx.callTool(TOOL.postComment, {
-            taskId,
-            text: "This needs access to your Mac's apps: open Settings → Computer Use in Daily Do List and allow it.",
-          });
-          await ctx.callTool(TOOL.setTaskStatus, { taskId, status: "waiting_user" });
-          break;
-        }
-        await ctx.callTool(TOOL.postComment, { taskId, text: "Here's the answer." });
-        await ctx.callTool(TOOL.setTaskStatus, { taskId, status: "done", summary: "Answered" });
-        break;
-      case "ask_user":
-        await ctx.callTool(TOOL.askUser, { taskId, question: "What exactly do you mean?" });
-        break;
-      case "ignore":
-        await ctx.callTool(TOOL.setTaskStatus, { taskId, status: "ignored" });
-        break;
-    }
-  }
-};
-
 // ── Scoring ─────────────────────────────────────────────────────────────────
 
 function percentile(values: number[], p: number): number {
@@ -884,7 +702,7 @@ async function run(options: {
   let cleanup = async () => {};
   const model = process.env.DDL_MODEL || DEFAULT_MODEL;
   if (mode === "mock") {
-    harness = new ScriptedHarness({ script: baselineScript });
+    harness = new ScriptedHarness({ scriptFor: createFakeAgentScript(createFakeBrain()) });
   } else {
     const apiKey = process.env.OPENROUTER_API_KEY ?? "";
     const { createOpenRouterClient, createWebTools } = await import("@ddl/agent");
