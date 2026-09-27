@@ -4,6 +4,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListDrawing
+@testable import DailyDoListDrawingCore
 
 @Suite("Fonts")
 struct FontTests {

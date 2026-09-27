@@ -36,7 +36,8 @@ public struct DrawingViewport: Hashable, Sendable {
 /// panning and drawing over thousands of elements only blits it. It's redrawn when those
 /// elements change (by id, version and nonce), the zoom, theme or pixel scale changes, or the
 /// view moves past the margin.
-final class StaticLayerCache {
+package final class StaticLayerCache {
+  package init() {}
   private struct Key: Equatable {
     var signature: Int
     var zoom: Double
@@ -48,18 +49,18 @@ final class StaticLayerCache {
   private var image: CGImage?
   /// The scene rectangle the image covers.
   private var covered = DrawingRect(minX: 0, minY: 0, maxX: 0, maxY: 0)
-  private(set) var renderCount = 0
+  package private(set) var renderCount = 0
 
   /// Fraction of the view added on each side.
   static let margin = 0.5
 
-  func invalidate() {
+  package func invalidate() {
     key = nil
     image = nil
   }
 
   /// Draws the static elements into a y-down view context.
-  func draw(
+  package func draw(
     elements: [ExcalidrawElement], index: SceneRenderer.Index, skipping skipped: Set<String>,
     renderer: SceneRenderer, viewport: DrawingViewport, viewSize: CGSize, scale: Double,
     theme: DrawingTheme, canvasBackground: String, hairlineZoom: Double, in context: CGContext

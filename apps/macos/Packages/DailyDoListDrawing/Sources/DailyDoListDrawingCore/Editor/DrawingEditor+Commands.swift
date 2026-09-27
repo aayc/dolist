@@ -250,6 +250,7 @@ extension DrawingEditor {
     if let text = first.text ?? first.boundTextId.flatMap({ element($0)?.text }) {
       style.fontSize = text.fontSize
       style.fontFamily = text.fontFamily
+      style.textAlign = text.textAlign
     }
     self.style = style
   }
@@ -292,6 +293,7 @@ extension DrawingEditor {
           element.roundness =
             newStyle.roundEdges ? (element.type == .rectangle ? .adaptive : .proportional) : nil
         }
+        if newStyle.textAlign != old.textAlign { element.text?.textAlign = newStyle.textAlign }
         if var text = element.text,
           newStyle.fontSize != old.fontSize || newStyle.fontFamily != old.fontFamily
         {

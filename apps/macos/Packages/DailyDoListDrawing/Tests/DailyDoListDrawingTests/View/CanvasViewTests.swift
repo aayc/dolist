@@ -7,6 +7,7 @@ import SwiftUI
 import Testing
 
 @testable import DailyDoListDrawing
+@testable import DailyDoListDrawingCore
 
 /// The canvas driven with real mouse and key events, and rendered for review in
 /// `.build/drawing-snapshots/`.

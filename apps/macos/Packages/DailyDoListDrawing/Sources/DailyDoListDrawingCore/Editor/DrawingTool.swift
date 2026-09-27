@@ -1,4 +1,3 @@
-import DailyDoListUI
 import Foundation
 
 /// A tool of the tool bar, with Excalidraw's shortcuts (`SHAPES` in `shapes.tsx`): a letter and
@@ -50,11 +49,6 @@ public enum DrawingTool: String, CaseIterable, Hashable, Sendable {
     case .eraser: "eraser"
     case .hand: "hand.raised"
     }
-  }
-
-  /// The letter key (shown in the tooltip).
-  public var shortcut: KeyShortcut {
-    KeyShortcut(.character(Self.letters[self]!.first!), [])
   }
 
   /// Every key that picks the tool: its letters, then its number.
@@ -115,14 +109,4 @@ public enum DrawingCommand: String, CaseIterable, Hashable, Sendable {
     }
   }
 
-  public var shortcut: KeyShortcut {
-    switch self {
-    case .undo: KeyShortcut("z")
-    case .redo: KeyShortcut("z", [.shift, .command])
-    case .delete: KeyShortcut(.delete)
-    case .duplicate: KeyShortcut("d")
-    case .selectAll: KeyShortcut("a")
-    case .lockTool: KeyShortcut(.character("q"), [])
-    }
-  }
 }

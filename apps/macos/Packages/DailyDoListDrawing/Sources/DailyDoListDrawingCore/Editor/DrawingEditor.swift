@@ -48,6 +48,10 @@ public final class DrawingEditor {
   /// Screen pixels per scene unit, for hit tolerances (set by the view).
   @ObservationIgnored public var zoom: Double = 1
 
+  /// View-point tolerances; touch adapters use a larger target than mouse adapters.
+  @ObservationIgnored public var hitTolerance: Double = 10
+  @ObservationIgnored public var selectionHandleRadius: Double = 8
+
   /// After each committed change, with the scene to save.
   @ObservationIgnored public var onChange: ((ExcalidrawScene) -> Void)?
   /// After any change that needs a redraw.
@@ -258,5 +262,5 @@ public final class DrawingEditor {
   }
 
   /// Hit tolerance in scene units (10 screen pixels).
-  var threshold: Double { 10 / zoom }
+  var threshold: Double { hitTolerance / zoom }
 }

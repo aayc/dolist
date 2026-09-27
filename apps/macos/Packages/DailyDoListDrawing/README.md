@@ -1,8 +1,8 @@
 # DailyDoListDrawing
 
-The Mac app's native drawing engine: Excalidraw scenes stored in the Obsidian Excalidraw
+The Mac and iPhone apps' shared native drawing engine: Excalidraw scenes stored in the Obsidian Excalidraw
 plugin's `.excalidraw.md` files, drawn with a port of Rough.js so they look the way Excalidraw
-draws them, and edited in place in an AppKit canvas. Written from scratch for speed, with
+draws them, and edited in AppKit or UIKit canvases. Written from scratch for speed, with
 Excalidraw's core tools and shortcuts. The web app embeds the real Excalidraw editor; both edit the
 same files ([spec](../../../../docs/specs/drawings.md)).
 
@@ -11,7 +11,9 @@ same files ([spec](../../../../docs/specs/drawings.md)).
 | Target | What | Platforms |
 | --- | --- | --- |
 | `DailyDoListDrawingModel` | The scene model, its JSON codec, the file format, LZ-String, embeds and file names. Foundation only. | macOS, iOS |
-| `DailyDoListDrawing` | The Rough.js port, the CoreGraphics renderer, the editing state and tools (platform-neutral, in `Editor/`), and the AppKit canvas view with its tool bar (`View/`). Bundles Excalifont. | macOS |
+| `DailyDoListDrawingCore` | Rough.js, CoreGraphics/CoreText rendering, shared editing tools, geometry, history and Excalifont resources. | macOS, iOS |
+| `DailyDoListDrawing` | AppKit canvas and toolbar; re-exports the shared core to preserve existing imports. | macOS |
+| `DailyDoListMobileDrawing` | UIKit touch canvas, inline text editor and SwiftUI controls. | iOS |
 
 ## Architecture
 
@@ -234,3 +236,51 @@ hachure-fill 0.5.2, points-on-curve 0.2.0, points-on-path 0.2.1 (MIT, Preet Shih
 [fractional-indexing](https://github.com/rocicorp/fractional-indexing) 3.2.0 (CC0). The file
 format follows the [Obsidian Excalidraw plugin](https://github.com/zsviczian/obsidian-excalidraw-plugin)
 (`ExcalidrawData.ts`, `excalidrawMarkdownParsing.ts`) through `@ddl/core`. Excalifont is OFL-1.1.
+
+## iPhone integration and parity checklist
+
+`DailyDoListMobileDrawing` exposes `MobileDrawingController(scene:environment:)` and
+`MobileDrawingView(controller:)`. The controller's `onChange` receives each committed scene;
+its document owner handles debouncing, file serialization, saves, offline state and conflict merges.
+Use `replaceScene(_:keepHistory:)` for external updates and `finishEditing()` before leaving.
+`isEditing = false` makes a preview. `MobileDrawingCanvas(controller:theme:background:)` embeds
+only the canvas; `MobileDrawingCanvasView` is the UIKit API. Both platforms share the same
+`DrawingEditor` and `DrawingPreviewCache`. Mac resource packaging already copies all SwiftPM
+bundles; the font now lives in `DailyDoListDrawing_DailyDoListDrawingCore.bundle`.
+
+One finger uses the active tool; two fingers pan and pinch. The hand tool also pans with one
+finger. Selection handles have a 44-point hit diameter. The actions menu supplies multi-select,
+constraints, drawing from center, duplication, deletion, text/label editing and completing a
+multi-point line. A second finger interrupts a live gesture by restoring the last committed
+scene, without saving or adding undo. The inspector edits the shared `ElementStyle`.
+
+The inventory below comes from the pinned Excalidraw 0.18.1 source in its package source maps:
+`shapes.tsx`, `components/Actions.tsx`, `App.getContextMenuItems`, `actions/actionFrame.ts`,
+`actions/actionProperties.tsx`, and library controls. The app wrapper in
+`apps/web/src/features/drawings/DrawingEditor.tsx` disables export/load/save-as-image/save-to-file
+and AI, supplies only canvas background, clear and help in the main menu, but leaves context-menu
+copy-as-PNG/SVG available. These remaining controls are separate acceptance work, not implied by
+rendering an imported scene.
+
+- [x] Shared model/editor/renderer extraction, unchanged Mac public import and baseline tests.
+- [x] Native core ten tools, selection/marquee, move/resize, bound labels, text, styles, eraser,
+  undo/redo with tombstones, and unknown JSON/file preservation through the shared codec.
+- [x] Touch navigation, interruption rollback, explicit multi-select/constraints and 44-point controls.
+- [ ] Runtime iPhone computer-use verification of every tool, keyboard, rotation, dark mode and save/reopen.
+- [ ] Images: embedded file decode/render, photo/file insertion and replacement, crop and flip.
+- [ ] Transform: rotation, four layer commands, grouping/ungrouping, lock/unlock-all,
+  horizontal/vertical flip, six alignment and two distribution controls.
+- [ ] Clipboard: copy/cut/paste with bound labels, frames, groups and file references;
+  copy/paste styles; context-menu copy as PNG/SVG.
+- [ ] Frames: create, rename, wrap selection, select children, remove children and visibility.
+- [ ] Lines/arrows: insert/delete points, elbow creation/editing and straight/round/elbow controls.
+- [ ] Text: vertical alignment, bind/unbind/wrap text in container and automatic-width control.
+- [ ] Precision: grid, snap to grid/objects and freehand stroke shape.
+- [ ] Canvas: background, clear, zoom to selection/reset zoom, view/zen mode, statistics and help.
+- [ ] Links: edit/open links and copy element link with host-provided navigation policy.
+- [ ] Library: save selection, insert/delete items and import/export library files; external browse
+  requires host navigation policy and must not silently fetch or publish drawings.
+- [ ] Native accessibility actions, hardware shortcuts, full font-picker choices and inline previews.
+
+The first mobile checkpoint compiles against the iOS SDK; runtime verification belongs to the
+integrated app. Unchecked features remain explicit implementation work.

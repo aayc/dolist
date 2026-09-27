@@ -6,7 +6,7 @@ import Foundation
 public enum DrawingFonts {
   /// The resource bundle SwiftPM builds for this target, found without `Bundle.module` (which
   /// looks next to the `.app` and traps when it isn't there).
-  static let resourceBundleName = "DailyDoListDrawing_DailyDoListDrawing.bundle"
+  static let resourceBundleName = "DailyDoListDrawing_DailyDoListDrawingCore.bundle"
 
   /// Excalifont, loaded from the bundled file once; nil when the file can't be found or read.
   /// Font descriptors are immutable.

@@ -140,14 +140,14 @@ public struct DrawingColor: Hashable, Sendable {
 
 /// Parsed and themed colors, cached by their CSS string (drawing asks for the same few colors
 /// thousands of times a frame).
-final class DrawingColorCache: @unchecked Sendable {
+package final class DrawingColorCache: @unchecked Sendable {
   private let lock = NSLock()
   private var colors: [String: CGColor] = [:]
 
-  static let shared = DrawingColorCache()
+  package static let shared = DrawingColorCache()
 
   /// The color to draw `css` with in `theme`; unparseable colors draw black, like a canvas.
-  func cgColor(_ css: String, theme: DrawingTheme) -> CGColor {
+  package func cgColor(_ css: String, theme: DrawingTheme) -> CGColor {
     let key = theme == .dark ? "d" + css : "l" + css
     if let color = lock.withLock({ colors[key] }) { return color }
     let color = (DrawingColor.parse(css) ?? .black).themed(theme).cgColor

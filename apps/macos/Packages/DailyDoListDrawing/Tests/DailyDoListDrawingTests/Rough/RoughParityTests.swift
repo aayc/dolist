@@ -3,6 +3,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListDrawing
+@testable import DailyDoListDrawingCore
 
 /// The port against Rough.js 4.6.4 itself: `fixtures/rough-parity.jsonl` holds the op sets the
 /// JavaScript generator produced for each shape, seed and set of options (lines, linear paths,
