@@ -93,6 +93,8 @@ attempts while any capture is queued, sending or indeterminate. Capture preparat
 already-attempted note writes to resolve; those existing attempts may still reconcile/retry.
 The app handles `pendingNoteWrites` by reconciling notes, then retrying captures, then ordinary
 note synchronization. `pendingCaptures` is a waiting state, not a reason to erase edits. After an
+ordinary synchronization pass, barred new writes remain waiting; persisted attempts are processed
+first so lexical path order cannot deadlock capture. After an
 applied capture, refresh the current note and use ordinary three-way reconciliation. Never insert
 a pending capture into the editor and also submit its full text as an ordinary note save.
 

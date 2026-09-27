@@ -5,6 +5,30 @@ import Testing
 @testable import DailyDoListMobileKit
 
 struct CaptureOutboxTests {
+  @Test func anEarlierUnsentPathCannotBlockResolvingALaterAttemptForCapture() async throws {
+    let fixture = try RepositoryFixture()
+    defer { fixture.remove() }
+    let repository = try fixture.open()
+    _ = try await repository.create(path: "Z.md", content: "Already attempted")
+    let remote = RepositoryRemote(scope: fixture.scope)
+    await remote.loseNextResponse()
+    await #expect(throws: TestNetworkError.self) { try await repository.synchronize(with: remote) }
+    _ = try await repository.create(path: "A.md", content: "Not attempted yet")
+    let captures = try CaptureOutbox(rootDirectory: fixture.directory, scope: fixture.scope)
+    _ = try await captures.enqueue(
+      text: "Captured task", capturedAt: Date(timeIntervalSince1970: 1_700_000_000),
+      timeZone: #require(TimeZone(identifier: "UTC")))
+    _ = try await repository.synchronize(with: remote)
+    #expect(try await repository.note("Z.md")?.state == .synced)
+    #expect(try await repository.note("A.md")?.state == .waitingToSync)
+    let captureRemote = CaptureTestRemote(scope: fixture.scope)
+    _ = try await captures.synchronize(with: captureRemote)
+    _ = try await repository.synchronize(with: remote)
+    #expect(await captureRemote.appendCount == 1)
+    #expect(await remote.writes.count == 2)
+    #expect(try await repository.note("A.md")?.state == .synced)
+  }
+
   @Test(arguments: [CaptureState.sending, .applied])
   func interruptionBeforeSendOrReceiptCommitRecoversFromTheLastDurableState(
     _ failedState: CaptureState
@@ -120,9 +144,8 @@ struct CaptureOutboxTests {
     let repository = try fixture.open()
     _ = try await repository.create(path: "Other.md", content: "Other text")
     let notesRemote = RepositoryRemote(scope: fixture.scope)
-    await #expect(throws: WorkspaceRepositoryError.pendingCaptures) {
-      try await repository.synchronize(with: notesRemote)
-    }
+    _ = try await repository.synchronize(with: notesRemote)
+    #expect(try await repository.note("Other.md")?.state == .waitingToSync)
     _ = try await outbox.markReconciled(capture.id, replacing: uncertain.revision)
     _ = try await repository.synchronize(with: notesRemote)
     #expect(await notesRemote.notes["Other.md"]?.content == "Other text")
@@ -139,9 +162,8 @@ struct CaptureOutboxTests {
     let repository = try fixture.open()
     _ = try await repository.create(path: "Other.md", content: "Separate editor text")
     let notesRemote = RepositoryRemote(scope: fixture.scope)
-    await #expect(throws: WorkspaceRepositoryError.pendingCaptures) {
-      try await repository.synchronize(with: notesRemote)
-    }
+    _ = try await repository.synchronize(with: notesRemote)
+    #expect(try await repository.note("Other.md")?.state == .waitingToSync)
     #expect(await notesRemote.writes.isEmpty)
     #expect(try await repository.notes().map(\.content) == ["Separate editor text"])
     let restarted = try CaptureOutbox(rootDirectory: fixture.directory, scope: fixture.scope)

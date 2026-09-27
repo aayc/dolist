@@ -12,8 +12,17 @@ extension WorkspaceRepository {
     let generation = connectionGeneration
     try await verify(remote, generation: generation)
     var changed: [LocalNote] = []
-    for pending in try index.outbox() {
-      try await reconcile(path: pending.path, remote: remote, generation: generation)
+    let pendingWrites = try index.outbox().sorted {
+      if ($0.attempt != nil) != ($1.attempt != nil) { return $0.attempt != nil }
+      return $0.path < $1.path
+    }
+    for pending in pendingWrites {
+      do {
+        try await reconcile(path: pending.path, remote: remote, generation: generation)
+      } catch WorkspaceRepositoryError.pendingCaptures {
+        // A capture waits for earlier attempted writes. A blocked new note must not prevent
+        // another document's immutable attempt from resolving and releasing that dependency.
+      }
       if let note = try note(pending.path) { changed.append(note) }
     }
     return changed
