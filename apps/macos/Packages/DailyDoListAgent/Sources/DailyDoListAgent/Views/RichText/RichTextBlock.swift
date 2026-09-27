@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListAgentCore
 import SwiftUI
 
 /// One block of agent text (a paragraph, heading, list item or quote) in a `CitationTextView`:

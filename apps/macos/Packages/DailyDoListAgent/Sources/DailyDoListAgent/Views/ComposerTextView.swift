@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListAgentCore
 import DailyDoListUI
 import SwiftUI
 

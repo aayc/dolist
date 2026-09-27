@@ -1,4 +1,4 @@
-import DailyDoListUI
+import DailyDoListDomain
 import Foundation
 
 /// One block of rendered markdown. Inline styles (bold, italic, code spans, links) live in the
@@ -59,7 +59,7 @@ public enum MarkdownRenderer {
 
   /// Turns `[[target#subpath|alias]]` outside code spans and links into a link to the note, shown
   /// as the alias, else the note's name (`Note › Heading` with a subpath).
-  static func linkWikiLinks(_ text: inout AttributedString) {
+  package static func linkWikiLinks(_ text: inout AttributedString) {
     let characters = Array(text.characters)
     var matches: [(range: Range<Int>, display: String, url: URL)] = []
     var index = 0
@@ -122,7 +122,7 @@ public enum MarkdownRenderer {
   }
 
   /// Removes unsafe links and raw HTML, turns soft breaks into newlines.
-  static func sanitize(_ text: inout AttributedString) {
+  package static func sanitize(_ text: inout AttributedString) {
     var unsafeLinks: [Range<AttributedString.Index>] = []
     var softBreaks: [Range<AttributedString.Index>] = []
     var html: [Range<AttributedString.Index>] = []

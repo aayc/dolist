@@ -1,4 +1,3 @@
-import AppKit
 import DailyDoListModels
 import Foundation
 
@@ -43,15 +42,6 @@ extension AgentStore {
     surfaceActions[SurfaceKey(threadId: threadId, surface: surface)] ?? []
   }
 
-  /// The decoded image of a frame, cached until the surface's next frame.
-  public func image(for frame: SurfaceFrame) -> NSImage? {
-    let key = SurfaceKey(frame)
-    if let cached = decodedFrames[key], cached.ts == frame.ts { return cached.image }
-    guard let data = frame.imageData, let image = NSImage(data: data) else { return nil }
-    decodedFrames[key] = (frame.ts, image)
-    return image
-  }
-
   func receive(_ frame: SurfaceFrame) {
     let key = SurfaceKey(frame)
     if let current = frames[key], current.ts > frame.ts || current == frame { return }
@@ -71,7 +61,6 @@ extension AgentStore {
     for (key, _) in oldest {
       frames[key] = nil
       surfaceActions[key] = nil
-      decodedFrames[key] = nil
     }
   }
 }

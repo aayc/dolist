@@ -1,4 +1,3 @@
-import AppKit
 import DailyDoListClient
 import DailyDoListModels
 import Foundation
@@ -97,13 +96,16 @@ public final class AgentStore {
   public internal(set) var pendingPlacement: AgentPlacement?
   /// The always-on machine's name, from the host's settings (`remote.alwaysOnMachine`).
   public var alwaysOnMachineName: String?
+  /// Unsaved reply text survives navigation. The mobile host mirrors changes into its durable
+  /// workspace repository through the view's draft callbacks.
+  public var replyDrafts: [String: String] = [:]
   /// A message of the orchestrator's chat to show (a turn opened from the editor), until the chat
   /// has scrolled to it.
   public internal(set) var orchestratorFocus: OrchestratorFocus?
 
   // MARK: Bookkeeping
 
-  let now: @Sendable () -> Date
+  package let now: @Sendable () -> Date
   let artifactRefetchDelay: Duration
   let outbox: ClientOutbox
   /// Incremented for every applied event; REST snapshots compare against it to find the ids that
@@ -122,7 +124,6 @@ public final class AgentStore {
   /// Routines whose runs were loaded (`refresh()` refetches them).
   @ObservationIgnored var trackedRoutines: Set<String> = []
   @ObservationIgnored var subscriptionCounts: [SurfaceKey: Int] = [:]
-  @ObservationIgnored var decodedFrames: [SurfaceKey: (ts: EpochMillis, image: NSImage)] = [:]
   @ObservationIgnored var artifactRefetches: [String: Task<Void, Never>] = [:]
   @ObservationIgnored var refreshGeneration = 0
 
@@ -255,7 +256,7 @@ public final class AgentStore {
 
   /// Daemon ids of the user's messages → the optimistic ids they replaced (chat rows keep their
   /// identity when the daemon's copy arrives).
-  var messageAliases: [String: String] {
+  package var messageAliases: [String: String] {
     _ = loadedThreads
     return state.optimisticReplacements
   }

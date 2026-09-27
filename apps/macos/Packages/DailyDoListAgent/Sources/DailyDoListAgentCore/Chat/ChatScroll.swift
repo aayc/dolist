@@ -1,4 +1,4 @@
-import CoreGraphics
+import Foundation
 
 /// Whether the chat follows new content, and how many messages arrived while the user read
 /// further up.
@@ -8,26 +8,28 @@ import CoreGraphics
 /// even rows above resizing as they load. Within `pinThreshold` of the bottom still counts as at
 /// the bottom for the "Jump to latest" pill and its count. Growth and scrolling are told apart by
 /// what changed: the content's or viewport's height (growth), or only the offset (a scroll).
-struct ChatScroll: Equatable, Sendable {
-  /// Within this distance of the bottom, the pill hides and new messages count as seen.
-  static let pinThreshold: CGFloat = 48
-  /// Within this distance, the chat is at the bottom and follows growth.
-  static let followTolerance: CGFloat = 2
+package struct ChatScroll: Equatable, Sendable {
+  package init() {}
 
-  private(set) var isPinned = true
+  /// Within this distance of the bottom, the pill hides and new messages count as seen.
+  package static let pinThreshold: CGFloat = 48
+  /// Within this distance, the chat is at the bottom and follows growth.
+  package static let followTolerance: CGFloat = 2
+
+  package private(set) var isPinned = true
   /// Messages that arrived while unpinned.
-  private(set) var unseen = 0
+  package private(set) var unseen = 0
   /// At the bottom, or on the way there: growth scrolls down.
-  private(set) var isFollowing = true
+  package private(set) var isFollowing = true
   /// Scrolling down to the latest message (the pill stays hidden on the way).
-  private(set) var isJumping = false
+  package private(set) var isJumping = false
   private var contentHeight: CGFloat?
   private var viewportHeight: CGFloat?
   private var lastDistance: CGFloat = 0
 
   /// The layout changed. Returns whether to scroll to the bottom.
   /// - Parameter distanceFromBottom: from the viewport's bottom edge down to the content's.
-  mutating func layoutChanged(
+  package mutating func layoutChanged(
     contentHeight: CGFloat, viewportHeight: CGFloat, distanceFromBottom: CGFloat
   ) -> Bool {
     let resized = contentHeight != self.contentHeight || viewportHeight != self.viewportHeight
@@ -51,12 +53,12 @@ struct ChatScroll: Equatable, Sendable {
   }
 
   /// `count` messages arrived.
-  mutating func arrived(_ count: Int) {
+  package mutating func arrived(_ count: Int) {
     if !isPinned, count > 0 { unseen += count }
   }
 
   /// The user asked for the latest message: the chat scrolls down to it.
-  mutating func jumpToLatest() {
+  package mutating func jumpToLatest() {
     setPinned(true)
     isFollowing = true
     isJumping = true

@@ -5,6 +5,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 extension Fixture {
   static func routine(

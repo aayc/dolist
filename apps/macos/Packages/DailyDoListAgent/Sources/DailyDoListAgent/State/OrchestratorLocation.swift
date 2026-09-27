@@ -1,3 +1,4 @@
+import DailyDoListAgentCore
 import DailyDoListModels
 import DailyDoListUI
 import Foundation
@@ -121,4 +122,14 @@ public struct OrchestratorLocation: Equatable, Sendable {
     stored == .alwaysOnMachine
       ? reason + " It moves there, as you chose, once that's done." : reason
   }
+}
+
+extension AgentStore {
+  /// What the orchestrator's Remote switch row shows; nil without placement.
+  public var orchestratorLocation: OrchestratorLocation? {
+    OrchestratorLocation(
+      status: placement, machineName: alwaysOnMachineName, problem: status?.problem,
+      pending: pendingPlacement)
+  }
+
 }

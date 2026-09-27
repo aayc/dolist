@@ -2,6 +2,7 @@ import DailyDoListModels
 import Foundation
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 /// Routines of the sample: a morning briefing with finished runs, a paused price watch, a weekly
 /// review running now and a file whose schedule can't be read. Synthetic content only.

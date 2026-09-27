@@ -1,11 +1,10 @@
 import AppKit
+import DailyDoListAgentCore
 import DailyDoListUI
 import SwiftUI
 
 /// Semantic color of a status, risk or result (same palette as the web app's `--ddl-*` tokens).
-public enum Tone: String, CaseIterable, Hashable, Sendable {
-  case accent, faint, info, warning, success, danger
-
+extension Tone {
   public var color: Color {
     switch self {
     case .accent: Theme.accent

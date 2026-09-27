@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListAgentCore
 import DailyDoListModels
 import Foundation
 import Observation

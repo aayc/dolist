@@ -2,6 +2,7 @@ import DailyDoListModels
 import Foundation
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 /// Small synthetic builders (same defaults as the web reducer tests).
 enum Fixture {

@@ -3,6 +3,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 /// The activity labels (the web app's tests share these cases) and when the live row shows.
 @Suite("Chat activity")

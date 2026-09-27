@@ -67,19 +67,20 @@ public struct SurfaceAction: Hashable, Sendable, Identifiable {
   }
 }
 
-enum SurfaceFeed {
+package enum SurfaceFeed {
   /// Actions kept per surface.
-  static let maxActions = 40
+  package static let maxActions = 40
   /// Frames are only "live" while they keep coming.
-  static let liveWindow: TimeInterval = 3
+  package static let liveWindow: TimeInterval = 3
 
   /// Appends a frame's action, skipping consecutive repeats (a stream of frames after one click).
-  static func appending(_ action: SurfaceAction, to log: [SurfaceAction]) -> [SurfaceAction] {
+  package static func appending(_ action: SurfaceAction, to log: [SurfaceAction]) -> [SurfaceAction]
+  {
     if let last = log.last, last.sameAction(as: action) { return log }
     return Array((log + [action]).suffix(maxActions))
   }
 
-  static func isLive(lastFrameAt ts: EpochMillis?, now: Date) -> Bool {
+  package static func isLive(lastFrameAt ts: EpochMillis?, now: Date) -> Bool {
     guard let ts else { return false }
     let age = now.timeIntervalSince(Date(epochMillis: ts))
     return age < liveWindow && age > -liveWindow

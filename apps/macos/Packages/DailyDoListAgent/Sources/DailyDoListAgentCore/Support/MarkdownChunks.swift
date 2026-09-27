@@ -7,8 +7,8 @@ import Foundation
 /// fenced code, unless that line starts a list item (items of one list stay together: an ordered
 /// list numbers from its first item). Sources with link reference definitions or HTML blocks, which
 /// reach across blank lines, stay whole.
-enum MarkdownChunks {
-  static func split(_ source: String) -> [Substring] {
+package enum MarkdownChunks {
+  package static func split(_ source: String) -> [Substring] {
     guard !source.isEmpty else { return [] }
     var lines: [Substring] = []
     var start = source.startIndex
@@ -46,7 +46,7 @@ enum MarkdownChunks {
   }
 
   /// An open code fence (```` ``` ```` or `~~~`, three or more).
-  struct Fence {
+  package struct Fence {
     let marker: Character
     let length: Int
 
@@ -71,17 +71,17 @@ enum MarkdownChunks {
     }
   }
 
-  static func isBlank(_ line: Substring) -> Bool {
+  package static func isBlank(_ line: Substring) -> Bool {
     line.allSatisfy(\.isWhitespace)
   }
 
-  static func startsAtMargin(_ line: Substring) -> Bool {
+  package static func startsAtMargin(_ line: Substring) -> Bool {
     guard let first = line.first else { return false }
     return !first.isWhitespace
   }
 
   /// `- `, `* `, `+ `, `1. `, `1) ` (or the marker alone at the end of the text).
-  static func startsListItem(_ line: Substring) -> Bool {
+  package static func startsListItem(_ line: Substring) -> Bool {
     let body = line.drop { $0 == " " }
     guard let first = body.first else { return false }
     let afterMarker: Substring
@@ -101,7 +101,7 @@ enum MarkdownChunks {
   }
 
   /// `[label]: url` or an HTML block (`<div>`, `<!-- … -->`).
-  static func reachesAcrossBlankLines(_ line: Substring) -> Bool {
+  package static func reachesAcrossBlankLines(_ line: Substring) -> Bool {
     let body = line.drop { $0 == " " }
     guard line.count - body.count <= 3, let first = body.first else { return false }
     if first == "<" {
@@ -124,8 +124,8 @@ enum MarkdownChunks {
 /// - Unclosed `**`, `~~` and code spans on the last line are closed, so bold and code render as
 ///   they type.
 /// - Inside an unclosed code fence the text is code: only a half-typed closing fence is left out.
-enum MarkdownTail {
-  static func tolerant(_ text: String) -> String {
+package enum MarkdownTail {
+  package static func tolerant(_ text: String) -> String {
     var lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
     guard var last = lines.popLast() else { return text }
     var fence: MarkdownChunks.Fence?
@@ -151,7 +151,7 @@ enum MarkdownTail {
 
   /// A line with nothing but markup so far: list and quote markers, heading hashes, rules, setext
   /// underlines, table delimiters, fences, a number that may become `1.`.
-  static func isMarkupOnly(_ line: String) -> Bool {
+  package static func isMarkupOnly(_ line: String) -> Bool {
     let trimmed = line.trimmingCharacters(in: .whitespaces)
     guard !trimmed.isEmpty else { return false }
     if trimmed.allSatisfy({ "-=*_+#>|:~`".contains($0) || $0 == " " }) { return true }
@@ -160,7 +160,7 @@ enum MarkdownTail {
     return !digits.isEmpty && (rest.isEmpty || rest == "." || rest == ")")
   }
 
-  static func dropTrailingDelimiters(_ text: String) -> String {
+  package static func dropTrailingDelimiters(_ text: String) -> String {
     var result = Substring(text)
     while let last = result.last, "*_~`".contains(last) {
       result = result.dropLast()
@@ -169,7 +169,7 @@ enum MarkdownTail {
   }
 
   /// `[label](partial` or `[label` at the end → `label` (nothing for a citation or an image).
-  static func dropHalfLink(_ text: String) -> String {
+  package static func dropHalfLink(_ text: String) -> String {
     guard let open = text.lastIndex(of: "[") else { return text }
     let tail = text[text.index(after: open)...]
     if tail.contains("\n") { return text }
@@ -191,7 +191,7 @@ enum MarkdownTail {
 
   /// Closes `**`, `~~` and code spans left open in `line` (innermost first), before any trailing
   /// whitespace so the closers still count as closing.
-  static func closingInline(_ line: String) -> String {
+  package static func closingInline(_ line: String) -> String {
     let chars = Array(line)
     var code: (position: Int, run: Int)?
     var strong: Int?

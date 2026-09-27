@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListAgentCore
 import DailyDoListUI
 
 extension NSAttributedString.Key {

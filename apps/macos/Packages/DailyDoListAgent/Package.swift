@@ -1,13 +1,15 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
-// Agent state (records, threads, approvals, status) and the agent UI: inbox, thread view with
-// approval cards, artifacts and live surfaces, notifications, menu bar content.
+// AgentCore owns portable state and actions. The macOS and iPhone products render that same
+// state through platform adapters; no image or window framework enters the core.
 // DailyDoListAgentTestSupport has the synthetic agent data (SampleData) the tests render.
 let package = Package(
   name: "DailyDoListAgent",
-  platforms: [.macOS(.v14)],
+  platforms: [.macOS(.v14), .iOS(.v17)],
   products: [
+    .library(name: "DailyDoListAgentCore", targets: ["DailyDoListAgentCore"]),
+    .library(name: "DailyDoListMobileAgent", targets: ["DailyDoListMobileAgent"]),
     .library(name: "DailyDoListAgent", targets: ["DailyDoListAgent"]),
     .library(name: "DailyDoListAgentTestSupport", targets: ["DailyDoListAgentTestSupport"]),
   ],
@@ -19,8 +21,26 @@ let package = Package(
   ],
   targets: [
     .target(
+      name: "DailyDoListAgentCore",
+      dependencies: [
+        .product(name: "DailyDoListModels", package: "DailyDoListModels"),
+        .product(name: "DailyDoListDomain", package: "DailyDoListDomain"),
+        .product(name: "DailyDoListClient", package: "DailyDoListClient"),
+      ]
+    ),
+    .target(
+      name: "DailyDoListMobileAgent",
+      dependencies: [
+        "DailyDoListAgentCore",
+        .product(name: "DailyDoListModels", package: "DailyDoListModels"),
+        .product(name: "DailyDoListDomain", package: "DailyDoListDomain"),
+        .product(name: "DailyDoListClient", package: "DailyDoListClient"),
+      ]
+    ),
+    .target(
       name: "DailyDoListAgent",
       dependencies: [
+        "DailyDoListAgentCore",
         .product(name: "DailyDoListModels", package: "DailyDoListModels"),
         .product(name: "DailyDoListDomain", package: "DailyDoListDomain"),
         .product(name: "DailyDoListClient", package: "DailyDoListClient"),
@@ -30,6 +50,7 @@ let package = Package(
     .target(
       name: "DailyDoListAgentTestSupport",
       dependencies: [
+        "DailyDoListAgentCore",
         "DailyDoListAgent",
         .product(name: "DailyDoListModels", package: "DailyDoListModels"),
         .product(name: "DailyDoListClient", package: "DailyDoListClient"),
@@ -39,6 +60,7 @@ let package = Package(
     .testTarget(
       name: "DailyDoListAgentTests",
       dependencies: [
+        "DailyDoListAgentCore",
         "DailyDoListAgent",
         "DailyDoListAgentTestSupport",
         .product(name: "DailyDoListModels", package: "DailyDoListModels"),

@@ -3,6 +3,7 @@ import DailyDoListUITestSupport
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 /// Random event streams over a small universe of ids (so events keep hitting the same entities),
 /// with few distinct timestamps (so collisions and reordering are common). Port of the web

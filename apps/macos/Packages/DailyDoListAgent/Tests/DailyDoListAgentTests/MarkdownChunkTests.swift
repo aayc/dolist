@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 /// Chunked parsing renders exactly what parsing the whole text renders (so a message typing out
 /// never reflows when it finishes), and half-typed markdown is tolerated.

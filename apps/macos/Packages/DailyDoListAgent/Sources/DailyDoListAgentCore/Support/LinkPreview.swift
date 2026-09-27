@@ -66,15 +66,15 @@ public struct NotePreview: Hashable, Sendable {
   }
 }
 
-enum CitedSourceMatch {
-  static func source(for url: String, in sources: [CitedSource]) -> CitedSource? {
+package enum CitedSourceMatch {
+  package static func source(for url: String, in sources: [CitedSource]) -> CitedSource? {
     if let exact = sources.first(where: { $0.url == url }) { return exact }
     guard let key = key(url) else { return nil }
     return sources.first { self.key($0.url) == key }
   }
 
   /// `host/path?query`, lowercased host without `www.`, no trailing slash, no fragment.
-  static func key(_ url: String) -> String? {
+  package static func key(_ url: String) -> String? {
     guard var components = URLComponents(string: url), let host = components.host?.lowercased()
     else { return nil }
     components.fragment = nil
