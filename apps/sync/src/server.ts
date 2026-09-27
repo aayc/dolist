@@ -27,7 +27,7 @@ export interface SyncServerOptions {
   host?: string;
   /** Default 7332; 0 picks a free port. */
   port?: number;
-  /** Largest file content, UTF-8 bytes. Default 5 MiB. */
+  /** Largest file content, raw bytes (UTF-8 for text). Default 5 MiB. */
   maxFileBytes?: number;
   /** Storage quota per vault in bytes (only used when this server opens the database). */
   quotaBytes?: number;

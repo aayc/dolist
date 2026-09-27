@@ -40,6 +40,8 @@ const STATE_STATUS: Partial<Record<SyncErrorCode, ContentfulStatusCode>> = {
   lease_held: 409,
   stale_lease: 409,
   quota_exceeded: 413,
+  payload_too_large: 413,
+  unsupported_media_type: 415,
 };
 
 /** A change to the agent's files not made under the current agent grant from this device. */

@@ -39,7 +39,7 @@ export interface SyncAppOptions {
   store: SyncStore;
   hub: StreamHub;
   limiter: RateLimiter;
-  /** Largest file content accepted, in UTF-8 bytes. */
+  /** Largest file content accepted, in raw bytes (UTF-8 for text). */
   maxFileBytes: number;
   logger: Logger;
   /** Called once per authenticated request, for the server's traffic summary. */
@@ -55,6 +55,14 @@ const WriteFileSchema = z.strictObject({
   content: z.string(),
   ifMatch: RevSchema.nullable().optional(),
 });
+const BinaryWriteQuerySchema = z
+  .strictObject({
+    ifMatch: RevSchema.optional(),
+    ifAbsent: z.literal("1").optional(),
+  })
+  .refine((query) => query.ifMatch === undefined || query.ifAbsent === undefined, {
+    message: "Choose ifMatch or ifAbsent, not both",
+  });
 const RenameSchema = z.strictObject({ from: z.string(), to: z.string() });
 const FolderSchema = z.strictObject({ path: z.string() });
 const LeaseRequestSchema = z.strictObject({
@@ -90,7 +98,11 @@ export function createSyncApp(options: SyncAppOptions): Hono<Env> {
   app.notFound((c) => c.json(errorBody("not_found", "Unknown route"), 404));
 
   app.get(SYNC_ROUTES.health, (c) => {
-    const body: SyncHealthResponse = { ok: true, apiVersion: SYNC_API_VERSION };
+    const body: SyncHealthResponse = {
+      ok: true,
+      apiVersion: SYNC_API_VERSION,
+      capabilities: ["binary-files-v1"],
+    };
     return c.json(body);
   });
 
@@ -145,6 +157,66 @@ export function createSyncApp(options: SyncAppOptions): Hono<Env> {
     };
     return c.json(body, outcome.created ? 201 : 200);
   });
+
+  app.get("/v1/vaults/:vault/binary/*", (c) => {
+    const path = filePathFromUrl(c.req.url);
+    const file = store.readBinary(c.get("vault"), path, options.maxFileBytes);
+    if (!file) return notFound(c, path);
+    c.header("Content-Type", "application/octet-stream");
+    c.header("Content-Disposition", "attachment");
+    c.header("X-Content-Type-Options", "nosniff");
+    c.header("Cache-Control", "no-store");
+    c.header("Content-Length", String(file.content.byteLength));
+    c.header("X-DDL-File-Rev", file.rev);
+    c.header("X-DDL-File-Mtime", String(file.mtime));
+    c.header("X-DDL-File-Hash", file.hash);
+    return c.body(new Uint8Array(file.content).buffer);
+  });
+
+  app.put(
+    "/v1/vaults/:vault/binary/*",
+    bodyLimit({
+      maxSize: options.maxFileBytes,
+      onError: (c) => c.json(errorBody("payload_too_large", "File too large"), 413),
+    }),
+    async (c) => {
+      const path = filePathFromUrl(c.req.url);
+      const device = requireDevice(c);
+      const type = c.req.header("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+      if (type !== "application/octet-stream") {
+        throw new SyncApiError(
+          415,
+          "unsupported_media_type",
+          "Send binary files as application/octet-stream",
+        );
+      }
+      const parameters = new URL(c.req.url).searchParams;
+      for (const key of ["ifMatch", "ifAbsent"]) {
+        if (parameters.getAll(key).length > 1)
+          throw new SyncApiError(400, "invalid_request", "Duplicate write precondition");
+      }
+      const query = parse(BinaryWriteQuerySchema, c.req.query(), "query");
+      const content = new Uint8Array(await c.req.arrayBuffer());
+      if (content.byteLength > options.maxFileBytes)
+        throw new SyncApiError(413, "payload_too_large", "File too large");
+      const vault = c.get("vault");
+      requireLeaseEpoch(c, store, device, isAgentOwnedPath(path));
+      const outcome = store.writeBinary(
+        vault,
+        path,
+        content,
+        query.ifAbsent === "1" ? null : query.ifMatch,
+        device,
+      );
+      if (outcome.change) hub.publish(vault, [outcome.change]);
+      const body: SyncWriteResponse = {
+        ...outcome.entry,
+        created: outcome.created,
+        seq: outcome.change?.seq ?? null,
+      };
+      return c.json(body, outcome.created ? 201 : 200);
+    },
+  );
 
   app.delete("/v1/vaults/:vault/files/*", (c) => {
     const path = filePathFromUrl(c.req.url);

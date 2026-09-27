@@ -303,6 +303,9 @@ describe.each([
       created.close();
       const { DatabaseSync } = process.getBuiltinModule("node:sqlite");
       const old = new DatabaseSync(db);
+      old.exec(
+        "DROP INDEX files_blob_references; DROP TABLE blobs; ALTER TABLE files DROP COLUMN blob_hash",
+      );
       for (const column of dropped) old.exec(`ALTER TABLE leases DROP COLUMN ${column}`);
       old
         .prepare(

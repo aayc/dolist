@@ -100,14 +100,53 @@ that sync for the first time only add files. Through the sync service, journals 
 every agent file ([the agent lease](#the-agent-lease)): only the lease holder's appends travel,
 pushed as the union when the service's copy changed too, so no event is dropped.
 
-What syncs: every text file in the vault, including the agent's sidecar (`state/journal` with the
+What syncs: text files and bounded binary attachments in the vault, including the agent's sidecar (`state/journal` with the
 threads, `artifacts`, `state/records.json`, `approvals.json`, `settings.json`, and the thread
 snapshots older versions wrote in `threads/`, until the agent's holder moves them into the
 journals). The sync service also carries `state/tasks`: the lease holder's task IDs and settled
 snapshots must follow the agent or a handover can repeat completed unchecked tasks. Folder sync
 keeps these trackers device-local because it has no agent lease. What doesn't sync: each device's
 own sync snapshot (`.daily-do-list/sync/`), the Obsidian import manifest (`.daily-do-list/import/`,
-which names a folder on this machine), junk and temp files, and binary files (images, PDFs, …).
+which names a folder on this machine), and junk and temp files.
+Attachments over the configured byte limit remain pending; they are never truncated or decoded
+as replacement-character text.
+
+## Binary file transport
+
+`GET /v1/health` advertises `binary-files-v1` in its additive `capabilities` array. Binary-capable
+clients use `SYNC_ROUTES.binaryFile(vault, path)` (`/v1/vaults/:vault/binary/<encoded path>`):
+
+- `GET` returns exact bytes as `application/octet-stream`, with `Content-Length`,
+  `X-DDL-File-Rev`, `X-DDL-File-Mtime` (epoch milliseconds) and `X-DDL-File-Hash` (SHA-256).
+  It also reads existing text files as exact UTF-8 bytes. Responses are attachments with
+  `nosniff` and `no-store`; clients decide how to display supported content safely.
+- `PUT` requires `Content-Type: application/octet-stream` and a raw body. `?ifMatch=<rev>`
+  requires that revision, `?ifAbsent=1` is create-only, and omitting both is unconditional.
+  Conflicting/duplicate preconditions are rejected. The response is the existing
+  `SyncWriteResponse` (201 created, 200 replaced or unchanged); a failed comparison is 409
+  with `currentRev`, just like text writes.
+- The existing list/stat metadata includes `binary: true` for binary entries. Renames and
+  deletes use the existing routes, revisions and change log. Equal binary bytes retain their
+  revision and append nothing; explicitly converting text to a binary entry appends a new
+  revision even when the bytes are equal, so clients observe the metadata change.
+- Text content `GET`/`PUT` return 415 `unsupported_media_type` for binary entries, so old clients
+  cannot read an empty placeholder or overwrite an attachment through a text conversion.
+  Text metadata requests still work. Invalid stored UTF-8 text fails closed rather than being
+  silently replaced with U+FFFD; valid text keeps its original BOM and bytes.
+
+Schema 5 stores immutable blobs by `(vault, SHA-256)` and live file references in the existing
+file table. One transaction publishes the blob, file revision and change. Duplicate content
+within a vault shares a blob, but quota accounting still counts the logical size of every live
+file. Replacing/deleting the last reference collects that blob in the same transaction. Files,
+folders, leases, revisions and changes from older schema versions migrate intact; old servers
+refuse the newer schema. Reads and equal-byte retries verify blob size/hash, so corruption or a
+missing blob cannot become a successful empty-file acknowledgement.
+
+Binary routes use the same vault token, device identity, canonical-path rules, rate limits and
+agent lease fencing as text routes. The configured file byte limit applies to both upload and
+raw download, including an older file when a server restarts with a smaller limit. The service
+holds no MIME trust decision: a stored HTML/SVG/PDF remains opaque bytes here.
+
 
 ## Security
 
@@ -121,9 +160,10 @@ This repository is public and these are people's notes, so:
   all get the same 401 (same body, same `WWW-Authenticate`), over HTTP and on the WebSocket upgrade.
   Stream close codes say nothing about other vaults. Per-vault `seq` numbers leak nothing about
   other vaults' activity.
-- **Input.** Every path is validated (above); request bodies are capped at twice the file limit
-  (JSON escaping), files at 5 MiB by default (`--max-file-mb`), each vault at a quota
-  (`--max-vault-mb`, default 1 GiB); malformed JSON and unknown fields are 400s. Each vault is
+- **Input.** Every path is validated (above); JSON request bodies are capped at twice the file
+  limit (JSON escaping), raw binary bodies and downloads at the file limit, files at 5 MiB by
+  default (`--max-file-mb`), each vault at a quota (`--max-vault-mb`, default 1 GiB); malformed
+  JSON and unknown fields are 400s. Each vault is
   rate-limited (a token bucket, default 100 requests/s with bursts of 1 000; 429 with
   `Retry-After`, which the client honors). A vault gets at most 32 open streams, and clients can't
   send anything on them.
@@ -307,7 +347,6 @@ version moves into the journals (losing nothing).
 
 Phase 1 limitations:
 
-- Binary attachments (images, PDFs) are not synced; the provider API is text-only.
 - No end-to-end encryption yet: the server can read what it stores.
 - The change log is never compacted, and the quota is server-wide (one value for every vault).
 - File names that differ only in case or Unicode normalization across file systems aren't
@@ -318,7 +357,7 @@ Phase 1 limitations:
   it, see [ALWAYS_ON.md](./ALWAYS_ON.md#the-agent-relay)).
 Phase 2:
 
-- Attachments in S3/R2 (content-addressed, referenced from the change log).
+- External blob storage in S3/R2 (the current service keeps content-addressed blobs in SQLite).
 - A Cloudflare Durable Object host (one object per vault with its own SQLite, same protocol).
 - End-to-end encryption of content and paths.
 - Lease changes pushed on the stream.
