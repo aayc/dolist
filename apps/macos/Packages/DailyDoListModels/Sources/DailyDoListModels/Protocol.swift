@@ -8,6 +8,7 @@ public enum DaemonProtocol {
   /// Header clients send so the daemon can tag the origin of a change.
   public static let clientIdHeader = "x-ddl-client-id"
   public static let workspaceIdHeader = "x-ddl-workspace-id"
+  public static let operationIdHeader = "x-ddl-operation-id"
   /// WebSocket close code: the client's `hello.apiVersion` is incompatible.
   public static let incompatibleApiVersionCloseCode = 4426
 
@@ -75,6 +76,10 @@ public enum APIRoute {
   /// `date` is `today` or `YYYY-MM-DD`.
   public static func daily(_ date: String, create: Bool = true) -> String {
     "/api/daily/\(encodeURIComponent(date))\(create ? "?create=1" : "")"
+  }
+
+  public static func agentOperation(_ id: String) -> String {
+    "/api/agent/operations/\(encodeURIComponent(id))"
   }
 
   public static func dailyAppend(_ date: String) -> String {
@@ -748,6 +753,7 @@ public struct ApiErrorCode: WireEnum {
   public static let workspaceMismatch: Self = "workspace_mismatch"
   public static let hostMismatch: Self = "host_mismatch"
   public static let operationConflict: Self = "operation_conflict"
+  public static let operationIndeterminate: Self = "operation_indeterminate"
   public static let lockedByEnv: Self = "locked_by_env"
   public static let payloadTooLarge: Self = "payload_too_large"
   public static let upgradeRequired: Self = "upgrade_required"

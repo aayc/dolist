@@ -125,6 +125,20 @@ public protocol DaemonClient: AnyObject, Sendable {
   /// Obsidian vault moved, 409 while a job runs.
   func updateFromObsidian() async throws -> ObsidianImportJob
 
+  // Durable mutations. The caller saves one operation ID before sending and reuses it to resolve
+  // that attempt. Only opt in after health advertises agent-mutations-v1.
+  func postMessage(threadId: String, text: String, operationId: String) async throws
+    -> ThreadActionResponse
+  func cancelThread(_ id: String, operationId: String) async throws -> ThreadActionResponse
+  func retryThread(_ id: String, operationId: String) async throws -> ThreadActionResponse
+  func decideApproval(_ id: String, _ decision: ApprovalDecisionRequest, operationId: String)
+    async throws -> ApprovalRequest
+  func createRoutine(_ request: CreateRoutineRequest, operationId: String) async throws -> Routine
+  func runRoutine(_ id: String, operationId: String) async throws -> RoutineRunResponse
+  func pauseRoutine(_ id: String, operationId: String) async throws -> Routine
+  func resumeRoutine(_ id: String, operationId: String) async throws -> Routine
+  func agentOperation(_ operationId: String) async throws -> AgentOperationResponse
+
   // Events (WebSocket)
   /// Opens the event connection (idempotent); reconnects automatically until `disconnect()`.
   func connect() async

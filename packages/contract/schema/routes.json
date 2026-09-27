@@ -24,6 +24,13 @@
         "$ref": "wire.schema.json#/$defs/ApiErrorBody"
       }
     },
+    "409": {
+      "description": "An operation ID conflicts or its dispatch is uncertain.",
+      "codes": ["operation_conflict", "operation_indeterminate"],
+      "schema": {
+        "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+      }
+    },
     "412": {
       "description": "The verified workspace or host changed; reconnect without replaying pending writes.",
       "codes": ["workspace_mismatch", "host_mismatch"],
@@ -34,6 +41,13 @@
     "500": {
       "description": "Unexpected daemon failure.",
       "codes": ["internal_error"],
+      "schema": {
+        "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+      }
+    },
+    "503": {
+      "description": "The authoritative agent or receipt store is unavailable.",
+      "codes": ["agent_unavailable"],
       "schema": {
         "$ref": "wire.schema.json#/$defs/ApiErrorBody"
       }
@@ -457,6 +471,47 @@
             "413": {
               "description": "Body over 5 MB.",
               "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "agentOperation": {
+      "path": "/api/agent/operations/:id",
+      "auth": "bearer",
+      "params": {
+        "$ref": "#/$defs/agentOperation.params"
+      },
+      "methods": {
+        "GET": {
+          "summary": "Resolve an agent operation without dispatching it again (requires verified workspace).",
+          "responses": {
+            "200": {
+              "description": "The durable receipt, or its unresolved preparation.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/AgentOperationResponse"
+              }
+            },
+            "400": {
+              "description": "Missing verified workspace or invalid operation ID.",
+              "codes": ["invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "No preparation exists for this operation.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "503": {
+              "description": "The authoritative receipt store is unreachable.",
+              "codes": ["agent_unavailable"],
               "schema": {
                 "$ref": "wire.schema.json#/$defs/ApiErrorBody"
               }
@@ -891,9 +946,9 @@
             },
             "409": {
               "description": "Already decided, expired or cancelled (carries its current state).",
-              "codes": ["conflict"],
+              "codes": ["conflict", "operation_conflict", "operation_indeterminate"],
               "schema": {
-                "$ref": "wire.schema.json#/$defs/ApprovalConflictResponse"
+                "$ref": "#/$defs/approval.POST.409"
               }
             },
             "413": {
@@ -991,8 +1046,8 @@
               }
             },
             "409": {
-              "description": "A routine with that name exists.",
-              "codes": ["conflict"],
+              "description": "A routine with that name exists, or an operation ID conflicts or is uncertain.",
+              "codes": ["conflict", "operation_conflict", "operation_indeterminate"],
               "schema": {
                 "$ref": "wire.schema.json#/$defs/ApiErrorBody"
               }
@@ -1074,7 +1129,7 @@
             },
             "409": {
               "description": "It can't run now: a run is going, it has a problem, or today's extra runs are used up.",
-              "codes": ["conflict"],
+              "codes": ["conflict", "operation_conflict", "operation_indeterminate"],
               "schema": {
                 "$ref": "wire.schema.json#/$defs/ApiErrorBody"
               }
@@ -1889,6 +1944,28 @@
     }
   },
   "$defs": {
+    "agentOperation.params": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,128}$",
+          "description": "Client id chosen by the client."
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "approval.POST.409": {
+      "anyOf": [
+        {
+          "$ref": "wire.schema.json#/$defs/ApprovalConflictResponse"
+        },
+        {
+          "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+        }
+      ]
+    },
     "approval.params": {
       "type": "object",
       "properties": {

@@ -51,10 +51,12 @@ struct RESTTransport: Sendable {
     conflict: ConflictKind = .none,
     credential: Credential = .bearer,
     attribute: Bool = false,
+    operationId: String? = nil,
     as type: Response.Type = Response.self
   ) async throws(DaemonClientError) -> Response {
     let payload = try await exchange(
-      method, path, body: body, conflict: conflict, credential: credential, attribute: attribute)
+      method, path, body: body, conflict: conflict, credential: credential, attribute: attribute,
+      operationId: operationId)
     do {
       return try JSONDecoder.daemon.decode(Response.self, from: payload)
     } catch {
@@ -86,7 +88,7 @@ struct RESTTransport: Sendable {
 
   private func exchange(
     _ method: Method, _ path: String, body: (any Encodable & Sendable)?, conflict: ConflictKind,
-    credential: Credential, attribute: Bool
+    credential: Credential, attribute: Bool, operationId: String? = nil
   ) async throws(DaemonClientError) -> Data {
     var data: Data?
     if let body {
@@ -98,7 +100,8 @@ struct RESTTransport: Sendable {
     }
     let request = try makeRequest(
       method, path, body: data, accept: "application/json", timeout: requestTimeout,
-      attribute: attribute || method != .get, token: credential.sendsToken)
+      attribute: attribute || method != .get, token: credential.sendsToken, operationId: operationId
+    )
     let (payload, response) = try await send(request)
     try check(response, payload, conflict: conflict, credential: credential)
     return payload
@@ -106,7 +109,7 @@ struct RESTTransport: Sendable {
 
   func makeRequest(
     _ method: Method, _ path: String, body: Data?, accept: String, timeout: Duration,
-    attribute: Bool, token: Bool = true
+    attribute: Bool, token: Bool = true, operationId: String? = nil
   ) throws(DaemonClientError) -> URLRequest {
     guard let url = endpoint.url(forPath: path) else {
       throw .unreachable("invalid daemon URL for \(path)")
@@ -117,6 +120,12 @@ struct RESTTransport: Sendable {
     if token { request.setValue("Bearer \(endpoint.token)", forHTTPHeaderField: "Authorization") }
     if token, let expectedWorkspaceId {
       request.setValue(expectedWorkspaceId, forHTTPHeaderField: DaemonProtocol.workspaceIdHeader)
+    }
+    if let operationId {
+      guard RequestGuards.isClientID(operationId), expectedWorkspaceId != nil else {
+        throw .invalidRequest("An operation requires a valid ID and verified workspace.")
+      }
+      request.setValue(operationId, forHTTPHeaderField: DaemonProtocol.operationIdHeader)
     }
     request.setValue(accept, forHTTPHeaderField: "Accept")
     if attribute { request.setValue(clientId, forHTTPHeaderField: DaemonProtocol.clientIdHeader) }

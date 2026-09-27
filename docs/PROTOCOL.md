@@ -102,6 +102,30 @@ same host; `applied` returns the original saved base and `indeterminate` require
 Captured date/timezone, host date/timezone and the watch-window result are distinct. A successful
 append does not mean agent work has started. See `docs/DATA_FORMATS.md` for crash semantics.
 
+### Durable agent commands
+
+Clients opt in with the `agent-mutations-v1` health capability and a saved UUID in
+`X-DDL-Operation-Id`, alongside `X-DDL-Workspace-Id`. Supported POST routes are thread messages,
+cancel/retry, approval decisions, and routine create/run/pause/resume. Existing requests without
+an operation ID keep their previous behavior. IDs are unique within a workspace and bind the
+canonical method, route and validated request body; reuse for a different command answers
+409 `operation_conflict`.
+
+The dispatcher persists preparation before calling the existing runtime. Under the sync-service
+lease, that write must be accepted by the authoritative sync target with the current epoch;
+an asynchronous local sync push is insufficient. The target's workspace is checked too.
+A completed receipt replays the original HTTP status and JSON bytes, including rejected actions
+or an asynchronous 202. This acknowledges dispatch, not completion of the agent's work.
+
+`GET /api/agent/operations/:id` resolves an attempt without dispatching it. An `applied` receipt
+contains the original response; `pending` belongs to a live dispatch in this process. A
+preparation left after process or authority loss is `indeterminate`, and repeating its POST
+answers 409 `operation_indeterminate` without running it again. A 404 means this authority has
+no preparation. Never generate a new ID to silently retry an uncertain action, queue approvals
+offline, or automatically submit an unsent draft. The relay forwards only the validated operation
+ID and verified workspace header alongside its own credential; uncertain routine file requests
+with operation IDs never fall back to a second local dispatch.
+
 <!-- BEGIN GENERATED REFERENCE (pnpm --filter @ddl/contract generate); edits below are overwritten -->
 
 ## Reference
@@ -126,6 +150,7 @@ API version: **1**. Machine-readable: `packages/contract/schema/wire.schema.json
 | `settings` | GET | `/api/settings` | `bearer` | — | 200 [`SettingsResponse`](#settingsresponse) |
 | `settings` | PUT | `/api/settings` | `bearer` | [`UpdateSettingsRequest`](#updatesettingsrequest) | 200 [`SettingsResponse`](#settingsresponse) |
 | `settings` | PATCH | `/api/settings` | `bearer` | [`UpdateSettingsRequest`](#updatesettingsrequest) | 200 [`SettingsResponse`](#settingsresponse) |
+| `agentOperation` | GET | `/api/agent/operations/:id` | `bearer` | — | 200 [`AgentOperationResponse`](#agentoperationresponse) |
 | `agentStatus` | GET | `/api/agent/status` | `bearer` | — | 200 [`AgentStatusResponse`](#agentstatusresponse) |
 | `agentEnabled` | PUT | `/api/agent/enabled` | `bearer` | [`SetAgentEnabledRequest`](#setagentenabledrequest) | 200 [`AgentStatusResponse`](#agentstatusresponse) |
 | `agentEnabled` | POST | `/api/agent/enabled` | `bearer` | [`SetAgentEnabledRequest`](#setagentenabledrequest) | 200 [`AgentStatusResponse`](#agentstatusresponse) |
@@ -175,7 +200,7 @@ Auth:
 - `pairing_code`: No bearer token: the pairing code in the body is the credential (Host and Origin are still checked).
 - `upgrade`: WebSocket upgrade with a bearer token in the `Authorization` header (`?token=` only on loopback Hosts), or on a remote host a paired browser's cookie with its page's Origin; plus the Host and Origin checks.
 
-Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`, `forbidden_origin`), 412 (`workspace_mismatch`, `host_mismatch`), 500 (`internal_error`), unless it lists that status itself. Methods a route doesn't list answer 404 `not_found`.
+Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`, `forbidden_origin`), 409 (`operation_conflict`, `operation_indeterminate`), 412 (`workspace_mismatch`, `host_mismatch`), 500 (`internal_error`), 503 (`agent_unavailable`), unless it lists that status itself. Methods a route doesn't list answer 404 `not_found`.
 
 #### `health` — `/api/health`
 
@@ -307,6 +332,18 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
   - `400` [`ApiErrorBody`](#apierrorbody) `invalid_json`, `invalid_request` — Malformed JSON or failed validation.
   - `413` [`ApiErrorBody`](#apierrorbody) `payload_too_large` — Body over 5 MB.
 
+#### `agentOperation` — `/api/agent/operations/:id`
+
+- Path parameter `id`: string (`^[A-Za-z0-9_-]{1,128}$`) — Client id chosen by the client.
+
+**GET** — Resolve an agent operation without dispatching it again (requires verified workspace).
+
+- Responses:
+  - `200` [`AgentOperationResponse`](#agentoperationresponse) — The durable receipt, or its unresolved preparation.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_request` — Missing verified workspace or invalid operation ID.
+  - `404` [`ApiErrorBody`](#apierrorbody) `not_found` — No preparation exists for this operation.
+  - `503` [`ApiErrorBody`](#apierrorbody) `agent_unavailable` — The authoritative receipt store is unreachable.
+
 #### `agentStatus` — `/api/agent/status`
 
 **GET** — The agent runtime's state.
@@ -434,7 +471,7 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
   - `200` [`ApprovalResponse`](#approvalresponse) — The decided approval.
   - `400` [`ApiErrorBody`](#apierrorbody) `invalid_json`, `invalid_request` — Malformed JSON or failed validation.
   - `404` [`ApiErrorBody`](#apierrorbody) `not_found` — Unknown approval.
-  - `409` [`ApprovalConflictResponse`](#approvalconflictresponse) `conflict` — Already decided, expired or cancelled (carries its current state).
+  - `409` see `routes.json` `conflict`, `operation_conflict`, `operation_indeterminate` — Already decided, expired or cancelled (carries its current state).
   - `413` [`ApiErrorBody`](#apierrorbody) `payload_too_large` — Body over 5 MB.
   - `500` [`ApiErrorBody`](#apierrorbody) `agent_error`, `internal_error` — The runtime failed to record it.
   - `503` [`ApiErrorBody`](#apierrorbody) `agent_unavailable` — The approval system is unavailable.
@@ -465,7 +502,7 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
 - Responses:
   - `201` [`RoutineResponse`](#routineresponse) — Created.
   - `400` [`ApiErrorBody`](#apierrorbody) `invalid_json`, `invalid_request`, `invalid_path` — Malformed JSON or failed validation.
-  - `409` [`ApiErrorBody`](#apierrorbody) `conflict` — A routine with that name exists.
+  - `409` [`ApiErrorBody`](#apierrorbody) `conflict`, `operation_conflict`, `operation_indeterminate` — A routine with that name exists, or an operation ID conflicts or is uncertain.
   - `413` [`ApiErrorBody`](#apierrorbody) `payload_too_large` — Body over 5 MB.
 
 #### `routine` — `/api/routines/:id`
@@ -489,7 +526,7 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
   - `200` [`RoutineRunResponse`](#routinerunresponse) — The run started.
   - `400` [`ApiErrorBody`](#apierrorbody) `invalid_request` — Invalid routine id.
   - `404` [`ApiErrorBody`](#apierrorbody) `not_found` — Unknown routine.
-  - `409` [`ApiErrorBody`](#apierrorbody) `conflict` — It can't run now: a run is going, it has a problem, or today's extra runs are used up.
+  - `409` [`ApiErrorBody`](#apierrorbody) `conflict`, `operation_conflict`, `operation_indeterminate` — It can't run now: a run is going, it has a problem, or today's extra runs are used up.
   - `503` [`ApiErrorBody`](#apierrorbody) `agent_unavailable` — The agent can't run here right now.
 
 #### `routinePause` — `/api/routines/:id/pause`
@@ -744,6 +781,7 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
 | `workspace_mismatch` | The verified workspace changed; reconnect before reading or writing. |
 | `host_mismatch` | The capture belongs to a different serving host; do not retry here. |
 | `operation_conflict` | The operation ID was already used with a different payload. |
+| `operation_indeterminate` | The command may have been dispatched; it will not be dispatched again automatically. |
 | `payload_too_large` | Request body over 5 MB. |
 | `upgrade_required` | `/ws` requested without a WebSocket upgrade. |
 | `rate_limited` | Too many pairing attempts, or too many pairing codes outstanding; try later. |
@@ -2073,11 +2111,17 @@ Body of `POST /api/computer/permissions/open`.
 
 _Strict: unknown keys are rejected._
 
+#### AgentOperationResponse
+
+Durable agent command receipt. A pending command belongs to this live process; an indeterminate command is never automatically dispatched again.
+
+Type: object | object
+
 #### ApiErrorCode
 
 Machine-readable error code. Treat unknown codes like any failure with that HTTP status.
 
-Type: `"invalid_json"` | `"invalid_request"` | `"invalid_path"` | `"invalid_settings"` | `"unauthorized"` | `"pairing_rejected"` | `"forbidden_host"` | `"forbidden_origin"` | `"forbidden_device"` | `"not_found"` | `"conflict"` | `"locked_by_env"` | `"workspace_mismatch"` | `"host_mismatch"` | `"operation_conflict"` | `"payload_too_large"` | `"upgrade_required"` | `"rate_limited"` | `"http_error"` | `"agent_error"` | `"internal_error"` | `"machine_unreachable"` | `"agent_unavailable"`
+Type: `"invalid_json"` | `"invalid_request"` | `"invalid_path"` | `"invalid_settings"` | `"unauthorized"` | `"pairing_rejected"` | `"forbidden_host"` | `"forbidden_origin"` | `"forbidden_device"` | `"not_found"` | `"conflict"` | `"locked_by_env"` | `"workspace_mismatch"` | `"host_mismatch"` | `"operation_conflict"` | `"operation_indeterminate"` | `"payload_too_large"` | `"upgrade_required"` | `"rate_limited"` | `"http_error"` | `"agent_error"` | `"internal_error"` | `"machine_unreachable"` | `"agent_unavailable"`
 
 #### ApiErrorBody
 

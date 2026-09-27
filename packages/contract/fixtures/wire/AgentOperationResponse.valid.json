@@ -1,0 +1,27 @@
+[
+  {
+    "name": "completed message",
+    "value": {
+      "operationId": "ios_operation_one",
+      "workspaceId": "workspace_sample",
+      "outcome": "applied",
+      "response": { "status": 200, "body": { "ok": true } }
+    }
+  },
+  {
+    "name": "still dispatching",
+    "value": {
+      "operationId": "ios_operation_two",
+      "workspaceId": "workspace_sample",
+      "outcome": "pending"
+    }
+  },
+  {
+    "name": "uncertain after restart",
+    "value": {
+      "operationId": "ios_operation_three",
+      "workspaceId": "workspace_sample",
+      "outcome": "indeterminate"
+    }
+  }
+]

@@ -124,7 +124,7 @@ describe("operations", () => {
   );
 
   it("declares the common errors once, for every /api route", () => {
-    expect(Object.keys(COMMON_API_ERRORS)).toEqual(["401", "403", "412", "500"]);
+    expect(Object.keys(COMMON_API_ERRORS)).toEqual(["401", "403", "409", "412", "500", "503"]);
     const byAuth = (auth: RouteAuth) =>
       Object.entries(API_CONTRACT)
         .filter(([, route]) => route.auth === auth)
@@ -206,6 +206,9 @@ describe("operations", () => {
           404,
         ],
         "operation_conflict": [
+          409,
+        ],
+        "operation_indeterminate": [
           409,
         ],
         "pairing_rejected": [

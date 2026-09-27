@@ -19,6 +19,7 @@ import { createApp } from "./app";
 import { AttributedStorage } from "./attributed-storage";
 import { type DaemonConfig, loadConfig, summarizeConfig } from "./config";
 import { DeviceSettings, deviceSettingsFiles } from "./device-settings";
+import { ApiError } from "./errors";
 import { jsonObjectFile, secretFile } from "./home-files";
 import { displayPath } from "./home-paths";
 import { ObsidianImporter } from "./import/importer";
@@ -270,6 +271,28 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       storage,
       workspace,
       runtime: relay,
+      mutationAuthority: () => {
+        if (deviceSettings.sync.kind !== "remote") {
+          return { storage, epoch: 0, isCurrent: () => deviceSettings.sync.kind !== "remote" };
+        }
+        const handle = sync.handle;
+        if (!handle)
+          throw new ApiError(
+            503,
+            "agent_unavailable",
+            "The authoritative receipt store is unavailable",
+          );
+        const epoch = supervisor?.heldEpoch ?? null;
+        return {
+          storage: handle.target,
+          epoch,
+          isCurrent: () =>
+            sync.handle === handle &&
+            supervisor?.heldEpoch === epoch &&
+            epoch !== null &&
+            runtime.active,
+        };
+      },
       settings,
       config: { port, allowedOrigins: config.allowedOrigins },
       token,

@@ -394,3 +394,72 @@ extension HTTPDaemonClient {
     }
   }
 }
+
+extension HTTPDaemonClient {
+  public func postMessage(threadId: String, text: String, operationId: String) async throws
+    -> ThreadActionResponse
+  {
+    let id = try RequestGuards.runtimeID(threadId, "thread id")
+    return try await transport.json(
+      .post, APIRoute.threadMessages(id), body: PostMessageRequest(text: text),
+      operationId: operationId)
+  }
+
+  public func cancelThread(_ id: String, operationId: String) async throws -> ThreadActionResponse {
+    try await transport.json(
+      .post, APIRoute.threadCancel(try RequestGuards.runtimeID(id, "thread id")),
+      operationId: operationId)
+  }
+
+  public func retryThread(_ id: String, operationId: String) async throws -> ThreadActionResponse {
+    try await transport.json(
+      .post, APIRoute.threadRetry(try RequestGuards.runtimeID(id, "thread id")),
+      operationId: operationId)
+  }
+
+  public func decideApproval(_ id: String, _ decision: ApprovalDecisionRequest, operationId: String)
+    async throws -> ApprovalRequest
+  {
+    try await transport.json(
+      .post, APIRoute.approval(try RequestGuards.runtimeID(id, "approval id")), body: decision,
+      conflict: .approval, operationId: operationId, as: ApprovalResponse.self
+    ).approval
+  }
+
+  public func createRoutine(_ request: CreateRoutineRequest, operationId: String) async throws
+    -> Routine
+  {
+    try await transport.json(
+      .post, APIRoute.routines, body: request, operationId: operationId, as: RoutineResponse.self
+    ).routine
+  }
+
+  public func runRoutine(_ id: String, operationId: String) async throws -> RoutineRunResponse {
+    try await transport.json(
+      .post, APIRoute.routineRun(try RequestGuards.runtimeID(id, "routine id")),
+      operationId: operationId)
+  }
+
+  public func pauseRoutine(_ id: String, operationId: String) async throws -> Routine {
+    try await transport.json(
+      .post, APIRoute.routinePause(try RequestGuards.runtimeID(id, "routine id")),
+      operationId: operationId, as: RoutineResponse.self
+    ).routine
+  }
+
+  public func resumeRoutine(_ id: String, operationId: String) async throws -> Routine {
+    try await transport.json(
+      .post, APIRoute.routineResume(try RequestGuards.runtimeID(id, "routine id")),
+      operationId: operationId, as: RoutineResponse.self
+    ).routine
+  }
+
+  public func agentOperation(_ operationId: String) async throws -> AgentOperationResponse {
+    guard RequestGuards.isClientID(operationId), expectedWorkspaceId != nil else {
+      throw DaemonClientError.invalidRequest(
+        "Receipt lookup requires a valid ID and verified workspace.")
+    }
+    return try await transport.json(.get, APIRoute.agentOperation(operationId))
+  }
+
+}

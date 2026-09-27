@@ -584,3 +584,23 @@ have no expiry: removing them would invalidate the retry promise. They are exclu
 an explicit host ID in each request prevents transparent retry on a different serving endpoint.
 The note write and receipt write are separate transactions, so this protocol promises a durable
 applied result or explicit uncertainty, not unconditional exactly-once completion after a crash.
+
+
+## Agent command receipts — `state/journal/mutations/<operation-hash>.jsonl`
+
+The daemon's action dispatcher owns these append-only v1 events under the agent-owned, fenced
+journal tree. Filenames hash the workspace and operation IDs. `mutation.prepared` binds the
+workspace, operation ID, canonical route and request digest, process owner, and lease epoch;
+`mutation.completed` refers to that preparation and stores the exact HTTP status and JSON body.
+Events have unique IDs and `(epoch, seq)` like thread journals, so sync uses its existing union
+rule. Receipts do not expire. Invalid, truncated, conflicting or newer events fail closed and
+remain untouched; skipping one could dispatch a command twice.
+
+Standalone daemons write the local journal before dispatch. With the sync service, preparation
+and completion go directly to the authority through its conditional, epoch-fenced storage
+provider, then mirror locally; dispatch never depends on an asynchronous sync push. The target
+workspace must match the verified request. A preparation whose live process is gone means
+indeterminate, including crashes before dispatch or before completion persistence; it is never
+a queue to replay. A completed receipt records the original HTTP exchange, which can itself be
+a rejected command or an accepted background action. It does not replace the tool write-ahead
+journal or migrate approval and routine state.

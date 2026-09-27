@@ -10,7 +10,9 @@ describe("agent-owned sidecar paths", () => {
   it.each(PERSISTED_FORMATS.map((format) => [format.name, format] as const))(
     "%s is agent-owned exactly when the agent owns it",
     (_name, format) => {
-      expect(isAgentOwnedPath(format.path)).toBe(format.owner.startsWith("packages/agent/"));
+      expect(isAgentOwnedPath(format.path)).toBe(
+        format.owner.startsWith("packages/agent/") || format.name === "mutation-journal",
+      );
     },
   );
 

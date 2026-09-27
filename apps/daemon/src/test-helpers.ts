@@ -41,6 +41,7 @@ import type {
   PlacementSnapshot,
   PlacementSource,
 } from "./agent-location";
+import type { MutationAuthority } from "./agent-mutations";
 import { createApp } from "./app";
 import type { DeviceSettings } from "./device-settings";
 import type { ObsidianImporter } from "./import/importer";
@@ -412,6 +413,7 @@ export class FakeSystemSettings implements SystemSettingsOpener {
 
 export interface TestAppOptions<S extends StorageProvider = MemoryStorageProvider> {
   storage?: S;
+  mutationAuthority?: () => MutationAuthority;
   runtime?: AgentRuntime;
   settings?: SettingsStore;
   webDist?: string | null;
@@ -479,6 +481,7 @@ export async function createTestApp<S extends StorageProvider = MemoryStoragePro
     ...(options.imports ? { imports: options.imports } : {}),
     systemSettings,
     ...(options.now ? { now: options.now } : {}),
+    ...(options.mutationAuthority ? { mutationAuthority: options.mutationAuthority } : {}),
     ...(options.relay ? { relay: options.relay } : {}),
   });
 

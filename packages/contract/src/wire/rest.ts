@@ -482,3 +482,22 @@ export const ComputerPermissionsOpenRequestSchema = named(
   "Body of `POST /api/computer/permissions/open`.",
   z.strictObject({ pane: ComputerPermissionPaneSchema }),
 );
+
+/** Receipt lookup never dispatches the original command. Applied means its HTTP exchange completed. */
+export const AgentOperationResponseSchema = named(
+  "AgentOperationResponse",
+  "Durable agent command receipt. A pending command belongs to this live process; an indeterminate command is never automatically dispatched again.",
+  z.discriminatedUnion("outcome", [
+    z.looseObject({
+      operationId: ClientIdSchema,
+      workspaceId: RuntimeIdSchema,
+      outcome: z.literal("applied"),
+      response: z.looseObject({ status: z.int().min(200).max(599), body: z.unknown() }),
+    }),
+    z.looseObject({
+      operationId: ClientIdSchema,
+      workspaceId: RuntimeIdSchema,
+      outcome: z.enum(["pending", "indeterminate"]),
+    }),
+  ]),
+);

@@ -39,6 +39,9 @@ export const CLIENT_ID_HEADER = "x-ddl-client-id";
 /** Verified workspace context; old clients may omit it, offline-capable clients must send it. */
 export const WORKSPACE_ID_HEADER = "x-ddl-workspace-id";
 
+/** Durable agent command identity, scoped to the verified workspace. */
+export const OPERATION_ID_HEADER = "x-ddl-operation-id";
+
 /**
  * Every route's path: `:name` is one segment, a trailing `*` the rest (a vault path). The daemon
  * registers these patterns and clients build URLs from them (`API_ROUTES`); what each route
@@ -55,6 +58,7 @@ export const API_PATHS = {
   search: "/api/search",
   settings: "/api/settings",
   agentStatus: "/api/agent/status",
+  agentOperation: "/api/agent/operations/:id",
   agentEnabled: "/api/agent/enabled",
   tasks: "/api/tasks",
   threads: "/api/threads",

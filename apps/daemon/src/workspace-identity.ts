@@ -7,7 +7,11 @@ import type { MiddlewareHandler } from "hono";
 import { ApiError } from "./errors";
 import type { VaultSwitch } from "./vault-switch";
 
-export const MOBILE_CAPABILITIES = ["workspace-identity-v1", "daily-append-v1"] as const;
+export const MOBILE_CAPABILITIES = [
+  "workspace-identity-v1",
+  "daily-append-v1",
+  "agent-mutations-v1",
+] as const;
 
 /** Serializes verified exchanges with sync-target adoption; no old context can cross adoption. */
 export class WorkspaceIdentity {

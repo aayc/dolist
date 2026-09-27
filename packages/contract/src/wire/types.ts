@@ -172,3 +172,5 @@ export type ServerEventOf<T extends ServerEventType> = Extract<ServerEvent, { ty
 /** A server event's fields without its `type` tag. */
 export type ServerEventPayload<T extends ServerEventType> = Omit<ServerEventOf<T>, "type">;
 export type ClientEvent = WireType<"ClientEvent">;
+
+export type AgentOperationResponse = WireType<"AgentOperationResponse">;
