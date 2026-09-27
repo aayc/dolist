@@ -92,9 +92,18 @@
     public override var accessibilityElements: [Any]? {
       get {
         if let textEditor { return [textEditor] }
-        return editor.scene.visibleElements.filter { $0.containerId == nil }.map { element in
-          DrawingAccessibleElement(canvas: self, element: element)
-        }
+        let surface = UIAccessibilityElement(accessibilityContainer: self)
+        surface.accessibilityIdentifier = "DrawingCanvasSurface"
+        surface.accessibilityLabel = "Drawing canvas"
+        surface.accessibilityValue =
+          "\(editor.tool.label), \(editor.scene.visibleElements.count) elements"
+        surface.accessibilityHint = "Use direct touch to draw. Two fingers pan and pinch to zoom."
+        surface.accessibilityTraits = .allowsDirectInteraction
+        surface.accessibilityFrameInContainerSpace = bounds
+        return [surface]
+          + editor.scene.visibleElements.filter { $0.containerId == nil }.map { element in
+            DrawingAccessibleElement(canvas: self, element: element)
+          }
       }
       set {}
     }

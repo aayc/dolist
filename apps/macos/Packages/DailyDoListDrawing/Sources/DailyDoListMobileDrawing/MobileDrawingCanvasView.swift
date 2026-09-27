@@ -45,6 +45,7 @@
       super.init(frame: .zero)
       isMultipleTouchEnabled = true
       isOpaque = false
+      accessibilityIdentifier = "DrawingCanvas"
       accessibilityLabel = "Drawing canvas"
       accessibilityHint =
         "Use the selected tool with one finger. Use two fingers to pan or pinch to zoom."
@@ -180,7 +181,10 @@
     public func gestureRecognizer(
       _ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch
     ) -> Bool {
-      touch.view === self
+      // UIKit may place a transparent interaction subview inside a representable. Restrict only
+      // inline text input; recognizers already receive touches from this view's subtree.
+      guard let input = textEditor, let touched = touch.view else { return true }
+      return touched !== input && !touched.isDescendant(of: input)
     }
 
     public func gestureRecognizer(
