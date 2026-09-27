@@ -4,9 +4,10 @@ The running handoff log: what shipped, what's in flight, what's next, and the de
 them, so work can continue on any machine at any point. Read it before starting; keep it current
 (the rules are in `AGENTS.md`, "Handoff log").
 
-**Last updated:** 2026-09-27 · Another development Mac is set up with both clients running, and
-native toolchain compatibility fix `531d8d7` is merged on `main` after green CI and macOS workflows.
-The app on that Mac includes the fix; the main development Mac's installation remains `401997a`.
+**Last updated:** 2026-09-27 · The existing Linux VM now runs the remote agent, paired with the
+other development Mac. Both run `09e13dc` (handover fix integrated on `main` as `fffb5b7`), with
+real remote-task, approval, artifact, reboot and bidirectional handover checks passed.
+The main development Mac's installation remains `401997a`.
 The full native iPhone implementation plan is also on `main` (`40e1b29`); the user has now
 authorized implementation and thorough simulator testing in its separate task.
 
@@ -66,15 +67,31 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
   Testing library requires macOS 15. The local app test target still fails to compile an existing
   `CGWindowListCreateImage` snapshot under that override; its CI run passes with Apple's toolchain.
 
+### Remote Linux cutover (2026-09-27)
+
+- Reused the existing x64 VM, with Node 24 and the Linux setup kit. Retired containers, their
+  restart policies, nginx and certificate-renewal jobs are disabled; their data and private
+  rollback configuration remain. The first subscription's backup storage is unchanged.
+- Preserved the existing tailnet identity; HTTPS proxies expose only the daemon and sync service
+  to the tailnet. Public inbound traffic is denied. State lives on the managed data disk, mounted
+  independently of Azure's temporary disk; both services require its bind mount. The first reboot
+  exposed an ordering cycle, now fixed; the second boot started storage and services automatically.
+- The other development Mac is paired and synced, with Remote on and the live agent enabled.
+  The user's model and approval settings remain. Private setup, evidence and rollback details
+  live outside the repository. The existing tailnet key's expiry is unchanged; the private
+  runbook records its renewal date. Linux supports shell/browser execution, not macOS app control.
+- Real checks: local `uname -s` returned Darwin, remote returned Linux under the service user;
+  Chromium read a public page; denied and accepted approvals traveled through the native Mac app;
+  the Mac displayed a remote artifact; notes and history synced; an outage did not execute work
+  locally, and its queued task ran after recovery. One task thread then continued from Mac to
+  Linux. Completed unchecked tasks retained their IDs and did not repeat after the handover fix.
+- Fix `09e13dc` reproduced the missing-tracker problem in a two-daemon regression before fixing
+  it; all four branch workflows passed. Also passed `pnpm check`, production builds/budgets,
+  mock evals, and the Linux bundle smoke test on the actual host. Both installed clients retain
+  their prior versions for rollback. Main workflows are dispatched after the handoff update.
+
 ## In flight
 
-- Remote Linux cutover: reuse the existing 2-vCPU, 8-GiB Azure VM. Its retired services are
-  disabled, the tailnet identity is preserved, and the paired Mac has verified remote shell,
-  browser, approvals, artifacts and recovery after reboot. A persistent-disk mount-order issue
-  found by the reboot test is fixed. Live handover testing found task identities were excluded
-  from sync, repeating completed unchecked tasks; fix `09e13dc` is pushed on
-  `codex/remote-handoff-state`. Its regression, relay tests and `pnpm check` pass; CI, deployment
-  to both machines and the final real handover retest are next. The agents are paused meanwhile.
 - Full native iPhone app: `codex/iphone-app`, based on the completed Mac setup baseline.
   Foundation/toolchain and reusable editor extraction are first. The complete scope, durable
   user instruction, next actions and test evidence live in `apps/mobile/IMPLEMENTATION.md`.
@@ -82,11 +99,14 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
   Mac app, its daemon and the real vault must remain untouched.
 
 Local web/Mac setup is complete, with all four workflows green on `78ae584`.
-The remote-machine setup continues in its separate task.
+The remote-machine setup is complete, including the handover correction found during live testing.
 Native iPhone implementation is authorized and continues separately, including simulator testing.
 
 ## Shipped on `main` (newest first; older history is `git log`)
 
+- `fffb5b7` Leased agent handovers now sync task identities and settled snapshots, preventing
+  completed unchecked tasks from running again under fresh IDs. Folder sync retains its
+  device-local tracker behavior. Installed and verified on the paired Mac and Linux host.
 - `531d8d7` Native toolchain compatibility: explicitly discard Vim's returned callbacks and keep
   the undo action's captured manager on the main actor. Built, installed and verified both clients
   on another development Mac.
