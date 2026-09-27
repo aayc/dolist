@@ -26,6 +26,13 @@ extension SQLiteWorkspaceIndex: WorkspaceMaintenanceStore {
         let documents: [NoteIndexRecord] = try all("documents")
         let affected = documents.filter { proposed.action.affects($0.path) }
         let pending: [NoteOutboxRecord] = try all("outbox")
+        guard
+          !documents.contains(where: {
+            ($0.requiredDrawings ?? []).contains(where: proposed.action.affects)
+          })
+        else {
+          throw WorkspaceRepositoryError.pendingDrawingDependencies
+        }
         guard affected.allSatisfy({ $0.state == .synced }),
           !pending.contains(where: { proposed.action.affects($0.path) })
         else {
@@ -91,7 +98,7 @@ extension SQLiteWorkspaceIndex: WorkspaceMaintenanceStore {
   }
 
   public func discardLocalNote(path: String, expectedRevision: Int64) throws {
-    try WorkspaceRepository.validatePath(path)
+    try WorkspaceDocumentPath.validate(path)
     try locked {
       try transaction {
         guard let record: NoteIndexRecord = try read("documents", key: path) else {

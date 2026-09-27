@@ -34,7 +34,9 @@ public actor WorkspaceRepository {
     return try index.document(path).map(snapshot)
   }
 
-  public func notes() throws -> [LocalNote] { try index.documents().map(snapshot) }
+  public func notes() throws -> [LocalNote] {
+    try index.documents().filter { !WorkspaceDocumentPath.isDrawing($0.path) }.map(snapshot)
+  }
 
   /// A fetched note can seed/refresh clean cache entries. Dirty/recovery entries win until
   /// reconciliation; an arriving server snapshot must never overwrite their working files.
@@ -59,15 +61,19 @@ public actor WorkspaceRepository {
   /// Ordinary new notes use create-only intent. Daily capture is a separate append operation;
   /// callers must not represent the same pending capture as an ordinary full-note edit.
   @discardableResult
-  public func create(path: String, content: String) throws -> LocalNote {
+  public func create(path: String, content: String, requiringDrawings: [String] = []) throws
+    -> LocalNote
+  {
     try Self.validatePath(path)
     guard try index.document(path) == nil else {
       throw WorkspaceRepositoryError.documentNeedsReview
     }
     let hash = try checkpoints.put(content)
+    for path in requiringDrawings { try DrawingRepository.validatePath(path) }
     let record = NoteIndexRecord(
       path: path, working: hash, revision: 1, acknowledgedRevision: 0,
-      state: .waitingToSync, recoveryCopies: [])
+      state: .waitingToSync, recoveryCopies: [],
+      requiredDrawings: requiringDrawings.isEmpty ? nil : requiringDrawings)
     try index.commit(record, pending: NoteOutboxRecord(path: path))
     return try snapshot(record)
   }
@@ -105,10 +111,19 @@ public actor WorkspaceRepository {
 
   /// Called by a debounced editor checkpoint or by `edit`, never per-key on the main actor.
   @discardableResult
-  public func save(path: String, content: String, expectedRevision: Int64) throws -> LocalNote {
+  public func save(
+    path: String, content: String, expectedRevision: Int64, requiringDrawings: [String]? = nil
+  ) throws -> LocalNote {
     var record = try requireDocument(path, revision: expectedRevision)
+    if let requiringDrawings {
+      for path in requiringDrawings { try DrawingRepository.validatePath(path) }
+    }
+    let dependencies = requiringDrawings ?? record.requiredDrawings ?? []
     let hash = try checkpoints.put(content)
-    if hash == record.working { return try snapshot(record) }
+    if hash == record.working && dependencies == (record.requiredDrawings ?? []) {
+      return try snapshot(record)
+    }
+    record.requiredDrawings = dependencies.isEmpty ? nil : dependencies
     record.working = hash
     record.revision = try nextRevision(record.revision)
     var pending = try index.pending(path)
@@ -239,11 +254,8 @@ public actor WorkspaceRepository {
   }
 
   static func validatePath(_ path: String) throws {
-    let segments = path.split(separator: "/", omittingEmptySubsequences: false)
-    guard !path.isEmpty, path.hasSuffix(".md"), !path.contains("\\"), !path.contains("\0"),
-      !path.hasSuffix(".excalidraw.md"),
-      segments.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." && !$0.hasPrefix(".") })
-    else { throw WorkspaceRepositoryError.invalidPath }
+    try WorkspaceDocumentPath.validate(path)
+    guard !WorkspaceDocumentPath.isDrawing(path) else { throw WorkspaceRepositoryError.invalidPath }
   }
 
   private static func validate(_ scope: WorkspaceScope) throws {

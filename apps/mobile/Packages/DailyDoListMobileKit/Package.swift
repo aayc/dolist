@@ -10,6 +10,7 @@ let package = Package(
     .package(path: "../../../macos/Packages/DailyDoListClient"),
     .package(path: "../../../macos/Packages/DailyDoListDomain"),
     .package(path: "../../../macos/Packages/DailyDoListModels"),
+    .package(path: "../../../macos/Packages/DailyDoListDrawing"),
   ],
   targets: [
     .target(
@@ -17,6 +18,7 @@ let package = Package(
       dependencies: [
         "DailyDoListClient", "DailyDoListDomain", "DailyDoListModels",
         .product(name: "DailyDoListAgentCore", package: "DailyDoListAgent"),
+        .product(name: "DailyDoListDrawingModel", package: "DailyDoListDrawing"),
       ],
       linkerSettings: [.linkedLibrary("sqlite3")]),
     .testTarget(

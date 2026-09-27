@@ -78,6 +78,7 @@ public enum WorkspaceRepositoryError: Error, Equatable, Sendable {
   case pendingCaptures
   case pendingNoteWrites
   case pendingStructuralChange
+  case pendingDrawingDependencies
   case workspaceForgotten
   case unsupportedIndexVersion(Int)
   case storage(String)
@@ -111,6 +112,7 @@ public enum ReviewReason: String, Codable, Sendable {
   case remoteDeleted
   case pathCollision
   case uncertainWrite
+  case invalidDrawing
 }
 
 /// UTF-16 offsets match TextKit and the shared editor. Enqueue away from the input callback;

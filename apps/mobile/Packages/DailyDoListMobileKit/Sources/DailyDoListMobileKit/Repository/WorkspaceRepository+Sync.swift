@@ -12,16 +12,19 @@ extension WorkspaceRepository {
     let generation = connectionGeneration
     try await verify(remote, generation: generation)
     var changed: [LocalNote] = []
-    let pendingWrites = try index.outbox().sorted {
-      if ($0.attempt != nil) != ($1.attempt != nil) { return $0.attempt != nil }
-      return $0.path < $1.path
-    }
+    let pendingWrites = try index.outbox().filter { !WorkspaceDocumentPath.isDrawing($0.path) }
+      .sorted {
+        if ($0.attempt != nil) != ($1.attempt != nil) { return $0.attempt != nil }
+        return $0.path < $1.path
+      }
     for pending in pendingWrites {
       do {
         try await reconcile(path: pending.path, remote: remote, generation: generation)
       } catch WorkspaceRepositoryError.pendingCaptures {
         // A capture waits for earlier attempted writes. A blocked new note must not prevent
         // another document's immutable attempt from resolving and releasing that dependency.
+      } catch WorkspaceRepositoryError.pendingDrawingDependencies {
+        // New embeds wait for their drawing's acknowledged create, across restart as well.
       } catch WorkspaceRepositoryError.pendingStructuralChange {
         // Local text stays durable while an online rename/delete awaits acknowledgement.
       }
@@ -142,7 +145,8 @@ extension WorkspaceRepository {
       try index.pending(path)?.attempt
       ?? NoteWriteAttempt(
         operationID: UUID(),
-        checkpoint: record.working, revision: record.revision, baseVersion: record.baseVersion)
+        checkpoint: record.working, revision: record.revision, baseVersion: record.baseVersion,
+        requiredDrawings: record.requiredDrawings)
     let content = try checkpoints.read(attempt.checkpoint)
     try index.commit(record, pending: NoteOutboxRecord(path: path, attempt: attempt))
     do {
@@ -168,6 +172,10 @@ extension WorkspaceRepository {
     var latest = try requireDocument(path)
     guard try index.pending(path)?.attempt?.operationID == attempt.operationID else {
       throw WorkspaceRepositoryError.concurrentWrite
+    }
+    if let acknowledgedDependencies = attempt.requiredDrawings {
+      latest.requiredDrawings?.removeAll { acknowledgedDependencies.contains($0) }
+      if latest.requiredDrawings?.isEmpty == true { latest.requiredDrawings = nil }
     }
     latest.base = attempt.checkpoint
     latest.baseVersion = remote.version
