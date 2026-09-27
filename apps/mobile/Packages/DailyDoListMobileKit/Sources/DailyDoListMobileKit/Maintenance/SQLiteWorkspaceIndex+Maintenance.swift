@@ -164,6 +164,7 @@ extension SQLiteWorkspaceIndex: WorkspaceMaintenanceStore {
     try execute("DELETE FROM documents")
     try execute("DELETE FROM document_history")
     try execute("DELETE FROM document_cache_access")
+    try clearStorageControlState()
     try execute("DELETE FROM workspace_values")
     try execute("DELETE FROM workspace_value_revisions")
     try execute("DELETE FROM content_cache")

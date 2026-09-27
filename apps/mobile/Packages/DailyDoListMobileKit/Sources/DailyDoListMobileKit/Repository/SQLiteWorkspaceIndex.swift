@@ -71,6 +71,7 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
       }
       try createContentCacheSchema()
       try createDocumentHistorySchema()
+      try createStorageControlSchema()
       // Version 5 keeps document revisions after eviction and coordinates file reclamation.
       // Older writers must not publish checkpoints without the filesystem access barrier.
       try execute("PRAGMA user_version=5")
@@ -101,7 +102,8 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
   public func document(_ path: String) throws -> NoteIndexRecord? {
     try locked {
       let record: NoteIndexRecord? = try read("documents", key: path)
-      if record != nil { try touchDocument(path) }
+      // An optional LRU timestamp must not make an otherwise readable note fail on disk full.
+      if record != nil { try? touchDocument(path) }
       return record
     }
   }

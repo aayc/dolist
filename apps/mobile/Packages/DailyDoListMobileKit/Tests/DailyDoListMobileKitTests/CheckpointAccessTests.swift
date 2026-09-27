@@ -33,6 +33,11 @@ struct CheckpointAccessTests {
     let prematureCleanup = try otherHandle.beginExclusiveAccess()
     #expect(prematureCleanup == nil)
     prematureCleanup?.release()
+    let collector = WorkspaceStorageMaintenance(
+      scope: fixture.scope, store: index, checkpoints: otherHandle,
+      files: FoundationCheckpointFileSystem(directory: directory), budgetBytes: 0)
+    #expect(try await collector.collectGarbage().busy)
+    #expect(try await collector.trim().busy)
     gate.release()
     try await writing.value
     let record = try #require(try index.document(path))
