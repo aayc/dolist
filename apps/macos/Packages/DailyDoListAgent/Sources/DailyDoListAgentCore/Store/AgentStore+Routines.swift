@@ -35,10 +35,18 @@ extension AgentStore {
   /// Fetches the routines and the starter templates. Failures show in the Routines view
   /// (`routinesLoadError`), not as a toast.
   public func loadRoutines() async {
+    guard canFetchContent else {
+      await hydrateCachedContent()
+      return
+    }
     let mark = eventSeq
+    let authority = mutationAuthorityGeneration
     do {
       let list = try await client.routines()
+      guard contentCache == nil || (authority == mutationAuthorityGeneration && canFetchContent)
+      else { return }
       applyFetchedRoutines(list, since: mark)
+      contentDidChange()
     } catch {
       if case DaemonClientError.cancelled = error { return }
       routinesLoadError = AgentAlert.describe(error)
@@ -55,11 +63,20 @@ extension AgentStore {
 
   /// Fetches a routine's runs; `refresh()` refetches them from then on (events keep them live).
   public func loadRuns(ofRoutine routineId: String) async {
+    guard canFetchContent else {
+      trackedRoutines.insert(routineId)
+      await hydrateCachedContent()
+      return
+    }
     trackedRoutines.insert(routineId)
     let mark = eventSeq
+    let authority = mutationAuthorityGeneration
     do {
       let runs = try await client.threads(routineId: routineId)
+      guard contentCache == nil || (authority == mutationAuthorityGeneration && canFetchContent)
+      else { return }
       applyFetchedRuns(runs, routineId: routineId, since: mark)
+      contentDidChange()
     } catch {
       report(error, title: "Couldn't load the routine's runs")
     }
@@ -98,13 +115,13 @@ extension AgentStore {
   /// Pauses or resumes a routine (optimistic; rolls back and leaves an alert on failure).
   @discardableResult
   public func setRoutinePaused(_ id: String, _ paused: Bool) async -> Bool {
-    guard !busyRoutineIds.contains(id) else { return false }
+    guard !cachedContentReadOnly, !busyRoutineIds.contains(id) else { return false }
     busyRoutineIds.insert(id)
     defer { busyRoutineIds.remove(id) }
     routineAlerts[id] = nil
     let previous = routine(id)
     var optimistic: Routine?
-    if var next = previous {
+    if contentCache == nil, var next = previous {
       next.paused = paused
       if paused { next.nextRunAt = nil }
       optimistic = next
@@ -115,6 +132,7 @@ extension AgentStore {
       let result = try await performMutation(paused ? .pauseRoutine(id) : .resumeRoutine(id))
       guard case .routine(let updated) = result else { throw AgentMutationError.corruptJournal }
       if routinesTouch <= mark { mutate { $0.upsertRoutine(updated) } }
+      contentDidChange()
       return true
     } catch {
       if let previous, let optimistic, routine(id) == optimistic {
@@ -134,6 +152,7 @@ extension AgentStore {
       let result = try await performMutation(.createRoutine(request))
       guard case .routine(let routine) = result else { throw AgentMutationError.corruptJournal }
       mutate { $0.upsertRoutine(routine) }
+      contentDidChange()
       return .success(routine)
     } catch {
       return .failure(RoutineFormError(error))

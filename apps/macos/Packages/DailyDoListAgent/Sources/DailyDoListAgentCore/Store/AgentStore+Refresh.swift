@@ -12,6 +12,11 @@ extension AgentStore {
   /// Call it at launch and after every reconnect. Events that arrive while it runs are newer than
   /// its snapshots and are never overwritten; overlapping refreshes only apply the latest.
   public func refresh(todayNotePath: String? = nil) async {
+    guard canFetchContent else {
+      await hydrateCachedContent()
+      return
+    }
+    let authority = mutationAuthorityGeneration
     await refreshPendingMutations()
     if let todayNotePath { self.todayNotePath = todayNotePath }
     if let path = self.todayNotePath { trackedNotes.insert(path) }
@@ -33,7 +38,9 @@ extension AgentStore {
       status, pending, list, records
     )
     let (routinesResult, runResults) = await (routineList, runs)
-    guard generation == refreshGeneration else { return }
+    guard generation == refreshGeneration,
+      contentCache == nil || (authority == mutationAuthorityGeneration && canFetchContent)
+    else { return }
 
     var failure: Error?
     switch statusResult {
@@ -44,6 +51,7 @@ extension AgentStore {
     case .success(let value):
       let preserving = touchedIds(approvalTouches, since: mark)
       mutate { $0.applyPendingApprovals(value, preserving: preserving) }
+      approvalsFetchedAt = now()
     case .failure(let error): failure = failure ?? error
     }
     switch listResult {
@@ -69,6 +77,11 @@ extension AgentStore {
       }
     }
     if let failure { report(failure, title: "Couldn't refresh the agent's state") }
+    if contentCache != nil {
+      contentAuthorityReady = failure == nil
+      cachedThreadIDs.formUnion(state.loadedThreads.keys)
+      contentDidChange()
+    }
 
     // The orchestrator's chat is pinned in the inbox whatever the list's filter, so it's always
     // loaded; a daemon without an agent runtime has none, which isn't worth a toast.

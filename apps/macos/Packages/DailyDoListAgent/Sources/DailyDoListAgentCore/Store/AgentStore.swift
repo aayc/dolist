@@ -15,6 +15,19 @@ import Observation
 @Observable
 public final class AgentStore {
   public let client: DaemonClient
+  @ObservationIgnored let contentCache: (any AgentContentCache)?
+  @ObservationIgnored let cacheCheckpointDelay: Duration
+  public internal(set) var cacheAvailability: [AgentCacheResource: AgentCacheAvailability] = [:]
+  public internal(set) var approvalsFetchedAt: Date?
+  public internal(set) var cachedInboxAt: Date?
+  public internal(set) var cachedThreadIDs: Set<String> = []
+  public internal(set) var contentAuthorityReady = false
+  @ObservationIgnored var cacheHydrated = false
+  @ObservationIgnored var cacheStateRevision: UInt64 = 0
+  @ObservationIgnored var cachePersistedRevision: UInt64 = 0
+  @ObservationIgnored var cacheDirtyThreads: Set<String> = []
+  @ObservationIgnored var cacheCheckpointTask: Task<Void, Never>?
+  @ObservationIgnored var cacheFlushTask: Task<Void, Never>?
   @ObservationIgnored let mutationJournal: (any AgentMutationJournal)?
   /// Persisted user actions whose result still needs a receipt check. Never automatically sent.
   public internal(set) var pendingMutations: [PendingAgentMutation] = []
@@ -131,18 +144,25 @@ public final class AgentStore {
   @ObservationIgnored var artifactRefetches: [String: Task<Void, Never>] = [:]
   @ObservationIgnored var refreshGeneration = 0
 
-  public convenience init(client: DaemonClient, mutationJournal: (any AgentMutationJournal)? = nil)
-  {
-    self.init(client: client, now: { Date() }, mutationJournal: mutationJournal)
+  public convenience init(
+    client: DaemonClient, mutationJournal: (any AgentMutationJournal)? = nil,
+    contentCache: (any AgentContentCache)? = nil
+  ) {
+    self.init(
+      client: client, now: { Date() }, mutationJournal: mutationJournal, contentCache: contentCache)
   }
 
   init(
     client: DaemonClient, now: @escaping @Sendable () -> Date,
     artifactRefetchDelay: Duration = .milliseconds(150),
-    mutationJournal: (any AgentMutationJournal)? = nil
+    mutationJournal: (any AgentMutationJournal)? = nil,
+    contentCache: (any AgentContentCache)? = nil,
+    cacheCheckpointDelay: Duration = .milliseconds(350)
   ) {
     self.client = client
     self.mutationJournal = mutationJournal
+    self.contentCache = contentCache
+    self.cacheCheckpointDelay = cacheCheckpointDelay
     self.now = now
     self.artifactRefetchDelay = artifactRefetchDelay
     self.outbox = ClientOutbox(client: client)
@@ -178,7 +198,8 @@ public final class AgentStore {
     default:
       break
     }
-    mutate { $0.apply(event, now: now().epochMillis) }
+    let changes = mutate { $0.apply(event, now: now().epochMillis) }
+    if !changes.isEmpty { contentDidChange(threadIDs: changedCacheThreads(event)) }
     if case .threadMessage(let event) = event {
       if case .artifact(let message) = event.message {
         refetchIfArtifactMissing(threadId: event.threadId, artifactId: message.artifactId)
@@ -206,6 +227,10 @@ public final class AgentStore {
     case .state(let state):
       mutationAuthorityGeneration &+= 1
       connectionState = state
+      if contentCache != nil {
+        contentAuthorityReady = false
+        refreshGeneration += 1
+      }
     case .resync: Task { await refresh() }
     }
   }

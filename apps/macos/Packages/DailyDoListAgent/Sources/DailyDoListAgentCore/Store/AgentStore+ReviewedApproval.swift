@@ -9,7 +9,7 @@ extension AgentStore {
     _ reviewed: ApprovalRequest, decision: ApprovalDecision, scope: ApprovalScope = .once,
     note: String? = nil, reviewedRunner: AgentRunsOn?, authorizationAvailable: Bool
   ) async -> Bool {
-    guard authorizationAvailable, readOnly == nil else {
+    guard authorizationAvailable, !cachedContentReadOnly, readOnly == nil else {
       lastError = AgentAlert(
         title: "Decision not sent", message: readOnly?.reason ?? "Reconnect to review this action.")
       return false
