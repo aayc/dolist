@@ -20,7 +20,11 @@ describe("health", () => {
   it("answers without authentication and says nothing about vaults", async () => {
     const response = await fetch(`${t.url}/v1/health`);
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ ok: true, apiVersion: SYNC_API_VERSION });
+    expect(await response.json()).toEqual({
+      ok: true,
+      apiVersion: SYNC_API_VERSION,
+      capabilities: ["binary-files-v1"],
+    });
   });
 });
 

@@ -27,11 +27,11 @@ export function requirePrefix(prefix: string | undefined): string {
   return prefix ? requirePath(prefix) : "";
 }
 
-/** `["", "v1", "vaults", "<vault>", "files"]` precede the file path in the URL. */
+/** `["", "v1", "vaults", "<vault>", "files" | "binary"]` precede the file path. */
 const FILE_ROUTE_SEGMENTS = 5;
 
 /**
- * The file path of a `/v1/vaults/<vault>/files/<encoded path>` URL, decoded segment by segment
+ * The file path of a `/v1/vaults/<vault>/{files,binary}/<encoded path>` URL, decoded segment by segment
  * from the raw pathname (Hono's decoded path would decode `%25` twice).
  */
 export function filePathFromUrl(url: string): string {

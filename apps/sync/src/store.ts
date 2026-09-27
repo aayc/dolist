@@ -5,6 +5,7 @@ import {
   createId,
   outranks,
   SYNC_LEASE_TAKEOVER,
+  SYNC_LIMITS,
   type SyncChange,
   type SyncChangesResponse,
   type SyncErrorCode,
@@ -17,7 +18,7 @@ import {
 import { generateToken, hashToken, sameHash } from "./tokens";
 
 /** Bumped with every schema change; `migrate` upgrades older databases in place. */
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 const MAX_VAULT_NAME_LENGTH = 100;
 
 const SCHEMA = `
@@ -34,12 +35,22 @@ CREATE TABLE files (
   path TEXT NOT NULL,
   rev TEXT NOT NULL,
   content TEXT NOT NULL,
+  blob_hash TEXT,
   hash TEXT NOT NULL,
   size INTEGER NOT NULL,
   mtime INTEGER NOT NULL,
   updated_by TEXT,
   PRIMARY KEY (vault, path)
 ) STRICT;
+
+CREATE TABLE blobs (
+  vault TEXT NOT NULL REFERENCES vaults(id) ON DELETE CASCADE,
+  hash TEXT NOT NULL,
+  content BLOB NOT NULL,
+  PRIMARY KEY (vault, hash)
+) STRICT, WITHOUT ROWID;
+
+CREATE INDEX files_blob_references ON files(vault, blob_hash) WHERE blob_hash IS NOT NULL;
 
 CREATE TABLE folders (
   vault TEXT NOT NULL REFERENCES vaults(id) ON DELETE CASCADE,
@@ -85,6 +96,14 @@ const MIGRATIONS = [
    ALTER TABLE leases ADD COLUMN pending_device_name TEXT;
    ALTER TABLE leases ADD COLUMN pending_priority TEXT;
    ALTER TABLE leases ADD COLUMN pending_asked_at INTEGER`,
+  `ALTER TABLE files ADD COLUMN blob_hash TEXT;
+   CREATE TABLE blobs (
+     vault TEXT NOT NULL REFERENCES vaults(id) ON DELETE CASCADE,
+     hash TEXT NOT NULL,
+     content BLOB NOT NULL,
+     PRIMARY KEY (vault, hash)
+   ) STRICT, WITHOUT ROWID;
+   CREATE INDEX files_blob_references ON files(vault, blob_hash) WHERE blob_hash IS NOT NULL`,
 ] as const;
 
 export interface VaultInfo {
@@ -99,6 +118,10 @@ export interface VaultInfo {
 
 export interface StoredFile extends SyncFileEntry {
   content: string;
+}
+
+export interface StoredBinaryFile extends SyncFileEntry {
+  content: Uint8Array;
 }
 
 export interface WriteOutcome {
@@ -248,13 +271,13 @@ export class SyncStore {
   listFiles(vault: string, prefix: string): { files: SyncFileEntry[]; seq: number } {
     const rows = prefix
       ? this.#all(
-          `SELECT path, rev, hash, size, mtime FROM files
+          `SELECT path, rev, hash, size, mtime, blob_hash FROM files
             WHERE vault = ? AND (path = ? OR (path >= ? AND path < ?)) ORDER BY path`,
           vault,
           ...prefixRange(prefix),
         )
       : this.#all(
-          "SELECT path, rev, hash, size, mtime FROM files WHERE vault = ? ORDER BY path",
+          "SELECT path, rev, hash, size, mtime, blob_hash FROM files WHERE vault = ? ORDER BY path",
           vault,
         );
     return { files: rows.map(toEntry), seq: this.latestSeq(vault) };
@@ -262,7 +285,7 @@ export class SyncStore {
 
   stat(vault: string, path: string): SyncFileEntry | null {
     const row = this.#get(
-      "SELECT path, rev, hash, size, mtime FROM files WHERE vault = ? AND path = ?",
+      "SELECT path, rev, hash, size, mtime, blob_hash FROM files WHERE vault = ? AND path = ?",
       vault,
       path,
     );
@@ -271,11 +294,115 @@ export class SyncStore {
 
   read(vault: string, path: string): StoredFile | null {
     const row = this.#get(
-      "SELECT path, rev, hash, size, mtime, content FROM files WHERE vault = ? AND path = ?",
+      "SELECT path, rev, hash, size, mtime, blob_hash, CAST(content AS BLOB) AS text_bytes FROM files WHERE vault = ? AND path = ?",
       vault,
       path,
     );
-    return row ? { ...toEntry(row), content: String(row.content) } : null;
+    if (!row) return null;
+    if (row.blob_hash !== null) throw binaryTextAccess();
+    if (!(row.text_bytes instanceof Uint8Array)) throw new Error("Unreadable text content");
+    let content: string;
+    try {
+      content = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(row.text_bytes);
+    } catch {
+      throw new Error("Stored text is not valid UTF-8");
+    }
+    return { ...toEntry(row), content };
+  }
+
+  /** Byte reads also support existing text files without a lossy decode/encode round trip. */
+  readBinary(
+    vault: string,
+    path: string,
+    maxBytes: number = SYNC_LIMITS.fileBytes,
+  ): StoredBinaryFile | null {
+    const entry = this.stat(vault, path);
+    if (!entry) return null;
+    if (entry.size > maxBytes) throw new VaultStateError("payload_too_large", "File too large");
+    const row = entry.binary
+      ? this.#get("SELECT content FROM blobs WHERE vault = ? AND hash = ?", vault, entry.hash)
+      : this.#get(
+          "SELECT CAST(content AS BLOB) AS content FROM files WHERE vault = ? AND path = ?",
+          vault,
+          path,
+        );
+    const content = row?.content;
+    if (
+      !(content instanceof Uint8Array) ||
+      content.byteLength !== entry.size ||
+      sha256(content) !== entry.hash
+    ) {
+      throw new Error("Stored file content failed integrity verification");
+    }
+    return { ...entry, content };
+  }
+
+  writeBinary(
+    vault: string,
+    path: string,
+    content: Uint8Array,
+    ifMatch: string | null | undefined,
+    device: string,
+  ): WriteOutcome {
+    const hash = sha256(content);
+    const size = content.byteLength;
+    return this.#transaction(() => {
+      if (this.#isFolder(vault, path))
+        throw new VaultStateError("not_a_file", `Not a file: "${path}"`);
+      const existing = this.stat(vault, path);
+      checkPrecondition(path, existing, ifMatch);
+      this.#assertCanHoldFile(vault, path);
+      if (existing?.binary && existing.hash === hash) {
+        // A retry must not acknowledge a corrupt or missing supposedly durable blob.
+        this.readBinary(vault, path, size);
+        return { entry: existing, created: false, change: null };
+      }
+      this.#checkQuota(vault, size - (existing?.size ?? 0));
+      this.#run(
+        // An empty request buffer may have a null backing pointer; SQLite must receive an
+        // empty BLOB rather than SQL NULL (which INSERT OR IGNORE would silently reject).
+        "INSERT OR IGNORE INTO blobs (vault, hash, content) VALUES (?, ?, CASE WHEN ?=0 THEN zeroblob(0) ELSE ? END)",
+        vault,
+        hash,
+        size,
+        content,
+      );
+      const stored = this.#get(
+        "SELECT content FROM blobs WHERE vault = ? AND hash = ?",
+        vault,
+        hash,
+      )?.content;
+      if (!(stored instanceof Uint8Array) || sha256(stored) !== hash)
+        throw new Error("Stored blob failed integrity verification");
+      const seq = this.#nextSeq(vault);
+      const at = this.#now();
+      const entry: SyncFileEntry = { path, rev: `r${seq}`, size, hash, mtime: at, binary: true };
+      this.#run(
+        `INSERT INTO files (vault, path, rev, content, blob_hash, hash, size, mtime, updated_by)
+        VALUES (?, ?, ?, '', ?, ?, ?, ?, ?)
+        ON CONFLICT (vault, path) DO UPDATE SET rev=excluded.rev, content='', blob_hash=excluded.blob_hash,
+          hash=excluded.hash, size=excluded.size, mtime=excluded.mtime, updated_by=excluded.updated_by`,
+        vault,
+        path,
+        entry.rev,
+        hash,
+        hash,
+        size,
+        at,
+        device,
+      );
+      this.#addFolders(vault, ancestorFolders(path));
+      if (existing?.binary && existing.hash !== hash) this.#pruneBlob(vault, existing.hash);
+      const change = this.#appendChange(vault, seq, {
+        path,
+        rev: entry.rev,
+        deleted: false,
+        created: !existing,
+        device,
+        at,
+      });
+      return { entry, created: !existing, change };
+    });
   }
 
   /**
@@ -298,6 +425,7 @@ export class SyncStore {
         throw new VaultStateError("not_a_file", `Not a file: "${path}"`);
       }
       const existing = this.stat(vault, path);
+      if (existing?.binary) throw binaryTextAccess();
       checkPrecondition(path, existing, ifMatch);
       this.#assertCanHoldFile(vault, path);
       if (existing && existing.hash === hash) {
@@ -345,6 +473,7 @@ export class SyncStore {
       }
       if (ifMatch !== undefined && existing.rev !== ifMatch) throw conflict(path, existing.rev);
       this.#run("DELETE FROM files WHERE vault = ? AND path = ?", vault, path);
+      if (existing.binary) this.#pruneBlob(vault, existing.hash);
       return this.#appendDeletion(vault, path, device);
     });
   }
@@ -427,11 +556,11 @@ export class SyncStore {
       }
       const [, low, high] = prefixRange(path);
       const inside = this.#all(
-        "SELECT path FROM files WHERE vault = ? AND path >= ? AND path < ? ORDER BY path",
+        "SELECT path, blob_hash FROM files WHERE vault = ? AND path >= ? AND path < ? ORDER BY path",
         vault,
         low,
         high,
-      ).map((row) => String(row.path));
+      );
       this.#run(
         "DELETE FROM folders WHERE vault = ? AND (path = ? OR (path >= ? AND path < ?))",
         vault,
@@ -440,11 +569,15 @@ export class SyncStore {
         high,
       );
       const changes: SyncChange[] = [];
+      const deleted: string[] = [];
       for (const file of inside) {
-        this.#run("DELETE FROM files WHERE vault = ? AND path = ?", vault, file);
-        changes.push(this.#appendDeletion(vault, file, device));
+        const filePath = String(file.path);
+        this.#run("DELETE FROM files WHERE vault = ? AND path = ?", vault, filePath);
+        if (typeof file.blob_hash === "string") this.#pruneBlob(vault, file.blob_hash);
+        changes.push(this.#appendDeletion(vault, filePath, device));
+        deleted.push(filePath);
       }
-      return { deleted: inside, changes };
+      return { deleted, changes };
     });
   }
 
@@ -710,6 +843,17 @@ export class SyncStore {
     }
   }
 
+  #pruneBlob(vault: string, hash: string): void {
+    this.#run(
+      `DELETE FROM blobs WHERE vault = ? AND hash = ?
+      AND NOT EXISTS (SELECT 1 FROM files WHERE vault = ? AND blob_hash = ?)`,
+      vault,
+      hash,
+      vault,
+      hash,
+    );
+  }
+
   #checkQuota(vault: string, growth: number): void {
     if (growth <= 0 || !Number.isFinite(this.#quotaBytes)) return;
     const used = Number(
@@ -782,8 +926,15 @@ function prefixRange(prefix: string): [string, string, string] {
   return [prefix, `${prefix}/`, `${prefix}0`];
 }
 
-function sha256(text: string): string {
-  return createHash("sha256").update(text, "utf8").digest("hex");
+function sha256(content: string | Uint8Array): string {
+  return createHash("sha256").update(content).digest("hex");
+}
+
+function binaryTextAccess(): VaultStateError {
+  return new VaultStateError(
+    "unsupported_media_type",
+    "Binary files require the binary content route",
+  );
 }
 
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
@@ -800,6 +951,7 @@ function toEntry(row: Row): SyncFileEntry {
     size: Number(row.size),
     hash: String(row.hash),
     mtime: Number(row.mtime),
+    ...(typeof row.blob_hash === "string" ? { binary: true as const } : {}),
   };
 }
 

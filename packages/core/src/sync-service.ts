@@ -4,12 +4,12 @@
  * `@ddl/storage`) and future native clients all build on these types, as `protocol.ts` is for
  * the daemon. Changes must be additive within `SYNC_API_VERSION`.
  *
- * Transport: JSON under `/v1`, over HTTPS in production. Every vault route needs
- * `Authorization: Bearer <token>`; a token authorizes exactly one vault, and a wrong token, an
- * unknown vault and another vault's token all get the same 401. Mutating requests name the device
+ * Transport: JSON and size-limited raw binary under `/v1`, over HTTPS in production. Every vault
+ * route needs `Authorization: Bearer <token>`; a token authorizes exactly one vault, and a wrong
+ * token, an unknown vault and another vault's token all get the same 401. Mutating requests name the device
  * in `X-DDL-Device`, which the server records on the change.
  *
- * Content is opaque to the server: it stores and returns it as sent (after replacing lone
+ * Content is opaque to the server: it stores and returns bytes as sent (text replaces lone
  * surrogates, like every provider) and never merges, so end-to-end encryption can be layered on
  * without protocol changes.
  *
@@ -71,7 +71,7 @@ export const SYNC_LEASE_NAMES = ["agent"] as const;
 export type SyncLeaseName = (typeof SYNC_LEASE_NAMES)[number];
 
 export const SYNC_LIMITS = {
-  /** Default cap on one file's content, in UTF-8 bytes (servers may configure another). */
+  /** Default cap on one file's raw content bytes (UTF-8 for text; servers may configure another). */
   fileBytes: 5 * 1024 * 1024,
   /** Longest vault path, in UTF-16 code units. */
   pathLength: 4096,
@@ -109,6 +109,11 @@ export const SYNC_ROUTES = {
    * DELETE (`?ifMatch=<rev>`) → 204, 404 or 409 SyncConflictBody
    */
   file: (vault: string, path: string) => vaultRoute(vault, `/files/${encodeVaultPath(path)}`),
+  /** GET raw bytes with x-ddl-file-{rev,mtime,hash}; PUT octet-stream with ?ifMatch=rev or
+   * ?ifAbsent=1 → SyncWriteResponse. Files metadata/listing, delete and rename use the same routes.
+   */
+  binaryFile: (vault: string, path: string) =>
+    vaultRoute(vault, `/binary/${encodeVaultPath(path)}`),
   /** POST SyncRenameRequest → SyncWriteResponse (the moved file), 404 or 409 */
   rename: (vault: string) => vaultRoute(vault, "/rename"),
   /**
@@ -135,14 +140,17 @@ export const SYNC_ROUTES = {
 export interface SyncHealthResponse {
   ok: true;
   apiVersion: number;
+  capabilities?: string[];
 }
 
 export interface SyncFileEntry {
   path: string;
   rev: string;
-  /** UTF-8 bytes of the content. */
+  /** Raw bytes (UTF-8 for text files). */
   size: number;
-  /** SHA-256 of the content's UTF-8 bytes, lowercase hex. */
+  /** Present only for binary content; text reads/writes of this entry are refused. */
+  binary?: true;
+  /** SHA-256 of the raw content bytes, lowercase hex. */
   hash: string;
   /** When the server accepted this content (epoch ms, server clock). */
   mtime: number;
@@ -327,6 +335,8 @@ export type SyncErrorCode =
   | "payload_too_large"
   /** 413: the write would exceed the vault's storage quota. */
   | "quota_exceeded"
+  /** 415: binary content accessed through a text route, or unsupported request media type. */
+  | "unsupported_media_type"
   /** 426: `…/stream` requested without a WebSocket upgrade. */
   | "upgrade_required"
   /** 429: too many requests for this vault; retry after `Retry-After` seconds. */

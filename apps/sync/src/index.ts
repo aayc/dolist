@@ -10,6 +10,7 @@ export {
 } from "./server";
 export {
   type LeaseOutcome,
+  type StoredBinaryFile,
   type StoredFile,
   SyncStore,
   type SyncStoreOptions,
