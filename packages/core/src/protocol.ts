@@ -59,6 +59,7 @@ export const API_PATHS = {
   settings: "/api/settings",
   agentStatus: "/api/agent/status",
   agentOperation: "/api/agent/operations/:id",
+  agentNotifications: "/api/agent/notifications",
   agentEnabled: "/api/agent/enabled",
   tasks: "/api/tasks",
   threads: "/api/threads",

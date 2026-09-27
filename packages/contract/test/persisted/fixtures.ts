@@ -22,7 +22,7 @@ export type FixtureFormat =
   | "workspace"
   | "capture";
 /** Formats whose fixtures are JSON Lines (`*.jsonl`); journals have no legacy files. */
-export type JsonlFixtureFormat = "thread-journal" | "mutation-journal";
+export type JsonlFixtureFormat = "thread-journal" | "mutation-journal" | "notification-journal";
 export type FixtureKind = "v1" | "legacy" | "corrupt" | "future";
 
 export const FIXTURE_FORMATS: readonly FixtureFormat[] = [

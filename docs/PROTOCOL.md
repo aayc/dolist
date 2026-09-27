@@ -126,6 +126,24 @@ offline, or automatically submit an unsent draft. The relay forwards only the va
 ID and verified workspace header alongside its own credential; uncertain routine file requests
 with operation IDs never fall back to a second local dispatch.
 
+### Notification catch-up
+
+`notification-catch-up-v1` adds `GET /api/agent/notifications` with a required verified workspace.
+Without `cursor`, it returns no alerts and a baseline cursor at the latest durable decision; this
+prevents a newly paired phone from announcing history. Pass that opaque cursor and `limit`
+(1–200, default 100) for subsequent pages, store the returned cursor only after handling the
+page, and continue while `hasMore` is true. An empty page can advance the cursor past deliberate
+suppression. Cursors belong to one workspace.
+
+The scheduler records its actual notification decision, including `never` and unchanged runs,
+before marking the run notified or sending `routine.notification`. Both the live event and
+catch-up payload carry the same stable `id`; deduplicate on that ID. Ordering uses lease epoch
+and sequence, so a clock adjustment or host handover does not lose an alert. Decisions survive
+restarts and failed response delivery; duplicate persistence never emits a second live alert.
+Catch-up is authenticated and may be relayed or read from the sync authority during handover.
+It supplies missed routine decisions, not background execution or APNs delivery. Approval
+catch-up continues to use the freshly fetched approval list and each approval's stable ID.
+
 <!-- BEGIN GENERATED REFERENCE (pnpm --filter @ddl/contract generate); edits below are overwritten -->
 
 ## Reference
@@ -150,6 +168,7 @@ API version: **1**. Machine-readable: `packages/contract/schema/wire.schema.json
 | `settings` | GET | `/api/settings` | `bearer` | — | 200 [`SettingsResponse`](#settingsresponse) |
 | `settings` | PUT | `/api/settings` | `bearer` | [`UpdateSettingsRequest`](#updatesettingsrequest) | 200 [`SettingsResponse`](#settingsresponse) |
 | `settings` | PATCH | `/api/settings` | `bearer` | [`UpdateSettingsRequest`](#updatesettingsrequest) | 200 [`SettingsResponse`](#settingsresponse) |
+| `agentNotifications` | GET | `/api/agent/notifications` | `bearer` | — | 200 [`AgentNotificationsResponse`](#agentnotificationsresponse) |
 | `agentOperation` | GET | `/api/agent/operations/:id` | `bearer` | — | 200 [`AgentOperationResponse`](#agentoperationresponse) |
 | `agentStatus` | GET | `/api/agent/status` | `bearer` | — | 200 [`AgentStatusResponse`](#agentstatusresponse) |
 | `agentEnabled` | PUT | `/api/agent/enabled` | `bearer` | [`SetAgentEnabledRequest`](#setagentenabledrequest) | 200 [`AgentStatusResponse`](#agentstatusresponse) |
@@ -331,6 +350,16 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
   - `200` [`SettingsResponse`](#settingsresponse) — The new effective settings.
   - `400` [`ApiErrorBody`](#apierrorbody) `invalid_json`, `invalid_request` — Malformed JSON or failed validation.
   - `413` [`ApiErrorBody`](#apierrorbody) `payload_too_large` — Body over 5 MB.
+
+#### `agentNotifications` — `/api/agent/notifications`
+
+**GET** — Catch up durable routine notifications with a verified workspace; absent cursor establishes a baseline.
+
+- Query `cursor`
+- Query `limit`
+- Responses:
+  - `200` [`AgentNotificationsResponse`](#agentnotificationsresponse) — Notifications and the next durable cursor.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_request` — Invalid cursor, page limit or missing verified workspace.
 
 #### `agentOperation` — `/api/agent/operations/:id`
 
@@ -1233,6 +1262,7 @@ A finished run to tell the user about (sent according to the routine's `notify`)
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
+| `id` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | no | Stable notification decision ID for live/catch-up deduplication. |
 | `routineId` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | yes | Runtime id, safe to use in URLs. |
 | `title` | string | yes | The routine's name. |
 | `body` | string | yes | The run's result in a line or two. |
@@ -2116,6 +2146,18 @@ _Strict: unknown keys are rejected._
 Durable agent command receipt. A pending command belongs to this live process; an indeterminate command is never automatically dispatched again.
 
 Type: object | object
+
+#### AgentNotificationsResponse
+
+Bounded notification catch-up. Omit the cursor to establish a baseline without historical alerts; persist each returned cursor after handling its page.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `notifications` | [`RoutineNotification`](#routinenotification)[] | yes |  |
+| `cursor` | string (1–1024 chars) | yes |  |
+| `hasMore` | boolean | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
 
 #### ApiErrorCode
 

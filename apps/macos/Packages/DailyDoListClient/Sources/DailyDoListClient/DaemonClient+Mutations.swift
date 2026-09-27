@@ -2,6 +2,12 @@ import DailyDoListModels
 
 /// Compatibility defaults for clients predating durable operations. Callers must feature-check.
 extension DaemonClient {
+  public func agentNotifications(cursor: String?, limit: Int = 100) async throws
+    -> AgentNotificationsResponse
+  {
+    throw DaemonClientError.notFound("This client does not serve notification catch-up.")
+  }
+
   public func postMessage(threadId: String, text: String, operationId: String) async throws
     -> ThreadActionResponse
   {

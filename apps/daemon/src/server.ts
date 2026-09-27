@@ -14,6 +14,7 @@ import {
 import type { StorageProvider } from "@ddl/storage";
 import { getRequestListener } from "@hono/node-server";
 import { LEASE_CHECKING_PROBLEM, type LeaseTimings } from "./agent-lease";
+import type { MutationAuthority } from "./agent-mutations";
 import { AgentSupervisor } from "./agent-supervisor";
 import { createApp } from "./app";
 import { AttributedStorage } from "./attributed-storage";
@@ -25,6 +26,7 @@ import { displayPath } from "./home-paths";
 import { ObsidianImporter } from "./import/importer";
 import { LeasedAgentRuntime } from "./leased-runtime";
 import { MACHINE_TOKEN_FILE, MachineLink } from "./machine-link";
+import { NotificationJournal } from "./notifications";
 import { PairedDeviceStore } from "./paired-devices";
 import { ReadinessMonitor, systemReadinessProbes } from "./readiness";
 import type { LinkTimings } from "./relay/link";
@@ -136,6 +138,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     await workspace.current();
     const agentStorage = new AttributedStorage(storage, writes, { origin: "agent" });
     let supervisor: AgentSupervisor | undefined;
+    let notifications: NotificationJournal;
     // The real runtime exists only while this device runs the agent (see AgentSupervisor).
     const runtime = new LeasedAgentRuntime({
       mode: config.agentMode,
@@ -150,6 +153,8 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
           connectors,
           logger,
           leaseEpoch: () => supervisor?.heldEpoch ?? null,
+          persistRoutineNotification: async (runId, notification) =>
+            notifications.record(await workspace.current(), runId, notification),
           ...(hooks ? { wrapExecution: hooks.execution } : {}),
         }),
       storage: agentStorage,
@@ -251,6 +256,33 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       },
       logger: logger.child({ component: "vault" }),
     });
+    const mutationAuthority = (): MutationAuthority => {
+      if (deviceSettings.sync.kind !== "remote") {
+        return { storage, epoch: 0, isCurrent: () => deviceSettings.sync.kind !== "remote" };
+      }
+      const handle = sync.handle;
+      if (!handle)
+        throw new ApiError(
+          503,
+          "agent_unavailable",
+          "The authoritative receipt store is unavailable",
+        );
+      const epoch = supervisor?.heldEpoch ?? null;
+      return {
+        storage: handle.target,
+        epoch,
+        isCurrent: () =>
+          sync.handle === handle &&
+          supervisor?.heldEpoch === epoch &&
+          epoch !== null &&
+          runtime.active,
+      };
+    };
+    notifications = new NotificationJournal({
+      local: storage,
+      authority: mutationAuthority,
+      logger,
+    });
     await supervisor.start();
     // Clients talk to the relay; the supervisor drives the leased runtime underneath it.
     const relay = new AgentRelay({
@@ -271,28 +303,8 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       storage,
       workspace,
       runtime: relay,
-      mutationAuthority: () => {
-        if (deviceSettings.sync.kind !== "remote") {
-          return { storage, epoch: 0, isCurrent: () => deviceSettings.sync.kind !== "remote" };
-        }
-        const handle = sync.handle;
-        if (!handle)
-          throw new ApiError(
-            503,
-            "agent_unavailable",
-            "The authoritative receipt store is unavailable",
-          );
-        const epoch = supervisor?.heldEpoch ?? null;
-        return {
-          storage: handle.target,
-          epoch,
-          isCurrent: () =>
-            sync.handle === handle &&
-            supervisor?.heldEpoch === epoch &&
-            epoch !== null &&
-            runtime.active,
-        };
-      },
+      mutationAuthority,
+      notifications,
       settings,
       config: { port, allowedOrigins: config.allowedOrigins },
       token,

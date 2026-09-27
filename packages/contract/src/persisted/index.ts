@@ -57,6 +57,7 @@ export {
   type PersistedMutationEvent,
   PersistedMutationEventSchema,
 } from "./mutations";
+export { type PersistedNotificationEvent, PersistedNotificationEventSchema } from "./notifications";
 export {
   PERSISTED_FILE_ID_PATTERN,
   PERSISTED_PATHS,

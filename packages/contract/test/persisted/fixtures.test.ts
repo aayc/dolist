@@ -92,6 +92,7 @@ describe("fixture coverage", () => {
       thread: "threads",
       "thread-journal": "thread-journal",
       "mutation-journal": "mutation-journal",
+      "notification-journal": "notification-journal",
       records: "records",
       approvals: "approvals",
       "task-state": "task-state",

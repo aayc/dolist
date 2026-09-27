@@ -411,6 +411,9 @@ class Runtime implements AgentRuntime {
       dropTriage: (runId) => this.orchestrator.dropQueued(runId),
       capabilities: () => this.capabilities().available,
       onNotification: (notification) => this.emitter.emit("routine.notification", notification),
+      ...(options.persistRoutineNotification
+        ? { persistNotification: options.persistRoutineNotification }
+        : {}),
       now,
       logger: this.logger.child({ component: "routine-scheduler" }),
       ...(overrides.maxRoutineRunMs !== undefined ? { maxRunMs: overrides.maxRoutineRunMs } : {}),
@@ -496,6 +499,7 @@ class Runtime implements AgentRuntime {
     // The broker persists with a debounce; unflushed approvals would vanish on restart while
     // their thread messages still point at them.
     const broker = this.broker as ApprovalBroker & { flush?: () => Promise<void> };
+    await this.scheduler.flushNotifications();
     await Promise.all([
       this.threads.flush(),
       this.records.flush(),

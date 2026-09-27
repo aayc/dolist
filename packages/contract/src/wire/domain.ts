@@ -464,6 +464,9 @@ export const RoutineNotificationSchema = named(
   "RoutineNotification",
   "A finished run to tell the user about (sent according to the routine's `notify`).",
   z.looseObject({
+    id: RuntimeIdSchema.optional().describe(
+      "Stable notification decision ID for live/catch-up deduplication.",
+    ),
     routineId: RuntimeIdSchema,
     title: z.string().describe("The routine's name."),
     body: z.string().describe("The run's result in a line or two."),

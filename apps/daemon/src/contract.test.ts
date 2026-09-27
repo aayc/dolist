@@ -440,6 +440,18 @@ const scenarios: Record<string, Scenario> = {
   "PUT settings": (observed) => settingsPatch(observed, "PUT"),
   "PATCH settings": (observed) => settingsPatch(observed, "PATCH"),
 
+  "GET agentNotifications": async (observed) => {
+    const { api } = await setup(observed);
+    const health = await api.call("health", "GET");
+    const headers = { [WORKSPACE_ID_HEADER]: (health.body as { workspaceId: string }).workspaceId };
+    expect((await api.call("agentNotifications", "GET")).status).toBe(400);
+    expect((await api.call("agentNotifications", "GET", { headers })).status).toBe(200);
+    expect(
+      (await api.call("agentNotifications", "GET", { headers, query: { cursor: "invalid" } }))
+        .status,
+    ).toBe(400);
+  },
+
   "GET agentOperation": async (observed) => {
     const { api } = await setup(observed);
     const health = await api.call("health", "GET");
