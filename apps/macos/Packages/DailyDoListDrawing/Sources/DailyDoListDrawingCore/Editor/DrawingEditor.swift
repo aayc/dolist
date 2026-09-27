@@ -47,6 +47,7 @@ public final class DrawingEditor {
   public internal(set) var selectedPointIndex: Int?
   public var arrowShape: DrawingArrowShape = .sharp
   public var objectsSnapEnabled = false
+  public var rotationHandleEnabled = false
   public var gridEnabled = false {
     didSet {
       guard gridEnabled != oldValue, !readingCanvasPreferences else { return }

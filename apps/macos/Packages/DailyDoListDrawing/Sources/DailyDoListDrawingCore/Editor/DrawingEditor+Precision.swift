@@ -10,6 +10,27 @@ extension DrawingEditor {
       (point.x / gridSize).rounded() * gridSize, (point.y / gridSize).rounded() * gridSize)
   }
 
+  /// Aligns construction handles with visible object bounds. Rotated resize frames use grid
+  /// snapping only; their local axes do not coincide with scene-aligned object edges.
+  func snappedPointer(_ point: DrawingPoint, excluding ids: Set<String> = []) -> DrawingPoint {
+    var result = snapped(point)
+    guard objectsSnapEnabled else { return result }
+    var dx: Double?
+    var dy: Double?
+    for element in scene.visibleElements where !ids.contains(element.id) {
+      let box = ElementGeometry.bounds(element)
+      for x in [box.minX, box.center.x, box.maxX] where abs(x - result.x) <= 6 / zoom {
+        if dx == nil || abs(x - result.x) < abs(dx!) { dx = x - result.x }
+      }
+      for y in [box.minY, box.center.y, box.maxY] where abs(y - result.y) <= 6 / zoom {
+        if dy == nil || abs(y - result.y) < abs(dy!) { dy = y - result.y }
+      }
+    }
+    result.x += dx ?? 0
+    result.y += dy ?? 0
+    return result
+  }
+
   func snappedMovement(_ delta: DrawingPoint, originals: [String: ExcalidrawElement])
     -> DrawingPoint
   {
@@ -41,6 +62,14 @@ extension DrawingEditor {
       next.y += dy ?? 0
     }
     return next
+  }
+
+  public var rotationHandle: DrawingPoint? {
+    guard rotationHandleEnabled, let frame = selectionFrame, frame.pointHandles.isEmpty,
+      !selectedElements.contains(where: { $0.type.isFrameLike || $0.locked })
+    else { return nil }
+    return DrawingPoint(frame.center.x, frame.rect.minY - 32 / zoom)
+      .rotated(around: frame.center, by: frame.angle)
   }
 
   public func beginLinearEditing(_ id: String) {

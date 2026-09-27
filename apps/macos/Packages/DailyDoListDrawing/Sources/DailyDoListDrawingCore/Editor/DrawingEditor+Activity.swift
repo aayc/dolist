@@ -6,7 +6,7 @@ extension DrawingEditor {
   public var activeElementIds: Set<String> {
     var ids = Set<String>()
     switch gesture {
-    case .move(_, let originals, _, _), .resize(_, _, let originals):
+    case .move(_, let originals, _, _), .resize(_, _, let originals), .rotate(_, _, let originals):
       ids = Set(originals.keys)
     case .movePoint(let id, _), .create(let id, _), .linear(let id, _, _), .freedraw(let id):
       ids = [id]

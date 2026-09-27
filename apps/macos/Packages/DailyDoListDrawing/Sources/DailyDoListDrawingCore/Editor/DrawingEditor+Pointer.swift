@@ -9,6 +9,7 @@ extension DrawingEditor {
     case resize(
       handle: TransformHandle, frame: SelectionFrame, originals: [String: ExcalidrawElement])
     case movePoint(id: String, index: Int)
+    case rotate(center: DrawingPoint, startAngle: Double, originals: [String: ExcalidrawElement])
     case create(id: String, origin: DrawingPoint)
     case linear(id: String, origin: DrawingPoint, startTarget: String?)
     case freedraw(id: String)
@@ -83,7 +84,8 @@ extension DrawingEditor {
   public func pointerDown(
     at point: DrawingPoint, modifiers: PointerModifiers = [], clickCount: Int = 1
   ) {
-    let point = tool == .selection || tool == .eraser || tool == .freedraw ? point : snapped(point)
+    let point =
+      tool == .selection || tool == .eraser || tool == .freedraw ? point : snappedPointer(point)
     if editingTextId != nil { endTextEditing() }
     hoveredId = nil
     if let id = multiPointElementId {
@@ -130,7 +132,8 @@ extension DrawingEditor {
     guard let gesture else { return }
     let point: DrawingPoint = {
       switch gesture {
-      case .create, .linear, .resize, .movePoint: return snapped(point)
+      case .create, .linear, .movePoint: return snappedPointer(point, excluding: activeElementIds)
+      case .resize: return point
       default: return point
       }
     }()
@@ -154,6 +157,20 @@ extension DrawingEditor {
       }
       moveSelection(originals: originals, by: point - start, snapAxis: modifiers.contains(.shift))
       self.gesture = .move(start: start, originals: originals, duplicate: false, moved: true)
+      invalidate()
+    case .rotate(let center, let startAngle, let originals):
+      var angle = atan2(point.y - center.y, point.x - center.x) - startAngle
+      if modifiers.contains(.shift) { angle = (angle / (.pi / 12)).rounded() * (.pi / 12) }
+      for original in originals.values {
+        let before = ElementGeometry.center(original)
+        let after = before.rotated(around: center, by: angle)
+        update(original.id) {
+          $0.x = original.x + after.x - before.x
+          $0.y = original.y + after.y - before.y
+          $0.angle = (original.angle + angle).truncatingRemainder(dividingBy: 2 * .pi)
+        }
+      }
+      updateArrowsBound(to: Set(originals.keys), movedTogether: Set(originals.keys))
       invalidate()
     case .resize(let handle, let frame, let originals):
       resize(handle: handle, frame: frame, originals: originals, to: point, modifiers: modifiers)
@@ -197,6 +214,9 @@ extension DrawingEditor {
       } else {
         commit()
       }
+    case .rotate:
+      updateFrameMembership()
+      commit()
     case .resize:
       updateFrameMembership(resizing: true)
       commit()
@@ -260,6 +280,17 @@ extension DrawingEditor {
       return
     }
     if let frame = selectionFrame {
+      if let handle = rotationHandle, handle.distance(to: point) <= handleRadius {
+        let originals = Dictionary(
+          uniqueKeysWithValues: withDependents(editableSelection).compactMap {
+            id in element(id).map { (id, $0) }
+          })
+        gesture = .rotate(
+          center: frame.center,
+          startAngle: atan2(point.y - frame.center.y, point.x - frame.center.x),
+          originals: originals)
+        return
+      }
       if let index = frame.pointHandle(at: point, radius: handleRadius), let id = selectedIds.first
       {
         selectedPointIndex = index

@@ -15,6 +15,7 @@
     public var isEditing = true
     public var viewOnly = false
     public var zenMode = false
+    public var laserEnabled = false
     public var commandError: String?
     public var multiSelect = false
     public var constrain = false
@@ -77,6 +78,7 @@
       view.mode = controller.isEditing && !controller.viewOnly ? .editing : .display
       view.theme = theme
       view.background = background
+      view.laserEnabled = controller.laserEnabled
       var modifiers: PointerModifiers = []
       if controller.multiSelect || controller.constrain { modifiers.insert(.shift) }
       if controller.fromCenter { modifiers.insert(.option) }
@@ -95,6 +97,7 @@
     @State private var precisionShown = false
     @State private var transferShown = false
     @State private var canvasShown = false
+    @State private var extrasShown = false
 
     public init(controller: MobileDrawingController) { self.controller = controller }
     public var body: some View {
@@ -108,6 +111,14 @@
             controller.viewOnly = false
             controller.zenMode = false
           }.padding(8)
+        }
+      }
+      .sheet(isPresented: $extrasShown) {
+        NavigationStack {
+          MobileDrawingExtras(controller: controller)
+            .toolbar {
+              ToolbarItem(placement: .confirmationAction) { Button("Done") { extrasShown = false } }
+            }
         }
       }
       .sheet(isPresented: $canvasShown) {
@@ -169,6 +180,7 @@
         HStack(spacing: 2) {
           ForEach(DrawingTool.toolbarTools, id: \.self) { tool in
             Button {
+              controller.laserEnabled = false
               controller.editor.tool = tool
             } label: {
               Image(systemName: tool.symbol).frame(width: 44, height: 44)
@@ -205,6 +217,8 @@
             isOn: Binding(
               get: { controller.editor.isToolLocked }, set: { controller.editor.isToolLocked = $0 })
           )
+          Toggle("Laser pointer", isOn: $controller.laserEnabled)
+          Button("Insert URL card") { extrasShown = true }
           Button("Canvas settings and help") { canvasShown = true }
           Button("View mode") { controller.viewOnly = true }
           Button("Zen mode") { controller.zenMode = true }

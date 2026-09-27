@@ -36,6 +36,17 @@
           context.strokeEllipse(in: rect)
         }
       }
+      if let point = editor.rotationHandle, let frame = editor.selectionFrame {
+        let start = viewport.sceneToView(
+          DrawingPoint(frame.center.x, frame.rect.minY)
+            .rotated(around: frame.center, by: frame.angle))
+        let end = viewport.sceneToView(point)
+        context.move(to: start)
+        context.addLine(to: end)
+        context.strokePath()
+        context.fillEllipse(in: CGRect(x: end.x - 6, y: end.y - 6, width: 12, height: 12))
+        context.strokeEllipse(in: CGRect(x: end.x - 6, y: end.y - 6, width: 12, height: 12))
+      }
       for point in editor.linearMidpoints {
         let center = viewport.sceneToView(point)
         context.setFillColor(UIColor.systemIndigo.withAlphaComponent(0.3).cgColor)

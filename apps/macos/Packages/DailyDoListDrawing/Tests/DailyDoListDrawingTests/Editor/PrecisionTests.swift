@@ -132,4 +132,42 @@ struct PrecisionTests {
     editor.redo()
     #expect(editor.scene.viewBackgroundColor == "#ffeedd")
   }
+  @Test func objectSnappingAppliesToConstructionAndResizeEdges() throws {
+    let target = TestScenes.element(.rectangle, id: "target", x: 100, y: 80, width: 60, height: 50)
+    let editor = DrawingEditor(
+      scene: .init(elements: [target]), environment: DeterministicDrawingEnvironment())
+    editor.objectsSnapEnabled = true
+    editor.tool = .rectangle
+    editor.pointerDown(at: DrawingPoint(10, 10))
+    editor.pointerDragged(to: DrawingPoint(97, 77))
+    editor.pointerUp(at: DrawingPoint(97, 77))
+    let created = try #require(editor.selectedElements.first)
+    #expect(created.x + created.width == 100 && created.y + created.height == 80)
+    let frame = try #require(editor.selectionFrame)
+    let handle = try #require(frame.handles[.se])
+    editor.pointerDown(at: handle)
+    editor.pointerDragged(to: DrawingPoint(161 + 5, 132 + 5))
+    editor.pointerUp(at: DrawingPoint(161 + 5, 132 + 5))
+    #expect(editor.element(created.id)!.width + created.x == 160)
+    #expect(editor.element(created.id)!.height + created.y == 130)
+  }
+
+  @Test func touchRotationUsesOneUndoStepAndKeepsTheCenter() throws {
+    let shape = TestScenes.element(.rectangle, id: "shape", x: 100, y: 100, width: 120, height: 80)
+    let editor = DrawingEditor(
+      scene: .init(elements: [shape]), environment: DeterministicDrawingEnvironment())
+    editor.rotationHandleEnabled = true
+    editor.select(["shape"])
+    let handle = try #require(editor.rotationHandle)
+    let center = try #require(editor.selectionFrame?.center)
+    let end = handle.rotated(around: center, by: .pi / 2)
+    editor.pointerDown(at: handle)
+    editor.pointerDragged(to: end)
+    editor.pointerUp(at: end)
+    #expect(abs(editor.element("shape")!.angle - .pi / 2) < 0.00001)
+    #expect(ElementGeometry.center(editor.element("shape")!) == ElementGeometry.center(shape))
+    editor.undo()
+    #expect(editor.element("shape")?.angle == 0 && !editor.canUndo)
+  }
+
 }
