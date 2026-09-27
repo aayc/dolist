@@ -25,15 +25,16 @@ struct Relay {
       let log = devices.log
       let onMachine = devices.onMachine
 
-      // Paired: the relay connects first (nothing wrong yet), then forwards.
+      // The event coalescer can replace a brief connecting state with connected before flushing.
       let reported = log.items[devices.pairedMark...].compactMap { item -> AgentStatusResponse? in
         guard case .event(.agentStatus(let status)) = item, let relay = status.placement?.relay,
           relay != .off
         else { return nil }
         return status
       }
-      #expect(reported.first?.placement?.relay == .connecting)
-      #expect(reported.first?.problem == nil, "connecting isn't a problem")
+      #expect(
+        [RelayState.connecting, .connected].contains(reported.first?.placement?.relay ?? .off))
+      #expect(reported.first?.problem == nil, "pairing and connection aren't problems")
 
       // Connected: the machine's agent under the laptop's own placement, nothing wrong with it.
       let status = try await client.agentStatus()

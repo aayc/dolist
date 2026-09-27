@@ -4,7 +4,7 @@ import Foundation
 
 /// The repository cannot be handed a legacy/unguarded client by accident. The same immutable
 /// workspace header protects its reads and the actual conditional write after the handshake.
-public struct HTTPWorkspaceRemote: WorkspaceRemote, CaptureRemote {
+public struct HTTPWorkspaceRemote: WorkspaceRemote, CaptureRemote, StructuralRemote {
   public let profileID: UUID
   public let origin: ConnectionOrigin
   private let workspaceID: String
@@ -71,6 +71,29 @@ public struct HTTPWorkspaceRemote: WorkspaceRemote, CaptureRemote {
       hostID: response.hostId, hostDate: response.hostDate, hostTimeZone: response.hostTimeZone,
       watched: response.watched, outcome: response.outcome == .applied ? .applied : .indeterminate,
       note: response.note, path: response.path)
+  }
+
+  public func perform(_ action: WorkspaceStructuralAction, workspaceID: String) async throws {
+    guard self.workspaceID == workspaceID else { throw WorkspaceRepositoryError.workspaceMismatch }
+    do {
+      switch action {
+      case .rename(let from, let to, _):
+        let response = try await client.rename(from: from, to: to)
+        guard response.path == to else { throw WorkspaceRepositoryError.invalidPath }
+      case .trash(let path, let isFolder):
+        let response = try await isFolder ? client.deleteFolder(path) : client.deleteNote(path)
+        guard response.ok, response.trashedTo.hasPrefix(".trash/") else {
+          throw WorkspaceRepositoryError.invalidPath
+        }
+      }
+    } catch let error as DaemonClientError {
+      // These responses are rejected by validation/authentication before the filesystem call.
+      // A missing source or a server error may follow a partial folder operation: retain review.
+      if let status = error.httpStatus, [400, 401, 403, 412, 429].contains(status) {
+        throw StructuralRemoteError.rejected
+      }
+      throw error
+    }
   }
 
 }

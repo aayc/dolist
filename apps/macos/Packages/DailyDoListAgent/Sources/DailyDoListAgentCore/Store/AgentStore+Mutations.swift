@@ -10,9 +10,17 @@ extension AgentStore {
     guard let mutationJournal else {
       return try await command.send(using: client, operationID: nil)
     }
+    guard case .connected = connectionState else { throw AgentMutationError.authorizationChanged }
+    let authority = mutationAuthorityGeneration
     do {
       let result = try await mutationJournal.perform(
-        command, operationID: operationID, authorize: authorize)
+        command, operationID: operationID,
+        authorize: { [weak self] in
+          guard let self, case .connected = self.connectionState,
+            self.mutationAuthorityGeneration == authority
+          else { return false }
+          return authorize()
+        })
       await refreshPendingMutations()
       return result
     } catch {

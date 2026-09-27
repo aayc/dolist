@@ -9,8 +9,6 @@ struct PhoneWorkspaceView: View {
   let model: PhoneAppModel
   @Bindable var workspace: PhoneWorkspace
   let chooseHost: () -> Void
-  @State private var newNote = false
-  @State private var newPath = ""
   @State private var capture = false
 
   var body: some View {
@@ -36,6 +34,7 @@ struct PhoneWorkspaceView: View {
           }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
+          PhoneNoteNavigation(workspace: workspace)
           if !model.connection.actionsEnabled {
             ConnectionStatusView(connection: model.connection).padding(10).frame(
               maxWidth: .infinity, alignment: .leading
@@ -45,30 +44,7 @@ struct PhoneWorkspaceView: View {
         }
       }.tabItem { Label("Today", systemImage: "calendar") }.tag(0)
       NavigationStack {
-        List {
-          ForEach(workspace.entries.filter { $0.kind == .file }, id: \.path) { entry in
-            Button {
-              Task { await workspace.open(entry.path) }
-            } label: {
-              Label(entry.path, systemImage: "doc.text").foregroundStyle(.primary)
-            }
-          }
-        }
-        .overlay {
-          if workspace.entries.isEmpty {
-            ContentUnavailableView("No downloaded notes", systemImage: "folder")
-          }
-        }
-        .navigationTitle("Notes")
-        .refreshable { await workspace.refreshTree() }
-        .toolbar {
-          ToolbarItem(placement: .topBarTrailing) {
-            Button("New note", systemImage: "square.and.pencil") {
-              newPath = ""
-              newNote = true
-            }
-          }
-        }
+        PhoneExplorerView(workspace: workspace)
       }.tabItem { Label("Notes", systemImage: "folder") }.tag(1)
       Group {
         if let store = workspace.agent {
@@ -76,7 +52,7 @@ struct PhoneWorkspaceView: View {
             store: store,
             actionsEnabled: workspace.online && model.connection.actionsEnabled,
             hostName: workspace.profile.name, drafts: workspace.composerDrafts.callbacks,
-            openNote: { path, _ in Task { await workspace.open(path) } })
+            openNote: { path, line in Task { await workspace.open(path, line: line) } })
         } else {
           ContentUnavailableView(
             "Inbox unavailable", systemImage: "tray",
@@ -89,7 +65,7 @@ struct PhoneWorkspaceView: View {
             store: store,
             actionsEnabled: workspace.online && model.connection.actionsEnabled,
             hostName: workspace.profile.name, drafts: workspace.composerDrafts.callbacks,
-            openNote: { path, _ in Task { await workspace.open(path) } })
+            openNote: { path, line in Task { await workspace.open(path, line: line) } })
         } else {
           ContentUnavailableView(
             "Routines unavailable", systemImage: "repeat",
@@ -107,6 +83,9 @@ struct PhoneWorkspaceView: View {
           }
           Section("On this iPhone") {
             NavigationLink("Captures") { CaptureHistoryView(workspace: workspace) }
+            NavigationLink("Recovery and pending actions") {
+              PhoneRecoveryView(workspace: workspace)
+            }
             Button("Sync saved changes", systemImage: "arrow.triangle.2.circlepath") {
               Task { await workspace.synchronize() }
             }.disabled(!workspace.online || workspace.refreshing)
@@ -115,13 +94,6 @@ struct PhoneWorkspaceView: View {
           }
         }.navigationTitle("Settings")
       }.tabItem { Label("Settings", systemImage: "gearshape") }.tag(4)
-    }
-    .alert("New note", isPresented: $newNote) {
-      TextField("Folder/Note.md", text: $newPath).textInputAutocapitalization(.never)
-      Button("Create") { Task { await workspace.createNote(newPath) } }
-      Button("Cancel", role: .cancel) {}
-    } message: {
-      Text("Use a name or a relative path inside this workspace.")
     }
     .alert(
       "Couldn't finish",
@@ -132,6 +104,10 @@ struct PhoneWorkspaceView: View {
     } message: {
       Text(workspace.error ?? "")
     }
+    .preferredColorScheme(
+      workspace.settings?.theme == .dark
+        ? .dark : workspace.settings?.theme == .light ? .light : nil
+    )
     .sheet(isPresented: $capture) { CaptureTaskView(workspace: workspace) }
   }
   private var hostSettings: some View {

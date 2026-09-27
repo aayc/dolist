@@ -21,6 +21,7 @@ final class NoteSession {
   @ObservationIgnored private var requiresReview = false
   @ObservationIgnored private var debounce: Task<Void, Never>?
   @ObservationIgnored private var saveTask: Task<Void, Never>?
+  @ObservationIgnored private var editableBeforeStructure: Bool?
   var onCheckpoint: (() -> Void)?
 
   init(note: LocalNote, repository: WorkspaceRepository) {
@@ -162,6 +163,43 @@ final class NoteSession {
   }
 
   func finishComposition() { editor.input.unmarkText() }
+
+  func setStructureLocked(_ locked: Bool) {
+    var configuration = editor.configuration
+    if locked {
+      editableBeforeStructure = configuration.isEditable
+      configuration.isEditable = false
+    } else {
+      configuration.isEditable = editableBeforeStructure ?? configuration.isEditable
+      editableBeforeStructure = nil
+    }
+    editor.updateConfiguration(configuration)
+  }
+
+  /// Structural mutation already checkpointed and fenced this editor. Keep its undo/caret
+  /// objects; only the durable repository path changes after the host's acknowledgement.
+  func retarget(_ incoming: LocalNote) {
+    note = incoming
+    durableText = incoming.content
+    if editor.text == incoming.content {
+      durableRevision = revision
+      hasUncheckpointedEdits = false
+    }
+  }
+
+  /// The user explicitly chose a reviewed version with this editor locked and checkpointed.
+  /// Ordinary incoming snapshots use `adopt` so they cannot overwrite live typing.
+  func adoptReviewed(_ incoming: LocalNote) {
+    guard incoming.path == note.path else { return }
+    note = incoming
+    durableText = incoming.content
+    editor.applyExternalText(incoming.content)
+    durableRevision = revision
+    hasUncheckpointedEdits = false
+    requiresReview = false
+    incomingAfterComposition = nil
+    error = nil
+  }
 
   func setSourceMode(_ source: Bool) {
     var configuration = editor.configuration

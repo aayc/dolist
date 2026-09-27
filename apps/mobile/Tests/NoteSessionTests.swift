@@ -73,6 +73,30 @@ struct NoteSessionTests {
     #expect(session.editor.text == "Local日本\nRemote update")
     #expect(try await fixture.repository.note("Note.md")?.content == session.editor.text)
   }
+
+  @Test func choosingTheReviewedHostVersionDoesNotMergeRejectedTextBackIn() async throws {
+    let fixture = try NoteSessionFixture()
+    defer { fixture.remove() }
+    let original = try await fixture.repository.cache(
+      RemoteNote(content: "Host", version: "v1"), path: "Note.md")
+    let session = NoteSession(note: original, repository: fixture.repository)
+    session.editor.selection = NSRange(location: 0, length: 4)
+    session.editor.input.insertText("Local")
+    await session.checkpoint()
+    let parked = try await fixture.repository.saveForReview(
+      path: "Note.md", content: "Local", expectedRevision: session.note.localRevision)
+    await session.adopt(parked)
+    let chosen = try await fixture.repository.useRemoteVersion(
+      path: "Note.md", expectedRevision: session.note.localRevision)
+    session.adoptReviewed(chosen)
+    await session.checkpoint()
+    #expect(session.editor.text == "Host")
+    #expect(session.note.state == .synced)
+    #expect(!session.hasUncheckpointedEdits)
+    #expect(
+      try chosen.recoveryCopies.map { try String(contentsOf: $0, encoding: .utf8) }.contains(
+        "Local"))
+  }
 }
 
 private struct NoteSessionFixture {

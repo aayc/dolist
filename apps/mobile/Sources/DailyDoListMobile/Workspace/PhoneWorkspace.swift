@@ -11,6 +11,11 @@ import Observation
 @MainActor @Observable
 final class PhoneWorkspace {
   let tabs = TabsStore()
+  let rootDirectory: URL
+  let structural: WorkspaceStructuralCoordinator
+  let recovery: WorkspaceRecovery
+  var structuralOperations: [WorkspaceStructuralOperation] = []
+  var structuralBusy = false
   let profile: ConnectionProfile
   let repository: WorkspaceRepository
   let cache: WorkspaceCache
@@ -35,9 +40,13 @@ final class PhoneWorkspace {
   @ObservationIgnored var synchronizeAgain = false
 
   init(
+    rootDirectory: URL, structural: WorkspaceStructuralCoordinator, recovery: WorkspaceRecovery,
     profile: ConnectionProfile, repository: WorkspaceRepository, cache: WorkspaceCache,
     captureOutbox: CaptureOutbox
   ) {
+    self.rootDirectory = rootDirectory
+    self.structural = structural
+    self.recovery = recovery
     self.profile = profile
     self.repository = repository
     self.cache = cache
@@ -52,7 +61,11 @@ final class PhoneWorkspace {
       let cached = try await repository.notes()
       entries = try await cache.tree()?.value.entries ?? []
       includeLocalNotes(cached)
-      if active == nil, let first = cached.first { show(first) }
+      if active == nil, let first = cached.first {
+        show(first)
+        tabs.place(first.path)
+      }
+      structuralOperations = try await structural.unresolved()
       await loadCaptures()
     } catch { self.error = error.localizedDescription }
   }
@@ -66,7 +79,18 @@ final class PhoneWorkspace {
       return
     }
     online = true
-    if agent?.client.clientId != client.clientId { agent = AgentStore(client: client) }
+    if agent?.client.clientId != client.clientId {
+      do {
+        let journal = try MobileAgentMutationJournal(
+          rootDirectory: rootDirectory,
+          scope: repository.scope,
+          remote: HTTPAgentMutationRemote(client: client, scope: repository.scope))
+        agent = AgentStore(client: client, mutationJournal: journal)
+      } catch {
+        self.error = error.localizedDescription
+        return
+      }
+    }
     agent?.handle(.state(.connected(serverVersion: serverVersion)))
     do {
       let settingsRevision = try await cache.settings()?.revision
@@ -90,6 +114,7 @@ final class PhoneWorkspace {
 
   func suspend() async {
     invalidateAuthority()
+    await structural.invalidateConnection()
     await repository.invalidateConnection()
     await captureOutbox.invalidateConnection()
     await checkpointAll(finishComposition: true)
@@ -117,28 +142,13 @@ final class PhoneWorkspace {
   }
 
   func openToday() async {
-    let date = LocalDate(date: Date(), timeZone: .current)
-    let epoch = generation
-    if let client, online {
-      do {
-        let daily = try await client.dailyNote(date.isoString, create: true)
-        guard epoch == generation else { return }
-        _ = try await repository.cache(
-          RemoteNote(content: daily.content, version: daily.version), path: daily.path)
-        guard epoch == generation else { return }
-        agent?.todayNotePath = daily.path
-        await open(daily.path)
-      } catch { if epoch == generation { self.error = error.localizedDescription } }
-    } else if let settings {
-      await open(DailyNotes.path(for: date, settings: settings.dailyNotes))
-    } else {
-      error =
-        "Reconnect once to load your daily-note settings. Downloaded notes remain available in Notes."
-    }
-    selectedTab = 0
+    await openDaily(LocalDate(date: Date(), timeZone: .current))
   }
 
-  func open(_ path: String) async {
+  func open(_ path: String, newTab: Bool = false, recordHistory: Bool = true, line: Int? = nil)
+    async
+  {
+    guard !structuralBusy else { return }
     navigation &+= 1
     let request = navigation
     do {
@@ -160,6 +170,9 @@ final class PhoneWorkspace {
       } else if active?.note.path != path {
         error = "This note has not been downloaded to this iPhone yet."
       }
+      guard active?.note.path == path else { return }
+      tabs.place(path, newTab: newTab, recordHistory: recordHistory)
+      if let line { revealLine(line) }
       selectedTab = 0
     } catch { if request == navigation { self.error = error.localizedDescription } }
   }
@@ -171,6 +184,7 @@ final class PhoneWorkspace {
       includeLocalNotes([note])
       navigation &+= 1
       show(note)
+      tabs.place(note.path)
       selectedTab = 0
       await synchronize()
     } catch { self.error = error.localizedDescription }
@@ -329,6 +343,5 @@ final class PhoneWorkspace {
     configureEditor(session)
     sessions[note.path] = session
     active = session
-    tabs.place(note.path)
   }
 }

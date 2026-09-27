@@ -46,10 +46,10 @@ No feature is complete merely because its API or a placeholder screen exists.
 | Milestone | Status | Remaining acceptance |
 | --- | --- | --- |
 | 0 Foundations | In progress | App builds for simulator/device SDK; editor input/undo/composition proven; broader input/embedding/device acceptance remains |
-| 1 Shared logic | In progress | EditorCore extracted and Mac editor tests pass; AgentCore and DrawingCore extracted; workspace/shared navigation work remains |
+| 1 Shared logic | In progress | EditorCore extracted and Mac editor tests pass; AgentCore and DrawingCore extracted; WorkspaceCore navigation extracted; full workspace integration remains |
 | 2 Connection and durability | In progress | Workspace identity/capture/receipt protocols and durable caches integrated; real Keychain/manual pairing and offline relaunch/merge verified; broader recovery matrix remains |
-| 3 Notes/editor | In progress | Today/ordinary notes/creation/editing and captures work; full navigation/search/living-list/content matrix remains |
-| 4 Agent workspace | In progress | Shared AgentCore and native screens integrated; Inbox/result/artifact checked; durable receipts wiring, caches, settings/hosts and full action CUA remain |
+| 3 Notes/editor | In progress | Today/ordinary notes/creation/editing and captures work; hierarchical explorer, search, history/date navigation and recovery UI integrated; full living-list/content matrix remains |
+| 4 Agent workspace | In progress | Shared AgentCore and native screens integrated; Inbox/result/artifact checked; receipt-aware actions and settings/hosts integrated; full caches and action CUA remain |
 | 5 Drawings/content | In progress | Shared native canvas, images and arrangement implemented; app persistence/embeds and remaining parity/B0/P remain |
 | 6 Phone integration | In progress | Native keyboard/accessory, capture/Siri, local notification catch-up; Vim explicitly excluded |
 | 7 Hardening | Not started | All automated gates, computer-use feature matrix, recovery/accessibility/performance |
@@ -108,3 +108,23 @@ its actual interaction result. Screenshots alone do not prove behavior.
 - No paid Apple account: no paid push/distribution acceptance.
 - Physical iPhone availability and Personal Team signing are not yet verified. Device-only checks
   remain distinct from simulator coverage.
+
+## Latest integration checkpoint
+
+- The user explicitly removed iPhone Vim from scope. Its isolated unfinished branch is not
+  integrated; no mobile Vim controls are presented, even when shared desktop Vim is enabled.
+- Shared WorkspaceCore preserves Mac tab/history behavior. Phone explorer, search with honest
+  offline coverage, daily/weekly/date navigation, structural operations and recovery/export UI
+  are integrated. Offline creation from daily/weekly templates and restoration remain open.
+- Receipt-aware actions now reject a connection-generation change during durable preparation;
+  the regression includes disconnect followed by reconnect before dispatch. Four focused tests pass.
+- CUA passed note creation and real typing, back/forward with text retained, content search showing
+  human line 2 for wire line 1, and shared theme Save acknowledged by the host. Appearance settings
+  contain no Vim controls. Accessible rename and soft-delete also passed; the original text was verified in the synthetic
+  host’s Trash. Remaining recovery and full settings interactions are still in progress.
+- CUA launch caught stale incremental protocol witnesses after additive Client changes. A clean
+  rebuild restored launch with the same saved connection and notes; fresh CI simulator tests passed.
+- Latest web CI passed. Native packages, editor, app, shared iOS and iPhone jobs passed. Its one
+  relay integration failure assumed a transient connecting event survives coalescing; the corrected
+  assertion passed locally against real isolated daemons, with the full native rerun still due. The full repository check passed after reducing package
+  test concurrency for an unchanged connector timing test; its budget was not widened.

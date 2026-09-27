@@ -76,6 +76,7 @@ public final class AgentStore {
   public internal(set) var failedThreadIds: Set<String> = []
   /// The event connection, when fed through `handle(_:)`.
   public internal(set) var connectionState: ConnectionState = .idle
+  @ObservationIgnored var mutationAuthorityGeneration: UInt64 = 0
   /// Latest frame of each live surface.
   public internal(set) var frames: [SurfaceKey: SurfaceFrame] = [:]
   /// Recent actions of each live surface (newest last), for overlays and the action log.
@@ -202,7 +203,9 @@ public final class AgentStore {
   public func handle(_ item: DaemonStreamItem) {
     switch item {
     case .event(let event): apply(event)
-    case .state(let state): connectionState = state
+    case .state(let state):
+      mutationAuthorityGeneration &+= 1
+      connectionState = state
     case .resync: Task { await refresh() }
     }
   }

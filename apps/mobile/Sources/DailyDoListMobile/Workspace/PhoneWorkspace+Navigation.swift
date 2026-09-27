@@ -1,0 +1,116 @@
+import DailyDoListDomain
+import DailyDoListMobileKit
+import DailyDoListModels
+import Foundation
+
+extension PhoneWorkspace {
+  func goBack() async {
+    if let path = tabs.popBack() { await open(path, recordHistory: false) }
+  }
+
+  func goForward() async {
+    if let path = tabs.popForward() { await open(path, recordHistory: false) }
+  }
+
+  func closeNote(_ path: String) async {
+    await sessions[path]?.checkpoint()
+    if let next = tabs.close(path) { await open(next, recordHistory: false) } else { active = nil }
+  }
+
+  func reopenNote() async {
+    if let closed = tabs.popClosedTab() {
+      tabs.reinsert(closed)
+      await open(closed.path, recordHistory: false)
+    }
+  }
+
+  func revealLine(_ line: Int) {
+    guard let editor = active?.editor else { return }
+    let text = editor.text as NSString
+    var offset = 0
+    for _ in 0..<max(0, line) {
+      guard offset < text.length else { break }
+      offset = NSMaxRange(text.lineRange(for: NSRange(location: offset, length: 0)))
+    }
+    editor.selection = NSRange(location: min(offset, text.length), length: 0)
+    editor.input.scrollRangeToVisible(editor.selection)
+  }
+
+  func openDaily(_ date: LocalDate) async {
+    guard !structuralBusy else { return }
+    let epoch = generation
+    if let settings,
+      let cached = try? await repository.note(
+        DailyNotes.checkedPath(for: date, settings: settings.dailyNotes))
+    {
+      await open(cached.path)
+      return
+    }
+    if let client, online {
+      do {
+        let daily = try await client.dailyNote(date.isoString, create: true)
+        guard epoch == generation else { return }
+        _ = try await repository.cache(
+          RemoteNote(content: daily.content, version: daily.version), path: daily.path)
+        guard epoch == generation else { return }
+        if date == LocalDate(date: Date(), timeZone: .current) { agent?.todayNotePath = daily.path }
+        await open(daily.path)
+        await refreshTree()
+      } catch { if epoch == generation { self.error = error.localizedDescription } }
+    } else {
+      error =
+        "This daily note is not downloaded. Capture a task for today or create an ordinary note while offline."
+    }
+  }
+
+  func openWeekly(_ date: LocalDate = LocalDate(date: Date(), timeZone: .current)) async {
+    guard let settings else {
+      error = "Reconnect to load weekly-note settings."
+      return
+    }
+    do {
+      let path = try DailyNotes.checkedWeeklyPath(for: date, settings: settings.weeklyNotes)
+      if try await repository.note(path) != nil || entries.contains(where: { $0.path == path }) {
+        await open(path)
+        return
+      }
+      guard let remote, online else {
+        error = "This weekly note is not downloaded. Create an ordinary note while offline."
+        return
+      }
+      let epoch = generation
+      let fresh = try await client?.settings()
+      guard epoch == generation, let fresh else { return }
+      self.settings = fresh
+      let destination = try DailyNotes.checkedWeeklyPath(for: date, settings: fresh.weeklyNotes)
+      var content = ""
+      if let template = DailyNotes.templatePath(fresh.weeklyNotes.template),
+        let note = try await remote.readNote(template)
+      {
+        content = NoteTemplate.render(
+          note.content, context: .init(title: VaultPath.stem(destination), date: date))
+      }
+      guard epoch == generation else { return }
+      let note = try await repository.create(path: destination, content: content)
+      includeLocalNotes([note])
+      show(note)
+      tabs.place(note.path)
+      selectedTab = 0
+      await synchronize()
+    } catch { self.error = error.localizedDescription }
+  }
+
+  func openAdjacentDaily(_ direction: DailyNotes.Direction) async {
+    guard let settings else { return }
+    let date = DailyNotes.navigationAnchor(
+      activePath: active?.note.path, settings: settings.dailyNotes)
+    if let target = DailyNotes.adjacent(
+      paths: entries.map(\.path), from: date, direction: direction, settings: settings.dailyNotes)
+    {
+      await open(target.path)
+    } else {
+      error =
+        direction == .previous ? "No earlier daily note exists." : "No later daily note exists."
+    }
+  }
+}

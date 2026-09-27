@@ -13,6 +13,7 @@ struct StoreMutationTests {
     client.script { $0.thread = { _ in ThreadResponse(thread: Fixture.thread(), approvals: []) } }
     let journal = MutationJournalFixture()
     let store = AgentStore(client: client, mutationJournal: journal)
+    store.handle(.state(.connected(serverVersion: "test")))
     await store.loadThread("thr_1")
     #expect(await !store.postMessage(threadId: "thr_1", text: "Synthetic reply"))
     let id = try #require(store.unsentMessages.keys.first)
@@ -32,6 +33,7 @@ struct StoreMutationTests {
         id: "local-restored", command: .message(threadID: "thr_1", text: "Saved reply"),
         createdAt: Date()))
     let store = AgentStore(client: client, mutationJournal: journal)
+    store.handle(.state(.connected(serverVersion: "test")))
     await store.refreshPendingMutations()
     await store.loadThread("thr_1")
     await store.loadThread("thr_1", force: true)
@@ -41,12 +43,27 @@ struct StoreMutationTests {
     #expect(client.calls("postMessage").isEmpty)
   }
 
+  @Test func disconnectDuringPreparationCannotSendAfterAReconnect() async throws {
+    let gate = Gate()
+    let journal = MutationJournalFixture(gate: gate)
+    let store = AgentStore(client: FakeDaemonClient(), mutationJournal: journal)
+    store.handle(.state(.connected(serverVersion: "test")))
+    let action = Task { await store.cancelThread("thr_1") }
+    #expect(await waitForArrivals(gate))
+    store.handle(.state(.disconnected))
+    store.handle(.state(.connected(serverVersion: "test")))
+    await gate.open()
+    #expect(await !action.value)
+    #expect(await journal.authorized == false)
+  }
+
   @Test func approvalChangedDuringDurablePreparationCannotBeSent() async throws {
     let client = FakeDaemonClient()
     let gate = Gate()
     let journal = MutationJournalFixture(gate: gate)
     let store = AgentStore(
       client: client, now: { Date(epochMillis: 1_000) }, mutationJournal: journal)
+    store.handle(.state(.connected(serverVersion: "test")))
     let reviewed = Fixture.approval(expiresAt: 2_000)
     store.apply(.approvalUpsert(reviewed))
     let decision = Task {

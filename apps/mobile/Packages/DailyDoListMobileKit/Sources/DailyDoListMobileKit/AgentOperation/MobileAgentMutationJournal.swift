@@ -15,7 +15,9 @@ public struct HTTPAgentMutationRemote: AgentMutationRemote {
   private let client: any DaemonClient
 
   public init(client: HTTPDaemonClient, scope: WorkspaceScope) throws {
-    guard client.expectedWorkspaceId == scope.workspaceID else {
+    guard client.expectedWorkspaceId == scope.workspaceID,
+      client.endpoint.baseURL == scope.origin.url
+    else {
       throw WorkspaceRepositoryError.workspaceMismatch
     }
     self.client = client
