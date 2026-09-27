@@ -1,3 +1,4 @@
+import DailyDoListWorkspaceCore
 import Foundation
 import Observation
 
@@ -53,7 +54,7 @@ final class PaletteModel {
       selectedIndex = 0
       return
     }
-    selectedIndex = ((selectedIndex + delta) % items.count + items.count) % items.count
+    selectedIndex = QuickOpenRanking.movingSelection(selectedIndex, by: delta, count: items.count)
   }
 
   func select(_ index: Int) {
