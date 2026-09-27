@@ -13,10 +13,10 @@ public actor WorkspaceRepository {
     try Self.validate(scope)
     let directory = WorkspaceDirectory.url(root: rootDirectory, scope: scope)
     self.scope = scope
-    self.checkpoints = try MarkdownCheckpointStore(
-      directory: directory.appendingPathComponent("markdown"))
     self.index = try SQLiteWorkspaceIndex(
       url: directory.appendingPathComponent("index.sqlite"), scope: scope)
+    self.checkpoints = try MarkdownCheckpointStore(
+      directory: directory.appendingPathComponent("markdown"))
   }
 
   /// Inject storage to exercise disk-full/locked-data and interrupted-transaction recovery.
@@ -50,7 +50,8 @@ public actor WorkspaceRepository {
     let record = NoteIndexRecord(
       generation: prior?.generation ?? 0, path: path, working: hash, base: hash,
       baseVersion: remote.version,
-      revision: revision, acknowledgedRevision: revision, state: .synced, recoveryCopies: [])
+      revision: revision, acknowledgedRevision: revision, state: .synced,
+      recoveryCopies: prior?.recoveryCopies ?? [])
     try index.commit(record, pending: nil)
     return try snapshot(record)
   }

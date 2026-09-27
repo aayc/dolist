@@ -4,10 +4,16 @@ import SQLite3
 /// System SQLite, WAL and FULL synchronization. The lock also makes injected access in tests
 /// safe; normal access is serialized by `WorkspaceRepository` on its own actor executor.
 public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
-  private let database: OpaquePointer
-  private let lock = NSLock()
+  let database: OpaquePointer
+  let lock = NSLock()
 
-  public init(url: URL, scope: WorkspaceScope) throws {
+  public convenience init(url: URL, scope: WorkspaceScope) throws {
+    try self.init(url: url, scope: scope, allowForgotten: false)
+  }
+
+  /// Only the recovery owner may reopen a retired handle to finish interrupted file cleanup.
+  /// All normal reads and transactions still reject the retired namespace.
+  init(url: URL, scope: WorkspaceScope, allowForgotten: Bool) throws {
     guard !scope.workspaceID.isEmpty, !scope.hostID.isEmpty else {
       throw WorkspaceRepositoryError.invalidScope
     }
@@ -55,6 +61,10 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
       )
       if let stored: WorkspaceScope = try read("metadata", keyColumn: "key", key: "scope") {
         guard stored == scope else { throw WorkspaceRepositoryError.workspaceMismatch }
+        let forgotten: Bool? = try read("metadata", keyColumn: "key", key: "forgotten")
+        guard forgotten != true || allowForgotten else {
+          throw WorkspaceRepositoryError.workspaceForgotten
+        }
       } else {
         guard version == 0 else { throw WorkspaceRepositoryError.corruptIndex }
         try put("metadata", keyColumn: "key", key: "scope", value: scope)
@@ -103,21 +113,24 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
       guard document?.path == path || document == nil,
         pending?.path == path || pending == nil, pending == nil || document != nil
       else { throw WorkspaceRepositoryError.corruptIndex }
-      try execute("BEGIN IMMEDIATE")
+      try beginTransaction()
       do {
         if let attempt = pending?.attempt {
           let old: NoteOutboxRecord? = try read("outbox", key: path)
           if old?.attempt?.operationID != attempt.operationID {
-            let blocked = try statement(
-              "SELECT 1 FROM workspace_values WHERE blocks_note_writes=1 LIMIT 1"
+            let blocked: String? = try statement(
+              "SELECT key FROM workspace_values WHERE blocks_note_writes=1 LIMIT 1"
             ) { statement in
               switch sqlite3_step(statement) {
-              case SQLITE_ROW: return true
-              case SQLITE_DONE: return false
+              case SQLITE_ROW: return String(cString: sqlite3_column_text(statement, 0))
+              case SQLITE_DONE: return nil as String?
               default: throw failure()
               }
             }
-            guard !blocked else { throw WorkspaceRepositoryError.pendingCaptures }
+            if let blocked {
+              throw blocked.hasPrefix("structural/")
+                ? WorkspaceRepositoryError.pendingStructuralChange : .pendingCaptures
+            }
           }
         }
         let existing: NoteIndexRecord? = try read("documents", key: path)
@@ -139,116 +152,69 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
     }
   }
 
-  public func value(_ key: String) throws -> WorkspaceStoredValue? {
-    try locked { try read("workspace_values", keyColumn: "key", key: key) }
-  }
-
-  public func values(prefix: String) throws -> [WorkspaceStoredValue] {
-    try locked {
-      try statement(
-        "SELECT body FROM workspace_values WHERE instr(key, ?)=1 ORDER BY key", key: prefix
-      ) { statement in
-        var result: [WorkspaceStoredValue] = []
-        while true {
-          switch sqlite3_step(statement) {
-          case SQLITE_ROW: result.append(try decode(statement))
-          case SQLITE_DONE: return result
-          default: throw failure()
-          }
-        }
-      }
-    }
-  }
-
-  public func valueSummaries() throws -> [WorkspaceValueSummary] {
-    try locked {
-      try statement(
-        "SELECT key, revision, updated_at, retention, byte_count, blocks_note_writes FROM workspace_values"
-      ) { statement in
-        var result: [WorkspaceValueSummary] = []
-        while true {
-          switch sqlite3_step(statement) {
-          case SQLITE_ROW:
-            guard let key = sqlite3_column_text(statement, 0),
-              let raw = sqlite3_column_text(statement, 3),
-              let retention = WorkspaceValueRetention(rawValue: String(cString: raw))
-            else { throw WorkspaceRepositoryError.corruptIndex }
-            result.append(
-              WorkspaceValueSummary(
-                key: String(cString: key), revision: sqlite3_column_int64(statement, 1),
-                updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 2)),
-                retention: retention,
-                byteCount: Int(sqlite3_column_int64(statement, 4)),
-                blocksNoteWrites: sqlite3_column_int(statement, 5) != 0))
-          case SQLITE_DONE: return result
-          default: throw failure()
-          }
-        }
-      }
-    }
-  }
-
-  public func commitValues(_ changes: [WorkspaceValueMutation]) throws {
-    try locked {
-      guard Set(changes.map(\.key)).count == changes.count else {
+  func writeStoredValue(_ next: WorkspaceStoredValue?, key: String) throws {
+    try put("workspace_values", keyColumn: "key", key: key, value: next)
+    if let next {
+      guard !next.blocksNoteWrites || next.retention == .durable else {
         throw WorkspaceRepositoryError.corruptIndex
       }
-      try execute("BEGIN IMMEDIATE")
-      do {
-        if changes.contains(where: \.requiresIdleNoteWrites) {
-          let attempts: [NoteOutboxRecord] = try all("outbox")
-          guard !attempts.contains(where: { $0.attempt != nil }) else {
-            throw WorkspaceRepositoryError.pendingNoteWrites
-          }
-        }
-        for change in changes {
-          let old: WorkspaceStoredValue? = try read(
-            "workspace_values", keyColumn: "key", key: change.key)
-          guard old?.revision == change.expectedRevision else {
-            throw WorkspaceRepositoryError.concurrentWrite
-          }
-          guard change.value?.key == change.key || change.value == nil,
-            (change.expectedRevision ?? 0) < Int64.max
-          else { throw WorkspaceRepositoryError.corruptIndex }
-          var next = change.value
-          next?.revision = (change.expectedRevision ?? 0) + 1
-          try put("workspace_values", keyColumn: "key", key: change.key, value: next)
-          if let next {
-            guard !next.blocksNoteWrites || next.retention == .durable else {
-              throw WorkspaceRepositoryError.corruptIndex
-            }
-            try statement(
-              "UPDATE workspace_values SET blocks_note_writes=?, revision=?, updated_at=?, retention=?, byte_count=? WHERE key=?"
-            ) { statement in
-              guard sqlite3_bind_int(statement, 1, next.blocksNoteWrites ? 1 : 0) == SQLITE_OK,
-                sqlite3_bind_int64(statement, 2, next.revision) == SQLITE_OK,
-                sqlite3_bind_double(statement, 3, next.updatedAt.timeIntervalSince1970)
-                  == SQLITE_OK,
-                sqlite3_bind_text(statement, 4, next.retention.rawValue, -1, Self.transient)
-                  == SQLITE_OK,
-                sqlite3_bind_int64(statement, 5, Int64(next.byteCount)) == SQLITE_OK,
-                sqlite3_bind_text(statement, 6, next.key, -1, Self.transient) == SQLITE_OK,
-                sqlite3_step(statement) == SQLITE_DONE
-              else { throw failure() }
-            }
-          }
-        }
-        try execute("COMMIT")
-      } catch {
-        try? execute("ROLLBACK")
-        throw error
+      try statement(
+        "UPDATE workspace_values SET blocks_note_writes=?, revision=?, updated_at=?, retention=?, byte_count=? WHERE key=?"
+      ) { statement in
+        guard sqlite3_bind_int(statement, 1, next.blocksNoteWrites ? 1 : 0) == SQLITE_OK,
+          sqlite3_bind_int64(statement, 2, next.revision) == SQLITE_OK,
+          sqlite3_bind_double(statement, 3, next.updatedAt.timeIntervalSince1970)
+            == SQLITE_OK,
+          sqlite3_bind_text(statement, 4, next.retention.rawValue, -1, Self.transient)
+            == SQLITE_OK,
+          sqlite3_bind_int64(statement, 5, Int64(next.byteCount)) == SQLITE_OK,
+          sqlite3_bind_text(statement, 6, next.key, -1, Self.transient) == SQLITE_OK,
+          sqlite3_step(statement) == SQLITE_DONE
+        else { throw failure() }
       }
     }
   }
 
-  private func locked<T>(_ action: () throws -> T) rethrows -> T {
+  /// A retired namespace remains tombstoned so existing handles cannot revive its data.
+  public func isForgotten() throws -> Bool {
     lock.lock()
     defer { lock.unlock() }
+    let forgotten: Bool? = try read("metadata", keyColumn: "key", key: "forgotten")
+    return forgotten == true
+  }
+
+  func beginTransaction() throws {
+    try execute("BEGIN IMMEDIATE")
+    do {
+      let forgotten: Bool? = try read("metadata", keyColumn: "key", key: "forgotten")
+      guard forgotten != true else { throw WorkspaceRepositoryError.workspaceForgotten }
+    } catch {
+      try? execute("ROLLBACK")
+      throw error
+    }
+  }
+
+  func hasStructuralBarrier() throws -> Bool {
+    try statement(
+      "SELECT 1 FROM workspace_values WHERE blocks_note_writes=1 AND instr(key, 'structural/')=1 LIMIT 1"
+    ) { statement in
+      switch sqlite3_step(statement) {
+      case SQLITE_ROW: return true
+      case SQLITE_DONE: return false
+      default: throw failure()
+      }
+    }
+  }
+
+  func locked<T>(_ action: () throws -> T) throws -> T {
+    lock.lock()
+    defer { lock.unlock() }
+    let forgotten: Bool? = try read("metadata", keyColumn: "key", key: "forgotten")
+    guard forgotten != true else { throw WorkspaceRepositoryError.workspaceForgotten }
     return try action()
   }
 
-  private func all<Value: Decodable>(_ table: String, keyColumn: String = "path") throws -> [Value]
-  {
+  func all<Value: Decodable>(_ table: String, keyColumn: String = "path") throws -> [Value] {
     try statement("SELECT body FROM \(table) ORDER BY \(keyColumn)") { statement in
       var result: [Value] = []
       while true {
@@ -261,7 +227,7 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
     }
   }
 
-  private func read<Value: Decodable>(_ table: String, keyColumn: String = "path", key: String)
+  func read<Value: Decodable>(_ table: String, keyColumn: String = "path", key: String)
     throws -> Value?
   {
     try statement("SELECT body FROM \(table) WHERE \(keyColumn)=?", key: key) { statement in
@@ -273,7 +239,7 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
     }
   }
 
-  private func put<Value: Encodable>(
+  func put<Value: Encodable>(
     _ table: String, keyColumn: String = "path", key: String, value: Value?
   ) throws {
     guard let value else {
@@ -295,7 +261,7 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
     }
   }
 
-  private func decode<Value: Decodable>(_ statement: OpaquePointer) throws -> Value {
+  func decode<Value: Decodable>(_ statement: OpaquePointer) throws -> Value {
     guard let bytes = sqlite3_column_blob(statement, 0) else {
       throw WorkspaceRepositoryError.corruptIndex
     }
@@ -305,11 +271,11 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
     }
   }
 
-  private func execute(_ sql: String) throws {
+  func execute(_ sql: String) throws {
     guard sqlite3_exec(database, sql, nil, nil, nil) == SQLITE_OK else { throw failure() }
   }
 
-  private func statement<T>(_ sql: String, key: String? = nil, action: (OpaquePointer) throws -> T)
+  func statement<T>(_ sql: String, key: String? = nil, action: (OpaquePointer) throws -> T)
     throws -> T
   {
     var prepared: OpaquePointer?
@@ -325,12 +291,12 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
     return try action(prepared)
   }
 
-  private func failure() -> WorkspaceRepositoryError {
+  func failure() -> WorkspaceRepositoryError {
     // Do not put SQL parameters or note contents into errors/logs.
     .storage("Offline index error \(sqlite3_extended_errcode(database)).")
   }
 
-  private static var transient: sqlite3_destructor_type {
+  static var transient: sqlite3_destructor_type {
     unsafeBitCast(-1, to: sqlite3_destructor_type.self)
   }
 }
