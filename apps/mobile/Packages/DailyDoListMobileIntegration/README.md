@@ -9,7 +9,10 @@ Keychain group is used.
 
 1. Add the package product to the application target. Declare an application-target
    `AppIntentsPackage` with `includedPackages = [DoListIntentsPackage.self]`; framework intents
-   need this explicit inclusion. The package provides `DoListAppShortcuts` with four shortcuts.
+   need this explicit inclusion. Declare the four `AppShortcut` phrases in an app-target
+   `AppShortcutsProvider` too: package-only phrases were absent from the final app's catalog.
+   Verify the app's extracted metadata contains four actions and four `autoShortcuts`; all actions
+   must retain explicit local-device authentication. `DailyDoListApp.swift` shows this wiring.
 2. Construct one `PhoneIntegrations` with the **same** repository root, profile store,
    device-only `ConnectionCredentials`, selected-profile closure and Inbox cache as the app.
    `approvalCacheFactory` supplies a `PhoneApprovalCache` for the requested immutable scope;

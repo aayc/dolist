@@ -168,6 +168,19 @@ its actual interaction result. Screenshots alone do not prove behavior.
 - Native drawing precision/elbow routing checkpoints are integrated. The iPhone icon now uses
   the existing checkbox artwork with an opaque full-bleed background, visually inspected.
 
+- App Intents are installed synchronously at app initialization. Final app metadata contains
+  all four actions with explicit local-device authentication and all four shortcut phrases;
+  framework-only phrases were missing until an app-target provider was added. URL routes retain
+  profile/workspace/host scope. Local alert consent, private previews, visible-thread suppression,
+  optional background scheduling and an app-switcher privacy window are wired into the app.
+- The integrated native suite and `pnpm check` pass. CUA confirmed notification consent, hidden
+  previews by default and the privacy cover clearing after permission. It exposed foreground
+  cache contention during catch-up; a bounded refetch fixes that race, with an 11-test integration
+  suite proving that the rejected approval snapshot never alerts. The corrected UI recheck is due.
+- Relay CI's outage test opened its WebSocket before initial sync adopted the stable workspace
+  identity. The required invalidation then closed it. A deterministic held-adoption test now waits
+  for the stable identity before observing outage/recovery; no runtime behavior or budget changed.
+
 Next app work: drawing embeds and attachment/content rendering; living-list badges/activity;
 download controls; cache/intent/notification
 composition; full recovery, accessibility, keyboard and computer-use acceptance. Standalone

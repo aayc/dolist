@@ -11,6 +11,7 @@
     let hostName: String?
     let drafts: MobileAgentDrafts?
     let openNote: (String, Int?) -> Void
+    @Environment(\.mobileAgentVisibility) private var visibility
     @State private var tab = "chat"
     @State private var artifact: ArtifactMeta?
     @State private var repeatDraft: RoutineDraft?
@@ -90,9 +91,13 @@
       .toolbar { ToolbarItem(placement: .topBarTrailing) { threadMenu } }
       .onAppear {
         isVisible = true
+        visibility.thread(threadId, true)
         markVisibleRead()
       }
-      .onDisappear { isVisible = false }
+      .onDisappear {
+        isVisible = false
+        visibility.thread(threadId, false)
+      }
       .task(id: threadId) {
         await store.loadThread(threadId)
         await store.refreshCacheAvailability(.thread(threadId))

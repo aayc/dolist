@@ -6,6 +6,20 @@ import Testing
 @testable import DailyDoListMobileIntegration
 
 struct IntegrationTests {
+  @Test func foregroundCacheContentionRefetchesBeforeAlerting() async throws {
+    let f = try Fixture()
+    defer { f.remove() }
+    await f.remote.setApprovals([approval("superseded")])
+    await f.inbox.conflictNextWrite {
+      await f.remote.setApprovals([approval("current")])
+    }
+    try await f.service().catchUp()
+    #expect(await f.center.sent.count == 1)
+    #expect(
+      await f.center.sent.first?.route.destination == .thread("thread-1", approvalID: "current"))
+    #expect(await f.inbox.approvals.map(\.id) == ["current"])
+  }
+
   @Test func captureSurvivesLostReplyAndRestartWithFrozenPhoneDate() async throws {
     let f = try Fixture()
     defer { f.remove() }
@@ -235,6 +249,8 @@ private struct FakeCredentials: ConnectionCredentials {
 private actor FakeApprovalCache: PhoneApprovalCache {
   var approvals: [ApprovalRequest] = []
   var generation: Int64 = 0
+  var nextConflict: (@Sendable () async -> Void)?
+  func conflictNextWrite(_ action: @escaping @Sendable () async -> Void) { nextConflict = action }
   func snapshot() async throws -> PhoneApprovalSnapshot? {
     generation == 0
       ? nil
@@ -242,6 +258,12 @@ private actor FakeApprovalCache: PhoneApprovalCache {
         approvals: approvals, fetchedAt: Date(timeIntervalSince1970: 100), generation: generation)
   }
   func replacePending(_ approvals: [ApprovalRequest], replacing generation: Int64?) async throws {
+    if let action = nextConflict {
+      nextConflict = nil
+      await action()
+      self.generation += 1
+      throw WorkspaceRepositoryError.concurrentWrite
+    }
     guard generation == (self.generation == 0 ? nil : self.generation) else {
       throw WorkspaceRepositoryError.concurrentWrite
     }

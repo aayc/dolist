@@ -85,6 +85,7 @@ struct PhoneWorkspaceView: View {
             NavigationLink("Host and shared settings") { hostSettings }
           }
           Section("On this iPhone") {
+            NavigationLink("Notifications and Siri") { PhoneIntegrationSettingsView(model: model) }
             NavigationLink("Captures") { CaptureHistoryView(workspace: workspace) }
             NavigationLink("Recovery and pending actions") {
               PhoneRecoveryView(workspace: workspace)
@@ -112,6 +113,36 @@ struct PhoneWorkspaceView: View {
         ? .dark : workspace.settings?.theme == .light ? .light : nil
     )
     .onChange(of: workspace.selectedTab) { _, _ in workspace.scheduleNavigationSave() }
+    .environment(
+      \.mobileAgentVisibility,
+      MobileAgentVisibility(
+        thread: { id, visible in
+          if visible { model.visibleThreads.insert(id) } else { model.visibleThreads.remove(id) }
+        },
+        routine: { id, visible in
+          if visible { model.visibleRoutines.insert(id) } else { model.visibleRoutines.remove(id) }
+        })
+    )
+    .sheet(item: $workspace.routedThread) { destination in
+      NavigationStack {
+        if let store = workspace.agent {
+          MobileThreadView(
+            store: store, threadId: destination.id,
+            actionsEnabled: workspace.online && model.connection.actionsEnabled,
+            hostName: workspace.profile.name, drafts: workspace.composerDrafts.callbacks,
+            openNote: { path, line in
+              workspace.routedThread = nil
+              Task { await workspace.open(path, line: line) }
+            }
+          )
+          .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+              Button("Done") { workspace.routedThread = nil }
+            }
+          }
+        }
+      }
+    }
     .sheet(isPresented: $capture) { CaptureTaskView(workspace: workspace) }
   }
   private var hostSettings: some View {
