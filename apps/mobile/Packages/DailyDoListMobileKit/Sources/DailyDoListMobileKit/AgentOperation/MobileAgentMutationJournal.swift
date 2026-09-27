@@ -43,16 +43,7 @@ public actor MobileAgentMutationJournal: AgentMutationJournal {
   private static let prefix = "agent-operation/"
   private static let slotPrefix = "agent-operation-slot/"
 
-  private struct Record: Codable {
-    var version = 1
-    let scope: WorkspaceScope
-    let intent: PendingAgentMutation
-    var result: AgentMutationResult?
-    var receipt: AgentOperationResponse.Response?
-    var notDispatched = false
-
-    var unresolved: Bool { result == nil && receipt == nil && !notDispatched }
-  }
+  private typealias Record = AgentMutationRecoveryRecord
 
   public init(
     rootDirectory: URL, scope: WorkspaceScope, remote: any AgentMutationRemote,
@@ -170,13 +161,7 @@ public actor MobileAgentMutationJournal: AgentMutationJournal {
 
   private func records() throws -> [(WorkspaceStoredValue, Record)] {
     try store.values(prefix: Self.prefix).map { stored in
-      let record: Record
-      do { record = try JSONDecoder().decode(Record.self, from: stored.data) } catch {
-        throw AgentMutationError.corruptJournal
-      }
-      guard record.version == 1, record.scope == scope,
-        stored.key == Self.prefix + record.intent.id
-      else { throw AgentMutationError.corruptJournal }
+      let record = try Record.decode(stored, scope: scope)
       return (stored, record)
     }
   }

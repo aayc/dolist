@@ -83,6 +83,9 @@ public enum WorkspaceMaintenanceError: Error, Equatable, Sendable {
   case operationAlreadyResolved
   case unsyncedWork
   case invalidExportDestination
+  case incompleteExport
+  case invalidExport
+  case exportChanged
 }
 
 public enum StructuralRemoteError: Error, Sendable {
@@ -123,4 +126,5 @@ public protocol WorkspaceMaintenanceStore: WorkspaceIndex {
   func discardLocalNote(path: String, expectedRevision: Int64) throws
   func isForgotten() throws -> Bool
   func forget(discardUnsyncedWork: Bool) throws
+  func forget(expectedFingerprint: String, scope: WorkspaceScope) throws
 }

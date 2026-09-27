@@ -126,6 +126,35 @@ struct AgentMutationJournalTests {
     #expect(try await first.pending().count == 1)
   }
 
+  @Test func recoveryExportsExactUncertainActionAndItsScopeWithoutReplaying() async throws {
+    let fixture = try RepositoryFixture()
+    defer { fixture.remove() }
+    let remote = MutationRemote(scope: fixture.scope)
+    let journal = try open(fixture, remote)
+    let command = AgentMutationCommand.message(
+      threadID: "thread-test", text: "Unconfirmed protected reply")
+    await #expect(throws: AgentMutationError.uncertain("original-id")) {
+      try await journal.perform(command, operationID: "original-id", authorize: { true })
+    }
+    let recovery = try WorkspaceRecovery(rootDirectory: fixture.directory, scope: fixture.scope)
+    let exported = try await recovery.export(to: fixture.directory)
+    #expect(exported.manifest.unsupportedRecordCount == 0)
+    let operation = try #require(exported.manifest.agentOperations.first)
+    #expect(operation.scope == fixture.scope)
+    #expect(operation.intent.id == "original-id" && operation.intent.command == command)
+    #expect(operation.revision > 0)
+    #expect(try await recovery.summary().agentOperations == 1)
+    let copied = fixture.directory.appendingPathComponent("Files-copy")
+    try FileManager.default.copyItem(at: exported.directory, to: copied)
+    let proof = try await recovery.verifyExport(exported, at: copied)
+    try await recovery.forget(afterExport: proof)
+    #expect(await remote.sent.count == 1)
+    #expect(await remote.lookups.isEmpty)
+    await #expect(throws: WorkspaceRepositoryError.workspaceForgotten) {
+      try await journal.pending()
+    }
+  }
+
   private func attempt(_ journal: MobileAgentMutationJournal) async {
     _ = try? await journal.perform(
       .runRoutine("routine-test"), operationID: nil, authorize: { true })

@@ -5,18 +5,22 @@ public struct WorkspaceRecoverySummary: Sendable {
   public let composers: Int
   public let captures: Int
   public let structuralOperations: Int
+  public let agentOperations: Int
   public let unknownRecords: Int
   public var requiresDecision: Bool {
-    notes + composers + captures + structuralOperations + unknownRecords > 0
+    notes + composers + captures + structuralOperations + agentOperations + unknownRecords > 0
   }
 
-  init(snapshot: WorkspaceRecoverySnapshot) {
+  init(snapshot: WorkspaceRecoverySnapshot, scope: WorkspaceScope) {
+    let agent = RecoveryAgentMutations(values: snapshot.values, scope: scope)
+    agentOperations = agent.operations.count
     notes = snapshot.documents.filter { $0.state != .synced || !$0.recoveryCopies.isEmpty }.count
     var composers = 0
     var captures = 0
     var structural = 0
     var unknown = 0
-    for value in snapshot.values where value.retention == .durable {
+    for value in snapshot.values
+    where value.retention == .durable && !agent.recognizedKeys.contains(value.key) {
       if value.key.hasPrefix("composer/") {
         if let text = try? JSONDecoder().decode(String.self, from: value.data) {
           composers += text.isEmpty ? 0 : 1
@@ -55,6 +59,7 @@ public struct RecoveryExportEntry: Codable, Sendable {
   public let sourcePath: String?
   public let relativePath: String
   public let contentHash: String
+  public let byteCount: Int
   public let revision: Int64?
   public let baseVersion: String?
   public let context: String?
@@ -67,12 +72,23 @@ public struct RecoveryExportManifest: Codable, Sendable {
   public let entries: [RecoveryExportEntry]
   public let captures: [QueuedCapture]
   public let structuralOperations: [WorkspaceStructuralOperation]
+  public let agentOperations: [RecoveryAgentMutation]
+  public let snapshotFingerprint: String
   public let unsupportedRecordCount: Int
 }
 
 public struct RecoveryExportResult: Sendable {
   public let directory: URL
   public let manifest: RecoveryExportManifest
+  let manifestHash: String
+}
+
+/// Issued only after reading back the completed copy selected in Files. It binds the exact
+/// protected snapshot and cannot authorize forgetting new work created after that snapshot.
+public struct VerifiedRecoveryExport: Sendable {
+  public var scope: WorkspaceScope { exported.manifest.scope }
+  public let directory: URL
+  let exported: RecoveryExportResult
 }
 
 public struct RecoveryExportLocation: Sendable {
