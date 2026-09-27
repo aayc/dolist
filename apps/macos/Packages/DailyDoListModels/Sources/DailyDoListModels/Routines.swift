@@ -141,6 +141,7 @@ public struct RoutineTemplate: Codable, Hashable, Sendable, Identifiable {
 
 /// A finished run to tell the user about (sent according to the routine's `notify`).
 public struct RoutineNotification: Codable, Hashable, Sendable {
+  public var id: String?
   public var routineId: String
   /// The routine's name.
   public var title: String
@@ -152,8 +153,9 @@ public struct RoutineNotification: Codable, Hashable, Sendable {
 
   public init(
     routineId: String, title: String, body: String, threadId: String, status: TaskAgentStatus,
-    at: EpochMillis
+    at: EpochMillis, id: String? = nil
   ) {
+    self.id = id
     self.routineId = routineId
     self.title = title
     self.body = body
@@ -222,4 +224,16 @@ extension AgentThread {
 extension ThreadSummary {
   /// One run of a routine (listed under its routine, not in the task inbox).
   public var isRoutineRun: Bool { routineId != nil }
+}
+
+public struct AgentNotificationsResponse: Codable, Hashable, Sendable {
+  public var notifications: [RoutineNotification]
+  public var cursor: String
+  public var hasMore: Bool
+
+  public init(notifications: [RoutineNotification], cursor: String, hasMore: Bool) {
+    self.notifications = notifications
+    self.cursor = cursor
+    self.hasMore = hasMore
+  }
 }

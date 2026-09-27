@@ -1085,6 +1085,11 @@
     "RoutineNotification": {
       "type": "object",
       "properties": {
+        "id": {
+          "description": "Stable notification decision ID for live/catch-up deduplication.",
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$"
+        },
         "routineId": {
           "type": "string",
           "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
@@ -3233,6 +3238,29 @@
         }
       ],
       "description": "Durable agent command receipt. A pending command belongs to this live process; an indeterminate command is never automatically dispatched again."
+    },
+    "AgentNotificationsResponse": {
+      "type": "object",
+      "properties": {
+        "notifications": {
+          "maxItems": 200,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RoutineNotification"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "hasMore": {
+          "type": "boolean"
+        }
+      },
+      "required": ["notifications", "cursor", "hasMore"],
+      "additionalProperties": {},
+      "description": "Bounded notification catch-up. Omit the cursor to establish a baseline without historical alerts; persist each returned cursor after handling its page."
     },
     "ApiErrorCode": {
       "type": "string",

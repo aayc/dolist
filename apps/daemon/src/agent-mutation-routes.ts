@@ -1,10 +1,11 @@
-import { ClientIdSchema } from "@ddl/contract";
+import { API_CONTRACT, ClientIdSchema } from "@ddl/contract";
 import { API_PATHS, OPERATION_ID_HEADER, WORKSPACE_ID_HEADER } from "@ddl/core";
 import type { Hono, MiddlewareHandler } from "hono";
 import type { AgentMutations } from "./agent-mutations";
 import type { AppContext } from "./context";
 import { ApiError } from "./errors";
-import { readJson } from "./http-utils";
+import { readJson, readQuery } from "./http-utils";
+import type { NotificationJournal } from "./notifications";
 import { matchRelayRoute } from "./relay/routes";
 
 export function operationIdHeader(value: string | undefined): string | undefined {
@@ -48,7 +49,24 @@ export function registerMutationRoutes(
   app: Hono,
   ctx: AppContext,
   mutations: AgentMutations,
+  notifications: NotificationJournal,
 ): void {
+  app.get(API_PATHS.agentNotifications, async (c) => {
+    if (!c.req.header(WORKSPACE_ID_HEADER))
+      throw new ApiError(
+        400,
+        "invalid_request",
+        "Notification catch-up requires a verified workspace",
+      );
+    const query = readQuery(c, API_CONTRACT.agentNotifications.methods.GET.query);
+    return c.json(
+      await notifications.page(
+        await ctx.workspace.current(),
+        query.cursor,
+        query.limit ? Number(query.limit) : 100,
+      ),
+    );
+  });
   app.get(API_PATHS.agentOperation, async (c) => {
     const id = operationIdHeader(c.req.param("id"));
     if (!id || !c.req.header(WORKSPACE_ID_HEADER)) {

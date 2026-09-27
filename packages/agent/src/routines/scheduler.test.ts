@@ -457,6 +457,52 @@ describe("run threads", () => {
 });
 
 describe("notifications", () => {
+  it("persists exact notify/suppression decisions before announcing, and retries failed persistence after restart", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const persist = vi.fn(async (_runId, notification) => {
+      await gate;
+      return notification;
+    });
+    const h = await harness({ persistNotification: persist });
+    const { id } = await h.write(
+      "Synthetic watch",
+      routineFile({ schedule: "every hour", uses: "[web]", notify: "when changed" }),
+    );
+    const { threadId } = h.scheduler.runNow(id);
+    h.finish(h.runOf(threadId), { changed: true, text: "A synthetic change" });
+    expect(h.notifications).toEqual([]);
+    expect(h.state("Synthetic watch")?.lastRun?.notified).toBe(false);
+    expect(() => h.scheduler.runNow(id)).toThrow(RoutineConflictError);
+    release();
+    await h.scheduler.flushNotifications();
+    expect(h.notifications).toHaveLength(1);
+    expect(h.state("Synthetic watch")?.lastRun?.notified).toBe(true);
+    const next = h.scheduler.runNow(id);
+    persist.mockImplementationOnce(async () => {
+      throw new Error("offline store");
+    });
+    h.finish(h.runOf(next.threadId), { changed: false, text: "Unchanged synthetic result" });
+    await h.scheduler.flushNotifications();
+    expect(persist.mock.calls.at(-1)?.[1]).toBeNull();
+    expect(h.state("Synthetic watch")?.lastRun?.notified).toBe(false);
+    await Promise.all([h.library.state.flush(), h.records.flush(), h.threads.flush()]);
+    h.stop();
+    const after = await harness({
+      storage: h.storage,
+      persistNotification: async (_runId, notification) => {
+        expect(notification).toBeNull();
+        return null;
+      },
+    });
+    after.scheduler.reconcileAfterRestart();
+    await after.scheduler.flushNotifications();
+    expect(after.notifications).toEqual([]);
+    expect(after.state("Synthetic watch")?.lastRun?.notified).toBe(true);
+  });
+
   it.each([
     ["always", "done", undefined, true],
     ["always", "done", false, true],

@@ -463,3 +463,15 @@ extension HTTPDaemonClient {
   }
 
 }
+
+extension HTTPDaemonClient {
+  public func agentNotifications(cursor: String?, limit: Int = 100) async throws
+    -> AgentNotificationsResponse
+  {
+    guard expectedWorkspaceId != nil, (1...200).contains(limit) else {
+      throw DaemonClientError.invalidRequest(
+        "Notification catch-up requires a verified workspace and a limit of 1–200.")
+    }
+    return try await transport.json(.get, APIRoute.agentNotifications(cursor: cursor, limit: limit))
+  }
+}

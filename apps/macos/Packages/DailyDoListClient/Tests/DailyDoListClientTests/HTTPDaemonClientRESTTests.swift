@@ -429,6 +429,19 @@ struct HTTPDaemonClientRESTTests {
     #expect(request.jsonBody == ["code": "abcd-2345", "name": "Studio Mac", "kind": "app"])
   }
 
+  @Test func notificationCatchUpUsesTheSavedCursorAndVerifiedWorkspace() async throws {
+    let stub = Stub { _ in .json(#"{"notifications":[],"cursor":"next_cursor","hasMore":false}"#) }
+    let client: any DaemonClient = HTTPDaemonClient(
+      endpoint: DaemonEndpoint(baseURL: stub.baseURL, token: "test-token"), session: stub.session,
+      expectedWorkspaceId: "workspace_one")
+    let page = try await client.agentNotifications(cursor: "saved_cursor", limit: 50)
+    #expect(page.cursor == "next_cursor")
+    let request = try #require(stub.requests.last)
+    #expect(request.method == "GET")
+    #expect(request.target == "/api/agent/notifications?limit=50&cursor=saved_cursor")
+    #expect(request.header(DaemonProtocol.workspaceIdHeader) == "workspace_one")
+  }
+
   @Test func operationIDsSurviveProtocolDispatchAndReceiptLookupNeverSends() async throws {
     let stub = Stub { _ in .json(#"{"ok":true}"#) }
     let client: any DaemonClient = HTTPDaemonClient(

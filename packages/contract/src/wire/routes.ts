@@ -40,6 +40,7 @@ import {
   PairResponseSchema,
 } from "./remote";
 import {
+  AgentNotificationsResponseSchema,
   AgentOperationResponseSchema,
   AgentStatusResponseSchema,
   ApprovalDecisionRequestSchema,
@@ -409,6 +410,29 @@ const ROUTES = {
           200: json(SettingsResponseSchema, "The new effective settings."),
           400: invalidBody(),
           ...BODY_ERRORS,
+        },
+      },
+    },
+  },
+  agentNotifications: {
+    auth: "bearer",
+    methods: {
+      GET: {
+        summary:
+          "Catch up durable routine notifications with a verified workspace; absent cursor establishes a baseline.",
+        query: z.looseObject({
+          cursor: z.string().min(1).max(1024).optional(),
+          limit: z
+            .string()
+            .regex(/^(?:[1-9][0-9]?|1[0-9]{2}|200)$/)
+            .optional(),
+        }),
+        responses: {
+          200: json(AgentNotificationsResponseSchema, "Notifications and the next durable cursor."),
+          400: error(
+            ["invalid_request"],
+            "Invalid cursor, page limit or missing verified workspace.",
+          ),
         },
       },
     },

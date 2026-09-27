@@ -1,0 +1,28 @@
+[
+  {
+    "name": "first connection baseline",
+    "value": {
+      "notifications": [],
+      "cursor": "synthetic_baseline",
+      "hasMore": false
+    }
+  },
+  {
+    "name": "one missed decision",
+    "value": {
+      "notifications": [
+        {
+          "id": "notification_one",
+          "routineId": "routine_one",
+          "title": "Synthetic check",
+          "body": "A change was found.",
+          "threadId": "thread_one",
+          "status": "done",
+          "at": 1790536000000
+        }
+      ],
+      "cursor": "synthetic_next",
+      "hasMore": true
+    }
+  }
+]

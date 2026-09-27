@@ -174,3 +174,5 @@ export type ServerEventPayload<T extends ServerEventType> = Omit<ServerEventOf<T
 export type ClientEvent = WireType<"ClientEvent">;
 
 export type AgentOperationResponse = WireType<"AgentOperationResponse">;
+
+export type AgentNotificationsResponse = WireType<"AgentNotificationsResponse">;

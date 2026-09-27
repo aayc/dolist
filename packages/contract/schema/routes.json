@@ -479,6 +479,33 @@
         }
       }
     },
+    "agentNotifications": {
+      "path": "/api/agent/notifications",
+      "auth": "bearer",
+      "methods": {
+        "GET": {
+          "summary": "Catch up durable routine notifications with a verified workspace; absent cursor establishes a baseline.",
+          "query": {
+            "$ref": "#/$defs/agentNotifications.GET.query"
+          },
+          "responses": {
+            "200": {
+              "description": "Notifications and the next durable cursor.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/AgentNotificationsResponse"
+              }
+            },
+            "400": {
+              "description": "Invalid cursor, page limit or missing verified workspace.",
+              "codes": ["invalid_request"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
     "agentOperation": {
       "path": "/api/agent/operations/:id",
       "auth": "bearer",
@@ -1944,6 +1971,21 @@
     }
   },
   "$defs": {
+    "agentNotifications.GET.query": {
+      "type": "object",
+      "properties": {
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "limit": {
+          "type": "string",
+          "pattern": "^(?:[1-9][0-9]?|1[0-9]{2}|200)$"
+        }
+      },
+      "additionalProperties": {}
+    },
     "agentOperation.params": {
       "type": "object",
       "properties": {

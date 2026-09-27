@@ -8,6 +8,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { type HttpMethod, persistedThreadJournalPath } from "@ddl/contract";
 import {
+  type AgentNotificationsResponse,
   type AgentPlacement,
   type AgentStatusResponse,
   API_ROUTES,
@@ -128,13 +129,19 @@ async function call<T = unknown>(
   device: Device,
   method: HttpMethod,
   name: ApiRouteName,
-  init: { params?: Record<string, string>; query?: Record<string, string>; json?: unknown } = {},
+  init: {
+    params?: Record<string, string>;
+    query?: Record<string, string>;
+    json?: unknown;
+    headers?: Record<string, string>;
+  } = {},
 ): Promise<{ status: number; body: T }> {
   const search = init.query ? `?${new URLSearchParams(init.query).toString()}` : "";
   const response = await fetch(`${device.daemon.url}${routePath(name, init.params)}${search}`, {
     method,
     headers: {
       authorization: `Bearer ${device.apiToken}`,
+      ...init.headers,
       ...(init.json === undefined ? {} : { "content-type": "application/json" }),
     },
     ...(init.json === undefined ? {} : { body: JSON.stringify(init.json) }),
@@ -246,6 +253,63 @@ async function chatShows(device: Device, text: string): Promise<void> {
 }
 
 describe("the agent relay between daemons", { timeout: 120_000 * TIME_SCALE }, () => {
+  it("catches up the exact durable routine notification through the relay", async () => {
+    const machine = await startMachine();
+    const laptop = await startPairedLaptop(machine);
+    const identity = (await call<HealthResponse>(laptop, "GET", "health")).body.workspaceId!;
+    const headers = { [WORKSPACE_ID_HEADER]: identity };
+    const baseline = (
+      await call<AgentNotificationsResponse>(laptop, "GET", "agentNotifications", { headers })
+    ).body;
+    expect(baseline.notifications).toEqual([]);
+    const socket = await openSocket(laptop);
+    const created = await call<RoutineResponse>(laptop, "POST", "routines", {
+      json: {
+        name: "Synthetic catch-up",
+        schedule: "every weekday at 7:30",
+        notify: "always",
+        uses: ["files"],
+        instructions: "List the synthetic note titles.",
+      },
+    });
+    expect(
+      (await call(laptop, "POST", "routineRun", { params: { id: created.body.routine.id } }))
+        .status,
+    ).toBe(200);
+    const event = await socket.next(
+      "routine.notification",
+      (item) => item.notification.routineId === created.body.routine.id,
+      WAIT_MS,
+    );
+    expect(event.notification.id).toBeDefined();
+    const page = (
+      await call<AgentNotificationsResponse>(laptop, "GET", "agentNotifications", {
+        headers,
+        query: { cursor: baseline.cursor },
+      })
+    ).body;
+    expect(page.notifications).toEqual([event.notification]);
+    await call(laptop, "PATCH", "device", { json: { placement: "this_device" } });
+    await eventually(async () => {
+      expect(leaseHolder()?.device).toBe("dev_laptop");
+      expect((await status(laptop)).problem).toBeUndefined();
+    });
+    const repeated = (
+      await call<AgentNotificationsResponse>(laptop, "GET", "agentNotifications", {
+        headers,
+        query: { cursor: baseline.cursor },
+      })
+    ).body;
+    expect(repeated.notifications).toEqual([event.notification]);
+    const next = (
+      await call<AgentNotificationsResponse>(laptop, "GET", "agentNotifications", {
+        headers,
+        query: { cursor: page.cursor },
+      })
+    ).body;
+    expect(next.notifications).toEqual([]);
+  });
+
   it("resolves a lost relayed message response once after the lease moves to another host", async () => {
     const machine = await startMachine();
     const laptop = await startPairedLaptop(machine);

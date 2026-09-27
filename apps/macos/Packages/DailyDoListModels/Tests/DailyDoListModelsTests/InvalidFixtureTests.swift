@@ -22,6 +22,7 @@ struct InvalidFixtureTests {
   static let requiredNullable = "required-but-nullable fields decode a missing key as nil"
 
   static let expectations: [String: [String: Expectation]] = [
+    "AgentNotificationsResponse": ["missing cursor": .rejected],
     "AgentOperationResponse": ["completed without result": .rejected],
     "AgentStatusResponse": [
       "unknown reason for holding the agent here": .tolerated(openEnum),

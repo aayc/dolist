@@ -11,7 +11,8 @@ describe("agent-owned sidecar paths", () => {
     "%s is agent-owned exactly when the agent owns it",
     (_name, format) => {
       expect(isAgentOwnedPath(format.path)).toBe(
-        format.owner.startsWith("packages/agent/") || format.name === "mutation-journal",
+        format.owner.startsWith("packages/agent/") ||
+          ["mutation-journal", "notification-journal"].includes(format.name),
       );
     },
   );

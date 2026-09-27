@@ -9,6 +9,7 @@ import { z } from "zod";
 
 /** Every sidecar location the app persists to, relative to the vault root. */
 export const PERSISTED_PATHS = {
+  notificationJournals: `${SIDECAR_DIR}/state/journal/notifications`,
   mutationJournals: `${SIDECAR_DIR}/state/journal/mutations`,
   sidecar: SIDECAR_DIR,
   workspace: `${SIDECAR_DIR}/workspace.json`,

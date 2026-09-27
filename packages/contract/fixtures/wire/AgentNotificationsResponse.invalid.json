@@ -1,0 +1,11 @@
+[
+  {
+    "name": "missing cursor",
+    "value": {
+      "notifications": [],
+      "hasMore": false
+    },
+    "path": ["cursor"],
+    "code": "invalid_type"
+  }
+]
