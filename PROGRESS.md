@@ -4,11 +4,11 @@ The running handoff log: what shipped, what's in flight, what's next, and the de
 them, so work can continue on any machine at any point. Read it before starting; keep it current
 (the rules are in `AGENTS.md`, "Handoff log").
 
-**Last updated:** 2026-09-25, near midnight · `main` at `401997a`: everything is merged and pushed;
-nothing is in flight and no branches are open (GitHub has only `main`). The Mac app installed on the
-main development Mac is built from `401997a` (agent live, app control granted, 15 threads). CI was
-green on `c158aae` and was dispatched on `401997a` (check it: the macOS workflow's iOS job is the only
-check of the Swift cleanup's Models change, since the development Mac has no iOS SDK).
+**Last updated:** 2026-09-27 · Another development Mac is set up with both clients running, and
+native toolchain compatibility fix `531d8d7` is merged on `main` after green CI and macOS workflows.
+The app on that Mac includes the fix; the main development Mac's installation remains `401997a`.
+The full native iPhone implementation plan is also on `main` (`40e1b29`); the user has now
+authorized implementation and thorough simulator testing in its separate task.
 
 ## Picking this up
 
@@ -47,12 +47,35 @@ it, then check the agent status, that `/api/threads` still lists every thread, a
 is still granted. Never kill Daily Do List processes by name; never bind or kill 127.0.0.1:7331
 (its daemon) or 5173.
 
+### Setup on another development Mac (2026-09-27)
+
+- Installed the pinned workspace dependencies, Chromium, shellcheck, actionlint, gitleaks and Swift
+  toolchains. Builds use Swift 6.3.3 with Swift 6.2.4's formatter (the newer standalone formatter
+  rejects this checkout's configuration). New login/interactive shells select that toolchain.
+- Both clients are running against the same local daemon and vault; the signed Mac app and its
+  bundled daemon/helper are installed in Applications. The app supervises the daemon and serves
+  the web UI at http://127.0.0.1:7331 (the temporary dev servers are stopped). The private app
+  configuration uses the existing model credential and the checkout's built web UI. macOS
+  permissions for controlling other apps remain user-granted through Settings → Computer Use.
+- Passed: `pnpm check`, all production builds, bundle budgets, six web startup e2e tests,
+  `pnpm vim:check`, 173 native Vim tests, 300 native editor tests and 29 daemon integration tests.
+  Both CI and macOS workflows are green on `531d8d7`, including native app tests and iOS builds.
+  Local Swift 6.3 tests need `-- -Xswiftc -target -Xswiftc arm64-apple-macosx15.0` because its
+  Testing library requires macOS 15. The local app test target still fails to compile an existing
+  `CGWindowListCreateImage` snapshot under that override; its CI run passes with Apple's toolchain.
+
 ## In flight
 
-Nothing. Start from "Next up".
+Local web/Mac setup is complete. Check the workflows dispatched on `main` after the handoff commit.
+The remote-machine setup continues in its separate task.
+Native iPhone implementation is authorized and continues separately, including simulator testing.
 
 ## Shipped on `main` (newest first; older history is `git log`)
 
+- `531d8d7` Native toolchain compatibility: explicitly discard Vim's returned callbacks and keep
+  the undo action's captured manager on the main actor. Built, installed and verified both clients
+  on another development Mac.
+- `40e1b29` Full native iPhone implementation plan, with no mobile implementation changes.
 - `401997a` Swift cleanups (−699): one palette, scheduler, frame ticker and daemon-home definition
   (`DaemonHome` in Models, the stricter port/home rules), shared Swift test helpers, the Mac "Remote"
   switch shows the stored placement while held here (like the web). **Installed.**
@@ -173,11 +196,11 @@ Nothing. Start from "Next up".
 - **Tests:** one good test per behavior at the cheapest layer that protects it; regression tests for
   real bugs; no redundant layers (the user thinks we overtest). CI branch runs reuse cached results;
   `main` runs everything thoroughly.
-- **iPhone:** implementation remains deferred; the user requested a full-feature implementation
-  plan only on 2026-09-27. The codebase audit and plan are in `apps/mobile/PLAN.md`: feature parity,
+- **iPhone:** the user authorized full native implementation and thorough simulator computer-use
+  testing after the plan on 2026-09-27. The audit and plan are in `apps/mobile/PLAN.md`: feature parity,
   shared Swift extraction, durable offline editing, protocol prerequisites, drawings/Vim,
   Siri/Shortcuts, notification constraints and milestone exit gates. Native Swift and a free
-  Apple ID remain the baseline; no mobile code has been implemented.
+  Apple ID remain the baseline; implementation proceeds in its separate task.
 
 ## How the parallel work runs
 
