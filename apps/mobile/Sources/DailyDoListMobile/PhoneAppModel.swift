@@ -10,6 +10,7 @@ final class PhoneAppModel {
   let pairing: PairingService
   private(set) var workspace: PhoneWorkspace?
   var error: String?
+  @ObservationIgnored private let credentials: KeychainConnectionCredentials
   @ObservationIgnored private let root: URL
   @ObservationIgnored private var selection: UInt64 = 0
   @ObservationIgnored private var started = false
@@ -19,7 +20,7 @@ final class PhoneAppModel {
     root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
       .appendingPathComponent("DailyDoList", isDirectory: true)
     let profiles = FileConnectionProfileStore(directory: root)
-    let credentials = KeychainConnectionCredentials()
+    credentials = KeychainConnectionCredentials()
     connection = MobileConnection(profiles: profiles, credentials: credentials) {
       origin, token, workspace in
       ConnectionChannel.native(origin: origin, token: token, expectedWorkspaceID: workspace)
@@ -127,6 +128,13 @@ final class PhoneAppModel {
       profile: profile, repository: repository, drawingRepository: drawings, cache: cache,
       captureOutbox: captures)
     workspaces[profile.id] = created
+    // Construct the offline store without opening a socket or granting mutation authority.
+    // Missing credentials still permit reading saved content; pairing is handled separately.
+    let token = (try? await credentials.token(for: profile.id)) ?? ""
+    let channel = ConnectionChannel.native(
+      origin: profile.origin, token: token, expectedWorkspaceID: scope.workspaceID)
+    created.offlineChannel = channel
+    if let client = channel.client as? HTTPDaemonClient { try await created.prepareAgent(client) }
     return created
   }
 }

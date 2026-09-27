@@ -36,6 +36,7 @@ final class PhoneWorkspace {
   var error: String?
   var selectedTab = 0
   @ObservationIgnored var sessions: [String: NoteSession] = [:]
+  @ObservationIgnored var offlineChannel: ConnectionChannel?
   @ObservationIgnored var client: HTTPDaemonClient?
   @ObservationIgnored var remote: HTTPWorkspaceRemote?
   @ObservationIgnored var generation: UInt64 = 0
@@ -85,6 +86,19 @@ final class PhoneWorkspace {
     } catch { self.error = error.localizedDescription }
   }
 
+  func prepareAgent(_ client: HTTPDaemonClient) async throws {
+    guard agent?.client.clientId != client.clientId else { return }
+    await composerDrafts.flush()
+    await agent?.flushContentCache()
+    let journal = try MobileAgentMutationJournal(
+      rootDirectory: rootDirectory, scope: repository.scope,
+      remote: HTTPAgentMutationRemote(client: client, scope: repository.scope))
+    let content = try MobileAgentContentCache(rootDirectory: rootDirectory, scope: repository.scope)
+    let store = AgentStore(client: client, mutationJournal: journal, contentCache: content)
+    agent = store
+    await store.hydrateCachedContent()
+  }
+
   func connect(_ client: HTTPDaemonClient, serverVersion: String) async {
     generation &+= 1
     let epoch = generation
@@ -94,17 +108,14 @@ final class PhoneWorkspace {
       return
     }
     online = true
-    if agent?.client.clientId != client.clientId {
-      do {
-        let journal = try MobileAgentMutationJournal(
-          rootDirectory: rootDirectory,
-          scope: repository.scope,
-          remote: HTTPAgentMutationRemote(client: client, scope: repository.scope))
-        agent = AgentStore(client: client, mutationJournal: journal)
-      } catch {
-        self.error = error.localizedDescription
-        return
-      }
+    do {
+      try await prepareAgent(client)
+      guard epoch == generation, online else { return }
+      offlineChannel?.close()
+      offlineChannel = nil
+    } catch {
+      self.error = error.localizedDescription
+      return
     }
     agent?.handle(.state(.connected(serverVersion: serverVersion)))
     do {
@@ -115,6 +126,8 @@ final class PhoneWorkspace {
       configureEditors()
       try await cache.storeSettings(fetchedSettings, replacing: settingsRevision)
       await refreshTree()
+      guard epoch == generation, online else { return }
+      await downloadPeriodicTemplates()
       guard epoch == generation, online else { return }
       error = nil
       if active == nil && activeDrawing == nil {
@@ -141,6 +154,7 @@ final class PhoneWorkspace {
     await captureOutbox.invalidateConnection()
     await checkpointAll(finishComposition: true)
     await composerDrafts.flush()
+    await agent?.flushContentCache()
     await saveNavigation()
   }
 

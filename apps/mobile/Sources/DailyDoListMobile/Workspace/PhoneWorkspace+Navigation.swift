@@ -66,8 +66,7 @@ extension PhoneWorkspace {
         await refreshTree()
       } catch { if epoch == generation { self.error = error.localizedDescription } }
     } else {
-      error =
-        "This daily note is not downloaded. Capture a task for today or create an ordinary note while offline."
+      await createOfflinePeriodic(.daily, date: date)
     }
   }
 
@@ -83,7 +82,7 @@ extension PhoneWorkspace {
         return
       }
       guard let remote, online else {
-        error = "This weekly note is not downloaded. Create an ordinary note while offline."
+        await createOfflinePeriodic(.weekly, date: date)
         return
       }
       let epoch = generation
@@ -107,6 +106,29 @@ extension PhoneWorkspace {
       selectedTab = 0
       await synchronize()
     } catch { self.error = error.localizedDescription }
+  }
+
+  func createOfflinePeriodic(_ kind: PeriodicNoteKind, date: LocalDate) async {
+    guard let settings else {
+      error = "Reconnect to load daily and weekly note settings before creating these notes."
+      return
+    }
+    do {
+      let note = try await repository.createPeriodicNote(
+        kind, date: date, settings: settings, knownPaths: Set(entries.map(\.path)),
+        now: Date(), timeZone: .current)
+      includeLocalNotes([note])
+      await open(note.path)
+    } catch { self.error = error.localizedDescription }
+  }
+
+  func downloadPeriodicTemplates() async {
+    guard let settings, let remote, online else { return }
+    let epoch = generation
+    for template in Set([settings.dailyNotes.template, settings.weeklyNotes.template]) {
+      guard let path = DailyNotes.templatePath(template), epoch == generation else { continue }
+      await refresh(path, remote: remote)
+    }
   }
 
   func openAdjacentDaily(_ direction: DailyNotes.Direction) async {

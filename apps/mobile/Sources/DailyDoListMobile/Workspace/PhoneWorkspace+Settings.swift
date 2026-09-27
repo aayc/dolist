@@ -9,6 +9,7 @@ extension PhoneWorkspace {
     do {
       let revision = try await cache.settings()?.revision
       try await cache.storeSettings(settings, replacing: revision)
+      await downloadPeriodicTemplates()
     } catch { self.error = error.localizedDescription }
   }
 

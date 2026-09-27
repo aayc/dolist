@@ -6,6 +6,8 @@
 //   swift apps/macos/scripts/make-icon.swift --png Resources/AppIcon-1024.png   # one PNG (1024 px)
 //   iconutil -c icns -o AppIcon.icns build/AppIcon.iconset
 //
+// Use --ios --png FILE for an opaque square asset; iOS supplies its own corner mask.
+//
 // Geometry follows Apple's macOS icon grid: a 824 pt body centered on a 1024 pt canvas, with a
 // soft drop shadow in the margin.
 import CoreGraphics
@@ -39,7 +41,7 @@ func squircle(in rect: CGRect, exponent: CGFloat = 5) -> CGPath {
   return path
 }
 
-func drawIcon(in context: CGContext, size: CGFloat) {
+func drawIcon(in context: CGContext, size: CGFloat, iOS: Bool = false) {
   let unit = size / 1024
   // Tiny sizes (menu bar, Finder lists) get a bigger checkbox and a bolder check, without the
   // checkbox shadow, so the mark stays legible.
@@ -48,12 +50,17 @@ func drawIcon(in context: CGContext, size: CGFloat) {
   context.clear(CGRect(x: 0, y: 0, width: size, height: size))
 
   // Body with a drop shadow.
-  let body = CGRect(x: 100 * unit, y: 100 * unit, width: 824 * unit, height: 824 * unit)
-  let bodyPath = squircle(in: body)
+  let body =
+    iOS
+    ? CGRect(x: 0, y: 0, width: size, height: size)
+    : CGRect(x: 100 * unit, y: 100 * unit, width: 824 * unit, height: 824 * unit)
+  let bodyPath = iOS ? CGPath(rect: body, transform: nil) : squircle(in: body)
   context.saveGState()
-  context.setShadow(
-    offset: CGSize(width: 0, height: -12 * unit), blur: 28 * unit,
-    color: CGColor(srgbRed: 0.03, green: 0.08, blue: 0.25, alpha: 0.35))
+  if !iOS {
+    context.setShadow(
+      offset: CGSize(width: 0, height: -12 * unit), blur: 28 * unit,
+      color: CGColor(srgbRed: 0.03, green: 0.08, blue: 0.25, alpha: 0.35))
+  }
   context.addPath(bodyPath)
   context.setFillColor(blueBottom)
   context.fillPath()
@@ -83,7 +90,7 @@ func drawIcon(in context: CGContext, size: CGFloat) {
   context.restoreGState()
 
   // The checkbox: a white rounded square with a soft shadow.
-  let boxSize = (tiny ? 600 : small ? 520 : 430) * unit
+  let boxSize = (tiny ? 600 : small || iOS ? 520 : 430) * unit
   let box = CGRect(
     x: (size - boxSize) / 2, y: (size - boxSize) / 2 - 6 * unit, width: boxSize, height: boxSize)
   let boxPath = CGPath(
@@ -114,16 +121,16 @@ func drawIcon(in context: CGContext, size: CGFloat) {
   context.restoreGState()
 }
 
-func renderPNG(size pixels: Int, to url: URL) throws {
+func renderPNG(size pixels: Int, to url: URL, iOS: Bool = false) throws {
   let space = CGColorSpace(name: CGColorSpace.sRGB)!
   guard
     let context = CGContext(
       data: nil, width: pixels, height: pixels, bitsPerComponent: 8, bytesPerRow: 0, space: space,
-      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+      bitmapInfo: (iOS ? CGImageAlphaInfo.noneSkipLast : .premultipliedLast).rawValue)
   else { throw IconError("could not create a \(pixels)px bitmap") }
   context.interpolationQuality = .high
   context.setShouldAntialias(true)
-  drawIcon(in: context, size: CGFloat(pixels))
+  drawIcon(in: context, size: CGFloat(pixels), iOS: iOS)
   guard let image = context.makeImage(),
     let destination = CGImageDestinationCreateWithURL(
       url as CFURL, "public.png" as CFString, 1, nil)
@@ -149,15 +156,17 @@ func run() throws {
   var iconset: String?
   var png: String?
   var size = 1024
+  var iOS = false
   while !arguments.isEmpty {
     let argument = arguments.removeFirst()
     switch argument {
+    case "--ios": iOS = true
     case "--iconset": iconset = arguments.isEmpty ? nil : arguments.removeFirst()
     case "--png": png = arguments.isEmpty ? nil : arguments.removeFirst()
     case "--size": size = arguments.isEmpty ? size : Int(arguments.removeFirst()) ?? size
     default:
       throw IconError(
-        "unknown argument \(argument). Usage: make-icon.swift [--iconset DIR] [--png FILE [--size N]]"
+        "unknown argument \(argument). Usage: make-icon.swift [--iconset DIR] [--png FILE [--size N] [--ios]]"
       )
     }
   }
@@ -166,7 +175,7 @@ func run() throws {
     let directory = URL(fileURLWithPath: iconset, isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     for image in iconsetImages {
-      try renderPNG(size: image.pixels, to: directory.appendingPathComponent(image.name))
+      try renderPNG(size: image.pixels, to: directory.appendingPathComponent(image.name), iOS: iOS)
     }
     print("Wrote \(iconsetImages.count) images to \(iconset)")
   }
@@ -174,7 +183,7 @@ func run() throws {
     let url = URL(fileURLWithPath: png)
     try FileManager.default.createDirectory(
       at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try renderPNG(size: size, to: url)
+    try renderPNG(size: size, to: url, iOS: iOS)
     print("Wrote \(png) (\(size)px)")
   }
 }

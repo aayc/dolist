@@ -118,7 +118,7 @@ its actual interaction result. Screenshots alone do not prove behavior.
   integrated; no mobile Vim controls are presented, even when shared desktop Vim is enabled.
 - Shared WorkspaceCore preserves Mac tab/history behavior. Phone explorer, search with honest
   offline coverage, daily/weekly/date navigation, structural operations and recovery/export UI
-  are integrated. Offline creation from daily/weekly templates remains open; navigation restoration is now implemented.
+  are integrated. Offline daily/weekly creation uses cached templates and local dates; navigation restoration is implemented.
 - Receipt-aware actions now reject a connection-generation change during durable preparation;
   the regression includes disconnect followed by reconnect before dispatch. Four focused tests pass.
 - CUA passed note creation and real typing, back/forward with text retained, content search showing
@@ -159,7 +159,16 @@ its actual interaction result. Screenshots alone do not prove behavior.
   navigation tests (12), the native suite and lint pass. CUA confirmed the selected Welcome note
   after termination/relaunch and Back returning to the prior daily note with its text intact.
 
+- Offline Inbox/conversations/artifacts now hydrate before connecting. Cached controls remain
+  disabled until fresh authoritative responses arrive; bounded previews and explicit pins are
+  surfaced. Store replacement and suspension flush content and composer caches locally.
+- Offline daily/weekly creation freezes the template and phone date. Known undownloaded notes
+  and missing configured templates cannot become blank replacements. Templates download on
+  connection/settings refresh. All 99 MobileKit tests and the combined signed Simulator suite pass.
+- Native drawing precision/elbow routing checkpoints are integrated. The iPhone icon now uses
+  the existing checkbox artwork with an opaque full-bleed background, visually inspected.
+
 Next app work: drawing embeds and attachment/content rendering; living-list badges/activity;
-offline template creation; download controls; cache/intent/notification
+download controls; cache/intent/notification
 composition; full recovery, accessibility, keyboard and computer-use acceptance. Standalone
 drawings and foundational APIs do not complete those remaining features.
