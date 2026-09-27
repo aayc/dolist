@@ -106,7 +106,7 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
 
 ## In flight
 
-- Full native iPhone app: `codex/iphone-app`, checkpoint `8ae2559` pushed, with current main
+- Full native iPhone app: `codex/iphone-app`, checkpoint `9fe1ac9` pushed, with current main
   host-continuity fixes merged. Native pairing/Keychain, identity guard, durable notes/composers/
   captures, Inbox/agent UI and shared native drawing engine are integrated. Real simulator CUA
   passed HTTPS pairing, task→mock-agent result/artifact, capture, offline edit→terminate/relaunch,
@@ -125,21 +125,19 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
   then reconciliation with a separate remote shape; both changes reached the synthetic host. CUA
   dragging remains under investigation despite a passing real-touch native UI test. Binary attachments
   now preserve bytes across providers/sync and have authenticated bounded APIs. Bounded thread/artifact
-  cache foundations are integrated; native cache UI is integrated. App Intents/local notifications packages are integrated and app wiring is in progress.
+  cache foundations are integrated; native cache UI is integrated. App Intents and local notifications are integrated; private notification tap and mock Approve once passed CUA.
   Navigation restores open/closed notes, Back/Forward, caret and scrolling; CUA passed selected-note
   restoration and Back after relaunch. Offline daily/weekly creation uses downloaded templates;
   cached Inbox/conversations/artifacts now hydrate on cold launch with controls gated by fresh host
-  authority. All 99 MobileKit tests and the combined native suite pass. Root next owns living-list
-  UI, downloads and final integration; the editor stream owns native content/attachment embeds.
-- Foundation CI and macOS workflows passed on `a972928`. Local `pnpm check`, signed simulator
-  suite (59 tests), MobileKit and physical iPhone SDK build passed at the composition checkpoint.
-  Web CI passed on `6e31cd0`; all native/iPhone jobs passed except a coalesced-event timing
-  assumption in relay integration. The assertion is fixed and passed against isolated real daemons;
-  new security/Linux checks passed on `6c19850`. Web CI found a replica bootstrap/test-socket
-  race: identity adoption correctly invalidates an early socket; a deterministic test setup fix
-  is in progress. Native CI is still running. The latest local native suite and
-  full repository check pass, using serial package execution for timing-sensitive checks. The Mac window-opening budget failure is
-  reproduced on the unchanged local baseline (~6.4 s); it passes CI, and no budget was widened.
+  authority. The combined native suite and repository checks pass. Shared inline badges and scoped drawing/attachment embeds are integrated; CUA passed badge-to-thread navigation and drawing insertion. Root next owns downloads/recovery composition and final integration; parallel work covers native tables/callouts/backlinks, durable offline attachment uploads and commands.
+- All four branch workflows passed on `cebe37c`: web CI, macOS/iPhone/shared-iOS, security
+  and Linux packaging. The replica bootstrap race is fixed by waiting for the stable workspace
+  before observing relay recovery. Native badge/chip extraction passes 26 Mac regressions;
+  the combined signed simulator suite and full repository checks pass. Typed verified recovery
+  export/conditional Forget and checkpoint-safe storage cleanup are integrated. CUA found an embed
+  menu touch being intercepted by the hidden markdown link; the fix is under focused verification.
+  The Mac window-opening budget failure is reproduced on the unchanged local baseline (~6.4 s);
+  it passes CI, and no budget was widened.
   Scope: `docs/specs/iphone-implementation-streams.md`; durable instruction and evidence:
   `apps/mobile/IMPLEMENTATION.md`. The user asked to finish faster while retaining complete tests
   and CUA; use focused incremental checks and keep the full release gates.
