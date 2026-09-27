@@ -4,6 +4,54 @@ import Testing
 @testable import DailyDoListMobileKit
 
 struct WorkspaceRepositoryTests {
+  @Test func typingDuringACleanRemoteDeletionBecomesARecoveryDraftWithoutResurrection() async throws
+  {
+    let fixture = try RepositoryFixture()
+    defer { fixture.remove() }
+    let repository = try fixture.open()
+    _ = try await repository.cache(RemoteNote(content: "Original", version: "v1"), path: "Gone.md")
+    let remote = RepositoryRemote(scope: fixture.scope)
+    #expect(try await repository.refresh(path: "Gone.md", with: remote) == nil)
+    let recovered = try await repository.createRecoveryDraft(
+      path: "Gone.md", content: "Typing during refresh")
+    #expect(recovered.state == .recoveryDraft)
+    #expect(recovered.reviewReason == .remoteDeleted)
+    #expect(recovered.content == "Typing during refresh")
+    _ = try await repository.synchronize(with: remote)
+    #expect(await remote.writes.isEmpty)
+    await #expect(throws: WorkspaceRepositoryError.documentNeedsReview) {
+      try await repository.createRecoveryDraft(
+        path: "Gone.md", content: "Cannot replace existing draft")
+    }
+  }
+
+  @Test func liveEditorMergeConflictPreservesRemoteAndStopsAutomaticReplay() async throws {
+    let fixture = try RepositoryFixture()
+    defer { fixture.remove() }
+    let repository = try fixture.open()
+    let remoteVersion = try await repository.cache(
+      RemoteNote(content: "Remote replacement", version: "v2"), path: "Day.md")
+    let review = try await repository.saveForReview(
+      path: "Day.md", content: "Unsaved typing",
+      expectedRevision: remoteVersion.localRevision)
+    #expect(review.state == .needsReview)
+    #expect(review.content == "Unsaved typing")
+    #expect(
+      try review.recoveryCopies.map { try String(contentsOf: $0, encoding: .utf8) }.contains(
+        "Remote replacement"))
+    let remote = RepositoryRemote(
+      scope: fixture.scope, note: RemoteNote(content: "Remote replacement", version: "v2"))
+    _ = try await repository.synchronize(with: remote)
+    #expect(await remote.writes.isEmpty)
+    await #expect(
+      throws: WorkspaceRepositoryError.staleRevision(
+        expected: remoteVersion.localRevision, actual: review.localRevision)
+    ) {
+      try await repository.saveForReview(
+        path: "Day.md", content: "Stale result", expectedRevision: remoteVersion.localRevision)
+    }
+  }
+
   @Test func offlineEditsAndCreateOnlyIntentSurviveRestart() async throws {
     let fixture = try RepositoryFixture()
     defer { fixture.remove() }

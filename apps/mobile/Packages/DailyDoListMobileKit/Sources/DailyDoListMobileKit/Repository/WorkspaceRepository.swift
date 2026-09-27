@@ -11,9 +11,7 @@ public actor WorkspaceRepository {
 
   public init(rootDirectory: URL, scope: WorkspaceScope) throws {
     try Self.validate(scope)
-    let workspace = MarkdownCheckpointStore.digest(Data(scope.workspaceID.utf8))
-    let directory = rootDirectory.appendingPathComponent(scope.profileID.uuidString)
-      .appendingPathComponent(workspace)
+    let directory = WorkspaceDirectory.url(root: rootDirectory, scope: scope)
     self.scope = scope
     self.checkpoints = try MarkdownCheckpointStore(
       directory: directory.appendingPathComponent("markdown"))
@@ -73,6 +71,22 @@ public actor WorkspaceRepository {
     return try snapshot(record)
   }
 
+  /// A remote refresh can remove a clean cached row while the live editor receives unsaved
+  /// typing. Retain that text for recovery without creating an intent to restore the old path.
+  @discardableResult
+  public func createRecoveryDraft(path: String, content: String) throws -> LocalNote {
+    try Self.validatePath(path)
+    guard try index.document(path) == nil else {
+      throw WorkspaceRepositoryError.documentNeedsReview
+    }
+    let record = NoteIndexRecord(
+      path: path, working: try checkpoints.put(content), revision: 1,
+      acknowledgedRevision: 0, state: .recoveryDraft, reviewReason: .remoteDeleted,
+      recoveryCopies: [])
+    try index.commit(record, pending: nil)
+    return try snapshot(record)
+  }
+
   @discardableResult
   public func edit(path: String, change: NoteTextChange, expectedRevision: Int64) throws
     -> LocalNote
@@ -108,6 +122,36 @@ public actor WorkspaceRepository {
       }
     }
     try index.commit(record, pending: pending)
+    return try snapshot(record)
+  }
+
+  /// A live editor may have uncheckpointed typing when reconciliation updates its durable
+  /// snapshot. If merging those two versions conflicts, preserve the authoritative snapshots
+  /// and atomically park the merged local text for explicit review instead of replaying it.
+  @discardableResult
+  public func saveForReview(path: String, content: String, expectedRevision: Int64) throws
+    -> LocalNote
+  {
+    var record = try requireDocument(path, revision: expectedRevision)
+    guard record.reviewReason == nil || record.reviewReason == .overlappingEdits else {
+      throw WorkspaceRepositoryError.documentNeedsReview
+    }
+    guard try index.pending(path)?.attempt == nil else {
+      throw WorkspaceRepositoryError.pendingNoteWrites
+    }
+    for reference in [record.working, record.base].compactMap({ $0 })
+    where !record.recoveryCopies.contains(reference) {
+      _ = try checkpoints.read(reference)
+      record.recoveryCopies.append(reference)
+    }
+    let hash = try checkpoints.put(content)
+    if hash != record.working {
+      record.working = hash
+      record.revision = try nextRevision(record.revision)
+    }
+    record.state = .needsReview
+    record.reviewReason = .overlappingEdits
+    try index.commit(record, pending: nil)
     return try snapshot(record)
   }
 

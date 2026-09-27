@@ -38,6 +38,10 @@ serializes writes and merges with the shared `TextMerge`; it never line-merges d
 Same-line conflicts preserve the remote checkpoint and stop at review. `keepMergedEdits` resumes
 only after explicit review. `useRemoteVersion` keeps the local checkpoint exportable. Deleted
 dirty notes stop as recovery drafts; `recover(as:)` creates a separate note at a chosen new path.
+`saveForReview` parks a conflict between uncheckpointed UIKit typing and a newly reconciled
+snapshot, preserving the authoritative working/base copies before removing its queued save.
+`createRecoveryDraft` retains typing that arrived while a clean cached note was remotely deleted;
+it requires an absent path and never adds an outbox intent to recreate that path.
 
 Each outgoing attempt persists its exact body, base version, local revision and operation UUID
 before the network call. The UUID is local bookkeeping, not a claim of server idempotency. A lost
@@ -47,14 +51,62 @@ version has intervened, both sides remain available for review rather than repla
 already-applied task insertion. An acknowledgement changes only that attempt's revision and
 base; later typing stays queued.
 
+## Workspace cache and composers
+
+`WorkspaceCache` stores typed settings, the vault tree and recent thread summaries. Callers retain
+the revision before fetching and pass it to `storeSettings`, `storeTree` or `storeRecentThreads`;
+stale responses fail their comparison rather than replacing a newer snapshot. Missing cache
+entries mean unavailable, never empty editable server data.
+
+Composer drafts are durable strings keyed by `.thread(id)` or `.orchestrator`. `saveComposer`
+requires the revision returned by `composer`. An explicit empty save clears the text but keeps
+the revision, preventing a delayed pre-send checkpoint from restoring a sent/discarded draft.
+These drafts never cause delayed automatic sends.
+
+Notification cursor advancement, stable-ID deduplication and delivery acknowledgement use one
+revisioned durable record. The caller supplies IDs from actual server notification decisions;
+the cache does not infer `when_changed` from thread state. The visible list holds 500 entries and
+the deduplication history 2,000. Cursor/revision checks reject stale pages.
+
+The disposable metadata budget defaults to 8 MiB and removes oldest fetched payloads first.
+Budget queries read indexed sizes rather than decoding large capture receipts. Composers,
+notification state, captures, markdown, merge bases and recovery copies are protected. The
+budget therefore bounds disposable metadata, not total protected user data. Completed capture
+history stays durable, with the most recent 200 returned for display plus all pending/review
+captures; replay reads only pending entries.
+
+## Captures and write ordering
+
+`CaptureOutbox.enqueue` freezes the operation UUID, text, phone-local Gregorian date, timestamp,
+IANA timezone, profile/origin, workspace and serving host before returning a durable queue entry.
+`CaptureRemote` maps that operation to the guarded append route; retries always send the same
+payload to the same host. `RemoteWorkspaceIdentity.supportsAtomicCapture` must be true.
+
+Sending state commits before the request. Lost responses and failed receipt commits remain in
+that state after restart and resolve through the same server receipt. Applied receipts preserve
+the original saved `DailyNoteResponse`; they are not a new fetch of the current note. Indeterminate
+receipts stop replay and require `markReconciled` after explicit user review. Only queued,
+never-attempted captures can be cancelled; their tombstones prevent reuse of that UUID.
+
+Capture text stays outside note working copies until confirmed. SQLite barriers block new note
+attempts while any capture is queued, sending or indeterminate. Capture preparation waits for
+already-attempted note writes to resolve; those existing attempts may still reconcile/retry.
+The app handles `pendingNoteWrites` by reconciling notes, then retrying captures, then ordinary
+note synchronization. `pendingCaptures` is a waiting state, not a reason to erase edits. After an
+applied capture, refresh the current note and use ordinary three-way reconciliation. Never insert
+a pending capture into the editor and also submit its full text as an ordinary note save.
+
+Schema version 2 adds `workspace_values` to version 1 in one SQLite migration transaction. The
+table holds revisioned payloads and indexed retention/size/write-barrier metadata. Existing note
+and outbox rows remain intact. A failed migration rolls back; newer unknown versions fail closed.
+
 ## Remaining integrations
 
 This package provides text working copies and the repository policy, not the complete mobile
-feature set. The app supplies lifecycle, guarded HTTP transport, editor checkpoint scheduling,
-error/save-state presentation and explicit review UI. Atomic daily capture, drawing/asset
-dependency ordering, cached search/threads/settings, cache budgets, structural online actions,
-notification cursors and forget/export UI are separate integrations. Daily capture must not be
-represented simultaneously as an append operation and an ordinary full-note save.
+feature set. The app supplies lifecycle, guarded HTTP/capture transport, editor checkpoint
+scheduling, error/save-state presentation, notification catch-up and explicit review UI.
+Drawing/asset dependency ordering, cached search/full thread bodies/artifacts, clean markdown
+cache eviction, structural online actions and forget/export UI remain separate integrations.
 
 The storage protocols are injectable. Tests use real temporary SQLite/markdown files, a scripted
 remote and injected disk/transaction failures; no real vault or daemon is accessed.

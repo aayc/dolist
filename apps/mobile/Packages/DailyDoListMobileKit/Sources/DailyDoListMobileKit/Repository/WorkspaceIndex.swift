@@ -33,7 +33,7 @@ public struct NoteOutboxRecord: Codable, Sendable {
 /// Synchronous operations run exclusively on the repository actor. `commit` must atomically
 /// change both document and outbox; nil removes the corresponding row. It must throw rather
 /// than silently rebuilding a corrupted or newer index. Implementations may be failure-injected.
-public protocol WorkspaceIndex: Sendable {
+public protocol WorkspaceIndex: WorkspaceStateStore {
   func documents() throws -> [NoteIndexRecord]
   func document(_ path: String) throws -> NoteIndexRecord?
   func outbox() throws -> [NoteOutboxRecord]
