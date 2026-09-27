@@ -89,13 +89,14 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
   it; all four branch workflows passed. Also passed `pnpm check`, production builds/budgets,
   mock evals, and the Linux bundle smoke test on the actual host. Both installed clients retain
   their prior versions for rollback. Main workflows are dispatched after the handoff update.
+- Cursor CLI is installed and browser-authenticated under the remote service account. The
+  paired app now uses the Cursor harness with its existing Claude Opus 5.5 selection and
+  approval policy; OpenRouter remains available for the safety judge. A task entered in the
+  native Mac app ran Linux shell commands and opened a real Chromium page on the remote host,
+  with successful tool results displayed in its thread. Setup credentials remain private.
 
 ## In flight
 
-- Remote Cursor CLI setup: installed the official Linux CLI under the daemon's service account.
-  Browser sign-in is pending with the user; the working Pi harness remains selected until
-  authentication and a real Cursor task have been verified. Credentials and login links stay
-  outside this repository.
 - Full native iPhone app: `codex/iphone-app`, based on the completed Mac setup baseline.
   Foundation/toolchain and reusable editor extraction are first. The complete scope, durable
   user instruction, next actions and test evidence live in `apps/mobile/IMPLEMENTATION.md`.
