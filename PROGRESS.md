@@ -106,29 +106,33 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
 
 ## In flight
 
-- Full native iPhone app: `codex/iphone-app`, checkpoint `56ace13` pushed, with current main
+- Full native iPhone app: `codex/iphone-app`, checkpoint `6c19850` pushed, with current main
   host-continuity fixes merged. Native pairing/Keychain, identity guard, durable notes/composers/
   captures, Inbox/agent UI and shared native drawing engine are integrated. Real simulator CUA
   passed HTTPS pairing, task→mock-agent result/artifact, capture, offline edit→terminate/relaunch,
   and reconnect with a disjoint remote edit preserved. The simulator's missing Keychain identity
   was found through CUA and fixed with a simulator-only ad-hoc identity (no paid account).
 - Full features remain in progress. Parallel streams: `codex/iphone-backend` supplied identity,
-  capture, fenced action receipts and notification catch-up; `codex/iphone-agent-actions` now
-  wires durable action IDs into AgentCore. `codex/iphone-repository` supplied offline caches,
-  structural transactions and recovery/export/forget, and now owns durable drawings.
-  `codex/iphone-drawing` supplied the canvas, embedded images/arrangement and is finishing the
-  complete settings/host UI and now owns remaining drawing parity. The user explicitly excluded
+  capture, fenced action receipts and notification catch-up; `codex/iphone-agent-actions` supplied durable action IDs in AgentCore. `codex/iphone-repository` supplied offline caches,
+  structural transactions and recovery/export/forget, and durable drawings; it now wires bounded thread/artifact caches into AgentCore and native views.
+  `codex/iphone-drawing` supplied the canvas, embedded images/arrangement and complete settings/host UI; it now owns remaining drawing parity. The user explicitly excluded
   iPhone Vim; its isolated unfinished work is not integrated. The integrator owns composition,
   notes navigation/content, platform integration, CI and thorough CUA. Shared settings, explorer,
   history/calendar navigation, search and recovery UI are integrated; CUA passed creation, search,
   back/forward, theme save, accessible rename and soft deletion with text retained in Trash.
-  Drawing persistence, frame/point/grid controls and clipboard/library are integrated; app canvas
-  composition continues. Binary attachments and bounded offline caches are the next shared streams.
+  Standalone drawing composition/recovery, frame/point/grid controls, clipboard/library and bounded
+  SVG transfer are integrated. CUA passed text creation, save, undo/redo, offline editing and relaunch,
+  then reconciliation with a separate remote shape; both changes reached the synthetic host. CUA
+  dragging remains under investigation despite a passing real-touch native UI test. Binary attachments
+  now preserve bytes across providers/sync and have authenticated bounded APIs. Bounded thread/artifact
+  cache foundations are integrated; native cache UI and App Intents/local notifications are in flight.
+  Root next owns note content/embeds, living-list UI, navigation/downloads and final composition.
 - Foundation CI and macOS workflows passed on `a972928`. Local `pnpm check`, signed simulator
   suite (59 tests), MobileKit and physical iPhone SDK build passed at the composition checkpoint.
   Web CI passed on `6e31cd0`; all native/iPhone jobs passed except a coalesced-event timing
   assumption in relay integration. The assertion is fixed and passed against isolated real daemons;
-  the next full native run is due on the newer checkpoint. The latest local full check passes. The Mac window-opening budget failure is
+  new CI/native/security/Linux checks are dispatched on `6c19850`. The latest local native suite and
+  full repository check pass, using serial package execution for timing-sensitive checks. The Mac window-opening budget failure is
   reproduced on the unchanged local baseline (~6.4 s); it passes CI, and no budget was widened.
   Scope: `docs/specs/iphone-implementation-streams.md`; durable instruction and evidence:
   `apps/mobile/IMPLEMENTATION.md`. The user asked to finish faster while retaining complete tests
