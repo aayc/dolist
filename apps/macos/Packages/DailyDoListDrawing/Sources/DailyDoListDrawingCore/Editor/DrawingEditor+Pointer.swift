@@ -27,7 +27,7 @@ extension DrawingEditor {
   }
 
   /// Handles are grabbed within this many scene units.
-  var handleRadius: Double { 8 / zoom }
+  var handleRadius: Double { selectionHandleRadius / zoom }
 
   /// Where the pointer is, for hover feedback and the cursor.
   public enum HoverTarget: Equatable, Sendable {
@@ -218,6 +218,20 @@ extension DrawingEditor {
       if !ids.isEmpty { delete(ids) }
       commit()
     }
+  }
+
+  /// Abandons an interrupted pointer sequence without saving it or consuming undo. A second
+  /// finger beginning pan/pinch must never leave behind a partial stroke or moved element.
+  public func cancelPointerInteraction() {
+    guard gesture != nil || multiPointElementId != nil else { return }
+    cancelGesture()
+    multiPointElementId = nil
+    multiPointStartTarget = nil
+    scene.elements = committedElements
+    rebuildIndex()
+    selectedIds = committedSelection.filter { element($0).map { !$0.isDeleted } ?? false }
+    syncStyleToSelection()
+    invalidate()
   }
 
   func cancelGesture() {

@@ -80,7 +80,7 @@ public enum DrawingImage {
     return context.makeImage()
   }
 
-  static func fill(
+  package static func fill(
     _ background: DrawingBackground, scene: ExcalidrawScene, theme: DrawingTheme, rect: DrawingRect,
     in context: CGContext
   ) {

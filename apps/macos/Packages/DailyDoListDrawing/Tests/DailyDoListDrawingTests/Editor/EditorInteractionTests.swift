@@ -3,6 +3,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListDrawing
+@testable import DailyDoListDrawingCore
 
 /// The editor driven with pointer and key sequences, in scene coordinates.
 @MainActor
@@ -32,6 +33,45 @@ struct EditorInteractionTests {
       editor.pointerDragged(to: start + (end - start) * t, modifiers: modifiers)
     }
     editor.pointerUp(at: end, modifiers: modifiers)
+  }
+
+  @Test func interruptedTouchRollsBackCreationMoveAndEraseWithoutSaveOrUndo() throws {
+    let (editor, recorder) = makeEditor()
+    editor.tool = .rectangle
+    editor.pointerDown(at: P(10, 20))
+    editor.pointerDragged(to: P(100, 80))
+    editor.cancelPointerInteraction()
+    #expect(editor.scene.elements.isEmpty)
+    #expect(!editor.canUndo && recorder.scenes.isEmpty)
+
+    drag(editor, from: P(10, 20), to: P(100, 80))
+    let committed = editor.scene
+    let id = try #require(editor.selectedIds.first)
+    editor.pointerDown(at: P(50, 20))
+    editor.pointerDragged(to: P(200, 150))
+    editor.cancelPointerInteraction()
+    #expect(editor.scene == committed)
+    #expect(recorder.scenes.count == 1)
+    #expect(editor.selectedIds == [id])
+
+    editor.tool = .eraser
+    editor.pointerDown(at: P(50, 20))
+    #expect(!editor.erasingIds.isEmpty)
+    editor.cancelPointerInteraction()
+    #expect(editor.erasingIds.isEmpty && editor.scene == committed)
+    editor.undo()
+    #expect(editor.scene.elements.allSatisfy { $0.isDeleted })
+    editor.redo()
+    #expect(editor.scene.visibleElements.count == 1)
+  }
+
+  @Test func mobileTextAlignmentUpdatesExistingTextAndUndoRestoresIt() throws {
+    let (editor, _) = makeEditor([TestScenes.text("Synthetic label", id: "text", x: 0, y: 0)])
+    editor.select(["text"])
+    editor.applyStyle { $0.textAlign = .right }
+    #expect(editor.element("text")?.text?.textAlign == .right)
+    editor.undo()
+    #expect(editor.element("text")?.text?.textAlign == .left)
   }
 
   @Test func drawsARectangleAndSelectsIt() throws {

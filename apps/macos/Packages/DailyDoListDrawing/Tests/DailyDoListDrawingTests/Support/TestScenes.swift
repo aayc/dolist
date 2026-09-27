@@ -3,6 +3,8 @@ import DailyDoListDrawing
 import DailyDoListDrawingModel
 import Foundation
 
+@testable import DailyDoListDrawingCore
+
 /// Synthetic scenes for renders and interaction tests.
 enum TestScenes {
   static func element(

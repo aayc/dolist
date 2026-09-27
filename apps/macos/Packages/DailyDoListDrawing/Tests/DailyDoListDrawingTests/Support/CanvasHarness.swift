@@ -4,6 +4,7 @@ import DailyDoListUITestSupport
 import Foundation
 
 @testable import DailyDoListDrawing
+@testable import DailyDoListDrawingCore
 
 /// A canvas in an offscreen window, driven with real `NSEvent`s (points are in the view's
 /// flipped coordinates; at zoom 1 with the origin at 0,0 they're scene coordinates too).

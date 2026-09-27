@@ -2,6 +2,7 @@ import DailyDoListDrawingModel
 import Testing
 
 @testable import DailyDoListDrawing
+@testable import DailyDoListDrawingCore
 
 @Suite("Scene merge: two versions of a drawing, element by element")
 struct SceneMergeTests {

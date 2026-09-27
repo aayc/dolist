@@ -197,7 +197,7 @@ extension DrawingEditor {
   }
 
   /// `getBoundTextMaxWidth`.
-  static func boundTextMaxWidth(_ container: ExcalidrawElement) -> Double {
+  package static func boundTextMaxWidth(_ container: ExcalidrawElement) -> Double {
     switch container.type {
     case .ellipse: ((container.width / 2) * sqrt(2)).rounded() - boundTextPadding * 2
     case .diamond: (container.width / 2).rounded() - boundTextPadding * 2

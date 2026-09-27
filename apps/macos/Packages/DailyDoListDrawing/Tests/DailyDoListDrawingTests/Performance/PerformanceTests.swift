@@ -4,6 +4,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListDrawing
+@testable import DailyDoListDrawingCore
 
 /// Timings on a 2,000-element drawing (rectangles, ellipses, diamonds with fills, arrows,
 /// freehand strokes and text) in a 1200 × 800 canvas at 2× pixels. The goal is 60 fps panning and

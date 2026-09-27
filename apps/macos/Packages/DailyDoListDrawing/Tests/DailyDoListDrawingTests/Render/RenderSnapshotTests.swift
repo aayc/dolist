@@ -5,6 +5,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListDrawing
+@testable import DailyDoListDrawingCore
 
 /// Offscreen renders written to the package's `.build/drawing-snapshots/` for review (never
 /// committed), with checks on their pixels: every element type, light and dark, the three
