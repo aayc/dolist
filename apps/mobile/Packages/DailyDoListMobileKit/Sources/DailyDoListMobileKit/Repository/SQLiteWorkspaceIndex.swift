@@ -39,7 +39,7 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
         guard sqlite3_step(statement) == SQLITE_ROW else { throw failure() }
         return Int(sqlite3_column_int(statement, 0))
       }
-      guard (0...2).contains(version) else {
+      guard (0...3).contains(version) else {
         throw WorkspaceRepositoryError.unsupportedIndexVersion(version)
       }
       try execute("BEGIN IMMEDIATE")
@@ -69,7 +69,9 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
         guard version == 0 else { throw WorkspaceRepositoryError.corruptIndex }
         try put("metadata", keyColumn: "key", key: "scope", value: scope)
       }
-      try execute("PRAGMA user_version=2")
+      // Version 3 teaches writers about drawing rows and required drawing dependencies. An
+      // older writer must fail closed rather than sending a dependent note prematurely.
+      try execute("PRAGMA user_version=3")
       try execute("COMMIT")
       #if os(iOS)
         for suffix in ["", "-wal", "-shm"] {
@@ -118,6 +120,13 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
         if let attempt = pending?.attempt {
           let old: NoteOutboxRecord? = try read("outbox", key: path)
           if old?.attempt?.operationID != attempt.operationID {
+            for path in attempt.requiredDrawings ?? [] {
+              let drawing: NoteIndexRecord? = try read("documents", key: path)
+              guard WorkspaceDocumentPath.isDrawing(path), let drawing,
+                drawing.baseVersion != nil, drawing.acknowledgedRevision > 0,
+                drawing.state == .synced || drawing.state == .waitingToSync
+              else { throw WorkspaceRepositoryError.pendingDrawingDependencies }
+            }
             let blocked: String? = try statement(
               "SELECT key FROM workspace_values WHERE blocks_note_writes=1 LIMIT 1"
             ) { statement in

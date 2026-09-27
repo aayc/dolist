@@ -51,6 +51,44 @@ version has intervened, both sides remain available for review rather than repla
 already-applied task insertion. An acknowledgement changes only that attempt's revision and
 base; later typing stays queued.
 
+## Durable drawings and dependent embeds
+
+`DrawingRepository` shares the same namespace, immutable original/working/base markdown files,
+document rows and outbox transactions, while ordinary `WorkspaceRepository` rejects and filters
+`.excalidraw.md`. Its `cache`, `create`, `save`, `refresh`, `synchronize`, `recover`,
+`useRemoteVersion` and `createRecoveryDraft` return `LocalDrawing` with the parsed document,
+exact persisted content, durability/acknowledgement revisions and recovery file references.
+Canvas input checkpoints call `save(path:scene:expectedRevision:)` after debounce; the actor owns
+all serialization and disk work. Root UI must merge newer uncheckpointed canvas edits into an
+arriving snapshot using the same scene model and fence stale editor sessions by path/revision.
+
+The separate replay path uses shared `SceneMerge` by element ID/version/nonce, retaining deletion
+tombstones and remote file sections. It never line-merges scene JSON. Unknown element types remain
+verbatim while supported elements can change; dropping/changing an unsupported placeholder is
+rejected. Unreadable, truncated, malformed or unsupported-version originals stay exact and
+read-only with an editing error, not an invented empty writable scene. Invalid remote versions
+encountered during local editing preserve both files and stop at `.invalidDrawing` review.
+An unchanged canvas does not serialize/reformat a compressed original or create a write.
+
+Conditional create/save, immutable attempts, lost response reconciliation, identity fences and
+late acknowledgements follow the text repository's rules. A deleted dirty drawing becomes a
+recovery draft without recreating its old path. `createRecoveryDraft` also retains canvas input
+that arrived during a clean deletion refresh, including its previous non-scene file sections.
+All drawing originals, bases and recovery copies participate in structural remaps and export.
+
+For a newly inserted local drawing, first persist `DrawingRepository.create`, then persist the
+note with `WorkspaceRepository.create/save(..., requiringDrawings: [drawingPath])`. SQLite
+atomically records this dependency with the note revision and refuses its send until the drawing
+has an acknowledged remote base. Dependencies carried by an immutable note attempt are cleared
+only when that attempt is acknowledged; drawing dependencies added by later typing remain.
+Structural changes refuse unresolved dependent embeds. Removing an unsent embed can explicitly
+replace the note's dependency list. Do not infer a dependency from an untrusted remote wikilink.
+
+Foreground replay should reconcile note and drawing attempts, replay captures, synchronize
+drawings, then ordinary notes. Existing drawing attempts count as writes that captures must wait
+for; new drawing attempts respect pending capture/structural barriers. `WorkspaceRemote` serves
+both stores; no drawing-specific transport or unguarded write path is required.
+
 ## Workspace cache and composers
 
 `WorkspaceCache` stores typed settings, the vault tree and recent thread summaries. Callers retain
@@ -97,9 +135,12 @@ ordinary synchronization pass, barred new writes remain waiting; persisted attem
 first so lexical path order cannot deadlock capture. After an applied capture, refresh the current note and use ordinary three-way reconciliation. Never insert
 a pending capture into the editor and also submit its full text as an ordinary note save.
 
-Schema version 2 adds `workspace_values` to version 1 in one SQLite migration transaction. The
+Schema version 2 added `workspace_values` to version 1 in one SQLite migration transaction. The
 table holds revisioned payloads and indexed retention/size/write-barrier metadata. Existing note
-and outbox rows remain intact. A failed migration rolls back; newer unknown versions fail closed.
+and outbox rows remain intact. Version 3 adds drawing rows/dependency semantics with optional
+backward-readable JSON fields and advances the version atomically, so old writers fail closed
+instead of bypassing a dependent embed. A failed migration rolls back; newer unknown versions
+fail closed.
 
 ## Online structural changes
 
@@ -172,7 +213,7 @@ data removal, not a claim of forensic secure erasure.
 This package provides text working copies and the repository policy, not the complete mobile
 feature set. The app supplies lifecycle, guarded HTTP/capture transport, editor checkpoint
 scheduling, error/save-state presentation, notification catch-up and explicit review UI.
-Drawing/asset dependency ordering, cached search/full thread bodies/artifacts, clean markdown
+Binary asset upload/dependency ordering, cached search/full thread bodies/artifacts, clean markdown
 cache eviction and structural/recovery UI remain separate integrations.
 
 The storage protocols are injectable. Tests use real temporary SQLite/markdown files, a scripted

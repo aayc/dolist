@@ -42,7 +42,7 @@ public enum WorkspaceStructuralAction: Codable, Hashable, Sendable {
 
   static func validatePath(_ path: String, folder: Bool) throws {
     if !folder {
-      try WorkspaceRepository.validatePath(path)
+      try WorkspaceDocumentPath.validate(path)
       return
     }
     guard !path.isEmpty, !path.contains("\\"), !path.contains("\0"),

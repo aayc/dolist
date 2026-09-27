@@ -14,6 +14,8 @@ public struct NoteIndexRecord: Codable, Sendable {
   public var state: NoteSyncState
   public var reviewReason: ReviewReason?
   public var recoveryCopies: [String]
+  /// Newly embedded drawings must be acknowledged before this note may first send the embed.
+  public var requiredDrawings: [String]? = nil
 }
 
 /// Persisted before sending. An interrupted/lost response is reconciled with this exact body,
@@ -23,6 +25,7 @@ public struct NoteWriteAttempt: Codable, Sendable {
   public let checkpoint: String
   public let revision: Int64
   public let baseVersion: String?
+  public var requiredDrawings: [String]? = nil
 }
 
 public struct NoteOutboxRecord: Codable, Sendable {
