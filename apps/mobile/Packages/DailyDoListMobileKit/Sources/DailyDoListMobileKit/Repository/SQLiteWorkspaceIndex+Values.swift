@@ -59,14 +59,21 @@ extension SQLiteWorkspaceIndex {
       }
       try beginTransaction()
       do {
+        if changes.contains(where: \.requiresNoStructuralChange), try hasStructuralBarrier() {
+          throw WorkspaceRepositoryError.pendingStructuralChange
+        }
         if changes.contains(where: \.requiresIdleNoteWrites) {
           guard try !hasStructuralBarrier() else {
             throw WorkspaceRepositoryError.pendingStructuralChange
           }
+          try requireIdleAttachmentAttempts()
           let attempts: [NoteOutboxRecord] = try all("outbox")
           guard !attempts.contains(where: { $0.attempt != nil }) else {
             throw WorkspaceRepositoryError.pendingNoteWrites
           }
+        }
+        if changes.contains(where: \.requiresIdleCaptureWrites) {
+          try requireIdleCaptureWrites()
         }
         var revisions: [String: Int64] = [:]
         for change in changes {

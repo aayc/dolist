@@ -23,6 +23,8 @@ extension WorkspaceRepository {
       } catch WorkspaceRepositoryError.pendingCaptures {
         // A capture waits for earlier attempted writes. A blocked new note must not prevent
         // another document's immutable attempt from resolving and releasing that dependency.
+      } catch WorkspaceRepositoryError.pendingAttachmentDependencies {
+        // Pending imported files must be acknowledged before sending the containing embed.
       } catch WorkspaceRepositoryError.pendingDrawingDependencies {
         // New embeds wait for their drawing's acknowledged create, across restart as well.
       } catch WorkspaceRepositoryError.pendingStructuralChange {
@@ -156,7 +158,7 @@ extension WorkspaceRepository {
       ?? NoteWriteAttempt(
         operationID: UUID(),
         checkpoint: record.working, revision: record.revision, baseVersion: record.baseVersion,
-        requiredDrawings: record.requiredDrawings)
+        requiredDrawings: record.requiredDrawings, requiredAttachments: record.requiredAttachments)
     let content = try checkpoints.read(attempt.checkpoint)
     try index.commit(record, pending: NoteOutboxRecord(path: path, attempt: attempt))
     access?.release()
@@ -190,6 +192,10 @@ extension WorkspaceRepository {
     if let acknowledgedDependencies = attempt.requiredDrawings {
       latest.requiredDrawings?.removeAll { acknowledgedDependencies.contains($0) }
       if latest.requiredDrawings?.isEmpty == true { latest.requiredDrawings = nil }
+    }
+    if let acknowledged = attempt.requiredAttachments {
+      latest.requiredAttachments?.removeAll { acknowledged.contains($0) }
+      if latest.requiredAttachments?.isEmpty == true { latest.requiredAttachments = nil }
     }
     latest.base = attempt.checkpoint
     latest.baseVersion = remote.version

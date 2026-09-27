@@ -8,6 +8,8 @@ struct StorageReferenceGraph {
 
   init(snapshot: WorkspaceStorageSnapshot, scope: WorkspaceScope, activePaths: Set<String>) throws {
     let agentKeys = RecoveryAgentMutations(values: snapshot.values, scope: scope).recognizedKeys
+    let attachmentKeys = RecoveryAttachmentUploads(values: snapshot.values, scope: scope)
+      .recognizedKeys
     let pendingPaths = Set(snapshot.pending.map(\.path))
     let dependencies = Set(snapshot.documents.flatMap { $0.requiredDrawings ?? [] })
       .union(snapshot.pending.flatMap { $0.attempt?.requiredDrawings ?? [] })
@@ -22,6 +24,7 @@ struct StorageReferenceGraph {
         reasons.insert(.recovery)
       }
       if pendingPaths.contains(document.path) { reasons.insert(.pendingWrite) }
+      if !(document.requiredAttachments ?? []).isEmpty { reasons.insert(.attachmentDependency) }
       if dependencies.contains(document.path) || !(document.requiredDrawings ?? []).isEmpty {
         reasons.insert(.drawingDependency)
       }
@@ -57,6 +60,8 @@ struct StorageReferenceGraph {
         _ = try JSONDecoder().decode(String.self, from: value.data)
       } else if value.key.hasPrefix("capture/") {
         _ = try JSONDecoder().decode(QueuedCapture.self, from: value.data)
+      } else if attachmentKeys.contains(value.key) {
+        // Exact original bytes are inline SQLite data, independent of markdown checkpoint GC.
       } else if agentKeys.contains(value.key) {
         // Validated version 1 commands and their matching exclusion slots contain inline JSON.
       } else if value.key == "notifications" {

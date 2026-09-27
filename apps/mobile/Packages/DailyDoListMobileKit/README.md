@@ -378,3 +378,46 @@ unrecognized files are untouched. Unlink or directory-sync failure cannot remove
 content; remaining orphans can be collected later. Download selections/progress live in separate
 SQLite tables so disposable metadata trimming cannot remove them. Explicit workspace retirement
 clears them along with the other namespace state.
+
+## Durable attachment imports
+
+`AttachmentUploadRepository(rootDirectory:scope:)` prepares file/photo bytes with
+`prepare(data:originalFilename:)` and returns an `AttachmentUpload` only after one SQLite
+transaction stores the exact original bytes and immutable operation metadata. Each upload gets a
+random stable `attachments/<UUID>.<extension>` vault path; duplicate filenames do not collide.
+The original filename is retained for export, never interpreted as a relative path. The raw-byte
+limit is 5 MiB, enforced before persistence and by the authenticated HTTP transport. Markdown
+extensions fall back to `.bin`; importing a note as editable markdown is a separate document flow.
+
+`uploads`, `upload(_:)` and `bytes(_:)` expose persisted status and verified original bytes.
+`HTTPAttachmentUploadRemote(client:scope:)` requires an immutable expected-workspace client and
+advertised `binary-files-v1` capability. `synchronize(with:)` verifies profile/origin/workspace/host
+before network access. It reads each fixed destination first and only issues a create-only upload
+for a never-attempted queued operation. Lost replies reconcile by exact bytes. A previously
+attempted file that is missing or different becomes `needsReview`; it is never silently recreated
+or overwritten. Original bytes remain exportable. `cancel(_:expectedRevision:)` is explicit and
+only available before any attempt. Review may be checked again safely; a deliberate re-import
+uses `prepare` to produce a new path, and the editor must explicitly replace its old embed.
+
+Pass returned `.dependency` values to note `create`/`save` as `requiringAttachments`. The editor
+computes those dependencies off the input path and includes pending/review imports referenced by
+its text. Existing acknowledged unrelated files need no dependency. Note attempt preparation
+checks exact operation ID/path/hash acknowledgements inside the same SQLite transaction. Late note
+acknowledgements clear only dependencies included in that immutable attempt, preserving newer
+imports. An empty dependency array explicitly clears removed embeds; nil preserves the prior set.
+
+New upload attempts share note/capture/structural barriers. Reconcile attempted uploads and notes
+before captures, then send queued uploads after captures and synchronize notes again. A structural
+operation affecting a pending import or note dependency is refused; local import preparation also
+refuses an already-unresolved structural mutation. No connection or namespace can redirect frozen
+routing. Call `invalidateConnection` on profile/connection changes; a late response then remains
+unacknowledged and is reconciled by the next verified session.
+
+Schema 6 rejects older writers which cannot enforce attachment dependencies. Metadata uses durable
+`attachment-upload/<UUID>` workspace-value rows and raw originals use `attachment-original/<UUID>`.
+Both row revisions are compared and committed atomically. Pending originals are durable; after
+acknowledgement/cancellation only their bytes become disposable, while small typed metadata remains
+available for late note dependencies. The separate content cache can keep acknowledged bytes for
+preview. `RecoveryAttachmentUploads` validates exact key/scope/version/hash/byte count pairs and
+provides pending originals to the recovery exporter; future or corrupt formats remain unrecognized
+and protected. Markdown garbage collection recognizes these inline records and never deletes them.
