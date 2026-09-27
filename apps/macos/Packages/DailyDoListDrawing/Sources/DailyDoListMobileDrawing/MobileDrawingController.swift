@@ -207,6 +207,11 @@
         }
         command("Properties", symbol: "slider.horizontal.3") { propertiesShown = true }
         MobileDrawingImageControls(controller: controller)
+        if !controller.editor.erasingIds.isEmpty {
+          command("Restore pending erasure", symbol: "eraser.fill") {
+            controller.editor.restorePendingErasure()
+          }
+        }
         Spacer(minLength: 0)
         Menu {
           Toggle("Select multiple", isOn: $controller.multiSelect)

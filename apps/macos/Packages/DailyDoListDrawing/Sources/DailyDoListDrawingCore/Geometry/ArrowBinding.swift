@@ -92,7 +92,15 @@ public enum ArrowBinding {
     let focus = determineFocusDistance(target, adjacent, edge)
     var gap = max(1, distance(to: target, edge))
     if gap > maxBindingGap(target) { gap = highlightGap }
-    return PointBinding(elementId: target.id, focus: focus, gap: gap)
+    var result = PointBinding(elementId: target.id, focus: focus, gap: gap)
+    if arrow.elbowed, target.width > 0, target.height > 0 {
+      let point = edge.rotated(around: ElementGeometry.center(target), by: -target.angle)
+      result.extra["fixedPoint"] = .array([
+        .number(max(0, min(1, (point.x - target.x) / target.width))),
+        .number(max(0, min(1, (point.y - target.y) / target.height))),
+      ])
+    }
+    return result
   }
 
   public enum ArrowEnd: Sendable {

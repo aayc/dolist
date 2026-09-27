@@ -7,6 +7,7 @@
     @State private var background = ""
     @State private var search = ""
     var body: some View {
+      let _ = controller.editor.committedRevision
       Form {
         Section("Canvas") {
           TextField("Background color", text: $background).textInputAutocapitalization(.never)

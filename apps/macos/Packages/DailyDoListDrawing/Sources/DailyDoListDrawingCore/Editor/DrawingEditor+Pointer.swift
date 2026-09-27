@@ -9,6 +9,7 @@ extension DrawingEditor {
     case resize(
       handle: TransformHandle, frame: SelectionFrame, originals: [String: ExcalidrawElement])
     case movePoint(id: String, index: Int)
+    case moveSegment(original: ExcalidrawElement, index: Int, start: DrawingPoint)
     case rotate(center: DrawingPoint, startAngle: Double, originals: [String: ExcalidrawElement])
     case create(id: String, origin: DrawingPoint)
     case linear(id: String, origin: DrawingPoint, startTarget: String?)
@@ -120,7 +121,7 @@ extension DrawingEditor {
       createText(at: point)
     case .eraser:
       erasingIds = []
-      erase(from: point, to: point)
+      erase(from: point, to: point, restoring: modifiers.contains(.option))
       gesture = .erase(last: point)
       invalidate()
     case .hand:
@@ -158,6 +159,9 @@ extension DrawingEditor {
       moveSelection(originals: originals, by: point - start, snapAxis: modifiers.contains(.shift))
       self.gesture = .move(start: start, originals: originals, duplicate: false, moved: true)
       invalidate()
+    case .moveSegment(let original, let index, let start):
+      moveElbowSegment(original, index: index, by: point - start)
+      invalidate()
     case .rotate(let center, let startAngle, let originals):
       var angle = atan2(point.y - center.y, point.x - center.x) - startAngle
       if modifiers.contains(.shift) { angle = (angle / (.pi / 12)).rounded() * (.pi / 12) }
@@ -192,7 +196,7 @@ extension DrawingEditor {
       appendFreedrawPoint(id, point)
       invalidate()
     case .erase(let last):
-      erase(from: last, to: point)
+      erase(from: last, to: point, restoring: modifiers.contains(.option))
       self.gesture = .erase(last: point)
       invalidate()
     }
@@ -214,6 +218,8 @@ extension DrawingEditor {
       } else {
         commit()
       }
+    case .moveSegment:
+      commit()
     case .rotate:
       updateFrameMembership()
       commit()
@@ -300,8 +306,12 @@ extension DrawingEditor {
       if let id = editingLinearId,
         let segment = linearMidpoints.firstIndex(where: { $0.distance(to: point) <= handleRadius })
       {
-        insertLinearPoint(id, after: segment, at: point, commitChange: false)
-        gesture = .movePoint(id: id, index: segment + 1)
+        if let arrow = element(id), arrow.elbowed {
+          gesture = .moveSegment(original: arrow, index: segment + 1, start: point)
+        } else {
+          insertLinearPoint(id, after: segment, at: point, commitChange: false)
+          gesture = .movePoint(id: id, index: segment + 1)
+        }
         return
       }
       if let handle = frame.handle(at: point, radius: handleRadius) {
@@ -422,6 +432,7 @@ extension DrawingEditor {
     let point = ArrowBinding.absolutePoint(arrow, index)
     let target = arrowTarget(at: point, excluding: [id], for: id)
     bindEnd(id, end: isStart ? .start : .end, to: target)
+    if element(id)?.elbowed == true { routeElbow(id) }
   }
 
   /// Keeps the first point at 0,0 (as Excalidraw's linear editor does) and the size in sync.
@@ -431,6 +442,20 @@ extension DrawingEditor {
       element.width = size.width
       element.height = size.height
       return
+    }
+    if let segments = element.extraField("fixedSegments")?.arrayValue {
+      element.setExtraField(
+        "fixedSegments",
+        .array(
+          segments.map { value in
+            guard var object = value.objectValue else { return value }
+            for key in ["start", "end"] {
+              if let point = Self.readPoint(object[key]) {
+                object[key] = Self.pointJSON(point - first)
+              }
+            }
+            return .object(object)
+          }))
     }
     element.points = element.points.map { $0 - first }
     element.x += first.x

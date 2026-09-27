@@ -23,6 +23,8 @@
     public var theme: DrawingTheme = .light { didSet { setNeedsDisplay() } }
     public var background: DrawingBackground = .scene { didSet { setNeedsDisplay() } }
     public var pointerModifiers: PointerModifiers = []
+    var hardwareModifiers: PointerModifiers = []
+    var effectivePointerModifiers: PointerModifiers { pointerModifiers.union(hardwareModifiers) }
     public var laserEnabled = false { didSet { if laserEnabled != oldValue { clearLaser() } } }
     var laserTrail: [(point: DrawingPoint, time: CFTimeInterval)] = []
     var laserDisplayLink: CADisplayLink?
@@ -216,8 +218,9 @@
         if !navigatesWithOneFinger {
           let translation = recognizer.translation(in: self)
           let start = CGPoint(x: location.x - translation.x, y: location.y - translation.y)
-          editor.pointerDown(at: viewport.viewToScene(start), modifiers: pointerModifiers)
-          editor.pointerDragged(to: viewport.viewToScene(location), modifiers: pointerModifiers)
+          editor.pointerDown(at: viewport.viewToScene(start), modifiers: effectivePointerModifiers)
+          editor.pointerDragged(
+            to: viewport.viewToScene(location), modifiers: effectivePointerModifiers)
         }
       case .changed:
         if navigatesWithOneFinger {
@@ -228,12 +231,14 @@
               origin: dragOrigin
                 - DrawingPoint(translation.x / viewport.zoom, translation.y / viewport.zoom)))
         } else {
-          editor.pointerDragged(to: viewport.viewToScene(location), modifiers: pointerModifiers)
+          editor.pointerDragged(
+            to: viewport.viewToScene(location), modifiers: effectivePointerModifiers)
         }
       case .ended:
         if !navigatesWithOneFinger {
-          editor.pointerDragged(to: viewport.viewToScene(location), modifiers: pointerModifiers)
-          editor.pointerUp(at: viewport.viewToScene(location), modifiers: pointerModifiers)
+          editor.pointerDragged(
+            to: viewport.viewToScene(location), modifiers: effectivePointerModifiers)
+          editor.pointerUp(at: viewport.viewToScene(location), modifiers: effectivePointerModifiers)
         }
       case .cancelled, .failed: editor.cancelPointerInteraction()
       default: break
@@ -291,8 +296,8 @@
       guard mode == .editing, editor.tool != .hand else { return }
       if textEditor == nil { becomeFirstResponder() }
       let point = viewport.viewToScene(recognizer.location(in: self))
-      editor.pointerDown(at: point, modifiers: pointerModifiers, clickCount: count)
-      editor.pointerUp(at: point, modifiers: pointerModifiers)
+      editor.pointerDown(at: point, modifiers: effectivePointerModifiers, clickCount: count)
+      editor.pointerUp(at: point, modifiers: effectivePointerModifiers)
     }
   }
 #endif

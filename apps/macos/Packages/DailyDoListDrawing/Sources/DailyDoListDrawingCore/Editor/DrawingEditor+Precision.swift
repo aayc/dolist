@@ -168,6 +168,7 @@ extension DrawingEditor {
         if arrow.elbowed { orthogonalize(&arrow) }
         normalizePoints(&arrow)
       }
+      if shape == .elbow { routeElbow(id) }
       if let label = value.boundTextId { positionArrowLabel(label) }
     }
     commit()
@@ -223,6 +224,8 @@ extension DrawingEditor {
       route.append(point)
     }
     arrow.points = route
-    arrow.setExtraField("fixedSegments", .array([]))
+    if let movedPoint, movedPoint > 0, movedPoint < points.count - 1 {
+      synchronizeFixedSegments(&arrow)
+    }
   }
 }

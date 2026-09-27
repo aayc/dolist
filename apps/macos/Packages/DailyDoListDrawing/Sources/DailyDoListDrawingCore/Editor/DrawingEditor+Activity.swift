@@ -10,6 +10,7 @@ extension DrawingEditor {
       ids = Set(originals.keys)
     case .movePoint(let id, _), .create(let id, _), .linear(let id, _, _), .freedraw(let id):
       ids = [id]
+    case .moveSegment(let original, _, _): ids = [original.id]
     case .erase, .marquee, nil:
       break
     }
