@@ -28,6 +28,33 @@ struct WorkspaceCacheTests {
     #expect(await remote.notes["Draft.md"]?.content == "Old schema draft")
   }
 
+  @Test func schemaThreeMigratesCurrentRevisionsAndPreservesPendingWork() async throws {
+    let fixture = try RepositoryFixture()
+    defer { fixture.remove() }
+    let repository = try fixture.open()
+    _ = try await repository.create(path: "Pending.md", content: "Keep pending work")
+    let cache = try WorkspaceCache(rootDirectory: fixture.directory, scope: fixture.scope)
+    let revision = try await cache.storeSettings(.defaults, replacing: nil)
+    let path = WorkspaceDirectory.url(root: fixture.directory, scope: fixture.scope)
+      .appendingPathComponent("index.sqlite").path
+    var database: OpaquePointer?
+    #expect(sqlite3_open(path, &database) == SQLITE_OK)
+    defer { sqlite3_close(database) }
+    #expect(
+      sqlite3_exec(
+        database,
+        "DROP TABLE content_cache; DROP TABLE content_cache_keys; DROP TABLE workspace_value_revisions; PRAGMA user_version=3",
+        nil, nil, nil) == SQLITE_OK)
+    let reopened = try WorkspaceCache(rootDirectory: fixture.directory, scope: fixture.scope)
+    #expect(try await reopened.settings()?.revision == revision)
+    let next = try await reopened.storeSettings(.defaults, replacing: revision)
+    #expect(next > revision)
+    #expect(try await repository.note("Pending.md")?.content == "Keep pending work")
+    let remote = RepositoryRemote(scope: fixture.scope)
+    _ = try await repository.synchronize(with: remote)
+    #expect(await remote.notes["Pending.md"]?.content == "Keep pending work")
+  }
+
   @Test func aBatchWithAStaleRevisionRollsBackEveryValue() throws {
     let fixture = try RepositoryFixture()
     defer { fixture.remove() }
@@ -106,6 +133,25 @@ struct WorkspaceCacheTests {
     #expect(try await cache.settings() == nil)
     #expect(try await cache.composer(.orchestrator).text == "Unsent question")
     #expect(try await repository.note("Draft.md")?.content == "Never evict this draft")
+  }
+
+  @Test func evictionAndRecreationRejectsAnOldMatchingRevision() async throws {
+    let fixture = try RepositoryFixture()
+    defer { fixture.remove() }
+    let cache = try WorkspaceCache(rootDirectory: fixture.directory, scope: fixture.scope)
+    let old = try await cache.storeSettings(.defaults, replacing: nil)
+    let evictor = try WorkspaceCache(
+      rootDirectory: fixture.directory, scope: fixture.scope, budgetBytes: 0)
+    _ = try await evictor.trim()
+    let reopened = try WorkspaceCache(rootDirectory: fixture.directory, scope: fixture.scope)
+    var changed = AppSettings.defaults
+    changed.theme = .light
+    let current = try await reopened.storeSettings(changed, replacing: nil)
+    #expect(current > old)
+    await #expect(throws: WorkspaceRepositoryError.concurrentWrite) {
+      try await cache.storeSettings(.defaults, replacing: old)
+    }
+    #expect(try await reopened.settings()?.value == changed)
   }
 
   @Test func notificationCursorAndDeduplicationAdvanceTogetherAcrossRestart() async throws {

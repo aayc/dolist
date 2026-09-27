@@ -39,7 +39,7 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
         guard sqlite3_step(statement) == SQLITE_ROW else { throw failure() }
         return Int(sqlite3_column_int(statement, 0))
       }
-      guard (0...3).contains(version) else {
+      guard (0...4).contains(version) else {
         throw WorkspaceRepositoryError.unsupportedIndexVersion(version)
       }
       try execute("BEGIN IMMEDIATE")
@@ -69,9 +69,10 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
         guard version == 0 else { throw WorkspaceRepositoryError.corruptIndex }
         try put("metadata", keyColumn: "key", key: "scope", value: scope)
       }
-      // Version 3 teaches writers about drawing rows and required drawing dependencies. An
-      // older writer must fail closed rather than sending a dependent note prematurely.
-      try execute("PRAGMA user_version=3")
+      try createContentCacheSchema()
+      // Version 4 adds cache blobs and nonreused value revisions. Older writers must fail
+      // closed rather than bypassing drawing dependencies or reintroducing cache CAS reuse.
+      try execute("PRAGMA user_version=4")
       try execute("COMMIT")
       #if os(iOS)
         for suffix in ["", "-wal", "-shm"] {
@@ -164,6 +165,7 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
   func writeStoredValue(_ next: WorkspaceStoredValue?, key: String) throws {
     try put("workspace_values", keyColumn: "key", key: key, value: next)
     if let next {
+      try rememberValueRevision(next.revision, key: key)
       guard !next.blocksNoteWrites || next.retention == .durable else {
         throw WorkspaceRepositoryError.corruptIndex
       }

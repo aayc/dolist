@@ -33,6 +33,26 @@ struct AgentMutationJournalTests {
     #expect(try await cache.trim().protectedBytes == 0)
   }
 
+  @Test func evictedReceiptCanReconcileSameOperationWithNonreusedRevision() async throws {
+    let fixture = try RepositoryFixture()
+    defer { fixture.remove() }
+    let remote = MutationRemote(scope: fixture.scope)
+    await remote.configure(outcome: .applied)
+    let journal = try open(fixture, remote)
+    let command = AgentMutationCommand.cancelThread("thread-test")
+    for _ in 0..<2 {
+      await #expect(throws: AgentMutationError.uncertain("same-id")) {
+        try await journal.perform(command, operationID: "same-id", authorize: { true })
+      }
+      #expect(try await journal.resolve("same-id") == .thread(ThreadActionResponse()))
+      let cache = try WorkspaceCache(
+        rootDirectory: fixture.directory, scope: fixture.scope, budgetBytes: 0)
+      _ = try await cache.trim()
+    }
+    #expect(await remote.sent.map(\.1) == ["same-id", "same-id"])
+    #expect(try await journal.pending().isEmpty)
+  }
+
   @Test(arguments: [AgentOperationResponse.Outcome.pending, .indeterminate])
   func unknownOutcomeNeverReplaysOrChangesItsIntent(_ outcome: AgentOperationResponse.Outcome)
     async throws

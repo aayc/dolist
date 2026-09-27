@@ -41,7 +41,9 @@ public protocol WorkspaceStateStore: Sendable {
   func values(prefix: String) throws -> [WorkspaceStoredValue]
   func valueSummaries() throws -> [WorkspaceValueSummary]
   /// Compares every revision before changing any row. A failed comparison changes nothing.
-  func commitValues(_ changes: [WorkspaceValueMutation]) throws
+  /// Returns committed revisions; a recreated key never reuses an earlier revision.
+  @discardableResult
+  func commitValues(_ changes: [WorkspaceValueMutation]) throws -> [String: Int64]
 }
 
 enum WorkspaceDirectory {

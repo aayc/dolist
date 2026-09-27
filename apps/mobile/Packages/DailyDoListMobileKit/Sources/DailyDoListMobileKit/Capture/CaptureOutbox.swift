@@ -145,14 +145,15 @@ public actor CaptureOutbox {
     var stored = WorkspaceStoredValue(
       key: key, data: try JSONEncoder().encode(value), updatedAt: clock(), retention: .durable)
     stored.blocksNoteWrites = value.state.blocksNoteWrites
-    try store.commitValues([
+    let committed = try store.commitValues([
       WorkspaceValueMutation(
         key: key, value: stored,
         expectedRevision: value.revision == 0 ? nil : value.revision,
         requiresIdleNoteWrites: requiresIdleNoteWrites)
     ])
     var next = value
-    next.revision += 1
+    guard let revision = committed[key] else { throw WorkspaceRepositoryError.corruptIndex }
+    next.revision = revision
     return next
   }
 

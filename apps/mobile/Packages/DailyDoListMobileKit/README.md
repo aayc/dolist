@@ -252,3 +252,52 @@ cache eviction and structural/recovery UI remain separate integrations.
 
 The storage protocols are injectable. Tests use real temporary SQLite/markdown files, a scripted
 remote and injected disk/transaction failures; no real vault or daemon is accessed.
+
+## Full thread and artifact cache
+
+`WorkspaceContentCache` persists full `ThreadResponse` snapshots (messages, sources, artifact
+metadata and the last observed approvals) and authenticated artifact bytes in the same scoped
+SQLite database. Cached approvals are display-only; reading the cache never marks a thread read,
+replays a message or grants action authority. The app constructs offline agent state from these
+snapshots and separately establishes fresh connection authority before enabling actions.
+
+Before a network fetch call `beginThreadFetch` or `beginArtifactFetch`. Store the response with
+`storeThread(_:fetch:)` or `storeArtifact(_:data:mimeType:fetch:)`. Fetch tickets are persisted,
+scoped and single-use. Starting a later fetch invalidates an earlier response; committing consumes
+the ticket. Coalesce streaming checkpoints away from the main actor rather than persisting
+every token. For an authoritative thread update after reducing buffered/live stream events, use
+`beginThreadUpdate(_:replacing:)` with the current cached generation, then store the merged
+snapshot. Do not store the earlier raw network response after merging events. A rejected ticket
+means newer state/removal won, not an instruction to silently mint a replacement ticket for the
+same old response. These rules survive process termination and multiple SQLite handles.
+
+`thread`, `artifact` and `availability` distinguish absent bytes, an available snapshot and a
+previous download above the current read limit. `entries(pinnedOnly:)` enumerates cache selections
+without loading payloads.
+Every snapshot includes `fetchedAt`, a monotonic generation and a SHA-256; freshness is presentation
+information, never action permission. A cached thread lookup does not synthesize an empty thread.
+`artifact` validates the exact bytes against the digest and their descriptor. MIME types describe
+the server response, not trusted executable content; the existing preview/link policy still applies.
+The cache rejects metadata/byte-size disagreement instead of accepting a truncated download.
+
+Default ceilings are 64 MiB total, 8 MiB per thread and 5 MiB per artifact. The authenticated client
+must also enforce the network limit while streaming (`artifact(..., maxBytes:)`), before these
+bytes reach the cache. `ContentCacheLimits` can be supplied from phone preferences. Reads enforce
+the current per-item ceiling before materializing bytes, even after lowering a limit. `usage`
+counts payload, descriptor and metadata bytes; physical SQLite pages and its WAL add overhead.
+`trim` evicts least-recently-accessed unpinned entries. Metadata, bytes and fetch invalidation are
+one transaction, so an interrupted insertion or eviction cannot leave a successful empty cache.
+
+`setPinned` records a chosen download even before its bytes arrive. `availability` then reports
+missing and pinned. A pin is a cache preference, not unsynced work: it survives budget trimming but
+does not prevent explicit workspace Forget. If pins exceed a lowered budget, `usage.overBudget`
+remains true; the caller must offer unpinning or a larger budget. An insertion that cannot fit
+without evicting pins fails atomically and preserves all prior cache data. `remove` is explicit,
+clears the pin and fences any pending response. Dirty notes, immutable bases/recovery, capture
+receipts, composers and pending actions never enter this cache and cannot be its eviction victims.
+
+Schema 4 adds the content tables and nonreused workspace-value revisions. `commitValues` now returns
+the actual revisions it committed; callers must use them rather than assume a recreated key starts
+at 1. Existing revision values migrate unchanged. The revision history survives disposable-value
+eviction, preventing an old response from passing CAS after deletion/recreation. Cache payload
+failures report an unavailable/corrupt cache; repair must not alter durable note or operation state.

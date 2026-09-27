@@ -51,7 +51,8 @@ extension SQLiteWorkspaceIndex {
     }
   }
 
-  public func commitValues(_ changes: [WorkspaceValueMutation]) throws {
+  @discardableResult
+  public func commitValues(_ changes: [WorkspaceValueMutation]) throws -> [String: Int64] {
     try locked {
       guard Set(changes.map(\.key)).count == changes.count else {
         throw WorkspaceRepositoryError.corruptIndex
@@ -67,6 +68,7 @@ extension SQLiteWorkspaceIndex {
             throw WorkspaceRepositoryError.pendingNoteWrites
           }
         }
+        var revisions: [String: Int64] = [:]
         for change in changes {
           let old: WorkspaceStoredValue? = try read(
             "workspace_values", keyColumn: "key", key: change.key)
@@ -77,10 +79,14 @@ extension SQLiteWorkspaceIndex {
             (change.expectedRevision ?? 0) < Int64.max
           else { throw WorkspaceRepositoryError.corruptIndex }
           var next = change.value
-          next?.revision = (change.expectedRevision ?? 0) + 1
+          let last = try lastValueRevision(change.key)
+          guard last < Int64.max else { throw WorkspaceRepositoryError.corruptIndex }
+          next?.revision = last + 1
+          if let next { revisions[change.key] = next.revision }
           try writeStoredValue(next, key: change.key)
         }
         try execute("COMMIT")
+        return revisions
       } catch {
         try? execute("ROLLBACK")
         throw error

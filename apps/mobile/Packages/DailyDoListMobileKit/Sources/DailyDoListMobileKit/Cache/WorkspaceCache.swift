@@ -208,9 +208,10 @@ public actor WorkspaceCache {
   ) throws -> Int64 {
     let record = WorkspaceStoredValue(
       key: key, data: try JSONEncoder().encode(value), updatedAt: clock(), retention: retention)
-    try store.commitValues([
+    let committed = try store.commitValues([
       WorkspaceValueMutation(key: key, value: record, expectedRevision: revision)
     ])
-    return (revision ?? 0) + 1
+    guard let next = committed[key] else { throw WorkspaceRepositoryError.corruptIndex }
+    return next
   }
 }

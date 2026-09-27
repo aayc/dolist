@@ -130,6 +130,9 @@ extension SQLiteWorkspaceIndex: WorkspaceMaintenanceStore {
         try execute("DELETE FROM outbox")
         try execute("DELETE FROM documents")
         try execute("DELETE FROM workspace_values")
+        try execute("DELETE FROM workspace_value_revisions")
+        try execute("DELETE FROM content_cache")
+        try execute("DELETE FROM content_cache_keys")
       }
     }
   }

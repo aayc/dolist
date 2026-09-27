@@ -183,7 +183,7 @@ private final class FailingIndex: WorkspaceIndex, @unchecked Sendable {
     try wrapped.values(prefix: prefix)
   }
   func valueSummaries() throws -> [WorkspaceValueSummary] { try wrapped.valueSummaries() }
-  func commitValues(_ changes: [WorkspaceValueMutation]) throws {
+  func commitValues(_ changes: [WorkspaceValueMutation]) throws -> [String: Int64] {
     try wrapped.commitValues(changes)
   }
   func commit(

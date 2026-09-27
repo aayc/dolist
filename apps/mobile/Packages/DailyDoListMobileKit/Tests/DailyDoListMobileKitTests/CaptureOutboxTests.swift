@@ -244,7 +244,7 @@ private struct CaptureCommitFailureStore: WorkspaceStateStore {
     try wrapped.values(prefix: prefix)
   }
   func valueSummaries() throws -> [WorkspaceValueSummary] { try wrapped.valueSummaries() }
-  func commitValues(_ changes: [WorkspaceValueMutation]) throws {
+  func commitValues(_ changes: [WorkspaceValueMutation]) throws -> [String: Int64] {
     for change in changes {
       if let payload = change.value?.data,
         let capture = try? JSONDecoder().decode(QueuedCapture.self, from: payload),
@@ -253,7 +253,7 @@ private struct CaptureCommitFailureStore: WorkspaceStateStore {
         throw WorkspaceRepositoryError.storage("Injected transaction interruption")
       }
     }
-    try wrapped.commitValues(changes)
+    return try wrapped.commitValues(changes)
   }
 }
 

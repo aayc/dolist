@@ -103,22 +103,22 @@ public actor MobileAgentMutationJournal: AgentMutationJournal {
     else { throw AgentMutationError.corruptJournal }
     var record = Record(
       scope: scope, intent: PendingAgentMutation(id: id, command: command, createdAt: clock()))
-    try prepare(record)
+    let preparedRevision = try prepare(record)
     inFlight.insert(id)
     defer { inFlight.remove(id) }
     guard await authorize() else {
       record.notDispatched = true
-      try write(record, replacing: 1)
+      try write(record, replacing: preparedRevision)
       throw AgentMutationError.authorizationChanged
     }
     // Re-read after the main actor hop: namespace retirement fences a prepared action too.
-    guard try store.value(Self.prefix + id)?.revision == 1 else {
+    guard try store.value(Self.prefix + id)?.revision == preparedRevision else {
       throw WorkspaceRepositoryError.concurrentWrite
     }
     do {
       let result = try await remote.send(command, operationID: id)
       record.result = result
-      try write(record, replacing: 1)
+      try write(record, replacing: preparedRevision)
       return result
     } catch {
       // The prepared record already preserves an unknown outcome. Even cancellation may mean
@@ -203,7 +203,7 @@ public actor MobileAgentMutationJournal: AgentMutationJournal {
     try store.commitValues(changes)
   }
 
-  private func prepare(_ record: Record) throws {
+  private func prepare(_ record: Record) throws -> Int64 {
     let key = Self.prefix + record.intent.id
     var changes = [
       WorkspaceValueMutation(
@@ -231,6 +231,10 @@ public actor MobileAgentMutationJournal: AgentMutationJournal {
     }
     // The slot and intent share the SQLite transaction: two live handles cannot both prepare
     // replacement IDs for the same unresolved action.
-    try store.commitValues(changes)
+    let committed = try store.commitValues(changes)
+    guard let revision = committed[Self.prefix + record.intent.id] else {
+      throw WorkspaceRepositoryError.corruptIndex
+    }
+    return revision
   }
 }
