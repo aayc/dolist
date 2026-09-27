@@ -237,9 +237,9 @@ export async function createSync(options: {
       primary: options.primary,
       target,
       logger,
-      // Machine-local data never leaves this machine: the agent's scratch data, and the import
-      // manifest (it names a folder on this machine).
-      exclude: [".daily-do-list/state/tasks", IMPORT_DIR],
+      // A leased agent carries task identities to its next host. Folder sync has no lease,
+      // so its trackers remain device-local. Import manifests always name local folders.
+      exclude: [IMPORT_DIR, ...(fenced ? [] : [".daily-do-list/state/tasks"])],
       ...(fenced ? { fence: { covers: isAgentOwnedPath, epoch: leaseEpoch } } : {}),
     }),
     target,
