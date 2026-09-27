@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { mergeDrawingElements, mergeDrawingFiles, newerDrawingElement } from "./merge";
+import {
+  mergeDrawingAppState,
+  mergeDrawingElements,
+  mergeDrawingFiles,
+  newerDrawingElement,
+} from "./merge";
 import type { DrawingElement } from "./types";
 
 function el(id: string, version: number, extra: Partial<DrawingElement> = {}): DrawingElement {
@@ -103,5 +108,64 @@ describe("mergeDrawingElements: base, local and remote", () => {
       two: file("two", "data:2"),
       three: file("three", "data:3"),
     });
+  });
+});
+
+describe("mergeDrawingAppState", () => {
+  it("keeps offline background/grid edits and disjoint remote settings, ignoring JSON key order", () => {
+    const base = {
+      viewBackgroundColor: "#ffffff",
+      gridSize: null,
+      theme: "light" as const,
+      custom: { a: 1, b: [true, null] },
+    };
+    const local = {
+      ...base,
+      viewBackgroundColor: "#fff9db",
+      gridSize: 20,
+      custom: { offline: true },
+    };
+    const remote = {
+      ...base,
+      theme: "dark" as const,
+      custom: { b: [true, null], a: 1 },
+      remoteOnly: 7,
+    };
+    expect(mergeDrawingAppState(base, local, remote)).toEqual({
+      ...local,
+      theme: "dark",
+      remoteOnly: 7,
+    });
+    expect(mergeDrawingAppState(base, local, base)).toEqual(local);
+  });
+
+  it("uses the remote value for concurrent edits and treats deletion differently from null", () => {
+    const base = {
+      viewBackgroundColor: "#ffffff",
+      gridSize: 20,
+      localRemoved: true,
+      remoteRemoved: true,
+      nullValue: null,
+    };
+    const local = {
+      viewBackgroundColor: "#fff9db",
+      gridSize: 30,
+      remoteRemoved: false,
+      nullValue: null,
+    };
+    const remote = {
+      viewBackgroundColor: "#000000",
+      gridSize: null,
+      localRemoved: true,
+      nullValue: null,
+    };
+    expect(mergeDrawingAppState(base, local, remote)).toEqual({
+      viewBackgroundColor: "#000000",
+      gridSize: null,
+      nullValue: null,
+    });
+    expect(
+      mergeDrawingAppState(undefined, { gridSize: 20, localOnly: true }, { gridSize: 30 }),
+    ).toEqual({ gridSize: 30, localOnly: true });
   });
 });

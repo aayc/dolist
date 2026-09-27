@@ -87,14 +87,71 @@ struct SceneMergeTests {
     #expect(Self.ids(unindexed) == ["a", "mine", "b", "c"])
   }
 
-  @Test func takesTheirSceneFieldsAndBothSidesFiles() {
+  @Test func takesTheirSceneFieldsAndBothSidesFiles() throws {
     var local = ExcalidrawScene(elements: [])
     local.files = .object(JSONObject([("mine", .string("data:1"))]))
-    var remote = ExcalidrawScene(
-      elements: [], appState: JSONObject([("viewBackgroundColor", .string("#fff9db"))]))
+    var remote = try SceneCodec.decode(
+      ##"{"type":"excalidraw","version":2,"elements":[],"appState":{"viewBackgroundColor":"#fff9db"},"files":{},"futureTopLevel":{"revision":2}}"##
+    )
     remote.files = .object(JSONObject([("theirs", .string("data:2"))]))
     let merged = SceneMerge.merge(base: nil, local: local, remote: remote)
     #expect(merged.viewBackgroundColor == "#fff9db")
     #expect(merged.files.objectValue?.keys == ["theirs", "mine"])
+    #expect(
+      SceneCodec.encodeObject(merged)["futureTopLevel"]
+        == SceneCodec.encodeObject(remote)["futureTopLevel"])
+  }
+
+  @Test func keepsOfflineBackgroundAndGridWithDisjointRemoteSettings() {
+    var base = ExcalidrawScene()
+    base.appState["theme"] = .string("light")
+    base.appState["custom"] = .object(
+      JSONObject([("a", .number(1)), ("b", .array([.bool(true), .null]))]))
+    var local = base
+    local.appState["viewBackgroundColor"] = .string("#fff9db")
+    local.appState["gridSize"] = .number(20)
+    local.appState["custom"] = .object(JSONObject([("offline", .bool(true))]))
+    var remote = base
+    remote.appState["theme"] = .string("dark")
+    remote.appState["custom"] = .object(
+      JSONObject([("b", .array([.bool(true), .null])), ("a", .number(1))]))
+    remote.appState["remoteOnly"] = .number(7)
+    let merged = SceneMerge.merge(base: base, local: local, remote: remote)
+    #expect(merged.viewBackgroundColor == "#fff9db")
+    #expect(merged.appState["gridSize"] == .number(20))
+    #expect(merged.appState["theme"] == .string("dark"))
+    #expect(merged.appState["custom"] == local.appState["custom"])
+    #expect(merged.appState["remoteOnly"] == .number(7))
+    #expect(SceneMerge.merge(base: base, local: local, remote: base).appState == local.appState)
+  }
+
+  @Test func remoteSettingsWinConflictsAndDeletionIsDifferentFromNull() {
+    let base = ExcalidrawScene(
+      appState: JSONObject([
+        ("viewBackgroundColor", .string("#ffffff")), ("gridSize", .number(20)),
+        ("localRemoved", .bool(true)), ("remoteRemoved", .bool(true)), ("nullValue", .null),
+      ]))
+    let local = ExcalidrawScene(
+      appState: JSONObject([
+        ("viewBackgroundColor", .string("#fff9db")), ("gridSize", .number(30)),
+        ("remoteRemoved", .bool(false)), ("nullValue", .null),
+      ]))
+    let remote = ExcalidrawScene(
+      appState: JSONObject([
+        ("viewBackgroundColor", .string("#000000")), ("gridSize", .null),
+        ("localRemoved", .bool(true)), ("nullValue", .null),
+      ]))
+    let merged = SceneMerge.merge(base: base, local: local, remote: remote)
+    #expect(merged.viewBackgroundColor == "#000000")
+    #expect(merged.appState["gridSize"] == .null)
+    #expect(!merged.appState.contains("localRemoved"))
+    #expect(!merged.appState.contains("remoteRemoved"))
+    #expect(merged.appState["nullValue"] == .null)
+    let freshLocal = ExcalidrawScene(
+      appState: JSONObject([("gridSize", .number(20)), ("localOnly", .bool(true))]))
+    let freshRemote = ExcalidrawScene(appState: JSONObject([("gridSize", .number(30))]))
+    let fresh = SceneMerge.merge(base: nil, local: freshLocal, remote: freshRemote)
+    #expect(fresh.appState["gridSize"] == .number(30))
+    #expect(fresh.appState["localOnly"] == .bool(true))
   }
 }

@@ -135,7 +135,7 @@ canvas.background = .transparent                        // or .scene (default), 
 canvas.showsToolbar = false                             // place the tool bar yourself:
 host.addSubview(canvas.makeToolbarView())               // it follows the canvas's editor
 
-// A save that found the file changed elsewhere: both sides' work, element by element.
+// A save that found the file changed elsewhere: elements and per-key scene settings.
 let merged = SceneMerge.merge(base: sceneAsRead, local: canvas.scene, remote: theirs.scene)
 
 // Inline previews, cached by content hash:
@@ -336,3 +336,9 @@ flushes UIKit marked/text input and commits the visible pointer position before 
 The shared editor exposes the same activity state and explicit `commitInteraction()`; existing
 Mac `finishInteraction()` behavior remains available. Focused text/history/interaction tests and
 unsigned iOS compilation cover this checkpoint; integrated runtime checks remain with the app.
+
+`SceneMerge` compares each top-level `appState` key against the saved base. Local-only changes
+(including background, grid settings and removed keys) survive; a concurrent remote change wins
+that key. Missing keys differ from JSON null, and object key reordering is not a change. Nested
+values merge as whole values. Unknown scene fields and embedded-file merge behavior are preserved.
+The pure TypeScript reference is `mergeDrawingAppState` in `@ddl/core`.
