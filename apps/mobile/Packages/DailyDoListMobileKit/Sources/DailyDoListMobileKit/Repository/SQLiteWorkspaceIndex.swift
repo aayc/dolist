@@ -39,7 +39,7 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
         guard sqlite3_step(statement) == SQLITE_ROW else { throw failure() }
         return Int(sqlite3_column_int(statement, 0))
       }
-      guard (0...5).contains(version) else {
+      guard (0...6).contains(version) else {
         throw WorkspaceRepositoryError.unsupportedIndexVersion(version)
       }
       try execute("BEGIN IMMEDIATE")
@@ -72,9 +72,8 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
       try createContentCacheSchema()
       try createDocumentHistorySchema()
       try createStorageControlSchema()
-      // Version 5 keeps document revisions after eviction and coordinates file reclamation.
-      // Older writers must not publish checkpoints without the filesystem access barrier.
-      try execute("PRAGMA user_version=5")
+      // Version 6 prevents older writers from ignoring attachment upload dependencies.
+      try execute("PRAGMA user_version=6")
       try execute("COMMIT")
       #if os(iOS)
         for suffix in ["", "-wal", "-shm"] {
@@ -135,6 +134,7 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
                 drawing.state == .synced || drawing.state == .waitingToSync
               else { throw WorkspaceRepositoryError.pendingDrawingDependencies }
             }
+            try requireAcknowledgedAttachments(attempt.requiredAttachments ?? [])
             let blocked: String? = try statement(
               "SELECT key FROM workspace_values WHERE blocks_note_writes=1 LIMIT 1"
             ) { statement in

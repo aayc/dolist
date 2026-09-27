@@ -24,6 +24,9 @@ public struct WorkspaceValueMutation: Sendable {
   public var expectedRevision: Int64?
   /// Capture preparation and note-attempt preparation share the same SQLite write lock.
   public var requiresIdleNoteWrites: Bool = false
+  /// New attachment creates also wait for capture/structural barriers in the same transaction.
+  public var requiresIdleCaptureWrites: Bool = false
+  public var requiresNoStructuralChange: Bool = false
 }
 
 /// Lightweight budget/index metadata; listing it never decodes large thread/capture payloads.

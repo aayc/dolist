@@ -86,7 +86,8 @@ public struct DocumentDownloadTicket: Sendable {
 }
 
 public enum CachedDocumentProtection: String, Hashable, Sendable {
-  case unsynced, recovery, pendingWrite, drawingDependency, structuralOperation, pinned,
+  case unsynced, recovery, pendingWrite, drawingDependency, attachmentDependency,
+    structuralOperation, pinned,
     activeEditor
 }
 
