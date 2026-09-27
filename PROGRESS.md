@@ -117,7 +117,8 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
   wires durable action IDs into AgentCore. `codex/iphone-repository` supplied offline caches,
   structural transactions and recovery/export/forget, and now owns durable drawings.
   `codex/iphone-drawing` supplied the canvas, embedded images/arrangement and is finishing the
-  complete settings/host UI before taking the UIKit Vim host. The integrator owns composition,
+  complete settings/host UI and now owns remaining drawing parity. The user explicitly excluded
+  iPhone Vim; its isolated unfinished work is not integrated. The integrator owns composition,
   notes navigation/content, platform integration, CI and thorough CUA.
 - Foundation CI and macOS workflows passed on `a972928`. Local `pnpm check`, signed simulator
   suite (59 tests), MobileKit and physical iPhone SDK build passed at the composition checkpoint.
@@ -265,6 +266,8 @@ Native iPhone implementation is authorized and continues separately, including s
   several days. Continue autonomously until the full app is implemented, tested and thoroughly
   checked through computer-use. Preserve this instruction across compaction. Use the free-account
   baseline; never claim physical-device or paid-entitlement checks were run when unavailable.
+  **Later scope decision:** do not implement Vim on iPhone at all. No phone Vim mode, settings,
+  vimrc or acceptance work; preserve existing Mac/web Vim.
   Plan: `apps/mobile/PLAN.md`; execution/evidence ledger: `apps/mobile/IMPLEMENTATION.md`.
 
 ## How the parallel work runs
