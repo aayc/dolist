@@ -147,6 +147,32 @@ makes the names read-only in Settings.)
 The agent's browser on the machine starts signed in to nothing. Sign it in only to accounts made or
 set aside for the agent, so that a mistake lands there and not on your own accounts.
 
+### Reusing a machine and an existing vault
+
+Inventory systemd services, containers and restart policies, cron jobs, listening ports and
+`tailscale serve status` before replacing another workload. Keep a private rollback copy of its
+configuration and data, then stop and disable its services and container restarts. Keep the
+machine's existing Tailscale identity; replace only the retired Serve routes. Verify tailnet SSH
+works before closing public inbound ports.
+
+Keep `/var/lib/ddl` on a persistent disk. On Azure, `/mnt` can be the temporary resource disk:
+mount a managed data disk by UUID somewhere independent, such as `/srv/ddl-data`, and bind its
+`dolist` directory to `/var/lib/ddl`. Nesting it below `/mnt` can create a boot-order cycle with
+cloud-init. Add `RequiresMountsFor=/var/lib/ddl` in a `[Unit]` drop-in for **both** dolist services,
+so an unavailable data disk cannot silently create a second, empty state directory.
+
+Pause both agents while first connecting an existing vault. Back up the laptop's vault and private
+configuration, configure sync, and let both copies settle before pairing and selecting Remote.
+Review any initial settings conflict, keeping the intended model, approval policy and always-on
+machine address. Confirm sync is idle without conflicts, then enable the agent.
+
+Verify the cutover through the actual client: compare a local and remote `uname -s`, navigate a
+public page with the browser, retrieve an artifact, and accept and deny harmless test approvals.
+Stop the host's daemon and confirm the client reports it unavailable without silently executing
+locally. Queue a synthetic task during that outage, reboot, and verify automatic mount/service
+startup, reconnection and one execution of the queued task. Recheck that retired services stayed
+off. Shell and headless-browser work are supported on Linux; macOS app control is not.
+
 ## Where things are
 
 | Path | What |

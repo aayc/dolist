@@ -68,6 +68,13 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
 
 ## In flight
 
+- Remote Linux cutover: reuse the existing 2-vCPU, 8-GiB Azure VM. Its retired services are
+  disabled, the tailnet identity is preserved, and the paired Mac has verified remote shell,
+  browser, approvals, artifacts and recovery after reboot. A persistent-disk mount-order issue
+  found by the reboot test is fixed. Live handover testing found task identities were excluded
+  from sync, repeating completed unchecked tasks; fix `09e13dc` is pushed on
+  `codex/remote-handoff-state`. Its regression, relay tests and `pnpm check` pass; CI, deployment
+  to both machines and the final real handover retest are next. The agents are paused meanwhile.
 - Full native iPhone app: `codex/iphone-app`, based on the completed Mac setup baseline.
   Foundation/toolchain and reusable editor extraction are first. The complete scope, durable
   user instruction, next actions and test evidence live in `apps/mobile/IMPLEMENTATION.md`.
@@ -122,12 +129,6 @@ Native iPhone implementation is authorized and continues separately, including s
 
 ## Next up
 
-- **The Azure VM** (the user's next step): the user runs `az login` and saves the Tailscale auth key
-  file themselves (credentials never go in the chat or the repo). Check `Standard_D4ps_v6`
-  availability, show cost and resources, create them, run `setup.sh`, pair, and verify what only the
-  real VM can: the `az` commands, the Tailscale login, and that `tailscale serve` keeps the original
-  `Host` (the daemon refuses loopback-Host requests with proxy forwarding headers). Guides:
-  `deploy/azure/README.md`, `deploy/linux/README.md`; design `docs/ALWAYS_ON.md`.
 - **CI triggers** (the user, in repo settings): turn Actions (or each workflow) off and on, push
   once, check `gh run list --event push`; else GitHub Support. Until then, dispatch by hand.
 - **B0 binary files** (attachment sync, file serving) and **P rendering parity** (images on the
@@ -179,9 +180,11 @@ Native iPhone implementation is authorized and continues separately, including s
   agent's files; a former holder's stale agent changes are dropped (never a conflict copy);
   `settings.json` isn't an agent file; every device must run a fencing daemon (`docs/SYNC.md`).
   Journaling is not Temporal; threads are journal-only now.
-- **The Azure VM:** public IP with every inbound port closed; under $120/month: `Standard_D4ps_v6`
-  (Cobalt 100 ARM, 4 vCPU, 16 GB, ~$102) + 64 GB premium SSD (~$10) + static IP (~$4); x86
-  alternatives `Standard_B4as_v2` or `Standard_D2as_v5`.
+- **The Azure VM:** reuse the existing x64 `Standard_D2s_v3` (2 vCPU, 8 GiB) in the second
+  Visual Studio subscription, superseding the new ARM VM plan. Preserve its Tailscale identity
+  and old application data while retiring those services; every public inbound port stays
+  closed. The user approved transferring the existing model credential over SSH to the service's
+  private environment file. The first subscription's backup storage stays as it is.
 - **Routines:** one markdown file per routine in `Routines/`, each run a chat thread with
   notifications (always, when changed, never); approvals follow the global policy; "Repeat this"
   takes the user's schedule; a missed run catches up once; Run now has a daily budget; starter

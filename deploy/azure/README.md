@@ -12,6 +12,12 @@ Daily Do List never manages Azure itself: you create, stop and delete the VM, he
 portal. Everything below uses placeholders (`<resource-group>`, `<vm-name>`, …); keep your real
 names, keys and IDs out of any repository.
 
+An existing VM can also run the [Linux setup kit](../linux/README.md#reusing-a-machine-and-an-existing-vault).
+Inventory both its subscription's resources and its current workloads first. A lightly used x64 VM
+with 2 vCPUs and 8 GiB can be reused without creating or resizing a machine: build the x64 bundle,
+preserve its tailnet identity, retire the old services, and verify recovery after a reboot. The
+creation and cloud-init steps below are for a new VM; do not reapply them to an existing host.
+
 ## What you need
 
 - The [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), signed in
