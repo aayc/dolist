@@ -31,7 +31,13 @@ extension PhoneWorkspace {
       editor.finishComposition()
       editor.setStructureLocked(true)
     }
+    let canvases = drawingSessions.values.filter { action.affects($0.drawing.path) }
+    for canvas in canvases {
+      canvas.controller.finishEditing()
+      canvas.controller.isEditing = false
+    }
     defer {
+      for canvas in canvases { canvas.controller.isEditing = canvas.drawing.canEdit }
       structuralBusy = false
       for editor in editors { editor.setStructureLocked(false) }
     }
@@ -76,6 +82,23 @@ extension PhoneWorkspace {
             tabs.close(path)
             tabs.purge(path)
             if active?.note.path == path { active = nil }
+          }
+        }
+        for path in Array(drawingSessions.keys) where action.affects(path) {
+          guard let session = drawingSessions[path] else { continue }
+          if let destination = action.remappedPath(path),
+            let saved = try await drawingRepository.drawing(destination)
+          {
+            drawingSessions[path] = nil
+            drawingSessions[destination] = session
+            session.retarget(saved)
+          } else if let retained = try await drawingRepository.drawing(path) {
+            session.adoptRecovery(retained)
+          } else {
+            drawingSessions[path] = nil
+            tabs.close(path)
+            tabs.purge(path)
+            if activeDrawing?.drawing.path == path { activeDrawing = nil }
           }
         }
         if let destination = action.destination {

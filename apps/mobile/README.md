@@ -54,7 +54,8 @@ restart/merge checks. No developer account, real vault, real model or installed 
 - `DailyDoListMobileEditor`: UIKit input/layout adapter. Mac uses the same extracted parser and
   retains its existing AppKit adapter/tests. Public editor values remain re-exported by the Mac
   editor module for source compatibility.
-- Models, Client, Domain, Vim and DrawingModel remain the existing shared Swift products.
+- Models, Client, Domain and DrawingModel remain the existing shared Swift products. The phone
+  has no Vim mode or Vim settings; desktop Vim remains unchanged.
 
 Use synthetic content for simulator/computer-use tests. Never connect test code to a real vault
 or launch/stop the installed Mac app's daemon. See [AGENTS.md](../../AGENTS.md) and the execution

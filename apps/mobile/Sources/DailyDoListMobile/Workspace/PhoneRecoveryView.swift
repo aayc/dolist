@@ -6,6 +6,7 @@ import UIKit
 struct PhoneRecoveryView: View {
   let workspace: PhoneWorkspace
   @State private var notes: [LocalNote] = []
+  @State private var drawings: [LocalDrawing] = []
   @State private var exporting = false
   @State private var exported: RecoveryExportResult?
   @State private var showExport = false
@@ -18,6 +19,14 @@ struct PhoneRecoveryView: View {
           NavigationLink(note.path) { PhoneNoteRecoveryView(workspace: workspace, path: note.path) }
         }
         if notes.isEmpty { Text("No note conflicts").foregroundStyle(.secondary) }
+      }
+      Section("Local drawings needing review") {
+        ForEach(drawings, id: \.path) { drawing in
+          NavigationLink(drawing.path) {
+            PhoneDrawingRecoveryView(workspace: workspace, path: drawing.path)
+          }
+        }
+        if drawings.isEmpty { Text("No drawing conflicts").foregroundStyle(.secondary) }
       }
       Section("Moves and deletions") {
         ForEach(workspace.structuralOperations) { operation in
@@ -74,6 +83,9 @@ struct PhoneRecoveryView: View {
     .task {
       do {
         notes = try await workspace.repository.notes().filter {
+          $0.state == .needsReview || $0.state == .recoveryDraft
+        }
+        drawings = try await workspace.drawingRepository.drawings().filter {
           $0.state == .needsReview || $0.state == .recoveryDraft
         }
       } catch { failure = error.localizedDescription }

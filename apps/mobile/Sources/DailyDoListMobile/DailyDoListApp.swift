@@ -9,6 +9,8 @@ struct DailyDoListApp: App {
       #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--editor-spike") {
           EditorSpikeView()
+        } else if ProcessInfo.processInfo.arguments.contains("--drawing-spike") {
+          DrawingSpikeView()
         } else {
           PhoneRootView(model: model)
         }

@@ -18,7 +18,7 @@ struct PhoneNoteNavigation: View {
           Button(path) { Task { await workspace.open(path) } }
         }
         Divider()
-        if let path = workspace.active?.note.path {
+        if let path = workspace.activePath {
           Button("Close current note", systemImage: "xmark") {
             Task { await workspace.closeNote(path) }
           }

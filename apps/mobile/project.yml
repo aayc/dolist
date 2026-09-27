@@ -71,10 +71,12 @@ targets:
         product: DailyDoListMobileAgent
       - package: DailyDoListDrawing
         product: DailyDoListDrawingModel
+      - package: DailyDoListDrawing
+        product: DailyDoListMobileDrawing
   DailyDoListTests:
     type: bundle.unit-test
     platform: iOS
-    sources: [Tests, Packages/DailyDoListMobileKit/Tests/DailyDoListMobileKitTests, Packages/DailyDoListMobileSettings/Tests/DailyDoListMobileSettingsTests]
+    sources: [Tests, Packages/DailyDoListMobileKit/Tests/DailyDoListMobileKitTests, Packages/DailyDoListMobileSettings/Tests/DailyDoListMobileSettingsTests, ../macos/Packages/DailyDoListDrawing/Tests/DailyDoListMobileDrawingTests]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.dailydolist.iphone.tests

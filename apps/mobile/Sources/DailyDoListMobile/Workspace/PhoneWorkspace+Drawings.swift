@@ -1,0 +1,117 @@
+import DailyDoListDomain
+import DailyDoListDrawingModel
+import DailyDoListMobileKit
+import DailyDoListModels
+import Foundation
+import UIKit
+
+extension PhoneWorkspace {
+  func openDrawing(_ requested: String, newTab: Bool = false, recordHistory: Bool = true) async {
+    let path = requested.hasSuffix(".md") ? requested : requested + ".md"
+    navigation &+= 1
+    let request = navigation
+    do {
+      await checkpointAll(finishComposition: true)
+      guard request == navigation else { return }
+      if let cached = try await drawingRepository.drawing(path) {
+        guard request == navigation else { return }
+        showDrawing(cached)
+      }
+      if let remote, online {
+        await refreshDrawing(path, remote: remote)
+        guard request == navigation else { return }
+        if let cached = try await drawingRepository.drawing(path) {
+          guard request == navigation else { return }
+          showDrawing(cached)
+        }
+      }
+      guard activeDrawing?.drawing.path == path else {
+        error = "This drawing has not been downloaded to this iPhone yet."
+        return
+      }
+      tabs.place(path, newTab: newTab, recordHistory: recordHistory)
+      selectedTab = 0
+    } catch { if request == navigation { self.error = error.localizedDescription } }
+  }
+
+  func createDrawing(_ requested: String) async {
+    guard !structuralBusy else { return }
+    do {
+      let requested = try VaultPath.validated(requested)
+      let components = requested.split(separator: "/")
+      let path = DrawingFileName.path(
+        forName: components.last.map(String.init) ?? "Drawing",
+        folder: components.dropLast().joined(separator: "/"))
+      let drawing = try await drawingRepository.create(path: path)
+      includeLocalDrawings([drawing])
+      showDrawing(drawing)
+      tabs.place(path)
+      selectedTab = 0
+      await synchronize()
+    } catch { self.error = error.localizedDescription }
+  }
+
+  func refreshDrawing(_ path: String, remote: HTTPWorkspaceRemote) async {
+    let epoch = generation
+    do {
+      let existing = drawingSessions[path]
+      await existing?.checkpoint()
+      let drawing = try await drawingRepository.refresh(path: path, with: remote)
+      guard epoch == generation else { return }
+      if let drawing {
+        await existing?.adopt(drawing)
+      } else if let existing,
+        existing.hasUncheckpointedEdits || existing.controller.hasActiveInteraction
+      {
+        existing.controller.finishEditing()
+        let recovery = try await drawingRepository.createRecoveryDraft(
+          path: path, scene: existing.controller.scene, previous: existing.drawing.document)
+        existing.adoptRecovery(recovery)
+      } else {
+        drawingSessions[path] = nil
+        if activeDrawing?.drawing.path == path {
+          activeDrawing = nil
+          error = "This drawing was removed on the host."
+        }
+      }
+    } catch { if epoch == generation { self.error = error.localizedDescription } }
+  }
+
+  func showDrawing(_ drawing: LocalDrawing) {
+    active = nil
+    if let session = drawingSessions[drawing.path] {
+      activeDrawing = session
+      return
+    }
+    let session = DrawingSession(drawing: drawing, repository: drawingRepository)
+    session.onCheckpoint = { [weak self] in Task { await self?.synchronize() } }
+    session.controller.onOpenLink = { [weak self] link in
+      guard let self else { return }
+      if link.hasPrefix("[["), link.hasSuffix("]]") {
+        let target = String(link.dropFirst(2).dropLast(2))
+        if let path = WikiLinks.resolve(
+          target.components(separatedBy: "#")[0], in: self.entries.map(\.path))
+        {
+          Task { await self.open(path) }
+        }
+      } else if let url = URL(string: link), LinkPolicy.isAllowed(url) {
+        UIApplication.shared.open(url)
+      } else {
+        self.error = "This link cannot be opened safely."
+      }
+    }
+    session.controller.elementLink = { [weak session] elementID in
+      session.map { "[[\($0.drawing.path)#^\(elementID)]]" }
+    }
+    drawingSessions[drawing.path] = session
+    activeDrawing = session
+  }
+
+  func includeLocalDrawings(_ drawings: [LocalDrawing]) {
+    let known = Set(entries.map(\.path))
+    entries += drawings.filter { !known.contains($0.path) }.map {
+      VaultEntry(path: $0.path, kind: .file, version: $0.baseVersion)
+    }
+    entries.sort { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+  }
+}

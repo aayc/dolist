@@ -1,6 +1,7 @@
 import DailyDoListAgentCore
 import DailyDoListClient
 import DailyDoListDomain
+import DailyDoListDrawingModel
 import DailyDoListEditorCore
 import DailyDoListMobileKit
 import DailyDoListModels
@@ -18,6 +19,10 @@ final class PhoneWorkspace {
   var structuralBusy = false
   let profile: ConnectionProfile
   let repository: WorkspaceRepository
+  let drawingRepository: DrawingRepository
+  var activeDrawing: DrawingSession?
+  var activePath: String? { activeDrawing?.drawing.path ?? active?.note.path }
+  @ObservationIgnored var drawingSessions: [String: DrawingSession] = [:]
   let cache: WorkspaceCache
   let composerDrafts: PhoneComposerDrafts
   let captureOutbox: CaptureOutbox
@@ -41,7 +46,8 @@ final class PhoneWorkspace {
 
   init(
     rootDirectory: URL, structural: WorkspaceStructuralCoordinator, recovery: WorkspaceRecovery,
-    profile: ConnectionProfile, repository: WorkspaceRepository, cache: WorkspaceCache,
+    profile: ConnectionProfile, repository: WorkspaceRepository,
+    drawingRepository: DrawingRepository, cache: WorkspaceCache,
     captureOutbox: CaptureOutbox
   ) {
     self.rootDirectory = rootDirectory
@@ -49,6 +55,7 @@ final class PhoneWorkspace {
     self.recovery = recovery
     self.profile = profile
     self.repository = repository
+    self.drawingRepository = drawingRepository
     self.cache = cache
     self.composerDrafts = PhoneComposerDrafts(cache: cache)
     self.captureOutbox = captureOutbox
@@ -61,7 +68,8 @@ final class PhoneWorkspace {
       let cached = try await repository.notes()
       entries = try await cache.tree()?.value.entries ?? []
       includeLocalNotes(cached)
-      if active == nil, let first = cached.first {
+      includeLocalDrawings(try await drawingRepository.drawings())
+      if active == nil, activeDrawing == nil, let first = cached.first {
         show(first)
         tabs.place(first.path)
       }
@@ -102,7 +110,7 @@ final class PhoneWorkspace {
       await refreshTree()
       guard epoch == generation, online else { return }
       error = nil
-      if active == nil { await openToday() }
+      if active == nil && activeDrawing == nil { await openToday() }
       await synchronize()
       guard epoch == generation, online else { return }
       await agent?.refresh()
@@ -114,6 +122,7 @@ final class PhoneWorkspace {
 
   func suspend() async {
     invalidateAuthority()
+    await drawingRepository.invalidateConnection()
     await structural.invalidateConnection()
     await repository.invalidateConnection()
     await captureOutbox.invalidateConnection()
@@ -135,6 +144,10 @@ final class PhoneWorkspace {
   }
 
   func checkpointAll(finishComposition: Bool = false) async {
+    for session in Array(drawingSessions.values) {
+      if finishComposition { session.controller.finishEditing() }
+      await session.checkpoint()
+    }
     for session in Array(sessions.values) {
       if finishComposition { session.finishComposition() }
       await session.checkpoint()
@@ -149,6 +162,13 @@ final class PhoneWorkspace {
     async
   {
     guard !structuralBusy else { return }
+    if DrawingEmbed.isDrawingTarget(path) {
+      await openDrawing(path, newTab: newTab, recordHistory: recordHistory)
+      return
+    }
+    activeDrawing?.controller.finishEditing()
+    await activeDrawing?.checkpoint()
+    activeDrawing = nil
     navigation &+= 1
     let request = navigation
     do {
@@ -201,6 +221,7 @@ final class PhoneWorkspace {
       guard epoch == generation else { return }
       entries = tree.entries
       includeLocalNotes(try await repository.notes())
+      includeLocalDrawings(try await drawingRepository.drawings())
     } catch WorkspaceRepositoryError.concurrentWrite {
       // A newer fetch/event already won. Its snapshot is the one to display.
     } catch { if epoch == generation { self.error = error.localizedDescription } }
@@ -214,6 +235,8 @@ final class PhoneWorkspace {
       default:
         invalidateAuthority()
         Task {
+          await drawingRepository.invalidateConnection()
+          await structural.invalidateConnection()
           await repository.invalidateConnection()
           await captureOutbox.invalidateConnection()
         }
@@ -225,7 +248,11 @@ final class PhoneWorkspace {
     Task {
       for change in event.changes {
         guard epoch == generation else { return }
-        if sessions[change.path] != nil { await refresh(change.path, remote: remote) }
+        if drawingSessions[change.path] != nil {
+          await refreshDrawing(change.path, remote: remote)
+        } else if sessions[change.path] != nil {
+          await refresh(change.path, remote: remote)
+        }
       }
       guard epoch == generation else { return }
       await refreshTree()
@@ -281,6 +308,9 @@ final class PhoneWorkspace {
   }
 
   func syncNotes(_ remote: HTTPWorkspaceRemote, epoch: UInt64) async throws {
+    let drawings = try await drawingRepository.synchronize(with: remote)
+    guard epoch == generation else { return }
+    for drawing in drawings { await drawingSessions[drawing.path]?.adopt(drawing) }
     let changed = try await repository.synchronize(with: remote)
     guard epoch == generation else { return }
     for note in changed { await sessions[note.path]?.adopt(note) }
@@ -338,6 +368,7 @@ final class PhoneWorkspace {
   }
 
   func show(_ note: LocalNote) {
+    activeDrawing = nil
     let session = NoteSession(note: note, repository: repository)
     session.onCheckpoint = { [weak self] in Task { await self?.synchronize() } }
     configureEditor(session)

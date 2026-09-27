@@ -1,4 +1,5 @@
 import DailyDoListMobileAgent
+import DailyDoListMobileDrawing
 import DailyDoListMobileEditor
 import DailyDoListMobileKit
 import DailyDoListMobileSettings
@@ -15,7 +16,9 @@ struct PhoneWorkspaceView: View {
     TabView(selection: $workspace.selectedTab) {
       NavigationStack {
         Group {
-          if let session = workspace.active {
+          if let drawing = workspace.activeDrawing {
+            PhoneDrawingView(session: drawing)
+          } else if let session = workspace.active {
             PhoneNoteView(session: session)
           } else {
             ContentUnavailableView(
@@ -23,7 +26,7 @@ struct PhoneWorkspaceView: View {
               description: Text("Choose a downloaded note or open Today."))
           }
         }
-        .navigationTitle(workspace.active?.note.path.components(separatedBy: "/").last ?? "Today")
+        .navigationTitle(workspace.activePath?.components(separatedBy: "/").last ?? "Today")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
           ToolbarItem(placement: .topBarLeading) {

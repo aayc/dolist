@@ -13,8 +13,15 @@ extension PhoneWorkspace {
   }
 
   func closeNote(_ path: String) async {
+    drawingSessions[path]?.controller.finishEditing()
+    await drawingSessions[path]?.checkpoint()
     await sessions[path]?.checkpoint()
-    if let next = tabs.close(path) { await open(next, recordHistory: false) } else { active = nil }
+    if let next = tabs.close(path) {
+      await open(next, recordHistory: false)
+    } else {
+      active = nil
+      activeDrawing = nil
+    }
   }
 
   func reopenNote() async {
@@ -103,7 +110,7 @@ extension PhoneWorkspace {
   func openAdjacentDaily(_ direction: DailyNotes.Direction) async {
     guard let settings else { return }
     let date = DailyNotes.navigationAnchor(
-      activePath: active?.note.path, settings: settings.dailyNotes)
+      activePath: activePath, settings: settings.dailyNotes)
     if let target = DailyNotes.adjacent(
       paths: entries.map(\.path), from: date, direction: direction, settings: settings.dailyNotes)
     {

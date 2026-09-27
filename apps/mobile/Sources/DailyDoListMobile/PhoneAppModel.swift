@@ -111,9 +111,10 @@ final class PhoneAppModel {
     let scope = WorkspaceScope(
       profileID: profile.id, workspaceID: workspaceID, hostID: hostID, origin: profile.origin)
     let root = root.appendingPathComponent("workspaces")
-    let (repository, cache, captures, structural, recovery) = try await Task.detached {
+    let (repository, drawings, cache, captures, structural, recovery) = try await Task.detached {
       (
         try WorkspaceRepository(rootDirectory: root, scope: scope),
+        try DrawingRepository(rootDirectory: root, scope: scope),
         try WorkspaceCache(rootDirectory: root, scope: scope),
         try CaptureOutbox(rootDirectory: root, scope: scope),
         try WorkspaceStructuralCoordinator(rootDirectory: root, scope: scope),
@@ -123,7 +124,8 @@ final class PhoneAppModel {
     if let existing = workspaces[profile.id] { return existing }
     let created = PhoneWorkspace(
       rootDirectory: root, structural: structural, recovery: recovery,
-      profile: profile, repository: repository, cache: cache, captureOutbox: captures)
+      profile: profile, repository: repository, drawingRepository: drawings, cache: cache,
+      captureOutbox: captures)
     workspaces[profile.id] = created
     return created
   }

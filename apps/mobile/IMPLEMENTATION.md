@@ -58,8 +58,11 @@ No feature is complete merely because its API or a placeholder screen exists.
 ## Active ownership and next actions
 
 The written stream scope is `docs/specs/iphone-implementation-streams.md`. The integrator owns
-`codex/iphone-app`; `codex/iphone-backend`, `codex/iphone-repository` and `codex/iphone-agent`
-are isolated parallel streams. The agent UI stream continued as `codex/iphone-drawing` and completed native settings/host UI and now owns remaining drawing parity. The backend stream is adding notification catch-up and receipt-aware actions; repository is adding structural transactions/export/forget. Integrate reviewed commits and rerun affected tests.
+`codex/iphone-app` and app composition. Parallel streams completed the shared drawing canvas,
+settings/hosts, receipt-aware actions, notification catch-up, structural recovery, binary
+attachments and bounded thread/artifact cache foundations. Current work: remaining drawing parity;
+AgentCore/MobileAgent offline cache integration; native App Intents/local notifications and routing.
+Integrate reviewed commits and rerun affected tests. No mobile Vim work is authorized.
 
 1. Finish app composition with durable composers, receipt-aware agent actions, full settings and host controls.
 2. Integrate structural/recovery UI, cached content, drawings and complete notes navigation/search.
@@ -128,3 +131,30 @@ its actual interaction result. Screenshots alone do not prove behavior.
   relay integration failure assumed a transient connecting event survives coalescing; the corrected
   assertion passed locally against real isolated daemons, with the full native rerun still due. The full repository check passed after reducing package
   test concurrency for an unchanged connector timing test; its budget was not widened.
+- Standalone drawing creation/open/editing now uses the durable repository, shared tabs and
+  structural transactions. Recovery presents exact local/host files and preserves originals.
+  Gestures defer remote scene adoption; background checkpoint drains those arrivals. A malformed
+  incoming file retains both its original bytes and the in-progress valid local canvas, with no
+  automatic overwrite. Host echoes compare serialized scenes, avoiding repeated saves caused by
+  decoder bookkeeping. Native regressions cover those cases and stale incoming revisions.
+- Controller-owned drawing callbacks survive view disposal. The simulator suite passes native
+  touch creation/undo/redo, mounted-canvas hit testing and the drawing persistence regressions.
+  CUA passed text creation, save, undo/redo, offline edit, process termination/relaunch, and
+  reconnection with a disjoint remote shape; both sides were visibly retained and verified in the
+  synthetic host file. CUA drag did not create a rectangle despite the real-touch XCUITest passing;
+  keep that discrepancy open rather than claiming a CUA drag pass.
+- Binary files now preserve bytes through all storage providers and sync-service blobs. The daemon
+  exposes authenticated conditional file reads/uploads/soft deletion (5 MiB); only sniffed raster
+  types display inline. Swift downloads are bounded while streaming. Deep sync/property tests and
+  full repository checks pass. Native content caching uses bounded transactional SQLite blobs,
+  explicit pins/missing states and durable generation tickets; UI wiring remains in progress.
+- Shared drawing scene merge preserves local-only canvas settings and merges disjoint remote keys.
+  Native SVG transfer is bounded and rejects unsupported active constructs; full visual parity
+  remains under review. The unused mobile editor Vim dependency has also been removed.
+- Latest combined `pnpm check` passed after serial package execution; concurrent CLI/body-limit
+  timing failures passed serially without changing budgets. A new branch-wide CI run is due.
+
+Next app work: drawing embeds and attachment/content rendering; living-list badges/activity;
+offline template creation; persistent navigation/download controls; cache/intent/notification
+composition; full recovery, accessibility, keyboard and computer-use acceptance. Standalone
+drawings and foundational APIs do not complete those remaining features.

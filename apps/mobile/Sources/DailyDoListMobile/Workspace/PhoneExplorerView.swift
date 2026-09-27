@@ -15,12 +15,13 @@ struct PhoneExplorerView: View {
   @State private var trash: VaultTreeRow?
 
   private enum PathForm: Identifiable {
-    case note, folder
+    case note, drawing, folder
     case rename(VaultTreeRow)
     var id: String { title }
     var title: String {
       switch self {
       case .note: "New note"
+      case .drawing: "New drawing"
       case .folder: "New folder"
       case .rename: "Move or rename"
       }
@@ -107,6 +108,10 @@ struct PhoneExplorerView: View {
             path = ""
             form = .note
           }
+          Button("New drawing", systemImage: "pencil.tip.crop.circle.badge.plus") {
+            path = "Excalidraw/Untitled"
+            form = .drawing
+          }
           Button("New folder", systemImage: "folder.badge.plus") {
             path = ""
             form = .folder
@@ -115,33 +120,19 @@ struct PhoneExplorerView: View {
       }
     }
     .sheet(item: $form) { action in
-      NavigationStack {
-        Form {
-          TextField("Folder/Name", text: $path).textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-          Text("Use a relative path inside this workspace.").font(.footnote).foregroundStyle(
-            .secondary)
-        }
-        .navigationTitle(action.title)
-        .toolbar {
-          ToolbarItem(placement: .cancellationAction) { Button("Cancel") { form = nil } }
-          ToolbarItem(placement: .confirmationAction) {
-            Button("Save") {
-              let requested = path
-              form = nil
-              Task {
-                switch action {
-                case .note: await workspace.createNote(requested)
-                case .folder: await workspace.createFolder(requested)
-                case .rename(let row):
-                  await workspace.changeStructure(
-                    .rename(from: row.path, to: requested, isFolder: row.kind == .folder))
-                }
-              }
-            }.disabled(path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+      PhonePathEditor(title: action.title, path: $path) { requested in
+        form = nil
+        Task {
+          switch action {
+          case .note: await workspace.createNote(requested)
+          case .drawing: await workspace.createDrawing(requested)
+          case .folder: await workspace.createFolder(requested)
+          case .rename(let row):
+            await workspace.changeStructure(
+              .rename(from: row.path, to: requested, isFolder: row.kind == .folder))
           }
         }
-      }.presentationDetents([.medium, .large])
+      }
     }
     .confirmationDialog(
       "Move to Trash?",
@@ -194,5 +185,31 @@ struct PhoneExplorerView: View {
   private struct SearchRequest: Hashable {
     let query: String
     let online: Bool
+  }
+}
+
+/// Owns presentation-time reads so a prefilled path enables Save on the first presentation.
+private struct PhonePathEditor: View {
+  let title: String
+  @Binding var path: String
+  let save: (String) -> Void
+  @Environment(\.dismiss) private var dismiss
+  var body: some View {
+    NavigationStack {
+      Form {
+        TextField("Folder/Name", text: $path).textInputAutocapitalization(.never)
+          .autocorrectionDisabled()
+        Text("Use a relative path inside this workspace.").font(.footnote)
+          .foregroundStyle(.secondary)
+      }
+      .navigationTitle(title)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Save") { save(path) }
+            .disabled(path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+      }
+    }.presentationDetents([.medium, .large])
   }
 }

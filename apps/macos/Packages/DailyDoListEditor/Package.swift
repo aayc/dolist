@@ -23,7 +23,7 @@ let package = Package(
     .target(name: "DailyDoListEditorCore", dependencies: ["DailyDoListDomain"]),
     .target(
       name: "DailyDoListMobileEditor",
-      dependencies: ["DailyDoListEditorCore", "DailyDoListVim", "DailyDoListDomain"]),
+      dependencies: ["DailyDoListEditorCore", "DailyDoListDomain"]),
     .target(
       name: "DailyDoListEditor",
       dependencies: [
