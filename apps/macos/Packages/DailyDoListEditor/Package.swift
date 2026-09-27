@@ -20,10 +20,18 @@ let package = Package(
     .package(path: "../DailyDoListDrawing"),
   ],
   targets: [
-    .target(name: "DailyDoListEditorCore", dependencies: ["DailyDoListDomain"]),
+    .target(
+      name: "DailyDoListEditorCore",
+      dependencies: [
+        "DailyDoListDomain",
+        .product(name: "DailyDoListDrawingModel", package: "DailyDoListDrawing"),
+      ]),
     .target(
       name: "DailyDoListMobileEditor",
-      dependencies: ["DailyDoListEditorCore", "DailyDoListDomain"]),
+      dependencies: [
+        "DailyDoListEditorCore", "DailyDoListDomain",
+        .product(name: "DailyDoListMobileDrawing", package: "DailyDoListDrawing"),
+      ]),
     .target(
       name: "DailyDoListEditor",
       dependencies: [
@@ -31,6 +39,12 @@ let package = Package(
         .product(name: "DailyDoListVim", package: "DailyDoListVim"),
         .product(name: "DailyDoListUI", package: "DailyDoListUI"),
         .product(name: "DailyDoListDrawing", package: "DailyDoListDrawing"),
+      ]),
+    .testTarget(
+      name: "DailyDoListMobileEditorTests",
+      dependencies: [
+        "DailyDoListMobileEditor", "DailyDoListEditorCore",
+        .product(name: "DailyDoListMobileDrawing", package: "DailyDoListDrawing"),
       ]),
     .testTarget(
       name: "DailyDoListEditorTests",

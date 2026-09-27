@@ -22,6 +22,8 @@ package final class MarkdownParseCache {
   package private(set) var lastRestyledRange = NSRange(location: 0, length: 0)
   /// Lines that are one drawing embed, ascending. Kept up to date by the same incremental passes.
   package private(set) var embedLines: [Int] = []
+  /// Standalone local image/PDF lines, tracked by the same incremental tokenizer.
+  package private(set) var attachmentLines: [Int] = []
   /// Whether the most recent edit or restyle added, removed or moved an embed line.
   package private(set) var embedLinesChanged = false
 
@@ -30,6 +32,7 @@ package final class MarkdownParseCache {
     lines = Array(repeating: LineState(entry: .normal, kind: .blank), count: lineIndex.count)
     frontmatterEnd = computeFrontmatterEnd(text)
     embedLines.removeAll()
+    attachmentLines.removeAll()
     embedLinesChanged = true
     restyle(from: 0, through: lines.count - 1, text: text, consume: consume)
   }
@@ -60,6 +63,11 @@ package final class MarkdownParseCache {
         if shift != 0 { embedLinesChanged = true }
         return line + shift
       }
+    }
+    attachmentLines = attachmentLines.compactMap { line in
+      if line < change.firstLine { return line }
+      if line <= change.oldLastLine { return nil }
+      return line + change.newLastLine - change.oldLastLine
     }
     var from = change.firstLine
     var through = change.newLastLine
@@ -110,6 +118,14 @@ package final class MarkdownParseCache {
       consume(tokens, units, content, line + 1 < lines.count)
       lines[line] = LineState(entry: state, kind: tokens.kind)
       setEmbed(line, tokens.embed != nil)
+      let attachmentIndex = attachmentLines.firstIndex { $0 >= line } ?? attachmentLines.count
+      let hasAttachment =
+        attachmentIndex < attachmentLines.count && attachmentLines[attachmentIndex] == line
+      if tokens.attachment != nil, !hasAttachment {
+        attachmentLines.insert(line, at: attachmentIndex)
+      } else if tokens.attachment == nil, hasAttachment {
+        attachmentLines.remove(at: attachmentIndex)
+      }
       count += 1
       line += 1
       if line < lines.count {

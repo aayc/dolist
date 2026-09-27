@@ -14,7 +14,9 @@
     var restoredScrollY: Double?
     public private(set) var configuration: EditorConfiguration
     let parser = MarkdownParseCache()
-    private let preview = LivePreviewState(isEnabled: true)
+    lazy var embeds = MobileEmbedCoordinator(owner: self)
+    lazy var lineNumberGutter = MobileLineNumberGutter(owner: self)
+    let preview = LivePreviewState(isEnabled: true)
     private var style: MobileMarkdownStyle
     private var glyphs: MobileGlyphDelegate!
     private var suppressChanges = false
@@ -30,6 +32,10 @@
       style = MobileMarkdownStyle(fontSize: configuration.fontSize)
       super.init()
       glyphs = MobileGlyphDelegate(storage: input.textStorage, livePreview: preview, theme: style)
+      glyphs.embedFragment = { [weak self] offset, rect in
+        self?.embeds.fragment(at: offset, proposed: rect)
+      }
+      preview.drawsEmbed = { [weak self] offset in self?.embeds.draws(at: offset) == true }
       input.layoutManager.delegate = glyphs
       input.textStorage.delegate = self
       input.delegate = self
@@ -56,6 +62,7 @@
     /// A document switch, after the previous document has been checkpointed by its owner.
     public func load(_ text: String) {
       suppressChanges = true
+      embeds.reset()
       deferredExternalText = nil
       pendingStyle = nil
       input.textStorage.delegate = nil
@@ -73,6 +80,8 @@
 
     public func updateConfiguration(_ configuration: EditorConfiguration) {
       self.configuration = configuration
+      if !configuration.isEditable || !configuration.livePreview { embeds.endEditing() }
+      updateMobileGeometry()
       style = MobileMarkdownStyle(fontSize: configuration.fontSize)
       glyphs.theme = style
       preview.isEnabled = configuration.livePreview
@@ -172,8 +181,12 @@
     }
 
     @objc private func tapMarker(_ recognizer: UITapGestureRecognizer) {
-      guard let line = taskLine(at: recognizer.location(in: input)) else { return }
-      _ = toggleTask(atLine: line)
+      let point = recognizer.location(in: input)
+      if let line = taskLine(at: point) {
+        _ = toggleTask(atLine: line)
+      } else if let offset = linkAtPoint(point) {
+        _ = openLink(atUTF16: offset)
+      }
     }
 
     private func taskLine(at point: CGPoint) -> Int? {
@@ -195,7 +208,7 @@
       return parser.lineIndex.line(containing: range.location)
     }
 
-    private func perform(_ edit: TextEdit) {
+    func perform(_ edit: TextEdit) {
       applyingCommand = true
       input.undoManager?.beginUndoGrouping()
       for replacement in edit.replacements.reversed() {
@@ -211,6 +224,10 @@
     private func applyStyle(
       _ tokens: LineTokens, _ units: [UInt16], _ range: NSRange, _ hasNewline: Bool
     ) {
+      var tokens = tokens
+      if tokens.attachment != nil {
+        tokens.markers = [SyntaxMarker(range: NSRange(0, range.length), kind: .embed)]
+      }
       var position = range.location
       for segment in StyleSegments.build(tokens, length: range.length) {
         input.textStorage.setAttributes(
@@ -236,7 +253,7 @@
       updatePreview()
     }
 
-    private func updatePreview() {
+    func updatePreview() {
       let invalid = preview.update(
         selection: [selection], focused: input.isFirstResponder,
         lineIndex: parser.lineIndex, storage: input.textStorage)
@@ -245,6 +262,8 @@
           forCharacterRange: range, changeInLength: 0, actualCharacterRange: nil)
       }
       input.setNeedsDisplay()
+      lineNumberGutter.setNeedsDisplay()
+      embeds.schedule()
     }
   }
 
@@ -252,7 +271,8 @@
     public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
       // A recognizer over the whole text view prevents UIKit's caret/selection gestures even with
       // cancelsTouchesInView=false. Only participate when the user actually touched a checkbox.
-      taskLine(at: gestureRecognizer.location(in: input)) != nil
+      let point = gestureRecognizer.location(in: input)
+      return taskLine(at: point) != nil || linkAtPoint(point) != nil
     }
   }
 
@@ -284,6 +304,7 @@
           self?.flushStyling()
         }
       }
+      if embeds.editedLine != nil { embeds.endEditing() }
       preview.textDidChange(
         location: editedRange.location, oldLength: editedRange.length - delta,
         newLength: editedRange.length)
@@ -298,6 +319,8 @@
   extension MobileMarkdownController: UITextViewDelegate {
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
       onScrollChange?(scrollView.contentOffset.y)
+      updateMobileGeometry()
+      embeds.schedule()
     }
     public func textViewDidChangeSelection(_ textView: UITextView) {
       updatePreview()

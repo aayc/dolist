@@ -564,3 +564,56 @@ edit, and saves the result.
   - Marks don't survive switching notes (as in the web app).
   - As in vim.js, a mapping can't start with a key vim binds by itself (`,` or Space as the
     leader): that key's own command runs first.
+
+## Native iPhone embeds and attachments
+
+`DailyDoListMobileEditor` uses the same incremental tokenizer, drawing source edits and geometry
+as the Mac editor. `EditorDrawing` / `EditorDrawingState` now live in `DailyDoListEditorCore` and
+remain re-exported by the Mac module. Source bytes stay in `UITextView`: preview cards reserve
+line-fragment space, so copy, selection, external merges and undo retain UTF-16 source positions.
+Drawing cards support source reveal, insertion, placement, resizing, move up/down and touch
+repositioning, remove-with-undo, fullscreen navigation and a host-owned inline native canvas.
+Compact floated drawings display as blocks without rewriting their original modifiers.
+
+Install `MobileEditorEmbedHost` with `controller.setEmbedHost(host, identity: ...)`. The identity
+must include the authenticated host/credential generation **and** the owning note. It changes on
+host or note switches; pending loads/uploads are cancelled or ignored. The host resolves relative
+vault targets and supplies authenticated/offline data:
+
+- `loadDrawing(target)` asynchronously returns `EditorDrawingState`.
+- `loadAttachment(target)` returns `.missing`, `.unavailable`, or `.ready(MobileEditorAttachment)`;
+  the attachment contains its resolved path, original bytes, MIME type and content version.
+- `onDependenciesChanged(drawings, attachments)` tracks all referenced targets, including offscreen
+  previews. Call `drawingsDidChange()` / `attachmentsDidChange()` after relevant file events.
+- `drawingController(path)` returns the existing document session's `MobileDrawingController` for
+  inline editing. That session continues to own persistence and merges; the embed never replaces
+  its save callback. `onOpenDrawing(path)` routes fullscreen editing to the app.
+- `onOpenAttachment(attachment)` is optional; without it the package presents bounded native image
+  zoom/PDF page previews and explicit sharing. PDFs are rasterized without executing annotations.
+- `importAttachment(data, filename, mimeType)` uploads only an explicit user selection and returns
+  the vault target **after** acknowledgement. `MobileEditorAttachmentImportButton` provides Files
+  and Photos pickers; no queued upload is replayed after host/note changes.
+- `onOpenLink(EditorLinkPreview.Target)` receives wiki/internal links and external URLs allowed by
+  the shared `LinkPolicy`. Link taps never fetch embedded remote resources.
+
+The controller also exposes `insertDrawing(target:)`, `insertAttachment(target:)`,
+`importAttachment(data:filename:mimeType:)`, `finishEditingDrawing()` and `openLink(atUTF16:)`.
+`finishEditingDrawing()` flushes inline UIKit text and commits the drawing interaction before a
+background checkpoint. Configuration changes to read-only/source mode end inline drawing edits.
+`showLineNumbers` paints visible source line numbers; `readableLineLength` centers a maximum
+700-point column on wide layouts.
+
+Local `![[image.png|360|right-wrap]]`, PDF wiki embeds and standalone Markdown image syntax are
+previewed. Markdown image source spelling is retained during moves/removal; portable size and
+placement controls use wiki modifiers. Remote images, unsupported SVG constructs and unavailable
+files remain intact. Decoding accepts at most 32 MB, downsamples raster/PDF previews to 1600 pixels,
+and limits decoded cache bytes to 32 MB. Per-editor attachment caches hold at most 12 entries and
+32 MB each of source bytes/decoded pixels. The static SVG decoder has its separate documented
+2 MB/4096-pixel limits before thumbnailing. Drawing previews cache 12 rendered versions. Disk
+caching, authentication, download availability and upload conflict policy belong to the host.
+
+The iOS behavioral tests live in `Tests/DailyDoListMobileEditorTests`. Add that source directory to
+the app's native test target (alongside the drawing UIKit test directory); import the editor core,
+mobile editor and mobile drawing products. SwiftPM's library-only Xcode scheme does not run UIKit
+tests by itself. Tests cover hosted fragment space/source/undo, stale identity load/upload results,
+dependency targets and safe link routing. Existing Mac embed tests continue to test the shared edits.

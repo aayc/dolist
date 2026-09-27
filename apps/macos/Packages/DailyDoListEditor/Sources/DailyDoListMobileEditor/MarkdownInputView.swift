@@ -18,7 +18,9 @@
     }
 
     public override func layoutSubviews() {
+      commandController?.updateMobileGeometry()
       super.layoutSubviews()
+      commandController?.embeds.layout()
       guard window != nil, bounds.height > 0, bounds.width > 0,
         let restored = commandController?.restoredScrollY
       else { return }

@@ -1,37 +1,48 @@
-import DailyDoListDrawing
-import DailyDoListEditorCore
+import DailyDoListDrawingModel
 import Foundation
 
 /// Where an embed dragged somewhere lands: before which line, and how it's placed.
-struct EmbedDropTarget: Equatable {
+package struct EmbedDropTarget: Equatable {
   /// 0-based index of the line the embed goes before; the line count puts it after the last one.
-  var before: Int
-  var placement: DrawingEmbed.Placement
+  package var before: Int
+  package var placement: DrawingEmbed.Placement
   /// Where to draw the indicator: the boundary between the two lines.
-  var y: CGFloat
+  package var y: CGFloat
+
+  package init(before: Int, placement: DrawingEmbed.Placement, y: CGFloat) {
+    self.before = before
+    self.placement = placement
+    self.y = y
+  }
 }
 
 /// The text edits behind inserting, moving, resizing and removing embeds, as the web editor makes
 /// them (`embeds/edits.ts`, `embeds/drop.ts`). Pure: text in, `TextEdit` out. They are the user's
 /// own edits (undoable like typing).
-enum EmbedEdits {
+package enum EmbedEdits {
   /// An edit and where the embed's line starts afterwards.
-  struct Result: Equatable {
-    var edit: TextEdit
-    var lineStart: Int
+  package struct Result: Equatable {
+    package var edit: TextEdit
+    package var lineStart: Int
   }
 
   /// A line as drawn, in any vertical coordinates shared with the pointer.
-  struct LineBox: Equatable {
+  package struct LineBox: Equatable {
     /// 0-based.
-    var index: Int
-    var top: CGFloat
-    var bottom: CGFloat
+    package var index: Int
+    package var top: CGFloat
+    package var bottom: CGFloat
+
+    package init(index: Int, top: CGFloat, bottom: CGFloat) {
+      self.index = index
+      self.top = top
+      self.bottom = bottom
+    }
   }
 
   /// Where an embed dragged to `point` lands: between the two lines nearest the pointer, floating
   /// left in the column's left third, right in its right third, full width in between.
-  static func dropTarget(
+  package static func dropTarget(
     at point: CGPoint, lineAt: (CGFloat) -> LineBox, lineCount: Int, left: CGFloat, right: CGFloat
   ) -> EmbedDropTarget {
     let line = lineAt(point.y)
@@ -44,7 +55,9 @@ enum EmbedEdits {
   }
 
   /// The modifiers a placement implies: full width drops the size (the embed spans the column).
-  static func placed(_ spec: DrawingEmbed, _ placement: DrawingEmbed.Placement) -> DrawingEmbed {
+  package static func placed(_ spec: DrawingEmbed, _ placement: DrawingEmbed.Placement)
+    -> DrawingEmbed
+  {
     var next = spec
     next.placement = placement
     guard placement == .full else { return next }
@@ -57,14 +70,14 @@ enum EmbedEdits {
   }
 
   /// The range that removes the embed's line with one line break.
-  static func lineRemoval(_ content: NSRange, in text: NSString) -> NSRange {
+  package static func lineRemoval(_ content: NSRange, in text: NSString) -> NSRange {
     if content.end < text.length { return NSRange(content.location, content.end + 1) }
     if content.location > 0 { return NSRange(content.location - 1, content.end) }
     return NSRange(location: 0, length: text.length)
   }
 
   /// The `![[…]]` of an embed line (without the spaces around it).
-  static func markdownRange(of embed: EmbedLine, in text: NSString) -> NSRange {
+  package static func markdownRange(of embed: EmbedLine, in text: NSString) -> NSRange {
     var start = embed.content.location
     var end = embed.content.end
     while start < end, CharClass.isSpaceOrTab(text.character(at: start)) { start += 1 }
@@ -74,7 +87,7 @@ enum EmbedEdits {
 
   /// Moves the embed's line before line `before`, with `placement`. Dropping it next to its own
   /// line only changes the placement. Nil when nothing changes.
-  static func move(
+  package static func move(
     _ embed: EmbedLine, before target: Int, placement: DrawingEmbed.Placement, in text: NSString,
     lineIndex: LineIndex, selection: [NSRange]
   ) -> Result? {
@@ -102,7 +115,9 @@ enum EmbedEdits {
   }
 
   /// Sets the embed's width (points), scaling a given height with it. Nil when nothing changes.
-  static func resize(_ embed: EmbedLine, width: CGFloat, in text: NSString, selection: [NSRange])
+  package static func resize(
+    _ embed: EmbedLine, width: CGFloat, in text: NSString, selection: [NSRange]
+  )
     -> Result?
   {
     let next = max(EmbedGeometry.minWidth, width.rounded())
@@ -119,7 +134,9 @@ enum EmbedEdits {
   }
 
   /// Removes the embed's line. The drawing file stays, so undo brings the embed back.
-  static func remove(_ embed: EmbedLine, in text: NSString, selection: [NSRange]) -> TextEdit {
+  package static func remove(_ embed: EmbedLine, in text: NSString, selection: [NSRange])
+    -> TextEdit
+  {
     let edit = TextEdit(
       replacements: [.init(range: lineRemoval(embed.content, in: text), text: "")], selection: [])
     return mapped(edit, selection)
@@ -128,7 +145,9 @@ enum EmbedEdits {
   /// Inserts `markdown` (an `![[…]]`) on a line of its own at the caret's line: on that line when
   /// it's blank (with a new line after it for the caret), else above it. The caret stays off the
   /// embed's line, so the drawing shows rather than its syntax.
-  static func insert(_ markdown: String, in text: NSString, caret: Int, selection: [NSRange])
+  package static func insert(
+    _ markdown: String, in text: NSString, caret: Int, selection: [NSRange]
+  )
     -> Result
   {
     let line = TextLines(text).line(containing: caret)
