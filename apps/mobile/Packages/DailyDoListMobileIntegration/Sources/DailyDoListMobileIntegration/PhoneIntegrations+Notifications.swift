@@ -10,6 +10,20 @@ extension PhoneIntegrations {
     guard !catchingUp else { return }
     catchingUp = true
     defer { catchingUp = false }
+    for attempt in 0..<3 {
+      do {
+        try await performCatchUp()
+        return
+      } catch WorkspaceRepositoryError.concurrentWrite {
+        // The foreground Inbox or a live notification won a CAS while REST was in flight.
+        // Restart with fresh generations; never deliver from that superseded approval snapshot.
+        try Task.checkCancellation()
+        if attempt == 2 { throw WorkspaceRepositoryError.concurrentWrite }
+      }
+    }
+  }
+
+  private func performCatchUp() async throws {
     let settings = await preferences()
     guard settings.enabled, await notificationCenter.authorized() else { return }
     let scope = try await selectedScope()

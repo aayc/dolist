@@ -1,4 +1,5 @@
 import DailyDoListClient
+import DailyDoListMobileIntegration
 import DailyDoListMobileKit
 import Foundation
 import Observation
@@ -10,6 +11,16 @@ final class PhoneAppModel {
   let pairing: PairingService
   private(set) var workspace: PhoneWorkspace?
   var error: String?
+  var notificationError: String?
+  var notificationPreferences = PhoneNotificationPreferences()
+  var visibleThreads: Set<String> = []
+  var visibleRoutines: Set<String> = []
+  var appActive = true
+  @ObservationIgnored var integrations: PhoneIntegrations?
+  @ObservationIgnored var notificationCenter: SystemPhoneNotificationCenter?
+  @ObservationIgnored var backgroundRefresh: PhoneBackgroundRefresh?
+  @ObservationIgnored var notificationRefreshTask: Task<Void, Never>?
+  @ObservationIgnored private let privacyShield = PhonePrivacyShield()
   @ObservationIgnored private let credentials: KeychainConnectionCredentials
   @ObservationIgnored private let root: URL
   @ObservationIgnored private var selection: UInt64 = 0
@@ -39,6 +50,7 @@ final class PhoneAppModel {
         }
         self.workspace = workspace
         await workspace.connect(client, serverVersion: self.connection.health?.version ?? "")
+        self.scheduleNotificationRefresh()
       } catch { self.error = error.localizedDescription }
     }
     connection.onInvalidated = { [weak self] profile in
@@ -48,7 +60,9 @@ final class PhoneAppModel {
     connection.onItem = { [weak self] item in
       guard let self, self.workspace?.profile.id == self.connection.selected?.id else { return }
       self.workspace?.receive(item)
+      self.receiveNotificationEvent(item)
     }
+    installPhoneIntegrations(profiles: profiles, credentials: credentials, rootDirectory: root)
   }
 
   func start() async {
@@ -91,8 +105,10 @@ final class PhoneAppModel {
   }
 
   func setActive(_ active: Bool) async {
+    appActive = active
     guard !active else {
       await connection.setActive(true)
+      scheduleNotificationRefresh()
       return
     }
     // iOS can suspend us soon after this callback. Only bounded local checkpointing uses the
@@ -102,6 +118,7 @@ final class PhoneAppModel {
     await workspace?.checkpointAll(finishComposition: true)
     await workspace?.composerDrafts.flush()
     lease.end()
+    try? await backgroundRefresh?.schedule()
   }
 
   private func workspace(for profile: ConnectionProfile) async throws -> PhoneWorkspace {

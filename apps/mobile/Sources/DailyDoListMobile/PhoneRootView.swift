@@ -35,6 +35,7 @@ struct PhoneRootView: View {
       await model.setActive(scenePhase == .active)
       await model.start()
     }
+    .onOpenURL { url in Task { await model.openIntegrationURL(url) } }
     .onChange(of: scenePhase) { _, phase in Task { await model.setActive(phase == .active) } }
     .sheet(isPresented: $pairing) {
       ConnectionView(pairing: model.pairing, existingProfile: repairing) { await model.paired($0) }

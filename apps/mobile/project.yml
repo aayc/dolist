@@ -16,6 +16,8 @@ settings:
     MARKETING_VERSION: '0.1.0'
     CURRENT_PROJECT_VERSION: '1'
 packages:
+  DailyDoListMobileIntegration:
+    path: Packages/DailyDoListMobileIntegration
   DailyDoListMobileKit:
     path: Packages/DailyDoListMobileKit
   DailyDoListMobileSettings:
@@ -55,7 +57,16 @@ targets:
         INFOPLIST_KEY_NSCameraUsageDescription: Scan the pairing QR code from your Daily Do List host.
         INFOPLIST_KEY_UIRequiresFullScreen: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+    info:
+      path: .build/GeneratedInfo.plist
+      properties:
+        CFBundleURLTypes:
+          - CFBundleURLName: app.dailydolist.iphone
+            CFBundleURLSchemes: [dolist]
+        BGTaskSchedulerPermittedIdentifiers: [app.dailydolist.iphone.refresh]
+        UIBackgroundModes: [fetch]
     dependencies:
+      - package: DailyDoListMobileIntegration
       - package: DailyDoListMobileKit
       - package: DailyDoListMobileSettings
       - package: DailyDoListWorkspaceCore
@@ -77,7 +88,7 @@ targets:
   DailyDoListTests:
     type: bundle.unit-test
     platform: iOS
-    sources: [Tests, Packages/DailyDoListMobileKit/Tests/DailyDoListMobileKitTests, Packages/DailyDoListMobileSettings/Tests/DailyDoListMobileSettingsTests, ../macos/Packages/DailyDoListDrawing/Tests/DailyDoListMobileDrawingTests]
+    sources: [Tests, Packages/DailyDoListMobileIntegration/Tests/DailyDoListMobileIntegrationTests, Packages/DailyDoListMobileKit/Tests/DailyDoListMobileKitTests, Packages/DailyDoListMobileSettings/Tests/DailyDoListMobileSettingsTests, ../macos/Packages/DailyDoListDrawing/Tests/DailyDoListMobileDrawingTests]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.dailydolist.iphone.tests

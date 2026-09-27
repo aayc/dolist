@@ -35,6 +35,7 @@ final class PhoneWorkspace {
   var refreshing = false
   var error: String?
   var selectedTab = 0
+  var routedThread: PhoneThreadDestination?
   @ObservationIgnored var sessions: [String: NoteSession] = [:]
   @ObservationIgnored var offlineChannel: ConnectionChannel?
   @ObservationIgnored var client: HTTPDaemonClient?

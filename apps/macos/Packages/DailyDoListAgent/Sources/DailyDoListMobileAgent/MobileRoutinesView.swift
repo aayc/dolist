@@ -73,6 +73,7 @@
     let hostName: String?
     let drafts: MobileAgentDrafts?
     let openNote: (String, Int?) -> Void
+    @Environment(\.mobileAgentVisibility) private var visibility
     @State private var openedRun: String?
 
     var body: some View {
@@ -137,6 +138,8 @@
             description: Text("Its file may have moved or been deleted."))
         }
       }
+      .onAppear { visibility.routine(routineId, true) }
+      .onDisappear { visibility.routine(routineId, false) }
       .navigationTitle(store.routine(routineId)?.name ?? "Routine")
       .navigationBarTitleDisplayMode(.inline)
       .task(id: routineId) { await store.loadRuns(ofRoutine: routineId) }
