@@ -124,6 +124,7 @@
           controller.editor.redo()
         }
         command("Properties", symbol: "slider.horizontal.3") { propertiesShown = true }
+        MobileDrawingImageControls(controller: controller)
         Spacer(minLength: 0)
         Menu {
           Toggle("Select multiple", isOn: $controller.multiSelect)
@@ -135,6 +136,8 @@
               get: { controller.editor.isToolLocked }, set: { controller.editor.isToolLocked = $0 })
           )
           Button("Select all") { controller.editor.selectAll() }
+          MobileDrawingArrangeMenu(editor: controller.editor)
+          Button("Unlock all") { controller.editor.unlockAll() }
           Button("Duplicate") { controller.editor.duplicateSelection() }.disabled(
             controller.editor.selectedIds.isEmpty)
           Button("Edit text or label") { controller.editor.handleKey(.enter) }.disabled(

@@ -8,6 +8,7 @@ import Foundation
 /// y-down context (the caller sets zoom and scroll on the context).
 public final class SceneRenderer: @unchecked Sendable {
   public let cache: ElementRenderCache
+  let images = EmbeddedDrawingImageCache()
 
   public init(cache: ElementRenderCache = ElementRenderCache()) {
     self.cache = cache
@@ -21,8 +22,10 @@ public final class SceneRenderer: @unchecked Sendable {
   /// The scene's elements by id (containers, frames and labels look each other up).
   public struct Index: Sendable {
     public var elements: [String: ExcalidrawElement]
+    public var files: JSONValue
 
-    public init(_ elements: [ExcalidrawElement]) {
+    public init(_ elements: [ExcalidrawElement], files: JSONValue = .object(JSONObject())) {
+      self.files = files
       var byId: [String: ExcalidrawElement] = [:]
       byId.reserveCapacity(elements.count)
       for element in elements where !element.isDeleted { byId[element.id] = element }
@@ -60,11 +63,11 @@ public final class SceneRenderer: @unchecked Sendable {
       let label = element.boundTextId.flatMap { index.elements[$0] }
       draw(
         element, label: label, in: context, theme: theme, canvasBackground: canvasBackground,
-        zoom: zoom)
+        zoom: zoom, files: index.files)
       if let label, !skipped.contains(label.id) {
         draw(
           label, label: nil, in: context, theme: theme, canvasBackground: canvasBackground,
-          zoom: zoom)
+          zoom: zoom, files: index.files)
       }
       context.restoreGState()
     }
@@ -95,7 +98,8 @@ public final class SceneRenderer: @unchecked Sendable {
   /// Draws one element (not its label). `label` is its bound text, which arrows leave room for.
   public func draw(
     _ element: ExcalidrawElement, label: ExcalidrawElement? = nil, in context: CGContext,
-    theme: DrawingTheme, canvasBackground: String, zoom: Double = 1
+    theme: DrawingTheme, canvasBackground: String, zoom: Double = 1,
+    files: JSONValue = .object(JSONObject())
   ) {
     let entry = cache.entry(for: element)
     context.saveGState()
@@ -141,7 +145,9 @@ public final class SceneRenderer: @unchecked Sendable {
       context.setFillColor(DrawingColorCache.shared.cgColor(element.strokeColor, theme: theme))
       layout.draw(in: context, width: element.width, align: text.textAlign)
     case .image:
-      drawImagePlaceholder(element, in: context, theme: theme)
+      if !drawEmbeddedImage(element, files: files, in: context) {
+        drawImagePlaceholder(element, in: context, theme: theme)
+      }
     case .frame, .magicframe:
       drawFrame(element, in: context, theme: theme, zoom: zoom)
     default:
