@@ -341,3 +341,40 @@ Schema 5 retains each path's highest editor revision and metadata generation aft
 remote deletion, local discard and structural remaps. A later download or newly created draft at
 that path gets a higher revision, preventing an earlier live editor from passing CAS after a
 remove/recreate cycle. History is deleted only after namespace retirement fences every handle.
+
+## Offline download controls and storage maintenance
+
+`WorkspaceStorageMaintenance(rootDirectory:scope:budgetBytes:)` shares the repository namespace.
+`inventory(protecting:)` reports present markdown checkpoints, byte usage, durable download
+requests, selections and each document's eviction protections. The default disposable markdown
+budget is 128 MiB; SQLite/WAL and the separate bounded artifact/attachment cache add overhead.
+Presence is inexpensive metadata, while opening a note verifies its checkpoint digest and UTF-8.
+
+`setPinned` accepts `.document`, boundary-aware `.folder` and `.allDocuments` selections, including
+files not downloaded yet. `requestDownload(_:paths:maxBytes:)` persists the selection and fresh
+per-path UUID requests from a fresh or explicitly labeled cached tree. `beginDownload` durably
+records an attempt and returns a scope-bound ticket. These APIs never start a network request.
+The app supplies authenticated streaming bounds, uses repository `refresh` to reconcile content,
+and calls `completeDownload(_:expectedRevision:)` only for that exact durable revision. It must
+not publish an old HTTP response with an arbitrary `cache` call. Completion checks the ticket,
+current revision/generation, exact checkpoint digest and byte limit. `failDownload` preserves a
+reason; cancellation fences completion, and a new request gets a new UUID. A persisted attempting
+state after restart is unfinished work, not evidence of an active worker. An available request
+records a past completion; `inventory.documents` is the current availability authority.
+
+`trim(protecting:)` drops eligible least-recently-accessed clean index entries until the disposable
+budget is met. `evict(_:protecting:)` requests particular clean paths. Both return skipped paths,
+an active-writer busy result or unsupported durable-record counts rather than discarding work.
+The UI must pass every live editor path, including typing not yet checkpointed. Pins, dirty notes,
+immutable merge bases, review/recovery content, outstanding writes, structural recovery and drawing
+dependencies remain protected even above budget. Generation CAS is repeated inside SQLite before
+eviction, and revision history prevents stale editors saving through an evict/refetch cycle.
+
+`collectGarbage(maximumFiles:)` separately deletes a bounded number of unreferenced hash-named
+markdown files under the exclusive cross-handle publication lease. It derives references from
+all notes, attempts and structural recovery records. Validated current capture/composer/journal
+payloads contain inline data; any unknown durable format blocks reclamation. Symbolic links and
+unrecognized files are untouched. Unlink or directory-sync failure cannot remove referenced
+content; remaining orphans can be collected later. Download selections/progress live in separate
+SQLite tables so disposable metadata trimming cannot remove them. Explicit workspace retirement
+clears them along with the other namespace state.
