@@ -333,6 +333,8 @@ export class AgentSupervisor implements PlacementSource {
       }
     } else if (current.kind === "relayed") {
       current.watcher.stop();
+      // Notes typed here must reach the host before shutdown cancels their sync debounce.
+      await sync.syncPass();
     }
     await runtime.deactivate(problem);
   }

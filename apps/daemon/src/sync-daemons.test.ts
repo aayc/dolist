@@ -12,6 +12,7 @@ import {
   type NoteResponse,
   type SettingsResponse,
   type SyncStatusResponse,
+  type TaskRecordsResponse,
 } from "@ddl/core";
 import { createSyncServer, type RunningSyncServer } from "@ddl/sync";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -62,7 +63,7 @@ afterEach(async () => {
 
 async function startDevice(
   name: string,
-  options: { sync?: boolean; placement?: AgentPlacement } = {},
+  options: { sync?: boolean; placement?: AgentPlacement; syncDebounceMs?: number } = {},
 ): Promise<Device> {
   const root = join(dir.path, name);
   const home = join(root, "home");
@@ -96,7 +97,7 @@ async function startDevice(
     env,
     logger: logger.child({ device: name }),
     leaseTimings: LEASE,
-    syncDebounceMs: SYNC_DEBOUNCE_MS,
+    syncDebounceMs: options.syncDebounceMs ?? SYNC_DEBOUNCE_MS,
   });
   running.push(daemon);
   return { name, daemon, apiToken: readFileSync(config.tokenPath, "utf8").trim() };
@@ -129,6 +130,29 @@ const agentProblem = async (device: Device) => (await agentStatus(device)).probl
 describe("two daemons sharing a vault through the sync service", {
   timeout: 60_000 * TIME_SCALE,
 }, () => {
+  it("syncs a relaying device's last note when it quits before the debounce", async () => {
+    const laptop = await startDevice("Laptop", {
+      placement: "always_on_machine",
+      syncDebounceMs: 60_000,
+    });
+    await send(laptop, "PUT", API_ROUTES.settings, {
+      remote: { alwaysOnMachine: { name: "Host", url: "https://host.example.test" } },
+    });
+    await eventually(async () => expect(await agentProblem(laptop)).toBe(RELAY_PROBLEMS.notPaired));
+    await eventually(async () => {
+      const { body } = await get<SyncStatusResponse>(laptop, API_ROUTES.syncStatus);
+      expect(body.state).toBe("idle");
+      expect(body.lastSyncedAt).not.toBeNull();
+    });
+
+    const path = "Inbox/just-entered.md";
+    const content = "- [ ] Research native ferns\n";
+    expect((await send(laptop, "PUT", API_ROUTES.note(path), { content })).status).toBe(201);
+    expect(server.store.read(vault.id, path)).toBeNull();
+    await laptop.daemon.close();
+    expect(server.store.read(vault.id, path)?.content).toBe(content);
+  });
+
   it("sync notes both ways, run the agent on exactly one of them, and hand it over", async () => {
     const laptop = await startDevice("Laptop");
     await eventually(async () => expect(await agentProblem(laptop)).toBeUndefined());
@@ -187,9 +211,37 @@ describe("two daemons sharing a vault through the sync service", {
     );
     expect(server.store.read(vault.id, thread)?.content).toBe('{"by":"laptop"}');
 
+    // A completed unchecked task must keep its identity when the other device takes over.
+    await send(laptop, "PUT", API_ROUTES.settings, { agent: { settleMs: 100 } });
+    const daily = (await get<NoteResponse>(laptop, API_ROUTES.daily("today"))).body;
+    await write(laptop, daily.path, "- [ ] Research native ferns\n");
+    const records = async (device: Device) =>
+      (await get<TaskRecordsResponse>(device, API_ROUTES.tasks(daily.path))).body.records;
+    await eventually(async () => {
+      const current = await records(laptop);
+      expect(current).toHaveLength(1);
+      expect(current[0]?.status).toBe("done");
+    });
+    const completed = (await records(laptop))[0]!;
+    expect(await read(laptop, daily.path)).toContain("- [ ] Research native ferns");
+
     await laptop.daemon.close();
     await eventually(async () => expect(await agentProblem(desktop)).toBeUndefined());
     expect(server.store.leaseHolder(vault.id, "agent")?.deviceName).toBe("Desktop");
+    const prior = await read(desktop, daily.path);
+    await write(desktop, daily.path, `${prior}\n- [ ] Research shade gardens\n`);
+    await eventually(async () =>
+      expect(
+        (await records(desktop)).find((r) => r.text === "Research shade gardens")?.status,
+      ).toBe("done"),
+    );
+    const after = await records(desktop);
+    expect(after).toHaveLength(2);
+    expect(after.find((r) => r.text === completed.text)).toMatchObject({
+      taskId: completed.taskId,
+      threadId: completed.threadId,
+      status: "done",
+    });
 
     const lines = logger.lines.join("\n");
     expect(lines).toContain("This device runs the agent");

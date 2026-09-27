@@ -4,9 +4,11 @@ The running handoff log: what shipped, what's in flight, what's next, and the de
 them, so work can continue on any machine at any point. Read it before starting; keep it current
 (the rules are in `AGENTS.md`, "Handoff log").
 
-**Last updated:** 2026-09-27 · Another development Mac is set up with both clients running, and
-native toolchain compatibility fix `531d8d7` is merged on `main` after green CI and macOS workflows.
-The app on that Mac includes the fix; the main development Mac's installation remains `401997a`.
+**Last updated:** 2026-09-27 · The existing Linux VM runs the remote Cursor agent on `09e13dc`,
+paired with the other development Mac, whose bundled daemon is now `67a488b` (quit-sync fix
+integrated on `main` as `cf1807c`). Real remote-task, approval, artifact, reboot, bidirectional
+handover and app-close/reopen checks passed.
+The main development Mac's installation remains `401997a`.
 The full native iPhone implementation plan is also on `main` (`40e1b29`); the user has now
 authorized implementation and thorough simulator testing in its separate task.
 
@@ -59,25 +61,75 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
   permissions for controlling other apps remain user-granted through Settings → Computer Use.
 - Passed: `pnpm check`, all production builds, bundle budgets, six web startup e2e tests,
   `pnpm vim:check`, 173 native Vim tests, 300 native editor tests and 29 daemon integration tests.
-  Both CI and macOS workflows are green on `531d8d7`, including native app tests and iOS builds.
+  CI, macOS (including release packaging and iOS builds), Security and Linux bundle workflows are
+  green on merged setup commit `78ae584`. The native app test process crashed once on an unowned
+  reference; its targeted retry passed. The source-branch CI and macOS runs also passed.
   Local Swift 6.3 tests need `-- -Xswiftc -target -Xswiftc arm64-apple-macosx15.0` because its
   Testing library requires macOS 15. The local app test target still fails to compile an existing
   `CGWindowListCreateImage` snapshot under that override; its CI run passes with Apple's toolchain.
 
+### Remote Linux cutover (2026-09-27)
+
+- Reused the existing x64 VM, with Node 24 and the Linux setup kit. Retired containers, their
+  restart policies, nginx and certificate-renewal jobs are disabled; their data and private
+  rollback configuration remain. The first subscription's backup storage is unchanged.
+- Preserved the existing tailnet identity; HTTPS proxies expose only the daemon and sync service
+  to the tailnet. Public inbound traffic is denied. State lives on the managed data disk, mounted
+  independently of Azure's temporary disk; both services require its bind mount. The first reboot
+  exposed an ordering cycle, now fixed; the second boot started storage and services automatically.
+- The other development Mac is paired and synced, with Remote on and the live agent enabled.
+  The user's model and approval settings remain. Private setup, evidence and rollback details
+  live outside the repository. The existing tailnet key's expiry is unchanged; the private
+  runbook records its renewal date. Linux supports shell/browser execution, not macOS app control.
+- Real checks: local `uname -s` returned Darwin, remote returned Linux under the service user;
+  Chromium read a public page; denied and accepted approvals traveled through the native Mac app;
+  the Mac displayed a remote artifact; notes and history synced; an outage did not execute work
+  locally, and its queued task ran after recovery. One task thread then continued from Mac to
+  Linux. Completed unchecked tasks retained their IDs and did not repeat after the handover fix.
+- Fix `09e13dc` reproduced the missing-tracker problem in a two-daemon regression before fixing
+  it; all four branch workflows passed. Also passed `pnpm check`, production builds/budgets,
+  mock evals, and the Linux bundle smoke test on the actual host. Both installed clients retain
+  their prior versions for rollback. Main workflows are dispatched after the handoff update.
+- Cursor CLI is installed and browser-authenticated under the remote service account. The
+  paired app now uses the Cursor harness with its existing Claude Opus 5.5 selection and
+  approval policy; OpenRouter remains available for the safety judge. A task entered in the
+  native Mac app ran Linux shell commands and opened a real Chromium page on the remote host,
+  with successful tool results displayed in its thread. Setup credentials remain private.
+- Active Cursor work continued after quitting the Mac app: a delayed shell command finished,
+  then a new browser action ran, and reopening restored the same completed task without a repeat.
+  A separate immediate-quit race was reproduced and fixed: relaying clients now make a final
+  sync pass before shutdown cancels their pending note-sync debounce. The updated Mac app passed
+  a real paste-and-immediately-quit check; its new task ran remotely while the app stayed closed.
+  Local checks, production builds/budgets and all four branch workflows passed (the existing
+  native Vim timing flake passed on retry). Physical laptop sleep was not performed. Main
+  workflows are dispatched after this update; private evidence and the prior app remain available.
+
 ## In flight
 
 - Full native iPhone app: `codex/iphone-app`, based on the completed Mac setup baseline.
-  Foundation/toolchain and reusable editor extraction are first. The complete scope, durable
-  user instruction, next actions and test evidence live in `apps/mobile/IMPLEMENTATION.md`.
+  Foundation checkpoint `a972928` is pushed: unsigned iPhone builds, shared editor extraction,
+  real typing/undo/composition tests and focused simulator computer-use. Full features remain
+  in progress. The user explicitly authorized parallel subagents: `codex/iphone-backend`
+  (identity/capture contracts), `codex/iphone-repository` (durable offline drafts/outbox), and
+  `codex/iphone-agent` (shared agent core/native UI). The integrator owns app composition and
+  verification. Scope: `docs/specs/iphone-implementation-streams.md` on the integration branch.
+  The durable instruction, next actions and evidence live in `apps/mobile/IMPLEMENTATION.md`.
+  One existing Mac window-opening budget fails locally; baseline comparison is underway.
   Work uses an isolated checkout, synthetic vaults and separate test daemons; the installed
   Mac app, its daemon and the real vault must remain untouched.
 
-Local web/Mac setup is complete. Check the workflows dispatched on `main` after the handoff commit.
-The remote-machine setup continues in its separate task.
+Local web/Mac setup is complete, with all four workflows green on `78ae584`.
+The remote-machine setup is complete, including the handover correction found during live testing.
 Native iPhone implementation is authorized and continues separately, including simulator testing.
 
 ## Shipped on `main` (newest first; older history is `git log`)
 
+- `cf1807c` Relaying clients flush their last saved notes on quit, so a task entered just before
+  closing the app can reach the always-on host without waiting for the next launch. Installed
+  in the paired Mac's daemon and verified with a regression plus actual Cursor execution.
+- `fffb5b7` Leased agent handovers now sync task identities and settled snapshots, preventing
+  completed unchecked tasks from running again under fresh IDs. Folder sync retains its
+  device-local tracker behavior. Installed and verified on the paired Mac and Linux host.
 - `531d8d7` Native toolchain compatibility: explicitly discard Vim's returned callbacks and keep
   the undo action's captured manager on the main actor. Built, installed and verified both clients
   on another development Mac.
@@ -120,12 +172,6 @@ Native iPhone implementation is authorized and continues separately, including s
 
 ## Next up
 
-- **The Azure VM** (the user's next step): the user runs `az login` and saves the Tailscale auth key
-  file themselves (credentials never go in the chat or the repo). Check `Standard_D4ps_v6`
-  availability, show cost and resources, create them, run `setup.sh`, pair, and verify what only the
-  real VM can: the `az` commands, the Tailscale login, and that `tailscale serve` keeps the original
-  `Host` (the daemon refuses loopback-Host requests with proxy forwarding headers). Guides:
-  `deploy/azure/README.md`, `deploy/linux/README.md`; design `docs/ALWAYS_ON.md`.
 - **CI triggers** (the user, in repo settings): turn Actions (or each workflow) off and on, push
   once, check `gh run list --event push`; else GitHub Support. Until then, dispatch by hand.
 - **B0 binary files** (attachment sync, file serving) and **P rendering parity** (images on the
@@ -177,9 +223,11 @@ Native iPhone implementation is authorized and continues separately, including s
   agent's files; a former holder's stale agent changes are dropped (never a conflict copy);
   `settings.json` isn't an agent file; every device must run a fencing daemon (`docs/SYNC.md`).
   Journaling is not Temporal; threads are journal-only now.
-- **The Azure VM:** public IP with every inbound port closed; under $120/month: `Standard_D4ps_v6`
-  (Cobalt 100 ARM, 4 vCPU, 16 GB, ~$102) + 64 GB premium SSD (~$10) + static IP (~$4); x86
-  alternatives `Standard_B4as_v2` or `Standard_D2as_v5`.
+- **The Azure VM:** reuse the existing x64 `Standard_D2s_v3` (2 vCPU, 8 GiB) in the second
+  Visual Studio subscription, superseding the new ARM VM plan. Preserve its Tailscale identity
+  and old application data while retiring those services; every public inbound port stays
+  closed. The user approved transferring the existing model credential over SSH to the service's
+  private environment file. The first subscription's backup storage stays as it is.
 - **Routines:** one markdown file per routine in `Routines/`, each run a chat thread with
   notifications (always, when changed, never); approvals follow the global policy; "Repeat this"
   takes the user's schedule; a missed run catches up once; Run now has a daily budget; starter

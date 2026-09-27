@@ -91,7 +91,7 @@ export const PERSISTED_FORMATS: readonly PersistedFormatInfo[] = [
     path: `${PERSISTED_PATHS.taskState}/<hash(notePath)>.json`,
     version: PERSISTED_TASK_STATE_VERSION,
     owner: "packages/agent/src/orchestrator/task-watcher.ts",
-    syncs: false,
+    syncs: true, // Through the sync service only; folder sync has no agent lease.
   },
   {
     name: "records",

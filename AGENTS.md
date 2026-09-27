@@ -361,7 +361,9 @@ and real-keyboard e2e tests in `apps/web/e2e/vim.spec.ts`.
 - **Change the sync protocol:** edit `packages/core/src/sync-service.ts` (additive within
   `SYNC_API_VERSION`), then the server (`apps/sync`) and `RemoteStorageProvider`
   (`packages/storage/src/remote.ts`) in the same change, and update `docs/SYNC.md`. Tests start
-  the server in process (`createSyncServer({ db: ":memory:", port: 0 })`), never a real one.
+  the server in process (`createSyncServer({ db: ":memory:", port: 0 })`), never a real one. Task
+  identity snapshots (`state/tasks`) travel with the leased agent through the sync service;
+  folder sync keeps them device-local because it has no shared lease.
 - **Add a setting:** extend its wire schema (`packages/contract/src/wire/settings.ts`: `AppSettings`
   is inferred from it, and the daemon validates updates with it), `DEFAULT_SETTINGS` in
   `packages/core/src/settings.ts`, its file schema (`packages/contract/src/persisted/settings.ts`;

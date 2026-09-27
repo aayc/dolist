@@ -31,7 +31,7 @@ corruption.
 | `state/journal/threads/<threadId>.jsonl` | `packages/agent/src/threads/store.ts` | JSON Lines, append-only | 1 (per line) | yes (merged as a union of lines) |
 | `artifacts/<threadId>/<artifactId>.<ext>` | `packages/agent/src/threads/store.ts` | raw UTF-8 text | — | yes |
 | `artifacts/<threadId>/<artifactId>.<ext>.b64` | `packages/agent/src/threads/store.ts` | base64 of the bytes | — | yes |
-| `state/tasks/<hash(notePath)>.json` | `packages/agent/src/orchestrator/task-watcher.ts` | JSON, compact | 1 | **no** (excluded in `apps/daemon/src/wiring.ts`) |
+| `state/tasks/<hash(notePath)>.json` | `packages/agent/src/orchestrator/task-watcher.ts` | JSON, compact | 1 | **yes**, through the sync service only |
 | `state/records.json` | `packages/agent/src/orchestrator/records.ts` | JSON, compact | 1 | yes |
 | `state/approvals.json` | `packages/agent/src/safety/approval-store.ts` | JSON, pretty | 1 | yes |
 | `state/routines.json` | `packages/agent/src/routines/state.ts` | JSON, compact | 1 | yes |
@@ -261,12 +261,14 @@ The task watcher's identity tracking for one daily note (`hash` is `hashString` 
   baselined as already known (as without `actOnExistingTasks`) instead of being acted on again
   under fresh ids; later edits are detected against that baseline. (Previously a corrupt file
   made the watcher redo every open task of the note.)
-- Writes are debounced (300 ms); a concurrent valid change is overwritten (the state is this
-  machine's scratch data).
+- Writes are debounced (300 ms); a concurrent valid change is overwritten. With the sync service,
+  the agent lease fences this state like records and journals: the holder publishes it and the
+  next holder loads it before watching, preserving task IDs and settled snapshots. Folder sync
+  excludes it because those devices have no shared lease.
 - State is keyed by note path. Renaming or moving daily notes (or changing the daily-note folder or
   format) starts fresh tracking for the moved notes, governed by `actOnExistingTasks`; the old
-  state files stay where they are. It assumes one daemon per vault: two machines running the
-  daemon on one synced vault overwrite each other's tracker state.
+  state files stay where they are. Run one daemon per local vault folder; sync-service devices
+  use separate folders and share the agent lease.
 
 Version history: **1** only (files without `version` are read as version 1).
 

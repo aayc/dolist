@@ -103,10 +103,11 @@ pushed as the union when the service's copy changed too, so no event is dropped.
 What syncs: every text file in the vault, including the agent's sidecar (`state/journal` with the
 threads, `artifacts`, `state/records.json`, `approvals.json`, `settings.json`, and the thread
 snapshots older versions wrote in `threads/`, until the agent's holder moves them into the
-journals). What doesn't: each device's own sync snapshot (`.daily-do-list/sync/`), the agent's
-machine-local scratch data (`.daily-do-list/state/tasks`), the Obsidian import manifest
-(`.daily-do-list/import/`, which names a folder on this machine), junk and temp files, and binary
-files (images, PDFs, …).
+journals). The sync service also carries `state/tasks`: the lease holder's task IDs and settled
+snapshots must follow the agent or a handover can repeat completed unchecked tasks. Folder sync
+keeps these trackers device-local because it has no agent lease. What doesn't sync: each device's
+own sync snapshot (`.daily-do-list/sync/`), the Obsidian import manifest (`.daily-do-list/import/`,
+which names a folder on this machine), junk and temp files, and binary files (images, PDFs, …).
 
 ## Security
 

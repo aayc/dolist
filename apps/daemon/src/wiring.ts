@@ -249,11 +249,11 @@ export async function createSync(options: {
         prepared = true;
       },
       logger,
-      // Machine-local data never leaves this machine: the agent's scratch data, and the import
-      // manifest (it names a folder on this machine).
+      // Leased agents carry task identities to their next host. Import paths and capture
+      // receipts are machine-local; the workspace identity is adopted explicitly before sync.
       exclude: [
-        ".daily-do-list/state/tasks",
         IMPORT_DIR,
+        ...(fenced ? [] : [".daily-do-list/state/tasks"]),
         PERSISTED_PATHS.workspace,
         PERSISTED_PATHS.captures,
       ],

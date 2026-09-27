@@ -2,8 +2,8 @@
  * `.daily-do-list/state/tasks/<hash(notePath)>.json` — the task watcher's identity tracking for one
  * daily note: the tracked tasks (stable ids across edits) and the snapshot each task last settled
  * at. Written by `TaskWatcher` (packages/agent/src/orchestrator/task-watcher.ts), compact JSON.
- * Machine-local scratch data: the SyncEngine never syncs it (a vault inside a synced folder will
- * still carry it along).
+ * Synced through the sync service under the agent lease, so handover preserves task identities.
+ * Folder sync excludes it because those devices have no shared lease.
  *
  * v1: the only version so far (the writer always wrote `version: 1`).
  */
