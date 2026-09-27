@@ -13,7 +13,8 @@ let package = Package(
   targets: [
     .target(
       name: "DailyDoListMobileKit",
-      dependencies: ["DailyDoListClient", "DailyDoListDomain", "DailyDoListModels"]),
+      dependencies: ["DailyDoListClient", "DailyDoListDomain", "DailyDoListModels"],
+      linkerSettings: [.linkedLibrary("sqlite3")]),
     .testTarget(name: "DailyDoListMobileKitTests", dependencies: ["DailyDoListMobileKit"]),
   ]
 )
