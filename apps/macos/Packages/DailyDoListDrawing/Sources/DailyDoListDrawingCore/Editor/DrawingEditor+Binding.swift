@@ -71,6 +71,12 @@ extension DrawingEditor {
         normalizePoints(&element)
       }
     }
+    if element(arrowId)?.elbowed == true {
+      update(arrowId) {
+        orthogonalize(&$0)
+        normalizePoints(&$0)
+      }
+    }
     if let label = element(arrowId)?.boundTextId { positionArrowLabel(label) }
   }
 

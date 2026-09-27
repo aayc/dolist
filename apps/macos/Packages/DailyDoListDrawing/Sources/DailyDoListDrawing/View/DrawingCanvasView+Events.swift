@@ -109,7 +109,8 @@ extension DrawingCanvasView {
     if isPanning { return panStart == nil ? .openHand : .closedHand }
     switch editor.tool {
     case .text: return .iBeam
-    case .rectangle, .ellipse, .diamond, .arrow, .line, .freedraw, .eraser: return .crosshair
+    case .rectangle, .ellipse, .diamond, .arrow, .line, .freedraw, .eraser, .frame:
+      return .crosshair
     case .hand: return .openHand
     case .selection: break
     }

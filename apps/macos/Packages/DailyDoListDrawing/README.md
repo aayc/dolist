@@ -115,8 +115,9 @@ file: the frontmatter, the notice and any markdown above the data, `## Element L
 `## Embedded Files`, unknown sections, and what follows the drawing.
 
 **Deferred**: SVG image decoding, rotating with a handle (native mobile rotation commands exist),
-editing elbow arrows (drawn, kept), creating frames, Mac arrangement controls, copy and paste,
-grid and snapping, the linear element editor's midpoints, and the eraser's undo-while-dragging.
+obstacle-avoiding elbow rerouting, Mac arrangement controls, copy and paste,
+and the eraser's undo-while-dragging. Shared frame/point/grid commands are available on both platforms;
+the expanded inspector is currently native iPhone UI.
 
 ## API for the editor integration
 
@@ -273,15 +274,19 @@ rendering an imported scene.
   horizontal/vertical flip, six alignment and two distribution controls.
 - [ ] Clipboard: copy/cut/paste with bound labels, frames, groups and file references;
   copy/paste styles; context-menu copy as PNG/SVG.
-- [ ] Frames: create, rename, wrap selection, select children, remove children and visibility.
-- [ ] Lines/arrows: insert/delete points, elbow creation/editing and straight/round/elbow controls.
+- [x] Frames: create, rename, wrap selection, select children, remove children and visibility.
+- [x] Lines/arrows: insert/delete points, draggable midpoints, elbow creation/editing and straight/round/elbow controls.
+- [ ] Elbow routing: obstacle avoidance and Excalidraw fixed-segment routing parity (native routes remain orthogonal).
 - [ ] Text: vertical alignment, bind/unbind/wrap text in container and automatic-width control.
-- [ ] Precision: grid, snap to grid/objects and freehand stroke shape.
+- [x] Precision: visible grid, snap construction/movement to grid, snap movement to object edges/centers.
+- [ ] Precision: object snapping while constructing/resizing and freehand stroke shape.
 - [ ] Canvas: background, clear, zoom to selection/reset zoom, view/zen mode, statistics and help.
 - [ ] Links: edit/open links and copy element link with host-provided navigation policy.
 - [ ] Library: save selection, insert/delete items and import/export library files; external browse
   requires host navigation policy and must not silently fetch or publish drawings.
 - [ ] Native accessibility actions, hardware shortcuts, full font-picker choices and inline previews.
+- [ ] Extra tools: embeddable URL cards and transient laser pointer. Mermaid generation is deliberately
+  unavailable in the web wrapper (`excalidraw-assets.ts` substitutes an explanatory stub); AI is disabled.
 
 The first mobile checkpoint compiles against the iOS SDK; runtime verification belongs to the
 integrated app. Unchecked features remain explicit implementation work.
@@ -292,3 +297,12 @@ normalize orientation and store PNG so web clients can render the same bytes. Re
 creates a new file ID; old files stay for undo and tombstones. Crop, transforms and arrangement
 commands produce ordinary element versions and participate in the shared undo history. Grouped
 objects align and distribute as units. Imported SVG bytes remain preserved but are not yet decoded.
+
+The third checkpoint adds shared frame creation/wrapping/membership, renaming, selecting/releasing
+children and a native frame-visibility switch; line/arrow point insertion/deletion with midpoint
+handles; straight/round/orthogonal elbow controls; grid construction/movement and object-edge/center
+movement snapping. Grid settings persist in `appState`, including undo; canvas background changes
+now participate in history as well. Frame resizing changes membership without scaling children.
+The mobile actions menu opens **Frames, points and snapping**. Mac gets the frame tool and shared
+command APIs without changing its existing interaction policy. Elbow obstacle routing and the other
+unchecked controls remain explicit follow-up work.

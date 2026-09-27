@@ -72,6 +72,8 @@ package final class StaticLayerCache {
       hasher.combine(element.version)
       hasher.combine(element.versionNonce)
     }
+    hasher.combine(index.framesVisible)
+    hasher.combine(canvasBackground)
     hasher.combine(skipped.count)
     hasher.combine(hairlineZoom)
     let newKey = Key(signature: hasher.finalize(), zoom: viewport.zoom, theme: theme, scale: scale)

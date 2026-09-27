@@ -23,9 +23,14 @@ public final class SceneRenderer: @unchecked Sendable {
   public struct Index: Sendable {
     public var elements: [String: ExcalidrawElement]
     public var files: JSONValue
+    public var framesVisible: Bool
 
-    public init(_ elements: [ExcalidrawElement], files: JSONValue = .object(JSONObject())) {
+    public init(
+      _ elements: [ExcalidrawElement], files: JSONValue = .object(JSONObject()),
+      framesVisible: Bool = true
+    ) {
       self.files = files
+      self.framesVisible = framesVisible
       var byId: [String: ExcalidrawElement] = [:]
       byId.reserveCapacity(elements.count)
       for element in elements where !element.isDeleted { byId[element.id] = element }
@@ -44,6 +49,7 @@ public final class SceneRenderer: @unchecked Sendable {
     skipping skipped: Set<String> = []
   ) {
     for element in elements where !element.isDeleted && !skipped.contains(element.id) {
+      if element.type.isFrameLike && !index.framesVisible { continue }
       if element.type == .text, let containerId = element.containerId,
         index.elements[containerId] != nil
       {
@@ -51,7 +57,8 @@ public final class SceneRenderer: @unchecked Sendable {
       }
       if let visibleRect, !bounds(of: element, index: index).intersects(visibleRect) { continue }
       context.saveGState()
-      if let frameId = element.frameId, let frame = index.elements[frameId], frame.type.isFrameLike
+      if index.framesVisible, let frameId = element.frameId, let frame = index.elements[frameId],
+        frame.type.isFrameLike
       {
         let rect = CGRect(x: frame.x, y: frame.y, width: frame.width, height: frame.height)
         context.addPath(

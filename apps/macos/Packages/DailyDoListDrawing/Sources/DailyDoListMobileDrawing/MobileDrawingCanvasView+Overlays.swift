@@ -2,6 +2,22 @@
   import UIKit
 
   extension MobileDrawingCanvasView {
+    func drawGrid(in context: CGContext) {
+      guard editor.gridEnabled, editor.gridSize.isFinite, editor.gridSize >= 1 else { return }
+      var spacing = editor.gridSize * viewport.zoom
+      while spacing < 10 { spacing *= 2 }
+      let x0 = (-viewport.origin.x * viewport.zoom).truncatingRemainder(dividingBy: spacing)
+      let y0 = (-viewport.origin.y * viewport.zoom).truncatingRemainder(dividingBy: spacing)
+      context.saveGState()
+      context.setFillColor(UIColor.secondaryLabel.withAlphaComponent(0.3).cgColor)
+      for x in stride(from: x0, through: bounds.width, by: spacing) {
+        for y in stride(from: y0, through: bounds.height, by: spacing) {
+          context.fillEllipse(in: CGRect(x: x, y: y, width: 1.5, height: 1.5))
+        }
+      }
+      context.restoreGState()
+    }
+
     func drawSelection(in context: CGContext) {
       context.saveGState()
       defer { context.restoreGState() }
@@ -19,6 +35,18 @@
           context.fillEllipse(in: rect)
           context.strokeEllipse(in: rect)
         }
+      }
+      for point in editor.linearMidpoints {
+        let center = viewport.sceneToView(point)
+        context.setFillColor(UIColor.systemIndigo.withAlphaComponent(0.3).cgColor)
+        context.fillEllipse(in: CGRect(x: center.x - 4, y: center.y - 4, width: 8, height: 8))
+      }
+      if let index = editor.selectedPointIndex, let points = editor.selectionFrame?.pointHandles,
+        points.indices.contains(index)
+      {
+        let center = viewport.sceneToView(points[index])
+        context.setFillColor(UIColor.systemIndigo.cgColor)
+        context.fillEllipse(in: CGRect(x: center.x - 5, y: center.y - 5, width: 10, height: 10))
       }
       if let marquee = editor.marquee {
         let origin = viewport.sceneToView(DrawingPoint(marquee.minX, marquee.minY))

@@ -11,6 +11,8 @@ struct DrawingHistory {
     var orderAfter: [String]?
     var selectionBefore: Set<String>
     var selectionAfter: Set<String>
+    var appStateBefore: JSONObject?
+    var appStateAfter: JSONObject?
   }
 
   static let limit = 200

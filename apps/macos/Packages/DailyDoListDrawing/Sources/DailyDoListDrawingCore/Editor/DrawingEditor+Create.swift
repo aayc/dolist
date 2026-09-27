@@ -29,6 +29,12 @@ extension DrawingEditor {
     element.updated = environment.now()
     switch type {
     case .arrow:
+      element.elbowed = arrowShape == .elbow
+      if arrowShape == .elbow {
+        element.roundness = nil
+      } else if arrowShape == .round {
+        element.roundness = .proportional
+      }
       element.startArrowhead = style.startArrowhead
       element.endArrowhead = style.endArrowhead
     case .text:
@@ -76,6 +82,7 @@ extension DrawingEditor {
       return
     }
     select([id])
+    if element.type.isFrameLike { replaceFrameChildren(id) }
     if !isToolLocked { tool = .selection }
     commit()
   }

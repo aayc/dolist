@@ -100,7 +100,7 @@ public enum ArrowBinding {
     case end
   }
 
-  static func absolutePoint(_ arrow: ExcalidrawElement, _ index: Int) -> P {
+  package static func absolutePoint(_ arrow: ExcalidrawElement, _ index: Int) -> DrawingPoint {
     let point = arrow.points.isEmpty ? P.zero : arrow.points[index]
     let absolute = P(arrow.x + point.x, arrow.y + point.y)
     return arrow.angle == 0

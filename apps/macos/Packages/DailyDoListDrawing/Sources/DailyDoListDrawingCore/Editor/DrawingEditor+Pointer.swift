@@ -83,6 +83,7 @@ extension DrawingEditor {
   public func pointerDown(
     at point: DrawingPoint, modifiers: PointerModifiers = [], clickCount: Int = 1
   ) {
+    let point = tool == .selection || tool == .eraser || tool == .freedraw ? point : snapped(point)
     if editingTextId != nil { endTextEditing() }
     hoveredId = nil
     if let id = multiPointElementId {
@@ -91,7 +92,7 @@ extension DrawingEditor {
     }
     switch tool {
     case .selection: selectionDown(at: point, modifiers: modifiers, clickCount: clickCount)
-    case .rectangle, .ellipse, .diamond:
+    case .rectangle, .ellipse, .diamond, .frame:
       guard let type = tool.elementType else { return }
       let element = newElement(type, at: point)
       insert(element)
@@ -127,6 +128,12 @@ extension DrawingEditor {
 
   public func pointerDragged(to point: DrawingPoint, modifiers: PointerModifiers = []) {
     guard let gesture else { return }
+    let point: DrawingPoint = {
+      switch gesture {
+      case .create, .linear, .resize, .movePoint: return snapped(point)
+      default: return point
+      }
+    }()
     switch gesture {
     case .marquee(let start, let additive, let initial):
       let rect = DrawingRect(
@@ -161,7 +168,7 @@ extension DrawingEditor {
       resizeNewElement(id, origin: origin, to: point, modifiers: modifiers)
       invalidate()
     case .linear(let id, _, _):
-      movePointToPointer(id, index: 1, point, modifiers: modifiers)
+      movePointToPointer(id, index: nil, point, modifiers: modifiers)
       bindingHighlightId = arrowTarget(at: point, excluding: [id], for: id)
       invalidate()
     case .freedraw(let id):
@@ -184,11 +191,13 @@ extension DrawingEditor {
     case .move(_, let originals, _, let moved):
       if moved {
         unbindArrowsMovedAlone(Set(originals.keys))
+        updateFrameMembership()
         commit()
       } else {
         commit()
       }
     case .resize:
+      updateFrameMembership(resizing: true)
       commit()
     case .movePoint(let id, let index):
       finishPointMove(id, index: index)
@@ -251,11 +260,21 @@ extension DrawingEditor {
     if let frame = selectionFrame {
       if let index = frame.pointHandle(at: point, radius: handleRadius), let id = selectedIds.first
       {
+        selectedPointIndex = index
         gesture = .movePoint(id: id, index: index)
         return
       }
+      if let id = editingLinearId,
+        let segment = linearMidpoints.firstIndex(where: { $0.distance(to: point) <= handleRadius })
+      {
+        insertLinearPoint(id, after: segment, at: point, commitChange: false)
+        gesture = .movePoint(id: id, index: segment + 1)
+        return
+      }
       if let handle = frame.handle(at: point, radius: handleRadius) {
-        let ids = withDependents(selectedIds)
+        let ids =
+          selectedElements.contains(where: { $0.type.isFrameLike })
+          ? selectedIds : withDependents(selectedIds)
         let originals = Dictionary(
           uniqueKeysWithValues: ids.compactMap { id in element(id).map { (id, $0) } })
         gesture = .resize(handle: handle, frame: frame, originals: originals)
@@ -317,7 +336,7 @@ extension DrawingEditor {
 
   func moveSelection(originals: [String: ExcalidrawElement], by delta: DrawingPoint, snapAxis: Bool)
   {
-    var delta = delta
+    var delta = snappedMovement(delta, originals: originals)
     if snapAxis { if abs(delta.x) > abs(delta.y) { delta.y = 0 } else { delta.x = 0 } }
     for (id, original) in originals {
       update(id) { element in
@@ -355,6 +374,7 @@ extension DrawingEditor {
     }
     update(id) { element in
       element.points[index] = target
+      if element.elbowed { orthogonalize(&element, movedPoint: index) }
       normalizePoints(&element)
     }
     if let label = element(id)?.boundTextId { positionArrowLabel(label) }

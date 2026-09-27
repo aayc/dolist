@@ -73,6 +73,7 @@
     @Bindable public var controller: MobileDrawingController
     @Environment(\.colorScheme) private var colorScheme
     @State private var propertiesShown = false
+    @State private var precisionShown = false
 
     public init(controller: MobileDrawingController) { self.controller = controller }
     public var body: some View {
@@ -80,6 +81,17 @@
         if controller.isEditing { toolbar }
         MobileDrawingCanvas(controller: controller, theme: colorScheme == .dark ? .dark : .light)
         if controller.isEditing { commands }
+      }
+      .sheet(isPresented: $precisionShown) {
+        NavigationStack {
+          MobileDrawingPrecision(editor: controller.editor)
+            .navigationTitle("Frames and precision")
+            .toolbar {
+              ToolbarItem(placement: .confirmationAction) {
+                Button("Done") { precisionShown = false }
+              }
+            }
+        }
       }
       .sheet(isPresented: $propertiesShown) {
         NavigationStack {
@@ -135,6 +147,7 @@
             isOn: Binding(
               get: { controller.editor.isToolLocked }, set: { controller.editor.isToolLocked = $0 })
           )
+          Button("Frames, points and snapping") { precisionShown = true }
           Button("Select all") { controller.editor.selectAll() }
           MobileDrawingArrangeMenu(editor: controller.editor)
           Button("Unlock all") { controller.editor.unlockAll() }
