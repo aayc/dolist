@@ -235,7 +235,7 @@ public final class VimSession {
   /// until replaced).
   public func notify(_ message: String, duration: Double? = 5) {
     guard isAttached else { return }
-    cm.openNotification(message, long: false, duration: duration ?? 0)
+    _ = cm.openNotification(message, long: false, duration: duration ?? 0)
   }
 
   func report(_ error: any Error) {
