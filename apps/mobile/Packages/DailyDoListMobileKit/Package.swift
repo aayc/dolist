@@ -6,6 +6,7 @@ let package = Package(
   platforms: [.macOS(.v14), .iOS(.v17)],
   products: [.library(name: "DailyDoListMobileKit", targets: ["DailyDoListMobileKit"])],
   dependencies: [
+    .package(path: "../../../macos/Packages/DailyDoListAgent"),
     .package(path: "../../../macos/Packages/DailyDoListClient"),
     .package(path: "../../../macos/Packages/DailyDoListDomain"),
     .package(path: "../../../macos/Packages/DailyDoListModels"),
@@ -13,7 +14,10 @@ let package = Package(
   targets: [
     .target(
       name: "DailyDoListMobileKit",
-      dependencies: ["DailyDoListClient", "DailyDoListDomain", "DailyDoListModels"],
+      dependencies: [
+        "DailyDoListClient", "DailyDoListDomain", "DailyDoListModels",
+        .product(name: "DailyDoListAgentCore", package: "DailyDoListAgent"),
+      ],
       linkerSettings: [.linkedLibrary("sqlite3")]),
     .testTarget(
       name: "DailyDoListMobileKitTests",

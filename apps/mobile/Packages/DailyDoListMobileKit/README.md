@@ -166,6 +166,40 @@ opens; forgotten work cannot reappear from stale callbacks. Checkpoint removal f
 transaction and can be retried by a new recovery owner after a crash or filesystem error. Keep
 the small tombstone database; pairing again uses a fresh profile UUID. This is ordinary local
 data removal, not a claim of forensic secure erasure.
+## Agent action receipts
+
+`MobileAgentMutationJournal` implements AgentCore's optional `AgentMutationJournal`. Construct an
+`HTTPAgentMutationRemote` from a verified `HTTPDaemonClient` with its immutable workspace guard,
+then inject the journal into `AgentStore(client:mutationJournal:)`. The journal requires matching
+workspace/host identity and `agent-mutations-v1`; an older host never falls back to an unguarded
+phone action. Desktop callers without a journal keep their existing behavior.
+
+The exact Codable command, stable operation ID and timestamp are committed before the first
+request. A message uses its optimistic message ID as the operation ID. Commands cover chat,
+thread stop/retry, approval decisions and routine create/run/pause/resume. Approval review is
+checked again after preparation; a changed card, runner, expiry or authorization prevents sending.
+This is an online action journal, with no background drain or automatic replay.
+
+SQLite keys `agent-operation/<id>` hold version-1 records with `scope`, `intent` (ID, exact command,
+creation date), optional confirmed `result`/server `receipt`, and `notDispatched` for a failed
+authorization guard. `agent-operation-slot/<sha256 exclusion key>` holds the operation ID while
+uncertain. Slot and intent preparation share a CAS transaction, preventing two open handles from
+creating replacement IDs for one unresolved control. No credentials are stored in these records.
+Unresolved rows and slots are durable, survive cache trimming and block namespace retirement.
+Confirmation atomically removes the slot and makes history disposable; the daemon retains its
+durable receipt even after that local history is evicted.
+
+`AgentStore.pendingMutations` exposes unresolved intents, and `resolveMutation(id)` checks only
+the saved receipt. Restart, cancellation, missing receipt, pending receipt and indeterminate
+receipt never dispatch a saved command. The original HTTP result determines completion, including
+rejections; receipt completion does not mean agent work has finished. Changed payloads cannot
+reuse an ID. Repeated message attempts keep the original optimistic ID and pending messages
+reappear when their thread loads. Global agent enable/disable remains the existing idempotent
+settings operation.
+
+The recovery exporter must either validate and export these typed pending commands or report
+them as unsupported protected records; opaque journal JSON is never silently treated as an
+exported draft. Explicitly forgetting unresolved actions loses their local recovery controls.
 
 ## Remaining integrations
 

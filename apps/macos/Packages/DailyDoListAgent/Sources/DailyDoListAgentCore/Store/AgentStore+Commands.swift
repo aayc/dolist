@@ -30,6 +30,14 @@ extension AgentStore {
     }
     do {
       let response = try await client.thread(id)
+      if mutationJournal != nil, state.loadedThreads[id] == nil {
+        var empty = response.thread
+        empty.messages = []
+        mutate {
+          $0.applyThreadResponse(ThreadResponse(thread: empty, approvals: []), inFlight: [])
+        }
+      }
+      restorePendingMessages(threadID: id)
       failedThreadIds.remove(id)
       let buffered = loadBuffers[id] ?? []
       let inFlight = sendingMessageIds.union(unsentMessages.keys)
@@ -73,7 +81,7 @@ extension AgentStore {
   @discardableResult
   public func cancelThread(_ id: String) async -> Bool {
     do {
-      _ = try await client.cancelThread(id)
+      _ = try await performMutation(.cancelThread(id))
       return true
     } catch {
       report(error, title: "Couldn't stop the task")
@@ -85,7 +93,7 @@ extension AgentStore {
   @discardableResult
   public func retryThread(_ id: String) async -> Bool {
     do {
-      _ = try await client.retryThread(id)
+      _ = try await performMutation(.retryThread(id))
       return true
     } catch {
       report(error, title: "Couldn't retry the task")
@@ -109,10 +117,17 @@ extension AgentStore {
   /// its input in the same update). Nil for a blank message.
   func enqueueMessage(threadId: String, text: String) -> Task<Bool, Never>? {
     guard let body = text.trimmedNonEmpty else { return nil }
-    let localId = "local-\(UUID().uuidString.lowercased())"
+    let command = AgentMutationCommand.message(threadID: threadId, text: body)
+    let localId =
+      pendingMutations.first(where: { $0.command == command })?.id
+      ?? "local-\(UUID().uuidString.lowercased())"
+    guard !sendingMessageIds.contains(localId) else { return nil }
     let message = TextMessage(
       id: localId, author: "you", createdAt: now().epochMillis, role: .user, text: body)
-    let shown = !mutate { $0.insertOptimisticMessage(message, threadId: threadId) }.isEmpty
+    let existing =
+      state.loadedThreads[threadId]?.messages.contains(where: { $0.id == localId }) == true
+    let shown =
+      existing || !mutate { $0.insertOptimisticMessage(message, threadId: threadId) }.isEmpty
     sendingMessageIds.insert(localId)
     return Task { await self.deliver(body, id: localId, threadId: threadId, shown: shown) }
   }
@@ -141,12 +156,12 @@ extension AgentStore {
   private func deliver(_ text: String, id: String, threadId: String, shown: Bool) async -> Bool {
     defer { sendingMessageIds.remove(id) }
     do {
-      _ = try await client.postMessage(threadId: threadId, text: text)
+      _ = try await performMutation(.message(threadID: threadId, text: text), operationID: id)
       return true
     } catch {
       let cancelled: Bool =
         if case DaemonClientError.cancelled = error { true } else { error is CancellationError }
-      if cancelled {
+      if cancelled && mutationJournal == nil {
         mutate { $0.removeOptimisticMessage(id: id, threadId: threadId) }
       } else if shown, state.optimisticMessages[threadId]?.contains(id) == true {
         unsentMessages[id] = AgentAlert.describe(error)
@@ -168,7 +183,8 @@ extension AgentStore {
   @discardableResult
   public func decide(
     _ approvalId: String, _ decision: ApprovalDecision, scope: ApprovalScope? = nil,
-    note: String? = nil
+    note: String? = nil,
+    authorize: @escaping @MainActor @Sendable () -> Bool = { true }
   ) async -> Bool {
     guard !decidingApprovalIds.contains(approvalId) else { return false }
     let original = state.approvals[approvalId]
@@ -179,7 +195,7 @@ extension AgentStore {
       note: trimmedNote?.isEmpty == false ? trimmedNote : nil)
 
     var optimistic: ApprovalRequest?
-    if var next = original {
+    if mutationJournal == nil, var next = original {
       next.status = decision == .approve ? .approved : .denied
       next.scope = request.scope
       next.decisionNote = request.note
@@ -192,7 +208,13 @@ extension AgentStore {
     defer { decidingApprovalIds.remove(approvalId) }
 
     do {
-      let updated = try await client.decideApproval(approvalId, request)
+      let result = try await performMutation(.approval(id: approvalId, decision: request)) {
+        guard authorize() else { return false }
+        guard let original else { return true }
+        return self.approvals[approvalId] == original && original.isPending
+          && (original.expiresAt.map { $0 > self.now().epochMillis } ?? true)
+      }
+      guard case .approval(let updated) = result else { throw AgentMutationError.corruptJournal }
       mutate { $0.upsertApproval(updated, force: true) }
       return true
     } catch DaemonClientError.approvalConflict(let conflict) {

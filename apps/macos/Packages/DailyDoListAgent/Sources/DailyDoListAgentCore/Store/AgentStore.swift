@@ -15,6 +15,9 @@ import Observation
 @Observable
 public final class AgentStore {
   public let client: DaemonClient
+  @ObservationIgnored let mutationJournal: (any AgentMutationJournal)?
+  /// Persisted user actions whose result still needs a receipt check. Never automatically sent.
+  public internal(set) var pendingMutations: [PendingAgentMutation] = []
 
   /// The reducer's state. Published through the computed properties below, which report exactly
   /// the fields a mutation changed (see `mutate(_:)`).
@@ -127,15 +130,18 @@ public final class AgentStore {
   @ObservationIgnored var artifactRefetches: [String: Task<Void, Never>] = [:]
   @ObservationIgnored var refreshGeneration = 0
 
-  public convenience init(client: DaemonClient) {
-    self.init(client: client, now: { Date() })
+  public convenience init(client: DaemonClient, mutationJournal: (any AgentMutationJournal)? = nil)
+  {
+    self.init(client: client, now: { Date() }, mutationJournal: mutationJournal)
   }
 
   init(
     client: DaemonClient, now: @escaping @Sendable () -> Date,
-    artifactRefetchDelay: Duration = .milliseconds(150)
+    artifactRefetchDelay: Duration = .milliseconds(150),
+    mutationJournal: (any AgentMutationJournal)? = nil
   ) {
     self.client = client
+    self.mutationJournal = mutationJournal
     self.now = now
     self.artifactRefetchDelay = artifactRefetchDelay
     self.outbox = ClientOutbox(client: client)
