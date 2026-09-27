@@ -19,8 +19,10 @@ public struct FoundationRecoveryFileSystem: RecoveryFileSystem {
     }
     try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: false)
     do {
-      try FileManager.default.createDirectory(
-        at: staging.appendingPathComponent("markdown"), withIntermediateDirectories: false)
+      for directory in ["markdown", "binary"] {
+        try FileManager.default.createDirectory(
+          at: staging.appendingPathComponent(directory), withIntermediateDirectories: false)
+      }
     } catch {
       try? FileManager.default.removeItem(at: staging)
       throw error
@@ -34,8 +36,9 @@ public struct FoundationRecoveryFileSystem: RecoveryFileSystem {
     let pieces = relativePath.split(separator: "/", omittingEmptySubsequences: false)
     guard
       relativePath == "manifest.json"
-        || (pieces.count == 2 && pieces[0] == "markdown"
-          && pieces[1].hasSuffix(".md") && pieces[1] != ".md"
+        || (pieces.count == 2
+          && ((pieces[0] == "markdown" && pieces[1].hasSuffix(".md") && pieces[1] != ".md")
+            || (pieces[0] == "binary" && pieces[1].hasSuffix(".bin") && pieces[1] != ".bin"))
           && pieces[1].utf8.allSatisfy({
             (48...57).contains($0) || (97...122).contains($0) || $0 == 45 || $0 == 46
           }))
@@ -54,6 +57,7 @@ public struct FoundationRecoveryFileSystem: RecoveryFileSystem {
 
   public func finishExport(_ location: RecoveryExportLocation) throws -> URL {
     try syncDirectory(location.staging.appendingPathComponent("markdown"))
+    try syncDirectory(location.staging.appendingPathComponent("binary"))
     try syncDirectory(location.staging)
     try FileManager.default.moveItem(at: location.staging, to: location.destination)
     try syncDirectory(location.destination.deletingLastPathComponent())

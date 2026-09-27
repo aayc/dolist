@@ -91,8 +91,25 @@ public actor WorkspaceRecovery {
     var operations: [WorkspaceStructuralOperation] = []
     var unsupported = 0
     let agent = RecoveryAgentMutations(values: snapshot.values, scope: scope)
+    let uploads = RecoveryAttachmentUploads(values: snapshot.values, scope: scope)
+    for upload in uploads.uploads {
+      guard let data = uploads.originals[upload.id] else {
+        throw WorkspaceMaintenanceError.incompleteExport
+      }
+      let relative =
+        "binary/" + upload.id.uuidString.lowercased() + "-" + String(upload.sha256.prefix(12))
+        + ".bin"
+      try files.write(data, relativePath: relative, to: location)
+      entries.append(
+        RecoveryExportEntry(
+          kind: "attachment-original", sourcePath: upload.path,
+          relativePath: relative, contentHash: upload.sha256, byteCount: upload.byteCount,
+          revision: upload.revision, baseVersion: nil, context: upload.id.uuidString))
+    }
     for value in snapshot.values
-    where value.retention == .durable && !agent.recognizedKeys.contains(value.key) {
+    where value.retention == .durable && !agent.recognizedKeys.contains(value.key)
+      && !uploads.recognizedKeys.contains(value.key)
+    {
       if value.key.hasPrefix("composer/") {
         let text = try JSONDecoder().decode(String.self, from: value.data)
         if !text.isEmpty {
@@ -126,8 +143,9 @@ public actor WorkspaceRecovery {
       }
     }
     let manifest = RecoveryExportManifest(
-      formatVersion: 2, scope: scope, createdAt: clock(), entries: entries,
+      formatVersion: 3, scope: scope, createdAt: clock(), entries: entries,
       captures: captures, structuralOperations: operations, agentOperations: agent.operations,
+      attachmentUploads: uploads.uploads,
       snapshotFingerprint: try snapshot.fingerprint(scope: scope),
       unsupportedRecordCount: unsupported)
     let encoder = JSONEncoder()

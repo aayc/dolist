@@ -421,3 +421,18 @@ available for late note dependencies. The separate content cache can keep acknow
 preview. `RecoveryAttachmentUploads` validates exact key/scope/version/hash/byte count pairs and
 provides pending originals to the recovery exporter; future or corrupt formats remain unrecognized
 and protected. Markdown garbage collection recognizes these inline records and never deletes them.
+
+## Attachment recovery exports
+
+Recovery format 3 includes `attachmentUploads` with each unresolved upload's immutable operation
+ID, scope, original filename, destination, state and revision. Exact original bytes are copied to
+flat generated `binary/*.bin` files. Each manifest entry records its SHA-256 and byte count; names
+and MIME metadata never cause an original to be decoded or executed during export. Completed
+metadata is recognized without treating an acknowledged/cancelled upload as unsynced work.
+Missing or mismatched pending originals remain unsupported protected records and block Forget.
+
+Files-copy verification checks binary originals as well as Markdown. The conditional-retirement
+fingerprint covers all protected row metadata and each payload digest without constructing a
+second base64 copy of attachment bytes. A newly prepared attachment invalidates an earlier export.
+The phone's Forget screen should display `WorkspaceRecoverySummary.attachments` with the other
+protected-work counts.

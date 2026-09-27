@@ -4,11 +4,20 @@ import Foundation
 
 extension WorkspaceRecoverySnapshot {
   func fingerprint(scope: WorkspaceScope) throws -> String {
+    struct ValueDigest: Encodable {
+      let key: String
+      let revision: Int64
+      let contentHash: String
+      let byteCount: Int
+      let updatedAt: Date
+      let retention: WorkspaceValueRetention
+      let blocksNoteWrites: Bool
+    }
     struct Snapshot: Encodable {
       let scope: WorkspaceScope
       let documents: [NoteIndexRecord]
       let pendingWrites: [NoteOutboxRecord]
-      let values: [WorkspaceStoredValue]
+      let values: [ValueDigest]
     }
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
@@ -19,7 +28,13 @@ extension WorkspaceRecoverySnapshot {
         pendingWrites: pendingWrites.sorted {
           $0.path.utf8.lexicographicallyPrecedes($1.path.utf8)
         },
-        values: values.sorted { $0.key.utf8.lexicographicallyPrecedes($1.key.utf8) }))
+        values: values.sorted { $0.key.utf8.lexicographicallyPrecedes($1.key.utf8) }.map {
+          ValueDigest(
+            key: $0.key, revision: $0.revision,
+            contentHash: MarkdownCheckpointStore.digest($0.data),
+            byteCount: $0.data.count, updatedAt: $0.updatedAt, retention: $0.retention,
+            blocksNoteWrites: $0.blocksNoteWrites)
+        }))
     return MarkdownCheckpointStore.digest(data)
   }
 }
@@ -68,6 +83,9 @@ extension WorkspaceRecovery {
     }
     try requireDirectory(directory)
     try requireDirectory(directory.appendingPathComponent("markdown"))
+    if proof.exported.manifest.formatVersion >= 3 {
+      try requireDirectory(directory.appendingPathComponent("binary"))
+    }
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     let manifestBytes = try encoder.encode(proof.exported.manifest).count
