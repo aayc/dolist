@@ -5,14 +5,18 @@ public struct WorkspaceRecoverySummary: Sendable {
   public let composers: Int
   public let captures: Int
   public let structuralOperations: Int
+  public let attachments: Int
   public let agentOperations: Int
   public let unknownRecords: Int
   public var requiresDecision: Bool {
-    notes + composers + captures + structuralOperations + agentOperations + unknownRecords > 0
+    notes + composers + captures + structuralOperations + agentOperations + attachments
+      + unknownRecords > 0
   }
 
   init(snapshot: WorkspaceRecoverySnapshot, scope: WorkspaceScope) {
     let agent = RecoveryAgentMutations(values: snapshot.values, scope: scope)
+    let uploads = RecoveryAttachmentUploads(values: snapshot.values, scope: scope)
+    attachments = uploads.uploads.count
     agentOperations = agent.operations.count
     notes = snapshot.documents.filter { $0.state != .synced || !$0.recoveryCopies.isEmpty }.count
     var composers = 0
@@ -20,7 +24,9 @@ public struct WorkspaceRecoverySummary: Sendable {
     var structural = 0
     var unknown = 0
     for value in snapshot.values
-    where value.retention == .durable && !agent.recognizedKeys.contains(value.key) {
+    where value.retention == .durable && !agent.recognizedKeys.contains(value.key)
+      && !uploads.recognizedKeys.contains(value.key)
+    {
       if value.key.hasPrefix("composer/") {
         if let text = try? JSONDecoder().decode(String.self, from: value.data) {
           composers += text.isEmpty ? 0 : 1
@@ -73,6 +79,7 @@ public struct RecoveryExportManifest: Codable, Sendable {
   public let captures: [QueuedCapture]
   public let structuralOperations: [WorkspaceStructuralOperation]
   public let agentOperations: [RecoveryAgentMutation]
+  public let attachmentUploads: [AttachmentUpload]
   public let snapshotFingerprint: String
   public let unsupportedRecordCount: Int
 }
