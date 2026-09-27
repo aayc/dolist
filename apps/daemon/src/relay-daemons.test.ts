@@ -6,7 +6,7 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type HttpMethod, persistedThreadJournalPath } from "@ddl/contract";
+import { type HttpMethod, PERSISTED_PATHS, persistedThreadJournalPath } from "@ddl/contract";
 import {
   type AgentNotificationsResponse,
   type AgentPlacement,
@@ -14,6 +14,7 @@ import {
   API_ROUTES,
   type ApiRouteName,
   type ApprovalListResponse,
+  deferred,
   type HealthResponse,
   type MachineStatusResponse,
   OPERATION_ID_HEADER,
@@ -27,8 +28,9 @@ import {
   type ThreadResponse,
   WORKSPACE_ID_HEADER,
 } from "@ddl/core";
+import { RemoteStorageProvider } from "@ddl/storage";
 import { createSyncServer, type RunningSyncServer } from "@ddl/sync";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LeaseTimings } from "./agent-lease";
 import { loadConfig } from "./config";
 import { declaredResponse, expectConforms, routePath } from "./contract-test-helpers";
@@ -224,10 +226,23 @@ async function pair(laptop: Device, machine: Device): Promise<void> {
 
 const relayOf = async (device: Device) => (await status(device)).placement?.relay;
 
-async function startPairedLaptop(machine: Device): Promise<Device> {
+async function startPairedLaptop(
+  machine: Device,
+  onConnected?: (device: Device) => void,
+): Promise<Device> {
   const laptop = await startLaptop();
   await pair(laptop, machine);
   await eventually(async () => expect(await relayOf(laptop)).toBe("connected"));
+  const workspaceId = (await call<HealthResponse>(machine, "GET", "health")).body.workspaceId;
+  expect(workspaceId).toEqual(expect.any(String));
+  onConnected?.(laptop);
+  // Relay pairing and the replica's first sync run independently. Identity adoption closes old
+  // WebSockets, so establish the final namespace before opening a journey's observation socket.
+  await eventually(async () => {
+    expect((await call<HealthResponse>(laptop, "GET", "health")).body.workspaceId).toBe(
+      workspaceId,
+    );
+  });
   return laptop;
 }
 
@@ -493,7 +508,39 @@ describe("the agent relay between daemons", { timeout: 120_000 * TIME_SCALE }, (
 
   it("goes read-only while the machine is down and recovers when it returns", async () => {
     const machine = await startMachine();
-    const laptop = await startPairedLaptop(machine);
+    // Hold only initial identity adoption: a fast relay handshake must not make the replica
+    // appear ready for a persistent observation socket while this sync step is still pending.
+    const adoption = deferred<void>();
+    const linked = deferred<Device>();
+    const originalRead = RemoteStorageProvider.prototype.read;
+    const read = vi
+      .spyOn(RemoteStorageProvider.prototype, "read")
+      .mockImplementation(async function (this: RemoteStorageProvider, path) {
+        if (path === PERSISTED_PATHS.workspace) await adoption.promise;
+        return originalRead.call(this, path);
+      });
+    let laptop: Device;
+    let ready = false;
+    const preparing = startPairedLaptop(machine, linked.resolve).then((device) => {
+      ready = true;
+      return device;
+    });
+    void preparing.catch(linked.reject);
+    try {
+      const connecting = await linked.promise;
+      const machineIdentity = (await call<HealthResponse>(machine, "GET", "health")).body
+        .workspaceId;
+      const pendingIdentity = (await call<HealthResponse>(connecting, "GET", "health")).body
+        .workspaceId;
+      expect(pendingIdentity).not.toBe(machineIdentity);
+      expect(ready).toBe(false);
+      adoption.resolve();
+      laptop = await preparing;
+    } finally {
+      adoption.resolve();
+      read.mockRestore();
+      await preparing.catch(() => undefined);
+    }
     const socket = await openSocket(laptop);
     expect([200, 202]).toContain((await sayToOrchestrator(laptop, "Remember the plants")).status);
     await chatSyncedTo(laptop, "Remember the plants");
