@@ -114,8 +114,8 @@ unless moved as part of a selection), unknown fields of elements, bindings, the 
 file: the frontmatter, the notice and any markdown above the data, `## Element Links`,
 `## Embedded Files`, unknown sections, and what follows the drawing.
 
-**Deferred**: SVG image decoding, rotating with a handle (native mobile rotation commands exist),
-obstacle-avoiding elbow rerouting, Mac arrangement controls, SVG clipboard export,
+**Deferred**: extended SVG image features, rotating with a handle (native mobile rotation commands exist),
+obstacle-avoiding elbow rerouting, Mac arrangement controls,
 and the eraser's undo-while-dragging. Shared frame/point/grid commands are available on both platforms;
 the expanded inspector is currently native iPhone UI.
 
@@ -269,11 +269,13 @@ rendering an imported scene.
 - [x] Touch navigation, interruption rollback, explicit multi-select/constraints and 44-point controls.
 - [ ] Runtime iPhone computer-use verification of every tool, keyboard, rotation, dark mode and save/reopen.
 - [x] Raster images: embedded file decode/render, photo/file insertion and replacement, crop and flip.
-- [ ] SVG image decoding (unsupported embedded bytes remain untouched and show a placeholder).
+- [x] Bounded static SVG shapes, transforms, clipping and embedded raster image decode.
+- [ ] Extended SVG: arc paths, text, CSS, gradients, filters and external resources remain unsupported;
+  original embedded bytes stay intact and the renderer shows a placeholder.
 - [x] Shared transform commands and native mobile menus: rotation, four layer commands, grouping/ungrouping, lock/unlock-all,
   horizontal/vertical flip, six alignment and two distribution controls.
 - [x] Clipboard: copy/cut/paste with bound labels, frames, groups and file references; copy/paste styles; copy as PNG.
-- [ ] Clipboard: vector SVG export.
+- [x] Clipboard: vector SVG export (rough paths and text glyphs, local PNG bytes for image elements).
 - [x] Frames: create, rename, wrap selection, select children, remove children and visibility.
 - [x] Lines/arrows: insert/delete points, draggable midpoints, elbow creation/editing and straight/round/elbow controls.
 - [ ] Elbow routing: obstacle avoidance and Excalidraw fixed-segment routing parity (native routes remain orthogonal).
@@ -342,3 +344,14 @@ unsigned iOS compilation cover this checkpoint; integrated runtime checks remain
 that key. Missing keys differ from JSON null, and object key reordering is not a change. Nested
 values merge as whole values. Unknown scene fields and embedded-file merge behavior are preserved.
 The pure TypeScript reference is `mergeDrawingAppState` in `@ddl/core`.
+
+SVG copy exports rough geometry and glyph outlines as paths, preserving rotation, opacity, frame
+clipping and arrow-label gaps; raster image elements embed normalized local PNG bytes. It does not
+export active links or resources. Static SVG image import/rendering accepts basic shapes, M/L/H/V/
+C/S/Q/T/Z paths, transforms, presentation styles, clipping and embedded raster images, with a 2 MB
+source limit, 10,000 nodes, 64 nesting levels, bounded path tokens and 4096-pixel raster bounds.
+Unknown or active constructs reject the whole SVG, preserving the original drawing file bytes.
+The parser never resolves entities, external resources, CSS or scripts; unsupported extended SVG
+remains an explicit parity gap. Accepted file imports retain original SVG bytes rather than replacing
+them with a raster. Regression tests cover rejection, transforms/clipping, vector text export and
+embedded image transfer. Visual runtime parity still requires the integrated app pass.

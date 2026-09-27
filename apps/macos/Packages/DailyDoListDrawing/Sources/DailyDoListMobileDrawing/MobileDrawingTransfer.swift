@@ -46,6 +46,13 @@
       else { throw DrawingTransferError.invalid }
       editor.pasteStyle(from: value)
     }
+    public func copySelectionSVG() throws {
+      guard let scene = editor.copiedScene() else { return }
+      let svg = try DrawingSVG.render(scene, theme: canvas?.theme ?? .light)
+      UIPasteboard.general.items = [
+        ["public.svg-image": Data(svg.utf8), "public.utf8-plain-text": svg]
+      ]
+    }
     public func copySelectionImage() throws {
       guard let scene = editor.copiedScene(),
         let image = DrawingImage.render(
@@ -74,6 +81,10 @@
           Button("Paste style") { perform { try controller.pasteStyle() } }
             .disabled(controller.editor.selectedIds.isEmpty)
           Button("Copy as PNG") { perform { try controller.copySelectionImage() } }
+            .disabled(controller.editor.selectedIds.isEmpty)
+        }
+        Section {
+          Button("Copy as SVG") { perform { try controller.copySelectionSVG() } }
             .disabled(controller.editor.selectedIds.isEmpty)
         }
         Section {
