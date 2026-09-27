@@ -97,6 +97,10 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
 
 ## In flight
 
+- Remote quit continuity: `codex/remote-quit-sync` (`67a488b`) fixes a reproduced race where a
+  relaying client could quit before syncing its last saved note. Active Cursor work already
+  passed a real app-close/reopen test without duplicates; the final-sync regression, all local
+  checks and production bundle budgets pass. Branch CI and the updated Mac installation are next.
 - Full native iPhone app: `codex/iphone-app`, based on the completed Mac setup baseline.
   Foundation checkpoint `a972928` is pushed: unsigned iPhone builds, shared editor extraction,
   real typing/undo/composition tests and focused simulator computer-use. Full features remain
