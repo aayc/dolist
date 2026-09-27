@@ -386,7 +386,10 @@ clears them along with the other namespace state.
 transaction stores the exact original bytes and immutable operation metadata. Each upload gets a
 random stable `attachments/<UUID>.<extension>` vault path; duplicate filenames do not collide.
 The original filename is retained for export, never interpreted as a relative path. The raw-byte
-limit is 5 MiB, enforced before persistence and by the authenticated HTTP transport. Markdown
+limit is 5 MiB, enforced before persistence and by the authenticated HTTP transport. A 32 MiB
+aggregate original-byte budget is checked in the same SQLite transaction as import preparation.
+Only completed disposable originals can be evicted to admit another file; otherwise the new import
+fails explicitly, retaining every pending original. Existing data over the limit is never truncated. Markdown
 extensions fall back to `.bin`; importing a note as editable markdown is a separate document flow.
 
 `uploads`, `upload(_:)` and `bytes(_:)` expose persisted status and verified original bytes.

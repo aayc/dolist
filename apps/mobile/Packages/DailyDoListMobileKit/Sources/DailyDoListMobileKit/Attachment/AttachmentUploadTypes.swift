@@ -52,6 +52,7 @@ public struct AttachmentUpload: Codable, Sendable, Identifiable {
 
 public enum AttachmentUploadError: Error, Equatable, LocalizedError, Sendable {
   case tooLarge(maxBytes: Int)
+  case storageLimit(maxBytes: Int)
   case invalidFilename
   case missingUpload
   case missingOriginal
@@ -61,6 +62,8 @@ public enum AttachmentUploadError: Error, Equatable, LocalizedError, Sendable {
   public var errorDescription: String? {
     switch self {
     case .tooLarge(let maxBytes): "The attachment exceeds the \(maxBytes)-byte upload limit."
+    case .storageLimit(let maxBytes):
+      "Attachment originals have reached the \(maxBytes / (1_024 * 1_024)) MB limit. Sync or export and resolve pending uploads before importing more."
     case .invalidFilename: "Choose an attachment with a valid filename."
     case .missingUpload: "This attachment upload is no longer available."
     case .missingOriginal: "The original attachment bytes are unavailable on this device."

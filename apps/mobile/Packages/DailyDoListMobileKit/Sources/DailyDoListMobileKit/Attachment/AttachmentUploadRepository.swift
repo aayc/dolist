@@ -4,6 +4,7 @@ import Foundation
 /// Original bytes and the immutable destination commit before the editor receives its embed.
 /// This actor has no UI/input-path work; call it after file/photo loading away from typing.
 public actor AttachmentUploadRepository {
+  public static let maximumOriginalBytes = 32 * 1_024 * 1_024
   public nonisolated let scope: WorkspaceScope
   let store: any WorkspaceStateStore
   let clock: @Sendable () -> Date
@@ -120,7 +121,8 @@ public actor AttachmentUploadRepository {
       WorkspaceValueMutation(
         key: key, value: metadata, expectedRevision: creating ? nil : record.upload.revision,
         requiresIdleNoteWrites: preparingAttempt, requiresIdleCaptureWrites: preparingAttempt,
-        requiresNoStructuralChange: creating),
+        requiresNoStructuralChange: creating,
+        attachmentImportBytes: creating ? original.data.count : nil),
       WorkspaceValueMutation(
         key: bytes.key, value: bytes, expectedRevision: creating ? nil : original.revision),
     ]
