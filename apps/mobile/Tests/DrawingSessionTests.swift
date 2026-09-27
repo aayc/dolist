@@ -7,6 +7,32 @@ import Testing
 
 @MainActor
 struct DrawingSessionTests {
+  @Test func recoveryPreparationRefusesAnUnpersistedLiveDrawing() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let scope = WorkspaceScope(
+      profileID: UUID(), workspaceID: "workspace", hostID: "host",
+      origin: try ConnectionOrigin("https://notes.example.test"))
+    let repository = try DrawingRepository(rootDirectory: root, scope: scope)
+    let path = "Sketch.excalidraw.md"
+    let original = try await repository.cache(
+      RemoteNote(
+        content: ExcalidrawMarkdown.serialize(ExcalidrawScene(), previous: nil), version: "v1"),
+      path: path)
+    let session = DrawingSession(drawing: original, repository: repository)
+    let recovery = try WorkspaceRecovery(rootDirectory: root, scope: scope)
+    try await recovery.discardLocalNote(path: path, expectedRevision: original.localRevision)
+    session.controller.editor.tool = .rectangle
+    session.controller.editor.pointerDown(at: .init(10, 10))
+    session.controller.editor.pointerDragged(to: .init(60, 50))
+    session.controller.finishEditing()
+    await session.checkpoint()
+    #expect(session.hasUncheckpointedEdits)
+    #expect(throws: PhoneRecoveryPreparationError.unsavedDrawing(path)) {
+      try PhoneRecoveryPreparation.validate(notes: [], drawings: [session])
+    }
+  }
+
   @Test func malformedArrivalDuringGesturePreservesBothOriginalsAtBackgroundCheckpoint()
     async throws
   {

@@ -90,6 +90,46 @@ public actor CaptureOutbox {
     return try save(value)
   }
 
+  /// Read the exact receipt path without creating a daily note or retrying the append. The
+  /// snapshot is bound to both the capture revision and this connection generation.
+  public func inspectIndeterminate(
+    _ id: UUID, replacing revision: Int64,
+    with remote: any WorkspaceRemote
+  ) async throws -> CaptureInspection {
+    let epoch = generation
+    let capture = try require(id, revision: revision)
+    guard capture.state == .indeterminate else { throw CaptureError.notIndeterminate }
+    guard let path = capture.receipt?.path else { throw CaptureError.receiptMismatch }
+    try WorkspaceDocumentPath.validate(path)
+    guard remote.profileID == scope.profileID, remote.origin == scope.origin else {
+      throw WorkspaceRepositoryError.workspaceMismatch
+    }
+    let identity = try await remote.identity()
+    try check(epoch)
+    guard identity.workspaceID == scope.workspaceID else {
+      throw WorkspaceRepositoryError.workspaceMismatch
+    }
+    guard identity.hostID == scope.hostID else { throw WorkspaceRepositoryError.hostMismatch }
+    guard identity.supportsConditionalWorkspaceWrites else {
+      throw WorkspaceRepositoryError.unsupportedHost
+    }
+    let note = try await remote.readNote(path)
+    try check(epoch)
+    _ = try require(id, revision: revision)
+    return CaptureInspection(
+      scope: scope, captureID: id, revision: revision, path: path,
+      note: note, connectionGeneration: epoch)
+  }
+
+  /// The UI calls this only after explicit user review. Matching text alone is never evidence
+  /// that an append committed, and this operation never creates a replacement capture.
+  @discardableResult
+  public func markReconciled(afterReview inspection: CaptureInspection) throws -> QueuedCapture {
+    guard inspection.scope == scope else { throw WorkspaceRepositoryError.workspaceMismatch }
+    try check(inspection.connectionGeneration)
+    return try markReconciled(inspection.captureID, replacing: inspection.revision)
+  }
+
   public func invalidateConnection() { generation &+= 1 }
 
   @discardableResult

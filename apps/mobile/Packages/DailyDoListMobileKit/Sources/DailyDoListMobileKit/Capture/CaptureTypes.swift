@@ -111,3 +111,13 @@ public protocol CaptureRemote: Sendable {
   /// Requests require the expected-workspace header. Never substitute another serving host.
   func append(_ capture: CaptureOperation) async throws -> CaptureReceipt
 }
+
+/// Read-only host evidence, retained only for the current connection and capture revision.
+public struct CaptureInspection: Sendable {
+  public let scope: WorkspaceScope
+  public let captureID: UUID
+  public let revision: Int64
+  public let path: String
+  public let note: RemoteNote?
+  let connectionGeneration: UInt64
+}

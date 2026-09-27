@@ -146,10 +146,52 @@ struct CaptureOutboxTests {
     let notesRemote = RepositoryRemote(scope: fixture.scope)
     _ = try await repository.synchronize(with: notesRemote)
     #expect(try await repository.note("Other.md")?.state == .waitingToSync)
-    _ = try await outbox.markReconciled(capture.id, replacing: uncertain.revision)
+    let inspection = try await outbox.inspectIndeterminate(
+      capture.id, replacing: uncertain.revision, with: notesRemote)
+    #expect(inspection.note == nil)
+    #expect(inspection.path == uncertain.receipt?.path)
+    _ = try await outbox.markReconciled(afterReview: inspection)
     _ = try await repository.synchronize(with: notesRemote)
     #expect(await notesRemote.notes["Other.md"]?.content == "Other text")
     #expect(await remote.attempts.count == 1)
+  }
+
+  @Test func captureReviewRequiresTheSameConnectionAndUnchangedOriginalRevision() async throws {
+    let fixture = try RepositoryFixture()
+    defer { fixture.remove() }
+    let outbox = try CaptureOutbox(rootDirectory: fixture.directory, scope: fixture.scope)
+    let capture = try await outbox.enqueue(
+      text: "Original task", capturedAt: Date(), timeZone: .current)
+    let appendRemote = CaptureTestRemote(scope: fixture.scope)
+    await appendRemote.makeIndeterminate()
+    _ = try await outbox.synchronize(with: appendRemote)
+    let uncertain = try #require(await outbox.capture(capture.id))
+    let remote = RepositoryRemote(scope: fixture.scope)
+    let path = try #require(uncertain.receipt?.path)
+    await remote.replace(
+      path, with: RemoteNote(content: "Current note", version: "current-version"))
+    let inspection = try await outbox.inspectIndeterminate(
+      capture.id, replacing: uncertain.revision, with: remote)
+    #expect(inspection.note?.content == "Current note")
+    await outbox.invalidateConnection()
+    await #expect(throws: WorkspaceRepositoryError.connectionChanged) {
+      try await outbox.markReconciled(afterReview: inspection)
+    }
+    await remote.setIdentity(workspaceID: "other-workspace")
+    await #expect(throws: WorkspaceRepositoryError.workspaceMismatch) {
+      try await outbox.inspectIndeterminate(capture.id, replacing: uncertain.revision, with: remote)
+    }
+    await remote.setIdentity(workspaceID: fixture.scope.workspaceID)
+    let fresh = try await outbox.inspectIndeterminate(
+      capture.id, replacing: uncertain.revision, with: remote)
+    let second = try CaptureOutbox(rootDirectory: fixture.directory, scope: fixture.scope)
+    _ = try await second.markReconciled(capture.id, replacing: uncertain.revision)
+    await #expect(throws: WorkspaceRepositoryError.concurrentWrite) {
+      try await outbox.markReconciled(afterReview: fresh)
+    }
+    #expect(await appendRemote.attempts.count == 1)
+    #expect(await remote.writes.isEmpty)
+    #expect(try await outbox.capture(capture.id)?.operation.text == "Original task")
   }
 
   @Test func captureBarrierSurvivesRestartAndNeverBecomesAFullNoteSave() async throws {
