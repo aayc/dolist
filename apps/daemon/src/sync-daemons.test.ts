@@ -12,6 +12,7 @@ import {
   type NoteResponse,
   type SettingsResponse,
   type SyncStatusResponse,
+  type TaskRecordsResponse,
 } from "@ddl/core";
 import { createSyncServer, type RunningSyncServer } from "@ddl/sync";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -187,9 +188,37 @@ describe("two daemons sharing a vault through the sync service", {
     );
     expect(server.store.read(vault.id, thread)?.content).toBe('{"by":"laptop"}');
 
+    // A completed unchecked task must keep its identity when the other device takes over.
+    await send(laptop, "PUT", API_ROUTES.settings, { agent: { settleMs: 100 } });
+    const daily = (await get<NoteResponse>(laptop, API_ROUTES.daily("today"))).body;
+    await write(laptop, daily.path, "- [ ] Research native ferns\n");
+    const records = async (device: Device) =>
+      (await get<TaskRecordsResponse>(device, API_ROUTES.tasks(daily.path))).body.records;
+    await eventually(async () => {
+      const current = await records(laptop);
+      expect(current).toHaveLength(1);
+      expect(current[0]?.status).toBe("done");
+    });
+    const completed = (await records(laptop))[0]!;
+    expect(await read(laptop, daily.path)).toContain("- [ ] Research native ferns");
+
     await laptop.daemon.close();
     await eventually(async () => expect(await agentProblem(desktop)).toBeUndefined());
     expect(server.store.leaseHolder(vault.id, "agent")?.deviceName).toBe("Desktop");
+    const prior = await read(desktop, daily.path);
+    await write(desktop, daily.path, `${prior}\n- [ ] Research shade gardens\n`);
+    await eventually(async () =>
+      expect(
+        (await records(desktop)).find((r) => r.text === "Research shade gardens")?.status,
+      ).toBe("done"),
+    );
+    const after = await records(desktop);
+    expect(after).toHaveLength(2);
+    expect(after.find((r) => r.text === completed.text)).toMatchObject({
+      taskId: completed.taskId,
+      threadId: completed.threadId,
+      status: "done",
+    });
 
     const lines = logger.lines.join("\n");
     expect(lines).toContain("This device runs the agent");
