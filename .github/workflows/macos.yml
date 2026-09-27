@@ -85,6 +85,7 @@ jobs:
             packages: DailyDoListEditor
             sources: >-
               apps/macos/Packages/DailyDoListUI apps/macos/Packages/DailyDoListVim
+              apps/macos/Packages/DailyDoListDomain apps/macos/Packages/DailyDoListModels
               apps/macos/Packages/DailyDoListDrawing apps/macos/Packages/DailyDoListEditor
           - group: others
             packages: >-

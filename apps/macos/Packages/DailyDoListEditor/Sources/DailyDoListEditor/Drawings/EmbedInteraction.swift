@@ -1,5 +1,6 @@
 import AppKit
 import DailyDoListDrawing
+import DailyDoListEditorCore
 
 /// A press on a drawn embed, until the mouse goes up: a click, a move or a resize.
 struct EmbedInteraction {

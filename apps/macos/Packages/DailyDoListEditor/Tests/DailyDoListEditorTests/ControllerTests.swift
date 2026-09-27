@@ -3,6 +3,7 @@ import DailyDoListUITestSupport
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 @Suite("Controller")
 @MainActor

@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 import DailyDoListVim
 
 /// Vim's view of a `MarkdownEditorController`: `VimEditor` on its TextKit text system.

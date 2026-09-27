@@ -2,6 +2,7 @@ import AppKit
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Commands driven through the offscreen editor: keys go through the text view's action methods,
 /// shortcuts through synthesized key events.

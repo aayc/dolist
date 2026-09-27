@@ -1,5 +1,6 @@
 import AppKit
 import DailyDoListDrawing
+import DailyDoListEditorCore
 
 /// Drawing embeds in live preview: a line that is one `![[Plan.excalidraw|360|right-wrap]]` is
 /// drawn as the drawing unless the selection is on it (then its syntax shows, as in source mode).

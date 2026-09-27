@@ -4,6 +4,7 @@ import DailyDoListVim
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// What vim shows: the command-line panel, search highlights, the block cursor and the status.
 @MainActor

@@ -1,4 +1,5 @@
 import CoreGraphics
+import DailyDoListEditorCore
 import Foundation
 
 /// How to paint one badge in the current frame (`rest` when nothing about it moves).

@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 
 /// How loud an agent badge is. Only badges that need the user stand out; work in progress is a
 /// neutral pill and finished work is quiet text.

@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 
 /// Lightweight line-number gutter: draws the numbers of the visible lines only, aligned with each
 /// line's first baseline, and emphasizes the caret's line.

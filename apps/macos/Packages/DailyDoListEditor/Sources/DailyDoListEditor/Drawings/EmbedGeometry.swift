@@ -1,5 +1,6 @@
 import CoreGraphics
 import DailyDoListDrawing
+import DailyDoListEditorCore
 
 /// Sizes and places a drawing embed in the text column the way the web editor's embed layer does
 /// (`widget.ts`, `styles.css`): a width from the modifiers (else the drawing's own width, else

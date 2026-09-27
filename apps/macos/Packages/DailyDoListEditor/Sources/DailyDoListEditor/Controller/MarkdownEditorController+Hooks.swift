@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 import DailyDoListUI
 
 extension MarkdownEditorController: MarkdownTextViewHooks {

@@ -1,5 +1,6 @@
 import AppKit
 import DailyDoListDrawing
+import DailyDoListEditorCore
 
 /// What the user does with a drawn embed, like the web editor's embed layer (`embeds/widget.ts`):
 /// click selects it (without moving the caret, which is hidden meanwhile); dragging shows where it

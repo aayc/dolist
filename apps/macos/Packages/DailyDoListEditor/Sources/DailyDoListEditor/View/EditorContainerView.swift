@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 
 /// The editor's outer view: the scroll view, with vim's command-line panel under it while vim
 /// shows one (the scroll view gets shorter, like CodeMirror's bottom panels).

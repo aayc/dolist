@@ -87,7 +87,7 @@ struct ApprovalPolicyPicker: View {
     case save(ApprovalPolicy)
   }
 
-  static func choice(_ policy: ApprovalPolicy, current: ApprovalPolicy) -> Choice {
+  nonisolated static func choice(_ policy: ApprovalPolicy, current: ApprovalPolicy) -> Choice {
     if policy == current { return .unchanged }
     return policy.needsConfirmation ? .confirm : .save(policy)
   }

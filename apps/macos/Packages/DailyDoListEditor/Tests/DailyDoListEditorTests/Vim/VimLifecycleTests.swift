@@ -3,6 +3,7 @@ import DailyDoListVim
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Vim alongside the rest of the editor: mouse selections, paste, shortcuts, note switches,
 /// turning vim on and off, badges.

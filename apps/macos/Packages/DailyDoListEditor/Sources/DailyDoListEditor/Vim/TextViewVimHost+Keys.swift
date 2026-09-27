@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 import DailyDoListVim
 
 /// Key routing: every key press goes to vim first (the web app's vim plugin runs before any

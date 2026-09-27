@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 
 extension MarkdownEditorController {
   /// One display frame while something moves: redraws just what moves (badges fading in or

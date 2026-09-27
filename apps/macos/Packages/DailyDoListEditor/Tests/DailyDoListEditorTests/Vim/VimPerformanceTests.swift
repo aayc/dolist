@@ -4,6 +4,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Keystrokes with vim mode on, through `keyDown` like a keyboard, on a 10,000-line note with
 /// mixed markdown and live preview: insert-mode typing (vim → NSTextView → restyle, badges,

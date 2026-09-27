@@ -3,6 +3,7 @@ import DailyDoListVim
 import DailyDoListVimTestSupport
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// The real editor as a vim vector host: one offscreen `MarkdownEditorController` reused for every
 /// case, laid out like the vectors' oracle (16 pt monospaced lines of the header's height, a

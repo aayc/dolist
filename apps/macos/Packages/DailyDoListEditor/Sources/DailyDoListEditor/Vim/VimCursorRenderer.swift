@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 import DailyDoListVim
 
 /// Vim's block cursor, drawn like the web app's (`measureCursor` of @replit/codemirror-vim): a

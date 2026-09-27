@@ -3,6 +3,7 @@ import DailyDoListVim
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// The app's vim integration (`EditorVimIntegration`, the port of the web editor's
 /// `vim-integration.ts`): ex commands and keys mapped to app requests, the clipboard registers,

@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Parses marked text: `|` is the caret, `«` … `»` a selection.
 func parseMarked(_ marked: String) -> (text: String, selection: NSRange) {

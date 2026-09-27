@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 
 /// TextKit 1 layout manager that lets `DecorationRenderer` draw the editor's decorations: code
 /// block, inline code, tag and highlight backgrounds, blockquote bars and horizontal rules behind

@@ -4,6 +4,7 @@ import DailyDoListUITestSupport
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Renders the sample note offscreen in light and dark appearance and writes PNGs to the package's
 /// `.build/editor-snapshots/` for manual review (never committed).

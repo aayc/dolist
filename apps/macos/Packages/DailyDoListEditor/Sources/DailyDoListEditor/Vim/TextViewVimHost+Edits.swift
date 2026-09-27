@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 import DailyDoListVim
 
 /// The edit pipeline seen from vim: which edits are vim's (not reported back, undo step labeled

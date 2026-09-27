@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 import DailyDoListVim
 
 /// The system clipboard as vim sees it (the web app's `SystemClipboard`): what vim last wrote,

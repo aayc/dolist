@@ -1,0 +1,2 @@
+// Optional, untracked overrides for a free Personal Team and a unique bundle identifier.
+#include? "Signing.local.xcconfig"

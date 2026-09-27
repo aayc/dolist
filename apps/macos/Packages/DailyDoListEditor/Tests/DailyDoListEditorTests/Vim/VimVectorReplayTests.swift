@@ -5,6 +5,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Replays every case of the web app's vim vectors (`packages/editor/test/vim/vectors.jsonl`)
 /// through the real Mac editor: `MarkdownEditorController` offscreen, its `VimEditor`

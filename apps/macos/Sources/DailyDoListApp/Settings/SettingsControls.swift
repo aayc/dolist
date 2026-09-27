@@ -60,7 +60,7 @@ struct CommitTextField: View {
   }
 
   /// What committing `draft` saves, or nil when nothing changes (the web's `draftToCommit`).
-  static func committed(_ draft: String, value: String, required: Bool) -> String? {
+  nonisolated static func committed(_ draft: String, value: String, required: Bool) -> String? {
     let text = required ? draft.trimmingCharacters(in: .whitespacesAndNewlines) : draft
     return text == value || (required && text.isEmpty) ? nil : text
   }

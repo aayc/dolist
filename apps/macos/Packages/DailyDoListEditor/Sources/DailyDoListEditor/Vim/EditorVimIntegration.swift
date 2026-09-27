@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 import DailyDoListVim
 
 /// Vim mode as the app ships it, installed once on the app's `Vim` (a port of the web editor's

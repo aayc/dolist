@@ -1,6 +1,8 @@
 import AppKit
 import DailyDoListUI
 
+@testable import DailyDoListEditorCore
+
 /// A tooltip center on virtual time that records what it shows (editor tests never touch the
 /// app's shared one).
 @MainActor

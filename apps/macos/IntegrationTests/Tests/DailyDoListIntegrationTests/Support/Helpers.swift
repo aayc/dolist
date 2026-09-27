@@ -7,7 +7,7 @@ import Testing
 /// throws something else.
 @MainActor
 func captureError<T>(
-  _ body: () async throws -> T, sourceLocation: SourceLocation = #_sourceLocation
+  _ body: @MainActor () async throws -> T, sourceLocation: SourceLocation = #_sourceLocation
 ) async -> DaemonClientError? {
   do {
     _ = try await body()

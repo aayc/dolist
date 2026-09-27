@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 
 extension EditorBadge {
   /// Statuses that never get a badge (same as the web editor).

@@ -1,4 +1,5 @@
 import CoreGraphics
+import DailyDoListEditorCore
 import Foundation
 
 /// Saved per-note editor state for instant tab switches (text, selection, scroll, undo).

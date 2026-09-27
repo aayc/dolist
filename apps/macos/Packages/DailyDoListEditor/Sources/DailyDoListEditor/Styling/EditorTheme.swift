@@ -1,8 +1,8 @@
 import AppKit
+import DailyDoListEditorCore
 
 extension NSAttributedString.Key {
   /// `NSNumber(MarkerKind.rawValue)` on markdown syntax that live preview may hide.
-  static let ddlMarker = NSAttributedString.Key("DDLMarker")
   /// `LinkAttribute` over a whole link (syntax included).
   static let ddlLink = NSAttributedString.Key("DDLLink")
   /// Inline code span (rounded background).

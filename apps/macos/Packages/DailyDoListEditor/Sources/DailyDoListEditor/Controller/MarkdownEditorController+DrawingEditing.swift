@@ -1,5 +1,6 @@
 import AppKit
 import DailyDoListDrawing
+import DailyDoListEditorCore
 
 /// Editing a drawing in place: the embed's box becomes a `DrawingCanvasView` in editing mode, with
 /// its tool bar floating next to it. The canvas takes the keyboard (vim and the note's shortcuts

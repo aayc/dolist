@@ -2,6 +2,7 @@ import AppKit
 import DailyDoListVim
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Records what vim asks the editor's host for.
 @MainActor

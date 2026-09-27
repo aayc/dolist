@@ -3,6 +3,7 @@ import DailyDoListUITestSupport
 import Foundation
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Hand-driven motion for an offscreen editor: a manual clock and frame ticker, the window "on
 /// screen", Reduce Motion off (both switchable), and a record of every rect motion redraws.

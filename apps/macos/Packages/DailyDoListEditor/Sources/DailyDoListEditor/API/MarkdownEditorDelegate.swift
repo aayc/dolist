@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 
 @MainActor
 public protocol MarkdownEditorDelegate: AnyObject {

@@ -1,6 +1,7 @@
 import Foundation
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Tokenizes a single line (outside any fence or frontmatter).
 func tokenizeLine(_ line: String) -> LineTokens {

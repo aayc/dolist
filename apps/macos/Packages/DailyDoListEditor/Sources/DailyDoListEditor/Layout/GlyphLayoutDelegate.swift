@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 
 /// Layout-manager delegate implementing live preview and line metrics:
 ///

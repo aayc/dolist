@@ -2,6 +2,7 @@ import AppKit
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// The orchestrator's chips: badges with a chip status, an `anchorText` that must stay
 /// recognizable, their own tooltip, and a fade-out when their outcome has been shown.

@@ -2,6 +2,7 @@ import AppKit
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 @Suite("Editor smoke tests")
 @MainActor

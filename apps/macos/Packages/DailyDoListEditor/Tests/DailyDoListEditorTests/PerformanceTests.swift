@@ -3,6 +3,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Offscreen timings on a 2,000-line note with mixed markdown and 30 badges. Targets (release):
 /// load + style < 60 ms, keystroke avg < 3 ms / p95 < 8 ms, selection change < 2 ms. Assertions use

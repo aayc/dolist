@@ -1,5 +1,6 @@
 import AppKit
 import DailyDoListDrawing
+import DailyDoListEditorCore
 
 /// A drawing being edited in place: the canvas that replaced the embed's box, its tool bar, and
 /// how tall the box has grown while drawing.

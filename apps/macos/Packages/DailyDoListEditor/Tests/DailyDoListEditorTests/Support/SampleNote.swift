@@ -1,6 +1,7 @@
 import Foundation
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// A synthetic daily note exercising every construct the editor styles.
 enum SampleNote {

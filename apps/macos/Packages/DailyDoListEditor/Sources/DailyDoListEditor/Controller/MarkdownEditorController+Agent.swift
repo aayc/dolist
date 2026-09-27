@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 
 /// The agent's marks in a note: sparkles ending the lines it wrote, bands behind the lines its
 /// threads are anchored to, and hover previews of links (shown in the app's shared tooltip).

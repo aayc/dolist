@@ -3,6 +3,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// The embed edits, ported from the web editor's `embeds/embeds.test.ts` (same cases, same
 /// results).

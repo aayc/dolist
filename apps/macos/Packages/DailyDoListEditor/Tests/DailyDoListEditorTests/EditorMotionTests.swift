@@ -2,6 +2,7 @@ import AppKit
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Motion driven through the controller with a manual clock and ticker: what starts it, what it
 /// redraws, and that frames stop as soon as nothing on screen moves.

@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 @Suite("Motion timeline")
 struct MotionTimelineTests {

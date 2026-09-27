@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 
 /// Draws what isn't glyphs: backgrounds, bars and rules (behind the text) and checkboxes, bullets
 /// and agent sparkles (in the slots reserved by `GlyphLayoutDelegate`). Everything is derived from

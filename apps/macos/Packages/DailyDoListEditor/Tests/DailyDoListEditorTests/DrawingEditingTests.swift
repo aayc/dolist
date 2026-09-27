@@ -5,6 +5,7 @@ import DailyDoListVim
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Editing a drawing in place: the canvas replaces the embed's box, takes the keyboard (vim
 /// doesn't), reports every change to the host, grows with the drawing, takes new versions from

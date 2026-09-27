@@ -1,0 +1,43 @@
+name: iPhone app
+
+on:
+  push:
+    branches: [main]
+    paths: ["apps/mobile/**", "apps/macos/Packages/**", ".github/workflows/ios.yml"]
+  pull_request:
+    paths: ["apps/mobile/**", "apps/macos/Packages/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  native:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select Xcode
+        run: apps/macos/scripts/ci-select-xcode.sh
+      - name: Install pinned XcodeGen
+        run: apps/mobile/scripts/install-xcodegen.sh
+      - name: Build for a physical iPhone without signing
+        env:
+          DDL_IOS_DESTINATION: generic/platform=iOS
+        run: apps/mobile/scripts/build.sh
+      - name: Simulator input and UI tests
+        run: apps/mobile/scripts/test.sh
+      - name: Test evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: iphone-test-results
+          path: apps/mobile/.build/DerivedData/Logs/Test/*.xcresult
+          if-no-files-found: warn
+          retention-days: 14

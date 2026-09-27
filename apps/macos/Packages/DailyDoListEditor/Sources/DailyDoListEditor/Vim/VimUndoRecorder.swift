@@ -1,3 +1,4 @@
+import DailyDoListEditorCore
 import DailyDoListVim
 import Foundation
 

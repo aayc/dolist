@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 
 extension MarkdownEditorController {
   /// Toggles the checkbox of the task on a 0-based line (`[ ]` ↔ `[x]`, other statuses → done) as

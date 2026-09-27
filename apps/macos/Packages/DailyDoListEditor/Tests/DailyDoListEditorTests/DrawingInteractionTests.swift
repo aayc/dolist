@@ -3,6 +3,7 @@ import DailyDoListDrawing
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Selecting, moving, resizing, removing and inserting drawings, driven with real mouse and key
 /// events; the results are ordinary, undoable edits of the note.

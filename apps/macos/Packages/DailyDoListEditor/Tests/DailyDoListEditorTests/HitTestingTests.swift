@@ -3,6 +3,7 @@ import DailyDoListUI
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 @Suite("Hit testing: checkboxes and links")
 @MainActor

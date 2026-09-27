@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 
 /// Receives AppKit delegate callbacks and notifications for a controller (which isn't an
 /// `NSObject`, keeping those conformances out of the public API).

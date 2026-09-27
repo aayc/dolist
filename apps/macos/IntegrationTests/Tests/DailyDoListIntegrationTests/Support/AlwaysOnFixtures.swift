@@ -8,7 +8,7 @@ import Testing
 /// after `body`, whatever happens.
 @MainActor
 func withDaemon<T>(
-  environment: [String: String] = [:], _ body: (DaemonFixture) async throws -> T
+  environment: [String: String] = [:], _ body: @MainActor (DaemonFixture) async throws -> T
 ) async throws -> T {
   let daemon = try await DaemonFixture.launch(environment: environment)
   do {
@@ -122,7 +122,7 @@ final class SyncServiceFixture {
 @MainActor
 func eventually<T>(
   _ what: String, timeout: Duration = .seconds(10), every interval: Duration = .milliseconds(250),
-  _ probe: () async throws -> T?
+  _ probe: @MainActor () async throws -> T?
 ) async throws -> T {
   let deadline = ContinuousClock.now + timeout
   while true {

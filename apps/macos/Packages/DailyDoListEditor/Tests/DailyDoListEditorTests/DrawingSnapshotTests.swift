@@ -4,6 +4,7 @@ import DailyDoListUITestSupport
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Notes with drawings rendered offscreen, light and dark, written to `.build/editor-snapshots/`
 /// for review (never committed), with pixel checks that the drawings are drawn where their boxes

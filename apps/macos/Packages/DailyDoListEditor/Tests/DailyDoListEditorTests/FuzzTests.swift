@@ -3,6 +3,7 @@ import DailyDoListUITestSupport
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Robustness: random (and adversarial) input must never crash, and every range must stay inside
 /// its line or document.

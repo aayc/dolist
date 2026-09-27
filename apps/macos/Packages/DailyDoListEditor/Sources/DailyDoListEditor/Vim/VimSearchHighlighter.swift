@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 import DailyDoListVim
 
 /// Vim's search highlight (`hlsearch`, `incsearch`): the matches of the current search in the

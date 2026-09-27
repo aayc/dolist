@@ -3,6 +3,7 @@ import DailyDoListVim
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Vim's pixel-based commands in the app's own theme (the vectors pin them in plain 20 pt
 /// lines): headings are taller than body lines, long lines wrap, the text has padding.

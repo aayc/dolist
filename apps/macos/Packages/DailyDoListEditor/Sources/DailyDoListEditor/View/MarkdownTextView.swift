@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 
 /// Callbacks from the text view into the editor (implemented by `MarkdownEditorController`).
 @MainActor

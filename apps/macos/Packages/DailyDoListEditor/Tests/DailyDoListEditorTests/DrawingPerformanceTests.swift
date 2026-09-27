@@ -3,6 +3,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Typing in a 2,000-line note with six drawings (floats on both sides and full-width rows), with
 /// the same budgets as `PerformanceTests.keystrokes`: each sample is the keystroke, the layout of

@@ -78,3 +78,7 @@ apps/mobile/ios/build/
 DerivedData/
 apps/macos/build/
 *.xcuserstate
+
+# Generated iPhone project and Personal Team signing overrides
+apps/mobile/DailyDoList.xcodeproj/
+apps/mobile/Resources/Signing.local.xcconfig

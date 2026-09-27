@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 import DailyDoListVim
 
 /// Vim's command line under the editor, like the web app's `.cm-vim-panel`: a prompt (`:`, `/`,

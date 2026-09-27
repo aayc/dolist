@@ -1,4 +1,5 @@
 import CoreGraphics
+import DailyDoListEditorCore
 
 /// Where the text column goes: centered at a readable width (or full width), leaving room on the
 /// right for badges when lines run to the edge of the column.

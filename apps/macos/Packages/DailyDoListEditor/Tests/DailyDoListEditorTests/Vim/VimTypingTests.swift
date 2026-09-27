@@ -3,6 +3,7 @@ import DailyDoListVim
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Keys through `keyDown` like a keyboard: insert-mode typing goes through NSTextView (and the
 /// editor's list editing), vim records it for `.`, and undo steps follow CodeMirror's history.

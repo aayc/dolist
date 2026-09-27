@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 import DailyDoListVim
 
 /// Key presses (`NSEvent`) as vim sees them (`VimKeyInput`, what a DOM `KeyboardEvent` carries).

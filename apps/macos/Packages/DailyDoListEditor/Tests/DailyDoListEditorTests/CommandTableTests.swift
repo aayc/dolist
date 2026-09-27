@@ -3,6 +3,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Runs a pure command on marked text; returns the marked result, or nil if the command declined.
 private func run(_ marked: String, _ command: (NSString, [NSRange]) -> TextEdit?) -> String? {

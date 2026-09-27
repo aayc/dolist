@@ -3,6 +3,7 @@ import DailyDoListDrawing
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 @Suite("Drawing embeds: live preview, floats and wrapping")
 @MainActor

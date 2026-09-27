@@ -13,8 +13,9 @@ let package = Package(
     .library(name: "DailyDoListUI", targets: ["DailyDoListUI"]),
     .library(name: "DailyDoListUITestSupport", targets: ["DailyDoListUITestSupport"]),
   ],
+  dependencies: [.package(path: "../DailyDoListDomain")],
   targets: [
-    .target(name: "DailyDoListUI"),
+    .target(name: "DailyDoListUI", dependencies: ["DailyDoListDomain"]),
     .target(name: "DailyDoListUITestSupport", dependencies: ["DailyDoListUI"]),
     .testTarget(
       name: "DailyDoListUITests", dependencies: ["DailyDoListUI", "DailyDoListUITestSupport"]),

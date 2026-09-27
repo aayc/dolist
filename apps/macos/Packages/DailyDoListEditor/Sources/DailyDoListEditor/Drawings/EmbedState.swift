@@ -1,5 +1,6 @@
 import AppKit
 import DailyDoListDrawing
+import DailyDoListEditorCore
 
 /// A drawing embed alone on its line, as the document has it now.
 struct EmbedLine: Equatable {

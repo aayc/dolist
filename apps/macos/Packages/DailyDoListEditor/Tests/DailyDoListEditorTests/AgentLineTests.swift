@@ -3,6 +3,7 @@ import DailyDoListUI
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 @Suite("Agent lines: markers, sparkles, anchored lines, link previews")
 @MainActor

@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 import SwiftUI
 
 /// SwiftUI host for a controller.

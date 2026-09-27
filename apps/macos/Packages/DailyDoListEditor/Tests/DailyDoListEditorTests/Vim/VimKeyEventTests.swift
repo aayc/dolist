@@ -3,6 +3,7 @@ import DailyDoListVim
 import Testing
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// `NSEvent` → vim key: named keys by key code, characters vs. characters ignoring modifiers,
 /// modifiers, and the physical key for non-Latin layouts.

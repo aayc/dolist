@@ -4,6 +4,7 @@ import DailyDoListUITestSupport
 import DailyDoListVim
 
 @testable import DailyDoListEditor
+@testable import DailyDoListEditorCore
 
 /// Synthetic drawings for tests.
 enum TestDrawings {

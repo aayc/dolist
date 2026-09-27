@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListEditorCore
 import DailyDoListVim
 
 /// Layout for vim (`H`/`M`/`L`, `gj`/`gk`, `<C-d>`, `zz`…), from the layout manager. Content
