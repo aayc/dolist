@@ -36,6 +36,7 @@ export interface VaultSwitchOptions {
   blocked?: () => string | null;
   /** Shuts the daemon down and exits with `RESTART_EXIT_CODE`; called after the answer is sent. */
   restart: (vaultPath: string) => void;
+  onSwitch?: () => void;
   logger: Logger;
 }
 
@@ -45,6 +46,10 @@ export class VaultSwitch {
 
   constructor(options: VaultSwitchOptions) {
     this.#options = options;
+  }
+
+  get restarting(): boolean {
+    return this.#restarting !== null;
   }
 
   response(): DeviceVaultResponse {
@@ -78,6 +83,7 @@ export class VaultSwitch {
       this.#restarting = null;
       throw error;
     }
+    options.onSwitch?.();
     options.logger.info("Switching vaults; restarting", {
       vault: displayPath(path, options.homedir),
     });

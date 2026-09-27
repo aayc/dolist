@@ -17,7 +17,9 @@ export type PersistedFormatName =
   | "approvals"
   | "routines"
   | "settings"
-  | "import-manifest";
+  | "import-manifest"
+  | "workspace"
+  | "capture";
 
 export interface PersistedFormatInfo {
   name: PersistedFormatName;
@@ -33,6 +35,20 @@ export interface PersistedFormatInfo {
 
 /** Every file in the vault sidecar this app reads and writes (docs/DATA_FORMATS.md). */
 export const PERSISTED_FORMATS: readonly PersistedFormatInfo[] = [
+  {
+    name: "workspace",
+    path: PERSISTED_PATHS.workspace,
+    version: 1,
+    owner: "apps/daemon/src/workspace-identity.ts",
+    syncs: true,
+  },
+  {
+    name: "capture",
+    path: `${PERSISTED_PATHS.captures}/<host>/<principal-hash>/<operation>.json`,
+    version: 1,
+    owner: "apps/daemon/src/daily-capture.ts",
+    syncs: false,
+  },
   {
     name: "thread",
     path: `${PERSISTED_PATHS.threads}/<threadId>.json`,

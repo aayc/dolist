@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "operationId": "capture_one",
+  "workspaceId": "workspace_one",
+  "hostId": "host_one",
+  "principal": "master",
+  "payloadHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "phase": "prepared",
+  "path": "Daily/2026-09-28.md",
+  "date": "2026-09-28",
+  "content": "- [ ] Synthetic walk\n",
+  "created": true,
+  "hostDate": "2026-09-27",
+  "hostTimeZone": "UTC",
+  "watched": true
+}

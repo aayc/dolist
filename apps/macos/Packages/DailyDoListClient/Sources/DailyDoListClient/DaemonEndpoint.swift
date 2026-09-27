@@ -8,12 +8,15 @@ public struct DaemonEndpoint: Hashable, Sendable {
   public var baseURL: URL
   /// Bearer token (`$DDL_HOME/daemon-token`, or a device token from pairing).
   public var token: String
+  /// Phone clients always keep credentials out of URLs, including loopback TLS tests.
+  public var forceHeaderAuthentication: Bool
   /// Tests point an endpoint that must behave like a remote one at a local server.
   var treatsAsRemote = false
 
-  public init(baseURL: URL, token: String) {
+  public init(baseURL: URL, token: String, forceHeaderAuthentication: Bool = false) {
     self.baseURL = baseURL
     self.token = token
+    self.forceHeaderAuthentication = forceHeaderAuthentication
   }
 
   /// The daemon runs on this machine (`localhost`, `127.0.0.0/8`, `::1`).
@@ -31,7 +34,8 @@ public struct DaemonEndpoint: Hashable, Sendable {
     }
     components.scheme = baseURL.scheme == "https" ? "wss" : "ws"
     components.path = APIRoute.webSocket
-    components.queryItems = isLoopback ? [URLQueryItem(name: "token", value: token)] : nil
+    components.queryItems =
+      isLoopback && !forceHeaderAuthentication ? [URLQueryItem(name: "token", value: token)] : nil
     return components.url ?? fallback
   }
 
@@ -39,7 +43,9 @@ public struct DaemonEndpoint: Hashable, Sendable {
   /// daemon isn't on loopback.
   public var webSocketRequest: URLRequest {
     var request = URLRequest(url: webSocketURL)
-    if !isLoopback { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+    if !isLoopback || forceHeaderAuthentication {
+      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    }
     return request
   }
 

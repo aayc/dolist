@@ -62,16 +62,17 @@ struct HTTPDaemonClientEventsTests {
 
   @Test func aRemoteDaemonGetsTheTokenInTheAuthorizationHeader() async throws {
     let server = try await TestWebSocketServer()
-    var endpoint = DaemonEndpoint(baseURL: server.baseURL, token: "test-token")
-    endpoint.treatsAsRemote = true
+    let endpoint = DaemonEndpoint(
+      baseURL: server.baseURL, token: "test-token", forceHeaderAuthentication: true)
     let client = HTTPDaemonClient(
       endpoint: endpoint, session: URLSession(configuration: .ephemeral), clientId: "macos_test",
-      clientVersion: "macos/test", options: Self.fastOptions)
+      clientVersion: "macos/test", options: Self.fastOptions, expectedWorkspaceId: "workspace_one")
     let recorder = StreamRecorder(client.events())
     await client.connect()
     let peer = try await server.peer(1)
     try await recorder.waitFor("hello event") { $0 == .event(.hello(Self.hello)) }
     let upgrade = try #require(peer.upgrade)
+    #expect(upgrade.headers[DaemonProtocol.workspaceIdHeader] == "workspace_one")
     #expect(upgrade.target == "/ws", "no token in the URL")
     #expect(upgrade.headers["authorization"] == "Bearer test-token")
     #expect(upgrade.headers["origin"] == nil)

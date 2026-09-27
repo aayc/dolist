@@ -86,6 +86,22 @@ type follows), the route table and the fixtures, then `pnpm --filter @ddl/contra
 refresh `packages/contract/schema/*.json` and the reference below. Tests fail while any of these
 disagree.
 
+### Verified workspace context and capture
+
+Offline-capable clients require the `workspace-identity-v1` and `daily-append-v1` health
+capabilities. Bootstrap health without a workspace header, then send `X-DDL-Workspace-Id` on all
+subsequent authenticated REST requests and the WebSocket upgrade. The daemon returns 412 when
+that context changes; live streams close with 4412. Discard the connection context and verify
+health again while preserving local drafts. Existing clients may omit the header.
+
+`POST /api/daily/:date/append` requires that header and an explicit calendar date (never `today`).
+The request's `hostId` must also match health. `text` is user-owned markdown appended verbatim,
+with only a necessary separating newline and a final newline added. Clients supply checkbox
+syntax themselves. Use one durable operation ID and the identical payload on retries to that
+same host; `applied` returns the original saved base and `indeterminate` requires reconciliation.
+Captured date/timezone, host date/timezone and the watch-window result are distinct. A successful
+append does not mean agent work has started. See `docs/DATA_FORMATS.md` for crash semantics.
+
 <!-- BEGIN GENERATED REFERENCE (pnpm --filter @ddl/contract generate); edits below are overwritten -->
 
 ## Reference
@@ -104,6 +120,7 @@ API version: **1**. Machine-readable: `packages/contract/schema/wire.schema.json
 | `rename` | POST | `/api/notes-rename` | `bearer` | [`RenameRequest`](#renamerequest) | 200 [`RenameResponse`](#renameresponse) |
 | `folders` | POST | `/api/folders` | `bearer` | [`CreateFolderRequest`](#createfolderrequest) | 201 [`CreateFolderResponse`](#createfolderresponse) |
 | `folders` | DELETE | `/api/folders` | `bearer` | — | 200 [`TrashResponse`](#trashresponse) |
+| `dailyAppend` | POST | `/api/daily/:date/append` | `bearer` | [`DailyAppendRequest`](#dailyappendrequest) | 200 [`DailyAppendResponse`](#dailyappendresponse) |
 | `daily` | GET | `/api/daily/:date` | `bearer` | — | 200 [`DailyNoteResponse`](#dailynoteresponse) |
 | `search` | GET | `/api/search` | `bearer` | — | 200 [`SearchResponse`](#searchresponse) |
 | `settings` | GET | `/api/settings` | `bearer` | — | 200 [`SettingsResponse`](#settingsresponse) |
@@ -158,7 +175,7 @@ Auth:
 - `pairing_code`: No bearer token: the pairing code in the body is the credential (Host and Origin are still checked).
 - `upgrade`: WebSocket upgrade with a bearer token in the `Authorization` header (`?token=` only on loopback Hosts), or on a remote host a paired browser's cookie with its page's Origin; plus the Host and Origin checks.
 
-Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`, `forbidden_origin`), 500 (`internal_error`), unless it lists that status itself. Methods a route doesn't list answer 404 `not_found`.
+Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`, `forbidden_origin`), 412 (`workspace_mismatch`, `host_mismatch`), 500 (`internal_error`), unless it lists that status itself. Methods a route doesn't list answer 404 `not_found`.
 
 #### `health` — `/api/health`
 
@@ -231,6 +248,19 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
   - `200` [`TrashResponse`](#trashresponse) — Moved to the trash.
   - `400` [`ApiErrorBody`](#apierrorbody) `invalid_request`, `invalid_path` — Missing, malformed or hidden path.
   - `404` [`ApiErrorBody`](#apierrorbody) `not_found` — No such folder.
+
+#### `dailyAppend` — `/api/daily/:date/append`
+
+- Path parameter `date`: string (date) — Local calendar date YYYY-MM-DD.
+
+**POST** — Append captured markdown with a durable, host-bound operation receipt. Requires X-DDL-Workspace-Id.
+
+- Body: [`DailyAppendRequest`](#dailyappendrequest)
+- Responses:
+  - `200` [`DailyAppendResponse`](#dailyappendresponse) — Applied receipt or indeterminate outcome requiring reconciliation.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_json`, `invalid_request`, `invalid_settings` — Malformed JSON or failed validation.
+  - `409` [`ApiErrorBody`](#apierrorbody) `operation_conflict`, `conflict` — Operation ID reused with another payload, or repeated concurrent edits.
+  - `413` [`ApiErrorBody`](#apierrorbody) `payload_too_large` — Body over 5 MB.
 
 #### `daily` — `/api/daily/:date`
 
@@ -711,6 +741,9 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
 | `not_found` | Unknown route (or method), or the addressed item doesn't exist. |
 | `conflict` | Stale `baseVersion`, existing target, or an approval that is no longer pending. |
 | `locked_by_env` | The device setting is set by an environment variable (see `lockedByEnv`); change it there. |
+| `workspace_mismatch` | The verified workspace changed; reconnect before reading or writing. |
+| `host_mismatch` | The capture belongs to a different serving host; do not retry here. |
+| `operation_conflict` | The operation ID was already used with a different payload. |
 | `payload_too_large` | Request body over 5 MB. |
 | `upgrade_required` | `/ws` requested without a WebSocket upgrade. |
 | `rate_limited` | Too many pairing attempts, or too many pairing codes outstanding; try later. |
@@ -1568,6 +1601,9 @@ Liveness and versions. Clients should check `apiVersion` before anything else.
 | `apiVersion` | integer (≥ 1) | yes | Protocol major version (see API_VERSION). |
 | `vaultName` | string (≤ 1024 chars) | yes |  |
 | `agentMode` | [`AgentMode`](#agentmode) | yes |  |
+| `workspaceId` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | no | Stable logical vault identity shared by synced replicas. |
+| `hostId` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | no | Stable serving device identity; capture receipts belong to this host. |
+| `capabilities` | string (1–100 chars)[] | no | Explicit supported features; unknown values are ignored. |
 
 _Tolerant: clients must ignore keys they don't know._
 
@@ -1726,6 +1762,26 @@ A daily note, created from the template when requested.
 | `created` | boolean | yes | True when this request created the note. |
 
 _Tolerant: clients must ignore keys they don't know._
+
+#### DailyAppendRequest
+
+Append user-owned markdown exactly once or report uncertainty. Requires X-DDL-Workspace-Id. Retry only the identical request on the same host.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `operationId` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | yes | Runtime id, safe to use in URLs. |
+| `hostId` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | yes | Verified serving host from health. |
+| `text` | string (1–100000 chars) | yes | Markdown to append verbatim; the client supplies task syntax. |
+| `capturedAt` | integer (≥ 0) | yes | Epoch milliseconds. |
+| `timeZone` | string (1–100 chars) | yes | IANA time zone at capture; the explicit route date is authoritative. |
+
+_Strict: unknown keys are rejected._
+
+#### DailyAppendResponse
+
+Durable capture receipt. Applied carries the exact saved base, even on retry. Indeterminate requires user reconciliation and must never be automatically re-appended.
+
+Type: object | object
 
 #### SearchHit
 
@@ -2021,7 +2077,7 @@ _Strict: unknown keys are rejected._
 
 Machine-readable error code. Treat unknown codes like any failure with that HTTP status.
 
-Type: `"invalid_json"` | `"invalid_request"` | `"invalid_path"` | `"invalid_settings"` | `"unauthorized"` | `"pairing_rejected"` | `"forbidden_host"` | `"forbidden_origin"` | `"forbidden_device"` | `"not_found"` | `"conflict"` | `"locked_by_env"` | `"payload_too_large"` | `"upgrade_required"` | `"rate_limited"` | `"http_error"` | `"agent_error"` | `"internal_error"` | `"machine_unreachable"` | `"agent_unavailable"`
+Type: `"invalid_json"` | `"invalid_request"` | `"invalid_path"` | `"invalid_settings"` | `"unauthorized"` | `"pairing_rejected"` | `"forbidden_host"` | `"forbidden_origin"` | `"forbidden_device"` | `"not_found"` | `"conflict"` | `"locked_by_env"` | `"workspace_mismatch"` | `"host_mismatch"` | `"operation_conflict"` | `"payload_too_large"` | `"upgrade_required"` | `"rate_limited"` | `"http_error"` | `"agent_error"` | `"internal_error"` | `"machine_unreachable"` | `"agent_unavailable"`
 
 #### ApiErrorBody
 

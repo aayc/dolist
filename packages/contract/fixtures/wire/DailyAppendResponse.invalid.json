@@ -1,0 +1,16 @@
+[
+  {
+    "name": "applied requires a note",
+    "value": {
+      "operationId": "capture_one",
+      "hostId": "host_one",
+      "workspaceId": "workspace_one",
+      "hostDate": "2026-09-27",
+      "hostTimeZone": "America/Los_Angeles",
+      "watched": true,
+      "outcome": "applied"
+    },
+    "path": [],
+    "code": "invalid_union"
+  }
+]

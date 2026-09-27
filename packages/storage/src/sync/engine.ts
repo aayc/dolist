@@ -42,6 +42,8 @@ export interface SyncEngineOptions {
   /** Where the vault is mirrored (another folder, a bucket, …). */
   target: StorageProvider;
   logger?: Logger;
+  /** Establish target metadata before any content moves; failures keep the vault usable offline. */
+  beforeSync?: () => Promise<void>;
   /** Clock for timestamps and conflict-copy names. */
   now?: () => number;
   /** Extra vault-relative path prefixes that are never synced. */
@@ -146,11 +148,14 @@ export class SyncEngine {
       }
     | undefined;
 
+  private readonly beforeSync: (() => Promise<void>) | undefined;
+
   constructor(options: SyncEngineOptions) {
     if (options.primary.id === options.target.id) {
       throw new StorageError("Sync target must be a different storage than the vault");
     }
     this.primary = options.primary;
+    this.beforeSync = options.beforeSync;
     this.target = options.target;
     this.logger = (options.logger ?? silentLogger).child({
       component: "storage.sync",
@@ -266,6 +271,7 @@ export class SyncEngine {
     this.dirty.clear();
     this.setStatus({ state: "syncing" });
     try {
+      await this.beforeSync?.();
       const report = await this.reconcileAll();
       report.durationMs = Math.max(0, this.now() - startedAt);
       this.logger.debug("sync run finished", {

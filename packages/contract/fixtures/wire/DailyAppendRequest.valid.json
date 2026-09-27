@@ -1,0 +1,12 @@
+[
+  {
+    "name": "explicit capture context",
+    "value": {
+      "operationId": "capture_one",
+      "hostId": "host_one",
+      "text": "- [ ] Take a synthetic walk",
+      "capturedAt": 1790536000000,
+      "timeZone": "Pacific/Auckland"
+    }
+  }
+]

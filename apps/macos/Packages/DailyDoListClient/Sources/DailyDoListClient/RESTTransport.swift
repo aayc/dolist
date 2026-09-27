@@ -40,6 +40,7 @@ struct RESTTransport: Sendable {
   let clientId: String
   let requestTimeout: Duration
   let artifactTimeout: Duration
+  var expectedWorkspaceId: String? = nil
 
   /// A JSON request. Non-GET requests carry `x-ddl-client-id`; `attribute` forces it on a GET
   /// that writes (`GET /api/daily/…?create=1`).
@@ -114,6 +115,9 @@ struct RESTTransport: Sendable {
       url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: timeout.seconds)
     request.httpMethod = method.rawValue
     if token { request.setValue("Bearer \(endpoint.token)", forHTTPHeaderField: "Authorization") }
+    if token, let expectedWorkspaceId {
+      request.setValue(expectedWorkspaceId, forHTTPHeaderField: DaemonProtocol.workspaceIdHeader)
+    }
     request.setValue(accept, forHTTPHeaderField: "Accept")
     if attribute { request.setValue(clientId, forHTTPHeaderField: DaemonProtocol.clientIdHeader) }
     if let body {

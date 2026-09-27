@@ -429,6 +429,36 @@ struct HTTPDaemonClientRESTTests {
     #expect(request.jsonBody == ["code": "abcd-2345", "name": "Studio Mac", "kind": "app"])
   }
 
+  @Test func workspaceContextGuardsReadsCreateGETAndWritesButNotPairing() async throws {
+    let stub = Stub { _ in .json(value: SampleWire.note) }
+    let client = HTTPDaemonClient(
+      endpoint: DaemonEndpoint(baseURL: stub.baseURL, token: "test-token"), session: stub.session,
+      expectedWorkspaceId: "workspace_one")
+    _ = try await client.readNote("Draft.md")
+    stub.setHandler { _ in
+      .json(
+        #"{"path":"Daily/2026-09-27.md","content":"","version":"v1","mtime":0,"date":"2026-09-27","created":true}"#
+      )
+    }
+    _ = try await client.dailyNote("2026-09-27", create: true)
+    stub.setHandler { _ in .json(#"{"path":"Draft.md","version":"v2","mtime":0}"#) }
+    _ = try await client.writeNote("Draft.md", content: "Words", baseVersion: .createOnly)
+    #expect(
+      stub.requests.allSatisfy { $0.header(DaemonProtocol.workspaceIdHeader) == "workspace_one" })
+    stub.setHandler { _ in .json(412, #"{"error":"workspace_mismatch"}"#) }
+    await #expect(
+      throws: DaemonClientError.http(status: 412, body: ApiErrorBody(error: .workspaceMismatch))
+    ) {
+      try await client.writeNote("Draft.md", content: "Words", baseVersion: .createOnly)
+    }
+    await #expect(
+      throws: DaemonClientError.http(status: 412, body: ApiErrorBody(error: .workspaceMismatch))
+    ) {
+      try await client.pair(PairRequest(code: "ABCD2345", name: "Phone", kind: .app))
+    }
+    #expect(stub.requests.last?.header(DaemonProtocol.workspaceIdHeader) == nil)
+  }
+
   @Test func aRejectedPairingCodeIsNotARejectedToken() async throws {
     let rejected = #"{"error":"pairing_rejected","message":"That code expired."}"#
     let stub = Stub { _ in .json(401, rejected) }

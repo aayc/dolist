@@ -2178,6 +2178,25 @@
         },
         "agentMode": {
           "$ref": "#/$defs/AgentMode"
+        },
+        "workspaceId": {
+          "description": "Stable logical vault identity shared by synced replicas.",
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$"
+        },
+        "hostId": {
+          "description": "Stable serving device identity; capture receipts belong to this host.",
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$"
+        },
+        "capabilities": {
+          "description": "Explicit supported features; unknown values are ignored.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
         }
       },
       "required": ["ok", "version", "apiVersion", "vaultName", "agentMode"],
@@ -2479,6 +2498,152 @@
       "required": ["path", "content", "version", "mtime", "date", "created"],
       "additionalProperties": {},
       "description": "A daily note, created from the template when requested."
+    },
+    "DailyAppendRequest": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Runtime id, safe to use in URLs."
+        },
+        "hostId": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+          "description": "Verified serving host from health."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100000,
+          "description": "Markdown to append verbatim; the client supplies task syntax."
+        },
+        "capturedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "timeZone": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "IANA time zone at capture; the explicit route date is authoritative."
+        }
+      },
+      "required": ["operationId", "hostId", "text", "capturedAt", "timeZone"],
+      "additionalProperties": false,
+      "description": "Append user-owned markdown exactly once or report uncertainty. Requires X-DDL-Workspace-Id. Retry only the identical request on the same host."
+    },
+    "DailyAppendResponse": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+              "description": "Runtime id, safe to use in URLs."
+            },
+            "workspaceId": {
+              "type": "string",
+              "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+              "description": "Runtime id, safe to use in URLs."
+            },
+            "hostId": {
+              "type": "string",
+              "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+              "description": "Runtime id, safe to use in URLs."
+            },
+            "hostDate": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+              "description": "Local calendar date YYYY-MM-DD."
+            },
+            "hostTimeZone": {
+              "type": "string"
+            },
+            "watched": {
+              "type": "boolean",
+              "description": "Within the host's configured agent watch window; does not imply execution has begun."
+            },
+            "outcome": {
+              "type": "string",
+              "const": "applied"
+            },
+            "note": {
+              "$ref": "#/$defs/DailyNoteResponse"
+            }
+          },
+          "required": [
+            "operationId",
+            "workspaceId",
+            "hostId",
+            "hostDate",
+            "hostTimeZone",
+            "watched",
+            "outcome",
+            "note"
+          ],
+          "additionalProperties": {}
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+              "description": "Runtime id, safe to use in URLs."
+            },
+            "workspaceId": {
+              "type": "string",
+              "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+              "description": "Runtime id, safe to use in URLs."
+            },
+            "hostId": {
+              "type": "string",
+              "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+              "description": "Runtime id, safe to use in URLs."
+            },
+            "hostDate": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+              "description": "Local calendar date YYYY-MM-DD."
+            },
+            "hostTimeZone": {
+              "type": "string"
+            },
+            "watched": {
+              "type": "boolean",
+              "description": "Within the host's configured agent watch window; does not imply execution has begun."
+            },
+            "outcome": {
+              "type": "string",
+              "const": "indeterminate"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "description": "Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments)."
+            }
+          },
+          "required": [
+            "operationId",
+            "workspaceId",
+            "hostId",
+            "hostDate",
+            "hostTimeZone",
+            "watched",
+            "outcome",
+            "path"
+          ],
+          "additionalProperties": {}
+        }
+      ],
+      "description": "Durable capture receipt. Applied carries the exact saved base, even on retry. Indeterminate requires user reconciliation and must never be automatically re-appended."
     },
     "SearchHit": {
       "type": "object",
@@ -3024,6 +3189,9 @@
         "not_found",
         "conflict",
         "locked_by_env",
+        "workspace_mismatch",
+        "host_mismatch",
+        "operation_conflict",
         "payload_too_large",
         "upgrade_required",
         "rate_limited",

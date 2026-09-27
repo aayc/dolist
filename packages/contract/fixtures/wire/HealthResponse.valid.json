@@ -18,5 +18,18 @@
       "vaultName": "",
       "agentMode": "mock"
     }
+  },
+  {
+    "name": "offline capable daemon",
+    "value": {
+      "ok": true,
+      "version": "0.1.0",
+      "apiVersion": 1,
+      "vaultName": "Synthetic",
+      "agentMode": "off",
+      "workspaceId": "workspace_one",
+      "hostId": "host_one",
+      "capabilities": ["workspace-identity-v1", "daily-append-v1"]
+    }
   }
 ]

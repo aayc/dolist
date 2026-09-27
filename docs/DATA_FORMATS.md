@@ -35,6 +35,8 @@ corruption.
 | `state/records.json` | `packages/agent/src/orchestrator/records.ts` | JSON, compact | 1 | yes |
 | `state/approvals.json` | `packages/agent/src/safety/approval-store.ts` | JSON, pretty | 1 | yes |
 | `state/routines.json` | `packages/agent/src/routines/state.ts` | JSON, compact | 1 | yes |
+| `workspace.json` | `apps/daemon/src/workspace-identity.ts` | JSON, immutable logical identity except explicit sync adoption | 1 | target adoption before sync, never text-merged |
+| `captures/<host>/<principal-hash>/<operation>.json` | `apps/daemon/src/daily-capture.ts` | JSON, prepared/applied/indeterminate operation receipt | 1 | **no** (endpoint-local; host namespaced even in external folder sync) |
 | `settings.json` | `apps/daemon/src/settings-store.ts` | JSON, pretty, user-editable | 1 | yes |
 | `corrupt/…` | `PersistedFile` (all owners) | copies / moved originals | — | yes |
 | `sync/<targetId>.json` | `packages/storage/src/sync/snapshot.ts` | JSON | `format: 1` | **never** (per device) |
@@ -549,3 +551,36 @@ keep the old ones loading.
 - Journals are never compacted: a thread's journal grows with the thread (the orchestrator's chat
   trims its messages, not its journal). Compaction needs a marker every device honors, or a union
   would bring compacted events back; it is planned with the agent journal's later phases.
+
+## Workspace identity and capture receipts
+
+`workspace.json` is `{ "version": 1, "workspaceId": "<opaque-id>" }`. On the first daemon
+start, a missing file is created conditionally with a random identity. A restarted daemon keeps
+it. Importing notes into a new vault creates a new identity; copying the complete vault including
+its sidecar intentionally keeps its logical identity. Neither its path nor display name is an ID.
+
+Before syncing content, the daemon reads the target identity. A target outage fails only the
+sync pass and retries later; local vault access remains available. An empty target conditionally adopts
+the first joining vault's identity; concurrent joiners reread the winning identity. Other replicas
+adopt that target identity before any note sync. This is an explicit workspace transition: existing
+verified HTTP exchanges drain first, subsequent requests with the old identity fail with 412,
+and live WebSockets close with 4412. Identity is excluded from ordinary text merging and deletion
+propagation. A corrupt, newer or unexpectedly removed identity fails closed; it is retained for
+repair, never quarantined away and replaced with a new identity. This exception to generic
+quarantine is necessary to prevent old drafts being silently replayed into a newly named vault.
+
+Capture receipts bind the operation ID to the logical workspace, serving device, authenticated
+principal, explicit calendar date and SHA-256 of the exact request payload. Paths use the serving
+host ID and a hash of the principal, and never a token. The daemon saves a `prepared` record with
+the intended complete note content before its conditional note write. The `applied` record then
+stores the resulting note/version/base. Identical retries return that saved base; they do not
+return a newer note version or append again. A changed payload with the same ID fails with 409.
+
+A restart can recover a prepared operation only if the note's current text exactly matches its
+intended complete text. Otherwise it becomes `indeterminate`, including a crash before the write,
+a later edit, rename or deletion: the client must reconcile it instead of generating another
+operation automatically. Corrupt/newer receipts are retained and fail closed. Receipts currently
+have no expiry: removing them would invalidate the retry promise. They are excluded from sync;
+an explicit host ID in each request prevents transparent retry on a different serving endpoint.
+The note write and receipt write are separate transactions, so this protocol promises a durable
+applied result or explicit uncertainty, not unconditional exactly-once completion after a crash.

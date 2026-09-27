@@ -1,0 +1,35 @@
+[
+  {
+    "name": "applied with original base",
+    "value": {
+      "operationId": "capture_one",
+      "hostId": "host_one",
+      "workspaceId": "workspace_one",
+      "hostDate": "2026-09-27",
+      "hostTimeZone": "America/Los_Angeles",
+      "watched": true,
+      "outcome": "applied",
+      "note": {
+        "path": "Daily/2026-09-28.md",
+        "content": "- [ ] Take a synthetic walk\n",
+        "version": "v1",
+        "mtime": 1790536000001,
+        "date": "2026-09-28",
+        "created": true
+      }
+    }
+  },
+  {
+    "name": "indeterminate needs reconciliation",
+    "value": {
+      "operationId": "capture_one",
+      "hostId": "host_one",
+      "workspaceId": "workspace_one",
+      "hostDate": "2026-09-27",
+      "hostTimeZone": "America/Los_Angeles",
+      "watched": true,
+      "outcome": "indeterminate",
+      "path": "Daily/2026-09-28.md"
+    }
+  }
+]

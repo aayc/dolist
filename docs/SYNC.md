@@ -323,3 +323,13 @@ Phase 2:
 - Lease changes pushed on the stream.
 - Change-log compaction and per-vault quotas; the iOS client (the Swift models already decode the
   sync status).
+
+### Logical workspace identity
+
+The daemon establishes `.daily-do-list/workspace.json` with the target before the first content sync
+pass. A target outage leaves local vault access working and retries the preflight later. The first conditional create wins; joining replicas adopt the target's ID before notes
+move. This file is excluded from ordinary text merging, as are endpoint-local capture receipts
+under `.daily-do-list/captures/`. A mobile client's expected-workspace header fails after adoption
+until it explicitly verifies the new workspace. See `docs/DATA_FORMATS.md` for migration and
+recovery rules. The identity is metadata in the existing authenticated file protocol, so this
+change does not alter the sync wire version or agent lease fencing.

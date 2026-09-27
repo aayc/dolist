@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type { AgentRuntime, ExecutionProvider, LlmClient } from "@ddl/agent";
 import type { ConnectorsConfig, ConnectorToolSource } from "@ddl/connectors";
 import { EMPTY_CONNECTORS_CONFIG, loadConnectorsConfig } from "@ddl/connectors/config";
+import { PERSISTED_PATHS } from "@ddl/contract";
 import {
   type AppSettings,
   agentModel,
@@ -222,6 +223,7 @@ export async function createSync(options: {
   primary: StorageProvider;
   logger: Logger;
   leaseEpoch?: () => number | null;
+  prepareTarget?: (target: StorageProvider) => Promise<void>;
 }): Promise<SyncHandle | null> {
   if (options.target.kind === "none") return null;
   const logger = options.logger.child({ component: "sync" });
@@ -232,14 +234,25 @@ export async function createSync(options: {
     ...(fenced ? { leaseEpoch } : {}),
   });
   if (!target) return null;
+  let prepared = false;
   return {
     engine: new SyncEngine({
       primary: options.primary,
       target,
+      beforeSync: async () => {
+        if (prepared) return;
+        await options.prepareTarget?.(target);
+        prepared = true;
+      },
       logger,
       // Machine-local data never leaves this machine: the agent's scratch data, and the import
       // manifest (it names a folder on this machine).
-      exclude: [".daily-do-list/state/tasks", IMPORT_DIR],
+      exclude: [
+        ".daily-do-list/state/tasks",
+        IMPORT_DIR,
+        PERSISTED_PATHS.workspace,
+        PERSISTED_PATHS.captures,
+      ],
       ...(fenced ? { fence: { covers: isAgentOwnedPath, epoch: leaseEpoch } } : {}),
     }),
     target,

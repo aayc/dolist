@@ -38,12 +38,14 @@ import type { SettingsStore } from "./settings-store";
 import { NO_SYSTEM_SETTINGS, type SystemSettingsOpener } from "./system-settings";
 import { VaultSwitch } from "./vault-switch";
 import { DAEMON_VERSION } from "./version";
+import { WorkspaceIdentity } from "./workspace-identity";
 import { WriteTracker } from "./write-tracker";
 
 export const MAX_BODY_BYTES = WIRE_LIMITS.bodyBytes;
 
 export interface AppDeps {
   storage: StorageProvider;
+  workspace?: WorkspaceIdentity;
   runtime: AgentRuntime;
   settings: SettingsStore;
   /** `port` must be the port actually listened on (it is part of the Host/Origin allowlists). */
@@ -85,6 +87,7 @@ export function createApp(deps: AppDeps): Hono {
   const device = deps.device ?? memoryDeviceSettings({ remoteHosts });
   const ctx: AppContext = {
     storage: deps.storage,
+    workspace: deps.workspace ?? new WorkspaceIdentity(deps.storage, device.device.id),
     runtime: deps.runtime,
     settings: deps.settings,
     policy: createSecurityPolicy({
@@ -155,6 +158,7 @@ export function createApp(deps: AppDeps): Hono {
     }),
   );
   app.use("/api/*", requestLogger(ctx.logger));
+  app.use("/api/*", ctx.workspace.guard(ctx.vault));
   if (deps.relay) app.use("/api/*", deps.relay.middleware());
 
   registerVaultRoutes(app, ctx);

@@ -10,6 +10,7 @@ import {
   type ServerEventType,
   type SurfaceFrame,
   silentLogger,
+  WORKSPACE_ID_HEADER,
 } from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
 import { getRequestListener } from "@hono/node-server";
@@ -21,6 +22,7 @@ import { waitFor } from "./security/harness";
 import { createSettingsStore } from "./settings-store";
 import { FakeAgentRuntime, makeApproval, testToken } from "./test-helpers";
 import { DAEMON_VERSION } from "./version";
+import { WorkspaceIdentity } from "./workspace-identity";
 import { WriteTracker } from "./write-tracker";
 import { attachWebSocketHub, type WebSocketHub, type WebSocketHubOptions } from "./ws";
 
@@ -29,6 +31,7 @@ interface Harness {
   token: string;
   storage: MemoryStorageProvider;
   runtime: FakeAgentRuntime;
+  workspace: WorkspaceIdentity;
   hub: WebSocketHub;
   server: Server;
   url(query?: string): string;
@@ -49,6 +52,8 @@ afterEach(async () => {
 async function startHarness(options: Partial<WebSocketHubOptions> = {}): Promise<Harness> {
   const storage = new MemoryStorageProvider();
   const runtime = new FakeAgentRuntime();
+  const workspace = options.workspace ?? new WorkspaceIdentity(storage, "test_host");
+  await workspace.current();
   const settings = await createSettingsStore({ storage });
   const writes = new WriteTracker();
   const token = testToken();
@@ -58,6 +63,7 @@ async function startHarness(options: Partial<WebSocketHubOptions> = {}): Promise
   const port = (server.address() as AddressInfo).port;
   handler = createApp({
     storage,
+    workspace,
     runtime,
     settings,
     config: { port, allowedOrigins: [] },
@@ -67,6 +73,7 @@ async function startHarness(options: Partial<WebSocketHubOptions> = {}): Promise
   }).fetch;
   const hub = attachWebSocketHub({
     server,
+    workspace,
     policy: createSecurityPolicy({ port, token }),
     storage,
     runtime,
@@ -78,6 +85,7 @@ async function startHarness(options: Partial<WebSocketHubOptions> = {}): Promise
   });
   const harness: Harness = {
     port,
+    workspace,
     token,
     storage,
     runtime,
@@ -181,6 +189,26 @@ const frame = (threadId: string, surface: SurfaceFrame["surface"] = "browser"): 
 });
 
 describe("WebSocket authentication", () => {
+  it("checks workspace on upgrade and closes live sockets before adopted workspace events can arrive", async () => {
+    const h = await startHarness();
+    const headers = { [WORKSPACE_ID_HEADER]: await h.workspace.current() };
+    const client = await TestClient.connect(h.url(), { headers });
+    await client.next("hello");
+    const closed = new Promise<number>((resolve) =>
+      client.ws.once("close", (code) => resolve(code)),
+    );
+    const target = new MemoryStorageProvider();
+    await new WorkspaceIdentity(target, "another_host").current();
+    await h.workspace.adoptFrom(target);
+    expect(await closed).toBe(4412);
+    expect(h.hub.clientCount).toBe(0);
+    expect(await rejectionStatus(h.url(), { headers })).toBe("HTTP 412");
+    const reverified = await TestClient.connect(h.url(), {
+      headers: { [WORKSPACE_ID_HEADER]: await h.workspace.current() },
+    });
+    await reverified.next("hello");
+  });
+
   it("greets clients authenticated with ?token=", async () => {
     const h = await startHarness();
     const client = await TestClient.connect(h.url(), { origin: `http://127.0.0.1:${h.port}` });
