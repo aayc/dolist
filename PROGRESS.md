@@ -59,7 +59,9 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
   permissions for controlling other apps remain user-granted through Settings → Computer Use.
 - Passed: `pnpm check`, all production builds, bundle budgets, six web startup e2e tests,
   `pnpm vim:check`, 173 native Vim tests, 300 native editor tests and 29 daemon integration tests.
-  Both CI and macOS workflows are green on `531d8d7`, including native app tests and iOS builds.
+  CI, macOS (including release packaging and iOS builds), Security and Linux bundle workflows are
+  green on merged setup commit `78ae584`. The native app test process crashed once on an unowned
+  reference; its targeted retry passed. The source-branch CI and macOS runs also passed.
   Local Swift 6.3 tests need `-- -Xswiftc -target -Xswiftc arm64-apple-macosx15.0` because its
   Testing library requires macOS 15. The local app test target still fails to compile an existing
   `CGWindowListCreateImage` snapshot under that override; its CI run passes with Apple's toolchain.
@@ -72,7 +74,7 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
   Work uses an isolated checkout, synthetic vaults and separate test daemons; the installed
   Mac app, its daemon and the real vault must remain untouched.
 
-Local web/Mac setup is complete. Check the workflows dispatched on `main` after the handoff commit.
+Local web/Mac setup is complete, with all four workflows green on `78ae584`.
 The remote-machine setup continues in its separate task.
 Native iPhone implementation is authorized and continues separately, including simulator testing.
 
