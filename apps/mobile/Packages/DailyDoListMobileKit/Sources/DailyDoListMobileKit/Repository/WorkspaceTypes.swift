@@ -20,11 +20,16 @@ public struct RemoteWorkspaceIdentity: Hashable, Sendable {
   public var workspaceID: String
   public var hostID: String
   public var supportsConditionalWorkspaceWrites: Bool
+  public var supportsAtomicCapture: Bool
 
-  public init(workspaceID: String, hostID: String, supportsConditionalWorkspaceWrites: Bool) {
+  public init(
+    workspaceID: String, hostID: String, supportsConditionalWorkspaceWrites: Bool,
+    supportsAtomicCapture: Bool = false
+  ) {
     self.workspaceID = workspaceID
     self.hostID = hostID
     self.supportsConditionalWorkspaceWrites = supportsConditionalWorkspaceWrites
+    self.supportsAtomicCapture = supportsAtomicCapture
   }
 }
 
@@ -70,6 +75,8 @@ public enum WorkspaceRepositoryError: Error, Equatable, Sendable {
   case corruptCheckpoint
   case corruptIndex
   case concurrentWrite
+  case pendingCaptures
+  case pendingNoteWrites
   case unsupportedIndexVersion(Int)
   case storage(String)
 }

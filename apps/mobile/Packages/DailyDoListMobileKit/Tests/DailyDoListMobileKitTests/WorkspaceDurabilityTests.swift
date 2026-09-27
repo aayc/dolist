@@ -164,6 +164,14 @@ private final class FailingIndex: WorkspaceIndex, @unchecked Sendable {
   func document(_ path: String) throws -> NoteIndexRecord? { try wrapped.document(path) }
   func outbox() throws -> [NoteOutboxRecord] { try wrapped.outbox() }
   func pending(_ path: String) throws -> NoteOutboxRecord? { try wrapped.pending(path) }
+  func value(_ key: String) throws -> WorkspaceStoredValue? { try wrapped.value(key) }
+  func values(prefix: String) throws -> [WorkspaceStoredValue] {
+    try wrapped.values(prefix: prefix)
+  }
+  func valueSummaries() throws -> [WorkspaceValueSummary] { try wrapped.valueSummaries() }
+  func commitValues(_ changes: [WorkspaceValueMutation]) throws {
+    try wrapped.commitValues(changes)
+  }
   func commit(
     path: String, document: NoteIndexRecord?, pending: NoteOutboxRecord?, expectedGeneration: Int64?
   ) throws {
