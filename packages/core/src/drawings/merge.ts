@@ -6,7 +6,8 @@
  * element one side dropped and the other didn't touch is gone, while one the other side changed
  * survives. Nothing either side changed is lost.
  */
-import type { DrawingBinaryFiles, DrawingElement } from "./types";
+import { isRecord } from "../guards";
+import type { DrawingAppState, DrawingBinaryFiles, DrawingElement } from "./types";
 
 export interface MergeDrawingOptions {
   /** Elements being edited locally right now (a text being typed): the local copy wins. */
@@ -91,4 +92,47 @@ export function mergeDrawingFiles(
   remote: DrawingBinaryFiles,
 ): DrawingBinaryFiles {
   return { ...remote, ...local };
+}
+
+/**
+ * Three-way, top-level scene settings. A local value (including a removed key) survives when
+ * remote still has the base value. A concurrent remote change wins that key. Missing and null
+ * differ; nested values are atomic, and object key order is not a content change.
+ */
+export function mergeDrawingAppState(
+  base: DrawingAppState | undefined,
+  local: DrawingAppState,
+  remote: DrawingAppState,
+): DrawingAppState {
+  const before = base ?? {};
+  const merged = { ...remote };
+  for (const key of new Set([...Object.keys(before), ...Object.keys(local)])) {
+    if (Object.hasOwn(remote, key) !== Object.hasOwn(before, key)) continue;
+    if (!sameStateValue(remote[key], before[key])) continue;
+    if (Object.hasOwn(local, key)) {
+      // A JSON key named __proto__ is data, never the object's prototype.
+      Object.defineProperty(merged, key, {
+        value: local[key],
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+    } else delete merged[key];
+  }
+  return merged;
+}
+
+function sameStateValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((value, index) => sameStateValue(value, b[index]));
+  }
+  if (isRecord(a) && isRecord(b)) {
+    const keys = Object.keys(a);
+    return (
+      keys.length === Object.keys(b).length &&
+      keys.every((key) => Object.hasOwn(b, key) && sameStateValue(a[key], b[key]))
+    );
+  }
+  return false;
 }

@@ -134,7 +134,7 @@ canvas.background = .transparent                        // or .scene (default), 
 canvas.showsToolbar = false                             // place the tool bar yourself:
 host.addSubview(canvas.makeToolbarView())               // it follows the canvas's editor
 
-// A save that found the file changed elsewhere: both sides' work, element by element.
+// A save that found the file changed elsewhere: elements and per-key scene settings.
 let merged = SceneMerge.merge(base: sceneAsRead, local: canvas.scene, remote: theirs.scene)
 
 // Inline previews, cached by content hash:
@@ -292,3 +292,9 @@ normalize orientation and store PNG so web clients can render the same bytes. Re
 creates a new file ID; old files stay for undo and tombstones. Crop, transforms and arrangement
 commands produce ordinary element versions and participate in the shared undo history. Grouped
 objects align and distribute as units. Imported SVG bytes remain preserved but are not yet decoded.
+
+`SceneMerge` compares each top-level `appState` key against the saved base. Local-only changes
+(including background, grid settings and removed keys) survive; a concurrent remote change wins
+that key. Missing keys differ from JSON null, and object key reordering is not a change. Nested
+values merge as whole values. Unknown scene fields and embedded-file merge behavior are preserved.
+The pure TypeScript reference is `mergeDrawingAppState` in `@ddl/core`.

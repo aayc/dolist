@@ -10,7 +10,8 @@ import Foundation
 ///   (as Excalidraw and the plugin save) and this side didn't change it since the base;
 /// - order: by fractional `index` when every element has one, else theirs with ours after the
 ///   element they followed;
-/// - the rest of the scene (`appState`, other fields) is theirs; `files` has both sides' images.
+/// - `appState` merges per key against the base; local-only edits survive, remote edits win
+///   conflicts. Other scene fields stay remote; `files` keeps its existing union policy.
 public enum SceneMerge {
   public static func merge(
     base: ExcalidrawScene?, local: ExcalidrawScene, remote: ExcalidrawScene
@@ -57,6 +58,8 @@ public enum SceneMerge {
 
     var scene = remote
     scene.elements = merged
+    scene.appState = mergedAppState(
+      base: base?.appState, local: local.appState, remote: remote.appState)
     scene.files = mergedFiles(local: local.files, remote: remote.files)
     return scene
   }
@@ -65,6 +68,32 @@ public enum SceneMerge {
   static func prefersLocal(_ local: ExcalidrawElement, over remote: ExcalidrawElement) -> Bool {
     local.version > remote.version
       || (local.version == remote.version && local.versionNonce <= remote.versionNonce)
+  }
+
+  private static func mergedAppState(base: JSONObject?, local: JSONObject, remote: JSONObject)
+    -> JSONObject
+  {
+    let before = base ?? JSONObject()
+    var merged = remote
+    // Remote field order stays intact; local additions follow their original order.
+    let keys = before.keys + local.keys.filter { !before.contains($0) }
+    for key in keys where sameStateValue(remote[key], before[key]) {
+      merged[key] = local[key]
+    }
+    return merged
+  }
+
+  /// JSON object order is preserved for writing, but must not manufacture a settings conflict.
+  private static func sameStateValue(_ lhs: JSONValue?, _ rhs: JSONValue?) -> Bool {
+    switch (lhs, rhs) {
+    case (.object(let left), .object(let right)):
+      return left.count == right.count
+        && left.keys.allSatisfy { sameStateValue(left[$0], right[$0]) }
+    case (.array(let left), .array(let right)):
+      return left.count == right.count && zip(left, right).allSatisfy { sameStateValue($0, $1) }
+    default:
+      return lhs == rhs
+    }
   }
 
   private static func mergedFiles(local: JSONValue, remote: JSONValue) -> JSONValue {
