@@ -36,6 +36,8 @@ extension DrawingRepository {
     try await verify(remote, generation: current)
     let received = try await remote.readNote(path)
     try check(current)
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     if let prior = try index.document(path), prior.state != .synced {
       if try index.pending(path)?.attempt != nil { return try snapshot(prior) }
       if prior.state == .waitingToSync {
@@ -65,6 +67,8 @@ extension DrawingRepository {
       guard try index.pending(path) != nil else { return }
       let received = try await remote.readNote(path)
       try check(generation)
+      var access = try checkpoints.beginAccess()
+      defer { access?.release() }
       var record = try require(path)
       guard let pending = try index.pending(path), record.state == .waitingToSync else { return }
       if let attempt = pending.attempt {
@@ -81,6 +85,8 @@ extension DrawingRepository {
         try merge(record, remote: received)
         guard try index.pending(path) != nil else { return }
       }
+      access?.release()
+      access = nil
       try await transmit(path, remote: remote, generation: generation)
     }
   }
@@ -133,6 +139,8 @@ extension DrawingRepository {
     async throws
   {
     try check(generation)
+    var access = try checkpoints.beginAccess()
+    defer { access?.release() }
     let record = try require(path)
     let attempt =
       try index.pending(path)?.attempt
@@ -142,10 +150,13 @@ extension DrawingRepository {
     let content = try checkpoints.read(attempt.checkpoint)
     if let error = DrawingValidation.error(ExcalidrawMarkdown.parse(content)) { throw error }
     try index.commit(record, pending: NoteOutboxRecord(path: path, attempt: attempt))
+    access?.release()
+    access = nil
     do {
       let received = try await remote.writeNote(
         path, content: content, baseVersion: attempt.baseVersion, workspaceID: scope.workspaceID)
       try check(generation)
+      access = try checkpoints.beginAccess()
       if try checkpoints.put(received.content) == attempt.checkpoint {
         try acknowledge(path, attempt: attempt, remote: received)
       } else {
@@ -154,6 +165,7 @@ extension DrawingRepository {
       }
     } catch WorkspaceRemoteError.conflict {
       try check(generation)
+      access = try checkpoints.beginAccess()
       try index.commit(require(path), pending: NoteOutboxRecord(path: path))
     }
   }

@@ -39,7 +39,7 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
         guard sqlite3_step(statement) == SQLITE_ROW else { throw failure() }
         return Int(sqlite3_column_int(statement, 0))
       }
-      guard (0...4).contains(version) else {
+      guard (0...5).contains(version) else {
         throw WorkspaceRepositoryError.unsupportedIndexVersion(version)
       }
       try execute("BEGIN IMMEDIATE")
@@ -70,9 +70,10 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
         try put("metadata", keyColumn: "key", key: "scope", value: scope)
       }
       try createContentCacheSchema()
-      // Version 4 adds cache blobs and nonreused value revisions. Older writers must fail
-      // closed rather than bypassing drawing dependencies or reintroducing cache CAS reuse.
-      try execute("PRAGMA user_version=4")
+      try createDocumentHistorySchema()
+      // Version 5 keeps document revisions after eviction and coordinates file reclamation.
+      // Older writers must not publish checkpoints without the filesystem access barrier.
+      try execute("PRAGMA user_version=5")
       try execute("COMMIT")
       #if os(iOS)
         for suffix in ["", "-wal", "-shm"] {
@@ -98,7 +99,11 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
   }
 
   public func document(_ path: String) throws -> NoteIndexRecord? {
-    try locked { try read("documents", key: path) }
+    try locked {
+      let record: NoteIndexRecord? = try read("documents", key: path)
+      if record != nil { try touchDocument(path) }
+      return record
+    }
   }
 
   public func outbox() throws -> [NoteOutboxRecord] {
@@ -147,12 +152,24 @@ public final class SQLiteWorkspaceIndex: WorkspaceIndex, @unchecked Sendable {
         guard existing?.generation == expectedGeneration else {
           throw WorkspaceRepositoryError.concurrentWrite
         }
-        guard (expectedGeneration ?? 0) < Int64.max else {
+        let history = try documentHistory(path)
+        guard history.generation < Int64.max else {
           throw WorkspaceRepositoryError.corruptIndex
         }
         var next = document
-        next?.generation = (expectedGeneration ?? 0) + 1
-        try put("documents", key: path, value: next)
+        if let next {
+          guard next.revision >= history.revision,
+            existing != nil || next.revision > history.revision
+          else { throw WorkspaceRepositoryError.concurrentWrite }
+        }
+        next?.generation = history.generation + 1
+        if let next {
+          try put("documents", key: path, value: next)
+          try rememberDocumentHistory(next)
+          try touchDocument(path)
+        } else {
+          try deleteDocument(path)
+        }
         try put("outbox", key: path, value: pending)
         try execute("COMMIT")
       } catch {

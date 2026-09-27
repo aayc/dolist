@@ -7,6 +7,8 @@ extension DrawingRepository {
   public func preserveLiveDraft(
     path: String, scene: ExcalidrawScene, previous: ExcalidrawMarkdown, expectedRevision: Int64
   ) throws -> LocalDrawing {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     var record = try require(path, revision: expectedRevision)
     guard record.state == .needsReview, record.reviewReason == .invalidDrawing else {
       throw WorkspaceRepositoryError.documentNeedsReview
