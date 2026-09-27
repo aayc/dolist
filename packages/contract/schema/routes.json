@@ -88,6 +88,122 @@
         }
       }
     },
+    "file": {
+      "path": "/api/files/*",
+      "auth": "bearer",
+      "params": {
+        "$ref": "#/$defs/file.params"
+      },
+      "methods": {
+        "GET": {
+          "summary": "Bounded vault attachment bytes; raster signatures inline, active/unknown content as attachment. Metadata headers: X-DDL-File-Path (URI encoded), X-DDL-File-Version, X-DDL-File-Mtime, Content-Length, Content-Type, ETag. No bearer URLs.",
+          "responses": {
+            "200": {
+              "description": "At most 5 MiB, nosniff and sandboxed. Only detected PNG/JPEG/GIF/WebP are inline.",
+              "content": "binary"
+            },
+            "400": {
+              "description": "Malformed, hidden or escaping path.",
+              "codes": ["invalid_path"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "No file at this path.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "File exceeds the 5 MiB read limit.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        },
+        "PUT": {
+          "summary": "Upload exact bytes to a visible attachment path. Requires X-DDL-Workspace-Id and either ifAbsent=1 or ifMatch=<version>; no unconditional overwrite. Text-note extensions use the notes API.",
+          "query": {
+            "$ref": "#/$defs/file.PUT.query"
+          },
+          "binaryBody": {
+            "maxBytes": 5242880,
+            "contentType": "application/octet-stream"
+          },
+          "responses": {
+            "200": {
+              "description": "The replaced attachment.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/VaultFileMetadata"
+              }
+            },
+            "201": {
+              "description": "The newly created attachment.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/VaultFileMetadata"
+              }
+            },
+            "400": {
+              "description": "A required guard, conditional version or path is invalid.",
+              "codes": ["invalid_request", "invalid_path"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "409": {
+              "description": "The attachment changed or the destination exists.",
+              "codes": ["conflict"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "Upload exceeds 5 MiB.",
+              "codes": ["payload_too_large"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "415": {
+              "description": "Expected application/octet-stream.",
+              "codes": ["unsupported_media_type"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        },
+        "DELETE": {
+          "summary": "Move an attachment into .trash; requires the verified workspace header. Text-note extensions use the notes API.",
+          "responses": {
+            "200": {
+              "description": "The attachment's trash path.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/TrashResponse"
+              }
+            },
+            "400": {
+              "description": "Missing workspace guard or invalid attachment path.",
+              "codes": ["invalid_request", "invalid_path"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "404": {
+              "description": "No attachment at this path.",
+              "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
     "note": {
       "path": "/api/notes/*",
       "auth": "bearer",
@@ -2099,6 +2215,34 @@
         }
       },
       "required": ["date"],
+      "additionalProperties": false
+    },
+    "file.PUT.query": {
+      "type": "object",
+      "properties": {
+        "ifAbsent": {
+          "type": "string",
+          "const": "1"
+        },
+        "ifMatch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Opaque content version."
+        }
+      },
+      "additionalProperties": false
+    },
+    "file.params": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": ["path"],
       "additionalProperties": false
     },
     "folders.DELETE.query": {

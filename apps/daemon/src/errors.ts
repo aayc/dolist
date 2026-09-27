@@ -34,6 +34,8 @@ const NAMED_ERRORS = new Map<string, { status: ContentfulStatusCode; code: ApiEr
   ["RoutineInputError", { status: 400, code: "invalid_request" }],
   ["InvalidRemoteHostsError", { status: 400, code: "invalid_request" }],
   ["NotFoundError", { status: 404, code: "not_found" }],
+  ["FileTooLargeError", { status: 413, code: "payload_too_large" }],
+  ["InvalidTextFileError", { status: 415, code: "unsupported_media_type" }],
   ["UnknownThreadError", { status: 404, code: "not_found" }],
   ["UnknownRoutineError", { status: 404, code: "not_found" }],
   ["ConflictError", { status: 409, code: "conflict" }],

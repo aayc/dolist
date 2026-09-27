@@ -1,7 +1,8 @@
 # Spec: moving from Obsidian
 
-Status: M (the merge race, `6750f36`) and I0/I1 (Import from Obsidian, `e2fd3ce`) built; B0 and P
-not started.
+Status: M (the merge race, `6750f36`) and I0/I1 (Import from Obsidian, `e2fd3ce`) built. B0
+storage, sync, daemon and shared Swift transport implemented; client image presentation belongs
+to P and the iPhone implementation.
 
 Read `AGENTS.md` first (invariants: plain files, soft deletes, agents never silently change the
 user's words, time is local, wire changes in the contract + Swift together, the keystroke path).
@@ -26,7 +27,7 @@ Related: `docs/SYNC.md`, `docs/DATA_FORMATS.md`, `packages/editor/README.md` (em
   How it works: [apps/daemon/README.md](../../apps/daemon/README.md#importing-from-obsidian); the
   user's steps: the root README, "Moving from Obsidian".
 
-## B0 — binary files and attachment sync (after the always-on work lands)
+## B0 — binary files and attachment sync
 
 `StorageProvider` gains binary reads and writes (local-fs, memory, remote) under the shared
 contract tests; the sync service stores attachments
@@ -34,6 +35,16 @@ contract tests; the sync service stores attachments
 conflict copy); the daemon serves vault files to clients (`GET /api/files/*`, bearer-authenticated,
 correct content type, never executable content inline — the artifact policy applies). This is
 also what the editors need to show images.
+
+Implemented across the three providers, sync schema 5, SyncEngine, daemon and shared Swift client.
+The daemon and provider uploads are bounded at 5 MiB. Binary conflicts preserve both originals
+before replacement; equal mtimes use a SHA-256 tie-break and deterministic conflict-copy names.
+Existing text versions and old sync clients remain compatible; old clients receive 415 when trying
+to decode a marked binary file as text. PUT uses explicit create-or-version preconditions and a
+verified workspace header. DELETE soft-trashes attachments. Swift exposes authenticated Data
+payloads and bounded artifact previews; no credential-bearing image URLs are constructed.
+Details and limits: [storage](../../packages/storage/README.md#binary-files),
+[sync](../SYNC.md), and [daemon](../../apps/daemon/README.md#vault-attachment-api).
 
 ## P — the display gaps (after the drawings' embed layer, X1/X3)
 

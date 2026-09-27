@@ -33,6 +33,18 @@ import { AppSettingsSchema } from "./settings";
 
 // ── Vault ─────────────────────────────────────────────────────────────────
 
+export const VaultFileMetadataSchema = named(
+  "VaultFileMetadata",
+  "Versioned attachment metadata; MIME is detected from bytes, never trusted from an upload.",
+  z.looseObject({
+    path: VaultPathSchema,
+    version: ContentVersionSchema,
+    mtime: EpochMsSchema,
+    size: CountSchema.max(WIRE_LIMITS.bodyBytes),
+    mimeType: z.string().regex(/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/),
+  }),
+);
+
 export const AgentModeSchema = named(
   "AgentMode",
   "`live` (real model), `mock` (deterministic scripts) or `off`.",

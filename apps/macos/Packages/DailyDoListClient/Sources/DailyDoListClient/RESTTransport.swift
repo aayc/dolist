@@ -73,10 +73,18 @@ struct RESTTransport: Sendable {
   }
 
   /// Raw bytes and the media type (without parameters) of a binary GET.
-  func bytes(_ path: String) async throws(DaemonClientError) -> ArtifactPayload {
+  func bytes(_ path: String, maxBytes: Int? = nil) async throws(DaemonClientError)
+    -> ArtifactPayload
+  {
     let request = try makeRequest(
       .get, path, body: nil, accept: "*/*", timeout: artifactTimeout, attribute: false)
-    let (payload, response) = try await send(request)
+    let result: (Data, HTTPURLResponse)
+    if let maxBytes {
+      result = try await boundedFileExchange(request, maxBytes: maxBytes)
+    } else {
+      result = try await send(request)
+    }
+    let (payload, response) = result
     try check(response, payload, conflict: .none, credential: .bearer)
     let contentType = response.value(forHTTPHeaderField: "Content-Type") ?? ""
     let mimeType =
@@ -153,7 +161,7 @@ struct RESTTransport: Sendable {
   }
 
   /// Maps a non-2xx answer to its error.
-  private func check(
+  func check(
     _ response: HTTPURLResponse, _ payload: Data, conflict: ConflictKind, credential: Credential
   ) throws(DaemonClientError) {
     let status = response.statusCode

@@ -77,6 +77,14 @@ const BY_SCHEMA = new Map<object, () => Arb>(
 
 /** Single fields, by `Schema.field` path. */
 const BY_PATH: Record<string, () => Arb> = {
+  "VaultFileMetadata.mimeType": () =>
+    fc.constantFrom(
+      "application/octet-stream",
+      "image/png",
+      "image/jpeg",
+      "application/pdf",
+      "image/svg+xml",
+    ),
   "CreateRoutineRequest.name": () =>
     fc.oneof(fc.constantFrom("Morning briefing", "Price watch", "Café ☕ digest"), p.segment()),
   "WriteNoteRequest.content": () =>

@@ -21,6 +21,7 @@ export const API_ERROR_CODES = [
   "operation_conflict",
   "operation_indeterminate",
   "payload_too_large",
+  "unsupported_media_type",
   "upgrade_required",
   "rate_limited",
   "http_error",
@@ -53,6 +54,7 @@ export const API_ERROR_CODE_DESCRIPTIONS: Record<(typeof API_ERROR_CODES)[number
   locked_by_env:
     "The device setting is set by an environment variable (see `lockedByEnv`); change it there.",
   payload_too_large: "Request body over 5 MB.",
+  unsupported_media_type: "Use the appropriate binary or UTF-8 API and declared request type.",
   upgrade_required: "`/ws` requested without a WebSocket upgrade.",
   rate_limited: "Too many pairing attempts, or too many pairing codes outstanding; try later.",
   http_error: "Raised by the HTTP framework itself.",

@@ -12,6 +12,7 @@ export const MOBILE_CAPABILITIES = [
   "daily-append-v1",
   "agent-mutations-v1",
   "notification-catch-up-v1",
+  "binary-files-v1",
 ] as const;
 
 /** Serializes verified exchanges with sync-target adoption; no old context can cross adoption. */

@@ -27,15 +27,18 @@ import {
   toVaultPath,
   type Unsubscribe,
 } from "@ddl/core";
+import { binaryDigest, binaryReadLimit, checkBinarySize } from "./binary";
 import { toStorableText } from "./file-types";
 import { IgnoreRules } from "./ignore-rules";
 import { type SyncRequest, SyncRequestError, SyncServiceClient } from "./remote-client";
 import {
+  type BinaryFileContent,
   ConflictError,
   type FileContent,
   type FileEntry,
   type ListOptions,
   NotFoundError,
+  type ReadBinaryOptions,
   type RemoteStorageConfig,
   StaleLeaseError,
   type StorageCapabilities,
@@ -225,6 +228,67 @@ export class RemoteStorageProvider implements StorageProvider {
       size: written.size,
       created: written.created,
     };
+  }
+
+  async readBinary(
+    path: string,
+    options: ReadBinaryOptions = {},
+  ): Promise<BinaryFileContent | null> {
+    const p = toVaultPath(path);
+    const response = await this.#request("GET", SYNC_ROUTES.binaryFile(this.client.vault, p), {
+      accept: [404],
+      path: p,
+      responseBytes: binaryReadLimit(options),
+    });
+    if (response.status === 404) return null;
+    const bytes = response.bytes;
+    const version = response.headers?.get("x-ddl-file-rev");
+    const time = response.headers?.get("x-ddl-file-mtime");
+    const hash = response.headers?.get("x-ddl-file-hash");
+    const mtime = Number(time);
+    if (
+      !bytes ||
+      !version ||
+      !time ||
+      !Number.isSafeInteger(mtime) ||
+      mtime < 0 ||
+      !hash ||
+      hash !== (await binaryDigest(bytes))
+    ) {
+      throw new StorageError("The sync server sent invalid attachment metadata or bytes", p);
+    }
+    return { path: p, size: bytes.byteLength, mtime, version, bytes, binary: true };
+  }
+
+  async writeBinary(
+    path: string,
+    bytes: Uint8Array,
+    options: WriteOptions = {},
+  ): Promise<WriteResult> {
+    const p = toVaultPath(path);
+    checkBinarySize(p, bytes);
+    const written = required(
+      (
+        await this.#request<SyncWriteResponse>(
+          "PUT",
+          SYNC_ROUTES.binaryFile(this.client.vault, p),
+          {
+            bytes,
+            query: options.ifMatch === null ? { ifAbsent: "1" } : { ifMatch: options.ifMatch },
+            mutating: true,
+            path: p,
+            headers: this.#fenceHeaders(isAgentOwnedPath(p)),
+          },
+        )
+      ).body,
+    );
+    this.#emit({
+      kind: written.created ? "created" : "modified",
+      path: written.path,
+      version: written.rev,
+      self: true,
+    });
+    return { ...toFileEntry(written), created: written.created };
   }
 
   async delete(path: string, options: WriteOptions = {}): Promise<void> {
@@ -564,7 +628,13 @@ function listPrefix(options: ListOptions): string {
 }
 
 function toFileEntry(entry: SyncFileEntry): FileEntry {
-  return { path: entry.path, size: entry.size, mtime: entry.mtime, version: entry.rev };
+  return {
+    path: entry.path,
+    size: entry.size,
+    mtime: entry.mtime,
+    version: entry.rev,
+    ...(entry.binary ? { binary: true as const } : {}),
+  };
 }
 
 function required<T>(body: T | undefined): T {

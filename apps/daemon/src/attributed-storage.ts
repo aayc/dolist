@@ -1,8 +1,10 @@
 import { normalizePath, type Unsubscribe } from "@ddl/core";
 import type {
+  BinaryFileContent,
   FileContent,
   FileEntry,
   ListOptions,
+  ReadBinaryOptions,
   StorageCapabilities,
   StorageEvent,
   StorageProvider,
@@ -50,6 +52,16 @@ export class AttributedStorage implements StorageProvider {
 
   read(path: string): Promise<FileContent | null> {
     return this.inner.read(path);
+  }
+
+  readBinary(path: string, options?: ReadBinaryOptions): Promise<BinaryFileContent | null> {
+    return this.inner.readBinary(path, options);
+  }
+
+  async writeBinary(path: string, bytes: Uint8Array, options?: WriteOptions): Promise<WriteResult> {
+    const result = await this.inner.writeBinary(path, bytes, options);
+    this.writes.record(result.path, result.version, this.source);
+    return result;
   }
 
   async write(path: string, content: string, options?: WriteOptions): Promise<WriteResult> {

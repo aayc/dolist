@@ -125,7 +125,11 @@ export function renderProtocolReference(): string {
     "| --- | --- | --- | --- | --- | --- |",
   ];
   for (const { name, method, route, operation } of operations) {
-    const body = operation.body ? link(wireRegistry.get(operation.body)!.id) : "—";
+    const body = operation.body
+      ? link(wireRegistry.get(operation.body)!.id)
+      : operation.binaryBody
+        ? `Raw bytes (≤ ${operation.binaryBody.maxBytes})`
+        : "—";
     const success = Object.entries(operation.responses)
       .filter(([status]) => Number(status) < 300)
       .map(([status, spec]) => {
@@ -178,6 +182,10 @@ export function renderProtocolReference(): string {
       }
     }
     if (operation.body) out.push(`- Body: ${link(wireRegistry.get(operation.body)!.id)}`);
+    if (operation.binaryBody)
+      out.push(
+        `- Body: raw \`${operation.binaryBody.contentType}\`, at most ${operation.binaryBody.maxBytes} bytes.`,
+      );
     out.push("- Responses:");
     for (const [status, spec] of Object.entries(operation.responses))
       out.push(responseLine(status, spec));

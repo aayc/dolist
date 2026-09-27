@@ -23,6 +23,7 @@ struct InvalidFixtureTests {
 
   static let expectations: [String: [String: Expectation]] = [
     "AgentNotificationsResponse": ["missing cursor": .rejected],
+    "VaultFileMetadata": ["missing version": .rejected],
     "AgentOperationResponse": ["completed without result": .rejected],
     "AgentStatusResponse": [
       "unknown reason for holding the agent here": .tolerated(openEnum),

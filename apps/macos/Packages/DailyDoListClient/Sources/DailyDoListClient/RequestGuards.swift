@@ -4,6 +4,15 @@ import DailyDoListModels
 /// daemon's router resolves `.`/`..` path segments (even percent-encoded ones), so such a request
 /// would address a different route or note; they fail locally with the 400 the daemon would give.
 enum RequestGuards {
+  static func fileRoute(_ path: String) throws(DaemonClientError) -> String {
+    let segments = path.split(separator: "/", omittingEmptySubsequences: false)
+    guard !segments.isEmpty, path.utf16.count <= 1024,
+      segments.allSatisfy({ !$0.isEmpty && !$0.hasPrefix(".") && $0.utf16.count <= 255 }),
+      !path.contains("\\"),
+      !path.unicodeScalars.contains(where: { $0.value < 32 || $0.value == 127 })
+    else { throw .invalidPath("Invalid attachment path") }
+    return APIRoute.file(path)
+  }
   /// `APIRoute.note(path)`, refusing `.`/`..` segments (the daemon never accepts them anyway).
   static func noteRoute(_ path: String) throws(DaemonClientError) -> String {
     let segments = path.split(separator: "/", omittingEmptySubsequences: false)

@@ -2153,6 +2153,41 @@
       "additionalProperties": false,
       "description": "Body of `POST /api/machine/pair`: pair this device with the always-on machine."
     },
+    "VaultFileMetadata": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments)."
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Opaque content version."
+        },
+        "mtime": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Epoch milliseconds."
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5242880
+        },
+        "mimeType": {
+          "type": "string",
+          "pattern": "^[a-z0-9!#$&^_.+-]+\\/[a-z0-9!#$&^_.+-]+$"
+        }
+      },
+      "required": ["path", "version", "mtime", "size", "mimeType"],
+      "additionalProperties": {},
+      "description": "Versioned attachment metadata; MIME is detected from bytes, never trusted from an upload."
+    },
     "AgentMode": {
       "type": "string",
       "enum": ["live", "mock", "off"],
@@ -3282,6 +3317,7 @@
         "operation_conflict",
         "operation_indeterminate",
         "payload_too_large",
+        "unsupported_media_type",
         "upgrade_required",
         "rate_limited",
         "http_error",

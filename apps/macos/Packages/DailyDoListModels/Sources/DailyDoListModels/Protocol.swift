@@ -9,6 +9,7 @@ public enum DaemonProtocol {
   public static let clientIdHeader = "x-ddl-client-id"
   public static let workspaceIdHeader = "x-ddl-workspace-id"
   public static let operationIdHeader = "x-ddl-operation-id"
+  public static let attachmentMaxBytes = 5 * 1024 * 1024
   /// WebSocket close code: the client's `hello.apiVersion` is incompatible.
   public static let incompatibleApiVersionCloseCode = 4426
 
@@ -72,6 +73,7 @@ public enum APIRoute {
   }
 
   public static func note(_ path: String) -> String { "/api/notes/\(encodeVaultPath(path))" }
+  public static func file(_ path: String) -> String { "/api/files/\(encodeVaultPath(path))" }
 
   /// `date` is `today` or `YYYY-MM-DD`.
   public static func daily(_ date: String, create: Bool = true) -> String {
@@ -760,6 +762,7 @@ public struct ApiErrorCode: WireEnum {
   public static let operationIndeterminate: Self = "operation_indeterminate"
   public static let lockedByEnv: Self = "locked_by_env"
   public static let payloadTooLarge: Self = "payload_too_large"
+  public static let unsupportedMediaType: Self = "unsupported_media_type"
   public static let upgradeRequired: Self = "upgrade_required"
   /// 429: too many pairing attempts, or too many pairing codes outstanding.
   public static let rateLimited: Self = "rate_limited"

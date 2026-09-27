@@ -250,6 +250,65 @@ async function importedVault(bed: Testbed): Promise<string> {
 type Scenario = (observed: Observed) => Promise<void>;
 
 const scenarios: Record<string, Scenario> = {
+  "GET file": async (observed) => {
+    const { api, storage } = await setup(observed);
+    await storage.writeBinary(
+      "Assets/example.png",
+      new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+    );
+    expect((await api.call("file", "GET", { params: { path: "Assets/example.png" } })).status).toBe(
+      200,
+    );
+    expect(
+      (await api.call("file", "GET", { params: { path: ".daily-do-list/hidden.png" } })).status,
+    ).toBe(400);
+    expect((await api.call("file", "GET", { params: { path: "missing.png" } })).status).toBe(404);
+    await storage.write("oversized.png", "x".repeat(5 * 1024 * 1024 + 1));
+    expect((await api.call("file", "GET", { params: { path: "oversized.png" } })).status).toBe(413);
+  },
+  "PUT file": async (observed) => {
+    const { api, app } = await setup(observed);
+    const health = (await (await app.request("/api/health")).json()) as { workspaceId: string };
+    const headers = {
+      [WORKSPACE_ID_HEADER]: health.workspaceId,
+      "content-type": "application/octet-stream",
+    };
+    const call = (
+      query: Record<string, string>,
+      body = "synthetic bytes",
+      customHeaders = headers,
+    ) =>
+      api.call("file", "PUT", {
+        params: { path: "Assets/example.bin" },
+        query,
+        body,
+        headers: customHeaders,
+      });
+    const created = await call({ ifAbsent: "1" });
+    expect(created.status).toBe(201);
+    expect((await call({ ifMatch: (created.body as { version: string }).version })).status).toBe(
+      200,
+    );
+    expect((await call({})).status).toBe(400);
+    expect((await call({ ifAbsent: "1" })).status).toBe(409);
+    expect((await call({ ifAbsent: "1" }, "x".repeat(5 * 1024 * 1024 + 1))).status).toBe(413);
+    expect(
+      (await call({ ifAbsent: "1" }, "x", { ...headers, "content-type": "text/plain" })).status,
+    ).toBe(415);
+  },
+  "DELETE file": async (observed) => {
+    const { api, app, storage } = await setup(observed);
+    const health = (await (await app.request("/api/health")).json()) as { workspaceId: string };
+    await storage.writeBinary("Assets/example.bin", new Uint8Array([0, 255]));
+    const call = (headers?: Record<string, string>) =>
+      api.call("file", "DELETE", {
+        params: { path: "Assets/example.bin" },
+        ...(headers ? { headers } : {}),
+      });
+    expect((await call()).status).toBe(400);
+    expect((await call({ [WORKSPACE_ID_HEADER]: health.workspaceId })).status).toBe(200);
+    expect((await call({ [WORKSPACE_ID_HEADER]: health.workspaceId })).status).toBe(404);
+  },
   "GET health": async (observed) => {
     const { api } = await setup(observed);
     expect((await api.call("health", "GET")).body).toMatchObject({

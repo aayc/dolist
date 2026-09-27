@@ -11,7 +11,7 @@ import {
   type SyncLeaseStatusResponse,
   sleep,
 } from "@ddl/core";
-import { StorageError } from "./types";
+import { FileTooLargeError, StorageError } from "./types";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 const MAX_RATE_LIMIT_RETRIES = 3;
@@ -53,6 +53,10 @@ export class SyncRequestError extends StorageError {
 export interface SyncRequest {
   query?: Record<string, string | undefined>;
   body?: unknown;
+  /** Raw attachment bytes, mutually exclusive with JSON body. */
+  bytes?: Uint8Array;
+  /** Read a successful response as bytes with this strict allocation cap. */
+  responseBytes?: number;
   /** Sends `X-DDL-Device` (every mutating request). */
   mutating?: boolean;
   /** Extra request headers (e.g. the lease epoch). */
@@ -65,6 +69,8 @@ export interface SyncRequest {
 export interface SyncResponse<T> {
   status: number;
   body: T | undefined;
+  bytes?: Uint8Array;
+  headers?: Headers;
 }
 
 export type LeaseAttempt =
@@ -125,10 +131,15 @@ export class SyncServiceClient {
       authorization: `Bearer ${this.#token}`,
     };
     if (init.mutating) headers[SYNC_DEVICE_HEADER] = this.deviceId;
-    let body: string | undefined;
+    let body: string | Uint8Array<ArrayBuffer> | undefined;
     if (init.body !== undefined) {
       headers["content-type"] = "application/json";
       body = JSON.stringify(init.body);
+    }
+    if (init.bytes !== undefined) {
+      if (init.body !== undefined) throw new StorageError("Binary and JSON bodies are exclusive");
+      headers["content-type"] = "application/octet-stream";
+      body = new Uint8Array(init.bytes);
     }
     for (let attempt = 0; ; attempt++) {
       const signal = init.signal
@@ -138,8 +149,13 @@ export class SyncServiceClient {
       let text: string;
       try {
         response = await this.#fetch(url, { method, headers, signal, ...(body ? { body } : {}) });
+        if (response.ok && init.responseBytes !== undefined) {
+          const bytes = await readBoundedResponse(response, init.responseBytes);
+          return { status: response.status, body: undefined, bytes, headers: response.headers };
+        }
         text = await response.text();
       } catch (error) {
+        if (error instanceof StorageError) throw error;
         throw new SyncRequestError(
           `Could not reach the sync server at ${this.host}: ${describeFailure(error)}`,
           0,
@@ -193,6 +209,39 @@ export class SyncServiceClient {
     );
     return body?.holder ?? null;
   }
+}
+
+async function readBoundedResponse(response: Response, limit: number): Promise<Uint8Array> {
+  const declared = response.headers.get("content-length");
+  if (declared !== null && Number(declared) > limit) {
+    await response.body?.cancel();
+    throw new FileTooLargeError("attachment", limit);
+  }
+  const reader = response.body?.getReader();
+  if (!reader) return new Uint8Array();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+      size += next.value.byteLength;
+      if (size > limit) throw new FileTooLargeError("attachment", limit);
+      chunks.push(next.value);
+    }
+  } catch (error) {
+    await reader.cancel();
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }
 
 function leaseAttempt(

@@ -22,6 +22,7 @@ import {
   type SyncTargetConfig,
   type WriteResult,
 } from "../types";
+import { syncBinaryPath } from "./binary";
 import { conflictCopyPath, isConflictCopyPath } from "./conflict-path";
 import { decideSync, type SyncDecision } from "./decide";
 import { mergeText3 } from "./diff3";
@@ -118,7 +119,7 @@ export function disabledSyncStatus(): SyncStatus {
  *   formats keep the newest (by mtime) and save the other as the conflict copy;
  * - deleted on one side and unchanged on the other → deleted there; deleted vs modified → the
  *   modified file is restored.
- * Binary files (images, PDFs, …) are skipped: the provider API is text-only.
+ * Binary files use bounded byte reads and preserve a deterministic conflict copy of the loser.
  */
 export class SyncEngine {
   private readonly primary: StorageProvider;
@@ -383,6 +384,28 @@ export class SyncEngine {
   private async syncPath(path: string, ctx: RunContext): Promise<void> {
     const base = ctx.snapshot.entries.get(path);
     const decision = decideSync(base, ctx.primaryFiles.get(path), ctx.targetFiles.get(path));
+    if (
+      isBinaryPath(path) ||
+      ctx.primaryFiles.get(path)?.binary ||
+      ctx.targetFiles.get(path)?.binary
+    ) {
+      await syncBinaryPath(path, decision, base, ctx, {
+        primary: this.primary,
+        target: this.target,
+        fence: this.fence,
+        writePrimary: async (target, bytes, ifMatch) => {
+          this.writingPrimary.add(target);
+          try {
+            return await this.primary.writeBinary(target, bytes, { ifMatch });
+          } finally {
+            this.writingPrimary.delete(target);
+          }
+        },
+        deletePrimary: (target, ifMatch) => this.deletePrimary(target, ifMatch),
+      });
+      if (isConflictCopyPath(path) && decision.action === "pull") ctx.snapshot.conflicts.add(path);
+      return;
+    }
     const fenced = this.fence?.covers(path) ?? false;
     switch (decision.action) {
       case "skip":
@@ -672,7 +695,7 @@ export class SyncEngine {
   }
 
   private isSyncable(path: string): boolean {
-    return !this.rules.isIgnored(path) && !isBinaryPath(path);
+    return !this.rules.isIgnored(path);
   }
 
   private syncableFiles(listing: FileEntry[]): SideListing {

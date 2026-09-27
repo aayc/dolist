@@ -58,14 +58,16 @@ const PAIRS: Array<[string, () => Promise<Pair>]> = [
         },
         targetWatchReady: async () => {
           await target.whenWatchReady();
-          // The engine never syncs images, so it ignores the probe.
+          // The engine ignores its own sync bookkeeping, including the probe.
+          await mkdir(join(dir, "mirror", SYNC_STATE_DIR), { recursive: true });
           let probed = false;
           const off = target.watch((event) => {
-            if (event.path === "probe.png") probed = true;
+            if (event.path === `${SYNC_STATE_DIR}/probe.json`) probed = true;
           });
           try {
             await untilEventsFlow(
-              (attempt) => writeFile(join(dir, "mirror", "probe.png"), `probe ${attempt}`),
+              (attempt) =>
+                writeFile(join(dir, "mirror", `${SYNC_STATE_DIR}/probe.json`), `probe ${attempt}`),
               () => probed,
             );
           } finally {
@@ -354,7 +356,7 @@ describe.each(PAIRS)("SyncEngine (%s)", (_name, makePair) => {
     expect((await target.read("diff.md"))?.content).toBe("vault");
   });
 
-  it("never syncs its own state, excluded paths, temp files or binaries", async () => {
+  it("never syncs its own state, excluded paths or temp files", async () => {
     engine = makeEngine(["Private"]);
     await seed(primary, {
       [`${SYNC_STATE_DIR}/other-target.json`]: "{}",
@@ -372,7 +374,6 @@ describe.each(PAIRS)("SyncEngine (%s)", (_name, makePair) => {
       `${SYNC_STATE_DIR}/other-target.json`,
       snapshotPath(target.id),
       "Private/journal.md",
-      "image.png",
     ]) {
       expect(await target.read(path)).toBeNull();
     }
@@ -575,7 +576,7 @@ describe.each(PAIRS)("SyncEngine (%s)", (_name, makePair) => {
 
     await target.write("written-through-the-provider.md", "self");
     await pair.externalTargetWrite(`${SYNC_STATE_DIR}/elsewhere.json`, "{}");
-    await pair.externalTargetWrite("photo.png", "not synced");
+    await pair.externalTargetWrite("photo.png~", "not synced");
     await sleep(300);
     expect(runs).toBe(runsAfterStart);
     expect(await primary.read("written-through-the-provider.md")).toBeNull();
