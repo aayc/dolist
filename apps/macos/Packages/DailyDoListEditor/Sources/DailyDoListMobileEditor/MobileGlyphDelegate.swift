@@ -21,6 +21,8 @@
     /// The line fragment of a drawn embed's line, given the character at its start and the
     /// proposed fragment (the controller sizes it for the drawing).
     var embedFragment: ((Int, CGRect) -> CGRect?)?
+    var contentRange: ((Int) -> NSRange?)?
+    var contentFragment: ((Int, CGRect) -> CGRect?)?
 
     init(storage: NSTextStorage, livePreview: LivePreviewState, theme: MobileMarkdownStyle) {
       self.storage = storage
@@ -71,6 +73,18 @@
         guard livePreview.isHidden(kind, range: full) else { return }
         hidden.append((run, kind.isReplacement ? full.location : -1))
       }
+      var probe = first
+      while probe <= last {
+        if let range = contentRange?(probe), range.length > 0 {
+          hidden.append((range, -1))
+          probe = max(probe + 1, range.end)
+        } else {
+          // Content ranges are whole lines; skip to the next line rather than querying per glyph.
+          let tail = storage.mutableString.range(of: "\n", range: NSRange(probe, last + 1))
+          probe = tail.location == NSNotFound ? last + 1 : tail.location + 1
+        }
+      }
+      hidden.sort { $0.range.location < $1.range.location }
       guard !hidden.isEmpty else { return 0 }
       let text = storage.mutableString
       var properties = Array(UnsafeBufferPointer(start: props, count: count))
@@ -95,6 +109,9 @@
       _ layoutManager: NSLayoutManager, shouldUse action: NSLayoutManager.ControlCharacterAction,
       forControlCharacterAt charIndex: Int
     ) -> NSLayoutManager.ControlCharacterAction {
+      if let range = contentRange?(charIndex), NSLocationInRange(charIndex, range) {
+        return .zeroAdvancement
+      }
       guard let marker = hiddenMarker(at: charIndex) else { return action }
       return marker.kind.isReplacement && marker.range.location == charIndex
         ? .whitespace : .zeroAdvancement
@@ -123,9 +140,11 @@
     ) -> Bool {
       guard glyphRange.length > 0 else { return false }
       let character = layoutManager.characterIndexForGlyph(at: glyphRange.location)
-      guard let marker = hiddenMarker(at: character), marker.kind == .embed,
-        let rect = embedFragment?(character, lineFragmentRect.pointee)
-      else { return false }
+      let content = contentFragment?(character, lineFragmentRect.pointee)
+      let embed =
+        hiddenMarker(at: character)?.kind == .embed
+        ? embedFragment?(character, lineFragmentRect.pointee) : nil
+      guard let rect = content ?? embed else { return false }
       lineFragmentRect.pointee = rect
       lineFragmentUsedRect.pointee = rect
       return true
