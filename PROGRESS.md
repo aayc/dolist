@@ -173,7 +173,11 @@ Nothing. Start from "Next up".
 - **Tests:** one good test per behavior at the cheapest layer that protects it; regression tests for
   real bugs; no redundant layers (the user thinks we overtest). CI branch runs reuse cached results;
   `main` runs everything thoroughly.
-- **iPhone:** deferred; when it resumes: native Swift, a free Apple ID, Siri and Shortcuts.
+- **iPhone:** implementation remains deferred; the user requested a full-feature implementation
+  plan only on 2026-09-27. The codebase audit and plan are in `apps/mobile/PLAN.md`: feature parity,
+  shared Swift extraction, durable offline editing, protocol prerequisites, drawings/Vim,
+  Siri/Shortcuts, notification constraints and milestone exit gates. Native Swift and a free
+  Apple ID remain the baseline; no mobile code has been implemented.
 
 ## How the parallel work runs
 
