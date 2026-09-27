@@ -27,6 +27,29 @@ public struct LocalDrawing: Sendable {
 enum DrawingValidation {
   static func error(_ document: ExcalidrawMarkdown) -> DrawingRepositoryError? {
     guard document.readable, document.problems.isEmpty else { return .unreadableFile }
+    // The markdown reader normalizes malformed appState/files containers for display. Check
+    // the preserved source block too, before treating that tolerant result as writable.
+    guard
+      let section = document.sections.last(where: {
+        let heading = $0.heading.trimmingCharacters(in: .whitespaces)
+        return heading == "## Drawing" || heading == "# Drawing"
+      })
+    else { return .unreadableFile }
+    let lines = section.body.components(separatedBy: "\n")
+    guard let start = lines.firstIndex(where: { $0 == "```json" || $0 == "```compressed-json" }),
+      let end = lines.indices.dropFirst(start + 1).first(where: {
+        lines[$0].trimmingCharacters(in: .whitespaces) == "```"
+      })
+    else { return .unreadableFile }
+    var json = lines[(start + 1)..<end].joined(separator: "\n")
+    if document.compressed {
+      guard let decoded = LZString.decompressFromBase64(String(json.filter { !$0.isWhitespace }))
+      else { return .unreadableFile }
+      json = decoded
+    }
+    guard let raw = try? JSONParser.parse(json).objectValue else { return .unreadableFile }
+    if let files = raw["files"], files.objectValue == nil { return .invalidScene }
+    if let state = raw["appState"], state.objectValue == nil { return .invalidScene }
     return error(document.scene)
   }
 
