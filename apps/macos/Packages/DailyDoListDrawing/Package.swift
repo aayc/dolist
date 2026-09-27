@@ -26,6 +26,7 @@ let package = Package(
         "DailyDoListDrawingCore",
         .product(name: "DailyDoListUI", package: "DailyDoListUI"),
       ]),
+    .testTarget(name: "DailyDoListMobileDrawingTests", dependencies: ["DailyDoListMobileDrawing"]),
     .testTarget(
       name: "DailyDoListDrawingTests",
       dependencies: [
