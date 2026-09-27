@@ -13,10 +13,12 @@ public enum DrawingTool: String, CaseIterable, Hashable, Sendable {
   case text
   case eraser
   case hand
+  case frame
 
   /// The tools in the tool bar, in Excalidraw's order.
   public static let toolbarTools: [DrawingTool] = [
-    .hand, .selection, .rectangle, .diamond, .ellipse, .arrow, .line, .freedraw, .text, .eraser,
+    .hand, .selection, .frame, .rectangle, .diamond, .ellipse, .arrow, .line, .freedraw, .text,
+    .eraser,
   ]
 
   /// The tooltip's name.
@@ -32,6 +34,7 @@ public enum DrawingTool: String, CaseIterable, Hashable, Sendable {
     case .text: "Text"
     case .eraser: "Eraser"
     case .hand: "Hand (panning tool)"
+    case .frame: "Frame"
     }
   }
 
@@ -48,6 +51,7 @@ public enum DrawingTool: String, CaseIterable, Hashable, Sendable {
     case .text: "character"
     case .eraser: "eraser"
     case .hand: "hand.raised"
+    case .frame: "rectangle.dashed"
     }
   }
 
@@ -60,7 +64,7 @@ public enum DrawingTool: String, CaseIterable, Hashable, Sendable {
 
   static let letters: [DrawingTool: String] = [
     .selection: "v", .rectangle: "r", .diamond: "d", .ellipse: "o", .arrow: "a", .line: "l",
-    .freedraw: "px", .text: "t", .eraser: "e", .hand: "h",
+    .freedraw: "px", .text: "t", .eraser: "e", .hand: "h", .frame: "f",
   ]
   static let numbers: [DrawingTool: Character] = [
     .selection: "1", .rectangle: "2", .diamond: "3", .ellipse: "4", .arrow: "5", .line: "6",
@@ -83,6 +87,7 @@ public enum DrawingTool: String, CaseIterable, Hashable, Sendable {
     case .line: .line
     case .freedraw: .freedraw
     case .text: .text
+    case .frame: .frame
     default: nil
     }
   }

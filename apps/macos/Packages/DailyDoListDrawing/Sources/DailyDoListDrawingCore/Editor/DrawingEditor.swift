@@ -43,6 +43,31 @@ public final class DrawingEditor {
   public internal(set) var editingTextId: String?
   /// A line or arrow drawn click by click (its last point follows the pointer).
   public internal(set) var multiPointElementId: String?
+  public internal(set) var editingLinearId: String?
+  public internal(set) var selectedPointIndex: Int?
+  public var arrowShape: DrawingArrowShape = .sharp
+  public var objectsSnapEnabled = false
+  public var gridEnabled = false {
+    didSet {
+      guard gridEnabled != oldValue, !readingCanvasPreferences else { return }
+      scene.appState["gridModeEnabled"] = .bool(gridEnabled)
+      if gridEnabled { scene.appState["gridSize"] = .number(gridSize) }
+      commit()
+    }
+  }
+  public var gridSize: Double = 20 {
+    didSet {
+      guard gridSize != oldValue, !readingCanvasPreferences else { return }
+      guard gridSize.isFinite, (1...1000).contains(gridSize) else {
+        gridSize = oldValue
+        return
+      }
+      scene.appState["gridSize"] = .number(gridSize)
+      commit()
+    }
+  }
+  @ObservationIgnored private var readingCanvasPreferences = false
+  public var framesVisible = true { didSet { invalidate() } }
   public internal(set) var canUndo = false
   public internal(set) var canRedo = false
   /// Screen pixels per scene unit, for hit tolerances (set by the view).
@@ -63,6 +88,7 @@ public final class DrawingEditor {
 
   @ObservationIgnored let environment: DrawingEnvironment
   @ObservationIgnored var history = DrawingHistory()
+  @ObservationIgnored var committedAppState: JSONObject
   @ObservationIgnored var committedElements: [ExcalidrawElement]
   @ObservationIgnored var committedSelection: Set<String> = []
   @ObservationIgnored var indexById: [String: Int] = [:]
@@ -77,7 +103,17 @@ public final class DrawingEditor {
     self.scene = scene
     self.environment = environment
     self.committedElements = scene.elements
+    self.committedAppState = scene.appState
     rebuildIndex()
+    readCanvasPreferences()
+  }
+
+  private func readCanvasPreferences() {
+    readingCanvasPreferences = true
+    gridEnabled = scene.appState["gridModeEnabled"]?.boolValue ?? false
+    let size = scene.appState["gridSize"]?.numberValue ?? 20
+    gridSize = size.isFinite && (1...1000).contains(size) ? size : 20
+    readingCanvasPreferences = false
   }
 
   // MARK: Scene access
@@ -107,7 +143,11 @@ public final class DrawingEditor {
   public func replaceScene(_ newScene: ExcalidrawScene, keepHistory: Bool = false) {
     cancelGesture()
     scene = newScene
+    readCanvasPreferences()
+    editingLinearId = nil
+    selectedPointIndex = nil
     committedElements = newScene.elements
+    committedAppState = newScene.appState
     rebuildIndex()
     selectedIds = selectedIds.filter { element($0).map { !$0.isDeleted } ?? false }
     committedSelection = selectedIds
@@ -152,12 +192,22 @@ public final class DrawingEditor {
 
   /// Records the changes since the last commit for undo and reports the scene.
   func commit() {
-    if let entry = DrawingHistory.diff(
+    var entry = DrawingHistory.diff(
       from: committedElements, to: scene.elements, selectionBefore: committedSelection,
       selectionAfter: selectedIds)
-    {
+    if committedAppState != scene.appState {
+      if entry == nil {
+        entry = DrawingHistory.Entry(
+          before: [:], after: [:], orderBefore: nil, orderAfter: nil,
+          selectionBefore: committedSelection, selectionAfter: selectedIds)
+      }
+      entry?.appStateBefore = committedAppState
+      entry?.appStateAfter = scene.appState
+    }
+    if let entry {
       history.record(entry)
       committedElements = scene.elements
+      committedAppState = scene.appState
       committedSelection = selectedIds
       updateHistoryFlags()
       invalidate()
@@ -178,6 +228,7 @@ public final class DrawingEditor {
     guard let entry = history.popUndo() else { return }
     scene.elements = DrawingHistory.apply(
       entry.before, order: entry.orderBefore, to: scene.elements, environment: environment)
+    if let appState = entry.appStateBefore { scene.appState = appState }
     afterHistoryStep(selection: entry.selectionBefore)
   }
 
@@ -186,12 +237,17 @@ public final class DrawingEditor {
     guard let entry = history.popRedo() else { return }
     scene.elements = DrawingHistory.apply(
       entry.after, order: entry.orderAfter, to: scene.elements, environment: environment)
+    if let appState = entry.appStateAfter { scene.appState = appState }
     afterHistoryStep(selection: entry.selectionAfter)
   }
 
   private func afterHistoryStep(selection: Set<String>) {
+    readCanvasPreferences()
+    editingLinearId = nil
+    selectedPointIndex = nil
     rebuildIndex()
     committedElements = scene.elements
+    committedAppState = scene.appState
     selectedIds = selection.filter { element($0).map { !$0.isDeleted } ?? false }
     committedSelection = selectedIds
     syncStyleToSelection()
@@ -213,6 +269,10 @@ public final class DrawingEditor {
     let expanded = expandToGroups(ids).filter { element($0).map { !$0.isDeleted } ?? false }
     guard expanded != selectedIds else { return }
     selectedIds = expanded
+    if expanded != editingLinearId.map({ Set([$0]) }) {
+      editingLinearId = nil
+      selectedPointIndex = nil
+    }
     syncStyleToSelection()
     invalidate()
   }

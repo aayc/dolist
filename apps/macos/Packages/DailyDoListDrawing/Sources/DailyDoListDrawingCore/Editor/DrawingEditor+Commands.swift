@@ -244,6 +244,7 @@ extension DrawingEditor {
       style.roundEdges = first.roundness != nil
     }
     if first.type == .arrow {
+      arrowShape = first.elbowed ? .elbow : first.roundness == nil ? .sharp : .round
       style.startArrowhead = first.startArrowhead
       style.endArrowhead = first.endArrowhead
     }
