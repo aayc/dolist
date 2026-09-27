@@ -75,6 +75,12 @@ extension SQLiteWorkspaceIndex {
         if changes.contains(where: \.requiresIdleCaptureWrites) {
           try requireIdleCaptureWrites()
         }
+        let importedBytes = changes.compactMap(\.attachmentImportBytes)
+        guard importedBytes.count <= 1 else { throw WorkspaceRepositoryError.corruptIndex }
+        if let count = importedBytes.first {
+          try makeAttachmentOriginalSpace(
+            adding: count, maximumBytes: AttachmentUploadRepository.maximumOriginalBytes)
+        }
         var revisions: [String: Int64] = [:]
         for change in changes {
           let old: WorkspaceStoredValue? = try read(
