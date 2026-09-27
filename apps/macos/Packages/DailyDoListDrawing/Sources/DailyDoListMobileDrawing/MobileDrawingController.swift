@@ -101,6 +101,7 @@
       VStack(spacing: 0) {
         if controller.isEditing && !controller.viewOnly && !controller.zenMode { toolbar }
         MobileDrawingCanvas(controller: controller, theme: colorScheme == .dark ? .dark : .light)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
         if controller.isEditing && !controller.viewOnly && !controller.zenMode { commands }
         if controller.isEditing && (controller.viewOnly || controller.zenMode) {
           Button(controller.viewOnly ? "Exit view mode" : "Exit zen mode") {
