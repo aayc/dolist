@@ -12,6 +12,7 @@ on:
     branches: [main]
     paths:
       - "apps/macos/**"
+      - "apps/mobile/**"
       - "apps/daemon/**"
       - "apps/sync/**"
       - "packages/core/**"
@@ -26,9 +27,11 @@ on:
       - ".nvmrc"
       - ".github/actions/setup/**"
       - ".github/workflows/macos.yml"
+      - ".github/workflows/ios.yml"
   pull_request:
     paths:
       - "apps/macos/**"
+      - "apps/mobile/**"
       - "apps/daemon/**"
       - "apps/sync/**"
       - "packages/core/**"
@@ -43,6 +46,7 @@ on:
       - ".nvmrc"
       - ".github/actions/setup/**"
       - ".github/workflows/macos.yml"
+      - ".github/workflows/ios.yml"
   workflow_dispatch:
     inputs:
       release:
@@ -68,6 +72,9 @@ env:
   DDL_TEST_THOROUGH: ${{ (github.ref == 'refs/heads/main' || inputs.thorough) && '1' || '' }}
 
 jobs:
+  iphone:
+    uses: ./.github/workflows/ios.yml
+
   packages:
     name: Swift packages (${{ matrix.group }})
     runs-on: macos-latest

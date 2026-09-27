@@ -5,6 +5,7 @@ final class ConnectionUITests: XCTestCase {
   func testInvalidAddressRemainsOnConnectionScreen() {
     let app = XCUIApplication()
     app.launch()
+    app.buttons["Connect a host"].tap()
     let address = app.textFields["connection.address"]
     XCTAssertTrue(address.waitForExistence(timeout: 10))
     address.tap()

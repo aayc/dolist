@@ -20,4 +20,4 @@ fi
 exec xcodebuild test -quiet -project "$ROOT/DailyDoList.xcodeproj" -scheme DailyDoList \
   -destination "${DDL_IOS_DESTINATION}" \
   -derivedDataPath "$ROOT/.build/DerivedData" \
-  -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO "$@"
+  -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- "$@"

@@ -9,12 +9,14 @@
     let actionsEnabled: Bool
     let drafts: MobileAgentDrafts?
     @State private var text = ""
+    @State private var draftLoaded = false
+    @State private var draftError: String?
     @State private var stopping = false
     @State private var sending = false
     @FocusState private var focused: Bool
 
     private var canSend: Bool {
-      actionsEnabled && !sending && store.readOnly == nil && store.isAgentAvailable
+      actionsEnabled && draftLoaded && !sending && store.readOnly == nil && store.isAgentAvailable
         && text.trimmedNonEmpty != nil
     }
 
@@ -23,7 +25,7 @@
         HStack(alignment: .bottom, spacing: 12) {
           TextField("Reply to the agent…", text: $text, axis: .vertical)
             .lineLimit(1...7).focused($focused).textFieldStyle(.roundedBorder)
-            .accessibilityIdentifier("chat.reply")
+            .accessibilityIdentifier("chat.reply").disabled(!draftLoaded)
           if store.threadStatus(threadId)?.isActive == true {
             Button("Stop", systemImage: "stop.fill") {
               stopping = true
@@ -49,8 +51,19 @@
         }
       }
       .padding().background(.bar)
-      .onAppear { text = drafts?.load(threadId) ?? store.replyDrafts[threadId] ?? "" }
+      .task(id: threadId) {
+        draftLoaded = false
+        do {
+          text = try await drafts?.load(threadId) ?? store.replyDrafts[threadId] ?? ""
+          draftLoaded = true
+          draftError = nil
+        } catch { draftError = "Couldn't load your saved reply. Your draft is preserved." }
+      }
+      .overlay(alignment: .topLeading) {
+        if let draftError { Text(draftError).font(.caption).foregroundStyle(.red).padding() }
+      }
       .onChange(of: text) { _, value in
+        guard draftLoaded else { return }
         store.replyDrafts[threadId] = value
         drafts?.save(threadId, value)
       }

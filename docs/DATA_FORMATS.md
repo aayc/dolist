@@ -604,3 +604,12 @@ indeterminate, including crashes before dispatch or before completion persistenc
 a queue to replay. A completed receipt records the original HTTP exchange, which can itself be
 a rejected command or an accepted background action. It does not replace the tool write-ahead
 journal or migrate approval and routine state.
+
+## Native iPhone local workspace cache
+
+The iPhone stores public connection metadata in versioned `connections.json`; credentials are
+separate device-only Keychain entries. Each verified profile/workspace has immutable UTF-8 markdown
+checkpoints and a SQLite WAL index (schema 2). Durable note writes, captures, composer revisions and
+notification cursors survive process loss; disposable metadata has an independent byte budget.
+Neither cache data nor credentials belong in this repository or vault sync. Exact schema and
+recovery rules are in [MobileKit](../apps/mobile/Packages/DailyDoListMobileKit/README.md).

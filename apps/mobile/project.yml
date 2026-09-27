@@ -26,6 +26,8 @@ packages:
     path: ../macos/Packages/DailyDoListDomain
   DailyDoListEditor:
     path: ../macos/Packages/DailyDoListEditor
+  DailyDoListAgent:
+    path: ../macos/Packages/DailyDoListAgent
   DailyDoListVim:
     path: ../macos/Packages/DailyDoListVim
   DailyDoListDrawing:
@@ -41,11 +43,14 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.dailydolist.iphone
+        "CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]": Resources/Simulator.entitlements
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Daily Do List
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_NSCameraUsageDescription: Scan the pairing QR code from your Daily Do List host.
+        INFOPLIST_KEY_UIRequiresFullScreen: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
     dependencies:
       - package: DailyDoListMobileKit
@@ -54,6 +59,12 @@ targets:
       - package: DailyDoListDomain
       - package: DailyDoListEditor
         product: DailyDoListMobileEditor
+      - package: DailyDoListEditor
+        product: DailyDoListEditorCore
+      - package: DailyDoListAgent
+        product: DailyDoListAgentCore
+      - package: DailyDoListAgent
+        product: DailyDoListMobileAgent
       - package: DailyDoListVim
       - package: DailyDoListDrawing
         product: DailyDoListDrawingModel
@@ -67,6 +78,8 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: DailyDoList
+      - package: DailyDoListClient
+        product: DailyDoListClientTestSupport
   DailyDoListUITests:
     type: bundle.ui-testing
     platform: iOS

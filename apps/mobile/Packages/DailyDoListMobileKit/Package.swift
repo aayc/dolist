@@ -15,6 +15,11 @@ let package = Package(
       name: "DailyDoListMobileKit",
       dependencies: ["DailyDoListClient", "DailyDoListDomain", "DailyDoListModels"],
       linkerSettings: [.linkedLibrary("sqlite3")]),
-    .testTarget(name: "DailyDoListMobileKitTests", dependencies: ["DailyDoListMobileKit"]),
+    .testTarget(
+      name: "DailyDoListMobileKitTests",
+      dependencies: [
+        "DailyDoListMobileKit",
+        .product(name: "DailyDoListClientTestSupport", package: "DailyDoListClient"),
+      ]),
   ]
 )

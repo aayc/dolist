@@ -20,6 +20,7 @@
     private var pendingStyle: NSRange?
     private var styleScheduled = false
     private var deferredExternalText: (base: String, remote: String)?
+    public var onCompositionEnd: (() -> Void)?
     public var onMergeConflict: ((String) -> Void)?
 
     public init(configuration: EditorConfiguration = EditorConfiguration()) {
@@ -308,6 +309,7 @@
         if merged.conflict { onMergeConflict?(deferred.remote) }
         applyExternalText(merged.text)
       }
+      if input.markedTextRange == nil { onCompositionEnd?() }
       updatePreview()
     }
   }

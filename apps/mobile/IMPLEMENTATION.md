@@ -44,11 +44,11 @@ No feature is complete merely because its API or a placeholder screen exists.
 | Milestone | Status | Remaining acceptance |
 | --- | --- | --- |
 | 0 Foundations | In progress | App builds for simulator/device SDK; editor input/undo/composition proven; broader input/embedding/device acceptance remains |
-| 1 Shared logic | In progress | EditorCore extracted and Mac editor tests pass; AgentCore stream active; workspace/drawing extraction remains |
-| 2 Connection and durability | In progress | Separate identity/capture and durable repository streams; Keychain/pairing/lifecycle integration remains |
-| 3 Notes/editor | Not started | Entire notes/editing/navigation/search and living-list matrix |
-| 4 Agent workspace | Not started | Chat/orchestrator/approval/routine/artifact/surface/settings/host matrix |
-| 5 Drawings/content | Not started | Native touch tools/parity, embeds, attachment B0 and rendering P |
+| 1 Shared logic | In progress | EditorCore extracted and Mac editor tests pass; AgentCore and DrawingCore extracted; workspace/shared navigation work remains |
+| 2 Connection and durability | In progress | Workspace identity/capture/receipt protocols and durable caches integrated; real Keychain/manual pairing and offline relaunch/merge verified; broader recovery matrix remains |
+| 3 Notes/editor | In progress | Today/ordinary notes/creation/editing and captures work; full navigation/search/living-list/content matrix remains |
+| 4 Agent workspace | In progress | Shared AgentCore and native screens integrated; Inbox/result/artifact checked; durable receipts wiring, caches, settings/hosts and full action CUA remain |
+| 5 Drawings/content | In progress | Shared native canvas, images and arrangement implemented; app persistence/embeds and remaining parity/B0/P remain |
 | 6 Vim/phone integration | Not started | Full vectors, keyboard/accessory, capture/Siri, local notification catch-up |
 | 7 Hardening | Not started | All automated gates, computer-use feature matrix, recovery/accessibility/performance |
 | 8 Paid push/distribution | Not applicable | User has no paid account; keep optional design separate |
@@ -57,11 +57,11 @@ No feature is complete merely because its API or a placeholder screen exists.
 
 The written stream scope is `docs/specs/iphone-implementation-streams.md`. The integrator owns
 `codex/iphone-app`; `codex/iphone-backend`, `codex/iphone-repository` and `codex/iphone-agent`
-are isolated parallel streams. Integrate reviewed commits and rerun affected tests.
+are isolated parallel streams. The agent UI stream continued as `codex/iphone-drawing` and now owns native settings/host UI. The backend stream is adding notification catch-up and receipt-aware actions; repository is adding structural transactions/export/forget. Integrate reviewed commits and rerun affected tests.
 
-1. Finish the foundation checkpoint and integrate real pairing/connection lifecycle.
-2. Integrate workspace identity/capture contracts and durable repository before enabling replay.
-3. Compose full notes and agent UI, then drawing/content and Vim/phone integration.
+1. Finish app composition with durable composers, receipt-aware agent actions, full settings and host controls.
+2. Integrate structural/recovery UI, cached content, drawings and complete notes navigation/search.
+3. Complete editor living-list/content parity, Vim, Siri/capture and notification integration.
 4. Continue the release matrix; no feature is complete based on API availability alone.
 
 ## Validation evidence
@@ -74,10 +74,16 @@ are isolated parallel streams. Integrate reviewed commits and rerun affected tes
   including existing Vim vectors and editor performance checks. All 29 real-daemon integration
   tests pass after narrow Swift 6.1 isolation fixes. The app suite passes 305 of 306 tests;
   window-opening performance remains about 6.4 seconds against a 1-second budget even alone.
-  Compare the baseline before attributing it to the extraction; do not waive or widen the budget.
+  An isolated pre-extraction baseline reproduces 6.44 seconds versus 6.41 seconds here. This
+  is a pre-existing local failure, not a measured extraction regression. Do not widen the budget.
 - `pnpm check` and changed-file lint pass for the foundation checkpoint.
-- This validates a foundation only. The connection screen is still provisional and the full
-  feature and physical-device matrices remain open.
+- Foundation CI and macOS workflows both passed on `a972928`, including all web functional/performance
+  tests, benchmarks, Vim, evals, Mac packages/integration and shared iOS builds.
+- Native signed simulator suite passes including real Keychain persistence and UIKit live-edit
+  conflict/IME regressions. Connection/profile tests, offline repository and capture tests pass.
+- Backend receipt tests prove paired relay lost-response retry, fenced preparation and lease
+  handover without redispatch. Shared drawing checkpoint passes 102 package tests.
+- This remains an incomplete app. Full feature and physical-device matrices remain open.
 
 ## Computer-use evidence
 
@@ -87,7 +93,12 @@ are isolated parallel streams. Integrate reviewed commits and rerun affected tes
 | Same | Tap into prose and type | First check found a recognizer consuming editor taps; restricted recognizer to checkbox hits, then real typing passed |
 | Same, corrected build | Type on a line containing emoji | First check found disappearing emoji glyph; deferred style transaction plus pixel regression fixed it; repeated actual input shows leaf preserved |
 
-These are focused editor checks, not full app acceptance. Record every later feature group with
+| Integrated app / iPhone 16 Plus, iOS 18.5 | Manual pair through isolated HTTPS proxy, then open Today | Real TLS succeeded; initial unsigned build exposed missing Keychain identity. Simulator-only signing corrected it, real Keychain regression added, pairing then passed |
+| Same | Type task, open Inbox, open completed mock-agent thread and its Markdown artifact | Note reached real daemon, task completed in mock mode, unread/result/artifact displayed in portrait and landscape |
+| Same | Capture text, stop test host, edit downloaded note, terminate/relaunch app offline | Capture appeared exactly once; offline edit showed Saved on iPhone and survived process loss |
+| Same | Edit another line remotely, resume the same host and reconnect | Both remote and offline edits survived; status returned to Synced |
+
+These are focused end-to-end checks, not full app acceptance. Record every later feature group with
 its actual interaction result. Screenshots alone do not prove behavior.
 
 ## Outstanding constraints
