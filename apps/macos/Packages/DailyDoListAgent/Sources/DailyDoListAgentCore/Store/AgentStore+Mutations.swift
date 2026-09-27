@@ -7,6 +7,14 @@ extension AgentStore {
     _ command: AgentMutationCommand, operationID: String? = nil,
     authorize: @escaping @MainActor @Sendable () -> Bool = { true }
   ) async throws -> AgentMutationResult {
+    guard !cachedContentReadOnly else { throw AgentMutationError.authorizationChanged }
+    if contentCache != nil {
+      switch command {
+      case .message(let id, _), .cancelThread(let id), .retryThread(let id):
+        guard !cachedThreadIDs.contains(id) else { throw AgentMutationError.authorizationChanged }
+      default: break
+      }
+    }
     guard let mutationJournal else {
       return try await command.send(using: client, operationID: nil)
     }
@@ -39,7 +47,7 @@ extension AgentStore {
   /// A user-initiated receipt check. Refresh/reconnect never dispatches a saved control.
   @discardableResult
   public func resolveMutation(_ operationID: String) async -> Bool {
-    guard let mutationJournal else { return false }
+    guard !cachedContentReadOnly, let mutationJournal else { return false }
     do {
       let result = try await mutationJournal.resolve(operationID)
       switch result {

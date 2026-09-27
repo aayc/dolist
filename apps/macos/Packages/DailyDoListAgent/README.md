@@ -16,7 +16,8 @@ markdown, safety and hosted Mac view tests exercise the extracted implementation
 ## iPhone integration
 
 Create one `AgentStore` per connected workspace. Feed it server events with `handle(_:)` and
-refresh on launch/reconnect. The mobile host owns transport lifecycle and durable storage;
+refresh on launch/reconnect. Pass an optional `AgentContentCache` to the store for offline reads.
+The mobile host owns transport lifecycle and durable storage;
 the agent views never establish their own connection or start a daemon.
 
 ```swift
@@ -49,7 +50,9 @@ the host's ordinary note repository (`openNote`), including routine markdown fil
 Only visibly active conversation views mark threads read. Surface subscriptions are balanced on
 appearance/disappearance and scene activation. The core stores raw frames; each platform owns
 its decoded images. iPhone decoding runs on a serial worker, limits source dimensions/bytes and
-renders a thumbnail capped at 2,048 pixels per side. Previewable artifacts are limited to 32 MB.
+renders a thumbnail capped at 2,048 pixels per side. Phone artifacts use the authenticated
+streaming API with a 5 MiB ceiling (or the configured cache ceiling when smaller), even without
+a trustworthy Content-Length.
 HTML receives no token or JavaScript bridge, uses nonpersistent website data, disables scripts,
 restricts subresources with CSP and rejects navigation. Saving/sharing requires an explicit action.
 
@@ -61,7 +64,36 @@ core/Mac regressions. In this package directory, `xcodebuild build -scheme Daily
 developer membership; Simulator can be selected with `generic/platform=iOS Simulator`.
 
 The initial mobile product has compile coverage, not a completed phone release. The integrator
-still owns real-daemon and computer-use journeys, persistent thread/artifact caches and reply
-draft wiring, mobile lifecycle tests, receipt-aware retries, notification catch-up, hardware
+still owns real-daemon and computer-use journeys, reply draft wiring, mobile lifecycle tests,
+notification catch-up, hardware
 Return behavior, incremental row/render performance and accessibility/device profiling. Those
 remain acceptance work in `apps/mobile/PLAN.md`; successful SDK builds do not replace them.
+
+## Offline agent content
+
+`AgentContentCache` is Foundation-only and optional. A nil cache preserves the Mac store's
+existing behavior. The phone injects MobileKit's `MobileAgentContentCache`, calls
+`hydrateCachedContent()` before connecting, and calls `flushContentCache()` during its bounded
+background checkpoint. Hydration only reads local data and unresolved journal entries. Opening
+a cached thread never marks it read, sends a reply, makes an approval decision, starts a live
+surface or replays a saved control. The separate mutation journal owns unresolved actions.
+
+Every connection transition invalidates read authority. Fresh Inbox state enables controls; a
+cached thread also needs a fresh full-thread response before thread actions/read receipts.
+Responses from an earlier connection are discarded. Events arriving during a thread fetch are
+reduced first, and only the resulting full snapshot is persisted. Checkpoints are coalesced off
+the event path; optimistic message IDs are removed from the persisted thread. Status, approvals
+and routine controls do not persist optimistic success.
+
+The Inbox persists status, thread summaries, approvals, note records and routines/templates.
+`cachedInboxAt`, `approvalsFetchedAt`, `cachedThreadIDs`, `cacheAvailability` and
+`cachedContentReadOnly` expose presentation state. Cache timestamps describe an observation,
+never permission to act. Mobile views label saved copies and unavailable downloads, retain
+cached content on network failure, and expose explicit thread/artifact offline pins.
+
+`loadArtifact(threadID:artifactID:refresh:)` is cached-first; explicit refresh uses the bounded
+client overload. `AgentArtifactLoad.savedOffline` distinguishes a successful preview from a
+failed cache insertion, while `downloadArtifact` reports success only for persisted bytes.
+Cache failures retain the previous complete artifact. Preview engines still receive only bytes,
+without credentials or live remote resources. Pins select retention; they do not recursively
+download every artifact or silently run a background queue.

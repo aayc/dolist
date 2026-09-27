@@ -10,7 +10,12 @@ extension AgentStore {
   /// Fetches a thread once (`force` refetches) and keeps it live from then on. Concurrent calls
   /// share one request. `quiet` doesn't report a failure (the thread view still offers a retry).
   public func loadThread(_ id: String, force: Bool = false, quiet: Bool = false) async {
-    if !force, state.loadedThreads[id] != nil { return }
+    if contentCache != nil, state.loadedThreads[id] == nil { await hydrateCachedThread(id) }
+    guard canFetchContent else {
+      if state.loadedThreads[id] == nil { failedThreadIds.insert(id) }
+      return
+    }
+    if !force, state.loadedThreads[id] != nil, !cachedThreadIDs.contains(id) { return }
     if let inFlight = threadLoads[id] {
       await inFlight.value
       return
@@ -28,8 +33,11 @@ extension AgentStore {
       threadLoads[id] = nil
       loadingThreadIds.remove(id)
     }
+    let authority = mutationAuthorityGeneration
     do {
       let response = try await client.thread(id)
+      guard contentCache == nil || (authority == mutationAuthorityGeneration && canFetchContent)
+      else { return }
       if mutationJournal != nil, state.loadedThreads[id] == nil {
         var empty = response.thread
         empty.messages = []
@@ -49,6 +57,8 @@ extension AgentStore {
         return changes
       }
       forgetDeliveredUnsentMessages()
+      cachedThreadIDs.remove(id)
+      contentDidChange(threadIDs: [id])
     } catch {
       failedThreadIds.insert(id)
       if !quiet { report(error, title: "Couldn't load the thread") }
@@ -73,6 +83,7 @@ extension AgentStore {
 
   /// Tells the daemon the user saw the thread and clears its unread count locally.
   public func markRead(_ threadId: String) {
+    guard !cachedContentReadOnly, !cachedThreadIDs.contains(threadId) else { return }
     outbox.send(.threadRead(threadId: threadId))
     mutate { $0.markRead(threadId: threadId) }
   }
@@ -116,6 +127,7 @@ extension AgentStore {
   /// `postMessage`, with the message in the thread by the time this returns (the composer clears
   /// its input in the same update). Nil for a blank message.
   func enqueueMessage(threadId: String, text: String) -> Task<Bool, Never>? {
+    guard !cachedContentReadOnly, !cachedThreadIDs.contains(threadId) else { return nil }
     guard let body = text.trimmedNonEmpty else { return nil }
     let command = AgentMutationCommand.message(threadID: threadId, text: body)
     let localId =
@@ -186,7 +198,7 @@ extension AgentStore {
     note: String? = nil,
     authorize: @escaping @MainActor @Sendable () -> Bool = { true }
   ) async -> Bool {
-    guard !decidingApprovalIds.contains(approvalId) else { return false }
+    guard !cachedContentReadOnly, !decidingApprovalIds.contains(approvalId) else { return false }
     let original = state.approvals[approvalId]
     if let original, !original.isPending { return false }
     let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -195,7 +207,7 @@ extension AgentStore {
       note: trimmedNote?.isEmpty == false ? trimmedNote : nil)
 
     var optimistic: ApprovalRequest?
-    if mutationJournal == nil, var next = original {
+    if contentCache == nil, mutationJournal == nil, var next = original {
       next.status = decision == .approve ? .approved : .denied
       next.scope = request.scope
       next.decisionNote = request.note
@@ -216,6 +228,7 @@ extension AgentStore {
       }
       guard case .approval(let updated) = result else { throw AgentMutationError.corruptJournal }
       mutate { $0.upsertApproval(updated, force: true) }
+      contentDidChange(threadIDs: Set(updated.threadId.map { [$0] } ?? []))
       return true
     } catch DaemonClientError.approvalConflict(let conflict) {
       mutate { $0.upsertApproval(conflict.approval, force: true) }
@@ -236,10 +249,11 @@ extension AgentStore {
 
   /// Pauses or resumes the agent (optimistic; rolls back on failure).
   public func setEnabled(_ enabled: Bool) async {
+    guard !cachedContentReadOnly else { return }
     let previous = state.status
     let mark = eventSeq
     var optimistic: AgentStatusResponse?
-    if var next = previous {
+    if contentCache == nil, var next = previous {
       next.enabled = enabled
       let flipped = next
       optimistic = flipped
@@ -248,6 +262,7 @@ extension AgentStore {
     do {
       let status = try await client.setAgentEnabled(enabled)
       applyFetchedStatus(status, since: mark)
+      contentDidChange()
     } catch {
       if let previous, let optimistic, state.status == optimistic {
         mutate { $0.setStatus(previous) }
@@ -261,12 +276,21 @@ extension AgentStore {
   /// Fetches a note's task records once (`force` refetches); events keep them current after.
   /// `refresh()` refetches every note loaded this way.
   public func loadRecords(for notePath: String, force: Bool = false) async {
+    guard canFetchContent else {
+      trackedNotes.insert(notePath)
+      await hydrateCachedContent()
+      return
+    }
     if !force, trackedNotes.contains(notePath) { return }
     trackedNotes.insert(notePath)
     let mark = eventSeq
+    let authority = mutationAuthorityGeneration
     do {
       let records = try await client.taskRecords(notePath: notePath)
+      guard contentCache == nil || (authority == mutationAuthorityGeneration && canFetchContent)
+      else { return }
       applyFetchedRecords(records, notePath: notePath, since: mark)
+      contentDidChange()
     } catch {
       if !force { trackedNotes.remove(notePath) }
       report(error, title: "Couldn't load the agent's status for this note")
@@ -293,6 +317,9 @@ extension AgentStore {
 
   /// Fetches an artifact's bytes.
   public func fetchArtifact(threadId: String, artifactId: String) async throws -> ArtifactPayload {
-    try await client.artifact(threadId: threadId, artifactId: artifactId)
+    if contentCache != nil {
+      return try await loadArtifact(threadID: threadId, artifactID: artifactId).value.payload
+    }
+    return try await client.artifact(threadId: threadId, artifactId: artifactId)
   }
 }

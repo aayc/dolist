@@ -14,6 +14,11 @@
     let meta: ArtifactMeta
     let openNote: (String, Int?) -> Void
     @State private var payload: ArtifactPayload?
+    @State private var loadedMeta: ArtifactMeta?
+    @State private var fromCache = false
+    @State private var savedOffline = false
+    @State private var fetchedAt: Date?
+    @State private var loading = false
     @State private var image: UIImage?
     @State private var error: String?
     @State private var exporting = false
@@ -29,26 +34,75 @@
       self.openNote = openNote
     }
 
+    private var resource: AgentCacheResource {
+      .artifact(threadID: meta.threadId, artifactID: meta.id)
+    }
+    private var displayMeta: ArtifactMeta { loadedMeta ?? meta }
+
     public var body: some View {
       Group {
-        if let error {
+        if let payload {
+          VStack(spacing: 8) {
+            if let error {
+              Text(error).font(.caption).foregroundStyle(.secondary).padding(.horizontal)
+            }
+            if let fetchedAt {
+              HStack {
+                Label(
+                  savedOffline ? (fromCache ? "Saved copy" : "Downloaded") : "Preview only",
+                  systemImage: fromCache ? "iphone" : "arrow.down.circle")
+                Text(fetchedAt, style: .relative) + Text(" ago")
+                Spacer()
+                if savedOffline, store.cacheAvailability[resource]?.pinned == true {
+                  Image(systemName: "pin.fill")
+                }
+              }.font(.caption).foregroundStyle(.secondary).padding(.horizontal)
+            }
+            if store.hasContentCache, !savedOffline {
+              Text("This preview was not saved offline.")
+                .font(.caption).foregroundStyle(.secondary)
+            }
+            preview(payload).id(fetchedAt)
+          }
+        } else if let error {
           ContentUnavailableView {
             Label("Couldn't open artifact", systemImage: "exclamationmark.triangle")
           } description: {
             Text(error)
           } actions: {
-            Button("Try again") { Task { await load() } }
+            Button("Try again") { Task { await load(refresh: true) } }.disabled(
+              !store.canFetchContent)
           }
-        } else if let payload {
-          preview(payload)
         } else {
           ProgressView("Loading artifact…")
         }
       }
-      .navigationTitle(meta.title)
+      .navigationTitle(displayMeta.title)
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+        ToolbarItem(placement: .topBarLeading) {
+          Menu("Download options", systemImage: "ellipsis.circle") {
+            Button("Refresh download", systemImage: "arrow.clockwise") {
+              Task { await load(refresh: true) }
+            }.disabled(!store.canFetchContent || loading)
+            if store.hasContentCache {
+              let pinned = store.cacheAvailability[resource]?.pinned ?? false
+              Button(
+                pinned ? "Remove offline pin" : "Keep offline",
+                systemImage: pinned ? "pin.slash" : "pin"
+              ) {
+                Task {
+                  await store.setContentPinned(resource, pinned: !pinned)
+                  if !pinned, store.canFetchContent {
+                    _ = await store.downloadArtifact(threadID: meta.threadId, artifactID: meta.id)
+                    await load()
+                  }
+                }
+              }.disabled(loading)
+            }
+          }
+        }
         ToolbarItem(placement: .bottomBar) {
           HStack {
             Button("Save to Files", systemImage: "square.and.arrow.down") { exporting = true }
@@ -59,20 +113,23 @@
       }
       .fileExporter(
         isPresented: $exporting, document: payload.map { ArtifactDocument(data: $0.data) },
-        contentType: UTType(mimeType: meta.mimeType) ?? .data,
+        contentType: UTType(mimeType: displayMeta.mimeType) ?? .data,
         defaultFilename: ArtifactFiles.fileName(
-          meta: meta, kind: meta.kind, mimeType: meta.mimeType)
+          meta: displayMeta, kind: displayMeta.kind, mimeType: displayMeta.mimeType)
       ) { result in
         if case .failure(let problem) = result { error = problem.localizedDescription }
       }
-      .task(id: meta.id) { await load() }
+      .task(id: meta.id) {
+        await store.refreshCacheAvailability(resource)
+        await load()
+      }
       .sheet(isPresented: $sharing) {
         if let payload { MobileArtifactShare(data: payload.data) }
       }
     }
 
     @ViewBuilder private func preview(_ payload: ArtifactPayload) -> some View {
-      switch meta.kind {
+      switch displayMeta.kind {
       case .markdown:
         ScrollView {
           MobileMarkdownView(source: ArtifactFiles.text(of: payload), openNote: openNote).padding()
@@ -80,16 +137,20 @@
       case .html:
         MobileHTMLArtifact(html: ArtifactFiles.text(of: payload))
       case .image:
-        if let image { MobileZoomableImage(image: image, label: meta.title) } else { unavailable }
+        if let image {
+          MobileZoomableImage(image: image, label: displayMeta.title)
+        } else {
+          unavailable
+        }
       case .code, .json, .text:
         ScrollView {
-          if meta.kind == .text {
+          if displayMeta.kind == .text {
             Text(ArtifactFiles.text(of: payload)).textSelection(.enabled).frame(
               maxWidth: .infinity, alignment: .leading
             ).padding()
           } else {
             MobileJSONView(
-              text: meta.kind == .json
+              text: displayMeta.kind == .json
                 ? ArtifactFiles.prettyJSON(payload.data) ?? ArtifactFiles.text(of: payload)
                 : ArtifactFiles.text(of: payload)
             ).padding()
@@ -110,27 +171,29 @@
         description: Text("Save this file to open it in an app you choose."))
     }
 
-    private func load() async {
+    private func load(refresh: Bool = false) async {
+      guard !loading else { return }
+      loading = true
+      defer { loading = false }
       error = nil
-      payload = nil
-      image = nil
-      guard meta.size <= MobileImageDecoder.maximumBytes else {
-        error = "This artifact exceeds the 32 MB phone preview limit. Open it on the host."
-        return
-      }
       do {
-        let fetched = try await store.fetchArtifact(threadId: meta.threadId, artifactId: meta.id)
+        let result = try await store.loadArtifact(
+          threadID: meta.threadId, artifactID: meta.id, refresh: refresh)
         guard !Task.isCancelled else { return }
-        guard fetched.data.count <= MobileImageDecoder.maximumBytes else {
-          error = "This artifact exceeds the 32 MB phone preview limit."
-          return
-        }
-        if meta.kind == .image, let decoded = await MobileImageDecoder.shared.decode(fetched.data),
+        var decodedImage: UIImage?
+        if result.value.artifact.kind == .image,
+          let decoded = await MobileImageDecoder.shared.decode(result.value.payload.data),
           !Task.isCancelled
         {
-          image = UIImage(cgImage: decoded.image)
+          decodedImage = UIImage(cgImage: decoded.image)
         }
-        if !Task.isCancelled { payload = fetched }
+        guard !Task.isCancelled else { return }
+        image = decodedImage
+        loadedMeta = result.value.artifact
+        payload = result.value.payload
+        fromCache = result.fromCache
+        savedOffline = result.savedOffline
+        fetchedAt = result.fetchedAt
       } catch {
         if !Task.isCancelled { self.error = AgentAlert.describe(error) }
       }

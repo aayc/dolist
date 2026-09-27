@@ -247,8 +247,8 @@ exported draft. Explicitly forgetting unresolved actions loses their local recov
 This package provides text working copies and the repository policy, not the complete mobile
 feature set. The app supplies lifecycle, guarded HTTP/capture transport, editor checkpoint
 scheduling, error/save-state presentation, notification catch-up and explicit review UI.
-Binary asset upload/dependency ordering, cached search/full thread bodies/artifacts, clean markdown
-cache eviction and structural/recovery UI remain separate integrations.
+Binary asset upload/dependency ordering, cached search, clean markdown cache eviction and
+structural/recovery UI remain separate integrations.
 
 The storage protocols are injectable. Tests use real temporary SQLite/markdown files, a scripted
 remote and injected disk/transaction failures; no real vault or daemon is accessed.
@@ -301,3 +301,23 @@ the actual revisions it committed; callers must use them rather than assume a re
 at 1. Existing revision values migrate unchanged. The revision history survives disposable-value
 eviction, preventing an old response from passing CAS after deletion/recreation. Cache payload
 failures report an unavailable/corrupt cache; repair must not alter durable note or operation state.
+
+## Agent store cache adapter
+
+`MobileAgentContentCache(rootDirectory:scope:limits:)` implements AgentCore's optional
+`AgentContentCache`. It can also wrap an existing `WorkspaceContentCache` actor. Inject it into
+`AgentStore(client:mutationJournal:contentCache:)`, hydrate with `hydrateCachedContent()` and
+flush with `flushContentCache()` before suspension. Root app composition continues to own the
+authenticated connection and workspace authority; the adapter never opens a network connection.
+The Inbox uses the same bounded transactional content cache, so it shares eviction and retirement
+semantics with full threads and artifacts. Opaque adapter ticket owners also reject tickets
+accidentally passed to a different adapter instance.
+
+Local notification catch-up reads `inbox()` and its `value.approvals`,
+`value.approvalsFetchedAt` and `metadata.generation`. After a fresh pending-approval fetch, call
+`replacePendingApprovals(_:replacing:)` with that exact generation (nil only for a missing
+Inbox). It atomically preserves unrelated cached content and decided approvals, replaces the
+pending set and timestamps the approval observation. A generation conflict requires reading and
+reconciling newer state; it does not authorize blindly retrying an older response. Cached counts
+and decisions are presentation data only. Notification IDs use `WorkspaceCache`'s separate
+existing notification cursor, not the content entry's freshness timestamp.

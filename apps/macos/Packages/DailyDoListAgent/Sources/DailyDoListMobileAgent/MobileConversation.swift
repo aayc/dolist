@@ -50,12 +50,13 @@
               )
               .id(item.id)
             }
-            if let activity = ChatActivity.current(
-              status: thread.status, messages: thread.messages,
-              pendingApprovals: store.pendingApprovals(forThread: thread.id),
-              isTextActive: thread.messages.contains {
-                if case .text(let text) = $0 { text.streaming == true } else { false }
-              })
+            if !store.cachedContentReadOnly, !store.cachedThreadIDs.contains(thread.id),
+              let activity = ChatActivity.current(
+                status: thread.status, messages: thread.messages,
+                pendingApprovals: store.pendingApprovals(forThread: thread.id),
+                isTextActive: thread.messages.contains {
+                  if case .text(let text) = $0 { text.streaming == true } else { false }
+                })
             {
               TimelineView(.periodic(from: .now, by: 1)) { context in
                 HStack {

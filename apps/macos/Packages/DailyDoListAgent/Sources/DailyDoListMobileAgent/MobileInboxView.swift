@@ -24,15 +24,34 @@
       self.drafts = drafts
     }
 
+    private var canAct: Bool { actionsEnabled && !store.cachedContentReadOnly }
+
     public var body: some View {
       NavigationStack {
         List {
-          if !actionsEnabled || store.readOnly != nil {
+          if !canAct || store.readOnly != nil {
             Section {
               MobileAgentNotice(
                 title: "Read-only",
                 message: store.readOnly?.reason ?? "Reconnect to send messages or decisions.",
                 systemImage: "eye")
+            }
+          }
+          if store.hasContentCache, store.cachedContentReadOnly {
+            Section {
+              if let saved = store.cachedInboxAt {
+                Label {
+                  Text("Saved Inbox · ") + Text(saved, style: .relative) + Text(" ago")
+                } icon: {
+                  Image(systemName: "iphone")
+                }
+                .font(.caption).foregroundStyle(.secondary)
+                Text("Counts and status may have changed on the host.")
+                  .font(.caption).foregroundStyle(.secondary)
+              } else {
+                Text("No Inbox has been downloaded yet. Connect to load it.")
+                  .font(.caption).foregroundStyle(.secondary)
+              }
             }
           }
           Section {
@@ -49,7 +68,7 @@
             }
             NavigationLink {
               MobileRoutinesView(
-                store: store, actionsEnabled: actionsEnabled, hostName: hostName, drafts: drafts,
+                store: store, actionsEnabled: canAct, hostName: hostName, drafts: drafts,
                 openNote: openNote)
             } label: {
               Label("Routines", systemImage: "repeat")
@@ -60,7 +79,7 @@
             Section("Approvals") {
               ForEach(orphaned) {
                 MobileApprovalCard(
-                  store: store, approval: $0, actionsEnabled: actionsEnabled, hostName: hostName)
+                  store: store, approval: $0, actionsEnabled: canAct, hostName: hostName)
               }
             }
           }
@@ -83,12 +102,17 @@
           }
           if store.inboxSections().isEmpty {
             ContentUnavailableView(
-              "No task conversations yet", systemImage: "tray",
-              description: Text("Write in your daily note to start a conversation with the agent."))
+              store.cachedContentReadOnly
+                ? "No downloaded conversations" : "No task conversations yet", systemImage: "tray",
+              description: Text(
+                store.cachedContentReadOnly
+                  ? "Connect to load task conversations."
+                  : "Write in your daily note to start a conversation with the agent."))
           }
         }
         .navigationTitle("Inbox")
         .searchable(text: $filter, prompt: "Filter by task or note")
+        .task { await store.hydrateCachedContent() }
         .refreshable { await store.refresh() }
         .modifier(MobileAgentError(store: store))
         .toolbar {
@@ -100,7 +124,7 @@
               ) {
                 Task { await store.setEnabled(!status.enabled) }
               }
-              .disabled(!actionsEnabled || store.readOnly != nil)
+              .disabled(!canAct || store.readOnly != nil)
             }
           }
         }
@@ -109,7 +133,7 @@
 
     private func thread(_ id: String) -> some View {
       MobileThreadView(
-        store: store, threadId: id, actionsEnabled: actionsEnabled, hostName: hostName,
+        store: store, threadId: id, actionsEnabled: canAct, hostName: hostName,
         drafts: drafts, openNote: openNote)
     }
   }
