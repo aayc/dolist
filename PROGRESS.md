@@ -106,17 +106,28 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
 
 ## In flight
 
-- Full native iPhone app: `codex/iphone-app`, based on the completed Mac setup baseline.
-  Foundation checkpoint `a972928` is pushed: unsigned iPhone builds, shared editor extraction,
-  real typing/undo/composition tests and focused simulator computer-use. Full features remain
-  in progress. The user explicitly authorized parallel subagents: `codex/iphone-backend`
-  (identity/capture contracts), `codex/iphone-repository` (durable offline drafts/outbox), and
-  `codex/iphone-agent` (shared agent core/native UI). The integrator owns app composition and
-  verification. Scope: `docs/specs/iphone-implementation-streams.md` on the integration branch.
-  The durable instruction, next actions and evidence live in `apps/mobile/IMPLEMENTATION.md`.
-  One existing Mac window-opening budget fails locally; baseline comparison is underway.
-  Work uses an isolated checkout, synthetic vaults and separate test daemons; the installed
-  Mac app, its daemon and the real vault must remain untouched.
+- Full native iPhone app: `codex/iphone-app`, checkpoint `6e31cd0` pushed, with current main
+  host-continuity fixes merged. Native pairing/Keychain, identity guard, durable notes/composers/
+  captures, Inbox/agent UI and shared native drawing engine are integrated. Real simulator CUA
+  passed HTTPS pairing, task→mock-agent result/artifact, capture, offline edit→terminate/relaunch,
+  and reconnect with a disjoint remote edit preserved. The simulator's missing Keychain identity
+  was found through CUA and fixed with a simulator-only ad-hoc identity (no paid account).
+- Full features remain in progress. Parallel streams: `codex/iphone-backend` supplied identity,
+  capture, fenced action receipts and notification catch-up; `codex/iphone-agent-actions` now
+  wires durable action IDs into AgentCore. `codex/iphone-repository` supplied offline caches,
+  structural transactions and recovery/export/forget, and now owns durable drawings.
+  `codex/iphone-drawing` supplied the canvas, embedded images/arrangement and is finishing the
+  complete settings/host UI before taking the UIKit Vim host. The integrator owns composition,
+  notes navigation/content, platform integration, CI and thorough CUA.
+- Foundation CI and macOS workflows passed on `a972928`. Local `pnpm check`, signed simulator
+  suite (59 tests), MobileKit and physical iPhone SDK build passed at the composition checkpoint.
+  New CI/native runs are dispatched on `6e31cd0`. The Mac window-opening budget failure is
+  reproduced on the unchanged local baseline (~6.4 s); it passes CI, and no budget was widened.
+  Scope: `docs/specs/iphone-implementation-streams.md`; durable instruction and evidence:
+  `apps/mobile/IMPLEMENTATION.md`. The user asked to finish faster while retaining complete tests
+  and CUA; use focused incremental checks and keep the full release gates.
+  Work uses isolated checkouts, synthetic vaults and separate test daemons; the installed Mac
+  app, its daemon and the real vault remain untouched. Physical-device checks remain distinct.
 
 Local web/Mac setup is complete, with all four workflows green on `78ae584`.
 The remote-machine setup is complete, including the handover correction found during live testing.
