@@ -23,6 +23,7 @@ extension SQLiteWorkspaceIndex: WorkspaceMaintenanceStore {
           }
         }
         guard !pendingCapture else { throw WorkspaceRepositoryError.pendingCaptures }
+        try requireNoAffectedAttachmentUploads(proposed.action)
         let documents: [NoteIndexRecord] = try all("documents")
         let affected = documents.filter { proposed.action.affects($0.path) }
         let pending: [NoteOutboxRecord] = try all("outbox")

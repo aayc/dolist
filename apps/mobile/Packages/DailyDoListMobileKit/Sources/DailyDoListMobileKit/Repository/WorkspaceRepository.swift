@@ -67,7 +67,10 @@ public actor WorkspaceRepository {
   /// Ordinary new notes use create-only intent. Daily capture is a separate append operation;
   /// callers must not represent the same pending capture as an ordinary full-note edit.
   @discardableResult
-  public func create(path: String, content: String, requiringDrawings: [String] = []) throws
+  public func create(
+    path: String, content: String, requiringDrawings: [String] = [],
+    requiringAttachments: [AttachmentDependency] = []
+  ) throws
     -> LocalNote
   {
     let access = try checkpoints.beginAccess()
@@ -78,11 +81,13 @@ public actor WorkspaceRepository {
     }
     let hash = try checkpoints.put(content)
     for path in requiringDrawings { try DrawingRepository.validatePath(path) }
+    for dependency in requiringAttachments { try dependency.validate() }
     let record = NoteIndexRecord(
       path: path, working: hash, revision: try nextRevision(index.lastDocumentRevision(path)),
       acknowledgedRevision: 0,
       state: .waitingToSync, recoveryCopies: [],
-      requiredDrawings: requiringDrawings.isEmpty ? nil : requiringDrawings)
+      requiredDrawings: requiringDrawings.isEmpty ? nil : requiringDrawings,
+      requiredAttachments: requiringAttachments.isEmpty ? nil : requiringAttachments)
     try index.commit(record, pending: NoteOutboxRecord(path: path))
     return try snapshot(record)
   }
@@ -126,7 +131,8 @@ public actor WorkspaceRepository {
   /// Called by a debounced editor checkpoint or by `edit`, never per-key on the main actor.
   @discardableResult
   public func save(
-    path: String, content: String, expectedRevision: Int64, requiringDrawings: [String]? = nil
+    path: String, content: String, expectedRevision: Int64, requiringDrawings: [String]? = nil,
+    requiringAttachments: [AttachmentDependency]? = nil
   ) throws -> LocalNote {
     let access = try checkpoints.beginAccess()
     defer { access?.release() }
@@ -134,12 +140,17 @@ public actor WorkspaceRepository {
     if let requiringDrawings {
       for path in requiringDrawings { try DrawingRepository.validatePath(path) }
     }
+    let attachments = requiringAttachments ?? record.requiredAttachments ?? []
+    for dependency in attachments { try dependency.validate() }
     let dependencies = requiringDrawings ?? record.requiredDrawings ?? []
     let hash = try checkpoints.put(content)
-    if hash == record.working && dependencies == (record.requiredDrawings ?? []) {
+    if hash == record.working && dependencies == (record.requiredDrawings ?? [])
+      && attachments == (record.requiredAttachments ?? [])
+    {
       return try snapshot(record)
     }
     record.requiredDrawings = dependencies.isEmpty ? nil : dependencies
+    record.requiredAttachments = attachments.isEmpty ? nil : attachments
     record.working = hash
     record.revision = try nextRevision(record.revision)
     var pending = try index.pending(path)

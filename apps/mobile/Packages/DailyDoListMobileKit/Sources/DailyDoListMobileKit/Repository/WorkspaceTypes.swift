@@ -20,16 +20,18 @@ public struct RemoteWorkspaceIdentity: Hashable, Sendable {
   public var workspaceID: String
   public var hostID: String
   public var supportsConditionalWorkspaceWrites: Bool
+  public var supportsAttachmentUploads: Bool
   public var supportsAtomicCapture: Bool
 
   public init(
     workspaceID: String, hostID: String, supportsConditionalWorkspaceWrites: Bool,
-    supportsAtomicCapture: Bool = false
+    supportsAtomicCapture: Bool = false, supportsAttachmentUploads: Bool = false
   ) {
     self.workspaceID = workspaceID
     self.hostID = hostID
     self.supportsConditionalWorkspaceWrites = supportsConditionalWorkspaceWrites
     self.supportsAtomicCapture = supportsAtomicCapture
+    self.supportsAttachmentUploads = supportsAttachmentUploads
   }
 }
 
@@ -79,6 +81,7 @@ public enum WorkspaceRepositoryError: Error, Equatable, Sendable {
   case pendingNoteWrites
   case pendingStructuralChange
   case pendingDrawingDependencies
+  case pendingAttachmentDependencies
   case workspaceForgotten
   case unsupportedIndexVersion(Int)
   case storage(String)
