@@ -13,7 +13,9 @@ import {
   API_ROUTES,
   type ApiRouteName,
   type ApprovalListResponse,
+  type HealthResponse,
   type MachineStatusResponse,
+  OPERATION_ID_HEADER,
   ORCHESTRATOR_THREAD_ID,
   type PairedDevicesResponse,
   type PairingCodeResponse,
@@ -22,6 +24,7 @@ import {
   type SettingsResponse,
   type ThreadListResponse,
   type ThreadResponse,
+  WORKSPACE_ID_HEADER,
 } from "@ddl/core";
 import { createSyncServer, type RunningSyncServer } from "@ddl/sync";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -243,6 +246,54 @@ async function chatShows(device: Device, text: string): Promise<void> {
 }
 
 describe("the agent relay between daemons", { timeout: 120_000 * TIME_SCALE }, () => {
+  it("resolves a lost relayed message response once after the lease moves to another host", async () => {
+    const machine = await startMachine();
+    const laptop = await startPairedLaptop(machine);
+    const identity = (await call<HealthResponse>(laptop, "GET", "health")).body.workspaceId!;
+    const operationId = "phone_message_once";
+    const text = "A synthetic message whose response is lost";
+    const send = () =>
+      fetch(`${laptop.daemon.url}${API_ROUTES.threadMessages(ORCHESTRATOR_THREAD_ID)}`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${laptop.apiToken}`,
+          "content-type": "application/json",
+          [WORKSPACE_ID_HEADER]: identity,
+          [OPERATION_ID_HEADER]: operationId,
+        },
+        body: JSON.stringify({ text }),
+      });
+    const first = await send();
+    expect([200, 202]).toContain(first.status);
+    await first.body?.cancel();
+    await chatShows(machine, text);
+    await call(laptop, "PATCH", "device", { json: { placement: "this_device" } });
+    await eventually(async () => {
+      expect(leaseHolder()?.device).toBe("dev_laptop");
+      expect((await status(laptop)).problem).toBeUndefined();
+    });
+    const retried = await send();
+    expect(retried.status).toBe(first.status);
+    expect(await retried.json()).toMatchObject({ ok: true });
+    const lookup = await fetch(`${laptop.daemon.url}${API_ROUTES.agentOperation(operationId)}`, {
+      headers: { authorization: `Bearer ${laptop.apiToken}`, [WORKSPACE_ID_HEADER]: identity },
+    });
+    expect(await lookup.json()).toMatchObject({
+      outcome: "applied",
+      response: { status: first.status },
+    });
+    const chat = (
+      await call<ThreadResponse>(laptop, "GET", "thread", {
+        params: { id: ORCHESTRATOR_THREAD_ID },
+      })
+    ).body.thread;
+    expect(
+      chat.messages.filter(
+        (message) => message.kind === "text" && message.role === "user" && message.text === text,
+      ),
+    ).toHaveLength(1);
+  });
+
   it("lets a paired laptop show and act on the always-on machine's agent", async () => {
     const machine = await startMachine();
     await call(machine, "PATCH", "settings", { json: { agent: { settleMs: 200 } } });

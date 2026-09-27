@@ -429,6 +429,30 @@ struct HTTPDaemonClientRESTTests {
     #expect(request.jsonBody == ["code": "abcd-2345", "name": "Studio Mac", "kind": "app"])
   }
 
+  @Test func operationIDsSurviveProtocolDispatchAndReceiptLookupNeverSends() async throws {
+    let stub = Stub { _ in .json(#"{"ok":true}"#) }
+    let client: any DaemonClient = HTTPDaemonClient(
+      endpoint: DaemonEndpoint(baseURL: stub.baseURL, token: "test-token"), session: stub.session,
+      expectedWorkspaceId: "workspace_one")
+    _ = try await client.postMessage(
+      threadId: "thread_one", text: "Hello", operationId: "operation_one")
+    _ = try await client.postMessage(
+      threadId: "thread_one", text: "Hello", operationId: "operation_one")
+    #expect(stub.requests.count == 2)
+    #expect(
+      stub.requests.allSatisfy { $0.header(DaemonProtocol.operationIdHeader) == "operation_one" })
+    stub.setHandler { _ in
+      .json(
+        #"{"operationId":"operation_one","workspaceId":"workspace_one","outcome":"indeterminate"}"#)
+    }
+    #expect(try await client.agentOperation("operation_one").outcome == .indeterminate)
+    let lookup = try #require(stub.requests.last)
+    #expect(lookup.method == "GET")
+    #expect(lookup.target == "/api/agent/operations/operation_one")
+    #expect(lookup.header(DaemonProtocol.operationIdHeader) == nil)
+    #expect(lookup.header(DaemonProtocol.workspaceIdHeader) == "workspace_one")
+  }
+
   @Test func workspaceContextGuardsReadsCreateGETAndWritesButNotPairing() async throws {
     let stub = Stub { _ in .json(value: SampleWire.note) }
     let client = HTTPDaemonClient(

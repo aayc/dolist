@@ -20,7 +20,13 @@ import {
   ObsidianImportRequestSchema,
   ObsidianImportStatusResponseSchema,
 } from "./imports";
-import { IsoDateSchema, RequestPathSchema, RuntimeIdSchema, WIRE_LIMITS } from "./primitives";
+import {
+  ClientIdSchema,
+  IsoDateSchema,
+  RequestPathSchema,
+  RuntimeIdSchema,
+  WIRE_LIMITS,
+} from "./primitives";
 import {
   DeviceSettingsPatchSchema,
   DeviceSettingsResponseSchema,
@@ -34,6 +40,7 @@ import {
   PairResponseSchema,
 } from "./remote";
 import {
+  AgentOperationResponseSchema,
   AgentStatusResponseSchema,
   ApprovalDecisionRequestSchema,
   ApprovalListResponseSchema,
@@ -158,6 +165,11 @@ const error = (
 export const COMMON_API_ERRORS = {
   401: error(["unauthorized"], "Missing or invalid bearer token."),
   403: error(["forbidden_host", "forbidden_origin"], "Foreign Host or Origin header."),
+  409: error(
+    ["operation_conflict", "operation_indeterminate"],
+    "An operation ID conflicts or its dispatch is uncertain.",
+  ),
+  503: error(["agent_unavailable"], "The authoritative agent or receipt store is unavailable."),
   412: error(
     ["workspace_mismatch", "host_mismatch"],
     "The verified workspace or host changed; reconnect without replaying pending writes.",
@@ -401,6 +413,25 @@ const ROUTES = {
       },
     },
   },
+  agentOperation: {
+    params: z.object({ id: ClientIdSchema }),
+    auth: "bearer",
+    methods: {
+      GET: {
+        summary:
+          "Resolve an agent operation without dispatching it again (requires verified workspace).",
+        responses: {
+          200: json(
+            AgentOperationResponseSchema,
+            "The durable receipt, or its unresolved preparation.",
+          ),
+          400: error(["invalid_request"], "Missing verified workspace or invalid operation ID."),
+          404: error(["not_found"], "No preparation exists for this operation."),
+          503: error(["agent_unavailable"], "The authoritative receipt store is unreachable."),
+        },
+      },
+    },
+  },
   agentStatus: {
     auth: "bearer",
     methods: {
@@ -544,9 +575,9 @@ const ROUTES = {
           400: invalidBody(),
           404: error(["not_found"], "Unknown approval."),
           409: error(
-            ["conflict"],
+            ["conflict", "operation_conflict", "operation_indeterminate"],
             "Already decided, expired or cancelled (carries its current state).",
-            ApprovalConflictResponseSchema,
+            z.union([ApprovalConflictResponseSchema, ApiErrorBodySchema]),
           ),
           500: error(["agent_error", "internal_error"], "The runtime failed to record it."),
           503: error(["agent_unavailable"], "The approval system is unavailable."),
@@ -587,7 +618,10 @@ const ROUTES = {
         responses: {
           201: json(RoutineResponseSchema, "Created."),
           400: invalidBody(["invalid_path"]),
-          409: error(["conflict"], "A routine with that name exists."),
+          409: error(
+            ["conflict", "operation_conflict", "operation_indeterminate"],
+            "A routine with that name exists, or an operation ID conflicts or is uncertain.",
+          ),
           ...BODY_ERRORS,
         },
       },
@@ -618,7 +652,7 @@ const ROUTES = {
           400: error(["invalid_request"], "Invalid routine id."),
           404: error(["not_found"], "Unknown routine."),
           409: error(
-            ["conflict"],
+            ["conflict", "operation_conflict", "operation_indeterminate"],
             "It can't run now: a run is going, it has a problem, or today's extra runs are used up.",
           ),
           503: error(["agent_unavailable"], "The agent can't run here right now."),

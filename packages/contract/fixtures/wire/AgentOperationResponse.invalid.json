@@ -1,0 +1,12 @@
+[
+  {
+    "name": "completed without result",
+    "value": {
+      "operationId": "ios_operation_one",
+      "workspaceId": "workspace_sample",
+      "outcome": "applied"
+    },
+    "path": ["response"],
+    "code": "invalid_type"
+  }
+]

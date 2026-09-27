@@ -3174,6 +3174,66 @@
       "additionalProperties": false,
       "description": "Body of `POST /api/computer/permissions/open`."
     },
+    "AgentOperationResponse": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,128}$",
+              "description": "Client id chosen by the client."
+            },
+            "workspaceId": {
+              "type": "string",
+              "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+              "description": "Runtime id, safe to use in URLs."
+            },
+            "outcome": {
+              "type": "string",
+              "const": "applied"
+            },
+            "response": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "integer",
+                  "minimum": 200,
+                  "maximum": 599
+                },
+                "body": {}
+              },
+              "required": ["status", "body"],
+              "additionalProperties": {}
+            }
+          },
+          "required": ["operationId", "workspaceId", "outcome", "response"],
+          "additionalProperties": {}
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,128}$",
+              "description": "Client id chosen by the client."
+            },
+            "workspaceId": {
+              "type": "string",
+              "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
+              "description": "Runtime id, safe to use in URLs."
+            },
+            "outcome": {
+              "type": "string",
+              "enum": ["pending", "indeterminate"]
+            }
+          },
+          "required": ["operationId", "workspaceId", "outcome"],
+          "additionalProperties": {}
+        }
+      ],
+      "description": "Durable agent command receipt. A pending command belongs to this live process; an indeterminate command is never automatically dispatched again."
+    },
     "ApiErrorCode": {
       "type": "string",
       "enum": [
@@ -3192,6 +3252,7 @@
         "workspace_mismatch",
         "host_mismatch",
         "operation_conflict",
+        "operation_indeterminate",
         "payload_too_large",
         "upgrade_required",
         "rate_limited",

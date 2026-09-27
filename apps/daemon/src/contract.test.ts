@@ -14,6 +14,7 @@ import {
   type AppSettings,
   DEFAULT_SETTINGS,
   mergeSettings,
+  OPERATION_ID_HEADER,
   type RoutineListResponse,
   type RoutineResponse,
   silentLogger,
@@ -29,6 +30,7 @@ import {
   routePath,
 } from "./contract-test-helpers";
 import { memoryDeviceSettings } from "./device-settings";
+import { ApiError } from "./errors";
 import { type FakeMachine, startFakeMachine } from "./fake-machine";
 import { memoryJsonObjectFile, memorySecretFile } from "./home-files";
 import { ObsidianImporter } from "./import/importer";
@@ -437,6 +439,37 @@ const scenarios: Record<string, Scenario> = {
 
   "PUT settings": (observed) => settingsPatch(observed, "PUT"),
   "PATCH settings": (observed) => settingsPatch(observed, "PATCH"),
+
+  "GET agentOperation": async (observed) => {
+    const { api } = await setup(observed);
+    const health = await api.call("health", "GET");
+    const headers = { [WORKSPACE_ID_HEADER]: (health.body as { workspaceId: string }).workspaceId };
+    const query = { params: { id: "operation_sample" }, headers };
+    expect((await api.call("agentOperation", "GET", { params: query.params })).status).toBe(400);
+    expect((await api.call("agentOperation", "GET", query)).status).toBe(404);
+    // A rejected command is still a completed exchange and must never become a later action.
+    await api.call("threadCancel", "POST", {
+      params: { id: "thread_missing" },
+      headers: { ...headers, [OPERATION_ID_HEADER]: "operation_sample" },
+    });
+    expect((await api.call("agentOperation", "GET", query)).status).toBe(200);
+    const unavailable = await setup(observed, {
+      mutationAuthority: () => {
+        throw new ApiError(503, "agent_unavailable", "Store offline");
+      },
+    });
+    const otherHealth = await unavailable.api.call("health", "GET");
+    expect(
+      (
+        await unavailable.api.call("agentOperation", "GET", {
+          params: query.params,
+          headers: {
+            [WORKSPACE_ID_HEADER]: (otherHealth.body as { workspaceId: string }).workspaceId,
+          },
+        })
+      ).status,
+    ).toBe(503);
+  },
 
   "GET agentStatus": async (observed) => {
     const { api } = await setup(observed);

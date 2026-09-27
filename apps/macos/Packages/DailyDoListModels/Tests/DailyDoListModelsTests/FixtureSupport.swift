@@ -55,6 +55,7 @@ enum Fixtures {
     "DailyAppendRequest": DailyAppendRequest.self,
     "DailyAppendResponse": DailyAppendResponse.self,
     "HealthResponse": HealthResponse.self,
+    "AgentOperationResponse": AgentOperationResponse.self,
     "MachinePairRequest": MachinePairRequest.self,
     "MachineStatusResponse": MachineStatusResponse.self,
     "ObsidianImportJobResponse": ObsidianImportJobResponse.self,

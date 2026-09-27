@@ -8,6 +8,8 @@ import { type StorageProvider, searchVault } from "@ddl/storage";
 import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { getPath } from "hono/utils/url";
+import { mutationMiddleware, registerMutationRoutes } from "./agent-mutation-routes";
+import { AgentMutations, type MutationAuthority } from "./agent-mutations";
 import type { DaemonConfig } from "./config";
 import type { AppContext } from "./context";
 import { type DeviceSettings, memoryDeviceSettings } from "./device-settings";
@@ -46,6 +48,7 @@ export const MAX_BODY_BYTES = WIRE_LIMITS.bodyBytes;
 export interface AppDeps {
   storage: StorageProvider;
   workspace?: WorkspaceIdentity;
+  mutationAuthority?: () => MutationAuthority;
   runtime: AgentRuntime;
   settings: SettingsStore;
   /** `port` must be the port actually listened on (it is part of the Host/Origin allowlists). */
@@ -140,6 +143,14 @@ export function createApp(deps: AppDeps): Hono {
     version: deps.version ?? DAEMON_VERSION,
   };
 
+  const mutations = new AgentMutations({
+    local: deps.storage,
+    authority:
+      deps.mutationAuthority ??
+      (() => ({ storage: deps.storage, epoch: 0, isCurrent: () => true })),
+    logger: deps.logger,
+    now: () => ctx.now().getTime(),
+  });
   const app = new Hono({ getPath: (request) => escapeRoutingPath(getPath(request)) });
   app.onError(createErrorHandler(ctx.logger));
   app.notFound((c) =>
@@ -160,6 +171,8 @@ export function createApp(deps: AppDeps): Hono {
   app.use("/api/*", requestLogger(ctx.logger));
   app.use("/api/*", ctx.workspace.guard(ctx.vault));
   if (deps.relay) app.use("/api/*", deps.relay.middleware());
+  app.use("/api/*", mutationMiddleware(ctx, mutations));
+  registerMutationRoutes(app, ctx, mutations);
 
   registerVaultRoutes(app, ctx);
   registerNoteRoutes(app, ctx);

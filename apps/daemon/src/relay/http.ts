@@ -3,6 +3,7 @@
  * it: the machine token, the allowlisted target and a validated body. Nothing from the client's
  * request (its Authorization, cookies, Host, Origin or other headers) is passed on.
  */
+import { OPERATION_ID_HEADER, WORKSPACE_ID_HEADER } from "@ddl/core";
 import type { MachineCredential } from "../agent-location";
 
 export const RELAY_LIMITS = {
@@ -32,6 +33,8 @@ export interface MachineRequest {
   body?: Uint8Array<ArrayBuffer>;
   /** Any content type is accepted on success (artifact bytes); errors are still JSON. */
   binary?: boolean;
+  workspaceId?: string;
+  operationId?: string;
 }
 
 export interface MachineAnswer {
@@ -65,6 +68,8 @@ export async function callMachine(
     authorization: `Bearer ${credential.token}`,
     accept: request.binary ? "*/*" : "application/json",
   };
+  if (request.workspaceId) headers[WORKSPACE_ID_HEADER] = request.workspaceId;
+  if (request.operationId) headers[OPERATION_ID_HEADER] = request.operationId;
   if (request.body) headers["content-type"] = "application/json";
   let response: Response;
   try {

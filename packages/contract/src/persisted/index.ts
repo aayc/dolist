@@ -53,6 +53,11 @@ export {
   PersistedImportManifestFileSchema,
 } from "./import-manifest";
 export {
+  decodePersistedMutationJournal,
+  type PersistedMutationEvent,
+  PersistedMutationEventSchema,
+} from "./mutations";
+export {
   PERSISTED_FILE_ID_PATTERN,
   PERSISTED_PATHS,
   PersistedActionCategorySchema,
@@ -162,7 +167,6 @@ export {
   persistedThreadImportEvent,
   persistedThreadJournalPath,
 } from "./thread-journal";
-
 export {
   decodePersistedCapture,
   decodePersistedWorkspace,

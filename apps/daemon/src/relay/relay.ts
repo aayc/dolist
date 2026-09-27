@@ -23,6 +23,7 @@ import {
   errorMessage,
   type Logger,
   normalizeMachineUrl,
+  OPERATION_ID_HEADER,
   type RelayState,
   type RoutineListResponse,
   type RoutineRunResponse,
@@ -30,6 +31,7 @@ import {
   type SurfaceKind,
   type ThreadListResponse,
   type Unsubscribe,
+  WORKSPACE_ID_HEADER,
 } from "@ddl/core";
 import type { Context, MiddlewareHandler } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
@@ -39,7 +41,8 @@ import type {
   MachineCredentialSource,
   PlacementSource,
 } from "../agent-location";
-import { errorBody } from "../errors";
+import { operationIdHeader } from "../agent-mutation-routes";
+import { ApiError, errorBody } from "../errors";
 import { ForwardingAgentRuntime } from "../forwarding-runtime";
 import { readJson } from "../http-utils";
 import { AgentUnavailableError } from "../null-runtime";
@@ -497,6 +500,16 @@ export class AgentRelay extends ForwardingAgentRuntime {
       await readJson(c, route.body);
       body = new Uint8Array(await c.req.arrayBuffer());
     }
+    const operationId = operationIdHeader(c.req.header(OPERATION_ID_HEADER));
+    const workspaceId = c.req.header(WORKSPACE_ID_HEADER);
+    if (
+      operationId &&
+      route.method === "POST" &&
+      !route.body &&
+      (await c.req.text()).trim() !== ""
+    ) {
+      throw new ApiError(400, "invalid_request", "This action does not accept a body");
+    }
     let answer: MachineAnswer;
     try {
       answer = await callMachine(
@@ -505,6 +518,8 @@ export class AgentRelay extends ForwardingAgentRuntime {
           method: route.method,
           target: route.target,
           binary: route.binary,
+          ...(workspaceId ? { workspaceId } : {}),
+          ...(operationId ? { operationId } : {}),
           ...(body ? { body } : {}),
         },
         this.#timeout,
@@ -516,7 +531,7 @@ export class AgentRelay extends ForwardingAgentRuntime {
         method: route.method,
         reason: error.message,
       });
-      if (route.kind !== "action") return null;
+      if (route.kind !== "action" && !operationId) return null;
       const problem =
         error.reason === "rejected" ? RELAY_PROBLEMS.rejected : RELAY_PROBLEMS.unreachable;
       return c.json(errorBody("agent_unavailable", problem), 503);

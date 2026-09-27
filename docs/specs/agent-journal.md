@@ -1,7 +1,7 @@
 # Spec: the agent journal
 
 Status: **phase 1 (threads) built** (`dffdfdd`), and threads are journal-only (the first part of
-phase 2). Approvals, routines state and client ids are next. Fencing, its prerequisite, shipped
+phase 2). Client mutation receipts now wrap the existing daemon actions; approvals and routines state are next. Fencing, its prerequisite, shipped
 with the always-on work (`7ce1e9f`, see [SYNC.md](../SYNC.md#fencing)), and the daemon passes the
 lease epoch to the journal.
 
@@ -49,8 +49,13 @@ written any more, so every device upgrades together (as fencing already requires
 
 ## Phase 2: what's left
 
-- Approvals and routines state on the journal (with "run started" before a run begins), and
-  client-generated ids for idempotent mutations through the relay (an additive wire change).
+- Approvals and routines state on the journal (with "run started" before a run begins).
+- Client mutation IDs are implemented for chat, stop/retry, approvals and routine create/run/pause/resume.
+  The daemon writes preparation directly to the fenced sync authority before dispatch; abandoned
+  preparations remain indeterminate and are never re-dispatched. See the command receipts format
+  in [DATA_FORMATS.md](../DATA_FORMATS.md#agent-command-receipts--statejournalmutationsoperation-hashjsonl).
+  This bounded slice preserves the existing runtime entrypoints and does not complete the
+  approval/routine state migration or change harness recovery.
 - Compaction: journals grow with their thread (the orchestrator's chat most). Compacting needs a
   marker every device honors, or a union brings compacted events back.
 - Resuming the orchestrator's turn, and a Cursor session restored natively if ACP learns to seed
