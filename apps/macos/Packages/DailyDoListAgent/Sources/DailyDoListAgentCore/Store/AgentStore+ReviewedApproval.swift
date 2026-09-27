@@ -23,6 +23,10 @@ extension AgentStore {
         message: "This approval changed or expired. Refresh it before deciding.")
       return false
     }
-    return await decide(reviewed.id, decision, scope: scope, note: note)
+    return await decide(reviewed.id, decision, scope: scope, note: note) {
+      authorizationAvailable && self.readOnly == nil && self.placement?.runsOn == reviewedRunner
+        && self.approvals[reviewed.id] == reviewed && reviewed.isPending
+        && (reviewed.expiresAt.map { $0 > self.now().epochMillis } ?? true)
+    }
   }
 }

@@ -82,7 +82,8 @@ extension AgentStore {
     routineAlerts[id] = nil
     let mark = eventSeq
     do {
-      let response = try await client.runRoutine(id)
+      let result = try await performMutation(.runRoutine(id))
+      guard case .run(let response) = result else { throw AgentMutationError.corruptJournal }
       if routinesTouch <= mark { mutate { $0.upsertRoutine(response.routine) } }
       await loadRuns(ofRoutine: id)
       return response.threadId
@@ -111,8 +112,8 @@ extension AgentStore {
     }
     let mark = eventSeq
     do {
-      let updated =
-        paused ? try await client.pauseRoutine(id) : try await client.resumeRoutine(id)
+      let result = try await performMutation(paused ? .pauseRoutine(id) : .resumeRoutine(id))
+      guard case .routine(let updated) = result else { throw AgentMutationError.corruptJournal }
       if routinesTouch <= mark { mutate { $0.upsertRoutine(updated) } }
       return true
     } catch {
@@ -130,7 +131,8 @@ extension AgentStore {
     Routine, RoutineFormError
   > {
     do {
-      let routine = try await client.createRoutine(request)
+      let result = try await performMutation(.createRoutine(request))
+      guard case .routine(let routine) = result else { throw AgentMutationError.corruptJournal }
       mutate { $0.upsertRoutine(routine) }
       return .success(routine)
     } catch {

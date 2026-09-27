@@ -12,6 +12,7 @@ extension AgentStore {
   /// Call it at launch and after every reconnect. Events that arrive while it runs are newer than
   /// its snapshots and are never overwritten; overlapping refreshes only apply the latest.
   public func refresh(todayNotePath: String? = nil) async {
+    await refreshPendingMutations()
     if let todayNotePath { self.todayNotePath = todayNotePath }
     if let path = self.todayNotePath { trackedNotes.insert(path) }
     refreshGeneration += 1
