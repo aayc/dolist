@@ -537,7 +537,7 @@ edit, and saves the result.
   commands stop when it's released); set `vim` on every controller and apply the vimrc before
   turning `vimMode` on, so new sessions start with its mappings.
 
-## Known limitations
+## Known limitations (Mac editor)
 
 - Checkboxes and badges are drawn, not accessibility elements (the text itself is accessible).
 - No setext headings, indented code, tables or images (shown as source); callouts render as plain
@@ -617,3 +617,59 @@ the app's native test target (alongside the drawing UIKit test directory); impor
 mobile editor and mobile drawing products. SwiftPM's library-only Xcode scheme does not run UIKit
 tests by itself. Tests cover hosted fragment space/source/undo, stale identity load/upload results,
 dependency targets and safe link routing. Existing Mac embed tests continue to test the shared edits.
+
+## Native iPhone tables, callouts and backlinks
+
+The native content layer implements the table/callout/backlink behaviors specified by
+`docs/specs/obsidian-migration.md` (P). The current web and Mac editors still display tables as
+source and callouts as quotes; this layer does not change their behavior. `MarkdownContentLine`
+and `MarkdownContentIndex` are Foundation-only. Ordinary cell/title typing reparses just the
+changed line. Structural changes regroup the adjacent paragraph/quoted region; a 2,000-edit
+synthetic sweep compares incremental results against a fresh parse.
+
+GFM table cells handle escaped pipes, optional outer pipes, alignment, header rows and inline
+formatting. Wide tables scroll horizontally with synchronized row offsets. Tapping a cell reveals
+and selects that cell in the original source row; editing and undo use the existing text view.
+Missing cells display empty and excess cells remain in source, following the header's column count.
+Callouts recognize standard Obsidian types and aliases, titles, nested quotes and `+`/`-` folds.
+Unknown types retain their source and use note styling. Folding is transient presentation state;
+selecting a folded body expands it while editing. Agent-authored table rows and callout headers
+retain a visible sparkle and expose their thread through an optional menu callback. Other content
+inside callouts stays native editor text. Offscreen blocks have no overlay views and layout queries
+are restricted to visible source lines.
+
+Controller integration (the app integration owns these lifecycle call sites):
+
+1. Own `lazy var content = MobileContentCoordinator(owner: self)` alongside `embeds`.
+2. Set `glyphs.contentRange = { [weak self] in self?.content.hiddenRange(at: $0) }` and
+   `glyphs.contentFragment = { [weak self] in self?.content.fragment(at: $0, proposed: $1) }`.
+3. After each `parser.rebuild` and the surrounding text-storage attribute transaction in load and
+   configuration changes, call `content.rebuild()`.
+4. Immediately after `parser.textDidChange` in the character-edit callback, call
+   `content.didEdit(location: editedRange.location, oldLength: editedRange.length - delta,
+   newLength: editedRange.length)`. It reads `parser.lastRestyledRange` and defers all UIKit layout.
+5. Call `content.schedule()` after preview/selection updates and scrolling; call `content.layout()`
+   after text-view layout (where the embed layer lays out).
+6. Route `content.onOpenAgentThread` through the host's existing thread navigation. Skip ordinary
+   marker painting and badge spacing/overlays when `content.hiddenRange(at: markerOffset)` contains
+   that offset. This prevents markers and task chips from drawing over a table or folded body;
+   source rows and expanded callout body lines keep their normal decorations.
+
+`MobileBacklinksView(notePath:identity:source:onOpen:)` is a sheet/navigation destination. Its async
+`source(notePath)` returns `EditorBacklinksSnapshot`: linked/unlinked `EditorBacklinkMention` values
+with vault path, zero-based line and context. `coverage` is `.complete`, `.partial` or
+`.cached(updatedAt:)`; incomplete results never claim no mentions exist. The host identity must
+include credential/vault generation. Host or note changes ignore stale results; refresh failures
+retain an explicitly cached snapshot. `onOpen(path, line)` uses the existing note navigation.
+The host owns authenticated querying and offline caching; this package does not scan or mutate
+vault files. Unlinked mentions are navigable results, not automatic link edits.
+
+Include `Tests/DailyDoListMobileEditorTests/MobileContentTests.swift` through the existing native
+test source directory. It checks rendered row/source selection/undo, fold geometry without source
+mutation, and stale-host backlinks with cache coverage. The shared parser tests run in the Mac
+Editor package suite.
+
+Current phone layout adaptation: drawing floats display as full-width blocks on narrow screens
+and aligned blocks on wider screens, preserving their original wrap modifiers. Text does not wrap
+around wide-layout drawings yet. Table rows and callout headers reveal source for editing; there is
+no separate spreadsheet-style cell editor. These presentation choices never rewrite markdown.

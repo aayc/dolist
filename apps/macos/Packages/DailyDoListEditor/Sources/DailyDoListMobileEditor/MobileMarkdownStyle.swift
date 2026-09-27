@@ -56,5 +56,62 @@
       if let marker { values[.ddlMarker] = marker.rawValue }
       return values
     }
+
+    /// Inline formatting for table cells and callout titles. Syntax is removed only from this
+    /// presentation copy; ranges in the document remain untouched.
+    func contentText(_ source: String, bold: Bool = false) -> NSAttributedString {
+      let units = Array(source.utf16)
+      var inline = InlineTokenizer(units, from: 0, to: units.count)
+      inline.run()
+      var tokens = LineTokens(kind: .paragraph)
+      tokens.spans = inline.spans
+      tokens.markers = inline.markers
+      let value = NSMutableAttributedString(
+        string: source,
+        attributes: attributes(kind: .paragraph, style: bold ? [.bold] : [], marker: nil))
+      var position = 0
+      for segment in StyleSegments.build(tokens, length: units.count) {
+        var style = segment.style
+        if bold { style.insert(.bold) }
+        value.setAttributes(
+          attributes(kind: .paragraph, style: style, marker: nil),
+          range: NSRange(location: position, length: segment.length))
+        position += segment.length
+      }
+      for marker in tokens.markers.sorted(by: { $0.range.location > $1.range.location })
+      where marker.range.end <= value.length {
+        value.deleteCharacters(in: marker.range)
+      }
+      return value
+    }
+
+    static func calloutColor(_ family: String) -> UIColor {
+      switch family {
+      case "abstract", "info", "todo": .systemCyan
+      case "tip", "success": .systemGreen
+      case "question", "warning": .systemOrange
+      case "failure", "danger", "bug": .systemRed
+      case "example": .systemPurple
+      case "quote": .secondaryLabel
+      default: .systemBlue
+      }
+    }
+    static func calloutSymbol(_ family: String) -> String {
+      switch family {
+      case "abstract": "list.bullet.rectangle"
+      case "info": "info.circle"
+      case "todo": "checkmark.circle"
+      case "tip": "lightbulb"
+      case "success": "checkmark"
+      case "question": "questionmark.circle"
+      case "warning": "exclamationmark.triangle"
+      case "failure": "xmark"
+      case "danger": "bolt"
+      case "bug": "ant"
+      case "example": "list.bullet"
+      case "quote": "quote.opening"
+      default: "pencil"
+      }
+    }
   }
 #endif
