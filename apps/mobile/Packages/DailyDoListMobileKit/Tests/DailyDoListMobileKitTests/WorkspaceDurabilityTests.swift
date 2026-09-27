@@ -148,6 +148,20 @@ struct WorkspaceDurabilityTests {
     let copies = try resolved.recoveryCopies.map { try String(contentsOf: $0, encoding: .utf8) }
     #expect(copies.contains("Local draft"))
     #expect(await remote.writes.isEmpty)
+    let refreshed = try await repository.cache(
+      RemoteNote(content: "Updated remotely", version: "v2"), path: "Day.md")
+    #expect(refreshed.recoveryCopies == resolved.recoveryCopies)
+    let deletedRemote = RepositoryRemote(scope: fixture.scope)
+    let deleted = try #require(await repository.refresh(path: "Day.md", with: deletedRemote))
+    #expect(deleted.state == .recoveryDraft)
+    #expect(deleted.recoveryCopies == resolved.recoveryCopies)
+    let recovery = try WorkspaceRecovery(rootDirectory: fixture.directory, scope: fixture.scope)
+    let exported = try await recovery.export(to: fixture.directory)
+    let savedCopies = try exported.manifest.entries.filter { $0.kind == "recovery" }.map {
+      try String(
+        contentsOf: exported.directory.appendingPathComponent($0.relativePath), encoding: .utf8)
+    }
+    #expect(savedCopies.contains("Local draft"))
   }
 }
 

@@ -94,13 +94,78 @@ already-attempted note writes to resolve; those existing attempts may still reco
 The app handles `pendingNoteWrites` by reconciling notes, then retrying captures, then ordinary
 note synchronization. `pendingCaptures` is a waiting state, not a reason to erase edits. After an
 ordinary synchronization pass, barred new writes remain waiting; persisted attempts are processed
-first so lexical path order cannot deadlock capture. After an
-applied capture, refresh the current note and use ordinary three-way reconciliation. Never insert
+first so lexical path order cannot deadlock capture. After an applied capture, refresh the current note and use ordinary three-way reconciliation. Never insert
 a pending capture into the editor and also submit its full text as an ordinary note save.
 
 Schema version 2 adds `workspace_values` to version 1 in one SQLite migration transaction. The
 table holds revisioned payloads and indexed retention/size/write-barrier metadata. Existing note
 and outbox rows remain intact. A failed migration rolls back; newer unknown versions fail closed.
+
+## Online structural changes
+
+`WorkspaceStructuralCoordinator.perform(.rename(from:to:isFolder:) / .trash(path:isFolder:),
+with:)` verifies the same profile/origin/workspace/host, then persists a structural intent before
+sending exactly once. `StructuralRemote` must use guarded online routes, verify the acknowledgement
+matches the requested target, and use the daemon's soft-trash API. Map only definite no-effect
+responses to `StructuralRemoteError.rejected`; timeouts, lost responses, ambiguous 5xx responses
+and interruption all need review. No automatic structural resend exists.
+
+Preparation atomically refuses affected dirty/review/recovery notes, affected note outbox records,
+pending captures and any earlier unresolved structural intent. Folder membership requires an
+exact path component boundary. Destination collisions are conservatively rejected across case,
+Unicode normalization and file/directory prefixes. A durable barrier holds new note/capture sends
+while structural state is unresolved; local typing still checkpoints. The app should checkpoint
+and drain affected editors before invoking this API and fence editor sessions/navigation until
+the result is known. Unrelated already-attempted note writes may finish.
+
+A confirmed rename transaction remaps the latest cached paths and queued revisions, including
+text typed while the request was pending. A confirmed trash removes clean cached records but
+keeps newly dirty text as a recovery draft without an outbox. Recovery checkpoints are preserved.
+Path-bearing disposable snapshots are invalidated. Capture dates, paths and host routing are
+never remapped. The transaction either remaps everything or leaves every original row intact.
+
+`unresolved()` enumerates persisted `attempting` and `needsReview` records, with operation UUID,
+action/source/destination, scope, start time, revision and original checkpoint references.
+After restart, `attempting` is uncertain: the process could have stopped before or after the host
+mutated. Present both paths and refresh their existence/content plus relevant host/trash state.
+Equal content alone is not proof of a rename. The user must explicitly establish whether the
+requested mutation occurred; if evidence remains ambiguous, keep the record unresolved and
+export its originals. `resolve(id, revision:as:with:)` revalidates identity and changes local
+metadata only. It never sends the mutation again. `.applied` means the user confirmed the remote
+mutation; `.notApplied` means the user confirmed no remote mutation. Both require the displayed
+intent revision, and the app remaps open sessions only after an applied result.
+
+A destination created locally during the network wait also stops at review. Export/copy that
+local draft first, then use explicit `WorkspaceRecovery.discardLocalNote(path:expectedRevision:)`
+if the user chooses to abandon that local record, and retry local-only resolution. Discard never
+deletes remotely and refuses unacknowledged attempted writes. This prevents a collision from
+forcing either silent overwrite or an unrecoverable blocked state.
+
+## Recovery export and explicit forget
+
+`WorkspaceRecovery.summary()` counts unsynced/review/recovery notes, unsent composers, unresolved
+captures/structural actions and unknown protected records. `export(to:)` takes a consistent index
+snapshot and writes working markdown, bases, attempted write bodies, recovery copies, composer
+text, pending captures and structural originals. A versioned JSON manifest retains original
+paths, hashes, revisions, routing and operation metadata. Only known content is exported; unknown
+records are counted so the UI can report incomplete support rather than claiming a complete
+export. Corrupt or missing referenced data fails instead of producing a falsely successful export.
+
+Export files use numbered/hash flat names, so case/Unicode collisions and file-versus-directory
+names cannot overwrite one another. Original paths are manifest data, never filesystem targets.
+Each file is synchronized and the manifest is written last before the staging directory is
+published. Failure removes staging and leaves the source untouched. Export is user-invoked,
+contains no credential store or tokens, and may not target the private workspace directory.
+The app owns security-scoped destination access and share/document-picker presentation.
+
+`forget()` refuses protected local work. After offering sync or export, only an explicit discard
+choice may call `forget(discardUnsyncedWork: true)`. The app first fences/cancels editors and
+connection work, then invokes forget, and removes the Keychain credential/profile only after it
+succeeds. A committed namespace tombstone fences existing SQLite handles and future ordinary
+opens; forgotten work cannot reappear from stale callbacks. Checkpoint removal follows that
+transaction and can be retried by a new recovery owner after a crash or filesystem error. Keep
+the small tombstone database; pairing again uses a fresh profile UUID. This is ordinary local
+data removal, not a claim of forensic secure erasure.
 
 ## Remaining integrations
 
@@ -108,7 +173,7 @@ This package provides text working copies and the repository policy, not the com
 feature set. The app supplies lifecycle, guarded HTTP/capture transport, editor checkpoint
 scheduling, error/save-state presentation, notification catch-up and explicit review UI.
 Drawing/asset dependency ordering, cached search/full thread bodies/artifacts, clean markdown
-cache eviction, structural online actions and forget/export UI remain separate integrations.
+cache eviction and structural/recovery UI remain separate integrations.
 
 The storage protocols are injectable. Tests use real temporary SQLite/markdown files, a scripted
 remote and injected disk/transaction failures; no real vault or daemon is accessed.

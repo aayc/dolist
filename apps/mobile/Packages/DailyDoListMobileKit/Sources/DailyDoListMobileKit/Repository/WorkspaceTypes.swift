@@ -77,6 +77,8 @@ public enum WorkspaceRepositoryError: Error, Equatable, Sendable {
   case concurrentWrite
   case pendingCaptures
   case pendingNoteWrites
+  case pendingStructuralChange
+  case workspaceForgotten
   case unsupportedIndexVersion(Int)
   case storage(String)
 }

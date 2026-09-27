@@ -22,6 +22,8 @@ extension WorkspaceRepository {
       } catch WorkspaceRepositoryError.pendingCaptures {
         // A capture waits for earlier attempted writes. A blocked new note must not prevent
         // another document's immutable attempt from resolving and releasing that dependency.
+      } catch WorkspaceRepositoryError.pendingStructuralChange {
+        // Local text stays durable while an online rename/delete awaits acknowledgement.
       }
       if let note = try note(pending.path) { changed.append(note) }
     }
@@ -41,7 +43,7 @@ extension WorkspaceRepository {
     try checkConnection(generation)
     if let received { return try cache(received, path: path) }
     guard var existing = try index.document(path) else { return nil }
-    if existing.state == .synced {
+    if existing.state == .synced && existing.recoveryCopies.isEmpty {
       try index.commit(
         path: path, document: nil, pending: nil, expectedGeneration: existing.generation)
       return nil
