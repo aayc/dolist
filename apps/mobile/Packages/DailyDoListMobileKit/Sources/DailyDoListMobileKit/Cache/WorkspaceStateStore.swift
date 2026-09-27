@@ -27,6 +27,8 @@ public struct WorkspaceValueMutation: Sendable {
   /// New attachment creates also wait for capture/structural barriers in the same transaction.
   public var requiresIdleCaptureWrites: Bool = false
   public var requiresNoStructuralChange: Bool = false
+  /// Original-byte admission shares the transaction which first publishes an upload intent.
+  public var attachmentImportBytes: Int? = nil
 }
 
 /// Lightweight budget/index metadata; listing it never decodes large thread/capture payloads.
