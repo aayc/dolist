@@ -93,7 +93,11 @@ public actor CaptureOutbox {
   public func invalidateConnection() { generation &+= 1 }
 
   @discardableResult
-  public func synchronize(with remote: any CaptureRemote) async throws -> [QueuedCapture] {
+  /// A short-lived caller can resolve only its own operation; ordinary foreground synchronization
+  /// omits the filter and drains the pending queue. The same receipt and write barriers apply.
+  public func synchronize(with remote: any CaptureRemote, operationIDs: Set<UUID>? = nil)
+    async throws -> [QueuedCapture]
+  {
     guard !syncing else { return [] }
     syncing = true
     defer { syncing = false }
@@ -111,7 +115,15 @@ public actor CaptureOutbox {
       throw WorkspaceRepositoryError.unsupportedHost
     }
     var results: [QueuedCapture] = []
-    for cached in try captures(recentLimit: 0)
+    let candidates: [QueuedCapture]
+    if let operationIDs {
+      candidates = try operationIDs.sorted { $0.uuidString < $1.uuidString }.compactMap {
+        try capture($0)
+      }
+    } else {
+      candidates = try captures(recentLimit: 0)
+    }
+    for cached in candidates
     where cached.state == .queued || cached.state == .sending {
       try check(currentGeneration)
       // Re-read so a cancel/reconciliation in another repository instance wins by revision.
