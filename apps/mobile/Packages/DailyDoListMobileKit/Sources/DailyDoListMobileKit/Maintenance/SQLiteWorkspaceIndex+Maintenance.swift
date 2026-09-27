@@ -120,23 +120,54 @@ extension SQLiteWorkspaceIndex: WorkspaceMaintenanceStore {
     try locked {
       try transaction {
         let snapshot = try snapshotForRecovery()
-        guard discardUnsyncedWork || !WorkspaceRecoverySummary(snapshot: snapshot).requiresDecision
+        let scope = try recoveryScope()
+        guard
+          discardUnsyncedWork
+            || !WorkspaceRecoverySummary(snapshot: snapshot, scope: scope)
+              .requiresDecision
         else {
           throw WorkspaceMaintenanceError.unsyncedWork
         }
-        // Retiring the namespace fences other open SQLite handles as well as future opens.
-        // The connection owner may remove its Keychain/profile only after this commits.
-        try put("metadata", keyColumn: "key", key: "forgotten", value: true)
-        try execute("DELETE FROM outbox")
-        try execute("DELETE FROM documents")
-        try execute("DELETE FROM document_history")
-        try execute("DELETE FROM document_cache_access")
-        try execute("DELETE FROM workspace_values")
-        try execute("DELETE FROM workspace_value_revisions")
-        try execute("DELETE FROM content_cache")
-        try execute("DELETE FROM content_cache_keys")
+        try retireWorkspace()
       }
     }
+  }
+
+  public func forget(expectedFingerprint: String, scope: WorkspaceScope) throws {
+    try locked {
+      try transaction {
+        guard try recoveryScope() == scope else { throw WorkspaceRepositoryError.workspaceMismatch }
+        let snapshot = try snapshotForRecovery()
+        guard try snapshot.fingerprint(scope: scope) == expectedFingerprint else {
+          throw WorkspaceMaintenanceError.exportChanged
+        }
+        guard WorkspaceRecoverySummary(snapshot: snapshot, scope: scope).unknownRecords == 0 else {
+          throw WorkspaceMaintenanceError.incompleteExport
+        }
+        try retireWorkspace()
+      }
+    }
+  }
+
+  private func recoveryScope() throws -> WorkspaceScope {
+    guard let scope: WorkspaceScope = try read("metadata", keyColumn: "key", key: "scope") else {
+      throw WorkspaceRepositoryError.corruptIndex
+    }
+    return scope
+  }
+
+  private func retireWorkspace() throws {
+    // Retiring the namespace fences other open SQLite handles as well as future opens.
+    // The connection owner may remove its Keychain/profile only after this commits.
+    try put("metadata", keyColumn: "key", key: "forgotten", value: true)
+    try execute("DELETE FROM outbox")
+    try execute("DELETE FROM documents")
+    try execute("DELETE FROM document_history")
+    try execute("DELETE FROM document_cache_access")
+    try execute("DELETE FROM workspace_values")
+    try execute("DELETE FROM workspace_value_revisions")
+    try execute("DELETE FROM content_cache")
+    try execute("DELETE FROM content_cache_keys")
   }
 
   func transaction<Value>(_ action: () throws -> Value) throws -> Value {

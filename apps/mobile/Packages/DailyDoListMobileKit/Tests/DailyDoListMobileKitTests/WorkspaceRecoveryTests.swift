@@ -106,7 +106,7 @@ struct WorkspaceRecoveryTests {
     #expect(
       Set(json.keys) == [
         "formatVersion", "scope", "createdAt", "entries", "captures", "structuralOperations",
-        "unsupportedRecordCount",
+        "unsupportedRecordCount", "agentOperations", "snapshotFingerprint",
       ])
     #expect(try await repository.note("Review.md")?.state == .needsReview)
     let summary = try await recovery.summary()

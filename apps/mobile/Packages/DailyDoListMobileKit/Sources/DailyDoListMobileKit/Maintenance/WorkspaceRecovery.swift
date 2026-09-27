@@ -26,7 +26,7 @@ public actor WorkspaceRecovery {
   }
 
   public func summary() throws -> WorkspaceRecoverySummary {
-    WorkspaceRecoverySummary(snapshot: try store.recoverySnapshot())
+    WorkspaceRecoverySummary(snapshot: try store.recoverySnapshot(), scope: scope)
   }
 
   /// Explicitly discard this local record after the user has chosen to abandon its edits or
@@ -62,7 +62,7 @@ public actor WorkspaceRecovery {
       entries.append(
         RecoveryExportEntry(
           kind: kind, sourcePath: path, relativePath: relative, contentHash: hash,
-          revision: revision, baseVersion: baseVersion, context: context))
+          byteCount: data.count, revision: revision, baseVersion: baseVersion, context: context))
     }
     for record in snapshot.documents.sorted(by: { $0.path < $1.path }) {
       if record.state != .synced {
@@ -90,7 +90,9 @@ public actor WorkspaceRecovery {
     var captures: [QueuedCapture] = []
     var operations: [WorkspaceStructuralOperation] = []
     var unsupported = 0
-    for value in snapshot.values where value.retention == .durable {
+    let agent = RecoveryAgentMutations(values: snapshot.values, scope: scope)
+    for value in snapshot.values
+    where value.retention == .durable && !agent.recognizedKeys.contains(value.key) {
       if value.key.hasPrefix("composer/") {
         let text = try JSONDecoder().decode(String.self, from: value.data)
         if !text.isEmpty {
@@ -124,14 +126,19 @@ public actor WorkspaceRecovery {
       }
     }
     let manifest = RecoveryExportManifest(
-      formatVersion: 1, scope: scope, createdAt: clock(), entries: entries,
-      captures: captures, structuralOperations: operations, unsupportedRecordCount: unsupported)
+      formatVersion: 2, scope: scope, createdAt: clock(), entries: entries,
+      captures: captures, structuralOperations: operations, agentOperations: agent.operations,
+      snapshotFingerprint: try snapshot.fingerprint(scope: scope),
+      unsupportedRecordCount: unsupported)
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    try files.write(encoder.encode(manifest), relativePath: "manifest.json", to: location)
+    let manifestData = try encoder.encode(manifest)
+    try files.write(manifestData, relativePath: "manifest.json", to: location)
     let directory = try files.finishExport(location)
     finished = true
-    return RecoveryExportResult(directory: directory, manifest: manifest)
+    return RecoveryExportResult(
+      directory: directory, manifest: manifest,
+      manifestHash: MarkdownCheckpointStore.digest(manifestData))
   }
 
   /// Default refusal includes unsent composers and unresolved captures/structural operations.
