@@ -10,7 +10,7 @@ public struct ExcalidrawScene: Hashable, Sendable {
   public var elements: [ExcalidrawElement]
   /// Kept as read: `viewBackgroundColor`, `gridSize`, the plugin's `currentItem…` defaults.
   public var appState: JSONObject
-  /// Image data by file id, kept as read (images aren't drawn yet).
+  /// Embedded image data by file id, with unknown file metadata kept as read.
   public var files: JSONValue
   /// Other top-level keys and the order they came in.
   public internal(set) var preserved = PreservedFields()

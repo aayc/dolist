@@ -95,8 +95,8 @@ same files ([spec](../../../../docs/specs/drawings.md)).
   the tool, Delete, ⌘D, ⌘A, ⌘Z, ⇧⌘Z, arrows, Enter, Escape. Space-drag, scrolling and the hand
   tool pan; pinch and ⌘-scroll zoom (10%–3000%). The tool bar's tooltips show each tool's keys
   (`DrawingTool.shortcut`, the one table).
-- **Rendering**: every element type in full except images (a placeholder) and frames (outline and
-  name); every arrowhead Excalidraw has (arrow, bar, dot, circle, circle outline, triangle,
+- **Rendering**: embedded raster images decode through ImageIO (no network access); frames draw
+  an outline and name; every arrowhead Excalidraw has (arrow, bar, dot, circle, circle outline, triangle,
   triangle outline, diamond, diamond outline, crow's feet); elbow arrows as rounded runs; unknown
   types as a dashed box.
 - **Versions**: every change bumps `version`, `versionNonce` and `updated` like Excalidraw's
@@ -109,13 +109,13 @@ same files ([spec](../../../../docs/specs/drawings.md)).
 
 Everything read is written back: unknown element types (drawn as a dashed box, never modified
 unless moved as part of a selection), unknown fields of elements, bindings, the scene and its
-`appState`, the `files` map (images aren't loaded yet), `customData`, the plugin's `rawText`
+`appState`, the `files` map (including untouched file metadata), `customData`, the plugin's `rawText`
 (which follows edited text), links, locks, group ids, frame ids and fractional indices. In the
 file: the frontmatter, the notice and any markdown above the data, `## Element Links`,
 `## Embedded Files`, unknown sections, and what follows the drawing.
 
-**Deferred**: loading images from `files`, rotating with a handle (angles are kept and drawn),
-editing elbow arrows (drawn, kept), creating frames, z-order commands, copy and paste,
+**Deferred**: SVG image decoding, rotating with a handle (native mobile rotation commands exist),
+editing elbow arrows (drawn, kept), creating frames, Mac arrangement controls, copy and paste,
 grid and snapping, the linear element editor's midpoints, and the eraser's undo-while-dragging.
 
 ## API for the editor integration
@@ -267,8 +267,9 @@ rendering an imported scene.
   undo/redo with tombstones, and unknown JSON/file preservation through the shared codec.
 - [x] Touch navigation, interruption rollback, explicit multi-select/constraints and 44-point controls.
 - [ ] Runtime iPhone computer-use verification of every tool, keyboard, rotation, dark mode and save/reopen.
-- [ ] Images: embedded file decode/render, photo/file insertion and replacement, crop and flip.
-- [ ] Transform: rotation, four layer commands, grouping/ungrouping, lock/unlock-all,
+- [x] Raster images: embedded file decode/render, photo/file insertion and replacement, crop and flip.
+- [ ] SVG image decoding (unsupported embedded bytes remain untouched and show a placeholder).
+- [x] Shared transform commands and native mobile menus: rotation, four layer commands, grouping/ungrouping, lock/unlock-all,
   horizontal/vertical flip, six alignment and two distribution controls.
 - [ ] Clipboard: copy/cut/paste with bound labels, frames, groups and file references;
   copy/paste styles; context-menu copy as PNG/SVG.
@@ -284,3 +285,10 @@ rendering an imported scene.
 
 The first mobile checkpoint compiles against the iOS SDK; runtime verification belongs to the
 integrated app. Unchecked features remain explicit implementation work.
+
+The second checkpoint adds raster images and arrangement commands. Image decoding is local,
+bounded to 32 MB input and 4096 pixels per side, with a 64 MB decoded-image cache. iOS imports
+normalize orientation and store PNG so web clients can render the same bytes. Replacing an image
+creates a new file ID; old files stay for undo and tombstones. Crop, transforms and arrangement
+commands produce ordinary element versions and participate in the shared undo history. Grouped
+objects align and distribute as units. Imported SVG bytes remain preserved but are not yet decoded.

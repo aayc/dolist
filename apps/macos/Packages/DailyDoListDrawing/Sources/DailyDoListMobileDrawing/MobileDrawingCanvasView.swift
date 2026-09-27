@@ -131,7 +131,7 @@
       DrawingImage.fill(
         background, scene: scene, theme: theme,
         rect: DrawingRect(x: 0, y: 0, width: bounds.width, height: bounds.height), in: context)
-      let index = SceneRenderer.Index(scene.elements)
+      let index = SceneRenderer.Index(scene.elements, files: scene.files)
       let active = mode == .editing ? editor.activeElementIds : []
       staticLayer.draw(
         elements: scene.elements, index: index, skipping: active,

@@ -21,7 +21,7 @@ public enum DrawingImage {
     of scene: ExcalidrawScene, renderer: SceneRenderer = SceneRenderer(), padding: Double = padding
   ) -> DrawingRect {
     let visible = scene.visibleElements
-    let index = SceneRenderer.Index(visible)
+    let index = SceneRenderer.Index(visible, files: scene.files)
     var result: DrawingRect?
     for element in visible {
       var box = ElementGeometry.bounds(element)
@@ -60,9 +60,14 @@ public enum DrawingImage {
     renderer: SceneRenderer = SceneRenderer(), bounds: DrawingRect? = nil
   ) -> CGImage? {
     let bounds = bounds ?? contentBounds(of: scene, renderer: renderer)
-    let width = max(1, Int((bounds.width * scale).rounded(.up)))
-    let height = max(1, Int((bounds.height * scale).rounded(.up)))
-    guard width * height <= 64_000_000,
+    let pixelWidth = bounds.width * scale
+    let pixelHeight = bounds.height * scale
+    guard scale.isFinite, scale > 0, pixelWidth.isFinite, pixelHeight.isFinite,
+      pixelWidth > 0, pixelHeight > 0, pixelWidth <= 64_000_000, pixelHeight <= 64_000_000
+    else { return nil }
+    let width = max(1, Int(pixelWidth.rounded(.up)))
+    let height = max(1, Int(pixelHeight.rounded(.up)))
+    guard width <= 64_000_000 / height,
       let context = CGContext(
         data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
         space: CGColorSpace(name: CGColorSpace.sRGB)!,
@@ -75,7 +80,7 @@ public enum DrawingImage {
     fill(background, scene: scene, theme: theme, rect: bounds, in: context)
     let visible = scene.visibleElements
     renderer.draw(
-      visible, index: SceneRenderer.Index(visible), in: context, theme: theme,
+      visible, index: SceneRenderer.Index(visible, files: scene.files), in: context, theme: theme,
       canvasBackground: scene.viewBackgroundColor)
     return context.makeImage()
   }
@@ -122,7 +127,9 @@ public final class DrawingPreviewCache: @unchecked Sendable {
     for scene: ExcalidrawScene, contentHash: UInt64? = nil, width: Double, displayScale: Double = 2,
     theme: DrawingTheme, background: DrawingBackground = .scene
   ) -> CGImage? {
-    let pixelWidth = max(1, Int((width * displayScale).rounded()))
+    let pixels = width * displayScale
+    guard pixels.isFinite, pixels > 0, pixels <= 64_000_000 else { return nil }
+    let pixelWidth = max(1, Int(pixels.rounded()))
     let key = Key(
       contentHash: contentHash ?? DrawingContentHash.hash(scene), theme: theme,
       background: background,

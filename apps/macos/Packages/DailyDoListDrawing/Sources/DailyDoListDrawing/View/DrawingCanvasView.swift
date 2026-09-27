@@ -168,7 +168,7 @@ public final class DrawingCanvasView: NSView {
     let scale = Double(window?.backingScaleFactor ?? layer?.contentsScale ?? 2)
     drawBackground(in: context)
     let scene = editor.scene
-    let index = SceneRenderer.Index(scene.elements)
+    let index = SceneRenderer.Index(scene.elements, files: scene.files)
     let active = mode == .editing ? editor.activeElementIds : []
     staticLayer.draw(
       elements: scene.elements, index: index, skipping: active, renderer: renderer,

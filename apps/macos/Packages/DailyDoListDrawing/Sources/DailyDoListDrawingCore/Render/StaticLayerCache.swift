@@ -47,6 +47,7 @@ package final class StaticLayerCache {
 
   private var key: Key?
   private var image: CGImage?
+  private var files: JSONValue?
   /// The scene rectangle the image covers.
   private var covered = DrawingRect(minX: 0, minY: 0, maxX: 0, maxY: 0)
   package private(set) var renderCount = 0
@@ -75,7 +76,8 @@ package final class StaticLayerCache {
     hasher.combine(hairlineZoom)
     let newKey = Key(signature: hasher.finalize(), zoom: viewport.zoom, theme: theme, scale: scale)
     let visible = viewport.visibleRect(size: viewSize)
-    if newKey != key || image == nil || !covered.contains(visible) {
+    if newKey != key || image == nil || files != index.files || !covered.contains(visible) {
+      files = index.files
       render(
         elements: elements, index: index, skipping: skipped, renderer: renderer, viewport: viewport,
         viewSize: viewSize, scale: scale, theme: theme, canvasBackground: canvasBackground,
