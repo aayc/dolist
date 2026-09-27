@@ -103,7 +103,13 @@ extension PhoneWorkspace {
         }
         if let destination = action.destination {
           tabs.rename(from: action.source, to: destination)
+          for path in Array(savedPositions.keys) {
+            if let renamed = action.remappedPath(path) {
+              savedPositions[renamed] = savedPositions.removeValue(forKey: path)
+            }
+          }
         }
+        await saveNavigation()
         await refreshTree()
       } else if operation.state == .notApplied {
         error = "The host rejected the change. Nothing was moved or deleted."

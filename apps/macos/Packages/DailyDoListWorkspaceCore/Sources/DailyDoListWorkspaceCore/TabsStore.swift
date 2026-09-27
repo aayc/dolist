@@ -9,9 +9,17 @@ import Observation
 @MainActor
 @Observable
 public final class TabsStore {
-  public struct ClosedTab: Equatable, Sendable {
+  public struct ClosedTab: Codable, Equatable, Sendable {
     public let path: String
     public let index: Int
+  }
+
+  public struct Snapshot: Codable, Equatable, Sendable {
+    public let tabs: [String]
+    public let active: String?
+    public let back: [String]
+    public let forward: [String]
+    public let closed: [ClosedTab]
   }
 
   public private(set) var tabs: [String] = []
@@ -21,6 +29,20 @@ public final class TabsStore {
   public private(set) var closedTabs: [ClosedTab] = []
 
   public init() {}
+
+  public var snapshot: Snapshot {
+    Snapshot(tabs: tabs, active: active, back: backStack, forward: forwardStack, closed: closedTabs)
+  }
+
+  /// Restore bounded navigation with the caller's current workspace path validation.
+  public func restore(_ snapshot: Snapshot, isValid: (String) -> Bool = { _ in true }) {
+    restore(
+      tabs: Array(snapshot.tabs.filter(isValid).prefix(historyLimit)), active: snapshot.active)
+    backStack = Array(snapshot.back.filter(isValid).suffix(historyLimit))
+    forwardStack = Array(snapshot.forward.filter(isValid).suffix(historyLimit))
+    closedTabs = Array(snapshot.closed.filter { isValid($0.path) }.suffix(closedLimit))
+    collapseDuplicates()
+  }
 
   @ObservationIgnored private let historyLimit = 100
   @ObservationIgnored private let closedLimit = 20

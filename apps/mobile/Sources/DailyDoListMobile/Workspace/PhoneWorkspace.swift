@@ -43,6 +43,10 @@ final class PhoneWorkspace {
   @ObservationIgnored var synchronization: Task<Void, Never>?
   @ObservationIgnored var synchronizationID: UUID?
   @ObservationIgnored var synchronizeAgain = false
+  @ObservationIgnored var hydrated = false
+  @ObservationIgnored var savedPositions: [String: WorkspaceNavigation.Position] = [:]
+  @ObservationIgnored var navigationDebounce: Task<Void, Never>?
+  @ObservationIgnored var savingNavigation: Task<Void, Never>?
 
   init(
     rootDirectory: URL, structural: WorkspaceStructuralCoordinator, recovery: WorkspaceRecovery,
@@ -63,18 +67,21 @@ final class PhoneWorkspace {
   }
 
   func hydrate() async {
+    guard !hydrated else { return }
     do {
       settings = try await cache.settings()?.value
       let cached = try await repository.notes()
       entries = try await cache.tree()?.value.entries ?? []
       includeLocalNotes(cached)
       includeLocalDrawings(try await drawingRepository.drawings())
-      if active == nil, activeDrawing == nil, let first = cached.first {
+      try await restoreNavigation()
+      if active == nil, activeDrawing == nil, tabs.active == nil, let first = cached.first {
         show(first)
         tabs.place(first.path)
       }
       structuralOperations = try await structural.unresolved()
       await loadCaptures()
+      hydrated = true
     } catch { self.error = error.localizedDescription }
   }
 
@@ -110,7 +117,13 @@ final class PhoneWorkspace {
       await refreshTree()
       guard epoch == generation, online else { return }
       error = nil
-      if active == nil && activeDrawing == nil { await openToday() }
+      if active == nil && activeDrawing == nil {
+        if let path = tabs.active {
+          await open(path, recordHistory: false)
+        } else {
+          await openToday()
+        }
+      }
       await synchronize()
       guard epoch == generation, online else { return }
       await agent?.refresh()
@@ -128,6 +141,7 @@ final class PhoneWorkspace {
     await captureOutbox.invalidateConnection()
     await checkpointAll(finishComposition: true)
     await composerDrafts.flush()
+    await saveNavigation()
   }
 
   func invalidateAuthority() {
@@ -192,6 +206,7 @@ final class PhoneWorkspace {
       }
       guard active?.note.path == path else { return }
       tabs.place(path, newTab: newTab, recordHistory: recordHistory)
+      scheduleNavigationSave()
       if let line { revealLine(line) }
       selectedTab = 0
     } catch { if request == navigation { self.error = error.localizedDescription } }
@@ -205,6 +220,7 @@ final class PhoneWorkspace {
       navigation &+= 1
       show(note)
       tabs.place(note.path)
+      scheduleNavigationSave()
       selectedTab = 0
       await synchronize()
     } catch { self.error = error.localizedDescription }
@@ -372,6 +388,7 @@ final class PhoneWorkspace {
     let session = NoteSession(note: note, repository: repository)
     session.onCheckpoint = { [weak self] in Task { await self?.synchronize() } }
     configureEditor(session)
+    restorePosition(session)
     sessions[note.path] = session
     active = session
   }

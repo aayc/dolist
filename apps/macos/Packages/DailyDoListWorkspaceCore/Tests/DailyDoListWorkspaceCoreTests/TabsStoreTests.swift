@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import DailyDoListWorkspaceCore
@@ -5,6 +6,24 @@ import Testing
 @MainActor
 @Suite("TabsStore")
 struct TabsStoreTests {
+  @Test func snapshotRestoresHistoryAndClosedTabsWhileFilteringRemovedPaths() throws {
+    let tabs = TabsStore()
+    tabs.place("a.md")
+    tabs.place("b.md", newTab: true)
+    tabs.place("c.md", newTab: true)
+    tabs.close("c.md")
+    let data = try JSONEncoder().encode(tabs.snapshot)
+    let restored = TabsStore()
+    restored.restore(try JSONDecoder().decode(TabsStore.Snapshot.self, from: data)) {
+      $0 != "a.md"
+    }
+    #expect(restored.tabs == ["b.md"])
+    #expect(restored.active == "b.md")
+    #expect(restored.popClosedTab()?.path == "c.md")
+    #expect(restored.popBack() == "c.md")
+    #expect(restored.popBack() == nil)
+  }
+
   @Test func navigatingReplacesTheActiveTabLikeObsidian() {
     let tabs = TabsStore()
     tabs.place("a.md")

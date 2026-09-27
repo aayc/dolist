@@ -13,6 +13,7 @@ extension PhoneWorkspace {
   }
 
   func closeNote(_ path: String) async {
+    defer { scheduleNavigationSave() }
     drawingSessions[path]?.controller.finishEditing()
     await drawingSessions[path]?.checkpoint()
     await sessions[path]?.checkpoint()
@@ -102,6 +103,7 @@ extension PhoneWorkspace {
       includeLocalNotes([note])
       show(note)
       tabs.place(note.path)
+      scheduleNavigationSave()
       selectedTab = 0
       await synchronize()
     } catch { self.error = error.localizedDescription }

@@ -4,6 +4,24 @@ import UIKit
 
 @MainActor
 struct MobileEditorTests {
+  @Test func scrollRestorationWaitsForLayoutAndDoesNotOverrideLaterScrolling() {
+    let editor = MobileMarkdownController()
+    editor.load((0..<120).map { "Synthetic paragraph \($0)" }.joined(separator: "\n"))
+    editor.restoreScrollPosition(160)
+    let host = UIViewController()
+    host.view = editor.input
+    let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 600))
+    window.rootViewController = host
+    window.makeKeyAndVisible()
+    defer { window.isHidden = true }
+    host.view.layoutIfNeeded()
+    #expect(abs(editor.input.contentOffset.y - 160) < 1)
+    editor.input.setContentOffset(CGPoint(x: 0, y: 40), animated: false)
+    editor.input.setNeedsLayout()
+    editor.input.layoutIfNeeded()
+    #expect(abs(editor.input.contentOffset.y - 40) < 1)
+  }
+
   @Test func nativeInputContinuesTasksAndPreservesMarkdown() {
     let editor = MobileMarkdownController()
     editor.load("- [ ] Walk 🌿")

@@ -11,12 +11,13 @@ let package = Package(
     .package(path: "../../../macos/Packages/DailyDoListDomain"),
     .package(path: "../../../macos/Packages/DailyDoListModels"),
     .package(path: "../../../macos/Packages/DailyDoListDrawing"),
+    .package(path: "../../../macos/Packages/DailyDoListWorkspaceCore"),
   ],
   targets: [
     .target(
       name: "DailyDoListMobileKit",
       dependencies: [
-        "DailyDoListClient", "DailyDoListDomain", "DailyDoListModels",
+        "DailyDoListClient", "DailyDoListDomain", "DailyDoListModels", "DailyDoListWorkspaceCore",
         .product(name: "DailyDoListAgentCore", package: "DailyDoListAgent"),
         .product(name: "DailyDoListDrawingModel", package: "DailyDoListDrawing"),
       ],

@@ -30,6 +30,7 @@ extension PhoneWorkspace {
         return
       }
       tabs.place(path, newTab: newTab, recordHistory: recordHistory)
+      scheduleNavigationSave()
       selectedTab = 0
     } catch { if request == navigation { self.error = error.localizedDescription } }
   }
@@ -46,6 +47,7 @@ extension PhoneWorkspace {
       includeLocalDrawings([drawing])
       showDrawing(drawing)
       tabs.place(path)
+      scheduleNavigationSave()
       selectedTab = 0
       await synchronize()
     } catch { self.error = error.localizedDescription }

@@ -118,7 +118,7 @@ its actual interaction result. Screenshots alone do not prove behavior.
   integrated; no mobile Vim controls are presented, even when shared desktop Vim is enabled.
 - Shared WorkspaceCore preserves Mac tab/history behavior. Phone explorer, search with honest
   offline coverage, daily/weekly/date navigation, structural operations and recovery/export UI
-  are integrated. Offline creation from daily/weekly templates and restoration remain open.
+  are integrated. Offline creation from daily/weekly templates remains open; navigation restoration is now implemented.
 - Receipt-aware actions now reject a connection-generation change during durable preparation;
   the regression includes disconnect followed by reconnect before dispatch. Four focused tests pass.
 - CUA passed note creation and real typing, back/forward with text retained, content search showing
@@ -154,7 +154,12 @@ its actual interaction result. Screenshots alone do not prove behavior.
 - Latest combined `pnpm check` passed after serial package execution; concurrent CLI/body-limit
   timing failures passed serially without changing budgets. A new branch-wide CI run is due.
 
+- Navigation, open/closed notes and back/forward history now persist with bounded snapshots.
+  Caret and scroll positions restore after layout without overriding later scrolling. Shared
+  navigation tests (12), the native suite and lint pass. CUA confirmed the selected Welcome note
+  after termination/relaunch and Back returning to the prior daily note with its text intact.
+
 Next app work: drawing embeds and attachment/content rendering; living-list badges/activity;
-offline template creation; persistent navigation/download controls; cache/intent/notification
+offline template creation; download controls; cache/intent/notification
 composition; full recovery, accessibility, keyboard and computer-use acceptance. Standalone
 drawings and foundational APIs do not complete those remaining features.

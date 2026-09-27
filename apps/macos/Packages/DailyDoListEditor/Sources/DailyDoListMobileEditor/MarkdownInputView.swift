@@ -17,6 +17,20 @@
       commandController?.compositionDidEnd()
     }
 
+    public override func layoutSubviews() {
+      super.layoutSubviews()
+      guard window != nil, bounds.height > 0, bounds.width > 0,
+        let restored = commandController?.restoredScrollY
+      else { return }
+      commandController?.restoredScrollY = nil
+      layoutManager.ensureLayout(for: textContainer)
+      let height =
+        layoutManager.usedRect(for: textContainer).height
+        + textContainerInset.top + textContainerInset.bottom
+      setContentOffset(
+        CGPoint(x: 0, y: min(restored, max(0, height - bounds.height))), animated: false)
+    }
+
     public init() {
       let storage = NSTextStorage()
       let layout = MobileLayoutManager()

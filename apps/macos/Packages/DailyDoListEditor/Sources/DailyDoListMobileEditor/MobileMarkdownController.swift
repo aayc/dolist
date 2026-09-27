@@ -10,6 +10,8 @@
     public let input = MarkdownInputView()
     public var onTextChange: ((EditorTextChange) -> Void)?
     public var onSelectionChange: ((NSRange) -> Void)?
+    public var onScrollChange: ((Double) -> Void)?
+    var restoredScrollY: Double?
     public private(set) var configuration: EditorConfiguration
     let parser = MarkdownParseCache()
     private let preview = LivePreviewState(isEnabled: true)
@@ -42,6 +44,10 @@
     }
 
     public var text: String { input.textStorage.string }
+    public func restoreScrollPosition(_ y: Double) {
+      restoredScrollY = y.isFinite ? max(0, y) : 0
+      input.setNeedsLayout()
+    }
     public var selection: NSRange {
       get { input.selectedRange }
       set { input.selectedRange = newValue.clamped(to: input.textStorage.length) }
@@ -290,6 +296,9 @@
   }
 
   extension MobileMarkdownController: UITextViewDelegate {
+    public func scrollViewDidScroll(_ scrollView: UIScrollView) {
+      onScrollChange?(scrollView.contentOffset.y)
+    }
     public func textViewDidChangeSelection(_ textView: UITextView) {
       updatePreview()
       onSelectionChange?(selection)

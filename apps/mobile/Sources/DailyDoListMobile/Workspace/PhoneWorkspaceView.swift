@@ -111,6 +111,7 @@ struct PhoneWorkspaceView: View {
       workspace.settings?.theme == .dark
         ? .dark : workspace.settings?.theme == .light ? .light : nil
     )
+    .onChange(of: workspace.selectedTab) { _, _ in workspace.scheduleNavigationSave() }
     .sheet(isPresented: $capture) { CaptureTaskView(workspace: workspace) }
   }
   private var hostSettings: some View {
