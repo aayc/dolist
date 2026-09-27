@@ -29,11 +29,29 @@
       self.openNote = openNote
     }
 
+    private var canAct: Bool {
+      actionsEnabled && !store.cachedContentReadOnly && !store.cachedThreadIDs.contains(threadId)
+    }
+
     public var body: some View {
       Group {
         if let thread = store.thread(threadId) {
           VStack(spacing: 0) {
-            if !thread.surfaces.isEmpty {
+            if store.hasContentCache,
+              !store.canFetchContent || store.cachedThreadIDs.contains(threadId)
+            {
+              HStack {
+                Image(systemName: "iphone")
+                if case .available(let saved) = store.cacheAvailability[.thread(threadId)] {
+                  Text("Saved conversation · ") + Text(saved.fetchedAt, style: .relative)
+                    + Text(" ago")
+                } else {
+                  Text("Cached conversation")
+                }
+                Spacer()
+              }.font(.caption).foregroundStyle(.secondary).padding(.horizontal).padding(.bottom, 8)
+            }
+            if store.canFetchContent, !thread.surfaces.isEmpty {
               Picker("Conversation view", selection: $tab) {
                 Text("Chat").tag("chat")
                 ForEach(thread.surfaces, id: \.rawValue) { surface in
@@ -45,9 +63,9 @@
                 }
               }.pickerStyle(.segmented).padding(.horizontal).padding(.bottom, 8)
             }
-            if tab == "chat" {
+            if tab == "chat" || !store.canFetchContent {
               MobileConversation(
-                store: store, thread: thread, actionsEnabled: actionsEnabled, hostName: hostName,
+                store: store, thread: thread, actionsEnabled: canAct, hostName: hostName,
                 drafts: drafts, openNote: openNote, openArtifact: { artifact = $0 })
             } else {
               MobileSurfaceView(
@@ -61,6 +79,7 @@
             Text("Reconnect to load this conversation. Your local notes are still available.")
           } actions: {
             Button("Try again") { Task { await store.loadThread(threadId, force: true) } }
+              .disabled(!store.canFetchContent)
           }
         } else {
           ProgressView("Loading conversation…")
@@ -76,9 +95,11 @@
       .onDisappear { isVisible = false }
       .task(id: threadId) {
         await store.loadThread(threadId)
+        await store.refreshCacheAvailability(.thread(threadId))
         markVisibleRead()
       }
       .onChange(of: scenePhase) { _, _ in markVisibleRead() }
+      .onChange(of: canAct) { _, _ in markVisibleRead() }
       .onChange(of: store.unreadCount(forThread: threadId)) { _, _ in markVisibleRead() }
       .sheet(item: $artifact) { meta in
         NavigationStack { MobileArtifactView(store: store, meta: meta, openNote: openNote) }
@@ -87,7 +108,7 @@
         isPresented: Binding(get: { repeatDraft != nil }, set: { if !$0 { repeatDraft = nil } })
       ) {
         if let repeatDraft {
-          MobileNewRoutineView(store: store, initial: repeatDraft, actionsEnabled: actionsEnabled) {
+          MobileNewRoutineView(store: store, initial: repeatDraft, actionsEnabled: canAct) {
             _ in
             self.repeatDraft = nil
           }
@@ -105,19 +126,35 @@
         } else if let path = store.thread(threadId)?.notePath {
           Button("Show in note", systemImage: "note.text") { openNote(path, nil) }
         }
+        if store.hasContentCache {
+          let pinned = store.cacheAvailability[.thread(threadId)]?.pinned ?? false
+          Button(
+            pinned ? "Remove offline pin" : "Keep offline",
+            systemImage: pinned ? "pin.slash" : "pin"
+          ) {
+            Task {
+              await store.setContentPinned(.thread(threadId), pinned: !pinned)
+              if !pinned, store.canFetchContent {
+                await store.loadThread(threadId, force: true)
+                await store.flushContentCache()
+                await store.refreshCacheAvailability(.thread(threadId))
+              }
+            }
+          }
+        }
         Button("Refresh", systemImage: "arrow.clockwise") {
           Task { await store.loadThread(threadId, force: true) }
-        }
+        }.disabled(!store.canFetchContent)
         if let status = store.threadStatus(threadId), !status.isActive,
           threadId != OrchestratorThread.id
         {
           Button("Retry task", systemImage: "arrow.trianglehead.clockwise") {
             Task { await store.retryThread(threadId) }
-          }.disabled(!actionsEnabled || store.readOnly != nil)
+          }.disabled(!canAct || store.readOnly != nil)
           Button("Repeat this…", systemImage: "repeat") {
             repeatDraft = RoutineDraft(
               repeating: store.threadTitle(threadId) ?? "", threadId: threadId)
-          }.disabled(!actionsEnabled || store.readOnly != nil)
+          }.disabled(!canAct || store.readOnly != nil)
         }
         if let artifacts = store.thread(threadId)?.artifacts, !artifacts.isEmpty {
           Section("Artifacts") {
@@ -130,7 +167,7 @@
     }
 
     private func markVisibleRead() {
-      guard isVisible, scenePhase == .active, artifact == nil, repeatDraft == nil,
+      guard canAct, isVisible, scenePhase == .active, artifact == nil, repeatDraft == nil,
         store.thread(threadId) != nil
       else { return }
       store.markRead(threadId)

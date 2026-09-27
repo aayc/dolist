@@ -10,6 +10,7 @@ extension AgentStore {
 
   /// Starts watching a surface; the daemon is told on the first subscriber.
   public func subscribe(threadId: String, surface: SurfaceKind) {
+    guard canFetchContent else { return }
     let key = SurfaceKey(threadId: threadId, surface: surface)
     let count = subscriptionCounts[key, default: 0] + 1
     subscriptionCounts[key] = count
@@ -25,6 +26,8 @@ extension AgentStore {
       subscriptionCounts[key] = count - 1
     } else {
       subscriptionCounts[key] = nil
+      // The client removes its remembered subscription even while disconnected. Suppressing
+      // this cleanup would automatically resume an invisible surface after reconnect.
       outbox.send(.surfaceUnsubscribe(threadId: threadId, surface: surface))
     }
   }

@@ -15,7 +15,8 @@ extension AgentStore {
 
   /// Whether the orchestrator can be moved to `target` now (the command's availability).
   public func canMoveOrchestrator(to target: AgentPlacement) -> Bool {
-    guard let placement, placement.placement != .alwaysOnHost, placement.heldHere == nil,
+    guard !cachedContentReadOnly, let placement, placement.placement != .alwaysOnHost,
+      placement.heldHere == nil,
       pendingPlacement == nil
     else { return false }
     let selection: AgentPlacement =

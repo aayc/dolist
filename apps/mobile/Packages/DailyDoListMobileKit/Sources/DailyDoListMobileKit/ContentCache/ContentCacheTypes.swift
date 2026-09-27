@@ -2,11 +2,13 @@ import DailyDoListModels
 import Foundation
 
 public enum CachedContentResource: Codable, Hashable, Sendable {
+  case inbox
   case thread(String)
   case artifact(threadID: String, artifactID: String)
 
   var key: String {
     switch self {
+    case .inbox: return "agent/inbox"
     case .thread(let id):
       return "thread/" + MarkdownCheckpointStore.digest(Data(id.utf8))
     case .artifact(let thread, let artifact):
@@ -19,6 +21,7 @@ public enum CachedContentResource: Codable, Hashable, Sendable {
   func validate() throws {
     let ids: [String]
     switch self {
+    case .inbox: ids = []
     case .thread(let id): ids = [id]
     case .artifact(let thread, let artifact): ids = [thread, artifact]
     }
@@ -59,7 +62,7 @@ public struct ContentCacheLimits: Codable, Hashable, Sendable {
 
   func maximum(for resource: CachedContentResource) -> Int {
     switch resource {
-    case .thread: threadBytes
+    case .inbox, .thread: threadBytes
     case .artifact: artifactBytes
     }
   }
