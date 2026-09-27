@@ -18,7 +18,9 @@ export type FixtureFormat =
   | "task-state"
   | "routines"
   | "settings"
-  | "import-manifest";
+  | "import-manifest"
+  | "workspace"
+  | "capture";
 /** Formats whose fixtures are JSON Lines (`*.jsonl`); journals have no legacy files. */
 export type JsonlFixtureFormat = "thread-journal";
 export type FixtureKind = "v1" | "legacy" | "corrupt" | "future";
@@ -31,10 +33,16 @@ export const FIXTURE_FORMATS: readonly FixtureFormat[] = [
   "routines",
   "settings",
   "import-manifest",
+  "workspace",
+  "capture",
 ];
 
 /** Formats versioned from their first release have no legacy (unversioned) files. */
-export const VERSIONED_FROM_THE_START: ReadonlySet<FixtureFormat> = new Set(["import-manifest"]);
+export const VERSIONED_FROM_THE_START: ReadonlySet<FixtureFormat> = new Set([
+  "import-manifest",
+  "workspace",
+  "capture",
+]);
 
 export function fixtureKind(name: string): FixtureKind | null {
   if (name.startsWith("v1")) return "v1";

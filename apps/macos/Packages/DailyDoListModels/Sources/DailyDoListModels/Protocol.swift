@@ -7,6 +7,7 @@ public enum DaemonProtocol {
   public static let apiVersion = 1
   /// Header clients send so the daemon can tag the origin of a change.
   public static let clientIdHeader = "x-ddl-client-id"
+  public static let workspaceIdHeader = "x-ddl-workspace-id"
   /// WebSocket close code: the client's `hello.apiVersion` is incompatible.
   public static let incompatibleApiVersionCloseCode = 4426
 
@@ -74,6 +75,10 @@ public enum APIRoute {
   /// `date` is `today` or `YYYY-MM-DD`.
   public static func daily(_ date: String, create: Bool = true) -> String {
     "/api/daily/\(encodeURIComponent(date))\(create ? "?create=1" : "")"
+  }
+
+  public static func dailyAppend(_ date: String) -> String {
+    "/api/daily/\(encodeURIComponent(date))/append"
   }
 
   public static func search(_ query: String, limit: Int? = nil) -> String {
@@ -165,15 +170,22 @@ public struct HealthResponse: Codable, Hashable, Sendable {
   public var apiVersion: Int
   public var vaultName: String
   public var agentMode: AgentMode
+  public var workspaceId: String?
+  public var hostId: String?
+  public var capabilities: [String]?
 
   public init(
-    ok: Bool = true, version: String, apiVersion: Int, vaultName: String, agentMode: AgentMode
+    ok: Bool = true, version: String, apiVersion: Int, vaultName: String, agentMode: AgentMode,
+    workspaceId: String? = nil, hostId: String? = nil, capabilities: [String]? = nil
   ) {
     self.ok = ok
     self.version = version
     self.apiVersion = apiVersion
     self.vaultName = vaultName
     self.agentMode = agentMode
+    self.workspaceId = workspaceId
+    self.hostId = hostId
+    self.capabilities = capabilities
   }
 }
 
@@ -733,6 +745,9 @@ public struct ApiErrorCode: WireEnum {
   public static let notFound: Self = "not_found"
   public static let conflict: Self = "conflict"
   /// 409: a device setting is set by an environment variable.
+  public static let workspaceMismatch: Self = "workspace_mismatch"
+  public static let hostMismatch: Self = "host_mismatch"
+  public static let operationConflict: Self = "operation_conflict"
   public static let lockedByEnv: Self = "locked_by_env"
   public static let payloadTooLarge: Self = "payload_too_large"
   public static let upgradeRequired: Self = "upgrade_required"

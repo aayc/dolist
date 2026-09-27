@@ -9,6 +9,7 @@ import Foundation
 /// is exactly what the daemon's DNS-rebinding/CSRF guard accepts from a native client.
 public final class HTTPDaemonClient: DaemonClient {
   public let endpoint: DaemonEndpoint
+  public let expectedWorkspaceId: String?
   public let clientId: String
   /// Sent in the WebSocket hello for diagnostics, e.g. `macos/1.0`.
   public let clientVersion: String
@@ -26,19 +27,23 @@ public final class HTTPDaemonClient: DaemonClient {
     session: URLSession = .shared,
     clientId: String = HTTPDaemonClient.makeClientID(),
     clientVersion: String = HTTPDaemonClient.defaultClientVersion,
-    options: Options = Options()
+    options: Options = Options(),
+    expectedWorkspaceId: String? = nil
   ) {
     self.endpoint = endpoint
+    self.expectedWorkspaceId = expectedWorkspaceId
     self.clientId = clientId
     self.clientVersion = clientVersion
     transport = RESTTransport(
       endpoint: endpoint, session: session, clientId: clientId,
-      requestTimeout: options.requestTimeout, artifactTimeout: options.artifactTimeout)
+      requestTimeout: options.requestTimeout, artifactTimeout: options.artifactTimeout,
+      expectedWorkspaceId: expectedWorkspaceId)
     connection = EventConnection(
       endpoint: endpoint, session: session, clientId: clientId, clientVersion: clientVersion,
       configuration: EventConnection.Configuration(
         backoff: options.reconnectBackoff, helloTimeout: options.helloTimeout,
-        pingInterval: options.pingInterval, maximumMessageSize: options.maximumMessageSize))
+        pingInterval: options.pingInterval, maximumMessageSize: options.maximumMessageSize),
+      expectedWorkspaceId: expectedWorkspaceId)
   }
 
   deinit {
@@ -102,6 +107,16 @@ public final class HTTPDaemonClient: DaemonClient {
   /// With `create`, this GET writes the note, so it is attributed like a write.
   public func dailyNote(_ date: String, create: Bool) async throws -> DailyNoteResponse {
     try await transport.json(.get, APIRoute.daily(date, create: create), attribute: create)
+  }
+
+  /// Requires a client created with the verified workspace ID. Never retry on another host.
+  public func appendDailyNote(_ date: String, request: DailyAppendRequest) async throws
+    -> DailyAppendResponse
+  {
+    guard expectedWorkspaceId != nil else {
+      throw DaemonClientError.invalidRequest("Verify the workspace before capturing a task")
+    }
+    return try await transport.json(.post, APIRoute.dailyAppend(date), body: request)
   }
 
   public func search(_ query: String, limit: Int?) async throws -> SearchResponse {

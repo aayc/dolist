@@ -30,10 +30,14 @@ export function isCompatibleApiVersion(apiVersion: number): boolean {
 export const WS_CLOSE_CODES = {
   /** The client's `hello.apiVersion` is not compatible with the daemon's `API_VERSION`. */
   incompatibleApiVersion: 4426,
+  workspaceChanged: 4412,
 } as const;
 
 /** Header clients send so the daemon can tag the origin of a change and skip echoing it back. */
 export const CLIENT_ID_HEADER = "x-ddl-client-id";
+
+/** Verified workspace context; old clients may omit it, offline-capable clients must send it. */
+export const WORKSPACE_ID_HEADER = "x-ddl-workspace-id";
 
 /**
  * Every route's path: `:name` is one segment, a trailing `*` the rest (a vault path). The daemon
@@ -47,6 +51,7 @@ export const API_PATHS = {
   rename: "/api/notes-rename",
   folders: "/api/folders",
   daily: "/api/daily/:date",
+  dailyAppend: "/api/daily/:date/append",
   search: "/api/search",
   settings: "/api/settings",
   agentStatus: "/api/agent/status",

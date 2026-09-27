@@ -1,28 +1,35 @@
 import { API_CONTRACT } from "@ddl/contract";
 import {
   API_PATHS,
-  type AppSettings,
   type DailyNoteResponse,
-  DEFAULT_DAILY_NOTE_CONTENT,
-  dailyNotePath,
-  errorMessage,
-  isHiddenPath,
-  isSidecarPath,
-  type LocalDate,
   parseISODate,
-  renderTemplate,
-  stem,
-  templateNotePath,
   today,
   toISODate,
+  WORKSPACE_ID_HEADER,
 } from "@ddl/core";
-import type { FileContent, StorageProvider } from "@ddl/storage";
+import type { FileContent } from "@ddl/storage";
 import type { Hono } from "hono";
 import type { AppContext } from "../context";
+import { appendDailyCapture } from "../daily-capture";
+import { renderDailyNote, resolveDailyPath } from "../daily-note";
 import { ApiError, isNamedError } from "../errors";
-import { clientWriteSource, isTruthyFlag } from "../http-utils";
+import { clientWriteSource, isTruthyFlag, readJson } from "../http-utils";
+import { principalOf } from "../security";
 
 export function registerDailyRoutes(app: Hono, ctx: AppContext): void {
+  app.post(API_PATHS.dailyAppend, async (c) => {
+    if (!c.req.header(WORKSPACE_ID_HEADER))
+      throw new ApiError(400, "invalid_request", "Capture requires X-DDL-Workspace-Id");
+    const param = API_CONTRACT.dailyAppend.params.safeParse({ date: c.req.param("date") });
+    const date = param.success ? parseISODate(param.data.date) : null;
+    if (!date)
+      throw new ApiError(400, "invalid_request", "Capture requires an explicit YYYY-MM-DD date");
+    const request = await readJson(c, API_CONTRACT.dailyAppend.methods.POST.body);
+    const principal = principalOf(c);
+    if (!principal)
+      throw new ApiError(401, "unauthorized", "Capture needs an authenticated principal");
+    return c.json(await appendDailyCapture(ctx, date, request, principal, clientWriteSource(c)));
+  });
   /** `GET /api/daily/<YYYY-MM-DD|today>?create=1`, dates in the daemon's local time zone. */
   app.get(API_PATHS.daily, async (c) => {
     const param = API_CONTRACT.daily.params.safeParse({ date: c.req.param("date") });
@@ -60,50 +67,6 @@ export function registerDailyRoutes(app: Hono, ctx: AppContext): void {
       return c.json(toDailyResponse(current, iso, false));
     }
   });
-}
-
-function resolveDailyPath(date: LocalDate, settings: AppSettings): string {
-  let path: string;
-  try {
-    path = dailyNotePath(date, settings.dailyNotes);
-  } catch (error) {
-    throw new ApiError(
-      400,
-      "invalid_settings",
-      `Invalid daily note settings: ${errorMessage(error)}`,
-    );
-  }
-  if (isHiddenPath(path)) {
-    throw new ApiError(400, "invalid_settings", "Daily notes are configured in a hidden folder");
-  }
-  return path;
-}
-
-async function renderDailyNote(
-  storage: StorageProvider,
-  settings: AppSettings,
-  path: string,
-  date: LocalDate,
-  now: Date,
-): Promise<string> {
-  const template = await readTemplate(storage, settings);
-  if (template === null) return DEFAULT_DAILY_NOTE_CONTENT;
-  return renderTemplate(template, { title: stem(path), date, now });
-}
-
-async function readTemplate(
-  storage: StorageProvider,
-  settings: AppSettings,
-): Promise<string | null> {
-  let path: string | null;
-  try {
-    path = templateNotePath(settings.dailyNotes);
-  } catch {
-    return null;
-  }
-  if (!path || isSidecarPath(path)) return null;
-  const file = await storage.read(path);
-  return file ? file.content : null;
 }
 
 function toDailyResponse(file: FileContent, date: string, created: boolean): DailyNoteResponse {

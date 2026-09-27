@@ -1,0 +1,13 @@
+[
+  {
+    "name": "missing operation ID",
+    "value": {
+      "hostId": "host_one",
+      "text": "- [ ] Take a synthetic walk",
+      "capturedAt": 1790536000000,
+      "timeZone": "Pacific/Auckland"
+    },
+    "path": ["operationId"],
+    "code": "invalid_type"
+  }
+]

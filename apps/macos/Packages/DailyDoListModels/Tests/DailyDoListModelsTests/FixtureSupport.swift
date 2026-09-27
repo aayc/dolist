@@ -52,6 +52,8 @@ enum Fixtures {
     "DeviceSyncSetupRequest": DeviceSyncSetupRequest.self,
     "DeviceVaultRequest": DeviceVaultRequest.self,
     "DeviceVaultResponse": DeviceVaultResponse.self,
+    "DailyAppendRequest": DailyAppendRequest.self,
+    "DailyAppendResponse": DailyAppendResponse.self,
     "HealthResponse": HealthResponse.self,
     "MachinePairRequest": MachinePairRequest.self,
     "MachineStatusResponse": MachineStatusResponse.self,

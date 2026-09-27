@@ -6,12 +6,14 @@
 import { describe, expect, it } from "vitest";
 import {
   decodePersistedApprovals,
+  decodePersistedCapture,
   decodePersistedImportManifest,
   decodePersistedRecords,
   decodePersistedRoutines,
   decodePersistedSettings,
   decodePersistedTaskState,
   decodePersistedThread,
+  decodePersistedWorkspace,
   PERSISTED_FORMATS,
   type PersistedDecodeResult,
   type PersistedSettingsDocument,
@@ -29,6 +31,8 @@ import {
 } from "./fixtures";
 
 const DECODERS: Record<FixtureFormat, (text: string) => PersistedDecodeResult<unknown>> = {
+  workspace: decodePersistedWorkspace,
+  capture: decodePersistedCapture,
   threads: decodePersistedThread,
   records: decodePersistedRecords,
   approvals: decodePersistedApprovals,
@@ -83,6 +87,8 @@ describe.each(FIXTURE_FORMATS)("%s fixtures", (format) => {
 describe("fixture coverage", () => {
   it("has fixtures for every versioned format in the registry", () => {
     const covered: Record<string, FixtureFormat | JsonlFixtureFormat> = {
+      workspace: "workspace",
+      capture: "capture",
       thread: "threads",
       "thread-journal": "thread-journal",
       records: "records",

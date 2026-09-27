@@ -24,6 +24,13 @@
         "$ref": "wire.schema.json#/$defs/ApiErrorBody"
       }
     },
+    "412": {
+      "description": "The verified workspace or host changed; reconnect without replaying pending writes.",
+      "codes": ["workspace_mismatch", "host_mismatch"],
+      "schema": {
+        "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+      }
+    },
     "500": {
       "description": "Unexpected daemon failure.",
       "codes": ["internal_error"],
@@ -269,6 +276,50 @@
             "404": {
               "description": "No such folder.",
               "codes": ["not_found"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "dailyAppend": {
+      "path": "/api/daily/:date/append",
+      "auth": "bearer",
+      "params": {
+        "$ref": "#/$defs/dailyAppend.params"
+      },
+      "methods": {
+        "POST": {
+          "summary": "Append captured markdown with a durable, host-bound operation receipt. Requires X-DDL-Workspace-Id.",
+          "body": {
+            "$ref": "wire.schema.json#/$defs/DailyAppendRequest"
+          },
+          "responses": {
+            "200": {
+              "description": "Applied receipt or indeterminate outcome requiring reconciliation.",
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/DailyAppendResponse"
+              }
+            },
+            "400": {
+              "description": "Malformed JSON or failed validation.",
+              "codes": ["invalid_json", "invalid_request", "invalid_settings"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "409": {
+              "description": "Operation ID reused with another payload, or repeated concurrent edits.",
+              "codes": ["operation_conflict", "conflict"],
+              "schema": {
+                "$ref": "wire.schema.json#/$defs/ApiErrorBody"
+              }
+            },
+            "413": {
+              "description": "Body over 5 MB.",
+              "codes": ["payload_too_large"],
               "schema": {
                 "$ref": "wire.schema.json#/$defs/ApiErrorBody"
               }
@@ -1913,6 +1964,19 @@
             }
           ],
           "description": "`today` (the daemon's local date) or YYYY-MM-DD."
+        }
+      },
+      "required": ["date"],
+      "additionalProperties": false
+    },
+    "dailyAppend.params": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "format": "date",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+          "description": "Local calendar date YYYY-MM-DD."
         }
       },
       "required": ["date"],

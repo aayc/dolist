@@ -46,6 +46,16 @@ export const HealthResponseSchema = named(
     apiVersion: z.int().min(1).describe("Protocol major version (see API_VERSION)."),
     vaultName: z.string().max(WIRE_LIMITS.vaultNameLength),
     agentMode: AgentModeSchema,
+    workspaceId: RuntimeIdSchema.optional().describe(
+      "Stable logical vault identity shared by synced replicas.",
+    ),
+    hostId: RuntimeIdSchema.optional().describe(
+      "Stable serving device identity; capture receipts belong to this host.",
+    ),
+    capabilities: z
+      .array(z.string().min(1).max(100))
+      .optional()
+      .describe("Explicit supported features; unknown values are ignored."),
   }),
 );
 
@@ -168,6 +178,52 @@ export const DailyNoteResponseSchema = named(
     date: IsoDateSchema,
     created: z.boolean().describe("True when this request created the note."),
   }),
+);
+
+export const DailyAppendRequestSchema = named(
+  "DailyAppendRequest",
+  "Append user-owned markdown exactly once or report uncertainty. Requires X-DDL-Workspace-Id. Retry only the identical request on the same host.",
+  z.strictObject({
+    operationId: RuntimeIdSchema,
+    hostId: RuntimeIdSchema.describe("Verified serving host from health."),
+    text: z
+      .string()
+      .min(1)
+      .max(100_000)
+      .describe("Markdown to append verbatim; the client supplies task syntax."),
+    capturedAt: EpochMsSchema,
+    timeZone: z
+      .string()
+      .min(1)
+      .max(100)
+      .describe("IANA time zone at capture; the explicit route date is authoritative."),
+  }),
+);
+
+const captureFields = {
+  operationId: RuntimeIdSchema,
+  workspaceId: RuntimeIdSchema,
+  hostId: RuntimeIdSchema,
+  hostDate: IsoDateSchema,
+  hostTimeZone: z.string(),
+  watched: z
+    .boolean()
+    .describe(
+      "Within the host's configured agent watch window; does not imply execution has begun.",
+    ),
+};
+
+export const DailyAppendResponseSchema = named(
+  "DailyAppendResponse",
+  "Durable capture receipt. Applied carries the exact saved base, even on retry. Indeterminate requires user reconciliation and must never be automatically re-appended.",
+  z.union([
+    z.looseObject({
+      ...captureFields,
+      outcome: z.literal("applied"),
+      note: DailyNoteResponseSchema,
+    }),
+    z.looseObject({ ...captureFields, outcome: z.literal("indeterminate"), path: VaultPathSchema }),
+  ]),
 );
 
 export const SearchHitSchema = named(

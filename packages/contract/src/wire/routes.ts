@@ -43,6 +43,8 @@ import {
   CreateFolderRequestSchema,
   CreateFolderResponseSchema,
   CreateRoutineRequestSchema,
+  DailyAppendRequestSchema,
+  DailyAppendResponseSchema,
   DailyNoteResponseSchema,
   HealthResponseSchema,
   NoteResponseSchema,
@@ -156,6 +158,10 @@ const error = (
 export const COMMON_API_ERRORS = {
   401: error(["unauthorized"], "Missing or invalid bearer token."),
   403: error(["forbidden_host", "forbidden_origin"], "Foreign Host or Origin header."),
+  412: error(
+    ["workspace_mismatch", "host_mismatch"],
+    "The verified workspace or host changed; reconnect without replaying pending writes.",
+  ),
   500: error(["internal_error"], "Unexpected daemon failure."),
 } as const satisfies Record<number, ErrorResponseSpec>;
 
@@ -297,6 +303,29 @@ const ROUTES = {
           200: json(TrashResponseSchema, "Moved to the trash."),
           400: error(["invalid_request", "invalid_path"], "Missing, malformed or hidden path."),
           404: error(["not_found"], "No such folder."),
+        },
+      },
+    },
+  },
+  dailyAppend: {
+    auth: "bearer",
+    params: z.object({ date: IsoDateSchema }),
+    methods: {
+      POST: {
+        summary:
+          "Append captured markdown with a durable, host-bound operation receipt. Requires X-DDL-Workspace-Id.",
+        body: DailyAppendRequestSchema,
+        responses: {
+          200: json(
+            DailyAppendResponseSchema,
+            "Applied receipt or indeterminate outcome requiring reconciliation.",
+          ),
+          400: invalidBody(["invalid_settings"]),
+          409: error(
+            ["operation_conflict", "conflict"],
+            "Operation ID reused with another payload, or repeated concurrent edits.",
+          ),
+          ...BODY_ERRORS,
         },
       },
     },

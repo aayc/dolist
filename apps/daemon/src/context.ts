@@ -13,11 +13,13 @@ import type { SecurityPolicy } from "./security";
 import type { SettingsStore } from "./settings-store";
 import type { SystemSettingsOpener } from "./system-settings";
 import type { VaultSwitch } from "./vault-switch";
+import type { WorkspaceIdentity } from "./workspace-identity";
 import type { WriteTracker } from "./write-tracker";
 
 /** Resolved dependencies shared by the route modules. */
 export interface AppContext {
   storage: StorageProvider;
+  workspace: WorkspaceIdentity;
   runtime: AgentRuntime;
   settings: SettingsStore;
   policy: SecurityPolicy;

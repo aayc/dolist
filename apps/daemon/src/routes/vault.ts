@@ -11,17 +11,21 @@ import {
 import type { Hono } from "hono";
 import type { AppContext } from "../context";
 import { readQuery } from "../http-utils";
+import { MOBILE_CAPABILITIES } from "../workspace-identity";
 
 const DEFAULT_SEARCH_LIMIT = 50;
 
 export function registerVaultRoutes(app: Hono, ctx: AppContext): void {
-  app.get(API_PATHS.health, (c) => {
+  app.get(API_PATHS.health, async (c) => {
     const body: HealthResponse = {
       ok: true,
       version: ctx.version,
       apiVersion: API_VERSION,
       vaultName: ctx.storage.displayName,
       agentMode: ctx.runtime.mode,
+      workspaceId: await ctx.workspace.current(),
+      hostId: ctx.workspace.hostId,
+      capabilities: [...MOBILE_CAPABILITIES],
     };
     return c.json(body);
   });

@@ -10,6 +10,8 @@ import { z } from "zod";
 /** Every sidecar location the app persists to, relative to the vault root. */
 export const PERSISTED_PATHS = {
   sidecar: SIDECAR_DIR,
+  workspace: `${SIDECAR_DIR}/workspace.json`,
+  captures: `${SIDECAR_DIR}/captures`,
   threads: `${SIDECAR_DIR}/threads`,
   artifacts: `${SIDECAR_DIR}/artifacts`,
   taskState: `${SIDECAR_DIR}/state/tasks`,

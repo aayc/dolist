@@ -21,6 +21,7 @@ const HANDOVER_SYNC_TIMEOUT_MS = 15_000;
 export interface SyncControllerOptions {
   /** The vault as the engine sees it (attributed so its writes are tagged `sync`). */
   primary: StorageProvider;
+  prepareTarget?: (target: StorageProvider) => Promise<void>;
   device: DeviceIdentity;
   syncTokenPath: string;
   env: Record<string, string | undefined>;
@@ -59,7 +60,13 @@ export class SyncController {
     const target = this.#prepared.target;
     const { leaseEpoch, debounceMs } = this.#options;
     this.#handle = target
-      ? await createSync({ target, primary, logger, ...(leaseEpoch ? { leaseEpoch } : {}) })
+      ? await createSync({
+          target,
+          primary,
+          logger,
+          ...(leaseEpoch ? { leaseEpoch } : {}),
+          ...(this.#options.prepareTarget ? { prepareTarget: this.#options.prepareTarget } : {}),
+        })
       : null;
     if (this.#handle) {
       this.#unsubscribe = this.#handle.engine.onStatus((status) => {

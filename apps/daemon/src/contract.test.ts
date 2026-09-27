@@ -17,6 +17,7 @@ import {
   type RoutineListResponse,
   type RoutineResponse,
   silentLogger,
+  WORKSPACE_ID_HEADER,
 } from "@ddl/core";
 import { MemoryStorageProvider } from "@ddl/storage";
 import { describe, expect, it, vi } from "vitest";
@@ -372,6 +373,25 @@ const scenarios: Record<string, Scenario> = {
       error: "invalid_path",
     });
     expect((await remove({ path: "Nope" })).status).toBe(404);
+  },
+
+  "POST dailyAppend": async (observed) => {
+    const { api, app } = await setup(observed);
+    const health = await (await app.request("/api/health")).json();
+    const headers = { [WORKSPACE_ID_HEADER]: health.workspaceId };
+    const json = {
+      operationId: "capture_one",
+      hostId: health.hostId,
+      text: "- [ ] Synthetic task",
+      capturedAt: 0,
+      timeZone: "UTC",
+    };
+    const call = (init = {}) =>
+      api.call("dailyAppend", "POST", { params: { date: "2026-09-27" }, headers, json, ...init });
+    expect((await call()).status).toBe(200);
+    expect((await call({ json: { ...json, text: "Changed payload" } })).status).toBe(409);
+    expect((await call({ json: {} })).status).toBe(400);
+    expect((await call({ json: undefined, body: TOO_BIG })).status).toBe(413);
   },
 
   "GET daily": async (observed) => {

@@ -45,6 +45,7 @@ import {
   resolveVaultSearch,
   settingsDefaults,
 } from "./wiring";
+import { WorkspaceIdentity } from "./workspace-identity";
 import { WriteTracker } from "./write-tracker";
 import { attachWebSocketHub, type WebSocketHub } from "./ws";
 
@@ -130,6 +131,8 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     const connectors = await createConnectors(config, logger);
     resources.connectors = connectors;
     const device = await loadOrCreateDevice(config.devicePath, logger);
+    const workspace = new WorkspaceIdentity(storage, device.id);
+    await workspace.current();
     const agentStorage = new AttributedStorage(storage, writes, { origin: "agent" });
     let supervisor: AgentSupervisor | undefined;
     // The real runtime exists only while this device runs the agent (see AgentSupervisor).
@@ -172,6 +175,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
 
     const sync = new SyncController({
       primary: new AttributedStorage(storage, writes, { origin: "sync" }),
+      prepareTarget: (target) => workspace.adoptFrom(target),
       device,
       syncTokenPath: config.syncTokenPath,
       env,
@@ -236,6 +240,10 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
         }
         return null;
       },
+      onSwitch: () => {
+        workspace.invalidate();
+        resources.hub?.invalidateWorkspace();
+      },
       restart: (vaultPath) => {
         if (options.onRestart) options.onRestart(vaultPath);
         else logger.warn("The vault changes when the daemon starts again");
@@ -260,6 +268,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     const port = await listen(server, config.port);
     const app = createApp({
       storage,
+      workspace,
       runtime: relay,
       settings,
       config: { port, allowedOrigins: config.allowedOrigins },
@@ -283,6 +292,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
 
     resources.hub = attachWebSocketHub({
       server,
+      workspace,
       policy: createSecurityPolicy({
         port,
         token,

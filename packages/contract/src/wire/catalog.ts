@@ -41,6 +41,7 @@ export type WireSchemaName = keyof typeof WIRE_SCHEMAS;
 export const REQUEST_SCHEMA_NAMES = [
   "UpdateSettingsRequest",
   "WriteNoteRequest",
+  "DailyAppendRequest",
   "RenameRequest",
   "CreateFolderRequest",
   "SetAgentEnabledRequest",

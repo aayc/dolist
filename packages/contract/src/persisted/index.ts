@@ -162,3 +162,11 @@ export {
   persistedThreadImportEvent,
   persistedThreadJournalPath,
 } from "./thread-journal";
+
+export {
+  decodePersistedCapture,
+  decodePersistedWorkspace,
+  type PersistedCapture,
+  PersistedCaptureSchema,
+  PersistedWorkspaceSchema,
+} from "./workspace";

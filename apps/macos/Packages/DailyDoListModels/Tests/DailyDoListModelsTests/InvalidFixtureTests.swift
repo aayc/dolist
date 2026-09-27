@@ -291,6 +291,8 @@ struct InvalidFixtureTests {
       "always-on machine name over 64 characters": .tolerated(constraint),
       "unknown key in the always-on machine": .tolerated(unknownKey),
     ],
+    "DailyAppendRequest": ["missing operation ID": .rejected],
+    "DailyAppendResponse": ["applied requires a note": .rejected],
     "WriteNoteRequest": [
       "missing content": .rejected,
       "unknown key": .tolerated(unknownKey),

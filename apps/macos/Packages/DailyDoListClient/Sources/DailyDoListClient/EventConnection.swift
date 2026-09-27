@@ -26,6 +26,7 @@ actor EventConnection {
   }
 
   nonisolated let broadcaster = EventBroadcaster()
+  private let expectedWorkspaceId: String?
   private let endpoint: DaemonEndpoint
   private let session: URLSession
   private let clientId: String
@@ -49,8 +50,9 @@ actor EventConnection {
 
   init(
     endpoint: DaemonEndpoint, session: URLSession, clientId: String, clientVersion: String,
-    configuration: Configuration
+    configuration: Configuration, expectedWorkspaceId: String? = nil
   ) {
+    self.expectedWorkspaceId = expectedWorkspaceId
     self.endpoint = endpoint
     self.session = session
     self.clientId = clientId
@@ -120,7 +122,11 @@ actor EventConnection {
 
   /// One connection, from the upgrade until the socket closes.
   private func connectOnce(generation: Int) async -> Outcome {
-    let task = session.webSocketTask(with: endpoint.webSocketRequest)
+    var request = endpoint.webSocketRequest
+    if let expectedWorkspaceId {
+      request.setValue(expectedWorkspaceId, forHTTPHeaderField: DaemonProtocol.workspaceIdHeader)
+    }
+    let task = session.webSocketTask(with: request)
     task.maximumMessageSize = configuration.maximumMessageSize
     socket = task
     isOpen = false

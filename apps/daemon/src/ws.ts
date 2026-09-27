@@ -1,6 +1,7 @@
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
 import type { AgentRuntime } from "@ddl/agent";
+import { PERSISTED_PATHS } from "@ddl/contract";
 import {
   API_ROUTES,
   API_VERSION,
@@ -13,6 +14,8 @@ import {
   type SurfaceFrame,
   type SurfaceKind,
   type Unsubscribe,
+  WORKSPACE_ID_HEADER,
+  WS_CLOSE_CODES,
 } from "@ddl/core";
 import type { StorageProvider } from "@ddl/storage";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
@@ -25,6 +28,7 @@ import type { SettingsStore } from "./settings-store";
 import { parseBearer } from "./token";
 import { VaultChangeBatcher } from "./vault-events";
 import { DAEMON_VERSION } from "./version";
+import type { WorkspaceIdentity } from "./workspace-identity";
 import type { WriteTracker } from "./write-tracker";
 
 const DEFAULT_HEARTBEAT_MS = 30_000;
@@ -61,6 +65,7 @@ export interface WebSocketHubOptions {
   /** Revoking a device closes its sockets. */
   devices?: Pick<PairedDeviceStore, "onRevoke">;
   storage: StorageProvider;
+  workspace?: WorkspaceIdentity;
   runtime: AgentRuntime;
   settings: SettingsStore;
   writes: WriteTracker;
@@ -76,6 +81,7 @@ export interface WebSocketHubOptions {
 export interface WebSocketHub {
   readonly clientCount: number;
   broadcast(event: ServerEvent): void;
+  invalidateWorkspace(): void;
   close(): Promise<void>;
 }
 
@@ -195,6 +201,7 @@ export function attachWebSocketHub(options: WebSocketHubOptions): WebSocketHub {
   };
 
   const handleMessage = (client: Client, data: RawData, isBinary: boolean): void => {
+    if (!clients.has(client)) return;
     if (isBinary) {
       sendError(client, "Binary messages are not supported");
       return;
@@ -244,9 +251,31 @@ export function attachWebSocketHub(options: WebSocketHubOptions): WebSocketHub {
       rejectUpgrade(socket, decision.status);
       return;
     }
-    const { principal } = decision;
-    const deviceId = principal.kind === "device" ? principal.device.id : undefined;
-    wss.handleUpgrade(req, socket, head, (ws) => onConnection(ws, deviceId));
+    const expected = headerValue(req, WORKSPACE_ID_HEADER);
+    const upgrade = async () => {
+      if (socket.destroyed) return;
+      // Workspace verification can wait for sync adoption. Recheck credentials afterwards so
+      // a device revoked during that wait cannot establish a fresh socket.
+      const current = authorizeUpgrade(req, policy);
+      if ("status" in current) {
+        rejectUpgrade(socket, current.status);
+        return;
+      }
+      const deviceId =
+        current.principal.kind === "device" ? current.principal.device.id : undefined;
+      wss.handleUpgrade(req, socket, head, (ws) => onConnection(ws, deviceId));
+    };
+    if (expected !== undefined) {
+      if (!options.workspace) {
+        rejectUpgrade(socket, 412);
+        return;
+      }
+      void options.workspace
+        .verifyAndRun(expected, upgrade)
+        .catch(() => rejectUpgrade(socket, 412));
+    } else {
+      void upgrade().catch(() => socket.destroy());
+    }
   };
   server.on("upgrade", onUpgrade);
 
@@ -256,6 +285,14 @@ export function attachWebSocketHub(options: WebSocketHubOptions): WebSocketHub {
       if (client.deviceId !== deviceId) continue;
       clients.delete(client);
       client.ws.close(REVOKED_CLOSE_CODE, "Device revoked");
+      setTimeout(() => client.ws.terminate(), CLOSE_GRACE_MS).unref();
+    }
+  };
+
+  const invalidateWorkspace = (): void => {
+    for (const client of [...clients]) {
+      clients.delete(client);
+      client.ws.close(WS_CLOSE_CODES.workspaceChanged, "Workspace changed; verify identity again");
       setTimeout(() => client.ws.terminate(), CLOSE_GRACE_MS).unref();
     }
   };
@@ -271,7 +308,10 @@ export function attachWebSocketHub(options: WebSocketHubOptions): WebSocketHub {
     ...(options.imports
       ? [options.imports.onProgress((job) => broadcast({ type: "import.progress", job }))]
       : []),
-    options.storage.watch((event) => batcher.push(event)),
+    options.storage.watch((event) => {
+      if (event.path === PERSISTED_PATHS.workspace) invalidateWorkspace();
+      batcher.push(event);
+    }),
     options.settings.onChange((settings) => broadcast({ type: "settings.changed", settings })),
     runtime.on("task.records", ({ notePath, records }) =>
       broadcast({ type: "task.records", notePath, records }),
@@ -331,6 +371,7 @@ export function attachWebSocketHub(options: WebSocketHubOptions): WebSocketHub {
       return clients.size;
     },
     broadcast: (event) => broadcast(event),
+    invalidateWorkspace,
     close() {
       closing ??= close();
       return closing;
@@ -428,8 +469,13 @@ function rawDataToString(data: RawData): string {
   return Buffer.from(data).toString("utf8");
 }
 
-function rejectUpgrade(socket: Duplex, status: 401 | 403 | 404): void {
-  const reason = { 401: "Unauthorized", 403: "Forbidden", 404: "Not Found" }[status];
+function rejectUpgrade(socket: Duplex, status: 401 | 403 | 404 | 412): void {
+  const reason = {
+    401: "Unauthorized",
+    403: "Forbidden",
+    404: "Not Found",
+    412: "Precondition Failed",
+  }[status];
   socket.once("finish", () => socket.destroy());
   socket.end(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
 }
