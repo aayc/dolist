@@ -14,6 +14,7 @@ import {
   ThreadSummarySchema,
 } from "./domain";
 import {
+  ClientIdSchema,
   ContentVersionSchema,
   CountSchema,
   EpochMsSchema,
@@ -184,7 +185,7 @@ export const DailyAppendRequestSchema = named(
   "DailyAppendRequest",
   "Append user-owned markdown exactly once or report uncertainty. Requires X-DDL-Workspace-Id. Retry only the identical request on the same host.",
   z.strictObject({
-    operationId: RuntimeIdSchema,
+    operationId: ClientIdSchema,
     hostId: RuntimeIdSchema.describe("Verified serving host from health."),
     text: z
       .string()
@@ -201,7 +202,7 @@ export const DailyAppendRequestSchema = named(
 );
 
 const captureFields = {
-  operationId: RuntimeIdSchema,
+  operationId: ClientIdSchema,
   workspaceId: RuntimeIdSchema,
   hostId: RuntimeIdSchema,
   hostDate: IsoDateSchema,
