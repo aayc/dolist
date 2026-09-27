@@ -4,9 +4,10 @@ The running handoff log: what shipped, what's in flight, what's next, and the de
 them, so work can continue on any machine at any point. Read it before starting; keep it current
 (the rules are in `AGENTS.md`, "Handoff log").
 
-**Last updated:** 2026-09-27 · The existing Linux VM now runs the remote agent, paired with the
-other development Mac. Both run `09e13dc` (handover fix integrated on `main` as `fffb5b7`), with
-real remote-task, approval, artifact, reboot and bidirectional handover checks passed.
+**Last updated:** 2026-09-27 · The existing Linux VM runs the remote Cursor agent on `09e13dc`,
+paired with the other development Mac, whose bundled daemon is now `67a488b` (quit-sync fix
+integrated on `main` as `cf1807c`). Real remote-task, approval, artifact, reboot, bidirectional
+handover and app-close/reopen checks passed.
 The main development Mac's installation remains `401997a`.
 The full native iPhone implementation plan is also on `main` (`40e1b29`); the user has now
 authorized implementation and thorough simulator testing in its separate task.
@@ -94,13 +95,17 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
   approval policy; OpenRouter remains available for the safety judge. A task entered in the
   native Mac app ran Linux shell commands and opened a real Chromium page on the remote host,
   with successful tool results displayed in its thread. Setup credentials remain private.
+- Active Cursor work continued after quitting the Mac app: a delayed shell command finished,
+  then a new browser action ran, and reopening restored the same completed task without a repeat.
+  A separate immediate-quit race was reproduced and fixed: relaying clients now make a final
+  sync pass before shutdown cancels their pending note-sync debounce. The updated Mac app passed
+  a real paste-and-immediately-quit check; its new task ran remotely while the app stayed closed.
+  Local checks, production builds/budgets and all four branch workflows passed (the existing
+  native Vim timing flake passed on retry). Physical laptop sleep was not performed. Main
+  workflows are dispatched after this update; private evidence and the prior app remain available.
 
 ## In flight
 
-- Remote quit continuity: `codex/remote-quit-sync` (`67a488b`) fixes a reproduced race where a
-  relaying client could quit before syncing its last saved note. Active Cursor work already
-  passed a real app-close/reopen test without duplicates; the final-sync regression, all local
-  checks and production bundle budgets pass. Branch CI and the updated Mac installation are next.
 - Full native iPhone app: `codex/iphone-app`, based on the completed Mac setup baseline.
   Foundation checkpoint `a972928` is pushed: unsigned iPhone builds, shared editor extraction,
   real typing/undo/composition tests and focused simulator computer-use. Full features remain
@@ -119,6 +124,9 @@ Native iPhone implementation is authorized and continues separately, including s
 
 ## Shipped on `main` (newest first; older history is `git log`)
 
+- `cf1807c` Relaying clients flush their last saved notes on quit, so a task entered just before
+  closing the app can reach the always-on host without waiting for the next launch. Installed
+  in the paired Mac's daemon and verified with a regression plus actual Cursor execution.
 - `fffb5b7` Leased agent handovers now sync task identities and settled snapshots, preventing
   completed unchecked tasks from running again under fresh IDs. Folder sync retains its
   device-local tracker behavior. Installed and verified on the paired Mac and Linux host.
