@@ -9,6 +9,9 @@
   @Observable
   public final class MobileDrawingController {
     public let editor: DrawingEditor
+    public var library: MobileDrawingLibrary = .shared
+    @ObservationIgnored public var onOpenLink: ((String) -> Void)?
+    @ObservationIgnored public var elementLink: ((String) -> String?)?
     public var isEditing = true
     public var multiSelect = false
     public var constrain = false
@@ -74,6 +77,7 @@
     @Environment(\.colorScheme) private var colorScheme
     @State private var propertiesShown = false
     @State private var precisionShown = false
+    @State private var transferShown = false
 
     public init(controller: MobileDrawingController) { self.controller = controller }
     public var body: some View {
@@ -81,6 +85,16 @@
         if controller.isEditing { toolbar }
         MobileDrawingCanvas(controller: controller, theme: colorScheme == .dark ? .dark : .light)
         if controller.isEditing { commands }
+      }
+      .sheet(isPresented: $transferShown) {
+        NavigationStack {
+          MobileDrawingTransfer(controller: controller)
+            .toolbar {
+              ToolbarItem(placement: .confirmationAction) {
+                Button("Done") { transferShown = false }
+              }
+            }
+        }
       }
       .sheet(isPresented: $precisionShown) {
         NavigationStack {
@@ -147,6 +161,7 @@
             isOn: Binding(
               get: { controller.editor.isToolLocked }, set: { controller.editor.isToolLocked = $0 })
           )
+          Button("Copy, library and links") { transferShown = true }
           Button("Frames, points and snapping") { precisionShown = true }
           Button("Select all") { controller.editor.selectAll() }
           MobileDrawingArrangeMenu(editor: controller.editor)

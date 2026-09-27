@@ -115,7 +115,7 @@ file: the frontmatter, the notice and any markdown above the data, `## Element L
 `## Embedded Files`, unknown sections, and what follows the drawing.
 
 **Deferred**: SVG image decoding, rotating with a handle (native mobile rotation commands exist),
-obstacle-avoiding elbow rerouting, Mac arrangement controls, copy and paste,
+obstacle-avoiding elbow rerouting, Mac arrangement controls, SVG clipboard export,
 and the eraser's undo-while-dragging. Shared frame/point/grid commands are available on both platforms;
 the expanded inspector is currently native iPhone UI.
 
@@ -272,8 +272,8 @@ rendering an imported scene.
 - [ ] SVG image decoding (unsupported embedded bytes remain untouched and show a placeholder).
 - [x] Shared transform commands and native mobile menus: rotation, four layer commands, grouping/ungrouping, lock/unlock-all,
   horizontal/vertical flip, six alignment and two distribution controls.
-- [ ] Clipboard: copy/cut/paste with bound labels, frames, groups and file references;
-  copy/paste styles; context-menu copy as PNG/SVG.
+- [x] Clipboard: copy/cut/paste with bound labels, frames, groups and file references; copy/paste styles; copy as PNG.
+- [ ] Clipboard: vector SVG export.
 - [x] Frames: create, rename, wrap selection, select children, remove children and visibility.
 - [x] Lines/arrows: insert/delete points, draggable midpoints, elbow creation/editing and straight/round/elbow controls.
 - [ ] Elbow routing: obstacle avoidance and Excalidraw fixed-segment routing parity (native routes remain orthogonal).
@@ -281,9 +281,9 @@ rendering an imported scene.
 - [x] Precision: visible grid, snap construction/movement to grid, snap movement to object edges/centers.
 - [ ] Precision: object snapping while constructing/resizing and freehand stroke shape.
 - [ ] Canvas: background, clear, zoom to selection/reset zoom, view/zen mode, statistics and help.
-- [ ] Links: edit/open links and copy element link with host-provided navigation policy.
-- [ ] Library: save selection, insert/delete items and import/export library files; external browse
-  requires host navigation policy and must not silently fetch or publish drawings.
+- [x] Links: edit/open links and copy element link with host-provided navigation policy.
+- [x] Library: save selection, insert/delete items and import/export library files; external browse
+  requires host navigation policy and never silently fetches or publishes drawings.
 - [ ] Native accessibility actions, hardware shortcuts, full font-picker choices and inline previews.
 - [ ] Extra tools: embeddable URL cards and transient laser pointer. Mermaid generation is deliberately
   unavailable in the web wrapper (`excalidraw-assets.ts` substitutes an explanatory stub); AI is disabled.
@@ -306,3 +306,17 @@ now participate in history as well. Frame resizing changes membership without sc
 The mobile actions menu opens **Frames, points and snapping**. Mac gets the frame tool and shared
 command APIs without changing its existing interaction policy. Elbow obstacle routing and the other
 unchecked controls remain explicit follow-up work.
+
+The fourth checkpoint adds Excalidraw clipboard transfer (including PNG images), style transfer,
+and a device-local shape library with import/export, insertion and deletion. Transfers remap
+element/group identities and internal bindings; colliding image file IDs get new IDs without
+overwriting existing bytes. Unknown element, binding, file and library-item metadata survives.
+Pasted elements use normal undo/tombstones. JSON transfer is bounded to 32 MB and 10,000 elements;
+libraries to 1,000 items. Failed imports leave the drawing/library untouched.
+
+`MobileDrawingController.onOpenLink` must be connected to the app's navigation policy;
+`elementLink` supplies a deep link for a drawing element ID. Without these callbacks, the relevant
+buttons are disabled. `library` defaults to `MobileDrawingLibrary.shared` (app preferences) and
+can be replaced with a store initialized using an isolated `UserDefaults` suite. Library access
+is explicit user interaction and never a remote request. The **Copy, library and links** action
+opens these controls. Integrated runtime checks and vector SVG export remain pending.
