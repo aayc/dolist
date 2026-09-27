@@ -98,8 +98,14 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
 ## In flight
 
 - Full native iPhone app: `codex/iphone-app`, based on the completed Mac setup baseline.
-  Foundation/toolchain and reusable editor extraction are first. The complete scope, durable
-  user instruction, next actions and test evidence live in `apps/mobile/IMPLEMENTATION.md`.
+  Foundation checkpoint `a972928` is pushed: unsigned iPhone builds, shared editor extraction,
+  real typing/undo/composition tests and focused simulator computer-use. Full features remain
+  in progress. The user explicitly authorized parallel subagents: `codex/iphone-backend`
+  (identity/capture contracts), `codex/iphone-repository` (durable offline drafts/outbox), and
+  `codex/iphone-agent` (shared agent core/native UI). The integrator owns app composition and
+  verification. Scope: `docs/specs/iphone-implementation-streams.md` on the integration branch.
+  The durable instruction, next actions and evidence live in `apps/mobile/IMPLEMENTATION.md`.
+  One existing Mac window-opening budget fails locally; baseline comparison is underway.
   Work uses an isolated checkout, synthetic vaults and separate test daemons; the installed
   Mac app, its daemon and the real vault must remain untouched.
 
