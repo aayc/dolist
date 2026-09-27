@@ -36,6 +36,8 @@ public actor WorkspaceRecovery {
   }
 
   public func export(to parent: URL) throws -> RecoveryExportResult {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     let internalPath = checkpointDirectory.deletingLastPathComponent().resolvingSymlinksInPath()
       .standardizedFileURL.path
     let parentPath = parent.resolvingSymlinksInPath().standardizedFileURL.path
@@ -135,6 +137,9 @@ public actor WorkspaceRecovery {
   /// Default refusal includes unsent composers and unresolved captures/structural operations.
   /// Pass true only for the user's explicit discard choice, after offering export or sync.
   public func forget(discardUnsyncedWork: Bool = false) throws {
+    let checkpointStore = try MarkdownCheckpointStore(directory: checkpointDirectory)
+    let access = try checkpointStore.beginExclusiveAccess(wait: true)
+    defer { access?.release() }
     if try !store.isForgotten() { try store.forget(discardUnsyncedWork: discardUnsyncedWork) }
     try files.removeCheckpoints(at: checkpointDirectory)
   }

@@ -5,9 +5,16 @@ import Foundation
 /// Immutable, UTF-8 markdown checkpoints. The SQLite transaction publishes their references
 /// only after `put` succeeds; an interrupted transaction can leave harmless unreferenced files.
 public protocol NoteCheckpointStore: Sendable {
+  func beginAccess() throws -> CheckpointAccessLease?
   func put(_ content: String) throws -> String
   func read(_ reference: String) throws -> String
   func fileURL(_ reference: String) throws -> URL
+}
+
+extension NoteCheckpointStore {
+  /// Injected stores without filesystem checkpoints need no file lease. Wrappers around a real
+  /// MarkdownCheckpointStore must forward this operation as well as put/read.
+  public func beginAccess() throws -> CheckpointAccessLease? { nil }
 }
 
 public struct MarkdownCheckpointStore: NoteCheckpointStore {
@@ -19,6 +26,8 @@ public struct MarkdownCheckpointStore: NoteCheckpointStore {
   }
 
   public func put(_ content: String) throws -> String {
+    let access = try beginAccess()
+    defer { access?.release() }
     let data = Data(content.utf8)
     let reference = Self.digest(data)
     let target = try fileURL(reference)
@@ -52,6 +61,8 @@ public struct MarkdownCheckpointStore: NoteCheckpointStore {
   }
 
   public func read(_ reference: String) throws -> String {
+    let access = try beginAccess()
+    defer { access?.release() }
     let data = try Data(contentsOf: fileURL(reference))
     guard Self.digest(data) == reference, let text = String(data: data, encoding: .utf8) else {
       throw WorkspaceRepositoryError.corruptCheckpoint

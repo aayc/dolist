@@ -39,6 +39,7 @@ public struct NoteOutboxRecord: Codable, Sendable {
 public protocol WorkspaceIndex: WorkspaceStateStore {
   func documents() throws -> [NoteIndexRecord]
   func document(_ path: String) throws -> NoteIndexRecord?
+  func lastDocumentRevision(_ path: String) throws -> Int64
   func outbox() throws -> [NoteOutboxRecord]
   func pending(_ path: String) throws -> NoteOutboxRecord?
   func commit(
@@ -47,6 +48,10 @@ public protocol WorkspaceIndex: WorkspaceStateStore {
 }
 
 extension WorkspaceIndex {
+  public func lastDocumentRevision(_ path: String) throws -> Int64 {
+    try document(path)?.revision ?? 0
+  }
+
   func commit(_ document: NoteIndexRecord, pending: NoteOutboxRecord?) throws {
     try commit(
       path: document.path, document: document, pending: pending,

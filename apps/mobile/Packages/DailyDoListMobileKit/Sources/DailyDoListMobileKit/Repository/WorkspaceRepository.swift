@@ -30,25 +30,31 @@ public actor WorkspaceRepository {
   }
 
   public func note(_ path: String) throws -> LocalNote? {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     try Self.validatePath(path)
     return try index.document(path).map(snapshot)
   }
 
   public func notes() throws -> [LocalNote] {
-    try index.documents().filter { !WorkspaceDocumentPath.isDrawing($0.path) }.map(snapshot)
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
+    return try index.documents().filter { !WorkspaceDocumentPath.isDrawing($0.path) }.map(snapshot)
   }
 
   /// A fetched note can seed/refresh clean cache entries. Dirty/recovery entries win until
   /// reconciliation; an arriving server snapshot must never overwrite their working files.
   @discardableResult
   public func cache(_ remote: RemoteNote, path: String) throws -> LocalNote {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     try Self.validatePath(path)
     let prior = try index.document(path)
     if let existing = prior, existing.state != .synced {
       return try snapshot(existing)
     }
     let hash = try checkpoints.put(remote.content)
-    let revision = try nextRevision(prior?.revision ?? 0)
+    let revision = try nextRevision(prior?.revision ?? index.lastDocumentRevision(path))
     let record = NoteIndexRecord(
       generation: prior?.generation ?? 0, path: path, working: hash, base: hash,
       baseVersion: remote.version,
@@ -64,6 +70,8 @@ public actor WorkspaceRepository {
   public func create(path: String, content: String, requiringDrawings: [String] = []) throws
     -> LocalNote
   {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     try Self.validatePath(path)
     guard try index.document(path) == nil else {
       throw WorkspaceRepositoryError.documentNeedsReview
@@ -71,7 +79,8 @@ public actor WorkspaceRepository {
     let hash = try checkpoints.put(content)
     for path in requiringDrawings { try DrawingRepository.validatePath(path) }
     let record = NoteIndexRecord(
-      path: path, working: hash, revision: 1, acknowledgedRevision: 0,
+      path: path, working: hash, revision: try nextRevision(index.lastDocumentRevision(path)),
+      acknowledgedRevision: 0,
       state: .waitingToSync, recoveryCopies: [],
       requiredDrawings: requiringDrawings.isEmpty ? nil : requiringDrawings)
     try index.commit(record, pending: NoteOutboxRecord(path: path))
@@ -82,12 +91,15 @@ public actor WorkspaceRepository {
   /// typing. Retain that text for recovery without creating an intent to restore the old path.
   @discardableResult
   public func createRecoveryDraft(path: String, content: String) throws -> LocalNote {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     try Self.validatePath(path)
     guard try index.document(path) == nil else {
       throw WorkspaceRepositoryError.documentNeedsReview
     }
     let record = NoteIndexRecord(
-      path: path, working: try checkpoints.put(content), revision: 1,
+      path: path, working: try checkpoints.put(content),
+      revision: try nextRevision(index.lastDocumentRevision(path)),
       acknowledgedRevision: 0, state: .recoveryDraft, reviewReason: .remoteDeleted,
       recoveryCopies: [])
     try index.commit(record, pending: nil)
@@ -98,6 +110,8 @@ public actor WorkspaceRepository {
   public func edit(path: String, change: NoteTextChange, expectedRevision: Int64) throws
     -> LocalNote
   {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     let record = try requireDocument(path, revision: expectedRevision)
     let text = try checkpoints.read(record.working) as NSString
     guard change.range.location >= 0, change.range.length >= 0,
@@ -114,6 +128,8 @@ public actor WorkspaceRepository {
   public func save(
     path: String, content: String, expectedRevision: Int64, requiringDrawings: [String]? = nil
   ) throws -> LocalNote {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     var record = try requireDocument(path, revision: expectedRevision)
     if let requiringDrawings {
       for path in requiringDrawings { try DrawingRepository.validatePath(path) }
@@ -148,6 +164,8 @@ public actor WorkspaceRepository {
   public func saveForReview(path: String, content: String, expectedRevision: Int64) throws
     -> LocalNote
   {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     var record = try requireDocument(path, revision: expectedRevision)
     guard record.reviewReason == nil || record.reviewReason == .overlappingEdits else {
       throw WorkspaceRepositoryError.documentNeedsReview
@@ -175,6 +193,8 @@ public actor WorkspaceRepository {
   /// writes require saving a new recovery note or choosing the remote version instead.
   @discardableResult
   public func keepMergedEdits(path: String, expectedRevision: Int64) throws -> LocalNote {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     var record = try requireDocument(path, revision: expectedRevision)
     guard record.reviewReason == .overlappingEdits else {
       throw WorkspaceRepositoryError.documentNeedsReview
@@ -193,6 +213,8 @@ public actor WorkspaceRepository {
   @discardableResult
   public func recover(path: String, as newPath: String, expectedRevision: Int64) throws -> LocalNote
   {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     let record = try requireDocument(path, revision: expectedRevision)
     guard record.state == .recoveryDraft || record.state == .needsReview else {
       throw WorkspaceRepositoryError.documentNeedsReview
@@ -204,6 +226,8 @@ public actor WorkspaceRepository {
   /// working file in recovery copies so this choice remains exportable.
   @discardableResult
   public func useRemoteVersion(path: String, expectedRevision: Int64) throws -> LocalNote {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     var record = try requireDocument(path, revision: expectedRevision)
     guard record.state == .needsReview, let base = record.base else {
       throw WorkspaceRepositoryError.documentNeedsReview
