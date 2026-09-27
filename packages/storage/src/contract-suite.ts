@@ -2,7 +2,13 @@ import { InvalidPathError } from "@ddl/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { appendToFile } from "./append";
 import { utf8ByteLength } from "./file-types";
-import { ConflictError, NotFoundError, type StorageEvent, type StorageProvider } from "./types";
+import {
+  ConflictError,
+  FileTooLargeError,
+  NotFoundError,
+  type StorageEvent,
+  type StorageProvider,
+} from "./types";
 
 export interface StorageContractSubject {
   /** A fresh, empty provider. */
@@ -66,6 +72,33 @@ export function describeStorageContract(name: string, factory: StorageContractFa
       const w2 = await s.write("Daily/2026-09-23.md", "- [x] water the plants\n");
       expect(w2.created).toBe(false);
       expect(w2.version).not.toBe(w.version);
+    });
+
+    it("preserves arbitrary bytes through conditional replacement, rename and bounded reads", async () => {
+      const bytes = new Uint8Array([0, 255, 128, 13, 10, 195, 40]);
+      const created = await s.writeBinary("Assets/example.bin", bytes, { ifMatch: null });
+      bytes[0] = 42;
+      const saved = await s.readBinary("Assets/example.bin");
+      expect(saved?.bytes).toEqual(new Uint8Array([0, 255, 128, 13, 10, 195, 40]));
+      expect(saved?.version).toBe(created.version);
+      expect((await s.stat("Assets/example.bin"))?.binary).toBe(true);
+      await expect(s.read("Assets/example.bin")).rejects.toThrow();
+      await expect(s.readBinary("Assets/example.bin", { maxBytes: 6 })).rejects.toBeInstanceOf(
+        FileTooLargeError,
+      );
+      await expect(
+        s.writeBinary("Assets/example.bin", bytes, { ifMatch: null }),
+      ).rejects.toBeInstanceOf(ConflictError);
+      const replaced = await s.writeBinary("Assets/example.bin", bytes, {
+        ifMatch: created.version,
+      });
+      await expect(
+        s.writeBinary("Assets/example.bin", bytes, { ifMatch: "stale" }),
+      ).rejects.toBeInstanceOf(ConflictError);
+      const moved = await s.rename("Assets/example.bin", "Assets/moved.bin");
+      expect(moved.version).toBe(replaced.version);
+      expect((await s.readBinary("Assets/moved.bin"))?.bytes).toEqual(bytes);
+      expect(await s.readBinary("Assets/example.bin")).toBeNull();
     });
 
     it("derives versions from content", async () => {

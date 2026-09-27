@@ -8,14 +8,17 @@ import {
   toVaultPath,
   type Unsubscribe,
 } from "@ddl/core";
-import { toStorableText } from "./file-types";
+import { binaryDigest, binaryReadLimit, checkBinarySize, decodeText } from "./binary";
+import { isBinaryPath, toStorableText } from "./file-types";
 import { IgnoreRules } from "./ignore-rules";
 import {
+  type BinaryFileContent,
   ConflictError,
   type FileContent,
   type FileEntry,
   type ListOptions,
   NotFoundError,
+  type ReadBinaryOptions,
   type StorageCapabilities,
   StorageError,
   type StorageEvent,
@@ -26,6 +29,7 @@ import {
 
 interface MemoryFile {
   content: string;
+  bytes?: Uint8Array;
   mtime: number;
   version: string;
 }
@@ -98,7 +102,41 @@ export class MemoryStorageProvider implements StorageProvider {
   async read(path: string): Promise<FileContent | null> {
     const p = toVaultPath(path);
     const file = this.files.get(p);
-    return file ? { ...this.entry(p, file), content: file.content } : null;
+    return file
+      ? { ...this.entry(p, file), content: file.bytes ? decodeText(p, file.bytes) : file.content }
+      : null;
+  }
+
+  async readBinary(
+    path: string,
+    options: ReadBinaryOptions = {},
+  ): Promise<BinaryFileContent | null> {
+    const p = toVaultPath(path);
+    const file = this.files.get(p);
+    if (!file) return null;
+    const bytes = file.bytes ?? new TextEncoder().encode(file.content);
+    checkBinarySize(p, bytes, binaryReadLimit(options));
+    return { ...this.entry(p, file), bytes: bytes.slice() };
+  }
+
+  async writeBinary(
+    path: string,
+    input: Uint8Array,
+    options: WriteOptions = {},
+  ): Promise<WriteResult> {
+    const p = toVaultPath(path);
+    checkBinarySize(p, input);
+    const bytes = input.slice();
+    const version = await binaryDigest(bytes);
+    if (this.folders.has(p)) throw new StorageError(`Not a file: "${p}"`, p);
+    const existing = this.files.get(p);
+    this.checkPrecondition(p, existing, options);
+    this.assertCanHoldFile(p);
+    const file: MemoryFile = { content: "", bytes, version, mtime: this.clock() };
+    this.files.set(p, file);
+    for (const folder of ancestorFolders(p)) this.folders.add(folder);
+    this.emit({ kind: existing ? "modified" : "created", path: p, version, self: true });
+    return { ...this.entry(p, file), created: !existing };
   }
 
   async write(path: string, content: string, options: WriteOptions = {}): Promise<WriteResult> {
@@ -119,7 +157,10 @@ export class MemoryStorageProvider implements StorageProvider {
     const existing = this.files.get(p);
     this.checkPrecondition(p, existing, options);
     this.assertCanHoldFile(p);
-    const file = this.store(p, contentFrom(existing?.content));
+    const file = this.store(
+      p,
+      contentFrom(existing?.bytes ? decodeText(p, existing.bytes) : existing?.content),
+    );
     this.emit({
       kind: existing ? "modified" : "created",
       path: p,
@@ -130,7 +171,7 @@ export class MemoryStorageProvider implements StorageProvider {
       path: p,
       version: file.version,
       mtime: file.mtime,
-      size: byteLength(file.content),
+      size: file.bytes?.byteLength ?? byteLength(file.content),
       created: !existing,
     };
   }
@@ -164,7 +205,7 @@ export class MemoryStorageProvider implements StorageProvider {
       path: dst,
       version: file.version,
       mtime: file.mtime,
-      size: byteLength(file.content),
+      size: file.bytes?.byteLength ?? byteLength(file.content),
       created: true,
     };
   }
@@ -257,7 +298,13 @@ export class MemoryStorageProvider implements StorageProvider {
   }
 
   private entry(path: string, file: MemoryFile): FileEntry {
-    return { path, size: byteLength(file.content), mtime: file.mtime, version: file.version };
+    return {
+      path,
+      size: file.bytes?.byteLength ?? byteLength(file.content),
+      mtime: file.mtime,
+      version: file.version,
+      ...(file.bytes || isBinaryPath(path) ? { binary: true as const } : {}),
+    };
   }
 
   private emit(event: StorageEvent): void {

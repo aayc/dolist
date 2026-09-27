@@ -95,14 +95,7 @@ export class PersistedFile<T> {
 
   /** Reads and classifies the file. Storage errors propagate; the state stays "unknown". */
   load(): Promise<PersistedLoadResult<T>> {
-    return this.serialized(async () => {
-      const file = await this.storage.read(this.path);
-      if (!file) {
-        this.known = null;
-        return { status: "missing" } as const;
-      }
-      return this.accept(file);
-    });
+    return this.serialized(() => this.readAndAccept());
   }
 
   /**
@@ -115,12 +108,8 @@ export class PersistedFile<T> {
       for (let attempt = 0; attempt < MAX_SAVE_ATTEMPTS; attempt++) {
         if (this.blockedReason !== null) return "blocked";
         if (this.known === undefined) {
-          const file = await this.storage.read(this.path);
-          if (!file) this.known = null;
-          else {
-            const result = await this.accept(file);
-            if (result.status === "loaded") onExternal?.(result.value);
-          }
+          const result = await this.readAndAccept();
+          if (result.status === "loaded") onExternal?.(result.value);
           continue;
         }
         if (this.evidence && !(await this.preserveEvidence(this.evidence))) return "blocked";
@@ -140,6 +129,26 @@ export class PersistedFile<T> {
   /** Moves the file aside although it decoded (e.g. it belongs to another owner). */
   quarantine(reason: string): Promise<string | null> {
     return this.serialized(() => this.moveAside(reason));
+  }
+
+  private async readAndAccept(): Promise<PersistedLoadResult<T>> {
+    let file: { content: string; version: string } | null;
+    try {
+      file = await this.storage.read(this.path);
+    } catch (error) {
+      // Invalid encoding is corrupt content, not a transient I/O failure. Rename preserves
+      // the original bytes before any replacement, including errors discovered at save.
+      if (!hasName(error, "InvalidTextFileError")) throw error;
+      const reason = "is not valid UTF-8 text";
+      this.evidence = null;
+      const movedTo = await this.moveAside(reason);
+      return { status: "quarantined", reason, movedTo };
+    }
+    if (!file) {
+      this.known = null;
+      return { status: "missing" };
+    }
+    return this.accept(file);
   }
 
   private async accept(file: {

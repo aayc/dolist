@@ -115,6 +115,7 @@ export function buildRoutesDocument(): JsonObject {
       summary: operation.summary,
       ...(operation.query ? { query: ref(operation.query) } : {}),
       ...(operation.body ? { body: ref(operation.body) } : {}),
+      ...(operation.binaryBody ? { binaryBody: operation.binaryBody } : {}),
       responses: Object.fromEntries(
         Object.entries(operation.responses).map(([status, response]) => [
           status,

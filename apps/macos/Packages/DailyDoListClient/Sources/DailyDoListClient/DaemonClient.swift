@@ -14,6 +14,10 @@ public protocol DaemonClient: AnyObject, Sendable {
   func health() async throws -> HealthResponse
   func tree() async throws -> VaultTreeResponse
   func readNote(_ path: String) async throws -> NoteResponse
+  func readFile(_ path: String) async throws -> VaultFilePayload
+  func writeFile(_ path: String, data: Data, baseVersion: BaseVersion) async throws
+    -> VaultFileMetadata
+  func deleteFile(_ path: String) async throws -> TrashResponse
   /// Throws `.conflict` when `baseVersion` no longer matches.
   func writeNote(_ path: String, content: String, baseVersion: BaseVersion) async throws
     -> WriteNoteResponse
@@ -48,6 +52,7 @@ public protocol DaemonClient: AnyObject, Sendable {
   func decideApproval(_ id: String, _ decision: ApprovalDecisionRequest) async throws
     -> ApprovalRequest
   func artifact(threadId: String, artifactId: String) async throws -> ArtifactPayload
+  func artifact(threadId: String, artifactId: String, maxBytes: Int) async throws -> ArtifactPayload
 
   // Routines
   /// Every routine (sorted by name) and the starter templates of "New Routine…".

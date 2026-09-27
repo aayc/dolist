@@ -11,7 +11,7 @@ import { describeStorageContract } from "./contract-suite";
 import { RemoteStorageProvider, reconnectDelay, type WebSocketWithHeaders } from "./remote";
 import { SyncRequestError } from "./remote-client";
 import { startTestSyncServer, type TestSyncServer } from "./testing/sync-server";
-import { StaleLeaseError, StorageError, type StorageEvent } from "./types";
+import { FileTooLargeError, StaleLeaseError, StorageError, type StorageEvent } from "./types";
 
 describeStorageContract("RemoteStorageProvider", async () => {
   const sync = await startTestSyncServer();
@@ -300,6 +300,38 @@ describe("RemoteStorageProvider", () => {
     } finally {
       await limited.close();
     }
+  });
+
+  it("caps dishonest binary streams and rejects altered bytes before exposing them", async () => {
+    let cancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(7));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const provider = sync.provider("dev_a", {
+      fetch: async () => new Response(stream, { headers: { "Content-Length": "1" } }),
+    });
+    await expect(provider.readBinary("Assets/example.bin", { maxBytes: 6 })).rejects.toBeInstanceOf(
+      FileTooLargeError,
+    );
+    expect(cancelled).toBe(true);
+    const altered = sync.provider("dev_b", {
+      fetch: async () =>
+        new Response(new Uint8Array([0, 255]), {
+          headers: {
+            "x-ddl-file-rev": "r_1",
+            "x-ddl-file-mtime": "1",
+            "x-ddl-file-hash": "0".repeat(64),
+          },
+        }),
+    });
+    await expect(altered.readBinary("Assets/example.bin")).rejects.toThrow(
+      "invalid attachment metadata or bytes",
+    );
   });
 
   it("refuses to talk to anything but http(s)", () => {

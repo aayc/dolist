@@ -376,3 +376,17 @@ should fetch threads, approvals and task records again.
 
 Tests are colocated (`*.test.ts`). They use in-memory vaults and temp directories and never touch the
 real home directory or the network.
+
+## Vault attachment API
+
+`GET /api/files/<path>` returns authenticated original bytes with `X-DDL-File-Path` (URI encoded),
+`X-DDL-File-Version`, `X-DDL-File-Mtime`, Content-Length, and an ETag. Reads and uploads are limited
+to 5 MiB. `PUT` sends `application/octet-stream` with exactly one query precondition: `ifAbsent=1`
+for creation or `ifMatch=<version>` for replacement. PUT and DELETE require the verified
+`X-DDL-Workspace-Id` header; DELETE moves the file into `.trash/`. Text note writes continue to use
+the notes API. Paths must remain visible, vault-relative paths and obey the existing symlink boundary.
+
+Raster MIME types are detected from bytes before inline display is allowed. Other formats,
+including SVG, HTML and PDF, download with sandbox/CSP/nosniff headers. Tokens are sent in
+authentication headers and never embedded in attachment links. The complete response and error
+contract is generated in [PROTOCOL.md](../../docs/PROTOCOL.md).

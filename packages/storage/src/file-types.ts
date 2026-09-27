@@ -1,8 +1,8 @@
 import { extname, SIDECAR_DIR } from "@ddl/core";
 
 /**
- * Extensions of files that can't round-trip through the text-only StorageProvider API. Local-fs
- * versions them by stat instead of content, and the sync engine leaves them alone.
+ * Extensions whose original bytes must bypass text decoding and merging. Local-fs versions
+ * them by stat instead of content; sync uses the bounded binary provider API.
  */
 const BINARY_EXTENSIONS: ReadonlySet<string> = new Set([
   // images

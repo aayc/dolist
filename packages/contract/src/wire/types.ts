@@ -62,6 +62,7 @@ export type UpdateSettingsRequest = WireType<"UpdateSettingsRequest">;
 export type AgentMode = WireType<"AgentMode">;
 export type HealthResponse = WireType<"HealthResponse">;
 export type VaultEntry = WireType<"VaultEntry">;
+export type VaultFileMetadata = WireType<"VaultFileMetadata">;
 export type VaultTreeResponse = WireType<"VaultTreeResponse">;
 export type NoteResponse = WireType<"NoteResponse">;
 export type WriteNoteRequest = WireType<"WriteNoteRequest">;

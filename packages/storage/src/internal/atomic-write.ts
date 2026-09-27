@@ -1,7 +1,9 @@
 import { constants, type Stats } from "node:fs";
 import { type FileHandle, open, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { decodeText } from "../binary";
 import { createTempFileName } from "../ignore-rules";
+import { FileTooLargeError } from "../types";
 import { errorCode, isMissingError } from "./fs-errors";
 
 /**
@@ -12,7 +14,7 @@ import { errorCode, isMissingError } from "./fs-errors";
  */
 export async function writeFileAtomic(
   target: string,
-  content: string,
+  content: string | Uint8Array,
   mode?: number,
 ): Promise<Stats> {
   const temp = join(dirname(target), createTempFileName());
@@ -70,7 +72,37 @@ export async function readTextFile(path: string): Promise<LoadedTextFile | null>
   try {
     const stats = await handle.stat();
     if (!stats.isFile()) return null;
-    return { content: await handle.readFile("utf8"), stats };
+    return { content: decodeText(path, await handle.readFile()), stats };
+  } finally {
+    await handle.close();
+  }
+}
+
+/** A bounded read of one open regular file, including a concurrent in-place writer's growth. */
+export async function readBinaryFile(
+  path: string,
+  maxBytes: number,
+): Promise<{ bytes: Uint8Array; stats: Stats } | null> {
+  let handle: FileHandle;
+  try {
+    handle = await open(path, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0));
+  } catch (error) {
+    if (isMissingError(error) || errorCode(error) === "EISDIR") return null;
+    throw error;
+  }
+  try {
+    const stats = await handle.stat();
+    if (!stats.isFile()) return null;
+    if (stats.size > maxBytes) throw new FileTooLargeError(path, maxBytes);
+    const bytes = new Uint8Array(maxBytes + 1);
+    let offset = 0;
+    while (offset < bytes.length) {
+      const read = await handle.read(bytes, offset, bytes.length - offset, null);
+      if (read.bytesRead === 0) break;
+      offset += read.bytesRead;
+    }
+    if (offset > maxBytes) throw new FileTooLargeError(path, maxBytes);
+    return { bytes: bytes.slice(0, offset), stats };
   } finally {
     await handle.close();
   }

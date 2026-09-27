@@ -10,9 +10,15 @@ import {
   silentLogger,
   type Unsubscribe,
 } from "@ddl/core";
+import { binaryReadLimit, checkBinarySize, decodeText } from "./binary";
 import { isBinaryPath, isJournalPath, toStorableText } from "./file-types";
 import { IgnoreRules } from "./ignore-rules";
-import { appendFileDurably, readTextFile, writeFileAtomic } from "./internal/atomic-write";
+import {
+  appendFileDurably,
+  readBinaryFile,
+  readTextFile,
+  writeFileAtomic,
+} from "./internal/atomic-write";
 import { ChangeTracker, type ChangeTrackerHost, type PathProbe } from "./internal/change-tracker";
 import { errorCode, errorMessage, isAccessError, isMissingError } from "./internal/fs-errors";
 import { KeyedMutex } from "./internal/keyed-mutex";
@@ -20,11 +26,14 @@ import { createLimiter } from "./internal/limiter";
 import { RecursiveWatcher } from "./internal/recursive-watcher";
 import { contentVersion } from "./memory";
 import {
+  type BinaryFileContent,
   ConflictError,
   type FileContent,
   type FileEntry,
+  InvalidTextFileError,
   type ListOptions,
   NotFoundError,
+  type ReadBinaryOptions,
   type StorageCapabilities,
   StorageError,
   type StorageEvent,
@@ -54,6 +63,7 @@ const MAX_CONTENT_HASH_BYTES = 16 * 1024 * 1024;
 const READ_CONCURRENCY = 16;
 
 interface CachedVersion {
+  binary?: true;
   mtimeMs: number;
   size: number;
   version: string;
@@ -209,9 +219,47 @@ export class LocalFsStorageProvider implements StorageProvider {
     };
   }
 
-  async write(path: string, content: string, options: WriteOptions = {}): Promise<WriteResult> {
+  async readBinary(
+    path: string,
+    options: ReadBinaryOptions = {},
+  ): Promise<BinaryFileContent | null> {
     const requested = toVaultPath(path);
-    const text = toStorableText(content);
+    const root = await this.rootPath();
+    const { real } = await this.locate(root, requested);
+    if (!real) return null;
+    const p = onDiskSpelling(root, requested, real);
+    const loaded = await this.readLimit(() => readBinaryFile(real, binaryReadLimit(options)));
+    if (!loaded) return null;
+    const version = this.rememberBinary(p, loaded.stats, loaded.bytes);
+    return {
+      path: p,
+      size: loaded.bytes.byteLength,
+      mtime: toEpochMs(loaded.stats),
+      version,
+      ...(this.versions.get(p)?.binary ? { binary: true as const } : {}),
+      bytes: loaded.bytes,
+    };
+  }
+
+  async write(path: string, content: string, options: WriteOptions = {}): Promise<WriteResult> {
+    return this.writeContent(path, toStorableText(content), options);
+  }
+
+  async writeBinary(
+    path: string,
+    bytes: Uint8Array,
+    options: WriteOptions = {},
+  ): Promise<WriteResult> {
+    checkBinarySize(path, bytes);
+    return this.writeContent(path, bytes.slice(), options);
+  }
+
+  private async writeContent(
+    path: string,
+    text: string | Uint8Array,
+    options: WriteOptions,
+  ): Promise<WriteResult> {
+    const requested = toVaultPath(path);
     const root = await this.rootPath();
     return this.locks.run(lockKey(requested), async () => {
       const { abs, real } = await this.locate(root, requested);
@@ -233,7 +281,10 @@ export class LocalFsStorageProvider implements StorageProvider {
       ).catch((error: unknown) => Promise.reject(asInvalidIfTooLong(p, error)));
       // A new file may have landed in an existing folder spelled differently (`notes/` → `Notes/`).
       const written = before ? p : await spelledOnDisk(root, requested, abs);
-      const version = this.remember(written, stats, text);
+      const version =
+        typeof text === "string"
+          ? this.remember(written, stats, text)
+          : this.rememberBinary(written, stats, text, true);
       this.tracking?.tracker.recordSelf(written, version);
       this.emit({ kind: before ? "modified" : "created", path: written, version, self: true });
       return {
@@ -355,6 +406,7 @@ export class LocalFsStorageProvider implements StorageProvider {
           mtimeMs: resolved.stats.mtimeMs,
           size: resolved.stats.size,
           version: resolved.version,
+          ...(resolved.binary ? { binary: true as const } : {}),
         });
       }
       this.tracking?.tracker.recordSelf(renamed, resolved.version);
@@ -362,6 +414,7 @@ export class LocalFsStorageProvider implements StorageProvider {
       return {
         path: renamed,
         version: resolved.version,
+        ...(resolved.binary ? { binary: true as const } : {}),
         mtime: toEpochMs(resolved.stats),
         size: resolved.stats.size,
         created: true,
@@ -413,7 +466,13 @@ export class LocalFsStorageProvider implements StorageProvider {
     this.listeners.clear();
     await this.stopTracking();
     if (!this.versionCache) return;
-    const entries = [...this.versions].map(([p, v]) => [p, v.mtimeMs, v.size, v.version]);
+    const entries = [...this.versions].map(([p, v]) => [
+      p,
+      v.mtimeMs,
+      v.size,
+      v.version,
+      v.binary ?? false,
+    ]);
     try {
       await mkdir(dirname(this.versionCache), { recursive: true });
       await writeFileAtomic(this.versionCache, JSON.stringify({ root: this.root, entries }));
@@ -457,10 +516,15 @@ export class LocalFsStorageProvider implements StorageProvider {
     }
     if (saved?.root !== this.root || !Array.isArray(saved.entries)) return;
     for (const entry of saved.entries) {
-      const [p, mtimeMs, size, version] = Array.isArray(entry) ? entry : [];
+      const [p, mtimeMs, size, version, binary] = Array.isArray(entry) ? entry : [];
       if (typeof p !== "string" || typeof mtimeMs !== "number") continue;
       if (typeof size === "number" && typeof version === "string") {
-        this.versions.set(p, { mtimeMs, size, version });
+        this.versions.set(p, {
+          mtimeMs,
+          size,
+          version,
+          ...(binary === true || isBinaryPath(p) ? { binary: true as const } : {}),
+        });
       }
     }
   }
@@ -603,6 +667,7 @@ export class LocalFsStorageProvider implements StorageProvider {
       size: resolved.stats.size,
       mtime: toEpochMs(resolved.stats),
       version: resolved.version,
+      ...(resolved.binary ? { binary: true as const } : {}),
     };
   }
 
@@ -611,15 +676,29 @@ export class LocalFsStorageProvider implements StorageProvider {
     p: string,
     abs: string,
     stats: Stats,
-  ): Promise<{ version: string; stats: Stats } | null> {
+  ): Promise<{ version: string; stats: Stats; binary?: true } | null> {
     const cached = this.versions.get(p);
     if (cached && cached.mtimeMs === stats.mtimeMs && cached.size === stats.size) {
-      return { version: cached.version, stats };
+      return {
+        version: cached.version,
+        stats,
+        ...(cached.binary ? { binary: true as const } : {}),
+      };
     }
-    if (usesStatVersion(p, stats.size)) return { version: this.rememberStat(p, stats), stats };
-    const loaded = await this.readLimit(() => readTextFile(abs));
-    if (!loaded) return null;
-    return { version: this.remember(p, loaded.stats, loaded.content), stats: loaded.stats };
+    if (usesStatVersion(p, stats.size))
+      return {
+        version: this.rememberStat(p, stats),
+        stats,
+        ...(isBinaryPath(p) ? { binary: true as const } : {}),
+      };
+    try {
+      const loaded = await this.readLimit(() => readTextFile(abs));
+      if (!loaded) return null;
+      return { version: this.remember(p, loaded.stats, loaded.content), stats: loaded.stats };
+    } catch (error) {
+      if (!(error instanceof InvalidTextFileError)) throw error;
+      return { version: this.rememberStat(p, stats, true), stats, binary: true };
+    }
   }
 
   /** Version straight from disk, bypassing the memo (for preconditions and change detection). */
@@ -627,20 +706,48 @@ export class LocalFsStorageProvider implements StorageProvider {
     const stats = await statOrNull(real);
     if (!stats?.isFile()) return null;
     if (usesStatVersion(p, stats.size)) return this.rememberStat(p, stats);
-    const loaded = await this.readLimit(() => readTextFile(real));
-    return loaded ? this.remember(p, loaded.stats, loaded.content) : null;
+    try {
+      const loaded = await this.readLimit(() => readTextFile(real));
+      return loaded ? this.remember(p, loaded.stats, loaded.content) : null;
+    } catch (error) {
+      if (!(error instanceof InvalidTextFileError)) throw error;
+      return this.rememberStat(p, stats, true);
+    }
   }
 
   private remember(p: string, stats: Stats, content: string): string {
     if (usesStatVersion(p, stats.size)) return this.rememberStat(p, stats);
     const version = contentVersion(content);
-    this.versions.set(p, { mtimeMs: stats.mtimeMs, size: stats.size, version });
+    const cached = this.versions.get(p);
+    const binary = cached?.binary && cached.mtimeMs === stats.mtimeMs && cached.size === stats.size;
+    this.versions.set(p, {
+      mtimeMs: stats.mtimeMs,
+      size: stats.size,
+      version,
+      ...(binary ? { binary: true as const } : {}),
+    });
     return version;
   }
 
-  private rememberStat(p: string, stats: Stats): string {
+  private rememberBinary(p: string, stats: Stats, bytes: Uint8Array, forceBinary = false): string {
+    try {
+      const version = this.remember(p, stats, decodeText(p, bytes));
+      if (forceBinary) this.versions.get(p)!.binary = true;
+      return version;
+    } catch (error) {
+      if (!(error instanceof InvalidTextFileError)) throw error;
+      return this.rememberStat(p, stats, true);
+    }
+  }
+
+  private rememberStat(p: string, stats: Stats, binary = isBinaryPath(p)): string {
     const version = hashString(`stat:${stats.size}:${stats.mtimeMs}`);
-    this.versions.set(p, { mtimeMs: stats.mtimeMs, size: stats.size, version });
+    this.versions.set(p, {
+      mtimeMs: stats.mtimeMs,
+      size: stats.size,
+      version,
+      ...(binary ? { binary: true as const } : {}),
+    });
     return version;
   }
 

@@ -389,7 +389,7 @@ export function makeApproval(
 export interface TestRequestInit {
   method?: string;
   json?: unknown;
-  body?: string;
+  body?: string | Uint8Array<ArrayBuffer>;
   headers?: Record<string, string>;
   /** `null` sends no Authorization header. */
   token?: string | null;

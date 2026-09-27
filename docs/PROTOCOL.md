@@ -156,6 +156,9 @@ API version: **1**. Machine-readable: `packages/contract/schema/wire.schema.json
 | --- | --- | --- | --- | --- | --- |
 | `health` | GET | `/api/health` | `bearer` | — | 200 [`HealthResponse`](#healthresponse) |
 | `tree` | GET | `/api/vault/tree` | `bearer` | — | 200 [`VaultTreeResponse`](#vaulttreeresponse) |
+| `file` | GET | `/api/files/*` | `bearer` | — | 200 bytes |
+| `file` | PUT | `/api/files/*` | `bearer` | Raw bytes (≤ 5242880) | 200 [`VaultFileMetadata`](#vaultfilemetadata), 201 [`VaultFileMetadata`](#vaultfilemetadata) |
+| `file` | DELETE | `/api/files/*` | `bearer` | — | 200 [`TrashResponse`](#trashresponse) |
 | `note` | GET | `/api/notes/*` | `bearer` | — | 200 [`NoteResponse`](#noteresponse) |
 | `note` | PUT | `/api/notes/*` | `bearer` | [`WriteNoteRequest`](#writenoterequest) | 200 [`WriteNoteResponse`](#writenoteresponse), 201 [`WriteNoteResponse`](#writenoteresponse) |
 | `note` | DELETE | `/api/notes/*` | `bearer` | — | 200 [`TrashResponse`](#trashresponse) |
@@ -234,6 +237,38 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
 
 - Responses:
   - `200` [`VaultTreeResponse`](#vaulttreeresponse) — The vault tree.
+
+#### `file` — `/api/files/*`
+
+- Path parameter `path`: string (1–1024 chars)
+
+**GET** — Bounded vault attachment bytes; raster signatures inline, active/unknown content as attachment. Metadata headers: X-DDL-File-Path (URI encoded), X-DDL-File-Version, X-DDL-File-Mtime, Content-Length, Content-Type, ETag. No bearer URLs.
+
+- Responses:
+  - `200` bytes — At most 5 MiB, nosniff and sandboxed. Only detected PNG/JPEG/GIF/WebP are inline.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_path` — Malformed, hidden or escaping path.
+  - `404` [`ApiErrorBody`](#apierrorbody) `not_found` — No file at this path.
+  - `413` [`ApiErrorBody`](#apierrorbody) `payload_too_large` — File exceeds the 5 MiB read limit.
+
+**PUT** — Upload exact bytes to a visible attachment path. Requires X-DDL-Workspace-Id and either ifAbsent=1 or ifMatch=<version>; no unconditional overwrite. Text-note extensions use the notes API.
+
+- Query `ifAbsent`
+- Query `ifMatch`
+- Body: raw `application/octet-stream`, at most 5242880 bytes.
+- Responses:
+  - `200` [`VaultFileMetadata`](#vaultfilemetadata) — The replaced attachment.
+  - `201` [`VaultFileMetadata`](#vaultfilemetadata) — The newly created attachment.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_request`, `invalid_path` — A required guard, conditional version or path is invalid.
+  - `409` [`ApiErrorBody`](#apierrorbody) `conflict` — The attachment changed or the destination exists.
+  - `413` [`ApiErrorBody`](#apierrorbody) `payload_too_large` — Upload exceeds 5 MiB.
+  - `415` [`ApiErrorBody`](#apierrorbody) `unsupported_media_type` — Expected application/octet-stream.
+
+**DELETE** — Move an attachment into .trash; requires the verified workspace header. Text-note extensions use the notes API.
+
+- Responses:
+  - `200` [`TrashResponse`](#trashresponse) — The attachment's trash path.
+  - `400` [`ApiErrorBody`](#apierrorbody) `invalid_request`, `invalid_path` — Missing workspace guard or invalid attachment path.
+  - `404` [`ApiErrorBody`](#apierrorbody) `not_found` — No attachment at this path.
 
 #### `note` — `/api/notes/*`
 
@@ -812,6 +847,7 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
 | `operation_conflict` | The operation ID was already used with a different payload. |
 | `operation_indeterminate` | The command may have been dispatched; it will not be dispatched again automatically. |
 | `payload_too_large` | Request body over 5 MB. |
+| `unsupported_media_type` | Use the appropriate binary or UTF-8 API and declared request type. |
 | `upgrade_required` | `/ws` requested without a WebSocket upgrade. |
 | `rate_limited` | Too many pairing attempts, or too many pairing codes outstanding; try later. |
 | `http_error` | Raised by the HTTP framework itself. |
@@ -1652,6 +1688,20 @@ Body of `POST /api/machine/pair`: pair this device with the always-on machine.
 
 _Strict: unknown keys are rejected._
 
+#### VaultFileMetadata
+
+Versioned attachment metadata; MIME is detected from bytes, never trusted from an upload.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `path` | string (1–4096 chars) | yes | Canonical vault-relative path (no leading `/`, `.`/`..` or empty segments). |
+| `version` | string (1–256 chars) | yes | Opaque content version. |
+| `mtime` | integer (≥ 0) | yes | Epoch milliseconds. |
+| `size` | integer (0–5242880) | yes |  |
+| `mimeType` | string (`^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$`) | yes |  |
+
+_Tolerant: clients must ignore keys they don't know._
+
 #### AgentMode
 
 `live` (real model), `mock` (deterministic scripts) or `off`.
@@ -2163,7 +2213,7 @@ _Tolerant: clients must ignore keys they don't know._
 
 Machine-readable error code. Treat unknown codes like any failure with that HTTP status.
 
-Type: `"invalid_json"` | `"invalid_request"` | `"invalid_path"` | `"invalid_settings"` | `"unauthorized"` | `"pairing_rejected"` | `"forbidden_host"` | `"forbidden_origin"` | `"forbidden_device"` | `"not_found"` | `"conflict"` | `"locked_by_env"` | `"workspace_mismatch"` | `"host_mismatch"` | `"operation_conflict"` | `"operation_indeterminate"` | `"payload_too_large"` | `"upgrade_required"` | `"rate_limited"` | `"http_error"` | `"agent_error"` | `"internal_error"` | `"machine_unreachable"` | `"agent_unavailable"`
+Type: `"invalid_json"` | `"invalid_request"` | `"invalid_path"` | `"invalid_settings"` | `"unauthorized"` | `"pairing_rejected"` | `"forbidden_host"` | `"forbidden_origin"` | `"forbidden_device"` | `"not_found"` | `"conflict"` | `"locked_by_env"` | `"workspace_mismatch"` | `"host_mismatch"` | `"operation_conflict"` | `"operation_indeterminate"` | `"payload_too_large"` | `"unsupported_media_type"` | `"upgrade_required"` | `"rate_limited"` | `"http_error"` | `"agent_error"` | `"internal_error"` | `"machine_unreachable"` | `"agent_unavailable"`
 
 #### ApiErrorBody
 

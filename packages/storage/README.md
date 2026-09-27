@@ -1,7 +1,7 @@
 # @ddl/storage
 
 Vault storage behind the `StorageProvider` interface, a provider-agnostic two-way `SyncEngine`, and
-vault search. Everything is plain text files addressed by vault-relative POSIX paths
+vault search. Notes remain plain text; attachments remain original bytes, addressed by vault-relative POSIX paths
 (`Daily/2026-09-23.md`); see `src/types.ts` for the contract.
 
 ```ts
@@ -73,6 +73,19 @@ the server and the agent lease: [docs/SYNC.md](../../docs/SYNC.md).
   other one rescans its vault once (one walked listing). Watches opened elsewhere in the process go
   unnoticed.
 
+## Binary files
+
+Every provider implements `readBinary(path, { maxBytes? })` and `writeBinary(path, bytes, { ifMatch? })`.
+Reads return the original bytes and ordinary file metadata; writes use the same conditional-write
+semantics, atomic replacement and events as text. The default read limit and write limit are 5 MiB.
+A caller may explicitly raise its read limit up to 256 MiB, but daemon attachments and sync use the
+5 MiB bound. Oversized data throws `FileTooLargeError` before replacement. Text reads reject invalid
+UTF-8 instead of silently replacing bytes. Existing text version formats are unchanged.
+
+Remote binary transfers use the authenticated sync binary endpoint, verify its SHA-256 header,
+and cap streamed reads even when a server omits or lies about Content-Length. A sync server without
+`binary-files-v1` support cannot accept attachments; those paths stay pending with an error.
+
 ## Sync
 
 `SyncEngine` syncs a primary provider (the vault) with a target provider in both directions.
@@ -126,11 +139,16 @@ or an unsynced cloud folder) and that would delete synced files the other side s
 unchanged, the run fails with `SyncAbortedError` instead. Evicted iCloud Drive files
 (`.name.icloud` placeholders) are treated as unavailable, not as deletions.
 
-**Never synced:** `.daily-do-list/sync/**`, temp and editor backup files, ignored names, binary
-formats (the provider API is text-only), and any `exclude` prefixes you pass.
+**Binary conflicts.** Binary paths never pass through a text decoder or merge. The newest mtime
+wins, with a SHA-256 ordering tie-break. The losing bytes are first saved on both providers as
+`<name> (conflict <hash-prefix>).<ext>`; a pre-existing different file reserves that name and a
+numbered suffix is used. An interrupted copy leaves the original path untouched and resumes using
+the same saved bytes. Oversized attachments remain pending with an explicit error.
 
-**Limitations.** Binary attachments are not synced until the contract grows a bytes API. File
-names that differ only in case or Unicode normalization between two file systems are not
+**Never synced:** `.daily-do-list/sync/**`, temp and editor backup files, ignored names, and any
+`exclude` prefixes you pass.
+
+**Limitations.** File names that differ only in case or Unicode normalization between two file systems are not
 reconciled and stay pending. The target must not be inside the vault (or the reverse).
 
 ## Search

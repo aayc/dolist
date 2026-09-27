@@ -1,0 +1,13 @@
+[
+  {
+    "name": "missing version",
+    "value": {
+      "path": "Assets/example.png",
+      "mtime": 1790536000000,
+      "size": 8,
+      "mimeType": "image/png"
+    },
+    "path": ["version"],
+    "code": "invalid_type"
+  }
+]

@@ -51,6 +51,7 @@ export const API_PATHS = {
   health: "/api/health",
   tree: "/api/vault/tree",
   note: "/api/notes/*",
+  file: "/api/files/*",
   rename: "/api/notes-rename",
   folders: "/api/folders",
   daily: "/api/daily/:date",

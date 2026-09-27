@@ -22,6 +22,7 @@ import {
 } from "./imports";
 import {
   ClientIdSchema,
+  ContentVersionSchema,
   IsoDateSchema,
   RequestPathSchema,
   RuntimeIdSchema,
@@ -73,6 +74,7 @@ import {
   ThreadListResponseSchema,
   ThreadResponseSchema,
   TrashResponseSchema,
+  VaultFileMetadataSchema,
   VaultTreeResponseSchema,
   WriteNoteRequestSchema,
   WriteNoteResponseSchema,
@@ -135,6 +137,8 @@ export interface OperationSpec {
   query?: z.ZodObject;
   /** JSON request body (strict: unknown keys are rejected). */
   body?: z.ZodType;
+  /** An authenticated raw upload, never JSON/base64. */
+  binaryBody?: { maxBytes: number; contentType: string };
   responses: Readonly<Record<number, ResponseSpec>>;
 }
 
@@ -235,6 +239,58 @@ const ROUTES = {
       GET: {
         summary: "Every visible file and folder.",
         responses: { 200: json(VaultTreeResponseSchema, "The vault tree.") },
+      },
+    },
+  },
+  file: {
+    auth: "bearer",
+    params: z.object({ path: RequestPathSchema }),
+    methods: {
+      GET: {
+        summary:
+          "Bounded vault attachment bytes; raster signatures inline, active/unknown content as attachment. Metadata headers: X-DDL-File-Path (URI encoded), X-DDL-File-Version, X-DDL-File-Mtime, Content-Length, Content-Type, ETag. No bearer URLs.",
+        responses: {
+          200: {
+            kind: "binary",
+            description:
+              "At most 5 MiB, nosniff and sandboxed. Only detected PNG/JPEG/GIF/WebP are inline.",
+          },
+          400: error(["invalid_path"], "Malformed, hidden or escaping path."),
+          404: error(["not_found"], "No file at this path."),
+          413: error(["payload_too_large"], "File exceeds the 5 MiB read limit."),
+        },
+      },
+      PUT: {
+        summary:
+          "Upload exact bytes to a visible attachment path. Requires X-DDL-Workspace-Id and either ifAbsent=1 or ifMatch=<version>; no unconditional overwrite. Text-note extensions use the notes API.",
+        query: z.strictObject({
+          ifAbsent: z.literal("1").optional(),
+          ifMatch: ContentVersionSchema.optional(),
+        }),
+        binaryBody: { maxBytes: WIRE_LIMITS.bodyBytes, contentType: "application/octet-stream" },
+        responses: {
+          200: json(VaultFileMetadataSchema, "The replaced attachment."),
+          201: json(VaultFileMetadataSchema, "The newly created attachment."),
+          400: error(
+            ["invalid_request", "invalid_path"],
+            "A required guard, conditional version or path is invalid.",
+          ),
+          409: error(["conflict"], "The attachment changed or the destination exists."),
+          413: error(["payload_too_large"], "Upload exceeds 5 MiB."),
+          415: error(["unsupported_media_type"], "Expected application/octet-stream."),
+        },
+      },
+      DELETE: {
+        summary:
+          "Move an attachment into .trash; requires the verified workspace header. Text-note extensions use the notes API.",
+        responses: {
+          200: json(TrashResponseSchema, "The attachment's trash path."),
+          400: error(
+            ["invalid_request", "invalid_path"],
+            "Missing workspace guard or invalid attachment path.",
+          ),
+          404: error(["not_found"], "No attachment at this path."),
+        },
       },
     },
   },

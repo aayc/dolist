@@ -1,6 +1,6 @@
 /**
  * Storage Provider contract. A provider stores a flat namespace of vault-relative POSIX paths
- * (see `@ddl/core` paths) mapped to UTF-8 text files. Folders are implicit (derived from paths),
+ * (see `@ddl/core` paths) mapped to UTF-8 notes and original binary attachments. Folders are implicit (derived from paths),
  * except that providers may report empty folders via `listFolders`.
  *
  * Every write returns an opaque `version` (a content hash for local-fs). Passing
@@ -17,10 +17,21 @@ export interface FileEntry {
   /** Epoch ms. */
   mtime: number;
   version: string;
+  /** Bytes that must never pass through a UTF-8 text merge. */
+  binary?: true;
 }
 
 export interface FileContent extends FileEntry {
   content: string;
+}
+
+export interface BinaryFileContent extends FileEntry {
+  bytes: Uint8Array;
+}
+
+export interface ReadBinaryOptions {
+  /** Bounded allocation/read; defaults to the sync protocol's file-byte limit. */
+  maxBytes?: number;
 }
 
 export interface WriteOptions {
@@ -82,7 +93,9 @@ export interface StorageProvider {
   listFolders(options?: ListOptions): Promise<string[]>;
   stat(path: string): Promise<FileEntry | null>;
   read(path: string): Promise<FileContent | null>;
+  readBinary(path: string, options?: ReadBinaryOptions): Promise<BinaryFileContent | null>;
   write(path: string, content: string, options?: WriteOptions): Promise<WriteResult>;
+  writeBinary(path: string, bytes: Uint8Array, options?: WriteOptions): Promise<WriteResult>;
   /**
    * Adds `content` at the end of a file, creating it if missing, without rewriting what is there
    * (append-only journals). `ifMatch` as for `write`. Optional: callers fall back to read + write
@@ -124,6 +137,20 @@ export class NotFoundError extends StorageError {
   constructor(path: string) {
     super(`Not found: "${path}"`, path);
     this.name = "NotFoundError";
+  }
+}
+
+export class FileTooLargeError extends StorageError {
+  constructor(path: string, maxBytes: number) {
+    super(`File exceeds the ${maxBytes}-byte limit`, path);
+    this.name = "FileTooLargeError";
+  }
+}
+
+export class InvalidTextFileError extends StorageError {
+  constructor(path: string) {
+    super("This file is not valid UTF-8 text; use the binary API", path);
+    this.name = "InvalidTextFileError";
   }
 }
 

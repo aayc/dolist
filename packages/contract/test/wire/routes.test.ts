@@ -223,6 +223,9 @@ describe("operations", () => {
         "unauthorized": [
           401,
         ],
+        "unsupported_media_type": [
+          415,
+        ],
         "upgrade_required": [
           426,
         ],

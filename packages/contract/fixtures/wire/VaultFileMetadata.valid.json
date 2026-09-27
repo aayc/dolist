@@ -1,0 +1,12 @@
+[
+  {
+    "name": "synthetic attachment",
+    "value": {
+      "path": "Assets/example.png",
+      "version": "v-test",
+      "mtime": 1790536000000,
+      "size": 8,
+      "mimeType": "image/png"
+    }
+  }
+]

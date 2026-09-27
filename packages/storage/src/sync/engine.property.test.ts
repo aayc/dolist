@@ -1,6 +1,6 @@
 import { fc, test } from "@fast-check/vitest";
 import { describe, expect, it, vi } from "vitest";
-import { isBinaryPath, isMergeablePath } from "../file-types";
+import { isMergeablePath } from "../file-types";
 import { MemoryStorageProvider } from "../memory";
 import type { StorageProvider, SyncReport } from "../types";
 import { mergeText3 } from "./diff3";
@@ -253,6 +253,21 @@ describe("SyncEngine reacting to the target's change reports", () => {
       const primary = new MemoryStorageProvider({ id: "vault" });
       const target = new MemoryStorageProvider({ id: "mirror" });
       const engine = new SyncEngine({ primary, target, now: () => NOW });
+      // WebCrypto binary digests finish outside fake timers. Finish each quiet-period run
+      // before applying the next event batch; advancing time alone does not flush that I/O.
+      const waitForIdle = async () => {
+        if (engine.status().state === "syncing") {
+          await new Promise<void>((resolve) => {
+            const off = engine.onStatus((status) => {
+              if (status.state !== "syncing") {
+                off();
+                resolve();
+              }
+            });
+          });
+        }
+        await vi.advanceTimersByTimeAsync(0);
+      };
       let runs = 0;
       engine.onStatus((status) => {
         if (status.state === "syncing") runs++;
@@ -272,9 +287,7 @@ describe("SyncEngine reacting to the target's change reports", () => {
           if (report.self) await target.write(report.path, report.content);
           else target.simulateExternalChange(report.path, report.content);
           const syncable =
-            !report.path.startsWith(`${SYNC_STATE_DIR}/`) &&
-            !isBinaryPath(report.path) &&
-            !report.path.endsWith("~");
+            !report.path.startsWith(`${SYNC_STATE_DIR}/`) && !report.path.endsWith("~");
           pendingForeign ||= !report.self && syncable;
           if (report.burst) {
             // Short enough that even 12 reports in a row stay within one quiet period.
@@ -282,18 +295,18 @@ describe("SyncEngine reacting to the target's change reports", () => {
             continue;
           }
           await vi.advanceTimersByTimeAsync(TARGET_DEBOUNCE_MS * 2);
+          await waitForIdle();
           if (pendingForeign) expected++;
           pendingForeign = false;
           expect(runs).toBe(expected);
         }
         await vi.advanceTimersByTimeAsync(TARGET_DEBOUNCE_MS * 2);
+        await waitForIdle();
         if (pendingForeign) expected++;
         expect(runs).toBe(expected);
 
         await engine.syncOnce();
-        const synced = async (provider: StorageProvider) =>
-          [...(await snapshotOf(provider))].filter(([path]) => !isBinaryPath(path));
-        expect(await synced(primary)).toEqual(await synced(target));
+        expect(await snapshotOf(primary)).toEqual(await snapshotOf(target));
       } finally {
         await engine.stop();
         vi.useRealTimers();
