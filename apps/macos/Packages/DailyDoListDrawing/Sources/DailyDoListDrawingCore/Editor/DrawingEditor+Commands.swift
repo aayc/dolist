@@ -114,7 +114,7 @@ extension DrawingEditor {
 
   // MARK: Eraser
 
-  func erase(from start: DrawingPoint, to end: DrawingPoint) {
+  func erase(from start: DrawingPoint, to end: DrawingPoint, restoring: Bool = false) {
     let steps = max(1, Int(start.distance(to: end) * zoom / 4))
     let byId = elementsById
     var found = erasingIds
@@ -122,17 +122,25 @@ extension DrawingEditor {
       let t = Double(step) / Double(steps)
       let point = start + (end - start) * t
       for element in scene.elements.reversed() where !element.isDeleted && !element.locked {
-        guard !found.contains(element.id), HitTest.hits(element, point, threshold: threshold / 2)
+        guard HitTest.hits(element, point, threshold: threshold / 2)
         else { continue }
         let target = element.containerId.flatMap { byId[$0] } ?? element
-        found.insert(target.id)
-        if let label = target.boundTextId { found.insert(label) }
+        let affected = withDependents(expandToGroups([target.id])).filter {
+          self.element($0)?.locked != true
+        }
+        if restoring { found.subtract(affected) } else { found.formUnion(affected) }
       }
     }
     if found != erasingIds {
       erasingIds = found
       invalidate()
     }
+  }
+
+  /// A touch-accessible counterpart to holding Option while undoing a pending eraser sweep.
+  public func restorePendingErasure() {
+    erasingIds = []
+    invalidate()
   }
 
   // MARK: Keys

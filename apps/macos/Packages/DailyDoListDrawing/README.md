@@ -114,8 +114,7 @@ unless moved as part of a selection), unknown fields of elements, bindings, the 
 file: the frontmatter, the notice and any markdown above the data, `## Element Links`,
 `## Embedded Files`, unknown sections, and what follows the drawing.
 
-**Deferred**: extended SVG image features, obstacle-avoiding elbow rerouting, Mac arrangement controls,
-and the eraser's undo-while-dragging. Shared frame/point/grid commands are available on both platforms;
+**Deferred**: extended SVG image features, exact upstream elbow-route geometry fixtures and Mac arrangement controls. Shared frame/point/grid commands are available on both platforms;
 the expanded inspector is currently native iPhone UI.
 
 ## API for the editor integration
@@ -278,7 +277,8 @@ registers no implementation; its action manager returns null, so there is no exp
 - [x] Clipboard: vector SVG export (rough paths and text glyphs, local PNG bytes for image elements).
 - [x] Frames: create, rename, wrap selection, select children, remove children and visibility.
 - [x] Lines/arrows: insert/delete points, draggable midpoints, elbow creation/editing and straight/round/elbow controls.
-- [ ] Elbow routing: obstacle avoidance and Excalidraw fixed-segment routing parity (native routes remain orthogonal).
+- [x] Elbow routing around bound endpoint shapes, fixed-segment movement/release and fixed endpoint bindings.
+- [ ] Exact upstream elbow-route geometry for overlap and equal-cost route choices is not fixture-certified.
 - [x] Text: vertical alignment, bind/unbind/wrap text in container and automatic-width control.
 - [x] Precision: visible grid, snap construction/movement to grid, snap movement to object edges/centers.
 - [x] Precision: object snapping while constructing and resizing axis-aligned selections.
@@ -324,7 +324,7 @@ libraries to 1,000 items. Failed imports leave the drawing/library untouched.
 buttons are disabled. `library` defaults to `MobileDrawingLibrary.shared` (app preferences) and
 can be replaced with a store initialized using an isolated `UserDefaults` suite. Library access
 is explicit user interaction and never a remote request. The **Copy, library and links** action
-opens these controls. Integrated runtime checks and vector SVG export remain pending.
+opens these controls. Integrated runtime checks remain pending.
 
 The fifth checkpoint exposes text binding, vertical alignment and automatic width; canvas
 background/clear/search/statistics/help; view/zen modes; selection/reset zoom; all built-in font IDs
@@ -360,3 +360,20 @@ the scene, save state or history. Selecting a normal tool exits laser mode. URL 
 link action. They do not create a hidden browser or automatically fetch remote pages. This is the
 native card adapter for web embeds. Source-map inspection confirms `changeStrokeShape` has no
 registered action in pinned Excalidraw 0.18.1, so it is not an exposed control to reproduce.
+
+Elbows now use a bounded rectilinear visibility graph around their two bound endpoint shapes, matching
+the scope of the pinned web router. Midpoint drags move and fix an elbow segment; inspector commands
+fix, release, nudge or reroute it. Fixed coordinates survive endpoint moves and origin normalization,
+including unknown segment metadata. Native bindings record normalized `fixedPoint` values. The
+router preserves the previous orthogonal route when overlapping containers provide no valid path.
+It is deterministic, but exact upstream tie-breaking/overlap geometry is not covered by shared
+fixtures and remains explicitly uncertified. Geometry, binding, fixed-segment and gesture-undo tests
+cover the native behavior.
+
+Holding Option restores pending erasures; grouped shapes are erased/restored together. A native
+**Restore pending erasure** button clears the sweep before release. Held Shift/Option/Command/Control
+flags now reach pointer actions as well as discrete keyboard commands. Inspectors observe
+`committedRevision`, refreshing after edits and remote replacements without observing each pointer
+sample. Final shared regression: 126 tests before the final eraser addition; the focused final
+interaction/elbow pass covers 27 tests. The iOS target and UIKit tests compile unsigned. App-owned
+runtime checks and the remaining explicit compatibility limits above still apply.

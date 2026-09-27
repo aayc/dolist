@@ -433,4 +433,20 @@ struct EditorInteractionTests {
     #expect(editor.handleKey(.escape))
     #expect(editor.tool == .selection)
   }
+  @Test func optionEraserRestoresPendingGroupsWithoutChangingHistory() {
+    var a = TestScenes.element(.rectangle, id: "a", x: 0, y: 0, width: 40, height: 40)
+    var b = TestScenes.element(.rectangle, id: "b", x: 80, y: 0, width: 40, height: 40)
+    a.groupIds = ["group"]
+    b.groupIds = ["group"]
+    let editor = DrawingEditor(
+      scene: .init(elements: [a, b]), environment: DeterministicDrawingEnvironment())
+    editor.tool = .eraser
+    editor.pointerDown(at: DrawingPoint(0, 20))
+    #expect(editor.erasingIds == ["a", "b"])
+    editor.pointerDragged(to: DrawingPoint(0, 20), modifiers: .option)
+    #expect(editor.erasingIds.isEmpty)
+    editor.pointerUp(at: DrawingPoint(0, 20))
+    #expect(editor.scene.visibleElements.count == 2 && !editor.canUndo)
+  }
+
 }

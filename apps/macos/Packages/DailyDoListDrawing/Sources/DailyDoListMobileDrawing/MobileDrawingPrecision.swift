@@ -78,6 +78,31 @@
                   }
                   .accessibilityLabel("Move point right")
                 }.buttonStyle(.bordered)
+                if element.elbowed, index > 0 {
+                  let fixed =
+                    element.extraField("fixedSegments")?.arrayValue?.contains {
+                      $0.objectValue?["index"]?.numberValue == Double(index)
+                    } ?? false
+                  Button(fixed ? "Release preceding segment" : "Fix preceding segment") {
+                    editor.setElbowSegmentFixed(element.id, index: index, fixed: !fixed)
+                  }
+                  HStack {
+                    Button("Move segment left") {
+                      editor.moveElbowSegment(element.id, index: index, by: DrawingPoint(-1, 0))
+                    }
+                    Button("Move segment right") {
+                      editor.moveElbowSegment(element.id, index: index, by: DrawingPoint(1, 0))
+                    }
+                  }
+                  HStack {
+                    Button("Move segment up") {
+                      editor.moveElbowSegment(element.id, index: index, by: DrawingPoint(0, -1))
+                    }
+                    Button("Move segment down") {
+                      editor.moveElbowSegment(element.id, index: index, by: DrawingPoint(0, 1))
+                    }
+                  }
+                }
                 Button("Insert midpoint after point") {
                   editor.insertLinearPoint(element.id, after: index)
                 }
@@ -86,6 +111,9 @@
                   editor.deleteLinearPoint(element.id, index: index)
                 }
                 .disabled(element.points.count <= 2)
+              }
+              if element.elbowed {
+                Button("Reroute around bound shapes") { editor.rerouteElbow(element.id) }
               }
               Button("Finish editing points") { editor.endLinearEditing() }
             }

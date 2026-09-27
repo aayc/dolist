@@ -69,6 +69,8 @@ public final class DrawingEditor {
   }
   @ObservationIgnored private var readingCanvasPreferences = false
   public var framesVisible = true { didSet { invalidate() } }
+  /// Committed scene changes refresh inspectors without observing every pointer sample.
+  public private(set) var committedRevision = 0
   public internal(set) var canUndo = false
   public internal(set) var canRedo = false
   /// Screen pixels per scene unit, for hit tolerances (set by the view).
@@ -140,7 +142,8 @@ public final class DrawingEditor {
   }
 
   public var selectedElements: [ExcalidrawElement] {
-    scene.elements.filter { selectedIds.contains($0.id) && !$0.isDeleted }
+    _ = committedRevision
+    return scene.elements.filter { selectedIds.contains($0.id) && !$0.isDeleted }
   }
 
   func rebuildIndex() {
@@ -162,6 +165,7 @@ public final class DrawingEditor {
     selectedIds = selectedIds.filter { element($0).map { !$0.isDeleted } ?? false }
     committedSelection = selectedIds
     if !keepHistory { history.clear() }
+    committedRevision &+= 1
     updateHistoryFlags()
     invalidate()
   }
@@ -215,6 +219,7 @@ public final class DrawingEditor {
       entry?.appStateAfter = scene.appState
     }
     if let entry {
+      committedRevision &+= 1
       history.record(entry)
       committedElements = scene.elements
       committedAppState = scene.appState
@@ -252,6 +257,7 @@ public final class DrawingEditor {
   }
 
   private func afterHistoryStep(selection: Set<String>) {
+    committedRevision &+= 1
     readCanvasPreferences()
     editingLinearId = nil
     selectedPointIndex = nil

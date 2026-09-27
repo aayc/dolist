@@ -76,6 +76,7 @@ extension DrawingEditor {
         orthogonalize(&$0)
         normalizePoints(&$0)
       }
+      routeElbow(arrowId)
     }
     if let label = element(arrowId)?.boundTextId { positionArrowLabel(label) }
   }

@@ -132,6 +132,7 @@ extension DrawingEditor {
         bindEnd(id, end: .end, to: target)
       }
     }
+    if element(id)?.elbowed == true { routeElbow(id) }
     select([id])
     if !isToolLocked { tool = .selection }
     commit()

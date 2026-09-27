@@ -2,6 +2,32 @@
   import UIKit
 
   extension MobileDrawingCanvasView {
+    public override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      updateModifiers(event)
+      super.pressesBegan(presses, with: event)
+    }
+    public override func pressesChanged(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      updateModifiers(event)
+      super.pressesChanged(presses, with: event)
+    }
+    public override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      updateModifiers(event)
+      super.pressesEnded(presses, with: event)
+    }
+    public override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      hardwareModifiers = []
+      super.pressesCancelled(presses, with: event)
+    }
+    private func updateModifiers(_ event: UIPressesEvent?) {
+      let flags = event?.modifierFlags ?? []
+      var value: PointerModifiers = []
+      if flags.contains(.shift) { value.insert(.shift) }
+      if flags.contains(.alternate) { value.insert(.option) }
+      if flags.contains(.command) { value.insert(.command) }
+      if flags.contains(.control) { value.insert(.control) }
+      hardwareModifiers = value
+    }
+
     public override var keyCommands: [UIKeyCommand]? {
       guard mode == .editing, textEditor == nil else { return nil }
       let plain =
