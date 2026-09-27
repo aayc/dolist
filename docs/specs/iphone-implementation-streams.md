@@ -2,6 +2,7 @@
 
 The complete acceptance scope is `apps/mobile/PLAN.md`; the durable execution ledger is
 `apps/mobile/IMPLEMENTATION.md`. The user authorized parallel subagents on 2026-09-27.
+The user later explicitly excluded all iPhone Vim work; preserve Mac/web Vim only.
 Each stream uses an isolated branch, reports tests and remaining limitations, and never edits
 `PROGRESS.md`. The integrator owns manifests spanning streams, app composition, CI, computer-use
 and the final release checklist. No stream may operate the installed app or real vault.

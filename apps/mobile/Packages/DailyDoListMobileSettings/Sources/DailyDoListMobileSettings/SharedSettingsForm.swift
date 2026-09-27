@@ -126,17 +126,7 @@
           Toggle("Spellcheck", isOn: $draft.editor.spellcheck)
           Toggle("Show line numbers", isOn: $draft.editor.showLineNumbers)
         }
-        Section("Vim") {
-          Toggle("Vim mode", isOn: $draft.editor.vimMode)
-          TextEditor(text: $draft.editor.vimrc).font(.system(.body, design: .monospaced)).frame(
-            minHeight: 180
-          )
-          .accessibilityLabel("Vim startup commands").textInputAutocapitalization(.never)
-          .autocorrectionDisabled()
-          Text(
-            "One ex command per line. Lines beginning with a double quote are comments. Hardware-keyboard Vim support depends on the editor."
-          ).font(.footnote).foregroundStyle(.secondary)
-        }
+
       }
     }
 

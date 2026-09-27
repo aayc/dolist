@@ -1,35 +1,38 @@
 import DailyDoListAgentCore
 import DailyDoListClient
 import DailyDoListDomain
+import DailyDoListEditorCore
 import DailyDoListMobileKit
 import DailyDoListModels
+import DailyDoListWorkspaceCore
 import Foundation
 import Observation
 
 @MainActor @Observable
 final class PhoneWorkspace {
+  let tabs = TabsStore()
   let profile: ConnectionProfile
   let repository: WorkspaceRepository
   let cache: WorkspaceCache
   let composerDrafts: PhoneComposerDrafts
   let captureOutbox: CaptureOutbox
-  private(set) var settings: AppSettings?
-  private(set) var entries: [VaultEntry] = []
-  private(set) var active: NoteSession?
-  private(set) var agent: AgentStore?
-  private(set) var captures: [QueuedCapture] = []
-  private(set) var online = false
-  private(set) var refreshing = false
+  var settings: AppSettings?
+  var entries: [VaultEntry] = []
+  var active: NoteSession?
+  var agent: AgentStore?
+  var captures: [QueuedCapture] = []
+  var online = false
+  var refreshing = false
   var error: String?
   var selectedTab = 0
-  @ObservationIgnored private var sessions: [String: NoteSession] = [:]
-  @ObservationIgnored private var client: HTTPDaemonClient?
-  @ObservationIgnored private var remote: HTTPWorkspaceRemote?
-  @ObservationIgnored private var generation: UInt64 = 0
-  @ObservationIgnored private var navigation: UInt64 = 0
-  @ObservationIgnored private var synchronization: Task<Void, Never>?
-  @ObservationIgnored private var synchronizationID: UUID?
-  @ObservationIgnored private var synchronizeAgain = false
+  @ObservationIgnored var sessions: [String: NoteSession] = [:]
+  @ObservationIgnored var client: HTTPDaemonClient?
+  @ObservationIgnored var remote: HTTPWorkspaceRemote?
+  @ObservationIgnored var generation: UInt64 = 0
+  @ObservationIgnored var navigation: UInt64 = 0
+  @ObservationIgnored var synchronization: Task<Void, Never>?
+  @ObservationIgnored var synchronizationID: UUID?
+  @ObservationIgnored var synchronizeAgain = false
 
   init(
     profile: ConnectionProfile, repository: WorkspaceRepository, cache: WorkspaceCache,
@@ -70,6 +73,7 @@ final class PhoneWorkspace {
       let fetchedSettings = try await client.settings()
       guard epoch == generation, online else { return }
       self.settings = fetchedSettings
+      configureEditors()
       try await cache.storeSettings(fetchedSettings, replacing: settingsRevision)
       await refreshTree()
       guard epoch == generation, online else { return }
@@ -92,7 +96,7 @@ final class PhoneWorkspace {
     await composerDrafts.flush()
   }
 
-  private func invalidateAuthority() {
+  func invalidateAuthority() {
     generation &+= 1
     online = false
     client = nil
@@ -262,13 +266,13 @@ final class PhoneWorkspace {
     await task.value
   }
 
-  private func syncNotes(_ remote: HTTPWorkspaceRemote, epoch: UInt64) async throws {
+  func syncNotes(_ remote: HTTPWorkspaceRemote, epoch: UInt64) async throws {
     let changed = try await repository.synchronize(with: remote)
     guard epoch == generation else { return }
     for note in changed { await sessions[note.path]?.adopt(note) }
   }
 
-  private func refresh(_ path: String, remote: HTTPWorkspaceRemote) async {
+  func refresh(_ path: String, remote: HTTPWorkspaceRemote) async {
     let epoch = generation
     do {
       let existing = sessions[path]
@@ -311,7 +315,7 @@ final class PhoneWorkspace {
     } catch { self.error = error.localizedDescription }
   }
 
-  private func includeLocalNotes(_ notes: [LocalNote]) {
+  func includeLocalNotes(_ notes: [LocalNote]) {
     let known = Set(entries.map(\.path))
     entries += notes.filter { !known.contains($0.path) }.map {
       VaultEntry(path: $0.path, kind: .file, version: $0.baseVersion)
@@ -319,10 +323,12 @@ final class PhoneWorkspace {
     entries.sort { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
   }
 
-  private func show(_ note: LocalNote) {
+  func show(_ note: LocalNote) {
     let session = NoteSession(note: note, repository: repository)
     session.onCheckpoint = { [weak self] in Task { await self?.synchronize() } }
+    configureEditor(session)
     sessions[note.path] = session
     active = session
+    tabs.place(note.path)
   }
 }

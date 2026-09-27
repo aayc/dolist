@@ -2,6 +2,10 @@
 
 Status: **implementation authorized and in progress**. The user approved full development on
 2026-09-27, with a free Apple account and thorough automated and computer-use verification.
+**Scope update (2026-09-27): the user explicitly excluded Vim from the iPhone app.**
+Do not implement mobile Vim, its settings, vimrc, or Vim acceptance tests. Existing Mac/web Vim
+behavior and regression checks remain unchanged.
+
 Current work and evidence: `IMPLEMENTATION.md`. Audited 2026-09-27 starting at `dfdf74f`
 on `main`; independent Mac toolchain compatibility work reached `531d8d7` during the audit.
 This replaces the earlier mobile outline. Recheck the baseline when implementation starts,
@@ -18,13 +22,12 @@ harness, a sync-service lease, shell commands, or the Mac computer helper.
 
 - Native Swift, SwiftUI for the application, UIKit for text editing and the drawing canvas.
   No web app shell. A restricted WebKit view is appropriate for an HTML artifact only.
-- Reuse the Swift models, client, domain logic, Vim engine and drawing format. The daemon's
+- Reuse the Swift models, client, domain logic and drawing format. The daemon's
   REST/WebSocket protocol remains authoritative.
 - Start with a free Apple account and installation from Xcode. Paid distribution and APNs are a
   separate release capability, not an assumption hidden in the core app.
 - Siri and Shortcuts are in scope. iPad-specific layouts, widgets, a share extension and Live
-  Activities remain later extensions, as previously decided. Hardware-keyboard commands and Vim
-  **are** part of iPhone parity.
+  Activities remain later extensions, as previously decided. Hardware-keyboard commands remain part of iPhone parity. Vim is excluded by the user.
 - Preserve plain markdown, agent attribution, soft deletion, local calendar dates, the mandatory
   server-side safety gate, and the existing four approval policies.
 
@@ -120,7 +123,7 @@ Every row is required unless it explicitly says host-only or conditional.
 | Tasks | All existing checkbox statuses, touch toggle, keyboard commands, source round-trip | Task parser/status rules |
 | Living list | Task badges, prose anchors, agent-colored lines/sparkles, unread dots, orchestrator chips/header activity; open thread/turn | Badge/chip builders, agent state, presence |
 | Links/citations | Safe links; preview sheets from stored sources and cached notes; provenance preserved | `Thread.sources`, wikilinks, `LinkPolicy` |
-| Vim | Motions/operators/counts, modes, registers/macros, search/substitute, vimrc, app ex commands; hardware keyboard and touch Escape/command controls | Vim engine/oracle, UIKit host |
+| Vim | Excluded from iPhone by the user; no mobile mode or settings | Existing Mac/web behavior retained |
 | Drawing embeds | Display/insert/reposition/resize/placement/remove; source toggle | Drawing embed parser/edit rules |
 | Drawing editing | Native canvas/tools/properties, touch selection/multiselect, arrows, undo/redo, pan/pinch; close web parity gaps | Shared engine and UIKit canvas; section 7 |
 | Attachments | Authenticated image/PDF loading, cache/download, image sizing, safe preview, explicit Files/photo import | B0 binary API and embed layer |
@@ -133,7 +136,7 @@ Every row is required unless it explicitly says host-only or conditional.
 | Live views | Browser/Computer tabs when provided, zoomable frames/action history, staleness, visible-only subscription | Surface feed; viewing, not remote-control input |
 | Routines | Templates/create, schedule/instructions/notify/uses, file edit, pause/resume, Run Now, runs/budgets/errors, repeat task, notifications | Routine API/state; host scheduler |
 | Agent settings | Enable/pause, harness/models/judge, concurrency, settle/watch/act-on-existing, timeout, all policies | Entire `AppSettings.agent` |
-| Other settings | Editor/theme/vimrc, daily/weekly/templates, connectors/readiness, version/diagnostics | Settings schema and client |
+| Other settings | Editor/theme, daily/weekly/templates, connectors/readiness, version/diagnostics | Settings schema and client |
 | Host management | Named placement/readiness, machine pair/check/forget, sync, devices/code/revoke, remote hosts | Device/machine APIs with explicit host labels |
 | Connection | QR/manual pair, reconnect/re-pair, saved endpoint switching, downloads/cache controls | Keychain and connection coordinator |
 | Offline | Durable edits/creation/capture, cached drawings/threads/artifacts, chosen/full note download, local search and recovery | New repository/outbox |
@@ -147,7 +150,7 @@ Every row is required unless it explicitly says host-only or conditional.
   Today/Notes share a document repository so the same note cannot have competing drafts.
 - Date buttons/picker remain available; optional swipes must not conflict with text selection
   or back navigation. Notes uses a folder browser/search and an open-notes/quick-open sheet.
-  Multiple open notes and Vim tab commands do not require a desktop tab strip.
+  Multiple open notes do not require a desktop tab strip.
 - A badge opens a thread sheet, expandable to full screen, retaining editor state. Inbox opens
   the same thread. Returning must never reconstruct a dirty note from stale server text.
 - Routines have a visible Inbox entry and their own list/run history. Settings separates Phone,
@@ -375,12 +378,9 @@ precedence over chips, outcome timing matches, citations use stored sources, edi
 throttled (400 ms in the current reference). Suspension stops presence; background replay must
 not pretend the user is currently typing.
 
-For Vim, implement `VimEditor` over UIKit text/selection/layout/history. Share the engine, one app
-Vim instance, per-document sessions, registers/macros and vimrc. Add key-command/press and
-clipboard adapters; IME takes precedence. Keep touch insert mode usable, offer Escape/command
-entry, and route ex commands through the mobile command registry. Mac window/Finder commands
-report unavailable. Replay all existing vectors through the real mobile host with preview on/off;
-any exclusion needs a documented platform reason, not an arbitrary reduced sample.
+Vim is deliberately excluded from the iPhone app. Native editing, formatting, undo/redo and
+hardware-keyboard navigation remain in scope. Shared Mac/web Vim tests continue protecting
+existing clients, but no UIKit Vim host or phone Vim replay is required.
 
 ### Drawing strategy
 
@@ -526,7 +526,7 @@ milestone becomes a prerequisite, not something replaceable by frequent backgrou
 | Existing shared tests | Contract fixtures, Domain/merge properties, Vim vectors, drawing format/Rough/scene merge continue passing after extraction |
 | Repository model tests | Crash at every durable boundary, late ack/edit during save, revocation, changed workspace, deleted/moved file, conflict retry, disk full, migration, dirty-asset eviction protection |
 | Real daemon integration | Pair/revoke/header auth, private TLS proxy, capture race/lost response/restart, idempotent relay mutation, two clients deciding one approval, lease handover/read-only fallback |
-| UIKit editor/canvas | Actual input/marked text, selection/undo, syntax reveal, badges/tasks, complete Vim host replay, touch gestures, no note input while drawing |
+| UIKit editor/canvas | Actual input/marked text, selection/undo, syntax reveal, badges/tasks, touch gestures, no note input while drawing |
 | UI journeys | Pair→type→agent result; prose/citation; approve/deny; chat/Stop; routine create/run; offline→termination→merge; web→phone→web drawing; attachment; Siri capture |
 | Accessibility | VoiceOver actions for drawn controls and drawing elements, accessibility Dynamic Type, Reduce Motion, contrast, landscape, keyboard/switch access, alternatives to drag-only actions |
 | Physical device | Free-team signing/reprovision, Siri discovery/parameters, dictation/IME, notification actions, lock-state protection, private-network transitions, device performance |
@@ -545,7 +545,7 @@ phone, with separate simulator CI multipliers, in milestone 0:
 - Cached Today usable within 500 ms of scene activation after startup; network never blocks
   showing durable drafts. Measure cold process launch separately.
 - 2,000-line mixed note/30 badges: ordinary input/style p95 below 8 ms at 60 Hz. Also measure
-  10,000-line Vim and a six-drawing note. No network/disk/full parse on input callbacks.
+  a 10,000-line note and a six-drawing note. No network/disk/full parse on input callbacks.
 - 10,000-note tree and 400-thread/60-approval Inbox use virtualized/bounded rendering. Warm
   note switches target under 100 ms; cached search under 100 ms after dispatch.
 - No whole-chat rerender per token. 2,000-element drawing pan/drag/freehand within 16.7 ms/frame;
@@ -567,7 +567,7 @@ not implementations to copy blindly.
 | 3. Notes/editor | Daily/weekly/navigation/tree/search/commands; modes/tasks/badges/chips/citations; offline merge | 1–2 | J1–J8 on phone; input/IME and performance pass; clean stale text never writes back |
 | 4. Agent workspace | Inbox/chat/orchestrator/approvals/routines/settings; artifacts/surfaces; host management; journal mutation receipts | 1–2; 3 for anchors | Follow/redirect/approve/stop over real daemon/relay; no duplicate work from retries/handover |
 | 5. Drawings/content parity | UIKit canvas/embeds, native web-parity gaps, B0 attachments, P images/tables/callouts/backlinks | 1–3 and shared B0/P | Cross-client round-trip, offline scene merge, complete content display; malformed/unavailable files never overwritten |
-| 6. Vim/phone integration | UIKit Vim/vector replay; accessory controls; capture/Siri; notification catch-up/local alerts | 1–4 and capture/receipt API | Full vector coverage, hardware/touch input, real Siri capture once across failures, correct alert privacy/state |
+| 6. Phone integration | Native accessory controls; capture/Siri; notification catch-up/local alerts | 1–4 and capture/receipt API | Hardware/touch input, real Siri capture once across failures, correct alert privacy/state |
 | 7. Release hardening | Crash/lifecycle matrix, accessibility, memory/energy/performance, signing/install guide, recovery/diagnostics/docs | 2–6 | Full checklist on Simulator and phone; required CI green; no unresolved data-loss/safety failure |
 | 8. Push/distribution option | Paid entitlement, APNs registration/sender/handover, archives/TestFlight | 4, 6–7; paid account | Suspended-phone alerts, stale/offline decisions safe, token lifecycle verified |
 

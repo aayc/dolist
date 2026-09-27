@@ -18,6 +18,7 @@ let package = Package(
     .package(path: "Packages/DailyDoListVim"),
     .package(path: "Packages/DailyDoListAgent"),
     .package(path: "Packages/DailyDoListUI"),
+    .package(path: "Packages/DailyDoListWorkspaceCore"),
     .package(path: "Packages/DailyDoListDrawing"),
   ],
   targets: [
@@ -32,6 +33,7 @@ let package = Package(
         .product(name: "DailyDoListVim", package: "DailyDoListVim"),
         .product(name: "DailyDoListAgent", package: "DailyDoListAgent"),
         .product(name: "DailyDoListUI", package: "DailyDoListUI"),
+        .product(name: "DailyDoListWorkspaceCore", package: "DailyDoListWorkspaceCore"),
         .product(name: "DailyDoListDrawing", package: "DailyDoListDrawing"),
       ]
     ),
@@ -43,6 +45,7 @@ let package = Package(
         .product(name: "DailyDoListClientTestSupport", package: "DailyDoListClient"),
         .product(name: "DailyDoListAgentTestSupport", package: "DailyDoListAgent"),
         .product(name: "DailyDoListUI", package: "DailyDoListUI"),
+        .product(name: "DailyDoListWorkspaceCore", package: "DailyDoListWorkspaceCore"),
         .product(name: "DailyDoListUITestSupport", package: "DailyDoListUI"),
         .product(name: "DailyDoListDrawing", package: "DailyDoListDrawing"),
       ]),

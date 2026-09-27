@@ -1,6 +1,6 @@
 import Testing
 
-@testable import DailyDoListApp
+@testable import DailyDoListWorkspaceCore
 
 @MainActor
 @Suite("TabsStore")

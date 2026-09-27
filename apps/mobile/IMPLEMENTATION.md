@@ -7,7 +7,9 @@ previous planning-only request. They do not have a paid Apple developer account.
 away for several days and asked us to keep working until everything is implemented and tested,
 including thorough computer-use checks of all features. On the same day they explicitly authorized
 many subagents to accelerate implementation. Preserve these instructions through
-compaction. Do not stop at a prototype or declare unverified features complete.
+compaction. The user subsequently said "don't do vim mode in iphone at all": mobile Vim,
+vimrc/settings and mobile Vim acceptance are excluded. Keep existing Mac/web Vim intact.
+Do not stop at a prototype or declare unverified features complete.
 
 Read this file, `PLAN.md` and root `PROGRESS.md` on every continuation. Keep working on
 `codex/iphone-app` in its isolated worktree. Commit and push coherent checkpoints, maintain this
@@ -49,7 +51,7 @@ No feature is complete merely because its API or a placeholder screen exists.
 | 3 Notes/editor | In progress | Today/ordinary notes/creation/editing and captures work; full navigation/search/living-list/content matrix remains |
 | 4 Agent workspace | In progress | Shared AgentCore and native screens integrated; Inbox/result/artifact checked; durable receipts wiring, caches, settings/hosts and full action CUA remain |
 | 5 Drawings/content | In progress | Shared native canvas, images and arrangement implemented; app persistence/embeds and remaining parity/B0/P remain |
-| 6 Vim/phone integration | Not started | Full vectors, keyboard/accessory, capture/Siri, local notification catch-up |
+| 6 Phone integration | In progress | Native keyboard/accessory, capture/Siri, local notification catch-up; Vim explicitly excluded |
 | 7 Hardening | Not started | All automated gates, computer-use feature matrix, recovery/accessibility/performance |
 | 8 Paid push/distribution | Not applicable | User has no paid account; keep optional design separate |
 
@@ -57,11 +59,11 @@ No feature is complete merely because its API or a placeholder screen exists.
 
 The written stream scope is `docs/specs/iphone-implementation-streams.md`. The integrator owns
 `codex/iphone-app`; `codex/iphone-backend`, `codex/iphone-repository` and `codex/iphone-agent`
-are isolated parallel streams. The agent UI stream continued as `codex/iphone-drawing` and now owns native settings/host UI. The backend stream is adding notification catch-up and receipt-aware actions; repository is adding structural transactions/export/forget. Integrate reviewed commits and rerun affected tests.
+are isolated parallel streams. The agent UI stream continued as `codex/iphone-drawing` and completed native settings/host UI and now owns remaining drawing parity. The backend stream is adding notification catch-up and receipt-aware actions; repository is adding structural transactions/export/forget. Integrate reviewed commits and rerun affected tests.
 
 1. Finish app composition with durable composers, receipt-aware agent actions, full settings and host controls.
 2. Integrate structural/recovery UI, cached content, drawings and complete notes navigation/search.
-3. Complete editor living-list/content parity, Vim, Siri/capture and notification integration.
+3. Complete editor living-list/content parity, Siri/capture and notification integration.
 4. Continue the release matrix; no feature is complete based on API availability alone.
 
 ## Validation evidence

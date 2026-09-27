@@ -1,6 +1,7 @@
 import DailyDoListMobileAgent
 import DailyDoListMobileEditor
 import DailyDoListMobileKit
+import DailyDoListMobileSettings
 import DailyDoListModels
 import SwiftUI
 
@@ -102,6 +103,7 @@ struct PhoneWorkspaceView: View {
             LabeledContent("Workspace", value: workspace.profile.vaultName ?? "Connected vault")
             ConnectionStatusView(connection: model.connection)
             Button("Choose a connection", action: chooseHost)
+            NavigationLink("Host and shared settings") { hostSettings }
           }
           Section("On this iPhone") {
             NavigationLink("Captures") { CaptureHistoryView(workspace: workspace) }
@@ -132,6 +134,20 @@ struct PhoneWorkspaceView: View {
     }
     .sheet(isPresented: $capture) { CaptureTaskView(workspace: workspace) }
   }
+  private var hostSettings: some View {
+    let client = model.connection.client
+    let profileID = workspace.profile.id
+    return MobileSettingsView(
+      client: client, settings: workspace.settings,
+      hostName: workspace.profile.name,
+      actionsEnabled: model.connection.actionsEnabled && workspace.online,
+      hostID: workspace.profile.workspaceID,
+      isCurrentSession: {
+        model.connection.actionsEnabled && model.connection.selected?.id == profileID
+          && model.connection.client?.clientId == client?.clientId
+      }, onSettingsSaved: { value in Task { await workspace.adoptSettings(value) } })
+  }
+
 }
 
 private struct PhoneNoteView: View {

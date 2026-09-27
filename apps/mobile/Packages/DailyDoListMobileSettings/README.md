@@ -34,7 +34,8 @@ guard. No credential or pairing code is persisted by this package.
 
 ## Coverage
 
-The shared forms cover every `AppSettings` field: theme; all editor options and vimrc;
+Vim settings are intentionally absent on iPhone and preserved when editing other shared settings.
+The shared forms cover shared `AppSettings` fields: theme; iPhone editor options;
 daily/weekly folders, formats and templates with local-date previews; all agent switches, harness,
 OpenRouter/Cursor/judge models, settle/concurrency/watch/timeout settings; approval policy; and
 shared always-on machine name/address/clear. Every policy widening requires explicit confirmation

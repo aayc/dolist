@@ -97,13 +97,13 @@ jobs:
           - group: others
             packages: >-
               DailyDoListModels DailyDoListDomain DailyDoListClient DailyDoListUI DailyDoListAgent
-              DailyDoListDaemon DailyDoListComputer DailyDoListVim DailyDoListDrawing
+              DailyDoListDaemon DailyDoListComputer DailyDoListVim DailyDoListDrawing DailyDoListWorkspaceCore
             sources: >-
               apps/macos/Packages/DailyDoListModels apps/macos/Packages/DailyDoListDomain
               apps/macos/Packages/DailyDoListClient apps/macos/Packages/DailyDoListAgent
               apps/macos/Packages/DailyDoListUI apps/macos/Packages/DailyDoListDaemon
               apps/macos/Packages/DailyDoListComputer apps/macos/Packages/DailyDoListVim
-              apps/macos/Packages/DailyDoListDrawing
+              apps/macos/Packages/DailyDoListDrawing apps/macos/Packages/DailyDoListWorkspaceCore
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -18,6 +18,10 @@ settings:
 packages:
   DailyDoListMobileKit:
     path: Packages/DailyDoListMobileKit
+  DailyDoListMobileSettings:
+    path: Packages/DailyDoListMobileSettings
+  DailyDoListWorkspaceCore:
+    path: ../macos/Packages/DailyDoListWorkspaceCore
   DailyDoListModels:
     path: ../macos/Packages/DailyDoListModels
   DailyDoListClient:
@@ -28,8 +32,6 @@ packages:
     path: ../macos/Packages/DailyDoListEditor
   DailyDoListAgent:
     path: ../macos/Packages/DailyDoListAgent
-  DailyDoListVim:
-    path: ../macos/Packages/DailyDoListVim
   DailyDoListDrawing:
     path: ../macos/Packages/DailyDoListDrawing
 targets:
@@ -54,6 +56,8 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
     dependencies:
       - package: DailyDoListMobileKit
+      - package: DailyDoListMobileSettings
+      - package: DailyDoListWorkspaceCore
       - package: DailyDoListModels
       - package: DailyDoListClient
       - package: DailyDoListDomain
@@ -65,13 +69,12 @@ targets:
         product: DailyDoListAgentCore
       - package: DailyDoListAgent
         product: DailyDoListMobileAgent
-      - package: DailyDoListVim
       - package: DailyDoListDrawing
         product: DailyDoListDrawingModel
   DailyDoListTests:
     type: bundle.unit-test
     platform: iOS
-    sources: [Tests, Packages/DailyDoListMobileKit/Tests/DailyDoListMobileKitTests]
+    sources: [Tests, Packages/DailyDoListMobileKit/Tests/DailyDoListMobileKitTests, Packages/DailyDoListMobileSettings/Tests/DailyDoListMobileSettingsTests]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.dailydolist.iphone.tests
