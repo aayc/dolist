@@ -81,12 +81,17 @@ extension PhoneWorkspace {
 
   func showDrawing(_ drawing: LocalDrawing) {
     active = nil
-    if let session = drawingSessions[drawing.path] {
-      activeDrawing = session
-      return
-    }
+    activeDrawing = drawingSession(drawing)
+  }
+
+  func drawingSession(_ drawing: LocalDrawing) -> DrawingSession {
+    if let session = drawingSessions[drawing.path] { return session }
     let session = DrawingSession(drawing: drawing, repository: drawingRepository)
-    session.onCheckpoint = { [weak self] in Task { await self?.synchronize() } }
+    session.onCheckpoint = { [weak self] in
+      guard let self else { return }
+      for note in self.sessions.values { note.editor.drawingsDidChange() }
+      Task { await self.synchronize() }
+    }
     session.controller.onOpenLink = { [weak self] link in
       guard let self else { return }
       if link.hasPrefix("[["), link.hasSuffix("]]") {
@@ -106,7 +111,7 @@ extension PhoneWorkspace {
       session.map { "[[\($0.drawing.path)#^\(elementID)]]" }
     }
     drawingSessions[drawing.path] = session
-    activeDrawing = session
+    return session
   }
 
   func includeLocalDrawings(_ drawings: [LocalDrawing]) {

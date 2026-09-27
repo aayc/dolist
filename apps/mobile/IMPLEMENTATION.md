@@ -176,7 +176,7 @@ its actual interaction result. Screenshots alone do not prove behavior.
 - The integrated native suite and `pnpm check` pass. CUA confirmed notification consent, hidden
   previews by default and the privacy cover clearing after permission. It exposed foreground
   cache contention during catch-up; a bounded refetch fixes that race, with an 11-test integration
-  suite proving that the rejected approval snapshot never alerts. The corrected UI recheck is due.
+  suite proving that the rejected approval snapshot never alerts. The corrected CUA Settings recheck passed with no error and private previews still disabled.
 - Relay CI's outage test opened its WebSocket before initial sync adopted the stable workspace
   identity. The required invalidation then closed it. A deterministic held-adoption test now waits
   for the stable identity before observing outage/recovery; no runtime behavior or budget changed.
@@ -185,3 +185,19 @@ Next app work: drawing embeds and attachment/content rendering; living-list badg
 download controls; cache/intent/notification
 composition; full recovery, accessibility, keyboard and computer-use acceptance. Standalone
 drawings and foundational APIs do not complete those remaining features.
+
+
+- All four published branch workflows passed on `cebe37c`, including native, iPhone and
+  shared iOS jobs. Typed recovery export verification and safe cache cleanup are integrated;
+  conditional Forget refuses new or unexportable protected work.
+- The next combined signed Simulator suite passed after wiring drawing embeds, scoped attachment
+  snapshots and inline agent status controls. Shared Mac badge/chip extraction passed 26 focused
+  regressions. Native badge layout verifies separate touch space and unchanged source text.
+- CUA verified offline Inbox/thread relaunch with approval/send/stop disabled, explicit missing
+  artifact state, cached-template creation of Tomorrow and a missing weekly-template explanation.
+  A private local notification displayed generic approval text; tapping it opened the exact
+  conversation. Reviewing its exact mock input and Approve once produced the host-acknowledged
+  Approved once state and completed mock result. No real purchase or external action occurred.
+- Parallel work was interrupted by an account usage limit; continuation resumed the existing
+  branches. Native tables/callouts/backlinks, offline attachment uploads and command palette/
+  hardware keyboard work remain in flight. Download/recovery composition and full CUA remain.

@@ -1,13 +1,17 @@
+import DailyDoListDomain
 import DailyDoListModels
 import Foundation
 
 public enum CachedContentResource: Codable, Hashable, Sendable {
   case inbox
+  case attachment(path: String)
   case thread(String)
   case artifact(threadID: String, artifactID: String)
 
   var key: String {
     switch self {
+    case .attachment(let path):
+      return "attachment/" + MarkdownCheckpointStore.digest(Data(path.utf8))
     case .inbox: return "agent/inbox"
     case .thread(let id):
       return "thread/" + MarkdownCheckpointStore.digest(Data(id.utf8))
@@ -21,6 +25,11 @@ public enum CachedContentResource: Codable, Hashable, Sendable {
   func validate() throws {
     let ids: [String]
     switch self {
+    case .attachment(let path):
+      guard (try? VaultPath.validated(path)) == path else {
+        throw WorkspaceContentCacheError.invalidContent
+      }
+      ids = [path]
     case .inbox: ids = []
     case .thread(let id): ids = [id]
     case .artifact(let thread, let artifact): ids = [thread, artifact]
@@ -63,7 +72,7 @@ public struct ContentCacheLimits: Codable, Hashable, Sendable {
   func maximum(for resource: CachedContentResource) -> Int {
     switch resource {
     case .inbox, .thread: threadBytes
-    case .artifact: artifactBytes
+    case .artifact, .attachment: artifactBytes
     }
   }
 }

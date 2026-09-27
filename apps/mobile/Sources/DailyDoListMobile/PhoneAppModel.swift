@@ -140,7 +140,7 @@ final class PhoneAppModel {
       )
     }.value
     if let existing = workspaces[profile.id] { return existing }
-    let created = PhoneWorkspace(
+    let created = try PhoneWorkspace(
       rootDirectory: root, structural: structural, recovery: recovery,
       profile: profile, repository: repository, drawingRepository: drawings, cache: cache,
       captureOutbox: captures)

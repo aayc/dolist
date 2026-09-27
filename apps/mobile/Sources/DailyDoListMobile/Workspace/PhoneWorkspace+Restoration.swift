@@ -58,7 +58,10 @@ extension PhoneWorkspace {
         location: start, length: min(count - start, max(0, position.selection.length)))
       session.editor.restoreScrollPosition(position.scrollY)
     }
-    session.editor.onSelectionChange = { [weak self] _ in self?.scheduleNavigationSave() }
+    session.editor.onSelectionChange = { [weak self, weak session] _ in
+      self?.scheduleNavigationSave()
+      if let session { self?.reportPresence(session) }
+    }
     session.editor.onScrollChange = { [weak self] _ in self?.scheduleNavigationSave() }
   }
 }

@@ -75,6 +75,7 @@ extension PhoneWorkspace {
             sessions[path] = nil
             sessions[destination] = session
             session.retarget(saved)
+            configureEmbeds(session)
           } else if let retained = try await repository.note(path) {
             session.adoptRecovery(retained)
           } else {

@@ -23,6 +23,7 @@ final class PhoneWorkspace {
   var activeDrawing: DrawingSession?
   var activePath: String? { activeDrawing?.drawing.path ?? active?.note.path }
   @ObservationIgnored var drawingSessions: [String: DrawingSession] = [:]
+  let contentCache: WorkspaceContentCache
   let cache: WorkspaceCache
   let composerDrafts: PhoneComposerDrafts
   let captureOutbox: CaptureOutbox
@@ -35,6 +36,14 @@ final class PhoneWorkspace {
   var refreshing = false
   var error: String?
   var selectedTab = 0
+  var workingActivity: OrchestratorActivity?
+  @ObservationIgnored var chipBoard = OrchestratorChipBoard()
+  @ObservationIgnored var chipTimers: [String: Task<Void, Never>] = [:]
+  @ObservationIgnored var placedChips: [String: Set<String>] = [:]
+  @ObservationIgnored var annotationUpdate: Task<Void, Never>?
+  @ObservationIgnored var presenceTimer: Task<Void, Never>?
+  @ObservationIgnored var pendingPresence: (String, Int)?
+  @ObservationIgnored var lastPresence: (String, Int)?
   var routedThread: PhoneThreadDestination?
   @ObservationIgnored var sessions: [String: NoteSession] = [:]
   @ObservationIgnored var offlineChannel: ConnectionChannel?
@@ -55,7 +64,9 @@ final class PhoneWorkspace {
     profile: ConnectionProfile, repository: WorkspaceRepository,
     drawingRepository: DrawingRepository, cache: WorkspaceCache,
     captureOutbox: CaptureOutbox
-  ) {
+  ) throws {
+    self.contentCache = try WorkspaceContentCache(
+      rootDirectory: rootDirectory, scope: repository.scope)
     self.rootDirectory = rootDirectory
     self.structural = structural
     self.recovery = recovery
@@ -125,6 +136,7 @@ final class PhoneWorkspace {
       guard epoch == generation, online else { return }
       self.settings = fetchedSettings
       configureEditors()
+      configureEmbedHosts()
       try await cache.storeSettings(fetchedSettings, replacing: settingsRevision)
       await refreshTree()
       guard epoch == generation, online else { return }
@@ -141,6 +153,7 @@ final class PhoneWorkspace {
       await synchronize()
       guard epoch == generation, online else { return }
       await agent?.refresh()
+      scheduleAnnotations()
     } catch {
       guard epoch == generation else { return }
       self.error = error.localizedDescription
@@ -170,6 +183,8 @@ final class PhoneWorkspace {
     synchronizeAgain = false
     refreshing = false
     agent?.handle(.state(.disconnected))
+    configureEmbedHosts()
+    resetAnnotations()
   }
 
   func checkpointAll(finishComposition: Bool = false) async {
@@ -260,6 +275,7 @@ final class PhoneWorkspace {
 
   func receive(_ item: DaemonStreamItem) {
     agent?.handle(item)
+    receiveAnnotations(item)
     if case .state(let state) = item {
       switch state {
       case .connected: break  // Live REST identity must verify before connect grants authority.
@@ -277,6 +293,10 @@ final class PhoneWorkspace {
     guard case .event(.vaultChanged(let event)) = item, let remote, online else { return }
     let epoch = generation
     Task {
+      for session in sessions.values {
+        session.editor.drawingsDidChange()
+        session.editor.attachmentsDidChange()
+      }
       for change in event.changes {
         guard epoch == generation else { return }
         if drawingSessions[change.path] != nil {
@@ -403,6 +423,8 @@ final class PhoneWorkspace {
     let session = NoteSession(note: note, repository: repository)
     session.onCheckpoint = { [weak self] in Task { await self?.synchronize() } }
     configureEditor(session)
+    configureEmbeds(session)
+    configureAnnotations(session)
     restorePosition(session)
     sessions[note.path] = session
     active = session

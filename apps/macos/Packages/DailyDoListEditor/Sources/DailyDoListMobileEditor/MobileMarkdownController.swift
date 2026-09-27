@@ -8,6 +8,15 @@
   @MainActor
   public final class MobileMarkdownController: NSObject {
     public let input = MarkdownInputView()
+    public var onBadgeTap: ((EditorBadge) -> Void)?
+    public var onAgentMarkerTap: ((String?) -> Void)?
+    public var onUserEdit: (() -> Void)?
+    lazy var annotations = MobileBadgeCoordinator(owner: self)
+    public var badges: [EditorBadge] {
+      annotations.store.currentBadges(lineIndex: parser.lineIndex)
+    }
+    public func setBadges(_ badges: [EditorBadge]) { annotations.set(badges) }
+    public var selectedLine: Int { parser.lineIndex.line(containing: selection.location) }
     public var onTextChange: ((EditorTextChange) -> Void)?
     public var onSelectionChange: ((NSRange) -> Void)?
     public var onScrollChange: ((Double) -> Void)?
@@ -63,6 +72,7 @@
     public func load(_ text: String) {
       suppressChanges = true
       embeds.reset()
+      annotations.reset()
       deferredExternalText = nil
       pendingStyle = nil
       input.textStorage.delegate = nil
@@ -184,9 +194,33 @@
       let point = recognizer.location(in: input)
       if let line = taskLine(at: point) {
         _ = toggleTask(atLine: line)
+      } else if let marker = agentMarker(at: point) {
+        onAgentMarkerTap?(marker.threadId)
       } else if let offset = linkAtPoint(point) {
         _ = openLink(atUTF16: offset)
       }
+    }
+
+    private func agentMarker(at point: CGPoint) -> AgentMarkerToken? {
+      guard configuration.livePreview, let layout = input.layoutManager as? MobileLayoutManager
+      else { return nil }
+      let location = CGPoint(
+        x: point.x - input.textContainerInset.left, y: point.y - input.textContainerInset.top)
+      let character = layout.characterIndex(
+        for: location, in: input.textContainer,
+        fractionOfDistanceBetweenInsertionPoints: nil)
+      guard character < input.textStorage.length else { return nil }
+      var range = NSRange()
+      guard
+        let raw = input.textStorage.attribute(.ddlMarker, at: character, effectiveRange: &range)
+          as? Int,
+        MarkerKind(rawValue: raw) == .agent, preview.isHidden(.agent, range: range),
+        let rect = layout.markerRect(at: range.location),
+        rect.insetBy(dx: -8, dy: -6).contains(location)
+      else { return nil }
+      let line = parser.lineIndex.contentRange(
+        ofLine: parser.lineIndex.line(containing: character), textLength: input.textStorage.length)
+      return AgentMarker.scan(Array(input.textStorage.mutableString.substring(with: line).utf16))
     }
 
     private func taskLine(at point: CGPoint) -> Int? {
@@ -264,6 +298,7 @@
       input.setNeedsDisplay()
       lineNumberGutter.setNeedsDisplay()
       embeds.schedule()
+      annotations.schedule()
     }
   }
 
@@ -272,7 +307,8 @@
       // A recognizer over the whole text view prevents UIKit's caret/selection gestures even with
       // cancelsTouchesInView=false. Only participate when the user actually touched a checkbox.
       let point = gestureRecognizer.location(in: input)
-      return taskLine(at: point) != nil || linkAtPoint(point) != nil
+      return taskLine(at: point) != nil || agentMarker(at: point) != nil
+        || linkAtPoint(point) != nil
     }
   }
 
@@ -286,6 +322,9 @@
         in: editedRange, changeInLength: delta, text: textStorage.mutableString,
         consume: { _, _, _, _ in }
       )
+      annotations.edited(
+        location: editedRange.location, oldLength: editedRange.length - delta,
+        newLength: editedRange.length)
       let change = TextEdit(
         replacements: [
           .init(
@@ -309,6 +348,7 @@
         location: editedRange.location, oldLength: editedRange.length - delta,
         newLength: editedRange.length)
       guard !suppressChanges else { return }
+      onUserEdit?()
       onTextChange?(
         EditorTextChange(
           range: NSRange(location: editedRange.location, length: editedRange.length - delta),
@@ -321,6 +361,7 @@
       onScrollChange?(scrollView.contentOffset.y)
       updateMobileGeometry()
       embeds.schedule()
+      annotations.schedule()
     }
     public func textViewDidChangeSelection(_ textView: UITextView) {
       updatePreview()

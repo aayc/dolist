@@ -153,7 +153,7 @@ public actor WorkspaceContentCache {
     try store.contentUsage(budgetBytes: limits.totalBytes)
   }
 
-  private func begin(_ resource: CachedContentResource, replacing generation: Int64? = nil) throws
+  func begin(_ resource: CachedContentResource, replacing generation: Int64? = nil) throws
     -> ContentFetchTicket
   {
     try resource.validate()

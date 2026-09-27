@@ -23,6 +23,7 @@ final class NoteSession {
   @ObservationIgnored private var saveTask: Task<Void, Never>?
   @ObservationIgnored private var editableBeforeStructure: Bool?
   var onCheckpoint: (() -> Void)?
+  var requiredDrawings: ((String) async -> [String])?
 
   init(note: LocalNote, repository: WorkspaceRepository) {
     self.note = note
@@ -78,6 +79,7 @@ final class NoteSession {
     let sentRevision = revision
     let content = editor.text
     let expected = note.localRevision
+    let drawings = await requiredDrawings?(content)
     saving = true
     let task = Task { [self] in
       defer {
@@ -91,7 +93,8 @@ final class NoteSession {
             path: note.path, content: content, expectedRevision: expected)
         } else {
           saved = try await repository.save(
-            path: note.path, content: content, expectedRevision: expected)
+            path: note.path, content: content, expectedRevision: expected,
+            requiringDrawings: drawings)
         }
         guard saved.localRevision >= note.localRevision else { return }
         note = saved
@@ -162,7 +165,10 @@ final class NoteSession {
     error = nil
   }
 
-  func finishComposition() { editor.input.unmarkText() }
+  func finishComposition() {
+    editor.finishEditingDrawing()
+    editor.input.unmarkText()
+  }
 
   func setStructureLocked(_ locked: Bool) {
     var configuration = editor.configuration

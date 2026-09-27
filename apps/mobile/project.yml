@@ -88,7 +88,7 @@ targets:
   DailyDoListTests:
     type: bundle.unit-test
     platform: iOS
-    sources: [Tests, Packages/DailyDoListMobileIntegration/Tests/DailyDoListMobileIntegrationTests, Packages/DailyDoListMobileKit/Tests/DailyDoListMobileKitTests, Packages/DailyDoListMobileSettings/Tests/DailyDoListMobileSettingsTests, ../macos/Packages/DailyDoListDrawing/Tests/DailyDoListMobileDrawingTests]
+    sources: [Tests, Packages/DailyDoListMobileIntegration/Tests/DailyDoListMobileIntegrationTests, Packages/DailyDoListMobileKit/Tests/DailyDoListMobileKitTests, Packages/DailyDoListMobileSettings/Tests/DailyDoListMobileSettingsTests, ../macos/Packages/DailyDoListDrawing/Tests/DailyDoListMobileDrawingTests, ../macos/Packages/DailyDoListEditor/Tests/DailyDoListMobileEditorTests]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.dailydolist.iphone.tests

@@ -19,7 +19,7 @@ struct PhoneWorkspaceView: View {
           if let drawing = workspace.activeDrawing {
             PhoneDrawingView(session: drawing)
           } else if let session = workspace.active {
-            PhoneNoteView(session: session)
+            PhoneNoteView(workspace: workspace, session: session)
           } else {
             ContentUnavailableView(
               "Open a note", systemImage: "doc.text",
@@ -162,9 +162,12 @@ struct PhoneWorkspaceView: View {
 }
 
 private struct PhoneNoteView: View {
+  let workspace: PhoneWorkspace
   let session: NoteSession
   @State private var source = false
   @State private var readOnly = false
+  @State private var newDrawing = false
+  @State private var drawingName = ""
 
   var body: some View {
     VStack(spacing: 0) {
@@ -175,12 +178,23 @@ private struct PhoneNoteView: View {
         Menu("Editing options", systemImage: "ellipsis.circle") {
           Toggle("Source mode", isOn: $source)
           Toggle("Read only", isOn: $readOnly)
+          Button("Insert drawing", systemImage: "pencil.and.scribble") { newDrawing = true }
+            .disabled(readOnly)
           Button("Undo", systemImage: "arrow.uturn.backward") { session.editor.run(.undo) }
           Button("Redo", systemImage: "arrow.uturn.forward") { session.editor.run(.redo) }
         }
       }.padding(.horizontal).padding(.vertical, 6).background(.bar)
       MobileMarkdownView(controller: session.editor).id(session.note.path)
         .accessibilityIdentifier("workspace.editor")
+    }
+    .alert("Insert drawing", isPresented: $newDrawing) {
+      TextField("Drawing name", text: $drawingName)
+      Button("Cancel", role: .cancel) {}
+      Button("Create") {
+        let name = drawingName
+        drawingName = ""
+        Task { await workspace.insertDrawing(named: name, into: session) }
+      }.disabled(drawingName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
     .onChange(of: source) { _, value in session.setSourceMode(value) }
     .onChange(of: readOnly) { _, value in
