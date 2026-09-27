@@ -28,7 +28,7 @@ extension Vim {
       cm.closeVimNotification?()
       cm.closeVimNotification = cm.openNotification(text, long: true, duration: 0)
     } else {
-      cm.openNotification(text, long: false, duration: duration ?? 15)
+      _ = cm.openNotification(text, long: false, duration: duration ?? 15)
     }
   }
 
@@ -38,7 +38,7 @@ extension Vim {
       virtualPrompt = options
       return
     }
-    cm.openDialog(options)
+    _ = cm.openDialog(options)
   }
 
   /// `vimKeyFromEvent(e)` without langmap (what the prompt hooks use).

@@ -46,13 +46,7 @@ extension MarkdownEditorController {
       if groupsByEvent { manager.groupsByEvent = false }
       manager.beginUndoGrouping()
     }
-    // UndoManager doesn't retain targets: the action keeps its step alive.
-    manager.registerUndo(withTarget: step) { [weak self, weak manager, step] _ in
-      MainActor.assumeIsolated {
-        guard let self, let manager else { return }
-        self.revertVimUndoStep(step, in: manager)
-      }
-    }
+    registerVimUndoAction(step, in: manager)
     if let name = step.actionName { manager.setActionName(name) }
     if opensGroup {
       manager.endUndoGrouping()
@@ -92,14 +86,18 @@ extension MarkdownEditorController {
     let counterpart = VimUndoStep(
       inverse: forward, startSelection: remembered, below: redoing ? vimHost.recorder.top : nil,
       actionName: step.actionName)
-    manager.registerUndo(withTarget: counterpart) { [weak self, weak manager, counterpart] _ in
-      MainActor.assumeIsolated {
-        guard let self, let manager else { return }
-        self.revertVimUndoStep(counterpart, in: manager)
-      }
-    }
+    registerVimUndoAction(counterpart, in: manager)
     if let name = step.actionName { manager.setActionName(name) }
     vimHost.recorder.didRevert(onTop: redoing ? counterpart : step.below)
+  }
+
+  private func registerVimUndoAction(_ step: VimUndoStep, in manager: UndoManager) {
+    // UndoManager doesn't retain targets. Keep the step alive and its manager on the main actor.
+    let action: @MainActor @Sendable () -> Void = { [weak self, weak manager, step] in
+      guard let self, let manager else { return }
+      self.revertVimUndoStep(step, in: manager)
+    }
+    manager.registerUndo(withTarget: step) { _ in MainActor.assumeIsolated(action) }
   }
 
   /// Applies history changes with vim off: one edit the text view doesn't register (the step's
