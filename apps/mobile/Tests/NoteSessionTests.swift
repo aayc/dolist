@@ -97,6 +97,23 @@ struct NoteSessionTests {
       try chosen.recoveryCopies.map { try String(contentsOf: $0, encoding: .utf8) }.contains(
         "Local"))
   }
+
+  @Test func recoveryPreparationRefusesLiveTextAfterCheckpointFailure() async throws {
+    let fixture = try NoteSessionFixture()
+    defer { fixture.remove() }
+    let original = try await fixture.repository.create(path: "Draft.md", content: "Original")
+    let session = NoteSession(note: original, repository: fixture.repository)
+    let recovery = try WorkspaceRecovery(
+      rootDirectory: fixture.root, scope: fixture.repository.scope)
+    try await recovery.discardLocalNote(path: "Draft.md", expectedRevision: original.localRevision)
+    session.editor.input.insertText("Unsaved text")
+    await session.checkpoint()
+    #expect(session.hasUncheckpointedEdits)
+    #expect(throws: PhoneRecoveryPreparationError.unsavedNote("Draft.md")) {
+      try PhoneRecoveryPreparation.validate(notes: [session], drawings: [])
+    }
+  }
+
 }
 
 private struct NoteSessionFixture {

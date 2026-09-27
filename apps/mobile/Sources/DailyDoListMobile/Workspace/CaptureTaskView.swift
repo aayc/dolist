@@ -64,6 +64,11 @@ struct CaptureHistoryView: View {
               Task { await workspace.cancelCapture(capture) }
             }
           }
+          if capture.state == .indeterminate {
+            NavigationLink("Review uncertain capture") {
+              PhoneCaptureReviewView(workspace: workspace, capture: capture)
+            }
+          }
           if let path = capture.receipt?.note?.path ?? capture.receipt?.path {
             Button("Open note") { Task { await workspace.open(path) } }
           }

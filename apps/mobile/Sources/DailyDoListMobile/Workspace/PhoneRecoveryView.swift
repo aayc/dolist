@@ -11,6 +11,7 @@ struct PhoneRecoveryView: View {
   @State private var exported: RecoveryExportResult?
   @State private var showExport = false
   @State private var failure: String?
+  @State private var verified = false
 
   var body: some View {
     List {
@@ -27,6 +28,13 @@ struct PhoneRecoveryView: View {
           }
         }
         if drawings.isEmpty { Text("No drawing conflicts").foregroundStyle(.secondary) }
+      }
+      Section("Captures needing review") {
+        ForEach(workspace.captures.filter { $0.state == .indeterminate }) { capture in
+          NavigationLink(capture.operation.text) {
+            PhoneCaptureReviewView(workspace: workspace, capture: capture)
+          }
+        }
       }
       Section("Moves and deletions") {
         ForEach(workspace.structuralOperations) { operation in
@@ -57,10 +65,10 @@ struct PhoneRecoveryView: View {
       Section("Export") {
         Button("Export local recovery files", systemImage: "square.and.arrow.up") {
           exporting = true
+          verified = false
           Task {
             do {
-              await workspace.checkpointAll(finishComposition: true)
-              await workspace.composerDrafts.flush()
+              try await workspace.prepareRecoveryExport()
               exported = try await workspace.recovery.export(
                 to: FileManager.default.temporaryDirectory)
               showExport = true
@@ -69,8 +77,9 @@ struct PhoneRecoveryView: View {
           }
         }.disabled(exporting)
         Text(
-          "Includes local notes, bases, recovery copies, unsent reply drafts and captures. Save the folder in Files before removing this connection."
+          "Includes local notes, drawings, bases, recovery copies, unsent replies, captures and original unconfirmed agent requests. Save the folder in Files before removing this connection."
         ).font(.footnote).foregroundStyle(.secondary)
+        if verified { Label("Recovery copy verified", systemImage: "checkmark.shield") }
         if let exported, exported.manifest.unsupportedRecordCount > 0 {
           Text(
             "This export has \(exported.manifest.unsupportedRecordCount) protected records it cannot yet include. Keep this connection until those actions are resolved."
@@ -89,10 +98,22 @@ struct PhoneRecoveryView: View {
           $0.state == .needsReview || $0.state == .recoveryDraft
         }
       } catch { failure = error.localizedDescription }
+      await workspace.loadCaptures()
       await workspace.agent?.refreshPendingMutations()
     }
     .sheet(isPresented: $showExport) {
-      if let exported { WorkspaceExportPicker(url: exported.directory) }
+      if let exported {
+        WorkspaceExportPicker(url: exported.directory) { destination in
+          showExport = false
+          guard let destination else { return }
+          Task {
+            do {
+              _ = try await workspace.recovery.verifyExport(exported, at: destination)
+              verified = true
+            } catch { failure = error.localizedDescription }
+          }
+        }
+      }
     }
   }
 
@@ -108,14 +129,6 @@ struct PhoneRecoveryView: View {
     case .resumeRoutine: "Resume routine"
     }
   }
-}
-
-private struct WorkspaceExportPicker: UIViewControllerRepresentable {
-  let url: URL
-  func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-    UIDocumentPickerViewController(forExporting: [url], asCopy: true)
-  }
-  func updateUIViewController(_ controller: UIDocumentPickerViewController, context: Context) {}
 }
 
 private struct PhoneStructureReview: View {
