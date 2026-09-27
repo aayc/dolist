@@ -5,6 +5,7 @@ import {
   ApprovalRequestSchema,
   ApprovalScopeSchema,
   OrchestratorActivitySchema,
+  RoutineNotificationSchema,
   RoutineNotifySchema,
   RoutineSchema,
   RoutineTemplateSchema,
@@ -500,4 +501,14 @@ export const AgentOperationResponseSchema = named(
       outcome: z.enum(["pending", "indeterminate"]),
     }),
   ]),
+);
+
+export const AgentNotificationsResponseSchema = named(
+  "AgentNotificationsResponse",
+  "Bounded notification catch-up. Omit the cursor to establish a baseline without historical alerts; persist each returned cursor after handling its page.",
+  z.looseObject({
+    notifications: z.array(RoutineNotificationSchema).max(200),
+    cursor: z.string().min(1).max(1024),
+    hasMore: z.boolean(),
+  }),
 );

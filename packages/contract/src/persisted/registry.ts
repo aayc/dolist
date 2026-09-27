@@ -9,6 +9,7 @@ import { PERSISTED_THREAD_VERSION } from "./thread";
 import { PERSISTED_THREAD_JOURNAL_VERSION } from "./thread-journal";
 
 export type PersistedFormatName =
+  | "notification-journal"
   | "mutation-journal"
   | "thread"
   | "thread-journal"
@@ -36,6 +37,13 @@ export interface PersistedFormatInfo {
 
 /** Every file in the vault sidecar this app reads and writes (docs/DATA_FORMATS.md). */
 export const PERSISTED_FORMATS: readonly PersistedFormatInfo[] = [
+  {
+    name: "notification-journal",
+    path: `${PERSISTED_PATHS.notificationJournals}/<workspace-hash>/<epoch>-<seq>-<decision-id>.jsonl`,
+    version: 1,
+    owner: "apps/daemon/src/notifications.ts",
+    syncs: true,
+  },
   {
     name: "mutation-journal",
     path: `${PERSISTED_PATHS.mutationJournals}/<operation-hash>.jsonl`,

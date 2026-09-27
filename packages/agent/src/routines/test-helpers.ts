@@ -94,6 +94,10 @@ export interface SchedulerHarnessOptions {
   now?: number;
   capabilities?: Capability[];
   maxRunMs?: number;
+  persistNotification?: (
+    runId: string,
+    notification: RoutineNotification | null,
+  ) => Promise<RoutineNotification | null>;
   storage?: MemoryStorageProvider;
 }
 
@@ -131,6 +135,7 @@ export async function schedulerHarness(options: SchedulerHarnessOptions = {}) {
     dropTriage: (runId) => dropped.push(runId),
     capabilities: () => capabilities,
     onNotification: (notification) => notifications.push(notification),
+    ...(options.persistNotification ? { persistNotification: options.persistNotification } : {}),
     now,
     calendar: LA,
     ...(options.maxRunMs !== undefined ? { maxRunMs: options.maxRunMs } : {}),

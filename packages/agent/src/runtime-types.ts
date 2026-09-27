@@ -121,4 +121,9 @@ export interface AgentRuntimeOptions {
    * events across holders). Default 0, until leases carry an epoch.
    */
   leaseEpoch?: () => number;
+  /** Persist the scheduler's exact decision before its live event; null also records suppression. */
+  persistRoutineNotification?: (
+    runId: string,
+    notification: RoutineNotification | null,
+  ) => Promise<RoutineNotification | null>;
 }

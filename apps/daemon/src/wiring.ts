@@ -3,7 +3,7 @@
  */
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import type { AgentRuntime, ExecutionProvider, LlmClient } from "@ddl/agent";
+import type { AgentRuntime, AgentRuntimeOptions, ExecutionProvider, LlmClient } from "@ddl/agent";
 import type { ConnectorsConfig, ConnectorToolSource } from "@ddl/connectors";
 import { EMPTY_CONNECTORS_CONFIG, loadConnectorsConfig } from "@ddl/connectors/config";
 import { PERSISTED_PATHS } from "@ddl/contract";
@@ -91,6 +91,7 @@ export interface AgentStackOptions {
   logger: Logger;
   /** The agent lease's current grant, stamped on journal events (null: no lease held). */
   leaseEpoch?: () => number | null;
+  persistRoutineNotification?: AgentRuntimeOptions["persistRoutineNotification"];
   /** Wraps the execution provider (the e2e test hooks' simulated Mac). */
   wrapExecution?: (provider: ExecutionProvider) => ExecutionProvider;
 }
@@ -150,6 +151,9 @@ export async function createAgentStack(options: AgentStackOptions): Promise<Agen
       logger: logger.child({ component: "agent" }),
       ...(llm ? { llm } : {}),
       ...(options.leaseEpoch ? { leaseEpoch: () => options.leaseEpoch?.() ?? 0 } : {}),
+      ...(options.persistRoutineNotification
+        ? { persistRoutineNotification: options.persistRoutineNotification }
+        : {}),
     });
     return { runtime, execution };
   } catch (error) {

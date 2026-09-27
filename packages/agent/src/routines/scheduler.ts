@@ -84,6 +84,10 @@ export interface RoutineSchedulerOptions {
   /** Capabilities agents can be granted here. */
   capabilities: () => readonly Capability[];
   onNotification: (notification: RoutineNotification) => void;
+  persistNotification?: (
+    runId: string,
+    notification: RoutineNotification | null,
+  ) => Promise<RoutineNotification | null>;
   now?: () => number;
   calendar?: LocalCalendar;
   logger?: Logger;
@@ -122,6 +126,7 @@ export class RoutineScheduler {
   private readonly logger: Logger;
   private readonly maxRunMs: number;
   private readonly runs = new Map<string, ActiveRun>();
+  private readonly pendingNotifications = new Map<string, Promise<void>>();
   private active = false;
   private stopped = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -154,7 +159,8 @@ export class RoutineScheduler {
     for (const definition of this.library.catalog.list()) {
       const run = this.library.state.get(definition.id)?.lastRun;
       const record = run ? records.get(run.runId) : undefined;
-      if (run && record && record.status !== run.status) this.finalize(run.runId, record.status);
+      if (run && record && (record.status !== run.status || !run.notified))
+        this.finalize(run.runId, record.status);
     }
   }
 
@@ -202,6 +208,10 @@ export class RoutineScheduler {
     this.deactivate();
   }
 
+  async flushNotifications(): Promise<void> {
+    await Promise.all(this.pendingNotifications.values());
+  }
+
   /** Starts what's due, stops runs over their time limit, and plans the next look. */
   tick(): void {
     if (this.timer) clearTimeout(this.timer);
@@ -209,6 +219,11 @@ export class RoutineScheduler {
     if (!this.active || this.stopped) return;
     for (const definition of this.library.catalog.list()) {
       try {
+        const last = this.library.state.get(definition.id)?.lastRun;
+        if (this.options.persistNotification && last?.finishedAt !== undefined && !last.notified) {
+          this.notify(definition.id, last);
+          continue;
+        }
         this.plan(definition);
       } catch (error) {
         this.logger.error("Routine scheduling failed", {
@@ -383,7 +398,15 @@ export class RoutineScheduler {
     const now = this.now();
     let due = now + TICK_MS;
     for (const definition of this.library.catalog.list()) {
-      const next = this.library.state.get(definition.id)?.nextRunAt;
+      const state = this.library.state.get(definition.id);
+      // A failed durable decision retries on the bounded tick, not a zero-delay overdue slot.
+      if (
+        this.options.persistNotification &&
+        state?.lastRun?.finishedAt !== undefined &&
+        !state.lastRun.notified
+      )
+        continue;
+      const next = state?.nextRunAt;
       if (next != null) due = Math.min(due, next);
     }
     for (const run of this.runs.values()) {
@@ -408,6 +431,12 @@ export class RoutineScheduler {
       ? describeSchedule(definition.file.parsedSchedule)
       : undefined;
     const before = this.library.state.get(definition.id)?.lastRun;
+    if (this.options.persistNotification && before?.finishedAt !== undefined && !before.notified) {
+      this.notify(definition.id, before);
+      throw new RoutineConflictError(
+        "The previous run's notification decision is still being saved.",
+      );
+    }
     const previous =
       before && before.finishedAt !== undefined
         ? { startedAt: before.startedAt, status: before.status, result: before.result ?? "" }
@@ -530,7 +559,7 @@ export class RoutineScheduler {
       ...(record?.summary ? { summary: record.summary } : {}),
       ...(result ? { result } : {}),
       ...(changed !== undefined ? { changed } : {}),
-      notified: true,
+      notified: this.options.persistNotification ? (lastRun.notified ?? false) : true,
     };
     const path = this.library.definition(routineId)?.path ?? state.path;
     this.library.state.update(routineId, path, () => ({ lastRun: updated }));
@@ -539,9 +568,36 @@ export class RoutineScheduler {
   }
 
   private notify(routineId: string, run: RoutineRunState): void {
+    if (this.pendingNotifications.has(run.runId)) return;
+    const notification = this.notification(routineId, run);
+    const persist = this.options.persistNotification;
+    if (!persist) {
+      if (notification) this.emitNotification(notification);
+      return;
+    }
+    const pending = persist(run.runId, notification)
+      .then((saved) => {
+        const state = this.library.state.get(routineId);
+        if (state?.lastRun?.runId === run.runId) {
+          this.library.state.update(routineId, state.path, () => ({
+            lastRun: { ...state.lastRun!, notified: true },
+          }));
+        }
+        if (saved) this.emitNotification(saved);
+      })
+      .catch((error: unknown) => {
+        this.logger.warn("Routine notification decision is not durable yet", {
+          error: errorMessage(error),
+        });
+      })
+      .finally(() => this.pendingNotifications.delete(run.runId));
+    this.pendingNotifications.set(run.runId, pending);
+  }
+
+  private notification(routineId: string, run: RoutineRunState): RoutineNotification | null {
     const definition = this.library.definition(routineId);
     const notify = definition?.file.notify ?? "always";
-    if (!shouldNotify(notify, run)) return;
+    if (!shouldNotify(notify, run)) return null;
     const name = definition?.name ?? this.options.records.get(run.runId)?.text ?? "Routine";
     const result = firstLines(run.result ?? "") || run.summary || "";
     const body =
@@ -550,15 +606,19 @@ export class RoutineScheduler {
         : run.status === "waiting_user"
           ? `Needs you: ${run.summary ?? result}`
           : result || "Done.";
+    return {
+      routineId,
+      title: name,
+      body: truncate(body, NOTIFICATION_CHARS),
+      threadId: run.threadId,
+      status: run.status,
+      at: run.finishedAt ?? this.now(),
+    };
+  }
+
+  private emitNotification(notification: RoutineNotification): void {
     try {
-      this.options.onNotification({
-        routineId,
-        title: name,
-        body: truncate(body, NOTIFICATION_CHARS),
-        threadId: run.threadId,
-        status: run.status,
-        at: this.now(),
-      });
+      this.options.onNotification(notification);
     } catch (error) {
       this.logger.error("Routine notification failed", { error: errorMessage(error) });
     }

@@ -56,6 +56,9 @@ written any more, so every device upgrades together (as fencing already requires
   in [DATA_FORMATS.md](../DATA_FORMATS.md#agent-command-receipts--statejournalmutationsoperation-hashjsonl).
   This bounded slice preserves the existing runtime entrypoints and does not complete the
   approval/routine state migration or change harness recovery.
+- Routine notification decisions are durable, including suppression, before the live event and
+  notified flag. A workspace-scoped cursor provides bounded catch-up with stable IDs through
+  lease handover; it does not replace the remaining routine run-state migration.
 - Compaction: journals grow with their thread (the orchestrator's chat most). Compacting needs a
   marker every device honors, or a union brings compacted events back.
 - Resuming the orchestrator's turn, and a Cursor session restored natively if ACP learns to seed

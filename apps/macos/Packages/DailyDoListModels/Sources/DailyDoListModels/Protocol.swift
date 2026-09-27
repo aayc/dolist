@@ -78,6 +78,10 @@ public enum APIRoute {
     "/api/daily/\(encodeURIComponent(date))\(create ? "?create=1" : "")"
   }
 
+  public static func agentNotifications(cursor: String?, limit: Int) -> String {
+    "/api/agent/notifications?limit=\(limit)\(cursor.map { "&cursor=\(encodeURIComponent($0))" } ?? "")"
+  }
+
   public static func agentOperation(_ id: String) -> String {
     "/api/agent/operations/\(encodeURIComponent(id))"
   }

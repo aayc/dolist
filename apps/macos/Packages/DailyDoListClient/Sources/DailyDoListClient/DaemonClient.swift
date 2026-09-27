@@ -138,6 +138,7 @@ public protocol DaemonClient: AnyObject, Sendable {
   func pauseRoutine(_ id: String, operationId: String) async throws -> Routine
   func resumeRoutine(_ id: String, operationId: String) async throws -> Routine
   func agentOperation(_ operationId: String) async throws -> AgentOperationResponse
+  func agentNotifications(cursor: String?, limit: Int) async throws -> AgentNotificationsResponse
 
   // Events (WebSocket)
   /// Opens the event connection (idempotent); reconnects automatically until `disconnect()`.

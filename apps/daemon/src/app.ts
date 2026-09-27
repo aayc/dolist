@@ -17,6 +17,7 @@ import { createErrorHandler, errorBody } from "./errors";
 import { memoryJsonObjectFile, memorySecretFile } from "./home-files";
 import { ObsidianImporter } from "./import/importer";
 import { MachineLink } from "./machine-link";
+import { NotificationJournal } from "./notifications";
 import { PairedDeviceStore } from "./paired-devices";
 import { PairingCodes } from "./pairing";
 import { createRemoteHosts, type RemoteHosts } from "./remote-hosts";
@@ -49,6 +50,7 @@ export interface AppDeps {
   storage: StorageProvider;
   workspace?: WorkspaceIdentity;
   mutationAuthority?: () => MutationAuthority;
+  notifications?: NotificationJournal;
   runtime: AgentRuntime;
   settings: SettingsStore;
   /** `port` must be the port actually listened on (it is part of the Host/Origin allowlists). */
@@ -151,6 +153,15 @@ export function createApp(deps: AppDeps): Hono {
     logger: deps.logger,
     now: () => ctx.now().getTime(),
   });
+  const notifications =
+    deps.notifications ??
+    new NotificationJournal({
+      local: deps.storage,
+      authority:
+        deps.mutationAuthority ??
+        (() => ({ storage: deps.storage, epoch: 0, isCurrent: () => true })),
+      logger: deps.logger,
+    });
   const app = new Hono({ getPath: (request) => escapeRoutingPath(getPath(request)) });
   app.onError(createErrorHandler(ctx.logger));
   app.notFound((c) =>
@@ -172,7 +183,7 @@ export function createApp(deps: AppDeps): Hono {
   app.use("/api/*", ctx.workspace.guard(ctx.vault));
   if (deps.relay) app.use("/api/*", deps.relay.middleware());
   app.use("/api/*", mutationMiddleware(ctx, mutations));
-  registerMutationRoutes(app, ctx, mutations);
+  registerMutationRoutes(app, ctx, mutations, notifications);
 
   registerVaultRoutes(app, ctx);
   registerNoteRoutes(app, ctx);

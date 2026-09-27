@@ -30,6 +30,7 @@ interface RelayRule {
 export const RELAY_RULES = [
   { name: "agentStatus", method: "GET", kind: "read" },
   { name: "agentOperation", method: "GET", kind: "read" },
+  { name: "agentNotifications", method: "GET", kind: "read" },
   { name: "tasks", method: "GET", kind: "read" },
   { name: "threads", method: "GET", kind: "read" },
   { name: "thread", method: "GET", kind: "read" },

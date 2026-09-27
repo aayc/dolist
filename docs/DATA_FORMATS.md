@@ -604,3 +604,21 @@ indeterminate, including crashes before dispatch or before completion persistenc
 a queue to replay. A completed receipt records the original HTTP exchange, which can itself be
 a rejected command or an accepted background action. It does not replace the tool write-ahead
 journal or migrate approval and routine state.
+
+
+## Routine notification decisions — `state/journal/notifications/`
+
+Each immutable v1 JSONL file contains one `routine.notification.decided` event. A workspace hash
+names its directory; the filename orders it by zero-padded lease epoch and sequence and includes
+a SHA-256 ID derived from the run ID. The event binds its workspace and run, and holds either the
+exact notification (with the same stable ID) or null for deliberate suppression. Persisted
+suppression prevents later policy changes from inventing an alert for an old run.
+
+The scheduler waits for persistence before emitting the live notification and marking its run
+notified. An unfinished persistence attempt is retried on a later tick or startup; another run
+of that routine waits until this decision is durable. With sync-service leasing, the write goes
+directly through the epoch-fenced authority and then mirrors locally. Old or corrupt decisions
+are not overwritten. Epoch/sequence cursors handle clock regressions and lease changes, and
+queries bound their returned decisions to 200 per page. Files do not expire; listing their
+metadata currently scales with the retained decision count. One file per decision avoids the
+sync service's per-file size limit without inventing journal compaction.
