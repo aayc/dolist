@@ -92,6 +92,10 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
 
 ## In flight
 
+- Remote Cursor CLI setup: installed the official Linux CLI under the daemon's service account.
+  Browser sign-in is pending with the user; the working Pi harness remains selected until
+  authentication and a real Cursor task have been verified. Credentials and login links stay
+  outside this repository.
 - Full native iPhone app: `codex/iphone-app`, based on the completed Mac setup baseline.
   Foundation/toolchain and reusable editor extraction are first. The complete scope, durable
   user instruction, next actions and test evidence live in `apps/mobile/IMPLEMENTATION.md`.
