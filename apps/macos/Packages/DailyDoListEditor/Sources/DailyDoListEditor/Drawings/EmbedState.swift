@@ -2,17 +2,6 @@ import AppKit
 import DailyDoListDrawing
 import DailyDoListEditorCore
 
-/// A drawing embed alone on its line, as the document has it now.
-struct EmbedLine: Equatable {
-  /// 0-based.
-  var line: Int
-  /// The line's content (without its `\n`); its start is the embed's anchor.
-  var content: NSRange
-  var spec: DrawingEmbed
-
-  var lineStart: Int { content.location }
-}
-
 /// A floated drawing (`left-wrap`, `right-wrap`) and the part of the column the text stays out of
 /// (text-container coordinates).
 struct EmbedFloat: Equatable {

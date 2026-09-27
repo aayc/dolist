@@ -1,5 +1,4 @@
-import DailyDoListDrawing
-import DailyDoListEditorCore
+import DailyDoListDrawingModel
 import Foundation
 
 /// A drawing file an embed names, as the host has it now.

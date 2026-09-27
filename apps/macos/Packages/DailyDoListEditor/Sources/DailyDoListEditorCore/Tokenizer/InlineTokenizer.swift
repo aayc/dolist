@@ -15,6 +15,7 @@ package struct InlineTokenizer {
   package private(set) var spans: [StyledSpan] = []
   package private(set) var markers: [SyntaxMarker] = []
   package private(set) var links: [LinkToken] = []
+  package private(set) var images: [LinkToken] = []
   package private(set) var tags: [TagToken] = []
 
   private struct Delimiter {
@@ -273,7 +274,9 @@ package struct InlineTokenizer {
       let tail = scanLinkTail(from: close + 1)
     else { return close + 1 }
     if bracket.isImage {
-      // Images stay as source: nothing inside is styled.
+      images.append(
+        LinkToken(range: NSRange(bracket.start, tail.end), target: .url(tail.destination)))
+      // Images stay as source unless a platform opts into a standalone preview.
       if bracket.delimiterBottom < delimiters.count {
         delimiters.removeSubrange(bracket.delimiterBottom...)
       }

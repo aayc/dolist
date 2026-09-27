@@ -114,5 +114,22 @@
         x: glyphPosition.x, y: glyphPosition.y, width: width, height: proposedRect.height)
     }
 
+    func layoutManager(
+      _ layoutManager: NSLayoutManager,
+      shouldSetLineFragmentRect lineFragmentRect: UnsafeMutablePointer<CGRect>,
+      lineFragmentUsedRect: UnsafeMutablePointer<CGRect>,
+      baselineOffset: UnsafeMutablePointer<CGFloat>,
+      in textContainer: NSTextContainer, forGlyphRange glyphRange: NSRange
+    ) -> Bool {
+      guard glyphRange.length > 0 else { return false }
+      let character = layoutManager.characterIndexForGlyph(at: glyphRange.location)
+      guard let marker = hiddenMarker(at: character), marker.kind == .embed,
+        let rect = embedFragment?(character, lineFragmentRect.pointee)
+      else { return false }
+      lineFragmentRect.pointee = rect
+      lineFragmentUsedRect.pointee = rect
+      return true
+    }
+
   }
 #endif

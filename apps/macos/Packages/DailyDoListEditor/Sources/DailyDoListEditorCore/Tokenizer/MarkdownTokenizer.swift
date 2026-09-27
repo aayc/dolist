@@ -42,6 +42,11 @@ package enum MarkdownTokenizer {
         tokens.embed = embed
         tokens.markers = [SyntaxMarker(range: NSRange(0, s.count), kind: .embed)]
       }
+      if tokens.kind == .paragraph, tokens.quoteDepth == 0,
+        NoteAttachmentEmbed.parse(line: String(decoding: s, as: UTF16.self)) != nil
+      {
+        tokens.attachment = NSRange(0, s.count)
+      }
       return (tokens, .normal)
     }
     // The text before the marker is styled like any line; the whole text is the agent's.

@@ -65,6 +65,10 @@ package struct StyledSpan: Equatable, Sendable {
 package struct SyntaxMarker: Equatable, Sendable {
   package var range: NSRange
   package var kind: MarkerKind
+  package init(range: NSRange, kind: MarkerKind) {
+    self.range = range
+    self.kind = kind
+  }
 }
 
 /// What a link points to, as written in the text.
@@ -169,6 +173,8 @@ package struct LineTokens: Equatable, Sendable {
   package var agent: AgentMarkerToken?
   /// The `![[…]]` of a drawing embed alone on its line (spaces aside).
   package var embed: NSRange?
+  /// A standalone local image/PDF. Platforms may opt into preview independently.
+  package var attachment: NSRange?
 
   package init(kind: LineKind) {
     self.kind = kind
@@ -191,6 +197,7 @@ package struct LineTokens: Equatable, Sendable {
     copy.listPrefix = listPrefix?.offset(by: delta)
     copy.agent = agent?.offset(by: delta)
     copy.embed = embed?.shifted(by: delta)
+    copy.attachment = attachment?.shifted(by: delta)
     return copy
   }
 }
