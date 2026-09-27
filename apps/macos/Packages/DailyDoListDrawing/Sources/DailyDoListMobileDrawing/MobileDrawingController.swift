@@ -28,6 +28,7 @@
       scene: ExcalidrawScene, environment: DrawingEnvironment = SystemDrawingEnvironment()
     ) {
       editor = DrawingEditor(scene: scene, environment: environment)
+      editor.onChange = { [weak self] scene in self?.onChange?(scene) }
       editor.onInteractionEnd = { [weak self] in
         Task { @MainActor [weak self] in
           guard let self, !self.hasActiveInteraction else { return }
@@ -67,10 +68,9 @@
       self.background = background
     }
     public func makeUIView(context: Context) -> MobileDrawingCanvasView {
-      let view = MobileDrawingCanvasView(editor: controller.editor)
+      let view = MobileDrawingCanvasView(editor: controller.editor, forwardsChanges: false)
       controller.canvas = view
       view.controller = controller
-      view.onChange = { [weak controller] scene in controller?.onChange?(scene) }
       return view
     }
     public func updateUIView(_ view: MobileDrawingCanvasView, context: Context) {

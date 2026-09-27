@@ -40,7 +40,7 @@
       target: self, action: #selector(pan(_:)))
     private lazy var pinch = UIPinchGestureRecognizer(target: self, action: #selector(zoom(_:)))
 
-    public init(editor: DrawingEditor) {
+    public init(editor: DrawingEditor, forwardsChanges: Bool = true) {
       self.editor = editor
       super.init(frame: .zero)
       isMultipleTouchEnabled = true
@@ -54,7 +54,7 @@
         self?.positionTextEditor()
         self?.setNeedsDisplay()
       }
-      editor.onChange = { [weak self] scene in self?.onChange?(scene) }
+      if forwardsChanges { editor.onChange = { [weak self] scene in self?.onChange?(scene) } }
       editor.onBeginTextEditing = { [weak self] id in self?.beginInlineTextEditing(id) }
       editor.onEndTextEditing = { [weak self] in self?.endInlineTextEditing(notify: false) }
       drawingPan.maximumNumberOfTouches = 1
