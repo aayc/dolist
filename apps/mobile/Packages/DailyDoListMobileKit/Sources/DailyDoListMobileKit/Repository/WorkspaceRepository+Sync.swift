@@ -44,6 +44,8 @@ extension WorkspaceRepository {
     try await verify(remote, generation: generation)
     let received = try await remote.readNote(path)
     try checkConnection(generation)
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     if let received { return try cache(received, path: path) }
     guard var existing = try index.document(path) else { return nil }
     if existing.state == .synced && existing.recoveryCopies.isEmpty {
@@ -80,6 +82,8 @@ extension WorkspaceRepository {
       guard try index.pending(path) != nil else { return }
       let currentRemote = try await remote.readNote(path)
       try checkConnection(generation)
+      var access = try checkpoints.beginAccess()
+      defer { access?.release() }
       var record = try requireDocument(path)
       guard let pending = try index.pending(path), record.state == .waitingToSync else { return }
 
@@ -104,6 +108,8 @@ extension WorkspaceRepository {
             try review(&record, remote: nil, reason: .remoteDeleted)
             return
           }
+          access?.release()
+          access = nil
           try await transmit(path: path, remote: remote, generation: generation)
           continue
         }
@@ -133,6 +139,8 @@ extension WorkspaceRepository {
         }
         try index.commit(record, pending: NoteOutboxRecord(path: path))
       }
+      access?.release()
+      access = nil
       try await transmit(path: path, remote: remote, generation: generation)
     }
   }
@@ -140,6 +148,8 @@ extension WorkspaceRepository {
   private func transmit(path: String, remote: any WorkspaceRemote, generation: UInt64) async throws
   {
     try checkConnection(generation)
+    var access = try checkpoints.beginAccess()
+    defer { access?.release() }
     let record = try requireDocument(path)
     let attempt =
       try index.pending(path)?.attempt
@@ -149,11 +159,14 @@ extension WorkspaceRepository {
         requiredDrawings: record.requiredDrawings)
     let content = try checkpoints.read(attempt.checkpoint)
     try index.commit(record, pending: NoteOutboxRecord(path: path, attempt: attempt))
+    access?.release()
+    access = nil
     do {
       let result = try await remote.writeNote(
         path, content: content, baseVersion: attempt.baseVersion,
         workspaceID: scope.workspaceID)
       try checkConnection(generation)
+      access = try checkpoints.beginAccess()
       guard try checkpoints.put(result.content) == attempt.checkpoint else {
         var latest = try requireDocument(path)
         try review(&latest, remote: result, reason: .uncertainWrite)
@@ -162,6 +175,7 @@ extension WorkspaceRepository {
       try acknowledge(path: path, attempt: attempt, remote: result)
     } catch WorkspaceRemoteError.conflict {
       try checkConnection(generation)
+      access = try checkpoints.beginAccess()
       // A definite conditional rejection is safe to rebase. Other errors may be lost success.
       let latest = try requireDocument(path)
       try index.commit(latest, pending: NoteOutboxRecord(path: path))

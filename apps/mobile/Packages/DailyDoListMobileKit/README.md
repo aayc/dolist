@@ -321,3 +321,23 @@ pending set and timestamps the approval observation. A generation conflict requi
 reconciling newer state; it does not authorize blindly retrying an older response. Cached counts
 and decisions are presentation data only. Notification IDs use `WorkspaceCache`'s separate
 existing notification cursor, not the content entry's freshness timestamp.
+
+## Checkpoint publication and reclamation coordination
+
+Every synchronous note/drawing read or save holds `NoteCheckpointStore.beginAccess()` from the
+index read through checkpoint creation and metadata commit. The Markdown implementation uses a
+shared `flock` on a namespace file outside the markdown directory; independent actors, SQLite
+handles and processes therefore share the same barrier. Network requests release it before
+awaiting and acquire it again before reconciling their result. Injected wrappers around real
+checkpoint stores must forward `beginAccess`, and index wrappers must forward
+`lastDocumentRevision` along with ordinary metadata operations.
+
+Cleanup takes nonblocking exclusive access and skips an active namespace. Export holds shared
+access through copying its referenced markdown; explicit Forget holds exclusive access across
+retirement and checkpoint deletion. The coordination file is never removed, including by Forget.
+File-lock errors fail the operation; there is no uncoordinated fallback.
+
+Schema 5 retains each path's highest editor revision and metadata generation after cache removal,
+remote deletion, local discard and structural remaps. A later download or newly created draft at
+that path gets a higher revision, preventing an earlier live editor from passing CAS after a
+remove/recreate cycle. History is deleted only after namespace retirement fences every handle.

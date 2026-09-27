@@ -110,7 +110,7 @@ extension SQLiteWorkspaceIndex: WorkspaceMaintenanceStore {
         }
         let pending: NoteOutboxRecord? = try read("outbox", key: path)
         guard pending?.attempt == nil else { throw WorkspaceRepositoryError.pendingNoteWrites }
-        try put("documents", key: path, value: nil as NoteIndexRecord?)
+        try deleteDocument(path)
         try put("outbox", key: path, value: nil as NoteOutboxRecord?)
       }
     }
@@ -129,6 +129,8 @@ extension SQLiteWorkspaceIndex: WorkspaceMaintenanceStore {
         try put("metadata", keyColumn: "key", key: "forgotten", value: true)
         try execute("DELETE FROM outbox")
         try execute("DELETE FROM documents")
+        try execute("DELETE FROM document_history")
+        try execute("DELETE FROM document_cache_access")
         try execute("DELETE FROM workspace_values")
         try execute("DELETE FROM workspace_value_revisions")
         try execute("DELETE FROM content_cache")
@@ -168,10 +170,21 @@ extension SQLiteWorkspaceIndex: WorkspaceMaintenanceStore {
       guard pending?.attempt == nil else { throw WorkspaceRepositoryError.pendingNoteWrites }
       if let destination = action.remappedPath(oldPath) {
         record.path = destination
-        record.generation = 1
-        try put("documents", key: oldPath, value: nil as NoteIndexRecord?)
+        let history = try documentHistory(destination)
+        guard history.generation < Int64.max, history.revision < Int64.max else {
+          throw WorkspaceRepositoryError.corruptIndex
+        }
+        record.generation = history.generation + 1
+        if record.revision <= history.revision {
+          let wasAcknowledged = record.acknowledgedRevision == record.revision
+          record.revision = history.revision + 1
+          if wasAcknowledged { record.acknowledgedRevision = record.revision }
+        }
+        try deleteDocument(oldPath)
         try put("outbox", key: oldPath, value: nil as NoteOutboxRecord?)
         try put("documents", key: destination, value: record)
+        try rememberDocumentHistory(record)
+        try touchDocument(destination)
         try put(
           "outbox", key: destination,
           value: pending.map { _ in NoteOutboxRecord(path: destination) })
@@ -181,9 +194,10 @@ extension SQLiteWorkspaceIndex: WorkspaceMaintenanceStore {
         record.state = .recoveryDraft
         record.reviewReason = .remoteDeleted
         try put("documents", key: oldPath, value: record)
+        try rememberDocumentHistory(record)
         try put("outbox", key: oldPath, value: nil as NoteOutboxRecord?)
       } else {
-        try put("documents", key: oldPath, value: nil as NoteIndexRecord?)
+        try deleteDocument(oldPath)
         try put("outbox", key: oldPath, value: nil as NoteOutboxRecord?)
       }
     }

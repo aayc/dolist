@@ -29,16 +29,22 @@ public actor DrawingRepository {
   }
 
   public func drawing(_ path: String) throws -> LocalDrawing? {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     try Self.validatePath(path)
     return try index.document(path).map(snapshot)
   }
 
   public func drawings() throws -> [LocalDrawing] {
-    try index.documents().filter { WorkspaceDocumentPath.isDrawing($0.path) }.map(snapshot)
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
+    return try index.documents().filter { WorkspaceDocumentPath.isDrawing($0.path) }.map(snapshot)
   }
 
   @discardableResult
   public func cache(_ remote: RemoteNote, path: String) throws -> LocalDrawing {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     try Self.validatePath(path)
     let prior = try index.document(path)
     if let prior, prior.state != .synced {
@@ -48,7 +54,7 @@ public actor DrawingRepository {
       }
     }
     let hash = try checkpoints.put(remote.content)
-    let revision = try nextRevision(prior?.revision ?? 0)
+    let revision = try nextRevision(prior?.revision ?? index.lastDocumentRevision(path))
     let invalid = DrawingValidation.error(ExcalidrawMarkdown.parse(remote.content)) != nil
     var copies = prior?.recoveryCopies ?? []
     if let prior, prior.reviewReason == .invalidDrawing, !copies.contains(prior.working) {
@@ -71,12 +77,15 @@ public actor DrawingRepository {
   }
 
   private func createRaw(path: String, content: String) throws -> LocalDrawing {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     try Self.validatePath(path)
     guard try index.document(path) == nil else {
       throw WorkspaceRepositoryError.documentNeedsReview
     }
     let record = NoteIndexRecord(
-      path: path, working: try checkpoints.put(content), revision: 1,
+      path: path, working: try checkpoints.put(content),
+      revision: try nextRevision(index.lastDocumentRevision(path)),
       acknowledgedRevision: 0, state: .waitingToSync, recoveryCopies: [])
     try index.commit(record, pending: NoteOutboxRecord(path: path))
     return try snapshot(record)
@@ -86,6 +95,8 @@ public actor DrawingRepository {
   public func save(path: String, scene: ExcalidrawScene, expectedRevision: Int64) throws
     -> LocalDrawing
   {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     var record = try require(path, revision: expectedRevision)
     let previous = ExcalidrawMarkdown.parse(try checkpoints.read(record.working))
     if let error = DrawingValidation.error(previous) { throw error }
@@ -115,6 +126,8 @@ public actor DrawingRepository {
   public func recover(path: String, as newPath: String, expectedRevision: Int64) throws
     -> LocalDrawing
   {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     let record = try require(path, revision: expectedRevision)
     guard record.state == .needsReview || record.state == .recoveryDraft else {
       throw WorkspaceRepositoryError.documentNeedsReview
@@ -130,13 +143,16 @@ public actor DrawingRepository {
   public func createRecoveryDraft(
     path: String, scene: ExcalidrawScene, previous: ExcalidrawMarkdown
   ) throws -> LocalDrawing {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     try Self.validatePath(path)
     guard try index.document(path) == nil else {
       throw WorkspaceRepositoryError.documentNeedsReview
     }
     let content = try DrawingValidation.serialized(scene, previous: previous)
     let record = NoteIndexRecord(
-      path: path, working: try checkpoints.put(content), revision: 1,
+      path: path, working: try checkpoints.put(content),
+      revision: try nextRevision(index.lastDocumentRevision(path)),
       acknowledgedRevision: 0, state: .recoveryDraft, reviewReason: .remoteDeleted,
       recoveryCopies: [])
     try index.commit(record, pending: nil)
@@ -146,6 +162,8 @@ public actor DrawingRepository {
   /// Explicit review: preserve our file before taking a valid authoritative base.
   @discardableResult
   public func useRemoteVersion(path: String, expectedRevision: Int64) throws -> LocalDrawing {
+    let access = try checkpoints.beginAccess()
+    defer { access?.release() }
     var record = try require(path, revision: expectedRevision)
     guard record.state == .needsReview, let base = record.base else {
       throw WorkspaceRepositoryError.documentNeedsReview
