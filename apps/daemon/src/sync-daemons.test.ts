@@ -63,7 +63,7 @@ afterEach(async () => {
 
 async function startDevice(
   name: string,
-  options: { sync?: boolean; placement?: AgentPlacement } = {},
+  options: { sync?: boolean; placement?: AgentPlacement; syncDebounceMs?: number } = {},
 ): Promise<Device> {
   const root = join(dir.path, name);
   const home = join(root, "home");
@@ -97,7 +97,7 @@ async function startDevice(
     env,
     logger: logger.child({ device: name }),
     leaseTimings: LEASE,
-    syncDebounceMs: SYNC_DEBOUNCE_MS,
+    syncDebounceMs: options.syncDebounceMs ?? SYNC_DEBOUNCE_MS,
   });
   running.push(daemon);
   return { name, daemon, apiToken: readFileSync(config.tokenPath, "utf8").trim() };
@@ -130,6 +130,29 @@ const agentProblem = async (device: Device) => (await agentStatus(device)).probl
 describe("two daemons sharing a vault through the sync service", {
   timeout: 60_000 * TIME_SCALE,
 }, () => {
+  it("syncs a relaying device's last note when it quits before the debounce", async () => {
+    const laptop = await startDevice("Laptop", {
+      placement: "always_on_machine",
+      syncDebounceMs: 60_000,
+    });
+    await send(laptop, "PUT", API_ROUTES.settings, {
+      remote: { alwaysOnMachine: { name: "Host", url: "https://host.example.test" } },
+    });
+    await eventually(async () => expect(await agentProblem(laptop)).toBe(RELAY_PROBLEMS.notPaired));
+    await eventually(async () => {
+      const { body } = await get<SyncStatusResponse>(laptop, API_ROUTES.syncStatus);
+      expect(body.state).toBe("idle");
+      expect(body.lastSyncedAt).not.toBeNull();
+    });
+
+    const path = "Inbox/just-entered.md";
+    const content = "- [ ] Research native ferns\n";
+    expect((await send(laptop, "PUT", API_ROUTES.note(path), { content })).status).toBe(201);
+    expect(server.store.read(vault.id, path)).toBeNull();
+    await laptop.daemon.close();
+    expect(server.store.read(vault.id, path)?.content).toBe(content);
+  });
+
   it("sync notes both ways, run the agent on exactly one of them, and hand it over", async () => {
     const laptop = await startDevice("Laptop");
     await eventually(async () => expect(await agentProblem(laptop)).toBeUndefined());
