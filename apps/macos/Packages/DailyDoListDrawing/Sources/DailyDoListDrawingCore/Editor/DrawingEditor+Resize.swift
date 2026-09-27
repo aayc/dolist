@@ -10,7 +10,15 @@ extension DrawingEditor {
   ) {
     let padding = 5 / zoom
     let box = frame.rect.insetBy(padding)
-    let local = point.rotated(around: box.center, by: -frame.angle)
+    var local = point.rotated(around: box.center, by: -frame.angle)
+    let edgeOffset = DrawingPoint(
+      handle.movesRight ? padding : handle.movesLeft ? -padding : 0,
+      handle.movesBottom ? padding : handle.movesTop ? -padding : 0)
+    if frame.angle == 0 {
+      local = snappedPointer(local - edgeOffset, excluding: Set(originals.keys)) + edgeOffset
+    } else {
+      local = snapped(local - edgeOffset) + edgeOffset
+    }
     let keepAspect =
       modifiers.contains(.shift)
       || originals.values.contains { $0.type == .text && $0.containerId == nil && handle.isCorner }

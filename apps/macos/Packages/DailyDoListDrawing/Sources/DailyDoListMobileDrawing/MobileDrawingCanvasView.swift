@@ -23,6 +23,9 @@
     public var theme: DrawingTheme = .light { didSet { setNeedsDisplay() } }
     public var background: DrawingBackground = .scene { didSet { setNeedsDisplay() } }
     public var pointerModifiers: PointerModifiers = []
+    public var laserEnabled = false { didSet { if laserEnabled != oldValue { clearLaser() } } }
+    var laserTrail: [(point: DrawingPoint, time: CFTimeInterval)] = []
+    var laserDisplayLink: CADisplayLink?
     public var onChange: ((ExcalidrawScene) -> Void)?
     public var onEndEditing: (() -> Void)?
     let renderer = SceneRenderer()
@@ -49,6 +52,7 @@
       accessibilityLabel = "Drawing canvas"
       accessibilityHint =
         "Use the selected tool with one finger. Use two fingers to pan or pinch to zoom."
+      editor.rotationHandleEnabled = true
       editor.hitTolerance = 18
       editor.selectionHandleRadius = 22
       editor.onInvalidate = { [weak self] in
@@ -76,6 +80,11 @@
     }
     @available(*, unavailable) required init?(coder: NSCoder) {
       fatalError("init(coder:) unavailable")
+    }
+
+    public override func didMoveToWindow() {
+      super.didMoveToWindow()
+      if window == nil { clearLaser() }
     }
 
     public override func layoutSubviews() {
@@ -176,6 +185,7 @@
         context.restoreGState()
       }
       if mode == .editing { drawSelection(in: context) }
+      drawLaser(in: context)
     }
 
     public func gestureRecognizer(
@@ -196,6 +206,7 @@
     }
 
     @objc private func drag(_ recognizer: UIPanGestureRecognizer) {
+      if handleLaser(recognizer) { return }
       let location = recognizer.location(in: self)
       switch recognizer.state {
       case .began:
@@ -273,6 +284,10 @@
     @objc private func tap(_ recognizer: UITapGestureRecognizer) { tap(recognizer, count: 1) }
     @objc private func doubleTap(_ recognizer: UITapGestureRecognizer) { tap(recognizer, count: 2) }
     private func tap(_ recognizer: UITapGestureRecognizer, count: Int) {
+      if laserEnabled, mode == .editing {
+        addLaserPoint(recognizer.location(in: self))
+        return
+      }
       guard mode == .editing, editor.tool != .hand else { return }
       if textEditor == nil { becomeFirstResponder() }
       let point = viewport.viewToScene(recognizer.location(in: self))

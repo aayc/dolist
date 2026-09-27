@@ -51,6 +51,9 @@
             Text("Comic Shanns — hand drawn code").tag(FontFamily.comicShanns)
             Text("Liberation Sans — classic").tag(FontFamily.liberationSans)
           }
+          Text("The quick brown fox · 0123456789")
+            .font(Font(DrawingFonts.font(family: editor.style.fontFamily, size: 24)))
+            .accessibilityLabel("Selected font preview")
           Stepper(
             "Size \(Int(editor.style.fontSize))", value: binding(\.fontSize), in: 8...144, step: 2)
           Picker("Alignment", selection: binding(\.textAlign)) {

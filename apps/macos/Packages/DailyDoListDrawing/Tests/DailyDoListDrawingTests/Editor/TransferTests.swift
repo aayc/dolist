@@ -110,4 +110,16 @@ struct TransferTests {
     #expect(editor.element("target")?.link == nil)
     #expect(editor.element("target")?.strokeColor == original.strokeColor)
   }
+  @Test func urlCardsPreserveTheLinkAndTextAndUndoTogether() throws {
+    let editor = DrawingEditor(scene: .init(), environment: DeterministicDrawingEnvironment())
+    let id = try editor.insertURLCard("https://example.invalid/synthetic", at: DrawingPoint(20, 30))
+    #expect(editor.element(id)?.type == .embeddable)
+    #expect(editor.element(id)?.link == "https://example.invalid/synthetic")
+    let label = try #require(editor.element(id)?.boundTextId)
+    #expect(editor.element(label)?.text?.originalText == editor.element(id)?.link)
+    editor.undo()
+    #expect(editor.scene.visibleElements.isEmpty)
+    #expect(throws: (any Error).self) { try editor.insertURLCard("javascript:alert(1)", at: .zero) }
+  }
+
 }

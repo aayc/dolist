@@ -114,8 +114,7 @@ unless moved as part of a selection), unknown fields of elements, bindings, the 
 file: the frontmatter, the notice and any markdown above the data, `## Element Links`,
 `## Embedded Files`, unknown sections, and what follows the drawing.
 
-**Deferred**: extended SVG image features, rotating with a handle (native mobile rotation commands exist),
-obstacle-avoiding elbow rerouting, Mac arrangement controls,
+**Deferred**: extended SVG image features, obstacle-avoiding elbow rerouting, Mac arrangement controls,
 and the eraser's undo-while-dragging. Shared frame/point/grid commands are available on both platforms;
 the expanded inspector is currently native iPhone UI.
 
@@ -261,7 +260,8 @@ The inventory below comes from the pinned Excalidraw 0.18.1 source in its packag
 `apps/web/src/features/drawings/DrawingEditor.tsx` disables export/load/save-as-image/save-to-file
 and AI, supplies only canvas background, clear and help in the main menu, but leaves context-menu
 copy-as-PNG/SVG available. These remaining controls are separate acceptance work, not implied by
-rendering an imported scene.
+rendering an imported scene. The pinned package references `changeStrokeShape` in Actions, but
+registers no implementation; its action manager returns null, so there is no exposed freehand stroke-shape control.
 
 - [x] Shared model/editor/renderer extraction, unchanged Mac public import and baseline tests.
 - [x] Native core ten tools, selection/marquee, move/resize, bound labels, text, styles, eraser,
@@ -281,14 +281,16 @@ rendering an imported scene.
 - [ ] Elbow routing: obstacle avoidance and Excalidraw fixed-segment routing parity (native routes remain orthogonal).
 - [x] Text: vertical alignment, bind/unbind/wrap text in container and automatic-width control.
 - [x] Precision: visible grid, snap construction/movement to grid, snap movement to object edges/centers.
-- [ ] Precision: object snapping while constructing/resizing and freehand stroke shape.
+- [x] Precision: object snapping while constructing and resizing axis-aligned selections.
+  Rotated resizing keeps grid snapping in local axes.
 - [x] Canvas: background, clear, zoom to selection/reset zoom, view/zen mode, text search, statistics and help.
 - [x] Links: edit/open links and copy element link with host-provided navigation policy.
 - [x] Library: save selection, insert/delete items and import/export library files; external browse
   requires host navigation policy and never silently fetches or publishes drawings.
 - [x] Native object accessibility actions, hardware shortcuts and all built-in font-family choices.
-- [ ] Inline font previews and integrated VoiceOver/hardware-keyboard runtime verification.
-- [ ] Extra tools: embeddable URL cards and transient laser pointer. Mermaid generation is deliberately
+- [x] Inline selected-font preview and native touch rotation handle (one undo step).
+- [ ] Integrated VoiceOver/hardware-keyboard runtime verification.
+- [x] Extra tools: embeddable URL cards and transient laser pointer. Mermaid generation is deliberately
   unavailable in the web wrapper (`excalidraw-assets.ts` substitutes an explanatory stub); AI is disabled.
 
 The first mobile checkpoint compiles against the iOS SDK; runtime verification belongs to the
@@ -349,3 +351,12 @@ The parser never resolves entities, external resources, CSS or scripts; unsuppor
 remains an explicit parity gap. Accepted file imports retain original SVG bytes rather than replacing
 them with a raster. Regression tests cover rejection, transforms/clipping, vector text export and
 embedded image transfer. Visual runtime parity still requires the integrated app pass.
+
+The latest touch checkpoint adds construction and axis-aligned resize snapping to object edges
+and centers; a rotation handle with 15-degree constraints and one undo step; the selected-font
+preview; native URL-card creation; and a laser trail that expires after 0.8 seconds without changing
+the scene, save state or history. Selecting a normal tool exits laser mode. URL cards retain standard
+`embeddable` elements plus a bound URL label; their content opens only through the host's explicit
+link action. They do not create a hidden browser or automatically fetch remote pages. This is the
+native card adapter for web embeds. Source-map inspection confirms `changeStrokeShape` has no
+registered action in pinned Excalidraw 0.18.1, so it is not an exposed control to reproduce.
