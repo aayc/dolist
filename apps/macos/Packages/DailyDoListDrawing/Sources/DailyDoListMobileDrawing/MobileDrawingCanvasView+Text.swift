@@ -32,6 +32,15 @@
       input.selectedRange = NSRange(location: 0, length: input.text.utf16.count)
     }
 
+    public func finishEditing() {
+      if let input = textEditor {
+        input.unmarkText()
+        editor.updateEditingText(input.text)
+        endInlineTextEditing()
+      }
+      editor.commitInteraction()
+    }
+
     @objc private func finishText() { endInlineTextEditing() }
 
     public func endInlineTextEditing(notify: Bool = true) {

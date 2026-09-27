@@ -160,6 +160,7 @@ extension DrawingEditor {
   /// again).
   public func finishMultiPoint(dropLast: Bool = true) {
     guard let id = multiPointElementId else { return }
+    defer { notifyInteractionEnded() }
     multiPointElementId = nil
     let startTarget = multiPointStartTarget
     multiPointStartTarget = nil

@@ -71,6 +71,7 @@ extension DrawingEditor {
   /// Ends inline editing: empty text is removed, anything else committed.
   public func endTextEditing() {
     guard let id = editingTextId else { return }
+    defer { notifyInteractionEnded() }
     editingTextId = nil
     onEndTextEditing?()
     if let element = element(id),

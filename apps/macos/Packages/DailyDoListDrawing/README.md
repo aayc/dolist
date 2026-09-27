@@ -277,14 +277,15 @@ rendering an imported scene.
 - [x] Frames: create, rename, wrap selection, select children, remove children and visibility.
 - [x] Lines/arrows: insert/delete points, draggable midpoints, elbow creation/editing and straight/round/elbow controls.
 - [ ] Elbow routing: obstacle avoidance and Excalidraw fixed-segment routing parity (native routes remain orthogonal).
-- [ ] Text: vertical alignment, bind/unbind/wrap text in container and automatic-width control.
+- [x] Text: vertical alignment, bind/unbind/wrap text in container and automatic-width control.
 - [x] Precision: visible grid, snap construction/movement to grid, snap movement to object edges/centers.
 - [ ] Precision: object snapping while constructing/resizing and freehand stroke shape.
-- [ ] Canvas: background, clear, zoom to selection/reset zoom, view/zen mode, statistics and help.
+- [x] Canvas: background, clear, zoom to selection/reset zoom, view/zen mode, text search, statistics and help.
 - [x] Links: edit/open links and copy element link with host-provided navigation policy.
 - [x] Library: save selection, insert/delete items and import/export library files; external browse
   requires host navigation policy and never silently fetches or publishes drawings.
-- [ ] Native accessibility actions, hardware shortcuts, full font-picker choices and inline previews.
+- [x] Native object accessibility actions, hardware shortcuts and all built-in font-family choices.
+- [ ] Inline font previews and integrated VoiceOver/hardware-keyboard runtime verification.
 - [ ] Extra tools: embeddable URL cards and transient laser pointer. Mermaid generation is deliberately
   unavailable in the web wrapper (`excalidraw-assets.ts` substitutes an explanatory stub); AI is disabled.
 
@@ -320,3 +321,18 @@ buttons are disabled. `library` defaults to `MobileDrawingLibrary.shared` (app p
 can be replaced with a store initialized using an isolated `UserDefaults` suite. Library access
 is explicit user interaction and never a remote request. The **Copy, library and links** action
 opens these controls. Integrated runtime checks and vector SVG export remain pending.
+
+The fifth checkpoint exposes text binding, vertical alignment and automatic width; canvas
+background/clear/search/statistics/help; view/zen modes; selection/reset zoom; all built-in font IDs
+(using the documented device font fallbacks); VoiceOver object actions and hardware keyboard
+commands. Shapes remain native accessibility elements; text entry keeps UIKit's standard input.
+Escape now rolls back an interrupted pointer gesture, matching touch cancellation.
+
+`MobileDrawingController.hasActiveInteraction` reports pointer gestures, text editing and
+multi-point lines. `onInteractionEnd` runs on the next main-actor turn and rechecks idle state,
+including after a selection-only gesture, so the document host can defer incoming scene rebases.
+The host must recheck its session identity and pending revision in that callback. `finishEditing()`
+flushes UIKit marked/text input and commits the visible pointer position before background saves.
+The shared editor exposes the same activity state and explicit `commitInteraction()`; existing
+Mac `finishInteraction()` behavior remains available. Focused text/history/interaction tests and
+unsigned iOS compilation cover this checkpoint; integrated runtime checks remain with the app.

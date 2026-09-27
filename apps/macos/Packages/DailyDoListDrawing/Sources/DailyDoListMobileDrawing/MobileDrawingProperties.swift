@@ -42,9 +42,14 @@
         }
         Section("Text") {
           Picker("Font", selection: binding(\.fontFamily)) {
-            Text("Hand drawn").tag(FontFamily.excalifont)
-            Text("Normal").tag(FontFamily.helvetica)
-            Text("Code").tag(FontFamily.cascadia)
+            Text("Excalifont — hand drawn").tag(FontFamily.excalifont)
+            Text("Virgil — legacy hand drawn").tag(FontFamily.virgil)
+            Text("Helvetica — sans serif").tag(FontFamily.helvetica)
+            Text("Cascadia — code").tag(FontFamily.cascadia)
+            Text("Nunito — rounded").tag(FontFamily.nunito)
+            Text("Lilita One — bold").tag(FontFamily.lilitaOne)
+            Text("Comic Shanns — hand drawn code").tag(FontFamily.comicShanns)
+            Text("Liberation Sans — classic").tag(FontFamily.liberationSans)
           }
           Stepper(
             "Size \(Int(editor.style.fontSize))", value: binding(\.fontSize), in: 8...144, step: 2)
@@ -53,6 +58,35 @@
             Text("Center").tag(TextAlign.center)
             Text("Right").tag(TextAlign.right)
           }
+        }
+        Section("Text layout") {
+          Picker(
+            "Vertical alignment",
+            selection: Binding(
+              get: { editor.selectedTextElements.first?.text?.verticalAlign ?? .middle },
+              set: { editor.setTextVerticalAlignment($0) })
+          ) {
+            Text("Top").tag(VerticalAlign.top)
+            Text("Middle").tag(VerticalAlign.middle)
+            Text("Bottom").tag(VerticalAlign.bottom)
+          }.disabled(editor.selectedTextElements.isEmpty)
+          Toggle(
+            "Auto width",
+            isOn: Binding(
+              get: { editor.selectedTextElements.first?.text?.autoResize ?? true },
+              set: { editor.setTextAutoResize($0) })
+          )
+          .disabled(!editor.selectedTextElements.contains { $0.containerId == nil })
+          Button("Bind selected text and shape") { editor.bindSelectedText() }
+            .disabled(editor.selectedIds.count != 2)
+          Button("Unbind text") { editor.unbindSelectedText() }
+            .disabled(!editor.selectedTextElements.contains { $0.containerId != nil })
+          Button("Wrap text in a rectangle") { editor.wrapSelectedText() }
+            .disabled(!editor.selectedTextElements.contains { $0.containerId == nil })
+          Text(
+            "Excalifont is bundled. Other family identifiers are preserved and use the device's closest available fonts."
+          )
+          .font(.footnote).foregroundStyle(.secondary)
         }
         Section("Arrowheads") {
           arrowheadPicker("Start", selection: binding(\.startArrowhead))
