@@ -315,6 +315,9 @@ struct DrawingRepositoryTests {
     _ = try await reopened.synchronize(with: remote)
     let review = try #require(await reopened.drawing(original.path))
     #expect(review.reviewReason == .uncertainWrite)
+    let snapshot = try #require(await reopened.review(original.path))
+    #expect(snapshot.drawing.content == review.content)
+    #expect(snapshot.hostContent == other)
     #expect(review.document.scene.element(id: "local") != nil)
     #expect(
       try review.recoveryCopies.map { try String(contentsOf: $0, encoding: .utf8) }.contains(other))
