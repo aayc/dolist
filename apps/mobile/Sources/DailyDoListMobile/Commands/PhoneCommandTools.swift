@@ -1,5 +1,7 @@
 import DailyDoListMobileAgent
+import Observation
 import SwiftUI
+import UIKit
 
 private struct PhoneCommandEnvironmentKey: EnvironmentKey {
   static let defaultValue: PhoneCommandController? = nil
@@ -59,22 +61,30 @@ extension View {
 @MainActor private struct PhoneCommandContainer<Content: View>: View {
   let content: Content
   @State private var controller: PhoneCommandController
+  @State private var presentationGate: PhoneCommandPresentationGate
   init(
     content: Content, workspace: PhoneWorkspace, isCurrent: @escaping () -> Bool,
     chooseConnection: @escaping () -> Void, showHostSettings: @escaping () -> Void,
     insertDrawing: (() -> Void)?, visibleThread: @escaping () -> String?
   ) {
     self.content = content
-    _controller = State(
-      initialValue: PhoneCommandController(
-        workspace: workspace, isCurrent: isCurrent,
-        chooseConnection: chooseConnection, showHostSettings: showHostSettings,
-        insertDrawing: insertDrawing, visibleThread: visibleThread))
+    let gate = PhoneCommandPresentationGate()
+    let controller = PhoneCommandController(
+      workspace: workspace, isCurrent: { isCurrent() && gate.permitsActions },
+      chooseConnection: chooseConnection, showHostSettings: showHostSettings,
+      insertDrawing: insertDrawing, visibleThread: visibleThread)
+    gate.ownedPresentationIsActive = { [weak controller] in
+      controller?.presentation != nil || controller?.awaitingDismissal == true
+    }
+    _presentationGate = State(initialValue: gate)
+    _controller = State(initialValue: controller)
   }
   var body: some View {
     content
       .environment(\.phoneCommands, controller)
       .background {
+        PhoneCommandPresentationProbe(gate: presentationGate, owned: false)
+          .frame(width: 0, height: 0).accessibilityHidden(true)
         // Registered buttons participate in SwiftUI's native hosting-controller key command menu.
         // They never take text focus and are disabled while another presentation owns the input.
         ForEach(PhoneCommand.all.filter { $0.shortcut != nil }) { command in
@@ -91,21 +101,26 @@ extension View {
       }
       .sheet(item: $controller.presentation, onDismiss: controller.dismissed) {
         presentation in
-        switch presentation {
-        case .palette(let mode): PhonePaletteView(mode: mode, controller: controller)
-        case .path(let action, let original, let epoch):
-          PhoneCommandPathView(
-            controller: controller, action: action, original: original, epoch: epoch)
-        case .capture: CaptureTaskView(workspace: controller.workspace)
-        case .history: navigation { CaptureHistoryView(workspace: controller.workspace) }
-        case .recovery: navigation { PhoneRecoveryView(workspace: controller.workspace) }
-        case .newRoutine:
-          if let store = controller.workspace.agent {
-            MobileNewRoutineView(
-              store: store,
-              actionsEnabled: controller.canRun(.newRoutine)
-            ) { _ in controller.presentation = nil }
+        Group {
+          switch presentation {
+          case .palette(let mode): PhonePaletteView(mode: mode, controller: controller)
+          case .path(let action, let original, let epoch):
+            PhoneCommandPathView(
+              controller: controller, action: action, original: original, epoch: epoch)
+          case .capture: CaptureTaskView(workspace: controller.workspace)
+          case .history: navigation { CaptureHistoryView(workspace: controller.workspace) }
+          case .recovery: navigation { PhoneRecoveryView(workspace: controller.workspace) }
+          case .newRoutine:
+            if let store = controller.workspace.agent {
+              MobileNewRoutineView(
+                store: store,
+                actionsEnabled: controller.canRun(.newRoutine)
+              ) { _ in controller.presentation = nil }
+            }
           }
+        }.background {
+          PhoneCommandPresentationProbe(gate: presentationGate, owned: true)
+            .frame(width: 0, height: 0).accessibilityHidden(true)
         }
       }
   }
@@ -117,6 +132,80 @@ extension View {
         }
       }
     }
+  }
+}
+
+/// SwiftUI sheets can be owned by descendants (Backlinks, previews, Files), so root presentation
+/// state alone cannot protect the responder chain. Inspect the live UIKit hierarchy on every
+/// action, including actions invoked through the environment rather than a keyboard shortcut.
+@MainActor @Observable final class PhoneCommandPresentationGate {
+  @ObservationIgnored weak var rootProbe: UIViewController?
+  @ObservationIgnored weak var ownedProbe: UIViewController?
+  @ObservationIgnored private weak var hostingWindow: UIWindow?
+  @ObservationIgnored var ownedPresentationIsActive: () -> Bool = { false }
+  private var hierarchyRevision: UInt64 = 0
+
+  func hierarchyChanged() { hierarchyRevision &+= 1 }
+
+  var permitsActions: Bool {
+    _ = hierarchyRevision
+    guard let rootProbe, rootProbe.parent != nil else { return false }
+    if let window = rootProbe.viewIfLoaded?.window { hostingWindow = window }
+    // A full-screen sheet temporarily removes its presenter's view from the window. Retain only
+    // a weak window reference so owned sheet actions still work, but a retired probe fails closed.
+    guard let root = hostingWindow?.rootViewController else { return false }
+    var visited: Set<ObjectIdentifier> = []
+    var presentedIDs: Set<ObjectIdentifier> = []
+    var presented: [UIViewController] = []
+    func walk(_ controller: UIViewController) {
+      guard visited.insert(ObjectIdentifier(controller)).inserted else { return }
+      if let modal = controller.presentedViewController {
+        if presentedIDs.insert(ObjectIdentifier(modal)).inserted { presented.append(modal) }
+        walk(modal)
+      }
+      for child in controller.children { walk(child) }
+    }
+    walk(root)
+    guard !presented.isEmpty else { return true }
+    guard presented.count == 1, ownedPresentationIsActive(), let ownedProbe else { return false }
+    var ancestor: UIViewController? = ownedProbe
+    while let current = ancestor {
+      if current === presented[0] { return true }
+      ancestor = current.parent
+    }
+    return false
+  }
+}
+
+private struct PhoneCommandPresentationProbe: UIViewControllerRepresentable {
+  let gate: PhoneCommandPresentationGate
+  let owned: Bool
+  func makeUIViewController(context: Context) -> UIViewController {
+    let controller = PhoneCommandProbeController()
+    controller.hierarchyChanged = { [weak gate] in
+      Task { @MainActor in gate?.hierarchyChanged() }
+    }
+    controller.view = UIView()
+    controller.view.isUserInteractionEnabled = false
+    if owned { gate.ownedProbe = controller } else { gate.rootProbe = controller }
+    return controller
+  }
+  func updateUIViewController(_ controller: UIViewController, context: Context) {}
+}
+
+private final class PhoneCommandProbeController: UIViewController {
+  var hierarchyChanged: (() -> Void)?
+  override func didMove(toParent parent: UIViewController?) {
+    super.didMove(toParent: parent)
+    hierarchyChanged?()
+  }
+  override func viewDidAppear(_ animated: Bool) {
+    super.viewDidAppear(animated)
+    hierarchyChanged?()
+  }
+  override func viewDidDisappear(_ animated: Bool) {
+    super.viewDidDisappear(animated)
+    hierarchyChanged?()
   }
 }
 
