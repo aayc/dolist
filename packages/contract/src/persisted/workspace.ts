@@ -36,7 +36,7 @@ const note = z.looseObject({
 /** A preparation precedes every conditional file write. No automatic replay of a preparation. */
 export const PersistedCaptureSchema = z.looseObject({
   version: z.literal(1),
-  operationId: PersistedFileIdSchema,
+  operationId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
   workspaceId: PersistedFileIdSchema,
   hostId: PersistedFileIdSchema,
   principal: z.string().min(1),

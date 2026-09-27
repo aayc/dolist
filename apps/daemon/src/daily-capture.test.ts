@@ -97,6 +97,7 @@ describe("daily capture", () => {
     expect(await (await t.append()).json()).toEqual(receipt);
     expect((await t.storage.read(receipt.note.path))?.content).toContain("later typing");
     expect((await t.append({ ...t.request, text: "different payload" })).status).toBe(409);
+    expect((await t.append({ ...t.request, operationId: "unsafe:id" })).status).toBe(400);
     expect((await t.append({ ...t.request, hostId: "other_host" })).status).toBe(412);
     expect((await t.append(t.request, "today")).status).toBe(400);
   });

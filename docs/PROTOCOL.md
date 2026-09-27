@@ -718,7 +718,7 @@ Every `/api/*` route can also answer 401 (`unauthorized`), 403 (`forbidden_host`
 
 #### `ws` — `/ws`
 
-**GET** — WebSocket upgrade (`Authorization` header, `?token=` on loopback Hosts, or a remote browser's cookie). Rejected upgrades answer 401/403/404 with an empty body; a revoked device's sockets close with 1008.
+**GET** — WebSocket upgrade (`Authorization` header, `?token=` on loopback Hosts, or a remote browser's cookie). Rejected upgrades answer 401/403/404/412 with an empty body; a revoked device's sockets close with 1008 and a changed workspace closes with 4412.
 
 - Query `token`: The bearer token, on loopback Hosts only (refused on remote hosts).
 - Responses:
@@ -1769,7 +1769,7 @@ Append user-owned markdown exactly once or report uncertainty. Requires X-DDL-Wo
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `operationId` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | yes | Runtime id, safe to use in URLs. |
+| `operationId` | string (`^[A-Za-z0-9_-]{1,128}$`) | yes | Client id chosen by the client. |
 | `hostId` | string (`^(?!\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$`) | yes | Verified serving host from health. |
 | `text` | string (1–100000 chars) | yes | Markdown to append verbatim; the client supplies task syntax. |
 | `capturedAt` | integer (≥ 0) | yes | Epoch milliseconds. |

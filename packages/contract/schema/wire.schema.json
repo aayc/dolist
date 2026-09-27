@@ -2504,8 +2504,8 @@
       "properties": {
         "operationId": {
           "type": "string",
-          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
-          "description": "Runtime id, safe to use in URLs."
+          "pattern": "^[A-Za-z0-9_-]{1,128}$",
+          "description": "Client id chosen by the client."
         },
         "hostId": {
           "type": "string",
@@ -2542,8 +2542,8 @@
           "properties": {
             "operationId": {
               "type": "string",
-              "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
-              "description": "Runtime id, safe to use in URLs."
+              "pattern": "^[A-Za-z0-9_-]{1,128}$",
+              "description": "Client id chosen by the client."
             },
             "workspaceId": {
               "type": "string",
@@ -2593,8 +2593,8 @@
           "properties": {
             "operationId": {
               "type": "string",
-              "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:-]{1,200}$",
-              "description": "Runtime id, safe to use in URLs."
+              "pattern": "^[A-Za-z0-9_-]{1,128}$",
+              "description": "Client id chosen by the client."
             },
             "workspaceId": {
               "type": "string",

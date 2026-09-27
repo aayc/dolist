@@ -918,7 +918,7 @@ const ROUTES = {
     methods: {
       GET: {
         summary:
-          "WebSocket upgrade (`Authorization` header, `?token=` on loopback Hosts, or a remote browser's cookie). Rejected upgrades answer 401/403/404 with an empty body; a revoked device's sockets close with 1008.",
+          "WebSocket upgrade (`Authorization` header, `?token=` on loopback Hosts, or a remote browser's cookie). Rejected upgrades answer 401/403/404/412 with an empty body; a revoked device's sockets close with 1008 and a changed workspace closes with 4412.",
         query: z.looseObject({
           token: z
             .string()
