@@ -212,6 +212,30 @@ struct AttachmentUploadTests {
     #expect(await host.writes.isEmpty)
   }
 
+  @Test func aggregateAdmissionOnlyEvictsCompletedOriginalsAndRollsBackOnInsufficientSpace()
+    async throws
+  {
+    let fixture = try RepositoryFixture()
+    defer { fixture.remove() }
+    let uploads = try repository(fixture)
+    let first = try await uploads.prepare(data: Data([1, 2, 3]), originalFilename: "one.png")
+    let host = AttachmentTestRemote(scope: fixture.scope)
+    _ = try await uploads.synchronize(with: host)
+    let second = try await uploads.prepare(data: Data([4, 5, 6]), originalFilename: "two.png")
+    let index = try index(fixture)
+    #expect(throws: AttachmentUploadError.storageLimit(maxBytes: 6)) {
+      try index.transaction { try index.makeAttachmentOriginalSpace(adding: 4, maximumBytes: 6) }
+    }
+    #expect(try await uploads.bytes(first.id) == Data([1, 2, 3]))
+    #expect(try await uploads.bytes(second.id) == Data([4, 5, 6]))
+    try index.transaction { try index.makeAttachmentOriginalSpace(adding: 3, maximumBytes: 6) }
+    await #expect(throws: AttachmentUploadError.missingOriginal) {
+      try await uploads.bytes(first.id)
+    }
+    #expect(try await uploads.upload(first.id)?.state == .acknowledged)
+    #expect(try await uploads.bytes(second.id) == Data([4, 5, 6]))
+  }
+
   private func repository(_ fixture: RepositoryFixture) throws -> AttachmentUploadRepository {
     try AttachmentUploadRepository(rootDirectory: fixture.directory, scope: fixture.scope)
   }
