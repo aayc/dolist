@@ -50,23 +50,12 @@ struct PhoneDrawingRecoveryView: View {
   private func resolve(copy: Bool, snapshot: DrawingReviewSnapshot) {
     busy = true
     Task {
-      let session = workspace.drawingSessions[path]
-      session?.controller.finishEditing()
-      session?.controller.isEditing = false
-      defer {
-        if let session { session.controller.isEditing = session.drawing.canEdit }
-        busy = false
-      }
+      defer { busy = false }
       do {
-        await session?.checkpoint()
+        let saved = try await workspace.resolveDrawingReview(
+          snapshot, recoveryPath: copy ? recoveryPath : nil)
         if copy {
-          let saved = try await workspace.drawingRepository.recover(
-            path: path, as: recoveryPath, expectedRevision: snapshot.drawing.localRevision)
           await workspace.open(saved.path, newTab: true)
-        } else {
-          let saved = try await workspace.drawingRepository.useRemoteVersion(
-            path: path, expectedRevision: snapshot.drawing.localRevision)
-          session?.adoptReviewed(saved)
         }
         await load()
         await workspace.synchronize()
@@ -86,5 +75,35 @@ struct PhoneDrawingRecoveryView: View {
       }
       failure = nil
     } catch { failure = error.localizedDescription }
+  }
+}
+
+extension PhoneWorkspace {
+  func resolveDrawingReview(_ snapshot: DrawingReviewSnapshot, recoveryPath: String? = nil)
+    async throws -> LocalDrawing
+  {
+    guard !structuralBusy else { throw WorkspaceMaintenanceError.dirtyAffectedNotes }
+    structuralBusy = true
+    defer { structuralBusy = false }
+    let path = snapshot.drawing.path
+    let session = drawingSessions[path]
+    let wasEditing = session?.controller.isEditing
+    session?.controller.finishEditing()
+    session?.controller.isEditing = false
+    defer {
+      if let session {
+        session.controller.isEditing = wasEditing == true && session.drawing.canEdit
+      }
+    }
+    await session?.checkpoint()
+    try PhoneRecoveryPreparation.validate(notes: [], drawings: session.map { [$0] } ?? [])
+    if let recoveryPath {
+      return try await drawingRepository.recover(
+        path: path, as: recoveryPath, expectedRevision: snapshot.drawing.localRevision)
+    }
+    let saved = try await drawingRepository.useRemoteVersion(
+      path: path, expectedRevision: snapshot.drawing.localRevision)
+    session?.adoptReviewed(saved)
+    return saved
   }
 }

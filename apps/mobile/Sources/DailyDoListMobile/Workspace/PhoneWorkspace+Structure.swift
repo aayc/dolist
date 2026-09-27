@@ -25,28 +25,14 @@ extension PhoneWorkspace {
       error = "Connect to the host first."
       return
     }
-    structuralBusy = true
-    let editors = sessions.values.filter { action.affects($0.note.path) }
-    for editor in editors {
-      editor.finishComposition()
-      editor.setStructureLocked(true)
-    }
-    let canvases = drawingSessions.values.filter { action.affects($0.drawing.path) }
-    for canvas in canvases {
-      canvas.controller.finishEditing()
-      canvas.controller.isEditing = false
-    }
-    defer {
-      for canvas in canvases { canvas.controller.isEditing = canvas.drawing.canEdit }
-      structuralBusy = false
-      for editor in editors { editor.setStructureLocked(false) }
-    }
+    let epoch = generation
     do {
-      await checkpointAll()
-      await synchronize()
-      guard online else { throw WorkspaceRepositoryError.connectionChanged }
-      let operation = try await structural.perform(action, with: remote)
-      await adoptStructure(operation)
+      try await withCheckpointedStructure(action, synchronizeFirst: true) {
+        guard self.online, self.generation == epoch else {
+          throw WorkspaceRepositoryError.connectionChanged
+        }
+        return try await self.structural.perform(action, with: remote)
+      }
     } catch WorkspaceMaintenanceError.dirtyAffectedNotes {
       self.error = "Sync or recover the affected notes before moving or deleting them."
     } catch { self.error = error.localizedDescription }
@@ -55,12 +41,51 @@ extension PhoneWorkspace {
   func resolveStructure(_ operation: WorkspaceStructuralOperation, as result: StructuralResolution)
     async
   {
-    guard let remote, online else { return }
+    guard let remote, online, !structuralBusy else { return }
+    let epoch = generation
     do {
-      let resolved = try await structural.resolve(
-        operation.id, revision: operation.revision, as: result, with: remote)
-      await adoptStructure(resolved)
+      try await withCheckpointedStructure(operation.action, synchronizeFirst: false) {
+        guard self.online, self.generation == epoch else {
+          throw WorkspaceRepositoryError.connectionChanged
+        }
+        return try await self.structural.resolve(
+          operation.id, revision: operation.revision, as: result, with: remote)
+      }
     } catch { self.error = error.localizedDescription }
+  }
+
+  /// Keep affected editors fenced until the repository result has been adopted. A rejected
+  /// checkpoint must block both a new host operation and resolution of an uncertain deletion.
+  func withCheckpointedStructure(
+    _ action: WorkspaceStructuralAction, synchronizeFirst: Bool,
+    operation: @MainActor () async throws -> WorkspaceStructuralOperation
+  ) async throws {
+    guard !structuralBusy else { throw WorkspaceMaintenanceError.dirtyAffectedNotes }
+    structuralBusy = true
+    let editors = sessions.values.filter { action.affects($0.note.path) }
+    for editor in editors {
+      editor.finishComposition()
+      editor.setStructureLocked(true)
+    }
+    let canvases = drawingSessions.values.filter { action.affects($0.drawing.path) }
+    let editableCanvases = canvases.filter { $0.controller.isEditing }
+    for canvas in canvases {
+      canvas.controller.finishEditing()
+      canvas.controller.isEditing = false
+    }
+    defer {
+      for canvas in editableCanvases { canvas.controller.isEditing = canvas.drawing.canEdit }
+      structuralBusy = false
+      for editor in editors { editor.setStructureLocked(false) }
+    }
+    await checkpointAll()
+    try PhoneRecoveryPreparation.validate(notes: editors, drawings: canvases)
+    if synchronizeFirst {
+      await synchronize()
+      try PhoneRecoveryPreparation.validate(notes: editors, drawings: canvases)
+    }
+    let resolved = try await operation()
+    await adoptStructure(resolved)
   }
 
   private func adoptStructure(_ operation: WorkspaceStructuralOperation) async {

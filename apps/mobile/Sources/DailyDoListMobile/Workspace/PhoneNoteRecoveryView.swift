@@ -45,36 +45,16 @@ struct PhoneNoteRecoveryView: View {
     .refreshable { await load() }
   }
 
-  private enum Resolution { case keep, host, copy }
+  enum Resolution { case keep, host, copy }
   private func resolve(_ resolution: Resolution, snapshot: NoteReviewSnapshot) {
     busy = true
     Task {
-      let session = workspace.sessions[path]
-      session?.finishComposition()
-      session?.setStructureLocked(true)
-      defer {
-        session?.setStructureLocked(false)
-        busy = false
-      }
+      defer { busy = false }
       do {
-        await session?.checkpoint()
-        let saved: LocalNote
-        switch resolution {
-        case .keep:
-          saved = try await workspace.repository.keepMergedEdits(
-            path: path, expectedRevision: snapshot.note.localRevision)
-        case .host:
-          saved = try await workspace.repository.useRemoteVersion(
-            path: path, expectedRevision: snapshot.note.localRevision)
-        case .copy:
-          saved = try await workspace.repository.recover(
-            path: path, as: VaultPath.ensureMarkdownExtension(recoveryPath),
-            expectedRevision: snapshot.note.localRevision)
-        }
+        let saved = try await workspace.resolveNoteReview(
+          snapshot, as: resolution, recoveryPath: recoveryPath)
         if resolution == .copy {
           await workspace.open(saved.path, newTab: true)
-        } else {
-          session?.adoptReviewed(saved)
         }
         await load()
         await workspace.synchronize()
@@ -90,5 +70,40 @@ struct PhoneNoteRecoveryView: View {
       snapshot = try await workspace.repository.review(path)
       if recoveryPath.isEmpty { recoveryPath = VaultPath.stem(path) + " recovered.md" }
     } catch { failure = error.localizedDescription }
+  }
+}
+
+extension PhoneWorkspace {
+  func resolveNoteReview(
+    _ snapshot: NoteReviewSnapshot, as resolution: PhoneNoteRecoveryView.Resolution,
+    recoveryPath: String = ""
+  ) async throws -> LocalNote {
+    guard !structuralBusy else { throw WorkspaceMaintenanceError.dirtyAffectedNotes }
+    structuralBusy = true
+    defer { structuralBusy = false }
+    let path = snapshot.note.path
+    let session = sessions[path]
+    session?.finishComposition()
+    session?.setStructureLocked(true)
+    defer { session?.setStructureLocked(false) }
+    await session?.checkpoint()
+    // A failed checkpoint leaves the durable revision unchanged. CAS alone cannot protect
+    // newer text that exists only in TextKit from an explicit replacement of that revision.
+    try PhoneRecoveryPreparation.validate(notes: session.map { [$0] } ?? [], drawings: [])
+    let saved: LocalNote
+    switch resolution {
+    case .keep:
+      saved = try await repository.keepMergedEdits(
+        path: path, expectedRevision: snapshot.note.localRevision)
+    case .host:
+      saved = try await repository.useRemoteVersion(
+        path: path, expectedRevision: snapshot.note.localRevision)
+    case .copy:
+      saved = try await repository.recover(
+        path: path, as: VaultPath.ensureMarkdownExtension(recoveryPath),
+        expectedRevision: snapshot.note.localRevision)
+    }
+    if resolution != .copy { session?.adoptReviewed(saved) }
+    return saved
   }
 }
