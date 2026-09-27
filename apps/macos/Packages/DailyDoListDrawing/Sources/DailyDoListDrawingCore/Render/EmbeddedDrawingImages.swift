@@ -20,6 +20,18 @@ public enum EmbeddedDrawingImages {
   }
 
   public static func decode(_ data: Data) -> CGImage? {
+    guard !data.isEmpty, data.count <= maximumBytes else { return nil }
+    if let prefix = String(data: data.prefix(256), encoding: .utf8),
+      prefix.trimmingCharacters(
+        in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{FEFF}"))
+      ).hasPrefix("<")
+    {
+      return StaticSVGImage.decode(data)
+    }
+    return decodeRaster(data)
+  }
+
+  static func decodeRaster(_ data: Data) -> CGImage? {
     guard !data.isEmpty, data.count <= maximumBytes,
       let source = CGImageSourceCreateWithData(data as CFData, nil)
     else { return nil }

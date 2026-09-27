@@ -82,7 +82,13 @@
     }
 
     private func insert(_ bytes: Data) throws {
-      // Normalize orientation and format once; PNG bytes round-trip in the web editor too.
+      if StaticSVGImage.decode(bytes) != nil {
+        try controller.editor.insertImage(
+          data: bytes, mimeType: "image/svg+xml",
+          at: controller.insertionPoint, replacing: replacing)
+        return
+      }
+      // Normalize raster orientation and format once; preserve accepted SVG bytes verbatim.
       guard let image = EmbeddedDrawingImages.decode(bytes),
         let data = UIImage(cgImage: image).pngData()
       else { throw DrawingImageImportError.unreadable }
