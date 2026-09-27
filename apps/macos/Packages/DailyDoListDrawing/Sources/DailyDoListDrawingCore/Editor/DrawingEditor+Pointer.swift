@@ -183,6 +183,7 @@ extension DrawingEditor {
 
   public func pointerUp(at point: DrawingPoint, modifiers: PointerModifiers = []) {
     guard let gesture else { return }
+    defer { notifyInteractionEnded() }
     self.gesture = nil
     marquee = nil
     switch gesture {
@@ -233,6 +234,7 @@ extension DrawingEditor {
   /// finger beginning pan/pinch must never leave behind a partial stroke or moved element.
   public func cancelPointerInteraction() {
     guard gesture != nil || multiPointElementId != nil else { return }
+    defer { notifyInteractionEnded() }
     cancelGesture()
     multiPointElementId = nil
     multiPointStartTarget = nil

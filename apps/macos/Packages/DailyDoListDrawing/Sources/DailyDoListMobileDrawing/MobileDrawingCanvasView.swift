@@ -7,6 +7,8 @@
   public final class MobileDrawingCanvasView: UIView, UIGestureRecognizerDelegate {
     public enum Mode { case display, editing }
     public let editor: DrawingEditor
+    weak var controller: MobileDrawingController?
+    public override var canBecomeFirstResponder: Bool { true }
     public private(set) var viewport = DrawingViewport()
     public var mode: Mode = .editing {
       didSet {
@@ -116,6 +118,23 @@
             content.center.y - bounds.height / (2 * zoom))))
     }
 
+    public func zoomToSelection() {
+      guard let content = ElementGeometry.bounds(of: editor.selectedElements) else { return }
+      let zoom = min(
+        30,
+        max(
+          0.1,
+          min(
+            (bounds.width - 64) / max(1, content.width),
+            (bounds.height - 64) / max(1, content.height))))
+      setViewport(
+        DrawingViewport(
+          zoom: zoom,
+          origin: DrawingPoint(
+            content.center.x - bounds.width / (2 * zoom),
+            content.center.y - bounds.height / (2 * zoom))))
+    }
+
     public func zoom(by factor: Double) {
       let center = CGPoint(x: bounds.midX, y: bounds.midY)
       let anchor = viewport.viewToScene(center)
@@ -176,6 +195,7 @@
       let location = recognizer.location(in: self)
       switch recognizer.state {
       case .began:
+        if textEditor == nil { becomeFirstResponder() }
         navigatesWithOneFinger = mode == .display || editor.tool == .hand
         dragOrigin = viewport.origin
         if !navigatesWithOneFinger {
@@ -250,6 +270,7 @@
     @objc private func doubleTap(_ recognizer: UITapGestureRecognizer) { tap(recognizer, count: 2) }
     private func tap(_ recognizer: UITapGestureRecognizer, count: Int) {
       guard mode == .editing, editor.tool != .hand else { return }
+      if textEditor == nil { becomeFirstResponder() }
       let point = viewport.viewToScene(recognizer.location(in: self))
       editor.pointerDown(at: point, modifiers: pointerModifiers, clickCount: count)
       editor.pointerUp(at: point, modifiers: pointerModifiers)

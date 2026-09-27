@@ -13,9 +13,14 @@
     @ObservationIgnored public var onOpenLink: ((String) -> Void)?
     @ObservationIgnored public var elementLink: ((String) -> String?)?
     public var isEditing = true
+    public var viewOnly = false
+    public var zenMode = false
+    public var commandError: String?
     public var multiSelect = false
     public var constrain = false
     public var fromCenter = false
+    @ObservationIgnored public var onInteractionEnd: (() -> Void)?
+    public var hasActiveInteraction: Bool { editor.hasActiveInteraction }
     @ObservationIgnored public var onChange: ((ExcalidrawScene) -> Void)?
     @ObservationIgnored weak var canvas: MobileDrawingCanvasView?
 
@@ -23,6 +28,12 @@
       scene: ExcalidrawScene, environment: DrawingEnvironment = SystemDrawingEnvironment()
     ) {
       editor = DrawingEditor(scene: scene, environment: environment)
+      editor.onInteractionEnd = { [weak self] in
+        Task { @MainActor [weak self] in
+          guard let self, !self.hasActiveInteraction else { return }
+          self.onInteractionEnd?()
+        }
+      }
     }
 
     public func replaceScene(_ scene: ExcalidrawScene, keepHistory: Bool = false) {
@@ -32,8 +43,12 @@
         editor.replaceScene(scene, keepHistory: keepHistory)
       }
     }
-    public func finishEditing() { editor.finishInteraction() }
+    public func finishEditing() {
+      if let canvas { canvas.finishEditing() } else { editor.commitInteraction() }
+    }
     public func zoomToFit() { canvas?.zoomToFit() }
+    public func zoomToSelection() { canvas?.zoomToSelection() }
+    public func resetZoom() { if let canvas { canvas.zoom(by: 1 / canvas.viewport.zoom) } }
     public func zoom(by factor: Double) { canvas?.zoom(by: factor) }
     public var scene: ExcalidrawScene { editor.scene }
   }
@@ -54,11 +69,12 @@
     public func makeUIView(context: Context) -> MobileDrawingCanvasView {
       let view = MobileDrawingCanvasView(editor: controller.editor)
       controller.canvas = view
+      view.controller = controller
       view.onChange = { [weak controller] scene in controller?.onChange?(scene) }
       return view
     }
     public func updateUIView(_ view: MobileDrawingCanvasView, context: Context) {
-      view.mode = controller.isEditing ? .editing : .display
+      view.mode = controller.isEditing && !controller.viewOnly ? .editing : .display
       view.theme = theme
       view.background = background
       var modifiers: PointerModifiers = []
@@ -67,7 +83,7 @@
       view.pointerModifiers = modifiers
     }
     public static func dismantleUIView(_ view: MobileDrawingCanvasView, coordinator: ()) {
-      view.editor.finishInteraction()
+      view.finishEditing()
     }
   }
 
@@ -78,13 +94,40 @@
     @State private var propertiesShown = false
     @State private var precisionShown = false
     @State private var transferShown = false
+    @State private var canvasShown = false
 
     public init(controller: MobileDrawingController) { self.controller = controller }
     public var body: some View {
       VStack(spacing: 0) {
-        if controller.isEditing { toolbar }
+        if controller.isEditing && !controller.viewOnly && !controller.zenMode { toolbar }
         MobileDrawingCanvas(controller: controller, theme: colorScheme == .dark ? .dark : .light)
-        if controller.isEditing { commands }
+        if controller.isEditing && !controller.viewOnly && !controller.zenMode { commands }
+        if controller.isEditing && (controller.viewOnly || controller.zenMode) {
+          Button(controller.viewOnly ? "Exit view mode" : "Exit zen mode") {
+            controller.viewOnly = false
+            controller.zenMode = false
+          }.padding(8)
+        }
+      }
+      .sheet(isPresented: $canvasShown) {
+        NavigationStack {
+          MobileDrawingCanvasSettings(controller: controller)
+            .toolbar {
+              ToolbarItem(placement: .confirmationAction) {
+                Button("Done") { canvasShown = false }
+              }
+            }
+        }
+      }
+      .alert(
+        "Drawing command",
+        isPresented: Binding(
+          get: { controller.commandError != nil }, set: { if !$0 { controller.commandError = nil } }
+        )
+      ) {
+        Button("OK") { controller.commandError = nil }
+      } message: {
+        Text(controller.commandError ?? "")
       }
       .sheet(isPresented: $transferShown) {
         NavigationStack {
@@ -161,6 +204,9 @@
             isOn: Binding(
               get: { controller.editor.isToolLocked }, set: { controller.editor.isToolLocked = $0 })
           )
+          Button("Canvas settings and help") { canvasShown = true }
+          Button("View mode") { controller.viewOnly = true }
+          Button("Zen mode") { controller.zenMode = true }
           Button("Copy, library and links") { transferShown = true }
           Button("Frames, points and snapping") { precisionShown = true }
           Button("Select all") { controller.editor.selectAll() }
@@ -178,6 +224,9 @@
           Button("Zoom in") { controller.zoom(by: 1.25) }
           Button("Zoom out") { controller.zoom(by: 0.8) }
           Button("Fit drawing") { controller.zoomToFit() }
+          Button("Fit selection") { controller.zoomToSelection() }.disabled(
+            controller.editor.selectedIds.isEmpty)
+          Button("Reset zoom") { controller.resetZoom() }
         } label: {
           Image(systemName: "ellipsis.circle").frame(width: 44, height: 44)
         }

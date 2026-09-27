@@ -183,8 +183,7 @@ extension DrawingEditor {
         return true
       }
       if gesture != nil {
-        cancelGesture()
-        invalidate()
+        cancelPointerInteraction()
         return true
       }
       if tool != .selection {

@@ -85,6 +85,15 @@ public final class DrawingEditor {
   @ObservationIgnored public var onBeginTextEditing: ((String) -> Void)?
   /// Inline text editing ended (committed, discarded, or ended by another action).
   @ObservationIgnored public var onEndTextEditing: (() -> Void)?
+  /// Interaction completion, including selection-only gestures. Platform adapters may defer
+  /// notification until the command stack returns before rebasing incoming scenes.
+  @ObservationIgnored public var onInteractionEnd: (() -> Void)?
+  public var hasActiveInteraction: Bool {
+    gesture != nil || editingTextId != nil || multiPointElementId != nil
+  }
+  func notifyInteractionEnded() {
+    if !hasActiveInteraction { onInteractionEnd?() }
+  }
 
   @ObservationIgnored let environment: DrawingEnvironment
   @ObservationIgnored var history = DrawingHistory()
@@ -258,9 +267,18 @@ public final class DrawingEditor {
 
   /// Ends whatever is in progress (a text edit, a line drawn by clicks, a gesture).
   public func finishInteraction() {
+    let wasActive = hasActiveInteraction
+    defer { if wasActive { notifyInteractionEnded() } }
     if editingTextId != nil { endTextEditing() }
     if multiPointElementId != nil { finishMultiPoint() }
     if gesture != nil { cancelGesture() }
+  }
+
+  /// Commits the current pointer position for a background/save checkpoint. Unlike cancelling
+  /// a gesture when another tool takes over, this keeps the user's visible in-progress changes.
+  public func commitInteraction() {
+    if gesture != nil { pointerUp(at: .zero) }
+    finishInteraction()
   }
 
   // MARK: Selection
