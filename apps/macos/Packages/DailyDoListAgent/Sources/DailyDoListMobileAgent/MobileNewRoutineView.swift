@@ -3,7 +3,7 @@
   import DailyDoListModels
   import SwiftUI
 
-  struct MobileNewRoutineView: View {
+  public struct MobileNewRoutineView: View {
     let store: AgentStore
     let actionsEnabled: Bool
     let onDone: (Routine?) -> Void
@@ -15,7 +15,7 @@
       (.shell, "Shell"), (.files, "Files"), (.connectors, "Connectors"),
     ]
 
-    init(
+    public init(
       store: AgentStore, initial: RoutineDraft = RoutineDraft(), actionsEnabled: Bool,
       onDone: @escaping (Routine?) -> Void
     ) {
@@ -25,7 +25,7 @@
       _draft = State(initialValue: initial)
     }
 
-    var body: some View {
+    public var body: some View {
       NavigationStack {
         Form {
           if draft.repeatsThreadId == nil, !store.routineTemplates.isEmpty {
