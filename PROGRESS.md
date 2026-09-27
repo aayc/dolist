@@ -66,6 +66,12 @@ is still granted. Never kill Daily Do List processes by name; never bind or kill
 
 ## In flight
 
+- Full native iPhone app: `codex/iphone-app`, based on the completed Mac setup baseline.
+  Foundation/toolchain and reusable editor extraction are first. The complete scope, durable
+  user instruction, next actions and test evidence live in `apps/mobile/IMPLEMENTATION.md`.
+  Work uses an isolated checkout, synthetic vaults and separate test daemons; the installed
+  Mac app, its daemon and the real vault must remain untouched.
+
 Local web/Mac setup is complete. Check the workflows dispatched on `main` after the handoff commit.
 The remote-machine setup continues in its separate task.
 Native iPhone implementation is authorized and continues separately, including simulator testing.
@@ -136,8 +142,7 @@ Native iPhone implementation is authorized and continues separately, including s
   typing reveal / activity row / jump pill to the Mac orchestrator window; drawings follow-ups
   (shared merge vectors for `SceneMerge` and `mergeDrawingElements`, accessibility, image embeds);
   the Mac refuses hostless `http:` links while the web allows them; check the pointing-hand cursor
-  by hand on macOS 15+ (it moved to push/pop); iPhone app deferred (`apps/mobile/PLAN.md`: needs
-  full Xcode, a QR code on the pairing screens, an atomic daily-note append).
+  by hand on macOS 15+ (it moved to push/pop); iPhone implementation is now in flight (see `apps/mobile/IMPLEMENTATION.md`).
 - **Performance leftovers:** web inbox renders every row (21 ms at 300), search waits for its 180 ms
   debounce, each approval re-renders ~33 components, core's drawing parser is in the startup bundle
   (6.7 kB gz), the switcher lowercases every name per key; Mac tab switch to a 2,000-line note
@@ -196,11 +201,12 @@ Native iPhone implementation is authorized and continues separately, including s
 - **Tests:** one good test per behavior at the cheapest layer that protects it; regression tests for
   real bugs; no redundant layers (the user thinks we overtest). CI branch runs reuse cached results;
   `main` runs everything thoroughly.
-- **iPhone:** the user authorized full native implementation and thorough simulator computer-use
-  testing after the plan on 2026-09-27. The audit and plan are in `apps/mobile/PLAN.md`: feature parity,
-  shared Swift extraction, durable offline editing, protocol prerequisites, drawings/Vim,
-  Siri/Shortcuts, notification constraints and milestone exit gates. Native Swift and a free
-  Apple ID remain the baseline; implementation proceeds in its separate task.
+- **iPhone:** full native implementation authorized on 2026-09-27, superseding the earlier
+  planning-only instruction. The user has no paid Apple developer account and will be away for
+  several days. Continue autonomously until the full app is implemented, tested and thoroughly
+  checked through computer-use. Preserve this instruction across compaction. Use the free-account
+  baseline; never claim physical-device or paid-entitlement checks were run when unavailable.
+  Plan: `apps/mobile/PLAN.md`; execution/evidence ledger: `apps/mobile/IMPLEMENTATION.md`.
 
 ## How the parallel work runs
 

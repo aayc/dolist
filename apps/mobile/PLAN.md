@@ -1,6 +1,8 @@
 # Native iPhone app: implementation plan
 
-Status: **planning only; no implementation started**. Audited 2026-09-27 starting at `dfdf74f`
+Status: **implementation authorized and in progress**. The user approved full development on
+2026-09-27, with a free Apple account and thorough automated and computer-use verification.
+Current work and evidence: `IMPLEMENTATION.md`. Audited 2026-09-27 starting at `dfdf74f`
 on `main`; independent Mac toolchain compatibility work reached `531d8d7` during the audit.
 This replaces the earlier mobile outline. Recheck the baseline when implementation starts,
 especially Obsidian migration work and agent-journal phase 2.
@@ -586,7 +588,8 @@ after milestone 0; input correctness and crash recovery dominate more than scree
 
 ## 12. Choices to confirm at implementation kickoff
 
-These do not block planning, and this document does not authorize implementation.
+Implementation was authorized on 2026-09-27. Use the defaults below without repeatedly asking;
+record evidence-driven adjustments in `IMPLEMENTATION.md`. The user confirmed the free-account baseline.
 
 - Validate proposed iOS 17 deployment against the intended phone and a compiler that builds the
   repo. Keep the existing floor unless evidence requires raising it.
