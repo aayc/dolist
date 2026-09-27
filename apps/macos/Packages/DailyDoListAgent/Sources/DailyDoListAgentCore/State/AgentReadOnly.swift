@@ -69,18 +69,18 @@ public struct AgentReadOnly: Equatable, Sendable {
     self.init(kind: kind, reason: reason, banner: banner ? reason + Self.syncedSuffix : nil)
   }
 
-  static let syncedSuffix = " — showing the last synced state"
-  static let rejectedReason = "The always-on machine no longer accepts this device"
-  static let machineIdleReason = "The always-on machine isn't running the agent right now"
+  package static let syncedSuffix = " — showing the last synced state"
+  package static let rejectedReason = "The always-on machine no longer accepts this device"
+  package static let machineIdleReason = "The always-on machine isn't running the agent right now"
 
   /// The machine refused this device's credential (the relay's "…no longer accepts this device.
   /// Pair it again.").
-  static func rejected(_ placement: AgentPlacementStatus, problem: String?) -> Bool {
+  package static func rejected(_ placement: AgentPlacementStatus, problem: String?) -> Bool {
     placement.relay == .notPaired && problem?.contains("no longer accepts") == true
   }
 
   /// Set to the always-on machine, which nobody runs the agent on, and no relay to ask it.
-  static func machineIdle(_ placement: AgentPlacementStatus) -> Bool {
+  package static func machineIdle(_ placement: AgentPlacementStatus) -> Bool {
     placement.placement == .alwaysOnMachine && placement.heldHere == nil
       && placement.runsOn == nil && placement.relay == .off
   }

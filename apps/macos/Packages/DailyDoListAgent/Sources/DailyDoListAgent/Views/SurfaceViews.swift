@@ -1,3 +1,4 @@
+import DailyDoListAgentCore
 import DailyDoListModels
 import DailyDoListUI
 import SwiftUI
@@ -8,6 +9,7 @@ import SwiftUI
 public struct BrowserSurfaceView: View {
   let store: AgentStore
   let threadId: String
+  @State private var imageCache = SurfaceImageCache()
 
   public init(store: AgentStore, threadId: String) {
     self.store = store
@@ -21,7 +23,7 @@ public struct BrowserSurfaceView: View {
         systemImage: "globe", title: frame?.url ?? "Waiting for the browser…",
         subtitle: frame?.title, lastFrameAt: frame?.ts, monospacedTitle: frame?.url != nil)
       SurfaceStage(
-        image: frame.flatMap { store.image(for: $0) }, frame: frame,
+        image: frame.flatMap { imageCache.image(for: $0) }, frame: frame,
         markers: frame.map(Self.markers(for:)) ?? [],
         emptyText: "No frames yet — they stream here while the agent browses.")
     }
@@ -41,6 +43,7 @@ public struct BrowserSurfaceView: View {
 public struct ComputerSurfaceView: View {
   let store: AgentStore
   let threadId: String
+  @State private var imageCache = SurfaceImageCache()
   @Environment(\.agentReferenceDate) private var referenceDate
 
   static let markerCount = 5
@@ -58,7 +61,7 @@ public struct ComputerSurfaceView: View {
         systemImage: "desktopcomputer", title: "Computer use", subtitle: nil, lastFrameAt: frame?.ts
       )
       SurfaceStage(
-        image: frame.flatMap { store.image(for: $0) }, frame: frame,
+        image: frame.flatMap { imageCache.image(for: $0) }, frame: frame,
         markers: Self.markers(for: actions),
         emptyText: "No screenshots yet — they appear here while the agent uses the computer.")
       Hairline()

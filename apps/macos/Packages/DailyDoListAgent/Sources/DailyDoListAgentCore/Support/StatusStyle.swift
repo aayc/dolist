@@ -188,7 +188,7 @@ extension ArtifactMeta {
 }
 
 /// "waiting_for_input" → "Waiting for input"
-func humanize(_ raw: String) -> String {
+package func humanize(_ raw: String) -> String {
   let words = raw.replacingOccurrences(of: "_", with: " ").replacingOccurrences(of: "-", with: " ")
   guard let first = words.first else { return raw }
   return first.uppercased() + words.dropFirst()

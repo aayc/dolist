@@ -1,3 +1,4 @@
+import DailyDoListAgentCore
 import SwiftUI
 
 private struct AgentReferenceDateKey: EnvironmentKey {

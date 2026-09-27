@@ -19,7 +19,7 @@ public struct AgentAlert: Identifiable, Hashable, Sendable {
     self.init(title: title, message: Self.describe(error))
   }
 
-  static func describe(_ error: Error) -> String {
+  package static func describe(_ error: Error) -> String {
     if let error = error as? LocalizedError, let description = error.errorDescription {
       return description
     }

@@ -4,8 +4,8 @@ import Foundation
 /// What the agent is doing right now, for the live row at the end of a chat. Derived from what
 /// the thread already has (its status, tool calls, approvals, streaming text); the web app derives
 /// it the same way, with the same wording.
-struct ChatActivity: Hashable, Sendable {
-  enum Kind: Hashable, Sendable {
+package struct ChatActivity: Hashable, Sendable {
+  package enum Kind: Hashable, Sendable {
     /// Queued for a free agent.
     case waitingToStart
     /// A pending approval of this thread (`messageId`: its card in the chat).
@@ -15,19 +15,21 @@ struct ChatActivity: Hashable, Sendable {
     case thinking
   }
 
-  var kind: Kind
-  var label: String
+  package var kind: Kind
+  package var label: String
   /// When the current step began (for "· 12s"); nil when unknown.
-  var since: EpochMillis?
+  package var since: EpochMillis?
 
   /// Statuses whose agent is queued or running: the row shows only then.
-  static let liveStatuses: Set<TaskAgentStatus> = [.queued, .triaging, .working, .waitingApproval]
+  package static let liveStatuses: Set<TaskAgentStatus> = [
+    .queued, .triaging, .working, .waitingApproval,
+  ]
 
   /// The activity of a thread, or nil when the row shouldn't show.
   /// - Parameters:
   ///   - pendingApprovals: the thread's pending approvals, oldest first.
   ///   - isTextActive: agent text is typing out or streaming (the caret says enough then).
-  static func current(
+  package static func current(
     status: TaskAgentStatus, messages: [ThreadMessage], pendingApprovals: [ApprovalRequest],
     isTextActive: Bool
   ) -> ChatActivity? {
@@ -53,7 +55,7 @@ struct ChatActivity: Hashable, Sendable {
   }
 
   /// The latest thing that happened in the thread (a message, a tool call ending).
-  static func lastActivity(in messages: [ThreadMessage]) -> EpochMillis? {
+  package static func lastActivity(in messages: [ThreadMessage]) -> EpochMillis? {
     var latest: EpochMillis?
     for message in messages {
       var time = message.createdAt
@@ -66,7 +68,7 @@ struct ChatActivity: Hashable, Sendable {
   }
 
   /// "12s", "1m 5s", "2h 3m" once the step has taken 3 s; nil before.
-  static func elapsed(since: EpochMillis?, now: Date) -> String? {
+  package static func elapsed(since: EpochMillis?, now: Date) -> String? {
     guard let since else { return nil }
     let seconds = Int(((now.epochMillis - since) / 1000).rounded(.down))
     guard seconds >= 3 else { return nil }
@@ -78,11 +80,11 @@ struct ChatActivity: Hashable, Sendable {
   // MARK: Labels
 
   /// Quoted strings are clipped to this many characters (with the ellipsis).
-  static let clipLength = 40
+  package static let clipLength = 40
 
   /// What a running tool call is doing, in words: "Opening Safari…", "Searching the web for
   /// “espresso grinders”…". Inputs reach the client already redacted by the daemon.
-  static func label(for call: ToolCallMessage) -> String {
+  package static func label(for call: ToolCallMessage) -> String {
     func field(_ key: String) -> String? {
       guard let value = call.input[key]?.stringValue else { return nil }
       let cleaned = value.split(whereSeparator: \.isWhitespace).joined(separator: " ")
@@ -137,7 +139,7 @@ struct ChatActivity: Hashable, Sendable {
   }
 
   /// A drawing's name from its path or embed target: `![[Excalidraw/Flow.excalidraw|360]]` → "Flow".
-  static func drawingTitle(_ path: String?) -> String {
+  package static func drawingTitle(_ path: String?) -> String {
     var target = path ?? ""
     if target.hasPrefix("!") { target.removeFirst() }
     if target.hasPrefix("[[") { target.removeFirst(2) }
@@ -152,13 +154,13 @@ struct ChatActivity: Hashable, Sendable {
   }
 
   /// At most `clipLength` characters, the last one an ellipsis when cut.
-  static func clip(_ text: String) -> String {
+  package static func clip(_ text: String) -> String {
     guard text.count > clipLength else { return text }
     return String(text.prefix(clipLength - 1)).trimmingCharacters(in: .whitespaces) + "…"
   }
 
   /// The lowercased host of an absolute URL ("https://Shop.example/cart" → "shop.example").
-  static func host(of url: String?) -> String? {
+  package static func host(of url: String?) -> String? {
     guard let url, let components = URLComponents(string: url.trimmingCharacters(in: .whitespaces)),
       components.scheme != nil, let host = components.host, !host.isEmpty
     else { return nil }
@@ -166,7 +168,7 @@ struct ChatActivity: Hashable, Sendable {
   }
 
   /// `mcp__{server}__{tool}` → the server.
-  static func connectorServer(_ toolName: String) -> String? {
+  package static func connectorServer(_ toolName: String) -> String? {
     guard toolName.hasPrefix("mcp__") else { return nil }
     let rest = toolName.dropFirst("mcp__".count)
     let server = rest.range(of: "__").map { rest[..<$0.lowerBound] } ?? rest

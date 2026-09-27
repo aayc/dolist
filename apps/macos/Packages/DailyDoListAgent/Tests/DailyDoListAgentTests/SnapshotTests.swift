@@ -8,6 +8,7 @@ import SwiftUI
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 /// Renders views offscreen (an `NSHostingView` in a borderless window, so AppKit-backed controls
 /// draw too) and writes PNGs to `.build/agent-snapshots/`. The app's snapshots are the ones to

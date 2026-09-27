@@ -9,6 +9,7 @@ import SwiftUI
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 /// The agent's work shows read-only when the relay can't reach the always-on machine, this device
 /// isn't paired with it (or no longer accepted), another device runs the agent, or the machine

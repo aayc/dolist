@@ -2,6 +2,7 @@ import DailyDoListModels
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 @Suite("Reducer: threads, messages and deltas")
 struct ReducerThreadTests {

@@ -2,6 +2,7 @@ import DailyDoListModels
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 @Suite("Reducer: approvals, status, ignored events")
 struct ReducerApprovalTests {

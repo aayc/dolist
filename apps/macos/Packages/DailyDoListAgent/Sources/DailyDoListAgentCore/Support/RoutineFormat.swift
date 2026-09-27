@@ -89,7 +89,7 @@ public enum RoutineFormat {
   }
 
   /// The choices of the New Routine sheet.
-  static let notifyChoices: [(RoutineNotify, String)] = [
+  package static let notifyChoices: [(RoutineNotify, String)] = [
     (.always, "Every run"), (.whenChanged, "When something changed"), (.never, "Never"),
   ]
 

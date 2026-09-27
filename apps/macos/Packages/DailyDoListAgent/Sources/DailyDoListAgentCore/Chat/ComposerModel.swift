@@ -6,37 +6,39 @@ import Observation
 /// the agent, and what the empty input says.
 @MainActor
 @Observable
-final class ComposerModel {
-  let store: AgentStore
-  let threadId: String
-  var text = ""
+package final class ComposerModel {
+  package let store: AgentStore
+  package let threadId: String
+  package var text = ""
   /// A stop request is on its way.
-  private(set) var isStopping = false
+  package private(set) var isStopping = false
 
-  static let finishedStatuses: Set<TaskAgentStatus> = [.done, .failed, .cancelled, .ignored]
+  package static let finishedStatuses: Set<TaskAgentStatus> = [
+    .done, .failed, .cancelled, .ignored,
+  ]
 
-  init(store: AgentStore, threadId: String) {
+  package init(store: AgentStore, threadId: String) {
     self.store = store
     self.threadId = threadId
   }
 
-  var status: TaskAgentStatus? { store.threadStatus(threadId) }
+  package var status: TaskAgentStatus? { store.threadStatus(threadId) }
 
   /// Why replies are off (read-only on this device, or the agent is off, paused or has a problem).
-  var unavailableReason: String? { store.readOnly?.reason ?? store.unavailableReason }
+  package var unavailableReason: String? { store.readOnly?.reason ?? store.unavailableReason }
 
-  var canSend: Bool {
+  package var canSend: Bool {
     unavailableReason == nil && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
   }
 
   /// The agent is working on the thread: Stop shows beside Send.
-  var canStop: Bool { status?.isActive == true }
+  package var canStop: Bool { status?.isActive == true }
 
   /// Stop can't reach the agent from this device (it shows, disabled, with the reason).
-  var stopUnavailableReason: String? { store.readOnly?.reason }
+  package var stopUnavailableReason: String? { store.readOnly?.reason }
 
   /// What the empty input says.
-  var placeholder: String {
+  package var placeholder: String {
     if store.readOnly != nil { return "Replies are off while this is read-only" }
     if unavailableReason != nil { return "Replies are off while the agent can't act" }
     if !store.pendingApprovals(forThread: threadId).isEmpty {
@@ -49,7 +51,7 @@ final class ComposerModel {
   /// Sends the draft: it appears in the thread and the input clears in the same update. A failed
   /// send stays in the thread with a retry.
   @discardableResult
-  func send() -> Task<Bool, Never>? {
+  package func send() -> Task<Bool, Never>? {
     guard canSend else { return nil }
     let draft = text
     text = ""
@@ -58,7 +60,7 @@ final class ComposerModel {
 
   /// Stops the agent's work on the thread.
   @discardableResult
-  func stop() -> Task<Void, Never>? {
+  package func stop() -> Task<Void, Never>? {
     guard canStop, !isStopping, stopUnavailableReason == nil else { return nil }
     isStopping = true
     return Task {

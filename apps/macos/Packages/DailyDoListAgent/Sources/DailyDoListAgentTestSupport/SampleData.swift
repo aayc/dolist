@@ -4,6 +4,7 @@ import DailyDoListModels
 import Foundation
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 /// Rich synthetic agent data for the tests' views and snapshots: a day of tasks in every state, a
 /// booking thread with every message kind (including a pending approval), artifacts of each kind

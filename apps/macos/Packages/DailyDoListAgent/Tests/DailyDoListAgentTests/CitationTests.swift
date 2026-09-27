@@ -8,6 +8,7 @@ import SwiftUI
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 @Suite("Citations, wikilinks and link previews")
 @MainActor

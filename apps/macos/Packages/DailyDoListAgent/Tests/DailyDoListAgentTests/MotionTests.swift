@@ -4,6 +4,7 @@ import SwiftUI
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 /// The looping animations run on Core Animation only when motion is allowed, and the typing caret
 /// sits after the last character.

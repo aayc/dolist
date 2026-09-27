@@ -9,6 +9,7 @@ import SwiftUI
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 /// "Where the orchestrator runs": what the control shows in each placement state, moving the
 /// orchestrator through the store, and the bar in the agent panel's header.

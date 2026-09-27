@@ -4,6 +4,7 @@ import DailyDoListUITestSupport
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 /// A reveal environment with a manual ticker and a Reduce Motion switch.
 @MainActor

@@ -3,6 +3,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 @Suite("Formatting")
 struct FormattingTests {

@@ -4,6 +4,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 @MainActor
 final class FakeNotificationCenter: AgentNotificationCenter {

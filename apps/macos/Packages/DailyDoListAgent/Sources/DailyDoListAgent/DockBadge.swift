@@ -1,4 +1,5 @@
 import AppKit
+import DailyDoListAgentCore
 import Observation
 
 /// Shows the number of pending approvals on the Dock icon while started.

@@ -6,6 +6,7 @@ import SwiftUI
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 @testable import DailyDoListAgentTestSupport
 
 /// The agent panel with 400 of today's threads (their records, 60 pending approvals) and a thread

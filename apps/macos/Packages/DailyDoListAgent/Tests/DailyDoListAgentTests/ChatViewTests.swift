@@ -6,6 +6,7 @@ import SwiftUI
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 /// The chat as a whole, hosted in a window with a manual frame clock: history shows at once, new
 /// agent text types out frame by frame, and the live row follows the agent.

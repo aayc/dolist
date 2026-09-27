@@ -3,8 +3,8 @@ import DailyDoListModels
 /// One row of the chat: a message, or tool calls. Consecutive tool calls that succeeded collapse
 /// into one run ("Used 6 tools"); a running call, a failure and a blocked call each stay a row of
 /// their own.
-struct ChatItem: Identifiable, Sendable {
-  enum Content: Sendable {
+package struct ChatItem: Identifiable, Sendable {
+  package enum Content: Sendable {
     case message(ThreadMessage)
     /// One tool call, or several finished ones in a row.
     case tools([ToolCallMessage])
@@ -12,11 +12,13 @@ struct ChatItem: Identifiable, Sendable {
 
   /// The row's identity: the message's id (the optimistic one it replaced, for the user's own
   /// messages), or the first call's (a run keeps its id as it grows).
-  let id: String
-  let content: Content
+  package let id: String
+  package let content: Content
 
   /// - Parameter aliases: daemon message ids → the ids their rows had (`optimisticReplacements`).
-  static func make(_ messages: [ThreadMessage], aliases: [String: String] = [:]) -> [ChatItem] {
+  package static func make(_ messages: [ThreadMessage], aliases: [String: String] = [:])
+    -> [ChatItem]
+  {
     var items: [ChatItem] = []
     var run: [ToolCallMessage] = []
     func flush() {

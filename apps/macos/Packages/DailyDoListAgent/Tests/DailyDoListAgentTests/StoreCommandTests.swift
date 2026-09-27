@@ -6,6 +6,7 @@ import Observation
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 @MainActor
 @Suite("Store: events and commands")

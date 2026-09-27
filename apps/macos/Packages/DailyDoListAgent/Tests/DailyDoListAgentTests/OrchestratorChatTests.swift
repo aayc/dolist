@@ -5,6 +5,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 /// The orchestrator's own chat in the store: pinned apart from the inbox's sections, loaded on
 /// refresh, its decisions linked to their tasks, and talked to like any thread.

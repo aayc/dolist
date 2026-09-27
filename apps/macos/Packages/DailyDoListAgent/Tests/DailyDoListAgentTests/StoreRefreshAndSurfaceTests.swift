@@ -6,6 +6,7 @@ import Foundation
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 @MainActor
 @Suite("Store: resync")
@@ -307,14 +308,15 @@ struct StoreSurfaceTests {
   }
 
   @Test func decodesFramesOncePerTimestamp() throws {
+    let imageCache = SurfaceImageCache()
     let first = Fixture.frame(ts: 1)
     store.apply(.surfaceFrame(first))
-    let image = try #require(store.image(for: first))
-    #expect(store.image(for: first) === image)
+    let image = try #require(imageCache.image(for: first))
+    #expect(imageCache.image(for: first) === image)
     let second = Fixture.frame(ts: 2)
     store.apply(.surfaceFrame(second))
-    #expect(store.image(for: second) !== image)
-    #expect(store.image(for: Fixture.frame(ts: 3, data: "not base64!")) == nil)
+    #expect(imageCache.image(for: second) !== image)
+    #expect(imageCache.image(for: Fixture.frame(ts: 3, data: "not base64!")) == nil)
   }
 
   @Test func framesOfUnwatchedSurfacesAreDroppedBeyondALimit() {

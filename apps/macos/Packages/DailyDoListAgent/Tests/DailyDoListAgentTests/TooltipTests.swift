@@ -7,6 +7,7 @@ import SwiftUI
 import Testing
 
 @testable import DailyDoListAgent
+@testable import DailyDoListAgentCore
 
 /// The agent panel's tooltips: the host's shortcuts as keycaps, names on icon buttons, counts
 /// explained, and no shortcut spelled out.
