@@ -33,6 +33,20 @@ struct MobileEditorTests {
     #expect(editor.text == "- [ ] Walk 🌿\n- [x] Read")
   }
 
+  @Test func hardwareTabIndentsAndShiftTabOutdentsOnlyWhenEditableAndNotComposing() throws {
+    let editor = MobileMarkdownController()
+    editor.load("- Walk")
+    editor.selection = NSRange(location: 3, length: 0)
+    editor.input.insertText("\t")
+    #expect(editor.text == "\t- Walk")
+    let outdent = try #require(
+      editor.input.keyCommands?.first { $0.input == "\t" && $0.modifierFlags == .shift })
+    _ = editor.input.perform(outdent.action, with: outdent)
+    #expect(editor.text == "- Walk")
+    editor.input.setMarkedText("に", selectedRange: NSRange(location: 1, length: 0))
+    #expect(editor.input.keyCommands?.contains { $0.input == "\t" } != true)
+  }
+
   @Test func externalEditsMoveTheSelectionWithoutBecomingLocalTyping() {
     let editor = MobileMarkdownController()
     editor.load("First\nSecond 🌿")

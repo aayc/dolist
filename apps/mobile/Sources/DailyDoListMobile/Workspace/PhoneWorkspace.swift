@@ -263,6 +263,7 @@ final class PhoneWorkspace {
       scheduleNavigationSave()
       if let line { revealLine(line) }
       selectedTab = 0
+      await releaseHiddenEditors()
     } catch { if request == navigation { self.error = error.localizedDescription } }
   }
 

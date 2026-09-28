@@ -181,6 +181,9 @@
       return true
     }
 
+    /// A hardware Tab: like the Mac editor it indents list items and selections, else types a tab.
+    func handleTab() -> Bool { !applyingCommand && run(.indent) }
+
     func handleNewline() -> Bool {
       guard !applyingCommand, input.markedTextRange == nil, configuration.isEditable,
         let edit = ListCommands.newline(

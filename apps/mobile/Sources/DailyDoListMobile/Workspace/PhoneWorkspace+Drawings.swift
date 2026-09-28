@@ -32,6 +32,7 @@ extension PhoneWorkspace {
       tabs.place(path, newTab: newTab, recordHistory: recordHistory)
       scheduleNavigationSave()
       selectedTab = 0
+      await releaseHiddenEditors()
     } catch { if request == navigation { self.error = error.localizedDescription } }
   }
 

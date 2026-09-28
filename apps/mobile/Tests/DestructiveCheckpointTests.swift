@@ -33,6 +33,29 @@ struct DestructiveCheckpointTests {
     #expect(try await fixture.workspace.repository.note(parked.path)?.state == .needsReview)
   }
 
+  @Test func hiddenEditorsAreReleasedOnlyOnceTheirTypingIsSaved() async throws {
+    let fixture = try DestructiveCheckpointFixture()
+    defer { fixture.remove() }
+    let workspace = fixture.workspace
+    for path in ["A.md", "B.md", "C.md"] {
+      _ = try await workspace.repository.cache(RemoteNote(content: path, version: "v1"), path: path)
+    }
+    await workspace.open("A.md")
+    await workspace.open("B.md")
+    #expect(Set(workspace.sessions.keys) == ["B.md"])
+    let typing = try #require(workspace.sessions["B.md"])
+    typing.editor.selection = NSRange(location: 0, length: 0)
+    typing.editor.input.insertText("Unsaved ")
+    fixture.checkpoints.rejectWrites = true
+    await workspace.open("C.md")
+    #expect(Set(workspace.sessions.keys) == ["B.md", "C.md"])
+    #expect(workspace.sessions["B.md"]?.editor.text == "Unsaved B.md")
+    fixture.checkpoints.rejectWrites = false
+    await workspace.open("A.md")
+    #expect(Set(workspace.sessions.keys) == ["A.md"])
+    #expect(try await workspace.repository.note("B.md")?.content == "Unsaved B.md")
+  }
+
   @Test func reviewedHostDrawingCannotReplaceSceneWhoseCheckpointFailed() async throws {
     let fixture = try DestructiveCheckpointFixture()
     defer { fixture.remove() }

@@ -9,8 +9,22 @@
 
     public override func insertText(_ text: String) {
       if text == "\n", commandController?.handleNewline() == true { return }
+      if text == "\t", commandController?.handleTab() == true { return }
       super.insertText(text)
     }
+
+    /// Shift-Tab would otherwise move keyboard focus. Composition and read-only notes keep the
+    /// system's behavior.
+    public override var keyCommands: [UIKeyCommand]? {
+      guard markedTextRange == nil, commandController?.configuration.isEditable == true else {
+        return super.keyCommands
+      }
+      let outdent = UIKeyCommand(input: "\t", modifierFlags: .shift, action: #selector(outdent))
+      outdent.wantsPriorityOverSystemBehavior = true
+      return [outdent] + (super.keyCommands ?? [])
+    }
+
+    @objc private func outdent() { commandController?.run(.outdent) }
 
     public override func unmarkText() {
       super.unmarkText()

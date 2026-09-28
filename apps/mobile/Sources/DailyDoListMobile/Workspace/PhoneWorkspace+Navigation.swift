@@ -40,6 +40,24 @@ extension PhoneWorkspace {
     }
   }
 
+  /// Releases note editors no tab shows anymore, once they're saved: each holds a text system,
+  /// and live paths are protected from cache cleanup. An editor whose save failed (or is still
+  /// composing) stays. Back/Forward restore the caret and scroll from `savedPositions`. Inline
+  /// drawings keep their own `drawingSessions`, which this leaves alone.
+  func releaseHiddenEditors() async {
+    func hidden(_ path: String) -> Bool { !tabs.tabs.contains(path) && active?.note.path != path }
+    for (path, session) in sessions where hidden(path) {
+      await session.checkpoint()
+      guard hidden(path), sessions[path] === session, !session.hasUncheckpointedEdits else {
+        continue
+      }
+      savedPositions[path] = WorkspaceNavigation.Position(
+        selection: session.editor.selection,
+        scrollY: session.editor.input.contentOffset.y)
+      sessions[path] = nil
+    }
+  }
+
   func reopenNote() async {
     if let closed = tabs.popClosedTab() {
       tabs.reinsert(closed)
